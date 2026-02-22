@@ -11,17 +11,26 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-mavkit = { path = "../crates/mavkit", default-features = false, features = ["udp", "ardupilot"] }
+mavkit = { path = "../crates/mavkit", default-features = false, features = ["udp", "ardupilot", "stream"] }
+mavlink = { version = "0.17", features = ["tokio-1", "emit-extensions"] }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-http = "2"
+tauri-plugin-blec = "0.5"
 tokio = { version = "1", features = ["sync"] }
+tracing = "0.1"
+uuid = "1"
+base64 = "0.22"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 mavkit = { path = "../crates/mavkit", features = ["serial"] }
 serialport = "4"
+
+[target.'cfg(target_os = "android")'.dependencies]
+tauri-plugin-bluetooth-classic = { path = "../crates/tauri-plugin-bluetooth-classic" }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

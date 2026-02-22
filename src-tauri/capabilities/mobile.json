@@ -7,6 +7,8 @@
     "core:default",
     "dialog:default",
     "fs:default",
+    "blec:default",
+    "bluetooth-classic:default",
     {
       "identifier": "http:default",
       "allow": [{ "url": "https://autotest.ardupilot.org/Parameters/*" }]

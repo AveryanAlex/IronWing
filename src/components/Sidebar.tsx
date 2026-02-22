@@ -1,11 +1,13 @@
 import {
   Plane, Radio, Battery, Gauge, Compass, Navigation, Satellite,
   ArrowUp, RotateCcw, CircleDot, RefreshCw, Plug, Unplug, Loader2, X,
+  Bluetooth, Search,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { ArmSlider } from "./ArmSlider";
 import { cn } from "../lib/utils";
 import type { useVehicle } from "../hooks/use-vehicle";
+import type { TransportType } from "../telemetry";
 
 type SidebarProps = {
   vehicle: ReturnType<typeof useVehicle>;
@@ -18,6 +20,13 @@ function formatMaybe(value?: number) {
   if (typeof value !== "number" || Number.isNaN(value)) return "--";
   return value.toFixed(1);
 }
+
+const TRANSPORT_LABELS: Record<TransportType, string> = {
+  udp: "UDP",
+  serial: "Serial",
+  bluetooth_ble: "BLE",
+  bluetooth_spp: "Classic BT",
+};
 
 export function Sidebar({ vehicle, isMobile, open, onClose }: SidebarProps) {
   // Mobile: drawer overlay
@@ -64,8 +73,11 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
   const {
     telemetry, linkState, vehicleState, connected, connectionError,
     isConnecting, cancelConnect,
-    connectionMode, setConnectionMode, udpBind, setUdpBind,
+    connectionMode, setConnectionMode, transports,
+    udpBind, setUdpBind,
     serialPort, setSerialPort, baud, setBaud, serialPorts,
+    btDevices, btScanning, selectedBtDevice, setSelectedBtDevice,
+    scanBleDevices, refreshBondedDevices,
     takeoffAlt, setTakeoffAlt, availableModes,
     connect, disconnect, refreshSerialPorts,
     arm, disarm, setFlightMode, takeoff, findModeNumber,
@@ -84,15 +96,16 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
         <div className="space-y-2">
           <select
             value={connectionMode}
-            onChange={(e) => setConnectionMode(e.target.value as "udp" | "serial")}
+            onChange={(e) => setConnectionMode(e.target.value as TransportType)}
             disabled={formLocked}
             className="w-full rounded-md border border-border bg-bg-input px-2.5 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <option value="udp">UDP</option>
-            <option value="serial">Serial</option>
+            {transports.map((t) => (
+              <option key={t} value={t}>{TRANSPORT_LABELS[t]}</option>
+            ))}
           </select>
 
-          {connectionMode === "udp" ? (
+          {connectionMode === "udp" && (
             <input
               value={udpBind}
               onChange={(e) => setUdpBind(e.target.value)}
@@ -100,7 +113,9 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
               disabled={formLocked}
               className="w-full rounded-md border border-border bg-bg-input px-2.5 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
             />
-          ) : (
+          )}
+
+          {connectionMode === "serial" && (
             <>
               <div className="flex gap-1.5">
                 <select
@@ -124,6 +139,27 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
                 className="w-full rounded-md border border-border bg-bg-input px-2.5 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </>
+          )}
+
+          {connectionMode === "bluetooth_ble" && (
+            <BleDevicePicker
+              devices={btDevices.filter((d) => d.device_type === "ble")}
+              selected={selectedBtDevice}
+              onSelect={setSelectedBtDevice}
+              onScan={scanBleDevices}
+              scanning={btScanning}
+              disabled={formLocked}
+            />
+          )}
+
+          {connectionMode === "bluetooth_spp" && (
+            <SppDevicePicker
+              devices={btDevices.filter((d) => d.device_type === "classic")}
+              selected={selectedBtDevice}
+              onSelect={setSelectedBtDevice}
+              onRefresh={refreshBondedDevices}
+              disabled={formLocked}
+            />
           )}
 
           {isConnecting ? (
@@ -262,6 +298,98 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
         onDisarm={(force) => disarm(force)}
       />
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Bluetooth device pickers
+// ---------------------------------------------------------------------------
+
+function BleDevicePicker({
+  devices,
+  selected,
+  onSelect,
+  onScan,
+  scanning,
+  disabled,
+}: {
+  devices: { name: string; address: string }[];
+  selected: string;
+  onSelect: (address: string) => void;
+  onScan: () => void;
+  scanning: boolean;
+  disabled: boolean;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex gap-1.5">
+        <select
+          value={selected}
+          onChange={(e) => onSelect(e.target.value)}
+          disabled={disabled}
+          className="flex-1 rounded-md border border-border bg-bg-input px-2.5 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {devices.length === 0 && <option value="">No devices</option>}
+          {devices.map((d) => (
+            <option key={d.address} value={d.address}>
+              {d.name || d.address}
+            </option>
+          ))}
+        </select>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onScan}
+          disabled={disabled || scanning}
+        >
+          {scanning ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Search className="h-3.5 w-3.5" />
+          )}
+        </Button>
+      </div>
+      {scanning && (
+        <p className="flex items-center gap-1 text-[10px] text-text-muted">
+          <Bluetooth className="h-3 w-3" /> Scanning for BLE devices...
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SppDevicePicker({
+  devices,
+  selected,
+  onSelect,
+  onRefresh,
+  disabled,
+}: {
+  devices: { name: string; address: string }[];
+  selected: string;
+  onSelect: (address: string) => void;
+  onRefresh: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex gap-1.5">
+      <select
+        value={selected}
+        onChange={(e) => onSelect(e.target.value)}
+        disabled={disabled}
+        className="flex-1 rounded-md border border-border bg-bg-input px-2.5 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {devices.length === 0 && <option value="">No paired devices</option>}
+        {devices.map((d) => (
+          <option key={d.address} value={d.address}>
+            {d.name || d.address}
+          </option>
+        ))}
+      </select>
+      <Button variant="ghost" size="icon" onClick={onRefresh} disabled={disabled}>
+        <RefreshCw className="h-3.5 w-3.5" />
+      </Button>
+    </div>
   );
 }
 

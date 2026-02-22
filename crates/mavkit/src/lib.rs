@@ -7,6 +7,10 @@ pub mod mission;
 pub mod modes;
 pub mod params;
 pub mod state;
+#[cfg(feature = "stream")]
+pub mod ble_transport;
+#[cfg(feature = "stream")]
+pub mod stream_connection;
 pub mod vehicle;
 
 pub use config::VehicleConfig;

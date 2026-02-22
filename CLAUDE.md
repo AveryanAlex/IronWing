@@ -41,16 +41,24 @@ Tauri v2 desktop app with three layers: React frontend, Tauri IPC shell, Rust do
 React (TypeScript)  ──invoke/listen──>  Tauri Shell (main.rs)  ──calls──>  mavkit
 ```
 
-### Rust Crate
+### Rust Crates
 
 **`mavkit`** (`crates/mavkit/`) - Async MAVLink SDK:
 - `Vehicle` struct - async MAVLink vehicle handle (Clone via Arc, Send + Sync)
+- `Vehicle::from_connection()` - transport-agnostic entry point accepting any `Box<dyn AsyncMavConnection>`
+- `StreamConnection<R, W>` - adapter implementing `AsyncMavConnection` over any `AsyncRead + AsyncWrite` pair (feature-gated behind `stream`)
+- `ble_transport::channel_pair()` - creates `ChannelReader`/`ChannelWriter` for bridging callback-based transports (BLE, SPP) into async streams (feature-gated behind `stream`)
 - Watch channels for reactive state: `Telemetry`, `VehicleState`, `LinkState`, `MissionState`, `HomePosition`, `TransferProgress`
 - Mission operations via `MissionHandle`: upload, download, clear, verify roundtrip, set current
 - Flight commands: arm, disarm, set mode, takeoff, guided goto
 - Wire boundary: `items_for_wire_upload()` / `plan_from_wire_download()`
 - `validate_plan()`, `normalize_for_compare()`, `plans_equivalent()`
 - ArduPilot mode tables (feature-gated behind `ardupilot`)
+
+**`tauri-plugin-bluetooth-classic`** (`crates/tauri-plugin-bluetooth-classic/`) - Android Classic SPP:
+- Kotlin plugin: RFCOMM connect via SPP UUID, read loop (Base64 events), write, disconnect
+- Rust side: `get_bonded_devices`, `connect`, `disconnect`, `send` commands
+- Desktop stub returns errors (Classic SPP is Android-only; desktop uses serial `/dev/rfcomm0`)
 
 ### Wire Boundary Convention
 
@@ -66,12 +74,17 @@ MAVLink wire format puts home at seq 0 for Mission type. The rest of the codebas
 - `#[tauri::command]` async handlers call `Vehicle` methods directly
 - Watch → Tauri event bridge tasks forward state changes to the frontend
 - No session IDs — single active connection
+- `connect_ble()` bridges `tauri-plugin-blec` (NUS UART) → `channel_pair` → `StreamConnection` → `Vehicle::from_connection()`
+- `connect_spp()` (Android) bridges `tauri-plugin-bluetooth-classic` events → `channel_pair` → `StreamConnection` → `Vehicle::from_connection()`
+- `available_transports` command returns platform-appropriate list (serial hidden on Android, SPP only on Android)
 
 ### Frontend
 
 - `App.tsx` - Main component with all state management (connection, mission items, home position, transfer)
 - `MissionMap.tsx` - MapLibre GL 3D map with terrain, satellite imagery, click-to-add waypoints
 - `mission.ts` / `telemetry.ts` - IPC bridge functions (`invoke` + `listen` wrappers)
+- `use-vehicle.ts` - Connection lifecycle, transport discovery, BT device scanning, multi-transport connect
+- `Sidebar.tsx` - Dynamic transport selector (populated from `availableTransports`), BLE scan picker, SPP bonded device picker
 
 ### IPC Events
 
@@ -91,14 +104,55 @@ MAVLink wire format puts home at seq 0 for Mission type. The rest of the codebas
 - **Async commands**: All Tauri commands that need the vehicle are `async fn` using `tokio::sync::Mutex`. Pure commands (validate, list ports) are sync.
 - **Watch channels**: Vehicle state is exposed via `tokio::sync::watch` channels. Bridge tasks forward changes to Tauri events. Tasks auto-terminate when Vehicle drops.
 - **SITL tests**: Marked `#[ignore]` and run via `--ignored` flag. Must run with `--test-threads=1`. Use `is_optional_type_unsupported()` to skip fence/rally on targets that don't support them. CI runs SITL roundtrip tests on every push and PR.
+- **Feature gates**: mavkit's `stream` feature enables `StreamConnection` + `ble_transport` modules (pulls in `async-trait` + `futures`). The `stream` feature is always enabled in `src-tauri`.
+- **Dual command registration**: `src-tauri/src/lib.rs` has separate `#[cfg(not(target_os = "android"))]` and `#[cfg(target_os = "android")]` `invoke_handler` blocks because the command sets differ (serial vs SPP).
+
+## Bluetooth
+
+The app supports Bluetooth connectivity for MAVLink telemetry radios:
+
+| Transport | Desktop | Android | Implementation |
+|-----------|---------|---------|----------------|
+| UDP | Yes | Yes | mavlink crate built-in |
+| Serial | Yes | No | mavlink crate + `serialport` |
+| BLE (NUS UART) | Yes | Yes | `tauri-plugin-blec` (btleplug / native Android) |
+| Classic SPP | Via serial (`/dev/rfcomm0`) | Yes | `tauri-plugin-bluetooth-classic` (Kotlin RFCOMM) |
+
+### Transport-agnostic connection flow
+
+```
+[BT Device] <--SPP/BLE--> [blec / classic plugin]
+                                    ↓
+                         [byte channels (mpsc)]
+                                    ↓
+                         [StreamConnection adapter]
+                                    ↓
+                         [Vehicle::from_connection()]
+                                    ↓
+                         [existing event loop - unchanged]
+```
+
+- `Vehicle::from_connection()` accepts any `Box<dyn AsyncMavConnection>` — the event loop is transport-agnostic
+- `StreamConnection` wraps `AsyncRead + AsyncWrite` into `AsyncMavConnection` (uses mavlink crate's `read_versioned_msg_async` / `write_versioned_msg_async`)
+- `ble_transport::channel_pair()` bridges callback-based APIs (BLE notifications, SPP events) into async streams
+- BLE uses Nordic UART Service UUIDs (`6E400001/02/03`)
+
+### Platform gating
+
+- `LinkEndpoint::Serial` and `list_serial_ports_cmd` gated behind `#[cfg(not(target_os = "android"))]`
+- `LinkEndpoint::BluetoothSpp` and `bt_get_bonded_devices` gated behind `#[cfg(target_os = "android")]`
+- `LinkEndpoint::BluetoothBle` available on all platforms
+- Frontend calls `availableTransports()` on mount to populate the transport dropdown dynamically
+- Two separate `invoke_handler` blocks in `run()` register platform-specific command sets
 
 ## Android
 
-The app supports Android via Tauri v2 mobile. Serial port support is excluded on Android (the `serialport` crate doesn't compile for Android targets). On Android, only UDP/TCP connectivity is available.
+The app supports Android via Tauri v2 mobile. Serial port support is excluded on Android (the `serialport` crate doesn't compile for Android targets).
 
-- `list_serial_ports_cmd` and `Serial` variant of `LinkEndpoint` are gated behind `#[cfg(not(target_os = "android"))]`
 - `mavkit` is included without the `serial` feature on Android; desktop gets the full feature set via target-conditional deps
-- The `gen/android/` directory is generated by `npx tauri android init` and should not be manually edited
+- Android has Bluetooth Classic SPP + BLE; desktop has BLE + serial (including rfcomm)
+- Android manifest includes `BLUETOOTH`, `BLUETOOTH_ADMIN`, `BLUETOOTH_CONNECT`, `BLUETOOTH_SCAN`, `ACCESS_FINE_LOCATION` permissions
+- The `gen/android/` directory is generated by `npx tauri android init` — the AndroidManifest.xml permissions block is manually maintained
 
 ## Project Status
 

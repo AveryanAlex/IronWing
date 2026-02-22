@@ -1,0 +1,9 @@
+[default]
+description = "Default permissions for the Bluetooth Classic plugin"
+permissions = [
+    "allow-get-bonded-devices",
+    "allow-connect",
+    "allow-disconnect",
+    "allow-send",
+    "allow-request-bt-permissions",
+]

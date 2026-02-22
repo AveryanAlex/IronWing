@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   armVehicle,
+  availableTransports,
+  btGetBondedDevices,
+  btRequestPermissions,
+  btScanBle,
   connectLink,
   disarmVehicle,
   disconnectLink,
@@ -13,10 +17,12 @@ import {
   subscribeVehicleState,
   vehicleGuidedGoto,
   vehicleTakeoff,
+  type BluetoothDevice,
   type ConnectRequest,
   type FlightModeEntry,
   type LinkState,
   type Telemetry,
+  type TransportType,
   type VehicleState,
 } from "../telemetry";
 import type { HomePosition } from "../mission";
@@ -38,13 +44,19 @@ export function useVehicle() {
   const [isConnecting, setIsConnecting] = useState(false);
 
   // Connection form state
-  const [mode, setMode] = useState<"udp" | "serial">("udp");
+  const [mode, setMode] = useState<TransportType>("udp");
+  const [transports, setTransports] = useState<TransportType[]>(["udp"]);
   const [udpBind, setUdpBind] = useState("0.0.0.0:14550");
   const [serialPort, setSerialPort] = useState("");
   const [baud, setBaud] = useState(57600);
   const [serialPorts, setSerialPorts] = useState<string[]>([]);
   const [takeoffAlt, setTakeoffAlt] = useState("10");
   const [followVehicle, setFollowVehicle] = useState(true);
+
+  // Bluetooth state
+  const [btDevices, setBtDevices] = useState<BluetoothDevice[]>([]);
+  const [btScanning, setBtScanning] = useState(false);
+  const [selectedBtDevice, setSelectedBtDevice] = useState("");
 
   const connected = linkState === "connected";
 
@@ -63,6 +75,37 @@ export function useVehicle() {
     }
     return null;
   }, [telemetry.latitude_deg, telemetry.longitude_deg, telemetry.heading_deg]);
+
+  // Fetch available transports on mount
+  useEffect(() => {
+    availableTransports()
+      .then((t) => {
+        setTransports(t);
+        if (t.length > 0 && !t.includes(mode)) {
+          setMode(t[0]);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Auto-load devices when a Bluetooth transport is selected
+  const autoLoadedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (mode === "bluetooth_spp" && autoLoadedRef.current !== "bluetooth_spp") {
+      autoLoadedRef.current = "bluetooth_spp";
+      btRequestPermissions()
+        .then(() => btGetBondedDevices())
+        .then((devices) => {
+          setBtDevices(devices);
+          if (devices.length > 0 && !selectedBtDevice) {
+            setSelectedBtDevice(devices[0].address);
+          }
+        })
+        .catch(() => {});
+    } else if (mode !== "bluetooth_spp" && mode !== "bluetooth_ble") {
+      autoLoadedRef.current = null;
+    }
+  }, [mode]);
 
   // Throttle telemetry setState to animation frame rate
   const pendingTelemetry = useRef<Telemetry | null>(null);
@@ -119,11 +162,28 @@ export function useVehicle() {
     cancelledRef.current = false;
     setConnectionError(null);
     setIsConnecting(true);
-    const request: ConnectRequest =
-      mode === "udp"
-        ? { endpoint: { kind: "udp", bind_addr: udpBind } }
-        : { endpoint: { kind: "serial", port: serialPort, baud } };
+    let request: ConnectRequest;
+    switch (mode) {
+      case "udp":
+        request = { endpoint: { kind: "udp", bind_addr: udpBind } };
+        break;
+      case "serial":
+        request = { endpoint: { kind: "serial", port: serialPort, baud } };
+        break;
+      case "bluetooth_ble":
+        request = { endpoint: { kind: "bluetooth_ble", address: selectedBtDevice } };
+        break;
+      case "bluetooth_spp":
+        request = { endpoint: { kind: "bluetooth_spp", address: selectedBtDevice } };
+        break;
+    }
     try {
+      if (mode === "bluetooth_ble" || mode === "bluetooth_spp") {
+        if (!selectedBtDevice) {
+          throw new Error("No Bluetooth device selected");
+        }
+        await btRequestPermissions();
+      }
       await connectLink(request);
     } catch (err) {
       if (!cancelledRef.current) {
@@ -134,7 +194,7 @@ export function useVehicle() {
     } finally {
       setIsConnecting(false);
     }
-  }, [mode, udpBind, serialPort, baud]);
+  }, [mode, udpBind, serialPort, baud, selectedBtDevice]);
 
   const cancelConnect = useCallback(async () => {
     cancelledRef.current = true;
@@ -164,6 +224,40 @@ export function useVehicle() {
       toast.error("Failed to list serial ports", { description: asErrorMessage(err) });
     }
   }, [serialPort]);
+
+  const scanBleDevices = useCallback(async () => {
+    setBtScanning(true);
+    try {
+      await btRequestPermissions();
+      const devices = await btScanBle(5000);
+      setBtDevices((prev) => {
+        // Merge with existing, dedup by address
+        const map = new Map(prev.map((d) => [d.address, d]));
+        for (const d of devices) map.set(d.address, d);
+        return [...map.values()];
+      });
+      if (devices.length > 0 && !selectedBtDevice) {
+        setSelectedBtDevice(devices[0].address);
+      }
+    } catch (err) {
+      toast.error("BLE scan failed", { description: asErrorMessage(err) });
+    } finally {
+      setBtScanning(false);
+    }
+  }, [selectedBtDevice]);
+
+  const refreshBondedDevices = useCallback(async () => {
+    try {
+      await btRequestPermissions();
+      const devices = await btGetBondedDevices();
+      setBtDevices(devices);
+      if (devices.length > 0 && !selectedBtDevice) {
+        setSelectedBtDevice(devices[0].address);
+      }
+    } catch (err) {
+      toast.error("Failed to list bonded devices", { description: asErrorMessage(err) });
+    }
+  }, [selectedBtDevice]);
 
   const arm = useCallback(
     async (force = false) => {
@@ -250,12 +344,18 @@ export function useVehicle() {
     cancelConnect,
     // Connection form
     connectionMode: mode, setConnectionMode: setMode,
+    transports,
     udpBind, setUdpBind,
     serialPort, setSerialPort,
     baud, setBaud,
     serialPorts,
     takeoffAlt, setTakeoffAlt,
     followVehicle, setFollowVehicle,
+    // Bluetooth
+    btDevices, btScanning,
+    selectedBtDevice, setSelectedBtDevice,
+    scanBleDevices,
+    refreshBondedDevices,
     // Actions
     connect,
     disconnect,

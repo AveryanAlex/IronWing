@@ -1,0 +1,15 @@
+[package]
+name = "tauri-plugin-bluetooth-classic"
+version = "0.1.0"
+edition = "2021"
+links = "tauri-plugin-bluetooth-classic"
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }
+
+[dependencies]
+tauri = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["sync"] }
+tracing = "0.1"

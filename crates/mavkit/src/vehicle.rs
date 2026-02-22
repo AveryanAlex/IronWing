@@ -66,6 +66,21 @@ impl Vehicle {
             .await
             .map_err(|err| VehicleError::ConnectionFailed(err.to_string()))?;
 
+        Self::from_connection(connection, config).await
+    }
+
+    /// Create a `Vehicle` from a pre-built [`AsyncMavConnection`].
+    ///
+    /// This is the transport-agnostic entry point: any connection that
+    /// implements `AsyncMavConnection<common::MavMessage>` can be used,
+    /// including the [`StreamConnection`](crate::stream_connection::StreamConnection)
+    /// adapter for BLE / SPP byte streams.
+    ///
+    /// Waits for the first HEARTBEAT before returning.
+    pub async fn from_connection(
+        connection: Box<dyn mavlink::AsyncMavConnection<common::MavMessage> + Sync + Send>,
+        config: VehicleConfig,
+    ) -> Result<Self, VehicleError> {
         let (writers, channels) = create_channels();
         let cancel = CancellationToken::new();
         let (command_tx, command_rx) = mpsc::channel(config.command_buffer_size);

@@ -3,7 +3,9 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export type LinkEndpoint =
   | { kind: "udp"; bind_addr: string }
-  | { kind: "serial"; port: string; baud: number };
+  | { kind: "serial"; port: string; baud: number }
+  | { kind: "bluetooth_ble"; address: string }
+  | { kind: "bluetooth_spp"; address: string };
 
 export type ConnectRequest = {
   endpoint: LinkEndpoint;
@@ -81,6 +83,14 @@ export type FlightModeEntry = {
   name: string;
 };
 
+export type BluetoothDevice = {
+  name: string;
+  address: string;
+  device_type: "ble" | "classic";
+};
+
+export type TransportType = "udp" | "serial" | "bluetooth_ble" | "bluetooth_spp";
+
 export async function connectLink(request: ConnectRequest): Promise<void> {
   await invoke("connect_link", { request });
 }
@@ -91,6 +101,26 @@ export async function disconnectLink(): Promise<void> {
 
 export async function listSerialPorts(): Promise<string[]> {
   return invoke<string[]>("list_serial_ports_cmd");
+}
+
+export async function availableTransports(): Promise<TransportType[]> {
+  return invoke<TransportType[]>("available_transports");
+}
+
+export async function btRequestPermissions(): Promise<void> {
+  await invoke("bt_request_permissions");
+}
+
+export async function btScanBle(timeoutMs?: number): Promise<BluetoothDevice[]> {
+  return invoke<BluetoothDevice[]>("bt_scan_ble", { timeoutMs });
+}
+
+export async function btStopScanBle(): Promise<void> {
+  await invoke("bt_stop_scan_ble");
+}
+
+export async function btGetBondedDevices(): Promise<BluetoothDevice[]> {
+  return invoke<BluetoothDevice[]>("bt_get_bonded_devices");
 }
 
 export async function subscribeTelemetry(cb: (telemetry: Telemetry) => void): Promise<UnlistenFn> {

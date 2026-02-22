@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-get-bonded-devices"
+description = "Enables the get_bonded_devices command without any pre-configured scope."
+commands.allow = ["get_bonded_devices"]
+
+[[permission]]
+identifier = "deny-get-bonded-devices"
+description = "Denies the get_bonded_devices command without any pre-configured scope."
+commands.deny = ["get_bonded_devices"]
