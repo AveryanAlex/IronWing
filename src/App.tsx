@@ -91,7 +91,7 @@ export default function App() {
 
           <main
             className="flex-1 overflow-hidden p-2 lg:p-3"
-            style={{ paddingTop: isMobile ? "calc(var(--safe-area-top, 0px) + 0.5rem)" : undefined }}
+            style={{ paddingTop: isMobile ? "calc(var(--safe-area-top, 0px) + 0.25rem)" : undefined }}
           >
             {activeTab === "map" ? (
               <MapPanel vehicle={vehicle} mission={mission} />
@@ -121,7 +121,12 @@ export default function App() {
           />
         )}
 
-        <Toaster richColors position={isMobile ? "top-center" : "bottom-right"} theme="dark" />
+        <Toaster
+          richColors
+          position={isMobile ? "top-center" : "bottom-right"}
+          theme="dark"
+          style={isMobile ? { top: "var(--safe-area-top, 0px)" } : undefined}
+        />
       </div>
     </TooltipProvider>
   );
