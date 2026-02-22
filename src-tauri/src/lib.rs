@@ -764,6 +764,19 @@ pub fn run() {
     }
 
     builder
+        .setup(|_app| {
+            // Set window + webview background to match the dark theme so there's
+            // no white flash before the frontend CSS loads.
+            #[cfg(desktop)]
+            {
+                use tauri::Manager;
+                let bg = tauri::utils::config::Color(18, 23, 29, 255); // #12171d
+                if let Some(w) = _app.get_webview_window("main") {
+                    let _ = w.set_background_color(Some(bg));
+                }
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri app");
 }
