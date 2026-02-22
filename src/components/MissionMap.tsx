@@ -5,6 +5,7 @@ import maplibregl, {
   type Marker,
   type MapMouseEvent,
 } from "maplibre-gl";
+import { Map as MapIcon, Layers, Satellite } from "lucide-react";
 import type { HomePosition, MissionItem } from "../mission";
 
 const DEFAULT_CENTER: [number, number] = [8.545594, 47.397742];
@@ -518,20 +519,16 @@ export function MissionMap({
     <div className="relative h-full w-full">
       <div className="h-full w-full" ref={containerRef} />
       {!syntheticVision && (
-        <div className="absolute top-3 left-3 z-10 flex overflow-hidden rounded-md border border-border-light bg-bg-primary/85 text-xs backdrop-blur-sm">
-          {(["plan", "hybrid", "satellite"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setMapLayer(s)}
-              className={`px-3 py-1.5 font-medium capitalize ${
-                mapLayer === s
-                  ? "bg-accent-blue text-white"
-                  : "text-text-primary hover:bg-bg-tertiary"
-              }`}
-            >
-              {s === "plan" ? "Plan" : s === "hybrid" ? "Hybrid" : "Satellite"}
-            </button>
-          ))}
+        <div className="map-locate-group" style={{ top: 12, left: 12, bottom: "auto", right: "auto" }}>
+          <button onClick={() => setMapLayer("plan")} className={`map-locate-btn${mapLayer === "plan" ? " is-active" : ""}`} title="Map">
+            <MapIcon size={16} />
+          </button>
+          <button onClick={() => setMapLayer("hybrid")} className={`map-locate-btn${mapLayer === "hybrid" ? " is-active" : ""}`} title="Hybrid">
+            <Layers size={16} />
+          </button>
+          <button onClick={() => setMapLayer("satellite")} className={`map-locate-btn${mapLayer === "satellite" ? " is-active" : ""}`} title="Satellite">
+            <Satellite size={16} />
+          </button>
         </div>
       )}
     </div>

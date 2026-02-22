@@ -100,7 +100,7 @@ body {
   50% { box-shadow: 0 0 0 8px rgba(255, 68, 68, 0); }
 }
 
-/* Map locate buttons — positioned bottom-right, styled like MapLibre controls */
+/* Map control buttons — reusable group for locate + layer switch */
 .map-locate-group {
   position: absolute;
   bottom: 12px;
