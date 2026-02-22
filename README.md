@@ -2,14 +2,15 @@
 
 Modern Mission Planner rewrite using Tauri + React + Rust.
 
-Current state: M0-M2 complete. Mission planning MVP shipped (3D MapLibre planner, mission transfer engine with cancel support, set-current via COMMAND_LONG, SITL roundtrip suite).
+Current state: M0-M2.5 complete. Mission planning MVP, Bluetooth connectivity (BLE + Classic SPP), Android mobile support, flight instruments HUD, and parameter read/write all shipped.
 
 ## Stack
 
-- Desktop: Tauri v2
-- Frontend: React + TypeScript + Vite
-- Core: Rust (`mp-telemetry-core`, `mp-mission-core`)
-- Map: MapLibre GL JS (3D terrain + satellite hybrid)
+- Desktop + Mobile: Tauri v2 (desktop + Android)
+- Frontend: React + TypeScript + Vite + Radix UI + Tailwind CSS
+- Core: Rust (`mavkit` crate — async MAVLink SDK)
+- Map: MapLibre GL JS (3D terrain + satellite)
+- Transports: UDP, Serial, BLE (Nordic UART), Classic SPP (Android)
 
 ## Prerequisites
 
@@ -112,7 +113,7 @@ You should then see telemetry and mission workflows available (Read/Write/Verify
 ### 4) (Optional) Run SITL roundtrip integration tests
 
 ```bash
-MP_SITL_UDP_BIND=0.0.0.0:14550 cargo test -p mp-telemetry-core --test sitl_roundtrip -- --ignored --nocapture --test-threads=1
+MP_SITL_UDP_BIND=0.0.0.0:14550 cargo test -p mavkit --test sitl_roundtrip -- --ignored --nocapture --test-threads=1
 ```
 
 ### 5) Cleanup
@@ -123,14 +124,16 @@ docker rm -f ardupilot-sitl
 
 ## Flight Operations (GUI)
 
-After connecting to a vehicle (UDP or serial), the left panel shows vehicle status and flight controls.
+After connecting to a vehicle, the sidebar shows vehicle status and flight controls.
 
 ### Connect
 
-1. Select **UDP** or **Serial** mode
+1. Select a transport: **UDP**, **Serial**, **BLE**, or **Classic SPP** (Android)
 2. For UDP: enter bind address (default `0.0.0.0:14550`)
-3. Click **Connect**
-4. Wait for status to show "connected" and telemetry to appear
+3. For BLE: scan and select your device
+4. For Serial: select port and baud rate
+5. Click **Connect**
+6. Wait for status to show "connected" and telemetry to appear
 
 ### Arm and Disarm
 
@@ -166,6 +169,17 @@ On the **Flight Data** tab, **right-click** anywhere on the map to send the vehi
 ```
 Connect → Takeoff (10m) → right-click map to fly around → Land or RTL
 ```
+
+## Android
+
+Requires Android SDK + NDK. Run on a connected device or emulator:
+
+```bash
+npm run android:dev       # Dev build on device/emulator
+npm run android:build     # Build APK
+```
+
+Android supports UDP, BLE, and Classic SPP transports. Serial is excluded (doesn't compile for Android targets).
 
 ## CI
 

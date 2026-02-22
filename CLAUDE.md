@@ -156,4 +156,4 @@ The app supports Android via Tauri v2 mobile. Serial port support is excluded on
 
 ## Project Status
 
-M0-M2 complete. mavkit SDK complete. Roadmap details in `PLAN.md`.
+M0-M2.5 complete. mavkit SDK with full transport stack (UDP, serial, BLE, Classic SPP), Android mobile support, flight instruments HUD, and parameter read/write. Next up: M3 (parameter staging, metadata cache, setup wizards). Roadmap details in `PLAN.md`.

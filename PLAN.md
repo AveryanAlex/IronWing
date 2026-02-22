@@ -4,10 +4,9 @@
 
 Build a modern, desktop-first Ground Control Station from scratch using Tauri.
 
-- Primary target: Windows desktop operators (field use, low-latency telemetry, offline capable)
-- Secondary targets (after stabilization): Linux and macOS
+- Primary targets: Desktop (Linux, macOS, Windows) and Android
 - Initial scope (v1):
-  - Vehicle connect/disconnect (Serial + UDP, TCP optional)
+  - Vehicle connect/disconnect (Serial, UDP, BLE, Classic SPP)
   - Live flight data dashboard (HUD + map + status)
   - Mission planning (waypoints, geofence, rally basics)
   - Parameter read/write workflows
@@ -38,26 +37,19 @@ Build a modern, desktop-first Ground Control Station from scratch using Tauri.
 
 ## Frontend
 - React + TypeScript + Vite
-- TanStack Router (screen composition)
-- TanStack Query (server state and caching)
-- Zustand (local UI state)
-- Zod (runtime schema validation)
-- i18next (localization)
+- Radix UI + Tailwind CSS (component primitives + styling)
+- MapLibre GL JS (3D terrain + satellite)
 
 ## Maps and Visualization
-- MapLibre GL JS
-- PMTiles/MBTiles offline map cache strategy
-- Turf.js for geospatial calculations
-- ECharts (or uPlot for high-rate telemetry charts)
-- Custom HUD rendering (SVG/WebGL depending on performance)
+- MapLibre GL JS with 3D terrain
+- PMTiles/MBTiles offline map cache strategy (future)
+- Custom HUD rendering (SVG artificial horizon, tape gauges, flight path vector)
 
 ## Backend/Core (Rust)
 - tokio (async runtime)
-- rust-mavlink + serialport (live links and MAVLink parsing)
-- UDP/TCP/serial link adapters
-- tracing + tracing-subscriber (structured diagnostics)
+- rust-mavlink 0.17 + serialport (live links and MAVLink parsing)
+- UDP/serial/BLE/SPP link adapters via `StreamConnection`
 - anyhow/thiserror (error handling)
-- SQLite (settings, cache index, mission/log metadata)
 
 ## Quality/Delivery
 - GitHub Actions CI
@@ -76,19 +68,19 @@ Build a modern, desktop-first Ground Control Station from scratch using Tauri.
 4. Adapters: serial/network/filesystem/map-cache/firmware endpoints
 5. Persistence: SQLite + local files/cache
 
-## Domain Modules
-- `telemetry-core`
-  - Link manager, MAVLink session state, heartbeat, stream rates, reconnection
-- `mission-core`
-  - Mission model, editors, validators, upload/download sync
-- `vehicle-config-core`
-  - Parameter metadata/cache, diff/apply engine, calibration flows
-- `log-core`
-  - TLOG/BIN ingest, indexing, playback timeline, chart query API
-- `firmware-core`
-  - Manifest fetch, download cache, board/port detection, flash orchestration
-- `platform-core`
-  - Settings, diagnostics, updates, filesystem policy, crash metadata
+## Domain Modules (all in `mavkit` crate)
+- Vehicle lifecycle: connection, heartbeat, link state, reconnection
+- Telemetry: MAVLink message parsing, watch channels, configurable stream rates
+- Mission: model, validators, wire boundary translation, transfer engine (upload/download/clear/verify)
+- Parameters: read/write, bulk download, .parm file I/O
+- Flight commands: arm/disarm, mode set, takeoff, guided goto
+- Transport adapters: serial, UDP, BLE (via StreamConnection), Classic SPP (via StreamConnection)
+- ArduPilot mode tables (feature-gated)
+
+Future modules (not yet implemented):
+- Log ingest: TLOG/BIN import, indexing, playback timeline, chart query
+- Firmware: manifest fetch, download cache, flash orchestration
+- Parameter staging: diff/apply engine, rollback, metadata cache
 
 ## Design Constraints
 - No UI component directly accesses serial/network APIs
@@ -97,37 +89,42 @@ Build a modern, desktop-first Ground Control Station from scratch using Tauri.
 
 ---
 
-## 5) Proposed Repository Layout
+## 5) Repository Layout
 
 ```text
-missionplanner-next/
-  apps/
-    desktop/                    # Tauri app shell
-      src-tauri/
-        Cargo.toml
-        tauri.conf.json
-      src/                      # React app
-        app/
-        features/
-        shared/
+MissionPlannerNg/
+  src/                            # React frontend (TypeScript)
+    components/
+      hud/                        # Flight instruments (horizon, tapes, etc.)
+      ui/                         # Radix + Tailwind base components
+    hooks/                        # use-vehicle, use-mission, use-params
+    lib/                          # mav-commands, utils
+    App.tsx                       # Main layout + state orchestration
+    MissionMap.tsx                # MapLibre 3D map
+    Sidebar.tsx                   # Transport selector + BT device pickers
+    mission.ts / telemetry.ts     # IPC bridge functions
+  src-tauri/
+    src/lib.rs                    # Tauri IPC command handlers
+    Cargo.toml                    # Dependencies + feature gating
+    gen/android/                  # Android build artifacts (Gradle)
+    capabilities/                 # Tauri capability scopes
   crates/
-    mp-ipc/                     # Shared command/event contracts (serde structs)
-    mp-telemetry-core/
-    mp-mission-core/
-    mp-vehicle-config-core/
-    mp-log-core/
-    mp-firmware-core/
-    mp-platform-core/
-    mp-adapters/                # serial/tcp/udp/filesystem/http adapters
-    mp-sitl-testkit/            # SITL helpers for integration tests
-  packages/
-    ui-kit/                     # Shared React components/tokens
-    schema/                     # Zod mirrors of IPC contracts where needed
-  docs/
-    adr/
-    api/
-    workflows/
-  .github/workflows/
+    mavkit/                       # Async MAVLink SDK (domain core)
+      src/
+        vehicle.rs                # Vehicle abstraction + lifecycle
+        event_loop.rs             # MAVLink event loop
+        state.rs                  # Telemetry state structs
+        mission/                  # Mission model + transfer engine
+        params/                   # Parameter storage + file I/O
+        stream_connection.rs      # AsyncRead/AsyncWrite -> MAVConnection adapter
+        ble_transport.rs          # BLE/SPP callback -> async channel bridge
+        modes.rs                  # ArduPilot flight mode tables
+        command.rs                # Command types (arm, mode, takeoff, etc.)
+      tests/
+        sitl_roundtrip.rs         # SITL integration tests
+    tauri-plugin-bluetooth-classic/  # Android Classic SPP plugin (Kotlin RFCOMM)
+  .github/workflows/ci.yml       # CI: frontend typecheck + Rust tests + SITL
+  Makefile                        # Dev/test orchestration
 ```
 
 ---
@@ -201,7 +198,8 @@ Assumption: small focused team (4-6 engineers). Timeline can compress/expand bas
 Current status:
 - M0: complete
 - M1: complete
-- M2: complete (mission model with first-class home position, wire boundary translation, HOME_POSITION telemetry, MapLibre 3D planner, map/table sync, transfer engine with cancel support, SITL roundtrip suite passing, set-current via COMMAND_LONG)
+- M2: complete
+- M2.5: complete (Bluetooth transport stack, Android mobile, HUD instruments, param UI foundation)
 
 ## M0 - Foundation (Weeks 1-4) [COMPLETE]
 - Finalize architecture and ADRs
@@ -290,16 +288,64 @@ Out of scope (defer to later milestone):
 - Partial mission upload/download optimization
 - Terrain-following and camera-trigger authoring UX
 
-## M3 - Parameters and Setup Workflows (Weeks 17-24)
-- Metadata ingestion and cache
-- Param table with search/filter/grouping
-- Staged edits + apply/rollback
+## M2.5 - Bluetooth, Android, and Flight Instruments [COMPLETE]
+
+Shipped between M2 and M3 as cross-cutting platform work:
+
+1. Bluetooth transport stack
+   - BLE (Nordic UART Service) via `tauri-plugin-blec` — desktop + Android
+   - Classic SPP via `tauri-plugin-bluetooth-classic` — Android only (Kotlin RFCOMM)
+   - Desktop Classic SPP via serial `/dev/rfcomm0`
+   - Transport-agnostic bridge: callback-based BT APIs → `channel_pair()` → `StreamConnection` → `Vehicle::from_connection()`
+
+2. Android mobile support
+   - Tauri v2 mobile integration with responsive layout
+   - Bottom navigation (5 tabs) + drawer sidebar
+   - Edge-to-edge safe area handling
+   - BT permission request flow for Android 12+
+   - Platform-gated command sets (serial on desktop, SPP on Android)
+
+3. Flight instruments (HUD panel)
+   - Artificial horizon with terrain fill
+   - Tape gauges for airspeed and altitude
+   - Flight path vector and bearing bug
+   - Attitude, nav, and battery status display
+
+4. Flight operations
+   - Arm/disarm with state validation
+   - Flight mode selection (auto-populated from vehicle type)
+   - Takeoff with altitude entry (auto-arms + sets GUIDED)
+   - Guided goto via right-click on map
+   - RTL/Land quick buttons
+   - Telemetry rate throttling (configurable Hz)
+
+5. Parameter UI foundation
+   - Live parameter read/write
+   - Parameter table with search/filter
+   - .parm file import/export
+
+6. Platform and repo
+   - Flattened repo structure (removed `apps/desktop` nesting)
+   - Single stateful Connect/Disconnect button
+   - `available_transports` dynamic transport discovery
+   - BLE scan picker and SPP bonded device picker
+
+Exit criteria:
+- BLE and Classic SPP connections working on desktop and Android
+- HUD instruments rendering live telemetry
+- Parameter read/write working on SITL
+- Android APK builds and runs
+
+## M3 - Parameters and Setup Workflows
+- Parameter staging engine: stage edits, diff view, apply/rollback
+- ArduPilot parameter metadata cache (descriptions, ranges, units)
+- Parameter grouping and advanced filtering
 - First setup wizard subset (radio/compass/accelerometer as feasible)
 
 Exit criteria:
 - Typical parameter tuning flow complete without legacy app
 
-## M4 - Logs and Analysis (Weeks 25-30)
+## M4 - Logs and Analysis
 - TLOG/BIN import and index
 - Timeline playback tied to map and key telemetry widgets
 - Core charts and export
@@ -307,7 +353,7 @@ Exit criteria:
 Exit criteria:
 - Pilot can review a flight log with timeline and metrics
 
-## M5 - Firmware and Release Hardening (Weeks 31-40)
+## M5 - Firmware and Release Hardening
 - Firmware metadata/download cache
 - Flash workflow with safety checks and rollback messaging
 - Reliability hardening, crash recovery, diagnostics bundle
@@ -316,7 +362,7 @@ Exit criteria:
 Exit criteria:
 - Release candidate for controlled user group
 
-## M6 - Public Beta (Weeks 41-52)
+## M6 - Public Beta
 - Feature-gap triage from pilot users
 - Performance and UX polish
 - Documentation and migration guidance from legacy
@@ -370,12 +416,13 @@ Exit criteria:
 
 ---
 
-## 11) Immediate Next Steps (Current - M2 Closing)
+## 11) Immediate Next Steps (Current - M3 Start)
 
-1. ~~Stabilize SITL roundtrip suite~~ Done: all 3 mission types passing, home position properly handled at wire boundary
-2. ~~Harden transfer lifecycle edges: cancel/reset-to-idle path, mission-type mismatch handling, and readback verification UX~~ Done: cancel via `Arc<AtomicBool>` flag, transfer buttons disabled during active transfers, verify UX feedback
-3. ~~Migrate set-current transport to `MAV_CMD_DO_SET_MISSION_CURRENT` with fallback handling~~ Done: uses `COMMAND_LONG`, accepts `COMMAND_ACK` or `MISSION_CURRENT` response
-4. ~~Run ArduPilot SITL acceptance loop for M2 exit criteria (edit -> write -> readback compare -> clear)~~ Done: SITL roundtrip suite passing for all 3 mission types
-5. ~~Keep SITL workflow staged (nightly/manual) and promote to stricter gating once stable~~ Done: promoted to run on every push and PR
+1. Parameter staging engine: `staged_params` map in AppState, stage/apply/rollback commands, diff view in frontend
+2. ArduPilot parameter metadata: parse upstream JSON schema, cache locally, expose descriptions/ranges/units in param table
+3. Parameter grouping: categorize params by subsystem, collapsible groups in table UI
+4. Setup wizard MVP: radio failsafe + mode config flow, then compass calibration with live sensor values
+5. Frontend test baseline: add Vitest for hooks and IPC bridge modules
+6. Mobile polish: verify BT permission flow on Android 12+, test full connection lifecycle on hardware
 
 This plan stays biased toward shipping a usable cockpit first, with disciplined protocol correctness before advanced planning UX.
