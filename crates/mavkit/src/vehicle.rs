@@ -5,7 +5,7 @@ use crate::event_loop::run_event_loop;
 use crate::mission::{HomePosition, MissionHandle, TransferProgress};
 use crate::params::{ParamProgress, ParamStore, ParamsHandle};
 use crate::state::{
-    create_channels, FlightMode, LinkState, MissionState, StateChannels, Telemetry,
+    create_channels, FlightMode, LinkState, MissionState, StateChannels, StatusMessage, Telemetry,
     VehicleIdentity, VehicleState,
 };
 use mavlink::common::{self, MavCmd};
@@ -171,6 +171,10 @@ impl Vehicle {
         self.inner.channels.param_progress.clone()
     }
 
+    pub fn statustext(&self) -> watch::Receiver<Option<StatusMessage>> {
+        self.inner.channels.statustext.clone()
+    }
+
     // --- Vehicle commands ---
 
     pub async fn arm(&self, force: bool) -> Result<(), VehicleError> {
@@ -222,6 +226,28 @@ impl Vehicle {
             params,
             reply,
         })
+        .await
+    }
+
+    /// MAV_CMD_PREFLIGHT_CALIBRATION. Set params to 1 to start that calibration.
+    pub async fn preflight_calibration(
+        &self,
+        gyro: bool,
+        accel: bool,
+        radio_trim: bool,
+    ) -> Result<(), VehicleError> {
+        self.command_long(
+            MavCmd::MAV_CMD_PREFLIGHT_CALIBRATION,
+            [
+                if gyro { 1.0 } else { 0.0 },      // param1: gyro
+                0.0,                                  // param2: magnetometer
+                0.0,                                  // param3: ground pressure
+                if radio_trim { 1.0 } else { 0.0 },  // param4: radio trim
+                if accel { 1.0 } else { 0.0 },       // param5: accel
+                0.0,                                  // param6: compass/motor
+                0.0,                                  // param7: esc
+            ],
+        )
         .await
     }
 

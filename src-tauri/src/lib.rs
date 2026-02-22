@@ -1,7 +1,7 @@
 use mavkit::{
     format_param_file, parse_param_file, validate_plan, FlightMode, HomePosition, LinkState,
-    MissionIssue, MissionPlan, MissionType, Param, ParamProgress, ParamStore, Telemetry,
-    TransferProgress, Vehicle, VehicleConfig, VehicleState,
+    MissionIssue, MissionPlan, MissionType, Param, ParamProgress, ParamStore, ParamWriteResult,
+    StatusMessage, Telemetry, TransferProgress, Vehicle, VehicleConfig, VehicleState,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -534,6 +534,28 @@ async fn mission_cancel(state: tauri::State<'_, AppState>) -> Result<(), String>
 // Parameter commands
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Calibration commands
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+async fn calibrate_accel(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let guard = state.vehicle.lock().await;
+    let vehicle = guard.as_ref().ok_or("not connected")?;
+    vehicle.preflight_calibration(false, true, false).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn calibrate_gyro(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let guard = state.vehicle.lock().await;
+    let vehicle = guard.as_ref().ok_or("not connected")?;
+    vehicle.preflight_calibration(true, false, false).await.map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// Parameter commands
+// ---------------------------------------------------------------------------
+
 #[tauri::command]
 async fn param_download_all(state: tauri::State<'_, AppState>) -> Result<ParamStore, String> {
     let guard = state.vehicle.lock().await;
@@ -550,6 +572,16 @@ async fn param_write(
     let guard = state.vehicle.lock().await;
     let vehicle = guard.as_ref().ok_or("not connected")?;
     vehicle.params().write(name, value).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn param_write_batch(
+    state: tauri::State<'_, AppState>,
+    params: Vec<(String, f32)>,
+) -> Result<Vec<ParamWriteResult>, String> {
+    let guard = state.vehicle.lock().await;
+    let vehicle = guard.as_ref().ok_or("not connected")?;
+    vehicle.params().write_batch(params).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -674,6 +706,20 @@ fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
             }
         });
     }
+
+    // StatusText
+    {
+        let mut rx = vehicle.statustext();
+        let handle = app.clone();
+        tokio::spawn(async move {
+            while rx.changed().await.is_ok() {
+                let msg: Option<StatusMessage> = rx.borrow().clone();
+                if let Some(msg) = msg {
+                    let _ = handle.emit("statustext://message", &msg);
+                }
+            }
+        });
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -727,8 +773,11 @@ pub fn run() {
             set_telemetry_rate,
             param_download_all,
             param_write,
+            param_write_batch,
             param_parse_file,
-            param_format_file
+            param_format_file,
+            calibrate_accel,
+            calibrate_gyro
         ]);
     }
 
@@ -758,8 +807,11 @@ pub fn run() {
             set_telemetry_rate,
             param_download_all,
             param_write,
+            param_write_batch,
             param_parse_file,
-            param_format_file
+            param_format_file,
+            calibrate_accel,
+            calibrate_gyro
         ]);
     }
 

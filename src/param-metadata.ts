@@ -10,6 +10,8 @@ export type ParamMeta = {
   values?: { code: number; label: string }[];
   bitmask?: { bit: number; label: string }[];
   rebootRequired?: boolean;
+  readOnly?: boolean;
+  userLevel?: "Standard" | "Advanced";
 };
 
 export type ParamMetadataMap = Map<string, ParamMeta>;
@@ -43,10 +45,14 @@ export function parseMetadataXml(xml: string): ParamMetadataMap {
     const name = rawName.includes(":") ? rawName.split(":")[1] : rawName;
     if (!name) continue;
 
+    const userAttr = el.getAttribute("user");
     const meta: ParamMeta = {
       humanName: el.getAttribute("humanName") ?? "",
       description: el.getAttribute("documentation") ?? "",
     };
+    if (userAttr === "Standard" || userAttr === "Advanced") {
+      meta.userLevel = userAttr;
+    }
 
     // Parse <field> children
     const fields = el.querySelectorAll("field");
@@ -78,6 +84,9 @@ export function parseMetadataXml(xml: string): ParamMetadataMap {
           break;
         case "RebootRequired":
           meta.rebootRequired = text.toLowerCase() === "true";
+          break;
+        case "ReadOnly":
+          meta.readOnly = text.toLowerCase() === "true";
           break;
       }
     }

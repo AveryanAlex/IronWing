@@ -32,6 +32,7 @@ pub struct ParamStore {
 pub enum ParamTransferPhase {
     Idle,
     Downloading,
+    Writing,
     Completed,
     Failed,
 }
@@ -47,6 +48,14 @@ pub struct ParamProgress {
     pub phase: ParamTransferPhase,
     pub received: u16,
     pub expected: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ParamWriteResult {
+    pub name: String,
+    pub requested_value: f32,
+    pub confirmed_value: f32,
+    pub success: bool,
 }
 
 impl Default for ParamProgress {

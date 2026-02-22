@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   downloadAllParams,
   writeParam,
+  writeBatchParams,
   parseParamFile,
   formatParamFile,
   subscribeParamStore,
@@ -21,6 +22,8 @@ function asErrorMessage(error: unknown): string {
   return "unexpected error";
 }
 
+export type FilterMode = "all" | "modified" | "standard";
+
 export function useParams(connected: boolean, vehicleType?: string) {
   const [store, setStore] = useState<ParamStore | null>(null);
   const [progress, setProgress] = useState<ParamProgress | null>(null);
@@ -30,6 +33,8 @@ export function useParams(connected: boolean, vehicleType?: string) {
   const [metadata, setMetadata] = useState<ParamMetadataMap | null>(null);
   const [metadataLoading, setMetadataLoading] = useState(false);
   const lastFetchedType = useRef<string | undefined>();
+  const [staged, setStaged] = useState<Map<string, number>>(new Map());
+  const [filterMode, setFilterMode] = useState<FilterMode>("standard");
 
   // Subscribe to param events
   useEffect(() => {
@@ -54,6 +59,8 @@ export function useParams(connected: boolean, vehicleType?: string) {
       setProgress(null);
       setEditingParam(null);
       setMetadata(null);
+      setStaged(new Map());
+      setFilterMode("all");
       lastFetchedType.current = undefined;
     }
   }, [connected]);
@@ -92,20 +99,36 @@ export function useParams(connected: boolean, vehicleType?: string) {
   }, [store]);
 
   const filteredParams = useMemo(() => {
-    if (!search) return paramList;
-    const term = search.toLowerCase();
-    return paramList.filter((p) => {
-      if (p.name.toLowerCase().includes(term)) return true;
-      if (metadata) {
-        const meta = metadata.get(p.name);
-        if (meta) {
-          if (meta.description.toLowerCase().includes(term)) return true;
-          if (meta.humanName.toLowerCase().includes(term)) return true;
+    let list = paramList;
+
+    // Filter by mode
+    if (filterMode === "modified") {
+      list = list.filter((p) => staged.has(p.name));
+    } else if (filterMode === "standard") {
+      list = list.filter((p) => {
+        const meta = metadata?.get(p.name);
+        return !meta?.userLevel || meta.userLevel === "Standard";
+      });
+    }
+
+    // Filter by search
+    if (search) {
+      const term = search.toLowerCase();
+      list = list.filter((p) => {
+        if (p.name.toLowerCase().includes(term)) return true;
+        if (metadata) {
+          const meta = metadata.get(p.name);
+          if (meta) {
+            if (meta.description.toLowerCase().includes(term)) return true;
+            if (meta.humanName.toLowerCase().includes(term)) return true;
+          }
         }
-      }
-      return false;
-    });
-  }, [paramList, search, metadata]);
+        return false;
+      });
+    }
+
+    return list;
+  }, [paramList, search, metadata, filterMode, staged]);
 
   const groupedParams = useMemo(() => {
     const groups: Record<string, Param[]> = {};
@@ -140,7 +163,6 @@ export function useParams(connected: boolean, vehicleType?: string) {
       }
       try {
         const confirmed = await writeParam(name, value);
-        // Optimistically update local store
         setStore((prev) => {
           if (!prev) return prev;
           return {
@@ -155,6 +177,66 @@ export function useParams(connected: boolean, vehicleType?: string) {
     },
     [connected],
   );
+
+  const stage = useCallback(
+    (name: string, value: number) => {
+      // Don't stage if value matches current
+      const current = store?.params[name]?.value;
+      if (current !== undefined && current === value) {
+        setStaged((prev) => {
+          const next = new Map(prev);
+          next.delete(name);
+          return next;
+        });
+        return;
+      }
+      setStaged((prev) => {
+        const next = new Map(prev);
+        next.set(name, value);
+        return next;
+      });
+    },
+    [store],
+  );
+
+  const unstage = useCallback((name: string) => {
+    setStaged((prev) => {
+      const next = new Map(prev);
+      next.delete(name);
+      return next;
+    });
+  }, []);
+
+  const unstageAll = useCallback(() => {
+    setStaged(new Map());
+  }, []);
+
+  const applyStaged = useCallback(async () => {
+    if (!connected || staged.size === 0) return;
+    const entries: [string, number][] = Array.from(staged.entries());
+    try {
+      const results = await writeBatchParams(entries);
+      const succeeded = results.filter((r) => r.success);
+      const failed = results.filter((r) => !r.success);
+
+      // Remove successes from staged
+      setStaged((prev) => {
+        const next = new Map(prev);
+        for (const r of succeeded) next.delete(r.name);
+        return next;
+      });
+
+      if (failed.length === 0) {
+        toast.success(`${succeeded.length} parameters written`);
+      } else {
+        toast.warning(`${succeeded.length} written, ${failed.length} failed`, {
+          description: failed.map((r) => r.name).join(", "),
+        });
+      }
+    } catch (err) {
+      toast.error("Batch write failed", { description: asErrorMessage(err) });
+    }
+  }, [connected, staged]);
 
   const saveToFile = useCallback(async () => {
     if (!store) {
@@ -185,13 +267,34 @@ export function useParams(connected: boolean, vehicleType?: string) {
       const contents = await readTextFile(path);
       const parsed = await parseParamFile(contents);
       const count = Object.keys(parsed).length;
-      toast.success(`Loaded ${count} parameters from file`);
+
+      // Auto-stage values that differ from current store
+      if (store) {
+        let stagedCount = 0;
+        setStaged((prev) => {
+          const next = new Map(prev);
+          for (const [name, value] of Object.entries(parsed)) {
+            const current = store.params[name]?.value;
+            if (current !== undefined && current !== value) {
+              next.set(name, value);
+              stagedCount++;
+            }
+          }
+          return next;
+        });
+        toast.success(`Loaded ${count} params, ${stagedCount} differ from vehicle`, {
+          description: "Review staged changes and click Apply",
+        });
+        if (stagedCount > 0) setFilterMode("modified");
+      } else {
+        toast.success(`Loaded ${count} parameters from file`);
+      }
       return parsed;
     } catch (err) {
       toast.error("Failed to load file", { description: asErrorMessage(err) });
       return undefined;
     }
-  }, []);
+  }, [store]);
 
   return {
     store,
@@ -211,5 +314,12 @@ export function useParams(connected: boolean, vehicleType?: string) {
     loadFromFile,
     metadata,
     metadataLoading,
+    staged,
+    stage,
+    unstage,
+    unstageAll,
+    applyStaged,
+    filterMode,
+    setFilterMode,
   };
 }

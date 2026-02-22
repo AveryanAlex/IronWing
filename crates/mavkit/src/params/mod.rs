@@ -2,7 +2,7 @@ pub mod file;
 pub mod types;
 
 pub use file::{format_param_file, parse_param_file};
-pub use types::{Param, ParamProgress, ParamStore, ParamTransferPhase, ParamType};
+pub use types::{Param, ParamProgress, ParamStore, ParamTransferPhase, ParamType, ParamWriteResult};
 
 use crate::error::VehicleError;
 use crate::Vehicle;
@@ -30,6 +30,15 @@ impl<'a> ParamsHandle<'a> {
                 value,
                 reply,
             })
+            .await
+    }
+
+    pub async fn write_batch(
+        &self,
+        params: Vec<(String, f32)>,
+    ) -> Result<Vec<types::ParamWriteResult>, VehicleError> {
+        self.vehicle
+            .send_command(|reply| crate::command::Command::ParamWriteBatch { params, reply })
             .await
     }
 }

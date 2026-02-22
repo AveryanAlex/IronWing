@@ -18,8 +18,8 @@ pub use error::VehicleError;
 pub use vehicle::Vehicle;
 
 pub use state::{
-    AutopilotType, FlightMode, GpsFixType, LinkState, MissionState, SystemStatus, Telemetry,
-    VehicleIdentity, VehicleState, VehicleType,
+    AutopilotType, FlightMode, GpsFixType, LinkState, MissionState, StatusMessage, SystemStatus,
+    Telemetry, VehicleIdentity, VehicleState, VehicleType,
 };
 
 pub use mission::{
@@ -31,5 +31,5 @@ pub use mission::{
 
 pub use params::{
     format_param_file, parse_param_file, Param, ParamProgress, ParamStore, ParamTransferPhase,
-    ParamType, ParamsHandle,
+    ParamType, ParamWriteResult, ParamsHandle,
 };

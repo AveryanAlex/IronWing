@@ -15,12 +15,19 @@ export type ParamStore = {
   expected_count: number;
 };
 
-export type ParamTransferPhase = "idle" | "downloading" | "completed" | "failed";
+export type ParamTransferPhase = "idle" | "downloading" | "writing" | "completed" | "failed";
 
 export type ParamProgress = {
   phase: ParamTransferPhase;
   received: number;
   expected: number;
+};
+
+export type ParamWriteResult = {
+  name: string;
+  requested_value: number;
+  confirmed_value: number;
+  success: boolean;
 };
 
 export async function downloadAllParams(): Promise<ParamStore> {
@@ -29,6 +36,10 @@ export async function downloadAllParams(): Promise<ParamStore> {
 
 export async function writeParam(name: string, value: number): Promise<Param> {
   return invoke<Param>("param_write", { name, value });
+}
+
+export async function writeBatchParams(params: [string, number][]): Promise<ParamWriteResult[]> {
+  return invoke<ParamWriteResult[]>("param_write_batch", { params });
 }
 
 export async function parseParamFile(contents: string): Promise<Record<string, number>> {

@@ -5,7 +5,7 @@ use crate::mission::{
     self, IssueSeverity, MissionFrame, MissionItem, MissionPlan, MissionTransferMachine, MissionType,
     TransferPhase,
 };
-use crate::params::{Param, ParamProgress, ParamStore, ParamTransferPhase, ParamType};
+use crate::params::{Param, ParamProgress, ParamStore, ParamTransferPhase, ParamType, ParamWriteResult};
 use crate::state::{
     AutopilotType, GpsFixType, LinkState, MissionState, StateWriters, SystemStatus,
     VehicleState, VehicleType,
@@ -327,6 +327,15 @@ fn update_state(
                 ]);
             });
         }
+        common::MavMessage::STATUSTEXT(data) => {
+            let text = data.text.to_str().unwrap_or("").to_string();
+            if !text.is_empty() {
+                let _ = writers.statustext.send(Some(crate::state::StatusMessage {
+                    text,
+                    severity: data.severity as u8,
+                }));
+            }
+        }
         _ => {
             trace!("unhandled message type");
         }
@@ -392,6 +401,10 @@ async fn handle_command(
         }
         Command::ParamWrite { name, value, reply } => {
             let result = handle_param_write(&name, value, connection, writers, vehicle_target, config, cancel).await;
+            let _ = reply.send(result);
+        }
+        Command::ParamWriteBatch { params, reply } => {
+            let result = handle_param_write_batch(params, connection, writers, vehicle_target, config, cancel).await;
             let _ = reply.send(result);
         }
         Command::Shutdown => {
@@ -1606,4 +1619,71 @@ async fn handle_param_write(
     }
 
     Err(VehicleError::Timeout)
+}
+
+// ---------------------------------------------------------------------------
+// Parameter Batch Write
+// ---------------------------------------------------------------------------
+
+async fn handle_param_write_batch(
+    params: Vec<(String, f32)>,
+    connection: &(dyn AsyncMavConnection<common::MavMessage> + Sync + Send),
+    writers: &StateWriters,
+    vehicle_target: &mut Option<VehicleTarget>,
+    config: &VehicleConfig,
+    cancel: &CancellationToken,
+) -> Result<Vec<ParamWriteResult>, VehicleError> {
+    let total = params.len() as u16;
+    let mut results = Vec::with_capacity(params.len());
+
+    let _ = writers.param_progress.send(ParamProgress {
+        phase: ParamTransferPhase::Writing,
+        received: 0,
+        expected: total,
+    });
+
+    for (i, (name, value)) in params.into_iter().enumerate() {
+        let result = handle_param_write(&name, value, connection, writers, vehicle_target, config, cancel).await;
+        match result {
+            Ok(confirmed) => {
+                results.push(ParamWriteResult {
+                    name,
+                    requested_value: value,
+                    confirmed_value: confirmed.value,
+                    success: true,
+                });
+            }
+            Err(VehicleError::Cancelled) => {
+                let _ = writers.param_progress.send(ParamProgress {
+                    phase: ParamTransferPhase::Failed,
+                    received: i as u16,
+                    expected: total,
+                });
+                return Err(VehicleError::Cancelled);
+            }
+            Err(_) => {
+                results.push(ParamWriteResult {
+                    name,
+                    requested_value: value,
+                    confirmed_value: 0.0,
+                    success: false,
+                });
+            }
+        }
+
+        let _ = writers.param_progress.send(ParamProgress {
+            phase: ParamTransferPhase::Writing,
+            received: (i + 1) as u16,
+            expected: total,
+        });
+    }
+
+    let all_ok = results.iter().all(|r| r.success);
+    let _ = writers.param_progress.send(ParamProgress {
+        phase: if all_ok { ParamTransferPhase::Completed } else { ParamTransferPhase::Failed },
+        received: results.iter().filter(|r| r.success).count() as u16,
+        expected: total,
+    });
+
+    Ok(results)
 }

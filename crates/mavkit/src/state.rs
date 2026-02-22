@@ -196,6 +196,12 @@ impl AutopilotType {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StatusMessage {
+    pub text: String,
+    pub severity: u8,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GpsFixType {
@@ -231,6 +237,7 @@ pub(crate) struct StateWriters {
     pub mission_progress: tokio::sync::watch::Sender<Option<crate::mission::TransferProgress>>,
     pub param_store: tokio::sync::watch::Sender<crate::params::ParamStore>,
     pub param_progress: tokio::sync::watch::Sender<crate::params::ParamProgress>,
+    pub statustext: tokio::sync::watch::Sender<Option<StatusMessage>>,
 }
 
 /// Reader-side channels, cloneable via Arc.
@@ -243,6 +250,7 @@ pub(crate) struct StateChannels {
     pub mission_progress: tokio::sync::watch::Receiver<Option<crate::mission::TransferProgress>>,
     pub param_store: tokio::sync::watch::Receiver<crate::params::ParamStore>,
     pub param_progress: tokio::sync::watch::Receiver<crate::params::ParamProgress>,
+    pub statustext: tokio::sync::watch::Receiver<Option<StatusMessage>>,
 }
 
 pub(crate) fn create_channels() -> (StateWriters, StateChannels) {
@@ -254,6 +262,7 @@ pub(crate) fn create_channels() -> (StateWriters, StateChannels) {
     let (mp_tx, mp_rx) = tokio::sync::watch::channel(None);
     let (ps_tx, ps_rx) = tokio::sync::watch::channel(crate::params::ParamStore::default());
     let (pp_tx, pp_rx) = tokio::sync::watch::channel(crate::params::ParamProgress::default());
+    let (st_tx, st_rx) = tokio::sync::watch::channel(None);
 
     let writers = StateWriters {
         vehicle_state: vs_tx,
@@ -264,6 +273,7 @@ pub(crate) fn create_channels() -> (StateWriters, StateChannels) {
         mission_progress: mp_tx,
         param_store: ps_tx,
         param_progress: pp_tx,
+        statustext: st_tx,
     };
 
     let channels = StateChannels {
@@ -275,6 +285,7 @@ pub(crate) fn create_channels() -> (StateWriters, StateChannels) {
         mission_progress: mp_rx,
         param_store: ps_rx,
         param_progress: pp_rx,
+        statustext: st_rx,
     };
 
     (writers, channels)
