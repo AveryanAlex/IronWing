@@ -115,6 +115,7 @@ export function MissionMap({
       pitch: syntheticVision ? 75 : 0,
       maxPitch: 85,
       interactive: !syntheticVision,
+      attributionControl: false,
     });
 
     map.setStyle(BASE_STYLE_URL, {
