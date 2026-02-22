@@ -37,9 +37,11 @@ type MissionMapProps = {
   readOnly?: boolean;
   vehiclePosition?: { latitude_deg: number; longitude_deg: number; heading_deg: number } | null;
   deviceLocation?: { latitude_deg: number; longitude_deg: number; accuracy_m: number } | null;
-  flyToDeviceLocation?: number;
+  followTarget?: "vehicle" | "device" | null;
+  centerOnVehicleKey?: number;
+  centerOnDeviceKey?: number;
+  onUserInteraction?: () => void;
   currentMissionSeq?: number | null;
-  followVehicle?: boolean;
   syntheticVision?: boolean;
   svsTelemetry?: SvsTelemetry | null;
 };
@@ -49,7 +51,8 @@ export type { SvsTelemetry };
 export function MissionMap({
   missionItems, homePosition, selectedSeq, onSelectSeq,
   onMoveWaypoint, onContextMenu, readOnly,
-  vehiclePosition, deviceLocation, flyToDeviceLocation, currentMissionSeq, followVehicle,
+  vehiclePosition, deviceLocation, followTarget, centerOnVehicleKey, centerOnDeviceKey,
+  onUserInteraction, currentMissionSeq,
   syntheticVision, svsTelemetry,
 }: MissionMapProps) {
   type MapLayer = "plan" | "hybrid" | "satellite";
@@ -68,6 +71,8 @@ export function MissionMap({
   const onContextMenuRef = useRef(onContextMenu);
   const readOnlyRef = useRef(readOnly);
   const longPressFiredRef = useRef(false);
+  const onUserInteractionRef = useRef(onUserInteraction);
+  const programmaticMoveRef = useRef(false);
   const missionGeoJsonRef = useRef<any>({ type: "FeatureCollection", features: [] });
 
   useEffect(() => {
@@ -75,7 +80,8 @@ export function MissionMap({
     onMoveWaypointRef.current = onMoveWaypoint;
     onContextMenuRef.current = onContextMenu;
     readOnlyRef.current = readOnly;
-  }, [onSelectSeq, onMoveWaypoint, onContextMenu, readOnly]);
+    onUserInteractionRef.current = onUserInteraction;
+  }, [onSelectSeq, onMoveWaypoint, onContextMenu, readOnly, onUserInteraction]);
 
   const missionGeoJson = useMemo(() => {
     const lineCoordinates: [number, number][] = [];
@@ -247,6 +253,15 @@ export function MissionMap({
       el.addEventListener("touchcancel", clearLp);
     }
 
+    // Detect user-initiated map movement to break follow mode
+    map.on("movestart", () => {
+      if (programmaticMoveRef.current) {
+        programmaticMoveRef.current = false;
+      } else {
+        onUserInteractionRef.current?.();
+      }
+    });
+
     mapRef.current = map;
 
     return () => {
@@ -398,14 +413,15 @@ export function MissionMap({
           .addTo(map);
       }
 
-      if (followVehicle) {
+      if (followTarget === "vehicle") {
+        programmaticMoveRef.current = true;
         map.easeTo({ center: lngLat, duration: 500 });
       }
     } else if (vehicleMarkerRef.current) {
       vehicleMarkerRef.current.remove();
       vehicleMarkerRef.current = null;
     }
-  }, [vehiclePosition, followVehicle, syntheticVision]);
+  }, [vehiclePosition, followTarget, syntheticVision]);
 
   // SVS camera tracking
   useEffect(() => {
@@ -444,23 +460,42 @@ export function MissionMap({
           .setLngLat(lngLat)
           .addTo(map);
       }
+
+      if (followTarget === "device") {
+        programmaticMoveRef.current = true;
+        map.easeTo({ center: lngLat, duration: 500 });
+      }
     } else if (deviceLocationMarkerRef.current) {
       deviceLocationMarkerRef.current.remove();
       deviceLocationMarkerRef.current = null;
     }
-  }, [deviceLocation, syntheticVision]);
+  }, [deviceLocation, followTarget, syntheticVision]);
 
-  // Fly to device location on demand
+  // One-shot center on vehicle
   useEffect(() => {
-    if (!flyToDeviceLocation || !deviceLocation) return;
+    if (!centerOnVehicleKey || !vehiclePosition) return;
     const map = mapRef.current;
     if (!map) return;
+    programmaticMoveRef.current = true;
+    map.flyTo({
+      center: [vehiclePosition.longitude_deg, vehiclePosition.latitude_deg],
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 800,
+    });
+  }, [centerOnVehicleKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // One-shot center on device
+  useEffect(() => {
+    if (!centerOnDeviceKey || !deviceLocation) return;
+    const map = mapRef.current;
+    if (!map) return;
+    programmaticMoveRef.current = true;
     map.flyTo({
       center: [deviceLocation.longitude_deg, deviceLocation.latitude_deg],
       zoom: Math.max(map.getZoom(), 15),
       duration: 800,
     });
-  }, [flyToDeviceLocation]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [centerOnDeviceKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fit bounds on initial load (skip in SVS mode)
   useEffect(() => {

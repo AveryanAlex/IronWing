@@ -258,7 +258,7 @@ export function HudPanel({ vehicle, mission, svsEnabled }: HudPanelProps) {
             readOnly
             vehiclePosition={vehiclePosition}
             currentMissionSeq={missionState?.current_seq ?? null}
-            followVehicle
+            followTarget="vehicle"
           />
         </div>
       )}

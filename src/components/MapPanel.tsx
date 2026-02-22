@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Locate } from "lucide-react";
+import { Locate, Navigation } from "lucide-react";
 import { toast } from "sonner";
 import { MissionMap } from "./MissionMap";
 import { MapContextMenu } from "./MapContextMenu";
@@ -20,11 +20,16 @@ type ContextMenuState = {
   lng: number;
 } | null;
 
+const LONG_PRESS_MS = 500;
+
 export function MapPanel({ vehicle, mission, deviceLocation }: MapPanelProps) {
-  const { vehiclePosition, followVehicle, setFollowVehicle, guidedGoto } = vehicle;
+  const { vehiclePosition, guidedGoto } = vehicle;
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
-  const [flyToKey, setFlyToKey] = useState(0);
-  const pendingFlyToRef = useRef(false);
+
+  const [followTarget, setFollowTarget] = useState<"vehicle" | "device" | null>(null);
+  const [centerVehicleKey, setCenterVehicleKey] = useState(0);
+  const [centerDeviceKey, setCenterDeviceKey] = useState(0);
+  const pendingDeviceCenterRef = useRef(false);
 
   // Notify user when geolocation permission is denied asynchronously
   useEffect(() => {
@@ -33,13 +38,17 @@ export function MapPanel({ vehicle, mission, deviceLocation }: MapPanelProps) {
     }
   }, [deviceLocation.permissionDenied]);
 
-  // When location arrives after a pending "My Location" click, fly there once
+  // When device location arrives after a pending center request, center once
   useEffect(() => {
-    if (pendingFlyToRef.current && deviceLocation.location) {
-      pendingFlyToRef.current = false;
-      setFlyToKey((k) => k + 1);
+    if (pendingDeviceCenterRef.current && deviceLocation.location) {
+      pendingDeviceCenterRef.current = false;
+      setCenterDeviceKey((k) => k + 1);
     }
   }, [deviceLocation.location]);
+
+  const handleUserInteraction = useCallback(() => {
+    setFollowTarget(null);
+  }, []);
 
   const handleContextMenu = useCallback(
     (lat: number, lng: number, x: number, y: number) => {
@@ -47,8 +56,95 @@ export function MapPanel({ vehicle, mission, deviceLocation }: MapPanelProps) {
     },
     []
   );
-
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  // --- Vehicle button handlers ---
+  const vehicleLpRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const onVehiclePointerDown = useCallback(() => {
+    vehicleLpRef.current = setTimeout(() => {
+      vehicleLpRef.current = null;
+      if (!vehiclePosition) {
+        toast.error("No vehicle position");
+        return;
+      }
+      setFollowTarget("vehicle");
+      setCenterVehicleKey((k) => k + 1);
+      toast.success("Following vehicle");
+    }, LONG_PRESS_MS);
+  }, [vehiclePosition]);
+
+  const onVehiclePointerUp = useCallback(() => {
+    if (vehicleLpRef.current !== null) {
+      // Short press — long press timer didn't fire
+      clearTimeout(vehicleLpRef.current);
+      vehicleLpRef.current = null;
+      if (!vehiclePosition) {
+        toast.error("No vehicle position");
+        return;
+      }
+      setCenterVehicleKey((k) => k + 1);
+    }
+  }, [vehiclePosition]);
+
+  const onVehiclePointerLeave = useCallback(() => {
+    if (vehicleLpRef.current !== null) {
+      clearTimeout(vehicleLpRef.current);
+      vehicleLpRef.current = null;
+    }
+  }, []);
+
+  // --- Device button handlers ---
+  const deviceLpRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const ensureDeviceLocation = useCallback(() => {
+    if (!deviceLocation.supported) {
+      toast.error("Geolocation is not available on this device");
+      return false;
+    }
+    if (deviceLocation.permissionDenied) {
+      toast.error("Location permission was denied — enable it in system settings");
+      return false;
+    }
+    deviceLocation.startWatching();
+    return true;
+  }, [deviceLocation]);
+
+  const onDevicePointerDown = useCallback(() => {
+    deviceLpRef.current = setTimeout(() => {
+      deviceLpRef.current = null;
+      if (!ensureDeviceLocation()) return;
+      if (deviceLocation.location) {
+        setFollowTarget("device");
+        setCenterDeviceKey((k) => k + 1);
+        toast.success("Following my location");
+      } else {
+        pendingDeviceCenterRef.current = true;
+        setFollowTarget("device");
+        toast.success("Following my location");
+      }
+    }, LONG_PRESS_MS);
+  }, [ensureDeviceLocation, deviceLocation.location]);
+
+  const onDevicePointerUp = useCallback(() => {
+    if (deviceLpRef.current !== null) {
+      clearTimeout(deviceLpRef.current);
+      deviceLpRef.current = null;
+      if (!ensureDeviceLocation()) return;
+      if (deviceLocation.location) {
+        setCenterDeviceKey((k) => k + 1);
+      } else {
+        pendingDeviceCenterRef.current = true;
+      }
+    }
+  }, [ensureDeviceLocation, deviceLocation.location]);
+
+  const onDevicePointerLeave = useCallback(() => {
+    if (deviceLpRef.current !== null) {
+      clearTimeout(deviceLpRef.current);
+      deviceLpRef.current = null;
+    }
+  }, []);
 
   return (
     <div className="relative h-full overflow-hidden rounded-lg border border-border">
@@ -60,9 +156,11 @@ export function MapPanel({ vehicle, mission, deviceLocation }: MapPanelProps) {
         onContextMenu={handleContextMenu}
         vehiclePosition={vehiclePosition}
         deviceLocation={deviceLocation.location}
-        flyToDeviceLocation={flyToKey}
+        followTarget={followTarget}
+        centerOnVehicleKey={centerVehicleKey}
+        centerOnDeviceKey={centerDeviceKey}
+        onUserInteraction={handleUserInteraction}
         currentMissionSeq={mission.missionState?.current_seq ?? null}
-        followVehicle={followVehicle}
       />
       {contextMenu && (
         <MapContextMenu
@@ -78,35 +176,26 @@ export function MapPanel({ vehicle, mission, deviceLocation }: MapPanelProps) {
           onClose={closeContextMenu}
         />
       )}
-      <div className="absolute bottom-3 left-3 z-10 flex gap-2">
+      <div className="map-locate-group">
         <button
-          onClick={() => setFollowVehicle((v) => !v)}
-          className="rounded-md border border-border-light bg-bg-primary/85 px-3 py-1.5 text-xs font-medium text-text-primary backdrop-blur-sm transition-colors hover:bg-bg-tertiary"
+          className={`map-locate-btn${followTarget === "device" ? " is-active" : ""}`}
+          title="My Location (hold to follow)"
+          onPointerDown={onDevicePointerDown}
+          onPointerUp={onDevicePointerUp}
+          onPointerLeave={onDevicePointerLeave}
+          onContextMenu={(e) => e.preventDefault()}
         >
-          {followVehicle ? "Following" : "Follow Vehicle"}
+          <Locate size={16} />
         </button>
         <button
-          onClick={() => {
-            if (!deviceLocation.supported) {
-              toast.error("Geolocation is not available on this device");
-              return;
-            }
-            if (deviceLocation.permissionDenied) {
-              toast.error("Location permission was denied — enable it in system settings");
-              return;
-            }
-            if (deviceLocation.location) {
-              setFlyToKey((k) => k + 1);
-            } else {
-              pendingFlyToRef.current = true;
-            }
-            deviceLocation.startWatching();
-          }}
-          title="My Location"
-          className="flex items-center gap-1.5 rounded-md border border-border-light bg-bg-primary/85 px-3 py-1.5 text-xs font-medium text-text-primary backdrop-blur-sm transition-colors hover:bg-bg-tertiary"
+          className={`map-locate-btn${followTarget === "vehicle" ? " is-active" : ""}`}
+          title="Vehicle Location (hold to follow)"
+          onPointerDown={onVehiclePointerDown}
+          onPointerUp={onVehiclePointerUp}
+          onPointerLeave={onVehiclePointerLeave}
+          onContextMenu={(e) => e.preventDefault()}
         >
-          <Locate size={14} />
-          <span className="hidden sm:inline">My Location</span>
+          <Navigation size={16} />
         </button>
       </div>
     </div>
