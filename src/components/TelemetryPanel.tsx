@@ -19,7 +19,7 @@ function fmtInt(value: number | undefined): string {
 
 function Metric({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="flex flex-col items-center rounded-lg border border-border-light bg-bg-tertiary/50 px-3 py-2">
+    <div className="min-w-0 flex flex-col items-center rounded-lg border border-border-light bg-bg-tertiary/50 px-3 py-2">
       <span className="text-[10px] uppercase tracking-wider text-text-muted">{label}</span>
       <span className="mt-0.5 text-base font-bold">
         {value}
@@ -33,7 +33,7 @@ function SectionRow({ title, children }: { title: string; children: React.ReactN
   return (
     <div>
       <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">{title}</h3>
-      <div className="flex flex-wrap gap-2">{children}</div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(5rem,1fr))] gap-2">{children}</div>
     </div>
   );
 }

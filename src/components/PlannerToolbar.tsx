@@ -46,80 +46,88 @@ export function PlannerToolbar({ mission, connected }: PlannerToolbarProps) {
     : 0;
 
   return (
-    <div className="space-y-2">
-      {/* Primary actions */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Button size="sm" disabled={transferActive || !connected} onClick={upload}>
-          <Upload className="h-3.5 w-3.5" /> Write
-        </Button>
-        <Button size="sm" disabled={transferActive || !connected} onClick={download}>
-          <Download className="h-3.5 w-3.5" /> Read
-        </Button>
-        <Button variant="secondary" size="sm" disabled={transferActive || !connected} onClick={verify}>
-          <ShieldCheck className="h-3.5 w-3.5" /> Verify
-        </Button>
-        <Button variant="destructive" size="sm" disabled={transferActive || !connected} onClick={clear}>
-          <Trash2 className="h-3.5 w-3.5" /> Clear
-        </Button>
-
-        <div className="mx-1 h-5 w-px bg-border" />
-
-        <IconButton icon={<Plus className="h-3.5 w-3.5" />} label="Add Waypoint" onClick={addWaypoint} />
-        <IconButton icon={<ChevronLeft className="h-3.5 w-3.5" />} label="Insert Before"
-          onClick={() => insertBefore(selectedSeq ?? items.length)} />
-        <IconButton icon={<ChevronRight className="h-3.5 w-3.5" />} label="Insert After"
-          onClick={() => insertAfter(selectedSeq ?? items.length - 1)} />
-        <IconButton icon={<X className="h-3.5 w-3.5" />} label="Delete Selected"
-          onClick={() => deleteAt(selectedSeq ?? items.length - 1)}
-          disabled={items.length === 0} />
-        <IconButton icon={<ArrowUp className="h-3.5 w-3.5" />} label="Move Up"
-          onClick={() => { if (selectedSeq !== null) moveUp(selectedSeq); }}
-          disabled={selectedSeq === null || selectedSeq <= 0} />
-        <IconButton icon={<ArrowDown className="h-3.5 w-3.5" />} label="Move Down"
-          onClick={() => { if (selectedSeq !== null) moveDown(selectedSeq); }}
-          disabled={selectedSeq === null || selectedSeq >= Math.max(0, items.length - 1)} />
-
-        <div className="mx-1 h-5 w-px bg-border" />
-
-        <Button variant="ghost" size="sm" onClick={validate}>Validate</Button>
-        <Button variant="ghost" size="sm" disabled={!connected || selectedSeq === null} onClick={setCurrent}>
-          <SkipForward className="h-3.5 w-3.5" /> Set Current
-        </Button>
-        <Button variant="ghost" size="sm" disabled={missionType !== "mission"} onClick={updateHomeFromVehicle}>
-          Home from Vehicle
-        </Button>
-
-        {transferActive && (
-          <Button variant="ghost" size="sm" onClick={cancel}>Cancel</Button>
-        )}
-      </div>
-
-      {/* Mission type + transfer progress */}
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-1.5">
+      {/* Toolbar: mission type + all action groups */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
         <select
           value={missionType}
           onChange={(e) => setMissionType(e.target.value as MissionType)}
-          className="rounded-md border border-border bg-bg-input px-2 py-1 text-sm text-text-primary"
+          className="rounded-md border border-border bg-bg-input pl-2.5 pr-7 py-1.5 text-sm text-text-primary"
         >
           <option value="mission">Mission</option>
           <option value="fence">Fence</option>
           <option value="rally">Rally</option>
         </select>
 
-        {hasProgress && (
-          <div className="flex flex-1 items-center gap-2">
-            <Progress value={progressPct} className="flex-1" />
-            <span className="text-xs text-text-secondary">
-              {progress!.direction === "upload" ? "Uploading" : "Downloading"}{" "}
-              {progress!.completed_items}/{progress!.total_items}
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" disabled={transferActive || !connected} onClick={upload}>
+            <Upload className="h-3.5 w-3.5" /> Write
+          </Button>
+          <Button size="sm" disabled={transferActive || !connected} onClick={download}>
+            <Download className="h-3.5 w-3.5" /> Read
+          </Button>
+          <Button variant="secondary" size="sm" disabled={transferActive || !connected} onClick={verify}>
+            <ShieldCheck className="h-3.5 w-3.5" /> Verify
+          </Button>
+          <Button variant="destructive" size="sm" disabled={transferActive || !connected} onClick={clear}>
+            <Trash2 className="h-3.5 w-3.5" /> Clear
+          </Button>
+        </div>
 
-        {roundtripStatus && (
-          <span className="text-xs text-text-muted">{roundtripStatus}</span>
+        <div className="mx-1 hidden h-5 w-px bg-border sm:block" />
+
+        <div className="flex items-center gap-1.5">
+          <IconButton icon={<Plus className="h-3.5 w-3.5" />} label="Add Waypoint" onClick={addWaypoint} />
+          <IconButton icon={<ChevronLeft className="h-3.5 w-3.5" />} label="Insert Before"
+            onClick={() => insertBefore(selectedSeq ?? items.length)} />
+          <IconButton icon={<ChevronRight className="h-3.5 w-3.5" />} label="Insert After"
+            onClick={() => insertAfter(selectedSeq ?? items.length - 1)} />
+          <IconButton icon={<X className="h-3.5 w-3.5" />} label="Delete Selected"
+            onClick={() => deleteAt(selectedSeq ?? items.length - 1)}
+            disabled={items.length === 0} />
+          <IconButton icon={<ArrowUp className="h-3.5 w-3.5" />} label="Move Up"
+            onClick={() => { if (selectedSeq !== null) moveUp(selectedSeq); }}
+            disabled={selectedSeq === null || selectedSeq <= 0} />
+          <IconButton icon={<ArrowDown className="h-3.5 w-3.5" />} label="Move Down"
+            onClick={() => { if (selectedSeq !== null) moveDown(selectedSeq); }}
+            disabled={selectedSeq === null || selectedSeq >= Math.max(0, items.length - 1)} />
+        </div>
+
+        <div className="mx-1 hidden h-5 w-px bg-border sm:block" />
+
+        <div className="flex items-center gap-1.5">
+          <Button variant="ghost" size="sm" onClick={validate}>Validate</Button>
+          <Button variant="ghost" size="sm" disabled={!connected || selectedSeq === null} onClick={setCurrent}>
+            <SkipForward className="h-3.5 w-3.5" /> Set Current
+          </Button>
+          <Button variant="ghost" size="sm" disabled={missionType !== "mission"} onClick={updateHomeFromVehicle}>
+            Home from Vehicle
+          </Button>
+        </div>
+
+        {transferActive && (
+          <Button variant="ghost" size="sm" onClick={cancel}>Cancel</Button>
         )}
       </div>
+
+      {/* Transfer progress (only visible during active transfer) */}
+      {(hasProgress || roundtripStatus) && (
+        <div className="flex flex-wrap items-center gap-3">
+          {hasProgress && (
+            <div className="flex flex-1 items-center gap-2">
+              <Progress value={progressPct} className="flex-1" />
+              <span className="text-xs text-text-secondary">
+                {progress!.direction === "upload" ? "Uploading" : "Downloading"}{" "}
+                {progress!.completed_items}/{progress!.total_items}
+              </span>
+            </div>
+          )}
+
+          {roundtripStatus && (
+            <span className="text-xs text-text-muted">{roundtripStatus}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

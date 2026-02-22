@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { MapPin, Home, Trash2, Navigation } from "lucide-react";
 import type { MissionType } from "../mission";
 
@@ -22,9 +22,26 @@ export function MapContextMenu({
   onAddWaypoint, onSetHome, onDeleteWaypoint, onFlyTo, onClose,
 }: MapContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: x, top: y });
+
+  // Measure after render and clamp to parent bounds (runs before paint)
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const parent = el.offsetParent as HTMLElement | null;
+    if (!parent) { setPos({ left: x, top: y }); return; }
+    const pw = parent.clientWidth;
+    const ph = parent.clientHeight;
+    const ew = el.offsetWidth;
+    const eh = el.offsetHeight;
+    setPos({
+      left: Math.max(0, Math.min(x, pw - ew)),
+      top: Math.max(0, Math.min(y, ph - eh)),
+    });
+  }, [x, y]);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
+    function handleClickOutside(e: MouseEvent | TouchEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         onClose();
       }
@@ -33,9 +50,11 @@ export function MapContextMenu({
       if (e.key === "Escape") onClose();
     }
     document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
     document.addEventListener("keydown", handleEscape);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
     };
   }, [onClose]);
@@ -44,7 +63,7 @@ export function MapContextMenu({
     <div
       ref={ref}
       className="absolute z-50 min-w-[180px] overflow-hidden rounded-lg border border-border-light bg-bg-secondary p-1 shadow-lg shadow-black/30"
-      style={{ left: x, top: y }}
+      style={{ left: pos.left, top: pos.top }}
     >
       {mode === "planner" ? (
         <>

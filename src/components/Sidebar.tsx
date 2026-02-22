@@ -47,7 +47,7 @@ export function Sidebar({ vehicle, isMobile, open, onClose }: SidebarProps) {
             "fixed inset-y-0 left-0 z-50 flex w-72 flex-col gap-3 overflow-y-auto bg-bg-secondary px-3 pb-3 shadow-xl transition-transform duration-200",
             open ? "translate-x-0" : "-translate-x-full"
           )}
-          style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 0.75rem)" }}
+          style={{ paddingTop: "calc(var(--safe-area-top, 0px) + 0.25rem)" }}
         >
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-text-primary">Vehicle</span>
@@ -98,7 +98,7 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
             value={connectionMode}
             onChange={(e) => setConnectionMode(e.target.value as TransportType)}
             disabled={formLocked}
-            className="w-full rounded-md border border-border bg-bg-input px-2.5 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-md border border-border bg-bg-input pl-2.5 pr-7 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {transports.map((t) => (
               <option key={t} value={t}>{TRANSPORT_LABELS[t]}</option>
@@ -111,7 +111,7 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
               onChange={(e) => setUdpBind(e.target.value)}
               placeholder="0.0.0.0:14550"
               disabled={formLocked}
-              className="w-full rounded-md border border-border bg-bg-input px-2.5 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full rounded-md border border-border bg-bg-input pl-2.5 pr-7 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
             />
           )}
 
@@ -122,7 +122,7 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
                   value={serialPort}
                   onChange={(e) => setSerialPort(e.target.value)}
                   disabled={formLocked}
-                  className="flex-1 rounded-md border border-border bg-bg-input px-2.5 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 rounded-md border border-border bg-bg-input pl-2.5 pr-7 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {serialPorts.length === 0 && <option value="">No ports</option>}
                   {serialPorts.map((p) => <option key={p} value={p}>{p}</option>)}
@@ -136,7 +136,7 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
                 value={baud}
                 onChange={(e) => setBaud(Number(e.target.value) || 57600)}
                 disabled={formLocked}
-                className="w-full rounded-md border border-border bg-bg-input px-2.5 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full rounded-md border border-border bg-bg-input pl-2.5 pr-7 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </>
           )}
@@ -242,7 +242,7 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
             value={vehicleState?.custom_mode ?? ""}
             onChange={(e) => setFlightMode(Number(e.target.value))}
             disabled={!connected || availableModes.length === 0}
-            className="w-full rounded-md border border-border bg-bg-input px-2.5 py-1.5 text-sm text-text-primary disabled:opacity-50"
+            className="w-full rounded-md border border-border bg-bg-input pl-2.5 pr-7 py-1.5 text-sm text-text-primary disabled:opacity-50"
           >
             {availableModes.map((m) => (
               <option key={m.custom_mode} value={m.custom_mode}>{m.name}</option>
@@ -328,7 +328,7 @@ function BleDevicePicker({
           value={selected}
           onChange={(e) => onSelect(e.target.value)}
           disabled={disabled}
-          className="flex-1 rounded-md border border-border bg-bg-input px-2.5 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 rounded-md border border-border bg-bg-input pl-2.5 pr-7 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {devices.length === 0 && <option value="">No devices</option>}
           {devices.map((d) => (
@@ -378,7 +378,7 @@ function SppDevicePicker({
         value={selected}
         onChange={(e) => onSelect(e.target.value)}
         disabled={disabled}
-        className="flex-1 rounded-md border border-border bg-bg-input px-2.5 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex-1 rounded-md border border-border bg-bg-input pl-2.5 pr-7 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {devices.length === 0 && <option value="">No paired devices</option>}
         {devices.map((d) => (

@@ -44,7 +44,7 @@ function EnumEditor({
           if (e.key === "Escape") onCancel();
         }}
         autoFocus
-        className="w-44 rounded border border-accent-blue bg-bg-input px-1.5 py-0.5 text-xs font-mono text-text-primary"
+        className="w-44 rounded border border-accent-blue bg-bg-input pl-1.5 pr-6 py-0.5 text-xs font-mono text-text-primary"
       >
         {!hasCurrentInValues && (
           <option value={editValue}>{editValue} (custom)</option>
@@ -343,7 +343,7 @@ export function ConfigPanel({ params, connected }: ConfigPanelProps) {
             Loading descriptions…
           </span>
         )}
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="flex w-full items-center gap-1.5 sm:ml-auto sm:w-auto">
           <Search size={12} className="text-text-muted" />
           <input
             type="text"
