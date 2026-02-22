@@ -14,11 +14,21 @@ Scope: entire repository.
 
 - Stack: Tauri v2 shell + React/TypeScript frontend + Rust `mavkit` SDK.
 - Core crates:
-  - `crates/mavkit` (MAVLink domain SDK)
   - `src-tauri` (IPC shell and platform transport adapters)
   - `crates/tauri-plugin-bluetooth-classic` (Android Classic BT plugin)
+- External dependency:
+  - `mavkit` (published on crates.io, maintained in a separate repository)
 - Main frontend code lives in `src/`.
 - Build/test commands run from repo root.
+
+## mavkit Repository Boundary
+
+- `mavkit` is consumed from crates.io in this repository.
+- `mavkit` is our crate, and MissionPlanner is currently the primary downstream user.
+- It is OK to refactor and change mavkit when needed.
+- Agents can ask for mavkit library changes directly when product work requires SDK updates.
+- Keep SDK/API changes deliberate and keep Rust/TypeScript wire contracts aligned.
+- After mavkit changes are merged and released, bump the `mavkit` crate version in this repo.
 
 ## Cursor/Copilot Rules
 
@@ -46,23 +56,17 @@ Scope: entire repository.
 - `npm run android:dev` (Android dev run)
 - `npm run android:build` (Android APK build)
 
-### SITL integration commands
+### SITL bridge commands
 
 - `make bridge-up` (start ArduPilot SITL + MAVProxy)
-- `make test-sitl` (run SITL roundtrip suite)
-- `make test-sitl-strict` (strict SITL mode)
 - `make bridge-down` (stop SITL + MAVProxy)
 
-### Running a single test (important)
+### Running a single test in this repo (important)
 
 - Single Rust unit test by name:
-  - `cargo test -p mavkit wire_upload_prepends_home`
+  - `cargo test --workspace <test_name>`
 - Single test with exact match:
-  - `cargo test -p mavkit wire_upload_prepends_home -- --exact --nocapture`
-- Single integration test target (SITL file):
-  - `cargo test -p mavkit --test sitl_roundtrip -- --ignored --nocapture --test-threads=1`
-- Single SITL test with explicit bind address:
-  - `MP_SITL_UDP_BIND=0.0.0.0:14550 cargo test -p mavkit --test sitl_roundtrip <test_name> -- --ignored --nocapture --test-threads=1`
+  - `cargo test --workspace <test_name> -- --exact --nocapture`
 
 ## Architecture Constraints to Preserve
 

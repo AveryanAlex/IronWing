@@ -8,9 +8,7 @@ SITL_UDP_PORT ?= 14550
 MAVPROXY_PID_FILE ?= /tmp/missionplannerng-mavproxy.pid
 MAVPROXY_LOG_FILE ?= /tmp/missionplannerng-mavproxy.log
 
-MAVKIT_SITL_UDP_BIND ?= 0.0.0.0:$(SITL_UDP_PORT)
-
-.PHONY: help sitl-up sitl-down sitl-logs wait-tcp mavproxy-up mavproxy-down mavproxy-logs wait-udp bridge-up bridge-down status dev-sitl test-sitl test-sitl-strict android-dev android-build
+.PHONY: help sitl-up sitl-down sitl-logs wait-tcp mavproxy-up mavproxy-down mavproxy-logs wait-udp bridge-up bridge-down status dev-sitl android-dev android-build
 
 help:
 	@printf "MissionPlannerNg SITL helper targets\n\n"
@@ -24,8 +22,6 @@ help:
 	@printf "  make bridge-down        Stop MAVProxy + SITL\n"
 	@printf "  make status             Show SITL and MAVProxy status\n"
 	@printf "  make dev-sitl           Start bridge and run tauri desktop app\n"
-	@printf "  make test-sitl          Run staged SITL integration tests\n"
-	@printf "  make test-sitl-strict   Run strict SITL integration tests\n"
 
 sitl-up:
 	docker rm -f "$(SITL_CONTAINER)" >/dev/null 2>&1 || true
@@ -90,12 +86,6 @@ status:
 
 dev-sitl: bridge-up
 	npm run tauri:dev
-
-test-sitl:
-	MAVKIT_SITL_UDP_BIND="$(MAVKIT_SITL_UDP_BIND)" cargo test -p mavkit --test sitl_roundtrip -- --ignored --nocapture --test-threads=1
-
-test-sitl-strict:
-	MAVKIT_SITL_UDP_BIND="$(MAVKIT_SITL_UDP_BIND)" MAVKIT_SITL_STRICT=1 cargo test -p mavkit --test sitl_roundtrip -- --ignored --nocapture --test-threads=1
 
 android-dev:
 	npm run android:dev

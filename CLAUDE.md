@@ -6,20 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Check everything compiles
-cargo check --workspace          # Rust (desktop + mavkit)
+cargo check --workspace          # Rust (MissionPlannerNg workspace)
 npm run frontend:typecheck       # TypeScript
 
-# Run tests
-cargo test -p mavkit             # mavkit unit tests
+# Run tests in this repo
 cargo test --workspace           # All Rust tests (excludes SITL)
 
-# Run a single Rust test
-cargo test -p mavkit wire_upload_prepends_home
+# Run a single Rust test in this repo
+cargo test --workspace <test_name>
 
-# SITL integration tests (requires running SITL bridge)
+# SITL bridge helpers in this repo
 make bridge-up                   # Start ArduPilot SITL + MAVProxy
-make test-sitl                   # Run SITL roundtrip tests
-make test-sitl-strict            # Strict mode (MP_SITL_STRICT=1)
 make bridge-down                 # Stop everything
 
 # Dev
@@ -33,6 +30,15 @@ npm run android:build            # Build APK
 
 All commands run from the repo root.
 
+## mavkit Boundary
+
+- This repository consumes `mavkit` from crates.io.
+- `mavkit` is our crate, and MissionPlanner is currently the primary downstream user.
+- It is OK to refactor and change mavkit when needed.
+- Still prefer deliberate, well-scoped SDK changes and keep Rust/TypeScript wire contracts aligned.
+- Agents can ask for mavkit library changes directly when product work requires SDK updates.
+- After mavkit changes are merged and released, bump the `mavkit` crate version in this repo.
+
 ## Architecture
 
 Tauri v2 desktop app with three layers: React frontend, Tauri IPC shell, Rust domain crate.
@@ -43,7 +49,7 @@ React (TypeScript)  ──invoke/listen──>  Tauri Shell (main.rs)  ──cal
 
 ### Rust Crates
 
-**`mavkit`** (`crates/mavkit/`) - Async MAVLink SDK:
+**`mavkit`** (crates.io dependency, external repo) - Async MAVLink SDK:
 - `Vehicle` struct - async MAVLink vehicle handle (Clone via Arc, Send + Sync)
 - `Vehicle::from_connection()` - transport-agnostic entry point accepting any `Box<dyn AsyncMavConnection>`
 - `StreamConnection<R, W>` - adapter implementing `AsyncMavConnection` over any `AsyncRead + AsyncWrite` pair (feature-gated behind `stream`)
@@ -112,7 +118,6 @@ MAVLink wire format puts home at seq 0 for Mission type. The rest of the codebas
 - **Coordinates**: `MissionItem.x`/`y` are lat/lon as `i32` in degE7 (multiply by 1e7). `HomePosition` uses `f64` degrees.
 - **Async commands**: All Tauri commands that need the vehicle are `async fn` using `tokio::sync::Mutex`. Pure commands (validate, list ports) are sync.
 - **Watch channels**: Vehicle state is exposed via `tokio::sync::watch` channels. Bridge tasks forward changes to Tauri events. Tasks auto-terminate when Vehicle drops.
-- **SITL tests**: Marked `#[ignore]` and run via `--ignored` flag. Must run with `--test-threads=1`. Use `is_optional_type_unsupported()` to skip fence/rally on targets that don't support them. CI runs SITL roundtrip tests on every push and PR.
 - **Feature gates**: mavkit's `stream` feature enables `StreamConnection` + `ble_transport` modules (pulls in `async-trait` + `futures`). The `stream` feature is always enabled in `src-tauri`.
 - **Dual command registration**: `src-tauri/src/lib.rs` has separate `#[cfg(not(target_os = "android"))]` and `#[cfg(target_os = "android")]` `invoke_handler` blocks because the command sets differ (serial vs SPP).
 - **Parameter staging**: Edits always stage locally (never write directly). User reviews staged changes in a diff panel, then clicks "Apply" to batch-write. `ParamTransferPhase` has `Writing` variant for batch progress. File loading auto-stages values that differ from vehicle.

@@ -53,7 +53,7 @@ Build a modern, desktop-first Ground Control Station from scratch using Tauri.
 
 ## Quality/Delivery
 - GitHub Actions CI
-- cargo test + frontend unit tests + integration tests
+- cargo test + frontend unit tests
 - SITL-based E2E tests for high-risk workflows
 - Release signing + reproducible build metadata
 
@@ -112,23 +112,12 @@ MissionPlannerNg/
     gen/android/                  # Android build artifacts (Gradle)
     capabilities/                 # Tauri capability scopes
   crates/
-    mavkit/                       # Async MAVLink SDK (domain core)
-      src/
-        vehicle.rs                # Vehicle abstraction + lifecycle
-        event_loop.rs             # MAVLink event loop
-        state.rs                  # Telemetry state structs
-        mission/                  # Mission model + transfer engine
-        params/                   # Parameter storage + file I/O
-        stream_connection.rs      # AsyncRead/AsyncWrite -> MAVConnection adapter
-        ble_transport.rs          # BLE/SPP callback -> async channel bridge
-        modes.rs                  # ArduPilot flight mode tables
-        command.rs                # Command types (arm, mode, takeoff, etc.)
-      tests/
-        sitl_roundtrip.rs         # SITL integration tests
     tauri-plugin-bluetooth-classic/  # Android Classic SPP plugin (Kotlin RFCOMM)
-  .github/workflows/ci.yml       # CI: frontend typecheck + Rust tests + SITL
+  .github/workflows/ci.yml       # CI: frontend typecheck + Rust tests
   Makefile                        # Dev/test orchestration
 ```
+
+Note: `mavkit` is consumed from crates.io and maintained in a separate repository.
 
 ---
 

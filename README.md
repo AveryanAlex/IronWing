@@ -49,18 +49,6 @@ make status
 make dev-sitl
 ```
 
-Run staged integration tests:
-
-```bash
-make test-sitl
-```
-
-Run strict integration tests (fails on mission timeout/unsupported behavior):
-
-```bash
-make test-sitl-strict
-```
-
 Stop everything:
 
 ```bash
@@ -110,13 +98,7 @@ In the app:
 
 You should then see telemetry and mission workflows available (Read/Write/Verify/Clear, Set Current, Cancel Transfer).
 
-### 4) (Optional) Run SITL roundtrip integration tests
-
-```bash
-MAVKIT_SITL_UDP_BIND=0.0.0.0:14550 cargo test -p mavkit --test sitl_roundtrip -- --ignored --nocapture --test-threads=1
-```
-
-### 5) Cleanup
+### 4) Cleanup
 
 ```bash
 docker rm -f ardupilot-sitl
@@ -184,7 +166,6 @@ Android supports UDP, BLE, and Classic SPP transports. Serial is excluded (doesn
 ## CI
 
 - `.github/workflows/ci.yml`: frontend typecheck/build + Rust check/tests on every push and PR
-- `.github/workflows/sitl-mission.yml`: SITL mission roundtrip integration tests on every push and PR (also available via manual dispatch)
 
 ## Planning
 

@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "src-tauri",
-    "crates/mavkit",
     "crates/tauri-plugin-bluetooth-classic",
 ]
 resolver = "2"

@@ -11,7 +11,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-mavkit = { path = "../crates/mavkit", default-features = false, features = ["udp", "ardupilot", "stream"] }
+mavkit = { version = "=0.1.0", default-features = false, features = ["udp", "ardupilot", "stream"] }
 mavlink = { version = "0.17", features = ["tokio-1", "emit-extensions"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -26,7 +26,7 @@ uuid = "1"
 base64 = "0.22"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-mavkit = { path = "../crates/mavkit", features = ["serial"] }
+mavkit = { version = "=0.1.0", features = ["serial"] }
 serialport = "4"
 
 [target.'cfg(target_os = "android")'.dependencies]
