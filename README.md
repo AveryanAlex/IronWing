@@ -8,7 +8,7 @@ Current state: M0-M3 complete. Mission planning MVP, Bluetooth connectivity (BLE
 
 - Desktop + Mobile: Tauri v2 (desktop + Android)
 - Frontend: React + TypeScript + Vite + Radix UI + Tailwind CSS
-- Core: Rust (`mavkit` crate — async MAVLink SDK)
+- Core: Rust (MAVKit, crate: `mavkit` — async MAVLink SDK)
 - Map: MapLibre GL JS (3D terrain + satellite)
 - Transports: UDP, Serial, BLE (Nordic UART), Classic SPP (Android)
 
@@ -113,7 +113,7 @@ You should then see telemetry and mission workflows available (Read/Write/Verify
 ### 4) (Optional) Run SITL roundtrip integration tests
 
 ```bash
-MP_SITL_UDP_BIND=0.0.0.0:14550 cargo test -p mavkit --test sitl_roundtrip -- --ignored --nocapture --test-threads=1
+MAVKIT_SITL_UDP_BIND=0.0.0.0:14550 cargo test -p mavkit --test sitl_roundtrip -- --ignored --nocapture --test-threads=1
 ```
 
 ### 5) Cleanup

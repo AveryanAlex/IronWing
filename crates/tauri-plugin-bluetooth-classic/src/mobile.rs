@@ -33,15 +33,17 @@ impl<R: Runtime> BluetoothClassic<R> {
     }
 
     pub fn get_bonded_devices(&self) -> Result<Vec<BondedDevice>, Box<dyn std::error::Error>> {
-        let resp: BondedDevicesResponse = self
-            .0
-            .run_mobile_plugin("getBondedDevices", ())?;
+        let resp: BondedDevicesResponse = self.0.run_mobile_plugin("getBondedDevices", ())?;
         Ok(resp.devices)
     }
 
     pub fn connect(&self, address: &str) -> Result<(), Box<dyn std::error::Error>> {
-        self.0
-            .run_mobile_plugin::<()>("connect", ConnectArgs { address: address.to_string() })?;
+        self.0.run_mobile_plugin::<()>(
+            "connect",
+            ConnectArgs {
+                address: address.to_string(),
+            },
+        )?;
         Ok(())
     }
 
@@ -51,8 +53,12 @@ impl<R: Runtime> BluetoothClassic<R> {
     }
 
     pub fn send(&self, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
-        self.0
-            .run_mobile_plugin::<()>("send", SendArgs { data: data.to_vec() })?;
+        self.0.run_mobile_plugin::<()>(
+            "send",
+            SendArgs {
+                data: data.to_vec(),
+            },
+        )?;
         Ok(())
     }
 }

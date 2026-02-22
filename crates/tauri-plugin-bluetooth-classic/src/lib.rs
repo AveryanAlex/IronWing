@@ -41,13 +41,12 @@ struct BondedDevicesResponse {
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-async fn request_bt_permissions<R: Runtime>(
-    app: tauri::AppHandle<R>,
-) -> Result<(), String> {
+async fn request_bt_permissions<R: Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
     #[cfg(mobile)]
     {
         let bt = app.state::<BluetoothClassic<R>>();
-        bt.request_bt_permissions().map_err(|e: Box<dyn std::error::Error>| e.to_string())?;
+        bt.request_bt_permissions()
+            .map_err(|e: Box<dyn std::error::Error>| e.to_string())?;
     }
     #[cfg(not(mobile))]
     {
@@ -73,10 +72,7 @@ async fn get_bonded_devices<R: Runtime>(
 }
 
 #[tauri::command]
-async fn connect<R: Runtime>(
-    app: tauri::AppHandle<R>,
-    address: String,
-) -> Result<(), String> {
+async fn connect<R: Runtime>(app: tauri::AppHandle<R>, address: String) -> Result<(), String> {
     #[cfg(mobile)]
     {
         let bt = app.state::<BluetoothClassic<R>>();
@@ -90,9 +86,7 @@ async fn connect<R: Runtime>(
 }
 
 #[tauri::command]
-async fn disconnect<R: Runtime>(
-    app: tauri::AppHandle<R>,
-) -> Result<(), String> {
+async fn disconnect<R: Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
     #[cfg(mobile)]
     {
         let bt = app.state::<BluetoothClassic<R>>();
@@ -106,10 +100,7 @@ async fn disconnect<R: Runtime>(
 }
 
 #[tauri::command]
-async fn send<R: Runtime>(
-    app: tauri::AppHandle<R>,
-    data: Vec<u8>,
-) -> Result<(), String> {
+async fn send<R: Runtime>(app: tauri::AppHandle<R>, data: Vec<u8>) -> Result<(), String> {
     #[cfg(mobile)]
     {
         let bt = app.state::<BluetoothClassic<R>>();

@@ -8,7 +8,7 @@ SITL_UDP_PORT ?= 14550
 MAVPROXY_PID_FILE ?= /tmp/missionplannerng-mavproxy.pid
 MAVPROXY_LOG_FILE ?= /tmp/missionplannerng-mavproxy.log
 
-MP_SITL_UDP_BIND ?= 0.0.0.0:$(SITL_UDP_PORT)
+MAVKIT_SITL_UDP_BIND ?= 0.0.0.0:$(SITL_UDP_PORT)
 
 .PHONY: help sitl-up sitl-down sitl-logs wait-tcp mavproxy-up mavproxy-down mavproxy-logs wait-udp bridge-up bridge-down status dev-sitl test-sitl test-sitl-strict android-dev android-build
 
@@ -92,10 +92,10 @@ dev-sitl: bridge-up
 	npm run tauri:dev
 
 test-sitl:
-	MP_SITL_UDP_BIND="$(MP_SITL_UDP_BIND)" cargo test -p mavkit --test sitl_roundtrip -- --ignored --nocapture --test-threads=1
+	MAVKIT_SITL_UDP_BIND="$(MAVKIT_SITL_UDP_BIND)" cargo test -p mavkit --test sitl_roundtrip -- --ignored --nocapture --test-threads=1
 
 test-sitl-strict:
-	MP_SITL_UDP_BIND="$(MP_SITL_UDP_BIND)" MP_SITL_STRICT=1 cargo test -p mavkit --test sitl_roundtrip -- --ignored --nocapture --test-threads=1
+	MAVKIT_SITL_UDP_BIND="$(MAVKIT_SITL_UDP_BIND)" MAVKIT_SITL_STRICT=1 cargo test -p mavkit --test sitl_roundtrip -- --ignored --nocapture --test-threads=1
 
 android-dev:
 	npm run android:dev

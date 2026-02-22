@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+use tauri::Emitter;
 #[cfg(target_os = "android")]
 use tauri::Manager;
-use tauri::Emitter;
 
 static TELEMETRY_INTERVAL_MS: AtomicU64 = AtomicU64::new(200);
 
@@ -26,12 +26,21 @@ struct ConnectRequest {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum LinkEndpoint {
-    Udp { bind_addr: String },
+    Udp {
+        bind_addr: String,
+    },
     #[cfg(not(target_os = "android"))]
-    Serial { port: String, baud: u32 },
-    BluetoothBle { address: String },
+    Serial {
+        port: String,
+        baud: u32,
+    },
+    BluetoothBle {
+        address: String,
+    },
     #[cfg(target_os = "android")]
-    BluetoothSpp { address: String },
+    BluetoothSpp {
+        address: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -127,8 +136,8 @@ async fn connect_ble(address: &str) -> Result<Vehicle, String> {
     use mavkit::ble_transport::channel_pair;
     use mavkit::stream_connection::StreamConnection;
 
-    let handler = tauri_plugin_blec::get_handler()
-        .map_err(|e| format!("BLE plugin not initialized: {e}"))?;
+    let handler =
+        tauri_plugin_blec::get_handler().map_err(|e| format!("BLE plugin not initialized: {e}"))?;
 
     // Standard NUS UUIDs
     let _nus_service = uuid::Uuid::parse_str("6E400001-B5A3-F393-E0A9-E50E24DCCA9E").unwrap();
@@ -211,7 +220,8 @@ async fn connect_spp(app: &tauri::AppHandle, address: &str) -> Result<Vehicle, S
 
     let bt: tauri::State<'_, tauri_plugin_bluetooth_classic::BluetoothClassic<tauri::Wry>> =
         app.state();
-    bt.connect(address).map_err(|e: Box<dyn std::error::Error>| e.to_string())?;
+    bt.connect(address)
+        .map_err(|e: Box<dyn std::error::Error>| e.to_string())?;
 
     let (reader, writer, incoming_tx, mut outgoing_rx) = channel_pair(64);
 
@@ -231,10 +241,8 @@ async fn connect_spp(app: &tauri::AppHandle, address: &str) -> Result<Vehicle, S
     let bt_app = app.clone();
     tokio::spawn(async move {
         while let Some(data) = outgoing_rx.recv().await {
-            let bt: tauri::State<
-                '_,
-                tauri_plugin_bluetooth_classic::BluetoothClassic<tauri::Wry>,
-            > = bt_app.state();
+            let bt: tauri::State<'_, tauri_plugin_bluetooth_classic::BluetoothClassic<tauri::Wry>> =
+                bt_app.state();
             if let Err(e) = bt.send(&data) {
                 tracing::warn!("SPP write error: {e}");
                 return;
@@ -323,8 +331,8 @@ async fn bt_request_permissions() -> Result<(), String> {
 async fn bt_scan_ble(timeout_ms: Option<u64>) -> Result<Vec<BluetoothDevice>, String> {
     use tauri_plugin_blec::models::ScanFilter;
 
-    let handler = tauri_plugin_blec::get_handler()
-        .map_err(|e| format!("BLE plugin not initialized: {e}"))?;
+    let handler =
+        tauri_plugin_blec::get_handler().map_err(|e| format!("BLE plugin not initialized: {e}"))?;
 
     let (tx, mut rx) = tokio::sync::mpsc::channel(8);
     let timeout = timeout_ms.unwrap_or(3000);
@@ -338,9 +346,16 @@ async fn bt_scan_ble(timeout_ms: Option<u64>) -> Result<Vec<BluetoothDevice>, St
     let mut devices = Vec::new();
     while let Some(batch) = rx.recv().await {
         for d in batch {
-            if !devices.iter().any(|existing: &BluetoothDevice| existing.address == d.address) {
+            if !devices
+                .iter()
+                .any(|existing: &BluetoothDevice| existing.address == d.address)
+            {
                 devices.push(BluetoothDevice {
-                    name: if d.name.is_empty() { d.address.clone() } else { d.name },
+                    name: if d.name.is_empty() {
+                        d.address.clone()
+                    } else {
+                        d.name
+                    },
                     address: d.address,
                     device_type: "ble".to_string(),
                 });
@@ -353,8 +368,8 @@ async fn bt_scan_ble(timeout_ms: Option<u64>) -> Result<Vec<BluetoothDevice>, St
 
 #[tauri::command]
 async fn bt_stop_scan_ble() -> Result<(), String> {
-    let handler = tauri_plugin_blec::get_handler()
-        .map_err(|e| format!("BLE plugin not initialized: {e}"))?;
+    let handler =
+        tauri_plugin_blec::get_handler().map_err(|e| format!("BLE plugin not initialized: {e}"))?;
     handler
         .stop_scan()
         .await
@@ -364,12 +379,12 @@ async fn bt_stop_scan_ble() -> Result<(), String> {
 
 #[cfg(target_os = "android")]
 #[tauri::command]
-async fn bt_get_bonded_devices(
-    app: tauri::AppHandle,
-) -> Result<Vec<BluetoothDevice>, String> {
+async fn bt_get_bonded_devices(app: tauri::AppHandle) -> Result<Vec<BluetoothDevice>, String> {
     let bt: tauri::State<'_, tauri_plugin_bluetooth_classic::BluetoothClassic<tauri::Wry>> =
         app.state();
-    let devices = bt.get_bonded_devices().map_err(|e: Box<dyn std::error::Error>| e.to_string())?;
+    let devices = bt
+        .get_bonded_devices()
+        .map_err(|e: Box<dyn std::error::Error>| e.to_string())?;
     Ok(devices
         .into_iter()
         .map(|d| BluetoothDevice {
@@ -405,14 +420,14 @@ async fn set_flight_mode(
 ) -> Result<(), String> {
     let guard = state.vehicle.lock().await;
     let vehicle = guard.as_ref().ok_or("not connected")?;
-    vehicle.set_mode(custom_mode).await.map_err(|e| e.to_string())
+    vehicle
+        .set_mode(custom_mode)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn vehicle_takeoff(
-    state: tauri::State<'_, AppState>,
-    altitude_m: f32,
-) -> Result<(), String> {
+async fn vehicle_takeoff(state: tauri::State<'_, AppState>, altitude_m: f32) -> Result<(), String> {
     let guard = state.vehicle.lock().await;
     let vehicle = guard.as_ref().ok_or("not connected")?;
     vehicle.takeoff(altitude_m).await.map_err(|e| e.to_string())
@@ -427,13 +442,14 @@ async fn vehicle_guided_goto(
 ) -> Result<(), String> {
     let guard = state.vehicle.lock().await;
     let vehicle = guard.as_ref().ok_or("not connected")?;
-    vehicle.goto(lat_deg, lon_deg, alt_m).await.map_err(|e| e.to_string())
+    vehicle
+        .goto(lat_deg, lon_deg, alt_m)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn get_available_modes(
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<FlightMode>, String> {
+async fn get_available_modes(state: tauri::State<'_, AppState>) -> Result<Vec<FlightMode>, String> {
     let guard = state.vehicle.lock().await;
     let vehicle = guard.as_ref().ok_or("not connected")?;
     Ok(vehicle.available_modes())
@@ -463,7 +479,11 @@ async fn mission_upload_plan(
 ) -> Result<(), String> {
     let guard = state.vehicle.lock().await;
     let vehicle = guard.as_ref().ok_or("not connected")?;
-    vehicle.mission().upload(plan).await.map_err(|e| e.to_string())
+    vehicle
+        .mission()
+        .upload(plan)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -509,10 +529,7 @@ async fn mission_verify_roundtrip(
 }
 
 #[tauri::command]
-async fn mission_set_current(
-    state: tauri::State<'_, AppState>,
-    seq: u16,
-) -> Result<(), String> {
+async fn mission_set_current(state: tauri::State<'_, AppState>, seq: u16) -> Result<(), String> {
     let guard = state.vehicle.lock().await;
     let vehicle = guard.as_ref().ok_or("not connected")?;
     vehicle
@@ -542,14 +559,20 @@ async fn mission_cancel(state: tauri::State<'_, AppState>) -> Result<(), String>
 async fn calibrate_accel(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let guard = state.vehicle.lock().await;
     let vehicle = guard.as_ref().ok_or("not connected")?;
-    vehicle.preflight_calibration(false, true, false).await.map_err(|e| e.to_string())
+    vehicle
+        .preflight_calibration(false, true, false)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn calibrate_gyro(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let guard = state.vehicle.lock().await;
     let vehicle = guard.as_ref().ok_or("not connected")?;
-    vehicle.preflight_calibration(true, false, false).await.map_err(|e| e.to_string())
+    vehicle
+        .preflight_calibration(true, false, false)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -560,7 +583,11 @@ async fn calibrate_gyro(state: tauri::State<'_, AppState>) -> Result<(), String>
 async fn param_download_all(state: tauri::State<'_, AppState>) -> Result<ParamStore, String> {
     let guard = state.vehicle.lock().await;
     let vehicle = guard.as_ref().ok_or("not connected")?;
-    vehicle.params().download_all().await.map_err(|e| e.to_string())
+    vehicle
+        .params()
+        .download_all()
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -571,7 +598,11 @@ async fn param_write(
 ) -> Result<Param, String> {
     let guard = state.vehicle.lock().await;
     let vehicle = guard.as_ref().ok_or("not connected")?;
-    vehicle.params().write(name, value).await.map_err(|e| e.to_string())
+    vehicle
+        .params()
+        .write(name, value)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -581,7 +612,11 @@ async fn param_write_batch(
 ) -> Result<Vec<ParamWriteResult>, String> {
     let guard = state.vehicle.lock().await;
     let vehicle = guard.as_ref().ok_or("not connected")?;
-    vehicle.params().write_batch(params).await.map_err(|e| e.to_string())
+    vehicle
+        .params()
+        .write_batch(params)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
