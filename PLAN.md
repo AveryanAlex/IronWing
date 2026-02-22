@@ -80,7 +80,6 @@ Build a modern, desktop-first Ground Control Station from scratch using Tauri.
 Future modules (not yet implemented):
 - Log ingest: TLOG/BIN import, indexing, playback timeline, chart query
 - Firmware: manifest fetch, download cache, flash orchestration
-- Parameter staging: diff/apply engine, rollback, metadata cache
 
 ## Design Constraints
 - No UI component directly accesses serial/network APIs
@@ -96,6 +95,7 @@ MissionPlannerNg/
   src/                            # React frontend (TypeScript)
     components/
       hud/                        # Flight instruments (horizon, tapes, etc.)
+      setup/                      # Calibration wizards (accel, radio)
       ui/                         # Radix + Tailwind base components
     hooks/                        # use-vehicle, use-mission, use-params
     lib/                          # mav-commands, utils
@@ -103,6 +103,9 @@ MissionPlannerNg/
     MissionMap.tsx                # MapLibre 3D map
     Sidebar.tsx                   # Transport selector + BT device pickers
     mission.ts / telemetry.ts     # IPC bridge functions
+    params.ts / statustext.ts     # Parameter + status IPC
+    calibration.ts                # Calibration command IPC
+    param-metadata.ts             # ArduPilot param metadata parser + cache
   src-tauri/
     src/lib.rs                    # Tauri IPC command handlers
     Cargo.toml                    # Dependencies + feature gating
@@ -200,6 +203,7 @@ Current status:
 - M1: complete
 - M2: complete
 - M2.5: complete (Bluetooth transport stack, Android mobile, HUD instruments, param UI foundation)
+- M3: complete (parameter staging engine, setup wizards, STATUSTEXT plumbing)
 
 ## M0 - Foundation (Weeks 1-4) [COMPLETE]
 - Finalize architecture and ADRs
@@ -336,14 +340,49 @@ Exit criteria:
 - Parameter read/write working on SITL
 - Android APK builds and runs
 
-## M3 - Parameters and Setup Workflows
-- Parameter staging engine: stage edits, diff view, apply/rollback
-- ArduPilot parameter metadata cache (descriptions, ranges, units)
-- Parameter grouping and advanced filtering
-- First setup wizard subset (radio/compass/accelerometer as feasible)
+## M3 - Parameters and Setup Workflows [COMPLETE]
+
+1. Parameter staging engine
+   - Batch write in mavkit: `ParamWriteBatch` command, `write_batch()` on `ParamsHandle`, sequential PARAM_SET/PARAM_VALUE with progress (phase=Writing)
+   - `ParamWriteResult` type: name, requested_value, confirmed_value, success
+   - Tauri `param_write_batch` command (both desktop + Android)
+   - Frontend staging state: `staged` Map, `stage()`, `unstage()`, `unstageAll()`, `applyStaged()` in `use-params.ts`
+   - Edit-always-stages flow: confirming an edit stages the value; user clicks "Apply N Changes" to write to vehicle
+   - File loading auto-stages values that differ from current vehicle params
+
+2. Staging UI in ConfigPanel
+   - "Apply N Changes" primary button (green, shows write progress during batch)
+   - "Discard All" ghost button
+   - Collapsible staged diff panel: name, current value, new value, unstage button, reboot-required warning
+   - ParamRow staged indicators: amber dot, amber value text, "was X" secondary text
+   - Progress bar for both downloading (blue) and writing (amber) phases
+
+3. Metadata and filtering improvements
+   - Parse `ReadOnly` field and `user` attribute from ArduPilot `.pdef.xml`
+   - `readOnly` and `userLevel` ("Standard" | "Advanced") on `ParamMeta`
+   - Filter pills: Standard (default) | All | Modified (N)
+   - Read-only params show lock icon, disabled edit button
+
+4. STATUSTEXT plumbing (end-to-end)
+   - `StatusMessage { text, severity }` type in `state.rs`
+   - `statustext` watch channel on `StateWriters`/`StateChannels`
+   - `STATUSTEXT` handler in event_loop `update_state`
+   - `Vehicle::statustext()` accessor
+   - `statustext://message` Tauri event bridge
+   - `subscribeStatusText()` frontend IPC in `statustext.ts`
+
+5. Calibration commands and setup wizards
+   - `Vehicle::preflight_calibration(gyro, accel, radio_trim)` using `MAV_CMD_PREFLIGHT_CALIBRATION`
+   - `calibrate_accel`, `calibrate_gyro` Tauri commands (both platforms)
+   - AccelCalibWizard: 6-position guided flow, listens to STATUSTEXT for position prompts
+   - RadioCalibWizard: live RC channel bar chart, records min/max, stages RC*_MIN/MAX/TRIM params
+   - SetupPanel: houses accel, gyro, radio calibration cards
+   - [Parameters] / [Setup] sub-tab bar in ConfigPanel
 
 Exit criteria:
 - Typical parameter tuning flow complete without legacy app
+- Batch stage/apply/discard works end-to-end
+- Calibration commands accepted by SITL
 
 ## M4 - Logs and Analysis
 - TLOG/BIN import and index
@@ -416,13 +455,12 @@ Exit criteria:
 
 ---
 
-## 11) Immediate Next Steps (Current - M3 Start)
+## 11) Immediate Next Steps (Current - M4 Start)
 
-1. Parameter staging engine: `staged_params` map in AppState, stage/apply/rollback commands, diff view in frontend
-2. ArduPilot parameter metadata: parse upstream JSON schema, cache locally, expose descriptions/ranges/units in param table
-3. Parameter grouping: categorize params by subsystem, collapsible groups in table UI
-4. Setup wizard MVP: radio failsafe + mode config flow, then compass calibration with live sensor values
-5. Frontend test baseline: add Vitest for hooks and IPC bridge modules
-6. Mobile polish: verify BT permission flow on Android 12+, test full connection lifecycle on hardware
+1. TLOG/BIN log import and indexing
+2. Timeline playback tied to map and telemetry widgets
+3. Core flight review charts and data export
+4. Frontend test baseline: add Vitest for hooks and IPC bridge modules
+5. Mobile polish: verify BT permission flow on Android 12+, test full connection lifecycle on hardware
 
 This plan stays biased toward shipping a usable cockpit first, with disciplined protocol correctness before advanced planning UX.

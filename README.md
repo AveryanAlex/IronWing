@@ -2,7 +2,7 @@
 
 Modern Mission Planner rewrite using Tauri + React + Rust.
 
-Current state: M0-M2.5 complete. Mission planning MVP, Bluetooth connectivity (BLE + Classic SPP), Android mobile support, flight instruments HUD, and parameter read/write all shipped.
+Current state: M0-M3 complete. Mission planning MVP, Bluetooth connectivity (BLE + Classic SPP), Android mobile support, flight instruments HUD, parameter staging engine with batch write, setup wizards (accel/gyro/radio calibration), and STATUSTEXT plumbing all shipped.
 
 ## Stack
 
