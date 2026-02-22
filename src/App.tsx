@@ -15,6 +15,7 @@ import { useMission } from "./hooks/use-mission";
 import { useSettings } from "./hooks/use-settings";
 import { useParams } from "./hooks/use-params";
 import { useBreakpoint } from "./hooks/use-breakpoint";
+import { useDeviceLocation } from "./hooks/use-device-location";
 import { setTelemetryRate } from "./telemetry";
 import "./app.css";
 
@@ -63,6 +64,7 @@ export default function App() {
   const { settings, updateSettings } = useSettings();
   const [activeTab, setActiveTab] = useState<ActiveTab>("map");
   const { isMobile } = useBreakpoint();
+  const deviceLocation = useDeviceLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => { checkGpuRenderer() }, []);
@@ -94,13 +96,13 @@ export default function App() {
             style={{ paddingTop: isMobile ? "calc(var(--safe-area-top, 0px) + 0.25rem)" : undefined }}
           >
             {activeTab === "map" ? (
-              <MapPanel vehicle={vehicle} mission={mission} />
+              <MapPanel vehicle={vehicle} mission={mission} deviceLocation={deviceLocation} />
             ) : activeTab === "telemetry" ? (
               <TelemetryPanel vehicle={vehicle} mission={mission} />
             ) : activeTab === "hud" ? (
               <HudPanel vehicle={vehicle} mission={mission} svsEnabled={settings.svsEnabled} />
             ) : activeTab === "mission" ? (
-              <MissionPanel vehicle={vehicle} mission={mission} />
+              <MissionPanel vehicle={vehicle} mission={mission} deviceLocation={deviceLocation} />
             ) : activeTab === "config" ? (
               <ConfigPanel params={params} connected={vehicle.connected} />
             ) : (

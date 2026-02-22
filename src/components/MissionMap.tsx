@@ -36,6 +36,8 @@ type MissionMapProps = {
   onContextMenu?: (lat: number, lng: number, screenX: number, screenY: number) => void;
   readOnly?: boolean;
   vehiclePosition?: { latitude_deg: number; longitude_deg: number; heading_deg: number } | null;
+  deviceLocation?: { latitude_deg: number; longitude_deg: number; accuracy_m: number } | null;
+  flyToDeviceLocation?: number;
   currentMissionSeq?: number | null;
   followVehicle?: boolean;
   syntheticVision?: boolean;
@@ -47,7 +49,7 @@ export type { SvsTelemetry };
 export function MissionMap({
   missionItems, homePosition, selectedSeq, onSelectSeq,
   onMoveWaypoint, onContextMenu, readOnly,
-  vehiclePosition, currentMissionSeq, followVehicle,
+  vehiclePosition, deviceLocation, flyToDeviceLocation, currentMissionSeq, followVehicle,
   syntheticVision, svsTelemetry,
 }: MissionMapProps) {
   type MapLayer = "plan" | "hybrid" | "satellite";
@@ -59,6 +61,7 @@ export function MissionMap({
   const markersRef = useRef<Map<number, Marker>>(new Map());
   const homeMarkerRef = useRef<Marker | null>(null);
   const vehicleMarkerRef = useRef<Marker | null>(null);
+  const deviceLocationMarkerRef = useRef<Marker | null>(null);
   const hasSetInitialViewport = useRef(false);
   const onSelectSeqRef = useRef(onSelectSeq);
   const onMoveWaypointRef = useRef(onMoveWaypoint);
@@ -251,6 +254,7 @@ export function MissionMap({
       markersRef.current.clear();
       if (homeMarkerRef.current) { homeMarkerRef.current.remove(); homeMarkerRef.current = null; }
       if (vehicleMarkerRef.current) { vehicleMarkerRef.current.remove(); vehicleMarkerRef.current = null; }
+      if (deviceLocationMarkerRef.current) { deviceLocationMarkerRef.current.remove(); deviceLocationMarkerRef.current = null; }
       map.remove();
       mapRef.current = null;
       hasSetInitialViewport.current = false;
@@ -419,6 +423,43 @@ export function MissionMap({
       roll: roll_deg,
     });
   }, [syntheticVision, svsTelemetry]);
+
+  // Device location marker (blue dot)
+  useEffect(() => {
+    if (syntheticVision) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (deviceLocation) {
+      const lngLat: [number, number] = [deviceLocation.longitude_deg, deviceLocation.latitude_deg];
+
+      if (deviceLocationMarkerRef.current) {
+        deviceLocationMarkerRef.current.setLngLat(lngLat);
+      } else {
+        const el = document.createElement("div");
+        el.className = "device-location-marker";
+
+        deviceLocationMarkerRef.current = new maplibregl.Marker({ element: el, anchor: "center" })
+          .setLngLat(lngLat)
+          .addTo(map);
+      }
+    } else if (deviceLocationMarkerRef.current) {
+      deviceLocationMarkerRef.current.remove();
+      deviceLocationMarkerRef.current = null;
+    }
+  }, [deviceLocation, syntheticVision]);
+
+  // Fly to device location on demand
+  useEffect(() => {
+    if (!flyToDeviceLocation || !deviceLocation) return;
+    const map = mapRef.current;
+    if (!map) return;
+    map.flyTo({
+      center: [deviceLocation.longitude_deg, deviceLocation.latitude_deg],
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 800,
+    });
+  }, [flyToDeviceLocation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fit bounds on initial load (skip in SVS mode)
   useEffect(() => {

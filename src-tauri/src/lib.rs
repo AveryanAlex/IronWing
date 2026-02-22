@@ -696,7 +696,9 @@ pub fn run() {
 
     #[cfg(target_os = "android")]
     {
-        builder = builder.plugin(tauri_plugin_bluetooth_classic::init());
+        builder = builder
+            .plugin(tauri_plugin_bluetooth_classic::init())
+            .plugin(tauri_plugin_geolocation::init());
     }
 
     #[cfg(not(target_os = "android"))]

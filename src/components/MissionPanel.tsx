@@ -4,12 +4,14 @@ import { PlannerToolbar } from "./PlannerToolbar";
 import { MapContextMenu } from "./MapContextMenu";
 import type { useVehicle } from "../hooks/use-vehicle";
 import type { useMission } from "../hooks/use-mission";
+import type { useDeviceLocation } from "../hooks/use-device-location";
 import type { HomePosition, MissionItem } from "../mission";
 import { useState, useCallback, useRef } from "react";
 
 type MissionPanelProps = {
   vehicle: ReturnType<typeof useVehicle>;
   mission: ReturnType<typeof useMission>;
+  deviceLocation: ReturnType<typeof useDeviceLocation>;
 };
 
 type ContextMenuState = {
@@ -33,7 +35,7 @@ function findNearestWaypoint(items: MissionItem[], lat: number, lng: number): nu
   return nearest;
 }
 
-export function MissionPanel({ vehicle, mission }: MissionPanelProps) {
+export function MissionPanel({ vehicle, mission, deviceLocation }: MissionPanelProps) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
@@ -104,6 +106,7 @@ export function MissionPanel({ vehicle, mission }: MissionPanelProps) {
             onSelectSeq={mission.setSelectedSeq}
             onMoveWaypoint={mission.moveWaypointOnMap}
             onContextMenu={handleContextMenu}
+            deviceLocation={deviceLocation.location}
           />
           {contextMenu && (
             <MapContextMenu

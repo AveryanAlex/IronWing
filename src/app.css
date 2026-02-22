@@ -30,6 +30,16 @@
   box-sizing: border-box;
 }
 
+/* Consistent select chevron across platforms */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%236b8299'%3E%3Cpath d='M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.4rem center;
+  background-size: 1rem 1rem;
+  cursor: pointer;
+}
+
 html, body, #root {
   width: 100%;
   height: 100%;
@@ -88,4 +98,13 @@ body {
 @keyframes pulse-current {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.5); }
   50% { box-shadow: 0 0 0 8px rgba(255, 68, 68, 0); }
+}
+
+.device-location-marker {
+  width: 18px;
+  height: 18px;
+  background: #4285f4;
+  border: 3px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.3), 0 2px 8px rgba(0, 0, 0, 0.3);
 }

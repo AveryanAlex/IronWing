@@ -9,6 +9,7 @@
     "fs:default",
     "blec:default",
     "bluetooth-classic:default",
+    "geolocation:default",
     {
       "identifier": "http:default",
       "allow": [{ "url": "https://autotest.ardupilot.org/Parameters/*" }]
