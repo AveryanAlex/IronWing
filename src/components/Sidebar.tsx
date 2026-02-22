@@ -171,7 +171,8 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
               <Unplug className="h-3.5 w-3.5" /> Disconnect
             </Button>
           ) : (
-            <Button size="sm" className="w-full" onClick={connect}>
+            <Button size="sm" className="w-full" onClick={connect}
+              disabled={(connectionMode === "bluetooth_ble" || connectionMode === "bluetooth_spp") && !selectedBtDevice}>
               <Plug className="h-3.5 w-3.5" /> Connect
             </Button>
           )}
