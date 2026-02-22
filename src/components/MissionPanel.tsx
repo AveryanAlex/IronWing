@@ -38,10 +38,9 @@ export function MissionPanel({ vehicle, mission }: MissionPanelProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
   const handleContextMenu = useCallback(
-    (lat: number, lng: number, screenX: number, screenY: number) => {
-      const rect = mapContainerRef.current?.getBoundingClientRect();
-      const x = rect ? screenX - rect.left : screenX;
-      const y = rect ? screenY - rect.top : screenY;
+    (lat: number, lng: number, x: number, y: number) => {
+      // x/y are already relative to the map container (from MapLibre event.point
+      // or the long-press handler). MapContextMenu handles edge clamping itself.
       const nearestSeq = findNearestWaypoint(mission.items, lat, lng);
       setContextMenu({ x, y, lat, lng, nearestSeq });
     },
@@ -51,7 +50,7 @@ export function MissionPanel({ vehicle, mission }: MissionPanelProps) {
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   return (
-    <div className="flex h-full flex-col gap-3">
+    <div className="flex h-full flex-col gap-2 lg:gap-3">
       <PlannerToolbar mission={mission} connected={vehicle.connected} />
 
       {/* Home position info */}
@@ -66,24 +65,24 @@ export function MissionPanel({ vehicle, mission }: MissionPanelProps) {
           ) : (
             <span className="text-text-muted">Not set</span>
           )}
-          <div className="flex items-center gap-1.5 ml-auto">
+          <div className="flex w-full items-center gap-1.5 sm:ml-auto sm:w-auto">
             <input
               type="number" step="0.000001" placeholder="Lat"
               value={mission.homeLatInput}
               onChange={(e) => mission.setHomeLatInput(e.target.value)}
-              className="w-24 rounded border border-border bg-bg-input px-1.5 py-0.5 text-xs text-text-primary"
+              className="min-w-0 flex-1 sm:flex-none w-24 rounded border border-border bg-bg-input px-1.5 py-0.5 text-xs text-text-primary"
             />
             <input
               type="number" step="0.000001" placeholder="Lon"
               value={mission.homeLonInput}
               onChange={(e) => mission.setHomeLonInput(e.target.value)}
-              className="w-24 rounded border border-border bg-bg-input px-1.5 py-0.5 text-xs text-text-primary"
+              className="min-w-0 flex-1 sm:flex-none w-24 rounded border border-border bg-bg-input px-1.5 py-0.5 text-xs text-text-primary"
             />
             <input
               type="number" step="0.1" placeholder="Alt"
               value={mission.homeAltInput}
               onChange={(e) => mission.setHomeAltInput(e.target.value)}
-              className="w-16 rounded border border-border bg-bg-input px-1.5 py-0.5 text-xs text-text-primary"
+              className="min-w-0 flex-1 sm:flex-none w-16 rounded border border-border bg-bg-input px-1.5 py-0.5 text-xs text-text-primary"
             />
             <button
               onClick={mission.setArbitraryHome}
@@ -102,7 +101,6 @@ export function MissionPanel({ vehicle, mission }: MissionPanelProps) {
             missionItems={mission.items}
             homePosition={mission.missionType === "mission" ? mission.homePosition : null}
             selectedSeq={mission.selectedSeq}
-            onAddWaypoint={mission.addWaypointAt}
             onSelectSeq={mission.setSelectedSeq}
             onMoveWaypoint={mission.moveWaypointOnMap}
             onContextMenu={handleContextMenu}

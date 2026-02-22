@@ -31,9 +31,7 @@ type MissionMapProps = {
   missionItems: MissionItem[];
   homePosition: HomePosition | null;
   selectedSeq: number | null;
-  onAddWaypoint?: (latDeg: number, lonDeg: number) => void;
   onSelectSeq?: (seq: number | null) => void;
-  onRightClick?: (latDeg: number, lonDeg: number) => void;
   onMoveWaypoint?: (seq: number, latDeg: number, lonDeg: number) => void;
   onContextMenu?: (lat: number, lng: number, screenX: number, screenY: number) => void;
   readOnly?: boolean;
@@ -47,8 +45,8 @@ type MissionMapProps = {
 export type { SvsTelemetry };
 
 export function MissionMap({
-  missionItems, homePosition, selectedSeq, onAddWaypoint, onSelectSeq,
-  onRightClick, onMoveWaypoint, onContextMenu, readOnly,
+  missionItems, homePosition, selectedSeq, onSelectSeq,
+  onMoveWaypoint, onContextMenu, readOnly,
   vehiclePosition, currentMissionSeq, followVehicle,
   syntheticVision, svsTelemetry,
 }: MissionMapProps) {
@@ -62,22 +60,19 @@ export function MissionMap({
   const homeMarkerRef = useRef<Marker | null>(null);
   const vehicleMarkerRef = useRef<Marker | null>(null);
   const hasSetInitialViewport = useRef(false);
-  const onAddWaypointRef = useRef(onAddWaypoint);
   const onSelectSeqRef = useRef(onSelectSeq);
-  const onRightClickRef = useRef(onRightClick);
   const onMoveWaypointRef = useRef(onMoveWaypoint);
   const onContextMenuRef = useRef(onContextMenu);
   const readOnlyRef = useRef(readOnly);
+  const longPressFiredRef = useRef(false);
   const missionGeoJsonRef = useRef<any>({ type: "FeatureCollection", features: [] });
 
   useEffect(() => {
-    onAddWaypointRef.current = onAddWaypoint;
     onSelectSeqRef.current = onSelectSeq;
-    onRightClickRef.current = onRightClick;
     onMoveWaypointRef.current = onMoveWaypoint;
     onContextMenuRef.current = onContextMenu;
     readOnlyRef.current = readOnly;
-  }, [onAddWaypoint, onSelectSeq, onRightClick, onMoveWaypoint, onContextMenu, readOnly]);
+  }, [onSelectSeq, onMoveWaypoint, onContextMenu, readOnly]);
 
   const missionGeoJson = useMemo(() => {
     const lineCoordinates: [number, number][] = [];
@@ -195,25 +190,63 @@ export function MissionMap({
       }
     });
 
+    // Touch long-press state (closure-scoped)
+    let lpTimer: ReturnType<typeof setTimeout> | null = null;
+    let lpStart: { x: number; y: number } | null = null;
+    const clearLp = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } lpStart = null; };
+
     if (!syntheticVision) {
-      map.on("click", (event: MapMouseEvent) => {
-        if (readOnlyRef.current) return;
-        onAddWaypointRef.current?.(event.lngLat.lat, event.lngLat.lng);
+      // Suppress the click that follows a long-press so marker selection isn't triggered
+      map.on("click", () => {
+        if (longPressFiredRef.current) { longPressFiredRef.current = false; }
       });
 
       map.on("contextmenu", (event: MapMouseEvent) => {
         event.preventDefault();
-        if (onContextMenuRef.current) {
-          onContextMenuRef.current(event.lngLat.lat, event.lngLat.lng, event.point.x, event.point.y);
-        } else {
-          onRightClickRef.current?.(event.lngLat.lat, event.lngLat.lng);
-        }
+        onContextMenuRef.current?.(event.lngLat.lat, event.lngLat.lng, event.point.x, event.point.y);
       });
+
+      // Prevent native context menu & vibration on touch devices
+      const el = containerRef.current!;
+      el.addEventListener("contextmenu", (e) => e.preventDefault());
+
+      // Custom long-press for touch (Android doesn't reliably fire contextmenu)
+      const LONG_PRESS_MS = 500;
+      const MOVE_THRESHOLD = 10;
+
+      const onTouchStart = (e: TouchEvent) => {
+        if (e.touches.length !== 1) { clearLp(); return; }
+        const t = e.touches[0];
+        lpStart = { x: t.clientX, y: t.clientY };
+        longPressFiredRef.current = false;
+        lpTimer = setTimeout(() => {
+          if (!lpStart) return;
+          longPressFiredRef.current = true;
+          const rect = el.getBoundingClientRect();
+          const px = lpStart.x - rect.left;
+          const py = lpStart.y - rect.top;
+          const lngLat = map.unproject([px, py]);
+          onContextMenuRef.current?.(lngLat.lat, lngLat.lng, px, py);
+        }, LONG_PRESS_MS);
+      };
+      const onTouchMove = (e: TouchEvent) => {
+        if (!lpStart || !lpTimer) return;
+        const t = e.touches[0];
+        if (Math.hypot(t.clientX - lpStart.x, t.clientY - lpStart.y) > MOVE_THRESHOLD) {
+          clearLp();
+        }
+      };
+
+      el.addEventListener("touchstart", onTouchStart, { passive: true });
+      el.addEventListener("touchmove", onTouchMove, { passive: true });
+      el.addEventListener("touchend", clearLp);
+      el.addEventListener("touchcancel", clearLp);
     }
 
     mapRef.current = map;
 
     return () => {
+      clearLp();
       for (const marker of markersRef.current.values()) marker.remove();
       markersRef.current.clear();
       if (homeMarkerRef.current) { homeMarkerRef.current.remove(); homeMarkerRef.current = null; }
