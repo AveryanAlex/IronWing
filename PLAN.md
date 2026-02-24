@@ -1,4 +1,4 @@
-# Mission Planner Next - Greenfield Rewrite Plan
+# IronWing - Greenfield Rewrite Plan
 
 ## 1) Goal and Scope
 
@@ -91,7 +91,7 @@ Future modules (not yet implemented):
 ## 5) Repository Layout
 
 ```text
-MissionPlannerNg/
+IronWing/
   src/                            # React frontend (TypeScript)
     components/
       hud/                        # Flight instruments (horizon, tapes, etc.)

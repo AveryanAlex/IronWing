@@ -30,7 +30,7 @@ export function TopBar({ activeTab, onTabChange, linkState }: TopBarProps) {
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-bg-secondary px-4">
       <div className="flex items-center gap-3">
-        <span className="text-sm font-bold tracking-tight text-text-primary">Mission Planner NG</span>
+        <span className="text-sm font-bold tracking-tight text-text-primary">IronWing</span>
         <div className={cn("h-2 w-2 rounded-full", linkDotColor(linkState))} />
       </div>
       <nav className="flex gap-1">

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Check everything compiles
-cargo check --workspace          # Rust (MissionPlannerNg workspace)
+cargo check --workspace          # Rust (IronWing workspace)
 npm run frontend:typecheck       # TypeScript
 
 # Run tests in this repo
@@ -33,7 +33,7 @@ All commands run from the repo root.
 ## mavkit Boundary
 
 - This repository consumes `mavkit` from crates.io.
-- `mavkit` is our crate, and MissionPlanner is currently the primary downstream user.
+- `mavkit` is our crate, and IronWing is currently the primary downstream user.
 - It is OK to refactor and change mavkit when needed.
 - Still prefer deliberate, well-scoped SDK changes and keep Rust/TypeScript wire contracts aligned.
 - Agents can ask for mavkit library changes directly when product work requires SDK updates.

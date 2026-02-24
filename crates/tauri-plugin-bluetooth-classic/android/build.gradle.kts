@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "org.ardupilot.bluetooth.classic"
+    namespace = "dev.averylex.bluetooth.classic"
     compileSdk = 34
 
     defaultConfig {

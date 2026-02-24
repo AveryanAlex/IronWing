@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Operational guide for coding agents working in MissionPlannerNg.
+Operational guide for coding agents working in IronWing.
 Scope: entire repository.
 
 ## Priority Instructions
@@ -24,7 +24,7 @@ Scope: entire repository.
 ## mavkit Repository Boundary
 
 - `mavkit` is consumed from crates.io in this repository.
-- `mavkit` is our crate, and MissionPlanner is currently the primary downstream user.
+- `mavkit` is our crate, and IronWing is currently the primary downstream user.
 - It is OK to refactor and change mavkit when needed.
 - Agents can ask for mavkit library changes directly when product work requires SDK updates.
 - Keep SDK/API changes deliberate and keep Rust/TypeScript wire contracts aligned.

@@ -1,5 +1,5 @@
 {
-  description = "MissionPlannerNg development shell";
+  description = "IronWing development shell";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

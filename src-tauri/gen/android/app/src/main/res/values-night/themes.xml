@@ -1,6 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
-    <style name="Theme.missionplanner_desktop" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <style name="Theme.ironwing" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <!-- Dark background to prevent white flash before webview loads -->
         <item name="android:windowBackground">#12171d</item>
         <item name="android:colorBackground">#12171d</item>

@@ -1781,6 +1781,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "ironwing"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "mavkit",
+ "mavlink",
+ "serde",
+ "serde_json",
+ "serialport",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-blec",
+ "tauri-plugin-bluetooth-classic",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-geolocation",
+ "tauri-plugin-http",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2211,29 +2234,6 @@ dependencies = [
  "nix 0.29.0",
  "serialport",
  "winapi",
-]
-
-[[package]]
-name = "missionplanner_desktop"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "mavkit",
- "mavlink",
- "serde",
- "serde_json",
- "serialport",
- "tauri",
- "tauri-build",
- "tauri-plugin-blec",
- "tauri-plugin-bluetooth-classic",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-geolocation",
- "tauri-plugin-http",
- "tokio",
- "tracing",
- "uuid",
 ]
 
 [[package]]

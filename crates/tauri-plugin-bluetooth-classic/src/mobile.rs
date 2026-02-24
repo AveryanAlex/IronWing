@@ -7,7 +7,7 @@ use tauri::{
 use crate::{BondedDevice, BondedDevicesResponse, ConnectArgs, SendArgs};
 
 #[cfg(target_os = "android")]
-const PLUGIN_IDENTIFIER: &str = "org.ardupilot.bluetooth.classic";
+const PLUGIN_IDENTIFIER: &str = "dev.averylex.bluetooth.classic";
 
 pub fn init<R: Runtime, C: DeserializeOwned>(
     _app: &AppHandle<R>,

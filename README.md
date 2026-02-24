@@ -1,6 +1,6 @@
-# MissionPlannerNg
+# IronWing
 
-Modern Mission Planner rewrite using Tauri + React + Rust.
+Modern ground control station using Tauri + React + Rust.
 
 Current state: M0-M3 complete. Mission planning MVP, Bluetooth connectivity (BLE + Classic SPP), Android mobile support, flight instruments HUD, parameter staging engine with batch write, setup wizards (accel/gyro/radio calibration), and STATUSTEXT plumbing all shipped.
 
@@ -37,7 +37,7 @@ cargo test --workspace
 npm run tauri:dev
 ```
 
-## Use Mission Planner with ArduPilot SITL (development)
+## Use IronWing with ArduPilot SITL (development)
 
 This is the dev loop used by CI and local SITL testing.
 

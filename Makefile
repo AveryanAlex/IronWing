@@ -5,13 +5,13 @@ SITL_CONTAINER ?= ardupilot-sitl
 SITL_TCP_PORT ?= 5760
 SITL_UDP_PORT ?= 14550
 
-MAVPROXY_PID_FILE ?= /tmp/missionplannerng-mavproxy.pid
-MAVPROXY_LOG_FILE ?= /tmp/missionplannerng-mavproxy.log
+MAVPROXY_PID_FILE ?= /tmp/ironwing-mavproxy.pid
+MAVPROXY_LOG_FILE ?= /tmp/ironwing-mavproxy.log
 
 .PHONY: help sitl-up sitl-down sitl-logs wait-tcp mavproxy-up mavproxy-down mavproxy-logs wait-udp bridge-up bridge-down status dev-sitl android-dev android-build
 
 help:
-	@printf "MissionPlannerNg SITL helper targets\n\n"
+	@printf "IronWing SITL helper targets\n\n"
 	@printf "  make sitl-up            Start ArduPilot SITL docker container\n"
 	@printf "  make sitl-down          Stop SITL container\n"
 	@printf "  make sitl-logs          Tail SITL container logs\n"

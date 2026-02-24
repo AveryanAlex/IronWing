@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "MissionPlannerNg",
+  "productName": "IronWing",
   "version": "0.1.0",
-  "identifier": "org.ardupilot.missionplannerng",
+  "identifier": "dev.averylex.ironwing",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Mission Planner NG",
+        "title": "IronWing",
         "width": 1280,
         "height": 840,
         "resizable": true

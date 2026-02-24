@@ -1,4 +1,4 @@
-package org.ardupilot.bluetooth.classic
+package dev.averylex.bluetooth.classic
 
 import android.Manifest
 import android.annotation.SuppressLint
