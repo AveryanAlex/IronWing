@@ -1,14 +1,16 @@
 use mavkit::{
     format_param_file, parse_param_file,
-    tlog::{TlogEntry, TlogFile},
+    tlog::{TlogEntry, TlogFile, TlogWriter},
     validate_plan, FlightMode, HomePosition, LinkState, MissionIssue, MissionPlan, MissionType,
     Param, ParamProgress, ParamStore, ParamWriteResult, StatusMessage, Telemetry,
     TransferProgress, Vehicle, VehicleConfig, VehicleState,
 };
-use mavlink::{common::MavMessage, Message};
+use mavlink::{common::MavMessage, MavlinkVersion, Message};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::io::BufWriter;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::Emitter;
 #[cfg(target_os = "android")]
@@ -20,6 +22,124 @@ struct AppState {
     vehicle: tokio::sync::Mutex<Option<Vehicle>>,
     connect_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
     log_store: tokio::sync::Mutex<Option<LogStore>>,
+    recorder: TlogRecorderHandle,
+}
+
+// ---------------------------------------------------------------------------
+// TLOG recording
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
+enum RecordingStatus {
+    Idle,
+    Recording {
+        file_name: String,
+        bytes_written: u64,
+    },
+}
+
+enum RecorderState {
+    Idle,
+    Recording {
+        cancel: tokio::sync::oneshot::Sender<()>,
+        file_name: String,
+        bytes_written: Arc<AtomicU64>,
+    },
+}
+
+struct TlogRecorderHandle {
+    state: std::sync::Mutex<RecorderState>,
+}
+
+impl TlogRecorderHandle {
+    fn new() -> Self {
+        Self {
+            state: std::sync::Mutex::new(RecorderState::Idle),
+        }
+    }
+
+    fn start(&self, vehicle: &Vehicle, path: &str) -> Result<String, String> {
+        let mut guard = self.state.lock().unwrap();
+        if matches!(*guard, RecorderState::Recording { .. }) {
+            return Err("already recording".into());
+        }
+
+        let file =
+            std::fs::File::create(path).map_err(|e| format!("failed to create file: {e}"))?;
+        let writer = BufWriter::new(file);
+        let mut tlog_writer = TlogWriter::new(writer, MavlinkVersion::V2);
+
+        let file_name = std::path::Path::new(path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.to_string());
+
+        let bytes_written = Arc::new(AtomicU64::new(0));
+        let bytes_counter = bytes_written.clone();
+        let mut rx = vehicle.raw_messages();
+        let (cancel_tx, mut cancel_rx) = tokio::sync::oneshot::channel();
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = &mut cancel_rx => break,
+                    result = rx.recv() => {
+                        match result {
+                            Ok((header, msg)) => {
+                                match tlog_writer.write_now(&header, &msg) {
+                                    Ok(n) => {
+                                        bytes_counter.fetch_add(n as u64, Ordering::Relaxed);
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!("tlog write error: {e}");
+                                        break;
+                                    }
+                                }
+                            }
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                                tracing::warn!("tlog recorder lagged, skipped {n} messages");
+                            }
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                        }
+                    }
+                }
+            }
+            let _ = tlog_writer.flush();
+        });
+
+        let name = file_name.clone();
+        *guard = RecorderState::Recording {
+            cancel: cancel_tx,
+            file_name,
+            bytes_written,
+        };
+        Ok(name)
+    }
+
+    fn stop(&self) {
+        let mut guard = self.state.lock().unwrap();
+        if let RecorderState::Recording { cancel, .. } =
+            std::mem::replace(&mut *guard, RecorderState::Idle)
+        {
+            let _ = cancel.send(());
+        }
+    }
+
+    fn status(&self) -> RecordingStatus {
+        let guard = self.state.lock().unwrap();
+        match &*guard {
+            RecorderState::Idle => RecordingStatus::Idle,
+            RecorderState::Recording {
+                file_name,
+                bytes_written,
+                ..
+            } => RecordingStatus::Recording {
+                file_name: file_name.clone(),
+                bytes_written: bytes_written.load(Ordering::Relaxed),
+            },
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -404,6 +524,9 @@ async fn connect_spp(app: &tauri::AppHandle, address: &str) -> Result<Vehicle, S
 
 #[tauri::command]
 async fn disconnect_link(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    // Stop any active recording before disconnecting
+    state.recorder.stop();
+
     // Abort any in-flight connect attempt
     if let Some(handle) = state.connect_abort.lock().await.take() {
         handle.abort();
@@ -948,6 +1071,30 @@ async fn log_close(state: tauri::State<'_, AppState>) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
+// Recording commands
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+async fn recording_start(
+    state: tauri::State<'_, AppState>,
+    path: String,
+) -> Result<String, String> {
+    let guard = state.vehicle.lock().await;
+    let vehicle = guard.as_ref().ok_or("not connected")?;
+    state.recorder.start(vehicle, &path)
+}
+
+#[tauri::command]
+fn recording_stop(state: tauri::State<'_, AppState>) {
+    state.recorder.stop();
+}
+
+#[tauri::command]
+fn recording_status(state: tauri::State<'_, AppState>) -> RecordingStatus {
+    state.recorder.status()
+}
+
+// ---------------------------------------------------------------------------
 // Watch → Tauri event bridges
 // ---------------------------------------------------------------------------
 
@@ -1085,6 +1232,7 @@ pub fn run() {
         vehicle: tokio::sync::Mutex::new(None),
         connect_abort: tokio::sync::Mutex::new(None),
         log_store: tokio::sync::Mutex::new(None),
+        recorder: TlogRecorderHandle::new(),
     };
 
     let mut builder = tauri::Builder::default()
@@ -1135,7 +1283,10 @@ pub fn run() {
             log_open,
             log_query,
             log_get_summary,
-            log_close
+            log_close,
+            recording_start,
+            recording_stop,
+            recording_status
         ]);
     }
 
@@ -1173,7 +1324,10 @@ pub fn run() {
             log_open,
             log_query,
             log_get_summary,
-            log_close
+            log_close,
+            recording_start,
+            recording_stop,
+            recording_status
         ]);
     }
 

@@ -8,6 +8,7 @@ type TopBarProps = {
   activeTab: ActiveTab;
   onTabChange: (tab: ActiveTab) => void;
   linkState: LinkState | null;
+  isRecording?: boolean;
 };
 
 const TABS: { id: ActiveTab; label: string; Icon: typeof Map }[] = [
@@ -27,12 +28,13 @@ function linkDotColor(state: LinkState | null): string {
   return "bg-danger";
 }
 
-export function TopBar({ activeTab, onTabChange, linkState }: TopBarProps) {
+export function TopBar({ activeTab, onTabChange, linkState, isRecording }: TopBarProps) {
   return (
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-bg-secondary px-4">
       <div className="flex items-center gap-3">
         <span className="text-sm font-bold tracking-tight text-text-primary">IronWing</span>
         <div className={cn("h-2 w-2 rounded-full", linkDotColor(linkState))} />
+        {isRecording && <div className="h-2 w-2 animate-pulse rounded-full bg-danger" />}
       </div>
       <nav className="flex gap-1">
         {TABS.map(({ id, label, Icon }) => (

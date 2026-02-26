@@ -16,6 +16,7 @@ import { useMission } from "./hooks/use-mission";
 import { useSettings } from "./hooks/use-settings";
 import { useParams } from "./hooks/use-params";
 import { useLogs } from "./hooks/use-logs";
+import { useRecording } from "./hooks/use-recording";
 import { useBreakpoint } from "./hooks/use-breakpoint";
 import { useDeviceLocation } from "./hooks/use-device-location";
 import { setTelemetryRate } from "./telemetry";
@@ -64,6 +65,7 @@ export default function App() {
   const mission = useMission(vehicle.connected, vehicle.telemetry, vehicle.homePosition);
   const params = useParams(vehicle.connected, vehicle.vehicleState?.vehicle_type);
   const logs = useLogs();
+  const recording = useRecording(vehicle.connected);
   const { settings, updateSettings } = useSettings();
   const [activeTab, setActiveTab] = useState<ActiveTab>("map");
   const { isMobile } = useBreakpoint();
@@ -82,7 +84,7 @@ export default function App() {
       <div className="flex h-screen flex-col bg-bg-primary text-text-primary">
         {/* Desktop: full top bar with tabs */}
         {!isMobile && (
-          <TopBar activeTab={activeTab} onTabChange={setActiveTab} linkState={vehicle.linkState} />
+          <TopBar activeTab={activeTab} onTabChange={setActiveTab} linkState={vehicle.linkState} isRecording={recording.isRecording} />
         )}
 
         <div className="flex flex-1 overflow-hidden">
@@ -109,7 +111,7 @@ export default function App() {
             ) : activeTab === "config" ? (
               <ConfigPanel params={params} connected={vehicle.connected} />
             ) : activeTab === "logs" ? (
-              <LogsPanel logs={logs} />
+              <LogsPanel logs={logs} recording={recording} connected={vehicle.connected} />
             ) : (
               <SettingsPanel settings={settings} updateSettings={updateSettings} />
             )}
