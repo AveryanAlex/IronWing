@@ -2119,9 +2119,9 @@ checksum = "2532096657941c2fea9c289d370a250971c689d4f143798ff67113ec042024a5"
 
 [[package]]
 name = "mavkit"
-version = "0.1.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a86b1da1d09f15b520893a6825858a901cc6afbb341de712e8913409513b714c"
+checksum = "73295b96055ad3130df37377e82c3408023b7b03d6753a921bd6ada4bc29373d"
 dependencies = [
  "async-trait",
  "futures",

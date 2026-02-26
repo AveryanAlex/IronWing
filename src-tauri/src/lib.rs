@@ -1,8 +1,11 @@
 use mavkit::{
-    format_param_file, parse_param_file, validate_plan, FlightMode, HomePosition, LinkState,
-    MissionIssue, MissionPlan, MissionType, Param, ParamProgress, ParamStore, ParamWriteResult,
-    StatusMessage, Telemetry, TransferProgress, Vehicle, VehicleConfig, VehicleState,
+    format_param_file, parse_param_file,
+    tlog::{TlogEntry, TlogFile},
+    validate_plan, FlightMode, HomePosition, LinkState, MissionIssue, MissionPlan, MissionType,
+    Param, ParamProgress, ParamStore, ParamWriteResult, StatusMessage, Telemetry,
+    TransferProgress, Vehicle, VehicleConfig, VehicleState,
 };
+use mavlink::{common::MavMessage, Message};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -16,6 +19,145 @@ static TELEMETRY_INTERVAL_MS: AtomicU64 = AtomicU64::new(200);
 struct AppState {
     vehicle: tokio::sync::Mutex<Option<Vehicle>>,
     connect_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
+    log_store: tokio::sync::Mutex<Option<LogStore>>,
+}
+
+// ---------------------------------------------------------------------------
+// Log types
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Clone)]
+struct LogSummary {
+    file_name: String,
+    start_usec: u64,
+    end_usec: u64,
+    duration_secs: f64,
+    total_entries: usize,
+    message_types: HashMap<String, usize>,
+}
+
+#[derive(Serialize, Clone)]
+struct LogDataPoint {
+    timestamp_usec: u64,
+    fields: HashMap<String, f64>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
+enum LogLoadPhase {
+    Parsing,
+    Indexing,
+    Completed,
+    Failed,
+}
+
+#[derive(Serialize, Clone)]
+struct LogProgress {
+    phase: LogLoadPhase,
+    parsed: usize,
+}
+
+struct LogStore {
+    summary: LogSummary,
+    entries: Vec<TlogEntry>,
+    type_index: HashMap<String, Vec<usize>>,
+}
+
+fn extract_fields(msg: &MavMessage) -> (String, HashMap<String, f64>) {
+    let name = msg.message_name().to_string();
+    let mut fields = HashMap::new();
+
+    match msg {
+        MavMessage::ATTITUDE(d) => {
+            fields.insert("roll".into(), d.roll as f64);
+            fields.insert("pitch".into(), d.pitch as f64);
+            fields.insert("yaw".into(), d.yaw as f64);
+            fields.insert("rollspeed".into(), d.rollspeed as f64);
+            fields.insert("pitchspeed".into(), d.pitchspeed as f64);
+            fields.insert("yawspeed".into(), d.yawspeed as f64);
+        }
+        MavMessage::VFR_HUD(d) => {
+            fields.insert("airspeed".into(), d.airspeed as f64);
+            fields.insert("groundspeed".into(), d.groundspeed as f64);
+            fields.insert("heading".into(), d.heading as f64);
+            fields.insert("throttle".into(), d.throttle as f64);
+            fields.insert("alt".into(), d.alt as f64);
+            fields.insert("climb".into(), d.climb as f64);
+        }
+        MavMessage::GLOBAL_POSITION_INT(d) => {
+            fields.insert("lat".into(), d.lat as f64 / 1e7);
+            fields.insert("lon".into(), d.lon as f64 / 1e7);
+            fields.insert("alt".into(), d.alt as f64 / 1000.0);
+            fields.insert("relative_alt".into(), d.relative_alt as f64 / 1000.0);
+            fields.insert("vx".into(), d.vx as f64 / 100.0);
+            fields.insert("vy".into(), d.vy as f64 / 100.0);
+            fields.insert("vz".into(), d.vz as f64 / 100.0);
+            fields.insert("hdg".into(), d.hdg as f64 / 100.0);
+        }
+        MavMessage::SYS_STATUS(d) => {
+            fields.insert("voltage_battery".into(), d.voltage_battery as f64 / 1000.0);
+            fields.insert("current_battery".into(), d.current_battery as f64 / 100.0);
+            fields.insert("battery_remaining".into(), d.battery_remaining as f64);
+            fields.insert("load".into(), d.load as f64 / 10.0);
+        }
+        MavMessage::GPS_RAW_INT(d) => {
+            fields.insert("lat".into(), d.lat as f64 / 1e7);
+            fields.insert("lon".into(), d.lon as f64 / 1e7);
+            fields.insert("alt".into(), d.alt as f64 / 1000.0);
+            fields.insert("fix_type".into(), d.fix_type as u8 as f64);
+            fields.insert("satellites_visible".into(), d.satellites_visible as f64);
+            fields.insert("eph".into(), d.eph as f64 / 100.0);
+            fields.insert("epv".into(), d.epv as f64 / 100.0);
+        }
+        MavMessage::HEARTBEAT(d) => {
+            fields.insert("custom_mode".into(), d.custom_mode as f64);
+            fields.insert("base_mode".into(), d.base_mode.bits() as f64);
+            fields.insert("system_status".into(), d.system_status as u8 as f64);
+        }
+        MavMessage::RC_CHANNELS(d) => {
+            fields.insert("chan1_raw".into(), d.chan1_raw as f64);
+            fields.insert("chan2_raw".into(), d.chan2_raw as f64);
+            fields.insert("chan3_raw".into(), d.chan3_raw as f64);
+            fields.insert("chan4_raw".into(), d.chan4_raw as f64);
+            fields.insert("chan5_raw".into(), d.chan5_raw as f64);
+            fields.insert("chan6_raw".into(), d.chan6_raw as f64);
+            fields.insert("chan7_raw".into(), d.chan7_raw as f64);
+            fields.insert("chan8_raw".into(), d.chan8_raw as f64);
+            fields.insert("chancount".into(), d.chancount as f64);
+            fields.insert("rssi".into(), d.rssi as f64);
+        }
+        MavMessage::SERVO_OUTPUT_RAW(d) => {
+            fields.insert("servo1_raw".into(), d.servo1_raw as f64);
+            fields.insert("servo2_raw".into(), d.servo2_raw as f64);
+            fields.insert("servo3_raw".into(), d.servo3_raw as f64);
+            fields.insert("servo4_raw".into(), d.servo4_raw as f64);
+            fields.insert("servo5_raw".into(), d.servo5_raw as f64);
+            fields.insert("servo6_raw".into(), d.servo6_raw as f64);
+            fields.insert("servo7_raw".into(), d.servo7_raw as f64);
+            fields.insert("servo8_raw".into(), d.servo8_raw as f64);
+        }
+        MavMessage::BATTERY_STATUS(d) => {
+            fields.insert("current_battery".into(), d.current_battery as f64 / 100.0);
+            fields.insert(
+                "current_consumed".into(),
+                d.current_consumed as f64,
+            );
+            fields.insert("energy_consumed".into(), d.energy_consumed as f64);
+            fields.insert("battery_remaining".into(), d.battery_remaining as f64);
+        }
+        MavMessage::NAV_CONTROLLER_OUTPUT(d) => {
+            fields.insert("nav_roll".into(), d.nav_roll as f64);
+            fields.insert("nav_pitch".into(), d.nav_pitch as f64);
+            fields.insert("nav_bearing".into(), d.nav_bearing as f64);
+            fields.insert("target_bearing".into(), d.target_bearing as f64);
+            fields.insert("wp_dist".into(), d.wp_dist as f64);
+            fields.insert("alt_error".into(), d.alt_error as f64);
+            fields.insert("xtrack_error".into(), d.xtrack_error as f64);
+        }
+        _ => {}
+    }
+
+    (name, fields)
 }
 
 #[derive(Deserialize)]
@@ -630,6 +772,182 @@ fn param_format_file(store: ParamStore) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// Log commands
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+async fn log_open(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<LogSummary, String> {
+    // Close any existing log
+    *state.log_store.lock().await = None;
+
+    let _ = app.emit(
+        "log://progress",
+        LogProgress {
+            phase: LogLoadPhase::Parsing,
+            parsed: 0,
+        },
+    );
+
+    let tlog = TlogFile::open(&path).await.map_err(|e| e.to_string())?;
+    let reader = tlog.entries().await.map_err(|e| e.to_string())?;
+    let all_entries = reader.collect().await.map_err(|e| e.to_string())?;
+
+    // Emit progress after parsing
+    let total = all_entries.len();
+    let _ = app.emit(
+        "log://progress",
+        LogProgress {
+            phase: LogLoadPhase::Parsing,
+            parsed: total,
+        },
+    );
+
+    let _ = app.emit(
+        "log://progress",
+        LogProgress {
+            phase: LogLoadPhase::Indexing,
+            parsed: total,
+        },
+    );
+
+    // Build index and count message types
+    let mut type_index: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut message_types: HashMap<String, usize> = HashMap::new();
+    for (i, entry) in all_entries.iter().enumerate() {
+        let name = entry.message.message_name().to_string();
+        type_index.entry(name.clone()).or_default().push(i);
+        *message_types.entry(name).or_insert(0) += 1;
+
+        if (i + 1) % 5000 == 0 {
+            let _ = app.emit(
+                "log://progress",
+                LogProgress {
+                    phase: LogLoadPhase::Indexing,
+                    parsed: i + 1,
+                },
+            );
+        }
+    }
+
+    let (start_usec, end_usec) = if total > 0 {
+        (
+            all_entries[0].timestamp_usec,
+            all_entries[total - 1].timestamp_usec,
+        )
+    } else {
+        (0, 0)
+    };
+
+    let duration_secs = if end_usec > start_usec {
+        (end_usec - start_usec) as f64 / 1_000_000.0
+    } else {
+        0.0
+    };
+
+    let file_name = std::path::Path::new(&path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.clone());
+
+    let summary = LogSummary {
+        file_name,
+        start_usec,
+        end_usec,
+        duration_secs,
+        total_entries: total,
+        message_types,
+    };
+
+    let store = LogStore {
+        summary: summary.clone(),
+        entries: all_entries,
+        type_index,
+    };
+
+    *state.log_store.lock().await = Some(store);
+
+    let _ = app.emit(
+        "log://progress",
+        LogProgress {
+            phase: LogLoadPhase::Completed,
+            parsed: total,
+        },
+    );
+
+    Ok(summary)
+}
+
+#[tauri::command]
+async fn log_query(
+    state: tauri::State<'_, AppState>,
+    msg_type: String,
+    start_usec: Option<u64>,
+    end_usec: Option<u64>,
+    max_points: Option<usize>,
+) -> Result<Vec<LogDataPoint>, String> {
+    let guard = state.log_store.lock().await;
+    let store = guard.as_ref().ok_or("no log loaded")?;
+
+    let indices = store
+        .type_index
+        .get(&msg_type)
+        .ok_or_else(|| format!("no entries for message type: {msg_type}"))?;
+
+    let mut points: Vec<LogDataPoint> = Vec::new();
+    for &idx in indices {
+        let entry = &store.entries[idx];
+        let ts = entry.timestamp_usec;
+        if let Some(start) = start_usec {
+            if ts < start {
+                continue;
+            }
+        }
+        if let Some(end) = end_usec {
+            if ts > end {
+                continue;
+            }
+        }
+        let (_name, fields) = extract_fields(&entry.message);
+        points.push(LogDataPoint {
+            timestamp_usec: ts,
+            fields,
+        });
+    }
+
+    // Downsample if needed
+    if let Some(max) = max_points {
+        if points.len() > max && max > 0 {
+            let step = points.len() as f64 / max as f64;
+            let mut sampled = Vec::with_capacity(max);
+            let mut i = 0.0;
+            while (i as usize) < points.len() && sampled.len() < max {
+                sampled.push(points[i as usize].clone());
+                i += step;
+            }
+            return Ok(sampled);
+        }
+    }
+
+    Ok(points)
+}
+
+#[tauri::command]
+async fn log_get_summary(state: tauri::State<'_, AppState>) -> Result<Option<LogSummary>, String> {
+    let guard = state.log_store.lock().await;
+    Ok(guard.as_ref().map(|s| s.summary.clone()))
+}
+
+#[tauri::command]
+async fn log_close(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    *state.log_store.lock().await = None;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Watch → Tauri event bridges
 // ---------------------------------------------------------------------------
 
@@ -766,6 +1084,7 @@ pub fn run() {
     let state = AppState {
         vehicle: tokio::sync::Mutex::new(None),
         connect_abort: tokio::sync::Mutex::new(None),
+        log_store: tokio::sync::Mutex::new(None),
     };
 
     let mut builder = tauri::Builder::default()
@@ -812,7 +1131,11 @@ pub fn run() {
             param_parse_file,
             param_format_file,
             calibrate_accel,
-            calibrate_gyro
+            calibrate_gyro,
+            log_open,
+            log_query,
+            log_get_summary,
+            log_close
         ]);
     }
 
@@ -846,7 +1169,11 @@ pub fn run() {
             param_parse_file,
             param_format_file,
             calibrate_accel,
-            calibrate_gyro
+            calibrate_gyro,
+            log_open,
+            log_query,
+            log_get_summary,
+            log_close
         ]);
     }
 

@@ -10,16 +10,18 @@ import { HudPanel } from "./components/hud/HudPanel";
 import { MissionPanel } from "./components/MissionPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { ConfigPanel } from "./components/ConfigPanel";
+import { LogsPanel } from "./components/LogsPanel";
 import { useVehicle } from "./hooks/use-vehicle";
 import { useMission } from "./hooks/use-mission";
 import { useSettings } from "./hooks/use-settings";
 import { useParams } from "./hooks/use-params";
+import { useLogs } from "./hooks/use-logs";
 import { useBreakpoint } from "./hooks/use-breakpoint";
 import { useDeviceLocation } from "./hooks/use-device-location";
 import { setTelemetryRate } from "./telemetry";
 import "./app.css";
 
-type ActiveTab = "map" | "telemetry" | "hud" | "mission" | "config" | "settings";
+type ActiveTab = "map" | "telemetry" | "hud" | "mission" | "config" | "logs" | "settings";
 
 function checkGpuRenderer() {
   const canvas = document.createElement("canvas");
@@ -61,6 +63,7 @@ export default function App() {
   const vehicle = useVehicle();
   const mission = useMission(vehicle.connected, vehicle.telemetry, vehicle.homePosition);
   const params = useParams(vehicle.connected, vehicle.vehicleState?.vehicle_type);
+  const logs = useLogs();
   const { settings, updateSettings } = useSettings();
   const [activeTab, setActiveTab] = useState<ActiveTab>("map");
   const { isMobile } = useBreakpoint();
@@ -105,6 +108,8 @@ export default function App() {
               <MissionPanel vehicle={vehicle} mission={mission} deviceLocation={deviceLocation} />
             ) : activeTab === "config" ? (
               <ConfigPanel params={params} connected={vehicle.connected} />
+            ) : activeTab === "logs" ? (
+              <LogsPanel logs={logs} />
             ) : (
               <SettingsPanel settings={settings} updateSettings={updateSettings} />
             )}

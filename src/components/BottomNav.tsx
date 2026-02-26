@@ -1,7 +1,7 @@
-import { Map, Activity, Crosshair, Route, Sliders, Settings } from "lucide-react";
+import { Map, Activity, Crosshair, Route, Sliders, FileText, Settings } from "lucide-react";
 import { cn } from "../lib/utils";
 
-type ActiveTab = "map" | "telemetry" | "hud" | "mission" | "config" | "settings";
+type ActiveTab = "map" | "telemetry" | "hud" | "mission" | "config" | "logs" | "settings";
 
 type BottomNavProps = {
   activeTab: ActiveTab;
@@ -18,6 +18,7 @@ const TABS: { id: ActiveTab; label: string; Icon: typeof Map }[] = [
   { id: "hud", label: "HUD", Icon: Crosshair },
   { id: "mission", label: "Mission", Icon: Route },
   { id: "config", label: "Config", Icon: Sliders },
+  { id: "logs", label: "Logs", Icon: FileText },
   { id: "settings", label: "Settings", Icon: Settings },
 ];
 
