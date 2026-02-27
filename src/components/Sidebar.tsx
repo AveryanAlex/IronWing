@@ -23,6 +23,7 @@ function formatMaybe(value?: number) {
 
 const TRANSPORT_LABELS: Record<TransportType, string> = {
   udp: "UDP",
+  tcp: "TCP",
   serial: "Serial",
   bluetooth_ble: "BLE",
   bluetooth_spp: "Classic BT",
@@ -75,6 +76,7 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
     isConnecting, cancelConnect,
     connectionMode, setConnectionMode, transports,
     udpBind, setUdpBind,
+    tcpAddress, setTcpAddress,
     serialPort, setSerialPort, baud, setBaud, serialPorts,
     btDevices, btScanning, selectedBtDevice, setSelectedBtDevice,
     scanBleDevices, refreshBondedDevices,
@@ -110,6 +112,16 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
               value={udpBind}
               onChange={(e) => setUdpBind(e.target.value)}
               placeholder="0.0.0.0:14550"
+              disabled={formLocked}
+              className="w-full rounded-md border border-border bg-bg-input pl-2.5 pr-7 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+          )}
+
+          {connectionMode === "tcp" && (
+            <input
+              value={tcpAddress}
+              onChange={(e) => setTcpAddress(e.target.value)}
+              placeholder="127.0.0.1:5760"
               disabled={formLocked}
               className="w-full rounded-md border border-border bg-bg-input pl-2.5 pr-7 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
             />

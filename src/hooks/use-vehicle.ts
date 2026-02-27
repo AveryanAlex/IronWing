@@ -47,6 +47,7 @@ export function useVehicle() {
   const [mode, setMode] = useState<TransportType>("udp");
   const [transports, setTransports] = useState<TransportType[]>(["udp"]);
   const [udpBind, setUdpBind] = useState("0.0.0.0:14550");
+  const [tcpAddress, setTcpAddress] = useState("127.0.0.1:5760");
   const [serialPort, setSerialPort] = useState("");
   const [baud, setBaud] = useState(57600);
   const [serialPorts, setSerialPorts] = useState<string[]>([]);
@@ -167,6 +168,9 @@ export function useVehicle() {
       case "udp":
         request = { endpoint: { kind: "udp", bind_addr: udpBind } };
         break;
+      case "tcp":
+        request = { endpoint: { kind: "tcp", address: tcpAddress } };
+        break;
       case "serial":
         request = { endpoint: { kind: "serial", port: serialPort, baud } };
         break;
@@ -194,7 +198,7 @@ export function useVehicle() {
     } finally {
       setIsConnecting(false);
     }
-  }, [mode, udpBind, serialPort, baud, selectedBtDevice]);
+  }, [mode, udpBind, tcpAddress, serialPort, baud, selectedBtDevice]);
 
   const cancelConnect = useCallback(async () => {
     cancelledRef.current = true;
@@ -346,6 +350,7 @@ export function useVehicle() {
     connectionMode: mode, setConnectionMode: setMode,
     transports,
     udpBind, setUdpBind,
+    tcpAddress, setTcpAddress,
     serialPort, setSerialPort,
     baud, setBaud,
     serialPorts,

@@ -291,6 +291,9 @@ enum LinkEndpoint {
     Udp {
         bind_addr: String,
     },
+    Tcp {
+        address: String,
+    },
     #[cfg(not(target_os = "android"))]
     Serial {
         port: String,
@@ -339,6 +342,26 @@ async fn connect_link(
         LinkEndpoint::Udp { bind_addr } => {
             let address = format!("udpin:{bind_addr}");
             let task = tokio::spawn(async move { Vehicle::connect(&address).await });
+            *state.connect_abort.lock().await = Some(task.abort_handle());
+
+            let vehicle = task
+                .await
+                .map_err(|e| {
+                    if e.is_cancelled() {
+                        "connection cancelled".to_string()
+                    } else {
+                        e.to_string()
+                    }
+                })?
+                .map_err(|e| e.to_string())?;
+
+            *state.connect_abort.lock().await = None;
+            spawn_event_bridges(&app, &vehicle);
+            *state.vehicle.lock().await = Some(vehicle);
+        }
+        LinkEndpoint::Tcp { address } => {
+            let addr = format!("tcpout:{address}");
+            let task = tokio::spawn(async move { Vehicle::connect(&addr).await });
             *state.connect_abort.lock().await = Some(task.abort_handle());
 
             let vehicle = task
@@ -557,7 +580,7 @@ fn mission_validate_plan(plan: MissionPlan) -> Vec<MissionIssue> {
 
 #[tauri::command]
 fn available_transports() -> Vec<&'static str> {
-    let mut t = vec!["udp"];
+    let mut t = vec!["udp", "tcp"];
     #[cfg(not(target_os = "android"))]
     t.push("serial");
     t.push("bluetooth_ble");

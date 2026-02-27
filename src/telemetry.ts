@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export type LinkEndpoint =
   | { kind: "udp"; bind_addr: string }
+  | { kind: "tcp"; address: string }
   | { kind: "serial"; port: string; baud: number }
   | { kind: "bluetooth_ble"; address: string }
   | { kind: "bluetooth_spp"; address: string };
@@ -89,7 +90,7 @@ export type BluetoothDevice = {
   device_type: "ble" | "classic";
 };
 
-export type TransportType = "udp" | "serial" | "bluetooth_ble" | "bluetooth_spp";
+export type TransportType = "udp" | "tcp" | "serial" | "bluetooth_ble" | "bluetooth_spp";
 
 export async function connectLink(request: ConnectRequest): Promise<void> {
   await invoke("connect_link", { request });
