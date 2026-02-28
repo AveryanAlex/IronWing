@@ -45,6 +45,8 @@ type MissionMapProps = {
   currentMissionSeq?: number | null;
   syntheticVision?: boolean;
   svsTelemetry?: SvsTelemetry | null;
+  flightPath?: [number, number][];
+  replayPosition?: { latitude_deg: number; longitude_deg: number; heading_deg: number } | null;
 };
 
 export type { SvsTelemetry };
@@ -55,6 +57,7 @@ export function MissionMap({
   vehiclePosition, deviceLocation, followTarget, centerOnVehicleKey, centerOnDeviceKey,
   onUserInteraction, currentMissionSeq,
   syntheticVision, svsTelemetry,
+  flightPath, replayPosition,
 }: MissionMapProps) {
   type MapLayer = "plan" | "hybrid" | "satellite";
   const [mapLayer, setMapLayer] = useState<MapLayer>("plan");
@@ -66,6 +69,7 @@ export function MissionMap({
   const homeMarkerRef = useRef<Marker | null>(null);
   const vehicleMarkerRef = useRef<Marker | null>(null);
   const deviceLocationMarkerRef = useRef<Marker | null>(null);
+  const replayMarkerRef = useRef<Marker | null>(null);
   const hasSetInitialViewport = useRef(false);
   const onSelectSeqRef = useRef(onSelectSeq);
   const onMoveWaypointRef = useRef(onMoveWaypoint);
@@ -176,8 +180,28 @@ export function MissionMap({
       const source = map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
       if (source) source.setData(missionGeoJsonRef.current);
 
+      // Replay flight path layer
+      if (!map.getSource("replay-path")) {
+        map.addSource("replay-path", {
+          type: "geojson",
+          data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }, properties: {} },
+        });
+      }
+      if (!map.getLayer("replay-path-line")) {
+        map.addLayer({
+          id: "replay-path-line",
+          type: "line",
+          source: "replay-path",
+          paint: {
+            "line-color": "#ffb020",
+            "line-width": 3,
+            "line-dasharray": [2, 2],
+          },
+        });
+      }
+
       // Capture vector base layer IDs for toggling
-      const ownIds = new Set(["satellite", "hills", LINE_LAYER_ID]);
+      const ownIds = new Set(["satellite", "hills", LINE_LAYER_ID, "replay-path-line"]);
       baseLayerIdsRef.current = map.getStyle().layers
         .filter((l: any) => !ownIds.has(l.id))
         .map((l: any) => l.id);
@@ -272,6 +296,7 @@ export function MissionMap({
       if (homeMarkerRef.current) { homeMarkerRef.current.remove(); homeMarkerRef.current = null; }
       if (vehicleMarkerRef.current) { vehicleMarkerRef.current.remove(); vehicleMarkerRef.current = null; }
       if (deviceLocationMarkerRef.current) { deviceLocationMarkerRef.current.remove(); deviceLocationMarkerRef.current = null; }
+      if (replayMarkerRef.current) { replayMarkerRef.current.remove(); replayMarkerRef.current = null; }
       map.remove();
       mapRef.current = null;
       hasSetInitialViewport.current = false;
@@ -514,6 +539,56 @@ export function MissionMap({
     map.fitBounds(bounds, { padding: 48, maxZoom: 15, duration: 0 });
     hasSetInitialViewport.current = true;
   }, [missionItems, homePosition, syntheticVision]);
+
+  // Update replay flight path
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    const source = map.getSource("replay-path") as GeoJSONSource | undefined;
+    if (!source) return;
+
+    if (flightPath && flightPath.length >= 2) {
+      source.setData({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: flightPath },
+        properties: {},
+      });
+    } else {
+      source.setData({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: [] },
+        properties: {},
+      });
+    }
+  }, [flightPath]);
+
+  // Replay position marker (orange triangle)
+  useEffect(() => {
+    if (syntheticVision) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (replayPosition) {
+      const lngLat: [number, number] = [replayPosition.longitude_deg, replayPosition.latitude_deg];
+
+      if (replayMarkerRef.current) {
+        replayMarkerRef.current.setLngLat(lngLat);
+        const svg = replayMarkerRef.current.getElement().querySelector("svg");
+        if (svg) svg.style.transform = `rotate(${replayPosition.heading_deg}deg)`;
+      } else {
+        const el = document.createElement("div");
+        el.className = "vehicle-marker";
+        el.innerHTML = `<svg width="32" height="32" viewBox="0 0 32 32" style="transform: rotate(${replayPosition.heading_deg}deg)"><polygon points="16,4 26,28 16,22 6,28" fill="#ffb020" stroke="#fff" stroke-width="1.5"/></svg>`;
+
+        replayMarkerRef.current = new maplibregl.Marker({ element: el, anchor: "center" })
+          .setLngLat(lngLat)
+          .addTo(map);
+      }
+    } else if (replayMarkerRef.current) {
+      replayMarkerRef.current.remove();
+      replayMarkerRef.current = null;
+    }
+  }, [replayPosition, syntheticVision]);
 
   return (
     <div className="relative h-full w-full">

@@ -1081,6 +1081,64 @@ async fn log_query(
     Ok(points)
 }
 
+#[derive(Serialize, Clone)]
+struct FlightPathPoint {
+    timestamp_usec: u64,
+    lat: f64,
+    lon: f64,
+    alt: f64,
+    heading: f64,
+}
+
+#[tauri::command]
+async fn log_get_flight_path(
+    state: tauri::State<'_, AppState>,
+    max_points: Option<usize>,
+) -> Result<Vec<FlightPathPoint>, String> {
+    let guard = state.log_store.lock().await;
+    let store = guard.as_ref().ok_or("no log loaded")?;
+
+    let indices = store
+        .type_index
+        .get("GLOBAL_POSITION_INT")
+        .ok_or("no GPS data in log")?;
+
+    let mut points: Vec<FlightPathPoint> = Vec::with_capacity(indices.len());
+    for &idx in indices {
+        let entry = &store.entries[idx];
+        let (_name, fields) = extract_fields(&entry.message);
+        let lat = fields.get("lat").copied().unwrap_or(0.0);
+        let lon = fields.get("lon").copied().unwrap_or(0.0);
+        // Skip zero-position entries (no fix)
+        if lat.abs() < 1e-6 && lon.abs() < 1e-6 {
+            continue;
+        }
+        points.push(FlightPathPoint {
+            timestamp_usec: entry.timestamp_usec,
+            lat,
+            lon,
+            alt: fields.get("relative_alt").copied().unwrap_or(0.0),
+            heading: fields.get("hdg").copied().unwrap_or(0.0),
+        });
+    }
+
+    // Downsample if needed
+    if let Some(max) = max_points {
+        if points.len() > max && max > 0 {
+            let step = points.len() as f64 / max as f64;
+            let mut sampled = Vec::with_capacity(max);
+            let mut i = 0.0;
+            while (i as usize) < points.len() && sampled.len() < max {
+                sampled.push(points[i as usize].clone());
+                i += step;
+            }
+            return Ok(sampled);
+        }
+    }
+
+    Ok(points)
+}
+
 #[tauri::command]
 async fn log_get_summary(state: tauri::State<'_, AppState>) -> Result<Option<LogSummary>, String> {
     let guard = state.log_store.lock().await;
@@ -1306,6 +1364,7 @@ pub fn run() {
             log_open,
             log_query,
             log_get_summary,
+            log_get_flight_path,
             log_close,
             recording_start,
             recording_stop,
@@ -1347,6 +1406,7 @@ pub fn run() {
             log_open,
             log_query,
             log_get_summary,
+            log_get_flight_path,
             log_close,
             recording_start,
             recording_stop,

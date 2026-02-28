@@ -6,11 +6,13 @@ type ArmSliderProps = {
   armed: boolean;
   onArm: (force: boolean) => void;
   onDisarm: (force: boolean) => void;
+  replayActive?: boolean;
 };
 
-export function ArmSlider({ connected, armed, onArm, onDisarm }: ArmSliderProps) {
+export function ArmSlider({ connected, armed, onArm, onDisarm, replayActive }: ArmSliderProps) {
+  const disabled = !connected || !!replayActive;
   return (
-    <div className={cn("rounded-lg border border-border bg-bg-primary p-3", !connected && "opacity-50")}>
+    <div className={cn("rounded-lg border border-border bg-bg-primary p-3", disabled && "opacity-50")}>
       <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-text-muted">
         <Shield className="h-3.5 w-3.5" />
         {armed ? "Armed" : "Disarmed"}
@@ -27,7 +29,7 @@ export function ArmSlider({ connected, armed, onArm, onDisarm }: ArmSliderProps)
 
         <button
           type="button"
-          disabled={!connected || !armed}
+          disabled={disabled || !armed}
           onClick={() => onDisarm(false)}
           className={cn(
             "relative z-10 flex flex-1 items-center justify-center rounded-full text-sm font-medium transition-colors",
@@ -41,7 +43,7 @@ export function ArmSlider({ connected, armed, onArm, onDisarm }: ArmSliderProps)
 
         <button
           type="button"
-          disabled={!connected || armed}
+          disabled={disabled || armed}
           onClick={() => onArm(false)}
           className={cn(
             "relative z-10 flex flex-1 items-center justify-center rounded-full text-sm font-medium transition-colors",

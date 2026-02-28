@@ -11,6 +11,8 @@ type MapPanelProps = {
   vehicle: ReturnType<typeof useVehicle>;
   mission: ReturnType<typeof useMission>;
   deviceLocation: ReturnType<typeof useDeviceLocation>;
+  flightPath?: [number, number][];
+  replayPosition?: { latitude_deg: number; longitude_deg: number; heading_deg: number } | null;
 };
 
 type ContextMenuState = {
@@ -22,7 +24,7 @@ type ContextMenuState = {
 
 const LONG_PRESS_MS = 500;
 
-export function MapPanel({ vehicle, mission, deviceLocation }: MapPanelProps) {
+export function MapPanel({ vehicle, mission, deviceLocation, flightPath, replayPosition }: MapPanelProps) {
   const { vehiclePosition, guidedGoto } = vehicle;
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
 
@@ -161,6 +163,8 @@ export function MapPanel({ vehicle, mission, deviceLocation }: MapPanelProps) {
         centerOnDeviceKey={centerDeviceKey}
         onUserInteraction={handleUserInteraction}
         currentMissionSeq={mission.missionState?.current_seq ?? null}
+        flightPath={flightPath}
+        replayPosition={replayPosition}
       />
       {contextMenu && (
         <MapContextMenu

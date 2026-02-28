@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { TopBar } from "./components/TopBar";
@@ -17,9 +17,11 @@ import { useSettings } from "./hooks/use-settings";
 import { useParams } from "./hooks/use-params";
 import { useLogs } from "./hooks/use-logs";
 import { useRecording } from "./hooks/use-recording";
+import { usePlayback } from "./hooks/use-playback";
 import { useBreakpoint } from "./hooks/use-breakpoint";
 import { useDeviceLocation } from "./hooks/use-device-location";
 import { setTelemetryRate } from "./telemetry";
+import type { FlightPathPoint } from "./playback";
 import "./app.css";
 
 type ActiveTab = "map" | "telemetry" | "hud" | "mission" | "config" | "logs" | "settings";
@@ -60,17 +62,52 @@ function checkGpuRenderer() {
   if (loseExt) loseExt.loseContext();
 }
 
+/** Interpolate position along the flight path at the given timestamp. */
+function interpolatePosition(
+  path: FlightPathPoint[],
+  timeUsec: number,
+): { latitude_deg: number; longitude_deg: number; heading_deg: number } | null {
+  if (path.length === 0) return null;
+  if (timeUsec <= path[0].timestamp_usec) {
+    return { latitude_deg: path[0].lat, longitude_deg: path[0].lon, heading_deg: path[0].heading };
+  }
+  if (timeUsec >= path[path.length - 1].timestamp_usec) {
+    const last = path[path.length - 1];
+    return { latitude_deg: last.lat, longitude_deg: last.lon, heading_deg: last.heading };
+  }
+
+  // Binary search for bracketing points
+  let lo = 0;
+  let hi = path.length - 1;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (path[mid].timestamp_usec <= timeUsec) lo = mid;
+    else hi = mid;
+  }
+
+  const a = path[lo];
+  const b = path[hi];
+  const t = (timeUsec - a.timestamp_usec) / (b.timestamp_usec - a.timestamp_usec);
+  return {
+    latitude_deg: a.lat + (b.lat - a.lat) * t,
+    longitude_deg: a.lon + (b.lon - a.lon) * t,
+    heading_deg: a.heading + (b.heading - a.heading) * t,
+  };
+}
+
 export default function App() {
   const vehicle = useVehicle();
   const mission = useMission(vehicle.connected, vehicle.telemetry, vehicle.homePosition);
   const params = useParams(vehicle.connected, vehicle.vehicleState?.vehicle_type);
   const logs = useLogs();
   const recording = useRecording(vehicle.connected);
+  const playback = usePlayback();
   const { settings, updateSettings } = useSettings();
   const [activeTab, setActiveTab] = useState<ActiveTab>("map");
   const { isMobile } = useBreakpoint();
   const deviceLocation = useDeviceLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [flightPath, setFlightPath] = useState<FlightPathPoint[] | null>(null);
 
   useEffect(() => { checkGpuRenderer() }, []);
 
@@ -78,6 +115,24 @@ export default function App() {
   useEffect(() => {
     setTelemetryRate(settings.telemetryRateHz).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const replayActive = playback.isPlaying || playback.currentTimeUsec > 0;
+
+  // Compute map-ready flight path coordinates
+  const flightPathCoords = useMemo<[number, number][] | undefined>(() => {
+    if (!flightPath || flightPath.length < 2) return undefined;
+    return flightPath.map((p) => [p.lon, p.lat]);
+  }, [flightPath]);
+
+  // Compute interpolated replay position
+  const replayPosition = useMemo(() => {
+    if (!flightPath || !replayActive) return null;
+    return interpolatePosition(flightPath, playback.currentTimeUsec);
+  }, [flightPath, replayActive, playback.currentTimeUsec]);
+
+  const handleFlightPath = useCallback((path: FlightPathPoint[] | null) => {
+    setFlightPath(path);
+  }, []);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -94,6 +149,7 @@ export default function App() {
             isMobile={isMobile}
             open={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
+            replayActive={replayActive}
           />
 
           <main
@@ -101,7 +157,13 @@ export default function App() {
             style={{ paddingTop: isMobile ? "calc(var(--safe-area-top, 0px) + 0.25rem)" : undefined }}
           >
             {activeTab === "map" ? (
-              <MapPanel vehicle={vehicle} mission={mission} deviceLocation={deviceLocation} />
+              <MapPanel
+                vehicle={vehicle}
+                mission={mission}
+                deviceLocation={deviceLocation}
+                flightPath={flightPathCoords}
+                replayPosition={replayPosition}
+              />
             ) : activeTab === "telemetry" ? (
               <TelemetryPanel vehicle={vehicle} mission={mission} />
             ) : activeTab === "hud" ? (
@@ -111,7 +173,13 @@ export default function App() {
             ) : activeTab === "config" ? (
               <ConfigPanel params={params} connected={vehicle.connected} />
             ) : activeTab === "logs" ? (
-              <LogsPanel logs={logs} recording={recording} connected={vehicle.connected} />
+              <LogsPanel
+                logs={logs}
+                recording={recording}
+                connected={vehicle.connected}
+                playback={playback}
+                onFlightPath={handleFlightPath}
+              />
             ) : (
               <SettingsPanel settings={settings} updateSettings={updateSettings} />
             )}

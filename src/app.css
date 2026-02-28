@@ -1,5 +1,27 @@
 @import "tailwindcss";
 @import "maplibre-gl/dist/maplibre-gl.css";
+@import "uplot/dist/uPlot.min.css";
+
+/* uPlot dark theme overrides */
+.uplot .u-legend .u-series td {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.uplot .u-legend .u-marker {
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+}
+.uplot .u-legend th {
+  display: none;
+}
+.uplot .u-select {
+  background: rgba(18, 185, 255, 0.1);
+}
+.uplot .u-cursor-x,
+.uplot .u-cursor-y {
+  border-color: rgba(156, 178, 199, 0.3) !important;
+}
 
 @theme {
   --color-bg-primary: #12171d;

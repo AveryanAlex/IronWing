@@ -1,11 +1,20 @@
+import { useEffect, useState, useCallback } from "react";
 import { FolderOpen, X, Loader2, Circle, Square } from "lucide-react";
+import { Timeline } from "./charts/Timeline";
+import { LogCharts, CHART_DEFS, toAligned } from "./charts/LogCharts";
+import { getFlightPath, type FlightPathPoint } from "../playback";
+import type { LogDataPoint } from "../logs";
 import type { useLogs } from "../hooks/use-logs";
 import type { useRecording } from "../hooks/use-recording";
+import type { usePlayback } from "../hooks/use-playback";
+import type uPlot from "uplot";
 
 type LogsPanelProps = {
   logs: ReturnType<typeof useLogs>;
   recording: ReturnType<typeof useRecording>;
   connected: boolean;
+  playback: ReturnType<typeof usePlayback>;
+  onFlightPath: (path: FlightPathPoint[] | null) => void;
 };
 
 function formatDuration(secs: number): string {
@@ -20,8 +29,77 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function LogsPanel({ logs, recording, connected }: LogsPanelProps) {
-  const { summary, progress, loading, openFile, closeFile } = logs;
+export function LogsPanel({
+  logs,
+  recording,
+  connected,
+  playback,
+  onFlightPath,
+}: LogsPanelProps) {
+  const { summary, progress, loading, openFile, closeFile, queryMessages } =
+    logs;
+
+  const [chartData, setChartData] = useState<Map<string, LogDataPoint[]>>(
+    new Map(),
+  );
+  const [altitudeData, setAltitudeData] = useState<uPlot.AlignedData | null>(
+    null,
+  );
+
+  // Fetch chart data + flight path when summary changes
+  useEffect(() => {
+    if (!summary) {
+      setChartData(new Map());
+      setAltitudeData(null);
+      onFlightPath(null);
+      return;
+    }
+
+    // Configure playback time range
+    playback.configure(summary.start_usec, summary.end_usec);
+
+    // Unique message types needed
+    const msgTypes = [...new Set(CHART_DEFS.map((d) => d.msgType))];
+
+    // Parallel queries
+    const queries = msgTypes.map(async (mt): Promise<[string, LogDataPoint[]]> => {
+      try {
+        const pts = await queryMessages(mt, undefined, undefined, 2000);
+        return [mt, pts];
+      } catch {
+        return [mt, []];
+      }
+    });
+
+    const flightPathQuery = getFlightPath(1000).catch(() => null);
+
+    Promise.all([Promise.all(queries), flightPathQuery]).then(
+      ([results, fp]) => {
+        const map = new Map<string, LogDataPoint[]>();
+        for (const [mt, pts] of results) {
+          if (pts.length > 0) map.set(mt, pts);
+        }
+        setChartData(map);
+
+        // Build altitude data for timeline
+        const vfrPoints = map.get("VFR_HUD");
+        if (vfrPoints && vfrPoints.length > 0) {
+          setAltitudeData(toAligned(vfrPoints, ["alt"]));
+        } else {
+          setAltitudeData(null);
+        }
+
+        onFlightPath(fp);
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summary]);
+
+  const handleClose = useCallback(() => {
+    playback.stop();
+    onFlightPath(null);
+    closeFile();
+  }, [playback, closeFile, onFlightPath]);
 
   const recordingInfo =
     recording.status !== "idle" ? recording.status.recording : null;
@@ -31,8 +109,11 @@ export function LogsPanel({ logs, recording, connected }: LogsPanelProps) {
     <div className="flex items-center justify-between rounded-md border border-border bg-bg-secondary px-3 py-2">
       {recording.isRecording && recordingInfo ? (
         <>
-          <div className="flex items-center gap-2 min-w-0">
-            <Circle size={10} className="shrink-0 fill-danger text-danger animate-pulse" />
+          <div className="flex min-w-0 items-center gap-2">
+            <Circle
+              size={10}
+              className="shrink-0 animate-pulse fill-danger text-danger"
+            />
             <span className="truncate text-xs font-medium text-text-primary">
               {recordingInfo.file_name}
             </span>
@@ -50,7 +131,9 @@ export function LogsPanel({ logs, recording, connected }: LogsPanelProps) {
         </>
       ) : (
         <>
-          <span className="text-xs text-text-secondary">Record incoming MAVLink to file</span>
+          <span className="text-xs text-text-secondary">
+            Record incoming MAVLink to file
+          </span>
           <button
             onClick={recording.start}
             className="flex shrink-0 items-center gap-1.5 rounded-md bg-danger/20 px-3 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-danger/30"
@@ -101,11 +184,7 @@ export function LogsPanel({ logs, recording, connected }: LogsPanelProps) {
     );
   }
 
-  // Summary view
-  const sortedTypes = Object.entries(summary.message_types).sort(
-    (a, b) => b[1] - a[1],
-  );
-
+  // Log loaded — timeline + charts view
   return (
     <div className="flex h-full flex-col gap-3 overflow-hidden">
       {recordingBar}
@@ -130,7 +209,7 @@ export function LogsPanel({ logs, recording, connected }: LogsPanelProps) {
             Open
           </button>
           <button
-            onClick={closeFile}
+            onClick={handleClose}
             className="flex items-center gap-1.5 rounded-md bg-bg-tertiary px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:text-text-primary"
           >
             <X size={14} />
@@ -139,31 +218,26 @@ export function LogsPanel({ logs, recording, connected }: LogsPanelProps) {
         </div>
       </div>
 
-      {/* Message type table */}
-      <div className="flex-1 overflow-auto rounded-md border border-border bg-bg-secondary">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-border text-left text-text-muted">
-              <th className="px-3 py-2 font-medium">Message Type</th>
-              <th className="px-3 py-2 text-right font-medium">Count</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedTypes.map(([type_, count]) => (
-              <tr
-                key={type_}
-                className="border-b border-border/50 last:border-0"
-              >
-                <td className="px-3 py-1.5 font-mono text-text-primary">
-                  {type_}
-                </td>
-                <td className="px-3 py-1.5 text-right text-text-secondary">
-                  {count.toLocaleString()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Timeline + playback controls */}
+      <Timeline
+        startUsec={summary.start_usec}
+        endUsec={summary.end_usec}
+        currentUsec={playback.currentTimeUsec}
+        isPlaying={playback.isPlaying}
+        speed={playback.speed}
+        altitudeData={altitudeData}
+        onPlay={playback.play}
+        onPause={playback.pause}
+        onSeek={playback.seek}
+        onSpeedChange={playback.setSpeed}
+      />
+
+      {/* Charts */}
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <LogCharts
+          chartData={chartData}
+          currentTimeUsec={playback.currentTimeUsec}
+        />
       </div>
     </div>
   );

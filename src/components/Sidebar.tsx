@@ -14,6 +14,7 @@ type SidebarProps = {
   isMobile: boolean;
   open: boolean;
   onClose: () => void;
+  replayActive?: boolean;
 };
 
 function formatMaybe(value?: number) {
@@ -29,7 +30,7 @@ const TRANSPORT_LABELS: Record<TransportType, string> = {
   bluetooth_spp: "Classic BT",
 };
 
-export function Sidebar({ vehicle, isMobile, open, onClose }: SidebarProps) {
+export function Sidebar({ vehicle, isMobile, open, onClose, replayActive }: SidebarProps) {
   // Mobile: drawer overlay
   if (isMobile) {
     return (
@@ -56,7 +57,7 @@ export function Sidebar({ vehicle, isMobile, open, onClose }: SidebarProps) {
               <X size={16} />
             </button>
           </div>
-          <SidebarContent vehicle={vehicle} />
+          <SidebarContent vehicle={vehicle} replayActive={replayActive} />
         </aside>
       </>
     );
@@ -65,12 +66,12 @@ export function Sidebar({ vehicle, isMobile, open, onClose }: SidebarProps) {
   // Desktop: static sidebar
   return (
     <aside className="flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-r border-border bg-bg-secondary p-3 xl:w-72">
-      <SidebarContent vehicle={vehicle} />
+      <SidebarContent vehicle={vehicle} replayActive={replayActive} />
     </aside>
   );
 }
 
-function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> }) {
+function SidebarContent({ vehicle, replayActive }: { vehicle: ReturnType<typeof useVehicle>; replayActive?: boolean }) {
   const {
     telemetry, linkState, vehicleState, connected, connectionError,
     isConnecting, cancelConnect,
@@ -249,11 +250,17 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
           <Navigation className="h-3.5 w-3.5" /> Controls
         </h3>
 
+        {replayActive && (
+          <p className="mb-2 rounded-md bg-warning/10 px-2 py-1 text-xs text-warning">
+            Controls disabled during log replay
+          </p>
+        )}
+
         <div className="space-y-2">
           <select
             value={vehicleState?.custom_mode ?? ""}
             onChange={(e) => setFlightMode(Number(e.target.value))}
-            disabled={!connected || availableModes.length === 0}
+            disabled={!connected || !!replayActive || availableModes.length === 0}
             className="w-full rounded-md border border-border bg-bg-input pl-2.5 pr-7 py-1.5 text-sm text-text-primary disabled:opacity-50"
           >
             {availableModes.map((m) => (
@@ -270,11 +277,11 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
             />
             <span className="text-xs text-text-muted">m</span>
             <Button variant="secondary" size="sm" className="flex-1" onClick={takeoff}
-              disabled={!connected || !vehicleState?.armed || vehicleState?.mode_name?.toUpperCase() !== "GUIDED"}>
+              disabled={!connected || !!replayActive || !vehicleState?.armed || vehicleState?.mode_name?.toUpperCase() !== "GUIDED"}>
               Takeoff
             </Button>
           </div>
-          {connected && vehicleState && (!vehicleState.armed || vehicleState.mode_name?.toUpperCase() !== "GUIDED") && (
+          {connected && !replayActive && vehicleState && (!vehicleState.armed || vehicleState.mode_name?.toUpperCase() !== "GUIDED") && (
             <p className="text-[10px] text-text-muted">
               {!vehicleState.armed ? "Arm vehicle" : "Switch to GUIDED"} to enable takeoff
             </p>
@@ -283,19 +290,19 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
           <div className="flex gap-1.5">
             {findModeNumber("RTL") !== null && (
               <Button variant="secondary" size="sm" className="flex-1"
-                onClick={() => setFlightMode(findModeNumber("RTL")!)} disabled={!connected}>
+                onClick={() => setFlightMode(findModeNumber("RTL")!)} disabled={!connected || !!replayActive}>
                 <RotateCcw className="h-3 w-3" /> RTL
               </Button>
             )}
             {findModeNumber("LAND") !== null && (
               <Button variant="secondary" size="sm" className="flex-1"
-                onClick={() => setFlightMode(findModeNumber("LAND")!)} disabled={!connected}>
+                onClick={() => setFlightMode(findModeNumber("LAND")!)} disabled={!connected || !!replayActive}>
                 Land
               </Button>
             )}
             {findModeNumber("LOITER") !== null && (
               <Button variant="secondary" size="sm" className="flex-1"
-                onClick={() => setFlightMode(findModeNumber("LOITER")!)} disabled={!connected}>
+                onClick={() => setFlightMode(findModeNumber("LOITER")!)} disabled={!connected || !!replayActive}>
                 <CircleDot className="h-3 w-3" /> Loiter
               </Button>
             )}
@@ -309,6 +316,7 @@ function SidebarContent({ vehicle }: { vehicle: ReturnType<typeof useVehicle> })
         armed={vehicleState?.armed ?? false}
         onArm={(force) => arm(force)}
         onDisarm={(force) => disarm(force)}
+        replayActive={replayActive}
       />
     </>
   );
