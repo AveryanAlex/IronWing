@@ -36,6 +36,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Install Linux system dependencies
         run: |
@@ -57,8 +59,14 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
+      - name: Create dist directory
+        run: mkdir -p dist
+
       - name: Cargo check
         run: cargo check --workspace
+
+      - name: Cargo clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Cargo test
         run: cargo test --workspace

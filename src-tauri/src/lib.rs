@@ -168,7 +168,6 @@ enum LogLoadPhase {
     Parsing,
     Indexing,
     Completed,
-    Failed,
 }
 
 #[derive(Serialize, Clone)]
