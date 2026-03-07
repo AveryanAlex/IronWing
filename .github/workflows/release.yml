@@ -77,9 +77,18 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
+      - name: Resolve artifact paths
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        id: artifacts
+        shell: bash
+        run: |
+          echo "paths<<EOF" >> "$GITHUB_OUTPUT"
+          echo '${{ steps.tauri.outputs.artifactPaths }}' | jq -r '.[]' >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
       - name: Upload build artifacts
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
         with:
           name: ironwing-${{ matrix.platform }}${{ contains(matrix.args, 'aarch64') && '-aarch64' || contains(matrix.args, 'x86_64') && '-x86_64' || '' }}
-          path: ${{ join(fromJSON(steps.tauri.outputs.artifactPaths), '\n') }}
+          path: ${{ steps.artifacts.outputs.paths }}
