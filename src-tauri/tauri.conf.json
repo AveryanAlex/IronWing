@@ -3,6 +3,7 @@
   "productName": "IronWing",
   "version": "0.1.0",
   "identifier": "dev.averylex.ironwing",
+  "mainBinaryName": "ironwing-app",
   "build": {
     "beforeDevCommand": "pnpm run dev",
     "beforeBuildCommand": "pnpm run build",

@@ -3,6 +3,10 @@ name = "ironwing"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "ironwing-app"
+path = "src/main.rs"
+
 [lib]
 name = "ironwing"
 crate-type = ["staticlib", "cdylib", "rlib"]
