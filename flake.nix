@@ -13,11 +13,11 @@
 
   outputs =
     {
-      self,
       nixpkgs,
       systems,
       flake-utils,
       rust-overlay,
+      ...
     }:
     flake-utils.lib.eachSystem (import systems) (
       system:
@@ -33,17 +33,19 @@
 
         lib = pkgs.lib;
 
+        ndkVersion = "27.3.13750724";
+
         androidComposition = pkgs.androidenv.composeAndroidPackages {
           platformVersions = [
             "34"
             "36"
           ];
           buildToolsVersions = [
-            "34.0.0"
             "35.0.0"
+            "36.1.0"
           ];
           includeNDK = true;
-          ndkVersions = [ "27.2.12479018" ];
+          ndkVersions = [ ndkVersion ];
           abiVersions = [
             "arm64-v8a"
             "armeabi-v7a"
@@ -56,6 +58,8 @@
 
         androidSdk = androidComposition.androidsdk;
 
+        jdk = pkgs.jdk17;
+
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
           extensions = [
             "clippy"
@@ -66,8 +70,8 @@
           targets = [
             "aarch64-linux-android"
             "armv7-linux-androideabi"
-            "x86_64-linux-android"
             "i686-linux-android"
+            "x86_64-linux-android"
           ];
         };
 
@@ -104,20 +108,24 @@
           packages =
             (with pkgs; [
               android-studio
+              cargo-tauri
+              nodejs_20
+              pnpm
+              pkg-config
+              nixfmt
+            ])
+            ++ [
+              jdk
               android-studio-wrapper
               androidSdk
-              cargo-tauri
-              jdk17
-              nodejs_20
-              pkg-config
               rustToolchain
-            ])
+            ]
             ++ lib.optionals pkgs.stdenv.isLinux linuxDeps
             ++ lib.optionals pkgs.stdenv.isDarwin darwinDeps;
 
           ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
-          NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/27.2.12479018";
-          JAVA_HOME = "${pkgs.jdk17}";
+          NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/ndkVersion";
+          JAVA_HOME = "${jdk}";
           RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
           LD_LIBRARY_PATH = lib.optionalString pkgs.stdenv.isLinux (lib.makeLibraryPath linuxDeps);
 

@@ -15,6 +15,7 @@ val tauriProperties = Properties().apply {
 
 android {
     compileSdk = 36
+    buildToolsVersion = "36.1.0"
     namespace = "dev.averylex.ironwing"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"

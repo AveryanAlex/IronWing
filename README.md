@@ -16,7 +16,7 @@ Current state: M0-M3 complete. Mission planning MVP, Bluetooth connectivity (BLE
 
 - Node.js 20+
 - Rust stable toolchain
-- npm
+- pnpm
 - Optional but recommended: Nix (`nix develop`) for a preconfigured shell
 
 ## Local development
@@ -24,17 +24,17 @@ Current state: M0-M3 complete. Mission planning MVP, Bluetooth connectivity (BLE
 Install dependencies:
 
 ```bash
-npm install
+pnpm install
 ```
 
 Common commands:
 
 ```bash
-npm run frontend:typecheck
-npm run frontend:build
+pnpm run frontend:typecheck
+pnpm run frontend:build
 cargo check --workspace
 cargo test --workspace
-npm run tauri:dev
+pnpm run tauri:dev
 ```
 
 ## Use IronWing with ArduPilot SITL (development)
@@ -55,7 +55,7 @@ Stop everything:
 make bridge-down
 ```
 
-`make dev-sitl` starts SITL + MAVProxy bridge, waits for UDP telemetry, then launches `npm run tauri:dev`.
+`make dev-sitl` starts SITL + MAVProxy bridge, waits for UDP telemetry, then launches `pnpm run tauri:dev`.
 Wait logic uses checked-in Python helpers: `scripts/sitl_wait_tcp.py` and `scripts/sitl_wait_udp.py`.
 
 You can also inspect logs with:
@@ -87,7 +87,7 @@ This uses SITL TCP `5760` (same baseline transport used by legacy Mission Planne
 ### 3) Launch the desktop app
 
 ```bash
-npm run tauri:dev
+pnpm run tauri:dev
 ```
 
 In the app:
@@ -157,8 +157,8 @@ Connect → Takeoff (10m) → right-click map to fly around → Land or RTL
 Requires Android SDK + NDK. Run on a connected device or emulator:
 
 ```bash
-npm run android:dev       # Dev build on device/emulator
-npm run android:build     # Build APK
+pnpm run android:dev       # Dev build on device/emulator
+pnpm run android:build     # Build APK
 ```
 
 Android supports UDP, BLE, and Classic SPP transports. Serial is excluded (doesn't compile for Android targets).

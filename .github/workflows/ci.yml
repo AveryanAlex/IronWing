@@ -13,20 +13,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Typecheck frontend
-        run: npm run frontend:typecheck
+        run: pnpm run frontend:typecheck
 
       - name: Build frontend
-        run: npm run frontend:build
+        run: pnpm run frontend:build
 
   rust:
     runs-on: ubuntu-latest

@@ -85,10 +85,10 @@ status:
 	fi
 
 dev-sitl: bridge-up
-	npm run tauri:dev
+	pnpm run tauri:dev
 
 android-dev:
-	npm run android:dev
+	pnpm run android:dev
 
 android-build:
-	npm run android:build
+	pnpm run android:build
