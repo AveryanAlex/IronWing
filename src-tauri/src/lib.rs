@@ -16,13 +16,21 @@ use tauri::Emitter;
 #[cfg(target_os = "android")]
 use tauri::Manager;
 
+mod helpers;
+mod recording;
+mod bluetooth;
+mod connection;
+mod bridges;
+mod commands;
+mod logs;
+
 static TELEMETRY_INTERVAL_MS: AtomicU64 = AtomicU64::new(200);
 
 struct AppState {
-    vehicle: tokio::sync::Mutex<Option<Vehicle>>,
-    connect_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
-    log_store: tokio::sync::Mutex<Option<LogStore>>,
-    recorder: TlogRecorderHandle,
+    pub(crate) vehicle: tokio::sync::Mutex<Option<Vehicle>>,
+    pub(crate) connect_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
+    pub(crate) log_store: tokio::sync::Mutex<Option<LogStore>>,
+    pub(crate) recorder: TlogRecorderHandle,
 }
 
 // ---------------------------------------------------------------------------
