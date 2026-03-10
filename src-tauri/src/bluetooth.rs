@@ -94,3 +94,9 @@ pub(crate) async fn bt_get_bonded_devices(
         })
         .collect())
 }
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+pub(crate) async fn bt_get_bonded_devices() -> Result<Vec<BluetoothDevice>, String> {
+    Err("not supported on desktop".to_string())
+}

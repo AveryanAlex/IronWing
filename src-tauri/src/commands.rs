@@ -16,6 +16,12 @@ pub(crate) fn list_serial_ports_cmd() -> Result<Vec<String>, String> {
     Ok(ports.into_iter().map(|p| p.port_name).collect())
 }
 
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub(crate) fn list_serial_ports_cmd() -> Result<Vec<String>, String> {
+    Err("not supported on android".to_string())
+}
+
 #[tauri::command]
 pub(crate) fn mission_validate_plan(plan: MissionPlan) -> Vec<MissionIssue> {
     validate_plan(&plan)
