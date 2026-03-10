@@ -1,20 +1,23 @@
 use mavkit::{
     format_param_file, parse_param_file,
-    tlog::{TlogEntry, TlogFile, TlogWriter},
+    tlog::{TlogEntry, TlogFile},
     validate_plan, FlightMode, HomePosition, LinkState, MissionIssue, MissionPlan, MissionType,
     Param, ParamProgress, ParamStore, ParamWriteResult, StatusMessage, Telemetry,
     TransferProgress, Vehicle, VehicleConfig, VehicleState,
 };
-use mavlink::{common::MavMessage, MavlinkVersion, Message};
+use mavlink::{Message, common::MavMessage};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::BufWriter;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use std::time::Duration;
 use tauri::Emitter;
 #[cfg(target_os = "android")]
 use tauri::Manager;
+
+use bluetooth::{bt_request_permissions, bt_scan_ble, bt_stop_scan_ble};
+#[cfg(target_os = "android")]
+use bluetooth::bt_get_bonded_devices;
+use recording::{TlogRecorderHandle, recording_start, recording_status, recording_stop};
 
 mod helpers;
 mod recording;
@@ -31,123 +34,6 @@ struct AppState {
     pub(crate) connect_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
     pub(crate) log_store: tokio::sync::Mutex<Option<LogStore>>,
     pub(crate) recorder: TlogRecorderHandle,
-}
-
-// ---------------------------------------------------------------------------
-// TLOG recording
-// ---------------------------------------------------------------------------
-
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "snake_case")]
-enum RecordingStatus {
-    Idle,
-    Recording {
-        file_name: String,
-        bytes_written: u64,
-    },
-}
-
-enum RecorderState {
-    Idle,
-    Recording {
-        cancel: tokio::sync::oneshot::Sender<()>,
-        file_name: String,
-        bytes_written: Arc<AtomicU64>,
-    },
-}
-
-struct TlogRecorderHandle {
-    state: std::sync::Mutex<RecorderState>,
-}
-
-impl TlogRecorderHandle {
-    fn new() -> Self {
-        Self {
-            state: std::sync::Mutex::new(RecorderState::Idle),
-        }
-    }
-
-    fn start(&self, vehicle: &Vehicle, path: &str) -> Result<String, String> {
-        let mut guard = self.state.lock().unwrap();
-        if matches!(*guard, RecorderState::Recording { .. }) {
-            return Err("already recording".into());
-        }
-
-        let file =
-            std::fs::File::create(path).map_err(|e| format!("failed to create file: {e}"))?;
-        let writer = BufWriter::new(file);
-        let mut tlog_writer = TlogWriter::new(writer, MavlinkVersion::V2);
-
-        let file_name = std::path::Path::new(path)
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| path.to_string());
-
-        let bytes_written = Arc::new(AtomicU64::new(0));
-        let bytes_counter = bytes_written.clone();
-        let mut rx = vehicle.raw_messages();
-        let (cancel_tx, mut cancel_rx) = tokio::sync::oneshot::channel();
-
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = &mut cancel_rx => break,
-                    result = rx.recv() => {
-                        match result {
-                            Ok((header, msg)) => {
-                                match tlog_writer.write_now(&header, &msg) {
-                                    Ok(n) => {
-                                        bytes_counter.fetch_add(n as u64, Ordering::Relaxed);
-                                    }
-                                    Err(e) => {
-                                        tracing::warn!("tlog write error: {e}");
-                                        break;
-                                    }
-                                }
-                            }
-                            Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                                tracing::warn!("tlog recorder lagged, skipped {n} messages");
-                            }
-                            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                        }
-                    }
-                }
-            }
-            let _ = tlog_writer.flush();
-        });
-
-        let name = file_name.clone();
-        *guard = RecorderState::Recording {
-            cancel: cancel_tx,
-            file_name,
-            bytes_written,
-        };
-        Ok(name)
-    }
-
-    fn stop(&self) {
-        let mut guard = self.state.lock().unwrap();
-        if let RecorderState::Recording { cancel, .. } =
-            std::mem::replace(&mut *guard, RecorderState::Idle)
-        {
-            let _ = cancel.send(());
-        }
-    }
-
-    fn status(&self) -> RecordingStatus {
-        let guard = self.state.lock().unwrap();
-        match &*guard {
-            RecorderState::Idle => RecordingStatus::Idle,
-            RecorderState::Recording {
-                file_name,
-                bytes_written,
-                ..
-            } => RecordingStatus::Recording {
-                file_name: file_name.clone(),
-                bytes_written: bytes_written.load(Ordering::Relaxed),
-            },
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -349,13 +235,6 @@ enum LinkEndpoint {
     BluetoothSpp {
         address: String,
     },
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct BluetoothDevice {
-    name: String,
-    address: String,
-    device_type: String, // "ble" or "classic"
 }
 
 // ---------------------------------------------------------------------------
@@ -630,100 +509,6 @@ fn available_transports() -> Vec<&'static str> {
     #[cfg(target_os = "android")]
     t.push("bluetooth_spp");
     t
-}
-
-// ---------------------------------------------------------------------------
-// Bluetooth permissions
-// ---------------------------------------------------------------------------
-
-/// Request Android runtime permissions for Bluetooth (CONNECT, SCAN, LOCATION).
-/// No-op on desktop. Covers both BLE and Classic transports.
-#[cfg(target_os = "android")]
-#[tauri::command]
-async fn bt_request_permissions(app: tauri::AppHandle) -> Result<(), String> {
-    let bt: tauri::State<'_, tauri_plugin_bluetooth_classic::BluetoothClassic<tauri::Wry>> =
-        app.state();
-    bt.request_bt_permissions()
-        .map_err(|e: Box<dyn std::error::Error>| e.to_string())?;
-    Ok(())
-}
-
-#[cfg(not(target_os = "android"))]
-#[tauri::command]
-async fn bt_request_permissions() -> Result<(), String> {
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
-// BLE commands
-// ---------------------------------------------------------------------------
-
-#[tauri::command]
-async fn bt_scan_ble(timeout_ms: Option<u64>) -> Result<Vec<BluetoothDevice>, String> {
-    use tauri_plugin_blec::models::ScanFilter;
-
-    let handler =
-        tauri_plugin_blec::get_handler().map_err(|e| format!("BLE plugin not initialized: {e}"))?;
-
-    let (tx, mut rx) = tokio::sync::mpsc::channel(8);
-    let timeout = timeout_ms.unwrap_or(3000);
-
-    handler
-        .discover(Some(tx), timeout, ScanFilter::None)
-        .await
-        .map_err(|e| format!("BLE scan failed: {e}"))?;
-
-    // Collect all discovered devices from the channel
-    let mut devices = Vec::new();
-    while let Some(batch) = rx.recv().await {
-        for d in batch {
-            if !devices
-                .iter()
-                .any(|existing: &BluetoothDevice| existing.address == d.address)
-            {
-                devices.push(BluetoothDevice {
-                    name: if d.name.is_empty() {
-                        d.address.clone()
-                    } else {
-                        d.name
-                    },
-                    address: d.address,
-                    device_type: "ble".to_string(),
-                });
-            }
-        }
-    }
-
-    Ok(devices)
-}
-
-#[tauri::command]
-async fn bt_stop_scan_ble() -> Result<(), String> {
-    let handler =
-        tauri_plugin_blec::get_handler().map_err(|e| format!("BLE plugin not initialized: {e}"))?;
-    handler
-        .stop_scan()
-        .await
-        .map_err(|e| format!("BLE stop scan failed: {e}"))?;
-    Ok(())
-}
-
-#[cfg(target_os = "android")]
-#[tauri::command]
-async fn bt_get_bonded_devices(app: tauri::AppHandle) -> Result<Vec<BluetoothDevice>, String> {
-    let bt: tauri::State<'_, tauri_plugin_bluetooth_classic::BluetoothClassic<tauri::Wry>> =
-        app.state();
-    let devices = bt
-        .get_bonded_devices()
-        .map_err(|e: Box<dyn std::error::Error>| e.to_string())?;
-    Ok(devices
-        .into_iter()
-        .map(|d| BluetoothDevice {
-            name: d.name,
-            address: d.address,
-            device_type: "classic".to_string(),
-        })
-        .collect())
 }
 
 // ---------------------------------------------------------------------------
@@ -1739,30 +1524,6 @@ async fn log_export_csv(
 
     w.flush().map_err(|e| e.to_string())?;
     Ok(row_count)
-}
-
-// ---------------------------------------------------------------------------
-// Recording commands
-// ---------------------------------------------------------------------------
-
-#[tauri::command]
-async fn recording_start(
-    state: tauri::State<'_, AppState>,
-    path: String,
-) -> Result<String, String> {
-    let guard = state.vehicle.lock().await;
-    let vehicle = guard.as_ref().ok_or("not connected")?;
-    state.recorder.start(vehicle, &path)
-}
-
-#[tauri::command]
-fn recording_stop(state: tauri::State<'_, AppState>) {
-    state.recorder.stop();
-}
-
-#[tauri::command]
-fn recording_status(state: tauri::State<'_, AppState>) -> RecordingStatus {
-    state.recorder.status()
 }
 
 // ---------------------------------------------------------------------------
