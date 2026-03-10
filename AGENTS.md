@@ -174,4 +174,15 @@ The app supports Android via Tauri v2 mobile. Serial port support is excluded on
 
 ## Project Status
 
-M0-M3 complete. mavkit SDK with full transport stack (UDP, serial, BLE, Classic SPP), Android mobile support, flight instruments HUD, parameter staging engine with batch write, setup wizards (accel/gyro/radio calibration), and STATUSTEXT plumbing. Next up: M4 (logs and analysis). Roadmap details in `PLAN.md`.
+M0-M3 complete. M4 is in progress with TLOG recording/import, indexing, timeline playback, basic charts, and map replay path already shipped. Roadmap details in `PLAN.md`.
+
+## PLAN.md Maintenance
+
+- Treat `PLAN.md` as a living roadmap, not a historical changelog.
+- When shipped work materially changes milestone status or scope, update `PLAN.md` in the same task when practical.
+- Keep milestone status accurate (`complete`, `in progress`, etc.) and reflect partially shipped work explicitly.
+- Collapse completed milestones into short summaries once they are fully shipped; do not leave long implementation diaries for old work.
+- Keep current and future milestones detailed enough to drive execution: scope, remaining work, and exit criteria.
+- If a milestone is partially shipped, prefer a compact split between "current shipped slice" and "remaining scope".
+- Keep `Immediate Next Steps` focused on actionable near-term work; remove items that are already done.
+- Avoid stale duplication between `AGENTS.md`, `README.md`, and `PLAN.md`; when one changes materially, update the others if needed.

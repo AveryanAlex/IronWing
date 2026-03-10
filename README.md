@@ -2,8 +2,6 @@
 
 Modern ground control station using Tauri + React + Rust.
 
-Current state: M0-M3 complete. Mission planning MVP, Bluetooth connectivity (BLE + Classic SPP), Android mobile support, flight instruments HUD, parameter staging engine with batch write, setup wizards (accel/gyro/radio calibration), and STATUSTEXT plumbing all shipped.
-
 ## Stack
 
 - Desktop + Mobile: Tauri v2 (desktop + Android)

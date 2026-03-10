@@ -79,6 +79,7 @@ Build a modern, desktop-first Ground Control Station from scratch using Tauri.
 
 Future modules (not yet implemented):
 - Log ingest: TLOG/BIN import, indexing, playback timeline, chart query
+- Guided setup: onboarding wizard, setup state, readiness checklist, pre-arm assistant
 - Firmware: manifest fetch, download cache, flash orchestration
 
 ## Design Constraints
@@ -129,6 +130,7 @@ Use typed commands (request/response) plus typed event streams.
 - Link commands: connect/disconnect/list ports/start stream
 - Mission commands: load/save/edit/upload/download/validate
 - Param commands: fetch metadata/read/set/apply staged changes
+- Setup commands: inspect vehicle, run wizard step, validate readiness, surface blockers
 - Log commands: import/index/query/playback/export
 - Firmware commands: list targets/download/flash/verify
 
@@ -140,6 +142,8 @@ Use typed commands (request/response) plus typed event streams.
 - `mission.state`
 - `mission.error`
 - `params.progress`
+- `setup.progress`
+- `setup.issue`
 - `log.playback.tick`
 - `firmware.progress`
 - `system.alert`
@@ -193,204 +197,140 @@ Current status:
 - M2: complete
 - M2.5: complete (Bluetooth transport stack, Android mobile, HUD instruments, param UI foundation)
 - M3: complete (parameter staging engine, setup wizards, STATUSTEXT plumbing)
+- M4: in progress (TLOG recording/import, indexing, timeline playback, basic charts, map replay path)
 
-## M0 - Foundation (Weeks 1-4) [COMPLETE]
-- Finalize architecture and ADRs
-- Set up monorepo, CI, lint/test gates
-- Create IPC baseline (`mp-ipc`) + event bus skeleton
-- Add SITL smoke test in CI (connect and heartbeat)
+## Completed Milestones
 
-Exit criteria:
-- Green CI for desktop build + unit tests
-- End-to-end smoke path runs in automation
+### M0 - Foundation [COMPLETE]
+- Architecture, repo scaffolding, CI, and SITL smoke coverage are in place.
 
-## M1 - Connectivity + Live Telemetry (Weeks 5-10) [COMPLETE]
-- Implement serial/UDP adapters and session lifecycle
-- Parse core MAVLink telemetry fields
-- Build initial Flight Data screen shell (HUD + map + status cards)
-- Add reconnect, timeout, and connection diagnostics
+### M1 - Connectivity + Live Telemetry [COMPLETE]
+- Core connectivity, telemetry ingestion, flight data shell, and connection diagnostics shipped.
 
-Exit criteria:
-- Connect to SITL and at least one real autopilot profile
-- Stable 30-minute telemetry session without crash
+### M2 - Mission Planning MVP [COMPLETE]
+- Mission/fence/rally planning, transfer, verification, and SITL regression coverage shipped.
+- Deferred beyond M2: advanced survey tools, partial transfer optimization, terrain-following, and camera-trigger authoring UX.
 
-## M2 - Mission Planning MVP (Weeks 11-16) [COMPLETE]
+### M2.5 - Bluetooth, Android, and Flight Instruments [COMPLETE]
+- BLE + Classic SPP transport support, Android mobile shell, HUD instruments, flight operations, and parameter UI foundation shipped.
 
-Goal:
-- Operator can create/edit/upload/download/verify basic missions on SITL from the new app.
+### M3 - Parameters and Setup Workflows [COMPLETE]
+- Parameter staging/batch apply, metadata-aware filtering, STATUSTEXT plumbing, and accel/gyro/radio setup workflows shipped.
 
-M2 scope (must ship):
-- Mission model/editor (waypoints, altitude/speed basics)
-- Map interactions and mission table sync
-- Upload/download mission with validation and progress events
-- Basic geofence/rally upload/download
+## M4 - Logs and Analysis [IN PROGRESS]
 
-M2 workstreams:
+Current shipped slice:
+- TLOG recording from live MAVLink sessions
+- TLOG import, parse, and in-memory indexing
+- Timeline playback controls with speed/seek
+- Basic charts for altitude, speed, attitude, and battery
+- Flight-path replay tied to the map
 
-1. `mp-mission-core` crate (new)
-   - Status: complete
-   - Canonical mission domain types: `MissionPlan`, `MissionItem`, `MissionType`, `MissionFrame`
-   - First-class `HomePosition` type with `Option<HomePosition>` on `MissionPlan`
-   - Wire boundary translation: `items_for_wire_upload()` prepends home as seq 0 for Mission type, `plan_from_wire_download()` extracts seq 0 as home
-   - Validators: sequence continuity, coordinate bounds, NaN protection, home lat/lon range
-   - Normalizers for upload/readback comparisons (float tolerance + frame normalization)
-   - `MissionTransferMachine` accepts wire item count (including home) for correct progress tracking
-
-2. MAVLink mission transfer engine
-   - Status: complete
-   - Upload flow: `MISSION_COUNT` -> (`MISSION_REQUEST_INT` or `MISSION_REQUEST`) -> `MISSION_ITEM_INT` -> `MISSION_ACK`
-   - Download flow: `MISSION_REQUEST_LIST` -> `MISSION_COUNT` -> `MISSION_REQUEST_INT` loop -> `MISSION_ITEM_INT` loop -> `MISSION_ACK`
-   - Wire boundary adaptation: upload uses `items_for_wire_upload()`, download uses `plan_from_wire_download()` so the rest of the stack never sees the wire seq-0 home item
-   - `HOME_POSITION` MAVLink message (ID 242) handled: emits `HomePositionEvent` on receipt, auto-requests via `MAV_CMD_REQUEST_MESSAGE` after first heartbeat
-   - Mission namespaces via `mission_type` (`MISSION`, `FENCE`, `RALLY`)
-   - Timeout/retry policy (default 1500 ms, item 250 ms, max retries 5)
-   - Cancel/reset-to-idle behavior for failed transfers
-
-3. Tauri boundary integration
-   - Status: complete
-   - Commands: `mission_download`, `mission_upload`, `mission_clear`, `mission_verify_roundtrip`, `mission_set_current`
-   - Events: `mission.progress`, `mission.state`, `mission.error`, `home://position`
-
-4. Frontend mission planning surface
-   - Status: complete
-   - Home position is a standalone `homePosition` state, not embedded in items array; sourced from vehicle `HOME_POSITION` telemetry, mission download, or manual entry
-   - MapLibre 3D terrain panel with click-to-add waypoints, separate home marker ("H" pin), mission line GeoJSON
-   - Mission table with inline edit (command, lat/lon, altitude, hold/speed); items are 0-indexed internally, displayed 1-indexed
-   - Row operations: add/delete/reorder with map-table two-way selection sync
-   - Transfer actions: Read, Write, Verify, Clear with progress/error status inline
-
-5. SITL + regression automation
-   - Status: complete
-   - Roundtrip suite for `MISSION`, `FENCE`, `RALLY` all passing; sample mission plan includes home position, roundtrip comparison strips home (autopilot may overwrite) and verifies items via `plans_equivalent`
-   - Staged/non-strict mode by default (`--test-threads=1`); strict mode via `MP_SITL_STRICT=1`
-   - Nightly/manual CI workflow with retry logic for flaky SITL startup
-
-ArduPilot compatibility rules for M2:
-- Handle `MISSION_REQUEST` fallback by still answering with `MISSION_ITEM_INT`
-- Do not assume strict atomic upload behavior on ArduPilot; always run readback verification
-- Keep mission type flows independent (mission/fence/rally stored separately)
-
-Exit criteria:
-- Create/edit/upload/download/verify works on ArduPilot SITL for `MISSION`
-- Geofence and rally minimal roundtrip works (`MISSION_TYPE_FENCE`, `MISSION_TYPE_RALLY`)
-- Retry/timeout behavior proven in automated tests
-- Mission UI can complete a full plan-edit-sync loop without legacy app
-
-Out of scope (defer to later milestone):
-- Advanced survey/polygon/grid tools
-- Partial mission upload/download optimization
-- Terrain-following and camera-trigger authoring UX
-
-## M2.5 - Bluetooth, Android, and Flight Instruments [COMPLETE]
-
-Shipped between M2 and M3 as cross-cutting platform work:
-
-1. Bluetooth transport stack
-   - BLE (Nordic UART Service) via `tauri-plugin-blec` — desktop + Android
-   - Classic SPP via `tauri-plugin-bluetooth-classic` — Android only (Kotlin RFCOMM)
-   - Desktop Classic SPP via serial `/dev/rfcomm0`
-   - Transport-agnostic bridge: callback-based BT APIs → `channel_pair()` → `StreamConnection` → `Vehicle::from_connection()`
-
-2. Android mobile support
-   - Tauri v2 mobile integration with responsive layout
-   - Bottom navigation (5 tabs) + drawer sidebar
-   - Edge-to-edge safe area handling
-   - BT permission request flow for Android 12+
-   - Platform-gated command sets (serial on desktop, SPP on Android)
-
-3. Flight instruments (HUD panel)
-   - Artificial horizon with terrain fill
-   - Tape gauges for airspeed and altitude
-   - Flight path vector and bearing bug
-   - Attitude, nav, and battery status display
-
-4. Flight operations
-   - Arm/disarm with state validation
-   - Flight mode selection (auto-populated from vehicle type)
-   - Takeoff with altitude entry (auto-arms + sets GUIDED)
-   - Guided goto via right-click on map
-   - RTL/Land quick buttons
-   - Telemetry rate throttling (configurable Hz)
-
-5. Parameter UI foundation
-   - Live parameter read/write
-   - Parameter table with search/filter
-   - .parm file import/export
-
-6. Platform and repo
-   - Flattened repo structure (removed `apps/desktop` nesting)
-   - Single stateful Connect/Disconnect button
-   - `available_transports` dynamic transport discovery
-   - BLE scan picker and SPP bonded device picker
-
-Exit criteria:
-- BLE and Classic SPP connections working on desktop and Android
-- HUD instruments rendering live telemetry
-- Parameter read/write working on SITL
-- Android APK builds and runs
-
-## M3 - Parameters and Setup Workflows [COMPLETE]
-
-1. Parameter staging engine
-   - Batch write in mavkit: `ParamWriteBatch` command, `write_batch()` on `ParamsHandle`, sequential PARAM_SET/PARAM_VALUE with progress (phase=Writing)
-   - `ParamWriteResult` type: name, requested_value, confirmed_value, success
-   - Tauri `param_write_batch` command (both desktop + Android)
-   - Frontend staging state: `staged` Map, `stage()`, `unstage()`, `unstageAll()`, `applyStaged()` in `use-params.ts`
-   - Edit-always-stages flow: confirming an edit stages the value; user clicks "Apply N Changes" to write to vehicle
-   - File loading auto-stages values that differ from current vehicle params
-
-2. Staging UI in ConfigPanel
-   - "Apply N Changes" primary button (green, shows write progress during batch)
-   - "Discard All" ghost button
-   - Collapsible staged diff panel: name, current value, new value, unstage button, reboot-required warning
-   - ParamRow staged indicators: amber dot, amber value text, "was X" secondary text
-   - Progress bar for both downloading (blue) and writing (amber) phases
-
-3. Metadata and filtering improvements
-   - Parse `ReadOnly` field and `user` attribute from ArduPilot `.pdef.xml`
-   - `readOnly` and `userLevel` ("Standard" | "Advanced") on `ParamMeta`
-   - Filter pills: Standard (default) | All | Modified (N)
-   - Read-only params show lock icon, disabled edit button
-
-4. STATUSTEXT plumbing (end-to-end)
-   - `StatusMessage { text, severity }` type in `state.rs`
-   - `statustext` watch channel on `StateWriters`/`StateChannels`
-   - `STATUSTEXT` handler in event_loop `update_state`
-   - `Vehicle::statustext()` accessor
-   - `statustext://message` Tauri event bridge
-   - `subscribeStatusText()` frontend IPC in `statustext.ts`
-
-5. Calibration commands and setup wizards
-   - `Vehicle::preflight_calibration(gyro, accel, radio_trim)` using `MAV_CMD_PREFLIGHT_CALIBRATION`
-   - `calibrate_accel`, `calibrate_gyro` Tauri commands (both platforms)
-   - AccelCalibWizard: 6-position guided flow, listens to STATUSTEXT for position prompts
-   - RadioCalibWizard: live RC channel bar chart, records min/max, stages RC*_MIN/MAX/TRIM params
-   - SetupPanel: houses accel, gyro, radio calibration cards
-   - [Parameters] / [Setup] sub-tab bar in ConfigPanel
-
-Exit criteria:
-- Typical parameter tuning flow complete without legacy app
-- Batch stage/apply/discard works end-to-end
-- Calibration commands accepted by SITL
-
-## M4 - Logs and Analysis
-- TLOG/BIN import and index
-- Timeline playback tied to map and key telemetry widgets
-- Core charts and export
+Remaining M4 scope:
+- BIN import and index
+- Timeline playback tied to HUD and key telemetry widgets beyond the current map/charts integration
+- Core flight review charts expansion, derived metrics, and export
+- Persisted log library / recent recordings browser
 
 Exit criteria:
 - Pilot can review a flight log with timeline and metrics
 
-## M5 - Firmware and Release Hardening
-- Firmware metadata/download cache
-- Flash workflow with safety checks and rollback messaging
+## M5 - Guided Vehicle Setup Wizard
+
+Goal:
+- A new ArduPilot flight controller can be taken from first connection to first-flight-ready state inside IronWing with a guided, resumable workflow.
+
+Issue-sized tasks:
+
+1. Setup session model and persistence
+   - Add a setup profile/session model that tracks board identity, vehicle type, completed steps, blockers, and resume state
+   - Persist wizard progress locally so setup can resume after disconnects, restarts, or firmware updates
+
+2. Vehicle inspection and prerequisites step
+   - Detect connected board, firmware family/version, vehicle type, available sensors, RC presence, GPS state, and link quality
+   - Build a prerequisite screen that explains what can proceed now versus what requires hardware changes or outdoor GPS conditions
+
+3. Mandatory calibration step integration
+   - Integrate existing accel, gyro, and radio calibration flows into a single guided setup sequence
+   - Add the missing compass-calibration workflow and completion checks so all mandatory first-flight calibrations live in one place
+
+4. Frame, outputs, and motor/ESC verification step
+   - Add frame/orientation review, servo-output mapping checks, motor order/direction verification, and ESC calibration guidance/tests
+   - Separate "safe bench verification" from "props-on flight readiness" and enforce clear safety prompts
+
+5. Flight modes and failsafe configuration step
+   - Add guided setup for core flight modes and recommended mode ordering per vehicle class
+   - Add dedicated setup/review for radio, battery, GCS, and EKF/GPS-related failsafe settings with sane defaults and warnings
+
+6. Pre-arm blocker assistant
+   - Parse pre-arm failures and common STATUSTEXT/setup issues into actionable tasks with fix guidance instead of raw messages alone
+   - Keep a readiness checklist that updates live as calibrations, GPS/home lock, battery, and sensor health become valid
+
+7. First-flight readiness review and report
+   - Add a final review step covering level horizon check, motor direction confirmation, GPS/home readiness, battery state, and recommended staged mode progression
+   - Generate a saved setup summary/checklist the operator can revisit before first flight
+
+8. Validation and field test coverage
+   - Add SITL coverage for the wizard state machine and readiness logic where possible
+   - Run hardware validation on at least one fresh-controller setup flow and document known gaps by vehicle type
+
+Exit criteria:
+- New flight controller can be brought from first connection to first-flight-ready state using the guided setup flow without relying on external GCS setup screens
+- Wizard progress survives reconnects/restarts and clearly reports remaining blockers
+- Pre-arm/setup blockers are surfaced as actionable setup tasks rather than only raw status text
+
+## M6 - Firmware Install and Update Workflow
+
+Goal:
+- IronWing can install or update ArduPilot firmware with a board-aware, safety-focused workflow and clear recovery guidance.
+
+Issue-sized tasks:
+
+1. Firmware catalog client and cache
+   - Implement a client for official ArduPilot firmware metadata/download sources plus a local artifact cache
+   - Track channel metadata (stable, beta, latest, custom) and expose board/vehicle compatibility information
+
+2. Board identification and flash prerequisites
+   - Detect board identity, current firmware, bootloader/transport capabilities, and whether the device is in a flashable state
+   - Add prerequisite checks for power, USB/direct connection expectations, disconnected-state requirements, and storage location for backups/downloads
+
+3. Firmware picker UI and compatibility warnings
+   - Build a firmware selection flow for vehicle type, board target, release channel, and custom local firmware files
+   - Warn when switching vehicle families, using beta/dev builds, or selecting targets that may invalidate settings or peripherals
+
+4. Parameter backup and migration safeguards
+   - Add pre-flash parameter backup/export prompts and restore guidance after update
+   - Detect cases where automatic restore should be discouraged because parameter meaning or vehicle type changed
+
+5. Flash executor and progress reporting
+   - Implement the baseline USB flash flow with erase/program/verify progress, reboot handling, and reconnect prompts
+   - Capture structured logs for each flash attempt so failures can be diagnosed without guesswork
+
+6. Post-flash verification and next steps
+   - Reconnect after flash, confirm firmware version/target, and identify setup items invalidated by the update
+   - Hand off naturally into setup/review work when calibration, frame, or failsafe checks must be revisited
+
+7. Recovery and advanced firmware paths
+   - Add support paths for custom firmware loading, bootloader prompts, SD-card update guidance, and failed-flash troubleshooting
+   - Document and gate more advanced or risky flows separately from the default happy path
+
+8. Validation and hardware matrix
+   - Validate stable update flows on supported desktop platforms and at least one real board family
+   - Record known limitations for unsupported boards, first-time bootloader installs, and platform-specific flashing gaps
+
+Exit criteria:
+- Stable firmware install/update works with clear recovery guidance and post-flash verification
+- Firmware selection is board-aware and warns about risky or incompatible choices before flashing
+- Failed or interrupted flash attempts leave the user with actionable recovery steps and diagnostic logs
+
+## M7 - Release Hardening
 - Reliability hardening, crash recovery, diagnostics bundle
 - Signed installer + updater + staged release channel
 
 Exit criteria:
 - Release candidate for controlled user group
 
-## M6 - Public Beta
+## M8 - Public Beta
 - Feature-gap triage from pilot users
 - Performance and UX polish
 - Documentation and migration guidance from legacy
@@ -444,12 +384,14 @@ Exit criteria:
 
 ---
 
-## 11) Immediate Next Steps (Current - M4 Start)
+## 11) Immediate Next Steps (Current - M4 In Progress)
 
-1. TLOG/BIN log import and indexing
-2. Timeline playback tied to map and telemetry widgets
-3. Core flight review charts and data export
-4. Frontend test baseline: add Vitest for hooks and IPC bridge modules
-5. Mobile polish: verify BT permission flow on Android 12+, test full connection lifecycle on hardware
+1. Complete log ingestion parity: add BIN import/indexing alongside the shipped TLOG flow
+2. Extend replay so HUD, telemetry cards, and status widgets can render from playback time, not only live data
+3. Expand flight review: more charts, derived metrics, selected-range export, and per-flight summary data
+4. Add a persisted log library / recent recordings surface for imported and recorded sessions
+5. Frontend test baseline: add Vitest for hooks, playback state, and IPC bridge modules
+6. Mobile polish: verify BT permission flow on Android 12+, test full connection lifecycle on hardware
+7. Safety and support groundwork: confirmation UX/audit trail for critical actions and a diagnostics bundle export path
 
 This plan stays biased toward shipping a usable cockpit first, with disciplined protocol correctness before advanced planning UX.
