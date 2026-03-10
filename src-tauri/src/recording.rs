@@ -126,9 +126,8 @@ pub(crate) async fn recording_start(
     state: tauri::State<'_, AppState>,
     path: String,
 ) -> Result<String, String> {
-    let guard = state.vehicle.lock().await;
-    let vehicle = guard.as_ref().ok_or("not connected")?;
-    state.recorder.start(vehicle, &path)
+    let vehicle = crate::helpers::with_vehicle(&state).await?;
+    state.recorder.start(&*vehicle, &path)
 }
 
 #[tauri::command]

@@ -1693,4 +1693,14 @@ mod tests {
         assert!((tlog_lat - bin_lat).abs() < 1e-6);
         assert!((tlog_lon - bin_lon).abs() < 1e-6);
     }
+
+    #[test]
+    fn haversine_antipodal_points() {
+        // Antipodal points are exactly opposite on the globe
+        // Distance should be half the Earth's circumference ≈ 20,015 km
+        let dist = haversine_m(0.0, 0.0, 0.0, 180.0);
+        // Half circumference = π * R = π * 6,371,000 ≈ 20,015,087 m
+        let expected = std::f64::consts::PI * 6_371_000.0;
+        assert!((dist - expected).abs() / expected < 0.01, "Expected ~{:.0}m, got {:.0}m", expected, dist);
+    }
 }
