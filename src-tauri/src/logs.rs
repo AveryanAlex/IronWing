@@ -905,8 +905,7 @@ mod tests {
     use mavlink::common::{
         ATTITUDE_DATA, COMMAND_LONG_DATA, GLOBAL_POSITION_INT_DATA, GPS_RAW_INT_DATA,
         HEARTBEAT_DATA, MavAutopilot, MavModeFlag, MavState, MavSysStatusSensor,
-        MavSysStatusSensorExtended, MavType,
-        VFR_HUD_DATA,
+        MavSysStatusSensorExtended, MavType, RC_CHANNELS_DATA, SYS_STATUS_DATA, VFR_HUD_DATA,
     };
     use std::io::Cursor;
 
@@ -970,6 +969,14 @@ mod tests {
         Reader::new(Cursor::new(bytes))
             .collect::<Result<Vec<_>, _>>()
             .expect("synthetic BIN should parse")
+    }
+
+    fn stored_entry(msg_name: &str, fields: HashMap<String, f64>) -> StoredEntry {
+        StoredEntry {
+            timestamp_usec: 0,
+            msg_name: msg_name.to_string(),
+            fields,
+        }
     }
 
     #[test]
@@ -1264,5 +1271,426 @@ mod tests {
     fn haversine_short_distance() {
         let dist = haversine_m(0.0, 0.0, 0.0009, 0.0);
         assert!(dist >= 50.0 && dist <= 200.0, "expected ~100 m, got {dist}");
+    }
+
+    #[test]
+    fn apply_tlog_entry_attitude_converts_radians_to_degrees() {
+        let msg = MavMessage::ATTITUDE(ATTITUDE_DATA {
+            time_boot_ms: 0,
+            roll: 1.0,
+            pitch: 0.5,
+            yaw: -0.3,
+            rollspeed: 0.0,
+            pitchspeed: 0.0,
+            yawspeed: 0.0,
+        });
+        let (_, fields) = extract_fields(&msg);
+        let entry = stored_entry("ATTITUDE", fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_tlog_entry(&mut snap, &entry);
+
+        assert!((snap.roll_deg.expect("roll") - 1.0_f64.to_degrees()).abs() < 1e-6);
+        assert!((snap.pitch_deg.expect("pitch") - 0.5_f64.to_degrees()).abs() < 1e-6);
+        assert!((snap.yaw_deg.expect("yaw") - (-0.3_f64).to_degrees()).abs() < 1e-6);
+    }
+
+    #[test]
+    fn apply_tlog_entry_vfr_hud_sets_core_fields() {
+        let msg = MavMessage::VFR_HUD(VFR_HUD_DATA {
+            airspeed: 21.2,
+            groundspeed: 19.8,
+            heading: 275,
+            throttle: 64,
+            alt: 123.4,
+            climb: -0.7,
+        });
+        let (_, fields) = extract_fields(&msg);
+        let entry = stored_entry("VFR_HUD", fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_tlog_entry(&mut snap, &entry);
+
+        assert!((snap.altitude_m.expect("alt") - 123.4).abs() < 1e-5);
+        assert!((snap.speed_mps.expect("speed") - 19.8).abs() < 1e-5);
+        assert_eq!(snap.heading_deg, Some(275.0));
+        assert!((snap.climb_rate_mps.expect("climb") - (-0.7)).abs() < 1e-5);
+        assert_eq!(snap.throttle_pct, Some(64.0));
+        assert!((snap.airspeed_mps.expect("airspeed") - 21.2).abs() < 1e-5);
+    }
+
+    #[test]
+    fn apply_tlog_entry_global_position_int_sets_position() {
+        let msg = MavMessage::GLOBAL_POSITION_INT(GLOBAL_POSITION_INT_DATA {
+            time_boot_ms: 0,
+            lat: 377_749_000,
+            lon: -1_220_419_000,
+            alt: 42_000,
+            relative_alt: 15_500,
+            vx: 0,
+            vy: 0,
+            vz: 0,
+            hdg: 9_000,
+        });
+        let (_, fields) = extract_fields(&msg);
+        let entry = stored_entry("GLOBAL_POSITION_INT", fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_tlog_entry(&mut snap, &entry);
+
+        assert!((snap.latitude_deg.expect("lat") - 37.7749).abs() < 1e-6);
+        assert!((snap.longitude_deg.expect("lon") - (-122.0419)).abs() < 1e-6);
+        assert_eq!(snap.altitude_m, Some(15.5));
+        assert_eq!(snap.heading_deg, Some(90.0));
+    }
+
+    #[test]
+    fn apply_tlog_entry_sys_status_sets_battery_fields() {
+        let msg = MavMessage::SYS_STATUS(SYS_STATUS_DATA {
+            onboard_control_sensors_present: MavSysStatusSensor::empty(),
+            onboard_control_sensors_enabled: MavSysStatusSensor::empty(),
+            onboard_control_sensors_health: MavSysStatusSensor::empty(),
+            onboard_control_sensors_present_extended: MavSysStatusSensorExtended::empty(),
+            onboard_control_sensors_enabled_extended: MavSysStatusSensorExtended::empty(),
+            onboard_control_sensors_health_extended: MavSysStatusSensorExtended::empty(),
+            load: 0,
+            voltage_battery: 11_200,
+            current_battery: 378,
+            battery_remaining: 55,
+            drop_rate_comm: 0,
+            errors_comm: 0,
+            errors_count1: 0,
+            errors_count2: 0,
+            errors_count3: 0,
+            errors_count4: 0,
+        });
+        let (_, fields) = extract_fields(&msg);
+        let entry = stored_entry("SYS_STATUS", fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_tlog_entry(&mut snap, &entry);
+
+        assert_eq!(snap.battery_voltage_v, Some(11.2));
+        assert_eq!(snap.battery_current_a, Some(3.78));
+        assert_eq!(snap.battery_pct, Some(55.0));
+    }
+
+    #[test]
+    fn apply_tlog_entry_gps_raw_int_sets_fix_label() {
+        let msg = MavMessage::GPS_RAW_INT(GPS_RAW_INT_DATA {
+            time_usec: 0,
+            fix_type: mavlink::common::GpsFixType::GPS_FIX_TYPE_3D_FIX,
+            lat: 0,
+            lon: 0,
+            alt: 0,
+            eph: 145,
+            epv: 200,
+            vel: 0,
+            cog: 0,
+            satellites_visible: 17,
+            alt_ellipsoid: 0,
+            h_acc: 0,
+            v_acc: 0,
+            vel_acc: 0,
+            hdg_acc: 0,
+            yaw: 0,
+        });
+        let (_, fields) = extract_fields(&msg);
+        let entry = stored_entry("GPS_RAW_INT", fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_tlog_entry(&mut snap, &entry);
+
+        assert_eq!(snap.gps_fix_type.as_deref(), Some("3D Fix"));
+        assert_eq!(snap.gps_satellites, Some(17.0));
+        assert_eq!(snap.gps_hdop, Some(1.45));
+    }
+
+    #[test]
+    fn apply_tlog_entry_heartbeat_sets_armed_and_custom_mode() {
+        let msg = MavMessage::HEARTBEAT(HEARTBEAT_DATA {
+            custom_mode: 6,
+            mavtype: MavType::MAV_TYPE_QUADROTOR,
+            autopilot: MavAutopilot::MAV_AUTOPILOT_ARDUPILOTMEGA,
+            base_mode: MavModeFlag::MAV_MODE_FLAG_SAFETY_ARMED,
+            system_status: MavState::MAV_STATE_ACTIVE,
+            mavlink_version: 3,
+        });
+        let (_, fields) = extract_fields(&msg);
+        let entry = stored_entry("HEARTBEAT", fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_tlog_entry(&mut snap, &entry);
+
+        assert_eq!(snap.armed, Some(true));
+        assert_eq!(snap.custom_mode, Some(6));
+    }
+
+    #[test]
+    fn apply_tlog_entry_rc_channels_populates_channels_and_rssi() {
+        let msg = MavMessage::RC_CHANNELS(RC_CHANNELS_DATA {
+            time_boot_ms: 0,
+            chancount: 8,
+            chan1_raw: 1100,
+            chan2_raw: 1200,
+            chan3_raw: 1300,
+            chan4_raw: 1400,
+            chan5_raw: 1500,
+            chan6_raw: 1600,
+            chan7_raw: 1700,
+            chan8_raw: 1800,
+            chan9_raw: 1900,
+            chan10_raw: 2000,
+            chan11_raw: 0,
+            chan12_raw: 0,
+            chan13_raw: 0,
+            chan14_raw: 0,
+            chan15_raw: 0,
+            chan16_raw: 0,
+            chan17_raw: 0,
+            chan18_raw: 0,
+            rssi: 99,
+        });
+        let (_, fields) = extract_fields(&msg);
+        let entry = stored_entry("RC_CHANNELS", fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_tlog_entry(&mut snap, &entry);
+
+        assert_eq!(snap.rc_rssi, Some(99.0));
+        assert_eq!(
+            snap.rc_channels,
+            Some(vec![1100.0, 1200.0, 1300.0, 1400.0, 1500.0, 1600.0, 1700.0, 1800.0])
+        );
+    }
+
+    #[test]
+    fn apply_tlog_entry_unknown_keeps_existing_values() {
+        let mut snap = TelemetrySnapshot::default();
+        snap.roll_deg = Some(12.0);
+        snap.altitude_m = Some(50.0);
+        snap.gps_fix_type = Some("3D Fix".to_string());
+
+        let mut fields = HashMap::new();
+        fields.insert("ignored".to_string(), 1.0);
+        let entry = stored_entry("UNKNOWN", fields);
+        apply_tlog_entry(&mut snap, &entry);
+
+        assert_eq!(snap.roll_deg, Some(12.0));
+        assert_eq!(snap.altitude_m, Some(50.0));
+        assert_eq!(snap.gps_fix_type.as_deref(), Some("3D Fix"));
+    }
+
+    #[test]
+    fn apply_tlog_entry_carry_forward_across_messages() {
+        let att = MavMessage::ATTITUDE(ATTITUDE_DATA {
+            time_boot_ms: 0,
+            roll: 0.25,
+            pitch: 0.0,
+            yaw: 0.0,
+            rollspeed: 0.0,
+            pitchspeed: 0.0,
+            yawspeed: 0.0,
+        });
+        let (_, att_fields) = extract_fields(&att);
+        let att_entry = stored_entry("ATTITUDE", att_fields);
+
+        let vfr = MavMessage::VFR_HUD(VFR_HUD_DATA {
+            airspeed: 10.0,
+            groundspeed: 9.0,
+            heading: 180,
+            throttle: 45,
+            alt: 88.0,
+            climb: 0.1,
+        });
+        let (_, vfr_fields) = extract_fields(&vfr);
+        let vfr_entry = stored_entry("VFR_HUD", vfr_fields);
+
+        let mut unknown_fields = HashMap::new();
+        unknown_fields.insert("foo".to_string(), 1.0);
+        let unknown_entry = stored_entry("UNKNOWN", unknown_fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_tlog_entry(&mut snap, &att_entry);
+        let expected_roll = 0.25_f64.to_degrees();
+        assert!((snap.roll_deg.expect("roll") - expected_roll).abs() < 1e-6);
+
+        apply_tlog_entry(&mut snap, &vfr_entry);
+        assert!((snap.roll_deg.expect("roll retained") - expected_roll).abs() < 1e-6);
+        assert_eq!(snap.altitude_m, Some(88.0));
+
+        apply_tlog_entry(&mut snap, &unknown_entry);
+        assert!((snap.roll_deg.expect("roll still retained") - expected_roll).abs() < 1e-6);
+        assert_eq!(snap.altitude_m, Some(88.0));
+        assert_eq!(snap.heading_deg, Some(180.0));
+    }
+
+    #[test]
+    fn apply_bin_entry_att_sets_attitude_fields() {
+        let mut fields = HashMap::new();
+        fields.insert("Roll".to_string(), 45.0);
+        fields.insert("Pitch".to_string(), -10.0);
+        fields.insert("Yaw".to_string(), 180.0);
+        let entry = stored_entry("ATT", fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_bin_entry(&mut snap, &entry);
+
+        assert_eq!(snap.roll_deg, Some(45.0));
+        assert_eq!(snap.pitch_deg, Some(-10.0));
+        assert_eq!(snap.yaw_deg, Some(180.0));
+    }
+
+    #[test]
+    fn apply_bin_entry_gps_scales_and_sets_navigation_fields() {
+        let mut fields = HashMap::new();
+        fields.insert("Lat".to_string(), 377_749_000.0);
+        fields.insert("Lng".to_string(), -1_220_419_000.0);
+        fields.insert("Spd".to_string(), 15.5);
+        fields.insert("GCrs".to_string(), 270.0);
+        fields.insert("Status".to_string(), 3.0);
+        fields.insert("NSats".to_string(), 14.0);
+        fields.insert("HDop".to_string(), 0.8);
+        let entry = stored_entry("GPS", fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_bin_entry(&mut snap, &entry);
+
+        assert!((snap.latitude_deg.expect("lat") - 37.7749).abs() < 1e-6);
+        assert!((snap.longitude_deg.expect("lon") - (-122.0419)).abs() < 1e-6);
+        assert_eq!(snap.speed_mps, Some(15.5));
+        assert_eq!(snap.heading_deg, Some(270.0));
+        assert_eq!(snap.gps_fix_type.as_deref(), Some("3D Fix"));
+        assert_eq!(snap.gps_satellites, Some(14.0));
+    }
+
+    #[test]
+    fn apply_bin_entry_bat_sets_battery_fields() {
+        let mut fields = HashMap::new();
+        fields.insert("Volt".to_string(), 11.7);
+        fields.insert("Curr".to_string(), 6.3);
+        fields.insert("Rem".to_string(), 48.0);
+        let entry = stored_entry("BAT", fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_bin_entry(&mut snap, &entry);
+
+        assert_eq!(snap.battery_voltage_v, Some(11.7));
+        assert_eq!(snap.battery_current_a, Some(6.3));
+        assert_eq!(snap.battery_pct, Some(48.0));
+    }
+
+    #[test]
+    fn apply_bin_entry_rcin_populates_rc_channels() {
+        let mut fields = HashMap::new();
+        for i in 1..=8 {
+            fields.insert(format!("C{i}"), 1000.0 + (i as f64 * 10.0));
+        }
+        let entry = stored_entry("RCIN", fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_bin_entry(&mut snap, &entry);
+
+        assert_eq!(
+            snap.rc_channels,
+            Some(vec![1010.0, 1020.0, 1030.0, 1040.0, 1050.0, 1060.0, 1070.0, 1080.0])
+        );
+    }
+
+    #[test]
+    fn apply_bin_entry_rcou_populates_servo_outputs() {
+        let mut fields = HashMap::new();
+        for i in 1..=8 {
+            fields.insert(format!("C{i}"), 1100.0 + (i as f64 * 5.0));
+        }
+        let entry = stored_entry("RCOU", fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_bin_entry(&mut snap, &entry);
+
+        assert_eq!(
+            snap.servo_outputs,
+            Some(vec![1105.0, 1110.0, 1115.0, 1120.0, 1125.0, 1130.0, 1135.0, 1140.0])
+        );
+    }
+
+    #[test]
+    fn apply_bin_entry_ctun_sets_altitude_and_climb_rate() {
+        let mut fields = HashMap::new();
+        fields.insert("Alt".to_string(), 120.0);
+        fields.insert("CRt".to_string(), 1.7);
+        let entry = stored_entry("CTUN", fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_bin_entry(&mut snap, &entry);
+
+        assert_eq!(snap.altitude_m, Some(120.0));
+        assert_eq!(snap.climb_rate_mps, Some(1.7));
+    }
+
+    #[test]
+    fn apply_bin_entry_mode_sets_custom_mode() {
+        let mut fields = HashMap::new();
+        fields.insert("ModeNum".to_string(), 4.0);
+        let entry = stored_entry("MODE", fields);
+
+        let mut snap = TelemetrySnapshot::default();
+        apply_bin_entry(&mut snap, &entry);
+
+        assert_eq!(snap.custom_mode, Some(4));
+    }
+
+    #[test]
+    fn apply_bin_entry_unknown_keeps_existing_values() {
+        let mut snap = TelemetrySnapshot::default();
+        snap.roll_deg = Some(9.0);
+        snap.altitude_m = Some(22.0);
+
+        let mut fields = HashMap::new();
+        fields.insert("Something".to_string(), 1.0);
+        let entry = stored_entry("NKF1", fields);
+        apply_bin_entry(&mut snap, &entry);
+
+        assert_eq!(snap.roll_deg, Some(9.0));
+        assert_eq!(snap.altitude_m, Some(22.0));
+    }
+
+    #[test]
+    fn tlog_and_bin_gps_scaling_parity() {
+        let tlog_msg = MavMessage::GLOBAL_POSITION_INT(GLOBAL_POSITION_INT_DATA {
+            time_boot_ms: 0,
+            lat: 377_749_000,
+            lon: -1_220_419_000,
+            alt: 0,
+            relative_alt: 0,
+            vx: 0,
+            vy: 0,
+            vz: 0,
+            hdg: 0,
+        });
+        let (_, tlog_fields) = extract_fields(&tlog_msg);
+        let tlog_entry = stored_entry("GLOBAL_POSITION_INT", tlog_fields);
+
+        let mut bin_fields = HashMap::new();
+        bin_fields.insert("Lat".to_string(), 377_749_000.0);
+        bin_fields.insert("Lng".to_string(), -1_220_419_000.0);
+        let bin_entry = stored_entry("GPS", bin_fields);
+
+        let mut tlog_snap = TelemetrySnapshot::default();
+        let mut bin_snap = TelemetrySnapshot::default();
+        apply_tlog_entry(&mut tlog_snap, &tlog_entry);
+        apply_bin_entry(&mut bin_snap, &bin_entry);
+
+        let tlog_lat = tlog_snap.latitude_deg.expect("tlog lat");
+        let tlog_lon = tlog_snap.longitude_deg.expect("tlog lon");
+        let bin_lat = bin_snap.latitude_deg.expect("bin lat");
+        let bin_lon = bin_snap.longitude_deg.expect("bin lon");
+
+        assert!((tlog_lat - 37.7749).abs() < 1e-6);
+        assert!((tlog_lon - (-122.0419)).abs() < 1e-6);
+        assert!((bin_lat - 37.7749).abs() < 1e-6);
+        assert!((bin_lon - (-122.0419)).abs() < 1e-6);
+        assert!((tlog_lat - bin_lat).abs() < 1e-6);
+        assert!((tlog_lon - bin_lon).abs() < 1e-6);
     }
 }
