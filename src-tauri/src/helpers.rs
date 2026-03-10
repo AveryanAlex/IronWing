@@ -9,14 +9,13 @@ pub(crate) async fn with_vehicle(
         .map_err(|_| "not connected".to_string())
 }
 
-// TODO(T4): enable once `LogStore` is moved into `logs.rs`.
-// pub(crate) async fn with_log_store(
-//     state: &AppState,
-// ) -> Result<MappedMutexGuard<'_, crate::logs::LogStore>, String> {
-//     let guard = state.log_store.lock().await;
-//     tokio::sync::MutexGuard::try_map(guard, |opt| opt.as_mut())
-//         .map_err(|_| "no log loaded".to_string())
-// }
+pub(crate) async fn with_log_store(
+    state: &AppState,
+) -> Result<MappedMutexGuard<'_, crate::logs::LogStore>, String> {
+    let guard = state.log_store.lock().await;
+    tokio::sync::MutexGuard::try_map(guard, |opt| opt.as_mut())
+        .map_err(|_| "no log loaded".to_string())
+}
 
 pub(crate) fn downsample<T: Clone>(items: Vec<T>, max: usize) -> Vec<T> {
     if max == 0 || items.len() <= max {
