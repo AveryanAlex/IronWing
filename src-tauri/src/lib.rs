@@ -1482,6 +1482,258 @@ async fn log_close(state: tauri::State<'_, AppState>) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
+// Flight summary
+// ---------------------------------------------------------------------------
+
+fn haversine_m(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+    let r = 6_371_000.0;
+    let dlat = (lat2 - lat1).to_radians();
+    let dlon = (lon2 - lon1).to_radians();
+    let a = (dlat / 2.0).sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * (dlon / 2.0).sin().powi(2);
+    r * 2.0 * a.sqrt().asin()
+}
+
+#[derive(Serialize, Clone)]
+struct FlightSummary {
+    duration_secs: f64,
+    max_alt_m: Option<f64>,
+    avg_alt_m: Option<f64>,
+    max_speed_mps: Option<f64>,
+    avg_speed_mps: Option<f64>,
+    total_distance_m: Option<f64>,
+    max_distance_from_home_m: Option<f64>,
+    battery_start_v: Option<f64>,
+    battery_end_v: Option<f64>,
+    battery_min_v: Option<f64>,
+    mah_consumed: Option<f64>,
+    gps_sats_min: Option<u32>,
+    gps_sats_max: Option<u32>,
+}
+
+#[tauri::command]
+async fn log_get_flight_summary(
+    state: tauri::State<'_, AppState>,
+) -> Result<FlightSummary, String> {
+    let guard = state.log_store.lock().await;
+    let store = guard.as_ref().ok_or("no log loaded")?;
+    let is_bin = store.summary.log_type == LogType::Bin;
+
+    // Field name mappings
+    let (alt_msg, alt_field) = if is_bin { ("CTUN", "Alt") } else { ("VFR_HUD", "alt") };
+    let (spd_msg, spd_field) = if is_bin { ("GPS", "Spd") } else { ("VFR_HUD", "groundspeed") };
+    let (bat_msg, bat_v_field) = if is_bin { ("BAT", "Volt") } else { ("SYS_STATUS", "voltage_battery") };
+    let (gps_msg, lat_key, lon_key, sats_key, needs_dege7) = if is_bin {
+        ("GPS", "Lat", "Lng", "NSats", true)
+    } else {
+        ("GLOBAL_POSITION_INT", "lat", "lon", "satellites_visible", false)
+    };
+    let sats_msg = if is_bin { "GPS" } else { "GPS_RAW_INT" };
+
+    // Altitude stats
+    let mut alt_sum = 0.0_f64;
+    let mut alt_count = 0_u64;
+    let mut alt_max: Option<f64> = None;
+    if let Some(indices) = store.type_index.get(alt_msg) {
+        for &idx in indices {
+            if let Some(&v) = store.entries[idx].fields.get(alt_field) {
+                alt_sum += v;
+                alt_count += 1;
+                alt_max = Some(alt_max.map_or(v, |m: f64| m.max(v)));
+            }
+        }
+    }
+
+    // Speed stats
+    let mut spd_sum = 0.0_f64;
+    let mut spd_count = 0_u64;
+    let mut spd_max: Option<f64> = None;
+    if let Some(indices) = store.type_index.get(spd_msg) {
+        for &idx in indices {
+            if let Some(&v) = store.entries[idx].fields.get(spd_field) {
+                spd_sum += v;
+                spd_count += 1;
+                spd_max = Some(spd_max.map_or(v, |m: f64| m.max(v)));
+            }
+        }
+    }
+
+    // Battery stats
+    let mut bat_start: Option<f64> = None;
+    let mut bat_end: Option<f64> = None;
+    let mut bat_min: Option<f64> = None;
+    if let Some(indices) = store.type_index.get(bat_msg) {
+        for &idx in indices {
+            if let Some(&v) = store.entries[idx].fields.get(bat_v_field) {
+                if v > 0.0 {
+                    if bat_start.is_none() {
+                        bat_start = Some(v);
+                    }
+                    bat_end = Some(v);
+                    bat_min = Some(bat_min.map_or(v, |m: f64| m.min(v)));
+                }
+            }
+        }
+    }
+
+    // mAh consumed — from BATTERY_STATUS (tlog) or BAT.CurrTot (bin)
+    let mah_consumed = if is_bin {
+        store.type_index.get("BAT").and_then(|indices| {
+            indices.last().and_then(|&idx| {
+                store.entries[idx].fields.get("CurrTot").copied()
+            })
+        })
+    } else {
+        store.type_index.get("BATTERY_STATUS").and_then(|indices| {
+            indices.last().and_then(|&idx| {
+                store.entries[idx].fields.get("current_consumed").copied()
+            })
+        })
+    };
+
+    // GPS: distance, max distance from home, satellites
+    let mut total_dist = 0.0_f64;
+    let mut max_dist_home: Option<f64> = None;
+    let mut home_lat: Option<f64> = None;
+    let mut home_lon: Option<f64> = None;
+    let mut prev_lat: Option<f64> = None;
+    let mut prev_lon: Option<f64> = None;
+
+    if let Some(indices) = store.type_index.get(gps_msg) {
+        for &idx in indices {
+            let entry = &store.entries[idx];
+            let mut lat = entry.fields.get(lat_key).copied().unwrap_or(0.0);
+            let mut lon = entry.fields.get(lon_key).copied().unwrap_or(0.0);
+            if needs_dege7 {
+                lat /= 1e7;
+                lon /= 1e7;
+            }
+            if lat.abs() < 1e-6 && lon.abs() < 1e-6 {
+                continue;
+            }
+            if home_lat.is_none() {
+                home_lat = Some(lat);
+                home_lon = Some(lon);
+            }
+            if let (Some(plat), Some(plon)) = (prev_lat, prev_lon) {
+                total_dist += haversine_m(plat, plon, lat, lon);
+            }
+            if let (Some(hlat), Some(hlon)) = (home_lat, home_lon) {
+                let d = haversine_m(hlat, hlon, lat, lon);
+                max_dist_home = Some(max_dist_home.map_or(d, |m: f64| m.max(d)));
+            }
+            prev_lat = Some(lat);
+            prev_lon = Some(lon);
+        }
+    }
+
+    // GPS satellite stats
+    let mut sats_min: Option<u32> = None;
+    let mut sats_max: Option<u32> = None;
+    if let Some(indices) = store.type_index.get(sats_msg) {
+        for &idx in indices {
+            if let Some(&v) = store.entries[idx].fields.get(sats_key) {
+                let s = v as u32;
+                sats_min = Some(sats_min.map_or(s, |m| m.min(s)));
+                sats_max = Some(sats_max.map_or(s, |m| m.max(s)));
+            }
+        }
+    }
+
+    Ok(FlightSummary {
+        duration_secs: store.summary.duration_secs,
+        max_alt_m: alt_max,
+        avg_alt_m: if alt_count > 0 { Some(alt_sum / alt_count as f64) } else { None },
+        max_speed_mps: spd_max,
+        avg_speed_mps: if spd_count > 0 { Some(spd_sum / spd_count as f64) } else { None },
+        total_distance_m: if total_dist > 0.0 { Some(total_dist) } else { None },
+        max_distance_from_home_m: max_dist_home,
+        battery_start_v: bat_start,
+        battery_end_v: bat_end,
+        battery_min_v: bat_min,
+        mah_consumed,
+        gps_sats_min: sats_min,
+        gps_sats_max: sats_max,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// CSV export
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+async fn log_export_csv(
+    state: tauri::State<'_, AppState>,
+    path: String,
+    start_usec: Option<u64>,
+    end_usec: Option<u64>,
+) -> Result<u64, String> {
+    let guard = state.log_store.lock().await;
+    let store = guard.as_ref().ok_or("no log loaded")?;
+
+    // Collect entries in range
+    let entries: Vec<&StoredEntry> = store
+        .entries
+        .iter()
+        .filter(|e| {
+            if let Some(s) = start_usec {
+                if e.timestamp_usec < s { return false; }
+            }
+            if let Some(end) = end_usec {
+                if e.timestamp_usec > end { return false; }
+            }
+            true
+        })
+        .collect();
+
+    if entries.is_empty() {
+        return Err("no entries in selected range".into());
+    }
+
+    // Collect all unique field names (preserving a stable order)
+    let mut field_set = std::collections::BTreeSet::new();
+    for e in &entries {
+        for k in e.fields.keys() {
+            field_set.insert(k.clone());
+        }
+    }
+    let field_names: Vec<String> = field_set.into_iter().collect();
+
+    // Write CSV
+    let file = std::fs::File::create(&path)
+        .map_err(|e| format!("failed to create file: {e}"))?;
+    let mut w = std::io::BufWriter::new(file);
+
+    use std::io::Write;
+
+    // Header
+    write!(w, "timestamp_sec,msg_type").map_err(|e| e.to_string())?;
+    for name in &field_names {
+        write!(w, ",{name}").map_err(|e| e.to_string())?;
+    }
+    writeln!(w).map_err(|e| e.to_string())?;
+
+    // Rows
+    let mut row_count = 0_u64;
+    for e in &entries {
+        write!(w, "{:.6},{}", e.timestamp_usec as f64 / 1e6, e.msg_name)
+            .map_err(|e| e.to_string())?;
+        for name in &field_names {
+            if let Some(&v) = e.fields.get(name) {
+                write!(w, ",{v}").map_err(|e| e.to_string())?;
+            } else {
+                write!(w, ",").map_err(|e| e.to_string())?;
+            }
+        }
+        writeln!(w).map_err(|e| e.to_string())?;
+        row_count += 1;
+    }
+
+    w.flush().map_err(|e| e.to_string())?;
+    Ok(row_count)
+}
+
+// ---------------------------------------------------------------------------
 // Recording commands
 // ---------------------------------------------------------------------------
 
@@ -1696,6 +1948,8 @@ pub fn run() {
             log_get_summary,
             log_get_flight_path,
             log_get_telemetry_track,
+            log_get_flight_summary,
+            log_export_csv,
             log_close,
             recording_start,
             recording_stop,
@@ -1739,6 +1993,8 @@ pub fn run() {
             log_get_summary,
             log_get_flight_path,
             log_get_telemetry_track,
+            log_get_flight_summary,
+            log_export_csv,
             log_close,
             recording_start,
             recording_stop,

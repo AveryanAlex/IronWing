@@ -6,6 +6,7 @@ type UPlotChartProps = {
   data: uPlot.AlignedData;
   cursorTimeUsec?: number;
   height?: number;
+  onSelect?: (startSec: number, endSec: number) => void;
 };
 
 export function UPlotChart({
@@ -13,17 +14,39 @@ export function UPlotChart({
   data,
   cursorTimeUsec,
   height = 150,
+  onSelect,
 }: UPlotChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<uPlot | null>(null);
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
 
-  // Create / destroy chart
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
+    const hooks: uPlot.Options["hooks"] = { ...(options.hooks ?? {}) };
+
+    if (onSelectRef.current) {
+      hooks.setSelect = [
+        (u: uPlot) => {
+          const left = u.select.left;
+          const width = u.select.width;
+          if (width < 3) {
+            onSelectRef.current?.(0, 0);
+            return;
+          }
+          const startSec = u.posToVal(left, "x");
+          const endSec = u.posToVal(left + width, "x");
+          onSelectRef.current?.(startSec, endSec);
+          u.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false);
+        },
+      ];
+    }
+
     const fullOpts: uPlot.Options = {
       ...options,
+      hooks,
       width: el.clientWidth,
       height,
     };
@@ -46,18 +69,15 @@ export function UPlotChart({
       chart.destroy();
       chartRef.current = null;
     };
-    // Recreate only when options identity changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [options, height]);
 
-  // Update data without recreating chart
   useEffect(() => {
     if (chartRef.current) {
       chartRef.current.setData(data);
     }
   }, [data]);
 
-  // Programmatic cursor position for playback
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || cursorTimeUsec == null) return;
@@ -66,7 +86,6 @@ export function UPlotChart({
     const ts = chart.data[0];
     if (!ts || ts.length === 0) return;
 
-    // Find nearest index
     let lo = 0;
     let hi = ts.length - 1;
     while (lo < hi) {

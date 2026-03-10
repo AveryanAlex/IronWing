@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
-import { FolderOpen, X, Loader2, Circle, Square } from "lucide-react";
+import { FolderOpen, X, Loader2, Circle, Square, Download } from "lucide-react";
+import { save } from "@tauri-apps/plugin-dialog";
+import { toast } from "sonner";
 import { Timeline } from "./charts/Timeline";
-import { LogCharts, getChartDefs, toAligned } from "./charts/LogCharts";
+import { LogCharts, getChartDefs, toAligned, type TimeRange } from "./charts/LogCharts";
 import { getFlightPath, getLogTelemetryTrack, type FlightPathPoint, type TelemetrySnapshot } from "../playback";
-import type { LogDataPoint } from "../logs";
+import { getFlightSummary, exportLogCsv, type LogDataPoint, type FlightSummary } from "../logs";
 import type { useLogs } from "../hooks/use-logs";
 import type { useRecording } from "../hooks/use-recording";
 import type { usePlayback } from "../hooks/use-playback";
@@ -30,6 +32,53 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function fmtVal(v: number | null, decimals = 1, suffix = ""): string {
+  if (v == null) return "\u2014";
+  return `${v.toFixed(decimals)}${suffix}`;
+}
+
+function fmtDist(m: number | null): string {
+  if (m == null) return "\u2014";
+  if (m >= 1000) return `${(m / 1000).toFixed(2)} km`;
+  return `${m.toFixed(0)} m`;
+}
+
+type StatProps = { label: string; value: string };
+
+function Stat({ label, value }: StatProps) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] uppercase tracking-wider text-text-muted">{label}</span>
+      <span className="text-xs font-medium tabular-nums text-text-primary">{value}</span>
+    </div>
+  );
+}
+
+function SummaryBar({ data }: { data: FlightSummary }) {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5 rounded-md border border-border bg-bg-secondary px-3 py-2">
+      <Stat label="Duration" value={formatDuration(data.duration_secs)} />
+      <Stat label="Max Alt" value={fmtVal(data.max_alt_m, 1, " m")} />
+      <Stat label="Avg Alt" value={fmtVal(data.avg_alt_m, 1, " m")} />
+      <Stat label="Max Spd" value={fmtVal(data.max_speed_mps, 1, " m/s")} />
+      <Stat label="Distance" value={fmtDist(data.total_distance_m)} />
+      <Stat label="Max Range" value={fmtDist(data.max_distance_from_home_m)} />
+      {data.battery_start_v != null && (
+        <Stat
+          label="Battery"
+          value={`${fmtVal(data.battery_start_v, 1)}→${fmtVal(data.battery_end_v, 1)} V`}
+        />
+      )}
+      {data.mah_consumed != null && (
+        <Stat label="Consumed" value={fmtVal(data.mah_consumed, 0, " mAh")} />
+      )}
+      {data.gps_sats_min != null && (
+        <Stat label="Sats" value={`${data.gps_sats_min}–${data.gps_sats_max}`} />
+      )}
+    </div>
+  );
+}
+
 export function LogsPanel({
   logs,
   recording,
@@ -47,12 +96,15 @@ export function LogsPanel({
   const [altitudeData, setAltitudeData] = useState<uPlot.AlignedData | null>(
     null,
   );
+  const [flightSummary, setFlightSummary] = useState<FlightSummary | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [selectedRange, setSelectedRange] = useState<TimeRange | null>(null);
 
-  // Fetch chart data + flight path when summary changes
   useEffect(() => {
     if (!summary) {
       setChartData(new Map());
       setAltitudeData(null);
+      setFlightSummary(null);
       onFlightPath(null);
       onTelemetryTrack(null);
       return;
@@ -74,9 +126,10 @@ export function LogsPanel({
 
     const flightPathQuery = getFlightPath(1000).catch(() => null);
     const telemetryTrackQuery = getLogTelemetryTrack().catch(() => null);
+    const summaryQuery = getFlightSummary().catch(() => null);
 
-    Promise.all([Promise.all(queries), flightPathQuery, telemetryTrackQuery]).then(
-      ([results, fp, tt]) => {
+    Promise.all([Promise.all(queries), flightPathQuery, telemetryTrackQuery, summaryQuery]).then(
+      ([results, fp, tt, fs]) => {
         const map = new Map<string, LogDataPoint[]>();
         for (const [mt, pts] of results) {
           if (pts.length > 0) map.set(mt, pts);
@@ -95,6 +148,7 @@ export function LogsPanel({
 
         onFlightPath(fp);
         onTelemetryTrack(tt);
+        setFlightSummary(fs);
       },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -107,10 +161,34 @@ export function LogsPanel({
     closeFile();
   }, [playback, closeFile, onFlightPath, onTelemetryTrack]);
 
+  const handleExport = useCallback(async () => {
+    if (!summary) return;
+    const path = await save({
+      defaultPath: summary.file_name.replace(/\.(tlog|bin)$/i, ".csv"),
+      filters: [{ name: "CSV", extensions: ["csv"] }],
+    });
+    if (!path) return;
+
+    setExporting(true);
+    try {
+      const rows = await exportLogCsv(
+        path,
+        selectedRange?.startUsec,
+        selectedRange?.endUsec,
+      );
+      toast.success("CSV exported", { description: `${rows.toLocaleString()} rows written` });
+    } catch (err) {
+      toast.error("Export failed", {
+        description: typeof err === "string" ? err : err instanceof Error ? err.message : "unexpected error",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }, [summary]);
+
   const recordingInfo =
     recording.status !== "idle" ? recording.status.recording : null;
 
-  // Recording bar (shown when connected)
   const recordingBar = connected ? (
     <div className="flex items-center justify-between rounded-md border border-border bg-bg-secondary px-3 py-2">
       {recording.isRecording && recordingInfo ? (
@@ -152,7 +230,6 @@ export function LogsPanel({
     </div>
   ) : null;
 
-  // Loading state
   if (loading) {
     return (
       <div className="flex h-full flex-col gap-3">
@@ -171,7 +248,6 @@ export function LogsPanel({
     );
   }
 
-  // No log loaded
   if (!summary) {
     return (
       <div className="flex h-full flex-col gap-3">
@@ -190,7 +266,6 @@ export function LogsPanel({
     );
   }
 
-  // Log loaded — timeline + charts view
   return (
     <div className="flex h-full flex-col gap-3 overflow-hidden">
       {recordingBar}
@@ -208,6 +283,14 @@ export function LogsPanel({
         </div>
         <div className="flex shrink-0 gap-2">
           <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-1.5 rounded-md bg-bg-tertiary px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:text-text-primary disabled:opacity-40"
+          >
+            {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            {selectedRange ? "Export Range" : "CSV"}
+          </button>
+          <button
             onClick={openFile}
             className="flex items-center gap-1.5 rounded-md bg-bg-tertiary px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:text-text-primary"
           >
@@ -224,6 +307,9 @@ export function LogsPanel({
         </div>
       </div>
 
+      {/* Flight summary */}
+      {flightSummary && <SummaryBar data={flightSummary} />}
+
       {/* Timeline + playback controls */}
       <Timeline
         startUsec={summary.start_usec}
@@ -239,11 +325,26 @@ export function LogsPanel({
       />
 
       {/* Charts */}
+      {selectedRange && (
+        <div className="flex items-center gap-2 rounded-md border border-accent/30 bg-accent/10 px-3 py-1.5">
+          <span className="text-xs text-accent">
+            Range selected: {formatDuration((selectedRange.endUsec - selectedRange.startUsec) / 1e6)}
+          </span>
+          <button
+            onClick={() => setSelectedRange(null)}
+            className="ml-auto text-[10px] font-medium text-text-muted transition-colors hover:text-text-primary"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       <div className="min-h-0 flex-1 overflow-hidden">
         <LogCharts
           chartData={chartData}
           currentTimeUsec={playback.currentTimeUsec}
           logType={summary.log_type}
+          onRangeSelect={setSelectedRange}
         />
       </div>
     </div>

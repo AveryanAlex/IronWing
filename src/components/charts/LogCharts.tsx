@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import uPlot from "uplot";
 import { UPlotChart } from "./UPlotChart";
 import type { LogDataPoint, LogType } from "../../logs";
@@ -41,9 +41,49 @@ const TLOG_CHART_DEFS: ChartDef[] = [
     id: "battery",
     label: "Battery",
     msgType: "SYS_STATUS",
-    fields: ["voltage_battery"],
-    unit: "V",
-    colors: ["#ffb020"],
+    fields: ["voltage_battery", "current_battery"],
+    unit: "V / A",
+    colors: ["#ffb020", "#ff6b6b"],
+  },
+  {
+    id: "throttle",
+    label: "Throttle",
+    msgType: "VFR_HUD",
+    fields: ["throttle", "heading"],
+    unit: "% / deg",
+    colors: ["#a78bfa", "#f472b6"],
+  },
+  {
+    id: "gps",
+    label: "GPS",
+    msgType: "GPS_RAW_INT",
+    fields: ["satellites_visible", "eph"],
+    unit: "sats / m",
+    colors: ["#34d399", "#fbbf24"],
+  },
+  {
+    id: "rc_input",
+    label: "RC Input",
+    msgType: "RC_CHANNELS",
+    fields: ["chan1_raw", "chan2_raw", "chan3_raw", "chan4_raw"],
+    unit: "\u00b5s",
+    colors: ["#ff4444", "#57e38b", "#12b9ff", "#ff9f43"],
+  },
+  {
+    id: "servo_output",
+    label: "Servo Output",
+    msgType: "SERVO_OUTPUT_RAW",
+    fields: ["servo1_raw", "servo2_raw", "servo3_raw", "servo4_raw"],
+    unit: "\u00b5s",
+    colors: ["#ff4444", "#57e38b", "#12b9ff", "#ff9f43"],
+  },
+  {
+    id: "nav",
+    label: "Nav Controller",
+    msgType: "NAV_CONTROLLER_OUTPUT",
+    fields: ["wp_dist", "alt_error", "xtrack_error"],
+    unit: "m",
+    colors: ["#38bdf8", "#fb923c", "#e879f9"],
   },
 ];
 
@@ -76,9 +116,57 @@ const BIN_CHART_DEFS: ChartDef[] = [
     id: "battery",
     label: "Battery",
     msgType: "BAT",
-    fields: ["Volt", "Curr"],
-    unit: "V",
-    colors: ["#ffb020", "#ff6b6b"],
+    fields: ["Volt", "Curr", "CurrTot"],
+    unit: "V / A / mAh",
+    colors: ["#ffb020", "#ff6b6b", "#c084fc"],
+  },
+  {
+    id: "throttle",
+    label: "Throttle",
+    msgType: "CTUN",
+    fields: ["ThO"],
+    unit: "%",
+    colors: ["#a78bfa"],
+  },
+  {
+    id: "gps",
+    label: "GPS",
+    msgType: "GPS",
+    fields: ["NSats", "HDop"],
+    unit: "sats / hdop",
+    colors: ["#34d399", "#fbbf24"],
+  },
+  {
+    id: "rc_input",
+    label: "RC Input",
+    msgType: "RCIN",
+    fields: ["C1", "C2", "C3", "C4"],
+    unit: "\u00b5s",
+    colors: ["#ff4444", "#57e38b", "#12b9ff", "#ff9f43"],
+  },
+  {
+    id: "servo_output",
+    label: "Servo Output",
+    msgType: "RCOU",
+    fields: ["C1", "C2", "C3", "C4"],
+    unit: "\u00b5s",
+    colors: ["#ff4444", "#57e38b", "#12b9ff", "#ff9f43"],
+  },
+  {
+    id: "vibration",
+    label: "Vibration",
+    msgType: "VIBE",
+    fields: ["VibeX", "VibeY", "VibeZ"],
+    unit: "m/s\u00b2",
+    colors: ["#ff4444", "#57e38b", "#12b9ff"],
+  },
+  {
+    id: "nav",
+    label: "Nav Controller",
+    msgType: "NTUN",
+    fields: ["WpDist", "AltErr"],
+    unit: "m",
+    colors: ["#38bdf8", "#fb923c"],
   },
 ];
 
@@ -101,16 +189,19 @@ function toAligned(
   return [ts, ...cols] as unknown as uPlot.AlignedData;
 }
 
+export type TimeRange = { startUsec: number; endUsec: number };
+
 type LogChartsProps = {
   chartData: Map<string, LogDataPoint[]>;
   currentTimeUsec: number;
   logType: LogType;
+  onRangeSelect?: (range: TimeRange | null) => void;
 };
 
 export { getChartDefs, toAligned };
 export type { ChartDef };
 
-export function LogCharts({ chartData, currentTimeUsec, logType }: LogChartsProps) {
+export function LogCharts({ chartData, currentTimeUsec, logType, onRangeSelect }: LogChartsProps) {
   const chartDefs = getChartDefs(logType);
 
   const [visible, setVisible] = useState<Set<string>>(
@@ -161,6 +252,7 @@ export function LogCharts({ chartData, currentTimeUsec, logType }: LogChartsProp
               def={def}
               points={points}
               currentTimeUsec={currentTimeUsec}
+              onRangeSelect={onRangeSelect}
             />
           );
         })}
@@ -173,21 +265,38 @@ function ChartPanel({
   def,
   points,
   currentTimeUsec,
+  onRangeSelect,
 }: {
   def: ChartDef;
   points: LogDataPoint[];
   currentTimeUsec: number;
+  onRangeSelect?: (range: TimeRange | null) => void;
 }) {
   const data = useMemo(() => toAligned(points, def.fields), [points, def.fields]);
 
+  const handleSelect = useCallback(
+    (startSec: number, endSec: number) => {
+      if (startSec === 0 && endSec === 0) {
+        onRangeSelect?.(null);
+      } else {
+        onRangeSelect?.({
+          startUsec: Math.round(startSec * 1e6),
+          endUsec: Math.round(endSec * 1e6),
+        });
+      }
+    },
+    [onRangeSelect],
+  );
+
   const opts = useMemo((): Omit<uPlot.Options, "width" | "height"> => {
     const syncKey = uPlot.sync("log");
+    const startSec = data[0]?.[0] ?? 0;
     return {
       cursor: {
         lock: false,
         sync: { key: syncKey.key, setSeries: false },
       },
-      select: { show: false, left: 0, top: 0, width: 0, height: 0 },
+      select: { show: true, left: 0, top: 0, width: 0, height: 0 },
       legend: { show: true },
       axes: [
         {
@@ -195,13 +304,20 @@ function ChartPanel({
           grid: { stroke: "rgba(156, 178, 199, 0.08)" },
           ticks: { stroke: "rgba(156, 178, 199, 0.1)" },
           font: "10px system-ui",
+          values: (_u: uPlot, vals: number[]) =>
+            vals.map((v) => {
+              const rel = v - startSec;
+              const m = Math.floor(rel / 60);
+              const s = Math.floor(rel % 60);
+              return `${m}:${s.toString().padStart(2, "0")}`;
+            }),
         },
         {
           stroke: "rgba(156, 178, 199, 0.3)",
           grid: { stroke: "rgba(156, 178, 199, 0.08)" },
           ticks: { stroke: "rgba(156, 178, 199, 0.1)" },
           font: "10px system-ui",
-          size: 50,
+          size: 55,
         },
       ],
       series: [
@@ -213,7 +329,7 @@ function ChartPanel({
         })),
       ],
     };
-  }, [def.fields, def.colors]);
+  }, [def.fields, def.colors, data]);
 
   return (
     <div className="rounded-md border border-border bg-bg-secondary">
@@ -228,6 +344,7 @@ function ChartPanel({
         data={data}
         cursorTimeUsec={currentTimeUsec}
         height={140}
+        onSelect={handleSelect}
       />
     </div>
   );
