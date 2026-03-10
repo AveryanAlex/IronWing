@@ -896,3 +896,352 @@ pub(crate) async fn log_export_csv(
     w.flush().map_err(|e| e.to_string())?;
     Ok(row_count)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ardupilot_binlog::Reader;
+    use mavkit::tlog::TlogEntry;
+    use mavlink::common::{
+        ATTITUDE_DATA, COMMAND_LONG_DATA, GLOBAL_POSITION_INT_DATA, GPS_RAW_INT_DATA,
+        HEARTBEAT_DATA, MavAutopilot, MavModeFlag, MavState, MavSysStatusSensor,
+        MavSysStatusSensorExtended, MavType,
+        VFR_HUD_DATA,
+    };
+    use std::io::Cursor;
+
+    const HEADER_MAGIC: [u8; 2] = [0xA3, 0x95];
+    const FMT_TYPE: u8 = 0x80;
+
+    fn assert_field_eq(fields: &HashMap<String, f64>, key: &str, expected: f64) {
+        let got = fields.get(key).copied().unwrap_or(f64::NAN);
+        assert!(
+            (got - expected).abs() < 1e-5,
+            "field {key} mismatch: got {got}, expected {expected}"
+        );
+    }
+
+    fn build_fmt_bootstrap() -> Vec<u8> {
+        let mut msg = Vec::new();
+        msg.extend_from_slice(&HEADER_MAGIC);
+        msg.push(FMT_TYPE);
+        let mut payload = [0u8; 86];
+        payload[0] = FMT_TYPE;
+        payload[1] = 89;
+        payload[2..6].copy_from_slice(b"FMT\0");
+        payload[6..11].copy_from_slice(b"BBnNZ");
+        let labels = b"Type,Length,Name,Format,Labels";
+        payload[22..22 + labels.len()].copy_from_slice(labels);
+        msg.extend_from_slice(&payload);
+        msg
+    }
+
+    fn build_fmt_for_type(
+        msg_type: u8,
+        msg_len: u8,
+        name: &[u8; 4],
+        format: &str,
+        labels: &str,
+    ) -> Vec<u8> {
+        let mut msg = Vec::new();
+        msg.extend_from_slice(&HEADER_MAGIC);
+        msg.push(FMT_TYPE);
+        let mut payload = [0u8; 86];
+        payload[0] = msg_type;
+        payload[1] = msg_len;
+        payload[2..6].copy_from_slice(name);
+        let fmt_bytes = format.as_bytes();
+        payload[6..6 + fmt_bytes.len()].copy_from_slice(fmt_bytes);
+        let lbl_bytes = labels.as_bytes();
+        payload[22..22 + lbl_bytes.len()].copy_from_slice(lbl_bytes);
+        msg.extend_from_slice(&payload);
+        msg
+    }
+
+    fn build_data_message(msg_type: u8, payload: &[u8]) -> Vec<u8> {
+        let mut msg = Vec::new();
+        msg.extend_from_slice(&HEADER_MAGIC);
+        msg.push(msg_type);
+        msg.extend_from_slice(payload);
+        msg
+    }
+
+    fn parse_entries(bytes: Vec<u8>) -> Vec<ardupilot_binlog::Entry> {
+        Reader::new(Cursor::new(bytes))
+            .collect::<Result<Vec<_>, _>>()
+            .expect("synthetic BIN should parse")
+    }
+
+    #[test]
+    fn extract_fields_attitude() {
+        let msg = MavMessage::ATTITUDE(ATTITUDE_DATA {
+            time_boot_ms: 0,
+            roll: 0.5,
+            pitch: -0.1,
+            yaw: 1.2,
+            rollspeed: 0.01,
+            pitchspeed: 0.02,
+            yawspeed: 0.03,
+        });
+
+        let (name, fields) = extract_fields(&msg);
+        assert_eq!(name, "ATTITUDE");
+        assert_eq!(fields.len(), 6);
+        assert_field_eq(&fields, "roll", 0.5);
+        assert_field_eq(&fields, "pitch", -0.1);
+        assert_field_eq(&fields, "yaw", 1.2);
+        assert_field_eq(&fields, "rollspeed", 0.01);
+        assert_field_eq(&fields, "pitchspeed", 0.02);
+        assert_field_eq(&fields, "yawspeed", 0.03);
+    }
+
+    #[test]
+    fn extract_fields_vfr_hud() {
+        let msg = MavMessage::VFR_HUD(VFR_HUD_DATA {
+            airspeed: 12.3,
+            groundspeed: 11.4,
+            heading: 250,
+            throttle: 77,
+            alt: 123.4,
+            climb: -1.2,
+        });
+
+        let (name, fields) = extract_fields(&msg);
+        assert_eq!(name, "VFR_HUD");
+        assert_eq!(fields.len(), 6);
+        assert_field_eq(&fields, "airspeed", 12.3);
+        assert_field_eq(&fields, "groundspeed", 11.4);
+        assert_field_eq(&fields, "heading", 250.0);
+        assert_field_eq(&fields, "throttle", 77.0);
+        assert_field_eq(&fields, "alt", 123.4);
+        assert_field_eq(&fields, "climb", -1.2);
+    }
+
+    #[test]
+    fn extract_fields_global_position_int_scaled() {
+        let msg = MavMessage::GLOBAL_POSITION_INT(GLOBAL_POSITION_INT_DATA {
+            time_boot_ms: 0,
+            lat: 374221234,
+            lon: -1220845678,
+            alt: 123_456,
+            relative_alt: 7_890,
+            vx: 321,
+            vy: -123,
+            vz: 45,
+            hdg: 9_001,
+        });
+
+        let (_, fields) = extract_fields(&msg);
+        assert_eq!(fields.len(), 8);
+        assert_field_eq(&fields, "lat", 37.4221234);
+        assert_field_eq(&fields, "lon", -122.0845678);
+        assert_field_eq(&fields, "alt", 123.456);
+        assert_field_eq(&fields, "relative_alt", 7.89);
+        assert_field_eq(&fields, "vx", 3.21);
+        assert_field_eq(&fields, "vy", -1.23);
+        assert_field_eq(&fields, "vz", 0.45);
+        assert_field_eq(&fields, "hdg", 90.01);
+    }
+
+    #[test]
+    fn extract_fields_sys_status_scaled() {
+        let msg = MavMessage::SYS_STATUS(mavlink::common::SYS_STATUS_DATA {
+            onboard_control_sensors_present: MavSysStatusSensor::empty(),
+            onboard_control_sensors_enabled: MavSysStatusSensor::empty(),
+            onboard_control_sensors_health: MavSysStatusSensor::empty(),
+            onboard_control_sensors_present_extended: MavSysStatusSensorExtended::empty(),
+            onboard_control_sensors_enabled_extended: MavSysStatusSensorExtended::empty(),
+            onboard_control_sensors_health_extended: MavSysStatusSensorExtended::empty(),
+            load: 500,
+            voltage_battery: 11_900,
+            current_battery: 345,
+            battery_remaining: 67,
+            drop_rate_comm: 0,
+            errors_comm: 0,
+            errors_count1: 0,
+            errors_count2: 0,
+            errors_count3: 0,
+            errors_count4: 0,
+        });
+
+        let (_, fields) = extract_fields(&msg);
+        assert_field_eq(&fields, "voltage_battery", 11.9);
+        assert_field_eq(&fields, "current_battery", 3.45);
+        assert_field_eq(&fields, "battery_remaining", 67.0);
+        assert_field_eq(&fields, "load", 50.0);
+    }
+
+    #[test]
+    fn extract_fields_gps_raw_int_scaled() {
+        let msg = MavMessage::GPS_RAW_INT(GPS_RAW_INT_DATA {
+            time_usec: 0,
+            fix_type: mavlink::common::GpsFixType::GPS_FIX_TYPE_3D_FIX,
+            lat: 374221234,
+            lon: -1220845678,
+            alt: 12_345,
+            eph: 234,
+            epv: 567,
+            vel: 0,
+            cog: 0,
+            satellites_visible: 12,
+            alt_ellipsoid: 0,
+            h_acc: 0,
+            v_acc: 0,
+            vel_acc: 0,
+            hdg_acc: 0,
+            yaw: 0,
+        });
+
+        let (_, fields) = extract_fields(&msg);
+        assert_eq!(fields.len(), 7);
+        assert_field_eq(&fields, "lat", 37.4221234);
+        assert_field_eq(&fields, "lon", -122.0845678);
+        assert_field_eq(&fields, "alt", 12.345);
+        assert_field_eq(&fields, "fix_type", 3.0);
+        assert_field_eq(&fields, "satellites_visible", 12.0);
+        assert_field_eq(&fields, "eph", 2.34);
+        assert_field_eq(&fields, "epv", 5.67);
+    }
+
+    #[test]
+    fn extract_fields_heartbeat() {
+        let msg = MavMessage::HEARTBEAT(HEARTBEAT_DATA {
+            custom_mode: 42,
+            mavtype: MavType::MAV_TYPE_QUADROTOR,
+            autopilot: MavAutopilot::MAV_AUTOPILOT_ARDUPILOTMEGA,
+            base_mode: MavModeFlag::MAV_MODE_FLAG_SAFETY_ARMED,
+            system_status: MavState::MAV_STATE_ACTIVE,
+            mavlink_version: 3,
+        });
+
+        let (_, fields) = extract_fields(&msg);
+        assert_eq!(fields.len(), 3);
+        assert_field_eq(&fields, "custom_mode", 42.0);
+        assert_field_eq(
+            &fields,
+            "base_mode",
+            MavModeFlag::MAV_MODE_FLAG_SAFETY_ARMED.bits() as f64,
+        );
+        assert_field_eq(&fields, "system_status", MavState::MAV_STATE_ACTIVE as u8 as f64);
+    }
+
+    #[test]
+    fn extract_fields_unhandled_message_returns_empty_map() {
+        let msg = MavMessage::COMMAND_LONG(COMMAND_LONG_DATA {
+            target_system: 1,
+            target_component: 1,
+            command: mavlink::common::MavCmd::MAV_CMD_COMPONENT_ARM_DISARM,
+            confirmation: 0,
+            param1: 0.0,
+            param2: 0.0,
+            param3: 0.0,
+            param4: 0.0,
+            param5: 0.0,
+            param6: 0.0,
+            param7: 0.0,
+        });
+
+        let (_, fields) = extract_fields(&msg);
+        assert!(fields.is_empty());
+    }
+
+    #[test]
+    fn tlog_to_stored_copies_timestamp_and_extracts_fields() {
+        let msg = MavMessage::ATTITUDE(ATTITUDE_DATA {
+            time_boot_ms: 0,
+            roll: 0.25,
+            pitch: -0.5,
+            yaw: 1.0,
+            rollspeed: 0.11,
+            pitchspeed: 0.22,
+            yawspeed: 0.33,
+        });
+        let expected = extract_fields(&msg);
+        let entry = TlogEntry {
+            timestamp_usec: 123_456,
+            message: msg,
+        };
+
+        let stored = tlog_to_stored(&entry);
+        assert_eq!(stored.timestamp_usec, 123_456);
+        assert_eq!(stored.msg_name, expected.0);
+        assert_eq!(stored.fields, expected.1);
+    }
+
+    #[test]
+    fn bin_to_stored_with_timestamp_returns_entry() {
+        let mut data = Vec::new();
+        data.extend(build_fmt_bootstrap());
+        data.extend(build_fmt_for_type(0x81, 11, b"TST\0", "Q", "TimeUS"));
+        data.extend(build_data_message(0x81, &1_234u64.to_le_bytes()));
+        let entries = parse_entries(data);
+        let tst = entries
+            .iter()
+            .find(|e| e.name == "TST")
+            .expect("TST entry should exist");
+
+        let stored = bin_to_stored(tst).expect("timestamped entry should convert");
+        assert_eq!(stored.timestamp_usec, 1_234);
+        assert_eq!(stored.msg_name, "TST");
+        assert_field_eq(&stored.fields, "TimeUS", 1_234.0);
+    }
+
+    #[test]
+    fn bin_to_stored_without_timestamp_returns_none() {
+        let mut data = Vec::new();
+        data.extend(build_fmt_bootstrap());
+        data.extend(build_fmt_for_type(0x82, 7, b"NOT\0", "f", "Value"));
+        data.extend(build_data_message(0x82, &12.5f32.to_le_bytes()));
+        let entries = parse_entries(data);
+        let no_ts = entries
+            .iter()
+            .find(|e| e.name == "NOT")
+            .expect("NOT entry should exist");
+
+        assert!(bin_to_stored(no_ts).is_none());
+    }
+
+    #[test]
+    fn bin_to_stored_keeps_only_numeric_fields() {
+        let mut data = Vec::new();
+        data.extend(build_fmt_bootstrap());
+        data.extend(build_fmt_for_type(
+            0x83,
+            79,
+            b"MIX\0",
+            "QZf",
+            "TimeUS,Message,Value",
+        ));
+
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&777u64.to_le_bytes());
+        let mut msg_bytes = [0u8; 64];
+        msg_bytes[..2].copy_from_slice(b"ok");
+        payload.extend_from_slice(&msg_bytes);
+        payload.extend_from_slice(&3.5f32.to_le_bytes());
+        data.extend(build_data_message(0x83, &payload));
+
+        let entries = parse_entries(data);
+        let mix = entries
+            .iter()
+            .find(|e| e.name == "MIX")
+            .expect("MIX entry should exist");
+
+        let stored = bin_to_stored(mix).expect("MIX should convert");
+        assert!(stored.fields.contains_key("TimeUS"));
+        assert!(stored.fields.contains_key("Value"));
+        assert!(!stored.fields.contains_key("Message"));
+    }
+
+    #[test]
+    fn gps_fix_type_name_named_variants_and_unknown() {
+        assert_eq!(gps_fix_type_name(0.0), "No GPS");
+        assert_eq!(gps_fix_type_name(1.0), "No Fix");
+        assert_eq!(gps_fix_type_name(2.0), "2D Fix");
+        assert_eq!(gps_fix_type_name(3.0), "3D Fix");
+        assert_eq!(gps_fix_type_name(4.0), "DGPS");
+        assert_eq!(gps_fix_type_name(5.0), "RTK Float");
+        assert_eq!(gps_fix_type_name(6.0), "RTK Fixed");
+        assert_eq!(gps_fix_type_name(99.0), "Fix(99)");
+    }
+}
