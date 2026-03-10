@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { FolderOpen, X, Loader2, Circle, Square } from "lucide-react";
 import { Timeline } from "./charts/Timeline";
-import { LogCharts, CHART_DEFS, toAligned } from "./charts/LogCharts";
+import { LogCharts, getChartDefs, toAligned } from "./charts/LogCharts";
 import { getFlightPath, type FlightPathPoint } from "../playback";
 import type { LogDataPoint } from "../logs";
 import type { useLogs } from "../hooks/use-logs";
@@ -58,8 +58,11 @@ export function LogsPanel({
     // Configure playback time range
     playback.configure(summary.start_usec, summary.end_usec);
 
+    // Select chart defs based on log type
+    const chartDefs = getChartDefs(summary.log_type);
+
     // Unique message types needed
-    const msgTypes = [...new Set(CHART_DEFS.map((d) => d.msgType))];
+    const msgTypes = [...new Set(chartDefs.map((d) => d.msgType))];
 
     // Parallel queries
     const queries = msgTypes.map(async (mt): Promise<[string, LogDataPoint[]]> => {
@@ -82,9 +85,12 @@ export function LogsPanel({
         setChartData(map);
 
         // Build altitude data for timeline
-        const vfrPoints = map.get("VFR_HUD");
-        if (vfrPoints && vfrPoints.length > 0) {
-          setAltitudeData(toAligned(vfrPoints, ["alt"]));
+        const altDef = summary.log_type === "bin"
+          ? { msgType: "CTUN", field: "Alt" }
+          : { msgType: "VFR_HUD", field: "alt" };
+        const altPoints = map.get(altDef.msgType);
+        if (altPoints && altPoints.length > 0) {
+          setAltitudeData(toAligned(altPoints, [altDef.field]));
         } else {
           setAltitudeData(null);
         }
@@ -177,7 +183,7 @@ export function LogsPanel({
             className="flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/80"
           >
             <FolderOpen size={16} />
-            Open TLOG
+            Open Log
           </button>
         </div>
       </div>
@@ -237,6 +243,7 @@ export function LogsPanel({
         <LogCharts
           chartData={chartData}
           currentTimeUsec={playback.currentTimeUsec}
+          logType={summary.log_type}
         />
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import uPlot from "uplot";
 import { UPlotChart } from "./UPlotChart";
-import type { LogDataPoint } from "../../logs";
+import type { LogDataPoint, LogType } from "../../logs";
 
 type ChartDef = {
   id: string;
@@ -12,7 +12,7 @@ type ChartDef = {
   colors: string[];
 };
 
-const CHART_DEFS: ChartDef[] = [
+const TLOG_CHART_DEFS: ChartDef[] = [
   {
     id: "altitude",
     label: "Altitude",
@@ -47,6 +47,45 @@ const CHART_DEFS: ChartDef[] = [
   },
 ];
 
+const BIN_CHART_DEFS: ChartDef[] = [
+  {
+    id: "altitude",
+    label: "Altitude",
+    msgType: "CTUN",
+    fields: ["Alt", "DAlt", "CRt"],
+    unit: "m",
+    colors: ["#12b9ff", "#57e38b", "#ff9f43"],
+  },
+  {
+    id: "speed",
+    label: "Speed",
+    msgType: "GPS",
+    fields: ["Spd"],
+    unit: "m/s",
+    colors: ["#ff9f43"],
+  },
+  {
+    id: "attitude",
+    label: "Attitude",
+    msgType: "ATT",
+    fields: ["Roll", "Pitch", "Yaw"],
+    unit: "deg",
+    colors: ["#ff4444", "#57e38b", "#12b9ff"],
+  },
+  {
+    id: "battery",
+    label: "Battery",
+    msgType: "BAT",
+    fields: ["Volt", "Curr"],
+    unit: "V",
+    colors: ["#ffb020", "#ff6b6b"],
+  },
+];
+
+function getChartDefs(logType: LogType): ChartDef[] {
+  return logType === "bin" ? BIN_CHART_DEFS : TLOG_CHART_DEFS;
+}
+
 function toAligned(
   points: LogDataPoint[],
   fields: string[],
@@ -65,13 +104,17 @@ function toAligned(
 type LogChartsProps = {
   chartData: Map<string, LogDataPoint[]>;
   currentTimeUsec: number;
+  logType: LogType;
 };
 
-export { CHART_DEFS, toAligned };
+export { getChartDefs, toAligned };
+export type { ChartDef };
 
-export function LogCharts({ chartData, currentTimeUsec }: LogChartsProps) {
+export function LogCharts({ chartData, currentTimeUsec, logType }: LogChartsProps) {
+  const chartDefs = getChartDefs(logType);
+
   const [visible, setVisible] = useState<Set<string>>(
-    () => new Set(CHART_DEFS.map((d) => d.id)),
+    () => new Set(chartDefs.map((d) => d.id)),
   );
 
   const toggleChart = (id: string) => {
@@ -87,7 +130,7 @@ export function LogCharts({ chartData, currentTimeUsec }: LogChartsProps) {
     <div className="flex flex-col gap-2 overflow-hidden">
       {/* Toggle pills */}
       <div className="flex flex-wrap gap-1.5">
-        {CHART_DEFS.map((def) => {
+        {chartDefs.map((def) => {
           const hasData = chartData.has(def.msgType);
           const isOn = visible.has(def.id);
           return (
@@ -109,7 +152,7 @@ export function LogCharts({ chartData, currentTimeUsec }: LogChartsProps) {
 
       {/* Stacked charts */}
       <div className="flex-1 space-y-2 overflow-y-auto">
-        {CHART_DEFS.filter((d) => visible.has(d.id)).map((def) => {
+        {chartDefs.filter((d) => visible.has(d.id)).map((def) => {
           const points = chartData.get(def.msgType);
           if (!points || points.length === 0) return null;
           return (

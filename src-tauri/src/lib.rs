@@ -146,6 +146,13 @@ impl TlogRecorderHandle {
 // Log types
 // ---------------------------------------------------------------------------
 
+#[derive(Serialize, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+enum LogType {
+    Tlog,
+    Bin,
+}
+
 #[derive(Serialize, Clone)]
 struct LogSummary {
     file_name: String,
@@ -154,6 +161,7 @@ struct LogSummary {
     duration_secs: f64,
     total_entries: usize,
     message_types: HashMap<String, usize>,
+    log_type: LogType,
 }
 
 #[derive(Serialize, Clone)]
@@ -176,9 +184,15 @@ struct LogProgress {
     parsed: usize,
 }
 
+struct StoredEntry {
+    timestamp_usec: u64,
+    msg_name: String,
+    fields: HashMap<String, f64>,
+}
+
 struct LogStore {
     summary: LogSummary,
-    entries: Vec<TlogEntry>,
+    entries: Vec<StoredEntry>,
     type_index: HashMap<String, Vec<usize>>,
 }
 
@@ -277,6 +291,28 @@ fn extract_fields(msg: &MavMessage) -> (String, HashMap<String, f64>) {
     }
 
     (name, fields)
+}
+
+fn tlog_to_stored(entry: &TlogEntry) -> StoredEntry {
+    let (name, fields) = extract_fields(&entry.message);
+    StoredEntry {
+        timestamp_usec: entry.timestamp_usec,
+        msg_name: name,
+        fields,
+    }
+}
+
+fn bin_to_stored(entry: &ardupilot_binlog::Entry) -> Option<StoredEntry> {
+    let ts = entry.timestamp_usec?;
+    let fields: HashMap<String, f64> = entry
+        .fields()
+        .filter_map(|(k, v)| v.as_f64().map(|f| (k.to_string(), f)))
+        .collect();
+    Some(StoredEntry {
+        timestamp_usec: ts,
+        msg_name: entry.name.clone(),
+        fields,
+    })
 }
 
 #[derive(Deserialize)]
@@ -937,35 +973,93 @@ async fn log_open(
         },
     );
 
-    let tlog = TlogFile::open(&path).await.map_err(|e| e.to_string())?;
-    let reader = tlog.entries().await.map_err(|e| e.to_string())?;
-    let all_entries = reader.collect().await.map_err(|e| e.to_string())?;
+    let is_bin = path.ends_with(".bin") || path.ends_with(".BIN");
 
-    // Emit progress after parsing
-    let total = all_entries.len();
-    let _ = app.emit(
-        "log://progress",
-        LogProgress {
-            phase: LogLoadPhase::Parsing,
-            parsed: total,
-        },
-    );
+    let (stored_entries, start_usec, end_usec, log_type) = if is_bin {
+        // BIN log: sync parser via spawn_blocking
+        let path_clone = path.clone();
+        let (bin_entries, time_range) = tokio::task::spawn_blocking(move || {
+            let file =
+                ardupilot_binlog::File::open(&path_clone).map_err(|e| e.to_string())?;
+            let time_range = file.time_range().map_err(|e| e.to_string())?;
+            let entries: Vec<ardupilot_binlog::Entry> = file
+                .entries()
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            Ok::<_, String>((entries, time_range))
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e: String| e)?;
+
+        let total_parsed = bin_entries.len();
+        let _ = app.emit(
+            "log://progress",
+            LogProgress {
+                phase: LogLoadPhase::Parsing,
+                parsed: total_parsed,
+            },
+        );
+
+        let stored: Vec<StoredEntry> =
+            bin_entries.iter().filter_map(bin_to_stored).collect();
+
+        let (start, end) = match time_range {
+            Some((s, e)) => (s, e),
+            None if !stored.is_empty() => (
+                stored.first().unwrap().timestamp_usec,
+                stored.last().unwrap().timestamp_usec,
+            ),
+            _ => (0, 0),
+        };
+
+        (stored, start, end, LogType::Bin)
+    } else {
+        // TLOG
+        let tlog = TlogFile::open(&path).await.map_err(|e| e.to_string())?;
+        let reader = tlog.entries().await.map_err(|e| e.to_string())?;
+        let all_entries = reader.collect().await.map_err(|e| e.to_string())?;
+
+        let total_parsed = all_entries.len();
+        let _ = app.emit(
+            "log://progress",
+            LogProgress {
+                phase: LogLoadPhase::Parsing,
+                parsed: total_parsed,
+            },
+        );
+
+        let (start, end) = if total_parsed > 0 {
+            (
+                all_entries[0].timestamp_usec,
+                all_entries[total_parsed - 1].timestamp_usec,
+            )
+        } else {
+            (0, 0)
+        };
+
+        let stored: Vec<StoredEntry> = all_entries.iter().map(tlog_to_stored).collect();
+        (stored, start, end, LogType::Tlog)
+    };
 
     let _ = app.emit(
         "log://progress",
         LogProgress {
             phase: LogLoadPhase::Indexing,
-            parsed: total,
+            parsed: stored_entries.len(),
         },
     );
 
     // Build index and count message types
     let mut type_index: HashMap<String, Vec<usize>> = HashMap::new();
     let mut message_types: HashMap<String, usize> = HashMap::new();
-    for (i, entry) in all_entries.iter().enumerate() {
-        let name = entry.message.message_name().to_string();
-        type_index.entry(name.clone()).or_default().push(i);
-        *message_types.entry(name).or_insert(0) += 1;
+    for (i, entry) in stored_entries.iter().enumerate() {
+        type_index
+            .entry(entry.msg_name.clone())
+            .or_default()
+            .push(i);
+        *message_types.entry(entry.msg_name.clone()).or_insert(0) += 1;
 
         if (i + 1) % 5000 == 0 {
             let _ = app.emit(
@@ -978,14 +1072,7 @@ async fn log_open(
         }
     }
 
-    let (start_usec, end_usec) = if total > 0 {
-        (
-            all_entries[0].timestamp_usec,
-            all_entries[total - 1].timestamp_usec,
-        )
-    } else {
-        (0, 0)
-    };
+    let total = stored_entries.len();
 
     let duration_secs = if end_usec > start_usec {
         (end_usec - start_usec) as f64 / 1_000_000.0
@@ -1005,11 +1092,12 @@ async fn log_open(
         duration_secs,
         total_entries: total,
         message_types,
+        log_type,
     };
 
     let store = LogStore {
         summary: summary.clone(),
-        entries: all_entries,
+        entries: stored_entries,
         type_index,
     };
 
@@ -1056,10 +1144,9 @@ async fn log_query(
                 continue;
             }
         }
-        let (_name, fields) = extract_fields(&entry.message);
         points.push(LogDataPoint {
             timestamp_usec: ts,
-            fields,
+            fields: entry.fields.clone(),
         });
     }
 
@@ -1097,17 +1184,31 @@ async fn log_get_flight_path(
     let guard = state.log_store.lock().await;
     let store = guard.as_ref().ok_or("no log loaded")?;
 
-    let indices = store
-        .type_index
-        .get("GLOBAL_POSITION_INT")
-        .ok_or("no GPS data in log")?;
+    // Detect which GPS message type exists
+    let gps_type = if store.type_index.contains_key("GLOBAL_POSITION_INT") {
+        "GLOBAL_POSITION_INT"
+    } else if store.type_index.contains_key("GPS") {
+        "GPS"
+    } else {
+        return Err("no GPS data in log".into());
+    };
 
+    let (lat_key, lon_key, alt_key, hdg_key, needs_dege7_scale) =
+        match store.summary.log_type {
+            LogType::Tlog => ("lat", "lon", "relative_alt", "hdg", false),
+            LogType::Bin => ("Lat", "Lng", "Alt", "GCrs", true),
+        };
+
+    let indices = &store.type_index[gps_type];
     let mut points: Vec<FlightPathPoint> = Vec::with_capacity(indices.len());
     for &idx in indices {
         let entry = &store.entries[idx];
-        let (_name, fields) = extract_fields(&entry.message);
-        let lat = fields.get("lat").copied().unwrap_or(0.0);
-        let lon = fields.get("lon").copied().unwrap_or(0.0);
+        let mut lat = entry.fields.get(lat_key).copied().unwrap_or(0.0);
+        let mut lon = entry.fields.get(lon_key).copied().unwrap_or(0.0);
+        if needs_dege7_scale {
+            lat /= 1e7;
+            lon /= 1e7;
+        }
         // Skip zero-position entries (no fix)
         if lat.abs() < 1e-6 && lon.abs() < 1e-6 {
             continue;
@@ -1116,8 +1217,8 @@ async fn log_get_flight_path(
             timestamp_usec: entry.timestamp_usec,
             lat,
             lon,
-            alt: fields.get("relative_alt").copied().unwrap_or(0.0),
-            heading: fields.get("hdg").copied().unwrap_or(0.0),
+            alt: entry.fields.get(alt_key).copied().unwrap_or(0.0),
+            heading: entry.fields.get(hdg_key).copied().unwrap_or(0.0),
         });
     }
 

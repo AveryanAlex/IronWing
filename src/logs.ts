@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+export type LogType = "tlog" | "bin";
+
 export type LogSummary = {
   file_name: string;
   start_usec: number;
@@ -8,6 +10,7 @@ export type LogSummary = {
   duration_secs: number;
   total_entries: number;
   message_types: Record<string, number>;
+  log_type: LogType;
 };
 
 export type LogDataPoint = {

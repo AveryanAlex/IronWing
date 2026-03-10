@@ -48,6 +48,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
+name = "ardupilot-binlog"
+version = "0.1.0"
+source = "git+https://github.com/AveryanAlex/ardupilot-binlog.git?branch=main#6c4c0829677840a06be8a7f8de510a8272aa613c"
+dependencies = [
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1784,6 +1792,7 @@ dependencies = [
 name = "ironwing"
 version = "0.1.0"
 dependencies = [
+ "ardupilot-binlog",
  "base64 0.22.1",
  "mavkit",
  "mavlink",

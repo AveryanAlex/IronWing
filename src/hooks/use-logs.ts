@@ -26,7 +26,7 @@ export function useLogs() {
 
   const openFile = useCallback(async () => {
     const path = await open({
-      filters: [{ name: "TLOG Files", extensions: ["tlog"] }],
+      filters: [{ name: "Flight Logs", extensions: ["tlog", "bin"] }],
       multiple: false,
     });
     if (!path) return;
