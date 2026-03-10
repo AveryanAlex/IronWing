@@ -117,9 +117,12 @@ async fn connect_ble(address: &str) -> Result<Vehicle, String> {
         tauri_plugin_blec::get_handler().map_err(|e| format!("BLE plugin not initialized: {e}"))?;
 
     // Standard NUS UUIDs
-    let _nus_service = uuid::Uuid::parse_str("6E400001-B5A3-F393-E0A9-E50E24DCCA9E").unwrap();
-    let nus_rx = uuid::Uuid::parse_str("6E400002-B5A3-F393-E0A9-E50E24DCCA9E").unwrap(); // write to this
-    let nus_tx = uuid::Uuid::parse_str("6E400003-B5A3-F393-E0A9-E50E24DCCA9E").unwrap(); // notify from this
+    let _nus_service = uuid::Uuid::parse_str("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+        .expect("valid NUS service UUID");
+    let nus_rx = uuid::Uuid::parse_str("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
+        .expect("valid NUS RX UUID"); // write to this
+    let nus_tx = uuid::Uuid::parse_str("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
+        .expect("valid NUS TX UUID"); // notify from this
 
     // Try connecting (device should be in blec's cache from prior scan).
     // On Android, blec has no auto-discover fallback, so if the cache is

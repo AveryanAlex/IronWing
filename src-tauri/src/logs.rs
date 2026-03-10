@@ -313,9 +313,6 @@ fn apply_tlog_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
         }
         "BATTERY_STATUS" => {
             snap.energy_consumed_wh = f.get("energy_consumed").copied();
-            if snap.battery_voltage_v.is_none() {
-                snap.battery_voltage_v = f.get("current_battery").copied();
-            }
         }
         _ => {}
     }
@@ -428,8 +425,8 @@ pub(crate) async fn log_open(
             (s, e)
         } else if !stored.is_empty() {
             (
-                stored.first().unwrap().timestamp_usec,
-                stored.last().unwrap().timestamp_usec,
+                stored.first().expect("non-empty stored entries").timestamp_usec,
+                stored.last().expect("non-empty stored entries").timestamp_usec,
             )
         } else {
             (0, 0)

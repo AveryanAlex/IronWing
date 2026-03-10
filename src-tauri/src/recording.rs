@@ -39,7 +39,7 @@ impl TlogRecorderHandle {
     }
 
     pub(crate) fn start(&self, vehicle: &Vehicle, path: &str) -> Result<String, String> {
-        let mut guard = self.state.lock().unwrap();
+        let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if matches!(*guard, RecorderState::Recording { .. }) {
             return Err("already recording".into());
         }
@@ -97,7 +97,7 @@ impl TlogRecorderHandle {
     }
 
     pub(crate) fn stop(&self) {
-        let mut guard = self.state.lock().unwrap();
+        let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if let RecorderState::Recording { cancel, .. } =
             std::mem::replace(&mut *guard, RecorderState::Idle)
         {
@@ -106,7 +106,7 @@ impl TlogRecorderHandle {
     }
 
     pub(crate) fn status(&self) -> RecordingStatus {
-        let guard = self.state.lock().unwrap();
+        let guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
         match &*guard {
             RecorderState::Idle => RecordingStatus::Idle,
             RecorderState::Recording {
