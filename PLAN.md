@@ -221,14 +221,13 @@ Current status:
 
 Current shipped slice:
 - TLOG recording from live MAVLink sessions
-- TLOG import, parse, and in-memory indexing
+- TLOG and BIN import, parse, and in-memory indexing
 - Timeline playback controls with speed/seek
 - Basic charts for altitude, speed, attitude, and battery
 - Flight-path replay tied to the map
+- HUD, sidebar, and telemetry panel render from playback data during log replay
 
 Remaining M4 scope:
-- BIN import and index
-- Timeline playback tied to HUD and key telemetry widgets beyond the current map/charts integration
 - Core flight review charts expansion, derived metrics, and export
 - Persisted log library / recent recordings browser
 
@@ -386,12 +385,10 @@ Exit criteria:
 
 ## 11) Immediate Next Steps (Current - M4 In Progress)
 
-1. Complete log ingestion parity: add BIN import/indexing alongside the shipped TLOG flow
-2. Extend replay so HUD, telemetry cards, and status widgets can render from playback time, not only live data
-3. Expand flight review: more charts, derived metrics, selected-range export, and per-flight summary data
-4. Add a persisted log library / recent recordings surface for imported and recorded sessions
-5. Frontend test baseline: add Vitest for hooks, playback state, and IPC bridge modules
-6. Mobile polish: verify BT permission flow on Android 12+, test full connection lifecycle on hardware
-7. Safety and support groundwork: confirmation UX/audit trail for critical actions and a diagnostics bundle export path
+1. Expand flight review: more charts, derived metrics, selected-range export, and per-flight summary data
+2. Add a persisted log library / recent recordings surface for imported and recorded sessions
+3. Frontend test baseline: add Vitest for hooks, playback state, and IPC bridge modules
+4. Mobile polish: verify BT permission flow on Android 12+, test full connection lifecycle on hardware
+5. Safety and support groundwork: confirmation UX/audit trail for critical actions and a diagnostics bundle export path
 
 This plan stays biased toward shipping a usable cockpit first, with disciplined protocol correctness before advanced planning UX.

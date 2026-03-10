@@ -1176,6 +1176,190 @@ struct FlightPathPoint {
     heading: f64,
 }
 
+// ---------------------------------------------------------------------------
+// Telemetry track for playback (carry-forward merged snapshots)
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Clone, Default)]
+struct TelemetrySnapshot {
+    timestamp_usec: u64,
+    // Position
+    latitude_deg: Option<f64>,
+    longitude_deg: Option<f64>,
+    altitude_m: Option<f64>,
+    heading_deg: Option<f64>,
+    // Speed
+    speed_mps: Option<f64>,
+    airspeed_mps: Option<f64>,
+    climb_rate_mps: Option<f64>,
+    // Attitude
+    roll_deg: Option<f64>,
+    pitch_deg: Option<f64>,
+    yaw_deg: Option<f64>,
+    // Battery
+    battery_pct: Option<f64>,
+    battery_voltage_v: Option<f64>,
+    battery_current_a: Option<f64>,
+    energy_consumed_wh: Option<f64>,
+    // GPS
+    gps_fix_type: Option<String>,
+    gps_satellites: Option<f64>,
+    gps_hdop: Option<f64>,
+    // Control
+    throttle_pct: Option<f64>,
+    // Navigation
+    wp_dist_m: Option<f64>,
+    nav_bearing_deg: Option<f64>,
+    target_bearing_deg: Option<f64>,
+    xtrack_error_m: Option<f64>,
+    // Vehicle state
+    armed: Option<bool>,
+    custom_mode: Option<u32>,
+    // RC / Servo
+    rc_channels: Option<Vec<f64>>,
+    rc_rssi: Option<f64>,
+    servo_outputs: Option<Vec<f64>>,
+}
+
+fn gps_fix_type_name(val: f64) -> String {
+    match val as u8 {
+        0 => "No GPS".into(),
+        1 => "No Fix".into(),
+        2 => "2D Fix".into(),
+        3 => "3D Fix".into(),
+        4 => "DGPS".into(),
+        5 => "RTK Float".into(),
+        6 => "RTK Fixed".into(),
+        _ => format!("Fix({})", val as u8),
+    }
+}
+
+fn apply_tlog_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
+    let f = &entry.fields;
+    match entry.msg_name.as_str() {
+        "ATTITUDE" => {
+            snap.roll_deg = f.get("roll").map(|v| v.to_degrees());
+            snap.pitch_deg = f.get("pitch").map(|v| v.to_degrees());
+            snap.yaw_deg = f.get("yaw").map(|v| v.to_degrees());
+        }
+        "VFR_HUD" => {
+            snap.altitude_m = f.get("alt").copied();
+            snap.speed_mps = f.get("groundspeed").copied();
+            snap.heading_deg = f.get("heading").copied();
+            snap.climb_rate_mps = f.get("climb").copied();
+            snap.throttle_pct = f.get("throttle").copied();
+            snap.airspeed_mps = f.get("airspeed").copied();
+        }
+        "GLOBAL_POSITION_INT" => {
+            // Already scaled to degrees and meters in extract_fields
+            snap.latitude_deg = f.get("lat").copied();
+            snap.longitude_deg = f.get("lon").copied();
+            if snap.altitude_m.is_none() {
+                snap.altitude_m = f.get("relative_alt").copied();
+            }
+            if snap.heading_deg.is_none() {
+                snap.heading_deg = f.get("hdg").copied();
+            }
+        }
+        "SYS_STATUS" => {
+            snap.battery_voltage_v = f.get("voltage_battery").copied();
+            snap.battery_current_a = f.get("current_battery").copied();
+            snap.battery_pct = f.get("battery_remaining").copied();
+        }
+        "GPS_RAW_INT" => {
+            snap.gps_fix_type = f.get("fix_type").map(|v| gps_fix_type_name(*v));
+            snap.gps_satellites = f.get("satellites_visible").copied();
+            snap.gps_hdop = f.get("eph").copied();
+        }
+        "HEARTBEAT" => {
+            snap.custom_mode = f.get("custom_mode").map(|v| *v as u32);
+            snap.armed = f
+                .get("base_mode")
+                .map(|v| (*v as u32) & 0x80 != 0);
+        }
+        "NAV_CONTROLLER_OUTPUT" => {
+            snap.nav_bearing_deg = f.get("nav_bearing").copied();
+            snap.target_bearing_deg = f.get("target_bearing").copied();
+            snap.wp_dist_m = f.get("wp_dist").copied();
+            snap.xtrack_error_m = f.get("xtrack_error").copied();
+        }
+        "RC_CHANNELS" => {
+            let chans: Vec<f64> = (1..=8)
+                .filter_map(|i| f.get(&format!("chan{i}_raw")).copied())
+                .collect();
+            if !chans.is_empty() {
+                snap.rc_channels = Some(chans);
+            }
+            snap.rc_rssi = f.get("rssi").copied();
+        }
+        "SERVO_OUTPUT_RAW" => {
+            let servos: Vec<f64> = (1..=8)
+                .filter_map(|i| f.get(&format!("servo{i}_raw")).copied())
+                .collect();
+            if !servos.is_empty() {
+                snap.servo_outputs = Some(servos);
+            }
+        }
+        "BATTERY_STATUS" => {
+            snap.energy_consumed_wh = f.get("energy_consumed").copied();
+            // Prefer SYS_STATUS for voltage/current but fallback here
+            if snap.battery_voltage_v.is_none() {
+                snap.battery_voltage_v = f.get("current_battery").copied();
+            }
+        }
+        _ => {}
+    }
+}
+
+fn apply_bin_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
+    let f = &entry.fields;
+    match entry.msg_name.as_str() {
+        "ATT" => {
+            snap.roll_deg = f.get("Roll").copied();
+            snap.pitch_deg = f.get("Pitch").copied();
+            snap.yaw_deg = f.get("Yaw").copied();
+        }
+        "CTUN" => {
+            snap.altitude_m = f.get("Alt").copied();
+            snap.climb_rate_mps = f.get("CRt").copied();
+        }
+        "GPS" => {
+            snap.latitude_deg = f.get("Lat").map(|v| v / 1e7);
+            snap.longitude_deg = f.get("Lng").map(|v| v / 1e7);
+            snap.speed_mps = f.get("Spd").copied();
+            snap.heading_deg = f.get("GCrs").copied();
+            snap.gps_fix_type = f.get("Status").map(|v| gps_fix_type_name(*v));
+            snap.gps_satellites = f.get("NSats").copied();
+            snap.gps_hdop = f.get("HDop").copied();
+        }
+        "BAT" => {
+            snap.battery_voltage_v = f.get("Volt").copied();
+            snap.battery_current_a = f.get("Curr").copied();
+            snap.battery_pct = f.get("Rem").copied();
+        }
+        "MODE" => {
+            snap.custom_mode = f.get("ModeNum").map(|v| *v as u32);
+        }
+        "RCIN" => {
+            let chans: Vec<f64> = (1..=8)
+                .filter_map(|i| f.get(&format!("C{i}")).copied())
+                .collect();
+            if !chans.is_empty() {
+                snap.rc_channels = Some(chans);
+            }
+        }
+        "RCOU" => {
+            let servos: Vec<f64> = (1..=8)
+                .filter_map(|i| f.get(&format!("C{i}")).copied())
+                .collect();
+            if !servos.is_empty() {
+                snap.servo_outputs = Some(servos);
+            }
+        }
+        _ => {}
+    }
+}
+
 #[tauri::command]
 async fn log_get_flight_path(
     state: tauri::State<'_, AppState>,
@@ -1237,6 +1421,52 @@ async fn log_get_flight_path(
     }
 
     Ok(points)
+}
+
+const TELEMETRY_TRACK_INTERVAL_USEC: u64 = 100_000; // 10 Hz snapshots
+
+#[tauri::command]
+async fn log_get_telemetry_track(
+    state: tauri::State<'_, AppState>,
+    max_points: Option<usize>,
+) -> Result<Vec<TelemetrySnapshot>, String> {
+    let guard = state.log_store.lock().await;
+    let store = guard.as_ref().ok_or("no log loaded")?;
+
+    let is_bin = store.summary.log_type == LogType::Bin;
+    let mut running = TelemetrySnapshot::default();
+    let mut track: Vec<TelemetrySnapshot> = Vec::new();
+    let mut last_emit: u64 = 0;
+
+    for entry in &store.entries {
+        if is_bin {
+            apply_bin_entry(&mut running, entry);
+        } else {
+            apply_tlog_entry(&mut running, entry);
+        }
+
+        if entry.timestamp_usec >= last_emit + TELEMETRY_TRACK_INTERVAL_USEC || track.is_empty() {
+            let mut snap = running.clone();
+            snap.timestamp_usec = entry.timestamp_usec;
+            track.push(snap);
+            last_emit = entry.timestamp_usec;
+        }
+    }
+
+    if let Some(max) = max_points {
+        if track.len() > max && max > 0 {
+            let step = track.len() as f64 / max as f64;
+            let mut sampled = Vec::with_capacity(max);
+            let mut i = 0.0;
+            while (i as usize) < track.len() && sampled.len() < max {
+                sampled.push(track[i as usize].clone());
+                i += step;
+            }
+            return Ok(sampled);
+        }
+    }
+
+    Ok(track)
 }
 
 #[tauri::command]
@@ -1465,6 +1695,7 @@ pub fn run() {
             log_query,
             log_get_summary,
             log_get_flight_path,
+            log_get_telemetry_track,
             log_close,
             recording_start,
             recording_stop,
@@ -1507,6 +1738,7 @@ pub fn run() {
             log_query,
             log_get_summary,
             log_get_flight_path,
+            log_get_telemetry_track,
             log_close,
             recording_start,
             recording_stop,

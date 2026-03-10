@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { FolderOpen, X, Loader2, Circle, Square } from "lucide-react";
 import { Timeline } from "./charts/Timeline";
 import { LogCharts, getChartDefs, toAligned } from "./charts/LogCharts";
-import { getFlightPath, type FlightPathPoint } from "../playback";
+import { getFlightPath, getLogTelemetryTrack, type FlightPathPoint, type TelemetrySnapshot } from "../playback";
 import type { LogDataPoint } from "../logs";
 import type { useLogs } from "../hooks/use-logs";
 import type { useRecording } from "../hooks/use-recording";
@@ -15,6 +15,7 @@ type LogsPanelProps = {
   connected: boolean;
   playback: ReturnType<typeof usePlayback>;
   onFlightPath: (path: FlightPathPoint[] | null) => void;
+  onTelemetryTrack: (track: TelemetrySnapshot[] | null) => void;
 };
 
 function formatDuration(secs: number): string {
@@ -35,6 +36,7 @@ export function LogsPanel({
   connected,
   playback,
   onFlightPath,
+  onTelemetryTrack,
 }: LogsPanelProps) {
   const { summary, progress, loading, openFile, closeFile, queryMessages } =
     logs;
@@ -52,19 +54,15 @@ export function LogsPanel({
       setChartData(new Map());
       setAltitudeData(null);
       onFlightPath(null);
+      onTelemetryTrack(null);
       return;
     }
 
-    // Configure playback time range
     playback.configure(summary.start_usec, summary.end_usec);
 
-    // Select chart defs based on log type
     const chartDefs = getChartDefs(summary.log_type);
-
-    // Unique message types needed
     const msgTypes = [...new Set(chartDefs.map((d) => d.msgType))];
 
-    // Parallel queries
     const queries = msgTypes.map(async (mt): Promise<[string, LogDataPoint[]]> => {
       try {
         const pts = await queryMessages(mt, undefined, undefined, 2000);
@@ -75,16 +73,16 @@ export function LogsPanel({
     });
 
     const flightPathQuery = getFlightPath(1000).catch(() => null);
+    const telemetryTrackQuery = getLogTelemetryTrack().catch(() => null);
 
-    Promise.all([Promise.all(queries), flightPathQuery]).then(
-      ([results, fp]) => {
+    Promise.all([Promise.all(queries), flightPathQuery, telemetryTrackQuery]).then(
+      ([results, fp, tt]) => {
         const map = new Map<string, LogDataPoint[]>();
         for (const [mt, pts] of results) {
           if (pts.length > 0) map.set(mt, pts);
         }
         setChartData(map);
 
-        // Build altitude data for timeline
         const altDef = summary.log_type === "bin"
           ? { msgType: "CTUN", field: "Alt" }
           : { msgType: "VFR_HUD", field: "alt" };
@@ -96,6 +94,7 @@ export function LogsPanel({
         }
 
         onFlightPath(fp);
+        onTelemetryTrack(tt);
       },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,8 +103,9 @@ export function LogsPanel({
   const handleClose = useCallback(() => {
     playback.stop();
     onFlightPath(null);
+    onTelemetryTrack(null);
     closeFile();
-  }, [playback, closeFile, onFlightPath]);
+  }, [playback, closeFile, onFlightPath, onTelemetryTrack]);
 
   const recordingInfo =
     recording.status !== "idle" ? recording.status.recording : null;

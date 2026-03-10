@@ -21,7 +21,7 @@ import { usePlayback } from "./hooks/use-playback";
 import { useBreakpoint } from "./hooks/use-breakpoint";
 import { useDeviceLocation } from "./hooks/use-device-location";
 import { setTelemetryRate } from "./telemetry";
-import type { FlightPathPoint } from "./playback";
+import { interpolateLogTelemetry, type FlightPathPoint, type TelemetrySnapshot } from "./playback";
 import "./app.css";
 
 type ActiveTab = "map" | "telemetry" | "hud" | "mission" | "config" | "logs" | "settings";
@@ -108,30 +108,47 @@ export default function App() {
   const deviceLocation = useDeviceLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [flightPath, setFlightPath] = useState<FlightPathPoint[] | null>(null);
+  const [telemetryTrack, setTelemetryTrack] = useState<TelemetrySnapshot[] | null>(null);
 
   useEffect(() => { checkGpuRenderer() }, []);
 
-  // Apply saved telemetry rate on mount
   useEffect(() => {
     setTelemetryRate(settings.telemetryRateHz).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const replayActive = playback.isPlaying || playback.currentTimeUsec > 0;
 
-  // Compute map-ready flight path coordinates
   const flightPathCoords = useMemo<[number, number][] | undefined>(() => {
     if (!flightPath || flightPath.length < 2) return undefined;
     return flightPath.map((p) => [p.lon, p.lat]);
   }, [flightPath]);
 
-  // Compute interpolated replay position
   const replayPosition = useMemo(() => {
     if (!flightPath || !replayActive) return null;
     return interpolatePosition(flightPath, playback.currentTimeUsec);
   }, [flightPath, replayActive, playback.currentTimeUsec]);
 
+  const replayTelemetry = useMemo(() => {
+    if (!telemetryTrack || !replayActive) return null;
+    return interpolateLogTelemetry(telemetryTrack, playback.currentTimeUsec);
+  }, [telemetryTrack, replayActive, playback.currentTimeUsec]);
+
+  const effectiveVehicle = useMemo(() => {
+    if (!replayActive || !replayTelemetry) return vehicle;
+    return {
+      ...vehicle,
+      telemetry: replayTelemetry.telemetry,
+      vehicleState: replayTelemetry.vehicleState ?? vehicle.vehicleState,
+      vehiclePosition: replayPosition ?? vehicle.vehiclePosition,
+    };
+  }, [vehicle, replayActive, replayTelemetry, replayPosition]);
+
   const handleFlightPath = useCallback((path: FlightPathPoint[] | null) => {
     setFlightPath(path);
+  }, []);
+
+  const handleTelemetryTrack = useCallback((track: TelemetrySnapshot[] | null) => {
+    setTelemetryTrack(track);
   }, []);
 
   return (
@@ -145,7 +162,7 @@ export default function App() {
         <div className="flex flex-1 overflow-hidden">
           {/* Desktop: static sidebar | Mobile: drawer overlay */}
           <Sidebar
-            vehicle={vehicle}
+            vehicle={effectiveVehicle}
             isMobile={isMobile}
             open={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
@@ -158,16 +175,16 @@ export default function App() {
           >
             {activeTab === "map" ? (
               <MapPanel
-                vehicle={vehicle}
+                vehicle={effectiveVehicle}
                 mission={mission}
                 deviceLocation={deviceLocation}
                 flightPath={flightPathCoords}
                 replayPosition={replayPosition}
               />
             ) : activeTab === "telemetry" ? (
-              <TelemetryPanel vehicle={vehicle} mission={mission} />
+              <TelemetryPanel vehicle={effectiveVehicle} mission={mission} />
             ) : activeTab === "hud" ? (
-              <HudPanel vehicle={vehicle} mission={mission} svsEnabled={settings.svsEnabled} />
+              <HudPanel vehicle={effectiveVehicle} mission={mission} svsEnabled={settings.svsEnabled} />
             ) : activeTab === "mission" ? (
               <MissionPanel vehicle={vehicle} mission={mission} deviceLocation={deviceLocation} />
             ) : activeTab === "config" ? (
@@ -179,6 +196,7 @@ export default function App() {
                 connected={vehicle.connected}
                 playback={playback}
                 onFlightPath={handleFlightPath}
+                onTelemetryTrack={handleTelemetryTrack}
               />
             ) : (
               <SettingsPanel settings={settings} updateSettings={updateSettings} />
