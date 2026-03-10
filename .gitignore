@@ -14,3 +14,5 @@ result
 .DS_Store
 
 /mav.*
+
+.sisyphus/
