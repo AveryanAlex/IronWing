@@ -1244,4 +1244,25 @@ mod tests {
         assert_eq!(gps_fix_type_name(6.0), "RTK Fixed");
         assert_eq!(gps_fix_type_name(99.0), "Fix(99)");
     }
+
+    #[test]
+    fn haversine_nyc_to_london() {
+        let dist = haversine_m(40.7128, -74.0060, 51.5074, -0.1278);
+        assert!(
+            dist >= 5_514_000.0 && dist <= 5_626_000.0,
+            "expected ~5570 km, got {dist}"
+        );
+    }
+
+    #[test]
+    fn haversine_same_point() {
+        let dist = haversine_m(48.8566, 2.3522, 48.8566, 2.3522);
+        assert!(dist.abs() < 1e-6, "expected 0.0, got {dist}");
+    }
+
+    #[test]
+    fn haversine_short_distance() {
+        let dist = haversine_m(0.0, 0.0, 0.0009, 0.0);
+        assert!(dist >= 50.0 && dist <= 200.0, "expected ~100 m, got {dist}");
+    }
 }
