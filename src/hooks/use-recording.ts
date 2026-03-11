@@ -14,7 +14,10 @@ export function useRecording(connected: boolean) {
 
   const isRecording = status !== "idle";
 
-  // Poll status while recording
+  useEffect(() => {
+    getRecordingStatus().then(setStatus).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (isRecording) {
       pollRef.current = setInterval(async () => {

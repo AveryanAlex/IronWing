@@ -26,7 +26,42 @@ import {
   type VehicleState,
 } from "../telemetry";
 import type { HomePosition } from "../mission";
+import { getVehicleSnapshot } from "../snapshot";
 import { toast } from "sonner";
+
+const CONNECTION_KEY = "mpng_connection";
+
+type ConnectionFormState = {
+  mode: TransportType;
+  udpBind: string;
+  tcpAddress: string;
+  serialPort: string;
+  baud: number;
+  selectedBtDevice: string;
+  takeoffAlt: string;
+  followVehicle: boolean;
+};
+
+const CONNECTION_DEFAULTS: ConnectionFormState = {
+  mode: "udp",
+  udpBind: "0.0.0.0:14550",
+  tcpAddress: "127.0.0.1:5760",
+  serialPort: "",
+  baud: 57600,
+  selectedBtDevice: "",
+  takeoffAlt: "10",
+  followVehicle: true,
+};
+
+function loadConnectionForm(): ConnectionFormState {
+  try {
+    const raw = localStorage.getItem(CONNECTION_KEY);
+    if (!raw) return CONNECTION_DEFAULTS;
+    return { ...CONNECTION_DEFAULTS, ...JSON.parse(raw) };
+  } catch {
+    return CONNECTION_DEFAULTS;
+  }
+}
 
 function asErrorMessage(error: unknown): string {
   if (typeof error === "string") return error;
@@ -43,21 +78,22 @@ export function useVehicle() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
 
-  // Connection form state
-  const [mode, setMode] = useState<TransportType>("udp");
+  // Connection form state (persisted to localStorage)
+  const [saved] = useState(loadConnectionForm);
+  const [mode, setMode] = useState<TransportType>(saved.mode);
   const [transports, setTransports] = useState<TransportType[]>(["udp"]);
-  const [udpBind, setUdpBind] = useState("0.0.0.0:14550");
-  const [tcpAddress, setTcpAddress] = useState("127.0.0.1:5760");
-  const [serialPort, setSerialPort] = useState("");
-  const [baud, setBaud] = useState(57600);
+  const [udpBind, setUdpBind] = useState(saved.udpBind);
+  const [tcpAddress, setTcpAddress] = useState(saved.tcpAddress);
+  const [serialPort, setSerialPort] = useState(saved.serialPort);
+  const [baud, setBaud] = useState(saved.baud);
   const [serialPorts, setSerialPorts] = useState<string[]>([]);
-  const [takeoffAlt, setTakeoffAlt] = useState("10");
-  const [followVehicle, setFollowVehicle] = useState(true);
+  const [takeoffAlt, setTakeoffAlt] = useState(saved.takeoffAlt);
+  const [followVehicle, setFollowVehicle] = useState(saved.followVehicle);
 
   // Bluetooth state
   const [btDevices, setBtDevices] = useState<BluetoothDevice[]>([]);
   const [btScanning, setBtScanning] = useState(false);
-  const [selectedBtDevice, setSelectedBtDevice] = useState("");
+  const [selectedBtDevice, setSelectedBtDevice] = useState(saved.selectedBtDevice);
 
   const connected = linkState === "connected";
 
@@ -77,7 +113,12 @@ export function useVehicle() {
     return null;
   }, [telemetry.latitude_deg, telemetry.longitude_deg, telemetry.heading_deg]);
 
-  // Fetch available transports on mount
+  useEffect(() => {
+    localStorage.setItem(CONNECTION_KEY, JSON.stringify({
+      mode, udpBind, tcpAddress, serialPort, baud, selectedBtDevice, takeoffAlt, followVehicle,
+    }));
+  }, [mode, udpBind, tcpAddress, serialPort, baud, selectedBtDevice, takeoffAlt, followVehicle]);
+
   useEffect(() => {
     availableTransports()
       .then((t) => {
@@ -137,6 +178,16 @@ export function useVehicle() {
       stopLinkState = await subscribeLinkState(setLinkState);
       stopHome = await subscribeHomePosition(setHomePosition);
       stopVehicleState = await subscribeVehicleState(setVehicleState);
+
+      try {
+        const snapshot = await getVehicleSnapshot();
+        if (snapshot) {
+          setLinkState(snapshot.link_state);
+          setVehicleState(snapshot.vehicle_state);
+          setTelemetry(snapshot.telemetry);
+          if (snapshot.home_position) setHomePosition(snapshot.home_position);
+        }
+      } catch {}
     })();
 
     return () => {

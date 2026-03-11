@@ -12,6 +12,7 @@ import {
   type ParamProgress,
 } from "../params";
 import { fetchParamMetadata, type ParamMetadataMap } from "../param-metadata";
+import { getVehicleSnapshot } from "../snapshot";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
@@ -44,6 +45,14 @@ export function useParams(connected: boolean, vehicleType?: string) {
     (async () => {
       stopStore = await subscribeParamStore(setStore);
       stopProgress = await subscribeParamProgress(setProgress);
+
+      try {
+        const snapshot = await getVehicleSnapshot();
+        if (snapshot) {
+          setStore(snapshot.param_store);
+          setProgress(snapshot.param_progress);
+        }
+      } catch {}
     })();
 
     return () => {

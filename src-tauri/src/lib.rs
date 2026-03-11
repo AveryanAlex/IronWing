@@ -1,6 +1,6 @@
 use mavkit::Vehicle;
 use bluetooth::{bt_get_bonded_devices, bt_request_permissions, bt_scan_ble, bt_stop_scan_ble};
-use commands::{arm_vehicle, available_transports, calibrate_accel, calibrate_compass_accept, calibrate_compass_cancel, calibrate_compass_start, calibrate_gyro, disarm_vehicle, get_available_modes, list_serial_ports_cmd, mission_cancel, mission_clear_plan, mission_download_plan, mission_set_current, mission_upload_plan, mission_validate_plan, mission_verify_roundtrip, motor_test, param_download_all, param_format_file, param_parse_file, param_write, param_write_batch, reboot_vehicle, request_prearm_checks, set_flight_mode, set_telemetry_rate, vehicle_guided_goto, vehicle_takeoff};
+use commands::{arm_vehicle, available_transports, calibrate_accel, calibrate_compass_accept, calibrate_compass_cancel, calibrate_compass_start, calibrate_gyro, disarm_vehicle, get_available_modes, get_vehicle_snapshot, list_serial_ports_cmd, mission_cancel, mission_clear_plan, mission_download_plan, mission_set_current, mission_upload_plan, mission_validate_plan, mission_verify_roundtrip, motor_test, param_download_all, param_format_file, param_parse_file, param_write, param_write_batch, reboot_vehicle, request_prearm_checks, set_flight_mode, set_telemetry_rate, vehicle_guided_goto, vehicle_takeoff};
 use connection::{connect_link, disconnect_link};
 use logs::LogStore;
 use recording::{recording_start, recording_status, recording_stop, TlogRecorderHandle};
@@ -74,7 +74,8 @@ pub fn run() {
         crate::logs::log_close,
         recording_start,
         recording_stop,
-        recording_status
+        recording_status,
+        get_vehicle_snapshot
     ]);
 
     builder

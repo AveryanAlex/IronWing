@@ -18,6 +18,7 @@ import {
   type TransferProgress,
 } from "../mission";
 import type { Telemetry } from "../telemetry";
+import { getVehicleSnapshot } from "../snapshot";
 import { toast } from "sonner";
 
 function asErrorMessage(error: unknown): string {
@@ -87,6 +88,11 @@ export function useMission(connected: boolean, telemetry: Telemetry, vehicleHome
     (async () => {
       stopProgress = await subscribeMissionProgress(setProgress);
       stopState = await subscribeMissionState(setMissionState);
+
+      try {
+        const snapshot = await getVehicleSnapshot();
+        if (snapshot) setMissionState(snapshot.mission_state);
+      } catch {}
     })();
 
     return () => {

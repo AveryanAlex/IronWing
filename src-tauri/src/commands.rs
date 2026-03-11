@@ -2,12 +2,24 @@ use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 
 use mavkit::{
-    FlightMode, MissionIssue, MissionPlan, MissionType, Param, ParamStore, ParamWriteResult,
+    FlightMode, HomePosition, LinkState, MissionIssue, MissionPlan, MissionState, MissionType,
+    Param, ParamProgress, ParamStore, ParamWriteResult, Telemetry, VehicleState,
     format_param_file, parse_param_file, validate_plan,
 };
 
 use crate::bridges::TELEMETRY_INTERVAL_MS;
 use crate::{AppState, helpers::with_vehicle};
+
+#[derive(serde::Serialize)]
+pub(crate) struct VehicleSnapshot {
+    pub link_state: LinkState,
+    pub vehicle_state: VehicleState,
+    pub telemetry: Telemetry,
+    pub home_position: Option<HomePosition>,
+    pub mission_state: MissionState,
+    pub param_store: ParamStore,
+    pub param_progress: ParamProgress,
+}
 
 #[cfg(not(target_os = "android"))]
 #[tauri::command]
@@ -322,4 +334,23 @@ pub(crate) async fn request_prearm_checks(
         .request_prearm_checks()
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn get_vehicle_snapshot(
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<VehicleSnapshot>, String> {
+    let guard = state.vehicle.lock().await;
+    let Some(vehicle) = guard.as_ref() else {
+        return Ok(None);
+    };
+    Ok(Some(VehicleSnapshot {
+        link_state: vehicle.link_state().borrow().clone(),
+        vehicle_state: vehicle.state().borrow().clone(),
+        telemetry: vehicle.telemetry().borrow().clone(),
+        home_position: vehicle.home_position().borrow().clone(),
+        mission_state: vehicle.mission_state().borrow().clone(),
+        param_store: vehicle.param_store().borrow().clone(),
+        param_progress: vehicle.param_progress().borrow().clone(),
+    }))
 }
