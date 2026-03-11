@@ -9,9 +9,8 @@ import { TelemetryPanel } from "./components/TelemetryPanel";
 import { HudPanel } from "./components/hud/HudPanel";
 import { MissionPanel } from "./components/MissionPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
-import { ConfigPanel } from "./components/ConfigPanel";
 import { LogsPanel } from "./components/LogsPanel";
-import { SetupWizardPanel } from "./components/setup/SetupWizardPanel";
+import { SetupSectionPanel } from "./components/setup/SetupSectionPanel";
 import { useVehicle } from "./hooks/use-vehicle";
 import { useMission } from "./hooks/use-mission";
 import { useSettings } from "./hooks/use-settings";
@@ -195,8 +194,6 @@ export default function App() {
               <HudPanel vehicle={effectiveVehicle} mission={mission} svsEnabled={settings.svsEnabled} />
             ) : activeTab === "mission" ? (
               <MissionPanel vehicle={vehicle} mission={mission} deviceLocation={deviceLocation} />
-            ) : activeTab === "config" ? (
-              <ConfigPanel params={params} connected={vehicle.connected} />
             ) : activeTab === "logs" ? (
               <LogsPanel
                 logs={logs}
@@ -207,7 +204,7 @@ export default function App() {
                 onTelemetryTrack={handleTelemetryTrack}
               />
             ) : activeTab === "setup" ? (
-              <SetupWizardPanel
+              <SetupSectionPanel
                 connected={vehicle.connected}
                 vehicleState={vehicle.vehicleState}
                 telemetry={vehicle.telemetry}

@@ -211,8 +211,8 @@ export function useParams(connected: boolean, vehicleType?: string) {
     setStaged(new Map());
   }, []);
 
-  const applyStaged = useCallback(async () => {
-    if (!connected || staged.size === 0) return;
+  const applyStaged = useCallback(async (): Promise<boolean> => {
+    if (!connected || staged.size === 0) return false;
     const entries: [string, number][] = Array.from(staged.entries());
     try {
       const results = await writeBatchParams(entries);
@@ -228,13 +228,16 @@ export function useParams(connected: boolean, vehicleType?: string) {
 
       if (failed.length === 0) {
         toast.success(`${succeeded.length} parameters written`);
+        return true;
       } else {
         toast.warning(`${succeeded.length} written, ${failed.length} failed`, {
           description: failed.map((r) => r.name).join(", "),
         });
+        return false;
       }
     } catch (err) {
       toast.error("Batch write failed", { description: asErrorMessage(err) });
+      return false;
     }
   }, [connected, staged]);
 
