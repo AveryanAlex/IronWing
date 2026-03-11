@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   LayoutDashboard,
   Box,
@@ -20,7 +20,6 @@ import {
   Sliders,
   ChevronDown,
   ChevronRight,
-  Check,
   Circle,
   Menu,
   X,
@@ -38,9 +37,10 @@ import {
   type SectionStatus,
 } from "../../hooks/use-setup-sections";
 import type { useParams } from "../../hooks/use-params";
+import { SectionStatusIcon } from "./shared/SectionStatusIcon";
+import { formatStagedValue, displayParamValue } from "./shared/param-format-helpers";
 import type { VehicleState, Telemetry, LinkState, HomePosition, FlightModeEntry } from "../../telemetry";
 import type { SensorHealth } from "../../sensor-health";
-import type { Param } from "../../params";
 
 // Section components
 import { OverviewSection } from "./sections/OverviewSection";
@@ -60,7 +60,7 @@ import { ArmingSection } from "./sections/ArmingSection";
 import { InitialParamsSection } from "./sections/InitialParamsSection";
 import { PidTuningSection } from "./sections/PidTuningSection";
 import { PeripheralsSection } from "./sections/PeripheralsSection";
-import { FullParametersSection, HIDES_SHELL_STAGED_BAR } from "./sections/FullParametersSection";
+import { FullParametersSection } from "./sections/FullParametersSection";
 
 // ---------------------------------------------------------------------------
 // Section IDs
@@ -193,20 +193,8 @@ function DisconnectedGate() {
 }
 
 // ---------------------------------------------------------------------------
-// Staged params bar (shared shell)
+// Staged params tray (shell-owned, used by all sections including Full Params)
 // ---------------------------------------------------------------------------
-
-const INTEGER_TYPES = ["uint8", "int8", "uint16", "int16", "uint32", "int32"];
-
-function fmtVal(value: number, paramType?: string): string {
-  if (paramType && INTEGER_TYPES.includes(paramType)) return String(Math.round(value));
-  return String(value);
-}
-
-function displayValue(param: Param): string {
-  if (INTEGER_TYPES.includes(param.param_type)) return String(Math.round(param.value));
-  return String(param.value);
-}
 
 function StagedParamsBar({ params, onApplySuccess }: { params: ReturnType<typeof useParams>; onApplySuccess?: () => void }) {
   const [expanded, setExpanded] = useState(false);
@@ -238,74 +226,96 @@ function StagedParamsBar({ params, onApplySuccess }: { params: ReturnType<typeof
 
   return (
     <div className="border-t border-warning/30 bg-warning/5">
-      {/* Summary bar */}
       <button
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
         className="flex w-full items-center gap-2 px-3 py-2 text-xs text-warning hover:bg-warning/10 transition-colors"
       >
-        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        <ChevronDown
+          size={12}
+          className={cn(
+            "shrink-0 transition-transform duration-200",
+            expanded && "rotate-180",
+          )}
+        />
         <span className="font-medium">
           {staged.size} parameter{staged.size !== 1 ? "s" : ""} staged
         </span>
-        <span className="ml-auto text-[11px] text-text-muted">Review & Apply</span>
+        {hasRebootRequired && (
+          <RotateCw size={10} className="shrink-0 text-warning/70" />
+        )}
+        <span className="ml-auto text-[11px] text-text-muted">
+          {expanded ? "Collapse" : "Review & Apply"}
+        </span>
       </button>
 
-      {/* Expanded diff view */}
-      {expanded && (
-        <div className="border-t border-warning/20 px-3 py-2">
-          {hasRebootRequired && (
-            <div className="mb-2 flex items-center gap-1 rounded bg-warning/10 px-2 py-1 text-[10px] text-warning">
-              <RotateCw size={10} />
-              Some changes require a vehicle reboot
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-out",
+          expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+        aria-hidden={!expanded}
+      >
+        <div className="overflow-hidden min-h-0">
+          <div className="px-3 pt-1 pb-2">
+            {hasRebootRequired && (
+              <div className="mb-2 flex items-center gap-1.5 rounded bg-warning/10 px-2 py-1 text-[10px] text-warning">
+                <RotateCw size={10} className="shrink-0" />
+                Some changes require a vehicle reboot to take effect
+              </div>
+            )}
+            <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto mb-2">
+              {Array.from(staged.entries())
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([name, newValue]) => {
+                  const current = store?.params[name];
+                  return (
+                    <div key={name} className="flex items-center gap-2 text-[11px] font-mono">
+                      <span className="w-40 truncate text-text-primary sm:w-48" title={name}>
+                        {name}
+                      </span>
+                      <span className="text-text-muted">
+                        {current ? displayParamValue(current) : "?"}
+                      </span>
+                      <span className="text-text-muted">&rarr;</span>
+                      <span className="text-warning">
+                        {formatStagedValue(newValue, current?.param_type)}
+                      </span>
+                      {params.metadata?.get(name)?.rebootRequired && (
+                        <RotateCw size={8} className="text-warning" />
+                      )}
+                      <button
+                        onClick={() => params.unstage(name)}
+                        className="ml-auto p-0.5 text-text-muted hover:text-danger"
+                        title="Unstage"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  );
+                })}
             </div>
-          )}
-          <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto mb-2">
-            {Array.from(staged.entries())
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([name, newValue]) => {
-                const current = store?.params[name];
-                return (
-                  <div key={name} className="flex items-center gap-2 text-[11px] font-mono">
-                    <span className="w-40 truncate text-text-primary sm:w-48" title={name}>
-                      {name}
-                    </span>
-                    <span className="text-text-muted">{current ? displayValue(current) : "?"}</span>
-                    <span className="text-text-muted">&rarr;</span>
-                    <span className="text-warning">{fmtVal(newValue, current?.param_type)}</span>
-                    {params.metadata?.get(name)?.rebootRequired && (
-                      <RotateCw size={8} className="text-warning" />
-                    )}
-                    <button
-                      onClick={() => params.unstage(name)}
-                      className="ml-auto p-0.5 text-text-muted hover:text-danger"
-                      title="Unstage"
-                    >
-                      <X size={10} />
-                    </button>
-                  </div>
-                );
-              })}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleApply}
-              disabled={applying}
-              className="flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
-            >
-              <Upload size={12} className={applying ? "animate-pulse" : ""} />
-              {applying ? "Applying..." : "Apply All"}
-            </button>
-            <button
-              onClick={handleDiscardAll}
-              disabled={applying}
-              className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-opacity disabled:opacity-40"
-            >
-              <Trash2 size={12} />
-              Discard All
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleApply}
+                disabled={applying}
+                className="flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+              >
+                <Upload size={12} className={applying ? "animate-pulse" : ""} />
+                {applying ? "Applying..." : "Apply All"}
+              </button>
+              <button
+                onClick={handleDiscardAll}
+                disabled={applying}
+                className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-opacity disabled:opacity-40"
+              >
+                <Trash2 size={12} />
+                Discard All
+              </button>
+            </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -313,21 +323,6 @@ function StagedParamsBar({ params, onApplySuccess }: { params: ReturnType<typeof
 // ---------------------------------------------------------------------------
 // Nav item
 // ---------------------------------------------------------------------------
-
-function SectionStatusIcon({ status }: { status: "not_started" | "in_progress" | "complete" }) {
-  if (status === "complete") {
-    return (
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-success/20 text-success">
-        <Check size={10} strokeWidth={3} />
-      </span>
-    );
-  }
-  return (
-    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-bg-tertiary text-text-muted">
-      <Circle size={8} />
-    </span>
-  );
-}
 
 function SectionNavItem({
   section,
@@ -462,6 +457,12 @@ export function SetupSectionPanel({
     }
   }, [connected, setupReady, activeSection, setActiveSection]);
 
+  useEffect(() => {
+    if (contentScrollRef.current) {
+      contentScrollRef.current.scrollTop = 0;
+    }
+  }, [activeSection]);
+
   const handleSelectSection = useCallback(
     (id: SetupSectionId) => {
       setActiveSection(id);
@@ -475,6 +476,36 @@ export function SetupSectionPanel({
       confirmSection(activeSection);
     }
   }, [activeSection, confirmSection]);
+
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+  const [pendingHighlightParam, setPendingHighlightParam] = useState<string | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const navigateToParam = useCallback(
+    (paramName: string) => {
+      const el = document.querySelector(`[data-setup-param="${paramName}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("setup-param-highlight");
+        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = setTimeout(() => {
+          el.classList.remove("setup-param-highlight");
+          highlightTimerRef.current = null;
+        }, 1500);
+        return;
+      }
+
+      params.setFilterMode("all");
+      params.setSearch(paramName);
+      setPendingHighlightParam(paramName);
+      setActiveSection("full_parameters");
+    },
+    [params, setActiveSection],
+  );
+
+  const handleHighlightHandled = useCallback(() => {
+    setPendingHighlightParam(null);
+  }, []);
 
   if (!connected) return <DisconnectedGate />;
 
@@ -494,8 +525,6 @@ export function SetupSectionPanel({
 
   const activeSectionMeta = SETUP_SECTIONS.find((s) => s.id === effectiveSection);
   const ActiveIcon = activeSectionMeta?.icon ?? Circle;
-
-  const hideShellStagedBar = effectiveSection === "full_parameters" && HIDES_SHELL_STAGED_BAR;
 
   const sectionContent = (() => {
     switch (effectiveSection) {
@@ -537,10 +566,11 @@ export function SetupSectionPanel({
             vehicleState={vehicleState}
             telemetry={telemetry}
             availableModes={availableModes}
+            navigateToParam={navigateToParam}
           />
         );
       case "failsafe":
-        return <FailsafeSection params={params} vehicleState={vehicleState} />;
+        return <FailsafeSection params={params} vehicleState={vehicleState} navigateToParam={navigateToParam} />;
       case "rtl_return":
         return <RtlReturnSection params={params} vehicleState={vehicleState} />;
       case "geofence":
@@ -555,34 +585,41 @@ export function SetupSectionPanel({
           />
         );
       case "initial_params":
-        return <InitialParamsSection params={params} vehicleState={vehicleState} />;
+        return <InitialParamsSection params={params} vehicleState={vehicleState} navigateToParam={navigateToParam} />;
       case "pid_tuning":
         return <PidTuningSection params={params} vehicleState={vehicleState} />;
       case "peripherals":
         return <PeripheralsSection params={params} />;
       case "full_parameters":
-        return <FullParametersSection params={params} connected={connected} />;
+        return (
+          <FullParametersSection
+            params={params}
+            connected={connected}
+            highlightParam={pendingHighlightParam}
+            onHighlightHandled={handleHighlightHandled}
+          />
+        );
     }
   })();
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center gap-3 border-b border-border px-3 py-2">
-        {isMobile && (
+      {isMobile && (
+        <div className="flex items-center gap-3 border-b border-border px-3 py-2">
           <button
             onClick={() => setDrawerOpen(true)}
             className="rounded p-1 text-text-muted hover:text-text-primary transition-colors"
           >
             <Menu size={16} />
           </button>
-        )}
-        <Wrench size={16} className="text-accent shrink-0" />
-        <h2 className="text-sm font-semibold text-text-primary">Setup</h2>
-        <span className="ml-auto flex items-center gap-1.5 text-[11px] text-text-muted">
-          <ActiveIcon size={12} />
-          {activeSectionMeta?.label}
-        </span>
-      </div>
+          <Wrench size={16} className="text-accent shrink-0" />
+          <h2 className="text-sm font-semibold text-text-primary">Setup</h2>
+          <span className="ml-auto flex items-center gap-1.5 text-[11px] text-text-muted">
+            <ActiveIcon size={12} />
+            {activeSectionMeta?.label}
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         {isMobile ? (
@@ -623,9 +660,7 @@ export function SetupSectionPanel({
               </div>
             </aside>
 
-            <div className="flex flex-1 flex-col overflow-hidden">
-              <div className="flex-1 overflow-y-auto">{sectionContent}</div>
-            </div>
+            <div ref={contentScrollRef} className="flex-1 overflow-y-auto">{sectionContent}</div>
           </>
         ) : (
           <>
@@ -640,14 +675,12 @@ export function SetupSectionPanel({
               />
             </div>
 
-            <div className="flex flex-1 flex-col overflow-hidden">
-              <div className="flex-1 overflow-y-auto">{sectionContent}</div>
-            </div>
+            <div ref={contentScrollRef} className="flex-1 overflow-y-auto">{sectionContent}</div>
           </>
         )}
       </div>
 
-      {!hideShellStagedBar && <StagedParamsBar params={params} onApplySuccess={handleStagedApplySuccess} />}
+      <StagedParamsBar params={params} onApplySuccess={handleStagedApplySuccess} />
     </div>
   );
 }

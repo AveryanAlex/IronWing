@@ -1,9 +1,15 @@
 import { useState, useMemo } from "react";
-import { Gamepad2, Zap, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { Gamepad2, Plane, Zap, ChevronDown } from "lucide-react";
 import { ParamSelect } from "../primitives/ParamSelect";
 import { getStagedOrCurrent } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import type { VehicleState, Telemetry, FlightModeEntry } from "../../../telemetry";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { SectionCardHeader } from "../shared/SectionCardHeader";
+import { PreviewStagePanel } from "../shared/PreviewStagePanel";
+import type { PreviewRow } from "../shared/PreviewStagePanel";
+import { DocsLink } from "../shared/DocsLink";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -11,9 +17,6 @@ import type { VehicleState, Telemetry, FlightModeEntry } from "../../../telemetr
 
 const MODE_SLOT_COUNT = 6;
 const MODE_PARAM_PREFIX = "FLTMODE";
-
-const SIMPLE_DOCS_URL =
-  "https://ardupilot.org/copter/docs/simpleandsuper-simple-modes.html";
 
 const PWM_RANGES: { label: string; min: number; max: number }[] = [
   { label: "\u2264 1230", min: 0, max: 1230 },
@@ -71,7 +74,6 @@ export function vehicleTypeToPreset(vehicleType: string | undefined): VehiclePre
 
 export function getActiveSlotIndex(telemetry: Telemetry | null, fltmodeCh: number): number | null {
   if (!telemetry?.rc_channels) return null;
-  // FLTMODE_CH is 1-indexed, rc_channels array is 0-indexed
   const pwm = telemetry.rc_channels[fltmodeCh - 1];
   if (pwm == null || pwm === 0 || pwm === 65535) return null;
   for (let i = 0; i < PWM_RANGES.length; i++) {
@@ -125,6 +127,34 @@ export function buildPresetPreview(
   }));
 }
 
+export function buildPresetPreviewRows(
+  presetKey: VehiclePreset,
+  availableModes: FlightModeEntry[],
+  params: ParamInputParams,
+): PreviewRow[] {
+  const p = RECOMMENDED_PRESETS[presetKey];
+  return p.modes.map((modeNum, i) => {
+    const paramName = `${MODE_PARAM_PREFIX}${i + 1}`;
+    const currentValue = getStagedOrCurrent(paramName, params);
+    const proposedName = modeNameForValue(modeNum, availableModes, p.labels[i]);
+    const willChange = currentValue !== modeNum;
+    const currentName =
+      currentValue != null
+        ? modeNameForValue(currentValue, availableModes)
+        : null;
+    const detail = willChange && currentName
+      ? `${currentName} → ${proposedName}`
+      : proposedName;
+    return {
+      key: paramName,
+      label: `Slot ${i + 1}`,
+      detail,
+      paramName,
+      willChange,
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -134,6 +164,7 @@ type FlightModesSectionProps = {
   vehicleState: VehicleState | null;
   telemetry: Telemetry | null;
   availableModes: FlightModeEntry[];
+  navigateToParam?: (paramName: string) => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -187,7 +218,6 @@ function ModeSlotRow({
           : "bg-bg-tertiary/50 hover:bg-bg-tertiary"
       }`}
     >
-      {/* Slot number + PWM range */}
       <div className="flex w-24 shrink-0 flex-col gap-0.5">
         <div className="flex items-center gap-1.5">
           {isActive && (
@@ -202,7 +232,6 @@ function ModeSlotRow({
         <span className="text-[10px] text-text-muted">{PWM_RANGES[index].label}</span>
       </div>
 
-      {/* Mode selector */}
       <ParamSelect
         paramName={paramName}
         params={params}
@@ -212,7 +241,6 @@ function ModeSlotRow({
         className="flex-1"
       />
 
-      {/* Simple / Super Simple per-slot toggle chips (copter only) */}
       {showSimple && (
         <div className="flex shrink-0 gap-1.5">
           <SimpleToggleChip
@@ -231,58 +259,6 @@ function ModeSlotRow({
   );
 }
 
-function PresetPreviewPanel({
-  preset,
-  availableModes,
-  onApply,
-  onDismiss,
-}: {
-  preset: VehiclePreset;
-  availableModes: FlightModeEntry[];
-  onApply: () => void;
-  onDismiss: () => void;
-}) {
-  const preview = useMemo(
-    () => buildPresetPreview(preset, availableModes),
-    [preset, availableModes],
-  );
-
-  return (
-    <div className="rounded-lg border border-accent/20 bg-accent/5 p-3">
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-        Preview: {preset.charAt(0).toUpperCase() + preset.slice(1)} Defaults
-      </div>
-      <div className="flex flex-col gap-1">
-        {preview.map((entry) => (
-          <div
-            key={entry.slot}
-            className="flex items-center gap-2 text-xs text-text-secondary"
-          >
-            <span className="w-14 shrink-0 text-text-muted">Slot {entry.slot}</span>
-            <span className="font-medium text-text-primary">{entry.modeName}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onApply}
-          className="rounded-md bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/25"
-        >
-          Stage These Modes
-        </button>
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="rounded-md px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text-secondary"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
@@ -292,6 +268,7 @@ export function FlightModesSection({
   vehicleState,
   telemetry,
   availableModes,
+  navigateToParam,
 }: FlightModesSectionProps) {
   const fltmodeCh = getStagedOrCurrent("FLTMODE_CH", params) ?? 5;
   const activeSlot = getActiveSlotIndex(telemetry, fltmodeCh);
@@ -308,6 +285,11 @@ export function FlightModesSection({
     [availableModes],
   );
 
+  const presetPreviewRows = useMemo(
+    () => (preset ? buildPresetPreviewRows(preset, availableModes, params) : []),
+    [preset, availableModes, params],
+  );
+
   const applyPreset = (presetKey: VehiclePreset) => {
     const p = RECOMMENDED_PRESETS[presetKey];
     for (let i = 0; i < MODE_SLOT_COUNT; i++) {
@@ -317,14 +299,18 @@ export function FlightModesSection({
 
   return (
     <div className="flex flex-col gap-3 p-4">
+      <SetupSectionIntro
+        icon={Plane}
+        title="Flight Modes"
+        description="Assign up to 6 flight modes to your RC mode switch channel. Each slot maps a PWM range to a mode so you can switch behaviour in flight."
+      />
+
       {/* Current mode banner */}
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Gamepad2 size={14} className="text-accent" />
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            Current Flight Mode
-          </h3>
-        </div>
+        <SectionCardHeader
+          icon={Gamepad2}
+          title="Current Flight Mode"
+        />
         <div className="flex items-center gap-4">
           <div className="flex flex-col gap-0.5">
             <span className="text-[10px] uppercase tracking-wider text-text-muted">
@@ -351,50 +337,52 @@ export function FlightModesSection({
 
       {/* Recommended preset with preview */}
       {preset && (
-        <div className="rounded-lg border border-border-light bg-accent/5 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Zap size={14} className="text-accent" />
-              <div>
-                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                  Recommended Preset
-                </h3>
-              </div>
-            </div>
+        <SetupSectionIntro
+          icon={Zap}
+          title="Recommended Preset"
+          description={`Apply the standard ${preset.charAt(0).toUpperCase() + preset.slice(1)} flight mode layout to all 6 slots`}
+          actionSlot={
             <button
               type="button"
               onClick={() => setPresetPreviewOpen((v) => !v)}
               className="flex items-center gap-1.5 rounded-md bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
             >
               {preset.charAt(0).toUpperCase() + preset.slice(1)} Defaults
-              {presetPreviewOpen ? (
-                <ChevronUp size={12} />
-              ) : (
-                <ChevronDown size={12} />
-              )}
-            </button>
-          </div>
-          {presetPreviewOpen && (
-            <div className="mt-3">
-              <PresetPreviewPanel
-                preset={preset}
-                availableModes={availableModes}
-                onApply={() => {
-                  applyPreset(preset);
-                  setPresetPreviewOpen(false);
-                }}
-                onDismiss={() => setPresetPreviewOpen(false)}
+              <ChevronDown
+                size={12}
+                className={`transition-transform duration-200 ${presetPreviewOpen ? "rotate-180" : ""}`}
               />
-            </div>
+            </button>
+          }
+        >
+          {presetPreviewOpen && (
+            <PreviewStagePanel
+              rows={presetPreviewRows}
+              headerLabel={`Preview: ${preset.charAt(0).toUpperCase() + preset.slice(1)} Defaults`}
+              stageLabel="Stage These Modes"
+              onStage={() => {
+                applyPreset(preset);
+                setPresetPreviewOpen(false);
+              }}
+              onCancel={() => setPresetPreviewOpen(false)}
+              onRowClick={
+                navigateToParam
+                  ? (row) => {
+                      if (row.paramName) navigateToParam(row.paramName);
+                    }
+                  : undefined
+              }
+            />
           )}
-        </div>
+        </SetupSectionIntro>
       )}
 
       {/* Mode channel selector */}
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-        <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Mode Channel
-        </h3>
+        <SectionCardHeader
+          icon={Gamepad2}
+          title="Mode Channel"
+        />
         <ParamSelect
           paramName="FLTMODE_CH"
           params={params}
@@ -407,9 +395,10 @@ export function FlightModesSection({
       {/* Mode slots */}
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            Flight Mode Slots
-          </h3>
+          <SectionCardHeader
+            icon={Gamepad2}
+            title="Flight Mode Slots"
+          />
           {copter && (
             <div className="flex gap-3 text-[10px] text-text-muted">
               <span>Simple</span>
@@ -430,7 +419,6 @@ export function FlightModesSection({
           ))}
         </div>
 
-        {/* Simple / Super Simple context note + docs link (copter only) */}
         {copter && (
           <div className="mt-3 border-t border-border pt-3">
             <p className="text-[11px] leading-relaxed text-text-muted">
@@ -439,15 +427,12 @@ export function FlightModesSection({
               <span className="font-medium text-text-secondary">Super Simple</span>: controls
               relative to home direction (GPS required). Neither works in Acro or Drift.
             </p>
-            <a
-              href={SIMPLE_DOCS_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-accent hover:underline"
-            >
-              Simple &amp; Super Simple Docs
-              <ExternalLink size={10} />
-            </a>
+            <DocsLink
+              docsUrl={resolveDocsUrl("simple_super_simple_modes", "copter")}
+              docsLabel="Simple & Super Simple Docs"
+              variant="inline"
+              className="mt-1.5"
+            />
           </div>
         )}
       </div>

@@ -30,10 +30,8 @@ describe("SectionNavItem completed color", () => {
     expect(classNameBlock).not.toContain("text-accent");
   });
 
-  it("SectionStatusIcon still uses text-success for the complete check icon", () => {
-    const iconFn = src.slice(src.indexOf("function SectionStatusIcon("));
-    const iconBody = iconFn.slice(0, iconFn.indexOf("\nfunction "));
-    expect(iconBody).toContain("text-success");
+  it("imports SectionStatusIcon from the shared module", () => {
+    expect(src).toContain('import { SectionStatusIcon } from "./shared/SectionStatusIcon"');
   });
 });
 
@@ -275,5 +273,149 @@ describe("applyStaged success gating (false-positive completion fix)", () => {
     // Between applyStaged() and onApplySuccess there must be a conditional (if)
     const between = handleApplyFn.slice(applyLine, successLine);
     expect(between).toMatch(/if\s*\(/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Param navigation: navigateToParam contract
+// ---------------------------------------------------------------------------
+
+describe("navigateToParam shell-level contract", () => {
+  const panelSrc = readFileSync(resolve(__dirname, "SetupSectionPanel.tsx"), "utf-8");
+  const fnBody = panelSrc.slice(panelSrc.indexOf("export function SetupSectionPanel("));
+
+  it("defines a navigateToParam callback using useCallback", () => {
+    expect(fnBody).toMatch(/navigateToParam\s*=\s*useCallback/);
+  });
+
+  it("navigateToParam tries in-section anchor first via data-setup-param selector", () => {
+    const navFn = fnBody.slice(fnBody.indexOf("navigateToParam"));
+    expect(navFn).toContain('data-setup-param');
+    expect(navFn).toContain("scrollIntoView");
+  });
+
+  it("navigateToParam applies setup-param-highlight class for in-section matches", () => {
+    const navFn = fnBody.slice(fnBody.indexOf("navigateToParam"));
+    expect(navFn).toContain("setup-param-highlight");
+  });
+
+  it("navigateToParam clears previous highlight timer before setting a new one", () => {
+    const navFn = fnBody.slice(fnBody.indexOf("navigateToParam"));
+    expect(navFn).toMatch(/clearTimeout\(highlightTimerRef/);
+  });
+
+  it("navigateToParam falls back to full_parameters when anchor is not found", () => {
+    const navFn = fnBody.slice(fnBody.indexOf("navigateToParam"), fnBody.indexOf("navigateToParam") + 800);
+    expect(navFn).toContain('setFilterMode("all")');
+    expect(navFn).toContain("setSearch(paramName)");
+    expect(navFn).toContain('setActiveSection("full_parameters")');
+  });
+
+  it("passes highlightParam and onHighlightHandled to FullParametersSection", () => {
+    expect(fnBody).toMatch(/FullParametersSection[\s\S]*?highlightParam/);
+    expect(fnBody).toMatch(/FullParametersSection[\s\S]*?onHighlightHandled/);
+  });
+
+  it("manages pendingHighlightParam state for the fallback path", () => {
+    expect(fnBody).toContain("pendingHighlightParam");
+    expect(fnBody).toContain("setPendingHighlightParam");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Unified staged tray: shell-owned for all sections including Full Parameters
+// ---------------------------------------------------------------------------
+
+describe("Unified staged tray architecture", () => {
+  const src = readFileSync(resolve(__dirname, "SetupSectionPanel.tsx"), "utf-8");
+  const fnBody = src.slice(src.indexOf("export function SetupSectionPanel("));
+
+  it("does not import HIDES_SHELL_STAGED_BAR", () => {
+    expect(src).not.toContain("HIDES_SHELL_STAGED_BAR");
+  });
+
+  it("does not compute hideShellStagedBar", () => {
+    expect(fnBody).not.toContain("hideShellStagedBar");
+  });
+
+  it("renders StagedParamsBar unconditionally (no section-specific gating)", () => {
+    expect(fnBody).toContain("<StagedParamsBar");
+    expect(fnBody).not.toMatch(/!hide.*StagedParamsBar|hide.*&&.*StagedParamsBar/);
+  });
+
+  it("places StagedParamsBar as a shell-level footer beneath the body split", () => {
+    const returnBlock = fnBody.slice(fnBody.indexOf("return ("));
+
+    // Only one instance (shell-level footer, not duplicated per branch)
+    const allStagedBarOccurrences = (returnBlock.match(/<StagedParamsBar/g) || []).length;
+    expect(allStagedBarOccurrences).toBe(1);
+
+    // The old content-column wrapper (flex flex-1 flex-col) no longer exists —
+    // content scroll div is a direct child of the body row
+    expect(returnBlock).not.toContain('className="flex flex-1 flex-col overflow-hidden"');
+  });
+
+  it("uses shared formatting helpers from param-format-helpers", () => {
+    expect(src).toContain('import { formatStagedValue, displayParamValue } from "./shared/param-format-helpers"');
+  });
+
+  it("does not define local INTEGER_TYPES or displayValue", () => {
+    expect(src).not.toMatch(/^const INTEGER_TYPES/m);
+    expect(src).not.toMatch(/^function (displayValue|fmtVal)\(/m);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scroll reset: content scroll container resets to top on section change
+// ---------------------------------------------------------------------------
+
+describe("Content scroll reset on section change", () => {
+  const src = readFileSync(resolve(__dirname, "SetupSectionPanel.tsx"), "utf-8");
+  const fnBody = src.slice(src.indexOf("export function SetupSectionPanel("));
+
+  it("declares a contentScrollRef", () => {
+    expect(fnBody).toMatch(/contentScrollRef\s*=\s*useRef/);
+  });
+
+  it("has a useEffect that resets scrollTop when activeSection changes", () => {
+    expect(fnBody).toMatch(/useEffect\(\s*\(\)\s*=>\s*\{[^}]*contentScrollRef\.current[^}]*scrollTop\s*=\s*0/s);
+    expect(fnBody).toMatch(/\[activeSection\]/);
+  });
+
+  it("attaches contentScrollRef to the overflow-y-auto content container", () => {
+    expect(fnBody).toMatch(/ref=\{contentScrollRef\}.*overflow-y-auto/s);
+  });
+});
+
+describe("StagedParamsBar animated expand/collapse", () => {
+  const src = readFileSync(resolve(__dirname, "SetupSectionPanel.tsx"), "utf-8");
+  const barFn = src.slice(src.indexOf("function StagedParamsBar("));
+  const barBody = barFn.slice(0, barFn.indexOf("\n// ----") > 0 ? barFn.indexOf("\n// ----") : barFn.indexOf("\nexport ") > 0 ? barFn.indexOf("\nexport ") : barFn.indexOf("\nfunction Section"));
+
+  it("uses CSS grid rows for animated expand/collapse", () => {
+    expect(barBody).toContain("grid-rows-[1fr]");
+    expect(barBody).toContain("grid-rows-[0fr]");
+  });
+
+  it("uses transition-[grid-template-rows] for smooth animation", () => {
+    expect(barBody).toContain("transition-[grid-template-rows]");
+  });
+
+  it("has an overflow-hidden inner wrapper", () => {
+    expect(barBody).toContain("overflow-hidden");
+    expect(barBody).toContain("min-h-0");
+  });
+
+  it("uses aria-expanded on the toggle button", () => {
+    expect(barBody).toContain("aria-expanded");
+  });
+
+  it("uses aria-hidden on the collapsible panel", () => {
+    expect(barBody).toContain("aria-hidden");
+  });
+
+  it("uses a single rotating chevron with rotate-180", () => {
+    expect(barBody).toContain("transition-transform");
+    expect(barBody).toContain("rotate-180");
   });
 });

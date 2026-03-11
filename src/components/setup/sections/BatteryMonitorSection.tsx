@@ -24,6 +24,9 @@ import {
   calcBattLowVolt,
   calcBattCrtVolt,
 } from "../../../data/battery-presets";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { SectionCardHeader } from "../shared/SectionCardHeader";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 
 // ---------------------------------------------------------------------------
 // BATT_MONITOR enum values (ArduPilot)
@@ -111,12 +114,7 @@ function BoardPresetPanel({
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <CircuitBoard size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Board Preset
-        </h3>
-      </div>
+      <SectionCardHeader icon={CircuitBoard} title="Board Preset" />
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
@@ -196,12 +194,7 @@ function SensorPresetPanel({
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Cpu size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Sensor Preset
-        </h3>
-      </div>
+      <SectionCardHeader icon={Cpu} title="Sensor Preset" />
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
@@ -244,12 +237,7 @@ function VoltageCalibrationPanel({
 }) {
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Gauge size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Voltage Calibration
-        </h3>
-      </div>
+      <SectionCardHeader icon={Gauge} title="Voltage Calibration" />
 
       <div className="flex flex-col gap-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -295,12 +283,7 @@ function CurrentCalibrationPanel({
 }) {
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Zap size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Current Calibration
-        </h3>
-      </div>
+      <SectionCardHeader icon={Zap} title="Current Calibration" />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <ParamNumberInput
@@ -381,12 +364,7 @@ function BatterySettingsPanel({
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <FlaskConical size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Battery Settings
-        </h3>
-      </div>
+      <SectionCardHeader icon={FlaskConical} title="Battery Settings" />
 
       <div className="flex flex-col gap-3">
         <ParamNumberInput
@@ -484,12 +462,7 @@ function LiveBatteryStatus({ telemetry }: { telemetry: Telemetry | null }) {
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Activity size={14} className="text-success" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Live Battery Status
-        </h3>
-      </div>
+      <SectionCardHeader icon={Activity} title="Live Battery Status" />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatusReadout label="Voltage" value={fmtV(telemetry?.battery_voltage_v)} />
@@ -570,12 +543,7 @@ function BatteryInstance({
     <div className="flex flex-col gap-3">
       {/* Monitor Type */}
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Battery size={14} className="text-accent" />
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            {label} — Monitor Type
-          </h3>
-        </div>
+        <SectionCardHeader icon={Battery} title={`${label} — Monitor Type`} />
         <ParamSelect
           paramName={`${prefix}MONITOR`}
           params={params}
@@ -683,8 +651,18 @@ export function BatteryMonitorSection({
   params,
   telemetry,
 }: BatteryMonitorSectionProps) {
+  const batteryDocsUrl = resolveDocsUrl("power_module_config");
+
   return (
     <div className="flex flex-col gap-4 p-4">
+      <SetupSectionIntro
+        icon={Battery}
+        title="Power Monitor"
+        description="Configure battery monitors, voltage/current calibration, and failsafe thresholds. Select your board and sensor to auto-fill pin assignments and scaling factors."
+        docsUrl={batteryDocsUrl}
+        docsLabel="Power Module Docs"
+      />
+
       {/* Primary battery */}
       <BatteryInstance
         params={params}

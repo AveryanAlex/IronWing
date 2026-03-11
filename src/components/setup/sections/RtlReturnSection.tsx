@@ -1,4 +1,4 @@
-import { Home, Plane, AlertTriangle, ExternalLink } from "lucide-react";
+import { Home, Plane, AlertTriangle } from "lucide-react";
 import { ParamSelect } from "../primitives/ParamSelect";
 import {
   getStagedOrCurrent,
@@ -7,15 +7,10 @@ import {
 } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import type { VehicleState } from "../../../telemetry";
-
-// ---------------------------------------------------------------------------
-// Vehicle type helpers
-// ---------------------------------------------------------------------------
-
-function isPlane(vehicleState: VehicleState | null): boolean {
-  if (!vehicleState) return false;
-  return vehicleState.vehicle_type.toLowerCase().includes("fixed_wing");
-}
+import { isPlaneVehicleType as isPlane, getVehicleSlug } from "../shared/vehicle-helpers";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { SectionCardHeader } from "../shared/SectionCardHeader";
 
 // ---------------------------------------------------------------------------
 // Unit conversion (exported for testing)
@@ -32,11 +27,6 @@ export function toRawValue(display: number, factor: number): number {
 export function formatDisplayValue(value: number, decimals: number): string {
   return value.toFixed(decimals);
 }
-
-export const COPTER_RTL_DOCS_URL =
-  "https://ardupilot.org/copter/docs/rtl-mode.html";
-export const PLANE_RTL_DOCS_URL =
-  "https://ardupilot.org/plane/docs/rtl-mode.html";
 
 // ---------------------------------------------------------------------------
 // ScaledParamInput — displays/edits in user-friendly units
@@ -85,7 +75,7 @@ function ScaledParamInput({
   const resolvedDescription = description ?? meta?.description;
 
   return (
-    <div className="flex flex-col gap-1">
+    <div data-setup-param={paramName} className="flex flex-col gap-1">
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] uppercase tracking-wider text-text-muted">
           {resolvedLabel}
@@ -160,59 +150,37 @@ export function RtlReturnSection({
   vehicleState,
 }: RtlReturnSectionProps) {
   const plane = isPlane(vehicleState);
-  const docsUrl = plane ? PLANE_RTL_DOCS_URL : COPTER_RTL_DOCS_URL;
+  const vehicleSlug = getVehicleSlug(vehicleState);
+  const docsUrl = resolveDocsUrl("rtl_mode", vehicleSlug);
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      {/* Header */}
-      <div className="rounded-lg border border-border-light bg-accent/5 p-4">
-        <div className="flex items-center gap-2">
-          <Home size={14} className="text-accent" />
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                Return to Launch (RTL)
-              </h3>
-              {vehicleState && (
-                <a
-                  href={docsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[10px] text-accent hover:underline"
-                >
-                  How RTL works
-                  <ExternalLink size={10} />
-                </a>
-              )}
-            </div>
-            <p className="mt-0.5 text-[10px] text-text-muted">
-              {plane
-                ? "Configure altitude and landing behavior when the plane returns home."
-                : "Configure altitude, speed, and behavior when returning home. Home is the GPS location at arm time."}
-            </p>
-            {vehicleState && !plane && (
-              <p className="mt-0.5 text-[10px] text-text-muted/70">
-                If rally points are configured, RTL returns to the nearest one
-                instead of home.
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
+      <SetupSectionIntro
+        icon={Home}
+        title="Return to Launch (RTL)"
+        description={
+          plane
+            ? "Configure altitude and landing behavior when the plane returns home."
+            : "Configure altitude, speed, and behavior when returning home. Home is the GPS location at arm time."
+        }
+        docsUrl={docsUrl}
+        docsLabel="How RTL works"
+      >
+        {vehicleState && !plane && (
+          <p className="text-[10px] text-text-muted/70">
+            If rally points are configured, RTL returns to the nearest one
+            instead of home.
+          </p>
+        )}
+      </SetupSectionIntro>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* Copter RTL */}
-      {/* ----------------------------------------------------------------- */}
       {vehicleState && !plane && (
         <>
-          {/* Return Altitude */}
           <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Home size={14} className="text-accent" />
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                Return Altitude
-              </h3>
-            </div>
+            <SectionCardHeader
+              icon={Home}
+              title="Return Altitude"
+            />
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-4">
                 <ScaledParamInput
@@ -262,14 +230,11 @@ export function RtlReturnSection({
             </div>
           </div>
 
-          {/* Return Speed & Timing */}
           <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Home size={14} className="text-accent" />
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                Return Speed & Timing
-              </h3>
-            </div>
+            <SectionCardHeader
+              icon={Home}
+              title="Return Speed & Timing"
+            />
             <div className="grid grid-cols-2 gap-4">
               <ScaledParamInput
                 paramName="RTL_SPEED"
@@ -297,17 +262,12 @@ export function RtlReturnSection({
         </>
       )}
 
-      {/* ----------------------------------------------------------------- */}
-      {/* Plane RTL */}
-      {/* ----------------------------------------------------------------- */}
       {plane && (
         <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Plane size={14} className="text-accent" />
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-              Plane RTL Configuration
-            </h3>
-          </div>
+          <SectionCardHeader
+            icon={Plane}
+            title="Plane RTL Configuration"
+          />
           <div className="flex flex-col gap-3">
             <div className="grid grid-cols-2 gap-4">
               <ScaledParamInput
@@ -333,7 +293,6 @@ export function RtlReturnSection({
         </div>
       )}
 
-      {/* No vehicle state fallback */}
       {!vehicleState && (
         <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4 text-center">
           <p className="text-xs text-text-muted">

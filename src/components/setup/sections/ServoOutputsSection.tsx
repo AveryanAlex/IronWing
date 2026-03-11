@@ -5,6 +5,8 @@ import { ParamNumberInput } from "../primitives/ParamNumberInput";
 import { ParamToggle } from "../primitives/ParamToggle";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import type { VehicleState } from "../../../telemetry";
+import { isPlaneVehicleType as isPlane } from "../shared/vehicle-helpers";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -44,11 +46,6 @@ function hasAnyMotorAssignment(
     if (isMotorFunction(staged ?? val)) return true;
   }
   return false;
-}
-
-function isPlane(vehicleState: VehicleState | null): boolean {
-  if (!vehicleState) return false;
-  return vehicleState.vehicle_type.toLowerCase().includes("fixed_wing");
 }
 
 // ---------------------------------------------------------------------------
@@ -209,16 +206,11 @@ export function ServoOutputsSection({
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      {/* Section header */}
-      <div className="flex items-center gap-2">
-        <SlidersHorizontal size={16} className="text-accent shrink-0" />
-        <h2 className="text-sm font-semibold text-text-primary">
-          Servo Outputs
-        </h2>
-        <span className="ml-auto rounded bg-bg-tertiary px-1.5 py-0.5 text-[10px] font-mono text-text-muted">
-          {servoIndices.length} outputs
-        </span>
-      </div>
+      <SetupSectionIntro
+        icon={SlidersHorizontal}
+        title="Servo Outputs"
+        description="Assign functions, set PWM range, and reverse direction for each servo output. Motor outputs are assigned automatically by your frame type."
+      />
 
       {/* Info banners */}
       {showMotorBanner && <MotorAssignmentBanner />}

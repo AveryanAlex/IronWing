@@ -1,5 +1,6 @@
 import type { ParamInputParams } from "./param-helpers";
 import { getStagedOrCurrent, getParamMeta, StagedBadge } from "./param-helpers";
+import { SetupCheckbox } from "../shared/SetupCheckbox";
 
 type ParamBitmaskInputProps = {
   paramName: string;
@@ -34,7 +35,7 @@ export function ParamBitmaskInput({
 
   if (bits.length === 0) {
     return (
-      <div className={`flex flex-col gap-1 ${className ?? ""}`}>
+      <div data-setup-param={paramName} className={`flex flex-col gap-1 ${className ?? ""}`}>
         <span className="text-[10px] uppercase tracking-wider text-text-muted">
           {resolvedLabel}
         </span>
@@ -46,7 +47,7 @@ export function ParamBitmaskInput({
   }
 
   return (
-    <div className={`flex flex-col gap-1.5 ${className ?? ""}`}>
+    <div data-setup-param={paramName} className={`flex flex-col gap-1.5 ${className ?? ""}`}>
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] uppercase tracking-wider text-text-muted">
           {resolvedLabel}
@@ -64,19 +65,16 @@ export function ParamBitmaskInput({
         {bits.map((entry) => {
           const checked = (value & (1 << entry.bit)) !== 0;
           return (
-            <label
+            <button
               key={entry.bit}
-              className="flex items-center gap-2 text-xs text-text-primary"
+              type="button"
+              onClick={() => toggleBit(entry.bit)}
+              disabled={isReadOnly}
+              className="flex items-center gap-2 text-xs text-text-primary text-left disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => toggleBit(entry.bit)}
-                disabled={isReadOnly}
-                className="rounded border-border accent-accent"
-              />
+              <SetupCheckbox checked={checked} disabled={isReadOnly} />
               <span>{entry.label}</span>
-            </label>
+            </button>
           );
         })}
       </div>

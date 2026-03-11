@@ -2,11 +2,13 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import {
-  PREARM_DOCS_URL,
-  ARMING_DOCS_URL,
   ARMING_REQUIRE_OPTIONS,
   PREARM_PATTERNS,
 } from "./ArmingSection";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
+
+const PREARM_DOCS_URL = resolveDocsUrl("prearm_safety_checks")!;
+const ARMING_DOCS_URL = resolveDocsUrl("arming", "copter")!;
 
 const SECTION_SRC = readFileSync(resolve(__dirname, "ArmingSection.tsx"), "utf-8");
 
@@ -93,30 +95,24 @@ describe("ArmingSection structural contract — layout", () => {
 // ---------------------------------------------------------------------------
 
 describe("ArmingSection structural contract — docs links", () => {
-  it("renders the pre-arm docs link", () => {
-    expect(SECTION_SRC).toContain("PREARM_DOCS_URL");
+  it("renders the pre-arm docs link via DocsLink", () => {
+    expect(SECTION_SRC).toContain('resolveDocsUrl("prearm_safety_checks"');
     expect(SECTION_SRC).toContain("Pre-Arm Checks");
   });
 
-  it("renders the arming docs link", () => {
-    expect(SECTION_SRC).toContain("ARMING_DOCS_URL");
+  it("renders the arming docs link via DocsLink", () => {
+    expect(SECTION_SRC).toContain('resolveDocsUrl("arming"');
     expect(SECTION_SRC).toContain("Arming the Motors");
   });
 
-  it("both links use ExternalLink icon", () => {
-    const docsSection = SECTION_SRC.slice(
-      SECTION_SRC.indexOf("Help links"),
-    );
-    const externalLinkCount = (docsSection.match(/ExternalLink/g) || []).length;
-    expect(externalLinkCount).toBeGreaterThanOrEqual(2);
+  it("uses DocsLink component for docs links", () => {
+    expect(SECTION_SRC).toContain('<DocsLink');
+    expect(SECTION_SRC).toContain('import { DocsLink }');
   });
 
-  it("both links open in new tab", () => {
-    const docsSection = SECTION_SRC.slice(
-      SECTION_SRC.indexOf("Help links"),
-    );
-    const targetBlankCount = (docsSection.match(/target="_blank"/g) || []).length;
-    expect(targetBlankCount).toBeGreaterThanOrEqual(2);
+  it("uses shared SectionCardHeader for card headers", () => {
+    expect(SECTION_SRC).toContain('<SectionCardHeader');
+    expect(SECTION_SRC).toContain('import { SectionCardHeader }');
   });
 });
 

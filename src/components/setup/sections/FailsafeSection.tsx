@@ -9,8 +9,6 @@ import {
   Zap,
   AlertTriangle,
   ChevronDown,
-  ChevronUp,
-  ExternalLink,
   Info,
   RotateCcw,
 } from "lucide-react";
@@ -20,14 +18,13 @@ import { ParamToggle } from "../primitives/ParamToggle";
 import { getStagedOrCurrent } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import type { VehicleState } from "../../../telemetry";
-
-function isPlane(vehicleState: VehicleState | null): boolean {
-  if (!vehicleState) return false;
-  return vehicleState.vehicle_type.toLowerCase().includes("fixed_wing");
-}
-
-export const BATTERY_DOCS_URL =
-  "https://ardupilot.org/copter/docs/failsafe-battery.html";
+import { isPlaneVehicleType as isPlane } from "../shared/vehicle-helpers";
+import { getVehicleSlug } from "../shared/vehicle-helpers";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { SectionCardHeader } from "../shared/SectionCardHeader";
+import { PreviewStagePanel } from "../shared/PreviewStagePanel";
+import type { PreviewRow } from "../shared/PreviewStagePanel";
 
 export const COPTER_RADIO_FS_OPTIONS = [
   { value: 0, label: "Disabled" },
@@ -73,7 +70,6 @@ type DefaultEntry = { paramName: string; value: number; label: string };
 
 export const FAILSAFE_DEFAULTS_COPTER: DefaultEntry[] = [
   { paramName: "FS_THR_ENABLE", value: 1, label: "Radio → RTL" },
-  { paramName: "FS_GCS_ENABLE", value: 1, label: "GCS → RTL" },
   { paramName: "FS_EKF_ACTION", value: 1, label: "EKF → Land" },
   { paramName: "BATT_FS_LOW_ACT", value: 2, label: "Low Battery → RTL" },
   { paramName: "BATT_FS_CRT_ACT", value: 1, label: "Critical Battery → Land" },
@@ -82,7 +78,6 @@ export const FAILSAFE_DEFAULTS_COPTER: DefaultEntry[] = [
 
 export const FAILSAFE_DEFAULTS_PLANE: DefaultEntry[] = [
   { paramName: "THR_FAILSAFE", value: 1, label: "Radio → Enabled" },
-  { paramName: "FS_LONG_ACTN", value: 1, label: "GCS Long → RTL" },
   { paramName: "BATT_FS_LOW_ACT", value: 2, label: "Low Battery → RTL" },
   { paramName: "BATT_FS_CRT_ACT", value: 1, label: "Critical Battery → Land" },
 ];
@@ -132,71 +127,15 @@ function VoltageWarning() {
   );
 }
 
-function DefaultsPreviewPanel({
-  preview,
-  onApply,
-  onDismiss,
-}: {
-  preview: DefaultsPreviewEntry[];
-  onApply: () => void;
-  onDismiss: () => void;
-}) {
-  const changeCount = preview.filter((e) => e.willChange).length;
-
-  return (
-    <div className="rounded-lg border border-accent/20 bg-accent/5 p-3">
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-        Preview: {changeCount} of {preview.length} will change
-      </div>
-      <div className="flex flex-col gap-1">
-        {preview.map((entry) => (
-          <div
-            key={entry.paramName}
-            className={`flex items-center gap-2 text-xs ${
-              entry.willChange ? "text-text-primary" : "text-text-muted"
-            }`}
-          >
-            <span
-              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                entry.willChange ? "bg-accent" : "bg-text-muted/30"
-              }`}
-            />
-            <span className="w-36 shrink-0 font-medium">{entry.paramName}</span>
-            <span>{entry.label}</span>
-            {!entry.willChange && (
-              <span className="ml-auto text-[10px] text-text-muted">already set</span>
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onApply}
-          disabled={changeCount === 0}
-          className="rounded-md bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/25 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Stage {changeCount} Change{changeCount !== 1 ? "s" : ""}
-        </button>
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="rounded-md px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:text-text-secondary"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
 type FailsafeSectionProps = {
   params: ParamInputParams;
   vehicleState: VehicleState | null;
+  navigateToParam?: (paramName: string) => void;
 };
 
-export function FailsafeSection({ params, vehicleState }: FailsafeSectionProps) {
+export function FailsafeSection({ params, vehicleState, navigateToParam }: FailsafeSectionProps) {
   const plane = isPlane(vehicleState);
+  const vehicleSlug = getVehicleSlug(vehicleState);
   const [defaultsPreviewOpen, setDefaultsPreviewOpen] = useState(false);
 
   const radioFsParam = plane ? "THR_FAILSAFE" : "FS_THR_ENABLE";
@@ -217,6 +156,17 @@ export function FailsafeSection({ params, vehicleState }: FailsafeSectionProps) 
     [plane, params],
   );
 
+  const previewRows: PreviewRow[] = useMemo(
+    () =>
+      preview.map((entry) => ({
+        key: entry.paramName,
+        label: entry.label,
+        paramName: entry.paramName,
+        willChange: entry.willChange,
+      })),
+    [preview],
+  );
+
   const applyDefaults = () => {
     for (const entry of preview) {
       if (entry.willChange) {
@@ -227,20 +177,14 @@ export function FailsafeSection({ params, vehicleState }: FailsafeSectionProps) 
 
   return (
     <div className="flex flex-col gap-2.5 p-4">
-      {/* Header with recommended defaults */}
-      <div className="rounded-lg border border-border-light bg-accent/5 p-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ShieldAlert size={14} className="text-accent" />
-            <div>
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                Failsafe Configuration
-              </h3>
-              <p className="mt-0.5 text-[10px] text-text-muted">
-                Automatic actions when communication or power is lost
-              </p>
-            </div>
-          </div>
+      {/* Section intro with recommended defaults */}
+      <SetupSectionIntro
+        icon={ShieldAlert}
+        title="Failsafe Configuration"
+        description="Automatic actions when communication or power is lost"
+        docsUrl={resolveDocsUrl("failsafe_landing_page", vehicleSlug)}
+        docsLabel="Failsafe Docs"
+        actionSlot={
           <button
             type="button"
             onClick={() => setDefaultsPreviewOpen((v) => !v)}
@@ -248,35 +192,40 @@ export function FailsafeSection({ params, vehicleState }: FailsafeSectionProps) 
           >
             <Zap size={12} />
             Apply Recommended Defaults
-            {defaultsPreviewOpen ? (
-              <ChevronUp size={12} />
-            ) : (
-              <ChevronDown size={12} />
-            )}
-          </button>
-        </div>
-        {defaultsPreviewOpen && (
-          <div className="mt-3">
-            <DefaultsPreviewPanel
-              preview={preview}
-              onApply={() => {
-                applyDefaults();
-                setDefaultsPreviewOpen(false);
-              }}
-              onDismiss={() => setDefaultsPreviewOpen(false)}
+            <ChevronDown
+              size={12}
+              className={`transition-transform duration-200 ${defaultsPreviewOpen ? "rotate-180" : ""}`}
             />
-          </div>
+          </button>
+        }
+      >
+        {defaultsPreviewOpen && (
+          <PreviewStagePanel
+            rows={previewRows}
+            onStage={() => {
+              applyDefaults();
+              setDefaultsPreviewOpen(false);
+            }}
+            onCancel={() => setDefaultsPreviewOpen(false)}
+            onRowClick={
+              navigateToParam
+                ? (row) => {
+                    if (row.paramName) navigateToParam(row.paramName);
+                  }
+                : undefined
+            }
+          />
         )}
-      </div>
+      </SetupSectionIntro>
 
       {/* RC / Radio Failsafe */}
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-3">
-        <div className="mb-2.5 flex items-center gap-2">
-          <Radio size={14} className="text-accent" />
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            Radio Failsafe
-          </h3>
-        </div>
+        <SectionCardHeader
+          icon={Radio}
+          title="Radio Failsafe"
+          docsUrl={resolveDocsUrl("failsafe_radio", vehicleSlug)}
+          docsLabel="Radio Failsafe Docs"
+        />
         <div className="flex flex-col gap-2.5">
           {plane ? (
             <div className="grid grid-cols-2 gap-3">
@@ -326,23 +275,12 @@ export function FailsafeSection({ params, vehicleState }: FailsafeSectionProps) 
 
       {/* Battery Failsafe */}
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-3">
-        <div className="mb-2.5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Battery size={14} className="text-accent" />
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-              Battery Failsafe
-            </h3>
-          </div>
-          <a
-            href={BATTERY_DOCS_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-[10px] text-accent hover:underline"
-          >
-            ArduPilot Docs
-            <ExternalLink size={9} />
-          </a>
-        </div>
+        <SectionCardHeader
+          icon={Battery}
+          title="Battery Failsafe"
+          docsUrl={resolveDocsUrl("failsafe_battery", vehicleSlug)}
+          docsLabel="Battery Failsafe Docs"
+        />
 
         <div className="flex flex-col gap-2.5">
           {/* Low battery */}
@@ -423,12 +361,12 @@ export function FailsafeSection({ params, vehicleState }: FailsafeSectionProps) 
 
       {/* GCS Failsafe */}
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-3">
-        <div className="mb-2.5 flex items-center gap-2">
-          <Wifi size={14} className="text-accent" />
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            GCS Failsafe
-          </h3>
-        </div>
+        <SectionCardHeader
+          icon={Wifi}
+          title="GCS Failsafe"
+          docsUrl={resolveDocsUrl("failsafe_gcs", vehicleSlug)}
+          docsLabel="GCS Failsafe Docs"
+        />
         <div className="flex flex-col gap-2.5">
           {plane ? (
             <div className="grid grid-cols-2 gap-3">
@@ -458,12 +396,12 @@ export function FailsafeSection({ params, vehicleState }: FailsafeSectionProps) 
       {/* EKF Failsafe (copter only) */}
       {!plane && (
         <div className="rounded-lg border border-border bg-bg-tertiary/50 p-3">
-          <div className="mb-2.5 flex items-center gap-2">
-            <Navigation size={14} className="text-accent" />
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-              EKF Failsafe
-            </h3>
-          </div>
+          <SectionCardHeader
+            icon={Navigation}
+            title="EKF Failsafe"
+            docsUrl={resolveDocsUrl("failsafe_ekf", vehicleSlug)}
+            docsLabel="EKF Failsafe Docs"
+          />
           <div className="flex flex-col gap-2.5">
             <div className="grid grid-cols-2 gap-3">
               <ParamSelect
@@ -490,12 +428,12 @@ export function FailsafeSection({ params, vehicleState }: FailsafeSectionProps) 
       {/* Crash Detection (copter only) */}
       {!plane && (
         <div className="rounded-lg border border-border bg-bg-tertiary/50 p-3">
-          <div className="mb-2.5 flex items-center gap-2">
-            <ShieldOff size={14} className="text-accent" />
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-              Crash Detection
-            </h3>
-          </div>
+          <SectionCardHeader
+            icon={ShieldOff}
+            title="Crash Detection"
+            docsUrl={resolveDocsUrl("failsafe_crash_check", vehicleSlug)}
+            docsLabel="Crash Detection Docs"
+          />
           <ParamToggle
             paramName="FS_CRASH_CHECK"
             params={params}

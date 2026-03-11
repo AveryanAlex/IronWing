@@ -40,7 +40,7 @@ export function ParamNumberInput({
   const resolvedStep = step ?? meta?.increment;
 
   return (
-    <div className={`flex flex-col gap-1 ${className ?? ""}`}>
+    <div data-setup-param={paramName} className={`flex flex-col gap-1 ${className ?? ""}`}>
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] uppercase tracking-wider text-text-muted">
           {resolvedLabel}

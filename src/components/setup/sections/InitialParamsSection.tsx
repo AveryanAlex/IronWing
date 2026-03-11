@@ -2,16 +2,19 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   Calculator,
   Info,
-  CheckSquare,
-  MinusSquare,
-  Square,
   CheckCheck,
   ListChecks,
   ArrowRight,
 } from "lucide-react";
+import { SetupCheckbox } from "../shared/SetupCheckbox";
 import { getStagedOrCurrent } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import type { VehicleState } from "../../../telemetry";
+import {
+  isPlaneVehicleType as isPlane,
+  hasQuadPlaneParams,
+} from "../shared/vehicle-helpers";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import {
   computeTriState,
   toggleGroup,
@@ -201,18 +204,7 @@ const GROUP_META: Record<string, { label: string; order: number }> = {
   safety: { label: "Safety Defaults", order: 4 },
 };
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-export function isPlane(vehicleState: VehicleState | null): boolean {
-  if (!vehicleState) return false;
-  return vehicleState.vehicle_type.toLowerCase().includes("fixed_wing");
-}
-
-export function hasQuadPlaneParams(params: ParamInputParams): boolean {
-  return params.store?.params["Q_FRAME_CLASS"] !== undefined;
-}
+export { isPlane, hasQuadPlaneParams };
 
 function fmtValue(v: number): string {
   if (Number.isInteger(v)) return String(v);
@@ -226,55 +218,15 @@ function fmtValue(v: number): string {
 type InitialParamsSectionProps = {
   params: ParamInputParams;
   vehicleState: VehicleState | null;
+  navigateToParam?: (paramName: string) => void;
 };
 
 // ---------------------------------------------------------------------------
-// Tri-state checkbox icon
+// Tri-state → SetupCheckbox adapter
 // ---------------------------------------------------------------------------
 
-const TRI_STATE_ICONS: Record<TriState, typeof CheckSquare> = {
-  all: CheckSquare,
-  some: MinusSquare,
-  none: Square,
-};
-
-const TRI_STATE_COLORS: Record<TriState, string> = {
-  all: "text-accent",
-  some: "text-accent",
-  none: "text-text-muted",
-};
-
-function TriStateCheckbox({
-  state,
-  onClick,
-  size = 13,
-}: {
-  state: TriState;
-  onClick?: () => void;
-  size?: number;
-}) {
-  const Icon = TRI_STATE_ICONS[state];
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={state === "all" ? true : state === "some" ? "mixed" : false}
-        onClick={onClick}
-        className={`shrink-0 ${TRI_STATE_COLORS[state]}`}
-      >
-        <Icon size={size} />
-      </button>
-    );
-  }
-  return (
-    <span
-      aria-checked={state === "all" ? true : state === "some" ? "mixed" : false}
-      className={`shrink-0 ${TRI_STATE_COLORS[state]}`}
-    >
-      <Icon size={size} />
-    </span>
-  );
+function triStateToChecked(state: TriState): boolean | "mixed" {
+  return state === "all" ? true : state === "some" ? "mixed" : false;
 }
 
 // ---------------------------------------------------------------------------
@@ -286,33 +238,37 @@ function DiffRow({
   currentValue,
   selected,
   onToggle,
+  onNavigate,
 }: {
   param: ComputedParam;
   currentValue: number | null;
   selected: boolean;
   onToggle: () => void;
+  onNavigate?: (paramName: string) => void;
 }) {
   const delta =
     currentValue !== null ? param.proposed - currentValue : null;
   const changed = delta !== null && Math.abs(delta) > 0.001;
 
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-[11px] font-mono transition-colors hover:bg-bg-tertiary/60"
-    >
-      {/* Checkbox */}
-      {selected ? (
-        <CheckSquare size={13} className="shrink-0 text-accent" />
-      ) : (
-        <Square size={13} className="shrink-0 text-text-muted" />
-      )}
+    <div className="flex w-full items-center gap-2 rounded px-2 py-1 text-[11px] font-mono transition-colors hover:bg-bg-tertiary/60">
+      <SetupCheckbox checked={selected} onChange={onToggle} />
 
-      {/* Param name */}
-      <span className="w-44 truncate text-text-primary" title={param.name}>
-        {param.name}
-      </span>
+      {/* Param name — navigable */}
+      {onNavigate ? (
+        <button
+          type="button"
+          onClick={() => onNavigate(param.name)}
+          className="w-44 truncate text-left text-accent hover:underline"
+          title={`Jump to ${param.name}`}
+        >
+          {param.name}
+        </button>
+      ) : (
+        <span className="w-44 truncate text-text-primary" title={param.name}>
+          {param.name}
+        </span>
+      )}
 
       {/* Label */}
       <span className="hidden w-32 truncate text-text-muted sm:block">
@@ -339,7 +295,7 @@ function DiffRow({
           ? `${delta > 0 ? "+" : ""}${fmtValue(delta)}`
           : ""}
       </span>
-    </button>
+    </div>
   );
 }
 
@@ -350,6 +306,7 @@ function DiffRow({
 export function InitialParamsSection({
   params,
   vehicleState,
+  navigateToParam,
 }: InitialParamsSectionProps) {
   const [propSize, setPropSize] = useState(9);
   const [cellCount, setCellCount] = useState(4);
@@ -421,42 +378,22 @@ export function InitialParamsSection({
   if (isPlainFixedWing) {
     return (
       <div className="flex flex-col gap-4 p-4">
-        <div className="flex items-center gap-2">
-          <Calculator size={16} className="text-accent" />
-          <h3 className="text-sm font-semibold text-text-primary">
-            Initial Parameters Calculator
-          </h3>
-        </div>
-        <div className="flex items-start gap-2 rounded-lg border border-border bg-bg-tertiary/30 px-3 py-2 text-xs text-text-muted">
-          <Info size={14} className="mt-0.5 shrink-0" />
-          <span>
-            The initial parameters calculator targets multirotor and QuadPlane
-            vehicles. Fixed-wing tuning parameters differ significantly — use
-            the Full Parameters tab for manual configuration.
-          </span>
-        </div>
+        <SetupSectionIntro
+          icon={Calculator}
+          title="Initial Parameters Calculator"
+          description="The initial parameters calculator targets multirotor and QuadPlane vehicles. Fixed-wing tuning parameters differ significantly — use the Full Parameters tab for manual configuration."
+        />
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <Calculator size={16} className="text-accent" />
-        <h3 className="text-sm font-semibold text-text-primary">
-          Initial Parameters Calculator
-        </h3>
-      </div>
-
-      <p className="text-xs text-text-muted leading-relaxed">
-        Computes recommended starting parameters from your vehicle's physical
-        characteristics. Based on{" "}
-        <span className="font-medium text-text-secondary">
-          MissionPlanner ConfigInitialParams
-        </span>{" "}
-        formulas.
-      </p>
+      <SetupSectionIntro
+        icon={Calculator}
+        title="Initial Parameters Calculator"
+        description="Computes recommended starting parameters from your vehicle's physical characteristics. Based on MissionPlanner ConfigInitialParams formulas."
+      />
 
       {/* QuadPlane notice */}
       {isQuadPlane && (
@@ -556,7 +493,7 @@ export function InitialParamsSection({
 
         {/* Column header with global tri-state checkbox */}
         <div className="mb-1 flex items-center gap-2 border-b border-border/50 px-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-text-muted">
-          <TriStateCheckbox state={globalTriState} onClick={handleGlobalToggle} size={13} />
+          <SetupCheckbox checked={triStateToChecked(globalTriState)} onChange={handleGlobalToggle} size={13} />
           <span className="w-44">Parameter</span>
           <span className="hidden w-32 sm:block">Label</span>
           <span className="w-16 text-right">Current</span>
@@ -577,7 +514,7 @@ export function InitialParamsSection({
                   onClick={() => handleGroupToggle(groupNames)}
                   className="flex w-full items-center gap-2 rounded px-2 py-1 text-left transition-colors hover:bg-bg-tertiary/60"
                 >
-                  <TriStateCheckbox state={groupTriState} size={12} />
+                  <SetupCheckbox checked={triStateToChecked(groupTriState)} size={12} />
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-accent/70">
                     {GROUP_META[groupKey]?.label ?? groupKey}
                   </span>
@@ -593,6 +530,7 @@ export function InitialParamsSection({
                       currentValue={getStagedOrCurrent(p.name, params)}
                       selected={selected.has(p.name)}
                       onToggle={() => handleRowToggle(p.name)}
+                      onNavigate={navigateToParam}
                     />
                   ))}
                 </div>

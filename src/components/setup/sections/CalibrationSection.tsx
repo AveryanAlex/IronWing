@@ -7,6 +7,9 @@ import { ParamDisplay } from "../primitives/ParamDisplay";
 import { calibrateGyro } from "../../../calibration";
 import type { useParams } from "../../../hooks/use-params";
 import { toast } from "sonner";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { DocsLink } from "../shared/DocsLink";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 
 type CalibrationSectionProps = {
   params: ReturnType<typeof useParams>;
@@ -51,11 +54,13 @@ function CalibrationCard({
   title,
   description,
   status,
+  docsUrl,
   children,
 }: {
   title: string;
   description: string;
   status: CalibStatus;
+  docsUrl?: string | null;
   children: React.ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -74,10 +79,17 @@ function CalibrationCard({
           </div>
           <p className="text-[11px] text-text-muted mt-0.5">{description}</p>
         </div>
-        <ChevronDown
-          size={14}
-          className={`shrink-0 text-text-muted transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
-        />
+        <div className="flex items-center gap-2 shrink-0">
+          {docsUrl && (
+            <span onClick={(e) => e.stopPropagation()}>
+              <DocsLink docsUrl={docsUrl} />
+            </span>
+          )}
+          <ChevronDown
+            size={14}
+            className={`text-text-muted transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+          />
+        </div>
       </button>
       {expanded && (
         <div className="border-t border-border px-3 py-3">
@@ -152,12 +164,23 @@ export function CalibrationSection({ params, connected }: CalibrationSectionProp
     [params.store, params.staged, params.metadata, params.stage],
   );
 
+  const accelDocsUrl = resolveDocsUrl("accelerometer_calibration");
+  const compassDocsUrl = resolveDocsUrl("compass_calibration");
+  const radioDocsUrl = resolveDocsUrl("radio_calibration");
+
   return (
     <div className="flex flex-col gap-3 p-4">
+      <SetupSectionIntro
+        icon={Crosshair}
+        title="Sensor Calibration"
+        description="Calibrate accelerometer, gyroscope, compass, and radio before first flight. Each sensor needs accurate calibration for safe and stable flight."
+      />
+
       <CalibrationCard
         title="Accelerometer"
         description="6-position calibration for accurate attitude estimation"
         status={accelStatus}
+        docsUrl={accelDocsUrl}
       >
         <div className="flex flex-col gap-3">
           {accelStatus === "calibrated" && (
@@ -199,6 +222,7 @@ export function CalibrationSection({ params, connected }: CalibrationSectionProp
         title="Compass"
         description="Onboard compass calibration for heading accuracy"
         status={compassStatus}
+        docsUrl={compassDocsUrl}
       >
         <div className="flex flex-col gap-3">
           {compassStatus === "calibrated" && (
@@ -216,6 +240,7 @@ export function CalibrationSection({ params, connected }: CalibrationSectionProp
         title="Radio"
         description="Record RC transmitter stick and switch ranges"
         status={radioStatus}
+        docsUrl={radioDocsUrl}
       >
         <div className="flex flex-col gap-3">
           {radioStatus === "calibrated" && (

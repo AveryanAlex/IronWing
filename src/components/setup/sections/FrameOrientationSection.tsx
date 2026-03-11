@@ -6,35 +6,15 @@ import type { ParamInputParams } from "../primitives/param-helpers";
 import { MotorDiagram } from "../MotorDiagram";
 import { getAllLayouts } from "../../../data/motor-layouts";
 import type { VehicleState } from "../../../telemetry";
-
-// ---------------------------------------------------------------------------
-// Vehicle type helpers
-// ---------------------------------------------------------------------------
-
-const COPTER_VEHICLE_TYPES = [
-  "quadrotor",
-  "hexarotor",
-  "octorotor",
-  "tricopter",
-  "helicopter",
-  "coaxial",
-];
-
-function isCopter(vehicleState: VehicleState | null): boolean {
-  if (!vehicleState) return false;
-  return COPTER_VEHICLE_TYPES.some((t) =>
-    vehicleState.vehicle_type.toLowerCase().includes(t),
-  );
-}
-
-function isPlane(vehicleState: VehicleState | null): boolean {
-  if (!vehicleState) return false;
-  return vehicleState.vehicle_type.toLowerCase().includes("fixed_wing");
-}
-
-function hasQuadPlaneParams(params: ParamInputParams): boolean {
-  return params.store?.params["Q_FRAME_CLASS"] !== undefined;
-}
+import {
+  isCopterVehicleType as isCopter,
+  isPlaneVehicleType as isPlane,
+  hasQuadPlaneParams,
+  getVehicleSlug,
+} from "../shared/vehicle-helpers";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { SectionCardHeader } from "../shared/SectionCardHeader";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 
 // ---------------------------------------------------------------------------
 // Frame type filtering by class
@@ -107,12 +87,10 @@ function FrameSelectionPanel({
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Box size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          {quadPlane ? "QuadPlane Frame" : "Frame Configuration"}
-        </h3>
-      </div>
+      <SectionCardHeader
+        icon={Box}
+        title={quadPlane ? "QuadPlane Frame" : "Frame Configuration"}
+      />
 
       {showFrameSelection ? (
         <>
@@ -189,12 +167,7 @@ function FrameSelectionPanel({
 function BoardOrientationPanel({ params }: { params: ParamInputParams }) {
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Compass size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Board Orientation
-        </h3>
-      </div>
+      <SectionCardHeader icon={Compass} title="Board Orientation" />
 
       <ParamSelect
         paramName="AHRS_ORIENTATION"
@@ -214,8 +187,18 @@ export function FrameOrientationSection({
   params,
   vehicleState,
 }: FrameOrientationSectionProps) {
+  const slug = getVehicleSlug(vehicleState);
+  const frameDocsUrl = resolveDocsUrl("frame_type", slug);
+
   return (
     <div className="flex flex-col gap-4 p-4">
+      <SetupSectionIntro
+        icon={Box}
+        title="Frame & Orientation"
+        description="Configure your vehicle's frame type and board orientation. The frame class determines motor layout and mixing, while board orientation tells the flight controller how it's mounted."
+        docsUrl={frameDocsUrl}
+        docsLabel="Frame Configuration"
+      />
       <FrameSelectionPanel params={params} vehicleState={vehicleState} />
       <BoardOrientationPanel params={params} />
     </div>

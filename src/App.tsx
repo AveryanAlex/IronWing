@@ -11,6 +11,7 @@ import { MissionPanel } from "./components/MissionPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { LogsPanel } from "./components/LogsPanel";
 import { SetupSectionPanel } from "./components/setup/SetupSectionPanel";
+import { InsetPanelFrame } from "./components/InsetPanelFrame";
 import { useVehicle } from "./hooks/use-vehicle";
 import { useMission } from "./hooks/use-mission";
 import { useSettings } from "./hooks/use-settings";
@@ -179,33 +180,10 @@ export default function App() {
           />
 
           <main
-            className="flex-1 overflow-hidden p-2 lg:p-3"
+            className="flex-1 overflow-hidden"
             style={{ paddingTop: isMobile ? "calc(var(--safe-area-top, 0px) + 0.25rem)" : undefined }}
           >
-            {activeTab === "map" ? (
-              <MapPanel
-                vehicle={effectiveVehicle}
-                mission={mission}
-                deviceLocation={deviceLocation}
-                flightPath={flightPathCoords}
-                replayPosition={replayPosition}
-              />
-            ) : activeTab === "telemetry" ? (
-              <TelemetryPanel vehicle={effectiveVehicle} mission={mission} />
-            ) : activeTab === "hud" ? (
-              <HudPanel vehicle={effectiveVehicle} mission={mission} svsEnabled={settings.svsEnabled} />
-            ) : activeTab === "mission" ? (
-              <MissionPanel vehicle={vehicle} mission={mission} deviceLocation={deviceLocation} />
-            ) : activeTab === "logs" ? (
-              <LogsPanel
-                logs={logs}
-                recording={recording}
-                connected={vehicle.connected}
-                playback={playback}
-                onFlightPath={handleFlightPath}
-                onTelemetryTrack={handleTelemetryTrack}
-              />
-            ) : activeTab === "setup" ? (
+            {activeTab === "setup" ? (
               <SetupSectionPanel
                 connected={vehicle.connected}
                 vehicleState={vehicle.vehicleState}
@@ -217,7 +195,34 @@ export default function App() {
                 availableModes={vehicle.availableModes}
               />
             ) : (
-              <SettingsPanel settings={settings} updateSettings={updateSettings} />
+              <InsetPanelFrame>
+                {activeTab === "map" ? (
+                  <MapPanel
+                    vehicle={effectiveVehicle}
+                    mission={mission}
+                    deviceLocation={deviceLocation}
+                    flightPath={flightPathCoords}
+                    replayPosition={replayPosition}
+                  />
+                ) : activeTab === "telemetry" ? (
+                  <TelemetryPanel vehicle={effectiveVehicle} mission={mission} />
+                ) : activeTab === "hud" ? (
+                  <HudPanel vehicle={effectiveVehicle} mission={mission} svsEnabled={settings.svsEnabled} />
+                ) : activeTab === "mission" ? (
+                  <MissionPanel vehicle={vehicle} mission={mission} deviceLocation={deviceLocation} />
+                ) : activeTab === "logs" ? (
+                  <LogsPanel
+                    logs={logs}
+                    recording={recording}
+                    connected={vehicle.connected}
+                    playback={playback}
+                    onFlightPath={handleFlightPath}
+                    onTelemetryTrack={handleTelemetryTrack}
+                  />
+                ) : (
+                  <SettingsPanel settings={settings} updateSettings={updateSettings} />
+                )}
+              </InsetPanelFrame>
             )}
           </main>
         </div>

@@ -3,7 +3,6 @@ import {
   Satellite,
   AlertTriangle,
   ChevronDown,
-  ChevronRight,
   MapPin,
   Navigation,
   Info,
@@ -14,6 +13,9 @@ import { ParamBitmaskInput } from "../primitives/ParamBitmaskInput";
 import { getStagedOrCurrent } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import type { Telemetry } from "../../../telemetry";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { SectionCardHeader } from "../shared/SectionCardHeader";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -107,12 +109,7 @@ function Gps1Panel({ params }: { params: ParamInputParams }) {
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Satellite size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          GPS 1
-        </h3>
-      </div>
+      <SectionCardHeader icon={Satellite} title="GPS 1" />
 
       <div className="flex flex-col gap-4">
         <ParamSelect paramName={gps1TypeParam} params={params} label="GPS Type" />
@@ -174,13 +171,13 @@ function Gps2Panel({ params }: { params: ParamInputParams }) {
     <div className="rounded-lg border border-border bg-bg-tertiary/50">
       <button
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
         className="flex w-full items-center gap-2 rounded-lg px-4 py-3 text-left transition-colors hover:bg-bg-tertiary/80"
       >
-        {expanded ? (
-          <ChevronDown size={12} className="shrink-0 text-text-muted" />
-        ) : (
-          <ChevronRight size={12} className="shrink-0 text-text-muted" />
-        )}
+        <ChevronDown
+          size={12}
+          className={`shrink-0 text-text-muted transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+        />
         <Navigation size={14} className="shrink-0 text-accent" />
         <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
           GPS 2
@@ -223,14 +220,16 @@ function GpsStatusPanel({ telemetry }: { telemetry: Telemetry | null }) {
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <MapPin size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Live GPS Status
-        </h3>
+      <div className="mb-2.5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <MapPin size={14} className="text-accent" />
+          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+            Live GPS Status
+          </h3>
+        </div>
         {fixType && (
           <span
-            className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium ${
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
               ["fix_3d", "dgps", "rtk_float", "rtk_fixed"].includes(fixType)
                 ? "bg-success/10 text-success"
                 : fixType === "fix_2d"
@@ -296,8 +295,17 @@ function GpsStatusPanel({ telemetry }: { telemetry: Telemetry | null }) {
 // ---------------------------------------------------------------------------
 
 export function GpsSection({ params, telemetry }: GpsSectionProps) {
+  const gpsDocsUrl = resolveDocsUrl("positioning_gps_compass");
+
   return (
     <div className="flex flex-col gap-4 p-4">
+      <SetupSectionIntro
+        icon={Satellite}
+        title="GPS / Positioning"
+        description="Configure primary and secondary GPS receivers, GNSS constellation selection, and serial port assignment. Live fix status is shown below when connected."
+        docsUrl={gpsDocsUrl}
+        docsLabel="GPS & Compass Docs"
+      />
       <Gps1Panel params={params} />
       <Gps2Panel params={params} />
       <GpsStatusPanel telemetry={telemetry} />

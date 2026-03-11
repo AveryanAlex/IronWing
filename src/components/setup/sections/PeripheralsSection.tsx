@@ -19,6 +19,8 @@ import { getStagedOrCurrent, getParamMeta } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import type { ParamMeta } from "../../../param-metadata";
 import type { LucideIcon } from "lucide-react";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 
 // ---------------------------------------------------------------------------
 // Exclusion prefixes — params already owned by other sections
@@ -435,35 +437,30 @@ export function PeripheralsSection({ params }: PeripheralsSectionProps) {
   }, [showConfiguredOnly, additionalGroups, params]);
 
   const totalGroups = visibleGroups.length + visibleAdditional.length;
+  const peripheralsDocsUrl = resolveDocsUrl("optional_hardware");
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Puzzle size={16} className="text-accent" />
-          <h2 className="text-sm font-semibold text-text-primary">Peripherals</h2>
-        </div>
-
-        {/* Show Configured Only toggle */}
-        <button
-          onClick={() => setShowConfiguredOnly(!showConfiguredOnly)}
-          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
-            showConfiguredOnly
-              ? "bg-accent/10 text-accent"
-              : "bg-bg-tertiary text-text-muted hover:bg-bg-tertiary/80"
-          }`}
-        >
-          <Filter size={12} />
-          {showConfiguredOnly ? "Configured Only" : "Show All"}
-        </button>
-      </div>
-
-      <p className="text-xs text-text-muted">
-        Auto-generated parameter groups for connected peripherals. Expand a group to
-        configure its parameters. Controls are chosen automatically based on parameter
-        metadata.
-      </p>
+      <SetupSectionIntro
+        icon={Puzzle}
+        title="Peripherals"
+        description="Auto-generated parameter groups for connected peripherals. Expand a group to configure its parameters. Controls are chosen automatically based on parameter metadata."
+        docsUrl={peripheralsDocsUrl}
+        docsLabel="Peripheral Hardware Docs"
+        actionSlot={
+          <button
+            onClick={() => setShowConfiguredOnly(!showConfiguredOnly)}
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+              showConfiguredOnly
+                ? "bg-accent/10 text-accent"
+                : "bg-bg-tertiary text-text-muted hover:bg-bg-tertiary/80"
+            }`}
+          >
+            <Filter size={12} />
+            {showConfiguredOnly ? "Configured Only" : "Show All"}
+          </button>
+        }
+      />
 
       {/* Known peripheral groups */}
       {visibleGroups.map((group) => (

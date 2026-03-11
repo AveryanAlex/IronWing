@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Check,
   X,
-  Circle,
   Satellite,
   Battery,
   Radio,
@@ -34,6 +33,7 @@ import type { useParams } from "../../../hooks/use-params";
 import { SETUP_SECTIONS, SECTION_GROUPS } from "../SetupSectionPanel";
 import { ParamDisplay } from "../primitives/ParamDisplay";
 import type { ParamInputParams } from "../primitives/param-helpers";
+import { SectionStatusIcon } from "../shared/SectionStatusIcon";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -125,60 +125,11 @@ function sensorStatusColor(status: SensorStatus): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Pre-arm blocker helpers (categorized, from PrearmStep patterns)
-// ---------------------------------------------------------------------------
-
-type PrearmBlocker = {
-  id: string;
-  category: string;
-  rawText: string;
-  guidance: string;
-};
-
-const PREARM_PATTERNS: { pattern: RegExp; category: string; guidance: string }[] = [
-  { pattern: /gps/i, category: "GPS", guidance: "Ensure GPS has clear sky view. Wait for 3D fix and >6 satellites." },
-  { pattern: /ahrs|ekf/i, category: "EKF", guidance: "Wait for EKF to converge. May take 30-60 seconds after boot." },
-  { pattern: /compass|mag/i, category: "Compass", guidance: "Run compass calibration in the Calibration section." },
-  { pattern: /accel|ins/i, category: "IMU", guidance: "Run accelerometer calibration in the Calibration section." },
-  { pattern: /rc|throttle/i, category: "RC", guidance: "Calibrate radio in the RC / Receiver section." },
-  { pattern: /batt/i, category: "Battery", guidance: "Check battery connection and voltage." },
-  { pattern: /safety/i, category: "Safety", guidance: "Press the hardware safety switch on the flight controller." },
-  { pattern: /baro/i, category: "Baro", guidance: "Check barometer hardware. May need power cycle." },
-  { pattern: /board|internal/i, category: "Hardware", guidance: "Check flight controller hardware." },
-  { pattern: /log/i, category: "Logging", guidance: "Check SD card is inserted and functional." },
-];
-
-function classifyPrearm(text: string, ts: number): PrearmBlocker {
-  const stripped = text.replace(/^pre-?arm:\s*/i, "").trim();
-  for (const { pattern, category, guidance } of PREARM_PATTERNS) {
-    if (pattern.test(stripped)) {
-      return { id: `${category}-${ts}`, category, rawText: text, guidance };
-    }
-  }
-  return {
-    id: `unknown-${ts}`,
-    category: "Other",
-    rawText: text,
-    guidance: "Check ArduPilot documentation for this pre-arm failure.",
-  };
-}
-
-function categoryIcon(category: string) {
-  switch (category) {
-    case "GPS": return "\u{1F6F0}";
-    case "EKF": return "\u{1F4D0}";
-    case "Compass": return "\u{1F9ED}";
-    case "IMU": return "\u2696\uFE0F";
-    case "RC": return "\u{1F4E1}";
-    case "Battery": return "\u{1F50B}";
-    case "Safety": return "\u{1F512}";
-    case "Baro": return "\u{1F321}";
-    case "Hardware": return "\u{1F527}";
-    case "Logging": return "\u{1F4BE}";
-    default: return "\u26A0\uFE0F";
-  }
-}
+import {
+  type PrearmBlocker,
+  classifyPrearm,
+  categoryIcon,
+} from "../shared/prearm-helpers";
 
 // ---------------------------------------------------------------------------
 // Format helpers
@@ -207,32 +158,6 @@ function linkStateLabel(ls: LinkState | null): string {
 
 function linkStateOk(ls: LinkState | null): boolean {
   return ls === "connected";
-}
-
-// ---------------------------------------------------------------------------
-// Section status badge (consistent with SetupSectionPanel.SectionStatusIcon)
-// ---------------------------------------------------------------------------
-
-function StatusBadge({ status }: { status: SectionStatus }) {
-  if (status === "complete") {
-    return (
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-success/20 text-success">
-        <Check size={10} strokeWidth={3} />
-      </span>
-    );
-  }
-  if (status === "in_progress") {
-    return (
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent/20 text-accent">
-        <Circle size={8} fill="currentColor" />
-      </span>
-    );
-  }
-  return (
-    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-bg-tertiary text-text-muted">
-      <Circle size={8} />
-    </span>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -796,7 +721,7 @@ function SectionProgressList({
                     >
                       {section.label}
                     </span>
-                    <StatusBadge status={status} />
+                    <SectionStatusIcon status={status} />
                     <ChevronRight size={12} className="shrink-0 text-text-muted/50" />
                   </button>
                 );

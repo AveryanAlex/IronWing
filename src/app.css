@@ -177,3 +177,23 @@ body {
   border-radius: 50%;
   box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.3), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
+
+/* Param navigation highlight — applied transiently via JS, auto-fades */
+.setup-param-highlight {
+  animation: setup-param-flash 1.5s ease-out forwards;
+}
+
+@keyframes setup-param-flash {
+  0% {
+    box-shadow: 0 0 0 2px var(--color-accent);
+    background-color: rgba(18, 185, 255, 0.08);
+  }
+  70% {
+    box-shadow: 0 0 0 2px var(--color-accent);
+    background-color: rgba(18, 185, 255, 0.08);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    background-color: transparent;
+  }
+}

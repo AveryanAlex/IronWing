@@ -9,11 +9,22 @@ import {
   getBitmaskBit,
   toggleBitmaskBit,
   buildPresetPreview,
+  buildPresetPreviewRows,
 } from "./FlightModesSection";
 import type { ParamInputParams } from "../primitives/param-helpers";
+import type { ParamStore } from "../../../params";
 import type { FlightModeEntry, Telemetry } from "../../../telemetry";
 
 const SECTION_SRC = readFileSync(resolve(__dirname, "FlightModesSection.tsx"), "utf-8");
+
+function makeStore(entries: Record<string, number>): ParamStore {
+  const params: ParamStore["params"] = {};
+  let i = 0;
+  for (const [name, value] of Object.entries(entries)) {
+    params[name] = { name, value, param_type: "real32", index: i++ };
+  }
+  return { params, expected_count: i };
+}
 
 function makeParams(overrides: Partial<ParamInputParams> = {}): ParamInputParams {
   return {
@@ -187,24 +198,24 @@ describe("FlightModesSection structural contract", () => {
     expect(presetButtonBlock).toMatch(/setPresetPreviewOpen/);
   });
 
-  it("renders a PresetPreviewPanel when preview is open", () => {
-    expect(SECTION_SRC).toMatch(/PresetPreviewPanel/);
+  it("renders a PreviewStagePanel when preview is open", () => {
+    expect(SECTION_SRC).toMatch(/PreviewStagePanel/);
     expect(SECTION_SRC).toMatch(/presetPreviewOpen/);
   });
 
-  it("PresetPreviewPanel has Stage and Cancel actions", () => {
+  it("PreviewStagePanel has Stage and Cancel actions", () => {
     expect(SECTION_SRC).toMatch(/Stage These Modes/);
     expect(SECTION_SRC).toMatch(/Cancel/);
   });
 
-  it("PresetPreviewPanel calls buildPresetPreview for slot-to-mode mapping", () => {
+  it("PreviewStagePanel calls buildPresetPreview for slot-to-mode mapping", () => {
     expect(SECTION_SRC).toMatch(/buildPresetPreview\(/);
   });
 
   it("uses SimpleToggleChip instead of raw checkbox inputs for Simple/Super Simple", () => {
     const slotRow = SECTION_SRC.slice(
       SECTION_SRC.indexOf("function ModeSlotRow("),
-      SECTION_SRC.indexOf("function PresetPreviewPanel("),
+      SECTION_SRC.indexOf("export function FlightModesSection("),
     );
     expect(slotRow).not.toMatch(/<input[\s\S]*?type="checkbox"/);
     expect(slotRow).toMatch(/SimpleToggleChip/);
@@ -218,7 +229,7 @@ describe("FlightModesSection structural contract", () => {
     expect(chipBlock).toMatch(/\{label\}/);
     const slotRow = SECTION_SRC.slice(
       SECTION_SRC.indexOf("function ModeSlotRow("),
-      SECTION_SRC.indexOf("function PresetPreviewPanel("),
+      SECTION_SRC.indexOf("export function FlightModesSection("),
     );
     expect(slotRow).toMatch(/label="Simple"/);
     expect(slotRow).toMatch(/label="Super"/);
@@ -229,18 +240,17 @@ describe("FlightModesSection structural contract", () => {
     expect(SECTION_SRC).toMatch(/relative.*home.*direction.*GPS.*required/i);
   });
 
-  it("includes ArduPilot docs link for Simple/Super Simple", () => {
-    expect(SECTION_SRC).toContain(
-      "https://ardupilot.org/copter/docs/simpleandsuper-simple-modes.html",
-    );
-    expect(SECTION_SRC).toMatch(/ExternalLink/);
+  it("resolves Simple/Super Simple docs via the centralized registry", () => {
+    expect(SECTION_SRC).toContain('resolveDocsUrl("simple_super_simple_modes"');
+    expect(SECTION_SRC).toContain("<DocsLink");
+    expect(SECTION_SRC).not.toMatch(/const SIMPLE_DOCS_URL/);
   });
 
   it("docs note is gated behind copter check", () => {
     const mainFnBody = SECTION_SRC.slice(
       SECTION_SRC.indexOf("export function FlightModesSection("),
     );
-    const docsLinkIdx = mainFnBody.indexOf("Simple &amp; Super Simple Docs");
+    const docsLinkIdx = mainFnBody.indexOf("Simple & Super Simple Docs");
     const docsBlock = mainFnBody.slice(Math.max(0, docsLinkIdx - 1000), docsLinkIdx + 50);
     expect(docsBlock).toMatch(/copter/);
   });
@@ -250,5 +260,141 @@ describe("FlightModesSection structural contract", () => {
       SECTION_SRC.indexOf("export function FlightModesSection("),
     );
     expect(mainFn).toMatch(/copter.*Simple.*Super Simple/s);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildPresetPreviewRows — PreviewRow[] with willChange
+// ---------------------------------------------------------------------------
+
+describe("buildPresetPreviewRows", () => {
+  it("returns 6 PreviewRow entries for copter preset", () => {
+    const rows = buildPresetPreviewRows("copter", COPTER_MODES, makeParams());
+    expect(rows).toHaveLength(6);
+  });
+
+  it("each row has key, label, paramName, and willChange", () => {
+    const rows = buildPresetPreviewRows("copter", COPTER_MODES, makeParams());
+    for (const row of rows) {
+      expect(row).toHaveProperty("key");
+      expect(row).toHaveProperty("label");
+      expect(row).toHaveProperty("paramName");
+      expect(row).toHaveProperty("willChange");
+    }
+  });
+
+  it("willChange is true when current value differs from preset", () => {
+    const store = makeStore({ FLTMODE1: 999, FLTMODE2: 999 });
+    const params = makeParams({ store });
+    const rows = buildPresetPreviewRows("copter", COPTER_MODES, params);
+    expect(rows[0].willChange).toBe(true);
+    expect(rows[1].willChange).toBe(true);
+  });
+
+  it("willChange is false when current value matches preset", () => {
+    // Copter preset slot 1 = mode 0 (Stabilize)
+    const store = makeStore({ FLTMODE1: 0 });
+    const params = makeParams({ store });
+    const rows = buildPresetPreviewRows("copter", COPTER_MODES, params);
+    expect(rows[0].willChange).toBe(false);
+  });
+
+  it("willChange is true when param is null (not yet loaded)", () => {
+    const rows = buildPresetPreviewRows("copter", COPTER_MODES, makeParams());
+    // null !== modeNum → true
+    expect(rows[0].willChange).toBe(true);
+  });
+
+  it("label is the slot identifier without mode name", () => {
+    const rows = buildPresetPreviewRows("copter", COPTER_MODES, makeParams());
+    expect(rows[0].label).toBe("Slot 1");
+    expect(rows[2].label).toBe("Slot 3");
+  });
+
+  it("detail shows proposed mode name when current value is null", () => {
+    const rows = buildPresetPreviewRows("copter", COPTER_MODES, makeParams());
+    expect(rows[0].detail).toBe("Stabilize");
+  });
+
+  it("detail shows current → proposed delta when value differs", () => {
+    const store = makeStore({ FLTMODE1: 5 });
+    const params = makeParams({ store });
+    const rows = buildPresetPreviewRows("copter", COPTER_MODES, params);
+    expect(rows[0].detail).toBe("Loiter → Stabilize");
+  });
+
+  it("detail shows mode name without arrow when already set", () => {
+    const store = makeStore({ FLTMODE1: 0 });
+    const params = makeParams({ store });
+    const rows = buildPresetPreviewRows("copter", COPTER_MODES, params);
+    expect(rows[0].detail).toBe("Stabilize");
+    expect(rows[0].willChange).toBe(false);
+  });
+
+  it("paramName matches FLTMODE{N} pattern", () => {
+    const rows = buildPresetPreviewRows("plane", [], makeParams());
+    expect(rows.map((r) => r.paramName)).toEqual([
+      "FLTMODE1", "FLTMODE2", "FLTMODE3", "FLTMODE4", "FLTMODE5", "FLTMODE6",
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Structural contract: shared primitives
+// ---------------------------------------------------------------------------
+
+describe("FlightModesSection structural — shared primitives", () => {
+  it("imports SetupSectionIntro from shared", () => {
+    expect(SECTION_SRC).toMatch(/import.*SetupSectionIntro.*from.*shared\/SetupSectionIntro/);
+  });
+
+  it("imports SectionCardHeader from shared", () => {
+    expect(SECTION_SRC).toMatch(/import.*SectionCardHeader.*from.*shared\/SectionCardHeader/);
+  });
+
+  it("imports PreviewStagePanel from shared", () => {
+    expect(SECTION_SRC).toMatch(/import.*PreviewStagePanel.*from.*shared\/PreviewStagePanel/);
+  });
+
+  it("uses SetupSectionIntro component", () => {
+    expect(SECTION_SRC).toContain("<SetupSectionIntro");
+  });
+
+  it("uses SectionCardHeader for card headers", () => {
+    expect(SECTION_SRC).toContain("<SectionCardHeader");
+  });
+
+  it("uses PreviewStagePanel instead of local PresetPreviewPanel", () => {
+    expect(SECTION_SRC).toContain("<PreviewStagePanel");
+    expect(SECTION_SRC).not.toMatch(/function PresetPreviewPanel/);
+  });
+
+  it("accepts navigateToParam prop", () => {
+    expect(SECTION_SRC).toMatch(/navigateToParam\?.*=>.*void/);
+  });
+
+  it("wires onRowClick to navigateToParam", () => {
+    expect(SECTION_SRC).toMatch(/onRowClick/);
+    expect(SECTION_SRC).toMatch(/navigateToParam/);
+  });
+
+  it("has a section-level intro with 'Flight Modes' title (not just the preset intro)", () => {
+    expect(SECTION_SRC).toContain('title="Flight Modes"');
+  });
+
+  it("section-level intro appears before the Current Flight Mode card", () => {
+    const sectionIntroIdx = SECTION_SRC.indexOf('title="Flight Modes"');
+    const currentModeIdx = SECTION_SRC.indexOf('title="Current Flight Mode"');
+    expect(sectionIntroIdx).toBeGreaterThan(-1);
+    expect(currentModeIdx).toBeGreaterThan(-1);
+    expect(sectionIntroIdx).toBeLessThan(currentModeIdx);
+  });
+
+  it("section-level intro does not hardcode a docs URL (no flight_modes topic in registry)", () => {
+    const introBlock = SECTION_SRC.slice(
+      SECTION_SRC.indexOf('title="Flight Modes"') - 200,
+      SECTION_SRC.indexOf('title="Flight Modes"') + 50,
+    );
+    expect(introBlock).not.toMatch(/docsUrl=/);
   });
 });

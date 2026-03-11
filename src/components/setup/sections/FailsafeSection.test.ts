@@ -5,7 +5,6 @@ import {
   buildDefaultsPreview,
   FAILSAFE_DEFAULTS_COPTER,
   FAILSAFE_DEFAULTS_PLANE,
-  BATTERY_DOCS_URL,
   COPTER_RADIO_FS_OPTIONS,
   COPTER_GCS_FS_OPTIONS,
   COPTER_BATTERY_FS_OPTIONS,
@@ -14,10 +13,6 @@ import type { ParamInputParams } from "../primitives/param-helpers";
 import type { ParamStore } from "../../../params";
 
 const SECTION_SRC = readFileSync(resolve(__dirname, "FailsafeSection.tsx"), "utf-8");
-
-// ---------------------------------------------------------------------------
-// Test helpers
-// ---------------------------------------------------------------------------
 
 function makeStore(entries: Record<string, number>): ParamStore {
   const params: ParamStore["params"] = {};
@@ -38,25 +33,24 @@ function makeParams(overrides: Partial<ParamInputParams> = {}): ParamInputParams
   };
 }
 
-// ---------------------------------------------------------------------------
-// buildDefaultsPreview — pure logic tests
-// ---------------------------------------------------------------------------
-
 describe("FAILSAFE_DEFAULTS tables", () => {
   it("copter defaults include all expected params", () => {
     const names = FAILSAFE_DEFAULTS_COPTER.map((d) => d.paramName);
     expect(names).toContain("FS_THR_ENABLE");
-    expect(names).toContain("FS_GCS_ENABLE");
     expect(names).toContain("FS_EKF_ACTION");
     expect(names).toContain("BATT_FS_LOW_ACT");
     expect(names).toContain("BATT_FS_CRT_ACT");
     expect(names).toContain("FS_CRASH_CHECK");
   });
 
+  it("copter defaults do NOT include FS_GCS_ENABLE (removed per product decision)", () => {
+    const names = FAILSAFE_DEFAULTS_COPTER.map((d) => d.paramName);
+    expect(names).not.toContain("FS_GCS_ENABLE");
+  });
+
   it("plane defaults include all expected params", () => {
     const names = FAILSAFE_DEFAULTS_PLANE.map((d) => d.paramName);
     expect(names).toContain("THR_FAILSAFE");
-    expect(names).toContain("FS_LONG_ACTN");
     expect(names).toContain("BATT_FS_LOW_ACT");
     expect(names).toContain("BATT_FS_CRT_ACT");
   });
@@ -67,6 +61,11 @@ describe("FAILSAFE_DEFAULTS tables", () => {
     expect(names).not.toContain("FS_GCS_ENABLE");
     expect(names).not.toContain("FS_EKF_ACTION");
     expect(names).not.toContain("FS_CRASH_CHECK");
+  });
+
+  it("plane defaults do NOT include FS_LONG_ACTN (GCS long failsafe removed)", () => {
+    const names = FAILSAFE_DEFAULTS_PLANE.map((d) => d.paramName);
+    expect(names).not.toContain("FS_LONG_ACTN");
   });
 
   it("BATT_FS_LOW_ACT defaults to 2 (RTL) in both tables", () => {
@@ -124,7 +123,6 @@ describe("buildDefaultsPreview", () => {
     const params = makeParams({
       store: makeStore({
         FS_THR_ENABLE: 1,
-        FS_GCS_ENABLE: 0,
         FS_EKF_ACTION: 1,
         BATT_FS_LOW_ACT: 2,
         BATT_FS_CRT_ACT: 1,
@@ -135,10 +133,6 @@ describe("buildDefaultsPreview", () => {
     const thrEntry = preview.find((e) => e.paramName === "FS_THR_ENABLE")!;
     expect(thrEntry.willChange).toBe(false);
     expect(thrEntry.currentValue).toBe(1);
-
-    const gcsEntry = preview.find((e) => e.paramName === "FS_GCS_ENABLE")!;
-    expect(gcsEntry.willChange).toBe(true);
-    expect(gcsEntry.currentValue).toBe(0);
   });
 
   it("uses staged value over store value for current", () => {
@@ -148,7 +142,6 @@ describe("buildDefaultsPreview", () => {
     });
     const preview = buildDefaultsPreview(false, params);
     const thrEntry = preview.find((e) => e.paramName === "FS_THR_ENABLE")!;
-    // staged=1 matches default=1, so willChange should be false
     expect(thrEntry.willChange).toBe(false);
     expect(thrEntry.currentValue).toBe(1);
   });
@@ -157,7 +150,6 @@ describe("buildDefaultsPreview", () => {
     const params = makeParams({
       store: makeStore({
         FS_THR_ENABLE: 1,
-        FS_GCS_ENABLE: 1,
         FS_EKF_ACTION: 1,
         BATT_FS_LOW_ACT: 2,
         BATT_FS_CRT_ACT: 1,
@@ -245,13 +237,38 @@ describe("COPTER_BATTERY_FS_OPTIONS matches official ArduPilot BATT_FS_*_ACT map
   it("value 7 = Brake → Land", () => expect(byValue[7]).toMatch(/Brake.*Land/));
 });
 
-// ---------------------------------------------------------------------------
-// Structural contract: preview-before-stage
-// ---------------------------------------------------------------------------
+describe("FailsafeSection structural contract — shared primitives", () => {
+  it("uses SetupSectionIntro for the section intro", () => {
+    expect(SECTION_SRC).toMatch(/import.*SetupSectionIntro.*from.*shared\/SetupSectionIntro/);
+    expect(SECTION_SRC).toMatch(/<SetupSectionIntro/);
+  });
+
+  it("uses SectionCardHeader for card headers", () => {
+    expect(SECTION_SRC).toMatch(/import.*SectionCardHeader.*from.*shared\/SectionCardHeader/);
+    expect(SECTION_SRC).toMatch(/<SectionCardHeader/);
+  });
+
+  it("uses PreviewStagePanel for the defaults preview", () => {
+    expect(SECTION_SRC).toMatch(/import.*PreviewStagePanel.*from.*shared\/PreviewStagePanel/);
+    expect(SECTION_SRC).toMatch(/<PreviewStagePanel/);
+  });
+
+  it("does NOT contain the old DefaultsPreviewPanel local component", () => {
+    expect(SECTION_SRC).not.toMatch(/function DefaultsPreviewPanel/);
+  });
+
+  it("uses resolveDocsUrl from the centralized docs registry", () => {
+    expect(SECTION_SRC).toMatch(/import.*resolveDocsUrl.*from.*ardupilot-docs/);
+    expect(SECTION_SRC).toMatch(/resolveDocsUrl\(/);
+  });
+
+  it("does NOT hardcode BATTERY_DOCS_URL", () => {
+    expect(SECTION_SRC).not.toMatch(/BATTERY_DOCS_URL/);
+  });
+});
 
 describe("FailsafeSection structural contract — defaults preview", () => {
   it("does NOT immediately call applyDefaults on button click", () => {
-    // The button should toggle preview, not call applyDefaults directly
     const headerBlock = SECTION_SRC.slice(
       SECTION_SRC.indexOf("Apply Recommended Defaults"),
       SECTION_SRC.indexOf("Radio Failsafe"),
@@ -260,29 +277,40 @@ describe("FailsafeSection structural contract — defaults preview", () => {
     expect(headerBlock).toMatch(/defaultsPreviewOpen|setDefaultsPreviewOpen/);
   });
 
-  it("renders a DefaultsPreviewPanel when preview is open", () => {
-    expect(SECTION_SRC).toMatch(/DefaultsPreviewPanel/);
+  it("renders PreviewStagePanel when preview is open", () => {
+    expect(SECTION_SRC).toMatch(/PreviewStagePanel/);
     expect(SECTION_SRC).toMatch(/defaultsPreviewOpen/);
   });
 
-  it("DefaultsPreviewPanel has Stage and Cancel actions", () => {
-    expect(SECTION_SRC).toMatch(/Stage.*Change/s);
-    expect(SECTION_SRC).toMatch(/Cancel/);
+  it("PreviewStagePanel has onStage and onCancel callbacks", () => {
+    expect(SECTION_SRC).toMatch(/onStage=/);
+    expect(SECTION_SRC).toMatch(/onCancel=/);
   });
 
-  it("DefaultsPreviewPanel calls buildDefaultsPreview", () => {
+  it("calls buildDefaultsPreview", () => {
     expect(SECTION_SRC).toMatch(/buildDefaultsPreview\(/);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Structural contract: battery failsafe enhancements
-// ---------------------------------------------------------------------------
+describe("FailsafeSection structural contract — clickable preview rows", () => {
+  it("accepts navigateToParam prop", () => {
+    expect(SECTION_SRC).toMatch(/navigateToParam\?.*:\s*\(paramName:\s*string\)\s*=>\s*void/);
+  });
+
+  it("wires onRowClick to navigateToParam", () => {
+    expect(SECTION_SRC).toMatch(/onRowClick=/);
+    expect(SECTION_SRC).toMatch(/navigateToParam/);
+  });
+
+  it("preview rows have human-friendly label and raw paramName", () => {
+    expect(SECTION_SRC).toMatch(/label:\s*entry\.label/);
+    expect(SECTION_SRC).toMatch(/paramName:\s*entry\.paramName/);
+  });
+});
 
 describe("FailsafeSection structural contract — battery card", () => {
-  it("includes battery failsafe ArduPilot docs link", () => {
-    expect(SECTION_SRC).toContain(BATTERY_DOCS_URL);
-    expect(SECTION_SRC).toMatch(/ExternalLink/);
+  it("uses SectionCardHeader with battery docs from registry", () => {
+    expect(SECTION_SRC).toMatch(/resolveDocsUrl\("failsafe_battery"/);
   });
 
   it("includes escalation helper text about LOW vs CRITICAL", () => {
@@ -294,18 +322,34 @@ describe("FailsafeSection structural contract — battery card", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Structural contract: layout density
-// ---------------------------------------------------------------------------
+describe("FailsafeSection structural contract — per-card docs links", () => {
+  it("resolves radio failsafe docs", () => {
+    expect(SECTION_SRC).toMatch(/resolveDocsUrl\("failsafe_radio"/);
+  });
+
+  it("resolves GCS failsafe docs", () => {
+    expect(SECTION_SRC).toMatch(/resolveDocsUrl\("failsafe_gcs"/);
+  });
+
+  it("resolves EKF failsafe docs", () => {
+    expect(SECTION_SRC).toMatch(/resolveDocsUrl\("failsafe_ekf"/);
+  });
+
+  it("resolves crash detection docs", () => {
+    expect(SECTION_SRC).toMatch(/resolveDocsUrl\("failsafe_crash_check"/);
+  });
+
+  it("resolves section-level failsafe landing page docs", () => {
+    expect(SECTION_SRC).toMatch(/resolveDocsUrl\("failsafe_landing_page"/);
+  });
+});
 
 describe("FailsafeSection structural contract — layout", () => {
   it("does not have empty placeholder divs for spacing", () => {
-    // The old layout had <div /> placeholders in grid cols — should be gone
     const batterySection = SECTION_SRC.slice(
       SECTION_SRC.indexOf("Battery Failsafe"),
       SECTION_SRC.indexOf("GCS Failsafe"),
     );
-    // Empty div placeholders that waste space
     const emptyDivCount = (batterySection.match(/<div\s*\/>/g) || []).length;
     expect(emptyDivCount).toBe(0);
   });

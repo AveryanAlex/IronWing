@@ -188,3 +188,49 @@ describe("SerialPortsSection structural contract", () => {
     expect(SECTION_SRC).toMatch(/SERIAL\$\{i\}_BAUD/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Structural contract: shared shell language
+// ---------------------------------------------------------------------------
+
+describe("SerialPortsSection shell language", () => {
+  it("imports SetupSectionIntro from shared module", () => {
+    expect(SECTION_SRC).toMatch(
+      /import\s*\{[^}]*SetupSectionIntro[^}]*\}\s*from\s*["']\.\.\/shared\/SetupSectionIntro["']/,
+    );
+  });
+
+  it("imports SectionCardHeader from shared module", () => {
+    expect(SECTION_SRC).toMatch(
+      /import\s*\{[^}]*SectionCardHeader[^}]*\}\s*from\s*["']\.\.\/shared\/SectionCardHeader["']/,
+    );
+  });
+
+  it("renders SetupSectionIntro at the section level", () => {
+    expect(SECTION_SRC).toMatch(/<SetupSectionIntro/);
+  });
+
+  it("section intro includes serial-related title", () => {
+    expect(SECTION_SRC).toMatch(/title="Serial Ports"/);
+  });
+
+  it("does NOT pass a docsUrl to SetupSectionIntro", () => {
+    const introBlock = SECTION_SRC.slice(
+      SECTION_SRC.indexOf("<SetupSectionIntro"),
+      SECTION_SRC.indexOf("/>", SECTION_SRC.indexOf("<SetupSectionIntro")) + 2,
+    );
+    expect(introBlock).not.toMatch(/docsUrl/);
+  });
+
+  it("does NOT import resolveDocsUrl (no docs link needed)", () => {
+    expect(SECTION_SRC).not.toMatch(/resolveDocsUrl/);
+  });
+
+  it("does NOT render ExternalLink placeholder", () => {
+    expect(SECTION_SRC).not.toMatch(/ExternalLink/);
+  });
+
+  it("uses SectionCardHeader for hints card", () => {
+    expect(SECTION_SRC).toMatch(/<SectionCardHeader/);
+  });
+});

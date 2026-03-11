@@ -62,7 +62,7 @@ export function ParamSelect({
 
   if (compact) {
     return (
-      <div className={`flex items-center gap-1.5 ${className ?? ""}`}>
+      <div data-setup-param={paramName} className={`flex items-center gap-1.5 ${className ?? ""}`}>
         <div className="flex-1 min-w-0">{selectEl}</div>
         {isStaged && (
           <StagedBadge paramName={paramName} unstage={params.unstage} />
@@ -72,7 +72,7 @@ export function ParamSelect({
   }
 
   return (
-    <div className={`flex flex-col gap-1 ${className ?? ""}`}>
+    <div data-setup-param={paramName} className={`flex flex-col gap-1 ${className ?? ""}`}>
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] uppercase tracking-wider text-text-muted">
           {resolvedLabel}

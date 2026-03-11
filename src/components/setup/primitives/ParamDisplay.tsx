@@ -24,7 +24,7 @@ export function ParamDisplay({
   const displayValue = value != null ? formatParamValue(value, meta) : "—";
 
   return (
-    <div className={`flex flex-col gap-1 ${className ?? ""}`}>
+    <div data-setup-param={paramName} className={`flex flex-col gap-1 ${className ?? ""}`}>
       <span className="text-[10px] uppercase tracking-wider text-text-muted">
         {resolvedLabel}
       </span>

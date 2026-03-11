@@ -275,14 +275,9 @@ describe("InitialParamsSection structural contract", () => {
     expect(SECTION_SRC).toMatch(/useEffect\(\(\)\s*=>\s*\{?\s*\n?\s*setSelected/);
   });
 
-  it("global tri-state control uses <button>, not bare <span onClick>", () => {
-    const triCheckBlock = SECTION_SRC.slice(
-      SECTION_SRC.indexOf("function TriStateCheckbox("),
-      SECTION_SRC.indexOf("function DiffRow("),
-    );
-    expect(triCheckBlock).toContain("<button");
-    expect(triCheckBlock).toContain('type="button"');
-    expect(triCheckBlock).toContain('role="checkbox"');
+  it("global tri-state control uses SetupCheckbox with onChange for interactivity", () => {
+    expect(SECTION_SRC).toContain("triStateToChecked(globalTriState)");
+    expect(SECTION_SRC).toContain("onChange={handleGlobalToggle}");
   });
 
   it("gates calculator behind plain fixed-wing check with early return", () => {
@@ -297,5 +292,102 @@ describe("InitialParamsSection structural contract", () => {
     expect(earlyReturnIdx).toBeGreaterThan(0);
     const afterEarlyReturn = mainFn.slice(earlyReturnIdx);
     expect(afterEarlyReturn).not.toMatch(/\buse(State|Effect|Memo|Callback|Ref)\s*[<(]/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 9: Shared intro/header treatment and navigateToParam wiring
+// ---------------------------------------------------------------------------
+
+describe("InitialParamsSection shared shell chrome", () => {
+  it("imports SetupSectionIntro from shared module", () => {
+    expect(SECTION_SRC).toContain('import { SetupSectionIntro } from "../shared/SetupSectionIntro"');
+  });
+
+  it("renders SetupSectionIntro for the main view", () => {
+    expect(SECTION_SRC).toContain("<SetupSectionIntro");
+    expect(SECTION_SRC).toContain('title="Initial Parameters Calculator"');
+  });
+
+  it("uses SetupSectionIntro for the plain fixed-wing fallback too", () => {
+    const earlyReturnBlock = SECTION_SRC.slice(
+      SECTION_SRC.indexOf("if (isPlainFixedWing)"),
+      SECTION_SRC.indexOf("return (", SECTION_SRC.indexOf("if (isPlainFixedWing)") + 50),
+    );
+    expect(earlyReturnBlock).toContain("SetupSectionIntro");
+  });
+});
+
+describe("InitialParamsSection navigateToParam wiring", () => {
+  it("accepts navigateToParam as an optional prop", () => {
+    expect(SECTION_SRC).toMatch(/navigateToParam\??\s*:\s*\(paramName:\s*string\)\s*=>\s*void/);
+  });
+
+  it("DiffRow accepts onNavigate callback", () => {
+    const diffRowFn = SECTION_SRC.slice(
+      SECTION_SRC.indexOf("function DiffRow("),
+      SECTION_SRC.indexOf("function InitialParamsSection(") > 0
+        ? SECTION_SRC.indexOf("export function InitialParamsSection(")
+        : undefined,
+    );
+    expect(diffRowFn).toMatch(/onNavigate\??\s*:\s*\(paramName:\s*string\)\s*=>\s*void/);
+  });
+
+  it("passes navigateToParam as onNavigate to DiffRow", () => {
+    expect(SECTION_SRC).toContain("onNavigate={navigateToParam}");
+  });
+
+  it("DiffRow renders a clickable param name when onNavigate is provided", () => {
+    const diffRowFn = SECTION_SRC.slice(
+      SECTION_SRC.indexOf("function DiffRow("),
+      SECTION_SRC.indexOf("export function InitialParamsSection("),
+    );
+    expect(diffRowFn).toContain("onNavigate(param.name)");
+    expect(diffRowFn).toContain("text-accent hover:underline");
+  });
+
+  it("DiffRow still renders plain text when onNavigate is absent", () => {
+    const diffRowFn = SECTION_SRC.slice(
+      SECTION_SRC.indexOf("function DiffRow("),
+      SECTION_SRC.indexOf("export function InitialParamsSection("),
+    );
+    expect(diffRowFn).toContain("text-text-primary");
+  });
+
+  it("preserves the grouped diff-table model (not hidden preview)", () => {
+    expect(SECTION_SRC).toContain("Computed Parameters");
+    expect(SECTION_SRC).toContain("GROUP_META");
+    expect(SECTION_SRC).toContain("grouped.map");
+  });
+
+  it("preserves tri-state checkbox workflow via shared SetupCheckbox", () => {
+    expect(SECTION_SRC).toContain("SetupCheckbox");
+    expect(SECTION_SRC).toContain("triStateToChecked");
+    expect(SECTION_SRC).toContain("handleGlobalToggle");
+    expect(SECTION_SRC).toContain("handleGroupToggle");
+    expect(SECTION_SRC).toContain("handleRowToggle");
+  });
+
+  it("imports SetupCheckbox from shared module", () => {
+    expect(SECTION_SRC).toContain('import { SetupCheckbox } from "../shared/SetupCheckbox"');
+  });
+
+  it("does not define a local TriStateCheckbox function (uses shared SetupCheckbox)", () => {
+    expect(SECTION_SRC).not.toMatch(/function TriStateCheckbox\(/);
+  });
+
+  it("DiffRow uses SetupCheckbox for row selection", () => {
+    const diffRowFn = SECTION_SRC.slice(
+      SECTION_SRC.indexOf("function DiffRow("),
+      SECTION_SRC.indexOf("export function InitialParamsSection("),
+    );
+    expect(diffRowFn).toContain("<SetupCheckbox");
+  });
+
+  it("preserves Stage All and Stage Selected buttons", () => {
+    expect(SECTION_SRC).toContain("Stage All Recommended");
+    expect(SECTION_SRC).toContain("Stage Selected");
+    expect(SECTION_SRC).toContain("stageAll");
+    expect(SECTION_SRC).toContain("stageSelected");
   });
 });

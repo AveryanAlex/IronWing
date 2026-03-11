@@ -3,6 +3,8 @@ import { Cable, AlertTriangle, Info, RotateCw, Lightbulb } from "lucide-react";
 import { ParamSelect } from "../primitives/ParamSelect";
 import { getStagedOrCurrent } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { SectionCardHeader } from "../shared/SectionCardHeader";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -249,12 +251,7 @@ function RebootNotice() {
 function SetupHints() {
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Lightbulb size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Common Configurations
-        </h3>
-      </div>
+      <SectionCardHeader icon={Lightbulb} title="Common Configurations" />
 
       <div className="flex flex-col gap-2.5">
         <div className="flex items-start gap-2 rounded-md border border-border bg-bg-secondary/50 px-3 py-2">
@@ -305,18 +302,26 @@ export function SerialPortsSection({ params }: SerialPortsSectionProps) {
 
   return (
     <div className="flex flex-col gap-4 p-4">
+      <SetupSectionIntro
+        icon={Cable}
+        title="Serial Ports"
+        description="Assign protocols and baud rates to each serial port. GPS, telemetry, and RC receiver connections are configured here."
+      />
+
       {/* Reboot notice — always visible */}
       <RebootNotice />
 
       {/* Port table card */}
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Cable size={14} className="text-accent" />
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            Serial Port Assignment
-          </h3>
+        <div className="mb-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Cable size={14} className="text-accent" />
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+              Serial Port Assignment
+            </h3>
+          </div>
           {ports.length > 0 && (
-            <span className="ml-auto rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
+            <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
               {ports.length} ports
             </span>
           )}

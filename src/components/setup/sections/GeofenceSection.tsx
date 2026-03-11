@@ -13,45 +13,23 @@ import { ParamSelect } from "../primitives/ParamSelect";
 import { getStagedOrCurrent } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import type { VehicleState } from "../../../telemetry";
-
-// ---------------------------------------------------------------------------
-// Vehicle type helpers
-// ---------------------------------------------------------------------------
-
-function isCopter(vehicleState: VehicleState | null): boolean {
-  if (!vehicleState) return false;
-  const t = vehicleState.vehicle_type.toLowerCase();
-  return (
-    t.includes("quadrotor") ||
-    t.includes("helicopter") ||
-    t.includes("hexarotor") ||
-    t.includes("octorotor") ||
-    t.includes("tricopter") ||
-    t.includes("coaxial")
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
+import { isCopterVehicleType as isCopter } from "../shared/vehicle-helpers";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { SectionCardHeader } from "../shared/SectionCardHeader";
 
 type GeofenceSectionProps = {
   params: ParamInputParams;
   vehicleState: VehicleState | null;
 };
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
 export function GeofenceSection({ params, vehicleState }: GeofenceSectionProps) {
   const copter = isCopter(vehicleState);
 
   const fenceEnabled = (getStagedOrCurrent("FENCE_ENABLE", params) ?? 0) !== 0;
   const fenceType = getStagedOrCurrent("FENCE_TYPE", params) ?? 0;
-  const hasCircleOrPolygon = (fenceType & 0b0110) !== 0; // bits 1 (circle) or 2 (polygon)
+  const hasCircleOrPolygon = (fenceType & 0b0110) !== 0;
 
-  // Cross-validation: ALT_MAX > ALT_MIN
   const altMax = getStagedOrCurrent("FENCE_ALT_MAX", params);
   const altMin = getStagedOrCurrent("FENCE_ALT_MIN", params);
   const showAltWarning =
@@ -63,16 +41,19 @@ export function GeofenceSection({ params, vehicleState }: GeofenceSectionProps) 
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      {/* ----------------------------------------------------------------- */}
-      {/* Enable Panel */}
-      {/* ----------------------------------------------------------------- */}
+      <SetupSectionIntro
+        icon={Fence}
+        title="Geofence"
+        description="Configure virtual boundaries to keep the vehicle within a safe operating area. Supports altitude limits, circle radius, and polygon fences."
+        docsUrl={resolveDocsUrl("geofence")}
+        docsLabel="Fences Docs"
+      />
+
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Fence size={14} className="text-accent" />
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            Fence Enable
-          </h3>
-        </div>
+        <SectionCardHeader
+          icon={Fence}
+          title="Fence Enable"
+        />
         <ParamToggle
           paramName="FENCE_ENABLE"
           params={params}
@@ -89,16 +70,11 @@ export function GeofenceSection({ params, vehicleState }: GeofenceSectionProps) 
         )}
       </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* Fence Type Panel */}
-      {/* ----------------------------------------------------------------- */}
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <MapPin size={14} className="text-accent" />
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            Fence Type
-          </h3>
-        </div>
+        <SectionCardHeader
+          icon={MapPin}
+          title="Fence Type"
+        />
         <ParamBitmaskInput
           paramName="FENCE_TYPE"
           params={params}
@@ -107,17 +83,12 @@ export function GeofenceSection({ params, vehicleState }: GeofenceSectionProps) 
         />
       </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* Fence Parameters Panel (shown when enabled) */}
-      {/* ----------------------------------------------------------------- */}
       {fenceEnabled && (
         <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <ArrowUpFromDot size={14} className="text-accent" />
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-              Fence Parameters
-            </h3>
-          </div>
+          <SectionCardHeader
+            icon={ArrowUpFromDot}
+            title="Fence Parameters"
+          />
           <div className="flex flex-col gap-3">
             <div className="grid grid-cols-2 gap-4">
               <ParamNumberInput
@@ -164,7 +135,6 @@ export function GeofenceSection({ params, vehicleState }: GeofenceSectionProps) 
               />
             </div>
 
-            {/* Cross-validation: ALT_MAX > ALT_MIN */}
             {showAltWarning && (
               <div className="flex items-center gap-2 rounded-md bg-danger/10 px-3 py-2 text-xs text-danger">
                 <AlertTriangle size={13} strokeWidth={2.5} className="shrink-0" />
@@ -177,16 +147,11 @@ export function GeofenceSection({ params, vehicleState }: GeofenceSectionProps) 
         </div>
       )}
 
-      {/* ----------------------------------------------------------------- */}
-      {/* Breach Action Panel */}
-      {/* ----------------------------------------------------------------- */}
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <ArrowDownToDot size={14} className="text-accent" />
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            Breach Action
-          </h3>
-        </div>
+        <SectionCardHeader
+          icon={ArrowDownToDot}
+          title="Breach Action"
+        />
         <ParamSelect
           paramName="FENCE_ACTION"
           params={params}

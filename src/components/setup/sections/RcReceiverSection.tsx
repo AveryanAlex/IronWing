@@ -6,6 +6,9 @@ import { ParamBitmaskInput } from "../primitives/ParamBitmaskInput";
 import { getStagedOrCurrent } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import type { Telemetry } from "../../../telemetry";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { SectionCardHeader } from "../shared/SectionCardHeader";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -80,12 +83,7 @@ function ReceiverProtocolPanel({ params }: { params: ParamInputParams }) {
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Radio size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Receiver Protocol
-        </h3>
-      </div>
+      <SectionCardHeader icon={Radio} title="Receiver Protocol" />
 
       <div className="flex flex-col gap-3">
         <div className="flex items-start gap-2 rounded-md border border-border bg-bg-secondary/50 px-3 py-2.5">
@@ -219,12 +217,7 @@ function RssiPanel({ params }: { params: ParamInputParams }) {
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Signal size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          RSSI Configuration
-        </h3>
-      </div>
+      <SectionCardHeader icon={Signal} title="RSSI Configuration" />
 
       <div className="flex flex-col gap-3">
         <ParamSelect
@@ -276,12 +269,7 @@ function LiveRcBars({ connected }: { connected: boolean }) {
   if (!connected) {
     return (
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Activity size={14} className="text-accent" />
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            Live RC Channels
-          </h3>
-        </div>
+        <SectionCardHeader icon={Activity} title="Live RC Channels" />
         <p className="text-xs text-text-muted">Connect to a vehicle to see live RC values.</p>
       </div>
     );
@@ -334,8 +322,17 @@ export function RcReceiverSection({
   params,
   connected,
 }: RcReceiverSectionProps) {
+  const rcDocsUrl = resolveDocsUrl("radio_calibration");
+
   return (
     <div className="flex flex-col gap-4 p-4">
+      <SetupSectionIntro
+        icon={Radio}
+        title="RC Receiver"
+        description="Configure your RC receiver protocol, channel mapping, and RSSI source. Ensure your transmitter is bound and communicating before calibrating."
+        docsUrl={rcDocsUrl}
+        docsLabel="RC Calibration Docs"
+      />
       <ReceiverProtocolPanel params={params} />
       <ChannelMappingPanel params={params} />
       <RssiPanel params={params} />

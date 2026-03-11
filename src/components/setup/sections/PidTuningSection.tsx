@@ -11,28 +11,13 @@ import { ParamSelect } from "../primitives/ParamSelect";
 import { getStagedOrCurrent } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import type { VehicleState } from "../../../telemetry";
-
-// ---------------------------------------------------------------------------
-// Vehicle type helpers
-// ---------------------------------------------------------------------------
-
-function isPlane(vehicleState: VehicleState | null): boolean {
-  if (!vehicleState) return false;
-  return vehicleState.vehicle_type.toLowerCase().includes("fixed_wing");
-}
-
-function isCopter(vehicleState: VehicleState | null): boolean {
-  if (!vehicleState) return false;
-  const vt = vehicleState.vehicle_type.toLowerCase();
-  return (
-    vt.includes("quadrotor") ||
-    vt.includes("helicopter") ||
-    vt.includes("hexarotor") ||
-    vt.includes("octorotor") ||
-    vt.includes("tricopter") ||
-    vt.includes("coaxial")
-  );
-}
+import {
+  isPlaneVehicleType as isPlane,
+  isCopterVehicleType as isCopter,
+} from "../shared/vehicle-helpers";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { SectionCardHeader } from "../shared/SectionCardHeader";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 
 // ---------------------------------------------------------------------------
 // Rate PID axis config
@@ -189,26 +174,22 @@ export function PidTuningSection({
 
   const hntchEnabled = getStagedOrCurrent("INS_HNTCH_ENABLE", params);
 
+  const tuningDocsUrl = resolveDocsUrl("tuning");
+  const description = copter
+    ? "Tune rate, angle, and position controllers for your multirotor"
+    : plane
+      ? "Tune servo and speed controllers for your fixed-wing aircraft"
+      : "Connect to a vehicle to see tuning parameters for your vehicle type";
+
   return (
     <div className="flex flex-col gap-3 p-4">
-      {/* Header */}
-      <div className="rounded-lg border border-border-light bg-accent/5 p-4">
-        <div className="flex items-center gap-2">
-          <Activity size={14} className="text-accent" />
-          <div>
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-              PID Tuning
-            </h3>
-            <p className="mt-0.5 text-[10px] text-text-muted">
-              {copter
-                ? "Tune rate, angle, and position controllers for your multirotor"
-                : plane
-                  ? "Tune servo and speed controllers for your fixed-wing aircraft"
-                  : "Connect to a vehicle to see tuning parameters for your vehicle type"}
-            </p>
-          </div>
-        </div>
-      </div>
+      <SetupSectionIntro
+        icon={Activity}
+        title="PID Tuning"
+        description={description}
+        docsUrl={tuningDocsUrl}
+        docsLabel="Tuning Docs"
+      />
 
       {/* ================================================================= */}
       {/* COPTER PANELS                                                     */}
@@ -219,15 +200,7 @@ export function PidTuningSection({
           {/* Rate PIDs (Roll / Pitch / Yaw)                                  */}
           {/* --------------------------------------------------------------- */}
           <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Crosshair size={14} className="text-accent" />
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                Rate PIDs
-              </h3>
-              <span className="text-[10px] text-text-muted">
-                — Inner loop rate controllers (deg/s)
-              </span>
-            </div>
+            <SectionCardHeader icon={Crosshair} title="Rate PIDs — Inner loop rate controllers (deg/s)" />
             <div className="flex flex-col gap-3">
               {RATE_AXES.map((axis) => (
                 <RateAxisCard key={axis.prefix} axis={axis} params={params} />
@@ -239,15 +212,7 @@ export function PidTuningSection({
           {/* Angle PIDs                                                      */}
           {/* --------------------------------------------------------------- */}
           <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Move3D size={14} className="text-accent" />
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                Angle Controller
-              </h3>
-              <span className="text-[10px] text-text-muted">
-                — Outer loop angle gains
-              </span>
-            </div>
+            <SectionCardHeader icon={Move3D} title="Angle Controller — Outer loop angle gains" />
             <div className="grid grid-cols-3 gap-4">
               <ParamNumberInput
                 paramName="ATC_ANG_RLL_P"
@@ -277,15 +242,7 @@ export function PidTuningSection({
           {/* Position Controller                                             */}
           {/* --------------------------------------------------------------- */}
           <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Move3D size={14} className="text-accent" />
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                Position Controller
-              </h3>
-              <span className="text-[10px] text-text-muted">
-                — Altitude and position hold tuning
-              </span>
-            </div>
+            <SectionCardHeader icon={Move3D} title="Position Controller — Altitude and position hold tuning" />
 
             {/* Vertical: Accel Z, Vel Z, Pos Z */}
             <div className="mb-3">
@@ -380,15 +337,7 @@ export function PidTuningSection({
           {/* Servo Tuning (Roll, Pitch, Yaw)                                */}
           {/* --------------------------------------------------------------- */}
           <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Plane size={14} className="text-accent" />
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                Servo Tuning
-              </h3>
-              <span className="text-[10px] text-text-muted">
-                — Roll, pitch, and yaw control surface tuning
-              </span>
-            </div>
+            <SectionCardHeader icon={Plane} title="Servo Tuning — Roll, pitch, and yaw control surface tuning" />
             <div className="flex flex-col gap-4">
               {PLANE_AXES.map((axis) => (
                 <div
@@ -419,12 +368,7 @@ export function PidTuningSection({
           {/* Speed Configuration                                             */}
           {/* --------------------------------------------------------------- */}
           <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Gauge size={14} className="text-accent" />
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                Speed Configuration
-              </h3>
-            </div>
+            <SectionCardHeader icon={Gauge} title="Speed Configuration" />
             <div className="grid grid-cols-2 gap-4">
               <ParamNumberInput
                 paramName="ARSPD_FBW_MIN"
@@ -469,15 +413,7 @@ export function PidTuningSection({
       {/* ================================================================= */}
       {vehicleState && (
         <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <SlidersHorizontal size={14} className="text-accent" />
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-              Filters
-            </h3>
-            <span className="text-[10px] text-text-muted">
-              — Gyro, accelerometer, and harmonic notch
-            </span>
-          </div>
+          <SectionCardHeader icon={SlidersHorizontal} title="Filters — Gyro, accelerometer, and harmonic notch" />
 
           {/* Main filter cutoffs */}
           <div className="grid grid-cols-2 gap-4">

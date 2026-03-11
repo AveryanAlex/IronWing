@@ -1,30 +1,17 @@
-import { useState } from "react";
-import { RefreshCw, Save, FolderOpen, ChevronRight, ChevronDown, Search, Check, X, RotateCw, Loader2, Upload, Trash2, Lock } from "lucide-react";
-import type { useParams, FilterMode } from "../hooks/use-params";
-import type { Param, ParamType } from "../params";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { RefreshCw, Save, FolderOpen, ChevronDown, Search, Check, X, RotateCw, Loader2, Upload, Trash2, Lock } from "lucide-react";
+import { SetupCheckbox } from "./setup/shared/SetupCheckbox";
+import type { useParams } from "../hooks/use-params";
+import type { Param } from "../params";
 import type { ParamMeta, ParamMetadataMap } from "../param-metadata";
-
+import { formatStagedValue, displayParamValue } from "./setup/shared/param-format-helpers";
 
 type ConfigPanelProps = {
   params: ReturnType<typeof useParams>;
   connected: boolean;
+  highlightParam?: string | null;
+  onHighlightHandled?: () => void;
 };
-
-const INTEGER_TYPES: ParamType[] = ["uint8", "int8", "uint16", "int16", "uint32", "int32"];
-
-function displayValue(param: Param): string {
-  if (INTEGER_TYPES.includes(param.param_type)) {
-    return String(Math.round(param.value));
-  }
-  return String(param.value);
-}
-
-function formatStagedValue(value: number, paramType?: ParamType): string {
-  if (paramType && INTEGER_TYPES.includes(paramType)) {
-    return String(Math.round(value));
-  }
-  return String(value);
-}
 
 function EnumEditor({
   meta,
@@ -107,16 +94,16 @@ function BitmaskEditor({
       </div>
       <div className="ml-0 flex flex-col gap-0.5 sm:ml-56">
         {meta.bitmask!.map((b) => (
-          <label key={b.bit} className="flex items-center gap-1.5 text-[11px] text-text-secondary cursor-pointer">
-            <input
-              type="checkbox"
-              checked={(currentVal & (1 << b.bit)) !== 0}
-              onChange={() => toggleBit(b.bit)}
-              className="h-3 w-3 rounded border-border"
-            />
+          <button
+            key={b.bit}
+            type="button"
+            onClick={() => toggleBit(b.bit)}
+            className="flex items-center gap-1.5 text-[11px] text-text-secondary text-left"
+          >
+            <SetupCheckbox checked={(currentVal & (1 << b.bit)) !== 0} size={12} />
             <span className="font-mono text-text-muted">bit {b.bit}</span>
             {b.label}
-          </label>
+          </button>
         ))}
       </div>
     </div>
@@ -175,6 +162,7 @@ function ParamRow({
   editValue,
   stagedValue,
   readOnly,
+  highlighted,
   onStartEdit,
   onEditChange,
   onConfirm,
@@ -187,6 +175,7 @@ function ParamRow({
   editValue: string;
   stagedValue?: number;
   readOnly?: boolean;
+  highlighted?: boolean;
   onStartEdit: () => void;
   onEditChange: (v: string) => void;
   onConfirm: () => void;
@@ -198,7 +187,10 @@ function ParamRow({
   const valueLabel = meta?.values?.find((v) => v.code === Math.round(effectiveValue))?.label;
 
   return (
-    <div className={`flex flex-col gap-0.5 py-1 px-2 text-xs rounded ${isStaged ? "bg-warning/5" : "hover:bg-bg-tertiary/50"}`}>
+    <div
+      data-setup-param={param.name}
+      className={`flex flex-col gap-0.5 py-1 px-2 text-xs rounded ${isStaged ? "bg-warning/5" : "hover:bg-bg-tertiary/50"} ${highlighted ? "setup-param-highlight" : ""}`}
+    >
       <div className="flex items-center gap-2">
         <span className="w-40 shrink-0 truncate font-mono text-text-primary sm:w-56" title={param.name}>
           {isStaged && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-warning" />}
@@ -214,7 +206,7 @@ function ParamRow({
           )
         ) : readOnly ? (
           <span className="w-28 truncate text-left font-mono text-text-muted">
-            {valueLabel ?? displayValue(param)}
+            {valueLabel ?? displayParamValue(param)}
           </span>
         ) : (
           <button
@@ -222,18 +214,18 @@ function ParamRow({
             className={`w-28 truncate text-left font-mono hover:underline ${isStaged ? "text-warning" : "text-accent-blue"}`}
             title={
               isStaged
-                ? `Staged: ${formatStagedValue(stagedValue, param.param_type)} (current: ${displayValue(param)})`
+                ? `Staged: ${formatStagedValue(stagedValue, param.param_type)} (current: ${displayParamValue(param)})`
                 : valueLabel
-                  ? `${displayValue(param)} (${valueLabel})`
+                  ? `${displayParamValue(param)} (${valueLabel})`
                   : "Click to edit"
             }
           >
-            {isStaged ? formatStagedValue(stagedValue, param.param_type) : (valueLabel ?? displayValue(param))}
+            {isStaged ? formatStagedValue(stagedValue, param.param_type) : (valueLabel ?? displayParamValue(param))}
           </button>
         )}
         {isStaged && (
           <span className="text-[10px] text-text-muted font-mono">
-            was {displayValue(param)}
+            was {displayParamValue(param)}
           </span>
         )}
         {readOnly && (
@@ -282,6 +274,7 @@ function ParamGroup({
   editingParam,
   editValue,
   staged,
+  highlightParam,
   onStartEdit,
   onEditChange,
   onConfirm,
@@ -294,6 +287,7 @@ function ParamGroup({
   editingParam: string | null;
   editValue: string;
   staged: Map<string, number>;
+  highlightParam?: string | null;
   onStartEdit: (name: string, value: string) => void;
   onEditChange: (v: string) => void;
   onConfirm: () => void;
@@ -303,13 +297,24 @@ function ParamGroup({
   const [expanded, setExpanded] = useState(false);
   const stagedCount = groupParams.filter((p) => staged.has(p.name)).length;
 
+  const groupContainsHighlight = highlightParam != null && groupParams.some((p) => p.name === highlightParam);
+
+  useEffect(() => {
+    if (groupContainsHighlight && !expanded) {
+      setExpanded(true);
+    }
+  }, [groupContainsHighlight, expanded]);
+
   return (
     <div>
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-sm font-medium text-text-primary hover:bg-bg-tertiary/50"
       >
-        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <ChevronDown
+          size={14}
+          className={`shrink-0 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+        />
         <span>{prefix}</span>
         <span className="ml-1 text-xs text-text-muted">({groupParams.length})</span>
         {stagedCount > 0 && (
@@ -331,13 +336,14 @@ function ParamGroup({
                 editValue={editValue}
                 stagedValue={staged.get(param.name)}
                 readOnly={meta?.readOnly}
+                highlighted={highlightParam === param.name}
                 onStartEdit={() => {
                   const stagedVal = staged.get(param.name);
                   onStartEdit(
                     param.name,
                     stagedVal !== undefined
                       ? formatStagedValue(stagedVal, param.param_type)
-                      : displayValue(param),
+                      : displayParamValue(param),
                   );
                 }}
                 onEditChange={onEditChange}
@@ -381,93 +387,49 @@ function FilterPill({
   );
 }
 
-function StagedDiffPanel({
-  staged,
-  store,
-  metadata,
-  onUnstage,
-}: {
-  staged: Map<string, number>;
-  store: { params: Record<string, Param> };
-  metadata: ParamMetadataMap | null;
-  onUnstage: (name: string) => void;
-}) {
-  const [collapsed, setCollapsed] = useState(false);
-  const hasRebootRequired = Array.from(staged.keys()).some((name) => {
-    const meta = metadata?.get(name);
-    return meta?.rebootRequired;
-  });
-
-  if (collapsed) {
-    return (
-      <button
-        onClick={() => setCollapsed(false)}
-        className="flex items-center gap-1.5 rounded border border-warning/30 bg-warning/5 px-2 py-1 text-[11px] text-warning"
-      >
-        <ChevronRight size={12} />
-        {staged.size} staged changes
-      </button>
-    );
-  }
-
-  return (
-    <div className="rounded border border-warning/30 bg-warning/5 p-2">
-      <button
-        onClick={() => setCollapsed(true)}
-        className="mb-1.5 flex items-center gap-1 text-[11px] font-medium text-warning"
-      >
-        <ChevronDown size={12} />
-        Staged Changes ({staged.size})
-      </button>
-      {hasRebootRequired && (
-        <div className="mb-1.5 flex items-center gap-1 rounded bg-warning/10 px-2 py-1 text-[10px] text-warning">
-          <RotateCw size={10} />
-          Some changes require a vehicle reboot
-        </div>
-      )}
-      <div className="flex flex-col gap-0.5 max-h-32 overflow-y-auto">
-        {Array.from(staged.entries())
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([name, newValue]) => {
-            const current = store.params[name];
-            return (
-              <div key={name} className="flex items-center gap-2 text-[11px] font-mono">
-                <span className="w-40 truncate text-text-primary sm:w-48" title={name}>{name}</span>
-                <span className="text-text-muted">{current ? displayValue(current) : "?"}</span>
-                <span className="text-text-muted">&rarr;</span>
-                <span className="text-warning">
-                  {formatStagedValue(newValue, current?.param_type)}
-                </span>
-                {metadata?.get(name)?.rebootRequired && (
-                  <RotateCw size={8} className="text-warning" />
-                )}
-                <button
-                  onClick={() => onUnstage(name)}
-                  className="ml-auto p-0.5 text-text-muted hover:text-danger"
-                  title="Unstage"
-                >
-                  <X size={10} />
-                </button>
-              </div>
-            );
-          })}
-      </div>
-    </div>
-  );
-}
-
-export function ConfigPanel({ params, connected }: ConfigPanelProps) {
+export function ConfigPanel({ params, connected, highlightParam, onHighlightHandled }: ConfigPanelProps) {
   return (
     <div className="flex h-full flex-col gap-2 overflow-hidden">
-      <ParamsTabContent params={params} connected={connected} />
+      <ParamsTabContent params={params} connected={connected} highlightParam={highlightParam} onHighlightHandled={onHighlightHandled} />
     </div>
   );
 }
 
-function ParamsTabContent({ params, connected }: ConfigPanelProps) {
+function ParamsTabContent({ params, connected, highlightParam, onHighlightHandled }: ConfigPanelProps) {
   const downloading = params.progress?.phase === "downloading";
   const writing = params.progress?.phase === "writing";
   const busy = downloading || writing;
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scrollToHighlightedParam = useCallback((paramName: string) => {
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-setup-param="${paramName}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!highlightParam) return;
+
+    if (highlightTimerRef.current) {
+      clearTimeout(highlightTimerRef.current);
+    }
+
+    const delay = setTimeout(() => {
+      scrollToHighlightedParam(highlightParam);
+    }, 100);
+
+    highlightTimerRef.current = setTimeout(() => {
+      onHighlightHandled?.();
+      highlightTimerRef.current = null;
+    }, 1600);
+
+    return () => {
+      clearTimeout(delay);
+    };
+  }, [highlightParam, scrollToHighlightedParam, onHighlightHandled]);
 
   const handleStartEdit = (name: string, value: string) => {
     params.setEditingParam(name);
@@ -587,16 +549,6 @@ function ParamsTabContent({ params, connected }: ConfigPanelProps) {
         </div>
       )}
 
-      {/* Staged diff panel */}
-      {params.staged.size > 0 && params.store && (
-        <StagedDiffPanel
-          staged={params.staged}
-          store={params.store}
-          metadata={params.metadata}
-          onUnstage={params.unstage}
-        />
-      )}
-
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {!connected ? (
@@ -622,6 +574,7 @@ function ParamsTabContent({ params, connected }: ConfigPanelProps) {
                 editingParam={params.editingParam}
                 editValue={params.editValue}
                 staged={params.staged}
+                highlightParam={highlightParam}
                 onStartEdit={handleStartEdit}
                 onEditChange={params.setEditValue}
                 onConfirm={handleConfirm}

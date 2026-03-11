@@ -5,9 +5,11 @@ import {
   toDisplayValue,
   toRawValue,
   formatDisplayValue,
-  COPTER_RTL_DOCS_URL,
-  PLANE_RTL_DOCS_URL,
 } from "./RtlReturnSection";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
+
+const COPTER_RTL_DOCS_URL = resolveDocsUrl("rtl_mode", "copter")!;
+const PLANE_RTL_DOCS_URL = resolveDocsUrl("rtl_mode", "plane")!;
 
 const SECTION_SRC = readFileSync(
   resolve(__dirname, "RtlReturnSection.tsx"),
@@ -332,16 +334,12 @@ describe("RtlReturnSection structural — sentinel handling", () => {
 // ---------------------------------------------------------------------------
 
 describe("RtlReturnSection structural — docs and guidance", () => {
-  it("contains the copter RTL docs URL", () => {
-    expect(SECTION_SRC).toContain(COPTER_RTL_DOCS_URL);
+  it("resolves RTL docs via the docs registry", () => {
+    expect(SECTION_SRC).toContain('resolveDocsUrl("rtl_mode"');
   });
 
-  it("contains the plane RTL docs URL", () => {
-    expect(SECTION_SRC).toContain(PLANE_RTL_DOCS_URL);
-  });
-
-  it("imports and renders ExternalLink icon", () => {
-    expect(SECTION_SRC).toMatch(/ExternalLink/);
+  it("uses DocsLink or resolveDocsUrl for docs links", () => {
+    expect(SECTION_SRC).toMatch(/resolveDocsUrl|DocsLink/);
   });
 
   it("has 'How RTL works' link text", () => {
@@ -362,9 +360,8 @@ describe("RtlReturnSection structural — docs and guidance", () => {
 // ---------------------------------------------------------------------------
 
 describe("RtlReturnSection structural — vehicle branching", () => {
-  it("retains isPlane helper", () => {
-    expect(SECTION_SRC).toMatch(/function isPlane/);
-    expect(SECTION_SRC).toMatch(/fixed_wing/);
+  it("retains isPlane helper (imported from shared)", () => {
+    expect(SECTION_SRC).toMatch(/isPlaneVehicleType as isPlane/);
   });
 
   it("has copter-specific section gated on !plane", () => {

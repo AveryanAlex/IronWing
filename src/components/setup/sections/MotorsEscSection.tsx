@@ -20,6 +20,14 @@ import type { ParamInputParams } from "../primitives/param-helpers";
 import { MotorDiagram } from "../MotorDiagram";
 import { getMotorCount } from "../../../data/motor-layouts";
 import type { VehicleState } from "../../../telemetry";
+import {
+  isCopterVehicleType as isCopter,
+  isPlaneVehicleType as isPlane,
+  getVehicleSlug,
+} from "../shared/vehicle-helpers";
+import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { SectionCardHeader } from "../shared/SectionCardHeader";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -29,31 +37,6 @@ const MAX_THROTTLE_PCT = 5;
 const MOTOR_TEST_DURATION_S = 2.0;
 const COOLDOWN_MS = 2000;
 const ESC_CALIBRATION_VALUE = 3;
-
-const COPTER_VEHICLE_TYPES = [
-  "quadrotor",
-  "hexarotor",
-  "octorotor",
-  "tricopter",
-  "helicopter",
-  "coaxial",
-];
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function isCopter(vehicleState: VehicleState | null): boolean {
-  if (!vehicleState) return false;
-  return COPTER_VEHICLE_TYPES.some((t) =>
-    vehicleState.vehicle_type.toLowerCase().includes(t),
-  );
-}
-
-function isPlane(vehicleState: VehicleState | null): boolean {
-  if (!vehicleState) return false;
-  return vehicleState.vehicle_type.toLowerCase().includes("fixed_wing");
-}
 
 function isDshot(pwmType: number): boolean {
   return pwmType >= 4 && pwmType <= 7;
@@ -84,12 +67,7 @@ function EscProtocolCard({ params }: { params: ParamInputParams }) {
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Cog size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          ESC Protocol
-        </h3>
-      </div>
+      <SectionCardHeader icon={Cog} title="ESC Protocol" />
       <ParamSelect paramName="MOT_PWM_TYPE" params={params} />
     </div>
   );
@@ -202,12 +180,7 @@ function MotorTestCard({
   if (!copter) {
     return (
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Info size={14} className="text-accent" />
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            Motor / Servo Verification
-          </h3>
-        </div>
+        <SectionCardHeader icon={Info} title="Motor / Servo Verification" />
         <p className="text-xs leading-relaxed text-text-secondary">
           Motor/servo verification for this vehicle type should be done through manual inspection.
           Refer to{" "}
@@ -227,12 +200,7 @@ function MotorTestCard({
         />
       )}
 
-      <div className="mb-3 flex items-center gap-2">
-        <Shield size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Motor Test
-        </h3>
-      </div>
+      <SectionCardHeader icon={Shield} title="Motor Test" />
 
       {/* Motor diagram */}
       {frameClass != null && frameType != null && motorCount > 0 && (
@@ -327,7 +295,13 @@ function MotorTestCard({
 // ESC Calibration card (DShot vs PWM behavior)
 // ---------------------------------------------------------------------------
 
-function EscCalibrationCard({ params }: { params: ParamInputParams }) {
+function EscCalibrationCard({
+  params,
+  escCalDocsUrl,
+}: {
+  params: ParamInputParams;
+  escCalDocsUrl: string | null;
+}) {
   const pwmType = getStagedOrCurrent("MOT_PWM_TYPE", params);
   const escCalStaged = params.staged.has("ESC_CALIBRATION");
 
@@ -345,12 +319,7 @@ function EscCalibrationCard({ params }: { params: ParamInputParams }) {
   if (isDshot(pwmTypeValue)) {
     return (
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Zap size={14} className="text-accent" />
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-            ESC Calibration
-          </h3>
-        </div>
+        <SectionCardHeader icon={Zap} title="ESC Calibration" docsUrl={escCalDocsUrl} docsLabel="ESC Calibration Docs" />
         <div className="flex items-center gap-2 rounded-md bg-success/10 px-3 py-2.5 text-xs text-success">
           <CheckCircle2 size={14} className="shrink-0" />
           <span>
@@ -364,12 +333,7 @@ function EscCalibrationCard({ params }: { params: ParamInputParams }) {
   // PWM / OneShot — show calibration guidance
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Zap size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          ESC Calibration
-        </h3>
-      </div>
+      <SectionCardHeader icon={Zap} title="ESC Calibration" docsUrl={escCalDocsUrl} docsLabel="ESC Calibration Docs" />
 
       {/* Semi-Automatic Calibration */}
       <div className="flex flex-col gap-3">
@@ -442,12 +406,7 @@ function MotorRangeCard({ params }: { params: ParamInputParams }) {
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <SlidersHorizontal size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Motor Range Configuration
-        </h3>
-      </div>
+      <SectionCardHeader icon={SlidersHorizontal} title="Motor Range Configuration" />
 
       {/* DShot info note */}
       {dshotActive && (
@@ -534,12 +493,7 @@ function PlaneThrottleCard({ params }: { params: ParamInputParams }) {
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Gauge size={14} className="text-accent" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-          Throttle Configuration
-        </h3>
-      </div>
+      <SectionCardHeader icon={Gauge} title="Throttle Configuration" />
 
       <div className="mb-3 flex items-start gap-2 rounded-md bg-accent/10 px-3 py-2.5">
         <Info size={13} className="mt-0.5 shrink-0 text-accent" />
@@ -595,9 +549,20 @@ export function MotorsEscSection({
 }: MotorsEscSectionProps) {
   const copter = isCopter(vehicleState);
   const plane = isPlane(vehicleState);
+  const slug = getVehicleSlug(vehicleState);
+  const motorsDocsUrl = resolveDocsUrl("motors_esc", slug);
+  const escCalDocsUrl = resolveDocsUrl("esc_calibration", slug);
 
   return (
     <div className="flex flex-col gap-3 p-4">
+      <SetupSectionIntro
+        icon={Cog}
+        title="Motors & ESC"
+        description="Configure ESC protocol, test individual motors, calibrate ESCs, and set motor output ranges. Always remove propellers before testing."
+        docsUrl={motorsDocsUrl}
+        docsLabel="Motor Setup Docs"
+      />
+
       {/* ESC protocol — always shown for copters */}
       {copter && <EscProtocolCard params={params} />}
 
@@ -607,7 +572,7 @@ export function MotorsEscSection({
       {/* Copter motor range + ESC calibration */}
       {copter && (
         <>
-          <EscCalibrationCard params={params} />
+          <EscCalibrationCard params={params} escCalDocsUrl={escCalDocsUrl} />
           <MotorRangeCard params={params} />
         </>
       )}
