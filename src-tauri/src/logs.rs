@@ -1253,7 +1253,7 @@ mod tests {
     fn haversine_nyc_to_london() {
         let dist = haversine_m(40.7128, -74.0060, 51.5074, -0.1278);
         assert!(
-            dist >= 5_514_000.0 && dist <= 5_626_000.0,
+            (5_514_000.0..=5_626_000.0).contains(&dist),
             "expected ~5570 km, got {dist}"
         );
     }
@@ -1267,7 +1267,7 @@ mod tests {
     #[test]
     fn haversine_short_distance() {
         let dist = haversine_m(0.0, 0.0, 0.0009, 0.0);
-        assert!(dist >= 50.0 && dist <= 200.0, "expected ~100 m, got {dist}");
+        assert!((50.0..=200.0).contains(&dist), "expected ~100 m, got {dist}");
     }
 
     #[test]
@@ -1463,10 +1463,12 @@ mod tests {
 
     #[test]
     fn apply_tlog_entry_unknown_keeps_existing_values() {
-        let mut snap = TelemetrySnapshot::default();
-        snap.roll_deg = Some(12.0);
-        snap.altitude_m = Some(50.0);
-        snap.gps_fix_type = Some("3D Fix".to_string());
+        let mut snap = TelemetrySnapshot {
+            roll_deg: Some(12.0),
+            altitude_m: Some(50.0),
+            gps_fix_type: Some("3D Fix".to_string()),
+            ..Default::default()
+        };
 
         let mut fields = HashMap::new();
         fields.insert("ignored".to_string(), 1.0);
@@ -1639,9 +1641,11 @@ mod tests {
 
     #[test]
     fn apply_bin_entry_unknown_keeps_existing_values() {
-        let mut snap = TelemetrySnapshot::default();
-        snap.roll_deg = Some(9.0);
-        snap.altitude_m = Some(22.0);
+        let mut snap = TelemetrySnapshot {
+            roll_deg: Some(9.0),
+            altitude_m: Some(22.0),
+            ..Default::default()
+        };
 
         let mut fields = HashMap::new();
         fields.insert("Something".to_string(), 1.0);

@@ -235,6 +235,7 @@ export function SetupWizardPanel({
     { paramStore: params.store, downloadAll: params.download },
     vehicleState,
     connected,
+    sensorHealth,
   );
 
   // Gate: not connected

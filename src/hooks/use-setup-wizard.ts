@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import type { ParamStore } from "../params";
+import type { SensorHealth } from "../sensor-health";
 import type { VehicleState } from "../telemetry";
 
 // ---------------------------------------------------------------------------
@@ -149,6 +150,7 @@ export function useSetupWizard(
   params: { paramStore: ParamStore | null; downloadAll: () => void },
   vehicleState: VehicleState | null,
   connected: boolean,
+  sensorHealth: SensorHealth | null,
 ): SetupWizardReturn {
   const isSupported = vehicleState?.autopilot === "ardu_pilot_mega";
 
@@ -223,6 +225,8 @@ export function useSetupWizard(
 
       if (derived === true) {
         statuses.set(step.id, "complete");
+      } else if (step.id === "prearm" && sensorHealth?.pre_arm_good === true) {
+        statuses.set(step.id, "complete");
       } else if (confirmedSteps[step.id]) {
         statuses.set(step.id, "complete");
       } else if (step.id === activeStep) {
@@ -233,7 +237,7 @@ export function useSetupWizard(
     }
 
     return statuses;
-  }, [params.paramStore, confirmedSteps, activeStep]);
+  }, [params.paramStore, confirmedSteps, activeStep, sensorHealth]);
 
   // Navigation
   const goToStep = useCallback((id: WizardStepId) => {

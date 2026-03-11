@@ -127,7 +127,7 @@ pub(crate) async fn recording_start(
     path: String,
 ) -> Result<String, String> {
     let vehicle = crate::helpers::with_vehicle(&state).await?;
-    state.recorder.start(&*vehicle, &path)
+    state.recorder.start(&vehicle, &path)
 }
 
 #[tauri::command]
