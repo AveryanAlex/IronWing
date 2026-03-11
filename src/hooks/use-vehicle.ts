@@ -217,19 +217,6 @@ export function useVehicle() {
     cancelledRef.current = false;
     setConnectionError(null);
     setIsConnecting(true);
-
-    try {
-      const snapshot = await getVehicleSnapshot();
-      if (snapshot && snapshot.link_state === "connected") {
-        setLinkState(snapshot.link_state);
-        setVehicleState(snapshot.vehicle_state);
-        setTelemetry(snapshot.telemetry);
-        if (snapshot.home_position) setHomePosition(snapshot.home_position);
-        setIsConnecting(false);
-        return;
-      }
-    } catch {}
-
     let request: ConnectRequest;
     switch (mode) {
       case "udp":
