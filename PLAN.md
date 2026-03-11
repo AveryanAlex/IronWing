@@ -78,8 +78,6 @@ Build a modern, desktop-first Ground Control Station from scratch using Tauri.
 - ArduPilot mode tables (feature-gated)
 
 Future modules (not yet implemented):
-- Log ingest: TLOG/BIN import, indexing, playback timeline, chart query
-- Guided setup: onboarding wizard, setup state, readiness checklist, pre-arm assistant
 - Firmware: manifest fetch, download cache, flash orchestration
 
 ## Design Constraints
@@ -197,7 +195,8 @@ Current status:
 - M2: complete
 - M2.5: complete (Bluetooth transport stack, Android mobile, HUD instruments, param UI foundation)
 - M3: complete (parameter staging engine, setup wizards, STATUSTEXT plumbing)
-- M4: in progress (TLOG recording/import, indexing, timeline playback, basic charts, map replay path)
+- M4: complete (TLOG/BIN recording, import, indexing, timeline playback, charts, map replay, CSV export)
+- M5: complete (guided setup wizard, compass calibration, motor test, pre-arm assistant, sensor health)
 
 ## Completed Milestones
 
@@ -217,68 +216,11 @@ Current status:
 ### M3 - Parameters and Setup Workflows [COMPLETE]
 - Parameter staging/batch apply, metadata-aware filtering, STATUSTEXT plumbing, and accel/gyro/radio setup workflows shipped.
 
-## M4 - Logs and Analysis [IN PROGRESS]
+### M4 - Logs and Analysis [COMPLETE]
+- TLOG/BIN recording, import, indexing, timeline playback, expanded charts, flight summary stats, CSV export, map replay, and playback-aware HUD shipped.
 
-Current shipped slice:
-- TLOG recording from live MAVLink sessions
-- TLOG and BIN import, parse, and in-memory indexing
-- Timeline playback controls with speed/seek
-- Expanded charts: altitude, speed, attitude, battery, throttle, GPS quality, RC input, servo output, nav controller, vibration (BIN)
-- Flight summary stats: max/avg altitude, max speed, total distance, max range from home, battery delta, mAh consumed, GPS satellite range
-- CSV export with optional time-range selection (drag-to-select on any chart)
-- Flight-path replay tied to the map
-- HUD, sidebar, and telemetry panel render from playback data during log replay
-- Relative mm:ss time axis on all charts
-
-Remaining M4 scope:
-- Persisted log library / recent recordings browser
-
-Exit criteria:
-- Pilot can review a flight log with timeline and metrics
-
-## M5 - Guided Vehicle Setup Wizard
-
-Goal:
-- A new ArduPilot flight controller can be taken from first connection to first-flight-ready state inside IronWing with a guided, resumable workflow.
-
-Issue-sized tasks:
-
-1. Setup session model and persistence
-   - Add a setup profile/session model that tracks board identity, vehicle type, completed steps, blockers, and resume state
-   - Persist wizard progress locally so setup can resume after disconnects, restarts, or firmware updates
-
-2. Vehicle inspection and prerequisites step
-   - Detect connected board, firmware family/version, vehicle type, available sensors, RC presence, GPS state, and link quality
-   - Build a prerequisite screen that explains what can proceed now versus what requires hardware changes or outdoor GPS conditions
-
-3. Mandatory calibration step integration
-   - Integrate existing accel, gyro, and radio calibration flows into a single guided setup sequence
-   - Add the missing compass-calibration workflow and completion checks so all mandatory first-flight calibrations live in one place
-
-4. Frame, outputs, and motor/ESC verification step
-   - Add frame/orientation review, servo-output mapping checks, motor order/direction verification, and ESC calibration guidance/tests
-   - Separate "safe bench verification" from "props-on flight readiness" and enforce clear safety prompts
-
-5. Flight modes and failsafe configuration step
-   - Add guided setup for core flight modes and recommended mode ordering per vehicle class
-   - Add dedicated setup/review for radio, battery, GCS, and EKF/GPS-related failsafe settings with sane defaults and warnings
-
-6. Pre-arm blocker assistant
-   - Parse pre-arm failures and common STATUSTEXT/setup issues into actionable tasks with fix guidance instead of raw messages alone
-   - Keep a readiness checklist that updates live as calibrations, GPS/home lock, battery, and sensor health become valid
-
-7. First-flight readiness review and report
-   - Add a final review step covering level horizon check, motor direction confirmation, GPS/home readiness, battery state, and recommended staged mode progression
-   - Generate a saved setup summary/checklist the operator can revisit before first flight
-
-8. Validation and field test coverage
-   - Add SITL coverage for the wizard state machine and readiness logic where possible
-   - Run hardware validation on at least one fresh-controller setup flow and document known gaps by vehicle type
-
-Exit criteria:
-- New flight controller can be brought from first connection to first-flight-ready state using the guided setup flow without relying on external GCS setup screens
-- Wizard progress survives reconnects/restarts and clearly reports remaining blockers
-- Pre-arm/setup blockers are surfaced as actionable setup tasks rather than only raw status text
+### M5 - Guided Vehicle Setup Wizard [COMPLETE]
+- 7-step guided setup wizard (inspection, calibration, frame/motor, flight modes, failsafe, pre-arm, readiness), compass calibration workflow, motor test, pre-arm blocker parsing, sensor health watch, and localStorage persistence shipped.
 
 ## M6 - Firmware Install and Update Workflow
 
@@ -385,9 +327,9 @@ Exit criteria:
 
 ---
 
-## 11) Immediate Next Steps (Current - M4 In Progress)
+## 11) Immediate Next Steps (Current - M6 Next)
 
-1. Add a persisted log library / recent recordings surface for imported and recorded sessions
+1. Begin M6 firmware install workflow: board detection, firmware catalog client, flash executor
 2. Frontend test baseline: add Vitest for hooks, playback state, and IPC bridge modules
 3. Mobile polish: verify BT permission flow on Android 12+, test full connection lifecycle on hardware
 4. Safety and support groundwork: confirmation UX/audit trail for critical actions and a diagnostics bundle export path
