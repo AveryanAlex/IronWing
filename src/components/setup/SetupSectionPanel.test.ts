@@ -419,3 +419,39 @@ describe("StagedParamsBar animated expand/collapse", () => {
     expect(barBody).toContain("rotate-180");
   });
 });
+
+describe("Setup action relocation", () => {
+  const overviewSrc = readFileSync(
+    resolve(__dirname, "sections", "OverviewSection.tsx"),
+    "utf-8",
+  );
+  const configPanelSrc = readFileSync(
+    resolve(__dirname, "..", "ConfigPanel.tsx"),
+    "utf-8",
+  );
+
+  it("Overview quick actions expose refresh, save, and load through params actions", () => {
+    const quickActionsFn = overviewSrc.slice(overviewSrc.indexOf("function QuickActions("));
+    const quickActionsBody = quickActionsFn.slice(0, quickActionsFn.indexOf("\nfunction "));
+
+    expect(quickActionsBody).toContain("params.download");
+    expect(quickActionsBody).toContain("params.saveToFile");
+    expect(quickActionsBody).toContain("params.loadFromFile");
+    expect(quickActionsBody).toContain("Refresh");
+    expect(quickActionsBody).toContain("Save");
+    expect(quickActionsBody).toContain("Load");
+  });
+
+  it("ConfigPanel no longer renders the full-parameters action toolbar buttons", () => {
+    expect(configPanelSrc).not.toContain("Apply ");
+    expect(configPanelSrc).not.toContain("Save");
+    expect(configPanelSrc).not.toContain("Load");
+    expect(configPanelSrc).not.toContain("Downloading…");
+  });
+
+  it("ConfigPanel still renders filter pills and parameter search", () => {
+    expect(configPanelSrc).toContain("FilterPill");
+    expect(configPanelSrc).toContain("Search parameters…");
+    expect(configPanelSrc).toContain("Modified");
+  });
+});

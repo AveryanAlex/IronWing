@@ -36,20 +36,21 @@ describe("ConfigPanel has no inline StagedDiffPanel", () => {
   });
 });
 
-describe("ConfigPanel preserves toolbar apply/discard controls", () => {
-  it("has an Apply button that calls applyStaged", () => {
-    expect(src).toMatch(/params\.applyStaged/);
-    expect(src).toMatch(/Apply/);
+describe("ConfigPanel removes the top action toolbar", () => {
+  it("does not call applyStaged or unstageAll directly", () => {
+    expect(src).not.toMatch(/params\.applyStaged/);
+    expect(src).not.toMatch(/params\.unstageAll/);
   });
 
-  it("has a Discard All button that calls unstageAll", () => {
-    expect(src).toMatch(/params\.unstageAll/);
-    expect(src).toMatch(/Discard All/);
+  it("does not render the action toolbar labels", () => {
+    expect(src).not.toMatch(/Apply/);
+    expect(src).not.toMatch(/Discard All/);
   });
 
-  it("has a Refresh button that calls download", () => {
-    expect(src).toMatch(/params\.download/);
-    expect(src).toMatch(/Refresh/);
+  it("keeps parameter browsing controls without a refresh button", () => {
+    expect(src).toContain("FilterPill");
+    expect(src).toContain("Search parameters…");
+    expect(src).not.toMatch(/params\.download/);
   });
 });
 

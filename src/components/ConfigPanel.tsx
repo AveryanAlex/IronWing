@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { RefreshCw, Save, FolderOpen, ChevronDown, Search, Check, X, RotateCw, Loader2, Upload, Trash2, Lock } from "lucide-react";
+import { ChevronDown, Search, Check, X, RotateCw, Lock } from "lucide-react";
 import { SetupCheckbox } from "./setup/shared/SetupCheckbox";
 import type { useParams } from "../hooks/use-params";
 import type { Param } from "../params";
@@ -396,9 +396,8 @@ export function ConfigPanel({ params, connected, highlightParam, onHighlightHand
 }
 
 function ParamsTabContent({ params, connected, highlightParam, onHighlightHandled }: ConfigPanelProps) {
-  const downloading = params.progress?.phase === "downloading";
   const writing = params.progress?.phase === "writing";
-  const busy = downloading || writing;
+  const busy = params.progress?.phase === "downloading" || writing;
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scrollToHighlightedParam = useCallback((paramName: string) => {
@@ -453,60 +452,6 @@ function ParamsTabContent({ params, connected, highlightParam, onHighlightHandle
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={params.download}
-          disabled={!connected || busy}
-          className="flex items-center gap-1.5 rounded-md bg-accent-blue px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
-        >
-          <RefreshCw size={12} className={downloading ? "animate-spin" : ""} />
-          {downloading ? "Downloading…" : "Refresh"}
-        </button>
-        <button
-          onClick={params.applyStaged}
-          disabled={!connected || params.staged.size === 0 || busy}
-          className="flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
-        >
-          <Upload size={12} className={writing ? "animate-pulse" : ""} />
-          {writing
-            ? `Writing ${params.progress?.received ?? 0} / ${params.progress?.expected ?? 0}`
-            : `Apply ${params.staged.size} Change${params.staged.size !== 1 ? "s" : ""}`}
-        </button>
-        {params.staged.size > 0 && (
-          <button
-            onClick={params.unstageAll}
-            disabled={busy}
-            className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-opacity disabled:opacity-40"
-          >
-            <Trash2 size={12} />
-            Discard All
-          </button>
-        )}
-        <button
-          onClick={params.saveToFile}
-          disabled={!params.store}
-          className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-opacity disabled:opacity-40"
-        >
-          <Save size={12} />
-          Save
-        </button>
-        <button
-          onClick={params.loadFromFile}
-          className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-opacity disabled:opacity-40"
-        >
-          <FolderOpen size={12} />
-          Load
-        </button>
-        {params.metadataLoading && (
-          <span className="flex items-center gap-1 text-[10px] text-text-muted">
-            <Loader2 size={10} className="animate-spin" />
-            Loading descriptions…
-          </span>
-        )}
-      </div>
-
-      {/* Filter pills + search */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1">
           <FilterPill label="Standard" active={params.filterMode === "standard"} onClick={() => params.setFilterMode("standard")} />

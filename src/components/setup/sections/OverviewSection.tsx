@@ -8,6 +8,8 @@ import {
   ShieldCheck,
   ShieldAlert,
   RefreshCw,
+  Save,
+  FolderOpen,
   Power,
   PowerOff,
   ChevronRight,
@@ -305,8 +307,23 @@ function QuickActions({
           disabled={!connected || downloading}
           className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-colors hover:bg-bg-tertiary disabled:opacity-40"
         >
-          <Download size={12} className={downloading ? "animate-pulse" : ""} />
-          {downloading ? "Downloading..." : "Download All Params"}
+          <RefreshCw size={12} className={downloading ? "animate-spin" : ""} />
+          {downloading ? "Refreshing..." : "Refresh"}
+        </button>
+        <button
+          onClick={params.saveToFile}
+          disabled={!params.store}
+          className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-colors hover:bg-bg-tertiary disabled:opacity-40"
+        >
+          <Save size={12} />
+          Save
+        </button>
+        <button
+          onClick={params.loadFromFile}
+          className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-colors hover:bg-bg-tertiary disabled:opacity-40"
+        >
+          <FolderOpen size={12} />
+          Load
         </button>
         <button
           onClick={handleReboot}
