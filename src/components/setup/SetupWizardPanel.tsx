@@ -101,16 +101,6 @@ function WizardStagedBar({
   const [expanded, setExpanded] = useState(false);
   const [applying, setApplying] = useState(false);
 
-  const staged = params.staged;
-  const store = params.store;
-
-  if (staged.size === 0) return null;
-
-  const hasRebootRequired = Array.from(staged.keys()).some((name) => {
-    const meta = params.metadata?.get(name);
-    return meta?.rebootRequired;
-  });
-
   const handleApply = useCallback(async () => {
     setApplying(true);
     try {
@@ -123,6 +113,16 @@ function WizardStagedBar({
   const handleDiscardAll = useCallback(() => {
     params.unstageAll();
   }, [params]);
+
+  const staged = params.staged;
+  const store = params.store;
+
+  if (staged.size === 0) return null;
+
+  const hasRebootRequired = Array.from(staged.keys()).some((name) => {
+    const meta = params.metadata?.get(name);
+    return meta?.rebootRequired;
+  });
 
   return (
     <div className="border-t border-warning/30 bg-warning/5">
