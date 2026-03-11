@@ -69,6 +69,14 @@ export function useMission(connected: boolean, telemetry: Telemetry, vehicleHome
     progress?.phase === "transfer_items" ||
     progress?.phase === "await_ack";
 
+  // Clear vehicle-sourced state on disconnect
+  useEffect(() => {
+    if (!connected) {
+      setMissionState(null);
+      setProgress(null);
+    }
+  }, [connected]);
+
   // Sync home position from vehicle (unless user has set a custom one)
   useEffect(() => {
     if (vehicleHomePosition && homeSource !== "user") {
