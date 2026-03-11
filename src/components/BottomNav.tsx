@@ -1,7 +1,9 @@
-import { Map, Activity, Crosshair, Route, Sliders, FileText, Settings } from "lucide-react";
 import { cn } from "../lib/utils";
+import { type ActiveTab, TABS } from "../types";
 
-type ActiveTab = "map" | "telemetry" | "hud" | "mission" | "config" | "logs" | "settings";
+const MOBILE_LABELS: Partial<Record<ActiveTab, string>> = {
+  telemetry: "Telem",
+};
 
 type BottomNavProps = {
   activeTab: ActiveTab;
@@ -11,16 +13,6 @@ type BottomNavProps = {
   connectionError: string | null;
   onSidebarOpen: () => void;
 };
-
-const TABS: { id: ActiveTab; label: string; Icon: typeof Map }[] = [
-  { id: "map", label: "Map", Icon: Map },
-  { id: "telemetry", label: "Telem", Icon: Activity },
-  { id: "hud", label: "HUD", Icon: Crosshair },
-  { id: "mission", label: "Mission", Icon: Route },
-  { id: "config", label: "Config", Icon: Sliders },
-  { id: "logs", label: "Logs", Icon: FileText },
-  { id: "settings", label: "Settings", Icon: Settings },
-];
 
 export function BottomNav({ activeTab, onTabChange, isConnecting, connected, connectionError, onSidebarOpen }: BottomNavProps) {
   return (
@@ -56,7 +48,7 @@ export function BottomNav({ activeTab, onTabChange, isConnecting, connected, con
           )}
         >
           <Icon size={18} />
-          <span className="text-[10px]">{label}</span>
+          <span className="text-[10px]">{MOBILE_LABELS[id] ?? label}</span>
         </button>
       ))}
     </nav>

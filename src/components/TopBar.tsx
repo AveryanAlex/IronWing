@@ -1,8 +1,6 @@
-import { Map, Activity, Crosshair, Route, Sliders, FileText, Settings } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { LinkState } from "../telemetry";
-
-type ActiveTab = "map" | "telemetry" | "hud" | "mission" | "config" | "logs" | "settings";
+import { type ActiveTab, TABS } from "../types";
 
 type TopBarProps = {
   activeTab: ActiveTab;
@@ -10,16 +8,6 @@ type TopBarProps = {
   linkState: LinkState | null;
   isRecording?: boolean;
 };
-
-const TABS: { id: ActiveTab; label: string; Icon: typeof Map }[] = [
-  { id: "map", label: "Map", Icon: Map },
-  { id: "telemetry", label: "Telemetry", Icon: Activity },
-  { id: "hud", label: "HUD", Icon: Crosshair },
-  { id: "mission", label: "Mission", Icon: Route },
-  { id: "config", label: "Config", Icon: Sliders },
-  { id: "logs", label: "Logs", Icon: FileText },
-  { id: "settings", label: "Settings", Icon: Settings },
-];
 
 function linkDotColor(state: LinkState | null): string {
   if (state === "connected") return "bg-success";

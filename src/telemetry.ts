@@ -71,6 +71,9 @@ export type VehicleState = {
   system_status: string;
   vehicle_type: string;
   autopilot: string;
+  system_id: number;
+  component_id: number;
+  heartbeat_received: boolean;
 };
 
 export type HomePosition = {

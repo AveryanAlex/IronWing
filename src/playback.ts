@@ -181,6 +181,9 @@ export function interpolateLogTelemetry(
           system_status: "active",
           vehicle_type: "",
           autopilot: "",
+          system_id: 0,
+          component_id: 0,
+          heartbeat_received: false,
         }
       : null;
 

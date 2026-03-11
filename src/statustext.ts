@@ -2,7 +2,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export type StatusMessage = {
   text: string;
-  severity: number;
+  severity: string;
 };
 
 export async function subscribeStatusText(
