@@ -17,26 +17,26 @@ type BottomNavProps = {
 export function BottomNav({ activeTab, onTabChange, isConnecting, connected, connectionError, onSidebarOpen }: BottomNavProps) {
   return (
     <nav
-      className="flex shrink-0 items-center justify-around border-t border-border bg-bg-secondary"
+      className="w-full shrink-0 overflow-x-auto overflow-y-hidden border-t border-border bg-bg-secondary"
       style={{ paddingBottom: "var(--safe-area-bottom, 0px)" }}
     >
-      {/* Connection dot — opens sidebar drawer */}
-      <button
-        onClick={onSidebarOpen}
-        className="flex flex-col items-center justify-center gap-0.5 px-2 py-2"
-        aria-label="Vehicle panel"
-      >
-        <div className={cn(
-          "h-3 w-3 rounded-full",
-          isConnecting ? "bg-warning animate-pulse" :
-          connected ? "bg-success" :
-          connectionError ? "bg-danger" :
-          "bg-text-muted"
-        )} />
-        <span className="text-[10px] text-text-muted">Vehicle</span>
-      </button>
+      <div className="flex min-w-[360px] items-center justify-around">
+        <button
+          onClick={onSidebarOpen}
+          className="flex flex-col items-center justify-center gap-0.5 px-2 py-2"
+          aria-label="Vehicle panel"
+        >
+          <div className={cn(
+            "h-3 w-3 rounded-full",
+            isConnecting ? "bg-warning animate-pulse" :
+            connected ? "bg-success" :
+            connectionError ? "bg-danger" :
+            "bg-text-muted"
+          )} />
+          <span className="text-[10px] text-text-muted">Vehicle</span>
+        </button>
 
-      {TABS.map(({ id, label, Icon }) => (
+        {TABS.map(({ id, label, Icon }) => (
         <button
           key={id}
           onClick={() => onTabChange(id)}
@@ -50,7 +50,8 @@ export function BottomNav({ activeTab, onTabChange, isConnecting, connected, con
           <Icon size={18} />
           <span className="text-[10px]">{MOBILE_LABELS[id] ?? label}</span>
         </button>
-      ))}
+        ))}
+      </div>
     </nav>
   );
 }
