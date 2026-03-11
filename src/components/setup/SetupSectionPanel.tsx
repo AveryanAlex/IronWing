@@ -116,6 +116,7 @@ export const SETUP_SECTIONS: SetupSection[] = [
   { id: "frame_orientation", label: "Frame & Orientation", icon: Box, group: "essential" },
   { id: "calibration", label: "Calibration", icon: Compass, group: "essential" },
   { id: "rc_receiver", label: "RC / Receiver", icon: Radio, group: "essential" },
+  { id: "flight_modes", label: "Flight Modes", icon: Plane, group: "essential" },
   // Hardware
   { id: "gps", label: "GPS", icon: Satellite, group: "hardware" },
   { id: "battery_monitor", label: "Battery Monitor", icon: Battery, group: "hardware" },
@@ -123,7 +124,6 @@ export const SETUP_SECTIONS: SetupSection[] = [
   { id: "servo_outputs", label: "Servo Outputs", icon: SlidersHorizontal, group: "hardware" },
   { id: "serial_ports", label: "Serial Ports", icon: Cable, group: "hardware" },
   // Safety
-  { id: "flight_modes", label: "Flight Modes", icon: Plane, group: "safety" },
   { id: "failsafe", label: "Failsafe", icon: ShieldAlert, group: "safety" },
   { id: "rtl_return", label: "RTL / Return", icon: Home, group: "safety" },
   { id: "geofence", label: "Geofence", icon: Fence, group: "safety" },
@@ -140,7 +140,7 @@ export const SECTION_GROUPS: SetupGroup[] = [
   {
     id: "essential",
     label: "Essential Setup",
-    sections: ["overview", "frame_orientation", "calibration", "rc_receiver"],
+    sections: ["overview", "frame_orientation", "calibration", "rc_receiver", "flight_modes"],
   },
   {
     id: "hardware",
@@ -150,7 +150,7 @@ export const SECTION_GROUPS: SetupGroup[] = [
   {
     id: "safety",
     label: "Safety",
-    sections: ["flight_modes", "failsafe", "rtl_return", "geofence", "arming"],
+    sections: ["failsafe", "rtl_return", "geofence", "arming"],
   },
   {
     id: "tuning",
