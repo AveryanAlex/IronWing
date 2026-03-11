@@ -60,7 +60,7 @@ All instantiated in `App.tsx`, state drilled via props. No Context or global sto
 | Hook | Purpose | Key Pattern |
 |------|---------|-------------|
 | `useVehicle` | Connection lifecycle, telemetry, vehicle control | RAF coalescing: `pendingTelemetry` ref + `requestAnimationFrame` prevents re-renders faster than display rate |
-| `useMission` | Mission CRUD, transfer events | Subscribes to `mission.state` + `mission.progress` events |
+| `useMission` | Mission CRUD, transfer events | Subscribes to `mission://state` + `mission://progress` events |
 | `useParams` | Param store, staging, metadata, file I/O | Staging is pure frontend `Map<string, number>` — never writes directly; `applyStaged` calls batch write |
 | `useLogs` | Log open/close/query, progress | `log://progress` for parse progress during open |
 | `useRecording` | TLOG record start/stop | Polls `recording_status` every 2s while recording |

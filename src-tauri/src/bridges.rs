@@ -63,7 +63,7 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
         tokio::spawn(async move {
             while rx.changed().await.is_ok() {
                 let ms = rx.borrow().clone();
-                let _ = handle.emit("mission.state", &ms);
+                let _ = handle.emit("mission://state", &ms);
             }
         });
     }
@@ -88,7 +88,7 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
             while rx.changed().await.is_ok() {
                 let mp: Option<TransferProgress> = rx.borrow().clone();
                 if let Some(mp) = mp {
-                    let _ = handle.emit("mission.progress", &mp);
+                    let _ = handle.emit("mission://progress", &mp);
                 }
             }
         });

@@ -98,9 +98,9 @@ export async function cancelMissionTransfer(): Promise<void> {
 }
 
 export async function subscribeMissionProgress(cb: (event: TransferProgress) => void): Promise<UnlistenFn> {
-  return listen<TransferProgress>("mission.progress", (event) => cb(event.payload));
+  return listen<TransferProgress>("mission://progress", (event) => cb(event.payload));
 }
 
 export async function subscribeMissionState(cb: (event: MissionState) => void): Promise<UnlistenFn> {
-  return listen<MissionState>("mission.state", (event) => cb(event.payload));
+  return listen<MissionState>("mission://state", (event) => cb(event.payload));
 }

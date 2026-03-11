@@ -102,8 +102,8 @@ See `src/AGENTS.md` for detailed frontend structure, hook patterns, and IPC brid
 | `link://state` | `LinkState` | Rust → TS | Watch bridge |
 | `vehicle://state` | `VehicleState` | Rust → TS | Watch bridge |
 | `home://position` | `HomePosition` | Rust → TS | Watch bridge, filters None |
-| `mission.progress` | `TransferProgress` | Rust → TS | Watch bridge, filters None |
-| `mission.state` | `MissionState` | Rust → TS | Watch bridge |
+| `mission://progress` | `TransferProgress` | Rust → TS | Watch bridge, filters None |
+| `mission://state` | `MissionState` | Rust → TS | Watch bridge |
 | `param://store` | `ParamStore` | Rust → TS | Watch bridge |
 | `param://progress` | `ParamProgress` | Rust → TS | Watch bridge |
 | `statustext://message` | `StatusMessage` | Rust → TS | Watch bridge, filters None |
@@ -201,7 +201,7 @@ M0–M3 complete. M4 in progress (TLOG recording/import, indexing, timeline play
 
 ## Known Quirks
 
-- **IPC event naming inconsistency**: URI-style (`telemetry://tick`, `param://store`) vs dot-notation (`mission.state`, `mission.progress`). Not intentional — follow URI-style for new events.
+- **IPC event naming**: All events now use URI-style (`telemetry://tick`, `mission://state`, `param://store`). Follow this convention for new events.
 - **`mpng_settings`** localStorage key is a legacy name artifact (from "Mission Planner Next Gen").
 - **`mav.tlog`/`mav.tlog.raw`/`mav.parm`** at repo root are developer SITL artifacts, not committed test fixtures.
 - **Parameter metadata** fetched at runtime from `autotest.ardupilot.org` via `@tauri-apps/plugin-http` (bypasses CORS), parsed with browser `DOMParser`, cached in localStorage 7 days.
