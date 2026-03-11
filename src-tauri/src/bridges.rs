@@ -2,8 +2,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use mavkit::{
-    HomePosition, LinkState, ParamProgress, ParamStore, StatusMessage, Telemetry,
-    TransferProgress, Vehicle, VehicleState,
+    HomePosition, LinkState, MagCalProgress, MagCalReport, ParamProgress, ParamStore,
+    SensorHealth, StatusMessage, Telemetry, TransferProgress, Vehicle, VehicleState,
 };
 use tauri::Emitter;
 
@@ -127,6 +127,46 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
                 let msg: Option<StatusMessage> = rx.borrow().clone();
                 if let Some(msg) = msg {
                     let _ = handle.emit("statustext://message", &msg);
+                }
+            }
+        });
+    }
+
+    // SensorHealth
+    {
+        let mut rx = vehicle.sensor_health();
+        let handle = app.clone();
+        tokio::spawn(async move {
+            while rx.changed().await.is_ok() {
+                let val: SensorHealth = rx.borrow_and_update().clone();
+                let _ = handle.emit("sensor://health", &val);
+            }
+        });
+    }
+
+    // MagCalProgress
+    {
+        let mut rx = vehicle.mag_cal_progress();
+        let handle = app.clone();
+        tokio::spawn(async move {
+            while rx.changed().await.is_ok() {
+                let val: Option<MagCalProgress> = rx.borrow_and_update().clone();
+                if let Some(ref val) = val {
+                    let _ = handle.emit("compass://cal_progress", val);
+                }
+            }
+        });
+    }
+
+    // MagCalReport
+    {
+        let mut rx = vehicle.mag_cal_report();
+        let handle = app.clone();
+        tokio::spawn(async move {
+            while rx.changed().await.is_ok() {
+                let val: Option<MagCalReport> = rx.borrow_and_update().clone();
+                if let Some(ref val) = val {
+                    let _ = handle.emit("compass://cal_report", val);
                 }
             }
         });

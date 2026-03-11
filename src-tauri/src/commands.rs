@@ -253,3 +253,73 @@ pub(crate) fn param_parse_file(contents: String) -> Result<HashMap<String, f32>,
 pub(crate) fn param_format_file(store: ParamStore) -> String {
     format_param_file(&store)
 }
+
+#[tauri::command]
+pub(crate) async fn reboot_vehicle(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    with_vehicle(&state)
+        .await?
+        .reboot()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn motor_test(
+    state: tauri::State<'_, AppState>,
+    motor_instance: u8,
+    throttle_pct: f32,
+    duration_s: f32,
+) -> Result<(), String> {
+    with_vehicle(&state)
+        .await?
+        .motor_test(motor_instance, throttle_pct, duration_s)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn calibrate_compass_start(
+    state: tauri::State<'_, AppState>,
+    compass_mask: u8,
+) -> Result<(), String> {
+    with_vehicle(&state)
+        .await?
+        .start_mag_cal(compass_mask, true, false)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn calibrate_compass_accept(
+    state: tauri::State<'_, AppState>,
+    compass_mask: u8,
+) -> Result<(), String> {
+    with_vehicle(&state)
+        .await?
+        .accept_mag_cal(compass_mask)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn calibrate_compass_cancel(
+    state: tauri::State<'_, AppState>,
+    compass_mask: u8,
+) -> Result<(), String> {
+    with_vehicle(&state)
+        .await?
+        .cancel_mag_cal(compass_mask)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn request_prearm_checks(
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    with_vehicle(&state)
+        .await?
+        .request_prearm_checks()
+        .await
+        .map_err(|e| e.to_string())
+}
