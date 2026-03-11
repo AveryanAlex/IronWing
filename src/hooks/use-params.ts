@@ -49,7 +49,9 @@ export function useParams(connected: boolean, vehicleType?: string) {
       try {
         const snapshot = await getVehicleSnapshot();
         if (snapshot) {
-          setStore(snapshot.param_store);
+          if (Object.keys(snapshot.param_store.params).length > 0) {
+            setStore(snapshot.param_store);
+          }
           setProgress(snapshot.param_progress);
         }
       } catch {}
