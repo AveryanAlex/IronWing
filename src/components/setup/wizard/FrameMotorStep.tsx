@@ -7,6 +7,8 @@ import {
   Loader2,
   CheckCircle2,
   Info,
+  Zap,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "../../ui/button";
 import { motorTest, rebootVehicle } from "../../../calibration";
@@ -85,6 +87,24 @@ const SERVO_FUNCTION_LABELS: Record<number, string> = {
 const MAX_THROTTLE_PCT = 5;
 const MOTOR_TEST_DURATION_S = 2.0;
 const COOLDOWN_MS = 2000;
+
+const MOT_PWM_TYPE_LABELS: Record<number, string> = {
+  0: "Normal PWM",
+  1: "OneShot",
+  2: "OneShot125",
+  3: "Brushed (DualPWM)",
+  4: "DShot150",
+  5: "DShot300",
+  6: "DShot600",
+  7: "DShot1200",
+  8: "PWMRange",
+};
+
+const ESC_CALIBRATION_VALUE = 3;
+
+function isDshot(pwmType: number): boolean {
+  return pwmType >= 4 && pwmType <= 7;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -409,6 +429,269 @@ function MotorTestSection({
   );
 }
 
+function ParamNumericInput({
+  label,
+  paramName,
+  params,
+  unit,
+  min,
+  max,
+  step,
+  description,
+}: {
+  label: string;
+  paramName: string;
+  params: FrameMotorStepProps["params"];
+  unit?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  description?: string;
+}) {
+  const value = getStagedOrCurrent(params, paramName);
+  const isStaged = params.staged.has(paramName);
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10px] uppercase tracking-wider text-text-muted">{label}</span>
+        {isStaged && (
+          <span className="rounded bg-warning/10 px-1 py-px text-[9px] font-medium text-warning">
+            staged
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <input
+          type="number"
+          value={value != null ? String(value) : ""}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (!Number.isNaN(v)) params.stage(paramName, v);
+          }}
+          min={min}
+          max={max}
+          step={step}
+          className="w-full rounded border border-border bg-bg-input px-2 py-1.5 text-xs font-mono text-text-primary focus:border-accent focus:outline-none"
+        />
+        {unit && <span className="shrink-0 text-[10px] text-text-muted">{unit}</span>}
+      </div>
+      {description && (
+        <span className="text-[10px] text-text-muted">{description}</span>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function EscCalibrationSection({ params }: { params: FrameMotorStepProps["params"] }) {
+  const pwmType = getParamValue(params, "MOT_PWM_TYPE");
+  const escCalStaged = params.staged.has("ESC_CALIBRATION");
+
+  // Params not loaded yet
+  if (!params.store) {
+    return (
+      <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4 text-sm text-text-muted">
+        Download parameters first
+      </div>
+    );
+  }
+
+  const pwmTypeValue = pwmType ?? 0;
+  const protocolName = MOT_PWM_TYPE_LABELS[pwmTypeValue] ?? `Type ${pwmTypeValue}`;
+
+  // DShot — no calibration needed
+  if (isDshot(pwmTypeValue)) {
+    return (
+      <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Zap size={14} className="text-accent" />
+          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+            ESC Calibration
+          </h3>
+        </div>
+        <div className="flex items-center gap-2 rounded-md bg-success/10 px-3 py-2.5 text-xs text-success">
+          <CheckCircle2 size={14} className="shrink-0" />
+          <span>
+            No ESC calibration needed — <strong>{protocolName}</strong> is a digital protocol
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // PWM / OneShot — show calibration guidance
+  return (
+    <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <Zap size={14} className="text-accent" />
+        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+          ESC Calibration
+        </h3>
+      </div>
+
+      {/* Protocol badge */}
+      <div className="mb-3">
+        <span className="inline-flex items-center rounded bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
+          Protocol: {protocolName}
+        </span>
+      </div>
+
+      {/* Semi-Automatic Calibration */}
+      <div className="flex flex-col gap-3">
+        <h4 className="text-xs font-semibold text-text-primary">Semi-Automatic Calibration</h4>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => params.stage("ESC_CALIBRATION", ESC_CALIBRATION_VALUE)}
+            className="flex items-center gap-1.5 rounded-md bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
+          >
+            <Zap size={12} />
+            Stage ESC_CALIBRATION = 3
+          </button>
+          {escCalStaged && (
+            <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[9px] font-medium text-warning">
+              staged
+            </span>
+          )}
+        </div>
+
+        {escCalStaged && (
+          <ol className="ml-4 flex list-decimal flex-col gap-1.5 text-xs leading-relaxed text-text-secondary">
+            <li>Apply the staged parameter change using the yellow bar at the bottom</li>
+            <li>Disconnect battery and USB from the vehicle</li>
+            <li>Reconnect battery</li>
+            <li>Wait for arming tone, press safety button if present</li>
+            <li>
+              Wait for musical tone → cell-count beeps → long confirmation tone
+            </li>
+            <li>Disconnect battery, then reconnect normally to fly</li>
+          </ol>
+        )}
+
+        {/* Safety warning */}
+        <div className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger/10 px-3 py-2.5">
+          <AlertTriangle size={13} className="mt-0.5 shrink-0 text-danger" />
+          <span className="text-xs font-medium text-danger">
+            Remove ALL propellers before ESC calibration
+          </span>
+        </div>
+
+        {/* Fallback note */}
+        <p className="text-[10px] leading-relaxed text-text-muted">
+          Some ESC brands don't support calibration. If motors don't respond uniformly after
+          calibration, manually adjust MOT_PWM_MIN and MOT_PWM_MAX in the Motor Range section below.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function MotorRangeSection({ params }: { params: FrameMotorStepProps["params"] }) {
+  const pwmType = getParamValue(params, "MOT_PWM_TYPE");
+
+  // Params not loaded yet
+  if (!params.store) {
+    return (
+      <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4 text-sm text-text-muted">
+        Download parameters first
+      </div>
+    );
+  }
+
+  const pwmTypeValue = pwmType ?? 0;
+  const dshotActive = isDshot(pwmTypeValue);
+
+  return (
+    <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <SlidersHorizontal size={14} className="text-accent" />
+        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+          Motor Range Configuration
+        </h3>
+      </div>
+
+      {/* DShot info note */}
+      {dshotActive && (
+        <div className="mb-3 flex items-start gap-2 rounded-md bg-accent/10 px-3 py-2.5">
+          <Info size={13} className="mt-0.5 shrink-0 text-accent" />
+          <span className="text-xs text-accent">
+            PWM range (MOT_PWM_MIN/MAX) is not used with DShot. Only MOT_SPIN_* parameters apply.
+          </span>
+        </div>
+      )}
+
+      {/* Helper text */}
+      <div className="mb-4 flex flex-col gap-1 rounded-md border border-border-light bg-bg-secondary/50 px-3 py-2.5">
+        <p className="text-xs text-text-secondary">
+          Use Motor Test above to find the minimum throttle % that starts each motor. This is the
+          ESC deadzone.
+        </p>
+        <p className="text-[10px] font-mono text-text-muted">
+          MOT_SPIN_ARM = (deadzone% + 2) / 100 &nbsp;·&nbsp; MOT_SPIN_MIN = MOT_SPIN_ARM + 0.03
+        </p>
+      </div>
+
+      {/* Parameter inputs — 2-column grid */}
+      <div className="grid grid-cols-2 gap-4">
+        <ParamNumericInput
+          label="MOT_PWM_MIN"
+          paramName="MOT_PWM_MIN"
+          params={params}
+          unit="PWM"
+          min={0}
+          max={2000}
+          step={1}
+          description="Min PWM sent to ESCs"
+        />
+        <ParamNumericInput
+          label="MOT_PWM_MAX"
+          paramName="MOT_PWM_MAX"
+          params={params}
+          unit="PWM"
+          min={0}
+          max={2000}
+          step={1}
+          description="Max PWM sent to ESCs"
+        />
+        <ParamNumericInput
+          label="MOT_SPIN_ARM"
+          paramName="MOT_SPIN_ARM"
+          params={params}
+          min={0}
+          max={0.3}
+          step={0.01}
+          description="Motor spin when armed (fraction)"
+        />
+        <ParamNumericInput
+          label="MOT_SPIN_MIN"
+          paramName="MOT_SPIN_MIN"
+          params={params}
+          min={0}
+          max={0.4}
+          step={0.01}
+          description="Min spin in flight (fraction)"
+        />
+        <ParamNumericInput
+          label="MOT_SPIN_MAX"
+          paramName="MOT_SPIN_MAX"
+          params={params}
+          min={0.9}
+          max={1.0}
+          step={0.01}
+          description="Max useful throttle (fraction)"
+        />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 function ServoOutputTable({ params }: { params: FrameMotorStepProps["params"] }) {
   const servos: { index: number; paramName: string; value: number | undefined }[] = [];
   for (let i = 1; i <= 8; i++) {
@@ -484,6 +767,8 @@ export function FrameMotorStep({
     <div className="flex flex-col gap-3 p-4">
       <FrameSelectionSection params={params} />
       <MotorTestSection params={params} vehicleState={vehicleState} connected={connected} />
+      <EscCalibrationSection params={params} />
+      <MotorRangeSection params={params} />
       <ServoOutputTable params={params} />
 
       {/* Confirmation */}
