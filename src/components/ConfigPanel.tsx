@@ -1,9 +1,9 @@
-import { useState, useCallback } from "react";
-import { RefreshCw, Save, FolderOpen, ChevronRight, ChevronDown, Search, Check, X, RotateCw, Loader2, Upload, Trash2, Lock, Wrench, SlidersHorizontal } from "lucide-react";
+import { useState } from "react";
+import { RefreshCw, Save, FolderOpen, ChevronRight, ChevronDown, Search, Check, X, RotateCw, Loader2, Upload, Trash2, Lock } from "lucide-react";
 import type { useParams, FilterMode } from "../hooks/use-params";
 import type { Param, ParamType } from "../params";
 import type { ParamMeta, ParamMetadataMap } from "../param-metadata";
-import { SetupPanel } from "./setup/SetupPanel";
+
 
 type ConfigPanelProps = {
   params: ReturnType<typeof useParams>;
@@ -456,60 +456,10 @@ function StagedDiffPanel({
   );
 }
 
-type ConfigSubTab = "params" | "setup";
-
 export function ConfigPanel({ params, connected }: ConfigPanelProps) {
-  const [subTab, setSubTab] = useState<ConfigSubTab>("params");
-
-  const handleStageFromSetup = useCallback(
-    (entries: [string, number][]) => {
-      for (const [name, value] of entries) {
-        params.stage(name, value);
-      }
-      setSubTab("params");
-      params.setFilterMode("modified");
-    },
-    [params],
-  );
-
   return (
     <div className="flex h-full flex-col gap-2 overflow-hidden">
-      {/* Sub-tab bar */}
-      <div className="flex items-center gap-1 border-b border-border pb-1">
-        <button
-          onClick={() => setSubTab("params")}
-          className={`flex items-center gap-1.5 rounded-t px-3 py-1.5 text-xs font-medium transition-colors ${
-            subTab === "params"
-              ? "bg-bg-tertiary text-text-primary"
-              : "text-text-muted hover:text-text-primary"
-          }`}
-        >
-          <SlidersHorizontal size={12} />
-          Parameters
-          {params.staged.size > 0 && (
-            <span className="rounded-full bg-warning/20 px-1.5 text-[10px] text-warning">
-              {params.staged.size}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setSubTab("setup")}
-          className={`flex items-center gap-1.5 rounded-t px-3 py-1.5 text-xs font-medium transition-colors ${
-            subTab === "setup"
-              ? "bg-bg-tertiary text-text-primary"
-              : "text-text-muted hover:text-text-primary"
-          }`}
-        >
-          <Wrench size={12} />
-          Setup
-        </button>
-      </div>
-
-      {subTab === "setup" ? (
-        <SetupPanel connected={connected} onStageParams={handleStageFromSetup} />
-      ) : (
-        <ParamsTabContent params={params} connected={connected} />
-      )}
+      <ParamsTabContent params={params} connected={connected} />
     </div>
   );
 }
