@@ -77,6 +77,7 @@ export function useVehicle() {
   const [availableModes, setAvailableModes] = useState<FlightModeEntry[]>([]);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   // Connection form state (persisted to localStorage)
   const [saved] = useState(loadConnectionForm);
@@ -187,7 +188,9 @@ export function useVehicle() {
           setTelemetry(snapshot.telemetry);
           if (snapshot.home_position) setHomePosition(snapshot.home_position);
         }
-      } catch {}
+      } catch {} finally {
+        setHydrated(true);
+      }
     })();
 
     return () => {
@@ -400,6 +403,7 @@ export function useVehicle() {
   );
 
   return {
+    hydrated,
     telemetry,
     linkState,
     vehicleState,

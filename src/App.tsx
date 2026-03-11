@@ -158,6 +158,8 @@ export default function App() {
     setTelemetryTrack(track);
   }, []);
 
+  if (!vehicle.hydrated) return <div className="h-screen bg-bg-primary" />;
+
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex h-screen flex-col bg-bg-primary text-text-primary">
