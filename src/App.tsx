@@ -11,6 +11,7 @@ import { MissionPanel } from "./components/MissionPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { LogsPanel } from "./components/LogsPanel";
+import { SetupWizardPanel } from "./components/setup/SetupWizardPanel";
 import { useVehicle } from "./hooks/use-vehicle";
 import { useMission } from "./hooks/use-mission";
 import { useSettings } from "./hooks/use-settings";
@@ -21,10 +22,10 @@ import { usePlayback } from "./hooks/use-playback";
 import { useBreakpoint } from "./hooks/use-breakpoint";
 import { useDeviceLocation } from "./hooks/use-device-location";
 import { setTelemetryRate } from "./telemetry";
+import { subscribeSensorHealth, type SensorHealth } from "./sensor-health";
 import { interpolateLogTelemetry, type FlightPathPoint, type TelemetrySnapshot } from "./playback";
+import type { ActiveTab } from "./types";
 import "./app.css";
-
-type ActiveTab = "map" | "telemetry" | "hud" | "mission" | "config" | "logs" | "settings";
 
 function checkGpuRenderer() {
   const canvas = document.createElement("canvas");
@@ -109,8 +110,15 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [flightPath, setFlightPath] = useState<FlightPathPoint[] | null>(null);
   const [telemetryTrack, setTelemetryTrack] = useState<TelemetrySnapshot[] | null>(null);
+  const [sensorHealth, setSensorHealth] = useState<SensorHealth | null>(null);
 
   useEffect(() => { checkGpuRenderer() }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    subscribeSensorHealth(setSensorHealth).then((fn) => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  }, []);
 
   useEffect(() => {
     setTelemetryRate(settings.telemetryRateHz).catch(() => {});
@@ -197,6 +205,17 @@ export default function App() {
                 playback={playback}
                 onFlightPath={handleFlightPath}
                 onTelemetryTrack={handleTelemetryTrack}
+              />
+            ) : activeTab === "setup" ? (
+              <SetupWizardPanel
+                connected={vehicle.connected}
+                vehicleState={vehicle.vehicleState}
+                telemetry={vehicle.telemetry}
+                linkState={vehicle.linkState}
+                params={params}
+                sensorHealth={sensorHealth}
+                homePosition={vehicle.homePosition}
+                availableModes={vehicle.availableModes}
               />
             ) : (
               <SettingsPanel settings={settings} updateSettings={updateSettings} />
