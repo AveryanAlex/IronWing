@@ -222,49 +222,18 @@ Current status:
 ### M5 - Guided Vehicle Setup Wizard [COMPLETE]
 - 7-step guided setup wizard (inspection, calibration, frame/motor, flight modes, failsafe, pre-arm, readiness), compass calibration workflow, motor test, pre-arm blocker parsing, sensor health watch, and localStorage persistence shipped.
 
-## M6 - Firmware Install and Update Workflow
-
-Goal:
-- IronWing can install or update ArduPilot firmware with a board-aware, safety-focused workflow and clear recovery guidance.
-
-Issue-sized tasks:
-
-1. Firmware catalog client and cache
-   - Implement a client for official ArduPilot firmware metadata/download sources plus a local artifact cache
-   - Track channel metadata (stable, beta, latest, custom) and expose board/vehicle compatibility information
-
-2. Board identification and flash prerequisites
-   - Detect board identity, current firmware, bootloader/transport capabilities, and whether the device is in a flashable state
-   - Add prerequisite checks for power, USB/direct connection expectations, disconnected-state requirements, and storage location for backups/downloads
-
-3. Firmware picker UI and compatibility warnings
-   - Build a firmware selection flow for vehicle type, board target, release channel, and custom local firmware files
-   - Warn when switching vehicle families, using beta/dev builds, or selecting targets that may invalidate settings or peripherals
-
-4. Parameter backup and migration safeguards
-   - Add pre-flash parameter backup/export prompts and restore guidance after update
-   - Detect cases where automatic restore should be discouraged because parameter meaning or vehicle type changed
-
-5. Flash executor and progress reporting
-   - Implement the baseline USB flash flow with erase/program/verify progress, reboot handling, and reconnect prompts
-   - Capture structured logs for each flash attempt so failures can be diagnosed without guesswork
-
-6. Post-flash verification and next steps
-   - Reconnect after flash, confirm firmware version/target, and identify setup items invalidated by the update
-   - Hand off naturally into setup/review work when calibration, frame, or failsafe checks must be revisited
-
-7. Recovery and advanced firmware paths
-   - Add support paths for custom firmware loading, bootloader prompts, SD-card update guidance, and failed-flash troubleshooting
-   - Document and gate more advanced or risky flows separately from the default happy path
-
-8. Validation and hardware matrix
-   - Validate stable update flows on supported desktop platforms and at least one real board family
-   - Record known limitations for unsupported boards, first-time bootloader installs, and platform-specific flashing gaps
-
-Exit criteria:
-- Stable firmware install/update works with clear recovery guidance and post-flash verification
-- Firmware selection is board-aware and warns about risky or incompatible choices before flashing
-- Failed or interrupted flash attempts leave the user with actionable recovery steps and diagnostic logs
+### M6 - Firmware Flash Workflow [COMPLETE]
+- Serial-first firmware flashing via native Rust bootloader uploader for `.apj` artifacts (ArduPilot/PX4-compatible boards)
+- Official ArduPilot catalog client with board-filtered browsing plus local `.apj` file support for the serial path
+- Recovery-only STM32 DFU path via native Rust USB stack (nusb), with explicit Recovery/Advanced labeling and stronger warnings
+- Pre-flash parameter backup prompt reusing existing save-to-file capability
+- Reconnect verification with explicit `verified` vs `flashed_but_unverified` terminal outcomes (BL_REV < 3 boards)
+- DFU recovery guidance for Windows driver issues (WinUSB/Zadig) and unsupported platform states
+- Firmware setup section integrated into existing Setup panel with serial-first hierarchy
+- Desktop port inventory, bootloader re-enumeration detection, STM32 DFU device scanning
+- Firmware session exclusivity guard (mutually exclusive with live vehicle connection)
+- 100+ Rust fixture tests and 60+ Vitest tests covering both paths end-to-end without hardware
+- Deferred: automatic parameter restore/migration, Android flashing, `.px4`/`.hex`/`.dfu` formats, external flash (`extf_image`), DFU as normal install path, DFU catalog browsing, real hardware validation matrix
 
 ## M7 - Release Hardening
 - Reliability hardening, crash recovery, diagnostics bundle
