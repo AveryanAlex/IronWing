@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   cancelMissionTransfer,
   clearMissionPlan,
@@ -12,14 +12,39 @@ import {
   type HomePosition,
   type MissionState,
   type MissionIssue,
-  type MissionItem,
-  type MissionPlan,
   type MissionType,
   type TransferProgress,
 } from "../mission";
 import type { Telemetry } from "../telemetry";
+import type { MissionFrame, MissionItem } from "../mission";
 import { getVehicleSnapshot } from "../snapshot";
 import { toast } from "sonner";
+import {
+  type DraftState,
+  createEmptyDraft,
+  wrapItems,
+  addWaypoint as draftAddWaypoint,
+  addWaypointAt as draftAddWaypointAt,
+  insertBefore as draftInsertBefore,
+  insertAfter as draftInsertAfter,
+  deleteAt as draftDeleteAt,
+  moveUp as draftMoveUp,
+  moveDown as draftMoveDown,
+  reorderItems as draftReorderItems,
+  type NumericItemField,
+  updateField as draftUpdateField,
+  updateFrame as draftUpdateFrame,
+  updateCoordinate as draftUpdateCoordinate,
+  moveWaypointOnMap as draftMoveWaypointOnMap,
+  insertItemsAfter as draftInsertItemsAfter,
+  replaceAllItems as draftReplaceAllItems,
+  selectBySeq,
+  deriveSelectedSeq,
+  buildPlan,
+  rawItems,
+  takeSnapshot,
+  isDirty,
+} from "../lib/mission-draft";
 
 function asErrorMessage(error: unknown): string {
   if (typeof error === "string") return error;
@@ -29,30 +54,17 @@ function asErrorMessage(error: unknown): string {
 
 type HomeSource = "vehicle" | "user" | "download" | null;
 
-function createWaypoint(seq: number, latDeg: number, lonDeg: number, altitudeM: number): MissionItem {
-  return {
-    seq,
-    command: 16,
-    frame: "global_relative_alt_int",
-    current: seq === 0,
-    autocontinue: true,
-    param1: 0,
-    param2: 1,
-    param3: 0,
-    param4: 0,
-    x: Math.round(latDeg * 1e7),
-    y: Math.round(lonDeg * 1e7),
-    z: altitudeM,
-  };
-}
-
-function resequence(items: MissionItem[]): MissionItem[] {
-  return items.map((item, index) => ({ ...item, seq: index, current: index === 0 }));
-}
+export type TransferUi = {
+  active: boolean;
+  hasProgress: boolean;
+  progressPct: number;
+  direction: "upload" | "download" | null;
+  completedItems: number;
+  totalItems: number;
+};
 
 export function useMission(connected: boolean, telemetry: Telemetry, vehicleHomePosition: HomePosition | null) {
-  const [items, setItems] = useState<MissionItem[]>([]);
-  const [selectedSeq, setSelectedSeq] = useState<number | null>(null);
+  const [draft, setDraft] = useState<DraftState>(createEmptyDraft);
   const [missionType, setMissionType] = useState<MissionType>("mission");
   const [homePosition, setHomePosition] = useState<HomePosition | null>(null);
   const [homeSource, setHomeSource] = useState<HomeSource>(null);
@@ -64,12 +76,34 @@ export function useMission(connected: boolean, telemetry: Telemetry, vehicleHome
   const [missionState, setMissionState] = useState<MissionState | null>(null);
   const [roundtripStatus, setRoundtripStatus] = useState<string>("");
 
+  const items = useMemo(() => rawItems(draft), [draft]);
+  const selectedSeq = useMemo(() => deriveSelectedSeq(draft), [draft]);
+  const displayTotal = items.length;
+  const dirty = useMemo(() => isDirty(draft, homePosition), [draft, homePosition]);
+
+  const activeSeq = missionState?.current_seq ?? null;
+
   const transferActive =
     progress?.phase === "request_count" ||
     progress?.phase === "transfer_items" ||
     progress?.phase === "await_ack";
 
-  // Clear vehicle-sourced state on disconnect
+  const transferUi = useMemo<TransferUi>(() => {
+    const hasProgress = progress !== null &&
+      (progress.phase === "transfer_items" || progress.phase === "request_count");
+    const progressPct = progress && progress.total_items > 0
+      ? (progress.completed_items / progress.total_items) * 100
+      : 0;
+    return {
+      active: transferActive,
+      hasProgress,
+      progressPct,
+      direction: progress?.direction ?? null,
+      completedItems: progress?.completed_items ?? 0,
+      totalItems: progress?.total_items ?? 0,
+    };
+  }, [progress, transferActive]);
+
   useEffect(() => {
     if (!connected) {
       setMissionState(null);
@@ -77,7 +111,6 @@ export function useMission(connected: boolean, telemetry: Telemetry, vehicleHome
     }
   }, [connected]);
 
-  // Sync home position from vehicle (unless user has set a custom one)
   useEffect(() => {
     if (vehicleHomePosition && homeSource !== "user") {
       setHomePosition(vehicleHomePosition);
@@ -88,7 +121,6 @@ export function useMission(connected: boolean, telemetry: Telemetry, vehicleHome
     }
   }, [vehicleHomePosition]);
 
-  // Subscribe to mission progress + state events
   useEffect(() => {
     let stopProgress: (() => void) | null = null;
     let stopState: (() => void) | null = null;
@@ -109,181 +141,126 @@ export function useMission(connected: boolean, telemetry: Telemetry, vehicleHome
     };
   }, []);
 
-  function buildPlan(): MissionPlan {
-    return {
-      mission_type: missionType,
-      home: missionType === "mission" ? homePosition : null,
-      items: resequence(items),
-    };
-  }
+  const setSelectedSeq = useCallback((seq: number | null) => {
+    setDraft((prev) => selectBySeq(prev, seq));
+  }, []);
 
   const addWaypoint = useCallback(() => {
-    setItems((prev) => {
-      const seq = prev.length;
-      const base = prev[prev.length - 1];
-      if (!base) return [createWaypoint(0, 0, 0, 25)];
-      return [...prev, createWaypoint(seq, base.x / 1e7 + 0.0004, base.y / 1e7 + 0.0004, base.z)];
-    });
-    setSelectedSeq(items.length);
-  }, [items.length]);
+    setDraft((prev) => draftAddWaypoint(prev, missionType));
+  }, [missionType]);
 
-  const addWaypointAt = useCallback(
-    (latDeg: number, lonDeg: number) => {
-      setItems((prev) => {
-        const alt = prev[prev.length - 1]?.z ?? 25;
-        return [...prev, createWaypoint(prev.length, latDeg, lonDeg, alt)];
-      });
-      setSelectedSeq(items.length);
-    },
-    [items.length]
-  );
+  const addWaypointAt = useCallback((latDeg: number, lonDeg: number) => {
+    setDraft((prev) => draftAddWaypointAt(prev, latDeg, lonDeg, missionType));
+  }, [missionType]);
 
-  const insertBefore = useCallback(
-    (index: number) => {
-      setItems((prev) => {
-        if (prev.length === 0) return [createWaypoint(0, 0, 0, 25)];
-        const insertAt = Math.max(0, Math.min(index, prev.length));
-        const before = prev[insertAt - 1];
-        const after = prev[insertAt];
-        const seed = before ?? after;
-        if (!seed) return [createWaypoint(0, 0, 0, 25)];
+  const insertBefore = useCallback((index: number) => {
+    setDraft((prev) => draftInsertBefore(prev, index, missionType));
+  }, [missionType]);
 
-        let lat = seed.x / 1e7, lon = seed.y / 1e7, alt = seed.z;
-        if (before && after) {
-          lat = (before.x + after.x) / 2 / 1e7;
-          lon = (before.y + after.y) / 2 / 1e7;
-          alt = (before.z + after.z) / 2;
-        } else if (before) {
-          lat += 0.0004;
-          lon += 0.0004;
-        } else {
-          lat -= 0.0004;
-          lon -= 0.0004;
-        }
+  const insertAfter = useCallback((index: number) => {
+    setDraft((prev) => draftInsertAfter(prev, index, missionType));
+  }, [missionType]);
 
-        const next = [...prev];
-        next.splice(insertAt, 0, createWaypoint(0, lat, lon, alt));
-        return resequence(next);
-      });
-      setSelectedSeq(index);
-    },
-    []
-  );
+  const deleteAt = useCallback((index: number) => {
+    setDraft((prev) => draftDeleteAt(prev, index));
+  }, []);
 
-  const insertAfter = useCallback(
-    (index: number) => {
-      insertBefore(index + 1);
-    },
-    [insertBefore]
-  );
+  const moveUp = useCallback((index: number) => {
+    setDraft((prev) => draftMoveUp(prev, index));
+  }, []);
 
-  const deleteAt = useCallback(
-    (index: number) => {
-      setItems((prev) => {
-        if (index < 0 || index >= prev.length) return prev;
-        const next = [...prev];
-        next.splice(index, 1);
-        return resequence(next);
-      });
-      setSelectedSeq((current) => {
-        if (current === null) return null;
-        const newLen = Math.max(0, items.length - 1);
-        if (newLen === 0) return null;
-        return Math.min(current, newLen - 1);
-      });
-    },
-    [items.length]
-  );
+  const moveDown = useCallback((index: number) => {
+    setDraft((prev) => draftMoveDown(prev, index));
+  }, []);
 
-  const moveUp = useCallback(
-    (index: number) => {
-      if (index <= 0) return;
-      setItems((prev) => {
-        const next = [...prev];
-        const [moved] = next.splice(index, 1);
-        if (!moved) return prev;
-        next.splice(index - 1, 0, moved);
-        return resequence(next);
-      });
-      setSelectedSeq(index - 1);
-    },
-    []
-  );
-
-  const moveDown = useCallback(
-    (index: number) => {
-      setItems((prev) => {
-        if (index >= prev.length - 1) return prev;
-        const next = [...prev];
-        const [moved] = next.splice(index, 1);
-        if (!moved) return prev;
-        next.splice(index + 1, 0, moved);
-        return resequence(next);
-      });
-      setSelectedSeq(index + 1);
-    },
-    []
-  );
+  const reorderItemsFn = useCallback((fromUiId: number, toUiId: number) => {
+    setDraft((prev) => draftReorderItems(prev, fromUiId, toUiId));
+  }, []);
 
   const updateField = useCallback(
-    (index: number, field: "command" | "z" | "param1" | "param2", value: number) => {
-      setItems((prev) =>
-        prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
-      );
+    (index: number, field: NumericItemField, value: number) => {
+      setDraft((prev) => draftUpdateField(prev, index, field, value));
+    },
+    []
+  );
+
+  const updateFrame = useCallback(
+    (index: number, frame: MissionFrame) => {
+      setDraft((prev) => draftUpdateFrame(prev, index, frame));
     },
     []
   );
 
   const updateCoordinate = useCallback(
     (index: number, field: "x" | "y", valueDeg: number) => {
-      const encoded = Math.round(valueDeg * 1e7);
-      setItems((prev) =>
-        prev.map((item, i) => (i === index ? { ...item, [field]: encoded } : item))
-      );
+      setDraft((prev) => draftUpdateCoordinate(prev, index, field, valueDeg));
     },
     []
   );
 
   const moveWaypointOnMap = useCallback(
     (seq: number, latDeg: number, lonDeg: number) => {
-      setItems((prev) =>
-        prev.map((item) =>
-          item.seq === seq
-            ? { ...item, x: Math.round(latDeg * 1e7), y: Math.round(lonDeg * 1e7) }
-            : item
-        )
-      );
+      setDraft((prev) => draftMoveWaypointOnMap(prev, seq, latDeg, lonDeg));
     },
     []
   );
 
+  const bulkInsertAfter = useCallback(
+    (index: number, newItems: MissionItem[]) => {
+      setDraft((prev) => draftInsertItemsAfter(prev, index, newItems));
+    },
+    []
+  );
+
+  const bulkReplace = useCallback(
+    (newItems: MissionItem[]) => {
+      setDraft((prev) => draftReplaceAllItems(prev, newItems));
+    },
+    []
+  );
+
+  const currentPlan = useCallback(
+    () => buildPlan(draft, missionType, homePosition),
+    [draft, missionType, homePosition]
+  );
+
   const validate = useCallback(async () => {
     try {
-      const result = await validateMissionPlan(buildPlan());
+      const result = await validateMissionPlan(currentPlan());
       setIssues(result);
       if (result.length === 0) toast.success("Plan valid");
     } catch (err) {
       toast.error("Validation failed", { description: asErrorMessage(err) });
     }
-  }, [missionType, homePosition, items]);
+  }, [currentPlan]);
 
   const upload = useCallback(async () => {
     if (!connected) { toast.error("Connect to vehicle before upload"); return; }
     setProgress(null);
     try {
-      await uploadMissionPlan(buildPlan());
-      toast.success("Mission uploaded", { description: `${items.length} waypoints` });
+      const plan = currentPlan();
+      await uploadMissionPlan(plan);
+      setDraft((prev) => takeSnapshot(prev, homePosition));
+      toast.success("Mission uploaded", { description: `${items.length} items` });
     } catch (err) {
+      setProgress((prev) => prev && prev.phase !== "completed" && prev.phase !== "failed"
+        ? { ...prev, phase: "failed" } : prev);
       toast.error("Upload failed", { description: asErrorMessage(err) });
     }
-  }, [connected, missionType, homePosition, items]);
+  }, [connected, currentPlan, homePosition, items.length]);
 
   const download = useCallback(async () => {
     if (!connected) { toast.error("Connect to vehicle before download"); return; }
     setProgress(null);
     try {
       const plan = await downloadMissionPlan(missionType);
-      setItems(plan.items);
+      const newDraft: DraftState = {
+        items: wrapItems(plan.items),
+        selectedUiId: null,
+        snapshot: { items: [], home: null },
+      };
+      const snapped: DraftState = takeSnapshot(newDraft, plan.home);
+      setDraft(snapped);
       if (plan.home) {
         setHomePosition(plan.home);
         setHomeLatInput(plan.home.latitude_deg.toFixed(6));
@@ -291,11 +268,12 @@ export function useMission(connected: boolean, telemetry: Telemetry, vehicleHome
         setHomeAltInput(plan.home.altitude_m.toFixed(2));
         setHomeSource("download");
       }
-      setSelectedSeq(null);
       setIssues([]);
       setRoundtripStatus("Downloaded");
-      toast.success("Mission downloaded", { description: `${plan.items.length} waypoints` });
+      toast.success("Mission downloaded", { description: `${plan.items.length} items` });
     } catch (err) {
+      setProgress((prev) => prev && prev.phase !== "completed" && prev.phase !== "failed"
+        ? { ...prev, phase: "failed" } : prev);
       toast.error("Download failed", { description: asErrorMessage(err) });
     }
   }, [connected, missionType]);
@@ -305,17 +283,18 @@ export function useMission(connected: boolean, telemetry: Telemetry, vehicleHome
     setProgress(null);
     try {
       await clearMissionPlan(missionType);
-      setItems([]);
+      setDraft(createEmptyDraft());
       setHomePosition(null);
       setHomeSource(null);
       setHomeLatInput("");
       setHomeLonInput("");
       setHomeAltInput("");
-      setSelectedSeq(null);
       setIssues([]);
       setRoundtripStatus("Cleared");
       toast.success("Mission cleared");
     } catch (err) {
+      setProgress((prev) => prev && prev.phase !== "completed" && prev.phase !== "failed"
+        ? { ...prev, phase: "failed" } : prev);
       toast.error("Clear failed", { description: asErrorMessage(err) });
     }
   }, [connected, missionType]);
@@ -325,15 +304,21 @@ export function useMission(connected: boolean, telemetry: Telemetry, vehicleHome
     setProgress(null);
     setRoundtripStatus("Verifying...");
     try {
-      const ok = await verifyMissionRoundtrip(buildPlan());
+      const ok = await verifyMissionRoundtrip(currentPlan());
       setRoundtripStatus(ok ? "Roundtrip: pass" : "Roundtrip: fail");
-      if (ok) toast.success("Roundtrip verified");
-      else toast.warning("Roundtrip mismatch");
+      if (ok) {
+        setDraft((prev) => takeSnapshot(prev, homePosition));
+        toast.success("Roundtrip verified");
+      } else {
+        toast.warning("Roundtrip mismatch");
+      }
     } catch (err) {
+      setProgress((prev) => prev && prev.phase !== "completed" && prev.phase !== "failed"
+        ? { ...prev, phase: "failed" } : prev);
       setRoundtripStatus("Verify failed");
       toast.error("Verify failed", { description: asErrorMessage(err) });
     }
-  }, [connected, missionType, homePosition, items]);
+  }, [connected, currentPlan, homePosition]);
 
   const cancel = useCallback(async () => {
     if (!connected) return;
@@ -341,14 +326,18 @@ export function useMission(connected: boolean, telemetry: Telemetry, vehicleHome
       await cancelMissionTransfer();
     } catch (err) {
       toast.error("Cancel failed", { description: asErrorMessage(err) });
+    } finally {
+      setProgress((prev) => prev && prev.phase !== "completed" && prev.phase !== "failed" && prev.phase !== "cancelled"
+        ? { ...prev, phase: "cancelled" } : prev);
     }
   }, [connected]);
 
-  const setCurrent = useCallback(async () => {
+  const setCurrent = useCallback(async (explicitSeq?: number) => {
     if (!connected) { toast.error("Connect first"); return; }
-    if (selectedSeq === null) { toast.error("Select a waypoint first"); return; }
+    const seq = explicitSeq ?? selectedSeq;
+    if (seq === null) { toast.error("Select a waypoint first"); return; }
     try {
-      await setCurrentMissionItem(selectedSeq);
+      await setCurrentMissionItem(seq);
     } catch (err) {
       toast.error("Set current failed", { description: asErrorMessage(err) });
     }
@@ -402,6 +391,7 @@ export function useMission(connected: boolean, telemetry: Telemetry, vehicleHome
 
   return {
     items,
+    draftItems: draft.items,
     selectedSeq,
     setSelectedSeq,
     missionType,
@@ -414,9 +404,12 @@ export function useMission(connected: boolean, telemetry: Telemetry, vehicleHome
     issues,
     progress,
     transferActive,
+    transferUi,
     missionState,
     roundtripStatus,
-    // Actions
+    activeSeq,
+    displayTotal,
+    isDirty: dirty,
     addWaypoint,
     addWaypointAt,
     insertBefore,
@@ -424,9 +417,13 @@ export function useMission(connected: boolean, telemetry: Telemetry, vehicleHome
     deleteAt,
     moveUp,
     moveDown,
+    reorderItems: reorderItemsFn,
     updateField,
+    updateFrame,
     updateCoordinate,
     moveWaypointOnMap,
+    bulkInsertAfter,
+    bulkReplace,
     validate,
     upload,
     download,

@@ -65,7 +65,7 @@ export type TransferProgress = {
 };
 
 export type MissionState = {
-  current_seq: number;
+  current_seq: number | null;
   total_items: number;
 };
 
