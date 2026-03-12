@@ -7,6 +7,7 @@ import maplibregl, {
 } from "maplibre-gl";
 import { Map as MapIcon, Layers, Satellite } from "lucide-react";
 import type { HomePosition, MissionItem } from "../mission";
+import type { PolygonVertex } from "../lib/mission-grid";
 
 const DEFAULT_CENTER: [number, number] = [8.545594, 47.397742];
 const DEFAULT_ZOOM = 13;
@@ -43,10 +44,16 @@ type MissionMapProps = {
   centerOnDeviceKey?: number;
   onUserInteraction?: () => void;
   currentMissionSeq?: number | null;
+  flyToSelectedKey?: number;
   syntheticVision?: boolean;
   svsTelemetry?: SvsTelemetry | null;
   flightPath?: [number, number][];
   replayPosition?: { latitude_deg: number; longitude_deg: number; heading_deg: number } | null;
+  polygonVertices?: PolygonVertex[];
+  isDrawingPolygon?: boolean;
+  onPolygonClick?: (lat: number, lng: number) => void;
+  onPolygonComplete?: () => void;
+  onPolygonVertexMove?: (index: number, lat: number, lng: number) => void;
 };
 
 export type { SvsTelemetry };
@@ -55,9 +62,10 @@ export function MissionMap({
   missionItems, homePosition, selectedSeq, onSelectSeq,
   onMoveWaypoint, onContextMenu, readOnly,
   vehiclePosition, deviceLocation, followTarget, centerOnVehicleKey, centerOnDeviceKey,
-  onUserInteraction, currentMissionSeq,
+  onUserInteraction, currentMissionSeq, flyToSelectedKey,
   syntheticVision, svsTelemetry,
   flightPath, replayPosition,
+  polygonVertices, isDrawingPolygon, onPolygonClick, onPolygonComplete, onPolygonVertexMove,
 }: MissionMapProps) {
   type MapLayer = "plan" | "hybrid" | "satellite";
   const [mapLayer, setMapLayer] = useState<MapLayer>("plan");
@@ -79,6 +87,14 @@ export function MissionMap({
   const onUserInteractionRef = useRef(onUserInteraction);
   const programmaticMoveRef = useRef(false);
   const missionGeoJsonRef = useRef<any>({ type: "FeatureCollection", features: [] });
+  const onPolygonClickRef = useRef(onPolygonClick);
+  const onPolygonCompleteRef = useRef(onPolygonComplete);
+  const onPolygonVertexMoveRef = useRef(onPolygonVertexMove);
+  const isDrawingPolygonRef = useRef(isDrawingPolygon);
+  const polygonVerticesRef = useRef(polygonVertices);
+  const polygonMarkersRef = useRef<Marker[]>([]);
+  const missionItemsRef = useRef(missionItems);
+  const homePositionRef = useRef(homePosition);
 
   useEffect(() => {
     onSelectSeqRef.current = onSelectSeq;
@@ -86,7 +102,14 @@ export function MissionMap({
     onContextMenuRef.current = onContextMenu;
     readOnlyRef.current = readOnly;
     onUserInteractionRef.current = onUserInteraction;
-  }, [onSelectSeq, onMoveWaypoint, onContextMenu, readOnly, onUserInteraction]);
+    onPolygonClickRef.current = onPolygonClick;
+    onPolygonCompleteRef.current = onPolygonComplete;
+    onPolygonVertexMoveRef.current = onPolygonVertexMove;
+    isDrawingPolygonRef.current = isDrawingPolygon;
+    polygonVerticesRef.current = polygonVertices;
+    missionItemsRef.current = missionItems;
+    homePositionRef.current = homePosition;
+  }, [onSelectSeq, onMoveWaypoint, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, polygonVertices, missionItems, homePosition]);
 
   const missionGeoJson = useMemo(() => {
     const lineCoordinates: [number, number][] = [];
@@ -200,8 +223,45 @@ export function MissionMap({
         });
       }
 
-      // Capture vector base layer IDs for toggling
-      const ownIds = new Set(["satellite", "hills", LINE_LAYER_ID, "replay-path-line"]);
+      if (!map.getSource("grid-polygon")) {
+        map.addSource("grid-polygon", {
+          type: "geojson",
+          data: { type: "Feature", geometry: { type: "Polygon", coordinates: [] }, properties: {} },
+        });
+      }
+      if (!map.getLayer("grid-polygon-fill")) {
+        map.addLayer({
+          id: "grid-polygon-fill",
+          type: "fill",
+          source: "grid-polygon",
+          paint: { "fill-color": "#78d6ff", "fill-opacity": 0.15 },
+        });
+      }
+      if (!map.getLayer("grid-polygon-line")) {
+        map.addLayer({
+          id: "grid-polygon-line",
+          type: "line",
+          source: "grid-polygon",
+          paint: { "line-color": "#78d6ff", "line-width": 2, "line-dasharray": [3, 2] },
+        });
+      }
+
+      if (!map.getSource("polygon-preview")) {
+        map.addSource("polygon-preview", {
+          type: "geojson",
+          data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }, properties: {} },
+        });
+      }
+      if (!map.getLayer("polygon-preview-line")) {
+        map.addLayer({
+          id: "polygon-preview-line",
+          type: "line",
+          source: "polygon-preview",
+          paint: { "line-color": "#78d6ff", "line-width": 2, "line-dasharray": [4, 3], "line-opacity": 0.6 },
+        });
+      }
+
+      const ownIds = new Set(["satellite", "hills", LINE_LAYER_ID, "replay-path-line", "grid-polygon-fill", "grid-polygon-line", "polygon-preview-line"]);
       baseLayerIdsRef.current = map.getStyle().layers
         .filter((l: any) => !ownIds.has(l.id))
         .map((l: any) => l.id);
@@ -231,9 +291,27 @@ export function MissionMap({
     const clearLp = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } lpStart = null; };
 
     if (!syntheticVision) {
-      // Suppress the click that follows a long-press so marker selection isn't triggered
-      map.on("click", () => {
-        if (longPressFiredRef.current) { longPressFiredRef.current = false; }
+      map.on("click", (event: MapMouseEvent) => {
+        if (longPressFiredRef.current) { longPressFiredRef.current = false; return; }
+        if (isDrawingPolygonRef.current) {
+          const verts = polygonVerticesRef.current;
+          // Close polygon by clicking the first vertex when 3+ points exist
+          if (verts && verts.length >= 3) {
+            const firstPt = map.project([verts[0].longitude_deg, verts[0].latitude_deg]);
+            if (Math.hypot(firstPt.x - event.point.x, firstPt.y - event.point.y) < 20) {
+              onPolygonCompleteRef.current?.();
+              return;
+            }
+          }
+          onPolygonClickRef.current?.(event.lngLat.lat, event.lngLat.lng);
+          return;
+        }
+      });
+
+      map.on("dblclick", (event: MapMouseEvent) => {
+        if (isDrawingPolygonRef.current) {
+          event.preventDefault();
+        }
       });
 
       map.on("contextmenu", (event: MapMouseEvent) => {
@@ -291,6 +369,8 @@ export function MissionMap({
 
     return () => {
       clearLp();
+      for (const m of polygonMarkersRef.current) m.remove();
+      polygonMarkersRef.current = [];
       for (const marker of markersRef.current.values()) marker.remove();
       markersRef.current.clear();
       if (homeMarkerRef.current) { homeMarkerRef.current.remove(); homeMarkerRef.current = null; }
@@ -341,9 +421,12 @@ export function MissionMap({
         markerEl.type = "button";
         markerEl.className = "mission-pin is-home";
         markerEl.textContent = "H";
+        markerEl.dataset.missionMarkerSeq = "home";
+        markerEl.dataset.missionMarkerKind = "home";
+        markerEl.dataset.missionMarkerState = "default";
         markerEl.addEventListener("click", (e) => e.stopPropagation());
 
-        homeMarkerRef.current = new maplibregl.Marker({ element: markerEl, anchor: "bottom" })
+        homeMarkerRef.current = new maplibregl.Marker({ element: markerEl, anchor: "center" })
           .setLngLat(lngLat)
           .addTo(map);
       }
@@ -376,25 +459,44 @@ export function MissionMap({
         const markerEl = document.createElement("button");
         markerEl.type = "button";
         markerEl.className = "mission-pin";
+        markerEl.dataset.missionMarkerKind = "waypoint";
 
         const isDraggable = !readOnly;
 
-        if (!readOnly) {
-          markerEl.addEventListener("click", (e) => {
-            e.stopPropagation();
-            onSelectSeqRef.current?.(item.seq);
-          });
-        }
+        markerEl.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (longPressFiredRef.current) { longPressFiredRef.current = false; return; }
+          onSelectSeqRef.current?.(item.seq);
+        });
 
         const marker = new maplibregl.Marker({
           element: markerEl,
-          anchor: "bottom",
+          anchor: "center",
           draggable: isDraggable,
         })
           .setLngLat(lngLat)
           .addTo(map);
 
         if (isDraggable) {
+          marker.on("drag", () => {
+            const pos = marker.getLngLat();
+            const m = mapRef.current;
+            if (!m) return;
+            const src = m.getSource(SOURCE_ID) as GeoJSONSource | undefined;
+            if (!src) return;
+            const lineCoords: [number, number][] = [];
+            const hp = homePositionRef.current;
+            if (hp) lineCoords.push([hp.longitude_deg, hp.latitude_deg]);
+            for (const mi of missionItemsRef.current) {
+              if (mi.seq === item.seq) lineCoords.push([pos.lng, pos.lat]);
+              else lineCoords.push([mi.y / 1e7, mi.x / 1e7]);
+            }
+            const feats: any[] = [];
+            if (lineCoords.length >= 2) {
+              feats.push({ type: "Feature", geometry: { type: "LineString", coordinates: lineCoords }, properties: { kind: "mission-line" } });
+            }
+            src.setData({ type: "FeatureCollection", features: feats });
+          });
           marker.on("dragend", () => {
             const pos = marker.getLngLat();
             onMoveWaypointRef.current?.(item.seq, pos.lat, pos.lng);
@@ -407,11 +509,22 @@ export function MissionMap({
       const markerElement = markersRef.current.get(item.seq)?.getElement();
       if (markerElement) {
         markerElement.textContent = String(item.seq + 1);
-        if (readOnly) {
-          markerElement.classList.toggle("is-current", currentMissionSeq === item.seq);
-        } else {
-          markerElement.classList.toggle("is-selected", selectedSeq === item.seq);
-        }
+        markerElement.dataset.missionMarkerSeq = String(item.seq);
+
+        const isSelected = selectedSeq === item.seq;
+        const isCurrent = currentMissionSeq === item.seq;
+        markerElement.classList.toggle("is-selected", isSelected);
+        markerElement.classList.toggle("is-current", isCurrent);
+
+        // Compute state attribute for test/QA selectors
+        const state = isSelected && isCurrent
+          ? "selected+active"
+          : isSelected
+            ? "selected"
+            : isCurrent
+              ? "active"
+              : "default";
+        markerElement.dataset.missionMarkerState = state;
       }
     }
   }, [missionItems, selectedSeq, readOnly, currentMissionSeq]);
@@ -432,6 +545,7 @@ export function MissionMap({
       } else {
         const el = document.createElement("div");
         el.className = "vehicle-marker";
+        el.dataset.missionMarkerKind = "vehicle";
         el.innerHTML = `<svg width="32" height="32" viewBox="0 0 32 32" style="transform: rotate(${vehiclePosition.heading_deg}deg)"><polygon points="16,4 26,28 16,22 6,28" fill="#ff4444" stroke="#fff" stroke-width="1.5"/></svg>`;
 
         vehicleMarkerRef.current = new maplibregl.Marker({ element: el, anchor: "center" })
@@ -523,6 +637,19 @@ export function MissionMap({
     });
   }, [centerOnDeviceKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fly to selected marker when triggered by list card click
+  useEffect(() => {
+    if (!flyToSelectedKey || selectedSeq === null) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const marker = markersRef.current.get(selectedSeq);
+    if (marker) {
+      const lngLat = marker.getLngLat();
+      programmaticMoveRef.current = true;
+      map.flyTo({ center: [lngLat.lng, lngLat.lat], zoom: Math.max(map.getZoom(), 15), duration: 600 });
+    }
+  }, [flyToSelectedKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Fit bounds on initial load (skip in SVS mode)
   useEffect(() => {
     if (syntheticVision) return;
@@ -539,6 +666,134 @@ export function MissionMap({
     map.fitBounds(bounds, { padding: 48, maxZoom: 15, duration: 0 });
     hasSetInitialViewport.current = true;
   }, [missionItems, homePosition, syntheticVision]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    const source = map.getSource("grid-polygon") as GeoJSONSource | undefined;
+    if (!source) return;
+
+    if (polygonVertices && polygonVertices.length >= 3) {
+      const ring = polygonVertices.map((v) => [v.longitude_deg, v.latitude_deg] as [number, number]);
+      ring.push(ring[0]);
+      source.setData({
+        type: "Feature",
+        geometry: { type: "Polygon", coordinates: [ring] },
+        properties: {},
+      });
+    } else if (polygonVertices && polygonVertices.length >= 2) {
+      source.setData({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: polygonVertices.map((v) => [v.longitude_deg, v.latitude_deg]) },
+        properties: {},
+      });
+    } else {
+      source.setData({
+        type: "Feature",
+        geometry: { type: "Polygon", coordinates: [] },
+        properties: {},
+      });
+    }
+  }, [polygonVertices]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const vertices = polygonVertices ?? [];
+
+    while (polygonMarkersRef.current.length > vertices.length) {
+      polygonMarkersRef.current.pop()!.remove();
+    }
+
+    for (let i = 0; i < vertices.length; i++) {
+      const v = vertices[i];
+      const lngLat: [number, number] = [v.longitude_deg, v.latitude_deg];
+      const existing = polygonMarkersRef.current[i];
+
+      if (existing) {
+        existing.setLngLat(lngLat);
+        const el = existing.getElement();
+        el.textContent = String(i + 1);
+        el.classList.toggle("is-closeable", i === 0 && isDrawingPolygon === true && vertices.length >= 3);
+      } else {
+        const el = document.createElement("div");
+        el.className = "polygon-vertex" + (i === 0 ? " is-first" : "");
+        el.textContent = String(i + 1);
+        if (i === 0 && isDrawingPolygon && vertices.length >= 3) el.classList.add("is-closeable");
+
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (i === 0 && isDrawingPolygonRef.current && (polygonVerticesRef.current?.length ?? 0) >= 3) {
+            onPolygonCompleteRef.current?.();
+          }
+        });
+
+        const marker = new maplibregl.Marker({ element: el, anchor: "center", draggable: true })
+          .setLngLat(lngLat)
+          .addTo(map);
+
+        marker.on("drag", () => {
+          const pos = marker.getLngLat();
+          const verts = polygonVerticesRef.current;
+          if (!verts) return;
+          const src = map.getSource("grid-polygon") as GeoJSONSource | undefined;
+          if (!src) return;
+          const coords = verts.map((vv, j) =>
+            j === i ? [pos.lng, pos.lat] as [number, number] : [vv.longitude_deg, vv.latitude_deg] as [number, number]
+          );
+          if (coords.length >= 3) {
+            src.setData({ type: "Feature", geometry: { type: "Polygon", coordinates: [[...coords, coords[0]]] }, properties: {} });
+          } else if (coords.length >= 2) {
+            src.setData({ type: "Feature", geometry: { type: "LineString", coordinates: coords }, properties: {} });
+          }
+        });
+
+        marker.on("dragend", () => {
+          const pos = marker.getLngLat();
+          onPolygonVertexMoveRef.current?.(i, pos.lat, pos.lng);
+        });
+
+        polygonMarkersRef.current.push(marker);
+      }
+    }
+  }, [polygonVertices, isDrawingPolygon]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (!isDrawingPolygon) {
+      if (map.isStyleLoaded()) {
+        const src = map.getSource("polygon-preview") as GeoJSONSource | undefined;
+        src?.setData({ type: "Feature", geometry: { type: "LineString", coordinates: [] }, properties: {} });
+      }
+      return;
+    }
+
+    const onMouseMove = (e: MapMouseEvent) => {
+      const verts = polygonVerticesRef.current;
+      if (!verts || verts.length === 0) return;
+      const src = map.getSource("polygon-preview") as GeoJSONSource | undefined;
+      if (!src) return;
+      const cursor: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+      const last: [number, number] = [verts[verts.length - 1].longitude_deg, verts[verts.length - 1].latitude_deg];
+      const coords: [number, number][] = [last, cursor];
+      if (verts.length >= 2) {
+        coords.push([verts[0].longitude_deg, verts[0].latitude_deg]);
+      }
+      src.setData({ type: "Feature", geometry: { type: "LineString", coordinates: coords }, properties: {} });
+    };
+
+    map.on("mousemove", onMouseMove);
+    return () => {
+      map.off("mousemove", onMouseMove);
+      if (map.isStyleLoaded()) {
+        const src = map.getSource("polygon-preview") as GeoJSONSource | undefined;
+        src?.setData({ type: "Feature", geometry: { type: "LineString", coordinates: [] }, properties: {} });
+      }
+    };
+  }, [isDrawingPolygon]);
 
   // Update replay flight path
   useEffect(() => {
@@ -589,6 +844,17 @@ export function MissionMap({
       replayMarkerRef.current = null;
     }
   }, [replayPosition, syntheticVision]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const canvas = map.getCanvas();
+    if (isDrawingPolygon) {
+      canvas.style.cursor = "crosshair";
+    } else {
+      canvas.style.cursor = "";
+    }
+  }, [isDrawingPolygon]);
 
   return (
     <div className="relative h-full w-full">

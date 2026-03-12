@@ -117,9 +117,56 @@ body {
   animation: pulse-current 1.5s ease-in-out infinite;
 }
 
+.mission-pin.is-selected.is-current {
+  background: var(--color-warning);
+  border-color: var(--color-danger);
+  animation: pulse-current 1.5s ease-in-out infinite;
+  transform: scale(1.08);
+}
+
 @keyframes pulse-current {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.5); }
   50% { box-shadow: 0 0 0 8px rgba(255, 68, 68, 0); }
+}
+
+/* Polygon vertex markers for auto-grid drawing */
+.polygon-vertex {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--color-accent);
+  border-radius: 999px;
+  background: rgba(18, 185, 255, 0.2);
+  color: var(--color-accent);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.polygon-vertex:active {
+  cursor: grabbing;
+}
+
+.polygon-vertex.is-first {
+  border-width: 2.5px;
+}
+
+.polygon-vertex.is-closeable {
+  background: rgba(87, 227, 139, 0.3);
+  border-color: var(--color-success);
+  color: var(--color-success);
+  cursor: pointer;
+  transform: scale(1.15);
+}
+
+.polygon-vertex.is-closeable:hover {
+  background: rgba(87, 227, 139, 0.5);
+  transform: scale(1.25);
 }
 
 /* Map control buttons — reusable group for locate + layer switch */

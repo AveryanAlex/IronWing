@@ -27,15 +27,13 @@ export function SetupSectionIntro({
         <div className="flex items-start gap-2.5 min-w-0">
           <Icon size={14} className="mt-0.5 shrink-0 text-accent" />
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                {title}
-              </h3>
-              <DocsLink docsUrl={docsUrl} docsLabel={docsLabel} />
-            </div>
+            <h3 className="truncate text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+              {title}
+            </h3>
             <p className="mt-0.5 text-[10px] leading-relaxed text-text-muted">
               {description}
             </p>
+            <DocsLink docsUrl={docsUrl} docsLabel={docsLabel} className="mt-1" />
           </div>
         </div>
         {actionSlot && <div className="shrink-0">{actionSlot}</div>}
