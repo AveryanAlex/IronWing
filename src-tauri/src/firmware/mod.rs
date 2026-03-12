@@ -1372,7 +1372,7 @@ mod tests {
 
     #[test]
     fn inventory_filter_dfu_devices() {
-        let devices = vec![
+        let devices = [
             DfuDeviceInfo {
                 vid: 0x0483,
                 pid: 0xdf11,
