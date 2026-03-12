@@ -134,8 +134,8 @@ pub(crate) fn execute_dfu_recovery<D: DfuUsbAccess>(
 #[cfg(not(target_os = "android"))]
 mod dfuse {
     use super::FirmwareError;
-    use nusb::transfer::{ControlIn, ControlOut, ControlType, Recipient};
     use nusb::MaybeFuture;
+    use nusb::transfer::{ControlIn, ControlOut, ControlType, Recipient};
     use std::time::Duration;
 
     const STM32_FLASH_BASE: u32 = 0x0800_0000;

@@ -54,9 +54,11 @@ pub(crate) async fn firmware_flash_serial(
         }
     }
 
-    connection::force_disconnect(&state).await.inspect_err(|_| {
-        state.firmware_session.stop();
-    })?;
+    connection::force_disconnect(&state)
+        .await
+        .inspect_err(|_| {
+            state.firmware_session.stop();
+        })?;
 
     let (task, abort_handle) = {
         let handle = tokio::task::spawn_blocking({
@@ -154,7 +156,8 @@ pub(crate) async fn firmware_serial_preflight(
         _ => vec![],
     };
 
-    let detected_board_id = crate::firmware::discovery::detect_board_id_from_ports(&available_ports);
+    let detected_board_id =
+        crate::firmware::discovery::detect_board_id_from_ports(&available_ports);
 
     let session_status = state.firmware_session.status();
     let session_ready = matches!(session_status, FirmwareSessionStatus::Idle);
@@ -191,9 +194,7 @@ pub(crate) async fn firmware_catalog_entries(
 }
 
 #[tauri::command]
-pub(crate) fn firmware_session_status(
-    state: tauri::State<'_, AppState>,
-) -> FirmwareSessionStatus {
+pub(crate) fn firmware_session_status(state: tauri::State<'_, AppState>) -> FirmwareSessionStatus {
     state.firmware_session.status()
 }
 
@@ -302,18 +303,16 @@ pub(crate) async fn firmware_flash_dfu_recovery(
 async fn resolve_source(source: SerialFlashSource) -> Result<Vec<u8>, String> {
     match source {
         SerialFlashSource::LocalApjBytes { data } => Ok(data),
-        SerialFlashSource::CatalogUrl { url } => {
-            tokio::task::spawn_blocking(move || {
-                let response = ureq::get(&url)
-                    .call()
-                    .map_err(|e| format!("catalog download failed: {e}"))?;
-                response
-                    .into_body()
-                    .read_to_vec()
-                    .map_err(|e| format!("catalog read failed: {e}"))
-            })
-            .await
-            .map_err(|e| format!("download task failed: {e}"))?
-        }
+        SerialFlashSource::CatalogUrl { url } => tokio::task::spawn_blocking(move || {
+            let response = ureq::get(&url)
+                .call()
+                .map_err(|e| format!("catalog download failed: {e}"))?;
+            response
+                .into_body()
+                .read_to_vec()
+                .map_err(|e| format!("catalog read failed: {e}"))
+        })
+        .await
+        .map_err(|e| format!("download task failed: {e}"))?,
     }
 }

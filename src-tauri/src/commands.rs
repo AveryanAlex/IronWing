@@ -3,8 +3,8 @@ use std::sync::atomic::Ordering;
 
 use mavkit::{
     FlightMode, HomePosition, LinkState, MissionIssue, MissionPlan, MissionState, MissionType,
-    Param, ParamProgress, ParamStore, ParamWriteResult, Telemetry, VehicleState,
-    format_param_file, parse_param_file, validate_plan,
+    Param, ParamProgress, ParamStore, ParamWriteResult, Telemetry, VehicleState, format_param_file,
+    parse_param_file, validate_plan,
 };
 
 use crate::bridges::TELEMETRY_INTERVAL_MS;
@@ -326,9 +326,7 @@ pub(crate) async fn calibrate_compass_cancel(
 }
 
 #[tauri::command]
-pub(crate) async fn request_prearm_checks(
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+pub(crate) async fn request_prearm_checks(state: tauri::State<'_, AppState>) -> Result<(), String> {
     with_vehicle(&state)
         .await?
         .request_prearm_checks()

@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(mobile)]
 use tauri::Manager;
 use tauri::{
-    plugin::{Builder, TauriPlugin},
     Runtime,
+    plugin::{Builder, TauriPlugin},
 };
 
 #[cfg(mobile)]

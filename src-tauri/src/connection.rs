@@ -119,10 +119,10 @@ async fn connect_ble(address: &str) -> Result<Vehicle, String> {
     // Standard NUS UUIDs
     let _nus_service = uuid::Uuid::parse_str("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
         .expect("valid NUS service UUID");
-    let nus_rx = uuid::Uuid::parse_str("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
-        .expect("valid NUS RX UUID"); // write to this
-    let nus_tx = uuid::Uuid::parse_str("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
-        .expect("valid NUS TX UUID"); // notify from this
+    let nus_rx =
+        uuid::Uuid::parse_str("6E400002-B5A3-F393-E0A9-E50E24DCCA9E").expect("valid NUS RX UUID"); // write to this
+    let nus_tx =
+        uuid::Uuid::parse_str("6E400003-B5A3-F393-E0A9-E50E24DCCA9E").expect("valid NUS TX UUID"); // notify from this
 
     // Try connecting (device should be in blec's cache from prior scan).
     // On Android, blec has no auto-discover fallback, so if the cache is

@@ -145,10 +145,10 @@ fn port_changed_identity(before: &[PortInfo], current: &PortInfo) -> bool {
 /// This is a best-effort heuristic; the bootloader's own board_id is authoritative.
 pub(crate) fn detect_board_id_from_ports(ports: &[PortInfo]) -> Option<u32> {
     for port in ports {
-        if let (Some(vid), Some(pid)) = (port.vid, port.pid) {
-            if let Some(board_id) = vid_pid_to_board_id(vid, pid) {
-                return Some(board_id);
-            }
+        if let (Some(vid), Some(pid)) = (port.vid, port.pid)
+            && let Some(board_id) = vid_pid_to_board_id(vid, pid)
+        {
+            return Some(board_id);
         }
     }
     None

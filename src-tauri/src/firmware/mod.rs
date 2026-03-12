@@ -274,8 +274,8 @@ mod tests {
     /// Build a synthetic APJ JSON with base64(zlib(data)) image payload.
     fn make_apj(board_id: u32, image_data: &[u8], extf_data: &[u8]) -> Vec<u8> {
         use base64::prelude::*;
-        use flate2::write::ZlibEncoder;
         use flate2::Compression;
+        use flate2::write::ZlibEncoder;
         use std::io::Write;
 
         let compress = |data: &[u8]| -> String {
@@ -330,8 +330,8 @@ mod tests {
     #[test]
     fn artifact_rejects_apj_image_size_mismatch() {
         use base64::prelude::*;
-        use flate2::write::ZlibEncoder;
         use flate2::Compression;
+        use flate2::write::ZlibEncoder;
         use std::io::Write;
 
         let firmware_bytes = vec![0xDE, 0xAD, 0xBE, 0xEF];
@@ -1492,8 +1492,8 @@ mod tests {
     }
 
     fn make_manifest_gz(entries: &[serde_json::Value]) -> Vec<u8> {
-        use flate2::write::GzEncoder;
         use flate2::Compression;
+        use flate2::write::GzEncoder;
         use std::io::Write;
 
         let json = make_manifest_json(entries);
@@ -1614,8 +1614,8 @@ mod tests {
 
     #[test]
     fn catalog_corrupt_json_inside_gz_returns_error() {
-        use flate2::write::GzEncoder;
         use flate2::Compression;
+        use flate2::write::GzEncoder;
         use std::io::Write;
 
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
@@ -2020,7 +2020,7 @@ mod tests {
         mock.queue_sync_ok();
         mock.queue_identify(bl_rev, board_id, 0, flash_size);
         mock.queue_sync_ok(); // erase
-                              // program chunks
+        // program chunks
         let chunk_count = (image.len() + TEST_PROG_MULTI_MAX - 1) / TEST_PROG_MULTI_MAX.max(1);
         for _ in 0..chunk_count.max(1) {
             mock.queue_sync_ok();
@@ -2481,8 +2481,7 @@ mod tests {
         let session = FirmwareSessionHandle::new();
         session.try_start_serial().unwrap();
 
-        let deps = MockFlowDeps::new()
-            .with_ports_sequence(vec![vec![]]);
+        let deps = MockFlowDeps::new().with_ports_sequence(vec![vec![]]);
 
         let preflight = PreflightSnapshot {
             port: "/dev/ttyACM0".into(),
@@ -2492,7 +2491,10 @@ mod tests {
         let artifact = make_test_artifact(140, vec![0x01]);
 
         let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
-        assert!(matches!(result, SerialFlowResult::BoardDetectionFailed { .. }));
+        assert!(matches!(
+            result,
+            SerialFlowResult::BoardDetectionFailed { .. }
+        ));
 
         session.stop();
         session.try_start_serial().unwrap();
@@ -2504,8 +2506,7 @@ mod tests {
         let session = FirmwareSessionHandle::new();
         session.try_start_serial().unwrap();
 
-        let deps = MockFlowDeps::new()
-            .with_ports_sequence(vec![vec![]]);
+        let deps = MockFlowDeps::new().with_ports_sequence(vec![vec![]]);
 
         let preflight = PreflightSnapshot {
             port: "/dev/ttyACM0".into(),
@@ -2843,8 +2844,14 @@ mod tests {
         match &result {
             DfuRecoveryResult::Failed { reason } => {
                 assert!(reason.contains("not an STM32 DFU"), "got: {reason}");
-                assert!(reason.contains("0483"), "should mention expected VID: {reason}");
-                assert!(reason.contains("df11"), "should mention expected PID: {reason}");
+                assert!(
+                    reason.contains("0483"),
+                    "should mention expected VID: {reason}"
+                );
+                assert!(
+                    reason.contains("df11"),
+                    "should mention expected PID: {reason}"
+                );
             }
             other => panic!("expected Failed with non-STM32 guidance, got: {other:?}"),
         }
@@ -3005,7 +3012,10 @@ mod tests {
         let wrapped = FirmwareOutcome::DfuRecovery { outcome };
         let json = serde_json::to_string(&wrapped).unwrap();
         assert!(json.contains("dfu_recovery"), "got: {json}");
-        assert!(!json.contains("serial_primary"), "must not contain serial: {json}");
+        assert!(
+            !json.contains("serial_primary"),
+            "must not contain serial: {json}"
+        );
     }
 
     // ── DFU recovery integrated with session + artifact validation ──
@@ -3246,17 +3256,14 @@ mod tests {
             other => panic!("driver denied must produce UnsupportedRecoveryPath: {other:?}"),
         }
 
-        let json =
-            serde_json::to_string(&FirmwareOutcome::DfuRecovery { outcome }).unwrap();
+        let json = serde_json::to_string(&FirmwareOutcome::DfuRecovery { outcome }).unwrap();
         assert!(json.contains("unsupported_recovery_path"));
     }
 
     #[test]
     fn e2e_catalog_client_board_filtered() {
-        let dir = std::env::temp_dir().join(format!(
-            "ironwing_test_e2e_catalog_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("ironwing_test_e2e_catalog_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
 
         let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(3600));

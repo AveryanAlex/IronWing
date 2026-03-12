@@ -2,8 +2,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use mavkit::{
-    HomePosition, LinkState, MagCalProgress, MagCalReport, ParamProgress, ParamStore,
-    SensorHealth, StatusMessage, Telemetry, TransferProgress, Vehicle, VehicleState,
+    HomePosition, LinkState, MagCalProgress, MagCalReport, ParamProgress, ParamStore, SensorHealth,
+    StatusMessage, Telemetry, TransferProgress, Vehicle, VehicleState,
 };
 use tauri::Emitter;
 

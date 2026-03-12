@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::io::Write;
 
 use mavkit::tlog::{TlogEntry, TlogFile};
-use mavlink::common::MavMessage;
 use mavlink::Message;
+use mavlink::common::MavMessage;
 use serde::Serialize;
 use tauri::Emitter;
 
-use crate::{helpers, AppState};
+use crate::{AppState, helpers};
 
 #[derive(Serialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -425,8 +425,14 @@ pub(crate) async fn log_open(
             (s, e)
         } else if !stored.is_empty() {
             (
-                stored.first().expect("non-empty stored entries").timestamp_usec,
-                stored.last().expect("non-empty stored entries").timestamp_usec,
+                stored
+                    .first()
+                    .expect("non-empty stored entries")
+                    .timestamp_usec,
+                stored
+                    .last()
+                    .expect("non-empty stored entries")
+                    .timestamp_usec,
             )
         } else {
             (0, 0)
@@ -471,7 +477,10 @@ pub(crate) async fn log_open(
     let mut type_index: HashMap<String, Vec<usize>> = HashMap::new();
     let mut message_types: HashMap<String, usize> = HashMap::new();
     for (i, entry) in stored_entries.iter().enumerate() {
-        type_index.entry(entry.msg_name.clone()).or_default().push(i);
+        type_index
+            .entry(entry.msg_name.clone())
+            .or_default()
+            .push(i);
         *message_types.entry(entry.msg_name.clone()).or_insert(0) += 1;
 
         if (i + 1) % 5000 == 0 {
@@ -546,15 +555,15 @@ pub(crate) async fn log_query(
     for &idx in indices {
         let entry = &store.entries[idx];
         let ts = entry.timestamp_usec;
-        if let Some(start) = start_usec {
-            if ts < start {
-                continue;
-            }
+        if let Some(start) = start_usec
+            && ts < start
+        {
+            continue;
         }
-        if let Some(end) = end_usec {
-            if ts > end {
-                continue;
-            }
+        if let Some(end) = end_usec
+            && ts > end
+        {
+            continue;
         }
         points.push(LogDataPoint {
             timestamp_usec: ts,
@@ -691,7 +700,13 @@ pub(crate) async fn log_get_flight_summary(
     let (gps_msg, lat_key, lon_key, sats_key, needs_dege7) = if is_bin {
         ("GPS", "Lat", "Lng", "NSats", true)
     } else {
-        ("GLOBAL_POSITION_INT", "lat", "lon", "satellites_visible", false)
+        (
+            "GLOBAL_POSITION_INT",
+            "lat",
+            "lon",
+            "satellites_visible",
+            false,
+        )
     };
     let sats_msg = if is_bin { "GPS" } else { "GPS_RAW_INT" };
 
@@ -726,14 +741,14 @@ pub(crate) async fn log_get_flight_summary(
     let mut bat_min: Option<f64> = None;
     if let Some(indices) = store.type_index.get(bat_msg) {
         for &idx in indices {
-            if let Some(&v) = store.entries[idx].fields.get(bat_v_field) {
-                if v > 0.0 {
-                    if bat_start.is_none() {
-                        bat_start = Some(v);
-                    }
-                    bat_end = Some(v);
-                    bat_min = Some(bat_min.map_or(v, |m: f64| m.min(v)));
+            if let Some(&v) = store.entries[idx].fields.get(bat_v_field)
+                && v > 0.0
+            {
+                if bat_start.is_none() {
+                    bat_start = Some(v);
                 }
+                bat_end = Some(v);
+                bat_min = Some(bat_min.map_or(v, |m: f64| m.min(v)));
             }
         }
     }
@@ -841,15 +856,15 @@ pub(crate) async fn log_export_csv(
         .entries
         .iter()
         .filter(|e| {
-            if let Some(s) = start_usec {
-                if e.timestamp_usec < s {
-                    return false;
-                }
+            if let Some(s) = start_usec
+                && e.timestamp_usec < s
+            {
+                return false;
             }
-            if let Some(end) = end_usec {
-                if e.timestamp_usec > end {
-                    return false;
-                }
+            if let Some(end) = end_usec
+                && e.timestamp_usec > end
+            {
+                return false;
             }
             true
         })
@@ -878,7 +893,8 @@ pub(crate) async fn log_export_csv(
 
     let mut row_count = 0_u64;
     for e in &entries {
-        write!(w, "{:.6},{}", e.timestamp_usec as f64 / 1e6, e.msg_name).map_err(|e| e.to_string())?;
+        write!(w, "{:.6},{}", e.timestamp_usec as f64 / 1e6, e.msg_name)
+            .map_err(|e| e.to_string())?;
         for name in &field_names {
             if let Some(&v) = e.fields.get(name) {
                 write!(w, ",{v}").map_err(|e| e.to_string())?;
@@ -1126,7 +1142,11 @@ mod tests {
             "base_mode",
             MavModeFlag::MAV_MODE_FLAG_SAFETY_ARMED.bits() as f64,
         );
-        assert_field_eq(&fields, "system_status", MavState::MAV_STATE_ACTIVE as u8 as f64);
+        assert_field_eq(
+            &fields,
+            "system_status",
+            MavState::MAV_STATE_ACTIVE as u8 as f64,
+        );
     }
 
     #[test]
@@ -1267,7 +1287,10 @@ mod tests {
     #[test]
     fn haversine_short_distance() {
         let dist = haversine_m(0.0, 0.0, 0.0009, 0.0);
-        assert!((50.0..=200.0).contains(&dist), "expected ~100 m, got {dist}");
+        assert!(
+            (50.0..=200.0).contains(&dist),
+            "expected ~100 m, got {dist}"
+        );
     }
 
     #[test]
@@ -1457,7 +1480,9 @@ mod tests {
         assert_eq!(snap.rc_rssi, Some(99.0));
         assert_eq!(
             snap.rc_channels,
-            Some(vec![1100.0, 1200.0, 1300.0, 1400.0, 1500.0, 1600.0, 1700.0, 1800.0])
+            Some(vec![
+                1100.0, 1200.0, 1300.0, 1400.0, 1500.0, 1600.0, 1700.0, 1800.0
+            ])
         );
     }
 
@@ -1592,7 +1617,9 @@ mod tests {
 
         assert_eq!(
             snap.rc_channels,
-            Some(vec![1010.0, 1020.0, 1030.0, 1040.0, 1050.0, 1060.0, 1070.0, 1080.0])
+            Some(vec![
+                1010.0, 1020.0, 1030.0, 1040.0, 1050.0, 1060.0, 1070.0, 1080.0
+            ])
         );
     }
 
@@ -1609,7 +1636,9 @@ mod tests {
 
         assert_eq!(
             snap.servo_outputs,
-            Some(vec![1105.0, 1110.0, 1115.0, 1120.0, 1125.0, 1130.0, 1135.0, 1140.0])
+            Some(vec![
+                1105.0, 1110.0, 1115.0, 1120.0, 1125.0, 1130.0, 1135.0, 1140.0
+            ])
         );
     }
 
@@ -1702,6 +1731,11 @@ mod tests {
         let dist = haversine_m(0.0, 0.0, 0.0, 180.0);
         // Half circumference = π * R = π * 6,371,000 ≈ 20,015,087 m
         let expected = std::f64::consts::PI * 6_371_000.0;
-        assert!((dist - expected).abs() / expected < 0.01, "Expected ~{:.0}m, got {:.0}m", expected, dist);
+        assert!(
+            (dist - expected).abs() / expected < 0.01,
+            "Expected ~{:.0}m, got {:.0}m",
+            expected,
+            dist
+        );
     }
 }
