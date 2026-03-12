@@ -2,20 +2,25 @@ use mavkit::Vehicle;
 use bluetooth::{bt_get_bonded_devices, bt_request_permissions, bt_scan_ble, bt_stop_scan_ble};
 use commands::{arm_vehicle, available_transports, calibrate_accel, calibrate_compass_accept, calibrate_compass_cancel, calibrate_compass_start, calibrate_gyro, disarm_vehicle, get_available_modes, get_vehicle_snapshot, list_serial_ports_cmd, mission_cancel, mission_clear_plan, mission_download_plan, mission_set_current, mission_upload_plan, mission_validate_plan, mission_verify_roundtrip, motor_test, param_download_all, param_format_file, param_parse_file, param_write, param_write_batch, reboot_vehicle, request_prearm_checks, set_flight_mode, set_telemetry_rate, vehicle_guided_goto, vehicle_takeoff};
 use connection::{connect_link, disconnect_link};
+use firmware::commands::{firmware_catalog_entries, firmware_flash_dfu_recovery, firmware_flash_serial, firmware_reboot_to_bootloader, firmware_serial_preflight, firmware_session_cancel, firmware_session_status};
+use firmware::discovery::{firmware_list_dfu_devices, firmware_list_ports};
+use firmware::types::FirmwareSessionHandle;
 use logs::LogStore;
 use recording::{recording_start, recording_status, recording_stop, TlogRecorderHandle};
-mod bluetooth; mod bridges; mod commands; mod connection; mod helpers; mod logs; mod recording;
+mod bluetooth; mod bridges; mod commands; mod connection; #[allow(dead_code)] mod firmware; mod helpers; mod logs; mod recording;
 
 pub(crate) struct AppState {
     pub(crate) vehicle: tokio::sync::Mutex<Option<Vehicle>>,
     pub(crate) connect_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
     pub(crate) log_store: tokio::sync::Mutex<Option<LogStore>>,
     pub(crate) recorder: TlogRecorderHandle,
+    pub(crate) firmware_session: FirmwareSessionHandle,
+    pub(crate) firmware_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let state = AppState { vehicle: tokio::sync::Mutex::new(None), connect_abort: tokio::sync::Mutex::new(None), log_store: tokio::sync::Mutex::new(None), recorder: TlogRecorderHandle::new() };
+    let state = AppState { vehicle: tokio::sync::Mutex::new(None), connect_abort: tokio::sync::Mutex::new(None), log_store: tokio::sync::Mutex::new(None), recorder: TlogRecorderHandle::new(), firmware_session: FirmwareSessionHandle::new(), firmware_abort: tokio::sync::Mutex::new(None) };
     let mut builder = tauri::Builder::default()
         .manage(state)
         .plugin(tauri_plugin_dialog::init())
@@ -75,7 +80,16 @@ pub fn run() {
         recording_start,
         recording_stop,
         recording_status,
-        get_vehicle_snapshot
+        get_vehicle_snapshot,
+        firmware_list_ports,
+        firmware_list_dfu_devices,
+        firmware_flash_serial,
+        firmware_session_status,
+        firmware_session_cancel,
+        firmware_reboot_to_bootloader,
+        firmware_serial_preflight,
+        firmware_catalog_entries,
+        firmware_flash_dfu_recovery
     ]);
 
     builder

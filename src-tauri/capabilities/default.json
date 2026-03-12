@@ -11,7 +11,10 @@
     "blec:default",
     {
       "identifier": "http:default",
-      "allow": [{ "url": "https://autotest.ardupilot.org/Parameters/*" }]
+      "allow": [
+        { "url": "https://autotest.ardupilot.org/Parameters/*" },
+        { "url": "https://firmware.ardupilot.org/*" }
+      ]
     }
   ]
 }

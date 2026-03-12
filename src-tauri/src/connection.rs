@@ -242,10 +242,12 @@ async fn connect_spp(app: &tauri::AppHandle, address: &str) -> Result<Vehicle, S
 
 #[tauri::command]
 pub(crate) async fn disconnect_link(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    // Stop any active recording before disconnecting
+    force_disconnect(&state).await
+}
+
+pub(crate) async fn force_disconnect(state: &AppState) -> Result<(), String> {
     state.recorder.stop();
 
-    // Abort any in-flight connect attempt
     if let Some(handle) = state.connect_abort.lock().await.take() {
         handle.abort();
     }
@@ -255,4 +257,8 @@ pub(crate) async fn disconnect_link(state: tauri::State<'_, AppState>) -> Result
         v.disconnect().await.map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+pub(crate) async fn is_vehicle_connected(state: &AppState) -> bool {
+    state.vehicle.lock().await.is_some()
 }
