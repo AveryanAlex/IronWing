@@ -15,6 +15,7 @@ type SidebarProps = {
   open: boolean;
   onClose: () => void;
   replayActive?: boolean;
+  firmwareActive?: boolean;
 };
 
 function formatMaybe(value?: number) {
@@ -30,7 +31,7 @@ const TRANSPORT_LABELS: Record<TransportType, string> = {
   bluetooth_spp: "Classic BT",
 };
 
-export function Sidebar({ vehicle, isMobile, open, onClose, replayActive }: SidebarProps) {
+export function Sidebar({ vehicle, isMobile, open, onClose, replayActive, firmwareActive }: SidebarProps) {
   // Mobile: drawer overlay
   if (isMobile) {
     return (
@@ -57,7 +58,7 @@ export function Sidebar({ vehicle, isMobile, open, onClose, replayActive }: Side
               <X size={16} />
             </button>
           </div>
-          <SidebarContent vehicle={vehicle} replayActive={replayActive} />
+          <SidebarContent vehicle={vehicle} replayActive={replayActive} firmwareActive={firmwareActive} />
         </aside>
       </>
     );
@@ -66,12 +67,12 @@ export function Sidebar({ vehicle, isMobile, open, onClose, replayActive }: Side
   // Desktop: static sidebar
   return (
     <aside className="flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-r border-border bg-bg-secondary p-3 xl:w-72">
-      <SidebarContent vehicle={vehicle} replayActive={replayActive} />
+      <SidebarContent vehicle={vehicle} replayActive={replayActive} firmwareActive={firmwareActive} />
     </aside>
   );
 }
 
-function SidebarContent({ vehicle, replayActive }: { vehicle: ReturnType<typeof useVehicle>; replayActive?: boolean }) {
+function SidebarContent({ vehicle, replayActive, firmwareActive }: { vehicle: ReturnType<typeof useVehicle>; replayActive?: boolean; firmwareActive?: boolean }) {
   const {
     telemetry, linkState, vehicleState, connected, connectionError,
     isConnecting, cancelConnect,
@@ -86,7 +87,7 @@ function SidebarContent({ vehicle, replayActive }: { vehicle: ReturnType<typeof 
     arm, disarm, setFlightMode, takeoff, findModeNumber,
   } = vehicle;
 
-  const formLocked = isConnecting || connected;
+  const formLocked = isConnecting || connected || !!firmwareActive;
 
   return (
     <>

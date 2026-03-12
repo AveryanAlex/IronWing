@@ -47,7 +47,7 @@ describe("SetupSectionPanel hook order", () => {
 
     const body = src.slice(fnStart);
 
-    const earlyReturnIdx = body.indexOf("if (!connected) return");
+    const earlyReturnIdx = body.indexOf("if (!connected && activeSection !== \"firmware\") return");
     expect(earlyReturnIdx).toBeGreaterThan(-1);
 
     const afterEarlyReturn = body.slice(earlyReturnIdx);
@@ -160,7 +160,7 @@ describe("SetupSectionPanel metadata gate", () => {
   });
 
   it("uses setupReady (not just paramsLoaded) for the effective section gate", () => {
-    expect(fnBody).toMatch(/!setupReady\s*\?.*["']overview["']/);
+    expect(fnBody).toMatch(/!setupReady[\s\S]*?\?[\s\S]*?["']overview["']/);
   });
 
   it("passes setupReady to SectionNav for locking", () => {

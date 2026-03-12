@@ -18,6 +18,7 @@ import { useSettings } from "./hooks/use-settings";
 import { useParams } from "./hooks/use-params";
 import { useLogs } from "./hooks/use-logs";
 import { useRecording } from "./hooks/use-recording";
+import { useFirmware } from "./hooks/use-firmware";
 import { usePlayback } from "./hooks/use-playback";
 import { useBreakpoint } from "./hooks/use-breakpoint";
 import { useDeviceLocation } from "./hooks/use-device-location";
@@ -102,6 +103,7 @@ export default function App() {
   const params = useParams(vehicle.connected, vehicle.vehicleState?.vehicle_type);
   const logs = useLogs();
   const recording = useRecording(vehicle.connected);
+  const firmware = useFirmware();
   const playback = usePlayback();
   const { settings, updateSettings } = useSettings();
   const [activeTab, setActiveTab] = useState<ActiveTab>("map");
@@ -177,6 +179,7 @@ export default function App() {
             open={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
             replayActive={replayActive}
+            firmwareActive={firmware.isActive}
           />
 
           <main
@@ -193,6 +196,7 @@ export default function App() {
                 sensorHealth={sensorHealth}
                 homePosition={vehicle.homePosition}
                 availableModes={vehicle.availableModes}
+                firmware={firmware}
               />
             ) : (
               <InsetPanelFrame>

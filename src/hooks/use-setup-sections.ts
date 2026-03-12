@@ -25,7 +25,8 @@ export type SetupSectionId =
   | "initial_params"
   | "pid_tuning"
   | "peripherals"
-  | "full_parameters";
+  | "full_parameters"
+  | "firmware";
 
 export type SectionStatus = "not_started" | "in_progress" | "complete";
 
@@ -58,6 +59,7 @@ export const SECTION_IDS: SetupSectionId[] = [
   "pid_tuning",
   "peripherals",
   "full_parameters",
+  "firmware",
 ];
 
 // Sections whose completion is user-confirmed via localStorage
