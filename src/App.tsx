@@ -213,7 +213,7 @@ export default function App() {
                 ) : activeTab === "hud" ? (
                   <HudPanel vehicle={effectiveVehicle} mission={mission} svsEnabled={settings.svsEnabled} />
                 ) : activeTab === "mission" ? (
-                  <MissionPanel vehicle={vehicle} mission={mission} deviceLocation={deviceLocation} />
+                  <MissionPanel vehicle={vehicle} mission={mission} deviceLocation={deviceLocation} isMobile={isMobile} />
                 ) : activeTab === "logs" ? (
                   <LogsPanel
                     logs={logs}

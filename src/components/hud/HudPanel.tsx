@@ -113,7 +113,7 @@ export function HudPanel({ vehicle, mission, svsEnabled }: HudPanelProps) {
           <div className="hud-font text-center text-[10px] opacity-70">
             <div className="text-[9px] opacity-50">WPT</div>
             <div>
-              {missionState
+              {missionState && missionState.current_seq != null
                 ? `${missionState.current_seq + 1}/${missionState.total_items}`
                 : "--/--"}
             </div>

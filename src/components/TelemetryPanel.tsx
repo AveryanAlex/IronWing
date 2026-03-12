@@ -71,7 +71,7 @@ export function TelemetryPanel({ vehicle, mission }: TelemetryPanelProps) {
         <Metric
           label="Waypoint"
           value={
-            mission.missionState
+            mission.missionState && mission.missionState.current_seq != null
               ? `${mission.missionState.current_seq + 1} / ${mission.missionState.total_items}`
               : "--"
           }
