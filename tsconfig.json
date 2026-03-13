@@ -11,7 +11,12 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "paths": {
+      "@platform/core": ["./src/platform/tauri/core.ts"],
+      "@platform/event": ["./src/platform/tauri/event.ts"],
+      "@platform/http": ["./src/platform/tauri/http.ts"]
+    }
   },
   "include": ["src", "vite.config.ts"]
 }

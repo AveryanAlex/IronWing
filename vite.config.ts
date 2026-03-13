@@ -1,9 +1,20 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { fileURLToPath, URL } from "url";
+
+const isE2E = process.env.IRONWING_E2E === "1";
+const platformDir = isE2E ? "remote-ui" : "tauri";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      "@platform/core": fileURLToPath(new URL(`src/platform/${platformDir}/core.ts`, import.meta.url)),
+      "@platform/event": fileURLToPath(new URL(`src/platform/${platformDir}/event.ts`, import.meta.url)),
+      "@platform/http": fileURLToPath(new URL(`src/platform/${platformDir}/http.ts`, import.meta.url)),
+    },
+  },
   optimizeDeps: {
     esbuildOptions: {
       target: "es2022",

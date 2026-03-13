@@ -1,4 +1,4 @@
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@platform/event";
 
 export type SensorId = "gyro_3d" | "accel_3d" | "mag_3d" | "absolute_pressure" | "gps" | "optical_flow" | "range_finder" | "external_ground_truth" | "motor_outputs" | "rc_receiver" | "prearm_check" | "ahrs" | "terrain" | "reverse_motor" | "logging" | "battery";
 

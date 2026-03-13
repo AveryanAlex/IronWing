@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@platform/core";
 import type { LinkState, Telemetry, VehicleState } from "./telemetry";
 import type { HomePosition, MissionState } from "./mission";
 import type { ParamStore, ParamProgress } from "./params";

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Radio, Shuffle, Signal, Activity, Info } from "lucide-react";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@platform/event";
 import { ParamSelect } from "../primitives/ParamSelect";
 import { ParamBitmaskInput } from "../primitives/ParamBitmaskInput";
 import { getStagedOrCurrent } from "../primitives/param-helpers";

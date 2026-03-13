@@ -99,6 +99,7 @@ function SidebarContent({ vehicle, replayActive, firmwareActive }: { vehicle: Re
 
         <div className="space-y-2">
           <select
+            data-testid="connection-transport-select"
             value={connectionMode}
             onChange={(e) => setConnectionMode(e.target.value as TransportType)}
             disabled={formLocked}
@@ -111,6 +112,7 @@ function SidebarContent({ vehicle, replayActive, firmwareActive }: { vehicle: Re
 
           {connectionMode === "udp" && (
             <input
+              data-testid="connection-udp-bind"
               value={udpBind}
               onChange={(e) => setUdpBind(e.target.value)}
               placeholder="0.0.0.0:14550"
@@ -177,26 +179,26 @@ function SidebarContent({ vehicle, replayActive, firmwareActive }: { vehicle: Re
           )}
 
           {isConnecting ? (
-            <Button variant="secondary" size="sm" className="w-full" onClick={cancelConnect}>
+            <Button data-testid="connection-cancel-btn" variant="secondary" size="sm" className="w-full" onClick={cancelConnect}>
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> Cancel
             </Button>
           ) : connected ? (
-            <Button variant="secondary" size="sm" className="w-full" onClick={disconnect}>
+            <Button data-testid="connection-disconnect-btn" variant="secondary" size="sm" className="w-full" onClick={disconnect}>
               <Unplug className="h-3.5 w-3.5" /> Disconnect
             </Button>
           ) : (
-            <Button size="sm" className="w-full" onClick={connect}
+            <Button data-testid="connection-connect-btn" size="sm" className="w-full" onClick={connect}
               disabled={(connectionMode === "bluetooth_ble" || connectionMode === "bluetooth_spp") && !selectedBtDevice}>
               <Plug className="h-3.5 w-3.5" /> Connect
             </Button>
           )}
 
           {connectionError && (
-            <p className="rounded-md bg-danger/10 px-2 py-1 text-xs text-danger">{connectionError}</p>
+            <p data-testid="connection-error-message" className="rounded-md bg-danger/10 px-2 py-1 text-xs text-danger">{connectionError}</p>
           )}
         </div>
 
-        <div className="mt-2 flex items-center gap-2 text-xs text-text-secondary">
+        <div data-testid="connection-status-text" className="mt-2 flex items-center gap-2 text-xs text-text-secondary">
           <div className={cn(
             "h-1.5 w-1.5 rounded-full",
             isConnecting ? "bg-warning animate-pulse" :
@@ -221,25 +223,31 @@ function SidebarContent({ vehicle, replayActive, firmwareActive }: { vehicle: Re
           <StatusCard icon={<Plane className="h-3 w-3" />} label="State"
             value={vehicleState ? (vehicleState.armed ? "ARMED" : "DISARMED") : "--"}
             valueClass={vehicleState?.armed ? "text-danger" : ""}
+            testId="telemetry-state-value"
           />
           <StatusCard icon={<Navigation className="h-3 w-3" />} label="Mode"
             value={vehicleState?.mode_name ?? "--"}
+            testId="telemetry-mode-value"
           />
           <StatusCard icon={<ArrowUp className="h-3 w-3" />} label="Alt"
             value={`${formatMaybe(telemetry.altitude_m)} m`}
+            testId="telemetry-alt-value"
           />
           <StatusCard icon={<Gauge className="h-3 w-3" />} label="Speed"
             value={`${formatMaybe(telemetry.speed_mps)} m/s`}
+            testId="telemetry-speed-value"
           />
           <StatusCard icon={<Battery className="h-3 w-3" />} label="Battery"
             value={`${formatMaybe(telemetry.battery_pct)}%`}
+            testId="telemetry-battery-value"
           />
           <StatusCard icon={<Compass className="h-3 w-3" />} label="Heading"
             value={`${formatMaybe(telemetry.heading_deg)}°`}
+            testId="telemetry-heading-value"
           />
         </div>
 
-        <div className="mt-2 flex items-center gap-1.5 text-xs text-text-muted">
+        <div data-testid="telemetry-gps-text" className="mt-2 flex items-center gap-1.5 text-xs text-text-muted">
           <Satellite className="h-3 w-3" />
           GPS: {telemetry.gps_fix_type ?? "--"}
         </div>
@@ -415,14 +423,15 @@ function SppDevicePicker({
   );
 }
 
-function StatusCard({ icon, label, value, valueClass }: {
+function StatusCard({ icon, label, value, valueClass, testId }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   valueClass?: string;
+  testId?: string;
 }) {
   return (
-    <div className="rounded-md bg-bg-tertiary/50 px-2.5 py-2">
+    <div className="rounded-md bg-bg-tertiary/50 px-2.5 py-2" data-testid={testId}>
       <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-text-muted">
         {icon} {label}
       </div>

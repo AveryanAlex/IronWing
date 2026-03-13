@@ -1,5 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { invoke } from "@platform/core";
+import { listen, type UnlistenFn } from "@platform/event";
 
 export type LogType = "tlog" | "bin";
 

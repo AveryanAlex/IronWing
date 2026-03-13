@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Check, Play, Square } from "lucide-react";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@platform/event";
 
 type Telemetry = {
   rc_channels?: number[];

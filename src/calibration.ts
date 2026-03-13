@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@platform/core";
 
 export async function calibrateAccel(): Promise<void> {
   return invoke("calibrate_accel");
