@@ -5,7 +5,7 @@
   "identifier": "dev.averylex.ironwing",
   "mainBinaryName": "ironwing-app",
   "build": {
-    "beforeDevCommand": "pnpm run dev",
+    "beforeDevCommand": "pnpm run frontend:dev",
     "beforeBuildCommand": "pnpm run build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"

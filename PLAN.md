@@ -113,7 +113,7 @@ IronWing/
   crates/
     tauri-plugin-bluetooth-classic/  # Android Classic SPP plugin (Kotlin RFCOMM)
   .github/workflows/ci.yml       # CI: frontend typecheck + Rust tests
-  Makefile                        # Dev/test orchestration
+  scripts/                       # Node workflow orchestration (dev + e2e)
 ```
 
 Note: `mavkit` is consumed from crates.io and maintained in a separate repository.
@@ -266,8 +266,8 @@ A true browser-native mode would require a different approach entirely: a wasm-c
 - Unit tests per domain crate (protocol parsing, validators, state reducers)
 - Integration tests for link lifecycle and mission/param workflows
 - **Browser E2E via Playwright + Tauri Remote UI + SITL** (shipped):
-  - Tauri's Remote UI plugin exposes the frontend at `http://127.0.0.1:9515` during E2E runs. Playwright drives Chromium against this host while the Rust backend connects to a local SITL instance over UDP. This is a dev/test-only mechanism; the browser talks to the Rust process via WebSocket RPC, not raw MAVLink.
-  - Orchestrated by `scripts/e2e-start.sh` (build, SITL bridge, app launch, liveness wait). Makefile targets: `e2e-build`, `e2e-up`, `e2e-down`. pnpm scripts: `e2e`, `e2e:headed`.
+  - Tauri's Remote UI plugin exposes the frontend on a local per-run port during E2E runs. Playwright drives Chromium against this host while the Rust backend connects directly to a local SITL instance over TCP. This is a dev/test-only mechanism; the browser talks to the Rust process via WebSocket RPC, not raw MAVLink.
+  - Orchestrated by pnpm-only Node entrypoints (`scripts/dev.mjs`, `scripts/e2e.mjs`, `scripts/workflow/*.mjs`). `pnpm dev` and `pnpm e2e` auto-pick the first free instance id so concurrent runs get isolated ports and container names.
   - Initial suite covers app load smoke test, a full connect/telemetry/disconnect cycle, and a wrong-port cancel/recovery path against SITL.
   - Platform boundary (`src/platform/`) swaps Tauri IPC for WebSocket-based stubs at build time via `IRONWING_E2E=1`. A source guardrail test enforces that direct `@tauri-apps/api` imports stay confined to the platform layer.
   - Tests run serially (single SITL instance). Traces, screenshots, and video captured on failure.

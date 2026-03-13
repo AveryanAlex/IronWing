@@ -1,4 +1,8 @@
 use mavkit::{Vehicle, VehicleConfig};
+use mavlink::common::{
+    ATTITUDE_DATA, GLOBAL_POSITION_INT_DATA, GPS_RAW_INT_DATA, MavCmd, SYS_STATUS_DATA,
+};
+use mavlink::MessageData;
 use serde::Deserialize;
 #[cfg(target_os = "android")]
 use tauri::Manager;
@@ -35,9 +39,8 @@ pub(crate) enum LinkEndpoint {
 
 async fn connect_via_address(
     state: &AppState,
-    app: &tauri::AppHandle,
     address: String,
-) -> Result<(), String> {
+) -> Result<Vehicle, String> {
     let task = tokio::spawn(async move { Vehicle::connect(&address).await });
     *state.connect_abort.lock().await = Some(task.abort_handle());
 
@@ -53,7 +56,30 @@ async fn connect_via_address(
         .map_err(|e| e.to_string())?;
 
     *state.connect_abort.lock().await = None;
-    store_connected_vehicle(state, app, vehicle).await
+    Ok(vehicle)
+}
+
+async fn request_tcp_telemetry_streams(vehicle: Vehicle) {
+    let interval_requests = [
+        (GLOBAL_POSITION_INT_DATA::ID as f32, 200_000.0),
+        (ATTITUDE_DATA::ID as f32, 200_000.0),
+        (GPS_RAW_INT_DATA::ID as f32, 500_000.0),
+        (SYS_STATUS_DATA::ID as f32, 1_000_000.0),
+    ];
+
+    for (message_id, interval_usec) in interval_requests {
+        if let Err(err) = vehicle
+            .command_long(
+                MavCmd::MAV_CMD_SET_MESSAGE_INTERVAL,
+                [message_id, interval_usec, 0.0, 0.0, 0.0, 0.0, 0.0],
+            )
+            .await
+        {
+            tracing::warn!(
+                "failed to request telemetry stream for message id {message_id}: {err}"
+            );
+        }
+    }
 }
 
 async fn store_connected_vehicle(
@@ -87,14 +113,19 @@ pub(crate) async fn connect_link(
 
     match request.endpoint {
         LinkEndpoint::Udp { bind_addr } => {
-            connect_via_address(&state, &app, format!("udpin:{bind_addr}")).await
+            let vehicle = connect_via_address(&state, format!("udpin:{bind_addr}")).await?;
+            store_connected_vehicle(&state, &app, vehicle).await
         }
         LinkEndpoint::Tcp { address } => {
-            connect_via_address(&state, &app, format!("tcpout:{address}")).await
+            let vehicle = connect_via_address(&state, format!("tcpout:{address}")).await?;
+            store_connected_vehicle(&state, &app, vehicle.clone()).await?;
+            tauri::async_runtime::spawn(request_tcp_telemetry_streams(vehicle));
+            Ok(())
         }
         #[cfg(not(target_os = "android"))]
         LinkEndpoint::Serial { port, baud } => {
-            connect_via_address(&state, &app, format!("serial:{port}:{baud}")).await
+            let vehicle = connect_via_address(&state, format!("serial:{port}:{baud}")).await?;
+            store_connected_vehicle(&state, &app, vehicle).await
         }
         LinkEndpoint::BluetoothBle { address } => {
             let vehicle = connect_ble(&address).await?;

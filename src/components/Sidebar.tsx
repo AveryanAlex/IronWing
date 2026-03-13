@@ -123,6 +123,7 @@ function SidebarContent({ vehicle, replayActive, firmwareActive }: { vehicle: Re
 
           {connectionMode === "tcp" && (
             <input
+              data-testid="connection-tcp-address"
               value={tcpAddress}
               onChange={(e) => setTcpAddress(e.target.value)}
               placeholder="127.0.0.1:5760"

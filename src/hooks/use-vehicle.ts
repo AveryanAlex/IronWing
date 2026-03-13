@@ -42,10 +42,19 @@ type ConnectionFormState = {
   followVehicle: boolean;
 };
 
+function defaultTcpAddress() {
+  const port = Number.parseInt(import.meta.env.VITE_IRONWING_SITL_TCP_PORT ?? "", 10);
+  if (Number.isFinite(port) && port > 0) {
+    return `127.0.0.1:${port}`;
+  }
+
+  return "127.0.0.1:5760";
+}
+
 const CONNECTION_DEFAULTS: ConnectionFormState = {
   mode: "udp",
   udpBind: "0.0.0.0:14550",
-  tcpAddress: "127.0.0.1:5760",
+  tcpAddress: defaultTcpAddress(),
   serialPort: "",
   baud: 57600,
   selectedBtDevice: "",
@@ -56,9 +65,25 @@ const CONNECTION_DEFAULTS: ConnectionFormState = {
 function loadConnectionForm(): ConnectionFormState {
   try {
     const raw = localStorage.getItem(CONNECTION_KEY);
-    if (!raw) return CONNECTION_DEFAULTS;
-    return { ...CONNECTION_DEFAULTS, ...JSON.parse(raw) };
+    const loaded = raw ? { ...CONNECTION_DEFAULTS, ...JSON.parse(raw) } : CONNECTION_DEFAULTS;
+
+    if (import.meta.env.VITE_IRONWING_SITL_MODE === "tcp") {
+      return {
+        ...loaded,
+        mode: "tcp",
+        tcpAddress: CONNECTION_DEFAULTS.tcpAddress,
+      };
+    }
+
+    return loaded;
   } catch {
+    if (import.meta.env.VITE_IRONWING_SITL_MODE === "tcp") {
+      return {
+        ...CONNECTION_DEFAULTS,
+        mode: "tcp",
+      };
+    }
+
     return CONNECTION_DEFAULTS;
   }
 }

@@ -1,12 +1,7 @@
 import { test, expect } from "@playwright/test";
-import { resolveE2ERuntime } from "../src/lib/e2e-runtime";
 
-const e2eRuntime = resolveE2ERuntime(process.env as Record<string, string | undefined>);
-
-test.describe("Negative path: wrong-port connect then cancel", () => {
-  test("connecting to wrong port shows Connecting, cancel returns to idle", async ({
-    page,
-  }) => {
+test.describe("Negative path: invalid UDP bind address", () => {
+  test("invalid UDP bind shows error and returns to idle controls", async ({ page }) => {
     await page.goto("/");
 
     const connectBtn = page.locator('[data-testid="connection-connect-btn"]');
@@ -19,6 +14,9 @@ test.describe("Negative path: wrong-port connect then cancel", () => {
       '[data-testid="connection-transport-select"]',
     );
     const udpBind = page.locator('[data-testid="connection-udp-bind"]');
+    const errorMessage = page.locator(
+      '[data-testid="connection-error-message"]',
+    );
 
     await page.waitForLoadState("networkidle");
     if (await disconnectBtn.isVisible()) {
@@ -33,22 +31,16 @@ test.describe("Negative path: wrong-port connect then cancel", () => {
     await expect(statusText).toContainText("Idle");
 
     await transportSelect.selectOption("udp");
-    await udpBind.fill(e2eRuntime.wrongUdpBindAddress);
+    await udpBind.fill("not-a-socket");
 
     await connectBtn.click();
 
-    await expect(statusText).toContainText("Connecting", { timeout: 5_000 });
-    await expect(cancelBtn).toBeVisible();
-    await expect(udpBind).toBeDisabled();
-
-    await cancelBtn.click();
-
-    await expect(statusText).toContainText("Idle", { timeout: 10_000 });
+    await expect(statusText).toContainText("Error", { timeout: 10_000 });
+    await expect(errorMessage).toContainText(/invalid socket address/i);
     await expect(connectBtn).toBeVisible();
     await expect(cancelBtn).not.toBeVisible();
-
+    await expect(disconnectBtn).not.toBeVisible();
     await expect(udpBind).toBeEnabled();
-    await udpBind.fill(e2eRuntime.udpBindAddress);
-    await expect(udpBind).toHaveValue(e2eRuntime.udpBindAddress);
+    await expect(udpBind).toHaveValue("not-a-socket");
   });
 });

@@ -19,9 +19,7 @@ cargo test --workspace           # All 40 Rust unit tests
 cargo test --workspace <test_name>  # Single test
 
 # SITL dev loop
-make bridge-up                   # Start ArduPilot SITL Docker + MAVProxy UDP bridge
-make bridge-down                 # Stop everything
-make dev-sitl                    # bridge-up + pnpm run tauri:dev
+pnpm run dev                     # Start SITL + tauri:dev; Ctrl+C cleans up
 
 # Dev
 pnpm run tauri:dev                # Desktop app with hot reload
@@ -183,9 +181,9 @@ See `src/AGENTS.md` for detailed frontend structure, hook patterns, and IPC brid
 ## Tests
 
 - **40 Rust unit tests** in `src-tauri/src/logs.rs` (34) and `helpers.rs` (6). Inline `#[cfg(test)]` modules, no separate `tests/` dir
-- **No TypeScript tests** — no vitest/jest configured
+- **Lightweight TypeScript/Node tests** — vitest covers selected helper logic; no broad component test suite
 - **No integration tests** for Tauri command layer
-- **SITL is manual-only** — `make dev-sitl` for dev loop, not automated in CI
+- **SITL dev loop is pnpm-managed** — `pnpm run dev` for local SITL + Tauri iteration; not automated in CI
 - BIN format test data is synthetic (built byte-by-byte in test helpers), no fixture files on disk
 
 ## Project Status

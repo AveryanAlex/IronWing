@@ -1,7 +1,10 @@
 import { test, expect } from "@playwright/test";
+import { resolveE2ERuntime } from "../src/lib/e2e-runtime";
+
+const e2eRuntime = resolveE2ERuntime(process.env as Record<string, string | undefined>);
 
 test.describe("SITL connect happy path", () => {
-  test("connects to SITL over UDP and receives live telemetry", async ({ page }) => {
+  test("connects to SITL over TCP and receives live telemetry", async ({ page }) => {
     await page.goto("/");
 
     const connectBtn = page.locator('[data-testid="connection-connect-btn"]');
@@ -23,10 +26,10 @@ test.describe("SITL connect happy path", () => {
     await expect(statusText).toContainText("Idle");
 
     const transportSelect = page.locator('[data-testid="connection-transport-select"]');
-    await transportSelect.selectOption("udp");
+    await transportSelect.selectOption("tcp");
 
-    const udpBind = page.locator('[data-testid="connection-udp-bind"]');
-    await udpBind.fill("0.0.0.0:14550");
+    const tcpAddress = page.locator('[data-testid="connection-tcp-address"]');
+    await tcpAddress.fill(e2eRuntime.tcpAddress);
 
     await connectBtn.click();
 

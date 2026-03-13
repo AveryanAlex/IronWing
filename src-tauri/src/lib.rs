@@ -141,13 +141,19 @@ pub fn run() {
             {
                 if std::env::var("IRONWING_E2E").as_deref() == Ok("1") {
                     use tauri_remote_ui::{RemoteUiConfig, RemoteUiExt};
-                    let config = RemoteUiConfig::default().set_port(Some(9515));
+                    let remote_ui_port = std::env::var("IRONWING_E2E_PORT")
+                        .ok()
+                        .and_then(|value| value.parse::<u16>().ok())
+                        .unwrap_or(9515);
+                    let config = RemoteUiConfig::default().set_port(Some(remote_ui_port));
                     let handle = _app.handle().clone();
                     tauri::async_runtime::spawn(async move {
                         if let Err(e) = handle.start_remote_ui(config).await {
                             tracing::error!("failed to start Remote UI: {e}");
                         } else {
-                            tracing::info!("Remote UI started on http://127.0.0.1:9515");
+                            tracing::info!(
+                                "Remote UI started on http://127.0.0.1:{remote_ui_port}"
+                            );
                         }
                     });
                 }

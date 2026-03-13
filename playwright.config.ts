@@ -1,4 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
+import { resolveE2ERuntime } from "./src/lib/e2e-runtime";
+
+const e2eRuntime = resolveE2ERuntime(process.env as Record<string, string | undefined>);
 
 export default defineConfig({
   testDir: "./e2e",
@@ -9,7 +12,7 @@ export default defineConfig({
   reporter: process.env.CI ? "github" : "list",
 
   use: {
-    baseURL: "http://127.0.0.1:9515",
+    baseURL: e2eRuntime.baseUrl,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -21,13 +24,4 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-
-  webServer: {
-    command: "scripts/e2e-start.sh --keep",
-    url: "http://127.0.0.1:9515/keep_alive",
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-    stdout: "pipe",
-    stderr: "pipe",
-  },
 });
