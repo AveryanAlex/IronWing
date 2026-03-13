@@ -93,13 +93,19 @@ export type SerialFlashSource =
   | { kind: "catalog_url"; url: string }
   | { kind: "local_apj_bytes"; data: number[] };
 
+export type DfuRecoverySource =
+  | { kind: "catalog_url"; url: string }
+  | { kind: "local_apj_bytes"; data: number[] }
+  | { kind: "local_bin_bytes"; data: number[] };
+
 export type SerialFlowResult =
   | { result: "verified"; board_id: number; bootloader_rev: number; port: string }
   | { result: "flashed_but_unverified"; board_id: number; bootloader_rev: number; port: string }
   | { result: "reconnect_verified"; board_id: number; bootloader_rev: number; flash_verified: boolean }
   | { result: "reconnect_failed"; board_id: number; bootloader_rev: number; flash_verified: boolean; reconnect_error: string }
   | { result: "failed"; reason: string }
-  | { result: "board_detection_failed"; reason: string };
+  | { result: "board_detection_failed"; reason: string }
+  | { result: "extf_capacity_insufficient"; reason: string };
 
 // ── DFU recovery result ──
 
@@ -123,10 +129,37 @@ export type CatalogEntry = {
   latest: boolean;
   git_sha: string;
   brand_name: string | null;
+  manufacturer: string | null;
 };
 
-export async function firmwareCatalogEntries(boardId: number): Promise<CatalogEntry[]> {
-  return invoke<CatalogEntry[]>("firmware_catalog_entries", { boardId });
+export type CatalogTargetSummary = {
+  board_id: number;
+  platform: string;
+  brand_name: string | null;
+  manufacturer: string | null;
+  vehicle_types: string[];
+  latest_version: string | null;
+};
+
+export async function firmwareCatalogEntries(
+  boardId: number,
+  platform?: string,
+): Promise<CatalogEntry[]> {
+  return invoke<CatalogEntry[]>("firmware_catalog_entries", { boardId, platform: platform ?? null });
+}
+
+export async function firmwareCatalogTargets(): Promise<CatalogTargetSummary[]> {
+  return invoke<CatalogTargetSummary[]>("firmware_catalog_targets");
+}
+
+// ── DFU source inspection ──
+
+export type DfuSourceCheck = {
+  has_extf: boolean;
+};
+
+export async function firmwareCheckDfuSource(url: string): Promise<DfuSourceCheck> {
+  return invoke<DfuSourceCheck>("firmware_check_dfu_source", { url });
 }
 
 // ── Serial primary commands ──
@@ -153,10 +186,10 @@ export async function firmwareRebootToBootloader(): Promise<void> {
 
 export async function firmwareFlashDfuRecovery(
   device: DfuDeviceInfo,
-  binData: number[],
+  source: DfuRecoverySource,
 ): Promise<DfuRecoveryResult> {
   return invoke<DfuRecoveryResult>("firmware_flash_dfu_recovery", {
-    request: { device, bin_data: binData },
+    request: { device, source },
   });
 }
 

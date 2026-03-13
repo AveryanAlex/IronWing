@@ -106,7 +106,8 @@ export type SetupGroupId =
   | "hardware"
   | "safety"
   | "tuning"
-  | "peripherals_advanced";
+  | "peripherals_advanced"
+  | "firmware";
 
 export type SetupGroup = {
   id: SetupGroupId;
@@ -135,10 +136,11 @@ export const SETUP_SECTIONS: SetupSection[] = [
   // Tuning
   { id: "initial_params", label: "Initial Parameters", icon: Calculator, group: "tuning" },
   { id: "pid_tuning", label: "PID Tuning", icon: Activity, group: "tuning" },
-  // Peripherals & Advanced
+  // Peripherals
   { id: "peripherals", label: "Peripherals", icon: Puzzle, group: "peripherals_advanced" },
   { id: "full_parameters", label: "Full Parameters", icon: Sliders, group: "peripherals_advanced" },
-  { id: "firmware", label: "Firmware", icon: Cpu, group: "peripherals_advanced" },
+  // Firmware
+  { id: "firmware", label: "Firmware", icon: Cpu, group: "firmware" },
 ];
 
 export const SECTION_GROUPS: SetupGroup[] = [
@@ -164,8 +166,13 @@ export const SECTION_GROUPS: SetupGroup[] = [
   },
   {
     id: "peripherals_advanced",
-    label: "Peripherals & Advanced",
-    sections: ["peripherals", "full_parameters", "firmware"],
+    label: "Peripherals",
+    sections: ["peripherals", "full_parameters"],
+  },
+  {
+    id: "firmware",
+    label: "Firmware",
+    sections: ["firmware"],
   },
 ];
 
@@ -514,8 +521,6 @@ export function SetupSectionPanel({
     setPendingHighlightParam(null);
   }, []);
 
-  if (!connected && activeSection !== "firmware") return <DisconnectedGate />;
-
   const effectiveSection = !setupReady && activeSection !== "firmware"
     ? "overview" as SetupSectionId
     : activeSection;
@@ -536,6 +541,7 @@ export function SetupSectionPanel({
   const ActiveIcon = activeSectionMeta?.icon ?? Circle;
 
   const sectionContent = (() => {
+    if (!connected && activeSection !== "firmware") return <DisconnectedGate />;
     switch (effectiveSection) {
       case "overview":
         return (

@@ -7,6 +7,21 @@ use std::path::Path;
 
 // ── Parsed artifact models (path-specific, not collapsed) ──
 
+/// Optional external-flash payload parsed from APJ `extf_image` field.
+/// Carries the decompressed image and metadata needed by the serial uploader
+/// to program external flash separately from the internal image.
+#[derive(Debug, Clone)]
+pub(crate) struct ExternalFlashPayload {
+    /// Decompressed external-flash image bytes.
+    pub(crate) image: Vec<u8>,
+    /// Actual decompressed size (always `image.len()`).
+    pub(crate) image_size: usize,
+    /// Declared `extf_image_size` from APJ metadata (0 means absent/unset).
+    pub(crate) declared_size: u32,
+    /// Total external-flash capacity from APJ `extflash_total` (0 means absent/unset).
+    pub(crate) extflash_total: u32,
+}
+
 /// Serial-path artifact: parsed from `.apj` file.
 /// Contains decompressed firmware image and board metadata.
 #[derive(Debug, Clone)]
@@ -15,6 +30,8 @@ pub(crate) struct SerialArtifact {
     pub(crate) image: Vec<u8>,
     pub(crate) image_size: usize,
     pub(crate) summary: String,
+    /// Optional external-flash payload. `None` when the APJ has no `extf_image`.
+    pub(crate) extf: Option<ExternalFlashPayload>,
 }
 
 /// DFU recovery artifact: validated raw `.bin` file.
@@ -38,41 +55,48 @@ struct ApjFile {
     summary: String,
     #[serde(default)]
     image_size: u32,
+    #[serde(default)]
+    extf_image_size: u32,
+    #[serde(default)]
+    extflash_total: u32,
+}
+
+// ── Shared decode/decompress helper ──
+
+/// Decode a base64-encoded, zlib-compressed payload.
+/// `label` is used in error messages to distinguish internal vs external images.
+fn decode_compressed_payload(b64: &str, label: &str) -> Result<Vec<u8>, FirmwareError> {
+    let compressed = BASE64_STANDARD
+        .decode(b64)
+        .map_err(|e| FirmwareError::ArtifactInvalid {
+            reason: format!("{label}: base64 decode failed: {e}"),
+        })?;
+
+    let mut decoder = ZlibDecoder::new(&compressed[..]);
+    let mut image = Vec::new();
+    decoder
+        .read_to_end(&mut image)
+        .map_err(|e| FirmwareError::ArtifactInvalid {
+            reason: format!("{label}: zlib decompression failed: {e}"),
+        })?;
+
+    Ok(image)
 }
 
 // ── Public parsing API ──
 
 /// Parse a `.apj` file for the serial flashing path.
-/// Returns a validated `SerialArtifact` with decompressed firmware image.
+/// Returns a validated `SerialArtifact` with decompressed firmware image
+/// and optional external-flash payload.
 pub(crate) fn parse_apj(data: &[u8]) -> Result<SerialArtifact, FirmwareError> {
     let apj: ApjFile =
         serde_json::from_slice(data).map_err(|e| FirmwareError::ArtifactInvalid {
             reason: format!("invalid APJ JSON: {e}"),
         })?;
 
-    // Reject non-empty extf_image (external flash not supported in V1)
-    if !apj.extf_image.is_empty() {
-        return Err(FirmwareError::ArtifactInvalid {
-            reason: "external flash image (extf_image) is not supported in V1".into(),
-        });
-    }
+    // ── Internal image (required) ──
 
-    // Decode base64
-    let compressed =
-        BASE64_STANDARD
-            .decode(&apj.image)
-            .map_err(|e| FirmwareError::ArtifactInvalid {
-                reason: format!("base64 decode failed: {e}"),
-            })?;
-
-    // Zlib decompress
-    let mut decoder = ZlibDecoder::new(&compressed[..]);
-    let mut image = Vec::new();
-    decoder
-        .read_to_end(&mut image)
-        .map_err(|e| FirmwareError::ArtifactInvalid {
-            reason: format!("zlib decompression failed: {e}"),
-        })?;
+    let image = decode_compressed_payload(&apj.image, "image")?;
 
     if image.is_empty() {
         return Err(FirmwareError::ArtifactInvalid {
@@ -91,11 +115,44 @@ pub(crate) fn parse_apj(data: &[u8]) -> Result<SerialArtifact, FirmwareError> {
         });
     }
 
+    // ── External flash image (optional) ──
+
+    let extf = if apj.extf_image.is_empty() {
+        None
+    } else {
+        let extf_image = decode_compressed_payload(&apj.extf_image, "extf_image")?;
+
+        if extf_image.is_empty() {
+            return Err(FirmwareError::ArtifactInvalid {
+                reason: "extf_image: decompressed external flash image is empty".into(),
+            });
+        }
+
+        let extf_actual = extf_image.len();
+
+        if apj.extf_image_size > 0 && apj.extf_image_size as usize != extf_actual {
+            return Err(FirmwareError::ArtifactInvalid {
+                reason: format!(
+                    "extf_image_size mismatch: declared {}, decompressed {extf_actual}",
+                    apj.extf_image_size
+                ),
+            });
+        }
+
+        Some(ExternalFlashPayload {
+            image: extf_image,
+            image_size: extf_actual,
+            declared_size: apj.extf_image_size,
+            extflash_total: apj.extflash_total,
+        })
+    };
+
     Ok(SerialArtifact {
         board_id: apj.board_id,
         image,
         image_size: actual_size,
         summary: apj.summary,
+        extf,
     })
 }
 

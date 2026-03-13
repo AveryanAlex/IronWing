@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager};
 
 use crate::AppState;
@@ -8,8 +8,9 @@ use crate::firmware::catalog::CatalogClient;
 use crate::firmware::dfu_recovery::{self, DfuRecoveryResult};
 use crate::firmware::serial_executor::{self, PreflightSnapshot};
 use crate::firmware::types::{
-    CatalogEntry, DfuDeviceInfo, FirmwareProgress, FirmwareSessionStatus, InventoryResult,
-    SerialFlashSource, SerialFlowResult, SerialPreflightInfo,
+    CatalogEntry, CatalogTargetSummary, DfuDeviceInfo, DfuRecoverySource, FirmwareProgress,
+    FirmwareSessionStatus, InventoryResult, SerialFlashSource, SerialFlowResult,
+    SerialPreflightInfo,
 };
 
 #[derive(Deserialize)]
@@ -71,7 +72,7 @@ pub(crate) async fn firmware_flash_serial(
                     &deps,
                     &preflight,
                     &artifact,
-                    |written, total| {
+                    |phase, written, total| {
                         let pct = if total > 0 {
                             (written as f32 / total as f32) * 100.0
                         } else {
@@ -80,7 +81,7 @@ pub(crate) async fn firmware_flash_serial(
                         let _ = app.emit(
                             "firmware://progress",
                             &FirmwareProgress {
-                                phase_label: "programming".into(),
+                                phase_label: phase.into(),
                                 bytes_written: written as u64,
                                 bytes_total: total as u64,
                                 pct,
@@ -177,6 +178,7 @@ pub(crate) async fn firmware_serial_preflight(
 pub(crate) async fn firmware_catalog_entries(
     app: tauri::AppHandle,
     board_id: u32,
+    platform: Option<String>,
 ) -> Result<Vec<CatalogEntry>, String> {
     tokio::task::spawn_blocking(move || {
         let cache_dir = app
@@ -186,7 +188,26 @@ pub(crate) async fn firmware_catalog_entries(
             .join("firmware_catalog");
         let client = CatalogClient::new(cache_dir);
         client
-            .get_entries_for_board_online(board_id)
+            .get_entries_filtered_online(board_id, platform.as_deref())
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("catalog task failed: {e}"))?
+}
+
+#[tauri::command]
+pub(crate) async fn firmware_catalog_targets(
+    app: tauri::AppHandle,
+) -> Result<Vec<CatalogTargetSummary>, String> {
+    tokio::task::spawn_blocking(move || {
+        let cache_dir = app
+            .path()
+            .app_cache_dir()
+            .unwrap_or_else(|_| std::env::temp_dir())
+            .join("firmware_catalog");
+        let client = CatalogClient::new(cache_dir);
+        client
+            .get_catalog_targets_online()
             .map_err(|e| e.to_string())
     })
     .await
@@ -226,7 +247,7 @@ fn capture_preflight(port: &str, baud: u32) -> PreflightSnapshot {
 #[derive(Deserialize)]
 pub(crate) struct DfuFlashRequest {
     device: DfuDeviceInfo,
-    bin_data: Vec<u8>,
+    source: DfuRecoverySource,
 }
 
 #[cfg(not(target_os = "android"))]
@@ -236,6 +257,11 @@ pub(crate) async fn firmware_flash_dfu_recovery(
     app: tauri::AppHandle,
     request: DfuFlashRequest,
 ) -> Result<DfuRecoveryResult, String> {
+    let bin_data = resolve_dfu_source(request.source).await?;
+
+    let recovery_artifact =
+        artifact::validate_recovery_bin(&bin_data).map_err(|e| e.to_string())?;
+
     state
         .firmware_session
         .try_start_dfu(connection::is_vehicle_connected(&state).await)
@@ -245,10 +271,10 @@ pub(crate) async fn firmware_flash_dfu_recovery(
         let handle = tokio::task::spawn_blocking({
             let app = app.clone();
             let device = request.device.clone();
-            let bin_data = request.bin_data;
+            let image = recovery_artifact.image;
             move || {
                 let usb = dfu_recovery::NusbDfuAccess::new();
-                dfu_recovery::execute_dfu_recovery(&usb, &device, &bin_data, |written, total| {
+                dfu_recovery::execute_dfu_recovery(&usb, &device, &image, |written, total| {
                     let pct = if total > 0 {
                         (written as f32 / total as f32) * 100.0
                     } else {
@@ -303,16 +329,66 @@ pub(crate) async fn firmware_flash_dfu_recovery(
 async fn resolve_source(source: SerialFlashSource) -> Result<Vec<u8>, String> {
     match source {
         SerialFlashSource::LocalApjBytes { data } => Ok(data),
-        SerialFlashSource::CatalogUrl { url } => tokio::task::spawn_blocking(move || {
-            let response = ureq::get(&url)
-                .call()
-                .map_err(|e| format!("catalog download failed: {e}"))?;
-            response
-                .into_body()
-                .read_to_vec()
-                .map_err(|e| format!("catalog read failed: {e}"))
-        })
-        .await
-        .map_err(|e| format!("download task failed: {e}"))?,
+        SerialFlashSource::CatalogUrl { url } => download_url(url).await,
     }
+}
+
+#[cfg(not(target_os = "android"))]
+async fn resolve_dfu_source(source: DfuRecoverySource) -> Result<Vec<u8>, String> {
+    match source {
+        DfuRecoverySource::LocalBinBytes { data } => Ok(data),
+        DfuRecoverySource::LocalApjBytes { data } => apj_to_dfu_bin(&data),
+        DfuRecoverySource::CatalogUrl { url } => {
+            let apj_bytes = download_url(url).await?;
+            apj_to_dfu_bin(&apj_bytes)
+        }
+    }
+}
+
+pub(crate) fn apj_to_dfu_bin(apj_bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let parsed = artifact::parse_apj(apj_bytes).map_err(|e| e.to_string())?;
+    if parsed.extf.is_some() {
+        return Err(
+            "this APJ contains an external-flash payload; DFU recovery can only write \
+             internal flash. Use the serial bootloader path for boards with external flash"
+                .into(),
+        );
+    }
+    Ok(parsed.image)
+}
+
+#[derive(Serialize)]
+pub(crate) struct DfuSourceCheck {
+    pub has_extf: bool,
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+pub(crate) async fn firmware_check_dfu_source(url: String) -> Result<DfuSourceCheck, String> {
+    let apj_bytes = download_url(url).await?;
+    let parsed = artifact::parse_apj(&apj_bytes).map_err(|e| e.to_string())?;
+    Ok(DfuSourceCheck {
+        has_extf: parsed.extf.is_some(),
+    })
+}
+
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub(crate) async fn firmware_check_dfu_source(_url: String) -> Result<DfuSourceCheck, String> {
+    Err("DFU source inspection is not supported on Android".into())
+}
+
+#[cfg(not(target_os = "android"))]
+async fn download_url(url: String) -> Result<Vec<u8>, String> {
+    tokio::task::spawn_blocking(move || {
+        let response = ureq::get(&url)
+            .call()
+            .map_err(|e| format!("catalog download failed: {e}"))?;
+        response
+            .into_body()
+            .read_to_vec()
+            .map_err(|e| format!("catalog read failed: {e}"))
+    })
+    .await
+    .map_err(|e| format!("download task failed: {e}"))?
 }

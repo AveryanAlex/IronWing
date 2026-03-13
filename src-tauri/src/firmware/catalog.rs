@@ -1,7 +1,8 @@
 use crate::firmware::cache::ManifestCache;
-use crate::firmware::types::{CatalogEntry, FirmwareError};
+use crate::firmware::types::{CatalogEntry, CatalogTargetSummary, FirmwareError};
 use flate2::read::GzDecoder;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::io::Read;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -30,6 +31,7 @@ struct RawEntry {
     #[serde(rename = "git-sha")]
     git_sha: Option<String>,
     brand_name: Option<String>,
+    manufacturer: Option<String>,
 }
 
 pub(crate) fn parse_manifest_gz(gz_data: &[u8]) -> Result<Vec<CatalogEntry>, FirmwareError> {
@@ -78,6 +80,7 @@ fn normalize_entry(raw: RawEntry) -> Option<CatalogEntry> {
         latest: raw.latest == Some(1),
         git_sha: raw.git_sha.unwrap_or_default(),
         brand_name: raw.brand_name,
+        manufacturer: raw.manufacturer,
     })
 }
 
@@ -87,6 +90,77 @@ pub(crate) fn filter_by_board(entries: &[CatalogEntry], board_id: u32) -> Vec<Ca
         .filter(|e| e.board_id == board_id)
         .cloned()
         .collect()
+}
+
+pub(crate) fn filter_by_board_and_platform(
+    entries: &[CatalogEntry],
+    board_id: u32,
+    platform: Option<&str>,
+) -> Vec<CatalogEntry> {
+    entries
+        .iter()
+        .filter(|e| e.board_id == board_id && platform.is_none_or(|p| e.platform == p))
+        .cloned()
+        .collect()
+}
+
+pub(crate) fn build_catalog_targets(entries: &[CatalogEntry]) -> Vec<CatalogTargetSummary> {
+    let mut groups: HashMap<(u32, String), CatalogTargetSummary> = HashMap::new();
+
+    for e in entries {
+        let key = (e.board_id, e.platform.clone());
+        let target = groups.entry(key).or_insert_with(|| CatalogTargetSummary {
+            board_id: e.board_id,
+            platform: e.platform.clone(),
+            brand_name: None,
+            manufacturer: None,
+            vehicle_types: Vec::new(),
+            latest_version: None,
+        });
+
+        if target.brand_name.is_none() {
+            target.brand_name.clone_from(&e.brand_name);
+        }
+        if target.manufacturer.is_none() {
+            target.manufacturer.clone_from(&e.manufacturer);
+        }
+
+        if !e.vehicle_type.is_empty() && !target.vehicle_types.contains(&e.vehicle_type) {
+            target.vehicle_types.push(e.vehicle_type.clone());
+        }
+
+        if e.version_type == "OFFICIAL" {
+            match &target.latest_version {
+                None => target.latest_version = Some(e.version.clone()),
+                Some(existing) if version_gt(&e.version, existing) => {
+                    target.latest_version = Some(e.version.clone());
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut targets: Vec<_> = groups.into_values().collect();
+    targets.sort_by(|a, b| {
+        a.platform
+            .cmp(&b.platform)
+            .then(a.board_id.cmp(&b.board_id))
+    });
+    for t in &mut targets {
+        t.vehicle_types.sort();
+    }
+    targets
+}
+
+fn version_gt(a: &str, b: &str) -> bool {
+    let parse = |s: &str| -> Vec<u32> {
+        s.split('.')
+            .map(|seg| seg.parse::<u32>().unwrap_or(0))
+            .collect()
+    };
+    let va = parse(a);
+    let vb = parse(b);
+    va > vb
 }
 
 pub(crate) fn reject_catalog_for_dfu() -> FirmwareError {
@@ -148,6 +222,56 @@ impl CatalogClient {
     where
         F: FnOnce() -> Result<Vec<u8>, FirmwareError>,
     {
+        let all_entries = self.get_all_entries(fetcher)?;
+        Ok(filter_by_board(&all_entries, board_id))
+    }
+
+    pub(crate) fn get_entries_filtered_online(
+        &self,
+        board_id: u32,
+        platform: Option<&str>,
+    ) -> Result<Vec<CatalogEntry>, FirmwareError> {
+        self.get_entries_filtered(board_id, platform, fetch_manifest_gz)
+    }
+
+    pub(crate) fn get_entries_filtered<F>(
+        &self,
+        board_id: u32,
+        platform: Option<&str>,
+        fetcher: F,
+    ) -> Result<Vec<CatalogEntry>, FirmwareError>
+    where
+        F: FnOnce() -> Result<Vec<u8>, FirmwareError>,
+    {
+        let all_entries = self.get_all_entries(fetcher)?;
+        Ok(filter_by_board_and_platform(
+            &all_entries,
+            board_id,
+            platform,
+        ))
+    }
+
+    pub(crate) fn get_catalog_targets_online(
+        &self,
+    ) -> Result<Vec<CatalogTargetSummary>, FirmwareError> {
+        self.get_catalog_targets(fetch_manifest_gz)
+    }
+
+    pub(crate) fn get_catalog_targets<F>(
+        &self,
+        fetcher: F,
+    ) -> Result<Vec<CatalogTargetSummary>, FirmwareError>
+    where
+        F: FnOnce() -> Result<Vec<u8>, FirmwareError>,
+    {
+        let all_entries = self.get_all_entries(fetcher)?;
+        Ok(build_catalog_targets(&all_entries))
+    }
+
+    fn get_all_entries<F>(&self, fetcher: F) -> Result<Vec<CatalogEntry>, FirmwareError>
+    where
+        F: FnOnce() -> Result<Vec<u8>, FirmwareError>,
+    {
         let gz_data = match self.cache.get_if_fresh() {
             Some(cached) => cached,
             None => {
@@ -156,8 +280,6 @@ impl CatalogClient {
                 fresh
             }
         };
-
-        let all_entries = parse_manifest_gz(&gz_data)?;
-        Ok(filter_by_board(&all_entries, board_id))
+        parse_manifest_gz(&gz_data)
     }
 }

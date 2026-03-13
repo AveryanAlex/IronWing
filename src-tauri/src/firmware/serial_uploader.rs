@@ -35,6 +35,12 @@ const INFO_BL_REV: u8 = 0x01;
 const INFO_BOARD_ID: u8 = 0x02;
 const INFO_BOARD_REV: u8 = 0x03;
 const INFO_FLASH_SIZE: u8 = 0x04;
+const INFO_EXTF_SIZE: u8 = 0x06;
+
+// External-flash command bytes
+const EXTF_ERASE: u8 = 0x34;
+const EXTF_PROG_MULTI: u8 = 0x35;
+const EXTF_GET_CRC: u8 = 0x37;
 
 // Bootloader revision bounds
 const BL_REV_MIN: u8 = 2;
@@ -64,6 +70,7 @@ pub(crate) struct BootloaderInfo {
     pub(crate) board_id: u32,
     pub(crate) board_rev: u32,
     pub(crate) flash_size: u32,
+    pub(crate) extf_size: u32,
 }
 
 // ── CRC computation (matches ArduPilot firmware.crc()) ──
@@ -147,11 +154,20 @@ pub(crate) fn identify(io: &mut dyn SerialIo) -> Result<BootloaderInfo, Firmware
     let board_rev = get_info(io, INFO_BOARD_REV)?;
     let flash_size = get_info(io, INFO_FLASH_SIZE)?;
 
+    let extf_size = match get_info(io, INFO_EXTF_SIZE) {
+        Ok(size) => size,
+        Err(_) => {
+            sync(io)?;
+            0
+        }
+    };
+
     Ok(BootloaderInfo {
         bl_rev,
         board_id,
         board_rev,
         flash_size,
+        extf_size,
     })
 }
 
@@ -224,29 +240,115 @@ pub(crate) fn verify_crc(
     Ok(())
 }
 
-/// Send REBOOT + EOC. Does not wait for a sync response (board is rebooting).
+// ── External-flash operations ──
+
+pub(crate) fn validate_extf_capacity(
+    extf: &crate::firmware::artifact::ExternalFlashPayload,
+    info: &BootloaderInfo,
+) -> Result<(), FirmwareError> {
+    if info.extf_size == 0 || (extf.image.len() as u32) > info.extf_size {
+        return Err(FirmwareError::ArtifactInvalid {
+            reason: format!(
+                "external-flash capacity insufficient: board reports {} bytes, firmware needs {} bytes",
+                info.extf_size,
+                extf.image.len()
+            ),
+        });
+    }
+    Ok(())
+}
+
+pub(crate) fn extf_erase(io: &mut dyn SerialIo, size: u32) -> Result<(), FirmwareError> {
+    io.write_all(&[EXTF_ERASE])?;
+    io.write_all(&size.to_le_bytes())?;
+    io.write_all(&[EOC])?;
+    get_sync(io)
+}
+
+pub(crate) fn extf_program(
+    io: &mut dyn SerialIo,
+    image: &[u8],
+    mut on_progress: impl FnMut(usize, usize),
+) -> Result<(), FirmwareError> {
+    // Pad image to 4-byte alignment with 0xFF for word-aligned programming
+    let padded_len = (image.len() + 3) & !3;
+    let mut padded = image.to_vec();
+    padded.resize(padded_len, 0xFF);
+
+    let total = image.len();
+    let mut written = 0;
+
+    for chunk in padded.chunks(PROG_MULTI_MAX) {
+        let len = chunk.len() as u8;
+        io.write_all(&[EXTF_PROG_MULTI, len])?;
+        io.write_all(chunk)?;
+        io.write_all(&[EOC])?;
+        get_sync(io)?;
+        written = (written + chunk.len()).min(total);
+        on_progress(written, total);
+    }
+
+    Ok(())
+}
+
+pub(crate) fn extf_verify_crc(io: &mut dyn SerialIo, image: &[u8]) -> Result<(), FirmwareError> {
+    let size = image.len() as u32;
+    let expected = firmware_crc(image, size);
+
+    io.write_all(&[EXTF_GET_CRC])?;
+    io.write_all(&size.to_le_bytes())?;
+    io.write_all(&[EOC])?;
+    let mut buf = [0u8; 4];
+    io.read_exact(&mut buf)?;
+    let reported = u32::from_le_bytes(buf);
+    get_sync(io)?;
+
+    if reported != expected {
+        return Err(FirmwareError::ProtocolError {
+            detail: format!("extf CRC mismatch: expected 0x{expected:08X}, got 0x{reported:08X}"),
+        });
+    }
+
+    Ok(())
+}
+
 pub(crate) fn reboot(io: &mut dyn SerialIo) -> Result<(), FirmwareError> {
     io.write_all(&[REBOOT, EOC])
 }
 
-/// Full upload flow: sync → identify → validate board → erase → program → verify → reboot.
-/// Returns the detected bootloader info on success.
 pub(crate) fn upload(
     io: &mut dyn SerialIo,
     artifact: &SerialArtifact,
-    mut on_progress: impl FnMut(usize, usize),
+    mut on_progress: impl FnMut(&str, usize, usize),
 ) -> Result<BootloaderInfo, FirmwareError> {
     sync(io)?;
     let info = identify(io)?;
     validate_board(artifact, &info)?;
-    erase(io)?;
-    program(io, &artifact.image, &mut on_progress)?;
 
-    // CRC verification available for bl_rev >= 3
+    if let Some(extf) = &artifact.extf {
+        validate_extf_capacity(extf, &info)?;
+
+        on_progress("extf_erasing", 0, 0);
+        extf_erase(io, extf.image.len() as u32)?;
+        on_progress("extf_programming", 0, extf.image.len());
+        extf_program(io, &extf.image, |w, t| {
+            on_progress("extf_programming", w, t)
+        })?;
+        on_progress("extf_verifying", 0, 0);
+        extf_verify_crc(io, &extf.image)?;
+    }
+
+    on_progress("erasing", 0, 0);
+    erase(io)?;
+    on_progress("programming", 0, artifact.image.len());
+    program(io, &artifact.image, |w, t| on_progress("programming", w, t))?;
+
     if info.bl_rev >= 3 {
+        on_progress("verifying", 0, 0);
         verify_crc(io, &artifact.image, info.flash_size)?;
     }
 
+    on_progress("rebooting", 0, 0);
     reboot(io)?;
     Ok(info)
 }

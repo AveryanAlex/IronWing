@@ -48,9 +48,8 @@ pub(crate) fn execute_serial_flash(
     deps: &dyn SerialFlowDeps,
     preflight: &PreflightSnapshot,
     artifact: &SerialArtifact,
-    mut on_progress: impl FnMut(usize, usize),
+    mut on_progress: impl FnMut(&str, usize, usize),
 ) -> SerialFlowResult {
-    // Step 1: Detect bootloader port
     let bootloader_port = match poll_for_bootloader_port(deps, &preflight.ports_before) {
         Ok(port) => port,
         Err(e) => {
@@ -60,7 +59,6 @@ pub(crate) fn execute_serial_flash(
         }
     };
 
-    // Step 2: Open serial connection to bootloader
     let mut io = match deps.open_serial(&bootloader_port.port_name, BOOTLOADER_BAUD) {
         Ok(io) => io,
         Err(e) => {
@@ -70,9 +68,15 @@ pub(crate) fn execute_serial_flash(
         }
     };
 
-    // Step 3: Run the upload protocol
     let info = match serial_uploader::upload(io.as_mut(), artifact, &mut on_progress) {
         Ok(info) => info,
+        Err(e @ FirmwareError::ArtifactInvalid { .. })
+            if e.to_string().contains("external-flash capacity") =>
+        {
+            return SerialFlowResult::ExtfCapacityInsufficient {
+                reason: e.to_string(),
+            };
+        }
         Err(e) => {
             return SerialFlowResult::Failed {
                 reason: e.to_string(),

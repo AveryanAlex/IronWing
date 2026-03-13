@@ -35,8 +35,8 @@ describe("SectionNavItem completed color", () => {
   });
 });
 
-describe("SetupSectionPanel hook order", () => {
-  it("has no React hook calls after the early return in SetupSectionPanel", () => {
+describe("SetupSectionPanel disconnected gate architecture", () => {
+  it("renders DisconnectedGate inside sectionContent, not as a component-level early return", () => {
     const src = readFileSync(
       resolve(__dirname, "SetupSectionPanel.tsx"),
       "utf-8",
@@ -47,11 +47,31 @@ describe("SetupSectionPanel hook order", () => {
 
     const body = src.slice(fnStart);
 
-    const earlyReturnIdx = body.indexOf("if (!connected && activeSection !== \"firmware\") return");
-    expect(earlyReturnIdx).toBeGreaterThan(-1);
+    const sectionContentStart = body.indexOf("const sectionContent");
+    expect(sectionContentStart).toBeGreaterThan(-1);
 
-    const afterEarlyReturn = body.slice(earlyReturnIdx);
-    const lines = afterEarlyReturn.split("\n").slice(1);
+    const beforeContent = body.slice(0, sectionContentStart);
+    expect(beforeContent).not.toMatch(/return\s*<DisconnectedGate/);
+
+    const contentBlock = body.slice(sectionContentStart, body.indexOf("return (", sectionContentStart));
+    expect(contentBlock).toContain("DisconnectedGate");
+    expect(contentBlock).toMatch(/!connected.*activeSection\s*!==\s*"firmware"/);
+  });
+
+  it("has no React hook calls after the sectionContent block", () => {
+    const src = readFileSync(
+      resolve(__dirname, "SetupSectionPanel.tsx"),
+      "utf-8",
+    );
+
+    const fnStart = src.indexOf("export function SetupSectionPanel(");
+    const body = src.slice(fnStart);
+
+    const sectionContentEnd = body.indexOf("})();");
+    expect(sectionContentEnd).toBeGreaterThan(-1);
+
+    const afterContent = body.slice(sectionContentEnd);
+    const lines = afterContent.split("\n");
 
     const violatingLines = lines
       .map((line, i) => ({ line: line.trim(), num: i + 1 }))
@@ -59,7 +79,7 @@ describe("SetupSectionPanel hook order", () => {
 
     expect(
       violatingLines,
-      `Hook calls found after early return:\n${violatingLines.map((v) => `  line +${v.num}: ${v.line}`).join("\n")}`,
+      `Hook calls found after sectionContent:\n${violatingLines.map((v) => `  line +${v.num}: ${v.line}`).join("\n")}`,
     ).toHaveLength(0);
   });
 });
@@ -417,6 +437,42 @@ describe("StagedParamsBar animated expand/collapse", () => {
   it("uses a single rotating chevron with rotate-180", () => {
     expect(barBody).toContain("transition-transform");
     expect(barBody).toContain("rotate-180");
+  });
+});
+
+describe("Firmware dedicated group architecture", () => {
+  const panelSrc = readFileSync(
+    resolve(__dirname, "SetupSectionPanel.tsx"),
+    "utf-8",
+  );
+  const groupsBlock = panelSrc.slice(panelSrc.indexOf("SECTION_GROUPS"));
+
+  it("firmware section belongs to a dedicated firmware group in SETUP_SECTIONS", () => {
+    expect(panelSrc).toMatch(/id:\s*"firmware".*group:\s*"firmware"/s);
+  });
+
+  it("SECTION_GROUPS contains a firmware group with firmware as its sole section", () => {
+    const firmwareGroupStart = groupsBlock.indexOf('id: "firmware"');
+    expect(firmwareGroupStart).toBeGreaterThan(-1);
+    const firmwareGroupSlice = groupsBlock.slice(firmwareGroupStart, firmwareGroupStart + 200);
+    expect(firmwareGroupSlice).toContain('sections: ["firmware"]');
+  });
+
+  it("no group label contains the word Advanced", () => {
+    const labelMatches = groupsBlock.match(/label:\s*"([^"]+)"/g) ?? [];
+    for (const match of labelMatches) {
+      expect(match.toLowerCase()).not.toContain("advanced");
+    }
+  });
+
+  it("firmware is not listed in the peripherals_advanced group sections", () => {
+    const advGroupStart = groupsBlock.indexOf('"peripherals_advanced"');
+    if (advGroupStart > -1) {
+      const advGroupSlice = groupsBlock.slice(advGroupStart, advGroupStart + 300);
+      const sectionsMatch = advGroupSlice.match(/sections:\s*\[([^\]]+)\]/);
+      expect(sectionsMatch).not.toBeNull();
+      expect(sectionsMatch![1]).not.toContain('"firmware"');
+    }
   });
 });
 

@@ -3,12 +3,15 @@ import type {
   FirmwareSessionStatus,
   SerialFlowResult,
   DfuRecoveryResult,
+  DfuRecoverySource,
 } from "../firmware";
 import {
   isFirmwareActive,
   deriveFirmwarePath,
   serialResultToStatus,
   dfuResultToStatus,
+  buildDfuApjSource,
+  buildDfuCatalogSource,
 } from "./use-firmware";
 
 const IDLE: FirmwareSessionStatus = { kind: "idle" };
@@ -46,6 +49,7 @@ describe("isFirmwareActive", () => {
       { result: "verified", board_id: 1, bootloader_rev: 4, port: "/dev/ttyACM0" },
       { result: "failed", reason: "timeout" },
       { result: "flashed_but_unverified", board_id: 1, bootloader_rev: 2, port: "/dev/ttyACM0" },
+      { result: "extf_capacity_insufficient", reason: "no extf support" },
     ];
     for (const r of results) {
       expect(isFirmwareActive(serialResultToStatus(r))).toBe(false);
@@ -148,6 +152,38 @@ describe("serialResultToStatus", () => {
     });
   });
 
+  it("maps extf_capacity_insufficient to completed serial failed (not recovery_needed)", () => {
+    const status = serialResultToStatus({
+      result: "extf_capacity_insufficient",
+      reason: "external-flash capacity insufficient: board reports 0 bytes, firmware needs 4 bytes",
+    });
+    expect(status).toEqual({
+      kind: "completed",
+      outcome: {
+        path: "serial_primary",
+        outcome: {
+          result: "failed",
+          reason: "external-flash capacity insufficient: board reports 0 bytes, firmware needs 4 bytes",
+        },
+      },
+    });
+  });
+
+  it("extf_capacity_insufficient is distinct from board_detection_failed", () => {
+    const extfFail = serialResultToStatus({
+      result: "extf_capacity_insufficient",
+      reason: "external-flash capacity insufficient",
+    });
+    const boardFail = serialResultToStatus({
+      result: "board_detection_failed",
+      reason: "no bootloader detected",
+    });
+    if (extfFail.kind === "completed" && boardFail.kind === "completed") {
+      expect(extfFail.outcome.outcome.result).toBe("failed");
+      expect(boardFail.outcome.outcome.result).toBe("recovery_needed");
+    }
+  });
+
   it("always produces kind=completed with path=serial_primary", () => {
     const results: SerialFlowResult[] = [
       { result: "verified", board_id: 1, bootloader_rev: 4, port: "p" },
@@ -156,6 +192,7 @@ describe("serialResultToStatus", () => {
       { result: "reconnect_failed", board_id: 1, bootloader_rev: 4, flash_verified: true, reconnect_error: "e" },
       { result: "failed", reason: "r" },
       { result: "board_detection_failed", reason: "r" },
+      { result: "extf_capacity_insufficient", reason: "r" },
     ];
     for (const r of results) {
       const s = serialResultToStatus(r);
@@ -342,14 +379,15 @@ describe("recovery-needed or unsupported outcomes stay distinct", () => {
     }
   });
 
-  it("all five terminal states are representable and distinct", () => {
+  it("all six terminal states are representable and distinct", () => {
     const verified = serialResultToStatus({ result: "verified", board_id: 1, bootloader_rev: 4, port: "p" });
     const unverified = serialResultToStatus({ result: "flashed_but_unverified", board_id: 1, bootloader_rev: 2, port: "p" });
     const failed = serialResultToStatus({ result: "failed", reason: "error" });
     const recoveryNeeded = serialResultToStatus({ result: "board_detection_failed", reason: "no bootloader" });
     const unsupported = dfuResultToStatus({ result: "platform_unsupported" });
+    const extfFailed = serialResultToStatus({ result: "extf_capacity_insufficient", reason: "no extf" });
 
-    const outcomes = [verified, unverified, failed, recoveryNeeded, unsupported].map((s) => {
+    const outcomes = [verified, unverified, failed, recoveryNeeded, unsupported, extfFailed].map((s) => {
       if (s.kind === "completed") {
         return `${s.outcome.path}:${s.outcome.outcome.result}`;
       }
@@ -426,5 +464,160 @@ describe("full transition sequences", () => {
     if (s2.kind === "completed" && s2.outcome.path === "dfu_recovery") {
       expect(s2.outcome.outcome.result).toBe("unsupported_recovery_path");
     }
+  });
+});
+
+describe("buildDfuApjSource", () => {
+  it("creates a local_apj_bytes source from a byte array", () => {
+    const bytes = [0x01, 0x02, 0x03, 0x04];
+    const source: DfuRecoverySource = buildDfuApjSource(bytes);
+    expect(source).toEqual({ kind: "local_apj_bytes", data: [0x01, 0x02, 0x03, 0x04] });
+  });
+
+  it("preserves empty byte arrays", () => {
+    const source = buildDfuApjSource([]);
+    expect(source).toEqual({ kind: "local_apj_bytes", data: [] });
+  });
+
+  it("returns an object distinct from local_bin_bytes", () => {
+    const apj = buildDfuApjSource([0xff]);
+    expect(apj.kind).toBe("local_apj_bytes");
+    expect(apj.kind).not.toBe("local_bin_bytes");
+  });
+});
+
+describe("buildDfuCatalogSource", () => {
+  it("creates a catalog_url source from a URL string", () => {
+    const url = "https://firmware.ardupilot.org/Copter/stable/CubeOrange/arducopter.apj";
+    const source: DfuRecoverySource = buildDfuCatalogSource(url);
+    expect(source).toEqual({ kind: "catalog_url", url });
+  });
+
+  it("is distinct from local_apj_bytes and local_bin_bytes", () => {
+    const cat = buildDfuCatalogSource("https://example.com/fw.apj");
+    expect(cat.kind).toBe("catalog_url");
+    expect(cat.kind).not.toBe("local_apj_bytes");
+    expect(cat.kind).not.toBe("local_bin_bytes");
+  });
+});
+
+describe("DFU source builder round-trip compatibility", () => {
+  it("buildDfuApjSource output is assignable to DfuRecoverySource", () => {
+    const source: DfuRecoverySource = buildDfuApjSource([1, 2, 3]);
+    expect(source.kind).toBe("local_apj_bytes");
+  });
+
+  it("buildDfuCatalogSource output is assignable to DfuRecoverySource", () => {
+    const source: DfuRecoverySource = buildDfuCatalogSource("https://example.com/fw.apj");
+    expect(source.kind).toBe("catalog_url");
+  });
+
+  it("all three DFU source kinds remain distinct", () => {
+    const apj = buildDfuApjSource([0x01]);
+    const catalog = buildDfuCatalogSource("https://example.com/fw.apj");
+    const bin: DfuRecoverySource = { kind: "local_bin_bytes", data: [0x01] };
+    const kinds = new Set([apj.kind, catalog.kind, bin.kind]);
+    expect(kinds.size).toBe(3);
+  });
+});
+
+// ── Task 9: gap-coverage tests ──
+
+describe("reconnect_failed with flash_verified=false maps to flashed_but_unverified", () => {
+  it("flash_verified=false still maps to flashed_but_unverified (not failed)", () => {
+    const status = serialResultToStatus({
+      result: "reconnect_failed",
+      board_id: 9,
+      bootloader_rev: 2,
+      flash_verified: false,
+      reconnect_error: "timeout after reboot",
+    });
+    expect(status.kind).toBe("completed");
+    if (status.kind === "completed" && status.outcome.path === "serial_primary") {
+      expect(status.outcome.outcome.result).toBe("flashed_but_unverified");
+    }
+  });
+
+  it("flash_verified=false and flash_verified=true both map to flashed_but_unverified for reconnect_failed", () => {
+    const withTrue = serialResultToStatus({
+      result: "reconnect_failed", board_id: 9, bootloader_rev: 4, flash_verified: true, reconnect_error: "e",
+    });
+    const withFalse = serialResultToStatus({
+      result: "reconnect_failed", board_id: 9, bootloader_rev: 2, flash_verified: false, reconnect_error: "e",
+    });
+    // Both must be flashed_but_unverified — reconnect_failed is always unverified regardless of flash_verified
+    if (withTrue.kind === "completed" && withFalse.kind === "completed") {
+      expect(withTrue.outcome.outcome.result).toBe("flashed_but_unverified");
+      expect(withFalse.outcome.outcome.result).toBe("flashed_but_unverified");
+    }
+  });
+});
+
+describe("platform_unsupported DFU outcome is inactive and has guidance", () => {
+  it("isFirmwareActive returns false for platform_unsupported outcome", () => {
+    const status = dfuResultToStatus({ result: "platform_unsupported" });
+    expect(isFirmwareActive(status)).toBe(false);
+  });
+
+  it("platform_unsupported produces unsupported_recovery_path with non-empty guidance", () => {
+    const status = dfuResultToStatus({ result: "platform_unsupported" });
+    expect(status.kind).toBe("completed");
+    if (status.kind === "completed" && status.outcome.path === "dfu_recovery") {
+      expect(status.outcome.outcome.result).toBe("unsupported_recovery_path");
+      if (status.outcome.outcome.result === "unsupported_recovery_path") {
+        expect(status.outcome.outcome.guidance.length).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+describe("dfu hook catch path produces failed session status", () => {
+  it("dfuResultToStatus for failed carries the reason string", () => {
+    const msg = "DFU recovery failed: catalog download failed: connection refused";
+    const status = dfuResultToStatus({ result: "failed", reason: msg });
+    expect(status.kind).toBe("completed");
+    if (status.kind === "completed" && status.outcome.path === "dfu_recovery") {
+      expect(status.outcome.outcome.result).toBe("failed");
+      if (status.outcome.outcome.result === "failed") {
+        expect(status.outcome.outcome.reason).toBe(msg);
+      }
+    }
+  });
+
+  it("failed dfu outcome is inactive", () => {
+    const status = dfuResultToStatus({ result: "failed", reason: "error" });
+    expect(isFirmwareActive(status)).toBe(false);
+  });
+});
+
+describe("driverGuidance is null for non-guidance DFU outcomes", () => {
+  // Mirrors the wizard's: dfuOutcome && "guidance" in dfuOutcome ? dfuOutcome.guidance : null
+  function extractDriverGuidance(status: ReturnType<typeof dfuResultToStatus>): string | null {
+    if (status.kind !== "completed") return null;
+    if (status.outcome.path !== "dfu_recovery") return null;
+    const outcome = status.outcome.outcome;
+    return "guidance" in outcome ? outcome.guidance : null;
+  }
+
+  it("verified outcome has no guidance", () => {
+    const status = dfuResultToStatus({ result: "verified" });
+    expect(extractDriverGuidance(status)).toBeNull();
+  });
+
+  it("failed outcome has no guidance", () => {
+    const status = dfuResultToStatus({ result: "failed", reason: "USB error" });
+    expect(extractDriverGuidance(status)).toBeNull();
+  });
+
+  it("driver_guidance outcome has guidance", () => {
+    const status = dfuResultToStatus({ result: "driver_guidance", guidance: "Install WinUSB via Zadig" });
+    expect(extractDriverGuidance(status)).toBe("Install WinUSB via Zadig");
+  });
+
+  it("platform_unsupported outcome has guidance (non-null)", () => {
+    const status = dfuResultToStatus({ result: "platform_unsupported" });
+    const guidance = extractDriverGuidance(status);
+    expect(guidance).not.toBeNull();
+    expect(typeof guidance).toBe("string");
   });
 });

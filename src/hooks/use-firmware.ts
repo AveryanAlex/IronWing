@@ -10,17 +10,20 @@ import {
   firmwareListPorts,
   firmwareListDfuDevices,
   firmwareCatalogEntries,
+  firmwareCatalogTargets,
   subscribeFirmwareProgress,
   type FirmwareSessionStatus,
   type FirmwareProgress,
   type SerialFlashSource,
   type SerialFlowResult,
   type DfuDeviceInfo,
+  type DfuRecoverySource,
   type DfuRecoveryResult,
   type SerialPreflightInfo,
   type InventoryResult,
   type DfuScanResult,
   type CatalogEntry,
+  type CatalogTargetSummary,
 } from "../firmware";
 
 export type FirmwareSessionPath = "serial_primary" | "dfu_recovery";
@@ -71,6 +74,11 @@ export function serialResultToStatus(result: SerialFlowResult): FirmwareSessionS
         kind: "completed",
         outcome: { path: "serial_primary", outcome: { result: "recovery_needed", reason: result.reason } },
       };
+    case "extf_capacity_insufficient":
+      return {
+        kind: "completed",
+        outcome: { path: "serial_primary", outcome: { result: "failed", reason: result.reason } },
+      };
   }
 }
 
@@ -97,6 +105,16 @@ export function dfuResultToStatus(result: DfuRecoveryResult): FirmwareSessionSta
         outcome: { path: "dfu_recovery", outcome: { result: "unsupported_recovery_path", guidance: "DFU recovery is not supported on this platform" } },
       };
   }
+}
+
+/** Build a DfuRecoverySource from raw APJ file bytes (Rust extracts the BIN internally). */
+export function buildDfuApjSource(apjBytes: number[]): DfuRecoverySource {
+  return { kind: "local_apj_bytes", data: apjBytes };
+}
+
+/** Build a DfuRecoverySource from a catalog firmware URL. */
+export function buildDfuCatalogSource(url: string): DfuRecoverySource {
+  return { kind: "catalog_url", url };
 }
 
 export function useFirmware() {
@@ -159,11 +177,11 @@ export function useFirmware() {
   );
 
   const flashDfuRecovery = useCallback(
-    async (device: DfuDeviceInfo, binData: number[]): Promise<DfuRecoveryResult> => {
+    async (device: DfuDeviceInfo, source: DfuRecoverySource): Promise<DfuRecoveryResult> => {
       setProgress(null);
       setSessionStatus({ kind: "dfu_recovery", phase: "idle" });
       try {
-        const result = await firmwareFlashDfuRecovery(device, binData);
+        const result = await firmwareFlashDfuRecovery(device, source);
         setSessionStatus(dfuResultToStatus(result));
         return result;
       } catch (err) {
@@ -208,9 +226,27 @@ export function useFirmware() {
     return firmwareListDfuDevices();
   }, []);
 
-  const catalogEntries = useCallback(async (boardId: number): Promise<CatalogEntry[]> => {
-    return firmwareCatalogEntries(boardId);
+  const catalogTargets = useCallback(async (): Promise<CatalogTargetSummary[]> => {
+    return firmwareCatalogTargets();
   }, []);
+
+  const catalogEntries = useCallback(async (boardId: number, platform?: string): Promise<CatalogEntry[]> => {
+    return firmwareCatalogEntries(boardId, platform);
+  }, []);
+
+  const flashDfuFromApj = useCallback(
+    async (device: DfuDeviceInfo, apjBytes: number[]): Promise<DfuRecoveryResult> => {
+      return flashDfuRecovery(device, buildDfuApjSource(apjBytes));
+    },
+    [flashDfuRecovery],
+  );
+
+  const flashDfuFromCatalog = useCallback(
+    async (device: DfuDeviceInfo, url: string): Promise<DfuRecoveryResult> => {
+      return flashDfuRecovery(device, buildDfuCatalogSource(url));
+    },
+    [flashDfuRecovery],
+  );
 
   const dismiss = useCallback(() => {
     setSessionStatus({ kind: "idle" });
@@ -224,12 +260,15 @@ export function useFirmware() {
     activePath,
     flashSerial,
     flashDfuRecovery,
+    flashDfuFromApj,
+    flashDfuFromCatalog,
     cancel,
     dismiss,
     preflight,
     rebootToBootloader,
     listPorts,
     listDfuDevices,
+    catalogTargets,
     catalogEntries,
   };
 }

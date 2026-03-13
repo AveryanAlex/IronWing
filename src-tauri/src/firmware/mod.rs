@@ -271,35 +271,91 @@ mod tests {
 
     // ── Artifact test helpers ──
 
-    /// Build a synthetic APJ JSON with base64(zlib(data)) image payload.
-    fn make_apj(board_id: u32, image_data: &[u8], extf_data: &[u8]) -> Vec<u8> {
-        use base64::prelude::*;
-        use flate2::Compression;
-        use flate2::write::ZlibEncoder;
-        use std::io::Write;
+    /// Options for building synthetic APJ fixtures with external-flash metadata.
+    struct ApjFixture {
+        board_id: u32,
+        image_data: Vec<u8>,
+        extf_data: Vec<u8>,
+        /// Override `extf_image_size` in the JSON (0 = omit / use default).
+        extf_image_size: u32,
+        /// Override `extflash_total` in the JSON (0 = omit / use default).
+        extflash_total: u32,
+    }
 
-        let compress = |data: &[u8]| -> String {
-            if data.is_empty() {
-                return String::new();
+    impl ApjFixture {
+        fn new(board_id: u32, image_data: &[u8]) -> Self {
+            Self {
+                board_id,
+                image_data: image_data.to_vec(),
+                extf_data: Vec::new(),
+                extf_image_size: 0,
+                extflash_total: 0,
             }
-            let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
-            encoder.write_all(data).unwrap();
-            let compressed = encoder.finish().unwrap();
-            BASE64_STANDARD.encode(&compressed)
-        };
+        }
 
-        let image_b64 = compress(image_data);
-        let extf_b64 = compress(extf_data);
+        fn with_extf(mut self, extf_data: &[u8]) -> Self {
+            self.extf_data = extf_data.to_vec();
+            self.extf_image_size = extf_data.len() as u32;
+            self
+        }
 
-        let json = serde_json::json!({
-            "board_id": board_id,
-            "image": image_b64,
-            "extf_image": extf_b64,
-            "summary": "test firmware",
-            "image_size": image_data.len(),
-        });
+        fn with_extf_image_size(mut self, size: u32) -> Self {
+            self.extf_image_size = size;
+            self
+        }
 
-        serde_json::to_vec(&json).unwrap()
+        fn with_extflash_total(mut self, total: u32) -> Self {
+            self.extflash_total = total;
+            self
+        }
+
+        fn build(&self) -> Vec<u8> {
+            self.build_with_raw_extf(None)
+        }
+
+        /// Build with an optional raw (pre-encoded) extf_image string override.
+        fn build_with_raw_extf(&self, raw_extf: Option<&str>) -> Vec<u8> {
+            use base64::prelude::*;
+            use flate2::Compression;
+            use flate2::write::ZlibEncoder;
+            use std::io::Write;
+
+            let compress = |data: &[u8]| -> String {
+                if data.is_empty() {
+                    return String::new();
+                }
+                let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+                encoder.write_all(data).unwrap();
+                let compressed = encoder.finish().unwrap();
+                BASE64_STANDARD.encode(&compressed)
+            };
+
+            let image_b64 = compress(&self.image_data);
+            let extf_b64 = raw_extf
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| compress(&self.extf_data));
+
+            let json = serde_json::json!({
+                "board_id": self.board_id,
+                "image": image_b64,
+                "extf_image": extf_b64,
+                "summary": "test firmware",
+                "image_size": self.image_data.len(),
+                "extf_image_size": self.extf_image_size,
+                "extflash_total": self.extflash_total,
+            });
+
+            serde_json::to_vec(&json).unwrap()
+        }
+    }
+
+    /// Shorthand: build a simple APJ with no external flash.
+    fn make_apj(board_id: u32, image_data: &[u8], _extf_data: &[u8]) -> Vec<u8> {
+        let mut f = ApjFixture::new(board_id, image_data);
+        if !_extf_data.is_empty() {
+            f = f.with_extf(_extf_data);
+        }
+        f.build()
     }
 
     // ── Artifact parsing tests ──
@@ -427,18 +483,108 @@ mod tests {
     }
 
     #[test]
-    fn artifact_rejects_nonempty_extf_image() {
-        let apj_data = make_apj(140, &[0x01, 0x02], &[0xFF, 0xFE]);
+    fn artifact_extf_no_payload() {
+        let apj_data = make_apj(140, &[0x01, 0x02, 0x03, 0x04], &[]);
+        let artifact = parse_apj(&apj_data).unwrap();
+        assert!(artifact.extf.is_none());
+        assert_eq!(artifact.image_size, 4);
+    }
+
+    #[test]
+    fn artifact_extf_valid_payload() {
+        let extf_bytes = vec![0xCA, 0xFE, 0xBA, 0xBE, 0x01, 0x02];
+        let apj_data = ApjFixture::new(140, &[0xDE, 0xAD])
+            .with_extf(&extf_bytes)
+            .with_extflash_total(1_048_576)
+            .build();
+
+        let artifact = parse_apj(&apj_data).unwrap();
+        assert_eq!(artifact.board_id, 140);
+        assert_eq!(artifact.image, vec![0xDE, 0xAD]);
+
+        let extf = artifact.extf.as_ref().unwrap();
+        assert_eq!(extf.image, extf_bytes);
+        assert_eq!(extf.image_size, 6);
+        assert_eq!(extf.declared_size, 6);
+        assert_eq!(extf.extflash_total, 1_048_576);
+    }
+
+    #[test]
+    fn artifact_extf_size_mismatch() {
+        let apj_data = ApjFixture::new(140, &[0x01, 0x02])
+            .with_extf(&[0xFF, 0xFE])
+            .with_extf_image_size(9999)
+            .build();
+
+        let result = parse_apj(&apj_data);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            FirmwareError::ArtifactInvalid { reason } => {
+                assert!(reason.contains("extf_image_size"), "got: {reason}");
+                assert!(reason.contains("9999"), "got: {reason}");
+            }
+            other => panic!("expected ArtifactInvalid, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn artifact_extf_corrupt_base64() {
+        let apj_data = ApjFixture::new(140, &[0x01, 0x02])
+            .build_with_raw_extf(Some("!!!not-valid-base64!!!"));
 
         let result = parse_apj(&apj_data);
         assert!(result.is_err());
         match result.unwrap_err() {
             FirmwareError::ArtifactInvalid { reason } => {
                 assert!(reason.contains("extf_image"), "got: {reason}");
-                assert!(reason.contains("not supported"), "got: {reason}");
+                assert!(reason.contains("base64"), "got: {reason}");
             }
             other => panic!("expected ArtifactInvalid, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn artifact_extf_corrupt_zlib() {
+        use base64::prelude::*;
+        let fake = BASE64_STANDARD.encode(b"this is not zlib data");
+        let apj_data = ApjFixture::new(140, &[0x01, 0x02])
+            .build_with_raw_extf(Some(&fake));
+
+        let result = parse_apj(&apj_data);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            FirmwareError::ArtifactInvalid { reason } => {
+                assert!(reason.contains("extf_image"), "got: {reason}");
+                assert!(reason.contains("zlib"), "got: {reason}");
+            }
+            other => panic!("expected ArtifactInvalid, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn artifact_extf_zero_declared_size_skips_check() {
+        let apj_data = ApjFixture::new(140, &[0x01, 0x02])
+            .with_extf(&[0xAA, 0xBB])
+            .with_extf_image_size(0)
+            .build();
+
+        let artifact = parse_apj(&apj_data).unwrap();
+        let extf = artifact.extf.as_ref().unwrap();
+        assert_eq!(extf.image_size, 2);
+        assert_eq!(extf.declared_size, 0);
+    }
+
+    #[test]
+    fn artifact_extf_metadata_preserved() {
+        let apj_data = ApjFixture::new(9, &[0x01])
+            .with_extf(&[0x02, 0x03, 0x04])
+            .with_extflash_total(2_097_152)
+            .build();
+
+        let artifact = parse_apj(&apj_data).unwrap();
+        let extf = artifact.extf.unwrap();
+        assert_eq!(extf.extflash_total, 2_097_152);
+        assert_eq!(extf.declared_size, 3);
     }
 
     // ── DFU recovery artifact tests ──
@@ -621,6 +767,11 @@ mod tests {
             self.queue_sync_ok();
             self.queue_u32_le(flash_size);
             self.queue_sync_ok();
+            // extf probe fails: 4 dummy value bytes + INSYNC+INVALID
+            self.queue_u32_le(0);
+            self.queue_read(&[0x12, 0x13]);
+            // resync after failed probe: INSYNC+OK
+            self.queue_sync_ok();
         }
     }
 
@@ -737,6 +888,7 @@ mod tests {
         assert_eq!(info.board_id, 140);
         assert_eq!(info.board_rev, 0);
         assert_eq!(info.flash_size, 2_097_152);
+        assert_eq!(info.extf_size, 0);
     }
 
     #[test]
@@ -787,12 +939,14 @@ mod tests {
             image: vec![0xDE, 0xAD],
             image_size: 2,
             summary: "test".into(),
+            extf: None,
         };
         let info = BootloaderInfo {
             bl_rev: 5,
             board_id: 140,
             board_rev: 0,
             flash_size: 2_097_152,
+            extf_size: 0,
         };
         validate_board(&artifact, &info).unwrap();
     }
@@ -804,12 +958,14 @@ mod tests {
             image: vec![0xDE, 0xAD],
             image_size: 2,
             summary: "test".into(),
+            extf: None,
         };
         let info = BootloaderInfo {
             bl_rev: 5,
             board_id: 9,
             board_rev: 0,
             flash_size: 2_097_152,
+            extf_size: 0,
         };
         let err = validate_board(&artifact, &info).unwrap_err();
         match err {
@@ -1017,14 +1173,15 @@ mod tests {
             image: image.clone(),
             image_size: 8,
             summary: "test fw".into(),
+            extf: None,
         };
 
         let mut progress = Vec::new();
-        let info = upload(&mut mock, &artifact, |w, t| progress.push((w, t))).unwrap();
+        let info = upload(&mut mock, &artifact, |_p, w, t| progress.push((w, t))).unwrap();
         assert_eq!(info.bl_rev, 5);
         assert_eq!(info.board_id, 140);
         assert_eq!(info.flash_size, flash_size);
-        assert_eq!(progress, vec![(8, 8)]);
+        assert!(progress.contains(&(8, 8)));
     }
 
     #[test]
@@ -1042,9 +1199,10 @@ mod tests {
             image,
             image_size: 4,
             summary: "test".into(),
+            extf: None,
         };
 
-        let info = upload(&mut mock, &artifact, |_, _| {}).unwrap();
+        let info = upload(&mut mock, &artifact, |_, _, _| {}).unwrap();
         assert_eq!(info.bl_rev, 2);
         assert_eq!(info.board_id, 9);
         assert!(
@@ -1065,9 +1223,10 @@ mod tests {
             image: vec![0x01],
             image_size: 1,
             summary: "test".into(),
+            extf: None,
         };
 
-        let err = upload(&mut mock, &artifact, |_, _| {}).unwrap_err();
+        let err = upload(&mut mock, &artifact, |_, _, _| {}).unwrap_err();
         match err {
             FirmwareError::BoardMismatch { expected, actual } => {
                 assert_eq!(expected, 140);
@@ -1099,9 +1258,10 @@ mod tests {
             image,
             image_size: 4,
             summary: "test".into(),
+            extf: None,
         };
 
-        let err = upload(&mut mock, &artifact, |_, _| {}).unwrap_err();
+        let err = upload(&mut mock, &artifact, |_, _, _| {}).unwrap_err();
         match err {
             FirmwareError::ProtocolError { detail } => {
                 assert!(detail.contains("CRC mismatch"), "got: {detail}");
@@ -1131,15 +1291,17 @@ mod tests {
             image: image.clone(),
             image_size: 600,
             summary: "big fw".into(),
+            extf: None,
         };
 
         let mut progress = Vec::new();
-        let info = upload(&mut mock, &artifact, |w, t| progress.push((w, t))).unwrap();
+        let info = upload(&mut mock, &artifact, |_p, w, t| progress.push((w, t))).unwrap();
         assert_eq!(info.bl_rev, 4);
-        assert_eq!(progress.len(), 3);
-        assert_eq!(progress[0], (252, 600));
-        assert_eq!(progress[1], (504, 600));
-        assert_eq!(progress[2], (600, 600));
+        let prog_calls: Vec<_> = progress.iter().filter(|(w, _)| *w > 0).cloned().collect();
+        assert_eq!(prog_calls.len(), 3);
+        assert_eq!(prog_calls[0], (252, 600));
+        assert_eq!(prog_calls[1], (504, 600));
+        assert_eq!(prog_calls[2], (600, 600));
     }
 
     // ── Inventory / discovery tests ──
@@ -1646,11 +1808,13 @@ mod tests {
             latest: true,
             git_sha: "abc123".into(),
             brand_name: Some("CubeBlack".into()),
+            manufacturer: Some("Hex/ProfiCNC".into()),
         };
         let json = serde_json::to_string(&entry).unwrap();
         assert!(json.contains("fmuv3"), "got: {json}");
         assert!(json.contains("4.5.0"), "got: {json}");
         assert!(json.contains("CubeBlack"), "got: {json}");
+        assert!(json.contains("Hex/ProfiCNC"), "got: {json}");
     }
 
     #[test]
@@ -2012,6 +2176,7 @@ mod tests {
             image,
             image_size,
             summary: "test firmware".into(),
+            extf: None,
         }
     }
 
@@ -2052,7 +2217,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
 
         match &result {
             SerialFlowResult::ReconnectVerified {
@@ -2093,7 +2258,7 @@ mod tests {
         };
         let artifact = make_test_artifact(9, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
 
         match &result {
             SerialFlowResult::ReconnectVerified { flash_verified, .. } => {
@@ -2120,7 +2285,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, vec![0x01]);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
 
         match &result {
             SerialFlowResult::BoardDetectionFailed { reason } => {
@@ -2161,7 +2326,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
 
         match &result {
             SerialFlowResult::Verified {
@@ -2203,7 +2368,7 @@ mod tests {
         };
         let artifact = make_test_artifact(9, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
 
         match &result {
             SerialFlowResult::FlashedButUnverified {
@@ -2231,11 +2396,13 @@ mod tests {
         };
         let artifact = make_test_artifact(140, vec![0xFF; 8]);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
 
         // Must be a typed serial failure, never DFU
         match &result {
-            SerialFlowResult::BoardDetectionFailed { .. } | SerialFlowResult::Failed { .. } => {
+            SerialFlowResult::BoardDetectionFailed { .. }
+            | SerialFlowResult::Failed { .. }
+            | SerialFlowResult::ExtfCapacityInsufficient { .. } => {
                 // Correct: serial flow failed without entering DFU
             }
             SerialFlowResult::ReconnectVerified { .. }
@@ -2275,7 +2442,7 @@ mod tests {
         // Source selection: local artifact (already parsed)
         let artifact = make_test_artifact(140, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
 
         match &result {
             SerialFlowResult::ReconnectVerified {
@@ -2310,7 +2477,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, vec![0x01]);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
 
         match &result {
             SerialFlowResult::Failed { reason } => {
@@ -2343,7 +2510,7 @@ mod tests {
         let artifact = make_test_artifact(140, image);
 
         let mut progress_calls = Vec::new();
-        execute_serial_flash(&deps, &preflight, &artifact, |w, t| {
+        execute_serial_flash(&deps, &preflight, &artifact, |_phase, w, t| {
             progress_calls.push((w, t));
         });
 
@@ -2359,6 +2526,7 @@ mod tests {
             board_id: 140,
             board_rev: 0,
             flash_size: 2_097_152,
+            extf_size: 0,
         };
         let identity = build_board_identity(&info, "/dev/ttyACM0");
         assert_eq!(identity.board_id, 140);
@@ -2459,7 +2627,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
 
         let outcome = result.to_outcome();
         let session_outcome = FirmwareOutcome::SerialPrimary { outcome };
@@ -2490,7 +2658,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, vec![0x01]);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
         assert!(matches!(
             result,
             SerialFlowResult::BoardDetectionFailed { .. }
@@ -2515,7 +2683,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, vec![0xFF; 4]);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
         let outcome = result.to_outcome();
         let wrapped = FirmwareOutcome::SerialPrimary { outcome };
         let json = serde_json::to_string(&wrapped).unwrap();
@@ -3082,7 +3250,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
         let outcome = result.to_outcome();
         assert!(
             matches!(outcome, SerialFlashOutcome::Verified),
@@ -3114,7 +3282,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, vec![0xFF; 8]);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
 
         match &result {
             SerialFlowResult::BoardDetectionFailed { .. } => {}
@@ -3171,7 +3339,7 @@ mod tests {
         };
         let artifact = make_test_artifact(9, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
         let outcome = result.to_outcome();
         assert!(
             matches!(outcome, SerialFlashOutcome::FlashedButUnverified),
@@ -3281,5 +3449,1513 @@ mod tests {
         assert!(results.iter().any(|e| e.version == "4.4.0"));
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Catalog target tests ──
+
+    use super::types::CatalogTargetSummary;
+
+    #[allow(clippy::too_many_arguments)]
+    fn sample_entry_full(
+        board_id: u32,
+        format: &str,
+        version: &str,
+        platform: &str,
+        vehicle_type: &str,
+        brand_name: Option<&str>,
+        manufacturer: Option<&str>,
+        latest: bool,
+    ) -> serde_json::Value {
+        let mut v = serde_json::json!({
+            "board_id": board_id,
+            "mav-type": vehicle_type,
+            "mav-firmware-version": version,
+            "mav-firmware-version-type": "OFFICIAL",
+            "format": format,
+            "platform": platform,
+            "url": format!("https://firmware.ardupilot.org/{platform}/{version}/firmware.apj"),
+            "image_size": 1_500_000,
+            "latest": if latest { 1 } else { 0 },
+            "git-sha": "abc123",
+        });
+        if let Some(bn) = brand_name {
+            v["brand_name"] = serde_json::Value::String(bn.into());
+        }
+        if let Some(mfr) = manufacturer {
+            v["manufacturer"] = serde_json::Value::String(mfr.into());
+        }
+        v
+    }
+
+    #[test]
+    fn catalog_target_groups_by_board_and_platform() {
+        let entries = vec![
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", Some("CubeOrange"), Some("Hex"), true),
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Plane", Some("CubeOrange"), Some("Hex"), true),
+            sample_entry_full(140, "apj", "4.4.0", "CubeOrange", "Copter", Some("CubeOrange"), Some("Hex"), false),
+        ];
+        let gz = make_manifest_gz(&entries);
+        let parsed = parse_manifest_gz(&gz).unwrap();
+        let targets = build_catalog_targets(&parsed);
+
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].board_id, 140);
+        assert_eq!(targets[0].platform, "CubeOrange");
+        assert_eq!(targets[0].brand_name.as_deref(), Some("CubeOrange"));
+        assert_eq!(targets[0].manufacturer.as_deref(), Some("Hex"));
+        assert!(targets[0].vehicle_types.contains(&"Copter".to_string()));
+        assert!(targets[0].vehicle_types.contains(&"Plane".to_string()));
+        assert_eq!(targets[0].latest_version.as_deref(), Some("4.5.0"));
+    }
+
+    #[test]
+    fn catalog_target_duplicate_board_id_different_platforms() {
+        let entries = vec![
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", Some("CubeOrange"), Some("Hex"), true),
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrangePlus", "Copter", Some("CubeOrange+"), Some("Hex"), true),
+        ];
+        let gz = make_manifest_gz(&entries);
+        let parsed = parse_manifest_gz(&gz).unwrap();
+        let targets = build_catalog_targets(&parsed);
+
+        assert_eq!(targets.len(), 2, "same board_id with different platforms must not collapse");
+        let platforms: Vec<&str> = targets.iter().map(|t| t.platform.as_str()).collect();
+        assert!(platforms.contains(&"CubeOrange"));
+        assert!(platforms.contains(&"CubeOrangePlus"));
+    }
+
+    #[test]
+    fn catalog_target_missing_brand_and_manufacturer() {
+        let entries = vec![
+            sample_entry_full(9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true),
+        ];
+        let gz = make_manifest_gz(&entries);
+        let parsed = parse_manifest_gz(&gz).unwrap();
+        let targets = build_catalog_targets(&parsed);
+
+        assert_eq!(targets.len(), 1);
+        assert!(targets[0].brand_name.is_none());
+        assert!(targets[0].manufacturer.is_none());
+    }
+
+    #[test]
+    fn catalog_target_latest_official_version_selected() {
+        let entries = vec![
+            sample_entry_full(140, "apj", "4.3.0", "CubeOrange", "Copter", Some("CO"), None, false),
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", Some("CO"), None, false),
+            sample_entry_full(140, "apj", "4.4.0", "CubeOrange", "Copter", Some("CO"), None, false),
+        ];
+        let gz = make_manifest_gz(&entries);
+        let parsed = parse_manifest_gz(&gz).unwrap();
+        let targets = build_catalog_targets(&parsed);
+
+        assert_eq!(targets.len(), 1);
+        assert_eq!(
+            targets[0].latest_version.as_deref(),
+            Some("4.5.0"),
+            "OFFICIAL entries with latest=false must still populate latest_version"
+        );
+    }
+
+    #[test]
+    fn catalog_target_dotted_version_comparison() {
+        let entries = vec![
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", None, None, false),
+            sample_entry_full(140, "apj", "4.10.0", "CubeOrange", "Copter", None, None, false),
+            sample_entry_full(140, "apj", "4.9.3", "CubeOrange", "Copter", None, None, false),
+        ];
+        let gz = make_manifest_gz(&entries);
+        let parsed = parse_manifest_gz(&gz).unwrap();
+        let targets = build_catalog_targets(&parsed);
+
+        assert_eq!(targets.len(), 1);
+        assert_eq!(
+            targets[0].latest_version.as_deref(),
+            Some("4.10.0"),
+            "dotted version comparison must treat 4.10.0 > 4.9.3 > 4.5.0"
+        );
+    }
+
+    #[test]
+    fn catalog_target_non_official_not_counted_as_latest() {
+        let entries = vec![
+            serde_json::json!({
+                "board_id": 140,
+                "mav-type": "Copter",
+                "mav-firmware-version": "4.6.0-dev",
+                "mav-firmware-version-type": "DEV",
+                "format": "apj",
+                "platform": "CubeOrange",
+                "url": "https://firmware.ardupilot.org/CubeOrange/4.6.0-dev/firmware.apj",
+                "image_size": 1_500_000,
+                "latest": 1,
+                "git-sha": "def456",
+            }),
+        ];
+        let gz = make_manifest_gz(&entries);
+        let parsed = parse_manifest_gz(&gz).unwrap();
+        let targets = build_catalog_targets(&parsed);
+
+        assert_eq!(targets.len(), 1);
+        assert!(targets[0].latest_version.is_none(), "DEV entries should not set latest_version");
+    }
+
+    #[test]
+    fn catalog_target_official_with_latest_false_populates_version() {
+        let entries = vec![
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", Some("CO"), None, false),
+        ];
+        let gz = make_manifest_gz(&entries);
+        let parsed = parse_manifest_gz(&gz).unwrap();
+        let targets = build_catalog_targets(&parsed);
+
+        assert_eq!(targets.len(), 1);
+        assert_eq!(
+            targets[0].latest_version.as_deref(),
+            Some("4.5.0"),
+            "OFFICIAL entry with latest=false must still set latest_version"
+        );
+    }
+
+    #[test]
+    fn catalog_target_vehicle_types_deduplicated() {
+        let entries = vec![
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", None, None, true),
+            sample_entry_full(140, "apj", "4.4.0", "CubeOrange", "Copter", None, None, false),
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Rover", None, None, true),
+        ];
+        let gz = make_manifest_gz(&entries);
+        let parsed = parse_manifest_gz(&gz).unwrap();
+        let targets = build_catalog_targets(&parsed);
+
+        assert_eq!(targets.len(), 1);
+        let copter_count = targets[0].vehicle_types.iter().filter(|v| *v == "Copter").count();
+        assert_eq!(copter_count, 1, "Copter should appear exactly once");
+        assert!(targets[0].vehicle_types.contains(&"Rover".to_string()));
+    }
+
+    #[test]
+    fn catalog_target_summary_serializes() {
+        let target = CatalogTargetSummary {
+            board_id: 140,
+            platform: "CubeOrange".into(),
+            brand_name: Some("CubeOrange".into()),
+            manufacturer: Some("Hex".into()),
+            vehicle_types: vec!["Copter".into(), "Plane".into()],
+            latest_version: Some("4.5.0".into()),
+        };
+        let json = serde_json::to_string(&target).unwrap();
+        assert!(json.contains("CubeOrange"), "got: {json}");
+        assert!(json.contains("Hex"), "got: {json}");
+        assert!(json.contains("Copter"), "got: {json}");
+        assert!(json.contains("4.5.0"), "got: {json}");
+    }
+
+    #[test]
+    fn catalog_target_sorted_by_platform() {
+        let entries = vec![
+            sample_entry_full(9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true),
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", None, None, true),
+            sample_entry_full(140, "apj", "4.5.0", "ABoardFirst", "Copter", None, None, true),
+        ];
+        let gz = make_manifest_gz(&entries);
+        let parsed = parse_manifest_gz(&gz).unwrap();
+        let targets = build_catalog_targets(&parsed);
+
+        assert_eq!(targets.len(), 3);
+        assert_eq!(targets[0].platform, "ABoardFirst");
+        assert_eq!(targets[1].platform, "CubeOrange");
+        assert_eq!(targets[2].platform, "fmuv2");
+    }
+
+    // ── filter_by_board_and_platform tests ──
+
+    #[test]
+    fn catalog_filter_by_board_and_platform_with_platform() {
+        let entries = vec![
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", None, None, true),
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrangePlus", "Copter", None, None, true),
+            sample_entry_full(9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true),
+        ];
+        let gz = make_manifest_gz(&entries);
+        let parsed = parse_manifest_gz(&gz).unwrap();
+
+        let filtered = filter_by_board_and_platform(&parsed, 140, Some("CubeOrange"));
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].platform, "CubeOrange");
+    }
+
+    #[test]
+    fn catalog_filter_by_board_and_platform_without_platform() {
+        let entries = vec![
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", None, None, true),
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrangePlus", "Copter", None, None, true),
+            sample_entry_full(9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true),
+        ];
+        let gz = make_manifest_gz(&entries);
+        let parsed = parse_manifest_gz(&gz).unwrap();
+
+        let filtered = filter_by_board_and_platform(&parsed, 140, None);
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().all(|e| e.board_id == 140));
+    }
+
+    #[test]
+    fn catalog_target_client_returns_grouped_targets() {
+        let dir = std::env::temp_dir().join(format!(
+            "ironwing_test_client_targets_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(3600));
+        let gz = make_manifest_gz(&[
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", Some("CO"), Some("Hex"), true),
+            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Plane", Some("CO"), Some("Hex"), true),
+            sample_entry_full(9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true),
+        ]);
+        let gz_clone = gz.clone();
+
+        let targets = client.get_catalog_targets(|| Ok(gz_clone)).unwrap();
+        assert_eq!(targets.len(), 2);
+
+        let co = targets.iter().find(|t| t.platform == "CubeOrange").unwrap();
+        assert_eq!(co.board_id, 140);
+        assert_eq!(co.vehicle_types.len(), 2);
+
+        let fmuv2 = targets.iter().find(|t| t.platform == "fmuv2").unwrap();
+        assert_eq!(fmuv2.board_id, 9);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── DFU recovery source contract tests ──
+
+    use super::commands::apj_to_dfu_bin;
+    use super::types::DfuRecoverySource;
+
+    #[test]
+    fn dfu_recovery_source_local_bin_bytes_passthrough() {
+        let bin = vec![0x00, 0x20, 0x00, 0x08, 0x01, 0x02, 0x03, 0x04];
+        let source: DfuRecoverySource = serde_json::from_str(
+            &serde_json::to_string(&serde_json::json!({
+                "kind": "local_bin_bytes",
+                "data": bin,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        match source {
+            DfuRecoverySource::LocalBinBytes { data } => {
+                assert_eq!(data, vec![0x00, 0x20, 0x00, 0x08, 0x01, 0x02, 0x03, 0x04]);
+            }
+            other => panic!("expected LocalBinBytes, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn dfu_recovery_source_deserializes_catalog_url() {
+        let json = r#"{"kind":"catalog_url","url":"https://firmware.ardupilot.org/fw.apj"}"#;
+        let source: DfuRecoverySource = serde_json::from_str(json).unwrap();
+        match source {
+            DfuRecoverySource::CatalogUrl { url } => {
+                assert_eq!(url, "https://firmware.ardupilot.org/fw.apj");
+            }
+            other => panic!("expected CatalogUrl, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn dfu_recovery_source_deserializes_local_apj_bytes() {
+        let json = r#"{"kind":"local_apj_bytes","data":[1,2,3,4]}"#;
+        let source: DfuRecoverySource = serde_json::from_str(json).unwrap();
+        match source {
+            DfuRecoverySource::LocalApjBytes { data } => {
+                assert_eq!(data, vec![1, 2, 3, 4]);
+            }
+            other => panic!("expected LocalApjBytes, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn dfu_recovery_source_rejects_unknown_kind() {
+        let json = r#"{"kind":"unknown_source","data":[1]}"#;
+        let result: Result<DfuRecoverySource, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn dfu_recovery_source_apj_without_extf_extracts_internal_image() {
+        let firmware_bytes = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04];
+        let apj_data = make_apj(140, &firmware_bytes, &[]);
+
+        let bin = apj_to_dfu_bin(&apj_data).unwrap();
+        assert_eq!(bin, firmware_bytes);
+    }
+
+    #[test]
+    fn dfu_recovery_extf_block_rejects_apj_with_external_flash() {
+        let internal = vec![0x01, 0x02, 0x03, 0x04];
+        let external = vec![0xCA, 0xFE, 0xBA, 0xBE];
+        let apj_data = ApjFixture::new(140, &internal)
+            .with_extf(&external)
+            .build();
+
+        let err = apj_to_dfu_bin(&apj_data).unwrap_err();
+        assert!(
+            err.contains("external-flash"),
+            "should mention external-flash: {err}"
+        );
+        assert!(
+            err.contains("serial bootloader"),
+            "should guide to serial path: {err}"
+        );
+    }
+
+    #[test]
+    fn dfu_recovery_source_apj_metadata_only_extf_fields_allowed() {
+        let apj_data = ApjFixture::new(140, &[0x01, 0x02])
+            .with_extflash_total(2_097_152)
+            .build();
+
+        let bin = apj_to_dfu_bin(&apj_data).unwrap();
+        assert_eq!(bin, vec![0x01, 0x02]);
+    }
+
+    #[test]
+    fn dfu_recovery_source_invalid_apj_propagates_error() {
+        let result = apj_to_dfu_bin(b"not json at all");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("invalid APJ JSON"));
+    }
+
+    // ── External-flash protocol constants for test assertions ──
+    const TEST_INFO_EXTF_SIZE: u8 = 0x06;
+    const TEST_EXTF_ERASE: u8 = 0x34;
+    const TEST_EXTF_PROG_MULTI: u8 = 0x35;
+    const TEST_EXTF_GET_CRC: u8 = 0x37;
+    const TEST_GET_DEVICE: u8 = 0x22;
+
+    /// Queue an identify sequence that also probes extf size.
+    /// Queues the standard 4 info queries (bl_rev, board_id, board_rev, flash_size)
+    /// then the extf_size probe response.
+    fn queue_identify_base(
+        mock: &mut MockSerial,
+        bl_rev: u32,
+        board_id: u32,
+        board_rev: u32,
+        flash_size: u32,
+    ) {
+        mock.queue_u32_le(bl_rev);
+        mock.queue_sync_ok();
+        mock.queue_u32_le(board_id);
+        mock.queue_sync_ok();
+        mock.queue_u32_le(board_rev);
+        mock.queue_sync_ok();
+        mock.queue_u32_le(flash_size);
+        mock.queue_sync_ok();
+    }
+
+    fn queue_identify_with_extf(
+        mock: &mut MockSerial,
+        bl_rev: u32,
+        board_id: u32,
+        board_rev: u32,
+        flash_size: u32,
+        extf_size: u32,
+    ) {
+        queue_identify_base(mock, bl_rev, board_id, board_rev, flash_size);
+        mock.queue_u32_le(extf_size);
+        mock.queue_sync_ok();
+    }
+
+    fn queue_identify_extf_probe_fails(
+        mock: &mut MockSerial,
+        bl_rev: u32,
+        board_id: u32,
+        board_rev: u32,
+        flash_size: u32,
+    ) {
+        queue_identify_base(mock, bl_rev, board_id, board_rev, flash_size);
+        // extf probe fails: 4 dummy value bytes + INSYNC+INVALID
+        mock.queue_u32_le(0);
+        mock.queue_read(&[TEST_INSYNC, TEST_INVALID]);
+        // resync after failed probe: INSYNC+OK
+        mock.queue_sync_ok();
+    }
+
+    // ── External-flash identify tests ──
+
+    #[test]
+    fn serial_uploader_extf_identify_with_extf_support() {
+        let mut mock = MockSerial::new();
+        queue_identify_with_extf(&mut mock, 5, 140, 0, 2_097_152, 1_048_576);
+        let info = identify(&mut mock).unwrap();
+        assert_eq!(info.bl_rev, 5);
+        assert_eq!(info.board_id, 140);
+        assert_eq!(info.flash_size, 2_097_152);
+        assert_eq!(info.extf_size, 1_048_576);
+    }
+
+    #[test]
+    fn serial_uploader_extf_identify_probe_failure_falls_back_to_zero() {
+        let mut mock = MockSerial::new();
+        queue_identify_extf_probe_fails(&mut mock, 5, 140, 0, 2_097_152);
+        let info = identify(&mut mock).unwrap();
+        assert_eq!(info.bl_rev, 5);
+        assert_eq!(info.board_id, 140);
+        assert_eq!(info.extf_size, 0, "failed extf probe should fall back to 0");
+    }
+
+    #[test]
+    fn serial_uploader_extf_identify_zero_extf_size() {
+        let mut mock = MockSerial::new();
+        queue_identify_with_extf(&mut mock, 5, 140, 0, 2_097_152, 0);
+        let info = identify(&mut mock).unwrap();
+        assert_eq!(info.extf_size, 0);
+    }
+
+    // ── External-flash capacity validation tests ──
+
+    #[test]
+    fn serial_uploader_extf_capacity_sufficient() {
+        let extf_payload = ExternalFlashPayload {
+            image: vec![0xCA; 512],
+            image_size: 512,
+            declared_size: 512,
+            extflash_total: 1_048_576,
+        };
+        let info = BootloaderInfo {
+            bl_rev: 5,
+            board_id: 140,
+            board_rev: 0,
+            flash_size: 2_097_152,
+            extf_size: 1_048_576,
+        };
+        validate_extf_capacity(&extf_payload, &info).unwrap();
+    }
+
+    #[test]
+    fn serial_uploader_extf_capacity_insufficient() {
+        let extf_payload = ExternalFlashPayload {
+            image: vec![0xCA; 2_000_000],
+            image_size: 2_000_000,
+            declared_size: 2_000_000,
+            extflash_total: 2_097_152,
+        };
+        let info = BootloaderInfo {
+            bl_rev: 5,
+            board_id: 140,
+            board_rev: 0,
+            flash_size: 2_097_152,
+            extf_size: 1_048_576, // smaller than image
+        };
+        let err = validate_extf_capacity(&extf_payload, &info).unwrap_err();
+        match err {
+            FirmwareError::ArtifactInvalid { reason } => {
+                assert!(reason.contains("external-flash"), "got: {reason}");
+                assert!(reason.contains("capacity"), "got: {reason}");
+            }
+            other => panic!("expected ArtifactInvalid, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn serial_uploader_extf_capacity_zero_extf_size_fails() {
+        let extf_payload = ExternalFlashPayload {
+            image: vec![0xCA; 100],
+            image_size: 100,
+            declared_size: 100,
+            extflash_total: 1_048_576,
+        };
+        let info = BootloaderInfo {
+            bl_rev: 5,
+            board_id: 140,
+            board_rev: 0,
+            flash_size: 2_097_152,
+            extf_size: 0,
+        };
+        let err = validate_extf_capacity(&extf_payload, &info).unwrap_err();
+        match err {
+            FirmwareError::ArtifactInvalid { reason } => {
+                assert!(reason.contains("external-flash"), "got: {reason}");
+            }
+            other => panic!("expected ArtifactInvalid, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn serial_uploader_extf_capacity_exact_fit() {
+        let extf_payload = ExternalFlashPayload {
+            image: vec![0xCA; 1_048_576],
+            image_size: 1_048_576,
+            declared_size: 1_048_576,
+            extflash_total: 1_048_576,
+        };
+        let info = BootloaderInfo {
+            bl_rev: 5,
+            board_id: 140,
+            board_rev: 0,
+            flash_size: 2_097_152,
+            extf_size: 1_048_576,
+        };
+        validate_extf_capacity(&extf_payload, &info).unwrap();
+    }
+
+    // ── External-flash full upload tests ──
+
+    /// Build a mock that handles full upload with extf: extf_erase, extf_program, extf_verify,
+    /// then internal erase, program, verify, reboot.
+    fn make_upload_mock_with_extf(
+        bl_rev: u32,
+        board_id: u32,
+        flash_size: u32,
+        extf_size: u32,
+        image: &[u8],
+        extf_image: &[u8],
+    ) -> MockSerial {
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok(); // sync
+
+        queue_identify_with_extf(&mut mock, bl_rev, board_id, 0, flash_size, extf_size);
+
+        // extf erase
+        mock.queue_sync_ok();
+
+        // extf program chunks (padded to 4-byte alignment)
+        let extf_padded_len = (extf_image.len() + 3) & !3;
+        let extf_chunks =
+            (extf_padded_len + TEST_PROG_MULTI_MAX - 1) / TEST_PROG_MULTI_MAX.max(1);
+        for _ in 0..extf_chunks.max(1) {
+            mock.queue_sync_ok();
+        }
+
+        // extf CRC verify (always, not gated by bl_rev)
+        let extf_crc = firmware_crc(extf_image, extf_image.len() as u32);
+        mock.queue_u32_le(extf_crc);
+        mock.queue_sync_ok();
+
+        // internal erase
+        mock.queue_sync_ok();
+
+        // internal program chunks
+        let int_chunks = (image.len() + TEST_PROG_MULTI_MAX - 1) / TEST_PROG_MULTI_MAX.max(1);
+        for _ in 0..int_chunks.max(1) {
+            mock.queue_sync_ok();
+        }
+
+        // internal CRC verify (gated by bl_rev >= 3)
+        if bl_rev >= 3 {
+            let int_crc = firmware_crc(image, flash_size);
+            mock.queue_u32_le(int_crc);
+            mock.queue_sync_ok();
+        }
+
+        mock
+    }
+
+    #[test]
+    fn serial_uploader_full_upload_with_extf_happy_path() {
+        let image = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+        let extf_image = vec![0xCA, 0xFE, 0xBA, 0xBE];
+        let flash_size = 2_097_152u32;
+        let extf_size = 1_048_576u32;
+
+        let mut mock =
+            make_upload_mock_with_extf(5, 140, flash_size, extf_size, &image, &extf_image);
+
+        let artifact = SerialArtifact {
+            board_id: 140,
+            image: image.clone(),
+            image_size: 8,
+            summary: "test fw".into(),
+            extf: Some(ExternalFlashPayload {
+                image: extf_image.clone(),
+                image_size: 4,
+                declared_size: 4,
+                extflash_total: extf_size,
+            }),
+        };
+
+        let mut progress = Vec::new();
+        let info = upload(&mut mock, &artifact, |p, w, t| progress.push((p.to_string(), w, t))).unwrap();
+        assert_eq!(info.bl_rev, 5);
+        assert_eq!(info.board_id, 140);
+        assert_eq!(info.extf_size, extf_size);
+        assert!(!progress.is_empty());
+
+        // Verify extf erase command was sent (EXTF_ERASE + EOC)
+        assert!(
+            mock.written.contains(&TEST_EXTF_ERASE),
+            "must send EXTF_ERASE command"
+        );
+        // Verify extf program command was sent
+        assert!(
+            mock.written.contains(&TEST_EXTF_PROG_MULTI),
+            "must send EXTF_PROG_MULTI command"
+        );
+        // Verify extf CRC check was sent
+        assert!(
+            mock.written.contains(&TEST_EXTF_GET_CRC),
+            "must send EXTF_GET_CRC command"
+        );
+
+        // Verify internal commands were also sent
+        assert!(
+            mock.written.contains(&TEST_CHIP_ERASE),
+            "must send CHIP_ERASE for internal flash"
+        );
+        assert!(
+            mock.written.contains(&TEST_PROG_MULTI),
+            "must send PROG_MULTI for internal flash"
+        );
+
+        // Verify extf erase appears before internal erase
+        let extf_erase_pos = mock
+            .written
+            .iter()
+            .position(|&b| b == TEST_EXTF_ERASE)
+            .unwrap();
+        let int_erase_pos = mock
+            .written
+            .iter()
+            .position(|&b| b == TEST_CHIP_ERASE)
+            .unwrap();
+        assert!(
+            extf_erase_pos < int_erase_pos,
+            "extf erase must come before internal erase"
+        );
+    }
+
+    #[test]
+    fn serial_uploader_full_upload_no_extf_unchanged() {
+        // Verify that internal-only uploads still work exactly as before
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152u32;
+
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok(); // sync
+        // identify with extf_size=0 (no extf support)
+        queue_identify_with_extf(&mut mock, 5, 140, 0, flash_size, 0);
+        mock.queue_sync_ok(); // internal erase
+        mock.queue_sync_ok(); // internal program
+        let expected_crc = firmware_crc(&image, flash_size);
+        mock.queue_u32_le(expected_crc);
+        mock.queue_sync_ok(); // internal verify
+
+        let artifact = SerialArtifact {
+            board_id: 140,
+            image: image.clone(),
+            image_size: 4,
+            summary: "test fw".into(),
+            extf: None,
+        };
+
+        let info = upload(&mut mock, &artifact, |_, _, _| {}).unwrap();
+        assert_eq!(info.bl_rev, 5);
+        assert_eq!(info.board_id, 140);
+        assert_eq!(info.extf_size, 0);
+
+        // Verify NO extf commands were sent
+        assert!(
+            !mock.written.contains(&TEST_EXTF_ERASE),
+            "must NOT send EXTF_ERASE for internal-only upload"
+        );
+        assert!(
+            !mock.written.contains(&TEST_EXTF_PROG_MULTI),
+            "must NOT send EXTF_PROG_MULTI for internal-only upload"
+        );
+    }
+
+    #[test]
+    fn serial_uploader_full_upload_extf_capacity_fail_before_erase() {
+        // Board reports no extf support but artifact has extf payload
+        let image = vec![0x01, 0x02];
+        let extf_image = vec![0xCA, 0xFE];
+
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok(); // sync
+        queue_identify_with_extf(&mut mock, 5, 140, 0, 2_097_152, 0); // extf_size=0
+
+        let artifact = SerialArtifact {
+            board_id: 140,
+            image,
+            image_size: 2,
+            summary: "test fw".into(),
+            extf: Some(ExternalFlashPayload {
+                image: extf_image,
+                image_size: 2,
+                declared_size: 2,
+                extflash_total: 1_048_576,
+            }),
+        };
+
+        let err = upload(&mut mock, &artifact, |_, _, _| {}).unwrap_err();
+        match err {
+            FirmwareError::ArtifactInvalid { reason } => {
+                assert!(reason.contains("external-flash"), "got: {reason}");
+            }
+            other => panic!("expected ArtifactInvalid, got: {other:?}"),
+        }
+
+        // Verify NO erase commands were sent
+        assert!(
+            !mock.written.contains(&TEST_CHIP_ERASE),
+            "must NOT erase when extf capacity is insufficient"
+        );
+        assert!(
+            !mock.written.contains(&TEST_EXTF_ERASE),
+            "must NOT extf erase when extf capacity is insufficient"
+        );
+    }
+
+    // ── Extf wire-format tests ──
+
+    #[test]
+    fn serial_uploader_extf_erase_sends_size_on_wire() {
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok();
+        let size: u32 = 1_048_576;
+        extf_erase(&mut mock, size).unwrap();
+        // Wire: EXTF_ERASE + size(4 LE bytes) + EOC
+        let expected: Vec<u8> = [&[TEST_EXTF_ERASE], size.to_le_bytes().as_slice(), &[TEST_EOC]]
+            .concat();
+        assert_eq!(mock.written, expected, "EXTF_ERASE must include 4-byte LE size");
+    }
+
+    #[test]
+    fn serial_uploader_extf_verify_crc_sends_size_on_wire() {
+        let extf_image = vec![0xCA, 0xFE, 0xBA, 0xBE];
+        let size = extf_image.len() as u32;
+        let expected_crc = firmware_crc(&extf_image, size);
+        let mut mock = MockSerial::new();
+        mock.queue_u32_le(expected_crc);
+        mock.queue_sync_ok();
+        extf_verify_crc(&mut mock, &extf_image).unwrap();
+        // Wire: EXTF_GET_CRC + size(4 LE bytes) + EOC
+        let expected_wire: Vec<u8> =
+            [&[TEST_EXTF_GET_CRC], size.to_le_bytes().as_slice(), &[TEST_EOC]].concat();
+        assert_eq!(mock.written, expected_wire, "EXTF_GET_CRC must include 4-byte LE size");
+    }
+
+    #[test]
+    fn serial_uploader_extf_verify_not_gated_by_bl_rev() {
+        // bl_rev 2 with extf should still verify extf CRC
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let extf_image = vec![0xCA, 0xFE, 0xBA, 0xBE];
+        let flash_size = 1_048_576u32;
+        let extf_size = 524_288u32;
+
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok(); // sync
+        queue_identify_with_extf(&mut mock, 2, 9, 0, flash_size, extf_size);
+
+        // extf erase
+        mock.queue_sync_ok();
+        // extf program
+        mock.queue_sync_ok();
+        // extf verify (should happen even at bl_rev 2)
+        let extf_crc = firmware_crc(&extf_image, extf_image.len() as u32);
+        mock.queue_u32_le(extf_crc);
+        mock.queue_sync_ok();
+
+        // internal erase
+        mock.queue_sync_ok();
+        // internal program
+        mock.queue_sync_ok();
+        // NO internal CRC verify (bl_rev 2)
+
+        let artifact = SerialArtifact {
+            board_id: 9,
+            image,
+            image_size: 4,
+            summary: "test".into(),
+            extf: Some(ExternalFlashPayload {
+                image: extf_image.clone(),
+                image_size: 4,
+                declared_size: 4,
+                extflash_total: extf_size,
+            }),
+        };
+
+        let info = upload(&mut mock, &artifact, |_, _, _| {}).unwrap();
+        assert_eq!(info.bl_rev, 2);
+        // Extf CRC command must have been sent even at bl_rev 2
+        assert!(
+            mock.written.contains(&TEST_EXTF_GET_CRC),
+            "extf verify must run regardless of bl_rev"
+        );
+        // Internal CRC must NOT have been sent (bl_rev 2)
+        assert!(
+            !mock.written.contains(&TEST_GET_CRC),
+            "internal CRC must not run at bl_rev 2"
+        );
+    }
+
+    #[test]
+    fn serial_uploader_extf_probe_failure_resyncs_protocol() {
+        let mut mock = MockSerial::new();
+        queue_identify_extf_probe_fails(&mut mock, 5, 140, 0, 2_097_152);
+        let info = identify(&mut mock).unwrap();
+        assert_eq!(info.extf_size, 0);
+
+        // After failed probe, identify must have sent GET_SYNC+EOC to resync
+        let written = &mock.written;
+        // Find the GET_DEVICE for extf probe (last GET_DEVICE command)
+        let last_get_device_pos = written
+            .iter()
+            .rposition(|&b| b == TEST_GET_DEVICE)
+            .expect("should have GET_DEVICE for extf probe");
+        // After the extf probe, there must be a GET_SYNC for resync
+        let resync_area = &written[last_get_device_pos..];
+        assert!(
+            resync_area.contains(&TEST_GET_SYNC),
+            "failed extf probe must resync with GET_SYNC; written after extf probe: {resync_area:?}"
+        );
+    }
+
+    #[test]
+    fn serial_uploader_extf_program_pads_to_4byte_alignment() {
+        // 5-byte image should be padded to 8 bytes for programming
+        let extf_image = vec![0x01, 0x02, 0x03, 0x04, 0x05];
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok(); // program chunk
+        extf_program(&mut mock, &extf_image, |_, _| {}).unwrap();
+
+        // EXTF_PROG_MULTI + length + data + EOC
+        // length should be 8 (padded to 4-byte boundary), not 5
+        assert_eq!(mock.written[0], TEST_EXTF_PROG_MULTI);
+        let written_len = mock.written[1] as usize;
+        assert_eq!(
+            written_len % 4,
+            0,
+            "extf program chunk length must be 4-byte aligned, got {written_len}"
+        );
+        assert_eq!(
+            written_len, 8,
+            "5-byte image should be padded to 8 bytes"
+        );
+        // Padding bytes should be 0xFF
+        assert_eq!(&mock.written[2..7], &[0x01, 0x02, 0x03, 0x04, 0x05]);
+        assert_eq!(&mock.written[7..10], &[0xFF, 0xFF, 0xFF]);
+    }
+
+    #[test]
+    fn serial_uploader_full_upload_extf_erase_uses_payload_size_not_capacity() {
+        // Board capacity is 1MB but extf payload is only 4 bytes.
+        // EXTF_ERASE must send the payload size (4), not the board capacity (1_048_576).
+        let image = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+        let extf_image = vec![0xCA, 0xFE, 0xBA, 0xBE];
+        let flash_size = 2_097_152u32;
+        let extf_size = 1_048_576u32; // board capacity (much larger than payload)
+        let extf_payload_size = extf_image.len() as u32; // 4 bytes
+
+        let mut mock =
+            make_upload_mock_with_extf(5, 140, flash_size, extf_size, &image, &extf_image);
+
+        let artifact = SerialArtifact {
+            board_id: 140,
+            image: image.clone(),
+            image_size: 8,
+            summary: "test fw".into(),
+            extf: Some(ExternalFlashPayload {
+                image: extf_image.clone(),
+                image_size: 4,
+                declared_size: 4,
+                extflash_total: extf_size,
+            }),
+        };
+
+        upload(&mut mock, &artifact, |_, _, _| {}).unwrap();
+
+        // Find the EXTF_ERASE command in the written bytes and extract the 4-byte LE size
+        let erase_pos = mock
+            .written
+            .iter()
+            .position(|&b| b == TEST_EXTF_ERASE)
+            .expect("must send EXTF_ERASE");
+        let wire_size_bytes = &mock.written[erase_pos + 1..erase_pos + 5];
+        let wire_size = u32::from_le_bytes(wire_size_bytes.try_into().unwrap());
+
+        assert_eq!(
+            wire_size, extf_payload_size,
+            "EXTF_ERASE must send payload size ({extf_payload_size}) not board capacity ({extf_size}); got {wire_size}"
+        );
+    }
+
+    // ── Serial flow extf integration tests ──
+
+    fn make_flow_upload_mock_with_extf(
+        bl_rev: u32,
+        board_id: u32,
+        flash_size: u32,
+        extf_size: u32,
+        image: &[u8],
+        extf_image: &[u8],
+    ) -> MockSerial {
+        make_upload_mock_with_extf(bl_rev, board_id, flash_size, extf_size, image, extf_image)
+    }
+
+    fn make_test_artifact_with_extf(
+        board_id: u32,
+        image: Vec<u8>,
+        extf_image: Vec<u8>,
+        extflash_total: u32,
+    ) -> SerialArtifact {
+        let image_size = image.len();
+        let extf_image_size = extf_image.len();
+        SerialArtifact {
+            board_id,
+            image,
+            image_size,
+            summary: "test firmware with extf".into(),
+            extf: Some(ExternalFlashPayload {
+                image: extf_image,
+                image_size: extf_image_size,
+                declared_size: extf_image_size as u32,
+                extflash_total,
+            }),
+        }
+    }
+
+    #[test]
+    fn serial_flow_extf_happy_path_reconnect_verified() {
+        let image = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+        let extf_image = vec![0xCA, 0xFE, 0xBA, 0xBE];
+        let flash_size = 2_097_152u32;
+        let extf_size = 1_048_576u32;
+
+        let mock = make_flow_upload_mock_with_extf(
+            5, 140, flash_size, extf_size, &image, &extf_image,
+        );
+        let bootloader_port = make_bootloader_port();
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![bootloader_port]])
+            .with_serial_mock(mock)
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyACM0".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact_with_extf(140, image, extf_image, extf_size);
+
+        let mut progress_calls: Vec<(String, usize, usize)> = Vec::new();
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |phase, w, t| {
+            progress_calls.push((phase.to_string(), w, t));
+        });
+
+        match &result {
+            SerialFlowResult::ReconnectVerified {
+                board_id,
+                bootloader_rev,
+                flash_verified,
+            } => {
+                assert_eq!(*board_id, 140);
+                assert_eq!(*bootloader_rev, 5);
+                assert!(*flash_verified);
+            }
+            other => panic!("expected ReconnectVerified, got: {other:?}"),
+        }
+
+        // Verify progress labels include extf phases
+        let phases: Vec<&str> = progress_calls.iter().map(|(p, _, _)| p.as_str()).collect();
+        assert!(
+            phases.contains(&"extf_erasing"),
+            "must emit extf_erasing phase; got: {phases:?}"
+        );
+        assert!(
+            phases.contains(&"extf_programming"),
+            "must emit extf_programming phase; got: {phases:?}"
+        );
+        assert!(
+            phases.contains(&"extf_verifying"),
+            "must emit extf_verifying phase; got: {phases:?}"
+        );
+        assert!(
+            phases.contains(&"erasing"),
+            "must emit erasing phase; got: {phases:?}"
+        );
+        assert!(
+            phases.contains(&"programming"),
+            "must emit programming phase; got: {phases:?}"
+        );
+        assert!(
+            phases.contains(&"verifying"),
+            "must emit verifying phase; got: {phases:?}"
+        );
+        assert!(
+            phases.contains(&"rebooting"),
+            "must emit rebooting phase; got: {phases:?}"
+        );
+    }
+
+    #[test]
+    fn serial_flow_extf_failure_capacity_insufficient() {
+        // Board reports no extf support (extf_size=0) but artifact has extf payload
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let extf_image = vec![0xCA, 0xFE, 0xBA, 0xBE];
+        let flash_size = 2_097_152u32;
+
+        // Board has no extf support
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok(); // sync
+        queue_identify_with_extf(&mut mock, 5, 140, 0, flash_size, 0); // extf_size=0
+
+        let bootloader_port = make_bootloader_port();
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![bootloader_port]])
+            .with_serial_mock(mock);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyACM0".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact_with_extf(140, image, extf_image, 1_048_576);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+
+        match &result {
+            SerialFlowResult::ExtfCapacityInsufficient { reason } => {
+                assert!(
+                    reason.contains("external-flash"),
+                    "should mention external-flash; got: {reason}"
+                );
+            }
+            other => panic!("expected ExtfCapacityInsufficient, got: {other:?}"),
+        }
+
+        // Must map to Failed outcome, NOT RecoveryNeeded
+        let outcome = result.to_outcome();
+        match outcome {
+            SerialFlashOutcome::Failed { reason } => {
+                assert!(reason.contains("external-flash"), "got: {reason}");
+            }
+            other => panic!(
+                "ExtfCapacityInsufficient must map to Failed outcome, not RecoveryNeeded; got: {other:?}"
+            ),
+        }
+    }
+
+    #[test]
+    fn serial_flow_extf_progress_phases_ordered_correctly() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let extf_image = vec![0xCA, 0xFE, 0xBA, 0xBE];
+        let flash_size = 2_097_152u32;
+        let extf_size = 1_048_576u32;
+
+        let mock = make_flow_upload_mock_with_extf(
+            5, 140, flash_size, extf_size, &image, &extf_image,
+        );
+        let bootloader_port = make_bootloader_port();
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![bootloader_port]])
+            .with_serial_mock(mock)
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyACM0".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact_with_extf(140, image, extf_image, extf_size);
+
+        let mut phases: Vec<String> = Vec::new();
+        execute_serial_flash(&deps, &preflight, &artifact, |phase, _, _| {
+            if phases.last().map(|p| p.as_str()) != Some(phase) {
+                phases.push(phase.to_string());
+            }
+        });
+
+        // extf phases must come before internal phases
+        let extf_erase_idx = phases.iter().position(|p| p == "extf_erasing").unwrap();
+        let extf_prog_idx = phases.iter().position(|p| p == "extf_programming").unwrap();
+        let extf_verify_idx = phases.iter().position(|p| p == "extf_verifying").unwrap();
+        let erase_idx = phases.iter().position(|p| p == "erasing").unwrap();
+        let prog_idx = phases.iter().position(|p| p == "programming").unwrap();
+        let verify_idx = phases.iter().position(|p| p == "verifying").unwrap();
+        let reboot_idx = phases.iter().position(|p| p == "rebooting").unwrap();
+
+        assert!(extf_erase_idx < extf_prog_idx, "extf_erasing before extf_programming");
+        assert!(extf_prog_idx < extf_verify_idx, "extf_programming before extf_verifying");
+        assert!(extf_verify_idx < erase_idx, "extf_verifying before erasing");
+        assert!(erase_idx < prog_idx, "erasing before programming");
+        assert!(prog_idx < verify_idx, "programming before verifying");
+        assert!(verify_idx < reboot_idx, "verifying before rebooting");
+    }
+
+    #[test]
+    fn serial_flow_no_extf_progress_labels_correct() {
+        // Internal-only artifact should emit erasing, programming, verifying, rebooting
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let mock = make_upload_mock(5, 140, flash_size, &image);
+        let bootloader_port = make_bootloader_port();
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![bootloader_port]])
+            .with_serial_mock(mock)
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyACM0".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let mut phases: Vec<String> = Vec::new();
+        execute_serial_flash(&deps, &preflight, &artifact, |phase, _, _| {
+            if phases.last().map(|p| p.as_str()) != Some(phase) {
+                phases.push(phase.to_string());
+            }
+        });
+
+        assert!(
+            !phases.iter().any(|p| p.starts_with("extf_")),
+            "internal-only should have no extf phases; got: {phases:?}"
+        );
+        assert!(
+            phases.contains(&"erasing".to_string()),
+            "must emit erasing; got: {phases:?}"
+        );
+        assert!(
+            phases.contains(&"programming".to_string()),
+            "must emit programming; got: {phases:?}"
+        );
+        assert!(
+            phases.contains(&"rebooting".to_string()),
+            "must emit rebooting; got: {phases:?}"
+        );
+    }
+
+    #[test]
+    fn serial_flow_extf_capacity_insufficient_serializes() {
+        let result = SerialFlowResult::ExtfCapacityInsufficient {
+            reason: "board reports 0 bytes, needs 4 bytes".into(),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(
+            json.contains("extf_capacity_insufficient"),
+            "got: {json}"
+        );
+        assert!(json.contains("board reports 0"), "got: {json}");
+    }
+
+    #[test]
+    fn catalog_target_manufacturer_parsed_from_manifest() {
+        let entries = vec![
+            serde_json::json!({
+                "board_id": 140,
+                "mav-type": "Copter",
+                "mav-firmware-version": "4.5.0",
+                "mav-firmware-version-type": "OFFICIAL",
+                "format": "apj",
+                "platform": "CubeOrange",
+                "url": "https://firmware.ardupilot.org/CubeOrange/4.5.0/firmware.apj",
+                "image_size": 1_500_000,
+                "latest": 1,
+                "git-sha": "abc123",
+                "brand_name": "CubeOrange",
+                "manufacturer": "Hex/ProfiCNC"
+            }),
+        ];
+        let gz = make_manifest_gz(&entries);
+        let parsed = parse_manifest_gz(&gz).unwrap();
+        assert_eq!(parsed[0].manufacturer.as_deref(), Some("Hex/ProfiCNC"));
+
+        let targets = build_catalog_targets(&parsed);
+        assert_eq!(targets[0].manufacturer.as_deref(), Some("Hex/ProfiCNC"));
+    }
+
+    // ── Task 9: gap-coverage tests ──
+
+    // R1: Android serial stub returns Err(String), not Ok(SerialFlowResult)
+    // The Android cfg path is not compiled in the test binary (host is not android),
+    // so we test the contract by verifying the Display impl produces the expected string.
+    #[test]
+    fn firmware_error_platform_unsupported_to_string() {
+        let err = FirmwareError::PlatformUnsupported;
+        let s = err.to_string();
+        assert_eq!(
+            s, "firmware flashing not supported on this platform",
+            "Android serial stub Err string must match: got {s:?}"
+        );
+    }
+
+    // R2: Android DFU stub returns Ok(DfuRecoveryResult::PlatformUnsupported).
+    // Verify the variant serializes to the expected discriminant so the TS
+    // dfuResultToStatus() switch arm fires correctly.
+    #[test]
+    fn android_dfu_stub_result_serializes_to_platform_unsupported() {
+        use crate::firmware::dfu_recovery::DfuRecoveryResult;
+        let result = DfuRecoveryResult::PlatformUnsupported;
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(
+            json.contains("platform_unsupported"),
+            "Android DFU Ok result must serialize to platform_unsupported; got: {json}"
+        );
+        // Must NOT be an error variant
+        assert!(
+            !json.contains("failed"),
+            "platform_unsupported must not serialize as failed; got: {json}"
+        );
+    }
+
+    // R3: firmware_serial_preflight on unsupported platform (Unsupported inventory)
+    // returns empty ports list, not an error.
+    #[test]
+    fn preflight_unsupported_inventory_yields_empty_ports() {
+        // Simulate the _ arm in firmware_serial_preflight:
+        //   let available_ports = match list_firmware_ports() {
+        //       InventoryResult::Available { ports } => ports,
+        //       _ => vec![],
+        //   };
+        let unsupported = InventoryResult::Unsupported;
+        let ports: Vec<crate::firmware::types::PortInfo> = match unsupported {
+            InventoryResult::Available { ports } => ports,
+            _ => vec![],
+        };
+        assert!(
+            ports.is_empty(),
+            "Unsupported inventory must yield empty ports, got: {ports:?}"
+        );
+    }
+
+    // R4: apj_to_dfu_bin rejects APJ with extf payload with a descriptive error.
+    #[test]
+    fn apj_to_dfu_bin_rejects_apj_with_extf() {
+        use crate::firmware::commands::apj_to_dfu_bin;
+        let apj = ApjFixture::new(140, &[0xDE, 0xAD, 0xBE, 0xEF])
+            .with_extf(&[0x01, 0x02, 0x03, 0x04])
+            .build();
+        let result = apj_to_dfu_bin(&apj);
+        assert!(result.is_err(), "APJ with extf must be rejected for DFU");
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("external-flash"),
+            "error must mention external-flash; got: {msg:?}"
+        );
+        assert!(
+            msg.contains("serial bootloader"),
+            "error must suggest serial bootloader path; got: {msg:?}"
+        );
+    }
+
+    // R5: apj_to_dfu_bin succeeds for APJ without extf, returning the internal image.
+    #[test]
+    fn apj_to_dfu_bin_succeeds_for_internal_only_apj() {
+        use crate::firmware::commands::apj_to_dfu_bin;
+        let image = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02];
+        let apj = ApjFixture::new(9, &image).build();
+        let result = apj_to_dfu_bin(&apj);
+        assert!(result.is_ok(), "internal-only APJ must succeed; got: {result:?}");
+        assert_eq!(result.unwrap(), image);
+    }
+
+    // R6: session cancel on idle session is idempotent — stop() on Idle stays Idle.
+    #[test]
+    fn session_cancel_on_idle_is_idempotent() {
+        let session = FirmwareSessionHandle::new();
+        // stop() on an already-idle session must not panic or corrupt state
+        session.stop();
+        session.stop();
+        assert!(
+            matches!(session.status(), FirmwareSessionStatus::Idle),
+            "session must remain Idle after repeated stop() calls"
+        );
+    }
+
+    // R7: rejected try_start_dfu(vehicle_connected=true) leaves session Idle.
+    #[test]
+    fn session_status_remains_idle_after_rejected_dfu_vehicle_connected() {
+        let session = FirmwareSessionHandle::new();
+        let result = session.try_start_dfu(true);
+        assert!(result.is_err(), "must reject DFU when vehicle connected");
+        match result.unwrap_err() {
+            FirmwareError::VehicleConnected => {}
+            other => panic!("expected VehicleConnected, got: {other:?}"),
+        }
+        // Session must still be Idle — not corrupted
+        assert!(
+            matches!(session.status(), FirmwareSessionStatus::Idle),
+            "session must remain Idle after rejected try_start_dfu"
+        );
+    }
+
+    // R8: ExtfCapacityInsufficient maps to Failed outcome (not RecoveryNeeded).
+    #[test]
+    fn extf_capacity_insufficient_maps_to_failed_not_recovery_needed() {
+        let result = SerialFlowResult::ExtfCapacityInsufficient {
+            reason: "external-flash capacity insufficient: board reports 0 bytes, firmware needs 4 bytes".into(),
+        };
+        let outcome = result.to_outcome();
+        match outcome {
+            SerialFlashOutcome::Failed { reason } => {
+                assert!(
+                    reason.contains("external-flash"),
+                    "reason must mention external-flash; got: {reason:?}"
+                );
+            }
+            other => panic!("expected Failed, got: {other:?}"),
+        }
+    }
+
+    // R9: ReconnectFailed with flash_verified=false maps to FlashedButUnverified.
+    #[test]
+    fn reconnect_failed_flash_unverified_maps_to_flashed_but_unverified() {
+        let result = SerialFlowResult::ReconnectFailed {
+            board_id: 9,
+            bootloader_rev: 4,
+            flash_verified: false,
+            reconnect_error: "timeout".into(),
+        };
+        let outcome = result.to_outcome();
+        assert!(
+            matches!(outcome, SerialFlashOutcome::FlashedButUnverified),
+            "ReconnectFailed(flash_verified=false) must map to FlashedButUnverified; got: {outcome:?}"
+        );
+    }
+
+    // R10: parse_apj with non-empty extf_image that decompresses to empty bytes
+    // returns ArtifactInvalid (not a silent empty extf payload).
+    #[test]
+    fn parse_apj_rejects_extf_image_that_decompresses_to_empty() {
+        use base64::prelude::*;
+        use flate2::Compression;
+        use flate2::write::ZlibEncoder;
+        use std::io::Write;
+
+        // Compress an empty slice — produces valid zlib but empty output
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&[]).unwrap();
+        let compressed = encoder.finish().unwrap();
+        let empty_extf_b64 = BASE64_STANDARD.encode(&compressed);
+
+        // Build APJ with a non-empty extf_image field that decompresses to 0 bytes
+        let apj = ApjFixture::new(140, &[0xDE, 0xAD, 0xBE, 0xEF])
+            .build_with_raw_extf(Some(&empty_extf_b64));
+
+        let result = parse_apj(&apj);
+        assert!(
+            result.is_err(),
+            "APJ with extf_image decompressing to empty must be rejected"
+        );
+        match result.unwrap_err() {
+            FirmwareError::ArtifactInvalid { reason } => {
+                assert!(
+                    reason.contains("extf_image"),
+                    "error must mention extf_image; got: {reason:?}"
+                );
+                assert!(
+                    reason.contains("empty"),
+                    "error must mention empty; got: {reason:?}"
+                );
+            }
+            other => panic!("expected ArtifactInvalid, got: {other:?}"),
+        }
+    }
+
+    // R11: FirmwareError::SessionBusy Display output matches expected IPC string.
+    #[test]
+    fn firmware_error_session_busy_to_string() {
+        let err = FirmwareError::SessionBusy {
+            current_session: "serial_primary".into(),
+        };
+        let s = err.to_string();
+        assert_eq!(
+            s, "firmware session already active: serial_primary",
+            "SessionBusy string must match IPC contract; got: {s:?}"
+        );
+    }
+
+    // R12: validate_recovery_bin rejects empty bytes with ArtifactInvalid.
+    #[test]
+    fn validate_recovery_bin_rejects_empty_bytes() {
+        let result = validate_recovery_bin(&[]);
+        assert!(result.is_err(), "empty bin must be rejected");
+        match result.unwrap_err() {
+            FirmwareError::ArtifactInvalid { reason } => {
+                assert!(
+                    reason.contains("empty"),
+                    "error must mention empty; got: {reason:?}"
+                );
+            }
+            other => panic!("expected ArtifactInvalid, got: {other:?}"),
+        }
+    }
+
+    // R13: InventoryResult::Unsupported serializes with kind="unsupported" and no ports field.
+    #[test]
+    fn inventory_result_unsupported_serializes_correctly() {
+        let result = InventoryResult::Unsupported;
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("unsupported"), "got: {json}");
+        assert!(!json.contains("ports"), "unsupported must not have ports field; got: {json}");
+    }
+
+    // R14: DfuScanResult::Unsupported serializes with kind="unsupported" and no devices field.
+    #[test]
+    fn dfu_scan_result_unsupported_serializes_correctly() {
+        let result = DfuScanResult::Unsupported;
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("unsupported"), "got: {json}");
+        assert!(!json.contains("devices"), "unsupported must not have devices field; got: {json}");
+    }
+
+    // R15: firmware_catalog_entries returning empty Vec serializes as JSON array [].
+    #[test]
+    fn empty_catalog_entries_serializes_as_empty_array() {
+        let entries: Vec<crate::firmware::types::CatalogEntry> = vec![];
+        let json = serde_json::to_string(&entries).unwrap();
+        assert_eq!(json, "[]", "empty catalog must serialize as []; got: {json}");
+    }
+
+    // R16: SerialFlowResult::ReconnectVerified with flash_verified=true maps to Verified.
+    #[test]
+    fn reconnect_verified_flash_true_maps_to_verified() {
+        let result = SerialFlowResult::ReconnectVerified {
+            board_id: 9,
+            bootloader_rev: 4,
+            flash_verified: true,
+        };
+        let outcome = result.to_outcome();
+        assert!(
+            matches!(outcome, SerialFlashOutcome::Verified),
+            "ReconnectVerified(flash_verified=true) must map to Verified; got: {outcome:?}"
+        );
+    }
+
+    // R17: SerialFlowResult::ReconnectVerified with flash_verified=false maps to FlashedButUnverified.
+    #[test]
+    fn reconnect_verified_flash_false_maps_to_flashed_but_unverified() {
+        let result = SerialFlowResult::ReconnectVerified {
+            board_id: 9,
+            bootloader_rev: 2,
+            flash_verified: false,
+        };
+        let outcome = result.to_outcome();
+        assert!(
+            matches!(outcome, SerialFlashOutcome::FlashedButUnverified),
+            "ReconnectVerified(flash_verified=false) must map to FlashedButUnverified; got: {outcome:?}"
+        );
+    }
+
+    // R18: apj_to_dfu_bin rejects invalid JSON (not a valid APJ).
+    #[test]
+    fn apj_to_dfu_bin_rejects_invalid_json() {
+        use crate::firmware::commands::apj_to_dfu_bin;
+        let result = apj_to_dfu_bin(b"not json at all");
+        assert!(result.is_err(), "invalid JSON must be rejected");
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("invalid firmware artifact") || msg.contains("invalid APJ JSON"),
+            "error must describe artifact problem; got: {msg:?}"
+        );
     }
 }

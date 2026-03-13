@@ -11,9 +11,9 @@ use commands::{
 };
 use connection::{connect_link, disconnect_link};
 use firmware::commands::{
-    firmware_catalog_entries, firmware_flash_dfu_recovery, firmware_flash_serial,
-    firmware_reboot_to_bootloader, firmware_serial_preflight, firmware_session_cancel,
-    firmware_session_status,
+    firmware_catalog_entries, firmware_catalog_targets, firmware_check_dfu_source,
+    firmware_flash_dfu_recovery, firmware_flash_serial, firmware_reboot_to_bootloader,
+    firmware_serial_preflight, firmware_session_cancel, firmware_session_status,
 };
 use firmware::discovery::{firmware_list_dfu_devices, firmware_list_ports};
 use firmware::types::FirmwareSessionHandle;
@@ -117,7 +117,9 @@ pub fn run() {
         firmware_reboot_to_bootloader,
         firmware_serial_preflight,
         firmware_catalog_entries,
-        firmware_flash_dfu_recovery
+        firmware_catalog_targets,
+        firmware_flash_dfu_recovery,
+        firmware_check_dfu_source
     ]);
 
     builder

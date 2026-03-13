@@ -167,10 +167,9 @@ pub(crate) enum DfuScanResult {
     Unsupported,
 }
 
-// ── Catalog entry (normalized from ArduPilot manifest, serial-path only) ──
+// ── Catalog entry (normalized from ArduPilot manifest) ──
 
 /// A normalized firmware catalog entry from the official ArduPilot manifest.
-/// Only available for the serial primary path; DFU recovery cannot use catalog entries.
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct CatalogEntry {
     pub(crate) board_id: u32,
@@ -184,6 +183,21 @@ pub(crate) struct CatalogEntry {
     pub(crate) latest: bool,
     pub(crate) git_sha: String,
     pub(crate) brand_name: Option<String>,
+    pub(crate) manufacturer: Option<String>,
+}
+
+// ── Catalog target summary (grouped for recovery-mode manual board selection) ──
+
+/// A grouped recovery target keyed by `board_id + platform`.
+/// Contains enough fields for a manual board selector in recovery mode.
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct CatalogTargetSummary {
+    pub(crate) board_id: u32,
+    pub(crate) platform: String,
+    pub(crate) brand_name: Option<String>,
+    pub(crate) manufacturer: Option<String>,
+    pub(crate) vehicle_types: Vec<String>,
+    pub(crate) latest_version: Option<String>,
 }
 
 // ── Serial preflight info (returned by the preflight command before flashing) ──
@@ -206,6 +220,19 @@ pub(crate) struct SerialPreflightInfo {
 pub(crate) enum SerialFlashSource {
     CatalogUrl { url: String },
     LocalApjBytes { data: Vec<u8> },
+}
+
+// ── DFU recovery source (command-level: what the frontend sends) ──
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(crate) enum DfuRecoverySource {
+    /// Download APJ from the official catalog URL, extract internal image for DFU.
+    CatalogUrl { url: String },
+    /// User-provided APJ file bytes, extract internal image for DFU.
+    LocalApjBytes { data: Vec<u8> },
+    /// User-provided raw BIN file bytes, pass directly to DFU executor.
+    LocalBinBytes { data: Vec<u8> },
 }
 
 // ── Serial flow terminal result (produced by the serial executor) ──
@@ -244,6 +271,8 @@ pub(crate) enum SerialFlowResult {
     Failed { reason: String },
     /// Board detection during bootloader phase failed.
     BoardDetectionFailed { reason: String },
+    /// Board lacks sufficient external-flash capacity for the firmware artifact.
+    ExtfCapacityInsufficient { reason: String },
 }
 
 impl SerialFlowResult {
@@ -265,6 +294,9 @@ impl SerialFlowResult {
                 reason: reason.clone(),
             },
             Self::BoardDetectionFailed { reason } => SerialFlashOutcome::RecoveryNeeded {
+                reason: reason.clone(),
+            },
+            Self::ExtfCapacityInsufficient { reason } => SerialFlashOutcome::Failed {
                 reason: reason.clone(),
             },
         }
