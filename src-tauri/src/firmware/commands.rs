@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 
 use crate::AppState;
 use crate::connection;
+use crate::e2e_emit::emit_event;
 use crate::firmware::artifact;
 use crate::firmware::catalog::CatalogClient;
 use crate::firmware::dfu_recovery::{self, DfuRecoveryResult};
@@ -78,7 +79,8 @@ pub(crate) async fn firmware_flash_serial(
                         } else {
                             0.0
                         };
-                        let _ = app.emit(
+                        emit_event(
+                            &app,
                             "firmware://progress",
                             &FirmwareProgress {
                                 phase_label: phase.into(),
@@ -280,7 +282,8 @@ pub(crate) async fn firmware_flash_dfu_recovery(
                     } else {
                         0.0
                     };
-                    let _ = app.emit(
+                    emit_event(
+                        &app,
                         "firmware://progress",
                         &FirmwareProgress {
                             phase_label: "dfu_downloading".into(),

@@ -5,7 +5,7 @@ use mavkit::{
     HomePosition, LinkState, MagCalProgress, MagCalReport, ParamProgress, ParamStore, SensorHealth,
     StatusMessage, Telemetry, TransferProgress, Vehicle, VehicleState,
 };
-use tauri::Emitter;
+use crate::e2e_emit::emit_event;
 
 pub(crate) static TELEMETRY_INTERVAL_MS: AtomicU64 = AtomicU64::new(200);
 
@@ -21,7 +21,7 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
                 match rx.has_changed() {
                     Ok(true) => {
                         let t: Telemetry = rx.borrow_and_update().clone();
-                        let _ = handle.emit("telemetry://tick", &t);
+                        emit_event(&handle, "telemetry://tick", &t);
                     }
                     Ok(false) => {}
                     Err(_) => break,
@@ -37,7 +37,7 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
         tokio::spawn(async move {
             while rx.changed().await.is_ok() {
                 let s: VehicleState = rx.borrow().clone();
-                let _ = handle.emit("vehicle://state", &s);
+                emit_event(&handle, "vehicle://state", &s);
             }
         });
     }
@@ -50,7 +50,7 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
             while rx.changed().await.is_ok() {
                 let hp: Option<HomePosition> = rx.borrow().clone();
                 if let Some(hp) = hp {
-                    let _ = handle.emit("home://position", &hp);
+                    emit_event(&handle, "home://position", &hp);
                 }
             }
         });
@@ -63,7 +63,7 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
         tokio::spawn(async move {
             while rx.changed().await.is_ok() {
                 let ms = rx.borrow().clone();
-                let _ = handle.emit("mission://state", &ms);
+                emit_event(&handle, "mission://state", &ms);
             }
         });
     }
@@ -75,7 +75,7 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
         tokio::spawn(async move {
             while rx.changed().await.is_ok() {
                 let ls: LinkState = rx.borrow().clone();
-                let _ = handle.emit("link://state", &ls);
+                emit_event(&handle, "link://state", &ls);
             }
         });
     }
@@ -88,7 +88,7 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
             while rx.changed().await.is_ok() {
                 let mp: Option<TransferProgress> = rx.borrow().clone();
                 if let Some(mp) = mp {
-                    let _ = handle.emit("mission://progress", &mp);
+                    emit_event(&handle, "mission://progress", &mp);
                 }
             }
         });
@@ -101,7 +101,7 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
         tokio::spawn(async move {
             while rx.changed().await.is_ok() {
                 let ps: ParamStore = rx.borrow().clone();
-                let _ = handle.emit("param://store", &ps);
+                emit_event(&handle, "param://store", &ps);
             }
         });
     }
@@ -113,7 +113,7 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
         tokio::spawn(async move {
             while rx.changed().await.is_ok() {
                 let pp: ParamProgress = rx.borrow().clone();
-                let _ = handle.emit("param://progress", &pp);
+                emit_event(&handle, "param://progress", &pp);
             }
         });
     }
@@ -126,7 +126,7 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
             while rx.changed().await.is_ok() {
                 let msg: Option<StatusMessage> = rx.borrow().clone();
                 if let Some(msg) = msg {
-                    let _ = handle.emit("statustext://message", &msg);
+                    emit_event(&handle, "statustext://message", &msg);
                 }
             }
         });
@@ -139,7 +139,7 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
         tokio::spawn(async move {
             while rx.changed().await.is_ok() {
                 let val: SensorHealth = rx.borrow_and_update().clone();
-                let _ = handle.emit("sensor://health", &val);
+                emit_event(&handle, "sensor://health", &val);
             }
         });
     }
@@ -152,7 +152,7 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
             while rx.changed().await.is_ok() {
                 let val: Option<MagCalProgress> = rx.borrow_and_update().clone();
                 if let Some(ref val) = val {
-                    let _ = handle.emit("compass://cal_progress", val);
+                    emit_event(&handle, "compass://cal_progress", val);
                 }
             }
         });
@@ -166,7 +166,7 @@ pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
             while rx.changed().await.is_ok() {
                 let val: Option<MagCalReport> = rx.borrow_and_update().clone();
                 if let Some(ref val) = val {
-                    let _ = handle.emit("compass://cal_report", val);
+                    emit_event(&handle, "compass://cal_report", val);
                 }
             }
         });

@@ -32,6 +32,7 @@ base64 = "0.22"
 flate2 = "1"
 crc32fast = "1"
 ureq = "3"
+tauri-remote-ui = { version = "=1.0.1-alpha.8", optional = true }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 mavkit = { git = "https://github.com/AveryanAlex/mavkit.git", branch = "main", features = ["serial"] }
@@ -45,3 +46,4 @@ tauri-plugin-geolocation = "2"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
+e2e-remote-ui = ["dep:tauri-remote-ui"]

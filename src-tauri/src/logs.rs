@@ -5,9 +5,8 @@ use mavkit::tlog::{TlogEntry, TlogFile};
 use mavlink::Message;
 use mavlink::common::MavMessage;
 use serde::Serialize;
-use tauri::Emitter;
 
-use crate::{AppState, helpers};
+use crate::{AppState, e2e_emit::emit_event, helpers};
 
 #[derive(Serialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -384,9 +383,10 @@ pub(crate) async fn log_open(
 ) -> Result<LogSummary, String> {
     *state.log_store.lock().await = None;
 
-    let _ = app.emit(
+    emit_event(
+        &app,
         "log://progress",
-        LogProgress {
+        &LogProgress {
             phase: LogLoadPhase::Parsing,
             parsed: 0,
         },
@@ -411,9 +411,10 @@ pub(crate) async fn log_open(
         .map_err(|e: String| e)?;
 
         let total_parsed = bin_entries.len();
-        let _ = app.emit(
+        emit_event(
+            &app,
             "log://progress",
-            LogProgress {
+            &LogProgress {
                 phase: LogLoadPhase::Parsing,
                 parsed: total_parsed,
             },
@@ -445,9 +446,10 @@ pub(crate) async fn log_open(
         let all_entries = reader.collect().await.map_err(|e| e.to_string())?;
 
         let total_parsed = all_entries.len();
-        let _ = app.emit(
+        emit_event(
+            &app,
             "log://progress",
-            LogProgress {
+            &LogProgress {
                 phase: LogLoadPhase::Parsing,
                 parsed: total_parsed,
             },
@@ -466,9 +468,10 @@ pub(crate) async fn log_open(
         (stored, start, end, LogType::Tlog)
     };
 
-    let _ = app.emit(
+    emit_event(
+        &app,
         "log://progress",
-        LogProgress {
+        &LogProgress {
             phase: LogLoadPhase::Indexing,
             parsed: stored_entries.len(),
         },
@@ -484,9 +487,10 @@ pub(crate) async fn log_open(
         *message_types.entry(entry.msg_name.clone()).or_insert(0) += 1;
 
         if (i + 1) % 5000 == 0 {
-            let _ = app.emit(
+            emit_event(
+                &app,
                 "log://progress",
-                LogProgress {
+                &LogProgress {
                     phase: LogLoadPhase::Indexing,
                     parsed: i + 1,
                 },
@@ -525,9 +529,10 @@ pub(crate) async fn log_open(
 
     *state.log_store.lock().await = Some(store);
 
-    let _ = app.emit(
+    emit_event(
+        &app,
         "log://progress",
-        LogProgress {
+        &LogProgress {
             phase: LogLoadPhase::Completed,
             parsed: total,
         },
