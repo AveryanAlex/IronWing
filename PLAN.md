@@ -77,8 +77,8 @@ Build a modern, desktop-first Ground Control Station from scratch using Tauri.
 - Transport adapters: serial, UDP, BLE (via StreamConnection), Classic SPP (via StreamConnection)
 - ArduPilot mode tables (feature-gated)
 
-Future modules (not yet implemented):
-- Firmware: manifest fetch, download cache, flash orchestration
+**Tauri shell firmware module** (`src-tauri/src/firmware/`):
+- Firmware: catalog client, artifact parsing, serial bootloader uploader (with extf), DFU recovery executor, port/device discovery
 
 ## Design Constraints
 - No UI component directly accesses serial/network APIs
@@ -197,6 +197,7 @@ Current status:
 - M3: complete (parameter staging engine, setup wizards, STATUSTEXT plumbing)
 - M4: complete (TLOG/BIN recording, import, indexing, timeline playback, charts, map replay, CSV export)
 - M5: complete (guided setup wizard, compass calibration, motor test, pre-arm assistant, sensor health)
+- M6: complete (firmware install/update and DFU recovery with catalog browsing, extf serial support)
 
 ## Completed Milestones
 
@@ -222,18 +223,20 @@ Current status:
 ### M5 - Guided Vehicle Setup Wizard [COMPLETE]
 - 7-step guided setup wizard (inspection, calibration, frame/motor, flight modes, failsafe, pre-arm, readiness), compass calibration workflow, motor test, pre-arm blocker parsing, sensor health watch, and localStorage persistence shipped.
 
-### M6 - Firmware Flash Workflow [COMPLETE]
+### M6 - Firmware Install and Recovery [COMPLETE]
+- Dedicated first-class Firmware group in Setup with explicit Install / Update and Recover via DFU modes
 - Serial-first firmware flashing via native Rust bootloader uploader for `.apj` artifacts (ArduPilot/PX4-compatible boards)
 - Official ArduPilot catalog client with board-filtered browsing plus local `.apj` file support for the serial path
-- Recovery-only STM32 DFU path via native Rust USB stack (nusb), with explicit Recovery/Advanced labeling and stronger warnings
+- Serial-path external-flash (`extf_image`) support: APJ parsing, bootloader capacity probe, erase/program/verify protocol, phase-labeled progress
+- Recovery-mode manual board target and version selection from the official ArduPilot catalog, with local `.apj` and local `.bin` fallback sources
+- STM32 DFU recovery path via native Rust USB stack (nusb), with stronger guardrails blocking APJs that require external-flash writes
 - Pre-flash parameter backup prompt reusing existing save-to-file capability
 - Reconnect verification with explicit `verified` vs `flashed_but_unverified` terminal outcomes (BL_REV < 3 boards)
 - DFU recovery guidance for Windows driver issues (WinUSB/Zadig) and unsupported platform states
-- Firmware setup section integrated into existing Setup panel with serial-first hierarchy
 - Desktop port inventory, bootloader re-enumeration detection, STM32 DFU device scanning
 - Firmware session exclusivity guard (mutually exclusive with live vehicle connection)
 - 100+ Rust fixture tests and 60+ Vitest tests covering both paths end-to-end without hardware
-- Deferred: automatic parameter restore/migration, Android flashing, `.px4`/`.hex`/`.dfu` formats, external flash (`extf_image`), DFU as normal install path, DFU catalog browsing, real hardware validation matrix
+- Deferred: automatic parameter restore/migration, Android flashing, `.px4`/`.hex`/`.dfu` formats, DFU as normal install path, real hardware validation matrix
 
 ## M7 - Release Hardening
 - Reliability hardening, crash recovery, diagnostics bundle
@@ -296,11 +299,12 @@ Exit criteria:
 
 ---
 
-## 11) Immediate Next Steps (Current - M6 Next)
+## 11) Immediate Next Steps (Current - M7 Next)
 
-1. Begin M6 firmware install workflow: board detection, firmware catalog client, flash executor
+1. Firmware validation on real hardware: serial flash and DFU recovery across representative board families
 2. Frontend test baseline: add Vitest for hooks, playback state, and IPC bridge modules
 3. Mobile polish: verify BT permission flow on Android 12+, test full connection lifecycle on hardware
 4. Safety and support groundwork: confirmation UX/audit trail for critical actions and a diagnostics bundle export path
+5. Release hardening: crash recovery, diagnostics bundle, signed installer and updater pipeline
 
 This plan stays biased toward shipping a usable cockpit first, with disciplined protocol correctness before advanced planning UX.
