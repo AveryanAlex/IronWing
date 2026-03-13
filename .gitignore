@@ -16,3 +16,6 @@ result
 /mav.*
 
 .sisyphus/
+
+test-results/
+playwright-report/

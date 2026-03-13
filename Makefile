@@ -8,7 +8,7 @@ SITL_UDP_PORT ?= 14550
 MAVPROXY_PID_FILE ?= /tmp/ironwing-mavproxy.pid
 MAVPROXY_LOG_FILE ?= /tmp/ironwing-mavproxy.log
 
-.PHONY: help sitl-up sitl-down sitl-logs wait-tcp mavproxy-up mavproxy-down mavproxy-logs wait-udp bridge-up bridge-down status dev-sitl android-dev android-build
+.PHONY: help sitl-up sitl-down sitl-logs wait-tcp mavproxy-up mavproxy-down mavproxy-logs wait-udp bridge-up bridge-down status dev-sitl android-dev android-build e2e-build e2e-up e2e-down
 
 help:
 	@printf "IronWing SITL helper targets\n\n"
@@ -22,6 +22,9 @@ help:
 	@printf "  make bridge-down        Stop MAVProxy + SITL\n"
 	@printf "  make status             Show SITL and MAVProxy status\n"
 	@printf "  make dev-sitl           Start bridge and run tauri desktop app\n"
+	@printf "  make e2e-build          Build frontend + Rust for E2E\n"
+	@printf "  make e2e-up             Full E2E: build + bridge + app + wait\n"
+	@printf "  make e2e-down           Stop E2E app + bridge\n"
 
 sitl-up:
 	docker rm -f "$(SITL_CONTAINER)" >/dev/null 2>&1 || true
@@ -92,3 +95,18 @@ android-dev:
 
 android-build:
 	pnpm run android:build
+
+e2e-build:
+	IRONWING_E2E=1 pnpm run build
+	cargo build -p ironwing --features custom-protocol,e2e-remote-ui
+
+e2e-up:
+	scripts/e2e-start.sh --keep
+
+e2e-down:
+	@if [ -f /tmp/ironwing-e2e-app.pid ] && kill -0 "$$(cat /tmp/ironwing-e2e-app.pid)" 2>/dev/null; then \
+	  kill "$$(cat /tmp/ironwing-e2e-app.pid)" 2>/dev/null || true; \
+	  rm -f /tmp/ironwing-e2e-app.pid; \
+	  echo "App stopped"; \
+	fi
+	$(MAKE) bridge-down
