@@ -161,6 +161,55 @@ pnpm run android:build     # Build APK
 
 Android supports UDP, BLE, and Classic SPP transports. Serial is excluded (doesn't compile for Android targets).
 
+## End-to-End Testing (Playwright + SITL)
+
+Browser-based E2E tests run against the real Tauri app connected to an ArduPilot SITL instance. Tauri's Remote UI crate (`tauri-remote-ui`) exposes the frontend at `http://127.0.0.1:9515` so Playwright can drive it from a standard Chromium browser. This is a **dev/test-only** mechanism, not a production web deployment.
+
+### How it works
+
+1. Frontend is built with `IRONWING_E2E=1`, which swaps Tauri IPC imports for a WebSocket-based implementation that talks to the Remote UI RPC proxy.
+2. The Rust binary is compiled with `--features custom-protocol,e2e-remote-ui`, enabling the Remote UI HTTP/WS server on port 9515.
+3. SITL bridge starts (Docker container + MAVProxy, same as `make bridge-up`).
+4. The app launches with Remote UI enabled (the native window shows a placeholder page while the browser host serves the real UI). A liveness check polls `http://127.0.0.1:9515/keep_alive` until the server is ready.
+5. Playwright opens Chromium, navigates to `http://127.0.0.1:9515/`, and runs specs against the live UI.
+
+### Quick start
+
+```bash
+# One-shot: build + start everything + run tests + tear down
+pnpm e2e
+
+# Or step by step for faster iteration:
+make e2e-up              # Build, start SITL + app, block when ready
+pnpm e2e                 # Run tests (reuses running app)
+make e2e-down            # Stop app + SITL
+```
+
+Other useful commands:
+
+```bash
+make e2e-build           # Build frontend + Rust binary only (no SITL)
+pnpm e2e:headed          # Run tests with a visible browser window
+```
+
+The startup orchestrator is `scripts/e2e-start.sh`. It accepts `--no-build` (skip compilation, reuse existing binary) and `--no-bridge` (skip SITL, app only). Playwright's `webServer` config calls this script automatically when no server is already running.
+
+### Current test scope
+
+Three spec files in `e2e/`:
+
+- **smoke.spec.ts** — Verifies the app loads through the Remote UI host and renders the expected title.
+- **sitl-connect.spec.ts** — Full connect/telemetry/disconnect cycle: selects UDP transport, connects to `0.0.0.0:14550`, waits for live telemetry (state, mode, altitude, battery, heading, GPS), then disconnects and confirms idle state.
+- **wrong-port-cancel.spec.ts** — Negative path: connects to a wrong port (`14551`), verifies "Connecting" state and UI lockout, cancels, and confirms clean return to idle with controls re-enabled.
+
+Tests run serially (`workers: 1`) since they share a single SITL instance. Traces, screenshots, and video are captured on failure.
+
+### Scope limits
+
+Remote UI proxies Tauri IPC over WebSocket, giving the browser access to the full Rust backend. This works for testing because the Tauri process is running locally with all native transports (UDP, serial, BLE) available on the Rust side. The browser itself doesn't open sockets or talk MAVLink directly.
+
+A future pure-web or wasm deployment would need a fundamentally different transport architecture (proxy server, wasm MAVLink parser, reduced transport surface). Remote UI is not that path. See `PLAN.md` for the roadmap note on browser-native architecture.
+
 ## CI
 
 - `.github/workflows/ci.yml`: frontend typecheck/build + Rust check/tests on every push and PR

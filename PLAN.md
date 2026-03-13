@@ -54,7 +54,7 @@ Build a modern, desktop-first Ground Control Station from scratch using Tauri.
 ## Quality/Delivery
 - GitHub Actions CI
 - cargo test + frontend unit tests
-- SITL-based E2E tests for high-risk workflows
+- SITL-based E2E tests for high-risk workflows (Playwright + Tauri Remote UI, shipped)
 - Release signing + reproducible build metadata
 
 ---
@@ -253,14 +253,25 @@ Exit criteria:
 Exit criteria:
 - Public beta with known limitation list and support process
 
+## Future: Browser-Native / Wasm Mode (not current scope)
+
+The Playwright E2E setup uses Tauri's Remote UI to serve the frontend in a browser, but the Rust backend still runs locally and owns all transport connections (UDP, serial, BLE). This is a testing convenience, not a web deployment architecture.
+
+A true browser-native mode would require a different approach entirely: a wasm-compiled MAVLink parser, a proxy/relay server bridging raw transports to WebSocket, and a reduced transport surface (no direct serial or BLE from the browser). The platform boundary (`src/platform/`) was designed with this split in mind, but the proxy layer, wasm packaging, and transport subset are all later work, well beyond the current milestone scope.
+
 ---
 
 ## 8) Test and Validation Strategy
 
 - Unit tests per domain crate (protocol parsing, validators, state reducers)
 - Integration tests for link lifecycle and mission/param workflows
-- SITL scenario suite:
-  - connect/disconnect reliability
+- **Browser E2E via Playwright + Tauri Remote UI + SITL** (shipped):
+  - Tauri's Remote UI plugin exposes the frontend at `http://127.0.0.1:9515` during E2E runs. Playwright drives Chromium against this host while the Rust backend connects to a local SITL instance over UDP. This is a dev/test-only mechanism; the browser talks to the Rust process via WebSocket RPC, not raw MAVLink.
+  - Orchestrated by `scripts/e2e-start.sh` (build, SITL bridge, app launch, liveness wait). Makefile targets: `e2e-build`, `e2e-up`, `e2e-down`. pnpm scripts: `e2e`, `e2e:headed`.
+  - Initial suite covers app load smoke test, a full connect/telemetry/disconnect cycle, and a wrong-port cancel/recovery path against SITL.
+  - Platform boundary (`src/platform/`) swaps Tauri IPC for WebSocket-based stubs at build time via `IRONWING_E2E=1`. A source guardrail test enforces that direct `@tauri-apps/api` imports stay confined to the platform layer.
+  - Tests run serially (single SITL instance). Traces, screenshots, and video captured on failure.
+- SITL scenario suite (planned expansion):
   - mode changes and telemetry continuity
   - mission upload/download consistency
   - parameter batch apply safety
@@ -303,8 +314,9 @@ Exit criteria:
 
 1. Firmware validation on real hardware: serial flash and DFU recovery across representative board families
 2. Frontend test baseline: add Vitest for hooks, playback state, and IPC bridge modules
-3. Mobile polish: verify BT permission flow on Android 12+, test full connection lifecycle on hardware
-4. Safety and support groundwork: confirmation UX/audit trail for critical actions and a diagnostics bundle export path
-5. Release hardening: crash recovery, diagnostics bundle, signed installer and updater pipeline
+3. Expand E2E suite: mission upload/download, parameter workflows, mode changes (infrastructure shipped, coverage is initial)
+4. Mobile polish: verify BT permission flow on Android 12+, test full connection lifecycle on hardware
+5. Safety and support groundwork: confirmation UX/audit trail for critical actions and a diagnostics bundle export path
+6. Release hardening: crash recovery, diagnostics bundle, signed installer and updater pipeline
 
 This plan stays biased toward shipping a usable cockpit first, with disciplined protocol correctness before advanced planning UX.
