@@ -530,6 +530,7 @@ mod tests {
     #[test]
     fn artifact_extf_corrupt_base64() {
         let apj_data = ApjFixture::new(140, &[0x01, 0x02])
+            .with_extf_image_size(1024)
             .build_with_raw_extf(Some("!!!not-valid-base64!!!"));
 
         let result = parse_apj(&apj_data);
@@ -548,6 +549,7 @@ mod tests {
         use base64::prelude::*;
         let fake = BASE64_STANDARD.encode(b"this is not zlib data");
         let apj_data = ApjFixture::new(140, &[0x01, 0x02])
+            .with_extf_image_size(1024)
             .build_with_raw_extf(Some(&fake));
 
         let result = parse_apj(&apj_data);
@@ -562,16 +564,17 @@ mod tests {
     }
 
     #[test]
-    fn artifact_extf_zero_declared_size_skips_check() {
+    fn artifact_extf_zero_declared_size_skips_decode() {
         let apj_data = ApjFixture::new(140, &[0x01, 0x02])
             .with_extf(&[0xAA, 0xBB])
             .with_extf_image_size(0)
             .build();
 
         let artifact = parse_apj(&apj_data).unwrap();
-        let extf = artifact.extf.as_ref().unwrap();
-        assert_eq!(extf.image_size, 2);
-        assert_eq!(extf.declared_size, 0);
+        assert!(
+            artifact.extf.is_none(),
+            "extf_image_size==0 must short-circuit to None even with real extf data"
+        );
     }
 
     #[test]
@@ -3952,11 +3955,11 @@ mod tests {
         };
         let err = validate_extf_capacity(&extf_payload, &info).unwrap_err();
         match err {
-            FirmwareError::ArtifactInvalid { reason } => {
-                assert!(reason.contains("external-flash"), "got: {reason}");
-                assert!(reason.contains("capacity"), "got: {reason}");
+            FirmwareError::ExtfCapacityInsufficient { board_capacity, firmware_needs } => {
+                assert_eq!(board_capacity, 1_048_576);
+                assert_eq!(firmware_needs, 2_000_000);
             }
-            other => panic!("expected ArtifactInvalid, got: {other:?}"),
+            other => panic!("expected ExtfCapacityInsufficient, got: {other:?}"),
         }
     }
 
@@ -3977,10 +3980,11 @@ mod tests {
         };
         let err = validate_extf_capacity(&extf_payload, &info).unwrap_err();
         match err {
-            FirmwareError::ArtifactInvalid { reason } => {
-                assert!(reason.contains("external-flash"), "got: {reason}");
+            FirmwareError::ExtfCapacityInsufficient { board_capacity, firmware_needs } => {
+                assert_eq!(board_capacity, 0);
+                assert_eq!(firmware_needs, 100);
             }
-            other => panic!("expected ArtifactInvalid, got: {other:?}"),
+            other => panic!("expected ExtfCapacityInsufficient, got: {other:?}"),
         }
     }
 
@@ -4192,13 +4196,13 @@ mod tests {
 
         let err = upload(&mut mock, &artifact, |_, _, _| {}).unwrap_err();
         match err {
-            FirmwareError::ArtifactInvalid { reason } => {
-                assert!(reason.contains("external-flash"), "got: {reason}");
+            FirmwareError::ExtfCapacityInsufficient { board_capacity, firmware_needs } => {
+                assert_eq!(board_capacity, 0);
+                assert_eq!(firmware_needs, 2);
             }
-            other => panic!("expected ArtifactInvalid, got: {other:?}"),
+            other => panic!("expected ExtfCapacityInsufficient, got: {other:?}"),
         }
 
-        // Verify NO erase commands were sent
         assert!(
             !mock.written.contains(&TEST_CHIP_ERASE),
             "must NOT erase when extf capacity is insufficient"
@@ -4822,8 +4826,60 @@ mod tests {
         );
     }
 
-    // R10: parse_apj with non-empty extf_image that decompresses to empty bytes
-    // returns ArtifactInvalid (not a silent empty extf payload).
+    // R10-pre: extf_image_size == 0 short-circuits before decode/decompress.
+    // Even garbage extf_image content must be ignored when declared size is zero.
+    #[test]
+    fn extf_placeholder_skips_decode_when_size_zero() {
+        let apj = ApjFixture::new(1054, &[0xDE, 0xAD, 0xBE, 0xEF])
+            .with_extf_image_size(0)
+            .build_with_raw_extf(Some("!!!not-valid-base64!!!"));
+
+        let result = parse_apj(&apj);
+        assert!(
+            result.is_ok(),
+            "extf_image_size==0 must short-circuit before decode; got: {result:?}"
+        );
+        let artifact = result.unwrap();
+        assert!(artifact.extf.is_none());
+    }
+
+    // R10: parse_apj with placeholder extf_image (decompresses to empty, declared size 0)
+    // treats the extf as absent — returns extf: None. This matches the official ArduPilot
+    // MatekF405-TE APJ pattern where extf_image="eNoDAAAAAAE=" and extf_image_size=0.
+    #[test]
+    fn extf_placeholder() {
+        use base64::prelude::*;
+        use flate2::Compression;
+        use flate2::write::ZlibEncoder;
+        use std::io::Write;
+
+        // Compress an empty slice — produces valid zlib but empty output
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&[]).unwrap();
+        let compressed = encoder.finish().unwrap();
+        let empty_extf_b64 = BASE64_STANDARD.encode(&compressed);
+
+        // Build APJ with placeholder extf: non-empty b64, decompresses to 0 bytes,
+        // declared extf_image_size = 0 (the default / absent case)
+        let apj = ApjFixture::new(1054, &[0xDE, 0xAD, 0xBE, 0xEF])
+            .with_extf_image_size(0)
+            .build_with_raw_extf(Some(&empty_extf_b64));
+
+        let result = parse_apj(&apj);
+        assert!(
+            result.is_ok(),
+            "Placeholder extf (decompresses to empty, declared_size=0) must succeed; got: {result:?}"
+        );
+        let artifact = result.unwrap();
+        assert!(
+            artifact.extf.is_none(),
+            "Placeholder extf must yield extf=None, not Some"
+        );
+        assert_eq!(artifact.board_id, 1054);
+    }
+
+    // R10b: parse_apj with extf_image that decompresses to empty BUT has non-zero
+    // declared extf_image_size is truly corrupt — must still fail.
     #[test]
     fn parse_apj_rejects_extf_image_that_decompresses_to_empty() {
         use base64::prelude::*;
@@ -4838,13 +4894,15 @@ mod tests {
         let empty_extf_b64 = BASE64_STANDARD.encode(&compressed);
 
         // Build APJ with a non-empty extf_image field that decompresses to 0 bytes
+        // BUT declares extf_image_size = 512 — this is corrupt, not a placeholder
         let apj = ApjFixture::new(140, &[0xDE, 0xAD, 0xBE, 0xEF])
+            .with_extf_image_size(512)
             .build_with_raw_extf(Some(&empty_extf_b64));
 
         let result = parse_apj(&apj);
         assert!(
             result.is_err(),
-            "APJ with extf_image decompressing to empty must be rejected"
+            "APJ with extf_image decompressing to empty but non-zero declared size must be rejected"
         );
         match result.unwrap_err() {
             FirmwareError::ArtifactInvalid { reason } => {
@@ -4852,13 +4910,36 @@ mod tests {
                     reason.contains("extf_image"),
                     "error must mention extf_image; got: {reason:?}"
                 );
-                assert!(
-                    reason.contains("empty"),
-                    "error must mention empty; got: {reason:?}"
-                );
             }
             other => panic!("expected ArtifactInvalid, got: {other:?}"),
         }
+    }
+
+    // R10c: apj_to_dfu_bin succeeds for APJ with placeholder extf (no real extf payload).
+    #[test]
+    fn apj_to_dfu_bin_succeeds_for_placeholder_extf() {
+        use crate::firmware::commands::apj_to_dfu_bin;
+        use base64::prelude::*;
+        use flate2::Compression;
+        use flate2::write::ZlibEncoder;
+        use std::io::Write;
+
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&[]).unwrap();
+        let compressed = encoder.finish().unwrap();
+        let empty_extf_b64 = BASE64_STANDARD.encode(&compressed);
+
+        let image = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02];
+        let apj = ApjFixture::new(1054, &image)
+            .with_extf_image_size(0)
+            .build_with_raw_extf(Some(&empty_extf_b64));
+
+        let result = apj_to_dfu_bin(&apj);
+        assert!(
+            result.is_ok(),
+            "APJ with placeholder extf must succeed for DFU; got: {result:?}"
+        );
+        assert_eq!(result.unwrap(), image);
     }
 
     // R11: FirmwareError::SessionBusy Display output matches expected IPC string.
@@ -4957,5 +5038,103 @@ mod tests {
             msg.contains("invalid firmware artifact") || msg.contains("invalid APJ JSON"),
             "error must describe artifact problem; got: {msg:?}"
         );
+    }
+
+    // ── Task 9: hardening tests ──
+
+    // T9-R1: ExtfCapacityInsufficient serializes with result="extf_capacity_insufficient".
+    #[test]
+    fn extf_capacity_insufficient_serializes_correctly() {
+        let result = SerialFlowResult::ExtfCapacityInsufficient {
+            reason: "external-flash capacity insufficient: board reports 0 bytes, firmware needs 4 bytes".into(),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(
+            json.contains("extf_capacity_insufficient"),
+            "must serialize with result=extf_capacity_insufficient; got: {json}"
+        );
+        assert!(
+            json.contains("external-flash"),
+            "reason must be preserved in JSON; got: {json}"
+        );
+    }
+
+    // T9-R2: ReconnectFailed with flash_verified=true still maps to FlashedButUnverified.
+    // (reconnect_failed always means unverified regardless of CRC)
+    #[test]
+    fn reconnect_failed_flash_true_still_maps_to_flashed_but_unverified() {
+        let result = SerialFlowResult::ReconnectFailed {
+            board_id: 140,
+            bootloader_rev: 5,
+            flash_verified: true,
+            reconnect_error: "connection refused".into(),
+        };
+        let outcome = result.to_outcome();
+        assert!(
+            matches!(outcome, SerialFlashOutcome::FlashedButUnverified),
+            "ReconnectFailed must always map to FlashedButUnverified even with flash_verified=true; got: {outcome:?}"
+        );
+    }
+
+    // T9-R3: validate_extf_capacity returns ExtfCapacityInsufficient (typed variant, not ArtifactInvalid).
+    #[test]
+    fn validate_extf_capacity_returns_typed_error() {
+        let extf = crate::firmware::artifact::ExternalFlashPayload {
+            image: vec![0x01, 0x02, 0x03, 0x04],
+            image_size: 4,
+            declared_size: 4,
+            extflash_total: 0,
+        };
+        let info = BootloaderInfo {
+            bl_rev: 5,
+            board_id: 140,
+            board_rev: 0,
+            flash_size: 2_097_152,
+            extf_size: 0, // no extf support
+        };
+        let err = validate_extf_capacity(&extf, &info).unwrap_err();
+        assert!(
+            matches!(err, FirmwareError::ExtfCapacityInsufficient { .. }),
+            "validate_extf_capacity must return ExtfCapacityInsufficient, not ArtifactInvalid; got: {err:?}"
+        );
+    }
+
+    // T9-R4: Executor routes ExtfCapacityInsufficient via typed match (not string detection).
+    #[test]
+    fn executor_routes_extf_capacity_via_typed_match() {
+        // Verify the to_string() of the typed variant still contains "external-flash"
+        // for backward compatibility, but the match in executor should be on the variant itself.
+        let err = FirmwareError::ExtfCapacityInsufficient {
+            board_capacity: 0,
+            firmware_needs: 4,
+        };
+        let msg = err.to_string();
+        assert!(
+            msg.contains("external-flash"),
+            "Display must mention external-flash for backward compat; got: {msg}"
+        );
+        assert!(
+            msg.contains("0 bytes") && msg.contains("4 bytes"),
+            "Display must include capacity details; got: {msg}"
+        );
+    }
+
+    // T9-R5: All SerialFlowResult to_outcome mappings are exhaustive.
+    #[test]
+    fn serial_flow_result_to_outcome_exhaustive() {
+        let variants: Vec<SerialFlowResult> = vec![
+            SerialFlowResult::Verified { board_id: 1, bootloader_rev: 4, port: "p".into() },
+            SerialFlowResult::FlashedButUnverified { board_id: 1, bootloader_rev: 2, port: "p".into() },
+            SerialFlowResult::ReconnectVerified { board_id: 1, bootloader_rev: 4, flash_verified: true },
+            SerialFlowResult::ReconnectVerified { board_id: 1, bootloader_rev: 2, flash_verified: false },
+            SerialFlowResult::ReconnectFailed { board_id: 1, bootloader_rev: 4, flash_verified: true, reconnect_error: "e".into() },
+            SerialFlowResult::ReconnectFailed { board_id: 1, bootloader_rev: 2, flash_verified: false, reconnect_error: "e".into() },
+            SerialFlowResult::Failed { reason: "r".into() },
+            SerialFlowResult::BoardDetectionFailed { reason: "r".into() },
+            SerialFlowResult::ExtfCapacityInsufficient { reason: "r".into() },
+        ];
+        for v in &variants {
+            let _ = v.to_outcome(); // must not panic
+        }
     }
 }

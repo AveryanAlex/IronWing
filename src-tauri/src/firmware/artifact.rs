@@ -117,20 +117,23 @@ pub(crate) fn parse_apj(data: &[u8]) -> Result<SerialArtifact, FirmwareError> {
 
     // ── External flash image (optional) ──
 
-    let extf = if apj.extf_image.is_empty() {
+    let extf = if apj.extf_image.is_empty() || apj.extf_image_size == 0 {
         None
     } else {
         let extf_image = decode_compressed_payload(&apj.extf_image, "extf_image")?;
 
         if extf_image.is_empty() {
             return Err(FirmwareError::ArtifactInvalid {
-                reason: "extf_image: decompressed external flash image is empty".into(),
+                reason: format!(
+                    "extf_image: decompressed to empty but extf_image_size declared {}",
+                    apj.extf_image_size
+                ),
             });
         }
 
         let extf_actual = extf_image.len();
 
-        if apj.extf_image_size > 0 && apj.extf_image_size as usize != extf_actual {
+        if apj.extf_image_size as usize != extf_actual {
             return Err(FirmwareError::ArtifactInvalid {
                 reason: format!(
                     "extf_image_size mismatch: declared {}, decompressed {extf_actual}",

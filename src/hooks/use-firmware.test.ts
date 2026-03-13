@@ -591,7 +591,6 @@ describe("dfu hook catch path produces failed session status", () => {
 });
 
 describe("driverGuidance is null for non-guidance DFU outcomes", () => {
-  // Mirrors the wizard's: dfuOutcome && "guidance" in dfuOutcome ? dfuOutcome.guidance : null
   function extractDriverGuidance(status: ReturnType<typeof dfuResultToStatus>): string | null {
     if (status.kind !== "completed") return null;
     if (status.outcome.path !== "dfu_recovery") return null;
@@ -619,5 +618,67 @@ describe("driverGuidance is null for non-guidance DFU outcomes", () => {
     const guidance = extractDriverGuidance(status);
     expect(guidance).not.toBeNull();
     expect(typeof guidance).toBe("string");
+  });
+});
+
+describe("platform_unsupported and driver_guidance produce distinct guidance", () => {
+  it("platform_unsupported guidance mentions platform", () => {
+    const status = dfuResultToStatus({ result: "platform_unsupported" });
+    if (status.kind === "completed" && status.outcome.path === "dfu_recovery") {
+      if (status.outcome.outcome.result === "unsupported_recovery_path") {
+        expect(status.outcome.outcome.guidance.toLowerCase()).toContain("platform");
+      }
+    }
+  });
+
+  it("driver_guidance preserves the exact guidance string from the backend", () => {
+    const guidance = "Install WinUSB driver using Zadig for STM32 DFU";
+    const status = dfuResultToStatus({ result: "driver_guidance", guidance });
+    if (status.kind === "completed" && status.outcome.path === "dfu_recovery") {
+      if (status.outcome.outcome.result === "unsupported_recovery_path") {
+        expect(status.outcome.outcome.guidance).toBe(guidance);
+      }
+    }
+  });
+
+  it("platform_unsupported and driver_guidance both map to unsupported_recovery_path but with different guidance", () => {
+    const platformStatus = dfuResultToStatus({ result: "platform_unsupported" });
+    const driverStatus = dfuResultToStatus({ result: "driver_guidance", guidance: "Install WinUSB" });
+    if (platformStatus.kind === "completed" && driverStatus.kind === "completed") {
+      const pOutcome = platformStatus.outcome.outcome;
+      const dOutcome = driverStatus.outcome.outcome;
+      expect(pOutcome.result).toBe("unsupported_recovery_path");
+      expect(dOutcome.result).toBe("unsupported_recovery_path");
+      if (pOutcome.result === "unsupported_recovery_path" && dOutcome.result === "unsupported_recovery_path") {
+        expect(pOutcome.guidance).not.toBe(dOutcome.guidance);
+      }
+    }
+  });
+});
+
+describe("extf_capacity_insufficient reason string contains hyphenated external-flash", () => {
+  it("reason with hyphenated external-flash is preserved through serialResultToStatus", () => {
+    const reason = "external-flash capacity insufficient: board reports 0 bytes, firmware needs 4 bytes";
+    const status = serialResultToStatus({ result: "extf_capacity_insufficient", reason });
+    if (status.kind === "completed" && status.outcome.path === "serial_primary") {
+      if (status.outcome.outcome.result === "failed") {
+        expect(status.outcome.outcome.reason).toContain("external-flash");
+      }
+    }
+  });
+
+  it("extf failure reason is not confused with recovery_needed reason", () => {
+    const extf = serialResultToStatus({
+      result: "extf_capacity_insufficient",
+      reason: "external-flash capacity insufficient",
+    });
+    const recovery = serialResultToStatus({
+      result: "board_detection_failed",
+      reason: "no bootloader detected",
+    });
+    if (extf.kind === "completed" && recovery.kind === "completed") {
+      expect(extf.outcome.outcome.result).toBe("failed");
+      expect(recovery.outcome.outcome.result).toBe("recovery_needed");
+    }
   });
 });

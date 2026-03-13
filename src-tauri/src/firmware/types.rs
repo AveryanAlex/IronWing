@@ -309,14 +309,31 @@ impl SerialFlowResult {
 #[serde(tag = "code", rename_all = "snake_case")]
 pub(crate) enum FirmwareError {
     VehicleConnected,
-    SessionBusy { current_session: String },
+    SessionBusy {
+        current_session: String,
+    },
     PortNotFound,
-    BoardMismatch { expected: u32, actual: u32 },
-    ArtifactInvalid { reason: String },
-    ProtocolError { detail: String },
-    UsbAccessDenied { guidance: String },
+    BoardMismatch {
+        expected: u32,
+        actual: u32,
+    },
+    ArtifactInvalid {
+        reason: String,
+    },
+    ProtocolError {
+        detail: String,
+    },
+    UsbAccessDenied {
+        guidance: String,
+    },
     PlatformUnsupported,
-    CatalogUnavailable { reason: String },
+    CatalogUnavailable {
+        reason: String,
+    },
+    ExtfCapacityInsufficient {
+        board_capacity: u32,
+        firmware_needs: u32,
+    },
 }
 
 impl std::fmt::Display for FirmwareError {
@@ -338,6 +355,15 @@ impl std::fmt::Display for FirmwareError {
             }
             Self::CatalogUnavailable { reason } => {
                 write!(f, "firmware catalog unavailable: {reason}")
+            }
+            Self::ExtfCapacityInsufficient {
+                board_capacity,
+                firmware_needs,
+            } => {
+                write!(
+                    f,
+                    "external-flash capacity insufficient: board reports {board_capacity} bytes, firmware needs {firmware_needs} bytes"
+                )
             }
         }
     }

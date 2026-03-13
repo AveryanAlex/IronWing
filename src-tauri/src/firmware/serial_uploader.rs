@@ -247,12 +247,9 @@ pub(crate) fn validate_extf_capacity(
     info: &BootloaderInfo,
 ) -> Result<(), FirmwareError> {
     if info.extf_size == 0 || (extf.image.len() as u32) > info.extf_size {
-        return Err(FirmwareError::ArtifactInvalid {
-            reason: format!(
-                "external-flash capacity insufficient: board reports {} bytes, firmware needs {} bytes",
-                info.extf_size,
-                extf.image.len()
-            ),
+        return Err(FirmwareError::ExtfCapacityInsufficient {
+            board_capacity: info.extf_size,
+            firmware_needs: extf.image.len() as u32,
         });
     }
     Ok(())

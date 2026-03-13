@@ -70,9 +70,7 @@ pub(crate) fn execute_serial_flash(
 
     let info = match serial_uploader::upload(io.as_mut(), artifact, &mut on_progress) {
         Ok(info) => info,
-        Err(e @ FirmwareError::ArtifactInvalid { .. })
-            if e.to_string().contains("external-flash capacity") =>
-        {
+        Err(e @ FirmwareError::ExtfCapacityInsufficient { .. }) => {
             return SerialFlowResult::ExtfCapacityInsufficient {
                 reason: e.to_string(),
             };

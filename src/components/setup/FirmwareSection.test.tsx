@@ -520,17 +520,17 @@ describe("checkApjHasExtf edge cases", () => {
     expect(fnBlock).toContain("return false");
   });
 
-  it("checkApjHasExtf checks extf_image is a non-empty string", () => {
+  it("checkApjHasExtf checks extf_image is a non-empty string and declared size > 0", () => {
     const fnStart = WIZARD_SRC.indexOf("function checkApjHasExtf");
-    const fnBlock = WIZARD_SRC.slice(fnStart, fnStart + 400);
+    const fnBlock = WIZARD_SRC.slice(fnStart, fnStart + 500);
     expect(fnBlock).toContain("extf_image");
-    expect(fnBlock).toContain("length > 0");
+    expect(fnBlock).toContain("extf_image_size");
+    expect(fnBlock).toContain("declaredSize > 0");
   });
 });
 
 describe("extf post-flash detection string match", () => {
   it("post-flash extf detection uses includes() on result.reason", () => {
-    // The wizard checks result.reason for extf after a failed flash
     expect(WIZARD_SRC).toContain("result.reason");
     expect(WIZARD_SRC).toContain("setExtfBlocked");
   });
@@ -543,19 +543,12 @@ describe("extf post-flash detection string match", () => {
     expect(handleDfu).toContain("toLowerCase()");
   });
 
-  it("extf blocking string in apj_to_dfu_bin uses hyphenated external-flash", () => {
-    // The Rust error string is "external-flash payload" (hyphenated)
-    // The wizard's post-flash check must match this exact string
-    // This test documents the known mismatch: "external flash" (space) vs "external-flash" (hyphen)
-    // The Rust error: "this APJ contains an external-flash payload"
-    // The wizard check: result.reason.toLowerCase().includes("external flash")
-    // This is a known gap — the check uses a space, Rust uses a hyphen
+  it("post-flash extf detection matches hyphenated external-flash from Rust", () => {
     const handleDfu = WIZARD_SRC.slice(
       WIZARD_SRC.indexOf("handleStartDfu"),
       WIZARD_SRC.indexOf("handleStartDfu") + 1200,
     );
-    // Document that the post-flash check exists (even if the string may not match)
-    expect(handleDfu).toContain("setExtfBlocked");
+    expect(handleDfu).toContain('"external-flash"');
   });
 });
 

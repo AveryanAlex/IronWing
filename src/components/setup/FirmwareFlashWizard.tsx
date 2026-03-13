@@ -83,7 +83,9 @@ function OutcomeBanner({ kind, message }: { kind: "success" | "warning" | "error
 function checkApjHasExtf(apjBytes: number[]): boolean {
   try {
     const json = JSON.parse(new TextDecoder().decode(new Uint8Array(apjBytes)));
-    return typeof json.extf_image === "string" && json.extf_image.length > 0;
+    if (typeof json.extf_image !== "string" || json.extf_image.length === 0) return false;
+    const declaredSize = typeof json.extf_image_size === "number" ? json.extf_image_size : 0;
+    return declaredSize > 0;
   } catch {
     return false;
   }
@@ -372,7 +374,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
         result = await flashDfuRecovery(device, { kind: "local_bin_bytes", data: dfuBinData! });
       }
       // Check for extf blocking on failed results
-      if (result.result === "failed" && result.reason.toLowerCase().includes("external flash")) {
+      if (result.result === "failed" && result.reason.toLowerCase().includes("external-flash")) {
         setExtfBlocked(result.reason);
       }
     } catch {
