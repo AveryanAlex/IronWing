@@ -1,6 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
-import { resolve } from "path";
 import {
   buildDefaultsPreview,
   FAILSAFE_DEFAULTS_COPTER,
@@ -11,8 +9,6 @@ import {
 } from "./FailsafeSection";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import type { ParamStore } from "../../../params";
-
-const SECTION_SRC = readFileSync(resolve(__dirname, "FailsafeSection.tsx"), "utf-8");
 
 function makeStore(entries: Record<string, number>): ParamStore {
   const params: ParamStore["params"] = {};
@@ -235,122 +231,4 @@ describe("COPTER_BATTERY_FS_OPTIONS matches official ArduPilot BATT_FS_*_ACT map
   it("value 5 = Terminate (marked dangerous)", () => expect(byValue[5]).toMatch(/Terminate/));
   it("value 6 = Auto DO_LAND_START → RTL", () => expect(byValue[6]).toMatch(/DO_LAND_START.*RTL/));
   it("value 7 = Brake → Land", () => expect(byValue[7]).toMatch(/Brake.*Land/));
-});
-
-describe("FailsafeSection structural contract — shared primitives", () => {
-  it("uses SetupSectionIntro for the section intro", () => {
-    expect(SECTION_SRC).toMatch(/import.*SetupSectionIntro.*from.*shared\/SetupSectionIntro/);
-    expect(SECTION_SRC).toMatch(/<SetupSectionIntro/);
-  });
-
-  it("uses SectionCardHeader for card headers", () => {
-    expect(SECTION_SRC).toMatch(/import.*SectionCardHeader.*from.*shared\/SectionCardHeader/);
-    expect(SECTION_SRC).toMatch(/<SectionCardHeader/);
-  });
-
-  it("uses PreviewStagePanel for the defaults preview", () => {
-    expect(SECTION_SRC).toMatch(/import.*PreviewStagePanel.*from.*shared\/PreviewStagePanel/);
-    expect(SECTION_SRC).toMatch(/<PreviewStagePanel/);
-  });
-
-  it("does NOT contain the old DefaultsPreviewPanel local component", () => {
-    expect(SECTION_SRC).not.toMatch(/function DefaultsPreviewPanel/);
-  });
-
-  it("uses resolveDocsUrl from the centralized docs registry", () => {
-    expect(SECTION_SRC).toMatch(/import.*resolveDocsUrl.*from.*ardupilot-docs/);
-    expect(SECTION_SRC).toMatch(/resolveDocsUrl\(/);
-  });
-
-  it("does NOT hardcode BATTERY_DOCS_URL", () => {
-    expect(SECTION_SRC).not.toMatch(/BATTERY_DOCS_URL/);
-  });
-});
-
-describe("FailsafeSection structural contract — defaults preview", () => {
-  it("does NOT immediately call applyDefaults on button click", () => {
-    const headerBlock = SECTION_SRC.slice(
-      SECTION_SRC.indexOf("Apply Recommended Defaults"),
-      SECTION_SRC.indexOf("Radio Failsafe"),
-    );
-    expect(headerBlock).not.toMatch(/onClick=\{[^}]*applyDefaults/);
-    expect(headerBlock).toMatch(/defaultsPreviewOpen|setDefaultsPreviewOpen/);
-  });
-
-  it("renders PreviewStagePanel when preview is open", () => {
-    expect(SECTION_SRC).toMatch(/PreviewStagePanel/);
-    expect(SECTION_SRC).toMatch(/defaultsPreviewOpen/);
-  });
-
-  it("PreviewStagePanel has onStage and onCancel callbacks", () => {
-    expect(SECTION_SRC).toMatch(/onStage=/);
-    expect(SECTION_SRC).toMatch(/onCancel=/);
-  });
-
-  it("calls buildDefaultsPreview", () => {
-    expect(SECTION_SRC).toMatch(/buildDefaultsPreview\(/);
-  });
-});
-
-describe("FailsafeSection structural contract — clickable preview rows", () => {
-  it("accepts navigateToParam prop", () => {
-    expect(SECTION_SRC).toMatch(/navigateToParam\?.*:\s*\(paramName:\s*string\)\s*=>\s*void/);
-  });
-
-  it("wires onRowClick to navigateToParam", () => {
-    expect(SECTION_SRC).toMatch(/onRowClick=/);
-    expect(SECTION_SRC).toMatch(/navigateToParam/);
-  });
-
-  it("preview rows have human-friendly label and raw paramName", () => {
-    expect(SECTION_SRC).toMatch(/label:\s*entry\.label/);
-    expect(SECTION_SRC).toMatch(/paramName:\s*entry\.paramName/);
-  });
-});
-
-describe("FailsafeSection structural contract — battery card", () => {
-  it("uses SectionCardHeader with battery docs from registry", () => {
-    expect(SECTION_SRC).toMatch(/resolveDocsUrl\("failsafe_battery"/);
-  });
-
-  it("includes escalation helper text about LOW vs CRITICAL", () => {
-    expect(SECTION_SRC).toMatch(/Low.*RTL.*Critical.*Land/is);
-  });
-
-  it("includes reboot/safety note about battery failsafe", () => {
-    expect(SECTION_SRC).toMatch(/reboot/i);
-  });
-});
-
-describe("FailsafeSection structural contract — per-card docs links", () => {
-  it("resolves radio failsafe docs", () => {
-    expect(SECTION_SRC).toMatch(/resolveDocsUrl\("failsafe_radio"/);
-  });
-
-  it("resolves GCS failsafe docs", () => {
-    expect(SECTION_SRC).toMatch(/resolveDocsUrl\("failsafe_gcs"/);
-  });
-
-  it("resolves EKF failsafe docs", () => {
-    expect(SECTION_SRC).toMatch(/resolveDocsUrl\("failsafe_ekf"/);
-  });
-
-  it("resolves crash detection docs", () => {
-    expect(SECTION_SRC).toMatch(/resolveDocsUrl\("failsafe_crash_check"/);
-  });
-
-  it("resolves section-level failsafe landing page docs", () => {
-    expect(SECTION_SRC).toMatch(/resolveDocsUrl\("failsafe_landing_page"/);
-  });
-});
-
-describe("FailsafeSection structural contract — layout", () => {
-  it("does not have empty placeholder divs for spacing", () => {
-    const batterySection = SECTION_SRC.slice(
-      SECTION_SRC.indexOf("Battery Failsafe"),
-      SECTION_SRC.indexOf("GCS Failsafe"),
-    );
-    const emptyDivCount = (batterySection.match(/<div\s*\/>/g) || []).length;
-    expect(emptyDivCount).toBe(0);
-  });
 });

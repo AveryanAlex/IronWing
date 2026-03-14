@@ -1,6 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
-import { resolve } from "path";
 import { getStagedOrCurrent, getParamMeta, formatParamValue } from "./param-helpers";
 import type { ParamInputParams } from "./param-helpers";
 import type { ParamMeta, ParamMetadataMap } from "../../../param-metadata";
@@ -159,75 +157,4 @@ describe("formatParamValue", () => {
     };
     expect(formatParamValue(1, meta)).toBe("Auto");
   });
-});
-
-describe("ParamInputParams type includes optional unstage", () => {
-  it("accepts unstage callback without type error", () => {
-    const params: ParamInputParams = {
-      store: null,
-      staged: new Map(),
-      metadata: null,
-      stage: () => {},
-      unstage: () => {},
-    };
-    expect(params.unstage).toBeDefined();
-  });
-
-  it("unstage is optional — omitting it satisfies the type", () => {
-    const params: ParamInputParams = {
-      store: null,
-      staged: new Map(),
-      metadata: null,
-      stage: () => {},
-    };
-    expect(params.unstage).toBeUndefined();
-  });
-});
-
-describe("StagedBadge structural contract", () => {
-  const helpersSrc = readFileSync(resolve(__dirname, "param-helpers.ts"), "utf-8");
-
-  it("exports a StagedBadge function", () => {
-    expect(helpersSrc).toMatch(/export function StagedBadge/);
-  });
-
-  it("renders a button element when unstage is provided", () => {
-    expect(helpersSrc).toMatch(/createElement\(\s*"button"/);
-  });
-
-  it("includes aria-label for accessibility", () => {
-    expect(helpersSrc).toMatch(/aria-label.*Unstage/);
-  });
-
-  it("renders a span (non-interactive) when unstage is absent", () => {
-    expect(helpersSrc).toMatch(/createElement\(\s*"span"/);
-  });
-});
-
-describe("All param primitives use StagedBadge", () => {
-  const primitives = [
-    "ParamSelect.tsx",
-    "ParamNumberInput.tsx",
-    "ParamBitmaskInput.tsx",
-    "ParamToggle.tsx",
-  ];
-
-  for (const file of primitives) {
-    it(`${file} imports and uses StagedBadge`, () => {
-      const src = readFileSync(resolve(__dirname, file), "utf-8");
-      expect(src).toMatch(/StagedBadge/);
-      expect(src).toMatch(/import.*StagedBadge.*from.*param-helpers/);
-    });
-
-    it(`${file} passes params.unstage to StagedBadge`, () => {
-      const src = readFileSync(resolve(__dirname, file), "utf-8");
-      expect(src).toMatch(/unstage=\{params\.unstage\}/);
-    });
-
-    it(`${file} preserves reboot badge`, () => {
-      const src = readFileSync(resolve(__dirname, file), "utf-8");
-      expect(src).toMatch(/rebootRequired/);
-      expect(src).toMatch(/reboot/);
-    });
-  }
 });

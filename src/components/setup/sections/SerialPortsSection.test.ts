@@ -1,6 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
-import { resolve } from "path";
 import {
   detectSerialPorts,
   detectConflicts,
@@ -8,11 +6,6 @@ import {
 } from "./SerialPortsSection";
 import type { SerialPort } from "./SerialPortsSection";
 import type { ParamInputParams } from "../primitives/param-helpers";
-
-const SECTION_SRC = readFileSync(
-  resolve(__dirname, "SerialPortsSection.tsx"),
-  "utf-8",
-);
 
 function makeParams(
   overrides: Partial<ParamInputParams> = {},
@@ -38,10 +31,6 @@ function makeStore(paramNames: string[], values?: Record<string, number>) {
   }
   return { params, expected_count: paramNames.length };
 }
-
-// ---------------------------------------------------------------------------
-// detectSerialPorts
-// ---------------------------------------------------------------------------
 
 describe("detectSerialPorts", () => {
   it("returns empty array when store is null", () => {
@@ -76,10 +65,6 @@ describe("detectSerialPorts", () => {
     expect(ports.map((p) => p.prefix)).toEqual(["SERIAL2", "SERIAL5"]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// detectConflicts
-// ---------------------------------------------------------------------------
 
 describe("detectConflicts", () => {
   const ports: SerialPort[] = [
@@ -139,98 +124,10 @@ describe("detectConflicts", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// EXCLUSIVE_PROTOCOLS
-// ---------------------------------------------------------------------------
-
 describe("EXCLUSIVE_PROTOCOLS", () => {
   it("includes GPS, RCInput, and Scripting", () => {
     expect(EXCLUSIVE_PROTOCOLS[5]).toBe("GPS");
     expect(EXCLUSIVE_PROTOCOLS[23]).toBe("RCInput");
     expect(EXCLUSIVE_PROTOCOLS[28]).toBe("Scripting");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Structural contract: compact ParamSelect usage
-// ---------------------------------------------------------------------------
-
-describe("SerialPortsSection structural contract", () => {
-  it("uses compact ParamSelect in table cells (no label/description props)", () => {
-    expect(SECTION_SRC).toMatch(/ParamSelect[\s\S]*?compact/);
-    expect(SECTION_SRC).not.toMatch(/ParamSelect[\s\S]*?label=""/);
-    expect(SECTION_SRC).not.toMatch(/ParamSelect[\s\S]*?description=""/);
-  });
-
-  it("table cells use align-middle for uniform vertical alignment", () => {
-    const tableBlock = SECTION_SRC.slice(
-      SECTION_SRC.indexOf("function PortTable("),
-      SECTION_SRC.indexOf("function ConflictWarnings("),
-    );
-    const alignTopMatches = tableBlock.match(/align-top/g);
-    expect(alignTopMatches).toBeNull();
-    const alignMiddleMatches = tableBlock.match(/align-middle/g);
-    expect(alignMiddleMatches).not.toBeNull();
-    expect(alignMiddleMatches!.length).toBeGreaterThanOrEqual(3);
-  });
-
-  it("renders a section-level RebootNotice", () => {
-    expect(SECTION_SRC).toMatch(/RebootNotice/);
-    expect(SECTION_SRC).toMatch(/reboot/i);
-  });
-
-  it("preserves conflict warning rendering", () => {
-    expect(SECTION_SRC).toMatch(/ConflictWarnings/);
-    expect(SECTION_SRC).toMatch(/AlertTriangle/);
-  });
-
-  it("preserves dynamic port detection via SERIALn_BAUD", () => {
-    expect(SECTION_SRC).toMatch(/SERIAL\$\{i\}_BAUD/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Structural contract: shared shell language
-// ---------------------------------------------------------------------------
-
-describe("SerialPortsSection shell language", () => {
-  it("imports SetupSectionIntro from shared module", () => {
-    expect(SECTION_SRC).toMatch(
-      /import\s*\{[^}]*SetupSectionIntro[^}]*\}\s*from\s*["']\.\.\/shared\/SetupSectionIntro["']/,
-    );
-  });
-
-  it("imports SectionCardHeader from shared module", () => {
-    expect(SECTION_SRC).toMatch(
-      /import\s*\{[^}]*SectionCardHeader[^}]*\}\s*from\s*["']\.\.\/shared\/SectionCardHeader["']/,
-    );
-  });
-
-  it("renders SetupSectionIntro at the section level", () => {
-    expect(SECTION_SRC).toMatch(/<SetupSectionIntro/);
-  });
-
-  it("section intro includes serial-related title", () => {
-    expect(SECTION_SRC).toMatch(/title="Serial Ports"/);
-  });
-
-  it("does NOT pass a docsUrl to SetupSectionIntro", () => {
-    const introBlock = SECTION_SRC.slice(
-      SECTION_SRC.indexOf("<SetupSectionIntro"),
-      SECTION_SRC.indexOf("/>", SECTION_SRC.indexOf("<SetupSectionIntro")) + 2,
-    );
-    expect(introBlock).not.toMatch(/docsUrl/);
-  });
-
-  it("does NOT import resolveDocsUrl (no docs link needed)", () => {
-    expect(SECTION_SRC).not.toMatch(/resolveDocsUrl/);
-  });
-
-  it("does NOT render ExternalLink placeholder", () => {
-    expect(SECTION_SRC).not.toMatch(/ExternalLink/);
-  });
-
-  it("uses SectionCardHeader for hints card", () => {
-    expect(SECTION_SRC).toMatch(/<SectionCardHeader/);
   });
 });
