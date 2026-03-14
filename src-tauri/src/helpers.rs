@@ -60,7 +60,21 @@ mod tests {
     fn downsample_larger_than_max() {
         let items: Vec<i32> = (0..100).collect();
         let result = downsample(items, 10);
-        assert_eq!(result.len(), 10);
+        assert_eq!(result, vec![0, 10, 20, 30, 40, 50, 60, 70, 80, 90]);
+    }
+
+    #[test]
+    fn downsample_non_divisible_ratio_preserves_sampling_order() {
+        let items: Vec<i32> = (0..50).collect();
+        let result = downsample(items, 7);
+        assert_eq!(result, vec![0, 7, 14, 21, 28, 35, 42]);
+    }
+
+    #[test]
+    fn downsample_to_single_item_keeps_first_element() {
+        let items: Vec<i32> = (10..20).collect();
+        let result = downsample(items, 1);
+        assert_eq!(result, vec![10]);
     }
 
     #[test]

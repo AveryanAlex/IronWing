@@ -12,6 +12,12 @@ pub(crate) mod types;
 mod tests {
     use super::artifact::*;
     use super::types::*;
+    use serde::Serialize;
+    use serde_json::json;
+
+    fn assert_serializes_to<T: Serialize>(value: &T, expected: serde_json::Value) {
+        assert_eq!(serde_json::to_value(value).unwrap(), expected);
+    }
 
     // ── Session contract serialization tests ──
 
@@ -20,9 +26,13 @@ mod tests {
         let status = FirmwareSessionStatus::SerialPrimary {
             phase: SerialFlashPhase::Idle,
         };
-        let json = serde_json::to_string(&status).unwrap();
-        assert!(json.contains("serial_primary"), "got: {json}");
-        assert!(json.contains("idle"), "got: {json}");
+        assert_serializes_to(
+            &status,
+            json!({
+                "kind": "serial_primary",
+                "phase": "idle"
+            }),
+        );
     }
 
     #[test]
@@ -30,9 +40,13 @@ mod tests {
         let status = FirmwareSessionStatus::DfuRecovery {
             phase: DfuRecoveryPhase::Idle,
         };
-        let json = serde_json::to_string(&status).unwrap();
-        assert!(json.contains("dfu_recovery"), "got: {json}");
-        assert!(json.contains("idle"), "got: {json}");
+        assert_serializes_to(
+            &status,
+            json!({
+                "kind": "dfu_recovery",
+                "phase": "idle"
+            }),
+        );
     }
 
     #[test]
@@ -43,14 +57,18 @@ mod tests {
             reason: "timeout".into(),
         };
 
-        let j1 = serde_json::to_string(&verified).unwrap();
-        let j2 = serde_json::to_string(&unverified).unwrap();
-        let j3 = serde_json::to_string(&failed).unwrap();
-
-        assert!(j1.contains("verified"), "got: {j1}");
-        assert!(j2.contains("flashed_but_unverified"), "got: {j2}");
-        assert!(j3.contains("failed"), "got: {j3}");
-        assert!(j3.contains("timeout"), "got: {j3}");
+        assert_serializes_to(&verified, json!({ "result": "verified" }));
+        assert_serializes_to(
+            &unverified,
+            json!({ "result": "flashed_but_unverified" }),
+        );
+        assert_serializes_to(
+            &failed,
+            json!({
+                "result": "failed",
+                "reason": "timeout"
+            }),
+        );
     }
 
     #[test]
@@ -63,14 +81,21 @@ mod tests {
             guidance: "use serial".into(),
         };
 
-        let j1 = serde_json::to_string(&verified).unwrap();
-        let j2 = serde_json::to_string(&failed).unwrap();
-        let j3 = serde_json::to_string(&unsupported).unwrap();
-
-        assert!(j1.contains("verified"), "got: {j1}");
-        assert!(j2.contains("failed"), "got: {j2}");
-        assert!(j3.contains("unsupported_recovery_path"), "got: {j3}");
-        assert!(j3.contains("use serial"), "got: {j3}");
+        assert_serializes_to(&verified, json!({ "result": "verified" }));
+        assert_serializes_to(
+            &failed,
+            json!({
+                "result": "failed",
+                "reason": "usb error"
+            }),
+        );
+        assert_serializes_to(
+            &unsupported,
+            json!({
+                "result": "unsupported_recovery_path",
+                "guidance": "use serial"
+            }),
+        );
     }
 
     #[test]
@@ -87,13 +112,29 @@ mod tests {
             path: "/tmp/fw.bin".into(),
         };
 
-        let j1 = serde_json::to_string(&catalog).unwrap();
-        let j2 = serde_json::to_string(&local_apj).unwrap();
-        let j3 = serde_json::to_string(&local_bin).unwrap();
-
-        assert!(j1.contains("official_catalog"), "got: {j1}");
-        assert!(j2.contains("local_apj"), "got: {j2}");
-        assert!(j3.contains("local_bin"), "got: {j3}");
+        assert_serializes_to(
+            &catalog,
+            json!({
+                "kind": "official_catalog",
+                "board_id": 42,
+                "url": "https://example.com/fw.apj",
+                "version": "4.5.0"
+            }),
+        );
+        assert_serializes_to(
+            &local_apj,
+            json!({
+                "kind": "local_apj",
+                "path": "/tmp/fw.apj"
+            }),
+        );
+        assert_serializes_to(
+            &local_bin,
+            json!({
+                "kind": "local_bin",
+                "path": "/tmp/fw.bin"
+            }),
+        );
     }
 
     #[test]
@@ -104,9 +145,12 @@ mod tests {
             bytes_total: 65536,
             pct: 1.56,
         };
-        let json = serde_json::to_string(&progress).unwrap();
-        assert!(json.contains("erasing"), "got: {json}");
-        assert!(json.contains("1024"), "got: {json}");
+        let value = serde_json::to_value(&progress).unwrap();
+        assert_eq!(value["phase_label"], json!("erasing"));
+        assert_eq!(value["bytes_written"], json!(1024));
+        assert_eq!(value["bytes_total"], json!(65536));
+        let pct = value["pct"].as_f64().unwrap();
+        assert!((pct - 1.56).abs() < 1e-6, "got pct={pct}");
     }
 
     #[test]
@@ -114,9 +158,13 @@ mod tests {
         let err = FirmwareError::SessionBusy {
             current_session: "serial_primary".into(),
         };
-        let json = serde_json::to_string(&err).unwrap();
-        assert!(json.contains("session_busy"), "got: {json}");
-        assert!(json.contains("serial_primary"), "got: {json}");
+        assert_serializes_to(
+            &err,
+            json!({
+                "code": "session_busy",
+                "current_session": "serial_primary"
+            }),
+        );
     }
 
     // ── Session ownership / exclusivity tests ──
@@ -195,10 +243,16 @@ mod tests {
             board_name: "fmuv3".into(),
             port: "/dev/ttyACM0".into(),
         };
-        let json = serde_json::to_string(&board).unwrap();
-        assert!(json.contains("140"), "got: {json}");
-        assert!(json.contains("fmuv3"), "got: {json}");
-        assert!(json.contains("/dev/ttyACM0"), "got: {json}");
+        assert_serializes_to(
+            &board,
+            json!({
+                "board_id": 140,
+                "bootloader_rev": 5,
+                "flash_size": 2_097_152,
+                "board_name": "fmuv3",
+                "port": "/dev/ttyACM0"
+            }),
+        );
     }
 
     #[test]
@@ -208,23 +262,25 @@ mod tests {
             product_id: 0xdf11,
             device_label: "STM32 DFU Bootloader".into(),
         };
-        let json = serde_json::to_string(&device).unwrap();
-        assert!(
-            json.contains("1155"),
-            "vendor_id 0x0483 = 1155, got: {json}"
+        assert_serializes_to(
+            &device,
+            json!({
+                "vendor_id": 1155,
+                "product_id": 57105,
+                "device_label": "STM32 DFU Bootloader"
+            }),
         );
-        assert!(
-            json.contains("57105"),
-            "product_id 0xdf11 = 57105, got: {json}"
-        );
-        assert!(json.contains("STM32 DFU Bootloader"), "got: {json}");
     }
 
     #[test]
     fn session_contracts_action_required_prompts_serialize() {
         let backup = ActionRequired::ConfirmParameterBackup;
-        let j1 = serde_json::to_string(&backup).unwrap();
-        assert!(j1.contains("confirm_parameter_backup"), "got: {j1}");
+        assert_serializes_to(
+            &backup,
+            json!({
+                "kind": "confirm_parameter_backup"
+            }),
+        );
 
         let confirm_serial = ActionRequired::ConfirmSerialFlash {
             board: SerialBoardIdentity {
@@ -238,10 +294,23 @@ mod tests {
                 path: "/tmp/fw.apj".into(),
             },
         };
-        let j2 = serde_json::to_string(&confirm_serial).unwrap();
-        assert!(j2.contains("confirm_serial_flash"), "got: {j2}");
-        assert!(j2.contains("fmuv3"), "got: {j2}");
-        assert!(j2.contains("local_apj"), "got: {j2}");
+        assert_serializes_to(
+            &confirm_serial,
+            json!({
+                "kind": "confirm_serial_flash",
+                "board": {
+                    "board_id": 140,
+                    "bootloader_rev": 5,
+                    "flash_size": 2_097_152,
+                    "board_name": "fmuv3",
+                    "port": "/dev/ttyACM0"
+                },
+                "source": {
+                    "kind": "local_apj",
+                    "path": "/tmp/fw.apj"
+                }
+            }),
+        );
 
         let confirm_dfu = ActionRequired::ConfirmDfuRecovery {
             device: DfuRecoveryIdentity {
@@ -250,16 +319,28 @@ mod tests {
                 device_label: "STM32 DFU".into(),
             },
         };
-        let j3 = serde_json::to_string(&confirm_dfu).unwrap();
-        assert!(j3.contains("confirm_dfu_recovery"), "got: {j3}");
-        assert!(j3.contains("STM32 DFU"), "got: {j3}");
+        assert_serializes_to(
+            &confirm_dfu,
+            json!({
+                "kind": "confirm_dfu_recovery",
+                "device": {
+                    "vendor_id": 1155,
+                    "product_id": 57105,
+                    "device_label": "STM32 DFU"
+                }
+            }),
+        );
 
         let driver = ActionRequired::InstallUsbDriver {
             guidance: "Install WinUSB via Zadig".into(),
         };
-        let j4 = serde_json::to_string(&driver).unwrap();
-        assert!(j4.contains("install_usb_driver"), "got: {j4}");
-        assert!(j4.contains("Zadig"), "got: {j4}");
+        assert_serializes_to(
+            &driver,
+            json!({
+                "kind": "install_usb_driver",
+                "guidance": "Install WinUSB via Zadig"
+            }),
+        );
     }
 
     #[test]
