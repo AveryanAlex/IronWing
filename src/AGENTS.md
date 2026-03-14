@@ -2,85 +2,100 @@
 
 ## Overview
 
-React frontend for IronWing GCS. No state management library — pure hooks + prop drilling from `App.tsx`.
+Frontend app state lives in hooks instantiated by `App.tsx`, then flows down via props. Bridge files in `src/*.ts` wrap IPC and event subscriptions; feature components consume those bridges through hooks, not by talking to Tauri directly.
+
+## Where To Look
+
+| Task | Location | Notes |
+|------|----------|-------|
+| App bootstrap / top-level routing | `main.tsx`, `App.tsx`, `types.ts` | `App.tsx` is the frontend state hub |
+| Connection + telemetry | `hooks/use-vehicle.ts`, `telemetry.ts` | Connection form state, BLE scan, vehicle actions |
+| Mission editing / playback | `hooks/use-mission.ts`, `components/mission/`, `lib/mission-*` | Draft model + map/shell split |
+| Param staging / metadata | `hooks/use-params.ts`, `components/ConfigPanel.tsx`, `param-metadata.ts` | Staged Map, filter modes, metadata fetch |
+| Setup UI | `components/setup/AGENTS.md` | Panel orchestration, shared primitives, section rules |
+| Platform alias layer | `platform/AGENTS.md` | `@platform/*` imports and Remote UI split |
+| E2E runtime mirror | `lib/e2e-runtime.ts` | Keep in sync with `scripts/workflow/runtime.mjs` |
 
 ## Structure
 
-```
+```text
 src/
-├── App.tsx              # State hub: 8 hooks, effectiveVehicle overlay, prop drilling
-├── main.tsx             # React entry (minimal)
-├── app.css              # Global styles (Tailwind v4 @theme)
+├── App.tsx
+├── main.tsx
+├── types.ts
 ├── components/
-│   ├── hud/             # Pure SVG flight instruments (horizon, tape gauges)
-│   ├── setup/           # Calibration wizards (accel, radio)
-│   ├── charts/          # uPlot-based log charts + timeline
-│   ├── ui/              # Radix + Tailwind primitives (button, dropdown, tooltip, progress)
-│   ├── MissionMap.tsx   # MapLibre 3D map (terrain, satellite, waypoints, replay path)
-│   ├── Sidebar.tsx      # Desktop: static aside. Mobile: drawer with backdrop
-│   ├── ConfigPanel.tsx  # Parameters + Setup tabs (largest component, 697 lines)
-│   └── ...              # Mission/Telemetry/Logs panels, TopBar, BottomNav
-├── hooks/               # All application state hooks (see below)
-├── lib/                 # mav-commands.ts (MAVLink command table), utils.ts
-├── mission.ts           # IPC bridge: mission invoke + listen wrappers
-├── telemetry.ts         # IPC bridge: connection, vehicle control, BLE scan, events
-├── params.ts            # IPC bridge: param download/write/batch/file
-├── statustext.ts        # IPC bridge: status message subscription only
-├── calibration.ts       # IPC bridge: calibrate_accel, calibrate_gyro
-├── logs.ts              # IPC bridge: log open/query/summary/export
-├── recording.ts         # IPC bridge: recording start/stop/status
-├── playback.ts          # IPC bridge: flight path + telemetry track + interpolation
-└── param-metadata.ts    # ArduPilot XML metadata fetch + parse + cache
+├── hooks/
+├── lib/
+├── data/
+├── platform/
+├── telemetry.ts / mission.ts / params.ts / logs.ts / recording.ts / firmware.ts
+├── sensor-health.ts / snapshot.ts / statustext.ts / calibration.ts / playback.ts
+└── param-metadata.ts
 ```
 
-## IPC Bridge Conventions
+## State + IPC Conventions
 
-Each `src/*.ts` bridge file wraps Tauri `invoke()` and `listen()` calls with typed functions.
-
-- **invoke args**: camelCase in TS (`{ customMode }`) → Tauri auto-converts to Rust snake_case (`custom_mode`)
-- **Event payloads**: snake_case fields matching Rust serde output
-- **Return types**: match Rust `Result<T, String>` — Tauri converts `Err` to rejected promise
-- **New events**: use URI-style `scheme://path` (not `dot.notation`) — see root AGENTS.md Known Quirks
-
-### Adding a new IPC command
-
-1. Add `invoke<ReturnType>("command_name", { camelCaseArgs })` wrapper in the relevant bridge file
-2. Export the wrapper function
-3. Consume in the appropriate hook or component
-
-### Adding a new event subscription
-
-1. Add `listen<PayloadType>("event://name", callback)` wrapper returning `Promise<UnlistenFn>`
-2. Subscribe in a `useEffect` hook, return unlisten in cleanup
+- No Context, Redux, or Zustand. Shared app state is created in hooks and passed down from `App.tsx`.
+- Bridge modules import from `@platform/core`, `@platform/event`, or `@platform/http` only.
+- Each bridge exports typed wrapper functions around `invoke()` or `listen()`.
+- Event payloads use Rust serde output names (snake_case).
+- `App.tsx` computes `effectiveVehicle` by overlaying replay telemetry over live telemetry during playback.
 
 ## Hooks
 
-All instantiated in `App.tsx`, state drilled via props. No Context or global store.
-
-| Hook | Purpose | Key Pattern |
-|------|---------|-------------|
-| `useVehicle` | Connection lifecycle, telemetry, vehicle control | RAF coalescing: `pendingTelemetry` ref + `requestAnimationFrame` prevents re-renders faster than display rate |
-| `useMission` | Mission CRUD, transfer events | Subscribes to `mission://state` + `mission://progress` events |
-| `useParams` | Param store, staging, metadata, file I/O | Staging is pure frontend `Map<string, number>` — never writes directly; `applyStaged` calls batch write |
-| `useLogs` | Log open/close/query, progress | `log://progress` for parse progress during open |
-| `useRecording` | TLOG record start/stop | Polls `recording_status` every 2s while recording |
-| `usePlayback` | Client-side RAF playback loop | Binary-search interpolation over telemetry track; `useRef` for mutable state in RAF callback |
-| `useSettings` | localStorage persistence | Key is `"mpng_settings"` (legacy name) |
-| `useBreakpoint` | `useSyncExternalStore` + `matchMedia` | `isMobile` = `!lg` (< 1024px) |
+| Hook | Purpose | Local pattern |
+|------|---------|---------------|
+| `useVehicle` | Connection lifecycle, telemetry, control actions | RAF-coalesced telemetry state; localStorage-backed connection form |
+| `useMission` | Mission CRUD, transfer state, home handling | Wraps pure `lib/mission-*` mutations |
+| `useParams` | Param store, staging, metadata, file I/O | Staging is local `Map<string, number>`; batch apply only |
+| `useLogs` | Log open/query/summary/progress | `log://progress` is inline event-driven |
+| `useRecording` | TLOG recording UI state | Polls recording status while active |
+| `useFirmware` | Firmware session/progress orchestration | Wraps typed firmware IPC contract |
+| `usePlayback` | Client-side playback loop | RAF timeline, not backend playback |
+| `useSettings` | Persisted UI settings | Uses legacy `mpng_settings` key |
+| `useBreakpoint` | Responsive breakpoint state | `isMobile` means `< lg`, not `< md` |
+| `useDeviceLocation` | Browser/native geolocation wrapper | Platform-aware fallback logic |
 
 ## Component Patterns
 
-- **HUD** (`components/hud/`): Pure SVG. `ArtificialHorizon` uses `useMemo` for pitch/roll transforms. `TapeGauge` supports optional `terrainValue` prop for altitude tape terrain band.
-- **Charts** (`components/charts/`): uPlot (canvas, not SVG). `UPlotChart` wraps with `ResizeObserver`. `Timeline` uses `setSelect` hook for range selection → seek/CSV export.
-- **Setup** (`components/setup/`): `AccelCalibWizard` drives 6-position calibration by pattern-matching STATUSTEXT messages. `RadioCalibWizard` subscribes directly to `telemetry://tick` (not via hook) for live RC channel data.
-- **Map**: MapLibre GL JS. Tiles: OpenFreeMap (vector), EOX S2 Cloudless (satellite), AWS Terrarium (DEM). Default center: Zurich.
-- **Sidebar**: Same `SidebarContent` renders in both desktop `<aside>` and mobile drawer. Transport selector, BT device pickers.
-- **BottomNav**: Mobile-only. Uses `var(--safe-area-bottom, 0px)` for notch padding.
+- `MissionMap.tsx` is the heavy MapLibre integration point; mission shells wrap it rather than duplicating map logic.
+- `components/mission/` splits shared mission content from desktop/mobile shells; map and editor content are reused across both.
+- `components/setup/` is its own subsystem. Follow `components/setup/AGENTS.md` and `components/setup/sections/AGENTS.md` before adding a new setup flow.
+- `components/ui/` are thin primitives; avoid adding app-specific state there.
+- `components/hud/` are pure SVG instruments.
+- `components/charts/` use uPlot canvas patterns, not React/SVG chart abstractions.
 
-## `effectiveVehicle` Pattern
+## Data / Lib Conventions
 
-`App.tsx` computes `effectiveVehicle` by overlaying log-replay data over live telemetry during playback. All child components receive `effectiveVehicle` — they don't need to know if data is live or replayed.
+- `lib/mission-draft.ts` owns in-memory mission editing state; do not re-implement waypoint mutation logic in components.
+- `lib/mission-coordinates.ts` owns degE7 conversion and coordinate math.
+- `lib/mission-grid.ts` owns auto-grid geometry generation.
+- `lib/mission-command-metadata.ts` owns command parameter metadata and labels.
+- `data/ardupilot-docs.ts` is the only place to add ArduPilot docs URLs.
+- `data/battery-presets.ts` and `data/motor-layouts.ts` are shared reference data, not section-local constants.
 
-## `param-metadata.ts`
+## Tests
 
-Fetches ArduPilot parameter XML from `https://autotest.ardupilot.org/Parameters/{slug}/apm.pdef.xml` using `@tauri-apps/plugin-http` (bypasses CORS). Parses with browser `DOMParser`. Cached in localStorage 7 days. `vehicleTypeToSlug()` maps MAVLink vehicle types → ArduPilot XML slugs (copter variants, plane, rover — no boat/sub/blimp).
+- `pnpm test` runs Vitest. Global environment is `node`.
+- Use `// @vitest-environment jsdom` only on files that truly need DOM rendering.
+- Use `@testing-library/react` semantic queries for focused component behavior tests.
+- Prefer pure helper extraction first, especially in setup and mission UI.
+- Do not add `readFileSync()` + source-text assertions against `.tsx` files.
+- `src/platform/import-boundary.test.ts` is the one allowed source-scan exception because it enforces the `@platform/*` boundary.
+
+### Model frontend tests
+
+- `src/lib/mission-draft.test.ts`
+- `src/lib/mission-coordinates.test.ts`
+- `src/lib/mission-grid.test.ts`
+- `src/playback.test.ts`
+- `src/param-metadata.test.ts`
+- `src/hooks/use-firmware.test.ts`
+- `src/components/setup/shared/SetupCheckbox.test.tsx`
+- `src/components/setup/shared/PreviewStagePanel.test.tsx`
+
+## Notes
+
+- `param-metadata.ts` fetches ArduPilot XML through the platform HTTP layer and parses it with `DOMParser`.
+- `RcReceiverSection.tsx` and `RadioCalibWizard.tsx` are intentional exceptions that subscribe to live events directly.
+- If you change runtime port math, update both `src/lib/e2e-runtime.ts` and `scripts/workflow/runtime.mjs`.
