@@ -106,26 +106,22 @@ pnpm run android:build     # Build APK
 
 Android supports UDP, BLE, and Classic SPP transports. Serial is excluded (doesn't compile for Android targets).
 
-## End-to-End Testing (Playwright + SITL)
+## End-to-End Testing (Playwright)
 
-Browser-based E2E tests run against the real Tauri app connected directly to an ArduPilot SITL instance over TCP. Tauri's Remote UI crate (`tauri-remote-ui`) exposes the frontend on a local per-run port so Playwright can drive it from a standard Chromium browser. This is a **dev/test-only** mechanism, not a production web deployment.
+Browser-based E2E tests now run against the production frontend bundle with the `@platform/*` boundary resolved to a mocked browser implementation. This is a **browser-only UI workflow**: it validates user-visible behavior, not real Tauri, Rust, or SITL integration.
 
 ### How it works
 
-1. Frontend is built with `IRONWING_E2E=1`, which swaps Tauri IPC imports for a WebSocket-based implementation that talks to the Remote UI RPC proxy.
-2. The Rust binary is compiled with `--features custom-protocol,e2e-remote-ui`, enabling the Remote UI HTTP/WS server on a per-run local port.
-3. Playwright auto-picks the first free instance id, starts a Docker SITL container on that instance's TCP port, and waits for the TCP endpoint to come up.
-4. The app launches with Remote UI enabled (the native window shows a placeholder page while the browser host serves the real UI). A liveness check polls the matching `http://127.0.0.1:<port>/keep_alive` endpoint until the server is ready.
-5. Playwright opens Chromium on that same Remote UI port, and the happy-path spec connects directly to SITL over TCP.
+1. Playwright builds the frontend with `IRONWING_PLATFORM=mock`, which swaps the native `@platform/*` imports for browser-safe mock implementations.
+2. Playwright starts a local Vite preview server for the built app.
+3. The browser tests configure mocked command results and emitted events through the `window.__IRONWING_MOCK_PLATFORM__` controller exposed by `src/platform/mock/backend.ts`.
+4. Specs drive the app through real browser interactions and assert visible state changes.
 
 ### Quick start
 
 ```bash
-# One-shot: build + start everything + run tests + tear down
+# One-shot: build the frontend bundle, start a local preview, run Playwright
 pnpm e2e
-
-# Pin a specific stack manually if you need to
-E2E_INSTANCE_ID=1 pnpm e2e
 ```
 
 Other useful commands:
@@ -134,24 +130,44 @@ Other useful commands:
 pnpm e2e:headed          # Run tests with a visible browser window
 ```
 
-`pnpm e2e` uses the Node entrypoint `scripts/e2e.mjs`, which picks a free instance, builds the frontend and Rust app, starts SITL, launches the Remote UI binary, runs Playwright, and always cleans everything up afterward.
+`pnpm e2e` uses Playwright's built-in `webServer` support to build the frontend, start a preview server, run the browser suite, and clean up afterward.
 
 ### Current test scope
 
 Four spec files in `e2e/`:
 
-- **smoke.spec.ts** — Verifies the app loads through the Remote UI host and renders the expected title.
-- **sitl-connect.spec.ts** — Full connect/telemetry/disconnect cycle: selects TCP transport, connects to the instance's `127.0.0.1:<sitl-port>`, waits for live telemetry (state, mode, altitude, battery, heading, GPS), then disconnects and confirms idle state.
-- **wrong-port-cancel.spec.ts** — Negative path: connects to an instance-scoped unused UDP port, verifies "Connecting" state and UI lockout, cancels, and confirms clean return to idle with controls re-enabled.
-- **invalid-udp-bind.spec.ts** — Negative path: enters an invalid UDP bind string and verifies the app surfaces the validation error cleanly.
+- **smoke.spec.ts** — Verifies the app loads and reaches the idle connection state in browser-only mode.
+- **connect-telemetry.spec.ts** — Mocked connect/telemetry/disconnect cycle: selects TCP transport, connects, receives mocked link/vehicle/telemetry events, then disconnects and confirms idle state.
+- **wrong-port-cancel.spec.ts** — Negative path: starts a deferred mocked connection, verifies "Connecting" state and UI lockout, cancels, and confirms clean return to idle with controls re-enabled.
+- **invalid-udp-bind.spec.ts** — Negative path: submits a mocked `connect_link` failure and verifies the app surfaces the validation error cleanly.
 
-Each Playwright invocation still runs serially (`workers: 1`), but `pnpm e2e` auto-picks the first free instance id so parallel suite invocations get isolated Remote UI and SITL ports plus unique container names. You can still pin an instance manually with `E2E_INSTANCE_ID`. Traces, screenshots, and video are captured on failure.
+Each Playwright invocation still runs serially (`workers: 1`). Traces, screenshots, and video are captured on failure.
 
 ### Scope limits
 
-Remote UI proxies Tauri IPC over WebSocket, giving the browser access to the full Rust backend. This works for testing because the Tauri process is running locally with all native transports (UDP, serial, BLE) available on the Rust side. The browser itself doesn't open sockets or talk MAVLink directly.
+- These tests do **not** prove real Tauri or Rust integration.
+- `pnpm run dev` remains the real SITL workflow: it starts ArduPilot SITL and launches the native Tauri app with the matching TCP address prefilled.
 
-A future pure-web or wasm deployment would need a fundamentally different transport architecture (proxy server, wasm MAVLink parser, reduced transport surface). Remote UI is not that path. See `PLAN.md` for the roadmap note on browser-native architecture.
+## Native End-to-End Testing (WebDriverIO)
+
+`pnpm run e2e:native` is the thin real-stack desktop lane: it builds a debug Tauri app, starts SITL, launches the native app through `tauri-driver`, and runs one WebDriverIO smoke test against the real Rust + frontend stack.
+
+### Prerequisites
+
+- `tauri-driver` on `PATH` (`cargo install tauri-driver --locked`) or `IRONWING_TAURI_DRIVER_PATH=/path/to/tauri-driver`
+- `WebKitWebDriver` on Linux
+
+### Quick start
+
+```bash
+pnpm run e2e:native
+```
+
+### Current native scope
+
+- **e2e-native/smoke.spec.mjs** — Verifies the native app launches, TCP SITL defaults are prefilled, connect succeeds against real SITL, telemetry renders, and disconnect returns to Idle.
+
+Keep this lane intentionally small. Broad UI coverage still belongs in the browser-only Playwright suite above.
 
 ## CI
 

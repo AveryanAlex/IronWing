@@ -1,8 +1,13 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures/mock-platform";
 
 test.describe("Negative path: invalid UDP bind address", () => {
-  test("invalid UDP bind shows error and returns to idle controls", async ({ page }) => {
+  test("invalid UDP bind shows error and returns to idle controls", async ({ page, mockPlatform }) => {
     await page.goto("/");
+    await mockPlatform.reset();
+    await mockPlatform.setCommandBehavior("connect_link", {
+      type: "reject",
+      error: "invalid socket address",
+    });
 
     const connectBtn = page.locator('[data-testid="connection-connect-btn"]');
     const cancelBtn = page.locator('[data-testid="connection-cancel-btn"]');
@@ -17,15 +22,6 @@ test.describe("Negative path: invalid UDP bind address", () => {
     const errorMessage = page.locator(
       '[data-testid="connection-error-message"]',
     );
-
-    await page.waitForLoadState("networkidle");
-    if (await disconnectBtn.isVisible()) {
-      await disconnectBtn.click();
-      await expect(statusText).toContainText("Idle", { timeout: 10_000 });
-    } else if (await cancelBtn.isVisible()) {
-      await cancelBtn.click();
-      await expect(statusText).toContainText("Idle", { timeout: 10_000 });
-    }
 
     await expect(connectBtn).toBeVisible({ timeout: 15_000 });
     await expect(statusText).toContainText("Idle");

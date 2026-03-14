@@ -8,7 +8,7 @@ Thin Tauri IPC shell between the React frontend and `mavkit`. This layer owns tr
 
 | Task | Location | Notes |
 |------|----------|-------|
-| App bootstrap / plugin registration | `lib.rs` | `AppState`, `invoke_handler!`, Remote UI + Android setup |
+| App bootstrap / plugin registration | `lib.rs` | `AppState`, `invoke_handler!`, Android setup |
 | General vehicle/mission/param commands | `commands.rs` | Most Tauri commands live here |
 | Transport setup / connect lifecycle | `connection.rs` | `LinkEndpoint`, BLE/SPP connection paths |
 | Event relays | `bridges.rs`, `e2e_emit.rs` | Watch channels + inline emit wrapper |
@@ -25,7 +25,7 @@ Thin Tauri IPC shell between the React frontend and `mavkit`. This layer owns tr
 | `commands.rs` | Vehicle, mission, param, calibration commands |
 | `connection.rs` | Transport setup, connect/disconnect lifecycle |
 | `bridges.rs` | Watch-channel relays for frontend events |
-| `e2e_emit.rs` | Unified emit wrapper for native + Remote UI |
+| `e2e_emit.rs` | Unified emit wrapper for the native webview |
 | `bluetooth.rs` | BLE scan and permissions helpers |
 | `logs.rs` | Log parsing, summary, track/path export, CSV export |
 | `recording.rs` | TLOG recording lifecycle |

@@ -1,7 +1,6 @@
 import dgram from "node:dgram";
 import net from "node:net";
 
-export const DEFAULT_REMOTE_UI_PORT = 9515;
 export const DEFAULT_SITL_TCP_PORT = 5760;
 export const DEFAULT_SITL_UDP_PORT = 14550;
 export const UDP_PORT_STRIDE = 10;
@@ -40,7 +39,6 @@ function closeUdpSocket(socket) {
 
 export function runtimeForInstance(instanceId, overrides = {}) {
   const normalizedInstanceId = parseInteger(instanceId, "instanceId");
-  const remoteUiPort = overrides.remoteUiPort ?? DEFAULT_REMOTE_UI_PORT + normalizedInstanceId;
   const sitlTcpPort = overrides.sitlTcpPort ?? DEFAULT_SITL_TCP_PORT + normalizedInstanceId;
   const sitlUdpPort =
     overrides.sitlUdpPort ?? DEFAULT_SITL_UDP_PORT + normalizedInstanceId * UDP_PORT_STRIDE;
@@ -48,18 +46,13 @@ export function runtimeForInstance(instanceId, overrides = {}) {
   const sitlContainer =
     overrides.sitlContainer ??
     (normalizedInstanceId === 0 ? "ardupilot-sitl" : `ardupilot-sitl-${normalizedInstanceId}`);
-  const baseUrl = `http://127.0.0.1:${remoteUiPort}`;
-  const livenessUrl = overrides.livenessUrl ?? `${baseUrl}/keep_alive`;
 
   return {
     instanceId: normalizedInstanceId,
-    remoteUiPort,
     sitlTcpPort,
     sitlUdpPort,
     wrongUdpPort,
     sitlContainer,
-    baseUrl,
-    livenessUrl,
     tcpAddress: `127.0.0.1:${sitlTcpPort}`,
     udpBindAddress: `0.0.0.0:${sitlUdpPort}`,
     wrongUdpBindAddress: `0.0.0.0:${wrongUdpPort}`,
@@ -73,22 +66,18 @@ export function resolveRuntimeFromEnv(env = process.env) {
     0;
 
   return runtimeForInstance(instanceId, {
-    remoteUiPort: parseOptionalInteger(env.E2E_REMOTE_UI_PORT, "E2E_REMOTE_UI_PORT"),
     sitlTcpPort: parseOptionalInteger(env.E2E_SITL_TCP_PORT, "E2E_SITL_TCP_PORT"),
     sitlUdpPort: parseOptionalInteger(env.E2E_SITL_UDP_PORT, "E2E_SITL_UDP_PORT"),
     sitlContainer: env.E2E_SITL_CONTAINER?.trim() || undefined,
-    livenessUrl: env.E2E_LIVENESS_URL?.trim() || undefined,
   });
 }
 
 export function runtimeEnv(runtime) {
   return {
     E2E_INSTANCE_ID: String(runtime.instanceId),
-    E2E_REMOTE_UI_PORT: String(runtime.remoteUiPort),
     E2E_SITL_TCP_PORT: String(runtime.sitlTcpPort),
     E2E_SITL_UDP_PORT: String(runtime.sitlUdpPort),
     E2E_SITL_CONTAINER: runtime.sitlContainer,
-    E2E_LIVENESS_URL: runtime.livenessUrl,
   };
 }
 
@@ -127,10 +116,7 @@ export async function findFreeInstance({
 } = {}) {
   for (let instanceId = 0; instanceId <= maxInstanceId; instanceId += 1) {
     const runtime = runtimeForInstance(instanceId);
-    const tcpFree = await Promise.all([
-      checkTcpPort("127.0.0.1", runtime.remoteUiPort),
-      checkTcpPort("127.0.0.1", runtime.sitlTcpPort),
-    ]);
+    const tcpFree = await Promise.all([checkTcpPort("127.0.0.1", runtime.sitlTcpPort)]);
     const udpFree = await Promise.all([
       checkUdpPort("0.0.0.0", runtime.sitlUdpPort),
       checkUdpPort("0.0.0.0", runtime.wrongUdpPort),

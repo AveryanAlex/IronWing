@@ -13,8 +13,7 @@ Frontend app state lives in hooks instantiated by `App.tsx`, then flows down via
 | Mission editing / playback | `hooks/use-mission.ts`, `components/mission/`, `lib/mission-*` | Draft model + map/shell split |
 | Param staging / metadata | `hooks/use-params.ts`, `components/ConfigPanel.tsx`, `param-metadata.ts` | Staged Map, filter modes, metadata fetch |
 | Setup UI | `components/setup/AGENTS.md` | Panel orchestration, shared primitives, section rules |
-| Platform alias layer | `platform/AGENTS.md` | `@platform/*` imports and Remote UI split |
-| E2E runtime mirror | `lib/e2e-runtime.ts` | Keep in sync with `scripts/workflow/runtime.mjs` |
+| Platform alias layer | `platform/AGENTS.md` | `@platform/*` imports and mocked-browser split |
 
 ## Structure
 
@@ -98,4 +97,4 @@ src/
 
 - `param-metadata.ts` fetches ArduPilot XML through the platform HTTP layer and parses it with `DOMParser`.
 - `RcReceiverSection.tsx` and `RadioCalibWizard.tsx` are intentional exceptions that subscribe to live events directly.
-- If you change runtime port math, update both `src/lib/e2e-runtime.ts` and `scripts/workflow/runtime.mjs`.
+- If you change SITL runtime port math, update `scripts/workflow/runtime.mjs` and its tests.

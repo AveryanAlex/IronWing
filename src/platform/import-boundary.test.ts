@@ -8,7 +8,7 @@ import { resolve, relative, join } from "path";
  *
  * Only the Tauri platform implementation files may import these directly.
  * All other frontend code must use the @platform/core and @platform/event aliases,
- * which switch at build time between tauri/ and remote-ui/ implementations.
+ * which switch at build time between tauri/ and mock/ implementations.
  */
 
 const SRC_DIR = resolve(__dirname, "..");

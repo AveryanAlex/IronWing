@@ -9,12 +9,13 @@ Modern ground control station for MAVLink vehicles. Tauri v2 app with a React/Ty
 | Task | Location | Notes |
 |------|----------|-------|
 | Frontend state, IPC bridges, UI patterns | `src/AGENTS.md` | Hook ownership, bridge wrappers, frontend tests |
-| Platform alias boundary (`@platform/*`) | `src/platform/AGENTS.md` | Build-time Tauri vs Remote UI split |
+| Platform alias boundary (`@platform/*`) | `src/platform/AGENTS.md` | Build-time Tauri vs mocked-browser split |
 | Setup UI and staging flow | `src/components/setup/AGENTS.md` | Shared primitives, panel orchestration |
 | Per-section setup rules | `src/components/setup/sections/AGENTS.md` | Section anatomy, docs links, helper placement |
 | Rust shell, commands, bridges, recording, logs | `src-tauri/src/AGENTS.md` | AppState, command patterns, event relays |
 | Firmware flashing / DFU recovery | `src-tauri/src/firmware/AGENTS.md` | Session model, serial vs DFU paths |
-| Playwright E2E | `e2e/AGENTS.md` | Remote UI + SITL workflow, spec conventions |
+| Playwright E2E | `e2e/AGENTS.md` | Mocked browser workflow, spec conventions |
+| Native WebDriver E2E | `e2e-native/AGENTS.md` | Real Tauri + Rust + SITL smoke lane |
 | Dev/E2E workflow helpers | `scripts/workflow/AGENTS.md` | Runtime port math, cleanup, SITL helpers |
 
 ## Build & Test Commands
@@ -37,6 +38,7 @@ pnpm run android:dev
 pnpm run android:build
 pnpm e2e
 pnpm e2e:headed
+pnpm run e2e:native
 ```
 
 Run commands from the repo root. Nix (`flake.nix` + `.envrc`) is the canonical reproducible environment.
@@ -67,7 +69,7 @@ React (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavki
 - `MissionItem.x` / `MissionItem.y` are always degE7 integers. `Telemetry` and `HomePosition` use floating-point `latitude_deg` / `longitude_deg`.
 - Mission home handling is a wire-boundary concern only: upload/download conversion happens in mavkit helpers, not in arbitrary frontend/backend code.
 - Parameter edits stage locally first and apply in batches. Do not bypass staging for general settings flows.
-- Remote UI is a dev/test mechanism for E2E. It is not a browser deployment architecture.
+- Playwright covers mocked browser flows; the thin real Rust↔frontend desktop integration lane now lives in `e2e-native/` via WebDriverIO.
 
 ## Transport / Platform Notes
 
@@ -93,10 +95,10 @@ React (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavki
 ## Tests
 
 - Prefer behavior/contract tests over implementation-detail tests.
-- Use Vitest for unit and focused jsdom component behavior; use Playwright for cross-layer flows.
+- Use Vitest for unit and focused jsdom component behavior; use Playwright for mocked browser flows and WebDriverIO for the thin native desktop smoke lane.
 - Do not add source-grep tests against `.tsx` source. Source scanning is only acceptable for real architectural guardrails.
-- Layer-specific test guidance lives in `src/AGENTS.md`, `src-tauri/src/AGENTS.md`, and `e2e/AGENTS.md`.
-- There is no integration-test layer for the Tauri command boundary today.
+- Layer-specific test guidance lives in `src/AGENTS.md`, `src-tauri/src/AGENTS.md`, `e2e/AGENTS.md`, and `e2e-native/AGENTS.md`.
+- Keep native desktop coverage intentionally thin and high-value; broad UI coverage still belongs in the mocked Playwright suite.
 
 ## PLAN.md Maintenance
 

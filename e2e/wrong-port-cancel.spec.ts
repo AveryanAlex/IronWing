@@ -1,13 +1,13 @@
-import { test, expect } from "@playwright/test";
-import { resolveE2ERuntime } from "../src/lib/e2e-runtime";
-
-const e2eRuntime = resolveE2ERuntime(process.env as Record<string, string | undefined>);
+import { test, expect } from "./fixtures/mock-platform";
 
 test.describe("Negative path: wrong-port connect then cancel", () => {
   test("connecting to wrong port shows Connecting, cancel returns to idle", async ({
     page,
+    mockPlatform,
   }) => {
     await page.goto("/");
+    await mockPlatform.reset();
+    await mockPlatform.setCommandBehavior("connect_link", { type: "defer" });
 
     const connectBtn = page.locator('[data-testid="connection-connect-btn"]');
     const cancelBtn = page.locator('[data-testid="connection-cancel-btn"]');
@@ -20,20 +20,11 @@ test.describe("Negative path: wrong-port connect then cancel", () => {
     );
     const udpBind = page.locator('[data-testid="connection-udp-bind"]');
 
-    await page.waitForLoadState("networkidle");
-    if (await disconnectBtn.isVisible()) {
-      await disconnectBtn.click();
-      await expect(statusText).toContainText("Idle", { timeout: 10_000 });
-    } else if (await cancelBtn.isVisible()) {
-      await cancelBtn.click();
-      await expect(statusText).toContainText("Idle", { timeout: 10_000 });
-    }
-
     await expect(connectBtn).toBeVisible({ timeout: 15_000 });
     await expect(statusText).toContainText("Idle");
 
     await transportSelect.selectOption("udp");
-    await udpBind.fill(e2eRuntime.wrongUdpBindAddress);
+    await udpBind.fill("0.0.0.0:14551");
 
     await connectBtn.click();
 
@@ -48,7 +39,10 @@ test.describe("Negative path: wrong-port connect then cancel", () => {
     await expect(cancelBtn).not.toBeVisible();
 
     await expect(udpBind).toBeEnabled();
-    await udpBind.fill(e2eRuntime.udpBindAddress);
-    await expect(udpBind).toHaveValue(e2eRuntime.udpBindAddress);
+
+    const invocations = await mockPlatform.getInvocations();
+    expect(invocations.map((entry) => entry.cmd)).toEqual(["connect_link", "disconnect_link"]);
+
+    expect(await mockPlatform.rejectDeferred("connect_link", "cancelled")).toBe(true);
   });
 });

@@ -54,7 +54,7 @@ Build a modern, desktop-first Ground Control Station from scratch using Tauri.
 ## Quality/Delivery
 - GitHub Actions CI
 - cargo test + frontend unit tests
-- SITL-based E2E tests for high-risk workflows (Playwright + Tauri Remote UI, shipped)
+- Mocked-browser Playwright E2E flows for high-risk UI workflows (shipped)
 - Release signing + reproducible build metadata
 
 ---
@@ -255,7 +255,7 @@ Exit criteria:
 
 ## Future: Browser-Native / Wasm Mode (not current scope)
 
-The Playwright E2E setup uses Tauri's Remote UI to serve the frontend in a browser, but the Rust backend still runs locally and owns all transport connections (UDP, serial, BLE). This is a testing convenience, not a web deployment architecture.
+The Playwright E2E setup now runs the production frontend bundle in a browser with the `@platform/*` boundary resolved to mocked browser implementations. This is a UI testing convenience, not a web deployment architecture.
 
 A true browser-native mode would require a different approach entirely: a wasm-compiled MAVLink parser, a proxy/relay server bridging raw transports to WebSocket, and a reduced transport surface (no direct serial or BLE from the browser). The platform boundary (`src/platform/`) was designed with this split in mind, but the proxy layer, wasm packaging, and transport subset are all later work, well beyond the current milestone scope.
 
@@ -265,12 +265,16 @@ A true browser-native mode would require a different approach entirely: a wasm-c
 
 - Unit tests per domain crate (protocol parsing, validators, state reducers)
 - Integration tests for link lifecycle and mission/param workflows
-- **Browser E2E via Playwright + Tauri Remote UI + SITL** (shipped):
-  - Tauri's Remote UI plugin exposes the frontend on a local per-run port during E2E runs. Playwright drives Chromium against this host while the Rust backend connects directly to a local SITL instance over TCP. This is a dev/test-only mechanism; the browser talks to the Rust process via WebSocket RPC, not raw MAVLink.
-  - Orchestrated by pnpm-only Node entrypoints (`scripts/dev.mjs`, `scripts/e2e.mjs`, `scripts/workflow/*.mjs`). `pnpm dev` and `pnpm e2e` auto-pick the first free instance id so concurrent runs get isolated ports and container names.
-  - Initial suite covers app load smoke test, a full connect/telemetry/disconnect cycle, and a wrong-port cancel/recovery path against SITL.
-  - Platform boundary (`src/platform/`) swaps Tauri IPC for WebSocket-based stubs at build time via `IRONWING_E2E=1`. A source guardrail test enforces that direct `@tauri-apps/api` imports stay confined to the platform layer.
-  - Tests run serially (single SITL instance). Traces, screenshots, and video captured on failure.
+- **Browser E2E via Playwright + mocked `@platform/*` boundary** (shipped):
+  - Playwright builds the production frontend bundle with `IRONWING_PLATFORM=mock`, starts a local preview server, and drives Chromium against that browser-only build.
+  - The mock platform (`src/platform/mock/`) exposes deterministic command responses and emitted events so specs can validate UI flows without Rust, Tauri, or SITL.
+  - Initial suite covers app load smoke, mocked connect/telemetry/disconnect, invalid bind error surfacing, and cancel/recovery while a mocked connect is in flight.
+  - A source guardrail test enforces that direct `@tauri-apps/api` imports stay confined to the platform layer.
+  - Tests run serially. Traces, screenshots, and video are captured on failure.
+- **Native desktop smoke via WebDriverIO** (shipped):
+  - `pnpm run e2e:native` builds a debug Tauri app, starts Docker SITL using the existing workflow helpers, launches the native app through `tauri-driver`, and runs a thin real-stack smoke test.
+  - The first native spec verifies startup, TCP SITL defaults, real connect, live telemetry, and disconnect recovery.
+  - Keep this lane intentionally small and high-value; broad UI behavior still belongs in the mocked Playwright suite.
 - SITL scenario suite (planned expansion):
   - mode changes and telemetry continuity
   - mission upload/download consistency

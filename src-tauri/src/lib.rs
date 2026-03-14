@@ -56,10 +56,6 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_blec::init());
-    #[cfg(feature = "e2e-remote-ui")]
-    {
-        builder = builder.plugin(tauri_remote_ui::init());
-    }
     #[cfg(target_os = "android")]
     {
         builder = builder
@@ -135,27 +131,6 @@ pub fn run() {
                 let bg = tauri::utils::config::Color(18, 23, 29, 255);
                 if let Some(w) = _app.get_webview_window("main") {
                     let _ = w.set_background_color(Some(bg));
-                }
-            }
-            #[cfg(feature = "e2e-remote-ui")]
-            {
-                if std::env::var("IRONWING_E2E").as_deref() == Ok("1") {
-                    use tauri_remote_ui::{RemoteUiConfig, RemoteUiExt};
-                    let remote_ui_port = std::env::var("IRONWING_E2E_PORT")
-                        .ok()
-                        .and_then(|value| value.parse::<u16>().ok())
-                        .unwrap_or(9515);
-                    let config = RemoteUiConfig::default().set_port(Some(remote_ui_port));
-                    let handle = _app.handle().clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Err(e) = handle.start_remote_ui(config).await {
-                            tracing::error!("failed to start Remote UI: {e}");
-                        } else {
-                            tracing::info!(
-                                "Remote UI started on http://127.0.0.1:{remote_ui_port}"
-                            );
-                        }
-                    });
                 }
             }
             Ok(())

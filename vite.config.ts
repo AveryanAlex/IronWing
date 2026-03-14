@@ -3,8 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath, URL } from "url";
 
-const isE2E = process.env.IRONWING_E2E === "1";
-const platformDir = isE2E ? "remote-ui" : "tauri";
+const platformDir = process.env.IRONWING_PLATFORM === "mock" ? "mock" : "tauri";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
