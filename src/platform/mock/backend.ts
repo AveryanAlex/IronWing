@@ -86,6 +86,16 @@ function defaultCommandResult(cmd: string, _args: CommandArgs): unknown {
       return "idle";
     case "firmware_session_status":
       return { kind: "idle" };
+    case "firmware_serial_readiness":
+      return {
+        can_start: true,
+        session_ready: true,
+        session_status: { kind: "idle" },
+        blocked_reason: null,
+        target_hint: null,
+        validation_pending: false,
+        bootloader_transition: { kind: "manual_bootloader_entry_required" },
+      };
     case "set_telemetry_rate":
     case "disconnect_link":
     case "firmware_session_cancel":
