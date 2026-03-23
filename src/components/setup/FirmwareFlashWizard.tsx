@@ -484,7 +484,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
       .then((result) => {
         if (cancelled) return;
         setSerialReadinessInfo(result);
-        setSerialReady(result.can_start ?? result.session_ready);
+        setSerialReady(result.readiness.kind === "advisory");
         setSerialReadinessReadyRequest(request);
         if (result.target_hint?.detected_board_id !== null && result.target_hint?.detected_board_id !== undefined) {
           setDetectedBoardId(result.target_hint.detected_board_id);
@@ -530,15 +530,19 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
     }
   }, [isSerialActive, isSerialCancelling, serialCompleted]);
 
+  const serialReadinessBlockedReason = serialReadinessInfo?.readiness.kind === "blocked"
+    ? serialReadinessInfo.readiness.reason
+    : null;
+
   const serialBlockedMessage = serialReadinessInfo?.validation_pending
     ? "Serial readiness validation is still pending."
-    : serialReadinessInfo?.blocked_reason === "session_busy"
+    : serialReadinessBlockedReason === "session_busy"
       ? "Another firmware session is already active."
-      : serialReadinessInfo?.blocked_reason === "port_unselected"
+      : serialReadinessBlockedReason === "port_unselected"
         ? "Select a serial port to continue."
-        : serialReadinessInfo?.blocked_reason === "port_unavailable"
+        : serialReadinessBlockedReason === "port_unavailable"
           ? "The selected serial port is not currently available."
-          : serialReadinessInfo?.blocked_reason === "source_missing"
+          : serialReadinessBlockedReason === "source_missing"
             ? "Choose a firmware source before starting the flash."
             : "Serial flash is not ready yet.";
 
@@ -633,20 +637,26 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
             {/* ── Completed outcome ── */}
             {serialCompleted && serialOutcome && (
               <>
-                {serialOutcome.result === "verified" && (
+                {(serialOutcome.result === "verified" || (serialOutcome.result === "reconnect_verified" && serialOutcome.flash_verified)) && (
                   <OutcomeBanner kind="success" message="Firmware flashed and verified successfully. The flight controller is ready." />
                 )}
                 {serialOutcome.result === "cancelled" && (
                   <OutcomeBanner kind="warning" message="Serial flash cancelled before completion." />
                 )}
-                {serialOutcome.result === "flashed_but_unverified" && (
+                {(serialOutcome.result === "flashed_but_unverified" || (serialOutcome.result === "reconnect_verified" && !serialOutcome.flash_verified)) && (
                   <OutcomeBanner kind="warning" message="Firmware was written but could not be verified (bootloader does not support CRC check). Power-cycle the board to confirm." />
+                )}
+                {serialOutcome.result === "reconnect_failed" && (
+                  <OutcomeBanner kind="warning" message={`Firmware was written, but reconnect verification failed: ${serialOutcome.reconnect_error}. Power-cycle the board to confirm.`} />
                 )}
                 {serialOutcome.result === "failed" && (
                   <OutcomeBanner kind="error" message={`Flash failed: ${serialOutcome.reason}`} />
                 )}
-                {serialOutcome.result === "recovery_needed" && (
+                {serialOutcome.result === "board_detection_failed" && (
                   <OutcomeBanner kind="error" message={`Board detection failed: ${serialOutcome.reason}. If the board is unresponsive, try DFU recovery mode below.`} />
+                )}
+                {serialOutcome.result === "extf_capacity_insufficient" && (
+                  <OutcomeBanner kind="error" message={`Flash failed: ${serialOutcome.reason}`} />
                 )}
                 <button
                   onClick={dismiss}

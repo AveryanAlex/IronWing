@@ -5,6 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { SerialReadinessRequest, SerialReadinessResponse } from "../../firmware";
 import { FirmwareFlashWizard, type FirmwareFlashWizardProps } from "./FirmwareFlashWizard";
 
 function deferred<T>() {
@@ -17,17 +18,42 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function readiness(overrides: Record<string, unknown> = {}) {
+function fnv1a64(bytes: number[]): string {
+  let hash = 0xcbf29ce484222325n;
+  for (const byte of bytes) {
+    hash ^= BigInt(byte);
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+
+function serialReadinessToken(request: SerialReadinessRequest): string {
+  const encoder = new TextEncoder();
+  const sourceIdentity = request.source.kind === "catalog_url"
+    ? `${request.source.url.length}-${fnv1a64([...encoder.encode(request.source.url)])}`
+    : `${request.source.data.length}-${fnv1a64(request.source.data)}`;
+  return `serial-readiness:port=${request.port}:source_kind=${request.source.kind}:source_identity=${sourceIdentity}:full_chip_erase=${request.options?.full_chip_erase ? 1 : 0}`;
+}
+
+const DEFAULT_READINESS_REQUEST: SerialReadinessRequest = {
+  port: "/dev/ttyACM0",
+  source: { kind: "catalog_url", url: "" },
+  options: { full_chip_erase: false },
+};
+
+function readiness(
+  overrides: Partial<SerialReadinessResponse> = {},
+  request: SerialReadinessRequest = DEFAULT_READINESS_REQUEST,
+): SerialReadinessResponse {
   return {
-    can_start: true,
-    session_ready: true,
+    request_token: serialReadinessToken(request),
     session_status: { kind: "idle" as const },
-    blocked_reason: null,
+    readiness: { kind: "advisory" as const },
     target_hint: null,
     validation_pending: false,
     bootloader_transition: { kind: "manual_bootloader_entry_required" as const },
     ...overrides,
-  };
+  } satisfies SerialReadinessResponse;
 }
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
@@ -460,9 +486,7 @@ describe("FirmwareFlashWizard", () => {
         ]),
         catalogEntries,
         serialReadiness: vi.fn().mockResolvedValue(readiness({
-          can_start: false,
-          session_ready: false,
-          blocked_reason: "source_missing",
+          readiness: { kind: "blocked", reason: "source_missing" },
           target_hint: { detected_board_id: null },
         })),
       },
@@ -607,9 +631,7 @@ describe("FirmwareFlashWizard", () => {
       session_status: { kind: "idle" as const },
     });
     const serialReadiness = vi.fn().mockResolvedValue(readiness({
-      can_start: false,
-      session_ready: false,
-      blocked_reason: "source_missing",
+      readiness: { kind: "blocked", reason: "source_missing" },
       target_hint: { detected_board_id: null },
     }));
 
@@ -675,9 +697,7 @@ describe("FirmwareFlashWizard", () => {
         session_status: { kind: "idle" as const },
       });
     const serialReadiness = vi.fn().mockResolvedValue(readiness({
-      can_start: false,
-      session_ready: false,
-      blocked_reason: "source_missing",
+      readiness: { kind: "blocked", reason: "source_missing" },
       target_hint: { detected_board_id: null },
     }));
 
@@ -754,7 +774,10 @@ describe("FirmwareFlashWizard", () => {
           session_status: { kind: "idle" as const },
         }),
         catalogEntries: vi.fn().mockResolvedValue([{ board_id: 140, platform: "fmuv3", vehicle_type: "Copter", version: "4.5.0", version_type: "stable", format: "apj", url: "https://example.com/fw.apj", image_size: 123, latest: true, git_sha: "abc", brand_name: null, manufacturer: null }]),
-        serialReadiness: vi.fn().mockResolvedValue({ session_ready: false, session_status: { kind: "idle" as const }, blocked_reason: "port_unavailable", target_hint: { detected_board_id: 140 }, validation_pending: false }),
+        serialReadiness: vi.fn().mockResolvedValue(readiness({
+          readiness: { kind: "blocked", reason: "port_unavailable" },
+          target_hint: { detected_board_id: 140 },
+        })),
       },
     );
 
@@ -783,7 +806,9 @@ describe("FirmwareFlashWizard", () => {
           session_status: { kind: "idle" as const },
         }),
         catalogEntries: vi.fn().mockResolvedValue([{ board_id: 140, platform: "fmuv3", vehicle_type: "Copter", version: "4.5.0", version_type: "stable", format: "apj", url: "https://example.com/fw.apj", image_size: 123, latest: true, git_sha: "abc", brand_name: null, manufacturer: null }]),
-        serialReadiness: vi.fn().mockResolvedValue({ session_ready: true, session_status: { kind: "idle" as const }, blocked_reason: null, target_hint: { detected_board_id: 140 }, validation_pending: false }),
+        serialReadiness: vi.fn().mockResolvedValue(readiness({
+          target_hint: { detected_board_id: 140 },
+        })),
         flashSerial: vi.fn().mockResolvedValue({ result: "verified", board_id: 140, bootloader_rev: 5, port: "/dev/ttyACM0" }),
       },
     );
@@ -829,7 +854,9 @@ describe("FirmwareFlashWizard", () => {
           session_ready: true,
           session_status: { kind: "idle" as const },
         }),
-        serialReadiness: vi.fn().mockResolvedValue({ session_ready: true, session_status: { kind: "idle" as const }, blocked_reason: null, target_hint: { detected_board_id: 140 }, validation_pending: false }),
+        serialReadiness: vi.fn().mockResolvedValue(readiness({
+          target_hint: { detected_board_id: 140 },
+        })),
         catalogEntries: vi.fn().mockResolvedValue([{ board_id: 140, platform: "fmuv3", vehicle_type: "Copter", version: "4.5.0", version_type: "stable", format: "apj", url: "https://example.com/fw.apj", image_size: 123, latest: true, git_sha: "abc", brand_name: null, manufacturer: null }]),
       },
     );
@@ -844,24 +871,17 @@ describe("FirmwareFlashWizard", () => {
   });
 
   it("clears stale board/catalog state when selected port has no detected target hint", async () => {
-    const serialReadiness = vi.fn().mockImplementation(async (request: { port: string }) => {
+    const serialReadiness = vi.fn().mockImplementation(async (request: SerialReadinessRequest) => {
       if (request.port === "/dev/ttyACM0") {
-        return {
-          session_ready: true,
-          session_status: { kind: "idle" as const },
-          blocked_reason: null,
+        return readiness({
           target_hint: { detected_board_id: 140 },
-          validation_pending: false,
-        };
+        }, request);
       }
 
-      return {
-        session_ready: false,
-        session_status: { kind: "idle" as const },
-        blocked_reason: request.port ? "port_unavailable" as const : "port_unselected" as const,
+      return readiness({
+        readiness: { kind: "blocked", reason: request.port ? "port_unavailable" : "port_unselected" },
         target_hint: { detected_board_id: null },
-        validation_pending: false,
-      };
+      }, request);
     });
 
     const firmware = makeFirmware(
@@ -917,9 +937,7 @@ describe("FirmwareFlashWizard", () => {
         }),
         serialReadiness: vi.fn().mockResolvedValue(readiness({
           target_hint: { detected_board_id: null },
-          can_start: false,
-          session_ready: false,
-          blocked_reason: "source_missing",
+          readiness: { kind: "blocked", reason: "source_missing" },
         })),
         catalogEntries: vi.fn().mockResolvedValue([
           { board_id: 140, platform: "CubeOrange", vehicle_type: "Copter", version: "4.5.0", version_type: "stable", format: "apj", url: "https://example.com/fw.apj", image_size: 123, latest: true, git_sha: "abc", brand_name: null, manufacturer: null },
@@ -943,13 +961,7 @@ describe("FirmwareFlashWizard", () => {
   });
 
   it("does not allow serial flash to start with stale readiness after a native-fast port switch", async () => {
-    const nextPortReadiness = deferred<{
-      session_ready: boolean;
-      session_status: { kind: "idle" };
-      blocked_reason: "port_unavailable" | "port_unselected" | null;
-      target_hint: { detected_board_id: number | null } | null;
-      validation_pending: boolean;
-    }>();
+    const nextPortReadiness = deferred<SerialReadinessResponse>();
 
     const firmware = makeFirmware(
       { kind: "idle" },
@@ -969,15 +981,11 @@ describe("FirmwareFlashWizard", () => {
         catalogEntries: vi.fn().mockResolvedValue([
           { board_id: 140, platform: "fmuv3", vehicle_type: "Copter", version: "4.5.0", version_type: "stable", format: "apj", url: "https://example.com/fw.apj", image_size: 123, latest: true, git_sha: "abc", brand_name: null, manufacturer: null },
         ]),
-        serialReadiness: vi.fn().mockImplementation(async (request: { port: string }) => {
+        serialReadiness: vi.fn().mockImplementation(async (request: SerialReadinessRequest) => {
           if (request.port === "/dev/ttyACM0") {
-            return {
-              session_ready: true,
-              session_status: { kind: "idle" as const },
-              blocked_reason: null,
+            return readiness({
               target_hint: { detected_board_id: 140 },
-              validation_pending: false,
-            };
+            }, request);
           }
 
           return nextPortReadiness.promise;
@@ -1001,13 +1009,17 @@ describe("FirmwareFlashWizard", () => {
 
     expect(firmware.flashSerial).not.toHaveBeenCalled();
 
-    nextPortReadiness.resolve({
-      session_ready: false,
+    nextPortReadiness.resolve(readiness({
       session_status: { kind: "idle" },
-      blocked_reason: "port_unavailable",
+      readiness: { kind: "blocked", reason: "port_unavailable" },
       target_hint: { detected_board_id: null },
       validation_pending: false,
-    });
+      bootloader_transition: { kind: "manual_bootloader_entry_required" },
+    }, {
+      port: "/dev/ttyUSB1",
+      source: { kind: "catalog_url", url: "https://example.com/fw.apj" },
+      options: { full_chip_erase: false },
+    }));
 
     await waitFor(() => {
       expect((screen.getByTestId("firmware-start-serial") as HTMLButtonElement).disabled).toBe(true);
@@ -1015,13 +1027,7 @@ describe("FirmwareFlashWizard", () => {
   });
 
   it("does not allow serial flash to start with stale readiness after replacing a local APJ with a same-sized file", async () => {
-    const nextFileReadiness = deferred<{
-      session_ready: boolean;
-      session_status: { kind: "idle" };
-      blocked_reason: "source_missing" | null;
-      target_hint: { detected_board_id: number | null } | null;
-      validation_pending: boolean;
-    }>();
+    const nextFileReadiness = deferred<SerialReadinessResponse>();
 
     vi.mocked(open)
       .mockResolvedValueOnce("/tmp/first.apj")
@@ -1042,15 +1048,11 @@ describe("FirmwareFlashWizard", () => {
           session_ready: true,
           session_status: { kind: "idle" as const },
         }),
-        serialReadiness: vi.fn().mockImplementation(async (request: { source: { kind: string; data?: number[] } }) => {
+        serialReadiness: vi.fn().mockImplementation(async (request: SerialReadinessRequest) => {
           if (request.source.kind === "local_apj_bytes" && request.source.data?.[0] === 1) {
-            return {
-              session_ready: true,
-              session_status: { kind: "idle" as const },
-              blocked_reason: null,
+            return readiness({
               target_hint: { detected_board_id: null },
-              validation_pending: false,
-            };
+            }, request);
           }
 
           return nextFileReadiness.promise;
@@ -1079,13 +1081,17 @@ describe("FirmwareFlashWizard", () => {
 
     expect(firmware.flashSerial).not.toHaveBeenCalled();
 
-    nextFileReadiness.resolve({
-      session_ready: false,
+    nextFileReadiness.resolve(readiness({
       session_status: { kind: "idle" },
-      blocked_reason: "source_missing",
+      readiness: { kind: "blocked", reason: "source_missing" },
       target_hint: { detected_board_id: null },
       validation_pending: false,
-    });
+      bootloader_transition: { kind: "manual_bootloader_entry_required" },
+    }, {
+      port: "/dev/ttyACM0",
+      source: { kind: "local_apj_bytes", data: [9, 8, 7, 6] },
+      options: { full_chip_erase: false },
+    }));
 
     await waitFor(() => {
       expect((screen.getByTestId("firmware-start-serial") as HTMLButtonElement).disabled).toBe(true);
@@ -1286,9 +1292,7 @@ describe("FirmwareFlashWizard", () => {
         }),
         catalogTargets: vi.fn().mockResolvedValue([]),
         serialReadiness: vi.fn().mockResolvedValue(readiness({
-          can_start: false,
-          session_ready: false,
-          blocked_reason: "source_missing",
+          readiness: { kind: "blocked", reason: "source_missing" },
           target_hint: { detected_board_id: null },
         })),
       },
@@ -1307,15 +1311,12 @@ describe("FirmwareFlashWizard", () => {
     const readinessMock = vi.fn()
       .mockResolvedValueOnce(readiness({
         bootloader_transition: { kind: "manual_bootloader_entry_required" as const },
-        can_start: true,
       }))
       .mockResolvedValueOnce(readiness({
         bootloader_transition: { kind: "already_in_bootloader" as const },
-        can_start: true,
       }))
       .mockResolvedValue(readiness({
         bootloader_transition: { kind: "already_in_bootloader" as const },
-        can_start: true,
       }));
 
     const preflightMock = vi.fn()

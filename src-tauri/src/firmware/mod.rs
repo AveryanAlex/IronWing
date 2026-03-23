@@ -11,7 +11,9 @@ pub(crate) mod types;
 #[cfg(test)]
 mod tests {
     use super::artifact::*;
-    use super::commands::{evaluate_serial_readiness, normalize_serial_options};
+    use super::commands::{
+        evaluate_serial_readiness, normalize_serial_options, serial_readiness_request_token,
+    };
     use super::serial_uploader::SerialReadError;
     use super::types::*;
     use serde::Serialize;
@@ -92,21 +94,150 @@ mod tests {
 
     #[test]
     fn session_contracts_serial_terminal_outcomes() {
-        let verified = SerialFlashOutcome::Verified;
+        let verified = SerialFlashOutcome::Verified {
+            board_id: 140,
+            bootloader_rev: 5,
+            port: "/dev/ttyACM0".into(),
+        };
         let cancelled = SerialFlashOutcome::Cancelled;
-        let unverified = SerialFlashOutcome::FlashedButUnverified;
+        let unverified = SerialFlashOutcome::FlashedButUnverified {
+            board_id: 9,
+            bootloader_rev: 2,
+            port: "/dev/ttyACM1".into(),
+        };
+        let reconnect_failed = SerialFlashOutcome::ReconnectFailed {
+            board_id: 140,
+            bootloader_rev: 5,
+            flash_verified: true,
+            reconnect_error: "timeout waiting for reconnect".into(),
+        };
+        let reconnect_verified = SerialFlashOutcome::ReconnectVerified {
+            board_id: 140,
+            bootloader_rev: 5,
+            flash_verified: true,
+        };
         let failed = SerialFlashOutcome::Failed {
             reason: "timeout".into(),
         };
+        let board_detection_failed = SerialFlashOutcome::BoardDetectionFailed {
+            reason: "no bootloader port observed".into(),
+        };
+        let extf_capacity_insufficient = SerialFlashOutcome::ExtfCapacityInsufficient {
+            reason: "external-flash capacity insufficient".into(),
+        };
 
-        assert_serializes_to(&verified, json!({ "result": "verified" }));
+        assert_serializes_to(
+            &verified,
+            json!({
+                "result": "verified",
+                "board_id": 140,
+                "bootloader_rev": 5,
+                "port": "/dev/ttyACM0"
+            }),
+        );
         assert_serializes_to(&cancelled, json!({ "result": "cancelled" }));
-        assert_serializes_to(&unverified, json!({ "result": "flashed_but_unverified" }));
+        assert_serializes_to(
+            &unverified,
+            json!({
+                "result": "flashed_but_unverified",
+                "board_id": 9,
+                "bootloader_rev": 2,
+                "port": "/dev/ttyACM1"
+            }),
+        );
+        assert_serializes_to(
+            &reconnect_failed,
+            json!({
+                "result": "reconnect_failed",
+                "board_id": 140,
+                "bootloader_rev": 5,
+                "flash_verified": true,
+                "reconnect_error": "timeout waiting for reconnect"
+            }),
+        );
+        assert_serializes_to(
+            &reconnect_verified,
+            json!({
+                "result": "reconnect_verified",
+                "board_id": 140,
+                "bootloader_rev": 5,
+                "flash_verified": true
+            }),
+        );
         assert_serializes_to(
             &failed,
             json!({
                 "result": "failed",
                 "reason": "timeout"
+            }),
+        );
+        assert_serializes_to(
+            &board_detection_failed,
+            json!({
+                "result": "board_detection_failed",
+                "reason": "no bootloader port observed"
+            }),
+        );
+        assert_serializes_to(
+            &extf_capacity_insufficient,
+            json!({
+                "result": "extf_capacity_insufficient",
+                "reason": "external-flash capacity insufficient"
+            }),
+        );
+    }
+
+    #[test]
+    fn session_contracts_serial_flow_results_serialize() {
+        let reconnect_verified = SerialFlowResult::ReconnectVerified {
+            board_id: 140,
+            bootloader_rev: 5,
+            flash_verified: true,
+        };
+        let reconnect_failed = SerialFlowResult::ReconnectFailed {
+            board_id: 140,
+            bootloader_rev: 5,
+            flash_verified: false,
+            reconnect_error: "timeout waiting for reconnect".into(),
+        };
+        let board_detection_failed = SerialFlowResult::BoardDetectionFailed {
+            reason: "no bootloader port observed".into(),
+        };
+        let extf_capacity_insufficient = SerialFlowResult::ExtfCapacityInsufficient {
+            reason: "external-flash capacity insufficient".into(),
+        };
+
+        assert_serializes_to(
+            &reconnect_verified,
+            json!({
+                "result": "reconnect_verified",
+                "board_id": 140,
+                "bootloader_rev": 5,
+                "flash_verified": true
+            }),
+        );
+        assert_serializes_to(
+            &reconnect_failed,
+            json!({
+                "result": "reconnect_failed",
+                "board_id": 140,
+                "bootloader_rev": 5,
+                "flash_verified": false,
+                "reconnect_error": "timeout waiting for reconnect"
+            }),
+        );
+        assert_serializes_to(
+            &board_detection_failed,
+            json!({
+                "result": "board_detection_failed",
+                "reason": "no bootloader port observed"
+            }),
+        );
+        assert_serializes_to(
+            &extf_capacity_insufficient,
+            json!({
+                "result": "extf_capacity_insufficient",
+                "reason": "external-flash capacity insufficient"
             }),
         );
     }
@@ -134,6 +265,35 @@ mod tests {
             json!({
                 "result": "unsupported_recovery_path",
                 "guidance": "use serial"
+            }),
+        );
+    }
+
+    #[test]
+    fn session_contracts_dfu_terminal_results_serialize() {
+        let reset_unconfirmed = super::dfu_recovery::DfuRecoveryResult::ResetUnconfirmed;
+        let driver_guidance = super::dfu_recovery::DfuRecoveryResult::DriverGuidance {
+            guidance: "Install WinUSB via Zadig".into(),
+        };
+        let platform_unsupported = super::dfu_recovery::DfuRecoveryResult::PlatformUnsupported;
+
+        assert_serializes_to(
+            &reset_unconfirmed,
+            json!({
+                "result": "reset_unconfirmed"
+            }),
+        );
+        assert_serializes_to(
+            &driver_guidance,
+            json!({
+                "result": "driver_guidance",
+                "guidance": "Install WinUSB via Zadig"
+            }),
+        );
+        assert_serializes_to(
+            &platform_unsupported,
+            json!({
+                "result": "platform_unsupported"
             }),
         );
     }
@@ -240,11 +400,11 @@ mod tests {
                 full_chip_erase: true,
             }),
         };
+        let request_token = serial_readiness_request_token(&request);
         let response = SerialReadinessResponse {
-            can_start: true,
-            session_ready: true,
+            request_token: request_token.clone(),
             session_status: FirmwareSessionStatus::Idle,
-            blocked_reason: None,
+            readiness: SerialReadiness::Advisory,
             target_hint: Some(SerialReadinessTargetHint {
                 detected_board_id: Some(140),
             }),
@@ -268,18 +428,67 @@ mod tests {
         assert_serializes_to(
             &response,
             json!({
-                "can_start": true,
-                "session_ready": true,
+                "request_token": request_token,
                 "session_status": {
                     "kind": "idle"
                 },
-                "blocked_reason": null,
+                "readiness": {
+                    "kind": "advisory"
+                },
                 "target_hint": {
                     "detected_board_id": 140
                 },
                 "validation_pending": false,
                 "bootloader_transition": {
                     "kind": "auto_reboot_supported"
+                }
+            }),
+        );
+    }
+
+    #[test]
+    fn session_contracts_serial_readiness_blocked_serializes() {
+        let request = SerialReadinessRequest {
+            port: "/dev/ttyUSB1".into(),
+            source: SerialFlashSource::LocalApjBytes {
+                data: vec![1, 2, 3, 4],
+            },
+            options: None,
+        };
+        let request_token = serial_readiness_request_token(&request);
+        let response = SerialReadinessResponse {
+            request_token: request_token.clone(),
+            session_status: FirmwareSessionStatus::SerialPrimary {
+                phase: SerialFlashPhase::Idle,
+            },
+            readiness: SerialReadiness::Blocked {
+                reason: SerialReadinessBlockedReason::SessionBusy,
+            },
+            target_hint: Some(SerialReadinessTargetHint {
+                detected_board_id: None,
+            }),
+            validation_pending: false,
+            bootloader_transition: SerialBootloaderTransition::TargetMismatch,
+        };
+
+        assert_serializes_to(
+            &response,
+            json!({
+                "request_token": request_token,
+                "session_status": {
+                    "kind": "serial_primary",
+                    "phase": "idle"
+                },
+                "readiness": {
+                    "kind": "blocked",
+                    "reason": "session_busy"
+                },
+                "target_hint": {
+                    "detected_board_id": null
+                },
+                "validation_pending": false,
+                "bootloader_transition": {
+                    "kind": "target_mismatch"
                 }
             }),
         );
@@ -303,6 +512,48 @@ mod tests {
             &SerialBootloaderTransition::TargetMismatch,
             json!({ "kind": "target_mismatch" }),
         );
+    }
+
+    #[test]
+    fn session_contracts_serial_readiness_request_deserializes_catalog_url() {
+        let request: SerialReadinessRequest = serde_json::from_value(json!({
+            "port": "/dev/ttyACM0",
+            "source": {
+                "kind": "catalog_url",
+                "url": "https://example.com/fw.apj"
+            },
+            "options": {
+                "full_chip_erase": true
+            }
+        }))
+        .unwrap();
+
+        assert_eq!(request.port, "/dev/ttyACM0");
+        assert!(matches!(
+            request.source,
+            SerialFlashSource::CatalogUrl { ref url } if url == "https://example.com/fw.apj"
+        ));
+        assert!(request.options.is_some_and(|options| options.full_chip_erase));
+    }
+
+    #[test]
+    fn session_contracts_serial_readiness_request_deserializes_local_apj_bytes() {
+        let request: SerialReadinessRequest = serde_json::from_value(json!({
+            "port": "/dev/ttyUSB1",
+            "source": {
+                "kind": "local_apj_bytes",
+                "data": [1, 2, 3, 4]
+            },
+            "options": null
+        }))
+        .unwrap();
+
+        assert_eq!(request.port, "/dev/ttyUSB1");
+        assert!(matches!(
+            request.source,
+            SerialFlashSource::LocalApjBytes { ref data } if data == &vec![1, 2, 3, 4]
+        ));
+        assert!(request.options.is_none());
     }
 
     #[test]
@@ -517,7 +768,11 @@ mod tests {
         let session = FirmwareSessionHandle::new();
         session.try_start_serial().unwrap();
         session.complete(FirmwareOutcome::SerialPrimary {
-            outcome: SerialFlashOutcome::Verified,
+            outcome: SerialFlashOutcome::Verified {
+                board_id: 140,
+                bootloader_rev: 5,
+                port: "/dev/ttyACM0".into(),
+            },
         });
 
         session.try_start_dfu(false).unwrap();
@@ -2998,8 +3253,10 @@ mod tests {
 
         let outcome = result.to_outcome();
         match outcome {
-            SerialFlashOutcome::Verified => {}
-            other => panic!("expected Verified outcome, got: {other:?}"),
+            SerialFlashOutcome::ReconnectVerified { flash_verified, .. } => {
+                assert!(flash_verified, "expected reconnect_verified flash outcome")
+            }
+            other => panic!("expected ReconnectVerified outcome, got: {other:?}"),
         }
     }
 
@@ -3033,8 +3290,10 @@ mod tests {
 
         let outcome = result.to_outcome();
         match outcome {
-            SerialFlashOutcome::FlashedButUnverified => {}
-            other => panic!("expected FlashedButUnverified, got: {other:?}"),
+            SerialFlashOutcome::ReconnectVerified { flash_verified, .. } => {
+                assert!(!flash_verified, "expected reconnect_verified flash_verified=false")
+            }
+            other => panic!("expected ReconnectVerified, got: {other:?}"),
         }
     }
 
@@ -3873,11 +4132,10 @@ mod tests {
             }
         }
 
-        // Verify the result maps to a recovery-needed outcome, not a DFU outcome
         let outcome = result.to_outcome();
         match outcome {
-            SerialFlashOutcome::RecoveryNeeded { .. } => {}
-            other => panic!("expected RecoveryNeeded outcome (no DFU fallback), got: {other:?}"),
+            SerialFlashOutcome::BoardDetectionFailed { .. } => {}
+            other => panic!("expected BoardDetectionFailed outcome (no DFU fallback), got: {other:?}"),
         }
     }
 
@@ -4869,8 +5127,8 @@ mod tests {
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::Verified),
-            "e2e serial happy path must produce Verified, got: {outcome:?}"
+            matches!(outcome, SerialFlashOutcome::ReconnectVerified { flash_verified: true, .. }),
+            "e2e serial happy path must produce ReconnectVerified(flash_verified=true), got: {outcome:?}"
         );
 
         let wrapped = FirmwareOutcome::SerialPrimary { outcome };
@@ -4907,19 +5165,19 @@ mod tests {
 
         let outcome = result.to_outcome();
         match &outcome {
-            SerialFlashOutcome::RecoveryNeeded { reason } => {
+            SerialFlashOutcome::BoardDetectionFailed { reason } => {
                 assert!(
                     !reason.is_empty(),
-                    "recovery_needed reason must be non-empty: {reason}"
+                    "board_detection_failed reason must be non-empty: {reason}"
                 );
             }
-            other => panic!("e2e serial failure outcome must be RecoveryNeeded, got: {other:?}"),
+            other => panic!("e2e serial failure outcome must be BoardDetectionFailed, got: {other:?}"),
         }
 
         let wrapped = FirmwareOutcome::SerialPrimary { outcome };
         let json = serde_json::to_string(&wrapped).unwrap();
         assert!(json.contains("serial_primary"));
-        assert!(json.contains("recovery_needed"));
+        assert!(json.contains("board_detection_failed"));
         assert!(!json.contains("dfu"));
 
         session.stop();
@@ -4958,12 +5216,12 @@ mod tests {
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::FlashedButUnverified),
-            "BL_REV 2 + reconnect failure must be FlashedButUnverified, got: {outcome:?}"
+            matches!(outcome, SerialFlashOutcome::ReconnectFailed { flash_verified: false, .. }),
+            "BL_REV 2 + reconnect failure must be ReconnectFailed(flash_verified=false), got: {outcome:?}"
         );
 
         let json = serde_json::to_string(&FirmwareOutcome::SerialPrimary { outcome }).unwrap();
-        assert!(json.contains("flashed_but_unverified"));
+        assert!(json.contains("reconnect_failed"));
         assert!(!json.contains("\"verified\""));
 
         session.stop();
@@ -6698,14 +6956,13 @@ mod tests {
             other => panic!("expected ExtfCapacityInsufficient, got: {other:?}"),
         }
 
-        // Must map to Failed outcome, NOT RecoveryNeeded
         let outcome = result.to_outcome();
         match outcome {
-            SerialFlashOutcome::Failed { reason } => {
+            SerialFlashOutcome::ExtfCapacityInsufficient { reason } => {
                 assert!(reason.contains("external-flash"), "got: {reason}");
             }
             other => panic!(
-                "ExtfCapacityInsufficient must map to Failed outcome, not RecoveryNeeded; got: {other:?}"
+                "ExtfCapacityInsufficient must preserve its typed outcome; got: {other:?}"
             ),
         }
     }
@@ -6960,27 +7217,25 @@ mod tests {
         );
     }
 
-    // R8: ExtfCapacityInsufficient maps to Failed outcome (not RecoveryNeeded).
     #[test]
-    fn extf_capacity_insufficient_maps_to_failed_not_recovery_needed() {
+    fn extf_capacity_insufficient_maps_to_typed_outcome() {
         let result = SerialFlowResult::ExtfCapacityInsufficient {
             reason: "external-flash capacity insufficient: board reports 0 bytes, firmware needs 4 bytes".into(),
         };
         let outcome = result.to_outcome();
         match outcome {
-            SerialFlashOutcome::Failed { reason } => {
+            SerialFlashOutcome::ExtfCapacityInsufficient { reason } => {
                 assert!(
                     reason.contains("external-flash"),
                     "reason must mention external-flash; got: {reason:?}"
                 );
             }
-            other => panic!("expected Failed, got: {other:?}"),
+            other => panic!("expected ExtfCapacityInsufficient, got: {other:?}"),
         }
     }
 
-    // R9: ReconnectFailed with flash_verified=false maps to FlashedButUnverified.
     #[test]
-    fn reconnect_failed_flash_unverified_maps_to_flashed_but_unverified() {
+    fn reconnect_failed_flash_unverified_maps_to_reconnect_failed() {
         let result = SerialFlowResult::ReconnectFailed {
             board_id: 9,
             bootloader_rev: 4,
@@ -6989,8 +7244,8 @@ mod tests {
         };
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::FlashedButUnverified),
-            "ReconnectFailed(flash_verified=false) must map to FlashedButUnverified; got: {outcome:?}"
+            matches!(outcome, SerialFlashOutcome::ReconnectFailed { flash_verified: false, .. }),
+            "ReconnectFailed(flash_verified=false) must preserve reconnect_failed; got: {outcome:?}"
         );
     }
 
@@ -7174,9 +7429,8 @@ mod tests {
         );
     }
 
-    // R16: SerialFlowResult::ReconnectVerified with flash_verified=true maps to Verified.
     #[test]
-    fn reconnect_verified_flash_true_maps_to_verified() {
+    fn reconnect_verified_flash_true_maps_to_reconnect_verified() {
         let result = SerialFlowResult::ReconnectVerified {
             board_id: 9,
             bootloader_rev: 4,
@@ -7184,14 +7438,13 @@ mod tests {
         };
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::Verified),
-            "ReconnectVerified(flash_verified=true) must map to Verified; got: {outcome:?}"
+            matches!(outcome, SerialFlashOutcome::ReconnectVerified { flash_verified: true, .. }),
+            "ReconnectVerified(flash_verified=true) must preserve reconnect_verified; got: {outcome:?}"
         );
     }
 
-    // R17: SerialFlowResult::ReconnectVerified with flash_verified=false maps to FlashedButUnverified.
     #[test]
-    fn reconnect_verified_flash_false_maps_to_flashed_but_unverified() {
+    fn reconnect_verified_flash_false_maps_to_reconnect_verified() {
         let result = SerialFlowResult::ReconnectVerified {
             board_id: 9,
             bootloader_rev: 2,
@@ -7199,8 +7452,8 @@ mod tests {
         };
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::FlashedButUnverified),
-            "ReconnectVerified(flash_verified=false) must map to FlashedButUnverified; got: {outcome:?}"
+            matches!(outcome, SerialFlashOutcome::ReconnectVerified { flash_verified: false, .. }),
+            "ReconnectVerified(flash_verified=false) must preserve reconnect_verified; got: {outcome:?}"
         );
     }
 
@@ -7236,10 +7489,8 @@ mod tests {
         );
     }
 
-    // T9-R2: ReconnectFailed with flash_verified=true still maps to FlashedButUnverified.
-    // (reconnect_failed always means unverified regardless of CRC)
     #[test]
-    fn reconnect_failed_flash_true_still_maps_to_flashed_but_unverified() {
+    fn reconnect_failed_flash_true_still_maps_to_reconnect_failed() {
         let result = SerialFlowResult::ReconnectFailed {
             board_id: 140,
             bootloader_rev: 5,
@@ -7248,8 +7499,8 @@ mod tests {
         };
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::FlashedButUnverified),
-            "ReconnectFailed must always map to FlashedButUnverified even with flash_verified=true; got: {outcome:?}"
+            matches!(outcome, SerialFlashOutcome::ReconnectFailed { flash_verified: true, .. }),
+            "ReconnectFailed must preserve reconnect_failed even with flash_verified=true; got: {outcome:?}"
         );
     }
 

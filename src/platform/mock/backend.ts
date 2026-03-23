@@ -88,10 +88,9 @@ function defaultCommandResult(cmd: string, _args: CommandArgs): unknown {
       return { kind: "idle" };
     case "firmware_serial_readiness":
       return {
-        can_start: true,
-        session_ready: true,
+        request_token: "mock:firmware_serial_readiness",
         session_status: { kind: "idle" },
-        blocked_reason: null,
+        readiness: { kind: "advisory" },
         target_hint: null,
         validation_pending: false,
         bootloader_transition: { kind: "manual_bootloader_entry_required" },

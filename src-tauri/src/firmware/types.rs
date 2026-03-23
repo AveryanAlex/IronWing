@@ -35,11 +35,37 @@ pub(crate) enum SerialFlashPhase {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub(crate) enum SerialFlashOutcome {
-    Verified,
+    Verified {
+        board_id: u32,
+        bootloader_rev: u8,
+        port: String,
+    },
     Cancelled,
-    FlashedButUnverified,
-    Failed { reason: String },
-    RecoveryNeeded { reason: String },
+    FlashedButUnverified {
+        board_id: u32,
+        bootloader_rev: u8,
+        port: String,
+    },
+    ReconnectVerified {
+        board_id: u32,
+        bootloader_rev: u8,
+        flash_verified: bool,
+    },
+    ReconnectFailed {
+        board_id: u32,
+        bootloader_rev: u8,
+        flash_verified: bool,
+        reconnect_error: String,
+    },
+    Failed {
+        reason: String,
+    },
+    BoardDetectionFailed {
+        reason: String,
+    },
+    ExtfCapacityInsufficient {
+        reason: String,
+    },
 }
 
 // ── DFU recovery path (separate product path, not a branch of serial) ──
@@ -250,11 +276,19 @@ pub(crate) struct SerialReadinessRequest {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(crate) enum SerialReadiness {
+    Advisory,
+    Blocked {
+        reason: SerialReadinessBlockedReason,
+    },
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub(crate) struct SerialReadinessResponse {
-    pub(crate) can_start: bool,
-    pub(crate) session_ready: bool,
+    pub(crate) request_token: String,
     pub(crate) session_status: FirmwareSessionStatus,
-    pub(crate) blocked_reason: Option<SerialReadinessBlockedReason>,
+    pub(crate) readiness: SerialReadiness,
     pub(crate) target_hint: Option<SerialReadinessTargetHint>,
     pub(crate) validation_pending: bool,
     pub(crate) bootloader_transition: SerialBootloaderTransition,
@@ -342,27 +376,56 @@ impl SerialFlowResult {
     /// Convert to a `SerialFlashOutcome` for the session status.
     pub(crate) fn to_outcome(&self) -> SerialFlashOutcome {
         match self {
-            Self::Verified { .. }
-            | Self::ReconnectVerified {
-                flash_verified: true,
-                ..
-            } => SerialFlashOutcome::Verified,
+            Self::Verified {
+                board_id,
+                bootloader_rev,
+                port,
+            } => SerialFlashOutcome::Verified {
+                board_id: *board_id,
+                bootloader_rev: *bootloader_rev,
+                port: port.clone(),
+            },
             Self::Cancelled => SerialFlashOutcome::Cancelled,
-            Self::FlashedButUnverified { .. }
-            | Self::ReconnectVerified {
-                flash_verified: false,
-                ..
-            }
-            | Self::ReconnectFailed { .. } => SerialFlashOutcome::FlashedButUnverified,
+            Self::FlashedButUnverified {
+                board_id,
+                bootloader_rev,
+                port,
+            } => SerialFlashOutcome::FlashedButUnverified {
+                board_id: *board_id,
+                bootloader_rev: *bootloader_rev,
+                port: port.clone(),
+            },
+            Self::ReconnectVerified {
+                board_id,
+                bootloader_rev,
+                flash_verified,
+            } => SerialFlashOutcome::ReconnectVerified {
+                board_id: *board_id,
+                bootloader_rev: *bootloader_rev,
+                flash_verified: *flash_verified,
+            },
+            Self::ReconnectFailed {
+                board_id,
+                bootloader_rev,
+                flash_verified,
+                reconnect_error,
+            } => SerialFlashOutcome::ReconnectFailed {
+                board_id: *board_id,
+                bootloader_rev: *bootloader_rev,
+                flash_verified: *flash_verified,
+                reconnect_error: reconnect_error.clone(),
+            },
             Self::Failed { reason } => SerialFlashOutcome::Failed {
                 reason: reason.clone(),
             },
-            Self::BoardDetectionFailed { reason } => SerialFlashOutcome::RecoveryNeeded {
+            Self::BoardDetectionFailed { reason } => SerialFlashOutcome::BoardDetectionFailed {
                 reason: reason.clone(),
             },
-            Self::ExtfCapacityInsufficient { reason } => SerialFlashOutcome::Failed {
-                reason: reason.clone(),
-            },
+            Self::ExtfCapacityInsufficient { reason } => {
+                SerialFlashOutcome::ExtfCapacityInsufficient {
+                    reason: reason.clone(),
+                }
+            }
         }
     }
 }

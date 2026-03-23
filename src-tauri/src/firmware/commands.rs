@@ -20,7 +20,7 @@ use crate::firmware::types::{
     CatalogEntry, CatalogTargetSummary, DfuDeviceInfo, DfuRecoveryPhase, DfuRecoverySource,
     FirmwareError, FirmwareProgress, FirmwareSessionStatus, InventoryResult, PortInfo,
     SerialBootloaderTransition, SerialFlashOptions, SerialFlashSource, SerialFlowResult,
-    SerialPreflightInfo, SerialReadinessBlockedReason, SerialReadinessRequest,
+    SerialPreflightInfo, SerialReadiness, SerialReadinessBlockedReason, SerialReadinessRequest,
     SerialReadinessResponse, SerialReadinessTargetHint,
 };
 
@@ -425,6 +425,7 @@ pub(crate) async fn firmware_serial_readiness(
     let blocked_reason =
         serial_readiness_blocked_reason(&request, &available_ports, &session_status);
     let session_ready = blocked_reason.is_none();
+    let readiness = serial_readiness(blocked_reason);
     let bootloader_transition = serial_bootloader_transition(
         &request.port,
         &available_ports,
@@ -433,14 +434,62 @@ pub(crate) async fn firmware_serial_readiness(
     );
 
     Ok(SerialReadinessResponse {
-        can_start: session_ready,
-        session_ready,
+        request_token: serial_readiness_request_token(&request),
         session_status,
-        blocked_reason,
+        readiness,
         target_hint,
         validation_pending: serial_validation_pending(&request, session_ready),
         bootloader_transition,
     })
+}
+
+pub(crate) fn serial_readiness_request_token(request: &SerialReadinessRequest) -> String {
+    let full_chip_erase = request
+        .options
+        .as_ref()
+        .is_some_and(|options| options.full_chip_erase);
+    let (source_kind, source_identity) = serial_readiness_source_identity(&request.source);
+
+    format!(
+        "serial-readiness:port={}:source_kind={source_kind}:source_identity={source_identity}:full_chip_erase={}",
+        request.port,
+        u8::from(full_chip_erase),
+    )
+}
+
+fn serial_readiness_source_identity(source: &SerialFlashSource) -> (&'static str, String) {
+    match source {
+        SerialFlashSource::CatalogUrl { url } => {
+            ("catalog_url", serial_readiness_content_identity(url.as_bytes()))
+        }
+        SerialFlashSource::LocalApjBytes { data } => {
+            ("local_apj_bytes", serial_readiness_content_identity(data))
+        }
+    }
+}
+
+fn serial_readiness_content_identity(bytes: &[u8]) -> String {
+    format!(
+        "{}-{:016x}",
+        bytes.len(),
+        serial_readiness_request_digest(bytes)
+    )
+}
+
+fn serial_readiness_request_digest(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf29ce484222325u64;
+    for &byte in bytes {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
+fn serial_readiness(blocked_reason: Option<SerialReadinessBlockedReason>) -> SerialReadiness {
+    match blocked_reason {
+        None => SerialReadiness::Advisory,
+        Some(reason) => SerialReadiness::Blocked { reason },
+    }
 }
 
 fn serial_validation_pending(request: &SerialReadinessRequest, session_ready: bool) -> bool {
@@ -1046,7 +1095,7 @@ mod tests {
         SessionCancelAction, cancellation_requested, classify_dfu_pretransfer_error,
         classify_session_cancel_action, evaluate_serial_readiness, map_dfu_validation_error,
         normalize_serial_options, serial_bootloader_transition, serial_readiness_blocked_reason,
-        serial_readiness_target_hint, serial_validation_pending,
+        serial_readiness_request_token, serial_readiness_target_hint, serial_validation_pending,
         should_auto_reboot_selected_serial_target, with_serial_flash_start_guard,
     };
     use crate::connection::ActiveLinkTarget;
@@ -1141,7 +1190,11 @@ mod tests {
             &ports,
             &FirmwareSessionStatus::Completed {
                 outcome: crate::firmware::types::FirmwareOutcome::SerialPrimary {
-                    outcome: crate::firmware::types::SerialFlashOutcome::Verified,
+                    outcome: crate::firmware::types::SerialFlashOutcome::Verified {
+                        board_id: 9,
+                        bootloader_rev: 4,
+                        port: "/dev/ttyACM0".into(),
+                    },
                 },
             }
         ));
@@ -1275,6 +1328,140 @@ mod tests {
         assert!(!serial_validation_pending(&catalog, false));
         assert!(serial_validation_pending(&local, true));
         assert!(!serial_validation_pending(&local, false));
+    }
+
+    #[test]
+    fn serial_readiness_request_token_is_stable_for_identical_requests() {
+        let request = SerialReadinessRequest {
+            port: "/dev/ttyACM0".into(),
+            source: SerialFlashSource::CatalogUrl {
+                url: "https://example.com/fw.apj".into(),
+            },
+            options: Some(SerialFlashOptions {
+                full_chip_erase: true,
+            }),
+        };
+
+        assert_eq!(
+            serial_readiness_request_token(&request),
+            serial_readiness_request_token(&request)
+        );
+    }
+
+    #[test]
+    fn serial_readiness_request_token_changes_with_catalog_url() {
+        let base = SerialReadinessRequest {
+            port: "/dev/ttyACM0".into(),
+            source: SerialFlashSource::CatalogUrl {
+                url: "https://example.com/fw-a.apj".into(),
+            },
+            options: Some(SerialFlashOptions {
+                full_chip_erase: false,
+            }),
+        };
+        let changed = SerialReadinessRequest {
+            source: SerialFlashSource::CatalogUrl {
+                url: "https://example.com/fw-b.apj".into(),
+            },
+            ..base.clone()
+        };
+
+        assert_ne!(
+            serial_readiness_request_token(&base),
+            serial_readiness_request_token(&changed)
+        );
+    }
+
+    #[test]
+    fn serial_readiness_request_token_changes_with_port() {
+        let base = SerialReadinessRequest {
+            port: "/dev/ttyACM0".into(),
+            source: SerialFlashSource::CatalogUrl {
+                url: "https://example.com/fw.apj".into(),
+            },
+            options: Some(SerialFlashOptions {
+                full_chip_erase: false,
+            }),
+        };
+        let changed = SerialReadinessRequest {
+            port: "/dev/ttyUSB1".into(),
+            ..base.clone()
+        };
+
+        assert_ne!(
+            serial_readiness_request_token(&base),
+            serial_readiness_request_token(&changed)
+        );
+    }
+
+    #[test]
+    fn serial_readiness_request_token_changes_with_local_apj_content() {
+        let base = SerialReadinessRequest {
+            port: "/dev/ttyACM0".into(),
+            source: SerialFlashSource::LocalApjBytes {
+                data: vec![1, 2, 3, 4],
+            },
+            options: Some(SerialFlashOptions {
+                full_chip_erase: false,
+            }),
+        };
+        let changed = SerialReadinessRequest {
+            source: SerialFlashSource::LocalApjBytes {
+                data: vec![1, 2, 3, 5],
+            },
+            ..base.clone()
+        };
+
+        assert_ne!(
+            serial_readiness_request_token(&base),
+            serial_readiness_request_token(&changed)
+        );
+    }
+
+    #[test]
+    fn serial_readiness_request_token_normalizes_missing_options_to_false() {
+        let without_options = SerialReadinessRequest {
+            port: "/dev/ttyACM0".into(),
+            source: SerialFlashSource::CatalogUrl {
+                url: "https://example.com/fw.apj".into(),
+            },
+            options: None,
+        };
+        let explicit_false = SerialReadinessRequest {
+            options: Some(SerialFlashOptions {
+                full_chip_erase: false,
+            }),
+            ..without_options.clone()
+        };
+
+        assert_eq!(
+            serial_readiness_request_token(&without_options),
+            serial_readiness_request_token(&explicit_false)
+        );
+    }
+
+    #[test]
+    fn serial_readiness_request_token_changes_with_full_chip_erase() {
+        let base = SerialReadinessRequest {
+            port: "/dev/ttyACM0".into(),
+            source: SerialFlashSource::CatalogUrl {
+                url: "https://example.com/fw.apj".into(),
+            },
+            options: Some(SerialFlashOptions {
+                full_chip_erase: false,
+            }),
+        };
+        let changed = SerialReadinessRequest {
+            options: Some(SerialFlashOptions {
+                full_chip_erase: true,
+            }),
+            ..base.clone()
+        };
+
+        assert_ne!(
+            serial_readiness_request_token(&base),
+            serial_readiness_request_token(&changed)
+        );
     }
 
     #[test]

@@ -19,12 +19,35 @@ export type DfuRecoveryPhase =
   | "verifying"
   | "manifesting_or_resetting";
 
+type SerialCancelledResult = { result: "cancelled" };
+type SerialVerifiedFields = { board_id: number; bootloader_rev: number; port: string };
+type SerialReconnectFields = {
+  board_id: number;
+  bootloader_rev: number;
+  flash_verified: boolean;
+};
+type SerialReconnectFailedFields = SerialReconnectFields & { reconnect_error: string };
+type SerialFailureFields = { reason: string };
+
+type SerialFlashOutcomeVerified = { result: "verified" } & SerialVerifiedFields;
+type SerialFlashOutcomeFlashedButUnverified = {
+  result: "flashed_but_unverified";
+} & SerialVerifiedFields;
+type SerialFlashOutcomeReconnectVerified = { result: "reconnect_verified" } & SerialReconnectFields;
+type SerialFlashOutcomeReconnectFailed = { result: "reconnect_failed" } & SerialReconnectFailedFields;
+type SerialFlashOutcomeFailed = { result: "failed" } & SerialFailureFields;
+type SerialFlashOutcomeBoardDetectionFailed = { result: "board_detection_failed" } & SerialFailureFields;
+type SerialFlashOutcomeExtfCapacityInsufficient = { result: "extf_capacity_insufficient" } & SerialFailureFields;
+
 export type SerialFlashOutcome =
-  | { result: "verified" }
-  | { result: "cancelled" }
-  | { result: "flashed_but_unverified" }
-  | { result: "failed"; reason: string }
-  | { result: "recovery_needed"; reason: string };
+  | SerialCancelledResult
+  | SerialFlashOutcomeVerified
+  | SerialFlashOutcomeFlashedButUnverified
+  | SerialFlashOutcomeReconnectVerified
+  | SerialFlashOutcomeReconnectFailed
+  | SerialFlashOutcomeFailed
+  | SerialFlashOutcomeBoardDetectionFailed
+  | SerialFlashOutcomeExtfCapacityInsufficient;
 
 export type DfuRecoveryOutcome =
   | { result: "verified" }
@@ -116,6 +139,10 @@ export type SerialReadinessBlockedReason =
   | "port_unavailable"
   | "source_missing";
 
+export type SerialReadiness =
+  | { kind: "advisory" }
+  | { kind: "blocked"; reason: SerialReadinessBlockedReason };
+
 export type SerialReadinessTargetHint = {
   detected_board_id: number | null;
 };
@@ -127,10 +154,9 @@ export type SerialBootloaderTransition =
   | { kind: "target_mismatch" };
 
 export type SerialReadinessResponse = {
-  can_start: boolean;
-  session_ready: boolean;
+  request_token: string;
   session_status: FirmwareSessionStatus;
-  blocked_reason: SerialReadinessBlockedReason | null;
+  readiness: SerialReadiness;
   target_hint: SerialReadinessTargetHint | null;
   validation_pending: boolean;
   bootloader_transition: SerialBootloaderTransition;
@@ -142,14 +168,14 @@ export type DfuRecoverySource =
   | { kind: "local_bin_bytes"; data: number[] };
 
 export type SerialFlowResult =
-  | { result: "verified"; board_id: number; bootloader_rev: number; port: string }
-  | { result: "flashed_but_unverified"; board_id: number; bootloader_rev: number; port: string }
-  | { result: "reconnect_verified"; board_id: number; bootloader_rev: number; flash_verified: boolean }
-  | { result: "reconnect_failed"; board_id: number; bootloader_rev: number; flash_verified: boolean; reconnect_error: string }
-  | { result: "cancelled" }
-  | { result: "failed"; reason: string }
-  | { result: "board_detection_failed"; reason: string }
-  | { result: "extf_capacity_insufficient"; reason: string };
+  | SerialCancelledResult
+  | ({ result: "verified" } & SerialVerifiedFields)
+  | ({ result: "flashed_but_unverified" } & SerialVerifiedFields)
+  | ({ result: "reconnect_verified" } & SerialReconnectFields)
+  | ({ result: "reconnect_failed" } & SerialReconnectFailedFields)
+  | ({ result: "failed" } & SerialFailureFields)
+  | ({ result: "board_detection_failed" } & SerialFailureFields)
+  | ({ result: "extf_capacity_insufficient" } & SerialFailureFields);
 
 // ── DFU recovery result ──
 

@@ -54,21 +54,19 @@ export function deriveFirmwarePath(status: FirmwareSessionStatus): FirmwareSessi
 export function serialResultToStatus(result: SerialFlowResult): FirmwareSessionStatus {
   switch (result.result) {
     case "verified":
-    case "reconnect_verified":
       return {
         kind: "completed",
         outcome: {
           path: "serial_primary",
-          outcome: result.result === "verified" || ("flash_verified" in result && result.flash_verified)
-            ? { result: "verified" }
-            : { result: "flashed_but_unverified" },
+          outcome: result,
         },
       };
     case "flashed_but_unverified":
+    case "reconnect_verified":
     case "reconnect_failed":
       return {
         kind: "completed",
-        outcome: { path: "serial_primary", outcome: { result: "flashed_but_unverified" } },
+        outcome: { path: "serial_primary", outcome: result },
       };
     case "cancelled":
       return {
@@ -81,14 +79,10 @@ export function serialResultToStatus(result: SerialFlowResult): FirmwareSessionS
         outcome: { path: "serial_primary", outcome: { result: "failed", reason: result.reason } },
       };
     case "board_detection_failed":
-      return {
-        kind: "completed",
-        outcome: { path: "serial_primary", outcome: { result: "recovery_needed", reason: result.reason } },
-      };
     case "extf_capacity_insufficient":
       return {
         kind: "completed",
-        outcome: { path: "serial_primary", outcome: { result: "failed", reason: result.reason } },
+        outcome: { path: "serial_primary", outcome: result },
       };
   }
 }
