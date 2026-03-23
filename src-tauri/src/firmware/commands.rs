@@ -591,14 +591,6 @@ pub(crate) fn evaluate_serial_readiness(
     serial_readiness_blocked_reason(request, available_ports, session_status).is_none()
 }
 
-fn enforce_serial_flash_start_ready(
-    request: &SerialReadinessRequest,
-    available_ports: &[PortInfo],
-    session_status: &FirmwareSessionStatus,
-) -> Result<(), String> {
-    with_serial_flash_start_guard(request, available_ports, session_status, || Ok(()))
-}
-
 fn validate_started_serial_flash_request(
     request: &SerialReadinessRequest,
     available_ports: &[PortInfo],
@@ -708,11 +700,6 @@ fn classify_session_cancel_action(
 
 fn cancellation_signal(state: &tauri::State<'_, AppState>) -> bool {
     state.firmware_cancel_requested.load(Ordering::SeqCst)
-}
-
-fn cleanup_firmware_session(state: &tauri::State<'_, AppState>) {
-    reset_firmware_cancellation(state);
-    state.firmware_session.stop();
 }
 
 fn reset_firmware_cancellation(state: &tauri::State<'_, AppState>) {
