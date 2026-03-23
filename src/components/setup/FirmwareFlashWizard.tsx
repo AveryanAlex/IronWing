@@ -17,7 +17,14 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
 import type { useFirmware } from "../../hooks/use-firmware";
-import type { PortInfo, DfuDeviceInfo, CatalogEntry, CatalogTargetSummary, SerialReadinessResponse } from "../../firmware";
+import type {
+  PortInfo,
+  DfuDeviceInfo,
+  CatalogEntry,
+  CatalogTargetSummary,
+  SerialReadinessRequest,
+  SerialReadinessResponse,
+} from "../../firmware";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -34,6 +41,7 @@ export type FirmwareFlashWizardProps = {
 // ---------------------------------------------------------------------------
 
 const BAUD_RATES = [115200, 57600, 230400, 460800, 921600];
+const EMPTY_BYTES: number[] = [];
 
 // ---------------------------------------------------------------------------
 // Progress bar
@@ -88,6 +96,24 @@ function checkApjHasExtf(apjBytes: number[]): boolean {
   } catch {
     return false;
   }
+}
+
+function fnv1a64(bytes: number[]): string {
+  let hash = 0xcbf29ce484222325n;
+  for (const byte of bytes) {
+    hash ^= BigInt(byte);
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+
+function serialReadinessRequestToken(request: SerialReadinessRequest): string {
+  const encoder = new TextEncoder();
+  const sourceIdentity = request.source.kind === "catalog_url"
+    ? `${request.source.url.length}-${fnv1a64([...encoder.encode(request.source.url)])}`
+    : `${request.source.data.length}-${fnv1a64(request.source.data)}`;
+
+  return `serial-readiness:port=${request.port}:source_kind=${request.source.kind}:source_identity=${sourceIdentity}:full_chip_erase=${request.options?.full_chip_erase ? 1 : 0}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -378,6 +404,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
 
   // ── Serial action ─────────────────────────────────────────────────────
   const selectedCatalogEntry = catalogList[selectedCatalogIdx] ?? null;
+  const selectedCatalogUrl = selectedCatalogEntry?.url ?? "";
   const hasSerialInputs = !!selectedPort && (
     (sourceMode === "catalog" && selectedCatalogEntry !== null) ||
     (sourceMode === "local" && localApjData !== null)
@@ -385,12 +412,19 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
 
   const serialReadinessRequest = useMemo(() => (
     sourceMode === "catalog"
-      ? { port: selectedPort, source: { kind: "catalog_url" as const, url: selectedCatalogEntry?.url ?? "" }, options: { full_chip_erase: fullChipErase } }
-      : { port: selectedPort, source: { kind: "local_apj_bytes" as const, data: localApjData ?? [] }, options: { full_chip_erase: fullChipErase } }
-  ), [fullChipErase, localApjData, selectedCatalogEntry, selectedPort, sourceMode]);
+      ? { port: selectedPort, source: { kind: "catalog_url" as const, url: selectedCatalogUrl }, options: { full_chip_erase: fullChipErase } }
+      : { port: selectedPort, source: { kind: "local_apj_bytes" as const, data: localApjData ?? EMPTY_BYTES }, options: { full_chip_erase: fullChipErase } }
+  ), [fullChipErase, localApjData, selectedCatalogUrl, selectedPort, sourceMode]);
 
-  const [serialReadinessReadyRequest, setSerialReadinessReadyRequest] = useState<typeof serialReadinessRequest | null>(null);
-  const hasFreshSerialReadiness = serialReadinessReadyRequest === serialReadinessRequest;
+  const expectedSerialReadinessToken = useMemo(
+    () => serialReadinessRequestToken(
+      sourceMode === "catalog"
+        ? { port: selectedPort, source: { kind: "catalog_url", url: selectedCatalogUrl }, options: { full_chip_erase: fullChipErase } }
+        : { port: selectedPort, source: { kind: "local_apj_bytes", data: localApjData ?? EMPTY_BYTES }, options: { full_chip_erase: fullChipErase } },
+    ),
+    [fullChipErase, localApjData, selectedCatalogUrl, selectedPort, sourceMode],
+  );
+  const hasFreshSerialReadiness = serialReadinessInfo?.request_token === expectedSerialReadinessToken;
 
   const canStartSerial = hasSerialInputs && serialReady && hasFreshSerialReadiness;
 
@@ -474,18 +508,26 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
   useEffect(() => {
     let cancelled = false;
     const request = serialReadinessRequest;
+    const expectedToken = expectedSerialReadinessToken;
 
     if (effectiveMode !== "install" || isSerialActive || isSerialCancelling || serialCompleted) {
       return;
     }
 
     setSerialReadyLoading(true);
-    serialReadiness(serialReadinessRequest)
+    serialReadiness(request)
       .then((result) => {
         if (cancelled) return;
+
+        if (result.request_token !== expectedToken) {
+          setSerialReadinessInfo(null);
+          setSerialReady(false);
+          setDetectedBoardId(null);
+          return;
+        }
+
         setSerialReadinessInfo(result);
         setSerialReady(result.readiness.kind === "advisory");
-        setSerialReadinessReadyRequest(request);
         if (result.target_hint?.detected_board_id !== null && result.target_hint?.detected_board_id !== undefined) {
           setDetectedBoardId(result.target_hint.detected_board_id);
         } else {
@@ -496,7 +538,6 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
         if (cancelled) return;
         setSerialReadinessInfo(null);
         setSerialReady(false);
-        setSerialReadinessReadyRequest(request);
       })
       .finally(() => {
         if (!cancelled) setSerialReadyLoading(false);
@@ -505,7 +546,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
     return () => {
       cancelled = true;
     };
-  }, [connected, effectiveMode, isSerialActive, isSerialCancelling, ports, serialCompleted, serialReadiness, serialReadinessRefreshKey, serialReadinessRequest]);
+  }, [connected, effectiveMode, expectedSerialReadinessToken, isSerialActive, isSerialCancelling, ports, serialCompleted, serialReadiness, serialReadinessRefreshKey]);
 
   useEffect(() => {
     if (!dfuVerifiedCompleted) {
