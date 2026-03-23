@@ -103,7 +103,7 @@ export function TapeGauge({
 
   // Bug position (e.g., airspeed bug, nav bearing)
   const bugPos = useMemo(() => {
-    if (bugValue === undefined || !hasValue) return null;
+    if (bugValue == null || !hasValue) return null;
     let offset = bugValue - displayValue;
     if (circular) {
       // Wrap to shortest angular path
@@ -116,14 +116,14 @@ export function TapeGauge({
 
   // Terrain band position (vertical tapes only)
   const terrainPos = useMemo(() => {
-    if (terrainValue === undefined || !hasValue || !isVertical) return null;
+    if (terrainValue == null || !hasValue || !isVertical) return null;
     const offset = terrainValue - displayValue;
     return span / 2 + (growsUp ? -1 : 1) * offset * pxPerUnit;
   }, [terrainValue, displayValue, span, pxPerUnit, isVertical, growsUp, hasValue]);
 
   // Trend arrow (e.g., climb rate)
   const trendLen = useMemo(() => {
-    if (trendValue === undefined || !hasValue) return null;
+    if (trendValue == null || !hasValue) return null;
     const maxLen = span * 0.3;
     const len = Math.max(-maxLen, Math.min(maxLen, trendValue * pxPerUnit * 6));
     if (Math.abs(len) < 3) return null;

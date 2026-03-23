@@ -39,7 +39,7 @@ export function ArtificialHorizon({ pitch, roll, size, climbRate, groundSpeed }:
 
   // Flight path vector angle (degrees)
   const fpvAngle = useMemo(() => {
-    if (climbRate === undefined || groundSpeed === undefined || groundSpeed < 1) return null;
+    if (climbRate == null || groundSpeed == null || groundSpeed < 1) return null;
     const gamma = Math.atan2(climbRate, groundSpeed) * (180 / Math.PI);
     return Math.max(-PITCH_CLAMP, Math.min(PITCH_CLAMP, gamma));
   }, [climbRate, groundSpeed]);

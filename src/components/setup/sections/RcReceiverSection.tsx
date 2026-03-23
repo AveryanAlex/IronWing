@@ -257,7 +257,7 @@ function LiveRcBars({ connected }: { connected: boolean }) {
         if (rc && rc.length > 0) {
           setChannels(rc.slice(0, CHANNEL_COUNT));
         }
-        if (telemetry.rc_rssi !== undefined) {
+        if (telemetry.rc_rssi != null) {
           setRssi(telemetry.rc_rssi);
         }
       });
@@ -286,7 +286,7 @@ function LiveRcBars({ connected }: { connected: boolean }) {
             Live RC Channels
           </h3>
         </div>
-        {rssi !== undefined && (
+        {rssi != null && (
           <span className="flex items-center gap-1 text-[10px] font-mono text-text-muted">
             <Signal size={10} />
             RSSI {rssi}%
