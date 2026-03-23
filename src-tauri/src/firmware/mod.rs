@@ -3016,12 +3016,13 @@ mod tests {
 
     use super::serial_executor::*;
     use std::cell::{Cell, RefCell};
-    use std::collections::VecDeque as StdVecDeque;
+    use std::collections::{HashMap, VecDeque as StdVecDeque};
 
     struct MockFlowDeps {
         ports_sequence: RefCell<Vec<Vec<PortInfo>>>,
         port_call_idx: Cell<usize>,
         serial_mocks: RefCell<StdVecDeque<MockSerial>>,
+        serial_mocks_by_port: RefCell<HashMap<String, StdVecDeque<MockSerial>>>,
         open_results: RefCell<StdVecDeque<Result<(), FirmwareError>>>,
         opened_ports: RefCell<Vec<String>>,
         sleep_calls: RefCell<Vec<u64>>,
@@ -3035,6 +3036,7 @@ mod tests {
                 ports_sequence: RefCell::new(vec![]),
                 port_call_idx: Cell::new(0),
                 serial_mocks: RefCell::new(StdVecDeque::new()),
+                serial_mocks_by_port: RefCell::new(HashMap::new()),
                 open_results: RefCell::new(StdVecDeque::new()),
                 opened_ports: RefCell::new(vec![]),
                 sleep_calls: RefCell::new(vec![]),
@@ -3055,6 +3057,13 @@ mod tests {
 
         fn with_serial_mocks(mut self, mocks: Vec<MockSerial>) -> Self {
             self.serial_mocks = RefCell::new(mocks.into());
+            self
+        }
+
+        fn with_serial_mocks_for_port(self, port: &str, mocks: Vec<MockSerial>) -> Self {
+            self.serial_mocks_by_port
+                .borrow_mut()
+                .insert(port.to_string(), mocks.into());
             self
         }
 
@@ -3088,7 +3097,14 @@ mod tests {
             if let Some(result) = self.open_results.borrow_mut().pop_front() {
                 result?;
             }
-            let mock = self.serial_mocks.borrow_mut().pop_front().ok_or_else(|| {
+            let mock = {
+                let mut serial_mocks_by_port = self.serial_mocks_by_port.borrow_mut();
+                serial_mocks_by_port
+                    .get_mut(_port)
+                    .and_then(StdVecDeque::pop_front)
+            }
+            .or_else(|| self.serial_mocks.borrow_mut().pop_front())
+            .ok_or_else(|| {
                 FirmwareError::ProtocolError {
                     detail: "no mock serial configured".into(),
                 }
@@ -3143,6 +3159,14 @@ mod tests {
             manufacturer: None,
             product: None,
             location: None,
+        }
+    }
+
+    fn make_normal_port_named(port_name: &str, serial_number: &str) -> PortInfo {
+        PortInfo {
+            port_name: port_name.into(),
+            serial_number: Some(serial_number.into()),
+            ..make_normal_port()
         }
     }
 
@@ -3582,6 +3606,275 @@ mod tests {
             deps.opened_ports.borrow().as_slice(),
             &[new_bootloader_port.port_name],
             "observed transition candidates must be probed before the stale selected port"
+        );
+    }
+
+    #[test]
+    fn serial_flow_wider_bootloader_candidate_beats_stale_selected_port() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let stale_selected_port = make_normal_port();
+        let wider_bootloader_port = make_bootloader_port_named("/dev/ttyACM1", "BL999");
+
+        let mut stale_selected_mock = MockSerial::new();
+        stale_selected_mock.queue_read(&[0xFD, 0x00]);
+        let upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![
+                stale_selected_port.clone(),
+                wider_bootloader_port.clone(),
+            ]])
+            .with_serial_mocks_for_port(&stale_selected_port.port_name, vec![stale_selected_mock])
+            .with_serial_mocks_for_port(&wider_bootloader_port.port_name, vec![upload_mock])
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: stale_selected_port.port_name.clone(),
+            baud: 57600,
+            ports_before: vec![stale_selected_port.clone(), wider_bootloader_port.clone()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[wider_bootloader_port.port_name],
+            "wider post-reboot bootloader candidates must outrank stale selected-port fallback"
+        );
+    }
+
+    #[test]
+    fn serial_flow_wider_bootloader_nonretryable_failure_does_not_abort_selected_port_success() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let selected_port = make_normal_port();
+        let wider_bootloader_port = make_bootloader_port_named("/dev/ttyACM1", "BL999");
+        let upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![
+                selected_port.clone(),
+                wider_bootloader_port.clone(),
+            ]])
+            .with_open_results(vec![Err(FirmwareError::PortOpenFailed {
+                detail: format!(
+                    "open serial port {}: permission denied",
+                    wider_bootloader_port.port_name
+                ),
+            })])
+            .with_serial_mocks_for_port(&selected_port.port_name, vec![upload_mock])
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: selected_port.port_name.clone(),
+            baud: 57600,
+            ports_before: vec![selected_port.clone(), wider_bootloader_port.clone()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[
+                wider_bootloader_port.port_name.clone(),
+                selected_port.port_name.clone(),
+            ],
+            "nonretryable wider-heuristic failures must behave like misses so later fallback success still wins"
+        );
+    }
+
+    #[test]
+    fn serial_flow_wider_bootloader_candidate_does_not_mask_selected_port_fatal_failure() {
+        let selected_port = make_normal_port();
+        let wider_bootloader_port = make_bootloader_port_named("/dev/ttyACM1", "BL999");
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![
+                selected_port.clone(),
+                wider_bootloader_port.clone(),
+            ]])
+            .with_open_results(vec![
+                Err(FirmwareError::PortOpenFailed {
+                    detail: format!(
+                        "open serial port {}: permission denied",
+                        wider_bootloader_port.port_name
+                    ),
+                }),
+                Err(FirmwareError::PortOpenFailed {
+                    detail: format!(
+                        "open serial port {}: permission denied",
+                        selected_port.port_name
+                    ),
+                }),
+            ]);
+
+        let preflight = PreflightSnapshot {
+            port: selected_port.port_name.clone(),
+            baud: 57600,
+            ports_before: vec![selected_port.clone(), wider_bootloader_port.clone()],
+        };
+        let artifact = make_test_artifact(140, vec![0x01, 0x02, 0x03, 0x04]);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        match result {
+            SerialFlowResult::Failed { reason } => {
+                assert!(reason.contains(&selected_port.port_name), "got: {reason}");
+                assert!(reason.contains("permission denied"), "got: {reason}");
+            }
+            other => panic!(
+                "expected selected-port fatal failure to stay fatal when only wider heuristics preceded it, got: {other:?}"
+            ),
+        }
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[
+                wider_bootloader_port.port_name.clone(),
+                selected_port.port_name.clone(),
+            ],
+            "wider heuristics must not downgrade a selected-port fatal result just by existing"
+        );
+    }
+
+    #[test]
+    fn serial_flow_observed_transition_outcome_beats_selected_port_fatal_fallback() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let selected_port = make_normal_port();
+        let observed_bootloader_port = make_bootloader_port_named("/dev/ttyACM1", "BL111");
+        let wrong_board_probe = make_probe_only_mock(5, 9, flash_size);
+        let mut selected_fatal_probe = MockSerial::new();
+        selected_fatal_probe.queue_flush_failure(FirmwareError::ProtocolError {
+            detail: format!("selected-port fallback probe failed on {}", selected_port.port_name),
+        });
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![
+                vec![selected_port.clone(), observed_bootloader_port.clone()],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+            ])
+            .with_serial_mocks_for_port(&observed_bootloader_port.port_name, vec![wrong_board_probe])
+            .with_serial_mocks_for_port(&selected_port.port_name, vec![selected_fatal_probe]);
+
+        let preflight = PreflightSnapshot {
+            port: selected_port.port_name.clone(),
+            baud: 57600,
+            ports_before: vec![selected_port.clone()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        match result {
+            SerialFlowResult::BoardDetectionFailed { reason } => {
+                assert!(reason.contains("board mismatch"), "got: {reason}");
+                assert!(
+                    !reason.contains(&selected_port.port_name),
+                    "observed-transition mismatch should outrank selected-port fallback fatal: {reason}"
+                );
+            }
+            other => panic!(
+                "expected observed-transition outcome to outrank selected-port fatal fallback, got: {other:?}"
+            ),
+        }
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[
+                observed_bootloader_port.port_name.clone(),
+                selected_port.port_name.clone(),
+            ],
+            "observed transition must be probed before selected-port fallback and its outcome must carry precedence"
+        );
+    }
+
+    #[test]
+    fn serial_flow_multiple_wider_bootloader_candidates_continue_until_board_match() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let first_wider_bootloader_port = make_bootloader_port_named("/dev/ttyACM1", "BL111");
+        let second_wider_bootloader_port = make_bootloader_port_named("/dev/ttyACM2", "BL222");
+        let first_probe_only_wrong_board = make_probe_only_mock(5, 9, flash_size);
+        let second_upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![
+                first_wider_bootloader_port.clone(),
+                second_wider_bootloader_port.clone(),
+            ]])
+            .with_serial_mocks_for_port(
+                &first_wider_bootloader_port.port_name,
+                vec![first_probe_only_wrong_board],
+            )
+            .with_serial_mocks_for_port(
+                &second_wider_bootloader_port.port_name,
+                vec![second_upload_mock],
+            )
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyUSB9".into(),
+            baud: 57600,
+            ports_before: vec![
+                make_normal_port_named("/dev/ttyUSB9", "APP999"),
+                first_wider_bootloader_port.clone(),
+                second_wider_bootloader_port.clone(),
+            ],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[
+                first_wider_bootloader_port.port_name.clone(),
+                second_wider_bootloader_port.port_name.clone(),
+            ],
+            "board mismatch on one wider bootloader candidate must continue probing later ranked candidates"
+        );
+    }
+
+    #[test]
+    fn serial_flow_unrelated_new_port_matching_board_succeeds_after_board_mismatch() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let wrong_board_port = make_bootloader_port_named("/dev/ttyACM1", "BL111");
+        let unrelated_matching_port = make_bootloader_port_named("/dev/ttyACM2", "BL222");
+        let first_probe_only_wrong_board = make_probe_only_mock(5, 9, flash_size);
+        let second_upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![wrong_board_port.clone(), unrelated_matching_port.clone()]])
+            .with_serial_mocks_for_port(&wrong_board_port.port_name, vec![first_probe_only_wrong_board])
+            .with_serial_mocks_for_port(&unrelated_matching_port.port_name, vec![second_upload_mock])
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyUSB9".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port_named("/dev/ttyUSB9", "APP999")],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[
+                wrong_board_port.port_name.clone(),
+                unrelated_matching_port.port_name.clone(),
+            ],
+            "a new unrelated bootloader port with the right board must still be tried after an earlier board mismatch"
         );
     }
 
