@@ -21,7 +21,7 @@ pub(crate) enum FirmwareSessionPath {
 
 // ── Serial primary path ──
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum SerialFlashPhase {
     Idle,
@@ -575,7 +575,7 @@ impl From<std::io::Error> for FirmwareError {
 
 enum SessionState {
     Idle,
-    SerialPrimary,
+    SerialPrimary { phase: SerialFlashPhase },
     DfuRecovery { phase: DfuRecoveryPhase },
     Cancelling { path: FirmwareSessionPath },
     Completed { outcome: FirmwareOutcome },
@@ -600,14 +600,18 @@ impl FirmwareSessionHandle {
         let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
         match *guard {
             SessionState::Idle => {
-                *guard = SessionState::SerialPrimary;
+                *guard = SessionState::SerialPrimary {
+                    phase: SerialFlashPhase::Idle,
+                };
                 Ok(())
             }
             SessionState::Completed { .. } => {
-                *guard = SessionState::SerialPrimary;
+                *guard = SessionState::SerialPrimary {
+                    phase: SerialFlashPhase::Idle,
+                };
                 Ok(())
             }
-            SessionState::SerialPrimary => Err(FirmwareError::SessionBusy {
+            SessionState::SerialPrimary { .. } => Err(FirmwareError::SessionBusy {
                 current_session: "serial_primary".into(),
             }),
             SessionState::DfuRecovery { .. } => Err(FirmwareError::SessionBusy {
@@ -639,7 +643,7 @@ impl FirmwareSessionHandle {
                 };
                 Ok(())
             }
-            SessionState::SerialPrimary => Err(FirmwareError::SessionBusy {
+            SessionState::SerialPrimary { .. } => Err(FirmwareError::SessionBusy {
                 current_session: "serial_primary".into(),
             }),
             SessionState::DfuRecovery { .. } => Err(FirmwareError::SessionBusy {
@@ -655,7 +659,7 @@ impl FirmwareSessionHandle {
     pub(crate) fn mark_cancelling(&self) {
         let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
         match *guard {
-            SessionState::SerialPrimary => {
+            SessionState::SerialPrimary { .. } => {
                 *guard = SessionState::Cancelling {
                     path: FirmwareSessionPath::SerialPrimary,
                 };
@@ -685,6 +689,14 @@ impl FirmwareSessionHandle {
         }
     }
 
+    /// Update the current serial phase while flashing is active.
+    pub(crate) fn set_serial_phase(&self, phase: SerialFlashPhase) {
+        let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if matches!(*guard, SessionState::SerialPrimary { .. }) {
+            *guard = SessionState::SerialPrimary { phase };
+        }
+    }
+
     /// Update the current DFU phase while recovery is active.
     pub(crate) fn set_dfu_phase(&self, phase: DfuRecoveryPhase) {
         let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -704,9 +716,9 @@ impl FirmwareSessionHandle {
         let guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
         match *guard {
             SessionState::Idle => FirmwareSessionStatus::Idle,
-            SessionState::SerialPrimary => FirmwareSessionStatus::SerialPrimary {
-                phase: SerialFlashPhase::Idle,
-            },
+            SessionState::SerialPrimary { phase } => {
+                FirmwareSessionStatus::SerialPrimary { phase }
+            }
             SessionState::DfuRecovery { phase } => FirmwareSessionStatus::DfuRecovery { phase },
             SessionState::Cancelling { path } => FirmwareSessionStatus::Cancelling { path },
             SessionState::Completed { ref outcome } => FirmwareSessionStatus::Completed {

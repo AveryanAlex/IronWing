@@ -19,9 +19,9 @@ use crate::firmware::serial_executor::{self, PreflightSnapshot};
 use crate::firmware::types::{
     CatalogEntry, CatalogTargetSummary, DfuDeviceInfo, DfuRecoveryPhase, DfuRecoverySource,
     FirmwareError, FirmwareProgress, FirmwareSessionStatus, InventoryResult, PortInfo,
-    SerialBootloaderTransition, SerialFlashOptions, SerialFlashSource, SerialFlowResult,
-    SerialPreflightInfo, SerialReadiness, SerialReadinessBlockedReason, SerialReadinessRequest,
-    SerialReadinessResponse, SerialReadinessTargetHint,
+    SerialBootloaderTransition, SerialFlashOptions, SerialFlashPhase, SerialFlashSource,
+    SerialFlowResult, SerialPreflightInfo, SerialReadiness, SerialReadinessBlockedReason,
+    SerialReadinessRequest, SerialReadinessResponse, SerialReadinessTargetHint,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +39,17 @@ fn dfu_phase_label(phase: DfuRecoveryPhase) -> &'static str {
         DfuRecoveryPhase::Erasing => "erasing",
         DfuRecoveryPhase::Verifying => "verifying",
         DfuRecoveryPhase::ManifestingOrResetting => "manifesting_or_resetting",
+    }
+}
+
+fn serial_phase_from_label(label: &str) -> Option<SerialFlashPhase> {
+    match label {
+        "probing" => Some(SerialFlashPhase::Probing),
+        "erasing" | "extf_erasing" => Some(SerialFlashPhase::Erasing),
+        "programming" | "extf_programming" => Some(SerialFlashPhase::Programming),
+        "verifying" | "extf_verifying" => Some(SerialFlashPhase::Verifying),
+        "rebooting" => Some(SerialFlashPhase::Rebooting),
+        _ => None,
     }
 }
 
@@ -198,10 +209,12 @@ pub(crate) async fn firmware_flash_serial(
     let (task, abort_handle) = {
         let handle = tokio::task::spawn_blocking({
             let app = app.clone();
+            let firmware_session = state.firmware_session.clone();
             let preflight = preflight.clone();
             let artifact = artifact.clone();
             let cancel_requested = state.firmware_cancel_requested.clone();
             move || {
+                firmware_session.set_serial_phase(SerialFlashPhase::Probing);
                 let deps = serial_executor::RealSerialDeps;
                 serial_executor::execute_serial_flash_with_options(
                     &deps,
@@ -210,6 +223,9 @@ pub(crate) async fn firmware_flash_serial(
                     &options,
                     &|| cancel_requested.load(Ordering::SeqCst),
                     |phase, written, total| {
+                        if let Some(serial_phase) = serial_phase_from_label(phase) {
+                            firmware_session.set_serial_phase(serial_phase);
+                        }
                         let pct = if total > 0 {
                             (written as f32 / total as f32) * 100.0
                         } else {
