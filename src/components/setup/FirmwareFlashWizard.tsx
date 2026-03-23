@@ -22,6 +22,7 @@ import type {
   DfuDeviceInfo,
   CatalogEntry,
   CatalogTargetSummary,
+  SerialFlashOutcome,
   SerialReadinessRequest,
   SerialReadinessResponse,
 } from "../../firmware";
@@ -81,6 +82,56 @@ function OutcomeBanner({ kind, message }: { kind: "success" | "warning" | "error
       <span className={cn("text-xs leading-relaxed", cfg.color)}>{message}</span>
     </div>
   );
+}
+
+function serialOutcomeBanner(outcome: SerialFlashOutcome): { kind: "success" | "warning" | "error"; message: string } {
+  switch (outcome.result) {
+    case "verified":
+      return {
+        kind: "success",
+        message: "Firmware flashed and verified successfully. The flight controller is ready.",
+      };
+    case "reconnect_verified":
+      return outcome.flash_verified
+        ? {
+            kind: "success",
+            message: "Firmware flashed and verified successfully. The board reconnected after flashing and is ready.",
+          }
+        : {
+            kind: "warning",
+            message: "Firmware was written and the board reconnected after flashing, but the flash could not be verified (bootloader does not support CRC check). Power-cycle the board to confirm.",
+          };
+    case "cancelled":
+      return {
+        kind: "warning",
+        message: "Serial flash cancelled before completion.",
+      };
+    case "flashed_but_unverified":
+      return {
+        kind: "warning",
+        message: "Firmware was written but could not be verified (bootloader does not support CRC check). Power-cycle the board to confirm.",
+      };
+    case "reconnect_failed":
+      return {
+        kind: "warning",
+        message: `Firmware was written, but reconnect verification failed: ${outcome.reconnect_error}. Power-cycle the board to confirm.`,
+      };
+    case "failed":
+      return {
+        kind: "error",
+        message: `Flash failed: ${outcome.reason}`,
+      };
+    case "board_detection_failed":
+      return {
+        kind: "error",
+        message: `Board detection failed: ${outcome.reason}. If the board is unresponsive, try DFU recovery mode below.`,
+      };
+    case "extf_capacity_insufficient":
+      return {
+        kind: "error",
+        message: `The selected firmware requires more external flash capacity than this board provides: ${outcome.reason}. Use a build without the external-flash payload or perform a full-chip erase only on supported hardware.`,
+      };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -490,9 +541,12 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
   const serialCompleted = isCompleted && sessionStatus.outcome.path === "serial_primary";
   const dfuCompleted = isCompleted && sessionStatus.outcome.path === "dfu_recovery";
 
-  const serialOutcome = serialCompleted ? sessionStatus.outcome.outcome : null;
+  const serialOutcome: SerialFlashOutcome | null = serialCompleted
+    ? sessionStatus.outcome.outcome as SerialFlashOutcome
+    : null;
   const dfuOutcome = dfuCompleted ? sessionStatus.outcome.outcome : null;
   const dfuVerifiedCompleted = dfuCompleted && dfuOutcome?.result === "verified";
+  const serialOutcomeBannerConfig = serialOutcome ? serialOutcomeBanner(serialOutcome) : null;
 
   const driverGuidance = dfuOutcome && "guidance" in dfuOutcome
     ? dfuOutcome.guidance
@@ -678,26 +732,8 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
             {/* ── Completed outcome ── */}
             {serialCompleted && serialOutcome && (
               <>
-                {(serialOutcome.result === "verified" || (serialOutcome.result === "reconnect_verified" && serialOutcome.flash_verified)) && (
-                  <OutcomeBanner kind="success" message="Firmware flashed and verified successfully. The flight controller is ready." />
-                )}
-                {serialOutcome.result === "cancelled" && (
-                  <OutcomeBanner kind="warning" message="Serial flash cancelled before completion." />
-                )}
-                {(serialOutcome.result === "flashed_but_unverified" || (serialOutcome.result === "reconnect_verified" && !serialOutcome.flash_verified)) && (
-                  <OutcomeBanner kind="warning" message="Firmware was written but could not be verified (bootloader does not support CRC check). Power-cycle the board to confirm." />
-                )}
-                {serialOutcome.result === "reconnect_failed" && (
-                  <OutcomeBanner kind="warning" message={`Firmware was written, but reconnect verification failed: ${serialOutcome.reconnect_error}. Power-cycle the board to confirm.`} />
-                )}
-                {serialOutcome.result === "failed" && (
-                  <OutcomeBanner kind="error" message={`Flash failed: ${serialOutcome.reason}`} />
-                )}
-                {serialOutcome.result === "board_detection_failed" && (
-                  <OutcomeBanner kind="error" message={`Board detection failed: ${serialOutcome.reason}. If the board is unresponsive, try DFU recovery mode below.`} />
-                )}
-                {serialOutcome.result === "extf_capacity_insufficient" && (
-                  <OutcomeBanner kind="error" message={`Flash failed: ${serialOutcome.reason}`} />
+                {serialOutcomeBannerConfig && (
+                  <OutcomeBanner kind={serialOutcomeBannerConfig.kind} message={serialOutcomeBannerConfig.message} />
                 )}
                 <button
                   onClick={dismiss}

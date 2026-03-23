@@ -5,7 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SerialReadinessRequest, SerialReadinessResponse } from "../../firmware";
+import type { SerialFlashOutcome, SerialReadinessRequest, SerialReadinessResponse } from "../../firmware";
 import { FirmwareFlashWizard, type FirmwareFlashWizardProps } from "./FirmwareFlashWizard";
 
 function deferred<T>() {
@@ -130,6 +130,21 @@ function makeFirmware(
     catalogEntries: vi.fn().mockResolvedValue([]),
     ...overrides,
   } as FirmwareFlashWizardProps["firmware"];
+}
+
+function renderCompletedSerialOutcome(outcome: SerialFlashOutcome) {
+  return render(
+    <FirmwareFlashWizard
+      firmware={makeFirmware({
+        kind: "completed",
+        outcome: {
+          path: "serial_primary",
+          outcome,
+        },
+      })}
+      connected={false}
+    />,
+  );
 }
 
 describe("FirmwareFlashWizard", () => {
@@ -634,6 +649,70 @@ describe("FirmwareFlashWizard", () => {
     expect(
       screen.getByText("DFU flash completed, but device reset could not be confirmed. Reconnect or power-cycle the board before continuing."),
     ).toBeTruthy();
+  });
+
+  it("renders reconnect_verified success copy when flash verification succeeded", () => {
+    renderCompletedSerialOutcome({
+      result: "reconnect_verified",
+      board_id: 9,
+      bootloader_rev: 4,
+      flash_verified: true,
+    });
+
+    expect(
+      screen.getByText("Firmware flashed and verified successfully. The board reconnected after flashing and is ready."),
+    ).toBeTruthy();
+  });
+
+  it("renders reconnect_verified unverified copy when reconnect succeeded but CRC verification did not", () => {
+    renderCompletedSerialOutcome({
+      result: "reconnect_verified",
+      board_id: 9,
+      bootloader_rev: 2,
+      flash_verified: false,
+    });
+
+    expect(
+      screen.getByText("Firmware was written and the board reconnected after flashing, but the flash could not be verified (bootloader does not support CRC check). Power-cycle the board to confirm."),
+    ).toBeTruthy();
+  });
+
+  it("renders reconnect_failed warning copy with the reconnect error", () => {
+    renderCompletedSerialOutcome({
+      result: "reconnect_failed",
+      board_id: 9,
+      bootloader_rev: 4,
+      flash_verified: true,
+      reconnect_error: "timeout waiting for heartbeat",
+    });
+
+    expect(
+      screen.getByText("Firmware was written, but reconnect verification failed: timeout waiting for heartbeat. Power-cycle the board to confirm."),
+    ).toBeTruthy();
+  });
+
+  it("renders recovery-oriented board detection failure copy distinct from generic flash failures", () => {
+    renderCompletedSerialOutcome({
+      result: "board_detection_failed",
+      reason: "no bootloader detected on the selected port",
+    });
+
+    expect(
+      screen.getByText("Board detection failed: no bootloader detected on the selected port. If the board is unresponsive, try DFU recovery mode below."),
+    ).toBeTruthy();
+    expect(screen.queryByText("Flash failed: no bootloader detected on the selected port")).toBeNull();
+  });
+
+  it("renders external-flash capacity copy distinct from generic flash failures", () => {
+    renderCompletedSerialOutcome({
+      result: "extf_capacity_insufficient",
+      reason: "external flash requires 16 MiB but only 8 MiB is available",
+    });
+
+    expect(
+      screen.getByText("The selected firmware requires more external flash capacity than this board provides: external flash requires 16 MiB but only 8 MiB is available. Use a build without the external-flash payload or perform a full-chip erase only on supported hardware."),
+    ).toBeTruthy();
+    expect(screen.queryByText("Flash failed: external flash requires 16 MiB but only 8 MiB is available")).toBeNull();
   });
 
   it("auto-returns verified DFU recovery to install/update with follow-up guidance", async () => {
