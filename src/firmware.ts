@@ -15,16 +15,21 @@ export type DfuRecoveryPhase =
   | "idle"
   | "detecting"
   | "downloading"
-  | "verifying";
+  | "erasing"
+  | "verifying"
+  | "manifesting_or_resetting";
 
 export type SerialFlashOutcome =
   | { result: "verified" }
+  | { result: "cancelled" }
   | { result: "flashed_but_unverified" }
   | { result: "failed"; reason: string }
   | { result: "recovery_needed"; reason: string };
 
 export type DfuRecoveryOutcome =
   | { result: "verified" }
+  | { result: "cancelled" }
+  | { result: "reset_unconfirmed" }
   | { result: "failed"; reason: string }
   | { result: "unsupported_recovery_path"; guidance: string };
 
@@ -36,6 +41,7 @@ export type FirmwareSessionStatus =
   | { kind: "idle" }
   | { kind: "serial_primary"; phase: SerialFlashPhase }
   | { kind: "dfu_recovery"; phase: DfuRecoveryPhase }
+  | { kind: "cancelling"; path: "serial_primary" | "dfu_recovery" }
   | { kind: "completed"; outcome: FirmwareOutcome };
 
 // ── Progress (mirrors Rust FirmwareProgress) ──
@@ -66,6 +72,7 @@ export type InventoryResult =
 export type DfuDeviceInfo = {
   vid: number;
   pid: number;
+  unique_id: string;
   serial_number: string | null;
   manufacturer: string | null;
   product: string | null;
@@ -93,8 +100,44 @@ export type SerialFlashSource =
   | { kind: "catalog_url"; url: string }
   | { kind: "local_apj_bytes"; data: number[] };
 
+export type SerialFlashOptions = {
+  full_chip_erase: boolean;
+};
+
+export type SerialReadinessRequest = {
+  port: string;
+  source: SerialFlashSource;
+  options?: SerialFlashOptions;
+};
+
+export type SerialReadinessBlockedReason =
+  | "session_busy"
+  | "port_unselected"
+  | "port_unavailable"
+  | "source_missing";
+
+export type SerialReadinessTargetHint = {
+  detected_board_id: number | null;
+};
+
+export type SerialBootloaderTransition =
+  | { kind: "auto_reboot_supported" }
+  | { kind: "already_in_bootloader" }
+  | { kind: "manual_bootloader_entry_required" }
+  | { kind: "target_mismatch" };
+
+export type SerialReadinessResponse = {
+  can_start: boolean;
+  session_ready: boolean;
+  session_status: FirmwareSessionStatus;
+  blocked_reason: SerialReadinessBlockedReason | null;
+  target_hint: SerialReadinessTargetHint | null;
+  validation_pending: boolean;
+  bootloader_transition: SerialBootloaderTransition;
+};
+
 export type DfuRecoverySource =
-  | { kind: "catalog_url"; url: string }
+  | { kind: "official_bootloader"; board_target: string }
   | { kind: "local_apj_bytes"; data: number[] }
   | { kind: "local_bin_bytes"; data: number[] };
 
@@ -103,6 +146,7 @@ export type SerialFlowResult =
   | { result: "flashed_but_unverified"; board_id: number; bootloader_rev: number; port: string }
   | { result: "reconnect_verified"; board_id: number; bootloader_rev: number; flash_verified: boolean }
   | { result: "reconnect_failed"; board_id: number; bootloader_rev: number; flash_verified: boolean; reconnect_error: string }
+  | { result: "cancelled" }
   | { result: "failed"; reason: string }
   | { result: "board_detection_failed"; reason: string }
   | { result: "extf_capacity_insufficient"; reason: string };
@@ -111,6 +155,8 @@ export type SerialFlowResult =
 
 export type DfuRecoveryResult =
   | { result: "verified" }
+  | { result: "cancelled" }
+  | { result: "reset_unconfirmed" }
   | { result: "failed"; reason: string }
   | { result: "driver_guidance"; guidance: string }
   | { result: "platform_unsupported" };
@@ -152,14 +198,8 @@ export async function firmwareCatalogTargets(): Promise<CatalogTargetSummary[]> 
   return invoke<CatalogTargetSummary[]>("firmware_catalog_targets");
 }
 
-// ── DFU source inspection ──
-
-export type DfuSourceCheck = {
-  has_extf: boolean;
-};
-
-export async function firmwareCheckDfuSource(url: string): Promise<DfuSourceCheck> {
-  return invoke<DfuSourceCheck>("firmware_check_dfu_source", { url });
+export async function firmwareRecoveryCatalogTargets(): Promise<CatalogTargetSummary[]> {
+  return invoke<CatalogTargetSummary[]>("firmware_recovery_catalog_targets");
 }
 
 // ── Serial primary commands ──
@@ -172,14 +212,17 @@ export async function firmwareFlashSerial(
   port: string,
   baud: number,
   source: SerialFlashSource,
+  options?: SerialFlashOptions,
 ): Promise<SerialFlowResult> {
   return invoke<SerialFlowResult>("firmware_flash_serial", {
-    request: { port, baud, source },
+    request: { port, baud, source, options: options ?? null },
   });
 }
 
-export async function firmwareRebootToBootloader(): Promise<void> {
-  return invoke<void>("firmware_reboot_to_bootloader");
+export async function firmwareSerialReadiness(
+  request: SerialReadinessRequest,
+): Promise<SerialReadinessResponse> {
+  return invoke<SerialReadinessResponse>("firmware_serial_readiness", { request });
 }
 
 // ── DFU recovery commands ──
@@ -201,6 +244,10 @@ export async function firmwareSessionStatus(): Promise<FirmwareSessionStatus> {
 
 export async function firmwareSessionCancel(): Promise<void> {
   return invoke<void>("firmware_session_cancel");
+}
+
+export async function firmwareSessionClearCompleted(): Promise<void> {
+  return invoke<void>("firmware_session_clear_completed");
 }
 
 // ── Port / device inventory commands ──

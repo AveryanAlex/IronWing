@@ -8,7 +8,15 @@ pub(crate) enum FirmwareSessionStatus {
     Idle,
     SerialPrimary { phase: SerialFlashPhase },
     DfuRecovery { phase: DfuRecoveryPhase },
+    Cancelling { path: FirmwareSessionPath },
     Completed { outcome: FirmwareOutcome },
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum FirmwareSessionPath {
+    SerialPrimary,
+    DfuRecovery,
 }
 
 // ── Serial primary path ──
@@ -28,6 +36,7 @@ pub(crate) enum SerialFlashPhase {
 #[serde(tag = "result", rename_all = "snake_case")]
 pub(crate) enum SerialFlashOutcome {
     Verified,
+    Cancelled,
     FlashedButUnverified,
     Failed { reason: String },
     RecoveryNeeded { reason: String },
@@ -35,19 +44,23 @@ pub(crate) enum SerialFlashOutcome {
 
 // ── DFU recovery path (separate product path, not a branch of serial) ──
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum DfuRecoveryPhase {
     Idle,
     Detecting,
     Downloading,
+    Erasing,
     Verifying,
+    ManifestingOrResetting,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub(crate) enum DfuRecoveryOutcome {
     Verified,
+    Cancelled,
+    ResetUnconfirmed,
     Failed { reason: String },
     UnsupportedRecoveryPath { guidance: String },
 }
@@ -97,6 +110,7 @@ pub(crate) struct DfuRecoveryIdentity {
     pub(crate) vendor_id: u16,
     pub(crate) product_id: u16,
     pub(crate) device_label: String,
+    pub(crate) unique_id: String,
 }
 
 // ── Action-required prompts (firmware flow pauses for user decision) ──
@@ -155,6 +169,7 @@ pub(crate) enum InventoryResult {
 pub(crate) struct DfuDeviceInfo {
     pub(crate) vid: u16,
     pub(crate) pid: u16,
+    pub(crate) unique_id: String,
     pub(crate) serial_number: Option<String>,
     pub(crate) manufacturer: Option<String>,
     pub(crate) product: Option<String>,
@@ -215,11 +230,57 @@ pub(crate) struct SerialPreflightInfo {
 
 // ── Serial flash source (command-level: what the frontend sends) ──
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(crate) enum SerialFlashSource {
     CatalogUrl { url: String },
     LocalApjBytes { data: Vec<u8> },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct SerialFlashOptions {
+    pub(crate) full_chip_erase: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct SerialReadinessRequest {
+    pub(crate) port: String,
+    pub(crate) source: SerialFlashSource,
+    pub(crate) options: Option<SerialFlashOptions>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct SerialReadinessResponse {
+    pub(crate) can_start: bool,
+    pub(crate) session_ready: bool,
+    pub(crate) session_status: FirmwareSessionStatus,
+    pub(crate) blocked_reason: Option<SerialReadinessBlockedReason>,
+    pub(crate) target_hint: Option<SerialReadinessTargetHint>,
+    pub(crate) validation_pending: bool,
+    pub(crate) bootloader_transition: SerialBootloaderTransition,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(crate) enum SerialBootloaderTransition {
+    AutoRebootSupported,
+    AlreadyInBootloader,
+    ManualBootloaderEntryRequired,
+    TargetMismatch,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum SerialReadinessBlockedReason {
+    SessionBusy,
+    PortUnselected,
+    PortUnavailable,
+    SourceMissing,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct SerialReadinessTargetHint {
+    pub(crate) detected_board_id: Option<u32>,
 }
 
 // ── DFU recovery source (command-level: what the frontend sends) ──
@@ -227,8 +288,8 @@ pub(crate) enum SerialFlashSource {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(crate) enum DfuRecoverySource {
-    /// Download APJ from the official catalog URL, extract internal image for DFU.
-    CatalogUrl { url: String },
+    /// Resolve the official recovery bootloader image for a board target.
+    OfficialBootloader { board_target: String },
     /// User-provided APJ file bytes, extract internal image for DFU.
     LocalApjBytes { data: Vec<u8> },
     /// User-provided raw BIN file bytes, pass directly to DFU executor.
@@ -267,6 +328,8 @@ pub(crate) enum SerialFlowResult {
         flash_verified: bool,
         reconnect_error: String,
     },
+    /// Flash was cancelled before completion.
+    Cancelled,
     /// Serial flow failed and may need manual recovery. Never auto-enters DFU.
     Failed { reason: String },
     /// Board detection during bootloader phase failed.
@@ -284,6 +347,7 @@ impl SerialFlowResult {
                 flash_verified: true,
                 ..
             } => SerialFlashOutcome::Verified,
+            Self::Cancelled => SerialFlashOutcome::Cancelled,
             Self::FlashedButUnverified { .. }
             | Self::ReconnectVerified {
                 flash_verified: false,
@@ -317,8 +381,24 @@ pub(crate) enum FirmwareError {
         expected: u32,
         actual: u32,
     },
+    PortOpenTransient {
+        detail: String,
+    },
+    PortOpenFailed {
+        detail: String,
+    },
+    BootloaderSyncMismatch {
+        received: u8,
+    },
+    IoTransient {
+        detail: String,
+    },
     ArtifactInvalid {
         reason: String,
+    },
+    Cancelled,
+    Timeout {
+        context: String,
     },
     ProtocolError {
         detail: String,
@@ -329,6 +409,19 @@ pub(crate) enum FirmwareError {
     PlatformUnsupported,
     CatalogUnavailable {
         reason: String,
+    },
+    UnsupportedDfuBootloaderTarget {
+        guidance: String,
+    },
+    ManualDfuRecoveryRequiresSerialPath {
+        guidance: String,
+    },
+    DfuExactTargetingUnavailable {
+        guidance: String,
+    },
+    InternalFlashCapacityInsufficient {
+        board_capacity: u32,
+        firmware_needs: u32,
     },
     ExtfCapacityInsufficient {
         board_capacity: u32,
@@ -347,7 +440,17 @@ impl std::fmt::Display for FirmwareError {
             Self::BoardMismatch { expected, actual } => {
                 write!(f, "board mismatch: expected {expected}, got {actual}")
             }
+            Self::PortOpenTransient { detail } => {
+                write!(f, "transient port open failure: {detail}")
+            }
+            Self::PortOpenFailed { detail } => write!(f, "port open failure: {detail}"),
+            Self::BootloaderSyncMismatch { received } => {
+                write!(f, "bootloader sync mismatch: got 0x{received:02X}")
+            }
+            Self::IoTransient { detail } => write!(f, "transient I/O failure: {detail}"),
             Self::ArtifactInvalid { reason } => write!(f, "invalid firmware artifact: {reason}"),
+            Self::Cancelled => write!(f, "flash cancellation requested"),
+            Self::Timeout { context } => write!(f, "timed out waiting for {context}"),
             Self::ProtocolError { detail } => write!(f, "protocol error: {detail}"),
             Self::UsbAccessDenied { guidance } => write!(f, "USB access denied: {guidance}"),
             Self::PlatformUnsupported => {
@@ -355,6 +458,24 @@ impl std::fmt::Display for FirmwareError {
             }
             Self::CatalogUnavailable { reason } => {
                 write!(f, "firmware catalog unavailable: {reason}")
+            }
+            Self::UnsupportedDfuBootloaderTarget { guidance } => {
+                write!(f, "unsupported DFU official bootloader target: {guidance}")
+            }
+            Self::ManualDfuRecoveryRequiresSerialPath { guidance } => {
+                write!(f, "manual DFU recovery requires serial path: {guidance}")
+            }
+            Self::DfuExactTargetingUnavailable { guidance } => {
+                write!(f, "DFU exact targeting unavailable: {guidance}")
+            }
+            Self::InternalFlashCapacityInsufficient {
+                board_capacity,
+                firmware_needs,
+            } => {
+                write!(
+                    f,
+                    "internal-flash capacity insufficient: board reports {board_capacity} bytes, firmware needs {firmware_needs} bytes"
+                )
             }
             Self::ExtfCapacityInsufficient {
                 board_capacity,
@@ -392,17 +513,20 @@ impl From<std::io::Error> for FirmwareError {
 enum SessionState {
     Idle,
     SerialPrimary,
-    DfuRecovery,
+    DfuRecovery { phase: DfuRecoveryPhase },
+    Cancelling { path: FirmwareSessionPath },
+    Completed { outcome: FirmwareOutcome },
 }
 
+#[derive(Clone)]
 pub(crate) struct FirmwareSessionHandle {
-    state: std::sync::Mutex<SessionState>,
+    state: std::sync::Arc<std::sync::Mutex<SessionState>>,
 }
 
 impl FirmwareSessionHandle {
     pub(crate) fn new() -> Self {
         Self {
-            state: std::sync::Mutex::new(SessionState::Idle),
+            state: std::sync::Arc::new(std::sync::Mutex::new(SessionState::Idle)),
         }
     }
 
@@ -416,11 +540,18 @@ impl FirmwareSessionHandle {
                 *guard = SessionState::SerialPrimary;
                 Ok(())
             }
+            SessionState::Completed { .. } => {
+                *guard = SessionState::SerialPrimary;
+                Ok(())
+            }
             SessionState::SerialPrimary => Err(FirmwareError::SessionBusy {
                 current_session: "serial_primary".into(),
             }),
-            SessionState::DfuRecovery => Err(FirmwareError::SessionBusy {
+            SessionState::DfuRecovery { .. } => Err(FirmwareError::SessionBusy {
                 current_session: "dfu_recovery".into(),
+            }),
+            SessionState::Cancelling { .. } => Err(FirmwareError::SessionBusy {
+                current_session: "cancelling".into(),
             }),
         }
     }
@@ -434,15 +565,68 @@ impl FirmwareSessionHandle {
         let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
         match *guard {
             SessionState::Idle => {
-                *guard = SessionState::DfuRecovery;
+                *guard = SessionState::DfuRecovery {
+                    phase: DfuRecoveryPhase::Idle,
+                };
+                Ok(())
+            }
+            SessionState::Completed { .. } => {
+                *guard = SessionState::DfuRecovery {
+                    phase: DfuRecoveryPhase::Idle,
+                };
                 Ok(())
             }
             SessionState::SerialPrimary => Err(FirmwareError::SessionBusy {
                 current_session: "serial_primary".into(),
             }),
-            SessionState::DfuRecovery => Err(FirmwareError::SessionBusy {
+            SessionState::DfuRecovery { .. } => Err(FirmwareError::SessionBusy {
                 current_session: "dfu_recovery".into(),
             }),
+            SessionState::Cancelling { .. } => Err(FirmwareError::SessionBusy {
+                current_session: "cancelling".into(),
+            }),
+        }
+    }
+
+    /// Mark the session as cancelling while async task shutdown is in progress.
+    pub(crate) fn mark_cancelling(&self) {
+        let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        match *guard {
+            SessionState::SerialPrimary => {
+                *guard = SessionState::Cancelling {
+                    path: FirmwareSessionPath::SerialPrimary,
+                };
+            }
+            SessionState::DfuRecovery { .. } => {
+                *guard = SessionState::Cancelling {
+                    path: FirmwareSessionPath::DfuRecovery,
+                };
+            }
+            SessionState::Idle
+            | SessionState::Cancelling { .. }
+            | SessionState::Completed { .. } => {}
+        }
+    }
+
+    /// Record the terminal outcome so polling can report it honestly.
+    pub(crate) fn complete(&self, outcome: FirmwareOutcome) {
+        let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = SessionState::Completed { outcome };
+    }
+
+    /// Clear a completed session back to idle without disturbing active work.
+    pub(crate) fn clear_completed(&self) {
+        let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if matches!(*guard, SessionState::Completed { .. }) {
+            *guard = SessionState::Idle;
+        }
+    }
+
+    /// Update the current DFU phase while recovery is active.
+    pub(crate) fn set_dfu_phase(&self, phase: DfuRecoveryPhase) {
+        let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if matches!(*guard, SessionState::DfuRecovery { .. }) {
+            *guard = SessionState::DfuRecovery { phase };
         }
     }
 
@@ -460,8 +644,10 @@ impl FirmwareSessionHandle {
             SessionState::SerialPrimary => FirmwareSessionStatus::SerialPrimary {
                 phase: SerialFlashPhase::Idle,
             },
-            SessionState::DfuRecovery => FirmwareSessionStatus::DfuRecovery {
-                phase: DfuRecoveryPhase::Idle,
+            SessionState::DfuRecovery { phase } => FirmwareSessionStatus::DfuRecovery { phase },
+            SessionState::Cancelling { path } => FirmwareSessionStatus::Cancelling { path },
+            SessionState::Completed { ref outcome } => FirmwareSessionStatus::Completed {
+                outcome: outcome.clone(),
             },
         }
     }
