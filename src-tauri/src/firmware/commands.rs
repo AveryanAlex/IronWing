@@ -855,7 +855,6 @@ pub(crate) async fn firmware_flash_dfu_recovery(
                     &|| cancel_requested.load(Ordering::SeqCst),
                     |phase| report_dfu_phase(&app, &firmware_session, phase),
                     |written, total| {
-                        firmware_session.set_dfu_phase(DfuRecoveryPhase::Downloading);
                         emit_dfu_progress(&app, DfuRecoveryPhase::Downloading, written, total)
                     },
                 )
