@@ -45,7 +45,7 @@ export function TapeGauge({
   const isVertical = orientation === "vertical";
   const { width, height } = size;
   const displayValue = value ?? 0;
-  const hasValue = value !== undefined && !Number.isNaN(value);
+  const hasValue = value != null && !Number.isNaN(value);
 
   // Quantize to nearest integer to avoid recalculating ticks on sub-pixel jitter
   const quantized = Math.round(displayValue);

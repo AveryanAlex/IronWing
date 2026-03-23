@@ -31,8 +31,8 @@ export function ArtificialHorizon({ pitch, roll, size, climbRate, groundSpeed }:
   const { width, height } = size;
   const cx = width / 2;
   const cy = height / 2;
-  const hasPitch = pitch !== undefined && !Number.isNaN(pitch);
-  const hasRoll = roll !== undefined && !Number.isNaN(roll);
+  const hasPitch = pitch != null && !Number.isNaN(pitch);
+  const hasRoll = roll != null && !Number.isNaN(roll);
 
   const pitchVal = hasPitch ? Math.max(-PITCH_CLAMP, Math.min(PITCH_CLAMP, pitch)) : 0;
   const rollVal = hasRoll ? roll : 0;

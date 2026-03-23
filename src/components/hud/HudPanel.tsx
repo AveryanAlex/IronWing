@@ -25,7 +25,7 @@ function fmtInt(value: number | undefined): string {
 /** Battery bar SVG */
 function BatteryIcon({ pct }: { pct: number | undefined }) {
   const level = typeof pct === "number" ? Math.max(0, Math.min(100, pct)) : 0;
-  const hasPct = pct !== undefined;
+  const hasPct = pct != null;
   const color = !hasPct ? "#12b9ff" : level > 30 ? "#57e38b" : level > 15 ? "#ffb020" : "#ff4444";
   return (
     <svg width={28} height={14} viewBox="0 0 28 14">
@@ -117,7 +117,7 @@ export function HudPanel({ vehicle, mission, svsEnabled }: HudPanelProps) {
                 ? `${missionState.current_index + 1}/${missionState.plan?.items.length ?? 0}`
                 : "--/--"}
             </div>
-            {telemetry.wp_dist_m !== undefined && (
+            {telemetry.wp_dist_m != null && (
               <div className="text-[9px]">{fmtInt(telemetry.wp_dist_m)}m</div>
             )}
           </div>
@@ -227,7 +227,7 @@ export function HudPanel({ vehicle, mission, svsEnabled }: HudPanelProps) {
               <span className="text-[9px] opacity-50">HDG </span>
               <span className="text-xs">{fmtInt(telemetry.heading_deg)}°</span>
             </div>
-            {telemetry.height_above_terrain_m !== undefined && (
+            {telemetry.height_above_terrain_m != null && (
               <div>
                 <span className="text-[9px] opacity-50">AGL </span>
                 <span className="text-xs" style={{ color: "#57e38b" }}>
