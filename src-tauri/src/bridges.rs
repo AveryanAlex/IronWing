@@ -96,7 +96,6 @@ pub(crate) fn spawn_event_bridges(
         let bat_current = telemetry.battery().current_a();
         let gps_quality = telemetry.gps().quality();
         let nav_wp = telemetry.navigation().waypoint();
-        let armed_metric = telemetry.armed();
 
         let handle = app.clone();
         tasks.push(tokio::spawn(async move {
@@ -104,21 +103,33 @@ pub(crate) fn spawn_event_bridges(
                 let ms = TELEMETRY_INTERVAL_MS.load(Ordering::Relaxed);
                 tokio::time::sleep(Duration::from_millis(ms)).await;
 
-                // Build a JSON snapshot from individual metric handles
+                // Build a flat JSON snapshot keyed to match telemetry_state_from_value()
                 let snapshot = serde_json::json!({
-                    "position": position_global.latest().and_then(|s| serde_json::to_value(&s.value).ok()),
-                    "groundspeed_mps": groundspeed.latest().map(|s| s.value),
+                    // Position — extract from nested GlobalPosition
+                    "latitude_deg": position_global.latest().map(|s| s.value.latitude_deg),
+                    "longitude_deg": position_global.latest().map(|s| s.value.longitude_deg),
+                    "altitude_m": position_global.latest().map(|s| s.value.altitude_msl_m),
+                    // Flight
+                    "speed_mps": groundspeed.latest().map(|s| s.value),
                     "airspeed_mps": airspeed.latest().map(|s| s.value),
                     "climb_rate_mps": climb_rate.latest().map(|s| s.value),
                     "heading_deg": heading.latest().map(|s| s.value),
                     "throttle_pct": throttle.latest().map(|s| s.value),
-                    "attitude": attitude.latest().and_then(|s| serde_json::to_value(&s.value).ok()),
-                    "battery_remaining_pct": bat_remaining.latest().map(|s| s.value),
+                    // Attitude — extract from nested EulerAttitude
+                    "roll_deg": attitude.latest().map(|s| s.value.roll_deg),
+                    "pitch_deg": attitude.latest().map(|s| s.value.pitch_deg),
+                    "yaw_deg": attitude.latest().map(|s| s.value.yaw_deg),
+                    // Battery
+                    "battery_pct": bat_remaining.latest().map(|s| s.value),
                     "battery_voltage_v": bat_voltage.latest().map(|s| s.value),
                     "battery_current_a": bat_current.latest().map(|s| s.value),
-                    "gps": gps_quality.latest().and_then(|s| serde_json::to_value(&s.value).ok()),
-                    "navigation_waypoint": nav_wp.latest().and_then(|s| serde_json::to_value(&s.value).ok()),
-                    "armed": armed_metric.latest().map(|s| s.value),
+                    // GPS — extract from nested GpsQuality
+                    "gps_fix_type": gps_quality.latest().map(|s| format!("{:?}", s.value.fix_type).to_lowercase()),
+                    "gps_satellites": gps_quality.latest().and_then(|s| s.value.satellites.map(|v| v as u64)),
+                    "gps_hdop": gps_quality.latest().and_then(|s| s.value.hdop),
+                    // Navigation waypoint — extract from nested WaypointProgress
+                    "wp_dist_m": nav_wp.latest().map(|s| s.value.distance_m),
+                    "nav_bearing_deg": nav_wp.latest().map(|s| s.value.bearing_deg),
                 });
 
                 let grouped = telemetry_snapshot_from_value(
