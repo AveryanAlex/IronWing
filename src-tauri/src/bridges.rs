@@ -1,11 +1,11 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
+use crate::e2e_emit::emit_event;
 use mavkit::{
     HomePosition, LinkState, MagCalProgress, MagCalReport, ParamProgress, ParamStore, SensorHealth,
     StatusMessage, Telemetry, TransferProgress, Vehicle, VehicleState,
 };
-use crate::e2e_emit::emit_event;
 
 pub(crate) static TELEMETRY_INTERVAL_MS: AtomicU64 = AtomicU64::new(200);
 

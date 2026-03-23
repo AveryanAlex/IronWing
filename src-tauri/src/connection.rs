@@ -1,13 +1,19 @@
 use mavkit::{Vehicle, VehicleConfig};
+use mavlink::MessageData;
 use mavlink::common::{
     ATTITUDE_DATA, GLOBAL_POSITION_INT_DATA, GPS_RAW_INT_DATA, MavCmd, SYS_STATUS_DATA,
 };
-use mavlink::MessageData;
 use serde::Deserialize;
 #[cfg(target_os = "android")]
 use tauri::Manager;
 
 use crate::AppState;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ActiveLinkTarget {
+    Serial { port: String },
+    Other,
+}
 
 #[derive(Deserialize)]
 pub(crate) struct ConnectRequest {
@@ -37,10 +43,7 @@ pub(crate) enum LinkEndpoint {
     },
 }
 
-async fn connect_via_address(
-    state: &AppState,
-    address: String,
-) -> Result<Vehicle, String> {
+async fn connect_via_address(state: &AppState, address: String) -> Result<Vehicle, String> {
     let task = tokio::spawn(async move { Vehicle::connect(&address).await });
     *state.connect_abort.lock().await = Some(task.abort_handle());
 
@@ -75,9 +78,7 @@ async fn request_tcp_telemetry_streams(vehicle: Vehicle) {
             )
             .await
         {
-            tracing::warn!(
-                "failed to request telemetry stream for message id {message_id}: {err}"
-            );
+            tracing::warn!("failed to request telemetry stream for message id {message_id}: {err}");
         }
     }
 }
@@ -86,9 +87,11 @@ async fn store_connected_vehicle(
     state: &AppState,
     app: &tauri::AppHandle,
     vehicle: Vehicle,
+    active_target: ActiveLinkTarget,
 ) -> Result<(), String> {
     crate::bridges::spawn_event_bridges(app, &vehicle);
     *state.vehicle.lock().await = Some(vehicle);
+    *state.active_link_target.lock().await = Some(active_target);
     Ok(())
 }
 
@@ -114,27 +117,27 @@ pub(crate) async fn connect_link(
     match request.endpoint {
         LinkEndpoint::Udp { bind_addr } => {
             let vehicle = connect_via_address(&state, format!("udpin:{bind_addr}")).await?;
-            store_connected_vehicle(&state, &app, vehicle).await
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await
         }
         LinkEndpoint::Tcp { address } => {
             let vehicle = connect_via_address(&state, format!("tcpout:{address}")).await?;
-            store_connected_vehicle(&state, &app, vehicle.clone()).await?;
+            store_connected_vehicle(&state, &app, vehicle.clone(), ActiveLinkTarget::Other).await?;
             tauri::async_runtime::spawn(request_tcp_telemetry_streams(vehicle));
             Ok(())
         }
         #[cfg(not(target_os = "android"))]
         LinkEndpoint::Serial { port, baud } => {
             let vehicle = connect_via_address(&state, format!("serial:{port}:{baud}")).await?;
-            store_connected_vehicle(&state, &app, vehicle).await
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Serial { port }).await
         }
         LinkEndpoint::BluetoothBle { address } => {
             let vehicle = connect_ble(&address).await?;
-            store_connected_vehicle(&state, &app, vehicle).await
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await
         }
         #[cfg(target_os = "android")]
         LinkEndpoint::BluetoothSpp { address } => {
             let vehicle = connect_spp(&app, &address).await?;
-            store_connected_vehicle(&state, &app, vehicle).await
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await
         }
     }
 }
@@ -284,6 +287,7 @@ pub(crate) async fn force_disconnect(state: &AppState) -> Result<(), String> {
     }
 
     let vehicle = state.vehicle.lock().await.take();
+    *state.active_link_target.lock().await = None;
     if let Some(v) = vehicle {
         v.disconnect().await.map_err(|e| e.to_string())?;
     }
@@ -292,4 +296,8 @@ pub(crate) async fn force_disconnect(state: &AppState) -> Result<(), String> {
 
 pub(crate) async fn is_vehicle_connected(state: &AppState) -> bool {
     state.vehicle.lock().await.is_some()
+}
+
+pub(crate) async fn active_link_target(state: &AppState) -> Option<ActiveLinkTarget> {
+    state.active_link_target.lock().await.clone()
 }
