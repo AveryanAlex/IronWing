@@ -7,7 +7,14 @@ import {
   type PolygonVertex,
   type GridResult,
 } from "./mission-grid";
-import { degE7ToDeg } from "./mission-coordinates";
+import {
+  commandCategory,
+  commandPosition,
+  geoPoint3dLatLon,
+  geoPoint3dAltitude,
+  type MissionItem,
+  type GeoPoint3d,
+} from "./mavkit-types";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -45,6 +52,21 @@ function assertErr(result: GridResult) {
   expect(result.ok).toBe(false);
   if (result.ok) throw new Error("Expected error result");
   return result.errors;
+}
+
+/** Extract position from a grid-generated item (always NavWaypoint). */
+function itemPosition(item: MissionItem): GeoPoint3d {
+  const pos = commandPosition(item.command);
+  if (!pos) throw new Error("Expected command with position");
+  return pos;
+}
+
+function itemLatLon(item: MissionItem): { latitude_deg: number; longitude_deg: number } {
+  return geoPoint3dLatLon(itemPosition(item));
+}
+
+function itemAlt(item: MissionItem): number {
+  return geoPoint3dAltitude(itemPosition(item)).value;
 }
 
 // ---------------------------------------------------------------------------
@@ -179,18 +201,14 @@ describe("generateGrid", () => {
     expect(items.length % 2).toBe(0); // each lane has 2 endpoints
   });
 
-  it("all items have command 16, global_relative_alt_int, autocontinue", () => {
+  it("all items are Nav Waypoint commands with RelHome frame and autocontinue", () => {
     const items = assertOk(generateGrid(defaultParams()));
     for (const item of items) {
-      expect(item.command).toBe(16);
-      expect(item.frame).toBe("global_relative_alt_int");
+      expect(commandCategory(item.command)).toBe("nav");
       expect(item.autocontinue).toBe(true);
+      const pos = itemPosition(item);
+      expect("RelHome" in pos).toBe(true);
     }
-  });
-
-  it("items are sequenced starting at 0", () => {
-    const items = assertOk(generateGrid(defaultParams()));
-    items.forEach((item, i) => expect(item.seq).toBe(i));
   });
 
   it("first item has current=true, others false", () => {
@@ -204,7 +222,7 @@ describe("generateGrid", () => {
   it("altitude is set on all items", () => {
     const items = assertOk(generateGrid(defaultParams({ altitude_m: 75 })));
     for (const item of items) {
-      expect(item.z).toBe(75);
+      expect(itemAlt(item)).toBe(75);
     }
   });
 
@@ -218,22 +236,23 @@ describe("generateGrid", () => {
     const lonMax = Math.max(...poly.map((v) => v.longitude_deg)) + 0.001;
 
     for (const item of items) {
-      const lat = degE7ToDeg(item.x);
-      const lon = degE7ToDeg(item.y);
-      expect(lat).toBeGreaterThan(latMin);
-      expect(lat).toBeLessThan(latMax);
-      expect(lon).toBeGreaterThan(lonMin);
-      expect(lon).toBeLessThan(lonMax);
+      const { latitude_deg, longitude_deg } = itemLatLon(item);
+      expect(latitude_deg).toBeGreaterThan(latMin);
+      expect(latitude_deg).toBeLessThan(latMax);
+      expect(longitude_deg).toBeGreaterThan(lonMin);
+      expect(longitude_deg).toBeLessThan(lonMax);
     }
   });
 
-  it("param1=0, param2=1, param3=0, param4=0 on all items", () => {
+  it("NavWaypoint fields have expected defaults (hold=0, acceptance=1, pass=0, yaw=0)", () => {
     const items = assertOk(generateGrid(defaultParams()));
     for (const item of items) {
-      expect(item.param1).toBe(0);
-      expect(item.param2).toBe(1);
-      expect(item.param3).toBe(0);
-      expect(item.param4).toBe(0);
+      const nav = item.command as { Nav: { Waypoint: { hold_time_s: number; acceptance_radius_m: number; pass_radius_m: number; yaw_deg: number } } };
+      const wp = nav.Nav.Waypoint;
+      expect(wp.hold_time_s).toBe(0);
+      expect(wp.acceptance_radius_m).toBe(1);
+      expect(wp.pass_radius_m).toBe(0);
+      expect(wp.yaw_deg).toBe(0);
     }
   });
 });
@@ -244,25 +263,28 @@ describe("generateGrid", () => {
 
 describe("track angle — ENU heading interpretation", () => {
   // Track angle 0° = North: lanes run N-S, so within each lane pair the
-  // latitude (x in degE7) varies while longitude (y) stays ~constant.
+  // latitude varies while longitude stays ~constant.
   it("0° produces north-south lanes (lat varies, lon ~constant within lane)", () => {
     const items = assertOk(
       generateGrid(defaultParams({ track_angle_deg: 0, lane_spacing_m: 20 })),
     );
-    // First lane: items[0] → items[1]. Lat should differ, lon should be ~same.
-    const dLat = Math.abs(items[1].x - items[0].x);
-    const dLon = Math.abs(items[1].y - items[0].y);
+    const p0 = itemLatLon(items[0]);
+    const p1 = itemLatLon(items[1]);
+    const dLat = Math.abs(p1.latitude_deg - p0.latitude_deg);
+    const dLon = Math.abs(p1.longitude_deg - p0.longitude_deg);
     expect(dLat).toBeGreaterThan(dLon * 5);
   });
 
   // Track angle 90° = East: lanes run E-W, so within each lane pair the
-  // longitude (y in degE7) varies while latitude (x) stays ~constant.
+  // longitude varies while latitude stays ~constant.
   it("90° produces east-west lanes (lon varies, lat ~constant within lane)", () => {
     const items = assertOk(
       generateGrid(defaultParams({ track_angle_deg: 90, lane_spacing_m: 20 })),
     );
-    const dLat = Math.abs(items[1].x - items[0].x);
-    const dLon = Math.abs(items[1].y - items[0].y);
+    const p0 = itemLatLon(items[0]);
+    const p1 = itemLatLon(items[1]);
+    const dLat = Math.abs(p1.latitude_deg - p0.latitude_deg);
+    const dLon = Math.abs(p1.longitude_deg - p0.longitude_deg);
     expect(dLon).toBeGreaterThan(dLat * 5);
   });
 
@@ -281,8 +303,10 @@ describe("track angle — ENU heading interpretation", () => {
     );
     expect(items0.length).toBe(items360.length);
     for (let i = 0; i < items0.length; i++) {
-      expect(items360[i].x).toBeCloseTo(items0[i].x, -1);
-      expect(items360[i].y).toBeCloseTo(items0[i].y, -1);
+      const p0 = itemLatLon(items0[i]);
+      const p360 = itemLatLon(items360[i]);
+      expect(p360.latitude_deg).toBeCloseTo(p0.latitude_deg, 5);
+      expect(p360.longitude_deg).toBeCloseTo(p0.longitude_deg, 5);
     }
   });
 
@@ -290,12 +314,12 @@ describe("track angle — ENU heading interpretation", () => {
     const items = assertOk(
       generateGrid(defaultParams({ track_angle_deg: 45, lane_spacing_m: 20 })),
     );
-    const dLat = Math.abs(items[1].x - items[0].x);
-    const dLon = Math.abs(items[1].y - items[0].y);
-    // Both should be substantial for a diagonal
+    const p0 = itemLatLon(items[0]);
+    const p1 = itemLatLon(items[1]);
+    const dLat = Math.abs(p1.latitude_deg - p0.latitude_deg);
+    const dLon = Math.abs(p1.longitude_deg - p0.longitude_deg);
     expect(dLat).toBeGreaterThan(0);
     expect(dLon).toBeGreaterThan(0);
-    // And roughly comparable for 45° on a ~square polygon
     expect(dLat / dLon).toBeGreaterThan(0.3);
     expect(dLat / dLon).toBeLessThan(3);
   });
@@ -336,19 +360,21 @@ describe("start corner", () => {
     const itemsTL = assertOk(
       generateGrid(defaultParams({ start_corner: "top_left" })),
     );
-    // First waypoint should differ in latitude
-    expect(itemsBL[0].x).not.toBe(itemsTL[0].x);
+    const pBL = itemLatLon(itemsBL[0]);
+    const pTL = itemLatLon(itemsTL[0]);
+    expect(pBL.latitude_deg).not.toBe(pTL.latitude_deg);
   });
 
   it("bottom_left and bottom_right start from different sides", () => {
-    // Use track_angle=90 so scanline X/Y align with geographic East/North
     const itemsBL = assertOk(
       generateGrid(defaultParams({ start_corner: "bottom_left", track_angle_deg: 90 })),
     );
     const itemsBR = assertOk(
       generateGrid(defaultParams({ start_corner: "bottom_right", track_angle_deg: 90 })),
     );
-    expect(itemsBL[0].y).not.toBe(itemsBR[0].y);
+    const pBL = itemLatLon(itemsBL[0]);
+    const pBR = itemLatLon(itemsBR[0]);
+    expect(pBL.longitude_deg).not.toBe(pBR.longitude_deg);
   });
 });
 
@@ -363,18 +389,11 @@ describe("snake pattern", () => {
         defaultParams({ lane_spacing_m: 15, track_angle_deg: 0 }),
       ),
     );
-    // Items come in pairs (lane start, lane end). Lane N should end on the
-    // opposite side from where lane N+1 starts.
     for (let lane = 0; lane + 1 < items.length / 2; lane++) {
-      const laneEnd = items[lane * 2 + 1];
-      const nextLaneStart = items[(lane + 1) * 2];
-      // The lon (y) of the lane end and next lane start should be close
-      // (they connect on the same side), or at least not on the opposite extreme
-      // This tests the snake: end of lane should be near the start of the next lane
-      const lonDiff = Math.abs(laneEnd.y - nextLaneStart.y);
-      // Within the polygon, the lon difference between adjacent lane
-      // endpoints should be much smaller than the polygon width
-      expect(lonDiff).toBeLessThan(1e7 * 0.002); // < ~0.002 degrees
+      const laneEnd = itemLatLon(items[lane * 2 + 1]);
+      const nextLaneStart = itemLatLon(items[(lane + 1) * 2]);
+      const lonDiff = Math.abs(laneEnd.longitude_deg - nextLaneStart.longitude_deg);
+      expect(lonDiff).toBeLessThan(0.002);
     }
   });
 });
@@ -385,7 +404,6 @@ describe("snake pattern", () => {
 
 describe("concave polygon", () => {
   it("generates waypoints for an L-shaped polygon", () => {
-    // L-shape: a concave hexagon
     const lPoly: PolygonVertex[] = [
       { latitude_deg: 47.38, longitude_deg: 8.54 },
       { latitude_deg: 47.38, longitude_deg: 8.542 },
@@ -401,7 +419,6 @@ describe("concave polygon", () => {
   });
 
   it("handles a U-shaped polygon (includes the open center per ArduPilot convention)", () => {
-    // U-shape: narrow opening at the top
     const uPoly: PolygonVertex[] = [
       { latitude_deg: 47.38, longitude_deg: 8.54 },
       { latitude_deg: 47.38, longitude_deg: 8.543 },
@@ -444,12 +461,14 @@ describe("turn direction", () => {
         }),
       ),
     );
-    // Same number of waypoints
     expect(itemsCW.length).toBe(itemsCCW.length);
-    // First two points (first lane endpoints) should be swapped
     if (itemsCW.length >= 2) {
-      expect(itemsCW[0].y).toBe(itemsCCW[1].y);
-      expect(itemsCW[1].y).toBe(itemsCCW[0].y);
+      const cwP0 = itemLatLon(itemsCW[0]);
+      const cwP1 = itemLatLon(itemsCW[1]);
+      const ccwP0 = itemLatLon(itemsCCW[0]);
+      const ccwP1 = itemLatLon(itemsCCW[1]);
+      expect(cwP0.longitude_deg).toBeCloseTo(ccwP1.longitude_deg, 5);
+      expect(cwP1.longitude_deg).toBeCloseTo(ccwP0.longitude_deg, 5);
     }
   });
 });
@@ -524,7 +543,7 @@ describe("edge cases", () => {
   it("handles negative altitude (below home)", () => {
     const items = assertOk(generateGrid(defaultParams({ altitude_m: -10 })));
     for (const item of items) {
-      expect(item.z).toBe(-10);
+      expect(itemAlt(item)).toBe(-10);
     }
   });
 
@@ -549,8 +568,6 @@ describe("edge cases", () => {
 
 describe("resolveStartCorner", () => {
   const poly = squarePolygon();
-  // At track_angle=90 (East), rotAngle=0, so scanline left/right/top/bottom
-  // map directly to geographic west/east/north/south.
   const angle = 90;
 
   it("picks bottom_left when home is south-west of the polygon", () => {
@@ -593,6 +610,8 @@ describe("resolveStartCorner", () => {
     const itemsNE = assertOk(
       generateGrid(defaultParams({ start_corner: cornerNE, track_angle_deg: angle })),
     );
-    expect(itemsSW[0].x).not.toBe(itemsNE[0].x);
+    const pSW = itemLatLon(itemsSW[0]);
+    const pNE = itemLatLon(itemsNE[0]);
+    expect(pSW.latitude_deg).not.toBe(pNE.latitude_deg);
   });
 });

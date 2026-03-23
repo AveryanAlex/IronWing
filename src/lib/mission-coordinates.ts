@@ -1,10 +1,9 @@
 /**
  * Flat-earth local tangent plane coordinate utilities for mission planning.
  * Accurate to <0.1% for distances under ~10 km at mid-latitudes.
- * Canonical storage remains degE7 (MissionItem.x/y); offsets are pure UI transforms.
  */
 
-import type { MissionItem, HomePosition } from "../mission";
+import type { HomePosition } from "./mavkit-types";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -12,36 +11,6 @@ import type { MissionItem, HomePosition } from "../mission";
 
 /** WGS-84 mean metres per degree of latitude. */
 const METERS_PER_DEG_LAT = 111_320;
-
-const DEG_E7 = 1e7;
-
-// ---------------------------------------------------------------------------
-// degE7 <-> decimal degree conversion
-// ---------------------------------------------------------------------------
-
-export function degToDegE7(deg: number): number {
-  return Math.round(deg * DEG_E7);
-}
-
-export function degE7ToDeg(degE7: number): number {
-  return degE7 / DEG_E7;
-}
-
-// ---------------------------------------------------------------------------
-// Mission item lat/lon extraction
-// ---------------------------------------------------------------------------
-
-export function itemLatDeg(item: MissionItem): number {
-  return degE7ToDeg(item.x);
-}
-
-export function itemLonDeg(item: MissionItem): number {
-  return degE7ToDeg(item.y);
-}
-
-export function itemLatLon(item: MissionItem): { lat: number; lon: number } {
-  return { lat: itemLatDeg(item), lon: itemLonDeg(item) };
-}
 
 // ---------------------------------------------------------------------------
 // Reference point type
@@ -56,7 +25,7 @@ export type GeoRef = {
 // Flat-earth local tangent plane helpers
 // ---------------------------------------------------------------------------
 
-/** metersPerDegLon ≈ 111_320 × cos(lat) */
+/** metersPerDegLon = 111_320 * cos(lat) */
 export function metersPerDegLon(latDeg: number): number {
   return METERS_PER_DEG_LAT * Math.cos((latDeg * Math.PI) / 180);
 }
@@ -122,76 +91,76 @@ export function latLonFromBearingDistance(
 // Offset-from-home helpers
 // ---------------------------------------------------------------------------
 
-export function itemOffsetFromHome(
-  item: MissionItem,
+export function offsetFromHome(
+  position: { latitude_deg: number; longitude_deg: number },
   home: HomePosition | null,
 ): { x_m: number; y_m: number } | null {
   if (!home) return null;
-  return latLonToLocalXY(home, itemLatDeg(item), itemLonDeg(item));
+  return latLonToLocalXY(home, position.latitude_deg, position.longitude_deg);
 }
 
 export function applyOffsetFromHome(
   home: HomePosition | null,
   x_m: number,
   y_m: number,
-): { x: number; y: number } | null {
+): { latitude_deg: number; longitude_deg: number } | null {
   if (!home) return null;
   const { lat, lon } = localXYToLatLon(home, x_m, y_m);
-  return { x: degToDegE7(lat), y: degToDegE7(lon) };
+  return { latitude_deg: lat, longitude_deg: lon };
 }
 
 // ---------------------------------------------------------------------------
 // Offset-from-previous-waypoint helpers
 // ---------------------------------------------------------------------------
 
-export function itemOffsetFromPrevious(
-  item: MissionItem,
-  previousItem: MissionItem | null | undefined,
+export function offsetFromPrevious(
+  position: { latitude_deg: number; longitude_deg: number },
+  previousPosition: { latitude_deg: number; longitude_deg: number } | null | undefined,
 ): { x_m: number; y_m: number } | null {
-  if (!previousItem) return null;
+  if (!previousPosition) return null;
   const ref: GeoRef = {
-    latitude_deg: itemLatDeg(previousItem),
-    longitude_deg: itemLonDeg(previousItem),
+    latitude_deg: previousPosition.latitude_deg,
+    longitude_deg: previousPosition.longitude_deg,
   };
-  return latLonToLocalXY(ref, itemLatDeg(item), itemLonDeg(item));
+  return latLonToLocalXY(ref, position.latitude_deg, position.longitude_deg);
 }
 
 export function applyOffsetFromPrevious(
-  previousItem: MissionItem | null | undefined,
+  previousPosition: { latitude_deg: number; longitude_deg: number } | null | undefined,
   x_m: number,
   y_m: number,
-): { x: number; y: number } | null {
-  if (!previousItem) return null;
+): { latitude_deg: number; longitude_deg: number } | null {
+  if (!previousPosition) return null;
   const ref: GeoRef = {
-    latitude_deg: itemLatDeg(previousItem),
-    longitude_deg: itemLonDeg(previousItem),
+    latitude_deg: previousPosition.latitude_deg,
+    longitude_deg: previousPosition.longitude_deg,
   };
   const { lat, lon } = localXYToLatLon(ref, x_m, y_m);
-  return { x: degToDegE7(lat), y: degToDegE7(lon) };
+  return { latitude_deg: lat, longitude_deg: lon };
 }
 
 // ---------------------------------------------------------------------------
 // Bearing/distance from home and previous
 // ---------------------------------------------------------------------------
 
-export function itemBearingDistanceFromHome(
-  item: MissionItem,
+export function bearingDistanceFromHome(
+  position: { latitude_deg: number; longitude_deg: number },
   home: HomePosition | null,
 ): { bearing_deg: number; distance_m: number } | null {
   if (!home) return null;
-  return bearingDistance(home, itemLatDeg(item), itemLonDeg(item));
+  return bearingDistance(home, position.latitude_deg, position.longitude_deg);
 }
 
-export function itemBearingDistanceFromPrevious(
-  item: MissionItem,
-  previousItem: MissionItem | null | undefined,
+export function bearingDistanceFromPrevious(
+  position: { latitude_deg: number; longitude_deg: number },
+  previousPosition: { latitude_deg: number; longitude_deg: number } | null | undefined,
 ): { bearing_deg: number; distance_m: number } | null {
-  if (!previousItem) return null;
+  if (!previousPosition) return null;
   const ref: GeoRef = {
-    latitude_deg: itemLatDeg(previousItem),
-    longitude_deg: itemLonDeg(previousItem),
+    latitude_deg: previousPosition.latitude_deg,
+    longitude_deg: previousPosition.longitude_deg,
   };
-  return bearingDistance(ref, itemLatDeg(item), itemLonDeg(item));
+  return bearingDistance(ref, position.latitude_deg, position.longitude_deg);
 }
 
 // ---------------------------------------------------------------------------
@@ -262,8 +231,4 @@ export function isHomeValid(home: HomePosition | null): home is HomePosition {
   if (!home) return false;
   if (!Number.isFinite(home.latitude_deg) || !Number.isFinite(home.longitude_deg)) return false;
   return true;
-}
-
-export function isItemCoordinateValid(item: MissionItem): boolean {
-  return Number.isFinite(item.x) && Number.isFinite(item.y);
 }

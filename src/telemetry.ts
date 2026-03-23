@@ -1,16 +1,8 @@
 import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
-
-export type LinkEndpoint =
-  | { kind: "udp"; bind_addr: string }
-  | { kind: "tcp"; address: string }
-  | { kind: "serial"; port: string; baud: number }
-  | { kind: "bluetooth_ble"; address: string }
-  | { kind: "bluetooth_spp"; address: string };
-
-export type ConnectRequest = {
-  endpoint: LinkEndpoint;
-};
+import type { DomainValue } from "./lib/domain-status";
+import type { SessionEvent } from "./session";
+import { createLatestScopedValueHandler } from "./lib/scoped-session-events";
 
 export type LinkState = "connecting" | "connected" | "disconnected" | { error: string };
 
@@ -64,6 +56,54 @@ export type Telemetry = {
   servo_outputs?: number[];
 };
 
+export type TelemetryState = {
+  flight?: {
+    altitude_m?: number;
+    speed_mps?: number;
+    climb_rate_mps?: number;
+    throttle_pct?: number;
+    airspeed_mps?: number;
+  };
+  navigation?: {
+    latitude_deg?: number;
+    longitude_deg?: number;
+    heading_deg?: number;
+    wp_dist_m?: number;
+    nav_bearing_deg?: number;
+    target_bearing_deg?: number;
+    xtrack_error_m?: number;
+  };
+  attitude?: {
+    roll_deg?: number;
+    pitch_deg?: number;
+    yaw_deg?: number;
+  };
+  power?: {
+    battery_pct?: number;
+    battery_voltage_v?: number;
+    battery_current_a?: number;
+    battery_voltage_cells?: number[];
+    energy_consumed_wh?: number;
+    battery_time_remaining_s?: number;
+  };
+  gps?: {
+    fix_type?: string;
+    satellites?: number;
+    hdop?: number;
+  };
+  terrain?: {
+    terrain_height_m?: number;
+    height_above_terrain_m?: number;
+  };
+  radio?: {
+    rc_channels?: number[];
+    rc_rssi?: number;
+    servo_outputs?: number[];
+  };
+};
+
+export type TelemetryDomain = DomainValue<TelemetryState>;
+
 export type VehicleState = {
   armed: boolean;
   custom_mode: number;
@@ -93,22 +133,8 @@ export type BluetoothDevice = {
   device_type: "ble" | "classic";
 };
 
-export type TransportType = "udp" | "tcp" | "serial" | "bluetooth_ble" | "bluetooth_spp";
-
-export async function connectLink(request: ConnectRequest): Promise<void> {
-  await invoke("connect_link", { request });
-}
-
-export async function disconnectLink(): Promise<void> {
-  await invoke("disconnect_link");
-}
-
 export async function listSerialPorts(): Promise<string[]> {
   return invoke<string[]>("list_serial_ports_cmd");
-}
-
-export async function availableTransports(): Promise<TransportType[]> {
-  return invoke<TransportType[]>("available_transports");
 }
 
 export async function btRequestPermissions(): Promise<void> {
@@ -127,20 +153,15 @@ export async function btGetBondedDevices(): Promise<BluetoothDevice[]> {
   return invoke<BluetoothDevice[]>("bt_get_bonded_devices");
 }
 
-export async function subscribeTelemetry(cb: (telemetry: Telemetry) => void): Promise<UnlistenFn> {
-  return listen<Telemetry>("telemetry://tick", (event) => cb(event.payload));
-}
+export async function subscribeTelemetryState(
+  cb: (domain: TelemetryDomain) => void,
+): Promise<UnlistenFn> {
+  const handleEvent = createLatestScopedValueHandler(cb);
 
-export async function subscribeLinkState(cb: (state: LinkState) => void): Promise<UnlistenFn> {
-  return listen<LinkState>("link://state", (event) => cb(event.payload));
-}
-
-export async function subscribeHomePosition(cb: (hp: HomePosition) => void): Promise<UnlistenFn> {
-  return listen<HomePosition>("home://position", (event) => cb(event.payload));
-}
-
-export async function subscribeVehicleState(cb: (state: VehicleState) => void): Promise<UnlistenFn> {
-  return listen<VehicleState>("vehicle://state", (event) => cb(event.payload));
+  return listen<SessionEvent<TelemetryDomain>>(
+    "telemetry://state",
+    (event) => handleEvent(event.payload),
+  );
 }
 
 export async function armVehicle(force: boolean): Promise<void> {
@@ -153,14 +174,6 @@ export async function disarmVehicle(force: boolean): Promise<void> {
 
 export async function setFlightMode(customMode: number): Promise<void> {
   await invoke("set_flight_mode", { customMode });
-}
-
-export async function vehicleTakeoff(altitudeM: number): Promise<void> {
-  await invoke("vehicle_takeoff", { altitudeM });
-}
-
-export async function vehicleGuidedGoto(latDeg: number, lonDeg: number, altM: number): Promise<void> {
-  await invoke("vehicle_guided_goto", { latDeg, lonDeg, altM });
 }
 
 export async function getAvailableModes(): Promise<FlightModeEntry[]> {

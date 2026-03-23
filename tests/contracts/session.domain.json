@@ -1,0 +1,13 @@
+{
+  "available": true,
+  "complete": true,
+  "provenance": "bootstrap",
+  "value": {
+    "status": "active",
+    "connection": {
+      "kind": "connected"
+    },
+    "vehicle_state": null,
+    "home_position": null
+  }
+}

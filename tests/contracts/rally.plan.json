@@ -1,0 +1,18 @@
+{
+  "points": [
+    {
+      "RelHome": {
+        "latitude_deg": 47.397,
+        "longitude_deg": 8.545,
+        "relative_alt_m": 30.0
+      }
+    },
+    {
+      "Msl": {
+        "latitude_deg": 47.5,
+        "longitude_deg": 8.55,
+        "altitude_msl_m": 500.0
+      }
+    }
+  ]
+}

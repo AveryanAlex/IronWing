@@ -1,42 +1,35 @@
 import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
+import type { FencePlan } from "./fence";
+import type { MissionPlan } from "./lib/mavkit-types";
+import type { RallyPlan } from "./rally";
+import type { SessionEvent } from "./session";
+
+export type {
+  FencePlan,
+  FenceRegion,
+  FenceInclusionPolygon,
+  FenceExclusionPolygon,
+  FenceInclusionCircle,
+  FenceExclusionCircle,
+  GeoPoint2d,
+  GeoPoint3d,
+  GeoPoint3dMsl,
+  GeoPoint3dRelHome,
+  GeoPoint3dTerrain,
+  HomePosition,
+  MissionCommand,
+  MissionItem,
+  MissionPlan,
+  RallyPlan,
+  RawMissionCommand,
+  MissionFrame,
+  NavCommand,
+  DoCommand,
+  ConditionCommand,
+} from "./lib/mavkit-types";
 
 export type MissionType = "mission" | "fence" | "rally";
-
-export type MissionFrame =
-  | "mission"
-  | "global_int"
-  | "global_relative_alt_int"
-  | "global_terrain_alt_int"
-  | "local_ned"
-  | "other";
-
-export type MissionItem = {
-  seq: number;
-  command: number;
-  frame: MissionFrame;
-  current: boolean;
-  autocontinue: boolean;
-  param1: number;
-  param2: number;
-  param3: number;
-  param4: number;
-  x: number;
-  y: number;
-  z: number;
-};
-
-export type HomePosition = {
-  latitude_deg: number;
-  longitude_deg: number;
-  altitude_m: number;
-};
-
-export type MissionPlan = {
-  mission_type: MissionType;
-  home: HomePosition | null;
-  items: MissionItem[];
-};
 
 export type MissionIssue = {
   code: string;
@@ -64,29 +57,46 @@ export type TransferProgress = {
   retries_used: number;
 };
 
+export type SyncState = "unknown" | "current" | "stale";
+
+export type MissionOperationKind = "upload" | "download" | "clear";
+
 export type MissionState = {
-  current_seq: number | null;
-  total_items: number;
+  plan: MissionPlan | null;
+  current_index: number | null;
+  sync: SyncState;
+  active_op: MissionOperationKind | null;
 };
 
-export async function validateMissionPlan(plan: MissionPlan): Promise<MissionIssue[]> {
-  return invoke<MissionIssue[]>("mission_validate_plan", { plan });
+export type MissionDownload = {
+  plan: import("./lib/mavkit-types").MissionPlan;
+  home: import("./lib/mavkit-types").HomePosition | null;
+};
+
+export type DomainPlanMap = {
+  mission: import("./lib/mavkit-types").MissionPlan;
+  fence: FencePlan;
+  rally: RallyPlan;
+};
+
+export async function uploadMission(
+  plan: import("./lib/mavkit-types").MissionPlan,
+): Promise<void> {
+  await invoke("mission_upload", { plan });
 }
 
-export async function uploadMissionPlan(plan: MissionPlan): Promise<void> {
-  await invoke("mission_upload_plan", { plan });
+export async function downloadMission(): Promise<MissionDownload> {
+  return invoke<MissionDownload>("mission_download");
 }
 
-export async function downloadMissionPlan(missionType: MissionType): Promise<MissionPlan> {
-  return invoke<MissionPlan>("mission_download_plan", { missionType });
+export async function validateMission(
+  plan: import("./lib/mavkit-types").MissionPlan,
+): Promise<MissionIssue[]> {
+  return invoke<MissionIssue[]>("mission_validate", { plan });
 }
 
-export async function clearMissionPlan(missionType: MissionType): Promise<void> {
-  await invoke("mission_clear_plan", { missionType });
-}
-
-export async function verifyMissionRoundtrip(plan: MissionPlan): Promise<boolean> {
-  return invoke<boolean>("mission_verify_roundtrip", { plan });
+export async function clearMission(): Promise<void> {
+  await invoke("mission_clear");
 }
 
 export async function setCurrentMissionItem(seq: number): Promise<void> {
@@ -97,10 +107,19 @@ export async function cancelMissionTransfer(): Promise<void> {
   await invoke("mission_cancel");
 }
 
-export async function subscribeMissionProgress(cb: (event: TransferProgress) => void): Promise<UnlistenFn> {
-  return listen<TransferProgress>("mission://progress", (event) => cb(event.payload));
+export async function subscribeMissionProgress(
+  cb: (event: SessionEvent<TransferProgress>) => void,
+): Promise<UnlistenFn> {
+  return listen<SessionEvent<TransferProgress>>(
+    "mission://progress",
+    (event) => cb(event.payload),
+  );
 }
 
-export async function subscribeMissionState(cb: (event: MissionState) => void): Promise<UnlistenFn> {
-  return listen<MissionState>("mission://state", (event) => cb(event.payload));
+export async function subscribeMissionState(
+  cb: (event: SessionEvent<MissionState>) => void,
+): Promise<UnlistenFn> {
+  return listen<SessionEvent<MissionState>>("mission://state", (event) =>
+    cb(event.payload),
+  );
 }

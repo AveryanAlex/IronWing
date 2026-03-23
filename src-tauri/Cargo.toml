@@ -26,6 +26,7 @@ tauri-plugin-http = "2"
 tauri-plugin-blec = "0.5"
 ardupilot-binlog = { git = "https://github.com/AveryanAlex/ardupilot-binlog.git", branch = "main" }
 tokio = { version = "1", features = ["sync"] }
+tokio-stream = "0.1"
 tracing = "0.1"
 uuid = "1"
 base64 = "0.22"

@@ -1,0 +1,67 @@
+{
+  "available": true,
+  "complete": true,
+  "provenance": "stream",
+  "value": {
+    "flight": {
+      "altitude_m": 123.4,
+      "speed_mps": 15.6,
+      "climb_rate_mps": 2.5,
+      "throttle_pct": 67.8,
+      "airspeed_mps": 14.2
+    },
+    "navigation": {
+      "latitude_deg": 47.397742,
+      "longitude_deg": 8.545594,
+      "heading_deg": 182.3,
+      "wp_dist_m": 54.1,
+      "nav_bearing_deg": 180.0,
+      "target_bearing_deg": 176.4,
+      "xtrack_error_m": 1.2
+    },
+    "attitude": {
+      "roll_deg": 1.1,
+      "pitch_deg": -2.2,
+      "yaw_deg": 183.7
+    },
+    "power": {
+      "battery_pct": 88.9,
+      "battery_voltage_v": 23.7,
+      "battery_current_a": 12.4,
+      "battery_voltage_cells": [
+        3.95,
+        3.96,
+        3.94,
+        3.95,
+        3.95,
+        3.95
+      ],
+      "energy_consumed_wh": 45.6,
+      "battery_time_remaining_s": 720.0
+    },
+    "gps": {
+      "fix_type": "fix_3d",
+      "satellites": 17,
+      "hdop": 0.8
+    },
+    "terrain": {
+      "terrain_height_m": 118.0,
+      "height_above_terrain_m": 5.4
+    },
+    "radio": {
+      "rc_channels": [
+        1100.0,
+        1500.0,
+        1900.0,
+        1500.0
+      ],
+      "rc_rssi": 92.0,
+      "servo_outputs": [
+        1200.0,
+        1210.0,
+        1220.0,
+        1230.0
+      ]
+    }
+  }
+}

@@ -56,30 +56,43 @@ impl TlogRecorderHandle {
 
         let bytes_written = Arc::new(AtomicU64::new(0));
         let bytes_counter = bytes_written.clone();
-        let mut rx = vehicle.raw_messages();
+        let raw_stream = vehicle.raw().subscribe();
         let (cancel_tx, mut cancel_rx) = tokio::sync::oneshot::channel();
 
         tokio::spawn(async move {
+            use tokio_stream::StreamExt;
+            use mavlink::Message;
+            tokio::pin!(raw_stream);
             loop {
                 tokio::select! {
                     _ = &mut cancel_rx => break,
-                    result = rx.recv() => {
-                        match result {
-                            Ok((header, msg)) => {
-                                match tlog_writer.write_now(&header, &msg) {
-                                    Ok(n) => {
-                                        bytes_counter.fetch_add(n as u64, Ordering::Relaxed);
-                                    }
-                                    Err(e) => {
-                                        tracing::warn!("tlog write error: {e}");
-                                        break;
+                    maybe_msg = raw_stream.next() => {
+                        match maybe_msg {
+                            Some(raw_msg) => {
+                                // Reconstruct a MavHeader from the RawMessage fields
+                                let header = mavlink::MavHeader {
+                                    system_id: raw_msg.system_id,
+                                    component_id: raw_msg.component_id,
+                                    sequence: 0,
+                                };
+                                // Re-parse the raw payload back into a typed message
+                                if let Ok(msg) = mavkit::dialect::MavMessage::parse(
+                                    MavlinkVersion::V2,
+                                    raw_msg.message_id,
+                                    &raw_msg.payload,
+                                ) {
+                                    match tlog_writer.write_now(&header, &msg) {
+                                        Ok(n) => {
+                                            bytes_counter.fetch_add(n as u64, Ordering::Relaxed);
+                                        }
+                                        Err(e) => {
+                                            tracing::warn!("tlog write error: {e}");
+                                            break;
+                                        }
                                     }
                                 }
                             }
-                            Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                                tracing::warn!("tlog recorder lagged, skipped {n} messages");
-                            }
-                            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                            None => break,
                         }
                     }
                 }

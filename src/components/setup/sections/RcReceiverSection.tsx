@@ -1,14 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
 import { Radio, Shuffle, Signal, Activity, Info } from "lucide-react";
-import { listen, type UnlistenFn } from "@platform/event";
 import { ParamSelect } from "../primitives/ParamSelect";
 import { ParamBitmaskInput } from "../primitives/ParamBitmaskInput";
 import { getStagedOrCurrent } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import type { Telemetry } from "../../../telemetry";
+import { subscribeTelemetryState } from "../../../telemetry";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import { SectionCardHeader } from "../shared/SectionCardHeader";
 import { resolveDocsUrl } from "../../../data/ardupilot-docs";
+import { selectTelemetryView } from "../../../lib/telemetry-selectors";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -247,16 +248,17 @@ function LiveRcBars({ connected }: { connected: boolean }) {
   const [rssi, setRssi] = useState<number | undefined>();
 
   useEffect(() => {
-    let unlisten: UnlistenFn | null = null;
+    let unlisten: (() => void) | null = null;
 
     (async () => {
-      unlisten = await listen<Telemetry>("telemetry://tick", (event) => {
-        const rc = event.payload.rc_channels;
+      unlisten = await subscribeTelemetryState((domain) => {
+        const telemetry = selectTelemetryView(domain);
+        const rc = telemetry.rc_channels;
         if (rc && rc.length > 0) {
           setChannels(rc.slice(0, CHANNEL_COUNT));
         }
-        if (event.payload.rc_rssi !== undefined) {
-          setRssi(event.payload.rc_rssi);
+        if (telemetry.rc_rssi !== undefined) {
+          setRssi(telemetry.rc_rssi);
         }
       });
     })();

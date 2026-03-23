@@ -3,10 +3,21 @@ use std::io::Write;
 
 use mavkit::tlog::{TlogEntry, TlogFile};
 use mavlink::Message;
-use mavlink::common::MavMessage;
+use mavkit::dialect::MavMessage;
 use serde::Serialize;
 
-use crate::{AppState, e2e_emit::emit_event, helpers};
+use crate::{
+    AppState,
+    e2e_emit::emit_event,
+    helpers,
+    ipc::{
+        DomainProvenance, DomainValue, PlaybackSnapshot, SessionConnection, SessionEnvelope,
+        SessionSnapshot, SessionStatus, StatusTextSnapshot, SupportSnapshot,
+        TelemetrySnapshot as GroupedTelemetrySnapshot,
+        playback::{PlaybackSeekResult, PlaybackState},
+        status_text_snapshot_from_entries, telemetry_snapshot_from_value,
+    },
+};
 
 #[derive(Serialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -56,6 +67,117 @@ pub(crate) struct LogStore {
     summary: LogSummary,
     entries: Vec<StoredEntry>,
     type_index: HashMap<String, Vec<usize>>,
+    playback_cursor_usec: Option<u64>,
+}
+
+#[derive(Serialize, Clone)]
+struct ScopedPlaybackStateEvent {
+    envelope: SessionEnvelope,
+    value: PlaybackState,
+}
+
+#[derive(Serialize, Clone)]
+struct ScopedDomainEvent<T> {
+    envelope: SessionEnvelope,
+    value: T,
+}
+
+pub(crate) struct PlaybackFrame {
+    pub session: DomainValue<SessionSnapshot>,
+    pub telemetry: GroupedTelemetrySnapshot,
+    pub support: SupportSnapshot,
+    pub status_text: StatusTextSnapshot,
+    pub playback: PlaybackSnapshot,
+}
+
+impl LogStore {
+    pub(crate) fn seek_playback(
+        &mut self,
+        cursor_usec: Option<u64>,
+        envelope: SessionEnvelope,
+    ) -> PlaybackSeekResult {
+        self.playback_cursor_usec = self.resolve_cursor_usec(cursor_usec);
+        PlaybackSeekResult {
+            envelope,
+            cursor_usec: self.playback_cursor_usec,
+        }
+    }
+
+    pub(crate) fn playback_frame(&self) -> PlaybackFrame {
+        let cursor_usec = self.resolve_cursor_usec(self.playback_cursor_usec);
+        let telemetry = self.telemetry_at(cursor_usec);
+        let vehicle_state = self.vehicle_state_at(&telemetry);
+
+        PlaybackFrame {
+            session: DomainValue::present(
+                SessionSnapshot {
+                    status: SessionStatus::Active,
+                    connection: SessionConnection::Disconnected,
+                    vehicle_state,
+                    home_position: None,
+                },
+                DomainProvenance::Playback,
+            ),
+            telemetry: telemetry_snapshot_from_value(
+                &serde_json::to_value(telemetry).unwrap_or(serde_json::Value::Null),
+                DomainProvenance::Playback,
+            ),
+            support: DomainValue::missing(DomainProvenance::Playback),
+            status_text: status_text_snapshot_from_entries(Vec::new(), DomainProvenance::Playback),
+            playback: PlaybackSnapshot { cursor_usec },
+        }
+    }
+
+    fn resolve_cursor_usec(&self, cursor_usec: Option<u64>) -> Option<u64> {
+        if self.entries.is_empty() {
+            return None;
+        }
+
+        let min = self.summary.start_usec;
+        let max = self.summary.end_usec;
+        Some(cursor_usec.unwrap_or(min).clamp(min, max))
+    }
+
+    fn telemetry_at(&self, cursor_usec: Option<u64>) -> TelemetrySnapshot {
+        let Some(cursor_usec) = cursor_usec else {
+            return TelemetrySnapshot::default();
+        };
+
+        let mut telemetry = TelemetrySnapshot::default();
+        for entry in self
+            .entries
+            .iter()
+            .take_while(|entry| entry.timestamp_usec <= cursor_usec)
+        {
+            if self.summary.log_type == LogType::Bin {
+                apply_bin_entry(&mut telemetry, entry);
+            } else {
+                apply_tlog_entry(&mut telemetry, entry);
+            }
+        }
+        telemetry.timestamp_usec = cursor_usec;
+        telemetry
+    }
+
+    /// Construct a vehicle-state–shaped JSON value for the playback session snapshot.
+    /// VehicleState is not publicly accessible in mavkit v0.4.0, so we produce a
+    /// serde_json::Value that matches the frontend contract shape.
+    fn vehicle_state_at(&self, telemetry: &TelemetrySnapshot) -> Option<serde_json::Value> {
+        let armed = telemetry.armed?;
+        let custom_mode = telemetry.custom_mode?;
+
+        Some(serde_json::json!({
+            "armed": armed,
+            "custom_mode": custom_mode,
+            "mode_name": format!("Mode {custom_mode}"),
+            "system_status": "active",
+            "vehicle_type": "",
+            "autopilot": "",
+            "system_id": 0,
+            "component_id": 0,
+            "heartbeat_received": false,
+        }))
+    }
 }
 
 fn extract_fields(msg: &MavMessage) -> (String, HashMap<String, f64>) {
@@ -236,14 +358,14 @@ pub(crate) struct FlightSummary {
 
 fn gps_fix_type_name(val: f64) -> String {
     match val as u8 {
-        0 => "No GPS".into(),
-        1 => "No Fix".into(),
-        2 => "2D Fix".into(),
-        3 => "3D Fix".into(),
-        4 => "DGPS".into(),
-        5 => "RTK Float".into(),
-        6 => "RTK Fixed".into(),
-        _ => format!("Fix({})", val as u8),
+        0 => "no_gps".into(),
+        1 => "no_fix".into(),
+        2 => "fix_2d".into(),
+        3 => "fix_3d".into(),
+        4 => "dgps".into(),
+        5 => "rtk_float".into(),
+        6 => "rtk_fixed".into(),
+        _ => format!("fix_{}", val as u8),
     }
 }
 
@@ -525,6 +647,7 @@ pub(crate) async fn log_open(
         summary: summary.clone(),
         entries: stored_entries,
         type_index,
+        playback_cursor_usec: None,
     };
 
     *state.log_store.lock().await = Some(store);
@@ -539,6 +662,73 @@ pub(crate) async fn log_open(
     );
 
     Ok(summary)
+}
+
+#[tauri::command]
+pub(crate) async fn playback_seek(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+    cursor_usec: Option<u64>,
+) -> Result<PlaybackSeekResult, String> {
+    let mut guard = state.log_store.lock().await;
+    let store = guard.as_mut().ok_or_else(|| "no log open".to_string())?;
+    let envelope = {
+        let mut runtime = state.session_runtime.lock().await;
+        runtime
+            .issue_playback_seek()
+            .map_err(|failure| failure.reason.message)?
+    };
+    state
+        .guided_runtime
+        .lock()
+        .await
+        .reset_for_playback("playback source switched");
+    let result = store.seek_playback(cursor_usec, envelope.clone());
+    let frame = store.playback_frame();
+    emit_event(
+        &app,
+        "session://state",
+        &ScopedDomainEvent {
+            envelope: envelope.clone(),
+            value: frame.session.clone(),
+        },
+    );
+    emit_event(
+        &app,
+        "telemetry://state",
+        &ScopedDomainEvent {
+            envelope: envelope.clone(),
+            value: frame.telemetry.clone(),
+        },
+    );
+    emit_event(
+        &app,
+        "support://state",
+        &ScopedDomainEvent {
+            envelope: envelope.clone(),
+            value: frame.support.clone(),
+        },
+    );
+    emit_event(
+        &app,
+        "status_text://state",
+        &ScopedDomainEvent {
+            envelope: envelope.clone(),
+            value: frame.status_text.clone(),
+        },
+    );
+    emit_event(
+        &app,
+        "playback://state",
+        &ScopedPlaybackStateEvent {
+            envelope: result.envelope.clone(),
+            value: PlaybackState {
+                cursor_usec: result.cursor_usec,
+                barrier_ready: true,
+            },
+        },
+    );
+    Ok(result)
 }
 
 #[tauri::command]
@@ -675,8 +865,12 @@ pub(crate) async fn log_get_summary(
 }
 
 #[tauri::command]
-pub(crate) async fn log_close(state: tauri::State<'_, AppState>) -> Result<(), String> {
+pub(crate) async fn log_close(
+    state: tauri::State<'_, AppState>,
+    _app: tauri::AppHandle,
+) -> Result<(), String> {
     *state.log_store.lock().await = None;
+    state.session_runtime.lock().await.close_playback_session();
     Ok(())
 }
 
@@ -918,9 +1112,10 @@ pub(crate) async fn log_export_csv(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ipc::SourceKind;
     use ardupilot_binlog::Reader;
     use mavkit::tlog::TlogEntry;
-    use mavlink::common::{
+    use mavkit::dialect::{
         ATTITUDE_DATA, COMMAND_LONG_DATA, GLOBAL_POSITION_INT_DATA, GPS_RAW_INT_DATA,
         HEARTBEAT_DATA, MavAutopilot, MavModeFlag, MavState, MavSysStatusSensor,
         MavSysStatusSensorExtended, MavType, RC_CHANNELS_DATA, SYS_STATUS_DATA, VFR_HUD_DATA,
@@ -997,6 +1192,23 @@ mod tests {
         }
     }
 
+    fn empty_store() -> LogStore {
+        LogStore {
+            summary: LogSummary {
+                file_name: "test.tlog".into(),
+                start_usec: 100,
+                end_usec: 200,
+                duration_secs: 0.1,
+                total_entries: 0,
+                message_types: HashMap::new(),
+                log_type: LogType::Tlog,
+            },
+            entries: Vec::new(),
+            type_index: HashMap::new(),
+            playback_cursor_usec: None,
+        }
+    }
+
     #[test]
     fn extract_fields_attitude() {
         let msg = MavMessage::ATTITUDE(ATTITUDE_DATA {
@@ -1070,7 +1282,7 @@ mod tests {
 
     #[test]
     fn extract_fields_sys_status_scaled() {
-        let msg = MavMessage::SYS_STATUS(mavlink::common::SYS_STATUS_DATA {
+        let msg = MavMessage::SYS_STATUS(SYS_STATUS_DATA {
             onboard_control_sensors_present: MavSysStatusSensor::empty(),
             onboard_control_sensors_enabled: MavSysStatusSensor::empty(),
             onboard_control_sensors_health: MavSysStatusSensor::empty(),
@@ -1100,7 +1312,7 @@ mod tests {
     fn extract_fields_gps_raw_int_scaled() {
         let msg = MavMessage::GPS_RAW_INT(GPS_RAW_INT_DATA {
             time_usec: 0,
-            fix_type: mavlink::common::GpsFixType::GPS_FIX_TYPE_3D_FIX,
+            fix_type: mavkit::dialect::GpsFixType::GPS_FIX_TYPE_3D_FIX,
             lat: 374221234,
             lon: -1220845678,
             alt: 12_345,
@@ -1159,7 +1371,7 @@ mod tests {
         let msg = MavMessage::COMMAND_LONG(COMMAND_LONG_DATA {
             target_system: 1,
             target_component: 1,
-            command: mavlink::common::MavCmd::MAV_CMD_COMPONENT_ARM_DISARM,
+            command: mavkit::dialect::MavCmd::MAV_CMD_COMPONENT_ARM_DISARM,
             confirmation: 0,
             param1: 0.0,
             param2: 0.0,
@@ -1195,6 +1407,27 @@ mod tests {
         assert_eq!(stored.timestamp_usec, 123_456);
         assert_eq!(stored.msg_name, expected.0);
         assert_eq!(stored.fields, expected.1);
+    }
+
+    #[test]
+    fn playback_seek_clamps_cursor_and_keeps_envelope() {
+        let mut store = empty_store();
+        store.entries.push(StoredEntry {
+            timestamp_usec: 150,
+            msg_name: "GPS_RAW_INT".into(),
+            fields: HashMap::new(),
+        });
+
+        let envelope = SessionEnvelope {
+            session_id: "session-1".into(),
+            source_kind: SourceKind::Playback,
+            seek_epoch: 1,
+            reset_revision: 1,
+        };
+        let result = store.seek_playback(Some(500), envelope.clone());
+
+        assert_eq!(result.envelope, envelope);
+        assert_eq!(result.cursor_usec, Some(200));
     }
 
     #[test]
@@ -1264,14 +1497,14 @@ mod tests {
 
     #[test]
     fn gps_fix_type_name_named_variants_and_unknown() {
-        assert_eq!(gps_fix_type_name(0.0), "No GPS");
-        assert_eq!(gps_fix_type_name(1.0), "No Fix");
-        assert_eq!(gps_fix_type_name(2.0), "2D Fix");
-        assert_eq!(gps_fix_type_name(3.0), "3D Fix");
-        assert_eq!(gps_fix_type_name(4.0), "DGPS");
-        assert_eq!(gps_fix_type_name(5.0), "RTK Float");
-        assert_eq!(gps_fix_type_name(6.0), "RTK Fixed");
-        assert_eq!(gps_fix_type_name(99.0), "Fix(99)");
+        assert_eq!(gps_fix_type_name(0.0), "no_gps");
+        assert_eq!(gps_fix_type_name(1.0), "no_fix");
+        assert_eq!(gps_fix_type_name(2.0), "fix_2d");
+        assert_eq!(gps_fix_type_name(3.0), "fix_3d");
+        assert_eq!(gps_fix_type_name(4.0), "dgps");
+        assert_eq!(gps_fix_type_name(5.0), "rtk_float");
+        assert_eq!(gps_fix_type_name(6.0), "rtk_fixed");
+        assert_eq!(gps_fix_type_name(99.0), "fix_99");
     }
 
     #[test]
@@ -1404,7 +1637,7 @@ mod tests {
     fn apply_tlog_entry_gps_raw_int_sets_fix_label() {
         let msg = MavMessage::GPS_RAW_INT(GPS_RAW_INT_DATA {
             time_usec: 0,
-            fix_type: mavlink::common::GpsFixType::GPS_FIX_TYPE_3D_FIX,
+            fix_type: mavkit::dialect::GpsFixType::GPS_FIX_TYPE_3D_FIX,
             lat: 0,
             lon: 0,
             alt: 0,
@@ -1426,7 +1659,7 @@ mod tests {
         let mut snap = TelemetrySnapshot::default();
         apply_tlog_entry(&mut snap, &entry);
 
-        assert_eq!(snap.gps_fix_type.as_deref(), Some("3D Fix"));
+        assert_eq!(snap.gps_fix_type.as_deref(), Some("fix_3d"));
         assert_eq!(snap.gps_satellites, Some(17.0));
         assert_eq!(snap.gps_hdop, Some(1.45));
     }
@@ -1496,7 +1729,7 @@ mod tests {
         let mut snap = TelemetrySnapshot {
             roll_deg: Some(12.0),
             altitude_m: Some(50.0),
-            gps_fix_type: Some("3D Fix".to_string()),
+            gps_fix_type: Some("fix_3d".to_string()),
             ..Default::default()
         };
 
@@ -1507,7 +1740,7 @@ mod tests {
 
         assert_eq!(snap.roll_deg, Some(12.0));
         assert_eq!(snap.altitude_m, Some(50.0));
-        assert_eq!(snap.gps_fix_type.as_deref(), Some("3D Fix"));
+        assert_eq!(snap.gps_fix_type.as_deref(), Some("fix_3d"));
     }
 
     #[test]
@@ -1589,7 +1822,7 @@ mod tests {
         assert!((snap.longitude_deg.expect("lon") - (-122.0419)).abs() < 1e-6);
         assert_eq!(snap.speed_mps, Some(15.5));
         assert_eq!(snap.heading_deg, Some(270.0));
-        assert_eq!(snap.gps_fix_type.as_deref(), Some("3D Fix"));
+        assert_eq!(snap.gps_fix_type.as_deref(), Some("fix_3d"));
         assert_eq!(snap.gps_satellites, Some(14.0));
     }
 

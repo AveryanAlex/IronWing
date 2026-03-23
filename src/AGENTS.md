@@ -9,7 +9,7 @@ Frontend app state lives in hooks instantiated by `App.tsx`, then flows down via
 | Task | Location | Notes |
 |------|----------|-------|
 | App bootstrap / top-level routing | `main.tsx`, `App.tsx`, `types.ts` | `App.tsx` is the frontend state hub |
-| Connection + telemetry | `hooks/use-vehicle.ts`, `telemetry.ts` | Connection form state, BLE scan, vehicle actions |
+| Connection + telemetry | `hooks/use-session.ts`, `telemetry.ts` | Connection form state, BLE scan, vehicle actions |
 | Mission editing / playback | `hooks/use-mission.ts`, `components/mission/`, `lib/mission-*` | Draft model + map/shell split |
 | Param staging / metadata | `hooks/use-params.ts`, `components/ConfigPanel.tsx`, `param-metadata.ts` | Staged Map, filter modes, metadata fetch |
 | Setup UI | `components/setup/AGENTS.md` | Panel orchestration, shared primitives, section rules |
@@ -44,7 +44,7 @@ src/
 
 | Hook | Purpose | Local pattern |
 |------|---------|---------------|
-| `useVehicle` | Connection lifecycle, telemetry, control actions | RAF-coalesced telemetry state; localStorage-backed connection form |
+| `useSession` | Connection lifecycle, telemetry, control actions | RAF-coalesced telemetry state; localStorage-backed connection form |
 | `useMission` | Mission CRUD, transfer state, home handling | Wraps pure `lib/mission-*` mutations |
 | `useParams` | Param store, staging, metadata, file I/O | Staging is local `Map<string, number>`; batch apply only |
 | `useLogs` | Log open/query/summary/progress | `log://progress` is inline event-driven |

@@ -3,14 +3,17 @@ import {
   ArrowUp, RotateCcw, CircleDot, RefreshCw, Plug, Unplug, Loader2, X,
   Bluetooth, Search,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { ArmSlider } from "./ArmSlider";
 import { cn } from "../lib/utils";
-import type { useVehicle } from "../hooks/use-vehicle";
-import type { TransportType } from "../telemetry";
+import type { useGuided } from "../hooks/use-guided";
+import type { useSession } from "../hooks/use-session";
+import type { TransportDescriptor, TransportType } from "../transport";
 
 type SidebarProps = {
-  vehicle: ReturnType<typeof useVehicle>;
+  vehicle: ReturnType<typeof useSession>;
+  guided: ReturnType<typeof useGuided>;
   isMobile: boolean;
   open: boolean;
   onClose: () => void;
@@ -31,7 +34,7 @@ const TRANSPORT_LABELS: Record<TransportType, string> = {
   bluetooth_spp: "Classic BT",
 };
 
-export function Sidebar({ vehicle, isMobile, open, onClose, replayActive, firmwareActive }: SidebarProps) {
+export function Sidebar({ vehicle, guided, isMobile, open, onClose, replayActive, firmwareActive }: SidebarProps) {
   // Mobile: drawer overlay
   if (isMobile) {
     return (
@@ -58,7 +61,7 @@ export function Sidebar({ vehicle, isMobile, open, onClose, replayActive, firmwa
               <X size={16} />
             </button>
           </div>
-          <SidebarContent vehicle={vehicle} replayActive={replayActive} firmwareActive={firmwareActive} />
+          <SidebarContent vehicle={vehicle} guided={guided} replayActive={replayActive} firmwareActive={firmwareActive} />
         </aside>
       </>
     );
@@ -67,16 +70,21 @@ export function Sidebar({ vehicle, isMobile, open, onClose, replayActive, firmwa
   // Desktop: static sidebar
   return (
     <aside className="flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-r border-border bg-bg-secondary p-3 xl:w-72">
-      <SidebarContent vehicle={vehicle} replayActive={replayActive} firmwareActive={firmwareActive} />
+      <SidebarContent vehicle={vehicle} guided={guided} replayActive={replayActive} firmwareActive={firmwareActive} />
     </aside>
   );
 }
 
-function SidebarContent({ vehicle, replayActive, firmwareActive }: { vehicle: ReturnType<typeof useVehicle>; replayActive?: boolean; firmwareActive?: boolean }) {
+function SidebarContent({ vehicle, guided, replayActive, firmwareActive }: {
+  vehicle: ReturnType<typeof useSession>;
+  guided: ReturnType<typeof useGuided>;
+  replayActive?: boolean;
+  firmwareActive?: boolean;
+}) {
   const {
     telemetry, linkState, vehicleState, connected, connectionError,
     isConnecting, cancelConnect,
-    connectionMode, setConnectionMode, transports,
+    connectionMode, setConnectionMode, transportDescriptors, selectedTransportDescriptor, describeTransportAvailability,
     udpBind, setUdpBind,
     tcpAddress, setTcpAddress,
     serialPort, setSerialPort, baud, setBaud, serialPorts,
@@ -84,10 +92,25 @@ function SidebarContent({ vehicle, replayActive, firmwareActive }: { vehicle: Re
     scanBleDevices, refreshBondedDevices,
     takeoffAlt, setTakeoffAlt, availableModes,
     connect, disconnect, refreshSerialPorts,
-    arm, disarm, setFlightMode, takeoff, findModeNumber,
+    arm, disarm, setFlightMode, findModeNumber,
   } = vehicle;
 
   const formLocked = isConnecting || connected || !!firmwareActive;
+  const connectDisabled = !selectedTransportDescriptor?.available ||
+    ((connectionMode === "bluetooth_ble" || connectionMode === "bluetooth_spp") && !selectedBtDevice);
+
+  const handleTakeoff = async () => {
+    const altitudeM = Number(takeoffAlt);
+    if (!Number.isFinite(altitudeM) || altitudeM <= 0) {
+      toast.error("Invalid takeoff altitude");
+      return;
+    }
+
+    const result = await guided.takeoff(altitudeM);
+    if (result.result === "rejected") {
+      toast.error("Takeoff rejected", { description: result.failure.reason.message });
+    }
+  };
 
   return (
     <>
@@ -105,10 +128,21 @@ function SidebarContent({ vehicle, replayActive, firmwareActive }: { vehicle: Re
             disabled={formLocked}
             className="w-full rounded-md border border-border bg-bg-input pl-2.5 pr-7 py-1.5 text-sm text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {transports.map((t) => (
-              <option key={t} value={t}>{TRANSPORT_LABELS[t]}</option>
+            {transportDescriptors.map((descriptor) => (
+              <option key={descriptor.kind} value={descriptor.kind} disabled={!descriptor.available}>
+                {TRANSPORT_LABELS[descriptor.kind]}{descriptor.available ? "" : " (unavailable)"}
+              </option>
             ))}
           </select>
+
+          {selectedTransportDescriptor && (
+            <p className={cn(
+              "text-[10px]",
+              selectedTransportDescriptor.available ? "text-text-muted" : "text-warning",
+            )}>
+              {describeTransportAvailability(selectedTransportDescriptor)}
+            </p>
+          )}
 
           {connectionMode === "udp" && (
             <input
@@ -189,7 +223,7 @@ function SidebarContent({ vehicle, replayActive, firmwareActive }: { vehicle: Re
             </Button>
           ) : (
             <Button data-testid="connection-connect-btn" size="sm" className="w-full" onClick={connect}
-              disabled={(connectionMode === "bluetooth_ble" || connectionMode === "bluetooth_spp") && !selectedBtDevice}>
+              disabled={connectDisabled}>
               <Plug className="h-3.5 w-3.5" /> Connect
             </Button>
           )}
@@ -268,6 +302,7 @@ function SidebarContent({ vehicle, replayActive, firmwareActive }: { vehicle: Re
 
         <div className="space-y-2">
           <select
+            data-testid="controls-flight-mode-select"
             value={vehicleState?.custom_mode ?? ""}
             onChange={(e) => setFlightMode(Number(e.target.value))}
             disabled={!connected || !!replayActive || availableModes.length === 0}
@@ -286,14 +321,14 @@ function SidebarContent({ vehicle, replayActive, firmwareActive }: { vehicle: Re
               className="w-16 rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm text-text-primary"
             />
             <span className="text-xs text-text-muted">m</span>
-            <Button variant="secondary" size="sm" className="flex-1" onClick={takeoff}
-              disabled={!connected || !!replayActive || !vehicleState?.armed || vehicleState?.mode_name?.toUpperCase() !== "GUIDED"}>
+            <Button data-testid="controls-takeoff-btn" variant="secondary" size="sm" className="flex-1" onClick={() => { void handleTakeoff(); }}
+              disabled={!connected || !!replayActive || !guided.takeoffReady}>
               Takeoff
             </Button>
           </div>
-          {connected && !replayActive && vehicleState && (!vehicleState.armed || vehicleState.mode_name?.toUpperCase() !== "GUIDED") && (
-            <p className="text-[10px] text-text-muted">
-              {!vehicleState.armed ? "Arm vehicle" : "Switch to GUIDED"} to enable takeoff
+          {connected && !replayActive && guided.takeoffPrompt && (
+            <p data-testid="controls-takeoff-hint" className="text-[10px] text-text-muted">
+              {guided.takeoffPrompt}
             </p>
           )}
 

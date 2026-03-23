@@ -83,8 +83,10 @@ export function MapContextMenu({
         </>
       ) : (
         <>
-          <MenuItem icon={<Navigation className="h-3.5 w-3.5" />} label="Fly To Here"
-            onClick={() => onFlyTo?.(lat, lng)} />
+          {onFlyTo && (
+            <MenuItem icon={<Navigation className="h-3.5 w-3.5" />} label="Fly To Here"
+              onClick={() => onFlyTo(lat, lng)} />
+          )}
           {missionType === "mission" && (
             <MenuItem icon={<Home className="h-3.5 w-3.5" />} label="Set Home Here"
               onClick={() => onSetHome?.(lat, lng)} />

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   ShieldCheck,
   ShieldAlert,
@@ -17,15 +17,13 @@ import { getStagedOrCurrent } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import { armVehicle, disarmVehicle } from "../../../telemetry";
 import type { VehicleState } from "../../../telemetry";
-import { requestPrearmChecks } from "../../../calibration";
-import { subscribeStatusText, type StatusMessage } from "../../../statustext";
-import type { SensorHealth } from "../../../sensor-health";
+import { isPreArmGood, type SensorHealth } from "../../../sensor-health";
+import type { SupportDomain } from "../../../support";
 import {
-  type PrearmBlocker,
-  classifyPrearm,
   categoryIcon,
 } from "../shared/prearm-helpers";
 import { getVehicleSlug } from "../shared/vehicle-helpers";
+import { usePrearmChecks } from "../shared/use-prearm-checks";
 import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import { SectionCardHeader } from "../shared/SectionCardHeader";
@@ -39,6 +37,7 @@ type ArmingSectionProps = {
   params: ParamInputParams;
   connected: boolean;
   vehicleState: VehicleState | null;
+  support: SupportDomain;
   sensorHealth: SensorHealth | null;
 };
 
@@ -62,13 +61,19 @@ export function ArmingSection({
   params,
   connected,
   vehicleState,
+  support,
   sensorHealth,
 }: ArmingSectionProps) {
   const vehicleSlug = getVehicleSlug(vehicleState);
   const armingCheckValue = getStagedOrCurrent("ARMING_CHECK", params);
   const armingRequireValue = getStagedOrCurrent("ARMING_REQUIRE", params);
-  const isReady = sensorHealth?.pre_arm_good === true;
+  const isReady = sensorHealth != null && isPreArmGood(sensorHealth);
   const armed = vehicleState?.armed === true;
+  const canRequestChecks = support.value?.can_request_prearm_checks === true;
+  const prearmResetKey = useMemo(
+    () => `${vehicleState?.system_id ?? "none"}:${connected}`,
+    [connected, vehicleState?.system_id],
+  );
 
   const checksDisabled = armingCheckValue === 0;
   const checksNotAll = armingCheckValue !== null && armingCheckValue !== 1 && armingCheckValue !== 0;
@@ -155,7 +160,9 @@ export function ArmingSection({
 
       <PrearmStatusPanel
         connected={connected}
+        canRequestChecks={canRequestChecks}
         sensorHealth={sensorHealth}
+        resetKey={prearmResetKey}
         vehicleSlug={vehicleSlug}
       />
 
@@ -174,71 +181,25 @@ export function ArmingSection({
 
 function PrearmStatusPanel({
   connected,
+  canRequestChecks,
   sensorHealth,
+  resetKey,
   vehicleSlug,
 }: {
   connected: boolean;
+  canRequestChecks: boolean;
   sensorHealth: SensorHealth | null;
+  resetKey: string;
   vehicleSlug: ReturnType<typeof getVehicleSlug>;
 }) {
-  const [blockers, setBlockers] = useState<PrearmBlocker[]>([]);
-  const [checking, setChecking] = useState(false);
-  const [hasChecked, setHasChecked] = useState(false);
-  const lastCheckTime = useRef<number>(0);
+  const { blockers, checking, hasChecked, runChecks } = usePrearmChecks({
+    connected,
+    canRequestChecks,
+    preArmGood: sensorHealth != null && isPreArmGood(sensorHealth),
+    resetKey,
+  });
 
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-
-    const handleStatus = (msg: StatusMessage) => {
-      const now = Date.now();
-      if (now < lastCheckTime.current) return;
-      if (!msg.text.toLowerCase().includes("prearm")) return;
-
-      const blocker = classifyPrearm(msg.text, now);
-      setBlockers((prev) => {
-        const filtered = prev.filter((b) => b.category !== blocker.category);
-        return [...filtered, blocker];
-      });
-    };
-
-    (async () => {
-      unlisten = await subscribeStatusText(handleStatus);
-    })();
-
-    return () => {
-      unlisten?.();
-    };
-  }, []);
-
-  const runChecks = useCallback(async () => {
-    if (!connected) return;
-    setChecking(true);
-    setBlockers([]);
-    lastCheckTime.current = Date.now();
-    try {
-      await requestPrearmChecks();
-      setHasChecked(true);
-    } catch {
-      // Vehicle may not support the command
-    }
-    setTimeout(() => setChecking(false), 3000);
-  }, [connected]);
-
-  useEffect(() => {
-    if (sensorHealth?.pre_arm_good === true) {
-      setBlockers([]);
-    }
-  }, [sensorHealth?.pre_arm_good]);
-
-  const autoChecked = useRef(false);
-  useEffect(() => {
-    if (connected && !autoChecked.current) {
-      autoChecked.current = true;
-      runChecks();
-    }
-  }, [connected]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const isReady = sensorHealth?.pre_arm_good === true;
+  const isReady = sensorHealth != null && isPreArmGood(sensorHealth);
   const blockerCount = blockers.length;
 
   return (
@@ -272,8 +233,9 @@ function PrearmStatusPanel({
 
         <button
           onClick={runChecks}
-          disabled={!connected || checking}
+          disabled={!connected || !canRequestChecks || checking}
           className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-colors hover:bg-bg-tertiary disabled:opacity-40"
+          title={!canRequestChecks ? "Pre-arm check requests are unavailable for this vehicle" : undefined}
         >
           <RefreshCw size={12} className={checking ? "animate-spin" : ""} />
           {checking ? "Checking..." : "Refresh"}

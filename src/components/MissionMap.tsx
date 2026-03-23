@@ -6,7 +6,8 @@ import maplibregl, {
   type MapMouseEvent,
 } from "maplibre-gl";
 import { Map as MapIcon, Layers, Satellite } from "lucide-react";
-import type { HomePosition, MissionItem } from "../mission";
+import type { HomePosition } from "../mission";
+import type { TypedDraftItem } from "../lib/mission-draft-typed";
 import type { PolygonVertex } from "../lib/mission-grid";
 
 const DEFAULT_CENTER: [number, number] = [8.545594, 47.397742];
@@ -30,11 +31,11 @@ type SvsTelemetry = {
 };
 
 type MissionMapProps = {
-  missionItems: MissionItem[];
+  missionItems: TypedDraftItem[];
   homePosition: HomePosition | null;
-  selectedSeq: number | null;
-  onSelectSeq?: (seq: number | null) => void;
-  onMoveWaypoint?: (seq: number, latDeg: number, lonDeg: number) => void;
+  selectedIndex: number | null;
+  onSelectIndex?: (index: number | null) => void;
+  onMoveWaypoint?: (index: number, latDeg: number, lonDeg: number) => void;
   onContextMenu?: (lat: number, lng: number, screenX: number, screenY: number) => void;
   readOnly?: boolean;
   vehiclePosition?: { latitude_deg: number; longitude_deg: number; heading_deg: number } | null;
@@ -59,7 +60,7 @@ type MissionMapProps = {
 export type { SvsTelemetry };
 
 export function MissionMap({
-  missionItems, homePosition, selectedSeq, onSelectSeq,
+  missionItems, homePosition, selectedIndex, onSelectIndex,
   onMoveWaypoint, onContextMenu, readOnly,
   vehiclePosition, deviceLocation, followTarget, centerOnVehicleKey, centerOnDeviceKey,
   onUserInteraction, currentMissionSeq, flyToSelectedKey,
@@ -79,7 +80,7 @@ export function MissionMap({
   const deviceLocationMarkerRef = useRef<Marker | null>(null);
   const replayMarkerRef = useRef<Marker | null>(null);
   const hasSetInitialViewport = useRef(false);
-  const onSelectSeqRef = useRef(onSelectSeq);
+  const onSelectIndexRef = useRef(onSelectIndex);
   const onMoveWaypointRef = useRef(onMoveWaypoint);
   const onContextMenuRef = useRef(onContextMenu);
   const readOnlyRef = useRef(readOnly);
@@ -97,7 +98,7 @@ export function MissionMap({
   const homePositionRef = useRef(homePosition);
 
   useEffect(() => {
-    onSelectSeqRef.current = onSelectSeq;
+    onSelectIndexRef.current = onSelectIndex;
     onMoveWaypointRef.current = onMoveWaypoint;
     onContextMenuRef.current = onContextMenu;
     readOnlyRef.current = readOnly;
@@ -109,7 +110,7 @@ export function MissionMap({
     polygonVerticesRef.current = polygonVertices;
     missionItemsRef.current = missionItems;
     homePositionRef.current = homePosition;
-  }, [onSelectSeq, onMoveWaypoint, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, polygonVertices, missionItems, homePosition]);
+  }, [onSelectIndex, onMoveWaypoint, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, polygonVertices, missionItems, homePosition]);
 
   const missionGeoJson = useMemo(() => {
     const lineCoordinates: [number, number][] = [];
@@ -119,7 +120,8 @@ export function MissionMap({
     }
 
     for (const item of missionItems) {
-      lineCoordinates.push([item.y / 1e7, item.x / 1e7]);
+      if (item.preview.latitude_deg === null || item.preview.longitude_deg === null) continue;
+      lineCoordinates.push([item.preview.longitude_deg, item.preview.latitude_deg]);
     }
 
     const features: any[] = [];
@@ -441,32 +443,48 @@ export function MissionMap({
     const map = mapRef.current;
     if (!map) return;
 
-    const nextSeqs = new Set(missionItems.map((item) => item.seq));
-    for (const [seq, marker] of markersRef.current.entries()) {
-      if (!nextSeqs.has(seq)) {
+    const nextIndexes = new Set(missionItems.map((item) => item.index));
+    for (const [index, marker] of markersRef.current.entries()) {
+      if (!nextIndexes.has(index)) {
         marker.remove();
-        markersRef.current.delete(seq);
+        markersRef.current.delete(index);
       }
     }
 
     for (const item of missionItems) {
-      const existing = markersRef.current.get(item.seq);
-      const lngLat: [number, number] = [item.y / 1e7, item.x / 1e7];
+      if (item.preview.latitude_deg === null || item.preview.longitude_deg === null) {
+        const existing = markersRef.current.get(item.index);
+        if (existing) {
+          existing.remove();
+          markersRef.current.delete(item.index);
+        }
+        continue;
+      }
 
-      if (existing) {
-        existing.setLngLat(lngLat);
+      const isDraggable = !readOnly && !item.readOnly;
+      const existing = markersRef.current.get(item.index);
+
+      if (existing && existing.isDraggable() !== isDraggable) {
+        existing.remove();
+        markersRef.current.delete(item.index);
+      }
+
+      const reusable = markersRef.current.get(item.index);
+      const lngLat: [number, number] = [item.preview.longitude_deg, item.preview.latitude_deg];
+
+      if (reusable) {
+        reusable.setLngLat(lngLat);
+        reusable.setDraggable(isDraggable);
       } else {
         const markerEl = document.createElement("button");
         markerEl.type = "button";
         markerEl.className = "mission-pin";
         markerEl.dataset.missionMarkerKind = "waypoint";
 
-        const isDraggable = !readOnly;
-
         markerEl.addEventListener("click", (e) => {
           e.stopPropagation();
           if (longPressFiredRef.current) { longPressFiredRef.current = false; return; }
-          onSelectSeqRef.current?.(item.seq);
+          onSelectIndexRef.current?.(item.index);
         });
 
         const marker = new maplibregl.Marker({
@@ -488,8 +506,9 @@ export function MissionMap({
             const hp = homePositionRef.current;
             if (hp) lineCoords.push([hp.longitude_deg, hp.latitude_deg]);
             for (const mi of missionItemsRef.current) {
-              if (mi.seq === item.seq) lineCoords.push([pos.lng, pos.lat]);
-              else lineCoords.push([mi.y / 1e7, mi.x / 1e7]);
+              if (mi.preview.latitude_deg === null || mi.preview.longitude_deg === null) continue;
+              if (mi.index === item.index) lineCoords.push([pos.lng, pos.lat]);
+              else lineCoords.push([mi.preview.longitude_deg, mi.preview.latitude_deg]);
             }
             const feats: any[] = [];
             if (lineCoords.length >= 2) {
@@ -499,20 +518,20 @@ export function MissionMap({
           });
           marker.on("dragend", () => {
             const pos = marker.getLngLat();
-            onMoveWaypointRef.current?.(item.seq, pos.lat, pos.lng);
+            onMoveWaypointRef.current?.(item.index, pos.lat, pos.lng);
           });
         }
 
-        markersRef.current.set(item.seq, marker);
+        markersRef.current.set(item.index, marker);
       }
 
-      const markerElement = markersRef.current.get(item.seq)?.getElement();
+      const markerElement = markersRef.current.get(item.index)?.getElement();
       if (markerElement) {
-        markerElement.textContent = String(item.seq + 1);
-        markerElement.dataset.missionMarkerSeq = String(item.seq);
+        markerElement.textContent = String(item.index + 1);
+        markerElement.dataset.missionMarkerSeq = String(item.index);
 
-        const isSelected = selectedSeq === item.seq;
-        const isCurrent = currentMissionSeq === item.seq;
+        const isSelected = selectedIndex === item.index;
+        const isCurrent = currentMissionSeq === item.index;
         markerElement.classList.toggle("is-selected", isSelected);
         markerElement.classList.toggle("is-current", isCurrent);
 
@@ -527,7 +546,7 @@ export function MissionMap({
         markerElement.dataset.missionMarkerState = state;
       }
     }
-  }, [missionItems, selectedSeq, readOnly, currentMissionSeq]);
+  }, [missionItems, selectedIndex, readOnly, currentMissionSeq]);
 
   // Vehicle marker (skip in SVS mode — the pilot IS the vehicle)
   useEffect(() => {
@@ -639,10 +658,10 @@ export function MissionMap({
 
   // Fly to selected marker when triggered by list card click
   useEffect(() => {
-    if (!flyToSelectedKey || selectedSeq === null) return;
+    if (!flyToSelectedKey || selectedIndex === null) return;
     const map = mapRef.current;
     if (!map) return;
-    const marker = markersRef.current.get(selectedSeq);
+    const marker = markersRef.current.get(selectedIndex);
     if (marker) {
       const lngLat = marker.getLngLat();
       programmaticMoveRef.current = true;
@@ -656,12 +675,18 @@ export function MissionMap({
     const map = mapRef.current;
     if (!map || hasSetInitialViewport.current) return;
 
-    const hasItems = missionItems.length > 0 || homePosition !== null;
-    if (!hasItems) return;
+    const plottableItems = missionItems.filter(
+      (item) => item.preview.latitude_deg !== null && item.preview.longitude_deg !== null,
+    );
+    const hasBoundsTarget = plottableItems.length > 0 || homePosition !== null;
+    if (!hasBoundsTarget) return;
 
     const bounds = new maplibregl.LngLatBounds();
     if (homePosition) bounds.extend([homePosition.longitude_deg, homePosition.latitude_deg]);
-    for (const item of missionItems) bounds.extend([item.y / 1e7, item.x / 1e7]);
+    for (const item of plottableItems) {
+      if (item.preview.latitude_deg === null || item.preview.longitude_deg === null) continue;
+      bounds.extend([item.preview.longitude_deg, item.preview.latitude_deg]);
+    }
 
     map.fitBounds(bounds, { padding: 48, maxZoom: 15, duration: 0 });
     hasSetInitialViewport.current = true;

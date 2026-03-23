@@ -1,6 +1,9 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import type { ParamStore } from "../params";
-import type { SensorHealth } from "../sensor-health";
+import { useState, useCallback, useMemo, useEffect } from "react";
+import type { CalibrationDomain } from "../calibration";
+import type { ConfigurationFactsDomain } from "../configuration-facts";
+import { deriveSetupSectionStatuses } from "../lib/configuration-facts";
+import type { SensorHealthDomain } from "../sensor-health";
+import type { SupportDomain } from "../support";
 import type { VehicleState } from "../telemetry";
 
 // ---------------------------------------------------------------------------
@@ -28,7 +31,7 @@ export type SetupSectionId =
   | "full_parameters"
   | "firmware";
 
-export type SectionStatus = "not_started" | "in_progress" | "complete";
+export type SectionStatus = "unknown" | "not_started" | "in_progress" | "failed" | "complete";
 
 export type OverallProgress = {
   completed: number;
@@ -61,12 +64,6 @@ export const SECTION_IDS: SetupSectionId[] = [
   "full_parameters",
   "firmware",
 ];
-
-// Sections whose completion is user-confirmed via localStorage
-const USER_CONFIRMED_SECTIONS: ReadonlySet<SetupSectionId> = new Set([
-  "flight_modes",
-  "failsafe",
-]);
 
 /**
  * Sections that have an actual completion path (param heuristic, sensor check,
@@ -113,130 +110,26 @@ function savePersisted(key: string, data: PersistedSections): void {
   localStorage.setItem(key, JSON.stringify(data));
 }
 
-// ---------------------------------------------------------------------------
-// Param helper
-// ---------------------------------------------------------------------------
+export type SetupFactDomains = {
+  support: SupportDomain | null;
+  sensorHealth: SensorHealthDomain | null;
+  configurationFacts: ConfigurationFactsDomain | null;
+  calibration: CalibrationDomain | null;
+};
 
-type ParamMap = Record<string, { value: number }>;
-
-function paramValue(params: ParamMap | null, name: string): number | null {
-  if (!params) return null;
-  return params[name]?.value ?? null;
-}
-
-// ---------------------------------------------------------------------------
-// Pure completion heuristics
-// ---------------------------------------------------------------------------
-
-/**
- * Compute the completion status for each section based on param values,
- * sensor health, vehicle type, and user-confirmed localStorage flags.
- *
- * Exported for testing — pure function, no React dependency.
- */
 export function computeSectionStatuses(
-  params: ParamMap | null,
-  sensorHealth: SensorHealth | null,
+  facts: SetupFactDomains,
   vehicleType: string | null,
   confirmedSections: Record<string, boolean>,
 ): Map<SetupSectionId, SectionStatus> {
-  const statuses = new Map<SetupSectionId, SectionStatus>();
-  const p = (name: string) => paramValue(params, name);
-
-  for (const id of SECTION_IDS) {
-    // User-confirmed sections (localStorage only)
-    if (USER_CONFIRMED_SECTIONS.has(id)) {
-      statuses.set(id, confirmedSections[id] ? "complete" : "not_started");
-      continue;
-    }
-
-    switch (id) {
-      case "frame_orientation": {
-        // Plane is always complete (no frame class needed); copter needs FRAME_CLASS > 0
-        const isPlane = vehicleType === "fixed_wing";
-        if (isPlane) {
-          statuses.set(id, "complete");
-        } else {
-          const frameClass = p("FRAME_CLASS") ?? 0;
-          statuses.set(id, frameClass > 0 ? "complete" : "not_started");
-        }
-        break;
-      }
-
-      case "calibration": {
-        // Accel offsets ≠ 0
-        const accelDone =
-          (p("INS_ACCOFFS_X") ?? 0) !== 0 ||
-          (p("INS_ACCOFFS_Y") ?? 0) !== 0 ||
-          (p("INS_ACCOFFS_Z") ?? 0) !== 0;
-        // Compass offsets ≠ 0
-        const compassDone =
-          (p("COMPASS_OFS_X") ?? 0) !== 0 ||
-          (p("COMPASS_OFS_Y") ?? 0) !== 0 ||
-          (p("COMPASS_OFS_Z") ?? 0) !== 0;
-        // RC calibrated (RC1_MIN != default 1100)
-        const radioDone =
-          (p("RC1_MIN") ?? 1100) < (p("RC1_MAX") ?? 1900) &&
-          (p("RC1_MIN") ?? 1100) !== 1100;
-
-        if (accelDone && compassDone && radioDone) {
-          statuses.set(id, "complete");
-        } else if (accelDone || compassDone || radioDone) {
-          statuses.set(id, "in_progress");
-        } else {
-          statuses.set(id, "not_started");
-        }
-        break;
-      }
-
-      case "gps": {
-        // GPS1_TYPE > 0 (newer firmware) or GPS_TYPE > 0 (older firmware)
-        const gps1Type = p("GPS1_TYPE");
-        const gpsType = p("GPS_TYPE");
-        const gpsConfigured = (gps1Type !== null && gps1Type > 0) || (gpsType !== null && gpsType > 0);
-        statuses.set(id, gpsConfigured ? "complete" : "not_started");
-        break;
-      }
-
-      case "battery_monitor": {
-        const battMonitor = p("BATT_MONITOR") ?? 0;
-        statuses.set(id, battMonitor > 0 ? "complete" : "not_started");
-        break;
-      }
-
-      case "motors_esc": {
-        // Motors auto-assigned when FRAME_CLASS > 0
-        const frameClass = p("FRAME_CLASS") ?? 0;
-        statuses.set(id, frameClass > 0 ? "complete" : "not_started");
-        break;
-      }
-
-      case "rc_receiver": {
-        // RC calibrated if RC1_MIN != 1100 (default)
-        const rc1Min = p("RC1_MIN") ?? 1100;
-        statuses.set(id, rc1Min !== 1100 ? "complete" : "not_started");
-        break;
-      }
-
-      case "arming": {
-        if (sensorHealth?.pre_arm_good) {
-          statuses.set(id, "complete");
-        } else if (sensorHealth !== null) {
-          statuses.set(id, "in_progress");
-        } else {
-          statuses.set(id, "not_started");
-        }
-        break;
-      }
-
-      default:
-        // Sections without param-derived heuristics
-        statuses.set(id, "not_started");
-        break;
-    }
-  }
-
-  return statuses;
+  return deriveSetupSectionStatuses({
+    vehicle_type: vehicleType,
+    confirmed_sections: confirmedSections,
+    support: facts.support,
+    sensor_health: facts.sensorHealth,
+    configuration_facts: facts.configurationFacts,
+    calibration: facts.calibration,
+  });
 }
 
 /**
@@ -271,19 +164,12 @@ export type SetupSectionsReturn = {
 };
 
 export function useSetupSections(
-  params: { paramStore: ParamStore | null },
   vehicleState: VehicleState | null,
-  sensorHealth: SensorHealth | null,
+  facts: SetupFactDomains,
 ): SetupSectionsReturn {
   const sysId = vehicleState?.system_id ?? 0;
   const vehicleType = vehicleState?.vehicle_type ?? null;
   const key = storageKey(sysId);
-
-  // Load persisted state
-  const persisted = useRef<PersistedSections | null>(null);
-  useEffect(() => {
-    persisted.current = loadPersisted(key);
-  }, [key]);
 
   // Active section from persisted or default
   const [activeSection, setActiveSectionRaw] = useState<SetupSectionId>(() => {
@@ -295,16 +181,12 @@ export function useSetupSections(
   });
 
   // Sync active section when key changes (vehicle switch)
-  const prevKeyRef = useRef(key);
   useEffect(() => {
-    if (prevKeyRef.current !== key) {
-      prevKeyRef.current = key;
-      const saved = loadPersisted(key);
-      if (saved && (SECTION_IDS as string[]).includes(saved.activeSection)) {
-        setActiveSectionRaw(saved.activeSection);
-      } else {
-        setActiveSectionRaw("overview");
-      }
+    const saved = loadPersisted(key);
+    if (saved && (SECTION_IDS as string[]).includes(saved.activeSection)) {
+      setActiveSectionRaw(saved.activeSection);
+    } else {
+      setActiveSectionRaw("overview");
     }
   }, [key]);
 
@@ -313,7 +195,6 @@ export function useSetupSections(
     const current = loadPersisted(key) ?? { activeSection: "overview" as SetupSectionId, confirmed: {} };
     current.activeSection = activeSection;
     savePersisted(key, current);
-    persisted.current = current;
   }, [activeSection, key]);
 
   // Confirmed sections from localStorage
@@ -343,7 +224,6 @@ export function useSetupSections(
         const current = loadPersisted(key) ?? { activeSection, confirmed: {} };
         current.confirmed = next;
         savePersisted(key, current);
-        persisted.current = current;
         return next;
       });
     },
@@ -353,16 +233,14 @@ export function useSetupSections(
   // Reset all sections
   const resetSections = useCallback(() => {
     localStorage.removeItem(key);
-    persisted.current = null;
     setActiveSectionRaw("overview");
     setConfirmedSections({});
   }, [key]);
 
   // Compute statuses
-  const paramMap = params.paramStore?.params ?? null;
   const sectionStatuses = useMemo(
-    () => computeSectionStatuses(paramMap, sensorHealth, vehicleType, confirmedSections),
-    [paramMap, sensorHealth, vehicleType, confirmedSections],
+    () => computeSectionStatuses(facts, vehicleType, confirmedSections),
+    [facts, vehicleType, confirmedSections],
   );
 
   const overallProgress = useMemo(

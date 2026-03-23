@@ -40,7 +40,7 @@ export function MissionVehicleCard({ connected, activeSeq, missionState, mission
         <div className="flex items-baseline justify-between">
           <span className="text-text-muted">Vehicle Items</span>
           <span className="tabular-nums text-text-secondary">
-            {missionState ? missionState.total_items : "—"}
+            {missionState?.plan ? missionState.plan.items.length : "—"}
           </span>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useMemo } from "react";
-import type { useVehicle } from "../../hooks/use-vehicle";
+import type { useSession } from "../../hooks/use-session";
 import type { useMission } from "../../hooks/use-mission";
 import { TapeGauge } from "./TapeGauge";
 import { ArtificialHorizon } from "./ArtificialHorizon";
@@ -7,7 +7,7 @@ import { MissionMap, type SvsTelemetry } from "../MissionMap";
 import "./hud.css";
 
 type HudPanelProps = {
-  vehicle: ReturnType<typeof useVehicle>;
+  vehicle: ReturnType<typeof useSession>;
   mission: ReturnType<typeof useMission>;
   svsEnabled: boolean;
 };
@@ -84,7 +84,7 @@ export function HudPanel({ vehicle, mission, svsEnabled }: HudPanelProps) {
 
   const armed = vehicleState?.armed ?? false;
   const modeName = vehicleState?.mode_name ?? "--";
-  const missionState = mission.missionState;
+  const missionState = mission.vehicle.missionState;
 
   return (
     <div className={`hud-panel h-full w-full rounded-lg ${hasSvs ? "hud-svs-active" : ""}`}>
@@ -92,9 +92,9 @@ export function HudPanel({ vehicle, mission, svsEnabled }: HudPanelProps) {
       {hasSvs ? (
         <div className="hud-svs-bg">
           <MissionMap
-            missionItems={mission.items}
-            homePosition={mission.missionType === "mission" ? mission.homePosition : null}
-            selectedSeq={null}
+            missionItems={mission.mission.draftItems as import("../../lib/mission-draft-typed").TypedDraftItem[]}
+            homePosition={mission.mission.homePosition}
+            selectedIndex={null}
             readOnly
             syntheticVision
             svsTelemetry={svsTelemetry}
@@ -113,8 +113,8 @@ export function HudPanel({ vehicle, mission, svsEnabled }: HudPanelProps) {
           <div className="hud-font text-center text-[10px] opacity-70">
             <div className="text-[9px] opacity-50">WPT</div>
             <div>
-              {missionState && missionState.current_seq != null
-                ? `${missionState.current_seq + 1}/${missionState.total_items}`
+              {missionState && missionState.current_index != null
+                ? `${missionState.current_index + 1}/${missionState.plan?.items.length ?? 0}`
                 : "--/--"}
             </div>
             {telemetry.wp_dist_m !== undefined && (
@@ -252,12 +252,12 @@ export function HudPanel({ vehicle, mission, svsEnabled }: HudPanelProps) {
       {!hasSvs && (
         <div className="hud-minimap">
           <MissionMap
-            missionItems={mission.items}
-            homePosition={mission.missionType === "mission" ? mission.homePosition : null}
-            selectedSeq={null}
+            missionItems={mission.mission.draftItems as import("../../lib/mission-draft-typed").TypedDraftItem[]}
+            homePosition={mission.mission.homePosition}
+            selectedIndex={null}
             readOnly
             vehiclePosition={vehiclePosition}
-            currentMissionSeq={missionState?.current_seq ?? null}
+            currentMissionSeq={missionState?.current_index ?? null}
             followTarget="vehicle"
           />
         </div>

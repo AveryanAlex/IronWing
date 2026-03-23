@@ -5,14 +5,14 @@ import { RadioCalibWizard } from "../RadioCalibWizard";
 import { CompassCalibWizard } from "../CompassCalibWizard";
 import { ParamDisplay } from "../primitives/ParamDisplay";
 import { calibrateGyro } from "../../../calibration";
-import type { useParams } from "../../../hooks/use-params";
+import type { ParamsState } from "../../../hooks/use-params";
 import { toast } from "sonner";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import { DocsLink } from "../shared/DocsLink";
 import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 
 type CalibrationSectionProps = {
-  params: ReturnType<typeof useParams>;
+  params: ParamsState;
   connected: boolean;
 };
 

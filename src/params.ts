@@ -1,5 +1,7 @@
 import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
+import { createLatestScopedEventHandler } from "./lib/scoped-session-events";
+import type { SessionEvent } from "./session";
 
 export type ParamType = "uint8" | "int8" | "uint16" | "int16" | "uint32" | "int32" | "real32";
 
@@ -15,13 +17,37 @@ export type ParamStore = {
   expected_count: number;
 };
 
-export type ParamTransferPhase = "idle" | "downloading" | "writing" | "completed" | "failed";
-
-export type ParamProgress = {
-  phase: ParamTransferPhase;
+export type ParamTransferCounts = {
   received: number;
   expected: number;
 };
+
+/** Matches mavkit's `ParamOperationProgress` externally-tagged serde enum. */
+export type ParamProgress =
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | { downloading: ParamTransferCounts }
+  | { writing: ParamTransferCounts };
+
+/** Extract the phase name from a progress value. */
+export function paramProgressPhase(p: ParamProgress): "downloading" | "writing" | "completed" | "failed" | "cancelled" {
+  if (typeof p === "string") return p;
+  if ("downloading" in p) return "downloading";
+  return "writing";
+}
+
+/** Extract transfer counts, or null for terminal states (completed/failed/cancelled). */
+export function paramProgressCounts(p: ParamProgress): ParamTransferCounts | null {
+  if (typeof p === "string") return null;
+  if ("downloading" in p) return p.downloading;
+  return p.writing;
+}
+
+/** True when a transfer is actively running (downloading or writing). */
+export function isParamTransferActive(p: ParamProgress): boolean {
+  return typeof p !== "string";
+}
 
 export type ParamWriteResult = {
   name: string;
@@ -50,10 +76,14 @@ export async function formatParamFile(store: ParamStore): Promise<string> {
   return invoke<string>("param_format_file", { store });
 }
 
-export async function subscribeParamStore(cb: (store: ParamStore) => void): Promise<UnlistenFn> {
-  return listen<ParamStore>("param://store", (event) => cb(event.payload));
+export async function subscribeParamStore(cb: (event: SessionEvent<ParamStore>) => void): Promise<UnlistenFn> {
+  const handleEvent = createLatestScopedEventHandler(cb);
+
+  return listen<SessionEvent<ParamStore>>("param://store", (event) => handleEvent(event.payload));
 }
 
-export async function subscribeParamProgress(cb: (progress: ParamProgress) => void): Promise<UnlistenFn> {
-  return listen<ParamProgress>("param://progress", (event) => cb(event.payload));
+export async function subscribeParamProgress(cb: (event: SessionEvent<ParamProgress>) => void): Promise<UnlistenFn> {
+  const handleEvent = createLatestScopedEventHandler(cb);
+
+  return listen<SessionEvent<ParamProgress>>("param://progress", (event) => handleEvent(event.payload));
 }

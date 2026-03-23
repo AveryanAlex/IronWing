@@ -83,12 +83,12 @@ describe("interpolateLogTelemetry", () => {
 
   it("preserves discrete fields from earlier snapshot (no interpolation)", () => {
     const track = [
-      snap(1000, { gps_fix_type: "3d_fix", armed: true, custom_mode: 4 }),
+      snap(1000, { gps_fix_type: "fix_3d", armed: true, custom_mode: 4 }),
       snap(2000, { gps_fix_type: "dgps", armed: false, custom_mode: 5 }),
     ];
     const result = interpolateLogTelemetry(track, 1500);
 
-    expect(result!.telemetry.gps_fix_type).toBe("3d_fix");
+    expect(result!.telemetry.gps_fix_type).toBe("fix_3d");
   });
 
   it("produces vehicleState when armed and custom_mode present", () => {

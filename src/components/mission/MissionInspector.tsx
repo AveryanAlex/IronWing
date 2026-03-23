@@ -1,17 +1,21 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { Settings2, ChevronRight } from "lucide-react";
-import { commandName, MAV_CMD } from "../../lib/mav-commands";
+import { Settings2 } from "lucide-react";
 import {
-  resolveCommandMetadata,
-  type ParamDescriptor,
-  type ParamSlot,
-  type CommandMetadata,
-} from "../../lib/mission-command-metadata";
+  commandDisplayName,
+  commandPosition,
+  commandCategory,
+  geoPoint3dLatLon,
+  geoPoint3dAltitude,
+} from "../../lib/mavkit-types";
+import type {
+  MissionItem,
+  MissionCommand,
+  GeoPoint3d,
+  HomePosition,
+} from "../../lib/mavkit-types";
 import {
-  itemLatDeg,
-  itemLonDeg,
-  itemOffsetFromHome,
-  itemOffsetFromPrevious,
+  offsetFromHome,
+  offsetFromPrevious,
   applyOffsetFromHome,
   applyOffsetFromPrevious,
   parseLatitude,
@@ -19,31 +23,30 @@ import {
   parseOffset,
   formatDeg,
 } from "../../lib/mission-coordinates";
-import { MissionCommandHelp } from "./MissionCommandHelp";
 import { cn } from "../../lib/utils";
-import type { MissionItem, MissionFrame, HomePosition } from "../../mission";
-import type { DraftItem } from "../../lib/mission-draft";
-import type { NumericItemField } from "../../lib/mission-draft";
+import type { TypedDraftItem } from "../../lib/mission-draft-typed";
 
 export type CoordinateMode = "absolute" | "home_offset" | "previous_offset";
 
 type MissionInspectorProps = {
-  draftItem: DraftItem;
+  missionType: "mission" | "fence" | "rally";
+  draftItem: TypedDraftItem;
   index: number;
-  previousItem: MissionItem | null;
+  previousItem: TypedDraftItem | null;
   homePosition: HomePosition | null;
+  readOnly?: boolean;
   isSelected: boolean;
-  onUpdateField: (index: number, field: NumericItemField, value: number) => void;
-  onUpdateFrame: (index: number, frame: MissionFrame) => void;
-  onUpdateCoordinate: (index: number, field: "x" | "y", valueDeg: number) => void;
-  onSelect: (seq: number) => void;
+  onUpdateCommand?: (index: number, command: MissionCommand) => void;
+  onUpdateAltitude: (index: number, altitudeM: number) => void;
+  onUpdateCoordinate: (index: number, field: "latitude_deg" | "longitude_deg", valueDeg: number) => void;
+  onSelect: (index: number) => void;
 };
 
-const FRAME_OPTIONS: { value: MissionFrame; label: string }[] = [
-  { value: "global_relative_alt_int", label: "Relative Alt" },
-  { value: "global_int", label: "Absolute (MSL)" },
-  { value: "global_terrain_alt_int", label: "Terrain" },
-];
+const ALTITUDE_FRAME_LABELS: Record<string, string> = {
+  msl: "Absolute (MSL)",
+  rel_home: "Relative Alt",
+  terrain: "Terrain",
+};
 
 const COORDINATE_MODES: { value: CoordinateMode; label: string }[] = [
   { value: "absolute", label: "Lat/Lon" },
@@ -51,236 +54,123 @@ const COORDINATE_MODES: { value: CoordinateMode; label: string }[] = [
   { value: "previous_offset", label: "Prev Offset" },
 ];
 
-type ParamFieldProps = {
-  slot: ParamSlot;
-  descriptor: ParamDescriptor;
-  value: number;
-  onCommit: (value: number) => void;
-  onFocusCapture: () => void;
-};
+// ---------------------------------------------------------------------------
+// Typed field extraction for display
+// ---------------------------------------------------------------------------
 
-function ParamField({ slot, descriptor, value, onCommit, onFocusCapture }: ParamFieldProps) {
-  const [local, setLocal] = useState(String(value));
-  const prevValueRef = useRef(value);
+type FieldEntry = { label: string; value: string };
 
-  useEffect(() => {
-    if (prevValueRef.current !== value) {
-      setLocal(String(value));
-      prevValueRef.current = value;
+/** Extract human-readable fields from the inner variant of a MissionCommand. */
+function extractCommandFields(cmd: MissionCommand): FieldEntry[] {
+  const entries: FieldEntry[] = [];
+
+  function walk(obj: Record<string, unknown>) {
+    for (const [key, val] of Object.entries(obj)) {
+      // Skip position — handled separately by coordinate fields
+      if (key === "position") continue;
+      if (typeof val === "number") {
+        entries.push({ label: fieldLabel(key), value: formatFieldValue(key, val) });
+      } else if (typeof val === "boolean") {
+        entries.push({ label: fieldLabel(key), value: val ? "Yes" : "No" });
+      } else if (typeof val === "string") {
+        entries.push({ label: fieldLabel(key), value: val });
+      }
     }
-  }, [value]);
-
-  const isUnsupported = descriptor.supported === false;
-  const isHidden = descriptor.hidden === true;
-
-  if (isHidden) return null;
-
-  const handleBlur = () => {
-    const n = Number(local);
-    if (Number.isFinite(n) && n !== value) {
-      onCommit(n);
-    } else {
-      setLocal(String(value));
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      (e.target as HTMLInputElement).blur();
-    }
-  };
-
-  if (descriptor.enumValues) {
-    return (
-      <div className="space-y-0.5">
-        <label className="flex items-center gap-1 text-[10px] text-text-muted">
-          {descriptor.label}
-          {descriptor.units && <span className="text-text-muted/50">({descriptor.units})</span>}
-          {descriptor.required && <span className="text-accent">*</span>}
-        </label>
-        <select
-          data-param-slot={slot}
-          value={value}
-          onChange={(e) => onCommit(Number(e.target.value))}
-          onFocus={onFocusCapture}
-          disabled={isUnsupported}
-          className={cn(
-            "w-full rounded border border-border bg-bg-input px-1.5 py-1 text-xs text-text-primary",
-            isUnsupported && "cursor-not-allowed opacity-40",
-          )}
-        >
-          {descriptor.enumValues.map((ev) => (
-            <option key={ev.value} value={ev.value}>{ev.label}</option>
-          ))}
-        </select>
-        {isUnsupported && descriptor.description && (
-          <p className="text-[9px] text-warning/70">{descriptor.description}</p>
-        )}
-      </div>
-    );
   }
 
-  return (
-    <div className="space-y-0.5">
-      <label className="flex items-center gap-1 text-[10px] text-text-muted">
-        {descriptor.label}
-        {descriptor.units && <span className="text-text-muted/50">({descriptor.units})</span>}
-        {descriptor.required && <span className="text-accent">*</span>}
-      </label>
-      <input
-        data-param-slot={slot}
-        type="number"
-        step="any"
-        value={local}
-        onChange={(e) => setLocal(e.target.value)}
-        onBlur={handleBlur}
-        onKeyDown={handleKeyDown}
-        onFocus={onFocusCapture}
-        disabled={isUnsupported}
-        className={cn(
-          "w-full rounded border border-border bg-bg-input px-1.5 py-1 text-xs tabular-nums text-text-primary",
-          isUnsupported && "cursor-not-allowed opacity-40",
-        )}
-      />
-      {isUnsupported && descriptor.description && (
-        <p className="text-[9px] text-warning/70">{descriptor.description}</p>
-      )}
-      {!isUnsupported && descriptor.description && (
-        <p className="text-[9px] text-text-muted/70">{descriptor.description}</p>
-      )}
-    </div>
-  );
-}
-
-function UnsupportedParamGroup({
-  slots,
-  item,
-}: {
-  slots: { slot: ParamSlot; descriptor: ParamDescriptor }[];
-  item: MissionItem;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="rounded-md border border-border/50 bg-bg-primary/30">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-[10px] text-text-muted/70 transition-colors hover:text-text-muted"
-      >
-        <ChevronRight
-          className={cn(
-            "h-3 w-3 shrink-0 transition-transform",
-            open && "rotate-90",
-          )}
-        />
-        <span>
-          {slots.length} unsupported field{slots.length !== 1 ? "s" : ""}
-        </span>
-        <span className="ml-auto text-[9px] text-text-muted/50">
-          {slots.map((s) => s.descriptor.label).join(", ")}
-        </span>
-      </button>
-      {open && (
-        <div className="space-y-1.5 border-t border-border/30 px-2 pb-2 pt-1.5">
-          {slots.map(({ slot, descriptor }) => (
-            <div key={slot} className="text-[10px]">
-              <span className="font-medium text-text-muted/60">{descriptor.label}</span>
-              {descriptor.units && (
-                <span className="text-text-muted/40"> ({descriptor.units})</span>
-              )}
-              <span className="ml-1 tabular-nums text-text-muted/40">= {item[slot] as number}</span>
-              {descriptor.description && (
-                <p className="mt-0.5 text-[9px] leading-relaxed text-text-muted/50">
-                  {descriptor.description}
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CoordinateFields({
-  item,
-  mode,
-  homePosition,
-  previousItem,
-  metadata,
-  onCommitCoordinate,
-  onFocusCapture,
-}: {
-  item: MissionItem;
-  mode: CoordinateMode;
-  homePosition: HomePosition | null;
-  previousItem: MissionItem | null;
-  metadata: CommandMetadata;
-  onCommitCoordinate: (field: "x" | "y", valueDeg: number) => void;
-  onFocusCapture: () => void;
-}) {
-  const xDesc = metadata.params.x;
-  const yDesc = metadata.params.y;
-
-  if (!xDesc && !yDesc) return null;
-  if (xDesc?.hidden && yDesc?.hidden) return null;
-
-  const lat = itemLatDeg(item);
-  const lon = itemLonDeg(item);
-
-  if (mode === "absolute") {
-    return (
-      <AbsoluteCoordInputs
-        lat={lat}
-        lon={lon}
-        xDesc={xDesc}
-        yDesc={yDesc}
-        onCommitCoordinate={onCommitCoordinate}
-        onFocusCapture={onFocusCapture}
-      />
-    );
+  // Dig into the externally-tagged enum layers to find the inner struct
+  if ("Nav" in cmd) {
+    const nav = cmd.Nav;
+    if (typeof nav === "string") return entries; // unit variant like "ReturnToLaunch"
+    const key = Object.keys(nav)[0];
+    const inner = (nav as Record<string, Record<string, unknown>>)[key];
+    if (inner) walk(inner);
+  } else if ("Do" in cmd) {
+    const d = cmd.Do;
+    if (typeof d === "string") return entries;
+    const key = Object.keys(d)[0];
+    const inner = (d as Record<string, Record<string, unknown>>)[key];
+    if (inner) walk(inner);
+  } else if ("Condition" in cmd) {
+    const key = Object.keys(cmd.Condition)[0];
+    const inner = (cmd.Condition as Record<string, Record<string, unknown>>)[key];
+    if (inner) walk(inner);
+  } else if ("Other" in cmd) {
+    const raw = cmd.Other;
+    entries.push({ label: "Command #", value: String(raw.command) });
+    entries.push({ label: "Frame", value: String(raw.frame) });
+    for (let i = 1; i <= 4; i++) {
+      const val = raw[`param${i}` as keyof typeof raw] as number;
+      if (val !== 0) entries.push({ label: `Param ${i}`, value: String(val) });
+    }
+    if (raw.x !== 0) entries.push({ label: "X", value: String(raw.x) });
+    if (raw.y !== 0) entries.push({ label: "Y", value: String(raw.y) });
+    if (raw.z !== 0) entries.push({ label: "Z", value: String(raw.z) });
   }
 
-  if (mode === "home_offset") {
-    const offset = itemOffsetFromHome(item, homePosition);
-    return (
-      <OffsetCoordInputs
-        offset={offset}
-        label="Home"
-        applyFn={(x, y) => applyOffsetFromHome(homePosition, x, y)}
-        onCommitCoordinate={onCommitCoordinate}
-        onFocusCapture={onFocusCapture}
-      />
-    );
-  }
-
-  const offset = itemOffsetFromPrevious(item, previousItem);
-  return (
-    <OffsetCoordInputs
-      offset={offset}
-      label="Previous"
-      applyFn={(x, y) => applyOffsetFromPrevious(previousItem, x, y)}
-      onCommitCoordinate={onCommitCoordinate}
-      onFocusCapture={onFocusCapture}
-    />
-  );
+  return entries;
 }
+
+function fieldLabel(key: string): string {
+  // Convert snake_case to Title Case and strip unit suffixes for display
+  return key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatFieldValue(key: string, val: number): string {
+  // Show integers as integers, floats with reasonable precision
+  if (Number.isInteger(val)) return String(val);
+  // Degrees get 7 decimals, everything else 2
+  if (key.includes("deg")) return val.toFixed(7);
+  return val.toFixed(2);
+}
+
+// ---------------------------------------------------------------------------
+// Position extraction helpers
+// ---------------------------------------------------------------------------
+
+function positionFromDraftItem(
+  item: TypedDraftItem,
+): GeoPoint3d | null {
+  const doc = item.document;
+  // MissionItem has a command field
+  if ("command" in doc) {
+    return commandPosition((doc as MissionItem).command);
+  }
+  // GeoPoint3d variants
+  if ("Msl" in doc || "RelHome" in doc || "Terrain" in doc) {
+    return doc as GeoPoint3d;
+  }
+  // FenceRegion — no position
+  return null;
+}
+
+function previousPosition(
+  previousItem: TypedDraftItem | null,
+): { latitude_deg: number; longitude_deg: number } | null {
+  if (!previousItem) return null;
+  const pos = positionFromDraftItem(previousItem);
+  if (!pos) return null;
+  return geoPoint3dLatLon(pos);
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
 
 function AbsoluteCoordInputs({
   lat,
   lon,
-  xDesc,
-  yDesc,
   onCommitCoordinate,
   onFocusCapture,
+  disabled = false,
 }: {
   lat: number;
   lon: number;
-  xDesc: ParamDescriptor | undefined;
-  yDesc: ParamDescriptor | undefined;
-  onCommitCoordinate: (field: "x" | "y", valueDeg: number) => void;
+  onCommitCoordinate: (field: "latitude_deg" | "longitude_deg", valueDeg: number) => void;
   onFocusCapture: () => void;
+  disabled?: boolean;
 }) {
   const [localLat, setLocalLat] = useState(formatDeg(lat));
   const [localLon, setLocalLon] = useState(formatDeg(lon));
@@ -304,7 +194,7 @@ function AbsoluteCoordInputs({
   const commitLat = () => {
     const result = parseLatitude(localLat);
     if (result.ok) {
-      onCommitCoordinate("x", result.value);
+      onCommitCoordinate("latitude_deg", result.value);
     } else {
       setLocalLat(formatDeg(lat));
     }
@@ -313,7 +203,7 @@ function AbsoluteCoordInputs({
   const commitLon = () => {
     const result = parseLongitude(localLon);
     if (result.ok) {
-      onCommitCoordinate("y", result.value);
+      onCommitCoordinate("longitude_deg", result.value);
     } else {
       setLocalLon(formatDeg(lon));
     }
@@ -323,46 +213,42 @@ function AbsoluteCoordInputs({
     if (e.key === "Enter") (e.target as HTMLInputElement).blur();
   };
 
-  if (xDesc?.hidden && yDesc?.hidden) return null;
-
   return (
     <div className="grid grid-cols-2 gap-2">
-      {xDesc && !xDesc.hidden && (
-        <div className="space-y-0.5">
-          <label className="text-[10px] text-text-muted">
-            {xDesc.label} <span className="text-text-muted/50">(deg)</span>
-          </label>
-          <input
-            data-coord-field="latitude"
-            type="text"
-            inputMode="decimal"
-            value={localLat}
-            onChange={(e) => setLocalLat(e.target.value)}
-            onBlur={commitLat}
-            onKeyDown={handleKeyDown}
-            onFocus={onFocusCapture}
-            className="w-full rounded border border-border bg-bg-input px-1.5 py-1 text-xs tabular-nums text-text-primary"
-          />
-        </div>
-      )}
-      {yDesc && !yDesc.hidden && (
-        <div className="space-y-0.5">
-          <label className="text-[10px] text-text-muted">
-            {yDesc.label} <span className="text-text-muted/50">(deg)</span>
-          </label>
-          <input
-            data-coord-field="longitude"
-            type="text"
-            inputMode="decimal"
-            value={localLon}
-            onChange={(e) => setLocalLon(e.target.value)}
-            onBlur={commitLon}
-            onKeyDown={handleKeyDown}
-            onFocus={onFocusCapture}
-            className="w-full rounded border border-border bg-bg-input px-1.5 py-1 text-xs tabular-nums text-text-primary"
-          />
-        </div>
-      )}
+      <div className="space-y-0.5">
+        <label className="text-[10px] text-text-muted">
+          Latitude <span className="text-text-muted/50">(deg)</span>
+        </label>
+        <input
+          data-coord-field="latitude"
+          type="text"
+          inputMode="decimal"
+          value={localLat}
+          onChange={(e) => setLocalLat(e.target.value)}
+          onBlur={commitLat}
+          onKeyDown={handleKeyDown}
+          onFocus={onFocusCapture}
+          disabled={disabled}
+          className="w-full rounded border border-border bg-bg-input px-1.5 py-1 text-xs tabular-nums text-text-primary"
+        />
+      </div>
+      <div className="space-y-0.5">
+        <label className="text-[10px] text-text-muted">
+          Longitude <span className="text-text-muted/50">(deg)</span>
+        </label>
+        <input
+          data-coord-field="longitude"
+          type="text"
+          inputMode="decimal"
+          value={localLon}
+          onChange={(e) => setLocalLon(e.target.value)}
+          onBlur={commitLon}
+          onKeyDown={handleKeyDown}
+          onFocus={onFocusCapture}
+          disabled={disabled}
+          className="w-full rounded border border-border bg-bg-input px-1.5 py-1 text-xs tabular-nums text-text-primary"
+        />
+      </div>
     </div>
   );
 }
@@ -373,12 +259,14 @@ function OffsetCoordInputs({
   applyFn,
   onCommitCoordinate,
   onFocusCapture,
+  disabled = false,
 }: {
   offset: { x_m: number; y_m: number } | null;
   label: string;
-  applyFn: (x_m: number, y_m: number) => { x: number; y: number } | null;
-  onCommitCoordinate: (field: "x" | "y", valueDeg: number) => void;
+  applyFn: (x_m: number, y_m: number) => { latitude_deg: number; longitude_deg: number } | null;
+  onCommitCoordinate: (field: "latitude_deg" | "longitude_deg", valueDeg: number) => void;
   onFocusCapture: () => void;
+  disabled?: boolean;
 }) {
   const eastM = offset?.x_m ?? 0;
   const northM = offset?.y_m ?? 0;
@@ -412,8 +300,8 @@ function OffsetCoordInputs({
     }
     const applied = applyFn(eastResult.value, northResult.value);
     if (applied) {
-      onCommitCoordinate("x", applied.x / 1e7);
-      onCommitCoordinate("y", applied.y / 1e7);
+      onCommitCoordinate("latitude_deg", applied.latitude_deg);
+      onCommitCoordinate("longitude_deg", applied.longitude_deg);
     } else {
       setLocalEast(eastM.toFixed(1));
       setLocalNorth(northM.toFixed(1));
@@ -447,6 +335,7 @@ function OffsetCoordInputs({
           onBlur={commitOffset}
           onKeyDown={handleKeyDown}
           onFocus={onFocusCapture}
+          disabled={disabled}
           className="w-full rounded border border-border bg-bg-input px-1.5 py-1 text-xs tabular-nums text-text-primary"
         />
       </div>
@@ -463,6 +352,7 @@ function OffsetCoordInputs({
           onBlur={commitOffset}
           onKeyDown={handleKeyDown}
           onFocus={onFocusCapture}
+          disabled={disabled}
           className="w-full rounded border border-border bg-bg-input px-1.5 py-1 text-xs tabular-nums text-text-primary"
         />
       </div>
@@ -470,78 +360,193 @@ function OffsetCoordInputs({
   );
 }
 
+function CoordinateFields({
+  position,
+  mode,
+  homePosition,
+  prevPos,
+  onCommitCoordinate,
+  onFocusCapture,
+  disabled = false,
+}: {
+  position: GeoPoint3d;
+  mode: CoordinateMode;
+  homePosition: HomePosition | null;
+  prevPos: { latitude_deg: number; longitude_deg: number } | null;
+  onCommitCoordinate: (field: "latitude_deg" | "longitude_deg", valueDeg: number) => void;
+  onFocusCapture: () => void;
+  disabled?: boolean;
+}) {
+  const { latitude_deg, longitude_deg } = geoPoint3dLatLon(position);
+
+  if (mode === "absolute") {
+    return (
+      <AbsoluteCoordInputs
+        lat={latitude_deg}
+        lon={longitude_deg}
+        onCommitCoordinate={onCommitCoordinate}
+        onFocusCapture={onFocusCapture}
+        disabled={disabled}
+      />
+    );
+  }
+
+  if (mode === "home_offset") {
+    const offset = offsetFromHome({ latitude_deg, longitude_deg }, homePosition);
+    return (
+      <OffsetCoordInputs
+        offset={offset}
+        label="Home"
+        applyFn={(x, y) => applyOffsetFromHome(homePosition, x, y)}
+        onCommitCoordinate={onCommitCoordinate}
+        onFocusCapture={onFocusCapture}
+        disabled={disabled}
+      />
+    );
+  }
+
+  const offset = offsetFromPrevious({ latitude_deg, longitude_deg }, prevPos);
+  return (
+    <OffsetCoordInputs
+      offset={offset}
+      label="Previous"
+      applyFn={(x, y) => applyOffsetFromPrevious(prevPos, x, y)}
+      onCommitCoordinate={onCommitCoordinate}
+      onFocusCapture={onFocusCapture}
+      disabled={disabled}
+    />
+  );
+}
+
+function AltitudeField({
+  position,
+  index,
+  onUpdateAltitude,
+  onFocusCapture,
+  disabled = false,
+}: {
+  position: GeoPoint3d;
+  index: number;
+  onUpdateAltitude: (index: number, altitudeM: number) => void;
+  onFocusCapture: () => void;
+  disabled?: boolean;
+}) {
+  const { value: altitude, frame } = geoPoint3dAltitude(position);
+  const [local, setLocal] = useState(String(altitude));
+  const prevRef = useRef(altitude);
+
+  useEffect(() => {
+    if (prevRef.current !== altitude) {
+      setLocal(String(altitude));
+      prevRef.current = altitude;
+    }
+  }, [altitude]);
+
+  const handleBlur = () => {
+    const n = Number(local);
+    if (Number.isFinite(n) && n !== altitude) {
+      onUpdateAltitude(index, n);
+    } else {
+      setLocal(String(altitude));
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+  };
+
+  return (
+    <div className="space-y-0.5">
+      <label className="flex items-center gap-1 text-[10px] text-text-muted">
+        Altitude
+        <span className="text-text-muted/50">(m)</span>
+        <span className="ml-auto text-[9px] text-text-muted/50">
+          {ALTITUDE_FRAME_LABELS[frame] ?? frame}
+        </span>
+      </label>
+      <input
+        data-param-slot="altitude"
+        type="number"
+        step="any"
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        onFocus={onFocusCapture}
+        disabled={disabled}
+        className="w-full rounded border border-border bg-bg-input px-1.5 py-1 text-xs tabular-nums text-text-primary"
+      />
+    </div>
+  );
+}
+
+function TypedFieldsDisplay({ fields }: { fields: FieldEntry[] }) {
+  if (fields.length === 0) return null;
+
+  return (
+    <div className="space-y-1">
+      <span className="text-[10px] font-medium text-text-muted">Parameters</span>
+      <div className="space-y-0.5">
+        {fields.map((f, i) => (
+          <div key={i} className="flex items-center justify-between text-[10px]">
+            <span className="text-text-muted">{f.label}</span>
+            <span className="tabular-nums text-text-primary">{f.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export function MissionInspector({
+  missionType,
   draftItem,
   index,
   previousItem,
   homePosition,
+  readOnly = false,
   isSelected,
-  onUpdateField,
-  onUpdateFrame,
+  onUpdateCommand: _onUpdateCommand,
+  onUpdateAltitude,
   onUpdateCoordinate,
   onSelect,
 }: MissionInspectorProps) {
-  const { item } = draftItem;
+  const controlReadOnly = readOnly || draftItem.readOnly;
   const [coordMode, setCoordMode] = useState<CoordinateMode>("absolute");
 
-  const metadata = useMemo(() => resolveCommandMetadata(item.command), [item.command]);
+  const position = useMemo(() => positionFromDraftItem(draftItem), [draftItem]);
+  const prevPos = useMemo(() => previousPosition(previousItem), [previousItem]);
+
+  const isMissionItem = "command" in draftItem.document;
+  const missionItem = isMissionItem ? (draftItem.document as MissionItem) : null;
+  const category = missionItem ? commandCategory(missionItem.command) : null;
+  const displayName = missionItem
+    ? commandDisplayName(missionItem.command)
+    : missionType === "fence"
+      ? "Fence Region"
+      : "Rally Point";
+
+  const typedFields = useMemo(
+    () => (missionItem ? extractCommandFields(missionItem.command) : []),
+    [missionItem],
+  );
 
   const ensureSelected = useCallback(() => {
     if (!isSelected) {
-      onSelect(item.seq);
+      onSelect(index);
     }
-  }, [isSelected, onSelect, item.seq]);
-
-  const handleCommandChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      onUpdateField(index, "command", Number(e.target.value) || 16);
-    },
-    [index, onUpdateField],
-  );
-
-  const handleFrameChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      onUpdateFrame(index, e.target.value as MissionFrame);
-    },
-    [index, onUpdateFrame],
-  );
-
-  const handleParamCommit = useCallback(
-    (slot: ParamSlot, value: number) => {
-      if (slot === "x" || slot === "y") {
-        onUpdateCoordinate(index, slot, value / 1e7);
-      } else {
-        onUpdateField(index, slot as NumericItemField, value);
-      }
-    },
-    [index, onUpdateField, onUpdateCoordinate],
-  );
+  }, [index, isSelected, onSelect]);
 
   const handleCoordCommit = useCallback(
-    (field: "x" | "y", valueDeg: number) => {
+    (field: "latitude_deg" | "longitude_deg", valueDeg: number) => {
       onUpdateCoordinate(index, field, valueDeg);
     },
     [index, onUpdateCoordinate],
   );
-
-  const { supportedSlots, unsupportedSlots } = useMemo(() => {
-    const slots: ParamSlot[] = ["param1", "param2", "param3", "param4"];
-    const all = slots
-      .filter((s) => metadata.params[s] !== undefined)
-      .map((s) => ({ slot: s, descriptor: metadata.params[s]! }));
-    return {
-      supportedSlots: all.filter((s) => s.descriptor.supported !== false),
-      unsupportedSlots: all.filter((s) => s.descriptor.supported === false),
-    };
-  }, [metadata]);
-
-  const zDescriptor = metadata.params.z;
-  // Show frame selector when:
-  // - Mapped command explicitly marks frame visible (!hidden) — currently none do for Copter
-  // - No frame metadata at all (raw/unmapped commands — user needs raw control)
-  const showFrame = !metadata.frame?.hidden;
-  const hasCoordinates = metadata.params.x || metadata.params.y;
-  const showCoordinates = hasCoordinates && !(metadata.params.x?.hidden && metadata.params.y?.hidden);
 
   return (
     <div
@@ -561,60 +566,25 @@ export function MissionInspector({
 
       <div className="space-y-0.5">
         <label className="text-[10px] text-text-muted">Command</label>
-        <select
-          data-mission-command-select
-          value={item.command}
-          onChange={handleCommandChange}
-          onFocus={ensureSelected}
-          className="w-full rounded border border-border bg-bg-input px-1.5 py-1 pr-6 text-xs text-text-primary"
-        >
-          <option value={item.command}>{commandName(item.command)}</option>
-          {Object.entries(MAV_CMD)
-            .filter(([k]) => Number(k) !== item.command)
-            .map(([k, v]) => (
-              <option key={k} value={k}>{v.short}</option>
-            ))}
-        </select>
+        <div className="rounded border border-border bg-bg-input px-1.5 py-1 text-xs text-text-primary">
+          {displayName}
+          {category && (
+            <span className="ml-1.5 text-[9px] uppercase text-text-muted/60">
+              {category}
+            </span>
+          )}
+        </div>
       </div>
 
-      <MissionCommandHelp metadata={metadata} />
-
-      {showFrame && (
-        <div className="space-y-0.5">
-          <label className="text-[10px] text-text-muted">{metadata.frame?.label ?? "Frame"}</label>
-          <select
-            data-param-slot="frame"
-            value={item.frame}
-            onChange={handleFrameChange}
-            onFocus={ensureSelected}
-            className="w-full rounded border border-border bg-bg-input px-1.5 py-1 text-xs text-text-primary"
-          >
-            {FRAME_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
+      {draftItem.readOnly && (
+        <p className="rounded border border-warning/30 bg-warning/5 px-2 py-1 text-[10px] text-warning/80">
+          Raw/unsupported item preserved read-only.
+        </p>
       )}
 
-      {supportedSlots.map(({ slot, descriptor }) => (
-        <ParamField
-          key={slot}
-          slot={slot}
-          descriptor={descriptor}
-          value={item[slot] as number}
-          onCommit={(v) => handleParamCommit(slot, v)}
-          onFocusCapture={ensureSelected}
-        />
-      ))}
+      <TypedFieldsDisplay fields={typedFields} />
 
-      {unsupportedSlots.length > 0 && (
-        <UnsupportedParamGroup
-          slots={unsupportedSlots}
-          item={item}
-        />
-      )}
-
-      {showCoordinates && (
+      {position && (
         <>
           <div className="flex items-center gap-1.5 border-t border-border/50 pt-2">
             <span className="text-[10px] font-medium text-text-muted">Coordinates</span>
@@ -639,25 +609,23 @@ export function MissionInspector({
           </div>
 
           <CoordinateFields
-            item={item}
+            position={position}
             mode={coordMode}
             homePosition={homePosition}
-            previousItem={previousItem}
-            metadata={metadata}
+            prevPos={prevPos}
             onCommitCoordinate={handleCoordCommit}
             onFocusCapture={ensureSelected}
+            disabled={controlReadOnly}
+          />
+
+          <AltitudeField
+            position={position}
+            index={index}
+            onUpdateAltitude={onUpdateAltitude}
+            onFocusCapture={ensureSelected}
+            disabled={controlReadOnly}
           />
         </>
-      )}
-
-      {zDescriptor && !zDescriptor.hidden && (
-        <ParamField
-          slot="z"
-          descriptor={zDescriptor}
-          value={item.z}
-          onCommit={(v) => onUpdateField(index, "z", v)}
-          onFocusCapture={ensureSelected}
-        />
       )}
     </div>
   );

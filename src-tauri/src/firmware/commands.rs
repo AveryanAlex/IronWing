@@ -46,7 +46,7 @@ pub(crate) async fn firmware_flash_serial(
         let reboot_result = {
             let guard = state.vehicle.lock().await;
             if let Some(vehicle) = guard.as_ref() {
-                vehicle.reboot_to_bootloader().await
+                vehicle.ardupilot().reboot_to_bootloader().await
             } else {
                 Ok(())
             }
@@ -56,7 +56,7 @@ pub(crate) async fn firmware_flash_serial(
         }
     }
 
-    connection::force_disconnect(&state)
+    connection::force_disconnect(&state, &app)
         .await
         .inspect_err(|_| {
             state.firmware_session.stop();
@@ -133,6 +133,7 @@ pub(crate) async fn firmware_reboot_to_bootloader(
     let guard = state.vehicle.lock().await;
     let vehicle = guard.as_ref().ok_or("not connected")?;
     vehicle
+        .ardupilot()
         .reboot_to_bootloader()
         .await
         .map_err(|e| e.to_string())
@@ -148,7 +149,12 @@ pub(crate) async fn firmware_serial_preflight(
         let guard = state.vehicle.lock().await;
         guard
             .as_ref()
-            .map(|v| v.param_store().borrow().params.len() as u32)
+            .and_then(|v| {
+                v.params()
+                    .latest()
+                    .and_then(|s| s.store)
+                    .map(|store| store.params.len() as u32)
+            })
             .unwrap_or(0)
     } else {
         0

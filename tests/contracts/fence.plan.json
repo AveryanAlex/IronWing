@@ -1,0 +1,25 @@
+{
+  "return_point": {
+    "latitude_deg": 47.397,
+    "longitude_deg": 8.545
+  },
+  "regions": [
+    {
+      "inclusion_polygon": {
+        "vertices": [
+          { "latitude_deg": 47.39, "longitude_deg": 8.53 },
+          { "latitude_deg": 47.41, "longitude_deg": 8.53 },
+          { "latitude_deg": 47.41, "longitude_deg": 8.56 },
+          { "latitude_deg": 47.39, "longitude_deg": 8.56 }
+        ],
+        "inclusion_group": 0
+      }
+    },
+    {
+      "exclusion_circle": {
+        "center": { "latitude_deg": 47.40, "longitude_deg": 8.545 },
+        "radius_m": 50.0
+      }
+    }
+  ]
+}

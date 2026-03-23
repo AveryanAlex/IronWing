@@ -20,12 +20,11 @@
  *   - Sequence assignment is external (items start at seq 0).
  */
 
-import type { MissionItem } from "../mission";
+import type { MissionItem } from "./mavkit-types";
 import {
   type GeoRef,
   latLonToLocalXY,
   localXYToLatLon,
-  degToDegE7,
 } from "./mission-coordinates";
 
 // ---------------------------------------------------------------------------
@@ -269,9 +268,9 @@ export function validateGridParams(params: GridParams): GridValidationError[] {
 /**
  * Generate a lawnmower/snake grid pattern from a polygon.
  *
- * Items are returned with seq starting at 0, using `command: 16`
- * (NAV_WAYPOINT), `frame: "global_relative_alt_int"`, `autocontinue: true`.
- * External code is responsible for re-sequencing into the overall mission.
+ * Items are returned as typed `NavWaypoint` MissionItems with RelHome
+ * altitude frame and `autocontinue: true`. External code is responsible
+ * for inserting into the overall mission plan.
  */
 export function generateGrid(params: GridParams): GridResult {
   const errors = validateGridParams(params);
@@ -354,18 +353,25 @@ export function generateGrid(params: GridParams): GridResult {
   const items: MissionItem[] = localWaypoints.map((p, i) => {
     const { lat, lon } = localXYToLatLon(ref, p.x, p.y);
     return {
-      seq: i,
-      command: 16,
-      frame: "global_relative_alt_int" as const,
+      command: {
+        Nav: {
+          Waypoint: {
+            position: {
+              RelHome: {
+                latitude_deg: lat,
+                longitude_deg: lon,
+                relative_alt_m: params.altitude_m,
+              },
+            },
+            hold_time_s: 0,
+            acceptance_radius_m: 1,
+            pass_radius_m: 0,
+            yaw_deg: 0,
+          },
+        },
+      },
       current: i === 0,
       autocontinue: true,
-      param1: 0,
-      param2: 1,
-      param3: 0,
-      param4: 0,
-      x: degToDegE7(lat),
-      y: degToDegE7(lon),
-      z: params.altitude_m,
     };
   });
 

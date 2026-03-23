@@ -35,6 +35,21 @@ export type FirmwareState = {
   activePath: FirmwareSessionPath | null;
 };
 
+export type FirmwareController = FirmwareState & {
+  flashSerial: (port: string, baud: number, source: SerialFlashSource) => Promise<SerialFlowResult>;
+  flashDfuRecovery: (device: DfuDeviceInfo, source: DfuRecoverySource) => Promise<DfuRecoveryResult>;
+  flashDfuFromApj: (device: DfuDeviceInfo, apjBytes: number[]) => Promise<DfuRecoveryResult>;
+  flashDfuFromCatalog: (device: DfuDeviceInfo, url: string) => Promise<DfuRecoveryResult>;
+  cancel: () => Promise<void>;
+  dismiss: () => void;
+  preflight: () => Promise<SerialPreflightInfo>;
+  rebootToBootloader: () => Promise<void>;
+  listPorts: () => Promise<InventoryResult>;
+  listDfuDevices: () => Promise<DfuScanResult>;
+  catalogTargets: () => Promise<CatalogTargetSummary[]>;
+  catalogEntries: (boardId: number, platform?: string) => Promise<CatalogEntry[]>;
+};
+
 export function isFirmwareActive(status: FirmwareSessionStatus): boolean {
   return status.kind === "serial_primary" || status.kind === "dfu_recovery";
 }
@@ -117,7 +132,7 @@ export function buildDfuCatalogSource(url: string): DfuRecoverySource {
   return { kind: "catalog_url", url };
 }
 
-export function useFirmware() {
+export function useFirmware(): FirmwareController {
   const [sessionStatus, setSessionStatus] = useState<FirmwareSessionStatus>({ kind: "idle" });
   const [progress, setProgress] = useState<FirmwareProgress | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);

@@ -96,7 +96,7 @@ IronWing/
       hud/                        # Flight instruments (horizon, tapes, etc.)
       setup/                      # Calibration wizards (accel, radio)
       ui/                         # Radix + Tailwind base components
-    hooks/                        # use-vehicle, use-mission, use-params
+    hooks/                        # use-session, use-mission, use-params
     lib/                          # mav-commands, utils
     App.tsx                       # Main layout + state orchestration
     MissionMap.tsx                # MapLibre 3D map

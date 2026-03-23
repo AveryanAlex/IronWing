@@ -1,0 +1,11 @@
+{
+  "available": true,
+  "complete": true,
+  "provenance": "stream",
+  "value": {
+    "can_request_prearm_checks": true,
+    "can_calibrate_accel": true,
+    "can_calibrate_compass": true,
+    "can_calibrate_radio": false
+  }
+}

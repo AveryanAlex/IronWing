@@ -1,9 +1,9 @@
 import { useState } from "react";
-import type { useVehicle } from "../hooks/use-vehicle";
+import type { useSession } from "../hooks/use-session";
 import type { useMission } from "../hooks/use-mission";
 
 type TelemetryPanelProps = {
-  vehicle: ReturnType<typeof useVehicle>;
+  vehicle: ReturnType<typeof useSession>;
   mission: ReturnType<typeof useMission>;
 };
 
@@ -71,8 +71,8 @@ export function TelemetryPanel({ vehicle, mission }: TelemetryPanelProps) {
         <Metric
           label="Waypoint"
           value={
-            mission.missionState && mission.missionState.current_seq != null
-              ? `${mission.missionState.current_seq + 1} / ${mission.missionState.total_items}`
+            mission.vehicle.missionState && mission.vehicle.missionState.current_index != null
+              ? `${mission.vehicle.missionState.current_index + 1} / ${mission.vehicle.missionState.plan?.items.length ?? 0}`
               : "--"
           }
         />

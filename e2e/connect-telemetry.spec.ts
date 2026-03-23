@@ -13,40 +13,59 @@ const connectedVehicleState = {
 };
 
 const telemetry = {
-  altitude_m: 12.4,
-  speed_mps: 4.8,
-  heading_deg: 182.1,
-  latitude_deg: 42.3898,
-  longitude_deg: -71.1476,
-  battery_pct: 87.2,
-  gps_fix_type: "3D Fix",
+  available: true,
+  complete: true,
+  provenance: "stream",
+  value: {
+    flight: {
+      altitude_m: 12.4,
+      speed_mps: 4.8,
+    },
+    navigation: {
+      heading_deg: 182.1,
+      latitude_deg: 42.3898,
+      longitude_deg: -71.1476,
+    },
+    power: {
+      battery_pct: 87.2,
+    },
+    gps: {
+      fix_type: "3D Fix",
+    },
+    radio: {
+      rc_channels: [1500, 1500, 1100, 1500],
+      rc_rssi: 92,
+    },
+  },
+};
+
+const support = {
+  available: true,
+  complete: true,
+  provenance: "stream",
+  value: {
+    can_arm: true,
+    reasons: [],
+    readiness: "ready",
+  },
+};
+
+const statusTextDomain = {
+  available: true,
+  complete: true,
+  provenance: "stream",
+  value: {
+    entries: [
+      { text: "Ready", severity: "notice", timestamp_usec: 1000 },
+    ],
+  },
 };
 
 test.describe("Happy path: mocked connect and telemetry", () => {
   test("connects over TCP, shows telemetry, and disconnects", async ({ page, mockPlatform }) => {
     await page.goto("/");
     await mockPlatform.reset();
-    await mockPlatform.setCommandBehavior("connect_link", {
-      type: "resolve",
-      emit: [
-        { event: "link://state", payload: "connected" },
-        { event: "vehicle://state", payload: connectedVehicleState },
-        { event: "telemetry://tick", payload: telemetry },
-        {
-          event: "home://position",
-          payload: {
-            latitude_deg: 42.3898,
-            longitude_deg: -71.1476,
-            altitude_m: 14,
-          },
-        },
-      ],
-    });
-    await mockPlatform.setCommandBehavior("disconnect_link", {
-      type: "resolve",
-      emit: [{ event: "link://state", payload: "disconnected" }],
-    });
-
+    await mockPlatform.setCommandBehavior("connect_link", { type: "defer" });
     const connectBtn = page.locator('[data-testid="connection-connect-btn"]');
     const disconnectBtn = page.locator('[data-testid="connection-disconnect-btn"]');
     const statusText = page.locator('[data-testid="connection-status-text"]');
@@ -62,6 +81,40 @@ test.describe("Happy path: mocked connect and telemetry", () => {
 
     await connectBtn.click();
 
+    await expect.poll(() => mockPlatform.getLiveEnvelope()).not.toBeNull();
+
+    await mockPlatform.resolveDeferredConnectLink({
+      vehicleState: connectedVehicleState,
+      guidedState: {
+        status: "blocked",
+        session: null,
+        entered_at_unix_msec: null,
+        blocking_reason: "vehicle_disarmed",
+        termination: null,
+        last_command: null,
+        actions: {
+          start: { allowed: false, blocking_reason: "vehicle_disarmed" },
+          update: { allowed: false, blocking_reason: "vehicle_disarmed" },
+          stop: { allowed: false, blocking_reason: "live_session_required" },
+        },
+      },
+    });
+
+    const liveEnvelope = await mockPlatform.getLiveEnvelope();
+    expect(liveEnvelope).not.toBeNull();
+
+    await mockPlatform.emit("telemetry://state", {
+      envelope: liveEnvelope,
+      value: telemetry,
+    });
+    await mockPlatform.emit("support://state", {
+      envelope: liveEnvelope,
+      value: support,
+    });
+    await mockPlatform.emit("status_text://state", {
+      envelope: liveEnvelope,
+      value: statusTextDomain,
+    });
     await expect(statusText).toContainText("Connected", { timeout: 10_000 });
     await expect(disconnectBtn).toBeVisible();
 

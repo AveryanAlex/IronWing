@@ -1,0 +1,27 @@
+{
+  "available": true,
+  "complete": false,
+  "provenance": "stream",
+  "value": {
+    "accel": null,
+    "compass": {
+      "lifecycle": "running",
+      "progress": {
+        "compass_id": 1,
+        "completion_pct": 42,
+        "status": "running_step_one",
+        "attempt": 1
+      },
+      "report": {
+        "compass_id": 1,
+        "status": "failed",
+        "fitness": 12.0,
+        "ofs_x": 1.0,
+        "ofs_y": 2.0,
+        "ofs_z": 3.0,
+        "autosaved": false
+      }
+    },
+    "radio": null
+  }
+}

@@ -1,10 +1,10 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { FolderOpen, X, Loader2, Circle, Square, Download } from "lucide-react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { Timeline } from "./charts/Timeline";
 import { LogCharts, getChartDefs, toAligned, type TimeRange } from "./charts/LogCharts";
-import { getFlightPath, getLogTelemetryTrack, type FlightPathPoint, type TelemetrySnapshot } from "../playback";
+import { getFlightPath, type FlightPathPoint } from "../playback";
 import { getFlightSummary, exportLogCsv, type LogDataPoint, type FlightSummary } from "../logs";
 import type { useLogs } from "../hooks/use-logs";
 import type { useRecording } from "../hooks/use-recording";
@@ -17,7 +17,6 @@ type LogsPanelProps = {
   connected: boolean;
   playback: ReturnType<typeof usePlayback>;
   onFlightPath: (path: FlightPathPoint[] | null) => void;
-  onTelemetryTrack: (track: TelemetrySnapshot[] | null) => void;
 };
 
 function formatDuration(secs: number): string {
@@ -85,10 +84,10 @@ export function LogsPanel({
   connected,
   playback,
   onFlightPath,
-  onTelemetryTrack,
 }: LogsPanelProps) {
   const { summary, progress, loading, openFile, closeFile, queryMessages } =
     logs;
+  const { configure, stop } = playback;
 
   const [chartData, setChartData] = useState<Map<string, LogDataPoint[]>>(
     new Map(),
@@ -99,18 +98,24 @@ export function LogsPanel({
   const [flightSummary, setFlightSummary] = useState<FlightSummary | null>(null);
   const [exporting, setExporting] = useState(false);
   const [selectedRange, setSelectedRange] = useState<TimeRange | null>(null);
+  const loadAttemptRef = useRef(0);
 
   useEffect(() => {
+    const attempt = loadAttemptRef.current + 1;
+    loadAttemptRef.current = attempt;
+    let cancelled = false;
+
     if (!summary) {
       setChartData(new Map());
       setAltitudeData(null);
       setFlightSummary(null);
       onFlightPath(null);
-      onTelemetryTrack(null);
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
-    playback.configure(summary.start_usec, summary.end_usec);
+    configure(summary.start_usec, summary.end_usec);
 
     const chartDefs = getChartDefs(summary.log_type);
     const msgTypes = [...new Set(chartDefs.map((d) => d.msgType))];
@@ -125,11 +130,14 @@ export function LogsPanel({
     });
 
     const flightPathQuery = getFlightPath(1000).catch(() => null);
-    const telemetryTrackQuery = getLogTelemetryTrack().catch(() => null);
     const summaryQuery = getFlightSummary().catch(() => null);
 
-    Promise.all([Promise.all(queries), flightPathQuery, telemetryTrackQuery, summaryQuery]).then(
-      ([results, fp, tt, fs]) => {
+    Promise.all([Promise.all(queries), flightPathQuery, summaryQuery]).then(
+      ([results, fp, fs]) => {
+        if (cancelled || loadAttemptRef.current !== attempt) {
+          return;
+        }
+
         const map = new Map<string, LogDataPoint[]>();
         for (const [mt, pts] of results) {
           if (pts.length > 0) map.set(mt, pts);
@@ -147,19 +155,20 @@ export function LogsPanel({
         }
 
         onFlightPath(fp);
-        onTelemetryTrack(tt);
         setFlightSummary(fs);
       },
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [summary]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [summary, configure, onFlightPath]);
 
   const handleClose = useCallback(() => {
-    playback.stop();
+    stop();
     onFlightPath(null);
-    onTelemetryTrack(null);
     closeFile();
-  }, [playback, closeFile, onFlightPath, onTelemetryTrack]);
+  }, [stop, closeFile, onFlightPath]);
 
   const handleExport = useCallback(async () => {
     if (!summary) return;
@@ -184,7 +193,7 @@ export function LogsPanel({
     } finally {
       setExporting(false);
     }
-  }, [summary]);
+  }, [selectedRange, summary]);
 
   const recordingInfo =
     recording.status !== "idle" ? recording.status.recording : null;

@@ -1,0 +1,229 @@
+{
+  "envelope": {
+    "session_id": "session-42",
+    "source_kind": "live",
+    "seek_epoch": 7,
+    "reset_revision": 1
+  },
+  "session": {
+    "available": true,
+    "complete": true,
+    "provenance": "bootstrap",
+    "value": {
+      "status": "active",
+      "connection": {
+        "kind": "connected"
+      },
+      "vehicle_state": null,
+      "home_position": null
+    }
+  },
+  "telemetry": {
+    "available": true,
+    "complete": true,
+    "provenance": "bootstrap",
+    "value": {
+      "flight": {
+        "altitude_m": 123.4,
+        "speed_mps": 15.6,
+        "climb_rate_mps": 2.5,
+        "throttle_pct": 67.8,
+        "airspeed_mps": 14.2
+      },
+      "navigation": {
+        "latitude_deg": 47.397742,
+        "longitude_deg": 8.545594,
+        "heading_deg": 182.3,
+        "wp_dist_m": 54.1,
+        "nav_bearing_deg": 180.0,
+        "target_bearing_deg": 176.4,
+        "xtrack_error_m": 1.2
+      },
+      "attitude": {
+        "roll_deg": 1.1,
+        "pitch_deg": -2.2,
+        "yaw_deg": 183.7
+      },
+      "power": {
+        "battery_pct": 88.9,
+        "battery_voltage_v": 23.7,
+        "battery_current_a": 12.4,
+        "battery_voltage_cells": [
+          3.95,
+          3.96,
+          3.94,
+          3.95,
+          3.95,
+          3.95
+        ],
+        "energy_consumed_wh": 45.6,
+        "battery_time_remaining_s": 720.0
+      },
+      "gps": {
+        "fix_type": "fix_3d",
+        "satellites": 17,
+        "hdop": 0.8
+      },
+      "terrain": {
+        "terrain_height_m": 118.0,
+        "height_above_terrain_m": 5.4
+      },
+      "radio": {
+        "rc_channels": [
+          1100.0,
+          1500.0,
+          1900.0,
+          1500.0
+        ],
+        "rc_rssi": 92.0,
+        "servo_outputs": [
+          1200.0,
+          1210.0,
+          1220.0,
+          1230.0
+        ]
+      }
+    }
+  },
+  "mission_state": {
+    "plan": null,
+    "current_index": 2,
+    "sync": "current",
+    "active_op": null
+  },
+  "param_store": {
+    "params": {
+      "ARMING_CHECK": {
+        "name": "ARMING_CHECK",
+        "value": 1.0,
+        "param_type": "uint8",
+        "index": 0
+      },
+      "FS_THR_ENABLE": {
+        "name": "FS_THR_ENABLE",
+        "value": 2.0,
+        "param_type": "uint8",
+        "index": 1
+      }
+    },
+    "expected_count": 2
+  },
+  "param_progress": "completed",
+  "support": {
+    "available": true,
+    "complete": true,
+    "provenance": "bootstrap",
+    "value": {
+      "can_request_prearm_checks": true,
+      "can_calibrate_accel": true,
+      "can_calibrate_compass": true,
+      "can_calibrate_radio": false
+    }
+  },
+  "sensor_health": {
+    "available": true,
+    "complete": true,
+    "provenance": "bootstrap",
+    "value": {
+      "gyro": "healthy",
+      "accel": "healthy",
+      "mag": "unhealthy",
+      "baro": "healthy",
+      "gps": "unhealthy",
+      "airspeed": "not_present",
+      "rc_receiver": "healthy",
+      "battery": "healthy",
+      "terrain": "not_present",
+      "geofence": "not_present"
+    }
+  },
+  "configuration_facts": {
+    "available": true,
+    "complete": false,
+    "provenance": "bootstrap",
+    "value": {
+      "frame": { "configured": true },
+      "gps": { "configured": true },
+      "battery_monitor": { "configured": true },
+      "motors_esc": null
+    }
+  },
+  "calibration": {
+    "available": true,
+    "complete": false,
+    "provenance": "bootstrap",
+    "value": {
+      "accel": null,
+      "compass": {
+        "lifecycle": "running",
+        "progress": {
+          "compass_id": 1,
+          "completion_pct": 42,
+          "status": "running_step_one",
+          "attempt": 1
+        },
+        "report": {
+          "compass_id": 1,
+          "status": "failed",
+          "fitness": 12.0,
+          "ofs_x": 1.0,
+          "ofs_y": 2.0,
+          "ofs_z": 3.0,
+          "autosaved": false
+        }
+      },
+      "radio": null
+    }
+  },
+  "guided": {
+    "available": true,
+    "complete": true,
+    "provenance": "bootstrap",
+    "value": {
+      "status": "active",
+      "session": {
+        "kind": "goto",
+        "latitude_deg": 47.397742,
+        "longitude_deg": 8.545594,
+        "altitude_m": 25.0
+      },
+      "entered_at_unix_msec": 123456,
+      "blocking_reason": null,
+      "termination": null,
+      "last_command": {
+        "operation_id": "start_guided_session",
+        "session_kind": "goto",
+        "at_unix_msec": 123456
+      },
+      "actions": {
+        "start": { "allowed": false, "blocking_reason": "operation_in_progress" },
+        "update": { "allowed": true, "blocking_reason": null },
+        "stop": { "allowed": false, "blocking_reason": "stop_unsupported" }
+      }
+    }
+  },
+  "status_text": {
+    "available": true,
+    "complete": true,
+    "provenance": "bootstrap",
+    "value": {
+      "entries": [
+        {
+          "sequence": 1,
+          "text": "Boot complete",
+          "severity": "info",
+          "timestamp_usec": 1000
+        },
+        {
+          "sequence": 2,
+          "text": "GPS ready",
+          "severity": "notice",
+          "timestamp_usec": 2000
+        }
+      ]
+    }
+  },
+  "playback": {
+    "cursor_usec": null
+  }
+}

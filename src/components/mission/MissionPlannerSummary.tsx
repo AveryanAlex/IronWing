@@ -41,7 +41,8 @@ function SyncBadge({ isDirty }: { isDirty: boolean }) {
 }
 
 export function MissionPlannerSummary({ mission, connected }: MissionPlannerSummaryProps) {
-  const { missionType, isDirty, homePosition, homeSource, activeSeq, missionState, transferUi, roundtripStatus, displayTotal, cancel } = mission;
+  const current = mission.current;
+  const missionType = mission.selectedTab;
 
   return (
     <div className="space-y-2">
@@ -53,31 +54,44 @@ export function MissionPlannerSummary({ mission, connected }: MissionPlannerSumm
         docsLabel="ArduPilot Docs"
         actionSlot={
           <div className="flex items-center gap-2">
-            <SyncBadge isDirty={isDirty} />
+            <SyncBadge isDirty={current.isDirty} />
             <span className="text-[10px] tabular-nums text-text-muted">
-              {displayTotal} item{displayTotal !== 1 ? "s" : ""}
+              {current.displayTotal} item{current.displayTotal !== 1 ? "s" : ""}
             </span>
           </div>
         }
       />
 
+      {current.recoverableAvailable && (
+        <div className="flex items-center justify-between rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
+          <span>Recoverable local draft available after the last session reset.</span>
+          <button
+            type="button"
+            onClick={current.recoverDraft}
+            className="rounded border border-warning/30 px-2 py-1 font-semibold text-warning transition-colors hover:bg-warning/10"
+          >
+            Recover draft
+          </button>
+        </div>
+      )}
+
       <MissionHomeCard
-        homePosition={homePosition}
-        homeSource={homeSource}
+        homePosition={current.homePosition}
+        homeSource={current.homeSource}
         missionType={missionType}
       />
 
       <MissionVehicleCard
         connected={connected}
-        activeSeq={activeSeq}
-        missionState={missionState}
+        activeSeq={mission.vehicle.activeSeq}
+        missionState={mission.vehicle.missionState}
         missionType={missionType}
       />
 
       <MissionTransferStatus
-        transferUi={transferUi}
-        roundtripStatus={roundtripStatus}
-        onCancel={cancel}
+        transferUi={current.transferUi}
+        roundtripStatus={current.roundtripStatus}
+        onCancel={current.cancel}
       />
     </div>
   );

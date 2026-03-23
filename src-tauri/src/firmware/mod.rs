@@ -58,10 +58,7 @@ mod tests {
         };
 
         assert_serializes_to(&verified, json!({ "result": "verified" }));
-        assert_serializes_to(
-            &unverified,
-            json!({ "result": "flashed_but_unverified" }),
-        );
+        assert_serializes_to(&unverified, json!({ "result": "flashed_but_unverified" }));
         assert_serializes_to(
             &failed,
             json!({
@@ -3574,9 +3571,36 @@ mod tests {
     #[test]
     fn catalog_target_groups_by_board_and_platform() {
         let entries = vec![
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", Some("CubeOrange"), Some("Hex"), true),
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Plane", Some("CubeOrange"), Some("Hex"), true),
-            sample_entry_full(140, "apj", "4.4.0", "CubeOrange", "Copter", Some("CubeOrange"), Some("Hex"), false),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "CubeOrange",
+                "Copter",
+                Some("CubeOrange"),
+                Some("Hex"),
+                true,
+            ),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "CubeOrange",
+                "Plane",
+                Some("CubeOrange"),
+                Some("Hex"),
+                true,
+            ),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.4.0",
+                "CubeOrange",
+                "Copter",
+                Some("CubeOrange"),
+                Some("Hex"),
+                false,
+            ),
         ];
         let gz = make_manifest_gz(&entries);
         let parsed = parse_manifest_gz(&gz).unwrap();
@@ -3595,14 +3619,36 @@ mod tests {
     #[test]
     fn catalog_target_duplicate_board_id_different_platforms() {
         let entries = vec![
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", Some("CubeOrange"), Some("Hex"), true),
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrangePlus", "Copter", Some("CubeOrange+"), Some("Hex"), true),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "CubeOrange",
+                "Copter",
+                Some("CubeOrange"),
+                Some("Hex"),
+                true,
+            ),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "CubeOrangePlus",
+                "Copter",
+                Some("CubeOrange+"),
+                Some("Hex"),
+                true,
+            ),
         ];
         let gz = make_manifest_gz(&entries);
         let parsed = parse_manifest_gz(&gz).unwrap();
         let targets = build_catalog_targets(&parsed);
 
-        assert_eq!(targets.len(), 2, "same board_id with different platforms must not collapse");
+        assert_eq!(
+            targets.len(),
+            2,
+            "same board_id with different platforms must not collapse"
+        );
         let platforms: Vec<&str> = targets.iter().map(|t| t.platform.as_str()).collect();
         assert!(platforms.contains(&"CubeOrange"));
         assert!(platforms.contains(&"CubeOrangePlus"));
@@ -3610,9 +3656,9 @@ mod tests {
 
     #[test]
     fn catalog_target_missing_brand_and_manufacturer() {
-        let entries = vec![
-            sample_entry_full(9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true),
-        ];
+        let entries = vec![sample_entry_full(
+            9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true,
+        )];
         let gz = make_manifest_gz(&entries);
         let parsed = parse_manifest_gz(&gz).unwrap();
         let targets = build_catalog_targets(&parsed);
@@ -3625,9 +3671,36 @@ mod tests {
     #[test]
     fn catalog_target_latest_official_version_selected() {
         let entries = vec![
-            sample_entry_full(140, "apj", "4.3.0", "CubeOrange", "Copter", Some("CO"), None, false),
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", Some("CO"), None, false),
-            sample_entry_full(140, "apj", "4.4.0", "CubeOrange", "Copter", Some("CO"), None, false),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.3.0",
+                "CubeOrange",
+                "Copter",
+                Some("CO"),
+                None,
+                false,
+            ),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "CubeOrange",
+                "Copter",
+                Some("CO"),
+                None,
+                false,
+            ),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.4.0",
+                "CubeOrange",
+                "Copter",
+                Some("CO"),
+                None,
+                false,
+            ),
         ];
         let gz = make_manifest_gz(&entries);
         let parsed = parse_manifest_gz(&gz).unwrap();
@@ -3644,9 +3717,36 @@ mod tests {
     #[test]
     fn catalog_target_dotted_version_comparison() {
         let entries = vec![
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", None, None, false),
-            sample_entry_full(140, "apj", "4.10.0", "CubeOrange", "Copter", None, None, false),
-            sample_entry_full(140, "apj", "4.9.3", "CubeOrange", "Copter", None, None, false),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "CubeOrange",
+                "Copter",
+                None,
+                None,
+                false,
+            ),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.10.0",
+                "CubeOrange",
+                "Copter",
+                None,
+                None,
+                false,
+            ),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.9.3",
+                "CubeOrange",
+                "Copter",
+                None,
+                None,
+                false,
+            ),
         ];
         let gz = make_manifest_gz(&entries);
         let parsed = parse_manifest_gz(&gz).unwrap();
@@ -3662,33 +3762,41 @@ mod tests {
 
     #[test]
     fn catalog_target_non_official_not_counted_as_latest() {
-        let entries = vec![
-            serde_json::json!({
-                "board_id": 140,
-                "mav-type": "Copter",
-                "mav-firmware-version": "4.6.0-dev",
-                "mav-firmware-version-type": "DEV",
-                "format": "apj",
-                "platform": "CubeOrange",
-                "url": "https://firmware.ardupilot.org/CubeOrange/4.6.0-dev/firmware.apj",
-                "image_size": 1_500_000,
-                "latest": 1,
-                "git-sha": "def456",
-            }),
-        ];
+        let entries = vec![serde_json::json!({
+            "board_id": 140,
+            "mav-type": "Copter",
+            "mav-firmware-version": "4.6.0-dev",
+            "mav-firmware-version-type": "DEV",
+            "format": "apj",
+            "platform": "CubeOrange",
+            "url": "https://firmware.ardupilot.org/CubeOrange/4.6.0-dev/firmware.apj",
+            "image_size": 1_500_000,
+            "latest": 1,
+            "git-sha": "def456",
+        })];
         let gz = make_manifest_gz(&entries);
         let parsed = parse_manifest_gz(&gz).unwrap();
         let targets = build_catalog_targets(&parsed);
 
         assert_eq!(targets.len(), 1);
-        assert!(targets[0].latest_version.is_none(), "DEV entries should not set latest_version");
+        assert!(
+            targets[0].latest_version.is_none(),
+            "DEV entries should not set latest_version"
+        );
     }
 
     #[test]
     fn catalog_target_official_with_latest_false_populates_version() {
-        let entries = vec![
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", Some("CO"), None, false),
-        ];
+        let entries = vec![sample_entry_full(
+            140,
+            "apj",
+            "4.5.0",
+            "CubeOrange",
+            "Copter",
+            Some("CO"),
+            None,
+            false,
+        )];
         let gz = make_manifest_gz(&entries);
         let parsed = parse_manifest_gz(&gz).unwrap();
         let targets = build_catalog_targets(&parsed);
@@ -3704,8 +3812,26 @@ mod tests {
     #[test]
     fn catalog_target_vehicle_types_deduplicated() {
         let entries = vec![
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", None, None, true),
-            sample_entry_full(140, "apj", "4.4.0", "CubeOrange", "Copter", None, None, false),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "CubeOrange",
+                "Copter",
+                None,
+                None,
+                true,
+            ),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.4.0",
+                "CubeOrange",
+                "Copter",
+                None,
+                None,
+                false,
+            ),
             sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Rover", None, None, true),
         ];
         let gz = make_manifest_gz(&entries);
@@ -3713,7 +3839,11 @@ mod tests {
         let targets = build_catalog_targets(&parsed);
 
         assert_eq!(targets.len(), 1);
-        let copter_count = targets[0].vehicle_types.iter().filter(|v| *v == "Copter").count();
+        let copter_count = targets[0]
+            .vehicle_types
+            .iter()
+            .filter(|v| *v == "Copter")
+            .count();
         assert_eq!(copter_count, 1, "Copter should appear exactly once");
         assert!(targets[0].vehicle_types.contains(&"Rover".to_string()));
     }
@@ -3739,8 +3869,26 @@ mod tests {
     fn catalog_target_sorted_by_platform() {
         let entries = vec![
             sample_entry_full(9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true),
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", None, None, true),
-            sample_entry_full(140, "apj", "4.5.0", "ABoardFirst", "Copter", None, None, true),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "CubeOrange",
+                "Copter",
+                None,
+                None,
+                true,
+            ),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "ABoardFirst",
+                "Copter",
+                None,
+                None,
+                true,
+            ),
         ];
         let gz = make_manifest_gz(&entries);
         let parsed = parse_manifest_gz(&gz).unwrap();
@@ -3757,8 +3905,26 @@ mod tests {
     #[test]
     fn catalog_filter_by_board_and_platform_with_platform() {
         let entries = vec![
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", None, None, true),
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrangePlus", "Copter", None, None, true),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "CubeOrange",
+                "Copter",
+                None,
+                None,
+                true,
+            ),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "CubeOrangePlus",
+                "Copter",
+                None,
+                None,
+                true,
+            ),
             sample_entry_full(9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true),
         ];
         let gz = make_manifest_gz(&entries);
@@ -3772,8 +3938,26 @@ mod tests {
     #[test]
     fn catalog_filter_by_board_and_platform_without_platform() {
         let entries = vec![
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", None, None, true),
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrangePlus", "Copter", None, None, true),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "CubeOrange",
+                "Copter",
+                None,
+                None,
+                true,
+            ),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "CubeOrangePlus",
+                "Copter",
+                None,
+                None,
+                true,
+            ),
             sample_entry_full(9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true),
         ];
         let gz = make_manifest_gz(&entries);
@@ -3794,8 +3978,26 @@ mod tests {
 
         let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(3600));
         let gz = make_manifest_gz(&[
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Copter", Some("CO"), Some("Hex"), true),
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Plane", Some("CO"), Some("Hex"), true),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "CubeOrange",
+                "Copter",
+                Some("CO"),
+                Some("Hex"),
+                true,
+            ),
+            sample_entry_full(
+                140,
+                "apj",
+                "4.5.0",
+                "CubeOrange",
+                "Plane",
+                Some("CO"),
+                Some("Hex"),
+                true,
+            ),
             sample_entry_full(9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true),
         ]);
         let gz_clone = gz.clone();
@@ -3881,9 +4083,7 @@ mod tests {
     fn dfu_recovery_extf_block_rejects_apj_with_external_flash() {
         let internal = vec![0x01, 0x02, 0x03, 0x04];
         let external = vec![0xCA, 0xFE, 0xBA, 0xBE];
-        let apj_data = ApjFixture::new(140, &internal)
-            .with_extf(&external)
-            .build();
+        let apj_data = ApjFixture::new(140, &internal).with_extf(&external).build();
 
         let err = apj_to_dfu_bin(&apj_data).unwrap_err();
         assert!(
@@ -4036,7 +4236,10 @@ mod tests {
         };
         let err = validate_extf_capacity(&extf_payload, &info).unwrap_err();
         match err {
-            FirmwareError::ExtfCapacityInsufficient { board_capacity, firmware_needs } => {
+            FirmwareError::ExtfCapacityInsufficient {
+                board_capacity,
+                firmware_needs,
+            } => {
                 assert_eq!(board_capacity, 1_048_576);
                 assert_eq!(firmware_needs, 2_000_000);
             }
@@ -4061,7 +4264,10 @@ mod tests {
         };
         let err = validate_extf_capacity(&extf_payload, &info).unwrap_err();
         match err {
-            FirmwareError::ExtfCapacityInsufficient { board_capacity, firmware_needs } => {
+            FirmwareError::ExtfCapacityInsufficient {
+                board_capacity,
+                firmware_needs,
+            } => {
                 assert_eq!(board_capacity, 0);
                 assert_eq!(firmware_needs, 100);
             }
@@ -4109,8 +4315,7 @@ mod tests {
 
         // extf program chunks (padded to 4-byte alignment)
         let extf_padded_len = (extf_image.len() + 3) & !3;
-        let extf_chunks =
-            (extf_padded_len + TEST_PROG_MULTI_MAX - 1) / TEST_PROG_MULTI_MAX.max(1);
+        let extf_chunks = (extf_padded_len + TEST_PROG_MULTI_MAX - 1) / TEST_PROG_MULTI_MAX.max(1);
         for _ in 0..extf_chunks.max(1) {
             mock.queue_sync_ok();
         }
@@ -4163,7 +4368,10 @@ mod tests {
         };
 
         let mut progress = Vec::new();
-        let info = upload(&mut mock, &artifact, |p, w, t| progress.push((p.to_string(), w, t))).unwrap();
+        let info = upload(&mut mock, &artifact, |p, w, t| {
+            progress.push((p.to_string(), w, t))
+        })
+        .unwrap();
         assert_eq!(info.bl_rev, 5);
         assert_eq!(info.board_id, 140);
         assert_eq!(info.extf_size, extf_size);
@@ -4277,7 +4485,10 @@ mod tests {
 
         let err = upload(&mut mock, &artifact, |_, _, _| {}).unwrap_err();
         match err {
-            FirmwareError::ExtfCapacityInsufficient { board_capacity, firmware_needs } => {
+            FirmwareError::ExtfCapacityInsufficient {
+                board_capacity,
+                firmware_needs,
+            } => {
                 assert_eq!(board_capacity, 0);
                 assert_eq!(firmware_needs, 2);
             }
@@ -4303,9 +4514,16 @@ mod tests {
         let size: u32 = 1_048_576;
         extf_erase(&mut mock, size).unwrap();
         // Wire: EXTF_ERASE + size(4 LE bytes) + EOC
-        let expected: Vec<u8> = [&[TEST_EXTF_ERASE], size.to_le_bytes().as_slice(), &[TEST_EOC]]
-            .concat();
-        assert_eq!(mock.written, expected, "EXTF_ERASE must include 4-byte LE size");
+        let expected: Vec<u8> = [
+            &[TEST_EXTF_ERASE],
+            size.to_le_bytes().as_slice(),
+            &[TEST_EOC],
+        ]
+        .concat();
+        assert_eq!(
+            mock.written, expected,
+            "EXTF_ERASE must include 4-byte LE size"
+        );
     }
 
     #[test]
@@ -4318,9 +4536,16 @@ mod tests {
         mock.queue_sync_ok();
         extf_verify_crc(&mut mock, &extf_image).unwrap();
         // Wire: EXTF_GET_CRC + size(4 LE bytes) + EOC
-        let expected_wire: Vec<u8> =
-            [&[TEST_EXTF_GET_CRC], size.to_le_bytes().as_slice(), &[TEST_EOC]].concat();
-        assert_eq!(mock.written, expected_wire, "EXTF_GET_CRC must include 4-byte LE size");
+        let expected_wire: Vec<u8> = [
+            &[TEST_EXTF_GET_CRC],
+            size.to_le_bytes().as_slice(),
+            &[TEST_EOC],
+        ]
+        .concat();
+        assert_eq!(
+            mock.written, expected_wire,
+            "EXTF_GET_CRC must include 4-byte LE size"
+        );
     }
 
     #[test]
@@ -4416,10 +4641,7 @@ mod tests {
             0,
             "extf program chunk length must be 4-byte aligned, got {written_len}"
         );
-        assert_eq!(
-            written_len, 8,
-            "5-byte image should be padded to 8 bytes"
-        );
+        assert_eq!(written_len, 8, "5-byte image should be padded to 8 bytes");
         // Padding bytes should be 0xFF
         assert_eq!(&mock.written[2..7], &[0x01, 0x02, 0x03, 0x04, 0x05]);
         assert_eq!(&mock.written[7..10], &[0xFF, 0xFF, 0xFF]);
@@ -4510,9 +4732,8 @@ mod tests {
         let flash_size = 2_097_152u32;
         let extf_size = 1_048_576u32;
 
-        let mock = make_flow_upload_mock_with_extf(
-            5, 140, flash_size, extf_size, &image, &extf_image,
-        );
+        let mock =
+            make_flow_upload_mock_with_extf(5, 140, flash_size, extf_size, &image, &extf_image);
         let bootloader_port = make_bootloader_port();
 
         let deps = MockFlowDeps::new()
@@ -4633,9 +4854,8 @@ mod tests {
         let flash_size = 2_097_152u32;
         let extf_size = 1_048_576u32;
 
-        let mock = make_flow_upload_mock_with_extf(
-            5, 140, flash_size, extf_size, &image, &extf_image,
-        );
+        let mock =
+            make_flow_upload_mock_with_extf(5, 140, flash_size, extf_size, &image, &extf_image);
         let bootloader_port = make_bootloader_port();
 
         let deps = MockFlowDeps::new()
@@ -4666,8 +4886,14 @@ mod tests {
         let verify_idx = phases.iter().position(|p| p == "verifying").unwrap();
         let reboot_idx = phases.iter().position(|p| p == "rebooting").unwrap();
 
-        assert!(extf_erase_idx < extf_prog_idx, "extf_erasing before extf_programming");
-        assert!(extf_prog_idx < extf_verify_idx, "extf_programming before extf_verifying");
+        assert!(
+            extf_erase_idx < extf_prog_idx,
+            "extf_erasing before extf_programming"
+        );
+        assert!(
+            extf_prog_idx < extf_verify_idx,
+            "extf_programming before extf_verifying"
+        );
         assert!(extf_verify_idx < erase_idx, "extf_verifying before erasing");
         assert!(erase_idx < prog_idx, "erasing before programming");
         assert!(prog_idx < verify_idx, "programming before verifying");
@@ -4725,31 +4951,26 @@ mod tests {
             reason: "board reports 0 bytes, needs 4 bytes".into(),
         };
         let json = serde_json::to_string(&result).unwrap();
-        assert!(
-            json.contains("extf_capacity_insufficient"),
-            "got: {json}"
-        );
+        assert!(json.contains("extf_capacity_insufficient"), "got: {json}");
         assert!(json.contains("board reports 0"), "got: {json}");
     }
 
     #[test]
     fn catalog_target_manufacturer_parsed_from_manifest() {
-        let entries = vec![
-            serde_json::json!({
-                "board_id": 140,
-                "mav-type": "Copter",
-                "mav-firmware-version": "4.5.0",
-                "mav-firmware-version-type": "OFFICIAL",
-                "format": "apj",
-                "platform": "CubeOrange",
-                "url": "https://firmware.ardupilot.org/CubeOrange/4.5.0/firmware.apj",
-                "image_size": 1_500_000,
-                "latest": 1,
-                "git-sha": "abc123",
-                "brand_name": "CubeOrange",
-                "manufacturer": "Hex/ProfiCNC"
-            }),
-        ];
+        let entries = vec![serde_json::json!({
+            "board_id": 140,
+            "mav-type": "Copter",
+            "mav-firmware-version": "4.5.0",
+            "mav-firmware-version-type": "OFFICIAL",
+            "format": "apj",
+            "platform": "CubeOrange",
+            "url": "https://firmware.ardupilot.org/CubeOrange/4.5.0/firmware.apj",
+            "image_size": 1_500_000,
+            "latest": 1,
+            "git-sha": "abc123",
+            "brand_name": "CubeOrange",
+            "manufacturer": "Hex/ProfiCNC"
+        })];
         let gz = make_manifest_gz(&entries);
         let parsed = parse_manifest_gz(&gz).unwrap();
         assert_eq!(parsed[0].manufacturer.as_deref(), Some("Hex/ProfiCNC"));
@@ -4839,7 +5060,10 @@ mod tests {
         let image = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02];
         let apj = ApjFixture::new(9, &image).build();
         let result = apj_to_dfu_bin(&apj);
-        assert!(result.is_ok(), "internal-only APJ must succeed; got: {result:?}");
+        assert!(
+            result.is_ok(),
+            "internal-only APJ must succeed; got: {result:?}"
+        );
         assert_eq!(result.unwrap(), image);
     }
 
@@ -5058,7 +5282,10 @@ mod tests {
         let result = InventoryResult::Unsupported;
         let json = serde_json::to_string(&result).unwrap();
         assert!(json.contains("unsupported"), "got: {json}");
-        assert!(!json.contains("ports"), "unsupported must not have ports field; got: {json}");
+        assert!(
+            !json.contains("ports"),
+            "unsupported must not have ports field; got: {json}"
+        );
     }
 
     // R14: DfuScanResult::Unsupported serializes with kind="unsupported" and no devices field.
@@ -5067,7 +5294,10 @@ mod tests {
         let result = DfuScanResult::Unsupported;
         let json = serde_json::to_string(&result).unwrap();
         assert!(json.contains("unsupported"), "got: {json}");
-        assert!(!json.contains("devices"), "unsupported must not have devices field; got: {json}");
+        assert!(
+            !json.contains("devices"),
+            "unsupported must not have devices field; got: {json}"
+        );
     }
 
     // R15: firmware_catalog_entries returning empty Vec serializes as JSON array [].
@@ -5075,7 +5305,10 @@ mod tests {
     fn empty_catalog_entries_serializes_as_empty_array() {
         let entries: Vec<crate::firmware::types::CatalogEntry> = vec![];
         let json = serde_json::to_string(&entries).unwrap();
-        assert_eq!(json, "[]", "empty catalog must serialize as []; got: {json}");
+        assert_eq!(
+            json, "[]",
+            "empty catalog must serialize as []; got: {json}"
+        );
     }
 
     // R16: SerialFlowResult::ReconnectVerified with flash_verified=true maps to Verified.
@@ -5204,12 +5437,38 @@ mod tests {
     #[test]
     fn serial_flow_result_to_outcome_exhaustive() {
         let variants: Vec<SerialFlowResult> = vec![
-            SerialFlowResult::Verified { board_id: 1, bootloader_rev: 4, port: "p".into() },
-            SerialFlowResult::FlashedButUnverified { board_id: 1, bootloader_rev: 2, port: "p".into() },
-            SerialFlowResult::ReconnectVerified { board_id: 1, bootloader_rev: 4, flash_verified: true },
-            SerialFlowResult::ReconnectVerified { board_id: 1, bootloader_rev: 2, flash_verified: false },
-            SerialFlowResult::ReconnectFailed { board_id: 1, bootloader_rev: 4, flash_verified: true, reconnect_error: "e".into() },
-            SerialFlowResult::ReconnectFailed { board_id: 1, bootloader_rev: 2, flash_verified: false, reconnect_error: "e".into() },
+            SerialFlowResult::Verified {
+                board_id: 1,
+                bootloader_rev: 4,
+                port: "p".into(),
+            },
+            SerialFlowResult::FlashedButUnverified {
+                board_id: 1,
+                bootloader_rev: 2,
+                port: "p".into(),
+            },
+            SerialFlowResult::ReconnectVerified {
+                board_id: 1,
+                bootloader_rev: 4,
+                flash_verified: true,
+            },
+            SerialFlowResult::ReconnectVerified {
+                board_id: 1,
+                bootloader_rev: 2,
+                flash_verified: false,
+            },
+            SerialFlowResult::ReconnectFailed {
+                board_id: 1,
+                bootloader_rev: 4,
+                flash_verified: true,
+                reconnect_error: "e".into(),
+            },
+            SerialFlowResult::ReconnectFailed {
+                board_id: 1,
+                bootloader_rev: 2,
+                flash_verified: false,
+                reconnect_error: "e".into(),
+            },
             SerialFlowResult::Failed { reason: "r".into() },
             SerialFlowResult::BoardDetectionFailed { reason: "r".into() },
             SerialFlowResult::ExtfCapacityInsufficient { reason: "r".into() },

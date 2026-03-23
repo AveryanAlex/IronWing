@@ -1,12 +1,15 @@
 use bluetooth::{bt_get_bonded_devices, bt_request_permissions, bt_scan_ble, bt_stop_scan_ble};
+use std::sync::atomic::AtomicU64;
+
 use commands::{
-    arm_vehicle, available_transports, calibrate_accel, calibrate_compass_accept,
-    calibrate_compass_cancel, calibrate_compass_start, calibrate_gyro, disarm_vehicle,
-    get_available_modes, get_vehicle_snapshot, list_serial_ports_cmd, mission_cancel,
-    mission_clear_plan, mission_download_plan, mission_set_current, mission_upload_plan,
-    mission_validate_plan, mission_verify_roundtrip, motor_test, param_download_all,
-    param_format_file, param_parse_file, param_write, param_write_batch, reboot_vehicle,
-    request_prearm_checks, set_flight_mode, set_telemetry_rate, vehicle_guided_goto,
+    ack_session_snapshot, arm_vehicle, available_transports, calibrate_accel,
+    calibrate_compass_accept, calibrate_compass_cancel, calibrate_compass_start, calibrate_gyro,
+    disarm_vehicle, fence_clear, fence_download, fence_upload, get_available_modes,
+    list_serial_ports_cmd, mission_cancel, mission_clear, mission_download, mission_set_current,
+    mission_upload, mission_validate, motor_test, open_session_snapshot, param_download_all,
+    param_format_file, param_parse_file, param_write, param_write_batch, rally_clear,
+    rally_download, rally_upload, reboot_vehicle, request_prearm_checks, set_flight_mode,
+    set_telemetry_rate, start_guided_session, stop_guided_session, update_guided_session,
     vehicle_takeoff,
 };
 use connection::{connect_link, disconnect_link};
@@ -17,9 +20,11 @@ use firmware::commands::{
 };
 use firmware::discovery::{firmware_list_dfu_devices, firmware_list_ports};
 use firmware::types::FirmwareSessionHandle;
+use ipc::{GuidedRuntime, StatusTextEntry};
 use logs::LogStore;
 use mavkit::Vehicle;
 use recording::{TlogRecorderHandle, recording_start, recording_status, recording_stop};
+use session_runtime::SessionRuntime;
 mod bluetooth;
 mod bridges;
 mod commands;
@@ -27,17 +32,26 @@ mod connection;
 mod e2e_emit;
 #[allow(dead_code)]
 mod firmware;
+mod guided;
 mod helpers;
+mod ipc;
 mod logs;
 mod recording;
+mod session_runtime;
 
 pub(crate) struct AppState {
     pub(crate) vehicle: tokio::sync::Mutex<Option<Vehicle>>,
     pub(crate) connect_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
+    pub(crate) background_tasks: tokio::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>,
+    pub(crate) background_listeners: tokio::sync::Mutex<Vec<tauri::EventId>>,
     pub(crate) log_store: tokio::sync::Mutex<Option<LogStore>>,
     pub(crate) recorder: TlogRecorderHandle,
     pub(crate) firmware_session: FirmwareSessionHandle,
     pub(crate) firmware_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
+    pub(crate) session_runtime: tokio::sync::Mutex<SessionRuntime>,
+    pub(crate) guided_runtime: tokio::sync::Mutex<GuidedRuntime>,
+    pub(crate) status_text_history: tokio::sync::Mutex<Vec<StatusTextEntry>>,
+    pub(crate) next_status_text_sequence: AtomicU64,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -45,10 +59,16 @@ pub fn run() {
     let state = AppState {
         vehicle: tokio::sync::Mutex::new(None),
         connect_abort: tokio::sync::Mutex::new(None),
+        background_tasks: tokio::sync::Mutex::new(Vec::new()),
+        background_listeners: tokio::sync::Mutex::new(Vec::new()),
         log_store: tokio::sync::Mutex::new(None),
         recorder: TlogRecorderHandle::new(),
         firmware_session: FirmwareSessionHandle::new(),
         firmware_abort: tokio::sync::Mutex::new(None),
+        session_runtime: tokio::sync::Mutex::new(SessionRuntime::new()),
+        guided_runtime: tokio::sync::Mutex::new(GuidedRuntime::default()),
+        status_text_history: tokio::sync::Mutex::new(Vec::new()),
+        next_status_text_sequence: AtomicU64::new(1),
     };
     let mut builder = tauri::Builder::default()
         .manage(state)
@@ -71,18 +91,25 @@ pub fn run() {
         bt_scan_ble,
         bt_stop_scan_ble,
         bt_get_bonded_devices,
-        mission_validate_plan,
-        mission_upload_plan,
-        mission_download_plan,
-        mission_clear_plan,
-        mission_verify_roundtrip,
+        mission_validate,
+        mission_upload,
+        mission_download,
+        mission_clear,
         mission_set_current,
         mission_cancel,
+        fence_upload,
+        fence_download,
+        fence_clear,
+        rally_upload,
+        rally_download,
+        rally_clear,
         arm_vehicle,
         disarm_vehicle,
         set_flight_mode,
         vehicle_takeoff,
-        vehicle_guided_goto,
+        start_guided_session,
+        update_guided_session,
+        stop_guided_session,
         get_available_modes,
         set_telemetry_rate,
         param_download_all,
@@ -106,10 +133,12 @@ pub fn run() {
         crate::logs::log_get_flight_summary,
         crate::logs::log_export_csv,
         crate::logs::log_close,
+        crate::logs::playback_seek,
         recording_start,
         recording_stop,
         recording_status,
-        get_vehicle_snapshot,
+        open_session_snapshot,
+        ack_session_snapshot,
         firmware_list_ports,
         firmware_list_dfu_devices,
         firmware_flash_serial,

@@ -1,10 +1,10 @@
 import { Sliders } from "lucide-react";
 import { ConfigPanel } from "../../ConfigPanel";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
-import type { useParams } from "../../../hooks/use-params";
+import type { ParamsState } from "../../../hooks/use-params";
 
 type FullParametersSectionProps = {
-  params: ReturnType<typeof useParams>;
+  params: ParamsState;
   connected: boolean;
   highlightParam?: string | null;
   onHighlightHandled?: () => void;

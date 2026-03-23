@@ -2,23 +2,26 @@ use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 
 use mavkit::{
-    FlightMode, HomePosition, LinkState, MissionIssue, MissionPlan, MissionState, MissionType,
-    Param, ParamProgress, ParamStore, ParamWriteResult, Telemetry, VehicleState, format_param_file,
-    parse_param_file, validate_plan,
+    FencePlan, FlightMode, HomePosition, MissionIssue, MissionPlan, ParamStore, ParamWriteResult,
+    RallyPlan, format_param_file, parse_param_file, validate_plan,
 };
-
 use crate::bridges::TELEMETRY_INTERVAL_MS;
+use crate::guided::{emit_guided_snapshot, live_context_from_vehicle};
+use crate::ipc::{
+    AckSessionSnapshotResult, DomainProvenance, DomainValue, GuidedCommandResult, GuidedFailure,
+    GuidedFatalityScope, GuidedLiveContext, OpenSessionSnapshot, SessionConnection,
+    SessionSnapshot, SourceKind, StartGuidedSessionRequest, UpdateGuidedSessionRequest,
+    calibration_snapshot_from_sources, configuration_facts_snapshot_from_param_store,
+    session_connection_from_link_state, status_text_snapshot_from_entries,
+};
 use crate::{AppState, helpers::with_vehicle};
 
-#[derive(serde::Serialize)]
-pub(crate) struct VehicleSnapshot {
-    pub link_state: LinkState,
-    pub vehicle_state: VehicleState,
-    pub telemetry: Telemetry,
-    pub home_position: Option<HomePosition>,
-    pub mission_state: MissionState,
-    pub param_store: ParamStore,
-    pub param_progress: ParamProgress,
+/// Result of downloading a mission plan from a vehicle.
+/// Home position is extracted from the telemetry home, not from plan items.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct MissionDownload {
+    pub plan: MissionPlan,
+    pub home: Option<HomePosition>,
 }
 
 #[cfg(not(target_os = "android"))]
@@ -35,19 +38,192 @@ pub(crate) fn list_serial_ports_cmd() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub(crate) fn mission_validate_plan(plan: MissionPlan) -> Vec<MissionIssue> {
+pub(crate) fn mission_validate(plan: MissionPlan) -> Vec<MissionIssue> {
     validate_plan(&plan)
 }
 
-#[tauri::command]
-pub(crate) fn available_transports() -> Vec<&'static str> {
-    let mut t = vec!["udp", "tcp"];
-    #[cfg(not(target_os = "android"))]
-    t.push("serial");
-    t.push("bluetooth_ble");
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(crate) enum TransportDescriptor {
+    Udp {
+        label: &'static str,
+        available: bool,
+        validation: UdpValidation,
+    },
+    Tcp {
+        label: &'static str,
+        available: bool,
+        validation: TcpValidation,
+    },
+    Serial {
+        label: &'static str,
+        available: bool,
+        validation: SerialValidation,
+        default_baud: u32,
+    },
+    BluetoothBle {
+        label: &'static str,
+        available: bool,
+        validation: AddressValidation,
+    },
     #[cfg(target_os = "android")]
-    t.push("bluetooth_spp");
-    t
+    BluetoothSpp {
+        label: &'static str,
+        available: bool,
+        validation: AddressValidation,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct UdpValidation {
+    bind_addr_required: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct TcpValidation {
+    address_required: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct SerialValidation {
+    port_required: bool,
+    baud_required: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct AddressValidation {
+    address_required: bool,
+}
+
+#[tauri::command]
+pub(crate) fn available_transports() -> Vec<TransportDescriptor> {
+    let mut transports = vec![
+        TransportDescriptor::Udp {
+            label: "UDP",
+            available: true,
+            validation: UdpValidation {
+                bind_addr_required: true,
+            },
+        },
+        TransportDescriptor::Tcp {
+            label: "TCP",
+            available: true,
+            validation: TcpValidation {
+                address_required: true,
+            },
+        },
+    ];
+    #[cfg(not(target_os = "android"))]
+    transports.push(TransportDescriptor::Serial {
+        label: "Serial",
+        available: true,
+        validation: SerialValidation {
+            port_required: true,
+            baud_required: true,
+        },
+        default_baud: 57600,
+    });
+    transports.push(TransportDescriptor::BluetoothBle {
+        label: "BLE",
+        available: true,
+        validation: AddressValidation {
+            address_required: true,
+        },
+    });
+    #[cfg(target_os = "android")]
+    transports.push(TransportDescriptor::BluetoothSpp {
+        label: "Classic BT",
+        available: true,
+        validation: AddressValidation {
+            address_required: true,
+        },
+    });
+    transports
+}
+
+fn hydrate_playback_snapshot(
+    snapshot: &mut OpenSessionSnapshot,
+    frame: crate::logs::PlaybackFrame,
+) {
+    snapshot.session = frame.session;
+    snapshot.telemetry = frame.telemetry;
+    snapshot.mission_state = None;
+    snapshot.param_store = None;
+    snapshot.param_progress = None;
+    snapshot.support = frame.support;
+    snapshot.sensor_health = DomainValue::missing(DomainProvenance::Playback);
+    snapshot.configuration_facts = DomainValue::missing(DomainProvenance::Playback);
+    snapshot.calibration = DomainValue::missing(DomainProvenance::Playback);
+    snapshot.guided = DomainValue::missing(DomainProvenance::Playback);
+    snapshot.status_text = frame.status_text;
+    snapshot.playback = frame.playback;
+}
+
+async fn hydrate_live_snapshot(
+    state: &tauri::State<'_, AppState>,
+    snapshot: &mut OpenSessionSnapshot,
+    vehicle: &mavkit::Vehicle,
+) {
+    let link_state = vehicle.link().state().latest().unwrap_or(mavkit::LinkState::Connecting);
+    let param_state = vehicle.params().latest();
+    let param_store = param_state
+        .as_ref()
+        .and_then(|s| s.store.clone())
+        .unwrap_or_default();
+
+    snapshot.session = DomainValue::present(
+        SessionSnapshot {
+            status: crate::ipc::SessionStatus::Active,
+            connection: session_connection_from_link_state(&link_state),
+            vehicle_state: None,
+            home_position: None,
+        },
+        DomainProvenance::Bootstrap,
+    );
+    snapshot.telemetry = DomainValue::missing(DomainProvenance::Bootstrap);
+    snapshot.mission_state = vehicle.mission().latest();
+    snapshot.param_store = Some(param_store.clone());
+    snapshot.param_progress = None;
+    snapshot.support = DomainValue::missing(DomainProvenance::Bootstrap);
+    snapshot.sensor_health = DomainValue::missing(DomainProvenance::Bootstrap);
+    snapshot.configuration_facts =
+        configuration_facts_snapshot_from_param_store(&param_store, DomainProvenance::Bootstrap);
+
+    let ardupilot = vehicle.ardupilot();
+    let mag_progress_list = ardupilot.mag_cal_progress().latest().unwrap_or_default();
+    let mag_report_list = ardupilot.mag_cal_report().latest().unwrap_or_default();
+    snapshot.calibration = calibration_snapshot_from_sources(
+        mag_progress_list.first(),
+        mag_report_list.first(),
+        DomainProvenance::Bootstrap,
+    );
+    snapshot.guided = state.guided_runtime.lock().await.snapshot_live(
+        DomainProvenance::Bootstrap,
+        live_context_from_vehicle(vehicle),
+    );
+    let entries = state.status_text_history.lock().await.clone();
+    snapshot.status_text = status_text_snapshot_from_entries(entries, DomainProvenance::Bootstrap);
+}
+
+fn guided_operation_failure(
+    operation_id: crate::ipc::OperationId,
+    kind: crate::ipc::ReasonKind,
+    message: impl Into<String>,
+    retryable: bool,
+    fatality_scope: GuidedFatalityScope,
+) -> GuidedCommandResult {
+    GuidedCommandResult::Rejected {
+        failure: GuidedFailure {
+            operation_id,
+            reason: crate::ipc::Reason {
+                kind,
+                message: message.into(),
+            },
+            retryable,
+            fatality_scope,
+            detail: None,
+        },
+    }
 }
 
 #[tauri::command]
@@ -81,11 +257,13 @@ pub(crate) async fn set_flight_mode(
 ) -> Result<(), String> {
     with_vehicle(&state)
         .await?
-        .set_mode(custom_mode)
+        .set_mode(custom_mode, false)
         .await
         .map_err(|e| e.to_string())
 }
 
+/// Takeoff requires a guided session in the new mavkit API. This uses a
+/// raw COMMAND_LONG as a back-compat shim until the caller migrates.
 #[tauri::command]
 pub(crate) async fn vehicle_takeoff(
     state: tauri::State<'_, AppState>,
@@ -93,30 +271,179 @@ pub(crate) async fn vehicle_takeoff(
 ) -> Result<(), String> {
     with_vehicle(&state)
         .await?
-        .takeoff(altitude_m)
+        .raw()
+        .command_long(
+            22, // MAV_CMD_NAV_TAKEOFF
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, altitude_m],
+        )
         .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// Back-compat shim: sends DO_REPOSITION via raw COMMAND_LONG as a goto.
+/// The new mavkit API requires a typed guided session, but the IronWing
+/// frontend manages guided mode independently.
+async fn send_guided_goto(
+    vehicle: &mavkit::Vehicle,
+    latitude_deg: f64,
+    longitude_deg: f64,
+    altitude_m: f32,
+) -> Result<(), String> {
+    vehicle
+        .raw()
+        .command_long(
+            192, // MAV_CMD_DO_REPOSITION
+            [
+                -1.0,     // ground speed (unchanged)
+                0.0,      // bitmask
+                0.0,      // loiter radius
+                0.0,      // yaw heading
+                latitude_deg as f32,
+                longitude_deg as f32,
+                altitude_m,
+            ],
+        )
+        .await
+        .map(|_| ())
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub(crate) async fn vehicle_guided_goto(
+pub(crate) async fn start_guided_session(
     state: tauri::State<'_, AppState>,
-    lat_deg: f64,
-    lon_deg: f64,
-    alt_m: f32,
-) -> Result<(), String> {
-    with_vehicle(&state)
-        .await?
-        .goto(lat_deg, lon_deg, alt_m)
+    app: tauri::AppHandle,
+    request: StartGuidedSessionRequest,
+) -> Result<GuidedCommandResult, String> {
+    let vehicle = state.vehicle.lock().await.clone();
+    let source_kind = state.session_runtime.lock().await.guided_source_kind();
+    let context = vehicle
+        .as_ref()
+        .map(live_context_from_vehicle)
+        .unwrap_or(GuidedLiveContext::unavailable());
+
+    {
+        let mut guided_runtime = state.guided_runtime.lock().await;
+        if let Err(failure) =
+            guided_runtime.reserve_start(source_kind, context, request.session.clone())
+        {
+            return Ok(GuidedCommandResult::Rejected { failure });
+        }
+    }
+
+    let Some(vehicle) = vehicle else {
+        return Ok(guided_operation_failure(
+            crate::ipc::OperationId::StartGuidedSession,
+            crate::ipc::ReasonKind::Unavailable,
+            "guided control requires a live vehicle session",
+            true,
+            GuidedFatalityScope::Session,
+        ));
+    };
+
+    let crate::ipc::GuidedSession::Goto {
+        latitude_deg,
+        longitude_deg,
+        altitude_m,
+    } = request.session;
+
+    if let Err(error) = send_guided_goto(&vehicle, latitude_deg, longitude_deg, altitude_m).await {
+        return Ok(state.guided_runtime.lock().await.abort_reserved(
+            crate::ipc::OperationId::StartGuidedSession,
+            crate::ipc::ReasonKind::Failed,
+            error.to_string(),
+        ));
+    }
+
+    let result = state
+        .guided_runtime
+        .lock()
         .await
-        .map_err(|e| e.to_string())
+        .commit_reserved(crate::ipc::OperationId::StartGuidedSession);
+    if let GuidedCommandResult::Accepted { state: guided } = &result {
+        emit_guided_snapshot(&state, &app, guided.clone()).await;
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub(crate) async fn update_guided_session(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+    request: UpdateGuidedSessionRequest,
+) -> Result<GuidedCommandResult, String> {
+    let vehicle = state.vehicle.lock().await.clone();
+    let source_kind = state.session_runtime.lock().await.guided_source_kind();
+    let context = vehicle
+        .as_ref()
+        .map(live_context_from_vehicle)
+        .unwrap_or(GuidedLiveContext::unavailable());
+
+    {
+        let mut guided_runtime = state.guided_runtime.lock().await;
+        if let Err(failure) =
+            guided_runtime.reserve_update(source_kind, context, request.session.clone())
+        {
+            return Ok(GuidedCommandResult::Rejected { failure });
+        }
+    }
+
+    let Some(vehicle) = vehicle else {
+        return Ok(guided_operation_failure(
+            crate::ipc::OperationId::UpdateGuidedSession,
+            crate::ipc::ReasonKind::Unavailable,
+            "guided control requires a live vehicle session",
+            true,
+            GuidedFatalityScope::Session,
+        ));
+    };
+
+    let crate::ipc::GuidedSession::Goto {
+        latitude_deg,
+        longitude_deg,
+        altitude_m,
+    } = request.session;
+
+    if let Err(error) = send_guided_goto(&vehicle, latitude_deg, longitude_deg, altitude_m).await {
+        return Ok(state.guided_runtime.lock().await.abort_reserved(
+            crate::ipc::OperationId::UpdateGuidedSession,
+            crate::ipc::ReasonKind::Failed,
+            error.to_string(),
+        ));
+    }
+
+    let result = state
+        .guided_runtime
+        .lock()
+        .await
+        .commit_reserved(crate::ipc::OperationId::UpdateGuidedSession);
+    if let GuidedCommandResult::Accepted { state: guided } = &result {
+        emit_guided_snapshot(&state, &app, guided.clone()).await;
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub(crate) async fn stop_guided_session(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<GuidedCommandResult, String> {
+    let vehicle = state.vehicle.lock().await.clone();
+    let source_kind = state.session_runtime.lock().await.guided_source_kind();
+    let context = vehicle
+        .as_ref()
+        .map(live_context_from_vehicle)
+        .unwrap_or(GuidedLiveContext::unavailable());
+    let result = state.guided_runtime.lock().await.stop(source_kind, context);
+    let _ = app;
+    Ok(result)
 }
 
 #[tauri::command]
 pub(crate) async fn get_available_modes(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<FlightMode>, String> {
-    Ok(with_vehicle(&state).await?.available_modes())
+    Ok(with_vehicle(&state).await?.available_modes().iter().collect())
 }
 
 #[tauri::command]
@@ -129,7 +456,7 @@ pub(crate) fn set_telemetry_rate(rate_hz: u32) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) async fn mission_upload_plan(
+pub(crate) async fn mission_upload(
     state: tauri::State<'_, AppState>,
     plan: MissionPlan,
 ) -> Result<(), String> {
@@ -137,45 +464,122 @@ pub(crate) async fn mission_upload_plan(
         .await?
         .mission()
         .upload(plan)
+        .map_err(|e| e.to_string())?
+        .wait()
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub(crate) async fn mission_download_plan(
+pub(crate) async fn mission_download(
     state: tauri::State<'_, AppState>,
-    mission_type: MissionType,
-) -> Result<MissionPlan, String> {
+) -> Result<MissionDownload, String> {
+    let vehicle = with_vehicle(&state).await?;
+    let plan = vehicle
+        .mission()
+        .download()
+        .map_err(|e| e.to_string())?
+        .wait()
+        .await
+        .map_err(|e| e.to_string())?;
+    let home = vehicle.home().latest().map(|sample| HomePosition {
+        latitude_deg: sample.value.latitude_deg,
+        longitude_deg: sample.value.longitude_deg,
+        altitude_m: sample.value.altitude_msl_m,
+    });
+    Ok(MissionDownload { plan, home })
+}
+
+#[tauri::command]
+pub(crate) async fn mission_clear(state: tauri::State<'_, AppState>) -> Result<(), String> {
     with_vehicle(&state)
         .await?
         .mission()
-        .download(mission_type)
+        .clear()
+        .map_err(|e| e.to_string())?
+        .wait()
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub(crate) async fn mission_clear_plan(
+pub(crate) async fn fence_upload(
     state: tauri::State<'_, AppState>,
-    mission_type: MissionType,
+    plan: FencePlan,
 ) -> Result<(), String> {
     with_vehicle(&state)
         .await?
-        .mission()
-        .clear(mission_type)
+        .fence()
+        .upload(plan)
+        .map_err(|e| e.to_string())?
+        .wait()
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub(crate) async fn mission_verify_roundtrip(
+pub(crate) async fn fence_download(
     state: tauri::State<'_, AppState>,
-    plan: MissionPlan,
-) -> Result<bool, String> {
+) -> Result<FencePlan, String> {
     with_vehicle(&state)
         .await?
-        .mission()
-        .verify_roundtrip(plan)
+        .fence()
+        .download()
+        .map_err(|e| e.to_string())?
+        .wait()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn fence_clear(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    with_vehicle(&state)
+        .await?
+        .fence()
+        .clear()
+        .map_err(|e| e.to_string())?
+        .wait()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn rally_upload(
+    state: tauri::State<'_, AppState>,
+    plan: RallyPlan,
+) -> Result<(), String> {
+    with_vehicle(&state)
+        .await?
+        .rally()
+        .upload(plan)
+        .map_err(|e| e.to_string())?
+        .wait()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn rally_download(
+    state: tauri::State<'_, AppState>,
+) -> Result<RallyPlan, String> {
+    with_vehicle(&state)
+        .await?
+        .rally()
+        .download()
+        .map_err(|e| e.to_string())?
+        .wait()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn rally_clear(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    with_vehicle(&state)
+        .await?
+        .rally()
+        .clear()
+        .map_err(|e| e.to_string())?
+        .wait()
         .await
         .map_err(|e| e.to_string())
 }
@@ -193,9 +597,11 @@ pub(crate) async fn mission_set_current(
         .map_err(|e| e.to_string())
 }
 
+/// Legacy cancel stub. The new mavkit API uses per-operation cancellation
+/// (via `MissionOperationHandle::cancel()`), so a global cancel is a no-op.
+/// Kept to avoid breaking the frontend IPC contract.
 #[tauri::command]
-pub(crate) async fn mission_cancel(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    with_vehicle(&state).await?.mission().cancel_transfer();
+pub(crate) async fn mission_cancel(_state: tauri::State<'_, AppState>) -> Result<(), String> {
     Ok(())
 }
 
@@ -203,7 +609,8 @@ pub(crate) async fn mission_cancel(state: tauri::State<'_, AppState>) -> Result<
 pub(crate) async fn calibrate_accel(state: tauri::State<'_, AppState>) -> Result<(), String> {
     with_vehicle(&state)
         .await?
-        .preflight_calibration(false, true, false)
+        .ardupilot()
+        .preflight_calibration(false, true, false, false)
         .await
         .map_err(|e| e.to_string())
 }
@@ -212,7 +619,8 @@ pub(crate) async fn calibrate_accel(state: tauri::State<'_, AppState>) -> Result
 pub(crate) async fn calibrate_gyro(state: tauri::State<'_, AppState>) -> Result<(), String> {
     with_vehicle(&state)
         .await?
-        .preflight_calibration(true, false, false)
+        .ardupilot()
+        .preflight_calibration(true, false, false, false)
         .await
         .map_err(|e| e.to_string())
 }
@@ -225,6 +633,8 @@ pub(crate) async fn param_download_all(
         .await?
         .params()
         .download_all()
+        .map_err(|e| e.to_string())?
+        .wait()
         .await
         .map_err(|e| e.to_string())
 }
@@ -234,11 +644,11 @@ pub(crate) async fn param_write(
     state: tauri::State<'_, AppState>,
     name: String,
     value: f32,
-) -> Result<Param, String> {
+) -> Result<ParamWriteResult, String> {
     with_vehicle(&state)
         .await?
         .params()
-        .write(name, value)
+        .write(&name, value)
         .await
         .map_err(|e| e.to_string())
 }
@@ -252,6 +662,8 @@ pub(crate) async fn param_write_batch(
         .await?
         .params()
         .write_batch(params)
+        .map_err(|e| e.to_string())?
+        .wait()
         .await
         .map_err(|e| e.to_string())
 }
@@ -259,6 +671,8 @@ pub(crate) async fn param_write_batch(
 #[tauri::command]
 pub(crate) fn param_parse_file(contents: String) -> Result<HashMap<String, f32>, String> {
     parse_param_file(&contents)
+        .map(|pairs| pairs.into_iter().collect())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -270,6 +684,7 @@ pub(crate) fn param_format_file(store: ParamStore) -> String {
 pub(crate) async fn reboot_vehicle(state: tauri::State<'_, AppState>) -> Result<(), String> {
     with_vehicle(&state)
         .await?
+        .ardupilot()
         .reboot()
         .await
         .map_err(|e| e.to_string())
@@ -284,7 +699,8 @@ pub(crate) async fn motor_test(
 ) -> Result<(), String> {
     with_vehicle(&state)
         .await?
-        .motor_test(motor_instance, throttle_pct, duration_s)
+        .ardupilot()
+        .motor_test(motor_instance, throttle_pct, duration_s as u16)
         .await
         .map_err(|e| e.to_string())
 }
@@ -296,7 +712,8 @@ pub(crate) async fn calibrate_compass_start(
 ) -> Result<(), String> {
     with_vehicle(&state)
         .await?
-        .start_mag_cal(compass_mask, true, false)
+        .ardupilot()
+        .start_mag_cal(compass_mask)
         .await
         .map_err(|e| e.to_string())
 }
@@ -304,11 +721,12 @@ pub(crate) async fn calibrate_compass_start(
 #[tauri::command]
 pub(crate) async fn calibrate_compass_accept(
     state: tauri::State<'_, AppState>,
-    compass_mask: u8,
+    _compass_mask: u8,
 ) -> Result<(), String> {
     with_vehicle(&state)
         .await?
-        .accept_mag_cal(compass_mask)
+        .ardupilot()
+        .accept_mag_cal()
         .await
         .map_err(|e| e.to_string())
 }
@@ -316,11 +734,12 @@ pub(crate) async fn calibrate_compass_accept(
 #[tauri::command]
 pub(crate) async fn calibrate_compass_cancel(
     state: tauri::State<'_, AppState>,
-    compass_mask: u8,
+    _compass_mask: u8,
 ) -> Result<(), String> {
     with_vehicle(&state)
         .await?
-        .cancel_mag_cal(compass_mask)
+        .ardupilot()
+        .cancel_mag_cal()
         .await
         .map_err(|e| e.to_string())
 }
@@ -329,26 +748,117 @@ pub(crate) async fn calibrate_compass_cancel(
 pub(crate) async fn request_prearm_checks(state: tauri::State<'_, AppState>) -> Result<(), String> {
     with_vehicle(&state)
         .await?
+        .ardupilot()
         .request_prearm_checks()
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub(crate) async fn get_vehicle_snapshot(
+pub(crate) async fn open_session_snapshot(
     state: tauri::State<'_, AppState>,
-) -> Result<Option<VehicleSnapshot>, String> {
-    let guard = state.vehicle.lock().await;
-    let Some(vehicle) = guard.as_ref() else {
-        return Ok(None);
-    };
-    Ok(Some(VehicleSnapshot {
-        link_state: vehicle.link_state().borrow().clone(),
-        vehicle_state: vehicle.state().borrow().clone(),
-        telemetry: vehicle.telemetry().borrow().clone(),
-        home_position: vehicle.home_position().borrow().clone(),
-        mission_state: vehicle.mission_state().borrow().clone(),
-        param_store: vehicle.param_store().borrow().clone(),
-        param_progress: vehicle.param_progress().borrow().clone(),
-    }))
+    _app: tauri::AppHandle,
+    source_kind: SourceKind,
+) -> Result<OpenSessionSnapshot, String> {
+    if source_kind == SourceKind::Playback {
+        let guard = state.log_store.lock().await;
+        let Some(store) = guard.as_ref() else {
+            return Err("no log open".to_string());
+        };
+
+        state
+            .guided_runtime
+            .lock()
+            .await
+            .reset_for_playback("playback source switched");
+
+        let mut runtime = state.session_runtime.lock().await;
+        let mut snapshot = runtime.open_session_snapshot(source_kind);
+        drop(runtime);
+
+        snapshot.guided = crate::ipc::guided::GuidedRuntime::snapshot_playback();
+        hydrate_playback_snapshot(&mut snapshot, store.playback_frame());
+        return Ok(snapshot);
+    }
+
+    let mut runtime = state.session_runtime.lock().await;
+    let mut snapshot = runtime.open_session_snapshot(source_kind);
+    drop(runtime);
+
+    let vehicle = state.vehicle.lock().await.clone();
+    if let Some(vehicle) = vehicle.as_ref() {
+        hydrate_live_snapshot(&state, &mut snapshot, vehicle).await;
+    } else {
+        snapshot.session = DomainValue::present(
+            SessionSnapshot {
+                status: crate::ipc::SessionStatus::Pending,
+                connection: SessionConnection::Disconnected,
+                vehicle_state: None,
+                home_position: None,
+            },
+            DomainProvenance::Bootstrap,
+        );
+        snapshot.telemetry = DomainValue::missing(DomainProvenance::Bootstrap);
+        snapshot.mission_state = None;
+        snapshot.param_store = None;
+        snapshot.param_progress = None;
+        snapshot.support = DomainValue::missing(DomainProvenance::Bootstrap);
+        snapshot.sensor_health = DomainValue::missing(DomainProvenance::Bootstrap);
+        snapshot.configuration_facts = DomainValue::missing(DomainProvenance::Bootstrap);
+        snapshot.calibration = DomainValue::missing(DomainProvenance::Bootstrap);
+        snapshot.guided = state.guided_runtime.lock().await.snapshot_live(
+            DomainProvenance::Bootstrap,
+            GuidedLiveContext::unavailable(),
+        );
+        snapshot.status_text =
+            status_text_snapshot_from_entries(Vec::new(), DomainProvenance::Bootstrap);
+    }
+
+    Ok(snapshot)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn available_transports_returns_typed_descriptors() {
+        let value = serde_json::to_value(available_transports()).expect("serialize transports");
+        assert!(
+            value
+                .as_array()
+                .expect("array")
+                .iter()
+                .all(|entry| entry.get("kind").is_some())
+        );
+        assert!(value.to_string().contains("validation"));
+    }
+
+    #[test]
+    fn guided_operation_failure_serializes_typed_operation_id_and_reason() {
+        let value = serde_json::to_value(guided_operation_failure(
+            crate::ipc::OperationId::StartGuidedSession,
+            crate::ipc::ReasonKind::Failed,
+            "goto failed",
+            true,
+            GuidedFatalityScope::Operation,
+        ))
+        .expect("serialize guided failure");
+
+        assert_eq!(value["result"], "rejected");
+        assert_eq!(value["failure"]["operation_id"], "start_guided_session");
+        assert_eq!(value["failure"]["reason"]["kind"], "failed");
+        assert_eq!(value["failure"]["reason"]["message"], "goto failed");
+    }
+}
+
+#[tauri::command]
+pub(crate) async fn ack_session_snapshot(
+    state: tauri::State<'_, AppState>,
+    session_id: String,
+    seek_epoch: u64,
+    reset_revision: u64,
+) -> Result<AckSessionSnapshotResult, String> {
+    let mut runtime = state.session_runtime.lock().await;
+    Ok(runtime.ack_session_snapshot(&session_id, seek_epoch, reset_revision))
 }

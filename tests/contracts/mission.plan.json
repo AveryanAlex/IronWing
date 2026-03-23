@@ -1,0 +1,60 @@
+{
+  "items": [
+    {
+      "command": {
+        "Nav": {
+          "Takeoff": {
+            "position": {
+              "RelHome": {
+                "latitude_deg": 47.397742,
+                "longitude_deg": 8.545594,
+                "relative_alt_m": 25.0
+              }
+            },
+            "pitch_deg": 15.0
+          }
+        }
+      },
+      "current": true,
+      "autocontinue": true
+    },
+    {
+      "command": {
+        "Nav": {
+          "Waypoint": {
+            "position": {
+              "RelHome": {
+                "latitude_deg": 47.4,
+                "longitude_deg": 8.55,
+                "relative_alt_m": 30.0
+              }
+            },
+            "hold_time_s": 0.0,
+            "acceptance_radius_m": 1.0,
+            "pass_radius_m": 0.0,
+            "yaw_deg": 0.0
+          }
+        }
+      },
+      "current": false,
+      "autocontinue": true
+    },
+    {
+      "command": {
+        "Other": {
+          "command": 4242,
+          "frame": "Global",
+          "param1": 1.0,
+          "param2": 2.0,
+          "param3": 3.0,
+          "param4": 4.0,
+          "x": 123,
+          "y": 456,
+          "z": 789.0
+        }
+      },
+      "current": false,
+      "autocontinue": false
+    }
+  ]
+}

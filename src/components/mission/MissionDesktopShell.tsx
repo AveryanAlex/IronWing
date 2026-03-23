@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { MapPin } from "lucide-react";
 import { MissionPlannerSummary } from "./MissionPlannerSummary";
 import { MissionWaypointList } from "./MissionWaypointList";
@@ -12,15 +11,7 @@ type MissionDesktopShellProps = {
 };
 
 export function MissionDesktopShell({ mission, connected, onCardSelect }: MissionDesktopShellProps) {
-  const selectedDraftItem = useMemo(() => {
-    if (mission.selectedSeq === null) return null;
-    return mission.draftItems[mission.selectedSeq] ?? null;
-  }, [mission.draftItems, mission.selectedSeq]);
-
-  const previousItem = useMemo(() => {
-    if (mission.selectedSeq === null || mission.selectedSeq === 0) return null;
-    return mission.items[mission.selectedSeq - 1] ?? null;
-  }, [mission.items, mission.selectedSeq]);
+  const current = mission.current;
 
   return (
     <div
@@ -37,28 +28,30 @@ export function MissionDesktopShell({ mission, connected, onCardSelect }: Missio
         <div className="sticky top-0 z-10 flex items-center gap-2 bg-bg-secondary px-3 py-2">
           <MapPin className="h-3.5 w-3.5 text-accent" />
           <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-            {mission.missionType === "mission" ? "Waypoints" : mission.missionType === "fence" ? "Fence" : "Rally"}
+            {current.tab === "mission" ? "Waypoints" : current.tab === "fence" ? "Fence" : "Rally"}
           </span>
           <span className="ml-auto text-xs tabular-nums text-text-muted">
-            {mission.items.length} item{mission.items.length !== 1 ? "s" : ""}
+            {current.displayTotal} item{current.displayTotal !== 1 ? "s" : ""}
           </span>
         </div>
 
         <div className="px-2.5 pb-2.5">
           <MissionWaypointList mission={mission} onCardSelect={onCardSelect} />
 
-          {selectedDraftItem && mission.selectedSeq !== null && (
+          {current.selectedItem && current.selectedIndex !== null && (
             <div className="mt-2">
               <MissionInspector
-                draftItem={selectedDraftItem}
-                index={mission.selectedSeq}
-                previousItem={previousItem}
-                homePosition={mission.homePosition}
+                missionType={current.tab}
+                draftItem={current.selectedItem}
+                index={current.selectedIndex}
+                previousItem={current.previousItem}
+                homePosition={current.homePosition}
+                readOnly={current.readOnly}
                 isSelected={true}
-                onUpdateField={mission.updateField}
-                onUpdateFrame={mission.updateFrame}
-                onUpdateCoordinate={mission.updateCoordinate}
-                onSelect={mission.setSelectedSeq}
+                onUpdateCommand={current.tab === "mission" ? mission.mission.updateCommand : undefined}
+                onUpdateAltitude={current.updateAltitude}
+                onUpdateCoordinate={current.updateCoordinate}
+                onSelect={current.select}
               />
             </div>
           )}

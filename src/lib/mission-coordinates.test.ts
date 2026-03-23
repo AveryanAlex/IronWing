@@ -1,22 +1,17 @@
 import { describe, it, expect } from "vitest";
-import type { MissionItem, HomePosition } from "../mission";
+import type { HomePosition } from "./mavkit-types";
 import {
-  degToDegE7,
-  degE7ToDeg,
-  itemLatDeg,
-  itemLonDeg,
-  itemLatLon,
   metersPerDegLon,
   latLonToLocalXY,
   localXYToLatLon,
   bearingDistance,
   latLonFromBearingDistance,
-  itemOffsetFromHome,
+  offsetFromHome,
   applyOffsetFromHome,
-  itemOffsetFromPrevious,
+  offsetFromPrevious,
   applyOffsetFromPrevious,
-  itemBearingDistanceFromHome,
-  itemBearingDistanceFromPrevious,
+  bearingDistanceFromHome,
+  bearingDistanceFromPrevious,
   parseLatitude,
   parseLongitude,
   parseDistance,
@@ -26,24 +21,10 @@ import {
   formatDistance,
   formatBearing,
   isHomeValid,
-  isItemCoordinateValid,
 } from "./mission-coordinates";
 
-function makeItem(latDeg: number, lonDeg: number, altM = 25): MissionItem {
-  return {
-    seq: 0,
-    command: 16,
-    frame: "global_relative_alt_int",
-    current: false,
-    autocontinue: true,
-    param1: 0,
-    param2: 0,
-    param3: 0,
-    param4: 0,
-    x: Math.round(latDeg * 1e7),
-    y: Math.round(lonDeg * 1e7),
-    z: altM,
-  };
+function makePosition(lat: number, lon: number): { latitude_deg: number; longitude_deg: number } {
+  return { latitude_deg: lat, longitude_deg: lon };
 }
 
 function makeHome(lat: number, lon: number, alt = 0): HomePosition {
@@ -51,71 +32,19 @@ function makeHome(lat: number, lon: number, alt = 0): HomePosition {
 }
 
 // ---------------------------------------------------------------------------
-// degE7 <-> decimal degree conversion
-// ---------------------------------------------------------------------------
-
-describe("degToDegE7 / degE7ToDeg", () => {
-  it("round-trips Zurich coordinates", () => {
-    const lat = 47.3769;
-    const e7 = degToDegE7(lat);
-    expect(e7).toBe(473769000);
-    expect(degE7ToDeg(e7)).toBeCloseTo(lat, 6);
-  });
-
-  it("handles negative coordinates (southern hemisphere)", () => {
-    const lat = -33.8688;
-    const e7 = degToDegE7(lat);
-    expect(e7).toBe(-338688000);
-    expect(degE7ToDeg(e7)).toBeCloseTo(lat, 6);
-  });
-
-  it("handles zero", () => {
-    expect(degToDegE7(0)).toBe(0);
-    expect(degE7ToDeg(0)).toBe(0);
-  });
-
-  it("handles boundary values", () => {
-    expect(degToDegE7(90)).toBe(900000000);
-    expect(degToDegE7(-180)).toBe(-1800000000);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Mission item lat/lon extraction
-// ---------------------------------------------------------------------------
-
-describe("itemLatDeg / itemLonDeg / itemLatLon", () => {
-  const item = makeItem(47.3769, 8.5417);
-
-  it("extracts latitude", () => {
-    expect(itemLatDeg(item)).toBeCloseTo(47.3769, 5);
-  });
-
-  it("extracts longitude", () => {
-    expect(itemLonDeg(item)).toBeCloseTo(8.5417, 5);
-  });
-
-  it("extracts both as object", () => {
-    const { lat, lon } = itemLatLon(item);
-    expect(lat).toBeCloseTo(47.3769, 5);
-    expect(lon).toBeCloseTo(8.5417, 5);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Flat-earth local tangent plane helpers
 // ---------------------------------------------------------------------------
 
 describe("metersPerDegLon", () => {
-  it("at equator ≈ 111_320", () => {
+  it("at equator ~ 111_320", () => {
     expect(metersPerDegLon(0)).toBeCloseTo(111_320, 0);
   });
 
-  it("at 47° (Zurich) ≈ 75_900", () => {
+  it("at 47deg (Zurich) ~ 75_900", () => {
     expect(metersPerDegLon(47)).toBeCloseTo(75_900, -2);
   });
 
-  it("at 90° (pole) ≈ 0", () => {
+  it("at 90deg (pole) ~ 0", () => {
     expect(metersPerDegLon(90)).toBeCloseTo(0, 0);
   });
 });
@@ -129,7 +58,7 @@ describe("latLonToLocalXY", () => {
     expect(y_m).toBeCloseTo(0, 1);
   });
 
-  it("1 degree north ≈ 111_320 m in Y", () => {
+  it("1 degree north ~ 111_320 m in Y", () => {
     const { x_m, y_m } = latLonToLocalXY(zurich, 48.3769, 8.5417);
     expect(y_m).toBeCloseTo(111_320, -1);
     expect(x_m).toBeCloseTo(0, 1);
@@ -173,23 +102,23 @@ describe("localXYToLatLon", () => {
 describe("bearingDistance", () => {
   const ref = { latitude_deg: 47.0, longitude_deg: 8.0 };
 
-  it("due north gives bearing ≈ 0°", () => {
+  it("due north gives bearing ~ 0deg", () => {
     const { bearing_deg, distance_m } = bearingDistance(ref, 47.001, 8.0);
     expect(bearing_deg).toBeCloseTo(0, 0);
     expect(distance_m).toBeCloseTo(111.32, 0);
   });
 
-  it("due east gives bearing ≈ 90°", () => {
+  it("due east gives bearing ~ 90deg", () => {
     const { bearing_deg } = bearingDistance(ref, 47.0, 8.001);
     expect(bearing_deg).toBeCloseTo(90, 0);
   });
 
-  it("due south gives bearing ≈ 180°", () => {
+  it("due south gives bearing ~ 180deg", () => {
     const { bearing_deg } = bearingDistance(ref, 46.999, 8.0);
     expect(bearing_deg).toBeCloseTo(180, 0);
   });
 
-  it("due west gives bearing ≈ 270°", () => {
+  it("due west gives bearing ~ 270deg", () => {
     const { bearing_deg } = bearingDistance(ref, 47.0, 7.999);
     expect(bearing_deg).toBeCloseTo(270, 0);
   });
@@ -210,14 +139,14 @@ describe("latLonFromBearingDistance", () => {
     expect(distance_m).toBeCloseTo(1000, 0);
   });
 
-  it("500m at 45° NE round-trips", () => {
+  it("500m at 45deg NE round-trips", () => {
     const { lat, lon } = latLonFromBearingDistance(ref, 45, 500);
     const { bearing_deg, distance_m } = bearingDistance(ref, lat, lon);
     expect(bearing_deg).toBeCloseTo(45, 0);
     expect(distance_m).toBeCloseTo(500, 0);
   });
 
-  it("2000m at 225° (SW) round-trips", () => {
+  it("2000m at 225deg (SW) round-trips", () => {
     const { lat, lon } = latLonFromBearingDistance(ref, 225, 2000);
     const { bearing_deg, distance_m } = bearingDistance(ref, lat, lon);
     expect(bearing_deg).toBeCloseTo(225, 0);
@@ -229,36 +158,35 @@ describe("latLonFromBearingDistance", () => {
 // Offset-from-home helpers
 // ---------------------------------------------------------------------------
 
-describe("itemOffsetFromHome / applyOffsetFromHome", () => {
+describe("offsetFromHome / applyOffsetFromHome", () => {
   const home = makeHome(47.0, 8.0);
 
   it("returns null when home is null", () => {
-    const item = makeItem(47.001, 8.001);
-    expect(itemOffsetFromHome(item, null)).toBeNull();
+    const pos = makePosition(47.001, 8.001);
+    expect(offsetFromHome(pos, null)).toBeNull();
     expect(applyOffsetFromHome(null, 100, 100)).toBeNull();
   });
 
-  it("item at home gives zero offset", () => {
-    const item = makeItem(47.0, 8.0);
-    const offset = itemOffsetFromHome(item, home);
+  it("position at home gives zero offset", () => {
+    const pos = makePosition(47.0, 8.0);
+    const offset = offsetFromHome(pos, home);
     expect(offset).not.toBeNull();
     expect(offset!.x_m).toBeCloseTo(0, 0);
     expect(offset!.y_m).toBeCloseTo(0, 0);
   });
 
-  it("round-trips: offset → apply → extract ≈ original", () => {
-    const item = makeItem(47.005, 8.003);
-    const offset = itemOffsetFromHome(item, home)!;
+  it("round-trips: offset then apply returns original position", () => {
+    const pos = makePosition(47.005, 8.003);
+    const offset = offsetFromHome(pos, home)!;
     const applied = applyOffsetFromHome(home, offset.x_m, offset.y_m)!;
-    expect(applied.x).toBeCloseTo(item.x, -1);
-    expect(applied.y).toBeCloseTo(item.y, -1);
+    expect(applied.latitude_deg).toBeCloseTo(47.005, 5);
+    expect(applied.longitude_deg).toBeCloseTo(8.003, 5);
   });
 
-  it("500m east offset produces correct degE7", () => {
+  it("500m east offset produces correct longitude", () => {
     const applied = applyOffsetFromHome(home, 500, 0)!;
-    const resultLon = applied.y / 1e7;
     const expectedDLon = 500 / metersPerDegLon(47.0);
-    expect(resultLon - 8.0).toBeCloseTo(expectedDLon, 5);
+    expect(applied.longitude_deg - 8.0).toBeCloseTo(expectedDLon, 5);
   });
 });
 
@@ -266,31 +194,31 @@ describe("itemOffsetFromHome / applyOffsetFromHome", () => {
 // Offset-from-previous-waypoint helpers
 // ---------------------------------------------------------------------------
 
-describe("itemOffsetFromPrevious / applyOffsetFromPrevious", () => {
-  it("returns null when previousItem is null or undefined", () => {
-    const item = makeItem(47.001, 8.001);
-    expect(itemOffsetFromPrevious(item, null)).toBeNull();
-    expect(itemOffsetFromPrevious(item, undefined)).toBeNull();
+describe("offsetFromPrevious / applyOffsetFromPrevious", () => {
+  it("returns null when previousPosition is null or undefined", () => {
+    const pos = makePosition(47.001, 8.001);
+    expect(offsetFromPrevious(pos, null)).toBeNull();
+    expect(offsetFromPrevious(pos, undefined)).toBeNull();
     expect(applyOffsetFromPrevious(null, 100, 100)).toBeNull();
     expect(applyOffsetFromPrevious(undefined, 100, 100)).toBeNull();
   });
 
   it("same position gives zero offset", () => {
-    const prev = makeItem(47.0, 8.0);
-    const curr = makeItem(47.0, 8.0);
-    const offset = itemOffsetFromPrevious(curr, prev);
+    const prev = makePosition(47.0, 8.0);
+    const curr = makePosition(47.0, 8.0);
+    const offset = offsetFromPrevious(curr, prev);
     expect(offset).not.toBeNull();
     expect(offset!.x_m).toBeCloseTo(0, 0);
     expect(offset!.y_m).toBeCloseTo(0, 0);
   });
 
-  it("round-trips: offset → apply → extract ≈ original", () => {
-    const prev = makeItem(47.0, 8.0);
-    const curr = makeItem(47.002, 8.004);
-    const offset = itemOffsetFromPrevious(curr, prev)!;
+  it("round-trips: offset then apply returns original position", () => {
+    const prev = makePosition(47.0, 8.0);
+    const curr = makePosition(47.002, 8.004);
+    const offset = offsetFromPrevious(curr, prev)!;
     const applied = applyOffsetFromPrevious(prev, offset.x_m, offset.y_m)!;
-    expect(applied.x).toBeCloseTo(curr.x, -1);
-    expect(applied.y).toBeCloseTo(curr.y, -1);
+    expect(applied.latitude_deg).toBeCloseTo(47.002, 5);
+    expect(applied.longitude_deg).toBeCloseTo(8.004, 5);
   });
 });
 
@@ -298,30 +226,30 @@ describe("itemOffsetFromPrevious / applyOffsetFromPrevious", () => {
 // Bearing/distance from home and previous
 // ---------------------------------------------------------------------------
 
-describe("itemBearingDistanceFromHome", () => {
+describe("bearingDistanceFromHome", () => {
   const home = makeHome(47.0, 8.0);
 
   it("returns null when home is null", () => {
-    expect(itemBearingDistanceFromHome(makeItem(47.001, 8.0), null)).toBeNull();
+    expect(bearingDistanceFromHome(makePosition(47.001, 8.0), null)).toBeNull();
   });
 
-  it("item due north of home gives bearing ≈ 0°", () => {
-    const item = makeItem(47.01, 8.0);
-    const result = itemBearingDistanceFromHome(item, home)!;
+  it("position due north of home gives bearing ~ 0deg", () => {
+    const pos = makePosition(47.01, 8.0);
+    const result = bearingDistanceFromHome(pos, home)!;
     expect(result.bearing_deg).toBeCloseTo(0, 0);
     expect(result.distance_m).toBeGreaterThan(1000);
   });
 });
 
-describe("itemBearingDistanceFromPrevious", () => {
-  it("returns null when previousItem is null", () => {
-    expect(itemBearingDistanceFromPrevious(makeItem(47.0, 8.0), null)).toBeNull();
+describe("bearingDistanceFromPrevious", () => {
+  it("returns null when previousPosition is null", () => {
+    expect(bearingDistanceFromPrevious(makePosition(47.0, 8.0), null)).toBeNull();
   });
 
-  it("item due east of previous gives bearing ≈ 90°", () => {
-    const prev = makeItem(47.0, 8.0);
-    const curr = makeItem(47.0, 8.01);
-    const result = itemBearingDistanceFromPrevious(curr, prev)!;
+  it("position due east of previous gives bearing ~ 90deg", () => {
+    const prev = makePosition(47.0, 8.0);
+    const curr = makePosition(47.0, 8.01);
+    const result = bearingDistanceFromPrevious(curr, prev)!;
     expect(result.bearing_deg).toBeCloseTo(90, 0);
     expect(result.distance_m).toBeGreaterThan(500);
   });
@@ -514,24 +442,6 @@ describe("isHomeValid", () => {
   });
 });
 
-describe("isItemCoordinateValid", () => {
-  it("returns true for valid item", () => {
-    expect(isItemCoordinateValid(makeItem(47.0, 8.0))).toBe(true);
-  });
-
-  it("returns false for NaN x", () => {
-    const item = makeItem(47.0, 8.0);
-    item.x = NaN;
-    expect(isItemCoordinateValid(item)).toBe(false);
-  });
-
-  it("returns false for Infinity y", () => {
-    const item = makeItem(47.0, 8.0);
-    item.y = Infinity;
-    expect(isItemCoordinateValid(item)).toBe(false);
-  });
-});
-
 // ---------------------------------------------------------------------------
 // Mission-scale integration: realistic waypoint distances
 // ---------------------------------------------------------------------------
@@ -541,49 +451,49 @@ describe("mission-scale integration", () => {
 
   it("waypoint 100m north of home: offset and bearing consistent", () => {
     const dLat = 100 / 111_320;
-    const item = makeItem(47.3769 + dLat, 8.5417);
-    const offset = itemOffsetFromHome(item, home)!;
+    const pos = makePosition(47.3769 + dLat, 8.5417);
+    const offset = offsetFromHome(pos, home)!;
     expect(offset.y_m).toBeCloseTo(100, 0);
     expect(offset.x_m).toBeCloseTo(0, 0);
 
-    const bd = itemBearingDistanceFromHome(item, home)!;
+    const bd = bearingDistanceFromHome(pos, home)!;
     expect(bd.bearing_deg).toBeCloseTo(0, 0);
     expect(bd.distance_m).toBeCloseTo(100, 0);
   });
 
   it("waypoint 200m east of home: offset and bearing consistent", () => {
     const dLon = 200 / metersPerDegLon(47.3769);
-    const item = makeItem(47.3769, 8.5417 + dLon);
-    const offset = itemOffsetFromHome(item, home)!;
+    const pos = makePosition(47.3769, 8.5417 + dLon);
+    const offset = offsetFromHome(pos, home)!;
     expect(offset.x_m).toBeCloseTo(200, 0);
     expect(offset.y_m).toBeCloseTo(0, 0);
 
-    const bd = itemBearingDistanceFromHome(item, home)!;
+    const bd = bearingDistanceFromHome(pos, home)!;
     expect(bd.bearing_deg).toBeCloseTo(90, 0);
     expect(bd.distance_m).toBeCloseTo(200, 0);
   });
 
   it("chain of 3 waypoints: previous-offset accumulates correctly", () => {
-    const wp1 = makeItem(47.3769, 8.5417);
+    const wp1 = makePosition(47.3769, 8.5417);
     const wp2Lat = 47.3769 + 100 / 111_320;
-    const wp2 = makeItem(wp2Lat, 8.5417);
+    const wp2 = makePosition(wp2Lat, 8.5417);
     const wp3Lat = wp2Lat + 100 / 111_320;
-    const wp3 = makeItem(wp3Lat, 8.5417);
+    const wp3 = makePosition(wp3Lat, 8.5417);
 
-    const offset12 = itemOffsetFromPrevious(wp2, wp1)!;
+    const offset12 = offsetFromPrevious(wp2, wp1)!;
     expect(offset12.y_m).toBeCloseTo(100, 0);
 
-    const offset23 = itemOffsetFromPrevious(wp3, wp2)!;
+    const offset23 = offsetFromPrevious(wp3, wp2)!;
     expect(offset23.y_m).toBeCloseTo(100, 0);
 
-    const totalFromHome = itemOffsetFromHome(wp3, home)!;
+    const totalFromHome = offsetFromHome(wp3, home)!;
     expect(totalFromHome.y_m).toBeCloseTo(200, 0);
   });
 
   it("bearing/distance round-trip at mission scale (1km)", () => {
     const { lat, lon } = latLonFromBearingDistance(home, 135, 1000);
-    const item = makeItem(lat, lon);
-    const bd = itemBearingDistanceFromHome(item, home)!;
+    const pos = makePosition(lat, lon);
+    const bd = bearingDistanceFromHome(pos, home)!;
     expect(bd.bearing_deg).toBeCloseTo(135, 0);
     expect(bd.distance_m).toBeCloseTo(1000, 0);
   });

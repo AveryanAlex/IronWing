@@ -1,0 +1,115 @@
+{
+  "envelope": {
+    "session_id": "session-43",
+    "source_kind": "playback",
+    "seek_epoch": 8,
+    "reset_revision": 2
+  },
+  "session": {
+    "available": true,
+    "complete": true,
+    "provenance": "playback",
+    "value": {
+      "status": "active",
+      "connection": {
+        "kind": "disconnected"
+      },
+      "vehicle_state": null,
+      "home_position": null
+    }
+  },
+  "telemetry": {
+    "available": true,
+    "complete": true,
+    "provenance": "playback",
+    "value": {
+      "flight": {
+        "altitude_m": null,
+        "speed_mps": null,
+        "climb_rate_mps": null,
+        "throttle_pct": null,
+        "airspeed_mps": null
+      },
+      "navigation": {
+        "latitude_deg": null,
+        "longitude_deg": null,
+        "heading_deg": null,
+        "wp_dist_m": null,
+        "nav_bearing_deg": null,
+        "target_bearing_deg": null,
+        "xtrack_error_m": null
+      },
+      "attitude": {
+        "roll_deg": null,
+        "pitch_deg": null,
+        "yaw_deg": null
+      },
+      "power": {
+        "battery_pct": null,
+        "battery_voltage_v": null,
+        "battery_current_a": null,
+        "battery_voltage_cells": null,
+        "energy_consumed_wh": null,
+        "battery_time_remaining_s": null
+      },
+      "gps": {
+        "fix_type": null,
+        "satellites": null,
+        "hdop": null
+      },
+      "terrain": {
+        "terrain_height_m": null,
+        "height_above_terrain_m": null
+      },
+      "radio": {
+        "rc_channels": null,
+        "rc_rssi": null,
+        "servo_outputs": null
+      }
+    }
+  },
+  "mission_state": null,
+  "param_store": null,
+  "param_progress": null,
+  "support": {
+    "available": false,
+    "complete": false,
+    "provenance": "playback",
+    "value": null
+  },
+  "sensor_health": {
+    "available": false,
+    "complete": false,
+    "provenance": "playback",
+    "value": null
+  },
+  "configuration_facts": {
+    "available": false,
+    "complete": false,
+    "provenance": "playback",
+    "value": null
+  },
+  "calibration": {
+    "available": false,
+    "complete": false,
+    "provenance": "playback",
+    "value": null
+  },
+  "guided": {
+    "available": false,
+    "complete": false,
+    "provenance": "playback",
+    "value": null
+  },
+  "status_text": {
+    "available": true,
+    "complete": true,
+    "provenance": "playback",
+    "value": {
+      "entries": []
+    }
+  },
+  "playback": {
+    "cursor_usec": null
+  }
+}

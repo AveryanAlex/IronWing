@@ -1,0 +1,17 @@
+{
+  "available": true,
+  "complete": true,
+  "provenance": "stream",
+  "value": {
+    "gyro": "healthy",
+    "accel": "not_present",
+    "mag": "not_present",
+    "baro": "not_present",
+    "gps": "not_present",
+    "airspeed": "not_present",
+    "rc_receiver": "not_present",
+    "battery": "not_present",
+    "terrain": "not_present",
+    "geofence": "not_present"
+  }
+}

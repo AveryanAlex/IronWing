@@ -1,174 +1,294 @@
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+use std::time::Instant;
 
 use mavkit::{
-    HomePosition, LinkState, MagCalProgress, MagCalReport, ParamProgress, ParamStore, SensorHealth,
-    StatusMessage, Telemetry, TransferProgress, Vehicle, VehicleState,
+    LinkState, SensorHealthSummary, Vehicle,
+    ardupilot::{MagCalProgress, MagCalReport},
 };
+use serde::Serialize;
+use tauri::Manager;
+
+use crate::AppState;
 use crate::e2e_emit::emit_event;
+use crate::guided::{emit_guided_snapshot, live_context_from_vehicle};
+use crate::ipc::calibration::CalibrationSources;
+use crate::ipc::{
+    DomainProvenance, DomainValue, SessionEnvelope, SessionSnapshot, SessionStatus,
+    configuration_facts_snapshot_from_param_store, push_status_text_entry,
+    sensor_health_snapshot_from_summary, session_connection_from_link_state,
+    status_text_entry_from_value, status_text_snapshot_from_entries,
+    support_snapshot_from_sensor_health, telemetry_snapshot_from_value,
+};
 
 pub(crate) static TELEMETRY_INTERVAL_MS: AtomicU64 = AtomicU64::new(200);
 
-pub(crate) fn spawn_event_bridges(app: &tauri::AppHandle, vehicle: &Vehicle) {
-    // Telemetry — throttled by TELEMETRY_INTERVAL_MS (re-read each loop for live rate changes)
+#[derive(Debug, Clone, Serialize)]
+struct ScopedEvent<T> {
+    envelope: SessionEnvelope,
+    value: T,
+}
+
+fn build_session_snapshot(
+    link_state: &LinkState,
+) -> DomainValue<SessionSnapshot> {
+    DomainValue::present(
+        SessionSnapshot {
+            status: SessionStatus::Active,
+            connection: session_connection_from_link_state(link_state),
+            vehicle_state: None,
+            home_position: None,
+        },
+        DomainProvenance::Stream,
+    )
+}
+
+async fn current_stream_envelope(handle: &tauri::AppHandle) -> Option<SessionEnvelope> {
+    let state: tauri::State<'_, AppState> = handle.state();
+    let mut runtime = state.session_runtime.lock().await;
+    runtime.current_stream_envelope(Instant::now())
+}
+
+async fn emit_scoped<T>(handle: &tauri::AppHandle, event: &str, value: T)
+where
+    T: Serialize + Clone + Send + 'static,
+{
+    if let Some(envelope) = current_stream_envelope(handle).await {
+        emit_event(handle, event, &ScopedEvent { envelope, value });
+    }
+}
+
+async fn reconcile_guided_runtime(handle: &tauri::AppHandle, vehicle: &Vehicle) {
+    let state: tauri::State<'_, AppState> = handle.state();
+    let maybe_snapshot = {
+        let mut guided_runtime = state.guided_runtime.lock().await;
+        guided_runtime.ensure_live_validity(live_context_from_vehicle(vehicle))
+    };
+
+    if let Some(snapshot) = maybe_snapshot {
+        emit_guided_snapshot(&state, handle, snapshot).await;
+    }
+}
+
+pub(crate) fn spawn_event_bridges(
+    app: &tauri::AppHandle,
+    vehicle: &Vehicle,
+) -> Vec<tokio::task::JoinHandle<()>> {
+    let mut tasks = Vec::new();
+    let calibration_sources = Arc::new(tokio::sync::Mutex::new(CalibrationSources::default()));
+
+    // Telemetry — throttled by TELEMETRY_INTERVAL_MS.
+    // The new mavkit API uses MetricHandle/ObservationHandle per metric, not a
+    // single monolith watch channel. We grab a snapshot of grouped telemetry
+    // by serializing individual metric handles on each tick.
     {
-        let mut rx = vehicle.telemetry();
+        let telemetry = vehicle.telemetry();
+        let position_global = telemetry.position().global();
+        let groundspeed = telemetry.position().groundspeed_mps();
+        let airspeed = telemetry.position().airspeed_mps();
+        let climb_rate = telemetry.position().climb_rate_mps();
+        let heading = telemetry.position().heading_deg();
+        let throttle = telemetry.position().throttle_pct();
+        let attitude = telemetry.attitude().euler();
+        let bat_remaining = telemetry.battery().remaining_pct();
+        let bat_voltage = telemetry.battery().voltage_v();
+        let bat_current = telemetry.battery().current_a();
+        let gps_quality = telemetry.gps().quality();
+        let nav_wp = telemetry.navigation().waypoint();
+        let armed_metric = telemetry.armed();
+
         let handle = app.clone();
-        tokio::spawn(async move {
+        tasks.push(tokio::spawn(async move {
             loop {
                 let ms = TELEMETRY_INTERVAL_MS.load(Ordering::Relaxed);
                 tokio::time::sleep(Duration::from_millis(ms)).await;
-                match rx.has_changed() {
-                    Ok(true) => {
-                        let t: Telemetry = rx.borrow_and_update().clone();
-                        emit_event(&handle, "telemetry://tick", &t);
-                    }
-                    Ok(false) => {}
-                    Err(_) => break,
-                }
+
+                // Build a JSON snapshot from individual metric handles
+                let snapshot = serde_json::json!({
+                    "position": position_global.latest().and_then(|s| serde_json::to_value(&s.value).ok()),
+                    "groundspeed_mps": groundspeed.latest().map(|s| s.value),
+                    "airspeed_mps": airspeed.latest().map(|s| s.value),
+                    "climb_rate_mps": climb_rate.latest().map(|s| s.value),
+                    "heading_deg": heading.latest().map(|s| s.value),
+                    "throttle_pct": throttle.latest().map(|s| s.value),
+                    "attitude": attitude.latest().and_then(|s| serde_json::to_value(&s.value).ok()),
+                    "battery_remaining_pct": bat_remaining.latest().map(|s| s.value),
+                    "battery_voltage_v": bat_voltage.latest().map(|s| s.value),
+                    "battery_current_a": bat_current.latest().map(|s| s.value),
+                    "gps": gps_quality.latest().and_then(|s| serde_json::to_value(&s.value).ok()),
+                    "navigation_waypoint": nav_wp.latest().and_then(|s| serde_json::to_value(&s.value).ok()),
+                    "armed": armed_metric.latest().map(|s| s.value),
+                });
+
+                let grouped = telemetry_snapshot_from_value(
+                    &snapshot,
+                    DomainProvenance::Stream,
+                );
+                emit_scoped(&handle, "telemetry://state", grouped).await;
             }
-        });
+        }));
     }
 
-    // VehicleState
+    // LinkState — drives session://state
     {
-        let mut rx = vehicle.state();
+        let link_observation = vehicle.link().state();
+        let mut link_sub = link_observation.subscribe();
         let handle = app.clone();
-        tokio::spawn(async move {
-            while rx.changed().await.is_ok() {
-                let s: VehicleState = rx.borrow().clone();
-                emit_event(&handle, "vehicle://state", &s);
+        let guided_vehicle = vehicle.clone();
+        tasks.push(tokio::spawn(async move {
+            while let Some(ls) = link_sub.recv().await {
+                let snapshot = build_session_snapshot(&ls);
+                emit_scoped(&handle, "session://state", snapshot).await;
+                reconcile_guided_runtime(&handle, &guided_vehicle).await;
             }
-        });
-    }
-
-    // HomePosition
-    {
-        let mut rx = vehicle.home_position();
-        let handle = app.clone();
-        tokio::spawn(async move {
-            while rx.changed().await.is_ok() {
-                let hp: Option<HomePosition> = rx.borrow().clone();
-                if let Some(hp) = hp {
-                    emit_event(&handle, "home://position", &hp);
-                }
-            }
-        });
+        }));
     }
 
     // MissionState
     {
-        let mut rx = vehicle.mission_state();
+        let mut mission_sub = vehicle.mission().subscribe();
         let handle = app.clone();
-        tokio::spawn(async move {
-            while rx.changed().await.is_ok() {
-                let ms = rx.borrow().clone();
-                emit_event(&handle, "mission://state", &ms);
+        tasks.push(tokio::spawn(async move {
+            while let Some(ms) = mission_sub.recv().await {
+                emit_scoped(&handle, "mission://state", ms).await;
             }
-        });
+        }));
     }
 
-    // LinkState
+    // ParamState (combines store and progress)
     {
-        let mut rx = vehicle.link_state();
+        let mut param_sub = vehicle.params().subscribe();
         let handle = app.clone();
-        tokio::spawn(async move {
-            while rx.changed().await.is_ok() {
-                let ls: LinkState = rx.borrow().clone();
-                emit_event(&handle, "link://state", &ls);
-            }
-        });
-    }
-
-    // MissionProgress
-    {
-        let mut rx = vehicle.mission_progress();
-        let handle = app.clone();
-        tokio::spawn(async move {
-            while rx.changed().await.is_ok() {
-                let mp: Option<TransferProgress> = rx.borrow().clone();
-                if let Some(mp) = mp {
-                    emit_event(&handle, "mission://progress", &mp);
+        tasks.push(tokio::spawn(async move {
+            while let Some(ps) = param_sub.recv().await {
+                if let Some(ref store) = ps.store {
+                    emit_scoped(&handle, "param://store", store.clone()).await;
+                    emit_scoped(
+                        &handle,
+                        "configuration_facts://state",
+                        configuration_facts_snapshot_from_param_store(
+                            store,
+                            DomainProvenance::Stream,
+                        ),
+                    )
+                    .await;
                 }
+                emit_scoped(&handle, "param://progress", ps.active_op).await;
             }
-        });
-    }
-
-    // ParamStore
-    {
-        let mut rx = vehicle.param_store();
-        let handle = app.clone();
-        tokio::spawn(async move {
-            while rx.changed().await.is_ok() {
-                let ps: ParamStore = rx.borrow().clone();
-                emit_event(&handle, "param://store", &ps);
-            }
-        });
-    }
-
-    // ParamProgress
-    {
-        let mut rx = vehicle.param_progress();
-        let handle = app.clone();
-        tokio::spawn(async move {
-            while rx.changed().await.is_ok() {
-                let pp: ParamProgress = rx.borrow().clone();
-                emit_event(&handle, "param://progress", &pp);
-            }
-        });
+        }));
     }
 
     // StatusText
     {
-        let mut rx = vehicle.statustext();
+        let status_text_handle = vehicle.telemetry().messages().status_text();
+        let mut status_sub = status_text_handle.subscribe();
         let handle = app.clone();
-        tokio::spawn(async move {
-            while rx.changed().await.is_ok() {
-                let msg: Option<StatusMessage> = rx.borrow().clone();
-                if let Some(msg) = msg {
-                    emit_event(&handle, "statustext://message", &msg);
+        tasks.push(tokio::spawn(async move {
+            while let Some(sample) = status_sub.recv().await {
+                let msg = sample.value;
+                // StatusTextEvent contains dialect::MavSeverity which doesn't
+                // implement Serialize. Build the JSON value the IPC layer expects
+                // by hand.
+                let msg_json = serde_json::json!({
+                    "text": msg.text,
+                    "severity": format!("{:?}", msg.severity),
+                    "id": msg.id,
+                    "source_system": msg.source_system,
+                    "source_component": msg.source_component,
+                });
+                if let Some(mut entry) = status_text_entry_from_value(&msg_json) {
+                    let state: tauri::State<'_, AppState> = handle.state();
+                    entry.sequence = state
+                        .next_status_text_sequence
+                        .fetch_add(1, Ordering::Relaxed);
+                    let mut history = state.status_text_history.lock().await;
+                    push_status_text_entry(&mut history, entry);
+                    emit_scoped(
+                        &handle,
+                        "status_text://state",
+                        status_text_snapshot_from_entries(
+                            history.clone(),
+                            DomainProvenance::Stream,
+                        ),
+                    )
+                    .await;
                 }
             }
-        });
+        }));
     }
 
     // SensorHealth
     {
-        let mut rx = vehicle.sensor_health();
+        let sensor_health_metric = vehicle.telemetry().sensor_health();
+        let mut sensor_sub = sensor_health_metric.subscribe();
         let handle = app.clone();
-        tokio::spawn(async move {
-            while rx.changed().await.is_ok() {
-                let val: SensorHealth = rx.borrow_and_update().clone();
-                emit_event(&handle, "sensor://health", &val);
+        tasks.push(tokio::spawn(async move {
+            while let Some(sample) = sensor_sub.recv().await {
+                let val: SensorHealthSummary = sample.value;
+                let json_val =
+                    serde_json::to_value(&val).unwrap_or(serde_json::Value::Null);
+                emit_scoped(
+                    &handle,
+                    "support://state",
+                    support_snapshot_from_sensor_health(&json_val, DomainProvenance::Stream),
+                )
+                .await;
+                emit_scoped(
+                    &handle,
+                    "sensor_health://state",
+                    sensor_health_snapshot_from_summary(&val, DomainProvenance::Stream),
+                )
+                .await;
             }
-        });
+        }));
     }
 
     // MagCalProgress
     {
-        let mut rx = vehicle.mag_cal_progress();
+        let mag_cal_progress_obs = vehicle.ardupilot().mag_cal_progress();
+        let mut mag_progress_sub = mag_cal_progress_obs.subscribe();
+        let calibration_sources = Arc::clone(&calibration_sources);
         let handle = app.clone();
-        tokio::spawn(async move {
-            while rx.changed().await.is_ok() {
-                let val: Option<MagCalProgress> = rx.borrow_and_update().clone();
+        tasks.push(tokio::spawn(async move {
+            while let Some(progress_vec) = mag_progress_sub.recv().await {
+                // Take the first compass entry for the existing single-compass UI
+                let val: Option<MagCalProgress> = progress_vec.first().cloned();
                 if let Some(ref val) = val {
                     emit_event(&handle, "compass://cal_progress", val);
                 }
+                let calibration = {
+                    let mut sources = calibration_sources.lock().await;
+                    sources.update_mag_progress(val);
+                    sources.snapshot(DomainProvenance::Stream)
+                };
+                emit_scoped(&handle, "calibration://state", calibration).await;
             }
-        });
+        }));
     }
 
     // MagCalReport
     {
-        let mut rx = vehicle.mag_cal_report();
+        let mag_cal_report_obs = vehicle.ardupilot().mag_cal_report();
+        let mut mag_report_sub = mag_cal_report_obs.subscribe();
+        let calibration_sources = Arc::clone(&calibration_sources);
         let handle = app.clone();
-        tokio::spawn(async move {
-            while rx.changed().await.is_ok() {
-                let val: Option<MagCalReport> = rx.borrow_and_update().clone();
+        tasks.push(tokio::spawn(async move {
+            while let Some(report_vec) = mag_report_sub.recv().await {
+                // Take the first compass entry for the existing single-compass UI
+                let val: Option<MagCalReport> = report_vec.first().cloned();
                 if let Some(ref val) = val {
                     emit_event(&handle, "compass://cal_report", val);
                 }
+                let calibration = {
+                    let mut sources = calibration_sources.lock().await;
+                    sources.update_mag_report(val);
+                    sources.snapshot(DomainProvenance::Stream)
+                };
+                emit_scoped(&handle, "calibration://state", calibration).await;
             }
-        });
+        }));
     }
+
+    tasks
 }

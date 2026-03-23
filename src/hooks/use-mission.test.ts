@@ -1,0 +1,771 @@
+// @vitest-environment jsdom
+import { renderHook, waitFor, act } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { MissionState, TransferProgress } from "../mission";
+import type { SessionEnvelope, SessionEvent } from "../session";
+
+const uploadMission = vi.fn();
+const downloadMission = vi.fn();
+const clearMission = vi.fn();
+const validateMission = vi.fn();
+const cancelMissionTransfer = vi.fn();
+const setCurrentMissionItem = vi.fn();
+const subscribeMissionProgress = vi.fn(async () => () => {});
+const subscribeMissionState = vi.fn(async () => () => {});
+const subscribeSessionState = vi.fn(async () => () => {});
+
+const uploadFence = vi.fn();
+const downloadFence = vi.fn();
+const clearFence = vi.fn();
+
+const uploadRally = vi.fn();
+const downloadRally = vi.fn();
+const clearRally = vi.fn();
+
+const toast = {
+  success: vi.fn(),
+  error: vi.fn(),
+  warning: vi.fn(),
+};
+
+let resolveMissionUpload: (() => void) | null = null;
+let resolveMissionDownload: ((value: { plan: { items: [] }; home: { latitude_deg: number; longitude_deg: number; altitude_m: number } | null }) => void) | null = null;
+
+let sessionListener: ((event: { envelope: SessionEnvelope }) => void) | null = null;
+let missionStateListener: ((event: SessionEvent<MissionState>) => void) | null = null;
+let missionProgressListener: ((event: SessionEvent<TransferProgress>) => void) | null = null;
+
+vi.mock("../mission", () => ({
+  cancelMissionTransfer,
+  clearMission,
+  downloadMission,
+  subscribeMissionState,
+  setCurrentMissionItem,
+  subscribeMissionProgress,
+  uploadMission,
+  validateMission,
+}));
+
+vi.mock("../fence", () => ({
+  clearFence,
+  downloadFence,
+  uploadFence,
+}));
+
+vi.mock("../rally", () => ({
+  clearRally,
+  downloadRally,
+  uploadRally,
+}));
+
+vi.mock("../session", () => ({
+  subscribeSessionState,
+}));
+
+vi.mock("sonner", () => ({ toast }));
+
+describe("useMission", () => {
+  beforeEach(() => {
+    sessionListener = null;
+    missionStateListener = null;
+    missionProgressListener = null;
+    for (const mock of [
+      uploadMission,
+      downloadMission,
+      clearMission,
+      validateMission,
+      cancelMissionTransfer,
+      setCurrentMissionItem,
+      subscribeMissionProgress,
+      subscribeMissionState,
+      subscribeSessionState,
+      uploadFence,
+      downloadFence,
+      clearFence,
+      uploadRally,
+      downloadRally,
+      clearRally,
+      toast.success,
+      toast.error,
+      toast.warning,
+    ]) {
+      mock.mockReset();
+    }
+
+    subscribeMissionProgress.mockImplementation((async (cb: (event: SessionEvent<TransferProgress>) => void) => {
+      missionProgressListener = cb;
+      return () => {
+        missionProgressListener = null;
+      };
+    }) as never);
+    subscribeMissionState.mockImplementation((async (cb: (event: SessionEvent<MissionState>) => void) => {
+      missionStateListener = cb;
+      return () => {
+        missionStateListener = null;
+      };
+    }) as never);
+    subscribeSessionState.mockImplementation((async (cb: (event: { envelope: SessionEnvelope }) => void) => {
+      sessionListener = cb;
+      return () => {
+        sessionListener = null;
+      };
+    }) as never);
+    resolveMissionUpload = null;
+    resolveMissionDownload = null;
+    uploadMission.mockImplementation(() => new Promise<void>((resolve) => {
+      resolveMissionUpload = resolve;
+    }));
+    downloadMission.mockImplementation(() => new Promise((resolve) => {
+      resolveMissionDownload = resolve;
+    }));
+    uploadFence.mockImplementation(() => new Promise(() => {}));
+    uploadRally.mockImplementation(() => new Promise(() => {}));
+  });
+
+  function createDeferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
+    });
+
+    return { promise, resolve, reject };
+  }
+
+  it("hydrates mission state from grouped bootstrap values before any stream event", async () => {
+    const { useMission } = await import("./use-mission");
+    const bootstrapEnvelope = {
+      session_id: "live-bootstrap",
+      source_kind: "live" as const,
+      seek_epoch: 3,
+      reset_revision: 2,
+    };
+    const bootstrapMissionState: MissionState = { plan: null, current_index: 4, sync: "current", active_op: null };
+
+    const { result } = renderHook(() => useMission(true, {} as never, null, bootstrapEnvelope, bootstrapMissionState));
+
+    await waitFor(() => {
+      expect(result.current.vehicle.missionState).toEqual(bootstrapMissionState);
+      expect(result.current.vehicle.activeSeq).toBe(4);
+    });
+  });
+
+  it("tracks operations per domain and rejects conflicting operations within the same domain", async () => {
+    const { useMission } = await import("./use-mission");
+    const { result } = renderHook(() => useMission(true, {} as never, null));
+
+    await waitFor(() => expect(sessionListener).not.toBeNull());
+
+    act(() => {
+      sessionListener?.({
+        envelope: { session_id: "live-1", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+      });
+      result.current.mission.addWaypoint();
+    });
+
+    act(() => {
+      void result.current.mission.upload();
+    });
+
+    await waitFor(() => expect(uploadMission).toHaveBeenCalledTimes(1));
+    expect(result.current.mission.operation.active).toBe(true);
+
+    act(() => {
+      void result.current.mission.upload();
+    });
+
+    expect(uploadMission).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith("Mission operation already in progress");
+
+    act(() => {
+      result.current.selectTab("fence");
+      result.current.fence.addWaypoint();
+      void result.current.fence.upload();
+    });
+
+    await waitFor(() => expect(uploadFence).toHaveBeenCalledTimes(1));
+    expect(result.current.fence.operation.active).toBe(true);
+    expect(result.current.rally.operation.active).toBe(false);
+  });
+
+  it("cancels pending domain operations and keeps dirty drafts recoverable on session changes", async () => {
+    const { useMission } = await import("./use-mission");
+    const { result } = renderHook(() => useMission(true, {} as never, null));
+
+    await waitFor(() => expect(sessionListener).not.toBeNull());
+
+    act(() => {
+      sessionListener?.({
+        envelope: { session_id: "live-1", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+      });
+      result.current.mission.addWaypoint();
+      void result.current.mission.upload();
+    });
+
+    await waitFor(() => expect(uploadMission).toHaveBeenCalledTimes(1));
+    expect(result.current.mission.draftItems).toHaveLength(1);
+    expect(result.current.mission.operation.active).toBe(true);
+
+    act(() => {
+      sessionListener?.({
+        envelope: { session_id: "live-2", source_kind: "live", seek_epoch: 0, reset_revision: 1 },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.mission.operation.active).toBe(false);
+      expect(result.current.mission.draftItems).toEqual([]);
+    });
+
+    act(() => {
+      void result.current.mission.upload();
+    });
+
+    await waitFor(() => expect(uploadMission).toHaveBeenCalledTimes(2));
+  });
+
+  it("ignores stale async results after a scope change", async () => {
+    const { useMission } = await import("./use-mission");
+    const { result } = renderHook(() => useMission(true, {} as never, null));
+
+    await waitFor(() => expect(sessionListener).not.toBeNull());
+
+    act(() => {
+      sessionListener?.({
+        envelope: { session_id: "live-1", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+      });
+      result.current.mission.addWaypoint();
+      void result.current.mission.download();
+    });
+
+    await waitFor(() => {
+      expect(downloadMission).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      sessionListener?.({
+        envelope: { session_id: "live-2", source_kind: "live", seek_epoch: 0, reset_revision: 1 },
+      });
+    });
+
+    await waitFor(() => expect(result.current.mission.draftItems).toEqual([]));
+
+    await act(async () => {
+      resolveMissionDownload?.({
+        plan: { items: [] },
+        home: { latitude_deg: 10, longitude_deg: 20, altitude_m: 30 },
+      });
+      resolveMissionUpload?.();
+      await Promise.resolve();
+    });
+
+    expect(result.current.mission.roundtripStatus).toBe("");
+    expect(result.current.mission.homePosition).toBeNull();
+    expect(result.current.mission.draftItems).toEqual([]);
+  });
+
+  it("ignores stale mission state envelopes after a session switch", async () => {
+    const { useMission } = await import("./use-mission");
+    const { result } = renderHook(() => useMission(true, {} as never, null));
+
+    const firstEnvelope = {
+      session_id: "live-mission-1",
+      source_kind: "live" as const,
+      seek_epoch: 0,
+      reset_revision: 0,
+    };
+    const secondEnvelope = {
+      session_id: "live-mission-2",
+      source_kind: "live" as const,
+      seek_epoch: 1,
+      reset_revision: 1,
+    };
+
+    await waitFor(() => {
+      expect(sessionListener).not.toBeNull();
+      expect(missionStateListener).not.toBeNull();
+    });
+
+    act(() => {
+      sessionListener?.({ envelope: firstEnvelope });
+      missionStateListener?.({
+        envelope: firstEnvelope,
+        value: { plan: null, current_index: 1, sync: "current", active_op: null },
+      });
+    });
+
+    await waitFor(() => expect(result.current.vehicle.activeSeq).toBe(1));
+
+    act(() => {
+      sessionListener?.({ envelope: secondEnvelope });
+      missionStateListener?.({
+        envelope: secondEnvelope,
+        value: { plan: null, current_index: 2, sync: "current", active_op: null },
+      });
+    });
+
+    await waitFor(() => expect(result.current.vehicle.activeSeq).toBe(2));
+
+    act(() => {
+      missionStateListener?.({
+        envelope: firstEnvelope,
+        value: { plan: null, current_index: 9, sync: "current", active_op: null },
+      });
+    });
+
+    expect(result.current.vehicle.missionState).toEqual({ plan: null, current_index: 2, sync: "current", active_op: null });
+    expect(result.current.vehicle.activeSeq).toBe(2);
+  });
+
+  it("only applies mission progress when the scoped envelope matches the current session", async () => {
+    const { useMission } = await import("./use-mission");
+    const { result } = renderHook(() => useMission(true, {} as never, null));
+
+    const firstEnvelope = {
+      session_id: "live-progress-1",
+      source_kind: "live" as const,
+      seek_epoch: 0,
+      reset_revision: 0,
+    };
+    const secondEnvelope = {
+      session_id: "live-progress-2",
+      source_kind: "live" as const,
+      seek_epoch: 1,
+      reset_revision: 1,
+    };
+
+    await waitFor(() => {
+      expect(sessionListener).not.toBeNull();
+      expect(missionProgressListener).not.toBeNull();
+    });
+
+    act(() => {
+      sessionListener?.({ envelope: firstEnvelope });
+      missionProgressListener?.({
+        envelope: firstEnvelope,
+        value: {
+          direction: "upload",
+          mission_type: "mission",
+          phase: "transfer_items",
+          completed_items: 1,
+          total_items: 4,
+          retries_used: 0,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.mission.transferUi.active).toBe(true);
+      expect(result.current.mission.transferUi.progressPct).toBe(25);
+    });
+
+    act(() => {
+      sessionListener?.({ envelope: secondEnvelope });
+    });
+
+    await waitFor(() => {
+      expect(result.current.mission.transferUi.active).toBe(false);
+      expect(result.current.mission.transferUi.hasProgress).toBe(false);
+      expect(result.current.mission.transferUi.progressPct).toBe(0);
+    });
+
+    act(() => {
+      missionProgressListener?.({
+        envelope: firstEnvelope,
+        value: {
+          direction: "upload",
+          mission_type: "mission",
+          phase: "transfer_items",
+          completed_items: 3,
+          total_items: 4,
+          retries_used: 0,
+        },
+      });
+    });
+
+    expect(result.current.mission.transferUi.active).toBe(false);
+    expect(result.current.mission.transferUi.hasProgress).toBe(false);
+    expect(result.current.mission.transferUi.progressPct).toBe(0);
+
+    act(() => {
+      missionProgressListener?.({
+        envelope: secondEnvelope,
+        value: {
+          direction: "download",
+          mission_type: "mission",
+          phase: "transfer_items",
+          completed_items: 2,
+          total_items: 5,
+          retries_used: 1,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.mission.transferUi.active).toBe(true);
+      expect(result.current.mission.transferUi.direction).toBe("download");
+      expect(result.current.mission.transferUi.progressPct).toBe(40);
+      expect(result.current.mission.transferUi.completedItems).toBe(2);
+      expect(result.current.mission.transferUi.totalItems).toBe(5);
+    });
+  });
+
+  it("ignores stale mission events across disconnect and disconnected rebootstrap", async () => {
+    const { useMission } = await import("./use-mission");
+    const firstEnvelope: SessionEnvelope = {
+      session_id: "live-scope-a",
+      source_kind: "live",
+      seek_epoch: 0,
+      reset_revision: 0,
+    };
+    const secondEnvelope: SessionEnvelope = {
+      session_id: "live-scope-b",
+      source_kind: "live",
+      seek_epoch: 1,
+      reset_revision: 1,
+    };
+    const bootstrapMissionState: MissionState = { plan: null, current_index: 7, sync: "current", active_op: null };
+
+    const { result, rerender } = renderHook(
+      ({ connected, bootstrapScope, bootstrapState }) => useMission(connected, {} as never, null, bootstrapScope, bootstrapState),
+      {
+        initialProps: {
+          connected: true,
+          bootstrapScope: null as SessionEnvelope | null,
+          bootstrapState: null as MissionState | null,
+        },
+      },
+    );
+
+    await waitFor(() => {
+      expect(sessionListener).not.toBeNull();
+      expect(missionStateListener).not.toBeNull();
+      expect(missionProgressListener).not.toBeNull();
+    });
+
+    act(() => {
+      sessionListener?.({ envelope: firstEnvelope });
+      missionStateListener?.({ envelope: firstEnvelope, value: { plan: null, current_index: 2, sync: "current", active_op: null } });
+      missionProgressListener?.({
+        envelope: firstEnvelope,
+        value: {
+          direction: "upload",
+          mission_type: "mission",
+          phase: "transfer_items",
+          completed_items: 2,
+          total_items: 5,
+          retries_used: 0,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.vehicle.missionState).toEqual({ plan: null, current_index: 2, sync: "current", active_op: null });
+      expect(result.current.mission.transferUi.progressPct).toBe(40);
+    });
+
+    rerender({ connected: false, bootstrapScope: null, bootstrapState: null });
+
+    await waitFor(() => {
+      expect(result.current.vehicle.missionState).toBeNull();
+      expect(result.current.mission.transferUi.active).toBe(false);
+      expect(result.current.mission.transferUi.progressPct).toBe(0);
+    });
+
+    act(() => {
+      missionStateListener?.({ envelope: firstEnvelope, value: { plan: null, current_index: 9, sync: "current", active_op: null } });
+      missionProgressListener?.({
+        envelope: firstEnvelope,
+        value: {
+          direction: "upload",
+          mission_type: "mission",
+          phase: "transfer_items",
+          completed_items: 4,
+          total_items: 5,
+          retries_used: 0,
+        },
+      });
+    });
+
+    expect(result.current.vehicle.missionState).toBeNull();
+    expect(result.current.mission.transferUi.active).toBe(false);
+    expect(result.current.mission.transferUi.progressPct).toBe(0);
+
+    rerender({ connected: false, bootstrapScope: secondEnvelope, bootstrapState: bootstrapMissionState });
+
+    await waitFor(() => expect(result.current.vehicle.missionState).toEqual(bootstrapMissionState));
+
+    act(() => {
+      missionStateListener?.({ envelope: firstEnvelope, value: { plan: null, current_index: 11, sync: "current", active_op: null } });
+      missionProgressListener?.({
+        envelope: firstEnvelope,
+        value: {
+          direction: "download",
+          mission_type: "mission",
+          phase: "transfer_items",
+          completed_items: 5,
+          total_items: 5,
+          retries_used: 0,
+        },
+      });
+    });
+
+    expect(result.current.vehicle.missionState).toEqual(bootstrapMissionState);
+    expect(result.current.mission.transferUi.active).toBe(false);
+    expect(result.current.mission.transferUi.progressPct).toBe(0);
+
+    act(() => {
+      missionStateListener?.({ envelope: secondEnvelope, value: { plan: null, current_index: 3, sync: "current", active_op: null } });
+      missionProgressListener?.({
+        envelope: secondEnvelope,
+        value: {
+          direction: "download",
+          mission_type: "mission",
+          phase: "transfer_items",
+          completed_items: 3,
+          total_items: 6,
+          retries_used: 1,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.vehicle.missionState).toEqual({ plan: null, current_index: 3, sync: "current", active_op: null });
+      expect(result.current.mission.transferUi.direction).toBe("download");
+      expect(result.current.mission.transferUi.progressPct).toBe(50);
+    });
+  });
+
+  it("cleans up late mission subscriptions that resolve after unmount", async () => {
+    const { useMission } = await import("./use-mission");
+    const progressDeferred = createDeferred<() => void>();
+    const stateDeferred = createDeferred<() => void>();
+    const sessionDeferred = createDeferred<() => void>();
+    const stopProgress = vi.fn();
+    const stopState = vi.fn();
+    const stopSession = vi.fn();
+
+    subscribeMissionProgress.mockImplementationOnce((async () => progressDeferred.promise) as never);
+    subscribeMissionState.mockImplementationOnce((async () => stateDeferred.promise) as never);
+    subscribeSessionState.mockImplementationOnce((async () => sessionDeferred.promise) as never);
+
+    const { unmount } = renderHook(() => useMission(true, {} as never, null));
+
+    unmount();
+
+    await act(async () => {
+      progressDeferred.resolve(stopProgress);
+      stateDeferred.resolve(stopState);
+      sessionDeferred.resolve(stopSession);
+      await Promise.resolve();
+    });
+
+    expect(stopProgress).toHaveBeenCalledTimes(1);
+    expect(stopState).toHaveBeenCalledTimes(1);
+    expect(stopSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("handles rejected mission subscription setup without unhandled rejections", async () => {
+    const { useMission } = await import("./use-mission");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    subscribeMissionState.mockRejectedValueOnce(new Error("mission state subscribe failed"));
+
+    renderHook(() => useMission(true, {} as never, null));
+
+    await waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledWith(
+        "Mission subscription setup failed",
+        expect.objectContaining({ message: "mission state subscribe failed" }),
+      );
+    });
+
+    warnSpy.mockRestore();
+  });
+
+  it("automatically cancels active transfers on scope invalidation and disconnect", async () => {
+    const { useMission } = await import("./use-mission");
+    const { result, rerender } = renderHook(({ connected }) => useMission(connected, {} as never, null), {
+      initialProps: { connected: true },
+    });
+
+    await waitFor(() => expect(sessionListener).not.toBeNull());
+
+    act(() => {
+      sessionListener?.({
+        envelope: { session_id: "live-cancel", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+      });
+      result.current.mission.addWaypoint();
+      void result.current.mission.upload();
+    });
+
+    await waitFor(() => expect(uploadMission).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      sessionListener?.({
+        envelope: { session_id: "live-cancel-2", source_kind: "live", seek_epoch: 0, reset_revision: 1 },
+      });
+    });
+
+    await waitFor(() => expect(cancelMissionTransfer).toHaveBeenCalledTimes(1));
+
+    rerender({ connected: false });
+
+    await waitFor(() => expect(cancelMissionTransfer).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      resolveMissionUpload?.();
+      await Promise.resolve();
+    });
+
+    expect(result.current.mission.draftItems).toEqual([]);
+  });
+
+  it("treats playback sessions as read-only for mutating actions", async () => {
+    const { useMission } = await import("./use-mission");
+    const { result } = renderHook(() => useMission(true, {} as never, null));
+
+    await waitFor(() => expect(sessionListener).not.toBeNull());
+
+    act(() => {
+      sessionListener?.({
+        envelope: { session_id: "playback-1", source_kind: "playback", seek_epoch: 1, reset_revision: 1 },
+      });
+      result.current.mission.addWaypoint();
+      void result.current.mission.upload();
+      void result.current.mission.clear();
+    });
+
+    expect(uploadMission).not.toHaveBeenCalled();
+    expect(clearMission).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("Mission is read-only in playback");
+  });
+
+  it("blocks local draft and home mutations in playback", async () => {
+    const { useMission } = await import("./use-mission");
+    const { result } = renderHook(() => useMission(true, { latitude_deg: 1, longitude_deg: 2, altitude_m: 3 } as never, null));
+
+    await waitFor(() => expect(sessionListener).not.toBeNull());
+
+    const typedItem = {
+      command: { Nav: { Waypoint: { position: { RelHome: { latitude_deg: 1, longitude_deg: 2, relative_alt_m: 3 } }, hold_time_s: 0, acceptance_radius_m: 1, pass_radius_m: 0, yaw_deg: 0 } } },
+      current: true,
+      autocontinue: true,
+    };
+
+    act(() => {
+      sessionListener?.({
+        envelope: { session_id: "playback-2", source_kind: "playback", seek_epoch: 2, reset_revision: 2 },
+      });
+      result.current.mission.addWaypoint();
+      result.current.mission.addWaypointAt(10, 20);
+      result.current.mission.insertBefore(0);
+      result.current.mission.insertAfter(0);
+      result.current.mission.replaceAll([typedItem]);
+      result.current.mission.setHomeLatInput("47.1");
+      result.current.mission.setHomeLonInput("8.1");
+      result.current.mission.setHomeAltInput("500");
+      result.current.mission.setArbitraryHome();
+      result.current.mission.updateHomeFromVehicle();
+      result.current.mission.setHomeFromMap(40, 50);
+    });
+
+    expect(result.current.mission.draftItems).toEqual([]);
+    expect(result.current.mission.homePosition).toBeNull();
+    expect(result.current.mission.isDirty).toBe(false);
+    expect(toast.error).toHaveBeenCalledWith("Mission is read-only in playback");
+  });
+
+  it("clears prior mission home when mission download returns home null", async () => {
+    const { useMission } = await import("./use-mission");
+    const { result } = renderHook(() => useMission(true, {} as never, null));
+
+    await waitFor(() => expect(sessionListener).not.toBeNull());
+
+    act(() => {
+      sessionListener?.({
+        envelope: { session_id: "live-home-clear", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+      });
+    });
+
+    downloadMission.mockResolvedValueOnce({
+      plan: { items: [] },
+      home: { latitude_deg: 47.1, longitude_deg: 8.1, altitude_m: 500 },
+    });
+
+    await act(async () => {
+      await result.current.mission.download();
+    });
+
+    expect(result.current.mission.homePosition).toEqual({ latitude_deg: 47.1, longitude_deg: 8.1, altitude_m: 500 });
+
+    downloadMission.mockResolvedValueOnce({
+      plan: { items: [] },
+      home: null,
+    });
+
+    await act(async () => {
+      await result.current.mission.download();
+    });
+
+    expect(result.current.mission.homePosition).toBeNull();
+  });
+
+  it("preserves separate domain state when switching tabs", async () => {
+    const { useMission } = await import("./use-mission");
+    const { result } = renderHook(() => useMission(true, {} as never, null));
+
+    await waitFor(() => expect(sessionListener).not.toBeNull());
+
+    act(() => {
+      sessionListener?.({
+        envelope: { session_id: "live-tabs", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+      });
+      result.current.mission.addWaypoint();
+    });
+
+    act(() => {
+      result.current.selectTab("fence");
+      result.current.fence.addWaypoint();
+    });
+
+    act(() => {
+      result.current.selectTab("rally");
+      result.current.rally.addWaypoint();
+    });
+
+    act(() => {
+      result.current.selectTab("mission");
+    });
+
+    expect(result.current.current).toBe(result.current.mission);
+    expect(result.current.current.draftItems).toHaveLength(1);
+    expect(result.current.mission.draftItems).toHaveLength(1);
+    expect(result.current.fence.draftItems).toHaveLength(1);
+    expect(result.current.rally.draftItems).toHaveLength(1);
+    expect(result.current.selectedTab).toBe("mission");
+  });
+
+  it("restricts setCurrent to the mission domain", async () => {
+    const { useMission } = await import("./use-mission");
+    const { result } = renderHook(() => useMission(true, {} as never, null));
+
+    await waitFor(() => expect(sessionListener).not.toBeNull());
+
+    act(() => {
+      sessionListener?.({
+        envelope: { session_id: "live-3", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+      });
+      result.current.fence.addWaypoint();
+    });
+
+    expect("setCurrent" in result.current.fence).toBe(false);
+
+    await act(async () => {
+      await result.current.mission.setCurrent(0);
+    });
+
+    expect(setCurrentMissionItem).toHaveBeenCalledWith(0);
+  });
+});

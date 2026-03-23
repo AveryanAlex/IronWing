@@ -12,19 +12,20 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { LogsPanel } from "./components/LogsPanel";
 import { SetupSectionPanel } from "./components/setup/SetupSectionPanel";
 import { InsetPanelFrame } from "./components/InsetPanelFrame";
-import { useVehicle } from "./hooks/use-vehicle";
+import { useSession } from "./hooks/use-session";
 import { useMission } from "./hooks/use-mission";
 import { useSettings } from "./hooks/use-settings";
 import { useParams } from "./hooks/use-params";
+import { useSetup } from "./hooks/use-setup";
 import { useLogs } from "./hooks/use-logs";
 import { useRecording } from "./hooks/use-recording";
 import { useFirmware } from "./hooks/use-firmware";
 import { usePlayback } from "./hooks/use-playback";
 import { useBreakpoint } from "./hooks/use-breakpoint";
 import { useDeviceLocation } from "./hooks/use-device-location";
+import { useGuided } from "./hooks/use-guided";
 import { setTelemetryRate } from "./telemetry";
-import { subscribeSensorHealth, type SensorHealth } from "./sensor-health";
-import { interpolateLogTelemetry, type FlightPathPoint, type TelemetrySnapshot } from "./playback";
+import { type FlightPathPoint } from "./playback";
 import type { ActiveTab } from "./types";
 import "./app.css";
 
@@ -64,101 +65,75 @@ function checkGpuRenderer() {
   if (loseExt) loseExt.loseContext();
 }
 
-/** Interpolate position along the flight path at the given timestamp. */
-function interpolatePosition(
-  path: FlightPathPoint[],
-  timeUsec: number,
-): { latitude_deg: number; longitude_deg: number; heading_deg: number } | null {
-  if (path.length === 0) return null;
-  if (timeUsec <= path[0].timestamp_usec) {
-    return { latitude_deg: path[0].lat, longitude_deg: path[0].lon, heading_deg: path[0].heading };
-  }
-  if (timeUsec >= path[path.length - 1].timestamp_usec) {
-    const last = path[path.length - 1];
-    return { latitude_deg: last.lat, longitude_deg: last.lon, heading_deg: last.heading };
-  }
-
-  // Binary search for bracketing points
-  let lo = 0;
-  let hi = path.length - 1;
-  while (lo < hi - 1) {
-    const mid = (lo + hi) >> 1;
-    if (path[mid].timestamp_usec <= timeUsec) lo = mid;
-    else hi = mid;
-  }
-
-  const a = path[lo];
-  const b = path[hi];
-  const t = (timeUsec - a.timestamp_usec) / (b.timestamp_usec - a.timestamp_usec);
-  return {
-    latitude_deg: a.lat + (b.lat - a.lat) * t,
-    longitude_deg: a.lon + (b.lon - a.lon) * t,
-    heading_deg: a.heading + (b.heading - a.heading) * t,
-  };
-}
-
 export default function App() {
-  const vehicle = useVehicle();
-  const mission = useMission(vehicle.connected, vehicle.telemetry, vehicle.homePosition);
-  const params = useParams(vehicle.connected, vehicle.vehicleState?.vehicle_type);
+  const vehicle = useSession();
+  const mission = useMission(
+    vehicle.connected,
+    vehicle.telemetry,
+    vehicle.homePosition,
+    vehicle.activeEnvelope,
+    vehicle.bootstrapMissionState,
+  );
+  const params = useParams(
+    vehicle.connected,
+    vehicle.vehicleState?.vehicle_type,
+    vehicle.activeEnvelope,
+    vehicle.bootstrapParamStore,
+    vehicle.bootstrapParamProgress,
+  );
+  const setup = useSetup(params, vehicle.vehicleState, {
+    support: vehicle.support,
+    sensorHealth: vehicle.sensorHealth,
+    configurationFacts: vehicle.configurationFacts,
+    calibration: vehicle.calibration,
+  }, vehicle.connected);
   const logs = useLogs();
   const recording = useRecording(vehicle.connected);
   const firmware = useFirmware();
   const playback = usePlayback();
+  const replayActive = playback.activeEnvelope?.source_kind === "playback" || playback.pendingEnvelope?.source_kind === "playback";
+  const guided = useGuided({
+    connected: vehicle.connected,
+    sourceKind: replayActive ? "playback" : "live",
+    telemetryAltitudeM: vehicle.telemetry.altitude_m,
+    guidedDomain: vehicle.guided,
+  });
   const { settings, updateSettings } = useSettings();
   const [activeTab, setActiveTab] = useState<ActiveTab>("map");
   const { isMobile } = useBreakpoint();
   const deviceLocation = useDeviceLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [flightPath, setFlightPath] = useState<FlightPathPoint[] | null>(null);
-  const [telemetryTrack, setTelemetryTrack] = useState<TelemetrySnapshot[] | null>(null);
-  const [sensorHealth, setSensorHealth] = useState<SensorHealth | null>(null);
 
   useEffect(() => { checkGpuRenderer() }, []);
 
   useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    subscribeSensorHealth(setSensorHealth).then((fn) => { unlisten = fn; });
-    return () => { unlisten?.(); };
-  }, []);
-
-  useEffect(() => {
-    setTelemetryRate(settings.telemetryRateHz).catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const replayActive = playback.isPlaying || playback.currentTimeUsec > 0;
+    setTelemetryRate(settings.telemetryRateHz).catch((error) => {
+      console.warn("Failed to apply telemetry rate", error);
+    });
+  }, [settings.telemetryRateHz]);
 
   const flightPathCoords = useMemo<[number, number][] | undefined>(() => {
     if (!flightPath || flightPath.length < 2) return undefined;
     return flightPath.map((p) => [p.lon, p.lat]);
   }, [flightPath]);
 
-  const replayPosition = useMemo(() => {
-    if (!flightPath || !replayActive) return null;
-    return interpolatePosition(flightPath, playback.currentTimeUsec);
-  }, [flightPath, replayActive, playback.currentTimeUsec]);
-
-  const replayTelemetry = useMemo(() => {
-    if (!telemetryTrack || !replayActive) return null;
-    return interpolateLogTelemetry(telemetryTrack, playback.currentTimeUsec);
-  }, [telemetryTrack, replayActive, playback.currentTimeUsec]);
-
   const effectiveVehicle = useMemo(() => {
-    if (!replayActive || !replayTelemetry) return vehicle;
+    if (!replayActive) return vehicle;
     return {
       ...vehicle,
-      telemetry: replayTelemetry.telemetry,
-      vehicleState: replayTelemetry.vehicleState ?? vehicle.vehicleState,
-      vehiclePosition: replayPosition ?? vehicle.vehiclePosition,
+      sessionDomain: playback.sessionDomain,
+      telemetryDomain: playback.telemetryDomain,
+      support: playback.support,
+      statusText: playback.statusText,
+      telemetry: playback.telemetry,
+      vehicleState: playback.vehicleState,
+      vehiclePosition: playback.vehiclePosition,
     };
-  }, [vehicle, replayActive, replayTelemetry, replayPosition]);
+  }, [playback, replayActive, vehicle]);
 
   const handleFlightPath = useCallback((path: FlightPathPoint[] | null) => {
     setFlightPath(path);
-  }, []);
-
-  const handleTelemetryTrack = useCallback((track: TelemetrySnapshot[] | null) => {
-    setTelemetryTrack(track);
   }, []);
 
   if (!vehicle.hydrated) return <div className="h-screen bg-bg-primary" />;
@@ -175,6 +150,7 @@ export default function App() {
           {/* Desktop: static sidebar | Mobile: drawer overlay */}
           <Sidebar
             vehicle={effectiveVehicle}
+            guided={guided}
             isMobile={isMobile}
             open={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
@@ -187,27 +163,28 @@ export default function App() {
             style={{ paddingTop: isMobile ? "calc(var(--safe-area-top, 0px) + 0.25rem)" : undefined }}
           >
             {activeTab === "setup" ? (
-              <SetupSectionPanel
-                connected={vehicle.connected}
-                vehicleState={vehicle.vehicleState}
-                telemetry={vehicle.telemetry}
-                linkState={vehicle.linkState}
-                params={params}
-                sensorHealth={sensorHealth}
-                homePosition={vehicle.homePosition}
+                <SetupSectionPanel
+                  connected={vehicle.connected}
+                  vehicleState={vehicle.vehicleState}
+                  telemetry={vehicle.telemetry}
+                  linkState={vehicle.linkState}
+                  setup={setup}
+                  support={vehicle.support}
+                  sensorHealth={vehicle.sensorHealth.value}
+                  homePosition={vehicle.homePosition}
                 availableModes={vehicle.availableModes}
                 firmware={firmware}
               />
             ) : (
               <InsetPanelFrame>
                 {activeTab === "map" ? (
-                  <MapPanel
-                    vehicle={effectiveVehicle}
-                    mission={mission}
-                    deviceLocation={deviceLocation}
-                    flightPath={flightPathCoords}
-                    replayPosition={replayPosition}
-                  />
+                    <MapPanel
+                      vehicle={effectiveVehicle}
+                      guided={guided}
+                      mission={mission}
+                      deviceLocation={deviceLocation}
+                      flightPath={flightPathCoords}
+                    />
                 ) : activeTab === "telemetry" ? (
                   <TelemetryPanel vehicle={effectiveVehicle} mission={mission} />
                 ) : activeTab === "hud" ? (
@@ -215,14 +192,13 @@ export default function App() {
                 ) : activeTab === "mission" ? (
                   <MissionPanel vehicle={vehicle} mission={mission} deviceLocation={deviceLocation} isMobile={isMobile} />
                 ) : activeTab === "logs" ? (
-                  <LogsPanel
-                    logs={logs}
-                    recording={recording}
-                    connected={vehicle.connected}
-                    playback={playback}
-                    onFlightPath={handleFlightPath}
-                    onTelemetryTrack={handleTelemetryTrack}
-                  />
+                    <LogsPanel
+                      logs={logs}
+                      recording={recording}
+                      connected={vehicle.connected}
+                      playback={playback}
+                      onFlightPath={handleFlightPath}
+                    />
                 ) : (
                   <SettingsPanel settings={settings} updateSettings={updateSettings} />
                 )}

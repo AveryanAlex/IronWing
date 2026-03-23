@@ -41,7 +41,11 @@ test.describe("Negative path: wrong-port connect then cancel", () => {
     await expect(udpBind).toBeEnabled();
 
     const invocations = await mockPlatform.getInvocations();
-    expect(invocations.map((entry) => entry.cmd)).toEqual(["connect_link", "disconnect_link"]);
+    expect(
+      invocations
+        .map((entry) => entry.cmd)
+        .filter((cmd) => cmd === "connect_link" || cmd === "disconnect_link"),
+    ).toEqual(["connect_link", "disconnect_link"]);
 
     expect(await mockPlatform.rejectDeferred("connect_link", "cancelled")).toBe(true);
   });

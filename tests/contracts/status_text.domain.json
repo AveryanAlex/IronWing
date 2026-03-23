@@ -1,0 +1,21 @@
+{
+  "available": true,
+  "complete": true,
+  "provenance": "stream",
+  "value": {
+    "entries": [
+      {
+        "sequence": 1,
+        "text": "Boot complete",
+        "severity": "info",
+        "timestamp_usec": 1000
+      },
+      {
+        "sequence": 2,
+        "text": "GPS ready",
+        "severity": "notice",
+        "timestamp_usec": 2000
+      }
+    ]
+  }
+}

@@ -33,15 +33,14 @@ import {
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useBreakpoint } from "../../hooks/use-breakpoint";
-import {
-  useSetupSections,
-  type SectionStatus,
-} from "../../hooks/use-setup-sections";
-import type { useParams } from "../../hooks/use-params";
+import type { UseSetupReturn } from "../../hooks/use-setup";
+import { type SectionStatus, type SetupSectionId } from "../../hooks/use-setup-sections";
+import type { ParamsState } from "../../hooks/use-params";
 import { SectionStatusIcon } from "./shared/SectionStatusIcon";
 import { formatStagedValue, displayParamValue } from "./shared/param-format-helpers";
 import type { VehicleState, Telemetry, LinkState, HomePosition, FlightModeEntry } from "../../telemetry";
 import type { SensorHealth } from "../../sensor-health";
+import type { SupportDomain } from "../../support";
 
 // Section components
 import { OverviewSection } from "./sections/OverviewSection";
@@ -63,32 +62,7 @@ import { PidTuningSection } from "./sections/PidTuningSection";
 import { PeripheralsSection } from "./sections/PeripheralsSection";
 import { FullParametersSection } from "./sections/FullParametersSection";
 import { FirmwareSection } from "./sections/FirmwareSection";
-import type { useFirmware } from "../../hooks/use-firmware";
-
-// ---------------------------------------------------------------------------
-// Section IDs
-// ---------------------------------------------------------------------------
-
-export type SetupSectionId =
-  | "overview"
-  | "frame_orientation"
-  | "calibration"
-  | "rc_receiver"
-  | "gps"
-  | "battery_monitor"
-  | "motors_esc"
-  | "servo_outputs"
-  | "serial_ports"
-  | "flight_modes"
-  | "failsafe"
-  | "rtl_return"
-  | "geofence"
-  | "arming"
-  | "initial_params"
-  | "pid_tuning"
-  | "peripherals"
-  | "full_parameters"
-  | "firmware";
+import type { FirmwareController } from "../../hooks/use-firmware";
 
 // ---------------------------------------------------------------------------
 // Section metadata
@@ -185,11 +159,12 @@ export type SetupSectionPanelProps = {
   vehicleState: VehicleState | null;
   telemetry: Telemetry | null;
   linkState: LinkState | null;
-  params: ReturnType<typeof useParams>;
+  setup: UseSetupReturn;
+  support: SupportDomain;
   sensorHealth: SensorHealth | null;
   homePosition: HomePosition | null;
   availableModes: FlightModeEntry[];
-  firmware: ReturnType<typeof useFirmware>;
+  firmware: FirmwareController;
 };
 
 // ---------------------------------------------------------------------------
@@ -209,7 +184,7 @@ function DisconnectedGate() {
 // Staged params tray (shell-owned, used by all sections including Full Params)
 // ---------------------------------------------------------------------------
 
-function StagedParamsBar({ params, onApplySuccess }: { params: ReturnType<typeof useParams>; onApplySuccess?: () => void }) {
+function StagedParamsBar({ params, onApplySuccess }: { params: ParamsState; onApplySuccess?: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const [applying, setApplying] = useState(false);
 
@@ -346,7 +321,7 @@ function SectionNavItem({
 }: {
   section: SetupSection;
   isActive: boolean;
-  status: "not_started" | "in_progress" | "complete";
+  status: SectionStatus;
   locked?: boolean;
   onClick: () => void;
 }) {
@@ -421,7 +396,7 @@ function SectionNav({
                       key={sectionId}
                       section={section}
                       isActive={sectionId === activeSection}
-                      status={sectionStatuses.get(sectionId) ?? "not_started"}
+                      status={sectionStatuses.get(sectionId) ?? "unknown"}
                       locked={isLocked}
                       onClick={() => onSelect(sectionId)}
                     />
@@ -445,7 +420,8 @@ export function SetupSectionPanel({
   vehicleState,
   telemetry,
   linkState,
-  params,
+  setup,
+  support,
   sensorHealth,
   homePosition,
   availableModes,
@@ -458,18 +434,15 @@ export function SetupSectionPanel({
     sectionStatuses,
     overallProgress,
     confirmSection,
-  } = useSetupSections({ paramStore: params.store }, vehicleState, sensorHealth);
+    params,
+    setupReady,
+    effectiveSection,
+    pendingHighlightParam,
+    navigateToParam,
+    handleHighlightHandled,
+  } = setup;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<SetupGroupId>>(new Set());
-
-  const paramsLoaded = params.store !== null;
-  const setupReady = paramsLoaded && params.metadata !== null;
-
-  useEffect(() => {
-    if (connected && !setupReady && activeSection !== "overview" && activeSection !== "firmware") {
-      setActiveSection("overview");
-    }
-  }, [connected, setupReady, activeSection, setActiveSection]);
 
   useEffect(() => {
     if (contentScrollRef.current) {
@@ -492,38 +465,6 @@ export function SetupSectionPanel({
   }, [activeSection, confirmSection]);
 
   const contentScrollRef = useRef<HTMLDivElement>(null);
-  const [pendingHighlightParam, setPendingHighlightParam] = useState<string | null>(null);
-  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const navigateToParam = useCallback(
-    (paramName: string) => {
-      const el = document.querySelector(`[data-setup-param="${paramName}"]`);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        el.classList.add("setup-param-highlight");
-        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-        highlightTimerRef.current = setTimeout(() => {
-          el.classList.remove("setup-param-highlight");
-          highlightTimerRef.current = null;
-        }, 1500);
-        return;
-      }
-
-      params.setFilterMode("all");
-      params.setSearch(paramName);
-      setPendingHighlightParam(paramName);
-      setActiveSection("full_parameters");
-    },
-    [params, setActiveSection],
-  );
-
-  const handleHighlightHandled = useCallback(() => {
-    setPendingHighlightParam(null);
-  }, []);
-
-  const effectiveSection = !setupReady && activeSection !== "firmware"
-    ? "overview" as SetupSectionId
-    : activeSection;
 
   const handleToggleGroup = (id: SetupGroupId) => {
     setCollapsedGroups((prev) => {
@@ -550,6 +491,7 @@ export function SetupSectionPanel({
             vehicleState={vehicleState}
             telemetry={telemetry}
             linkState={linkState}
+            support={support}
             sensorHealth={sensorHealth}
             homePosition={homePosition}
             params={params}
@@ -596,6 +538,7 @@ export function SetupSectionPanel({
             params={params}
             connected={connected}
             vehicleState={vehicleState}
+            support={support}
             sensorHealth={sensorHealth}
           />
         );

@@ -1,10 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Check, Play, Square } from "lucide-react";
-import { listen, type UnlistenFn } from "@platform/event";
-
-type Telemetry = {
-  rc_channels?: number[];
-};
+import { subscribeTelemetryState } from "../../telemetry";
+import { selectTelemetryView } from "../../lib/telemetry-selectors";
 
 type ChannelMinMax = {
   min: number;
@@ -34,11 +31,11 @@ export function RadioCalibWizard({
 
   // Subscribe to telemetry for live RC channels
   useEffect(() => {
-    let unlisten: UnlistenFn | null = null;
+    let unlisten: (() => void) | null = null;
 
     (async () => {
-      unlisten = await listen<Telemetry>("telemetry://tick", (event) => {
-        const rc = event.payload.rc_channels;
+      unlisten = await subscribeTelemetryState((domain) => {
+        const rc = selectTelemetryView(domain).rc_channels;
         if (!rc || rc.length === 0) return;
 
         if (recordingRef.current) {

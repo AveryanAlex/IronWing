@@ -4,16 +4,17 @@ import { MapContextMenu } from "../MapContextMenu";
 import { MissionWorkspaceHeader } from "./MissionWorkspaceHeader";
 import { MissionDesktopShell } from "./MissionDesktopShell";
 import { MissionAutoGridDialog } from "./MissionAutoGridDialog";
-import type { useVehicle } from "../../hooks/use-vehicle";
+import type { useSession } from "../../hooks/use-session";
 import type { useMission } from "../../hooks/use-mission";
 import type { useDeviceLocation } from "../../hooks/use-device-location";
-import type { MissionItem } from "../../mission";
+import type { MissionItem } from "../../lib/mavkit-types";
+import type { TypedDraftItem } from "../../lib/mission-draft-typed";
 import type { PolygonVertex } from "../../lib/mission-grid";
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
 
 type MissionWorkspaceProps = {
-  vehicle: ReturnType<typeof useVehicle>;
+  vehicle: ReturnType<typeof useSession>;
   mission: ReturnType<typeof useMission>;
   deviceLocation: ReturnType<typeof useDeviceLocation>;
 };
@@ -26,20 +27,22 @@ type ContextMenuState = {
   nearestSeq: number | null;
 } | null;
 
-function findNearestWaypoint(items: MissionItem[], lat: number, lng: number): number | null {
+function findNearestWaypoint(items: TypedDraftItem[], lat: number, lng: number): number | null {
   let nearest: number | null = null;
   let minDist = Infinity;
   for (const item of items) {
-    const d = Math.hypot(item.x / 1e7 - lat, item.y / 1e7 - lng);
+    if (item.preview.latitude_deg === null || item.preview.longitude_deg === null) continue;
+    const d = Math.hypot(item.preview.latitude_deg - lat, item.preview.longitude_deg - lng);
     if (d < minDist && d < 0.001) {
       minDist = d;
-      nearest = item.seq;
+      nearest = item.index;
     }
   }
   return nearest;
 }
 
 export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWorkspaceProps) {
+  const current = mission.current;
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [flyToKey, setFlyToKey] = useState(0);
   const [autoGridOpen, setAutoGridOpen] = useState(false);
@@ -49,7 +52,7 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
   const handleMapSelect = useCallback(
     (seq: number | null) => {
       if (isDrawingPolygon) return;
-      mission.setSelectedSeq(seq);
+      current.select(seq);
       if (seq !== null) {
         requestAnimationFrame(() => {
           const el = document.querySelector(`[data-mission-waypoint-card][data-seq="${seq}"]`);
@@ -57,7 +60,7 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
         });
       }
     },
-    [mission, isDrawingPolygon],
+    [current, isDrawingPolygon],
   );
 
   const handleCardSelect = useCallback(
@@ -70,10 +73,10 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
   const handleContextMenu = useCallback(
     (lat: number, lng: number, x: number, y: number) => {
       if (isDrawingPolygon) return;
-      const nearestSeq = findNearestWaypoint(mission.items, lat, lng);
+      const nearestSeq = findNearestWaypoint(current.draftItems, lat, lng);
       setContextMenu({ x, y, lat, lng, nearestSeq });
     },
-    [mission.items, isDrawingPolygon]
+    [current.draftItems, isDrawingPolygon]
   );
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
@@ -117,19 +120,20 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
 
   const handleGridGenerate = useCallback(
     (items: MissionItem[], mode: "after_selected" | "replace_all") => {
+      const m = mission.mission;
       if (mode === "replace_all") {
-        mission.bulkReplace(items);
+        m.replaceAll(items);
         toast.success("Grid generated", { description: `${items.length} waypoints (replaced)` });
       } else {
-        const insertAfter = mission.selectedSeq ?? mission.items.length - 1;
-        mission.bulkInsertAfter(insertAfter, items);
+        const insertAfter = m.selectedIndex ?? m.displayTotal - 1;
+        m.insertGeneratedAfter(insertAfter, items);
         toast.success("Grid generated", { description: `${items.length} waypoints inserted` });
       }
       setAutoGridOpen(false);
       setIsDrawingPolygon(false);
       setPolygonVertices([]);
     },
-    [mission],
+    [mission.mission],
   );
 
   return (
@@ -143,15 +147,16 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
             className="relative h-full overflow-hidden rounded-lg border border-border"
           >
             <MissionMap
-              missionItems={mission.items}
-              homePosition={mission.missionType === "mission" ? mission.homePosition : null}
-              selectedSeq={mission.selectedSeq}
-              onSelectSeq={handleMapSelect}
-              onMoveWaypoint={mission.moveWaypointOnMap}
+              missionItems={current.draftItems as TypedDraftItem[]}
+              homePosition={current.homePosition}
+              selectedIndex={current.selectedIndex}
+              onSelectIndex={handleMapSelect}
+              onMoveWaypoint={current.moveWaypointOnMap}
               onContextMenu={handleContextMenu}
+              readOnly={current.readOnly}
               deviceLocation={deviceLocation.location}
               vehiclePosition={vehicle.vehiclePosition}
-              currentMissionSeq={mission.missionState?.current_seq ?? null}
+              currentMissionSeq={current.tab === "mission" ? mission.vehicle.missionState?.current_index ?? null : null}
               flyToSelectedKey={flyToKey}
               polygonVertices={autoGridOpen ? polygonVertices : undefined}
               isDrawingPolygon={isDrawingPolygon}
@@ -167,10 +172,10 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
                 lng={contextMenu.lng}
                 nearestSeq={contextMenu.nearestSeq}
                 mode="planner"
-                missionType={mission.missionType}
-                onAddWaypoint={(lat, lng) => { mission.addWaypointAt(lat, lng); closeContextMenu(); }}
-                onSetHome={(lat, lng) => { mission.setHomeFromMap(lat, lng); closeContextMenu(); }}
-                onDeleteWaypoint={(seq) => { mission.deleteAt(seq); closeContextMenu(); }}
+                missionType={mission.selectedTab}
+                onAddWaypoint={(lat, lng) => { current.addWaypointAt(lat, lng); closeContextMenu(); }}
+                onSetHome={(lat, lng) => { current.setHomeFromMap(lat, lng); closeContextMenu(); }}
+                onDeleteWaypoint={(seq) => { current.deleteAt(seq); closeContextMenu(); }}
                 onClose={closeContextMenu}
               />
             )}
@@ -183,8 +188,8 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
                 onClearPolygon={handleClearPolygon}
                 onGenerate={handleGridGenerate}
                 onClose={handleAutoGridClose}
-                selectedSeq={mission.selectedSeq}
-                homePosition={mission.homePosition}
+                selectedSeq={current.selectedIndex}
+                homePosition={current.homePosition}
                 anchorX={12}
                 anchorY={48}
               />
@@ -200,13 +205,13 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
           <MissionDesktopShell mission={mission} connected={vehicle.connected} onCardSelect={handleCardSelect} />
         </Panel>
       </Group>
-      {mission.issues.length > 0 && (
+      {current.issues.length > 0 && (
         <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm">
           <h4 className="mb-1 font-semibold text-warning">
-            Validation Issues ({mission.issues.length})
+            Validation Issues ({current.issues.length})
           </h4>
           <ul className="list-inside list-disc space-y-0.5 text-xs text-text-secondary">
-            {mission.issues.map((issue, i) => (
+            {current.issues.map((issue, i) => (
               <li key={`${issue.code}-${i}`}>
                 <span className={issue.severity === "error" ? "text-danger" : "text-warning"}>
                   [{issue.severity}]

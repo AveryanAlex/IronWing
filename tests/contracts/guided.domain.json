@@ -1,0 +1,27 @@
+{
+  "available": true,
+  "complete": true,
+  "provenance": "stream",
+  "value": {
+    "status": "active",
+    "session": {
+      "kind": "goto",
+      "latitude_deg": 47.397742,
+      "longitude_deg": 8.545594,
+      "altitude_m": 25.0
+    },
+    "entered_at_unix_msec": 123456,
+    "blocking_reason": null,
+    "termination": null,
+    "last_command": {
+      "operation_id": "start_guided_session",
+      "session_kind": "goto",
+      "at_unix_msec": 123456
+    },
+    "actions": {
+      "start": { "allowed": false, "blocking_reason": "operation_in_progress" },
+      "update": { "allowed": true, "blocking_reason": null },
+      "stop": { "allowed": false, "blocking_reason": "stop_unsupported" }
+    }
+  }
+}

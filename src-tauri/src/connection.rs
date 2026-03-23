@@ -1,17 +1,48 @@
 use mavkit::{Vehicle, VehicleConfig};
-use mavlink::common::{
+use mavlink::MessageData;
+use mavkit::dialect::{
     ATTITUDE_DATA, GLOBAL_POSITION_INT_DATA, GPS_RAW_INT_DATA, MavCmd, SYS_STATUS_DATA,
 };
-use mavlink::MessageData;
 use serde::Deserialize;
+use std::future::Future;
+use std::sync::atomic::Ordering;
+use tauri::Listener;
 #[cfg(target_os = "android")]
 use tauri::Manager;
+use tokio::task::JoinHandle;
 
 use crate::AppState;
+use crate::guided::emit_guided_reset;
+
+struct ConnectedVehicle {
+    vehicle: Vehicle,
+    tasks: Vec<JoinHandle<()>>,
+    listeners: Vec<tauri::EventId>,
+}
+
+async fn abort_background_tasks(state: &AppState) {
+    let mut tasks = state.background_tasks.lock().await;
+    for task in tasks.drain(..) {
+        task.abort();
+    }
+}
+
+async fn clear_background_listeners(state: &AppState, app: &tauri::AppHandle) {
+    let mut listeners = state.background_listeners.lock().await;
+    for listener in listeners.drain(..) {
+        app.unlisten(listener);
+    }
+}
 
 #[derive(Deserialize)]
 pub(crate) struct ConnectRequest {
-    endpoint: LinkEndpoint,
+    transport: LinkEndpoint,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct DisconnectRequest {
+    #[allow(dead_code)]
+    session_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -40,7 +71,7 @@ pub(crate) enum LinkEndpoint {
 async fn connect_via_address(
     state: &AppState,
     address: String,
-) -> Result<Vehicle, String> {
+) -> Result<ConnectedVehicle, String> {
     let task = tokio::spawn(async move { Vehicle::connect(&address).await });
     *state.connect_abort.lock().await = Some(task.abort_handle());
 
@@ -56,7 +87,30 @@ async fn connect_via_address(
         .map_err(|e| e.to_string())?;
 
     *state.connect_abort.lock().await = None;
-    Ok(vehicle)
+    Ok(ConnectedVehicle {
+        vehicle,
+        tasks: Vec::new(),
+        listeners: Vec::new(),
+    })
+}
+
+async fn connect_with_abort<F>(state: &AppState, future: F) -> Result<ConnectedVehicle, String>
+where
+    F: Future<Output = Result<ConnectedVehicle, String>> + Send + 'static,
+{
+    let task = tokio::spawn(future);
+    *state.connect_abort.lock().await = Some(task.abort_handle());
+
+    let result = task.await.map_err(|e| {
+        if e.is_cancelled() {
+            "connection cancelled".to_string()
+        } else {
+            e.to_string()
+        }
+    })?;
+
+    *state.connect_abort.lock().await = None;
+    result
 }
 
 async fn request_tcp_telemetry_streams(vehicle: Vehicle) {
@@ -69,15 +123,14 @@ async fn request_tcp_telemetry_streams(vehicle: Vehicle) {
 
     for (message_id, interval_usec) in interval_requests {
         if let Err(err) = vehicle
+            .raw()
             .command_long(
-                MavCmd::MAV_CMD_SET_MESSAGE_INTERVAL,
+                MavCmd::MAV_CMD_SET_MESSAGE_INTERVAL as u16,
                 [message_id, interval_usec, 0.0, 0.0, 0.0, 0.0, 0.0],
             )
             .await
         {
-            tracing::warn!(
-                "failed to request telemetry stream for message id {message_id}: {err}"
-            );
+            tracing::warn!("failed to request telemetry stream for message id {message_id}: {err}");
         }
     }
 }
@@ -85,9 +138,16 @@ async fn request_tcp_telemetry_streams(vehicle: Vehicle) {
 async fn store_connected_vehicle(
     state: &AppState,
     app: &tauri::AppHandle,
-    vehicle: Vehicle,
+    connected_vehicle: ConnectedVehicle,
 ) -> Result<(), String> {
-    crate::bridges::spawn_event_bridges(app, &vehicle);
+    let ConnectedVehicle {
+        vehicle,
+        mut tasks,
+        listeners,
+    } = connected_vehicle;
+    tasks.extend(crate::bridges::spawn_event_bridges(app, &vehicle));
+    *state.background_tasks.lock().await = tasks;
+    *state.background_listeners.lock().await = listeners;
     *state.vehicle.lock().await = Some(vehicle);
     Ok(())
 }
@@ -102,24 +162,40 @@ pub(crate) async fn connect_link(
     if let Some(handle) = state.connect_abort.lock().await.take() {
         handle.abort();
     }
+    abort_background_tasks(&state).await;
+    clear_background_listeners(&state, &app).await;
 
     // Disconnect any existing vehicle
     {
+        let _ = emit_guided_reset(
+            &state,
+            &app,
+            crate::ipc::DomainProvenance::Stream,
+            crate::ipc::guided::GuidedTerminationReason::SourceSwitch,
+            "live source switched",
+        )
+        .await;
         let prev = state.vehicle.lock().await.take();
+        state.status_text_history.lock().await.clear();
+        state.next_status_text_sequence.store(1, Ordering::Relaxed);
         if let Some(v) = prev {
             let _ = v.disconnect().await;
         }
     }
 
-    match request.endpoint {
+    match request.transport {
         LinkEndpoint::Udp { bind_addr } => {
             let vehicle = connect_via_address(&state, format!("udpin:{bind_addr}")).await?;
             store_connected_vehicle(&state, &app, vehicle).await
         }
         LinkEndpoint::Tcp { address } => {
-            let vehicle = connect_via_address(&state, format!("tcpout:{address}")).await?;
-            store_connected_vehicle(&state, &app, vehicle.clone()).await?;
-            tauri::async_runtime::spawn(request_tcp_telemetry_streams(vehicle));
+            let mut connected_vehicle =
+                connect_via_address(&state, format!("tcpout:{address}")).await?;
+            let vehicle = connected_vehicle.vehicle.clone();
+            connected_vehicle
+                .tasks
+                .push(tokio::spawn(request_tcp_telemetry_streams(vehicle)));
+            store_connected_vehicle(&state, &app, connected_vehicle).await?;
             Ok(())
         }
         #[cfg(not(target_os = "android"))]
@@ -128,19 +204,23 @@ pub(crate) async fn connect_link(
             store_connected_vehicle(&state, &app, vehicle).await
         }
         LinkEndpoint::BluetoothBle { address } => {
-            let vehicle = connect_ble(&address).await?;
+            let vehicle =
+                connect_with_abort(&state, async move { connect_ble(&address).await }).await?;
             store_connected_vehicle(&state, &app, vehicle).await
         }
         #[cfg(target_os = "android")]
         LinkEndpoint::BluetoothSpp { address } => {
-            let vehicle = connect_spp(&app, &address).await?;
+            let spp_app = app.clone();
+            let vehicle =
+                connect_with_abort(&state, async move { connect_spp(&spp_app, &address).await })
+                    .await?;
             store_connected_vehicle(&state, &app, vehicle).await
         }
     }
 }
 
 /// Connect via BLE NUS (Nordic UART Service) using tauri-plugin-blec.
-async fn connect_ble(address: &str) -> Result<Vehicle, String> {
+async fn connect_ble(address: &str) -> Result<ConnectedVehicle, String> {
     use mavkit::ble_transport::channel_pair;
     use mavkit::stream_connection::StreamConnection;
 
@@ -186,7 +266,7 @@ async fn connect_ble(address: &str) -> Result<Vehicle, String> {
         .map_err(|e| format!("BLE subscribe failed: {e}"))?;
 
     // Spawn task to drain outgoing channel → send via BLE write
-    tokio::spawn(async move {
+    let writer_task = tokio::spawn(async move {
         let handler = match tauri_plugin_blec::get_handler() {
             Ok(h) => h,
             Err(_) => return,
@@ -213,17 +293,23 @@ async fn connect_ble(address: &str) -> Result<Vehicle, String> {
     // Create StreamConnection and build Vehicle
     let connection = StreamConnection::new(reader, writer);
     let connection: Box<
-        dyn mavlink::AsyncMavConnection<mavlink::common::MavMessage> + Sync + Send,
+        dyn mavlink::AsyncMavConnection<mavkit::dialect::MavMessage> + Sync + Send,
     > = Box::new(connection);
 
-    Vehicle::from_connection(connection, VehicleConfig::default())
+    let vehicle = Vehicle::from_connection(connection, VehicleConfig::default())
         .await
-        .map_err(|e| format!("Vehicle connection failed: {e}"))
+        .map_err(|e| format!("Vehicle connection failed: {e}"))?;
+
+    Ok(ConnectedVehicle {
+        vehicle,
+        tasks: vec![writer_task],
+        listeners: Vec::new(),
+    })
 }
 
 /// Connect via Classic SPP on Android using tauri-plugin-bluetooth-classic.
 #[cfg(target_os = "android")]
-async fn connect_spp(app: &tauri::AppHandle, address: &str) -> Result<Vehicle, String> {
+async fn connect_spp(app: &tauri::AppHandle, address: &str) -> Result<ConnectedVehicle, String> {
     use base64::Engine;
     use mavkit::ble_transport::channel_pair;
     use mavkit::stream_connection::StreamConnection;
@@ -238,7 +324,7 @@ async fn connect_spp(app: &tauri::AppHandle, address: &str) -> Result<Vehicle, S
 
     // Listen for incoming data events from the Kotlin plugin
     let tx_sender = incoming_tx.clone();
-    app.listen("plugin:bluetooth-classic://data", move |event| {
+    let listener_id = app.listen("plugin:bluetooth-classic://data", move |event| {
         if let Ok(payload) = serde_json::from_str::<serde_json::Value>(event.payload()) {
             if let Some(data_b64) = payload.get("data").and_then(|v| v.as_str()) {
                 if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(data_b64) {
@@ -250,7 +336,7 @@ async fn connect_spp(app: &tauri::AppHandle, address: &str) -> Result<Vehicle, S
 
     // Spawn task to drain outgoing channel → send via Classic BT
     let bt_app = app.clone();
-    tokio::spawn(async move {
+    let writer_task = tokio::spawn(async move {
         while let Some(data) = outgoing_rx.recv().await {
             let bt: tauri::State<'_, tauri_plugin_bluetooth_classic::BluetoothClassic<tauri::Wry>> =
                 bt_app.state();
@@ -263,25 +349,76 @@ async fn connect_spp(app: &tauri::AppHandle, address: &str) -> Result<Vehicle, S
 
     let connection = StreamConnection::new(reader, writer);
     let connection: Box<
-        dyn mavlink::AsyncMavConnection<mavlink::common::MavMessage> + Sync + Send,
+        dyn mavlink::AsyncMavConnection<mavkit::dialect::MavMessage> + Sync + Send,
     > = Box::new(connection);
 
-    Vehicle::from_connection(connection, VehicleConfig::default())
+    let vehicle = Vehicle::from_connection(connection, VehicleConfig::default())
         .await
-        .map_err(|e| format!("Vehicle connection failed: {e}"))
+        .map_err(|e| format!("Vehicle connection failed: {e}"))?;
+
+    Ok(ConnectedVehicle {
+        vehicle,
+        tasks: vec![writer_task],
+        listeners: vec![listener_id],
+    })
 }
 
 #[tauri::command]
-pub(crate) async fn disconnect_link(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    force_disconnect(&state).await
+pub(crate) async fn disconnect_link(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+    request: Option<DisconnectRequest>,
+) -> Result<(), String> {
+    let expected_session_id = state
+        .session_runtime
+        .lock()
+        .await
+        .current_stream_envelope(std::time::Instant::now())
+        .map(|envelope| envelope.session_id);
+    validate_disconnect_request(expected_session_id.as_deref(), request.as_ref())?;
+    force_disconnect(&state, &app).await
 }
 
-pub(crate) async fn force_disconnect(state: &AppState) -> Result<(), String> {
+fn validate_disconnect_request(
+    expected_session_id: Option<&str>,
+    request: Option<&DisconnectRequest>,
+) -> Result<(), String> {
+    let Some(requested_session_id) = request.and_then(|value| value.session_id.as_deref()) else {
+        return Ok(());
+    };
+
+    match expected_session_id {
+        Some(expected) if expected == requested_session_id => Ok(()),
+        Some(expected) => Err(format!(
+            "session_id mismatch: expected {expected}, got {requested_session_id}"
+        )),
+        None => Err(format!(
+            "session_id mismatch: no active session for {requested_session_id}"
+        )),
+    }
+}
+
+pub(crate) async fn force_disconnect(
+    state: &AppState,
+    app: &tauri::AppHandle,
+) -> Result<(), String> {
     state.recorder.stop();
+    let _ = emit_guided_reset(
+        state,
+        app,
+        crate::ipc::DomainProvenance::Stream,
+        crate::ipc::guided::GuidedTerminationReason::Disconnect,
+        "live vehicle disconnected",
+    )
+    .await;
+    state.status_text_history.lock().await.clear();
+    state.next_status_text_sequence.store(1, Ordering::Relaxed);
 
     if let Some(handle) = state.connect_abort.lock().await.take() {
         handle.abort();
     }
+    abort_background_tasks(state).await;
+    clear_background_listeners(state, app).await;
 
     let vehicle = state.vehicle.lock().await.take();
     if let Some(v) = vehicle {
@@ -292,4 +429,44 @@ pub(crate) async fn force_disconnect(state: &AppState) -> Result<(), String> {
 
 pub(crate) async fn is_vehicle_connected(state: &AppState) -> bool {
     state.vehicle.lock().await.is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn typed_connect_request_deserializes_transport_field() {
+        let request: ConnectRequest = serde_json::from_value(serde_json::json!({
+            "transport": { "kind": "tcp", "address": "127.0.0.1:5760" }
+        }))
+        .expect("deserialize connect request");
+
+        assert!(matches!(request.transport, LinkEndpoint::Tcp { .. }));
+    }
+
+    #[test]
+    fn typed_disconnect_request_accepts_session_id() {
+        let request: DisconnectRequest = serde_json::from_value(serde_json::json!({
+            "session_id": "session-1"
+        }))
+        .expect("deserialize disconnect request");
+
+        assert_eq!(request.session_id.as_deref(), Some("session-1"));
+    }
+
+    #[test]
+    fn disconnect_request_rejects_mismatched_session_id() {
+        let request = DisconnectRequest {
+            session_id: Some("session-2".into()),
+        };
+
+        let result = validate_disconnect_request(Some("session-1"), Some(&request));
+
+        assert!(
+            result
+                .expect_err("should reject mismatched session id")
+                .contains("session_id mismatch")
+        );
+    }
 }

@@ -9,17 +9,34 @@ import {
   Navigation,
   MapPin,
 } from "lucide-react";
-import { commandName } from "../../lib/mav-commands";
 import { cn } from "../../lib/utils";
-import type { DraftItem } from "../../lib/mission-draft";
+import { commandDisplayName, commandCategory } from "../../lib/mavkit-types";
+import type { MissionItem } from "../../lib/mavkit-types";
+import type { FenceRegion } from "../../lib/mavkit-types";
+import type { TypedDraftItem } from "../../lib/mission-draft-typed";
 import type { MissionType } from "../../mission";
 
+const CATEGORY_BADGE: Record<string, { label: string; className: string }> = {
+  nav: { label: "NAV", className: "bg-accent-blue/15 text-accent-blue" },
+  do: { label: "DO", className: "bg-warning/15 text-warning" },
+  condition: { label: "CND", className: "bg-purple-500/15 text-purple-400" },
+  other: { label: "RAW", className: "bg-bg-tertiary text-text-muted" },
+};
+
+function fenceRegionLabel(region: FenceRegion): string {
+  if ("inclusion_polygon" in region) return "Incl. Polygon";
+  if ("exclusion_polygon" in region) return "Excl. Polygon";
+  if ("inclusion_circle" in region) return "Incl. Circle";
+  return "Excl. Circle";
+}
+
 type MissionWaypointCardProps = {
-  draftItem: DraftItem;
+  draftItem: TypedDraftItem;
   displayIndex: number;
   isSelected: boolean;
   isActive: boolean;
   missionType: MissionType;
+  readOnly: boolean;
   onSelect: () => void;
   onInsertBefore: () => void;
   onInsertAfter: () => void;
@@ -33,6 +50,7 @@ export function MissionWaypointCard({
   isSelected,
   isActive: isActiveRaw,
   missionType,
+  readOnly,
   onSelect,
   onInsertBefore,
   onInsertAfter,
@@ -49,24 +67,24 @@ export function MissionWaypointCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: draftItem.uiId });
+  } = useSortable({ id: draftItem.uiId, disabled: readOnly });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
 
-  const { item } = draftItem;
-  const latDeg = item.x / 1e7;
-  const lonDeg = item.y / 1e7;
-  const hasCoords = item.x !== 0 || item.y !== 0;
+  const latDeg = draftItem.preview.latitude_deg;
+  const lonDeg = draftItem.preview.longitude_deg;
+  const altitudeM = draftItem.preview.altitude_m;
+  const hasCoords = latDeg !== null && lonDeg !== null;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       data-mission-waypoint-card
-      data-seq={item.seq}
+      data-seq={draftItem.index}
       className={cn(
         "group relative flex items-stretch rounded-md border text-xs transition-colors",
         isDragging && "z-50 opacity-70 shadow-lg",
@@ -81,9 +99,13 @@ export function MissionWaypointCard({
       {/* Drag handle */}
       <button
         data-mission-drag-handle
-        className="flex w-6 shrink-0 cursor-grab items-center justify-center rounded-l-md text-text-muted/50 transition-colors hover:bg-bg-tertiary hover:text-text-muted active:cursor-grabbing"
+        className={cn(
+          "flex w-6 shrink-0 items-center justify-center rounded-l-md text-text-muted/50 transition-colors hover:bg-bg-tertiary hover:text-text-muted",
+          readOnly ? "cursor-not-allowed opacity-40" : "cursor-grab active:cursor-grabbing",
+        )}
         {...attributes}
         {...listeners}
+        disabled={readOnly}
       >
         <GripVertical className="h-3.5 w-3.5" />
       </button>
@@ -104,10 +126,38 @@ export function MissionWaypointCard({
           {displayIndex}
         </div>
 
-        {/* Command name */}
-        <span className="shrink-0 font-medium text-text-primary">
-          {commandName(item.command)}
-        </span>
+        {/* Category badge + command name */}
+        {"command" in draftItem.document ? (() => {
+          const cmd = (draftItem.document as MissionItem).command;
+          const cat = commandCategory(cmd);
+          const badge = CATEGORY_BADGE[cat];
+          return (
+            <>
+              <span className={cn("shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide", badge.className)}>
+                {badge.label}
+              </span>
+              <span className="shrink-0 font-medium text-text-primary">
+                {commandDisplayName(cmd)}
+              </span>
+            </>
+          );
+        })() : (
+          <>
+            <span className={cn("shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide", missionType === "fence" ? "bg-orange-500/15 text-orange-400" : "bg-emerald-500/15 text-emerald-400")}>
+              {missionType === "fence" ? "FNC" : "RLY"}
+            </span>
+            <span className="shrink-0 font-medium text-text-primary">
+              {missionType === "fence"
+                ? fenceRegionLabel(draftItem.document as FenceRegion)
+                : "Rally Point"}
+            </span>
+          </>
+        )}
+        {draftItem.readOnly && (
+          <span className="rounded bg-warning/10 px-1 py-0.5 text-[9px] uppercase tracking-wide text-warning">
+            Raw
+          </span>
+        )}
 
         {/* Coordinate preview */}
         {hasCoords ? (
@@ -123,7 +173,7 @@ export function MissionWaypointCard({
 
         {/* Altitude */}
         <span className="ml-auto shrink-0 tabular-nums text-text-muted">
-          {item.z}m
+          {altitudeM === null ? "—" : `${altitudeM}m`}
         </span>
 
         {/* Active indicator */}

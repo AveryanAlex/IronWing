@@ -3,16 +3,18 @@ import { Locate, Navigation } from "lucide-react";
 import { toast } from "sonner";
 import { MissionMap } from "./MissionMap";
 import { MapContextMenu } from "./MapContextMenu";
-import type { useVehicle } from "../hooks/use-vehicle";
+import type { GuidedCommandResult } from "../guided";
+import type { useSession } from "../hooks/use-session";
+import type { useGuided } from "../hooks/use-guided";
 import type { useMission } from "../hooks/use-mission";
 import type { useDeviceLocation } from "../hooks/use-device-location";
 
 type MapPanelProps = {
-  vehicle: ReturnType<typeof useVehicle>;
+  vehicle: ReturnType<typeof useSession>;
+  guided: ReturnType<typeof useGuided>;
   mission: ReturnType<typeof useMission>;
   deviceLocation: ReturnType<typeof useDeviceLocation>;
   flightPath?: [number, number][];
-  replayPosition?: { latitude_deg: number; longitude_deg: number; heading_deg: number } | null;
 };
 
 type ContextMenuState = {
@@ -24,8 +26,16 @@ type ContextMenuState = {
 
 const LONG_PRESS_MS = 500;
 
-export function MapPanel({ vehicle, mission, deviceLocation, flightPath, replayPosition }: MapPanelProps) {
-  const { vehiclePosition, guidedGoto } = vehicle;
+export function describeGuidedCommandRejection(result: GuidedCommandResult): string | null {
+  if (result.result === "accepted") {
+    return null;
+  }
+
+  return result.failure.reason.message;
+}
+
+export function MapPanel({ vehicle, guided, mission, deviceLocation, flightPath }: MapPanelProps) {
+  const { vehiclePosition } = vehicle;
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
 
   const [followTarget, setFollowTarget] = useState<"vehicle" | "device" | null>(null);
@@ -59,6 +69,16 @@ export function MapPanel({ vehicle, mission, deviceLocation, flightPath, replayP
     []
   );
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  const handleFlyTo = useCallback(async (lat: number, lng: number) => {
+    const result = await guided.guidedGoto(lat, lng);
+    const rejectionMessage = describeGuidedCommandRejection(result);
+    if (rejectionMessage) {
+      toast.error("Guided command rejected", { description: rejectionMessage });
+      return;
+    }
+
+    closeContextMenu();
+  }, [closeContextMenu, guided]);
 
   // --- Vehicle button handlers ---
   const vehicleLpRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -151,9 +171,9 @@ export function MapPanel({ vehicle, mission, deviceLocation, flightPath, replayP
   return (
     <div className="relative h-full overflow-hidden rounded-lg border border-border">
       <MissionMap
-        missionItems={mission.items}
-        homePosition={mission.missionType === "mission" ? mission.homePosition : null}
-        selectedSeq={null}
+        missionItems={mission.mission.draftItems as import("../lib/mission-draft-typed").TypedDraftItem[]}
+        homePosition={mission.mission.homePosition}
+        selectedIndex={null}
         readOnly
         onContextMenu={handleContextMenu}
         vehiclePosition={vehiclePosition}
@@ -162,9 +182,8 @@ export function MapPanel({ vehicle, mission, deviceLocation, flightPath, replayP
         centerOnVehicleKey={centerVehicleKey}
         centerOnDeviceKey={centerDeviceKey}
         onUserInteraction={handleUserInteraction}
-        currentMissionSeq={mission.missionState?.current_seq ?? null}
+        currentMissionSeq={mission.vehicle.missionState?.current_index ?? null}
         flightPath={flightPath}
-        replayPosition={replayPosition}
       />
       {contextMenu && (
         <MapContextMenu
@@ -174,9 +193,9 @@ export function MapPanel({ vehicle, mission, deviceLocation, flightPath, replayP
           lng={contextMenu.lng}
           nearestSeq={null}
           mode="flight"
-          missionType={mission.missionType}
-          onFlyTo={(lat, lng) => { guidedGoto(lat, lng); closeContextMenu(); }}
-          onSetHome={(lat, lng) => { mission.setHomeFromMap(lat, lng); closeContextMenu(); }}
+          missionType="mission"
+          onFlyTo={guided.available ? (lat, lng) => { void handleFlyTo(lat, lng); } : undefined}
+          onSetHome={(lat, lng) => { mission.mission.setHomeFromMap(lat, lng); closeContextMenu(); }}
           onClose={closeContextMenu}
         />
       )}

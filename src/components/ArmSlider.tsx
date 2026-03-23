@@ -28,6 +28,7 @@ export function ArmSlider({ connected, armed, onArm, onDisarm, replayActive }: A
         />
 
         <button
+          data-testid="controls-disarm-btn"
           type="button"
           disabled={disabled || !armed}
           onClick={() => onDisarm(false)}
@@ -42,6 +43,7 @@ export function ArmSlider({ connected, armed, onArm, onDisarm, replayActive }: A
         </button>
 
         <button
+          data-testid="controls-arm-btn"
           type="button"
           disabled={disabled || armed}
           onClick={() => onArm(false)}

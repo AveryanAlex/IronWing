@@ -1,0 +1,11 @@
+{
+  "available": true,
+  "complete": false,
+  "provenance": "bootstrap",
+  "value": {
+    "frame": { "configured": true },
+    "gps": { "configured": true },
+    "battery_monitor": { "configured": true },
+    "motors_esc": null
+  }
+}

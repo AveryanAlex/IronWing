@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback } from "react";
 import {
   Check,
   X,
@@ -27,11 +27,12 @@ import {
 } from "lucide-react";
 import { armVehicle, disarmVehicle } from "../../../telemetry";
 import type { VehicleState, Telemetry, HomePosition, LinkState } from "../../../telemetry";
-import { requestPrearmChecks, rebootVehicle } from "../../../calibration";
-import { subscribeStatusText, type StatusMessage } from "../../../statustext";
-import type { SensorHealth, SensorId, SensorStatus } from "../../../sensor-health";
+import { rebootVehicle } from "../../../calibration";
+import { isPreArmGood, SENSOR_KEYS, type SensorHealth, type SensorId, type SensorStatus } from "../../../sensor-health";
+import type { SupportDomain } from "../../../support";
 import type { SetupSectionId, SectionStatus, OverallProgress } from "../../../hooks/use-setup-sections";
-import type { useParams } from "../../../hooks/use-params";
+import type { ParamsState } from "../../../hooks/use-params";
+import { paramProgressCounts } from "../../../params";
 import { SETUP_SECTIONS, SECTION_GROUPS } from "../SetupSectionPanel";
 import { ParamDisplay } from "../primitives/ParamDisplay";
 import type { ParamInputParams } from "../primitives/param-helpers";
@@ -46,9 +47,10 @@ export type OverviewSectionProps = {
   vehicleState: VehicleState | null;
   telemetry: Telemetry | null;
   linkState: LinkState | null;
+  support: SupportDomain;
   sensorHealth: SensorHealth | null;
   homePosition: HomePosition | null;
-  params: ReturnType<typeof useParams>;
+  params: ParamsState;
   sectionStatuses: Map<SetupSectionId, SectionStatus>;
   overallProgress: OverallProgress;
   onNavigateSection: (id: SetupSectionId) => void;
@@ -59,32 +61,25 @@ export type OverviewSectionProps = {
 // ---------------------------------------------------------------------------
 
 const SENSOR_NAMES: Record<SensorId, string> = {
-  gyro_3d: "Gyroscope",
-  accel_3d: "Accelerometer",
-  mag_3d: "Compass",
-  absolute_pressure: "Barometer",
+  gyro: "Gyroscope",
+  accel: "Accelerometer",
+  mag: "Compass",
+  baro: "Barometer",
   gps: "GPS",
-  optical_flow: "Optical Flow",
-  range_finder: "Range Finder",
-  external_ground_truth: "External Ground Truth",
-  motor_outputs: "Motor Outputs",
+  airspeed: "Airspeed",
   rc_receiver: "RC Receiver",
-  prearm_check: "Pre-Arm Check",
-  ahrs: "AHRS",
-  terrain: "Terrain",
-  reverse_motor: "Reverse Motor",
-  logging: "Logging",
   battery: "Battery",
+  terrain: "Terrain",
+  geofence: "Geofence",
 };
 
-const KEY_SENSORS: SensorId[] = [
-  "gyro_3d",
-  "accel_3d",
-  "mag_3d",
-  "absolute_pressure",
+const KEY_SENSORS: readonly SensorId[] = [
+  "gyro",
+  "accel",
+  "mag",
+  "baro",
   "gps",
   "rc_receiver",
-  "motor_outputs",
   "battery",
 ];
 
@@ -128,10 +123,9 @@ function sensorStatusColor(status: SensorStatus): string {
 }
 
 import {
-  type PrearmBlocker,
-  classifyPrearm,
   categoryIcon,
 } from "../shared/prearm-helpers";
+import { usePrearmChecks } from "../shared/use-prearm-checks";
 
 // ---------------------------------------------------------------------------
 // Format helpers
@@ -166,7 +160,7 @@ function linkStateOk(ls: LinkState | null): boolean {
 // ParamInputParams builder
 // ---------------------------------------------------------------------------
 
-function buildParamInputParams(params: ReturnType<typeof useParams>): ParamInputParams {
+function buildParamInputParams(params: ParamsState): ParamInputParams {
   return {
     store: params.store,
     staged: params.staged,
@@ -207,7 +201,7 @@ function VehicleInfoCard({
   params,
 }: {
   vehicleState: VehicleState | null;
-  params: ReturnType<typeof useParams>;
+  params: ParamsState;
 }) {
   if (!vehicleState) {
     return (
@@ -270,7 +264,7 @@ function QuickActions({
   params,
 }: {
   connected: boolean;
-  params: ReturnType<typeof useParams>;
+  params: ParamsState;
 }) {
   const [downloading, setDownloading] = useState(false);
   const [rebooting, setRebooting] = useState(false);
@@ -446,69 +440,23 @@ function StatusCard({
 
 function PrearmAndActions({
   connected,
+  support,
   vehicleState,
   sensorHealth,
 }: {
   connected: boolean;
+  support: SupportDomain;
   vehicleState: VehicleState | null;
   sensorHealth: SensorHealth | null;
 }) {
-  const [blockers, setBlockers] = useState<PrearmBlocker[]>([]);
-  const [checking, setChecking] = useState(false);
   const [arming, setArming] = useState(false);
-  const lastCheckTime = useRef<number>(0);
-
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-
-    const handleStatus = (msg: StatusMessage) => {
-      const now = Date.now();
-      if (now < lastCheckTime.current) return;
-      if (!msg.text.toLowerCase().includes("prearm")) return;
-
-      const blocker = classifyPrearm(msg.text, now);
-      setBlockers((prev) => {
-        const filtered = prev.filter((b) => b.category !== blocker.category);
-        return [...filtered, blocker];
-      });
-    };
-
-    (async () => {
-      unlisten = await subscribeStatusText(handleStatus);
-    })();
-
-    return () => {
-      unlisten?.();
-    };
-  }, []);
-
-  const runChecks = useCallback(async () => {
-    if (!connected) return;
-    setChecking(true);
-    setBlockers([]);
-    lastCheckTime.current = Date.now();
-    try {
-      await requestPrearmChecks();
-    } catch {
-      // Vehicle may not support the command
-    }
-    setTimeout(() => setChecking(false), 3000);
-  }, [connected]);
-
-  // Clear stale blockers when live sensor health reports pre-arm good
-  useEffect(() => {
-    if (sensorHealth?.pre_arm_good === true) {
-      setBlockers([]);
-    }
-  }, [sensorHealth?.pre_arm_good]);
-
-  const autoChecked = useRef(false);
-  useEffect(() => {
-    if (connected && !autoChecked.current) {
-      autoChecked.current = true;
-      runChecks();
-    }
-  }, [connected]); // eslint-disable-line react-hooks/exhaustive-deps
+  const canRequestChecks = support.value?.can_request_prearm_checks === true;
+  const { blockers, checking, runChecks } = usePrearmChecks({
+    connected,
+    canRequestChecks,
+    preArmGood: sensorHealth != null && isPreArmGood(sensorHealth),
+    resetKey: `${vehicleState?.system_id ?? "none"}:${connected}`,
+  });
 
   const handleArm = useCallback(async () => {
     if (!connected) return;
@@ -531,7 +479,7 @@ function PrearmAndActions({
     }
   }, [connected]);
 
-  const isReady = sensorHealth?.pre_arm_good === true;
+  const isReady = sensorHealth != null && isPreArmGood(sensorHealth);
   const armed = vehicleState?.armed === true;
 
   return (
@@ -564,11 +512,12 @@ function PrearmAndActions({
         </div>
 
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={runChecks}
-            disabled={!connected || checking}
-            className="flex items-center gap-1 rounded-md border border-border bg-bg-secondary px-2 py-1 text-[11px] font-medium text-text-primary transition-colors hover:bg-bg-tertiary disabled:opacity-40"
-          >
+            <button
+              onClick={runChecks}
+              disabled={!connected || !canRequestChecks || checking}
+              className="flex items-center gap-1 rounded-md border border-border bg-bg-secondary px-2 py-1 text-[11px] font-medium text-text-primary transition-colors hover:bg-bg-tertiary disabled:opacity-40"
+              title={!canRequestChecks ? "Pre-arm check requests are unavailable for this vehicle" : undefined}
+            >
             <RefreshCw size={10} className={checking ? "animate-spin" : ""} />
             Check
           </button>
@@ -641,12 +590,9 @@ function SensorHealthGrid({ sensorHealth }: { sensorHealth: SensorHealth | null 
     );
   }
 
-  const sensorMap = new Map(sensorHealth.sensors);
-  const keySensors = KEY_SENSORS.filter((id) => sensorMap.has(id));
-  const otherSensors = sensorHealth.sensors
-    .map(([id]) => id)
-    .filter((id) => !KEY_SENSORS.includes(id));
-  const orderedSensors = [...keySensors, ...otherSensors];
+  const preArmGood = isPreArmGood(sensorHealth);
+  const otherSensors = SENSOR_KEYS.filter((id) => !KEY_SENSORS.includes(id));
+  const orderedSensors = [...KEY_SENSORS, ...otherSensors];
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
@@ -655,15 +601,14 @@ function SensorHealthGrid({ sensorHealth }: { sensorHealth: SensorHealth | null 
           Sensor Health
         </h3>
         <span
-          className={`text-[10px] font-medium ${sensorHealth.pre_arm_good ? "text-success" : "text-warning"}`}
+          className={`text-[10px] font-medium ${preArmGood ? "text-success" : "text-warning"}`}
         >
-          {sensorHealth.pre_arm_good ? "Pre-Arm Good" : "Pre-Arm Fail"}
+          {preArmGood ? "Pre-Arm Good" : "Pre-Arm Fail"}
         </span>
       </div>
       <div className="grid grid-cols-2 gap-0.5 sm:grid-cols-4">
         {orderedSensors.map((id) => {
-          const status = sensorMap.get(id);
-          if (!status) return null;
+          const status = sensorHealth[id];
           return (
             <div
               key={id}
@@ -708,7 +653,7 @@ function SectionProgressList({
               {group.sections.map((sectionId) => {
                 const section = sectionMap.get(sectionId);
                 if (!section) return null;
-                const status = sectionStatuses.get(sectionId) ?? "not_started";
+                const status = sectionStatuses.get(sectionId) ?? "unknown";
                 const Icon = section.icon;
 
                 return (
@@ -724,16 +669,24 @@ function SectionProgressList({
                           ? "shrink-0 text-success"
                           : status === "in_progress"
                             ? "shrink-0 text-accent"
-                            : "shrink-0 text-text-muted"
+                            : status === "failed"
+                              ? "shrink-0 text-danger"
+                              : status === "unknown"
+                                ? "shrink-0 text-warning"
+                                : "shrink-0 text-text-muted"
                       }
                     />
                     <span
                       className={`flex-1 font-medium ${
                         status === "complete"
                           ? "text-success"
-                          : status === "in_progress"
-                            ? "text-text-primary"
-                            : "text-text-secondary"
+                          : status === "failed"
+                            ? "text-danger"
+                            : status === "unknown"
+                              ? "text-warning"
+                              : status === "in_progress"
+                                ? "text-text-primary"
+                                : "text-text-secondary"
                       }`}
                     >
                       {section.label}
@@ -775,7 +728,7 @@ function OnboardingOverview({
 }: {
   vehicleState: VehicleState | null;
   linkState: LinkState | null;
-  params: ReturnType<typeof useParams>;
+  params: ParamsState;
 }) {
   const [downloading, setDownloading] = useState(false);
 
@@ -825,21 +778,24 @@ function OnboardingOverview({
             <Download size={16} className={downloading ? "animate-pulse" : ""} />
             {downloading ? "Downloading..." : "Download Parameters"}
           </button>
-          {params.progress && (
-            <div className="w-full max-w-xs">
-              <div className="h-1.5 overflow-hidden rounded-full bg-bg-secondary">
-                <div
-                  className="h-full rounded-full bg-accent transition-all duration-300"
-                  style={{
-                    width: `${params.progress.expected > 0 ? Math.round((params.progress.received / params.progress.expected) * 100) : 0}%`,
-                  }}
-                />
+          {params.progress && (() => {
+            const counts = paramProgressCounts(params.progress);
+            return counts && (
+              <div className="w-full max-w-xs">
+                <div className="h-1.5 overflow-hidden rounded-full bg-bg-secondary">
+                  <div
+                    className="h-full rounded-full bg-accent transition-all duration-300"
+                    style={{
+                      width: `${counts.expected > 0 ? Math.round((counts.received / counts.expected) * 100) : 0}%`,
+                    }}
+                  />
+                </div>
+                <span className="mt-1 block text-[10px] text-text-muted">
+                  {counts.received} / {counts.expected} parameters
+                </span>
               </div>
-              <span className="mt-1 block text-[10px] text-text-muted">
-                {params.progress.received} / {params.progress.expected} parameters
-              </span>
-            </div>
-          )}
+            );
+          })()}
         </div>
       </div>
 
@@ -877,7 +833,7 @@ function MetadataLoadingOverview({
   params,
 }: {
   vehicleState: VehicleState | null;
-  params: ReturnType<typeof useParams>;
+  params: ParamsState;
 }) {
   const isLoading = params.metadataLoading;
   const hasFailed = !isLoading && params.metadata === null;
@@ -955,6 +911,7 @@ export function OverviewSection({
   vehicleState,
   telemetry,
   linkState,
+  support,
   sensorHealth,
   homePosition,
   params,
@@ -990,6 +947,7 @@ export function OverviewSection({
       <QuickActions connected={connected} params={params} />
       <PrearmAndActions
         connected={connected}
+        support={support}
         vehicleState={vehicleState}
         sensorHealth={sensorHealth}
       />

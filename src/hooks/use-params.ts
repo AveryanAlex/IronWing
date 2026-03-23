@@ -11,8 +11,9 @@ import {
   type ParamStore,
   type ParamProgress,
 } from "../params";
+import { isNewerScopedEnvelope, isSameEnvelope } from "../lib/scoped-session-events";
 import { fetchParamMetadata, type ParamMetadataMap } from "../param-metadata";
-import { getVehicleSnapshot } from "../snapshot";
+import { subscribeSessionState, type SessionEnvelope } from "../session";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
@@ -25,7 +26,40 @@ function asErrorMessage(error: unknown): string {
 
 export type FilterMode = "all" | "modified" | "standard";
 
-export function useParams(connected: boolean, vehicleType?: string) {
+export type ParamsState = {
+  store: ParamStore | null;
+  progress: ParamProgress | null;
+  search: string;
+  setSearch: (value: string) => void;
+  editingParam: string | null;
+  setEditingParam: (value: string | null) => void;
+  editValue: string;
+  setEditValue: (value: string) => void;
+  paramList: Param[];
+  filteredParams: Param[];
+  groupedParams: Record<string, Param[]>;
+  download: () => Promise<void>;
+  write: (name: string, value: number) => Promise<void>;
+  saveToFile: () => Promise<void>;
+  loadFromFile: () => Promise<Record<string, number> | undefined>;
+  metadata: ParamMetadataMap | null;
+  metadataLoading: boolean;
+  staged: Map<string, number>;
+  stage: (name: string, value: number) => void;
+  unstage: (name: string) => void;
+  unstageAll: () => void;
+  applyStaged: () => Promise<boolean>;
+  filterMode: FilterMode;
+  setFilterMode: (mode: FilterMode) => void;
+};
+
+export function useParams(
+  connected: boolean,
+  vehicleType?: string,
+  bootstrapScope: SessionEnvelope | null = null,
+  bootstrapStore: ParamStore | null = null,
+  bootstrapProgress: ParamProgress | null = null,
+): ParamsState {
   const [store, setStore] = useState<ParamStore | null>(null);
   const [progress, setProgress] = useState<ParamProgress | null>(null);
   const [search, setSearch] = useState("");
@@ -36,45 +70,95 @@ export function useParams(connected: boolean, vehicleType?: string) {
   const lastFetchedType = useRef<string | undefined>();
   const [staged, setStaged] = useState<Map<string, number>>(new Map());
   const [filterMode, setFilterMode] = useState<FilterMode>("standard");
+  const scopeRef = useRef<SessionEnvelope | null>(bootstrapScope);
+
+  const resetScopedState = useCallback(() => {
+    setStore(null);
+    setProgress(null);
+    setEditingParam(null);
+    setStaged(new Map());
+  }, []);
+
+  const eventMatchesCurrentScope = useCallback((incoming: SessionEnvelope) => {
+    const current = scopeRef.current;
+    return current !== null && isSameEnvelope(current, incoming);
+  }, []);
 
   // Subscribe to param events
   useEffect(() => {
     let stopStore: (() => void) | null = null;
     let stopProgress: (() => void) | null = null;
+    let stopSession: (() => void) | null = null;
 
     (async () => {
-      stopStore = await subscribeParamStore(setStore);
-      stopProgress = await subscribeParamProgress(setProgress);
-
-      try {
-        const snapshot = await getVehicleSnapshot();
-        if (snapshot) {
-          if (Object.keys(snapshot.param_store.params).length > 0) {
-            setStore(snapshot.param_store);
-          }
-          setProgress(snapshot.param_progress);
+      stopStore = await subscribeParamStore((event) => {
+        if (!eventMatchesCurrentScope(event.envelope)) {
+          return;
         }
-      } catch {}
+
+        setStore(event.value);
+      });
+      stopProgress = await subscribeParamProgress((event) => {
+        if (!eventMatchesCurrentScope(event.envelope)) {
+          return;
+        }
+
+        setProgress(event.value);
+      });
+      stopSession = await subscribeSessionState((event) => {
+        if (event.envelope.source_kind !== "live") {
+          return;
+        }
+
+        const previous = scopeRef.current;
+        if (previous && !isNewerScopedEnvelope(previous, event.envelope)) {
+          return;
+        }
+
+        scopeRef.current = event.envelope;
+        if (previous && !isSameEnvelope(previous, event.envelope)) {
+          resetScopedState();
+        }
+      });
+
     })();
 
     return () => {
       stopStore?.();
       stopProgress?.();
+      stopSession?.();
     };
-  }, []);
+  }, [eventMatchesCurrentScope, resetScopedState]);
+
+  useEffect(() => {
+    if (!connected || !bootstrapScope) return;
+
+    const previous = scopeRef.current;
+    scopeRef.current = bootstrapScope;
+    if (previous && !isSameEnvelope(previous, bootstrapScope)) {
+      resetScopedState();
+    }
+  }, [bootstrapScope, connected, resetScopedState]);
+
+  useEffect(() => {
+    if (!connected) return;
+    if (!bootstrapScope) return;
+    if (!eventMatchesCurrentScope(bootstrapScope)) return;
+
+    setStore(bootstrapStore && Object.keys(bootstrapStore.params).length > 0 ? bootstrapStore : null);
+    setProgress(bootstrapProgress);
+  }, [bootstrapProgress, bootstrapScope, bootstrapStore, connected, eventMatchesCurrentScope]);
 
   // Clear store on disconnect
   useEffect(() => {
     if (!connected) {
-      setStore(null);
-      setProgress(null);
-      setEditingParam(null);
+      scopeRef.current = null;
+      resetScopedState();
       setMetadata(null);
-      setStaged(new Map());
       setFilterMode("all");
       lastFetchedType.current = undefined;
     }
-  }, [connected]);
+  }, [connected, resetScopedState]);
 
   // Fetch metadata when vehicle type becomes known
   useEffect(() => {
