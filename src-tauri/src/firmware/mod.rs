@@ -5143,12 +5143,12 @@ mod tests {
         }
     }
 
-    // ── Windows driver guidance ──
+    // ── USB driver guidance ──
 
     #[test]
-    fn dfu_recovery_windows_driver_guidance() {
+    fn dfu_recovery_usb_driver_guidance() {
         let usb = MockDfuUsb::success().with_open_error(FirmwareError::UsbAccessDenied {
-            guidance: "access denied".into(),
+            guidance: "cannot open USB device: access denied".into(),
         });
         let device = stm32_dfu_device();
         let bin_data = vec![0x01, 0x02, 0x03, 0x04];
@@ -5157,6 +5157,10 @@ mod tests {
 
         match &result {
             DfuRecoveryResult::DriverGuidance { guidance } => {
+                assert!(
+                    guidance.contains("cannot open USB device"),
+                    "should preserve upstream context: {guidance}"
+                );
                 assert!(guidance.contains("WinUSB"), "got: {guidance}");
                 assert!(guidance.contains("Zadig"), "got: {guidance}");
                 assert!(guidance.contains("zadig.akeo.ie"), "got: {guidance}");
@@ -5176,7 +5180,7 @@ mod tests {
 
     #[test]
     fn dfu_recovery_driver_guidance_text_is_comprehensive() {
-        let text = windows_driver_guidance();
+        let text = usb_driver_guidance();
         assert!(text.contains("WinUSB"), "should mention WinUSB: {text}");
         assert!(text.contains("Zadig"), "should mention Zadig: {text}");
         assert!(text.contains("zadig.akeo.ie"), "should link Zadig: {text}");

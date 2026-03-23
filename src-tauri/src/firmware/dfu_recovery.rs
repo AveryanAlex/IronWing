@@ -106,18 +106,18 @@ pub(crate) fn validate_stm32_dfu_device(device: &DfuDeviceInfo) -> Result<(), Fi
 
 pub(crate) fn classify_usb_error(error: &FirmwareError) -> FirmwareError {
     match error {
-        FirmwareError::UsbAccessDenied { .. } => FirmwareError::UsbAccessDenied {
-            guidance: windows_driver_guidance().to_string(),
+        FirmwareError::UsbAccessDenied { guidance } => FirmwareError::UsbAccessDenied {
+            guidance: format!("{guidance}. {}", usb_driver_guidance()),
         },
         other => other.clone(),
     }
 }
 
-pub(crate) fn windows_driver_guidance() -> &'static str {
-    "STM32 DFU device is not accessible. On Windows, install the WinUSB driver \
-     using Zadig (https://zadig.akeo.ie): select the STM32 BOOTLOADER device \
-     and replace its driver with WinUSB. On Linux, ensure your user has USB \
-     permissions (udev rules). On macOS, no extra driver is needed."
+pub(crate) fn usb_driver_guidance() -> &'static str {
+    "On Windows, install the WinUSB driver using Zadig (https://zadig.akeo.ie): \
+     select the STM32 BOOTLOADER device and replace its driver with WinUSB. \
+     On Linux, ensure your user has USB permissions (udev rules). \
+     On macOS, no extra driver is needed"
 }
 
 // ── Terminal result ──
