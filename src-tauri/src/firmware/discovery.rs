@@ -78,7 +78,10 @@ pub(crate) fn firmware_list_dfu_devices() -> DfuScanResult {
 pub(crate) fn list_firmware_ports() -> InventoryResult {
     let ports = match serialport::available_ports() {
         Ok(ports) => ports,
-        Err(_) => return InventoryResult::Available { ports: vec![] },
+        Err(e) => {
+            tracing::warn!("serial port enumeration failed: {e}");
+            return InventoryResult::Available { ports: vec![] };
+        }
     };
 
     let port_infos = ports
@@ -122,7 +125,10 @@ pub(crate) fn list_dfu_devices() -> DfuScanResult {
 
     let devices = match nusb::list_devices().wait() {
         Ok(iter) => iter,
-        Err(_) => return DfuScanResult::Available { devices: vec![] },
+        Err(e) => {
+            tracing::warn!("USB device enumeration failed: {e}");
+            return DfuScanResult::Available { devices: vec![] };
+        }
     };
 
     let dfu_devices: Vec<DfuDeviceInfo> = devices
