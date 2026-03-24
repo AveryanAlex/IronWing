@@ -15,11 +15,11 @@ import {
 } from "@dnd-kit/sortable";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { MapPin } from "lucide-react";
-import { MissionWaypointCard } from "./MissionWaypointCard";
+import { MissionItemCard } from "./MissionItemCard";
 import type { MissionItem } from "../../lib/mavkit-types";
 import type { useMission } from "../../hooks/use-mission";
 
-type MissionWaypointListProps = {
+type MissionItemListProps = {
   mission: ReturnType<typeof useMission>;
   onSelectAndClose?: () => void;
   onCardSelect?: (seq: number) => void;
@@ -178,11 +178,11 @@ function JumpGutter({
   );
 }
 
-export function MissionWaypointList({
+export function MissionItemList({
   mission,
   onSelectAndClose,
   onCardSelect,
-}: MissionWaypointListProps) {
+}: MissionItemListProps) {
   const current = mission.current;
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -262,7 +262,7 @@ export function MissionWaypointList({
         >
           <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
             {current.draftItems.map((draftItem) => (
-              <MissionWaypointCard
+              <MissionItemCard
                 key={draftItem.uiId}
                 draftItem={draftItem}
                 displayIndex={draftItem.index + 1}

@@ -4,7 +4,7 @@ import { MissionMap } from "../MissionMap";
 import { MapContextMenu } from "../MapContextMenu";
 import { MissionWorkspaceHeader } from "./MissionWorkspaceHeader";
 import { MissionPlannerSummary } from "./MissionPlannerSummary";
-import { MissionWaypointList } from "./MissionWaypointList";
+import { MissionItemList } from "./MissionItemList";
 import { MissionInspector } from "./MissionInspector";
 import { MissionAutoGridDialog } from "./MissionAutoGridDialog";
 import { cn } from "../../lib/utils";
@@ -236,7 +236,7 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
             <MissionPlannerSummary mission={mission} connected={vehicle.connected} />
           </div>
 
-          <MissionWaypointList
+          <MissionItemList
             mission={mission}
             onCardSelect={handleCardSelect}
           />

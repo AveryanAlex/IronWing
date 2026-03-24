@@ -30,7 +30,7 @@ function fenceRegionLabel(region: FenceRegion): string {
   return "Excl. Circle";
 }
 
-type MissionWaypointCardProps = {
+type MissionItemCardProps = {
   draftItem: TypedDraftItem;
   displayIndex: number;
   isSelected: boolean;
@@ -44,7 +44,7 @@ type MissionWaypointCardProps = {
   onSetCurrent: () => void;
 };
 
-export function MissionWaypointCard({
+export function MissionItemCard({
   draftItem,
   displayIndex,
   isSelected,
@@ -56,7 +56,7 @@ export function MissionWaypointCard({
   onInsertAfter,
   onDelete,
   onSetCurrent,
-}: MissionWaypointCardProps) {
+}: MissionItemCardProps) {
   const isMission = missionType === "mission";
   // Active WP emphasis only applies in Mission mode
   const isActive = isMission && isActiveRaw;

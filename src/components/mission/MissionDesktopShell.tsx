@@ -1,6 +1,6 @@
 import { MapPin } from "lucide-react";
 import { MissionPlannerSummary } from "./MissionPlannerSummary";
-import { MissionWaypointList } from "./MissionWaypointList";
+import { MissionItemList } from "./MissionItemList";
 import { MissionInspector } from "./MissionInspector";
 import type { useMission } from "../../hooks/use-mission";
 
@@ -36,7 +36,7 @@ export function MissionDesktopShell({ mission, connected, onCardSelect }: Missio
         </div>
 
         <div className="px-2.5 pb-2.5">
-          <MissionWaypointList mission={mission} onCardSelect={onCardSelect} />
+          <MissionItemList mission={mission} onCardSelect={onCardSelect} />
 
           {current.selectedItem && current.selectedIndex !== null && (
             <div className="mt-2">
