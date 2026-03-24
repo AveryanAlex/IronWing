@@ -92,8 +92,10 @@ function extractCommandFields(cmd: MissionCommand): FieldEntry[] {
     const inner = (d as Record<string, Record<string, unknown>>)[key];
     if (inner) walk(inner);
   } else if ("Condition" in cmd) {
-    const key = Object.keys(cmd.Condition)[0];
-    const inner = (cmd.Condition as Record<string, Record<string, unknown>>)[key];
+    const c = cmd.Condition;
+    if (typeof c === "string") return entries;
+    const key = Object.keys(c)[0];
+    const inner = (c as Record<string, Record<string, unknown>>)[key];
     if (inner) walk(inner);
   } else if ("Other" in cmd) {
     const raw = cmd.Other;
