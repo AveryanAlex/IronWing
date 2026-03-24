@@ -166,9 +166,10 @@ pub(crate) async fn firmware_flash_serial(
     let was_connected = connection::is_vehicle_connected(&state).await;
     let active_link_target = connection::active_link_target(&state).await;
 
-    let auto_reboot_supported = should_auto_reboot_selected_serial_target(
-        active_link_target.as_ref(),
+    let bootloader_transition = serial_bootloader_transition(
         &port,
+        &available_ports,
+        active_link_target.as_ref(),
         was_connected,
     );
     let preflight = capture_preflight(&port, baud);
@@ -179,7 +180,10 @@ pub(crate) async fn firmware_flash_serial(
         return Ok(result);
     }
 
-    if auto_reboot_supported {
+    if matches!(
+        bootloader_transition,
+        SerialBootloaderTransition::AutoRebootSupported
+    ) {
         // Connected preflight path: request bootloader reboot via MAVLink, then disconnect
         let reboot_result = {
             let guard = state.vehicle.lock().await;
@@ -191,6 +195,39 @@ pub(crate) async fn firmware_flash_serial(
         };
         if let Err(e) = &reboot_result {
             tracing::warn!("bootloader reboot request failed (proceeding with disconnect): {e}");
+        }
+    }
+
+    if matches!(
+        bootloader_transition,
+        SerialBootloaderTransition::AutoRebootAttemptable
+    ) {
+        // Best-effort: open a temporary MAVLink session to reboot the board into bootloader.
+        // USB CDC ignores baud, and 115200 is ArduPilot's default MAVLink baud for true UARTs.
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            mavkit::Vehicle::connect(&format!("serial:{port}:115200")),
+        )
+        .await
+        {
+            Ok(Ok(vehicle)) => {
+                if let Err(e) = vehicle.reboot_to_bootloader().await {
+                    tracing::warn!(
+                        "temporary MAVLink reboot-to-bootloader failed (proceeding): {e}"
+                    );
+                }
+                let _ = vehicle.disconnect().await;
+            }
+            Ok(Err(e)) => {
+                tracing::warn!(
+                    "temporary MAVLink connection to {port} failed (proceeding): {e}"
+                );
+            }
+            Err(_) => {
+                tracing::warn!(
+                    "temporary MAVLink connection to {port} timed out (proceeding)"
+                );
+            }
         }
     }
 
