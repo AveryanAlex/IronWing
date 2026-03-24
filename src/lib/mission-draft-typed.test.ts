@@ -22,6 +22,7 @@ import {
   replaceAllTypedItems,
   updateFenceRegion,
   updateRallyAltitudeFrame,
+  addFenceRegionAt,
   type SessionScope,
 } from "./mission-draft-typed";
 
@@ -339,6 +340,37 @@ describe("mission-draft-typed: fence domain", () => {
     const fencePlan = typedDraftPlan(updated, "fence");
     expect(fencePlan.return_point).toEqual({ latitude_deg: 47.0, longitude_deg: 8.0 });
     expect(fencePlan.regions).toHaveLength(2);
+  });
+
+  it("addFenceRegionAt creates inclusion polygon with 4 vertices", () => {
+    const plan: FencePlan = { return_point: null, regions: [] };
+    const liveScope = scope("fence-add-incl-poly", "live");
+    const state = replaceTypedDraftFromDownload(createTypedDraftState(), "fence", plan, liveScope);
+
+    const updated = addFenceRegionAt(state, 47.5, 8.6, "inclusion_polygon");
+    const items = typedDraftItems(updated, "fence");
+    expect(items).toHaveLength(1);
+    const region = items[0].document as FenceRegion;
+    expect(region).toHaveProperty("inclusion_polygon");
+    if (!("inclusion_polygon" in region)) throw new Error("expected inclusion_polygon");
+    expect(region.inclusion_polygon.vertices).toHaveLength(4);
+    expect(region.inclusion_polygon.inclusion_group).toBe(0);
+  });
+
+  it("addFenceRegionAt creates exclusion circle with 50m radius", () => {
+    const plan: FencePlan = { return_point: null, regions: [] };
+    const liveScope = scope("fence-add-excl-circle", "live");
+    const state = replaceTypedDraftFromDownload(createTypedDraftState(), "fence", plan, liveScope);
+
+    const updated = addFenceRegionAt(state, 47.5, 8.6, "exclusion_circle");
+    const items = typedDraftItems(updated, "fence");
+    expect(items).toHaveLength(1);
+    const region = items[0].document as FenceRegion;
+    expect(region).toHaveProperty("exclusion_circle");
+    if (!("exclusion_circle" in region)) throw new Error("expected exclusion_circle");
+    expect(region.exclusion_circle.center.latitude_deg).toBeCloseTo(47.5, 3);
+    expect(region.exclusion_circle.center.longitude_deg).toBeCloseTo(8.6, 3);
+    expect(region.exclusion_circle.radius_m).toBe(50);
   });
 });
 

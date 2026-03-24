@@ -815,14 +815,16 @@ export function useMission(
     const selectedItem = visible ? typedDraftSelectedItem(typedDraftState, domain) : null;
     const previousItem = visible ? typedDraftPreviousItem(typedDraftState, domain) : null;
     const plan = visible ? typedDraftPlan(typedDraftState, domain) : emptyDomainPlan(domain);
+    const fencePlan = plan as FencePlan;
     return {
       tab: domain,
       label: missionLabel(domain),
       draftItems,
       plan,
+      returnPoint: fencePlan.return_point,
       selectedIndex,
       selectedItem,
-      selectedPlanItem: selectedIndex === null ? null : plan.regions[selectedIndex] ?? null,
+      selectedPlanItem: selectedIndex === null ? null : fencePlan.regions[selectedIndex] ?? null,
       previousItem,
       displayTotal: draftItems.length,
       recoverableAvailable: recoverableScopeMatches(typedDraftState.recoverable.fence?.scope, currentScope),
