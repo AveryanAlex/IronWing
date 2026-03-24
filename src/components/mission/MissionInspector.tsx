@@ -4,6 +4,7 @@ import {
   commandDisplayName,
   commandPosition,
   commandCategory,
+  defaultCommand,
   geoPoint3dLatLon,
   geoPoint3dAltitude,
 } from "../../lib/mavkit-types";
@@ -13,6 +14,7 @@ import type {
   GeoPoint3d,
   HomePosition,
 } from "../../lib/mavkit-types";
+import { CommandPicker } from "./CommandPicker";
 import {
   offsetFromHome,
   offsetFromPrevious,
@@ -512,7 +514,7 @@ export function MissionInspector({
   homePosition,
   readOnly = false,
   isSelected,
-  onUpdateCommand: _onUpdateCommand,
+  onUpdateCommand,
   onUpdateAltitude,
   onUpdateCoordinate,
   onSelect,
@@ -568,14 +570,24 @@ export function MissionInspector({
 
       <div className="space-y-0.5">
         <label className="text-[10px] text-text-muted">Command</label>
-        <div className="rounded border border-border bg-bg-input px-1.5 py-1 text-xs text-text-primary">
-          {displayName}
-          {category && (
-            <span className="ml-1.5 text-[9px] uppercase text-text-muted/60">
-              {category}
-            </span>
-          )}
-        </div>
+        {isMissionItem && !controlReadOnly && onUpdateCommand ? (
+          <CommandPicker
+            currentName={displayName}
+            onSelect={(cat, variant) => {
+              const newCmd = defaultCommand(cat, variant, position ?? undefined);
+              onUpdateCommand(index, newCmd);
+            }}
+          />
+        ) : (
+          <div className="rounded border border-border bg-bg-input px-1.5 py-1 text-xs text-text-primary">
+            {displayName}
+            {category && (
+              <span className="ml-1.5 text-[9px] uppercase text-text-muted/60">
+                {category}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {draftItem.readOnly && (

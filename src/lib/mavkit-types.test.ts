@@ -7,8 +7,10 @@ import type {
 import {
   commandCategory,
   commandDisplayName,
+  commandDisplayNameFromVariant,
   commandHasPosition,
   commandPosition,
+  defaultCommand,
   defaultGeoPoint3d,
   geoPoint3dAltitude,
   geoPoint3dLatLon,
@@ -352,5 +354,65 @@ describe("commandDisplayName", () => {
       },
     };
     expect(commandDisplayName(cmd)).toBe("Gimbal Manager Pitch Yaw");
+  });
+});
+
+describe("commandDisplayNameFromVariant", () => {
+  it("converts PascalCase to spaced display name", () => {
+    expect(commandDisplayNameFromVariant("ReturnToLaunch")).toBe("Return To Launch");
+    expect(commandDisplayNameFromVariant("SetRoiNone")).toBe("Set Roi None");
+    expect(commandDisplayNameFromVariant("Waypoint")).toBe("Waypoint");
+  });
+});
+
+describe("defaultCommand", () => {
+  it("creates a Nav Waypoint with position and category nav", () => {
+    const cmd = defaultCommand("Nav", "Waypoint");
+    expect(commandCategory(cmd)).toBe("nav");
+    expect(commandPosition(cmd)).not.toBeNull();
+    expect(cmd).toHaveProperty("Nav");
+    const nav = (cmd as { Nav: Record<string, unknown> }).Nav;
+    expect(nav).toHaveProperty("Waypoint");
+  });
+
+  it("creates a Nav ReturnToLaunch as a unit variant (no position)", () => {
+    const cmd = defaultCommand("Nav", "ReturnToLaunch");
+    expect(commandCategory(cmd)).toBe("nav");
+    expect(commandPosition(cmd)).toBeNull();
+    expect(cmd).toEqual({ Nav: "ReturnToLaunch" });
+  });
+
+  it("creates a Do ChangeSpeed with category do", () => {
+    const cmd = defaultCommand("Do", "ChangeSpeed");
+    expect(commandCategory(cmd)).toBe("do");
+    expect(cmd).toHaveProperty("Do");
+    const d = (cmd as { Do: Record<string, unknown> }).Do;
+    expect(d).toHaveProperty("ChangeSpeed");
+  });
+
+  it("creates a Do SetRoiNone as a unit variant", () => {
+    const cmd = defaultCommand("Do", "SetRoiNone");
+    expect(commandCategory(cmd)).toBe("do");
+    expect(cmd).toEqual({ Do: "SetRoiNone" });
+  });
+
+  it("creates a Condition Yaw with category condition", () => {
+    const cmd = defaultCommand("Condition", "Yaw");
+    expect(commandCategory(cmd)).toBe("condition");
+    expect(cmd).toHaveProperty("Condition");
+    const c = (cmd as { Condition: Record<string, unknown> }).Condition;
+    expect(c).toHaveProperty("Yaw");
+  });
+
+  it("uses provided position for position-bearing Nav commands", () => {
+    const pos = defaultGeoPoint3d(47.0, 8.0, 100);
+    const cmd = defaultCommand("Nav", "Waypoint", pos);
+    expect(commandPosition(cmd)).toEqual(pos);
+  });
+
+  it("uses provided position for position-bearing Do commands", () => {
+    const pos = defaultGeoPoint3d(47.0, 8.0, 100);
+    const cmd = defaultCommand("Do", "SetHome", pos);
+    expect(commandPosition(cmd)).toEqual(pos);
   });
 });
