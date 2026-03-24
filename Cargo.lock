@@ -1926,6 +1926,7 @@ dependencies = [
  "tauri-plugin-http",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "tracing",
  "ureq",
  "uuid",
@@ -2267,7 +2268,7 @@ checksum = "2532096657941c2fea9c289d370a250971c689d4f143798ff67113ec042024a5"
 [[package]]
 name = "mavkit"
 version = "0.4.0"
-source = "git+https://github.com/AveryanAlex/mavkit.git?branch=main#c8133efeb5db1e36f08ac0fe1e4f15199da0a6e6"
+source = "git+https://github.com/AveryanAlex/mavkit.git?branch=main#ed8182e0fc51b71c2b5ee8224c693d9293c554ba"
 dependencies = [
  "async-trait",
  "futures",
@@ -3194,7 +3195,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

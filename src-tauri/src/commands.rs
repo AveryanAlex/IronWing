@@ -463,14 +463,15 @@ pub(crate) async fn mission_upload(
     state: tauri::State<'_, AppState>,
     plan: MissionPlan,
 ) -> Result<(), String> {
-    with_vehicle(&state)
+    let op = with_vehicle(&state)
         .await?
         .mission()
         .upload(plan)
-        .map_err(|e| e.to_string())?
-        .wait()
-        .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    let result = op.wait().await.map_err(|e| e.to_string());
+    state.mission_op_cancel.lock().await.take();
+    result
 }
 
 #[tauri::command]
@@ -478,13 +479,14 @@ pub(crate) async fn mission_download(
     state: tauri::State<'_, AppState>,
 ) -> Result<MissionDownload, String> {
     let vehicle = with_vehicle(&state).await?;
-    let plan = vehicle
+    let op = vehicle
         .mission()
         .download()
-        .map_err(|e| e.to_string())?
-        .wait()
-        .await
         .map_err(|e| e.to_string())?;
+    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    let plan = op.wait().await.map_err(|e| e.to_string());
+    state.mission_op_cancel.lock().await.take();
+    let plan = plan?;
     let home = vehicle.home().latest().map(|sample| HomePosition {
         latitude_deg: sample.value.latitude_deg,
         longitude_deg: sample.value.longitude_deg,
@@ -495,14 +497,15 @@ pub(crate) async fn mission_download(
 
 #[tauri::command]
 pub(crate) async fn mission_clear(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    with_vehicle(&state)
+    let op = with_vehicle(&state)
         .await?
         .mission()
         .clear()
-        .map_err(|e| e.to_string())?
-        .wait()
-        .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    let result = op.wait().await.map_err(|e| e.to_string());
+    state.mission_op_cancel.lock().await.take();
+    result
 }
 
 #[tauri::command]
@@ -510,40 +513,43 @@ pub(crate) async fn fence_upload(
     state: tauri::State<'_, AppState>,
     plan: FencePlan,
 ) -> Result<(), String> {
-    with_vehicle(&state)
+    let op = with_vehicle(&state)
         .await?
         .fence()
         .upload(plan)
-        .map_err(|e| e.to_string())?
-        .wait()
-        .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    let result = op.wait().await.map_err(|e| e.to_string());
+    state.mission_op_cancel.lock().await.take();
+    result
 }
 
 #[tauri::command]
 pub(crate) async fn fence_download(
     state: tauri::State<'_, AppState>,
 ) -> Result<FencePlan, String> {
-    with_vehicle(&state)
+    let op = with_vehicle(&state)
         .await?
         .fence()
         .download()
-        .map_err(|e| e.to_string())?
-        .wait()
-        .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    let result = op.wait().await.map_err(|e| e.to_string());
+    state.mission_op_cancel.lock().await.take();
+    result
 }
 
 #[tauri::command]
 pub(crate) async fn fence_clear(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    with_vehicle(&state)
+    let op = with_vehicle(&state)
         .await?
         .fence()
         .clear()
-        .map_err(|e| e.to_string())?
-        .wait()
-        .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    let result = op.wait().await.map_err(|e| e.to_string());
+    state.mission_op_cancel.lock().await.take();
+    result
 }
 
 #[tauri::command]
@@ -551,40 +557,43 @@ pub(crate) async fn rally_upload(
     state: tauri::State<'_, AppState>,
     plan: RallyPlan,
 ) -> Result<(), String> {
-    with_vehicle(&state)
+    let op = with_vehicle(&state)
         .await?
         .rally()
         .upload(plan)
-        .map_err(|e| e.to_string())?
-        .wait()
-        .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    let result = op.wait().await.map_err(|e| e.to_string());
+    state.mission_op_cancel.lock().await.take();
+    result
 }
 
 #[tauri::command]
 pub(crate) async fn rally_download(
     state: tauri::State<'_, AppState>,
 ) -> Result<RallyPlan, String> {
-    with_vehicle(&state)
+    let op = with_vehicle(&state)
         .await?
         .rally()
         .download()
-        .map_err(|e| e.to_string())?
-        .wait()
-        .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    let result = op.wait().await.map_err(|e| e.to_string());
+    state.mission_op_cancel.lock().await.take();
+    result
 }
 
 #[tauri::command]
 pub(crate) async fn rally_clear(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    with_vehicle(&state)
+    let op = with_vehicle(&state)
         .await?
         .rally()
         .clear()
-        .map_err(|e| e.to_string())?
-        .wait()
-        .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    let result = op.wait().await.map_err(|e| e.to_string());
+    state.mission_op_cancel.lock().await.take();
+    result
 }
 
 #[tauri::command]
@@ -600,11 +609,11 @@ pub(crate) async fn mission_set_current(
         .map_err(|e| e.to_string())
 }
 
-/// Legacy cancel stub. The new mavkit API uses per-operation cancellation
-/// (via `MissionOperationHandle::cancel()`), so a global cancel is a no-op.
-/// Kept to avoid breaking the frontend IPC contract.
 #[tauri::command]
-pub(crate) async fn mission_cancel(_state: tauri::State<'_, AppState>) -> Result<(), String> {
+pub(crate) async fn mission_cancel(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    if let Some(token) = state.mission_op_cancel.lock().await.take() {
+        token.cancel();
+    }
     Ok(())
 }
 

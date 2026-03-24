@@ -41,6 +41,8 @@ mod logs;
 mod recording;
 mod session_runtime;
 
+pub(crate) type MissionCancelToken = tokio_util::sync::CancellationToken;
+
 pub(crate) enum FirmwareAbortHandle {
     SafeToAbort { handle: tokio::task::AbortHandle },
     Cooperative { _handle: tokio::task::AbortHandle },
@@ -58,6 +60,7 @@ pub(crate) struct AppState {
     pub(crate) firmware_abort: tokio::sync::Mutex<Option<FirmwareAbortHandle>>,
     pub(crate) firmware_cancel_requested: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub(crate) param_download_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
+    pub(crate) mission_op_cancel: tokio::sync::Mutex<Option<MissionCancelToken>>,
     pub(crate) session_runtime: tokio::sync::Mutex<SessionRuntime>,
     pub(crate) guided_runtime: tokio::sync::Mutex<GuidedRuntime>,
     #[allow(dead_code)] // Read by event bridge wiring (Task 3)
@@ -80,6 +83,7 @@ pub fn run() {
         firmware_abort: tokio::sync::Mutex::new(None),
         firmware_cancel_requested: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         param_download_abort: tokio::sync::Mutex::new(None),
+        mission_op_cancel: tokio::sync::Mutex::new(None),
         session_runtime: tokio::sync::Mutex::new(SessionRuntime::new()),
         guided_runtime: tokio::sync::Mutex::new(GuidedRuntime::default()),
         session_context: tokio::sync::Mutex::new(bridges::SessionContext::new()),

@@ -33,6 +33,7 @@ base64 = "0.22"
 flate2 = "1"
 crc32fast = "1"
 ureq = "3"
+tokio-util = { version = "0.7.18", features = ["rt"] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 mavkit = { git = "https://github.com/AveryanAlex/mavkit.git", branch = "main", features = ["serial"] }
