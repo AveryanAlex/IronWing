@@ -316,19 +316,6 @@ pub(crate) async fn firmware_flash_serial(
 }
 
 #[tauri::command]
-pub(crate) async fn firmware_reboot_to_bootloader(
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
-    let guard = state.vehicle.lock().await;
-    let vehicle = guard.as_ref().ok_or("not connected")?;
-    vehicle
-        .ardupilot()
-        .reboot_to_bootloader()
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 pub(crate) async fn firmware_serial_preflight(
     state: tauri::State<'_, AppState>,
 ) -> Result<SerialPreflightInfo, String> {
