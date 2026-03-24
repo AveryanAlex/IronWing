@@ -67,7 +67,7 @@ async fn current_stream_envelope(handle: &tauri::AppHandle) -> Option<SessionEnv
     runtime.current_stream_envelope(Instant::now())
 }
 
-async fn emit_scoped<T>(handle: &tauri::AppHandle, event: &str, value: T)
+pub(crate) async fn emit_scoped<T>(handle: &tauri::AppHandle, event: &str, value: T)
 where
     T: Serialize + Clone + Send + 'static,
 {
@@ -291,7 +291,6 @@ pub(crate) async fn spawn_event_bridges(
                     )
                     .await;
                 }
-                emit_scoped(&handle, "param://progress", ps.active_op).await;
             }
         }));
     }
