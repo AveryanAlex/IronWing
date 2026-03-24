@@ -104,8 +104,9 @@ fn contract_fixtures_round_trip_through_rust_contract_types() {
     assert_round_trip::<ipc::StatusTextSnapshot>("status_text.domain.json");
     assert_round_trip::<ipc::OpenSessionSnapshot>("open_session.live.json");
     assert_round_trip::<ipc::OpenSessionSnapshot>("open_session.playback.json");
-    // Mission/fence/rally document types have been removed; these pass-through
-    // mavkit types directly and are no longer covered by contract fixtures.
+    assert_round_trip::<mavkit::mission::MissionPlan>("mission.plan.json");
+    assert_round_trip::<mavkit::fence::FencePlan>("fence.plan.json");
+    assert_round_trip::<mavkit::rally::RallyPlan>("rally.plan.json");
 }
 
 #[test]
