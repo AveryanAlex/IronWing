@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Check,
   X,
@@ -32,7 +32,7 @@ import { isPreArmGood, SENSOR_KEYS, type SensorHealth, type SensorId, type Senso
 import type { SupportDomain } from "../../../support";
 import type { SetupSectionId, SectionStatus, OverallProgress } from "../../../hooks/use-setup-sections";
 import type { ParamsState } from "../../../hooks/use-params";
-import { paramProgressCounts } from "../../../params";
+import { paramProgressCounts, paramProgressPhase } from "../../../params";
 import { SETUP_SECTIONS, SECTION_GROUPS } from "../SetupSectionPanel";
 import { ParamDisplay } from "../primitives/ParamDisplay";
 import type { ParamInputParams } from "../primitives/param-helpers";
@@ -266,17 +266,36 @@ function QuickActions({
   connected: boolean;
   params: ParamsState;
 }) {
-  const [downloading, setDownloading] = useState(false);
   const [rebooting, setRebooting] = useState(false);
+  const lingerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
 
-  const handleDownload = useCallback(async () => {
-    setDownloading(true);
-    try {
-      await params.download();
-    } finally {
-      setDownloading(false);
+  const phase = params.progress ? paramProgressPhase(params.progress) : null;
+  const isDownloading = phase === "downloading";
+  const counts = params.progress ? paramProgressCounts(params.progress) : null;
+
+  // Linger "completed" state for 1.5s, clear timer on transition away
+  useEffect(() => {
+    if (phase === "completed") {
+      setShowCompleted(true);
+      lingerTimerRef.current = setTimeout(() => {
+        setShowCompleted(false);
+        lingerTimerRef.current = null;
+      }, 1500);
+    } else {
+      if (lingerTimerRef.current) {
+        clearTimeout(lingerTimerRef.current);
+        lingerTimerRef.current = null;
+      }
+      setShowCompleted(false);
     }
-  }, [params]);
+    return () => {
+      if (lingerTimerRef.current) {
+        clearTimeout(lingerTimerRef.current);
+        lingerTimerRef.current = null;
+      }
+    };
+  }, [phase]);
 
   const handleReboot = useCallback(async () => {
     if (!connected) return;
@@ -290,20 +309,37 @@ function QuickActions({
     }
   }, [connected]);
 
+  const progressPct =
+    counts && counts.expected
+      ? Math.round((counts.received / counts.expected) * 100)
+      : isDownloading
+        ? 0
+        : 100;
+
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
       <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
         Quick Actions
       </h3>
       <div className="flex flex-wrap gap-2">
-        <button
-          onClick={handleDownload}
-          disabled={!connected || downloading}
-          className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-colors hover:bg-bg-tertiary disabled:opacity-40"
-        >
-          <RefreshCw size={12} className={downloading ? "animate-spin" : ""} />
-          {downloading ? "Refreshing..." : "Refresh"}
-        </button>
+        {isDownloading ? (
+          <button
+            onClick={() => params.cancel()}
+            className="flex items-center gap-1.5 rounded-md border border-danger/30 bg-danger/5 px-3 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-danger/10"
+          >
+            <X size={12} />
+            Cancel
+          </button>
+        ) : (
+          <button
+            onClick={() => params.download()}
+            disabled={!connected}
+            className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-colors hover:bg-bg-tertiary disabled:opacity-40"
+          >
+            <RefreshCw size={12} />
+            Refresh
+          </button>
+        )}
         <button
           onClick={params.saveToFile}
           disabled={!params.store}
@@ -328,6 +364,25 @@ function QuickActions({
           {rebooting ? "Rebooting..." : "Reboot Vehicle"}
         </button>
       </div>
+
+      {/* Download progress bar */}
+      {(isDownloading || showCompleted) && (
+        <div className="mt-3 flex flex-col gap-1">
+          <div className="h-1.5 overflow-hidden rounded-full bg-bg-secondary">
+            <div
+              className="h-full rounded-full bg-accent-blue transition-all duration-300"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-text-muted">
+            {showCompleted && !isDownloading
+              ? `Downloaded ${counts?.received ?? ""} / ${counts?.expected ?? ""} parameters`
+              : counts
+                ? `Downloading ${counts.received} / ${counts.expected ?? "?"} parameters`
+                : "Downloading…"}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -730,16 +785,9 @@ function OnboardingOverview({
   linkState: LinkState | null;
   params: ParamsState;
 }) {
-  const [downloading, setDownloading] = useState(false);
-
-  const handleDownload = useCallback(async () => {
-    setDownloading(true);
-    try {
-      await params.download();
-    } finally {
-      setDownloading(false);
-    }
-  }, [params]);
+  const phase = params.progress ? paramProgressPhase(params.progress) : null;
+  const isDownloading = phase === "downloading";
+  const counts = params.progress ? paramProgressCounts(params.progress) : null;
 
   const linkOk = linkStateOk(linkState);
 
@@ -770,32 +818,39 @@ function OnboardingOverview({
               all setup sections.
             </p>
           </div>
-          <button
-            onClick={handleDownload}
-            disabled={downloading || !linkOk}
-            className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-bg-primary transition-opacity hover:opacity-90 disabled:opacity-40"
-          >
-            <Download size={16} className={downloading ? "animate-pulse" : ""} />
-            {downloading ? "Downloading..." : "Download Parameters"}
-          </button>
-          {params.progress && (() => {
-            const counts = paramProgressCounts(params.progress);
-            return counts && (
-              <div className="w-full max-w-xs">
-                <div className="h-1.5 overflow-hidden rounded-full bg-bg-secondary">
-                  <div
-                    className="h-full rounded-full bg-accent transition-all duration-300"
-                    style={{
-                      width: `${counts.expected != null && counts.expected > 0 ? Math.round((counts.received / counts.expected) * 100) : 0}%`,
-                    }}
-                  />
-                </div>
-                <span className="mt-1 block text-[10px] text-text-muted">
-                  {counts.received} / {counts.expected ?? "?"} parameters
-                </span>
+          {isDownloading ? (
+            <button
+              onClick={() => params.cancel()}
+              className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/5 px-5 py-2.5 text-sm font-semibold text-danger transition-opacity hover:opacity-90"
+            >
+              <X size={16} />
+              Cancel
+            </button>
+          ) : (
+            <button
+              onClick={() => params.download()}
+              disabled={!linkOk}
+              className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-bg-primary transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              <Download size={16} />
+              Download Parameters
+            </button>
+          )}
+          {isDownloading && counts && (
+            <div className="w-full max-w-xs">
+              <div className="h-1.5 overflow-hidden rounded-full bg-bg-secondary">
+                <div
+                  className="h-full rounded-full bg-accent transition-all duration-300"
+                  style={{
+                    width: `${counts.expected ? Math.round((counts.received / counts.expected) * 100) : 0}%`,
+                  }}
+                />
               </div>
-            );
-          })()}
+              <span className="mt-1 block text-[10px] text-text-muted">
+                {counts.received} / {counts.expected ?? "?"} parameters
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
