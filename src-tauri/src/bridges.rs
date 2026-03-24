@@ -4,7 +4,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use mavkit::{
-    LinkState, SensorHealthSummary, Vehicle,
+    SensorHealthSummary, Vehicle,
     ardupilot::{MagCalProgress, MagCalReport},
 };
 use serde::Serialize;
@@ -23,7 +23,6 @@ use crate::ipc::{
     support_snapshot, telemetry_snapshot_from_value,
 };
 
-#[allow(dead_code)] // Fields populated by event bridge wiring (Task 3)
 pub(crate) struct SessionContext {
     pub connection: SessionConnection,
     pub vehicle_state: Option<VehicleState>,
@@ -39,7 +38,6 @@ impl SessionContext {
         }
     }
 
-    #[allow(dead_code)] // Used by disconnect/reset path (Task 3)
     pub(crate) fn reset(&mut self) {
         self.connection = SessionConnection::Disconnected;
         self.vehicle_state = None;
@@ -49,15 +47,15 @@ impl SessionContext {
 
 pub(crate) static TELEMETRY_INTERVAL_MS: AtomicU64 = AtomicU64::new(200);
 
-fn build_session_snapshot(
-    link_state: &LinkState,
-) -> DomainValue<SessionSnapshot> {
+async fn snapshot_from_context(handle: &tauri::AppHandle) -> DomainValue<SessionSnapshot> {
+    let state: tauri::State<'_, AppState> = handle.state();
+    let ctx = state.session_context.lock().await;
     DomainValue::present(
         SessionSnapshot {
             status: SessionStatus::Active,
-            connection: session_connection_from_link_state(link_state),
-            vehicle_state: None,
-            home_position: None,
+            connection: ctx.connection.clone(),
+            vehicle_state: ctx.vehicle_state.clone(),
+            home_position: ctx.home_position.clone(),
         },
         DomainProvenance::Stream,
     )
@@ -90,11 +88,31 @@ async fn reconcile_guided_runtime(handle: &tauri::AppHandle, vehicle: &Vehicle) 
     }
 }
 
-pub(crate) fn spawn_event_bridges(
+pub(crate) async fn spawn_event_bridges(
     app: &tauri::AppHandle,
     vehicle: &Vehicle,
 ) -> Vec<tokio::task::JoinHandle<()>> {
     let mut tasks = Vec::new();
+
+    // Seed identity-derived fields so the first session://state has vehicle info
+    {
+        let identity = vehicle.identity();
+        let state: tauri::State<'_, AppState> = app.state();
+        let mut ctx = state.session_context.lock().await;
+        ctx.vehicle_state = Some(VehicleState {
+            armed: false,
+            custom_mode: 0,
+            mode_name: "unknown".into(),
+            system_status: "active".into(),
+            vehicle_type: format!("{:?}", identity.vehicle_type).to_lowercase(),
+            autopilot: format!("{:?}", identity.autopilot).to_lowercase(),
+            system_id: identity.system_id,
+            component_id: identity.component_id,
+            heartbeat_received: true,
+        });
+        ctx.connection = SessionConnection::Connected;
+    }
+
     let calibration_sources = Arc::new(tokio::sync::Mutex::new(CalibrationSources::default()));
 
     // Telemetry — throttled by TELEMETRY_INTERVAL_MS.
@@ -168,9 +186,78 @@ pub(crate) fn spawn_event_bridges(
         let guided_vehicle = vehicle.clone();
         tasks.push(tokio::spawn(async move {
             while let Some(ls) = link_sub.recv().await {
-                let snapshot = build_session_snapshot(&ls);
+                {
+                    let state: tauri::State<'_, AppState> = handle.state();
+                    let mut ctx = state.session_context.lock().await;
+                    ctx.connection = session_connection_from_link_state(&ls);
+                }
+                let snapshot = snapshot_from_context(&handle).await;
                 emit_scoped(&handle, "session://state", snapshot).await;
                 reconcile_guided_runtime(&handle, &guided_vehicle).await;
+            }
+        }));
+    }
+
+    // Armed state
+    {
+        let armed_metric = vehicle.telemetry().armed();
+        let mut armed_sub = armed_metric.subscribe();
+        let handle = app.clone();
+        tasks.push(tokio::spawn(async move {
+            while let Some(sample) = armed_sub.recv().await {
+                {
+                    let state: tauri::State<'_, AppState> = handle.state();
+                    let mut ctx = state.session_context.lock().await;
+                    if let Some(ref mut vs) = ctx.vehicle_state {
+                        vs.armed = sample.value;
+                    }
+                }
+                let snapshot = snapshot_from_context(&handle).await;
+                emit_scoped(&handle, "session://state", snapshot).await;
+            }
+        }));
+    }
+
+    // Current flight mode
+    {
+        let mode_obs = vehicle.current_mode();
+        let mut mode_sub = mode_obs.subscribe();
+        let handle = app.clone();
+        tasks.push(tokio::spawn(async move {
+            while let Some(current_mode) = mode_sub.recv().await {
+                {
+                    let state: tauri::State<'_, AppState> = handle.state();
+                    let mut ctx = state.session_context.lock().await;
+                    if let Some(ref mut vs) = ctx.vehicle_state {
+                        vs.custom_mode = current_mode.custom_mode;
+                        vs.mode_name = current_mode.name.clone();
+                    }
+                }
+                let snapshot = snapshot_from_context(&handle).await;
+                emit_scoped(&handle, "session://state", snapshot).await;
+            }
+        }));
+    }
+
+    // Home position
+    {
+        let home_metric = vehicle.telemetry().home();
+        let mut home_sub = home_metric.subscribe();
+        let handle = app.clone();
+        tasks.push(tokio::spawn(async move {
+            while let Some(sample) = home_sub.recv().await {
+                let geo = sample.value;
+                {
+                    let state: tauri::State<'_, AppState> = handle.state();
+                    let mut ctx = state.session_context.lock().await;
+                    ctx.home_position = Some(mavkit::HomePosition {
+                        latitude_deg: geo.latitude_deg,
+                        longitude_deg: geo.longitude_deg,
+                        altitude_m: geo.altitude_msl_m,
+                    });
+                }
+                let snapshot = snapshot_from_context(&handle).await;
+                emit_scoped(&handle, "session://state", snapshot).await;
             }
         }));
     }

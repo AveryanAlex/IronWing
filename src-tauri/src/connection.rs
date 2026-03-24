@@ -145,7 +145,7 @@ async fn store_connected_vehicle(
         mut tasks,
         listeners,
     } = connected_vehicle;
-    tasks.extend(crate::bridges::spawn_event_bridges(app, &vehicle));
+    tasks.extend(crate::bridges::spawn_event_bridges(app, &vehicle).await);
     *state.background_tasks.lock().await = tasks;
     *state.background_listeners.lock().await = listeners;
     *state.vehicle.lock().await = Some(vehicle);
@@ -178,6 +178,7 @@ pub(crate) async fn connect_link(
         let prev = state.vehicle.lock().await.take();
         state.status_text_history.lock().await.clear();
         state.next_status_text_sequence.store(1, Ordering::Relaxed);
+        state.session_context.lock().await.reset();
         if let Some(v) = prev {
             let _ = v.disconnect().await;
         }
@@ -415,6 +416,7 @@ pub(crate) async fn force_disconnect(
     .await;
     state.status_text_history.lock().await.clear();
     state.next_status_text_sequence.store(1, Ordering::Relaxed);
+    state.session_context.lock().await.reset();
 
     if let Some(handle) = state.connect_abort.lock().await.take() {
         handle.abort();
