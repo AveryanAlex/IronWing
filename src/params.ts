@@ -42,13 +42,19 @@ export function paramProgressPhase(
 ): "downloading" | "writing" | "completed" | "failed" | "cancelled" {
   if (typeof p === "string") return p;
   if ("downloading" in p) return "downloading";
-  return "writing";
+  if ("writing" in p) return "writing";
+  // TypeScript exhaustiveness: this branch is unreachable given the closed union.
+  // An explicit guard above ensures a new variant doesn't silently fall through.
+  throw new Error("unrecognised ParamProgress variant");
 }
 
 /**
  * Extract normalised { received, expected } counts for progress display.
  * For writing: maps index→received, total→expected.
  * Returns null for terminal states.
+ *
+ * Note: `expected` may be null (Downloading with unknown count) or 0 (Writing
+ * at the very start of a batch). Callers must guard against division by zero.
  */
 export function paramProgressCounts(
   p: ParamProgress,

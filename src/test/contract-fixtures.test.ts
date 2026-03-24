@@ -7,7 +7,7 @@ import type { FencePlan, FenceRegion } from "../fence";
 import type { GuidedAction, GuidedDomain, GuidedSession, GuidedState } from "../guided";
 import type { GeoPoint2d, GeoPoint3d, HomePosition, MissionPlan, MissionItem } from "../lib/mavkit-types";
 import type { MissionState } from "../mission";
-import type { ParamStore } from "../params";
+import type { ParamProgress, ParamStore } from "../params";
 import type { RallyPlan } from "../rally";
 import type { PlaybackSnapshot, SessionConnection, SessionDomain, SessionEnvelope, SessionState, SourceKind } from "../session";
 import type { StatusMessage, StatusTextDomain, StatusTextState } from "../statustext";
@@ -79,7 +79,7 @@ type ContractOpenSessionSnapshot = {
   telemetry: DomainValue<TelemetryState>;
   mission_state: MissionState | null;
   param_store: ParamStore | null;
-  param_progress: unknown;
+  param_progress: ParamProgress | null;
   support: DomainValue<ContractSupportState>;
   sensor_health: DomainValue<ContractSensorHealthState>;
   configuration_facts: DomainValue<ContractConfigurationFactsState>;
@@ -572,13 +572,13 @@ function expectParamStore(value: unknown, label: string): ParamStore {
   };
 }
 
-function expectParamProgress(value: unknown, label: string): unknown {
+function expectParamProgress(value: unknown, label: string): ParamProgress {
   // ParamOperationProgress is an externally-tagged serde enum:
   // unit variants serialize as strings ("completed", "failed", "cancelled")
   // data variants as objects ({ downloading: {...} }, { writing: {...} })
   if (typeof value === "string") {
     expect(["completed", "failed", "cancelled"]).toContain(value);
-    return value;
+    return value as ParamProgress;
   }
   const obj = expectRecord(value, label);
   if ("downloading" in obj) {
@@ -586,14 +586,14 @@ function expectParamProgress(value: unknown, label: string): unknown {
     expectNumber(d.received, `${label}.downloading.received`);
     // expected is Option<u16> → nullable
     expect(d.expected === null || typeof d.expected === "number").toBe(true);
-    return value;
+    return value as ParamProgress;
   }
   if ("writing" in obj) {
     const w = expectRecord(obj.writing, `${label}.writing`);
     expectNumber(w.index, `${label}.writing.index`);
     expectNumber(w.total, `${label}.writing.total`);
     expectString(w.name, `${label}.writing.name`);
-    return value;
+    return value as ParamProgress;
   }
   throw new Error(`${label}: unrecognised ParamOperationProgress shape`);
 }
