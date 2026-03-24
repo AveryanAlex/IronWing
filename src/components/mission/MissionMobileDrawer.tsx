@@ -15,6 +15,7 @@ import type { MissionItem } from "../../lib/mavkit-types";
 import type { TypedDraftItem } from "../../lib/mission-draft-typed";
 import type { PolygonVertex } from "../../lib/mission-grid";
 import { toast } from "sonner";
+import { findNearestWaypoint } from "./mission-helpers";
 
 type MissionMobileDrawerProps = {
   vehicle: ReturnType<typeof useSession>;
@@ -29,20 +30,6 @@ type ContextMenuState = {
   lng: number;
   nearestSeq: number | null;
 } | null;
-
-function findNearestWaypoint(items: TypedDraftItem[], lat: number, lng: number): number | null {
-  let nearest: number | null = null;
-  let minDist = Infinity;
-  for (const item of items) {
-    if (item.preview.latitude_deg === null || item.preview.longitude_deg === null) continue;
-    const d = Math.hypot(item.preview.latitude_deg - lat, item.preview.longitude_deg - lng);
-    if (d < minDist && d < 0.001) {
-      minDist = d;
-      nearest = item.index;
-    }
-  }
-  return nearest;
-}
 
 export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: MissionMobileDrawerProps) {
   const current = mission.current;
