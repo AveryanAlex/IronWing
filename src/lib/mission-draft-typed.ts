@@ -617,6 +617,17 @@ export function reorderTypedItems(state: TypedDraftState, domain: MissionDomain,
 // Public API: mutations
 // ---------------------------------------------------------------------------
 
+/** Replace a fence region at the given index with a new FenceRegion and recompute its preview. */
+export function updateFenceRegion(state: TypedDraftState, index: number, region: FenceRegion): TypedDraftState {
+  return withActiveItems(state, "fence", (items, selectedUiId) => ({
+    items: items.map((entry, i) => {
+      if (i !== index) return entry;
+      return { ...entry, document: region, preview: previewFromFenceRegion(region) };
+    }),
+    selectedUiId,
+  }));
+}
+
 /** Replace the command on a mission-domain item at the given index. */
 export function updateTypedCommand(state: TypedDraftState, domain: MissionDomain, index: number, command: MissionCommand): TypedDraftState {
   if (domain !== "mission") return state;

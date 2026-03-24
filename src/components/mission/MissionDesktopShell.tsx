@@ -2,6 +2,7 @@ import { MapPin } from "lucide-react";
 import { MissionPlannerSummary } from "./MissionPlannerSummary";
 import { MissionItemList } from "./MissionItemList";
 import { MissionInspector } from "./MissionInspector";
+import { FenceInspector } from "./FenceInspector";
 import type { useMission } from "../../hooks/use-mission";
 
 type MissionDesktopShellProps = {
@@ -40,19 +41,28 @@ export function MissionDesktopShell({ mission, connected, onCardSelect }: Missio
 
           {current.selectedItem && current.selectedIndex !== null && (
             <div className="mt-2">
-              <MissionInspector
-                missionType={current.tab}
-                draftItem={current.selectedItem}
-                index={current.selectedIndex}
-                previousItem={current.previousItem}
-                homePosition={current.homePosition}
-                readOnly={current.readOnly}
-                isSelected={true}
-                onUpdateCommand={current.tab === "mission" ? mission.mission.updateCommand : undefined}
-                onUpdateAltitude={current.updateAltitude}
-                onUpdateCoordinate={current.updateCoordinate}
-                onSelect={current.select}
-              />
+              {current.tab === "fence" ? (
+                <FenceInspector
+                  draftItem={current.selectedItem}
+                  index={current.selectedIndex}
+                  readOnly={current.readOnly}
+                  onUpdateRegion={mission.fence.updateRegion}
+                />
+              ) : (
+                <MissionInspector
+                  missionType={current.tab}
+                  draftItem={current.selectedItem}
+                  index={current.selectedIndex}
+                  previousItem={current.previousItem}
+                  homePosition={current.homePosition}
+                  readOnly={current.readOnly}
+                  isSelected={true}
+                  onUpdateCommand={current.tab === "mission" ? mission.mission.updateCommand : undefined}
+                  onUpdateAltitude={current.updateAltitude}
+                  onUpdateCoordinate={current.updateCoordinate}
+                  onSelect={current.select}
+                />
+              )}
             </div>
           )}
         </div>

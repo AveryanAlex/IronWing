@@ -21,6 +21,7 @@ import {
   downloadFence,
   uploadFence,
   type FencePlan,
+  type FenceRegion,
 } from "../fence";
 import {
   clearRally,
@@ -60,6 +61,7 @@ import {
   updateTypedCommand,
   updateTypedLatitude,
   updateTypedLongitude,
+  updateFenceRegion,
   type MissionDomain,
   type SessionScope,
 } from "../lib/mission-draft-typed";
@@ -845,6 +847,7 @@ export function useMission(
         ? updateTypedLatitude(prev, domain, index, valueDeg)
         : updateTypedLongitude(prev, domain, index, valueDeg)),
       moveWaypointOnMap: (index: number, latDeg: number, lonDeg: number) => mutateDomain(domain, (prev) => moveTypedWaypointOnMap(prev, domain, index, latDeg, lonDeg)),
+      updateRegion: (index: number, region: FenceRegion) => mutateDomain(domain, (prev) => updateFenceRegion(prev, index, region)),
       validate: () => validate(domain),
       upload: () => upload(domain),
       download: () => download(domain),

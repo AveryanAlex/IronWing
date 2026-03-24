@@ -20,6 +20,7 @@ import {
   deleteTypedAt,
   insertTypedItemsAfter,
   replaceAllTypedItems,
+  updateFenceRegion,
   type SessionScope,
 } from "./mission-draft-typed";
 
@@ -297,6 +298,32 @@ describe("mission-draft-typed: fence domain", () => {
 
     const updated = deleteTypedAt(state, "fence", 0);
     expect(typedDraftItems(updated, "fence")).toHaveLength(1);
+  });
+
+  it("updateFenceRegion replaces region and updates preview", () => {
+    const plan: FencePlan = {
+      return_point: null,
+      regions: [makeFenceRegion(47.4, 8.54)],
+    };
+    const liveScope = scope("fence-update", "live");
+    const state = replaceTypedDraftFromDownload(createTypedDraftState(), "fence", plan, liveScope);
+
+    // Replace inclusion polygon with an exclusion circle
+    const circle: FenceRegion = {
+      exclusion_circle: {
+        center: { latitude_deg: 48.0, longitude_deg: 9.0 },
+        radius_m: 500,
+      },
+    };
+    const updated = updateFenceRegion(state, 0, circle);
+    const items = typedDraftItems(updated, "fence");
+    expect(items).toHaveLength(1);
+
+    const doc = items[0].document as FenceRegion;
+    expect("exclusion_circle" in doc).toBe(true);
+    expect(items[0].preview.latitude_deg).toBeCloseTo(48.0, 3);
+    expect(items[0].preview.longitude_deg).toBeCloseTo(9.0, 3);
+    expect(items[0].preview.altitude_m).toBeNull();
   });
 
   it("preserves return_point when modifying regions", () => {
