@@ -50,6 +50,8 @@ pub(crate) struct AppState {
     pub(crate) firmware_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
     pub(crate) session_runtime: tokio::sync::Mutex<SessionRuntime>,
     pub(crate) guided_runtime: tokio::sync::Mutex<GuidedRuntime>,
+    #[allow(dead_code)] // Read by event bridge wiring (Task 3)
+    pub(crate) session_context: tokio::sync::Mutex<bridges::SessionContext>,
     pub(crate) status_text_history: tokio::sync::Mutex<Vec<StatusTextEntry>>,
     pub(crate) next_status_text_sequence: AtomicU64,
 }
@@ -67,6 +69,7 @@ pub fn run() {
         firmware_abort: tokio::sync::Mutex::new(None),
         session_runtime: tokio::sync::Mutex::new(SessionRuntime::new()),
         guided_runtime: tokio::sync::Mutex::new(GuidedRuntime::default()),
+        session_context: tokio::sync::Mutex::new(bridges::SessionContext::new()),
         status_text_history: tokio::sync::Mutex::new(Vec::new()),
         next_status_text_sequence: AtomicU64::new(1),
     };

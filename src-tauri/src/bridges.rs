@@ -14,6 +14,7 @@ use crate::AppState;
 use crate::e2e_emit::emit_event;
 use crate::guided::{emit_guided_snapshot, live_context_from_vehicle};
 use crate::ipc::calibration::CalibrationSources;
+use crate::ipc::session::{SessionConnection, VehicleState};
 use crate::ipc::{
     DomainProvenance, DomainValue, ScopedEvent, SessionEnvelope, SessionSnapshot, SessionStatus,
     configuration_facts_snapshot_from_param_store, push_status_text_entry,
@@ -21,6 +22,30 @@ use crate::ipc::{
     status_text_entry_from_value, status_text_snapshot_from_entries,
     support_snapshot, telemetry_snapshot_from_value,
 };
+
+#[allow(dead_code)] // Fields populated by event bridge wiring (Task 3)
+pub(crate) struct SessionContext {
+    pub connection: SessionConnection,
+    pub vehicle_state: Option<VehicleState>,
+    pub home_position: Option<mavkit::HomePosition>,
+}
+
+impl SessionContext {
+    pub(crate) fn new() -> Self {
+        Self {
+            connection: SessionConnection::Disconnected,
+            vehicle_state: None,
+            home_position: None,
+        }
+    }
+
+    #[allow(dead_code)] // Used by disconnect/reset path (Task 3)
+    pub(crate) fn reset(&mut self) {
+        self.connection = SessionConnection::Disconnected;
+        self.vehicle_state = None;
+        self.home_position = None;
+    }
+}
 
 pub(crate) static TELEMETRY_INTERVAL_MS: AtomicU64 = AtomicU64::new(200);
 
