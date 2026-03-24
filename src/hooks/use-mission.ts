@@ -62,6 +62,7 @@ import {
   updateTypedLatitude,
   updateTypedLongitude,
   updateFenceRegion,
+  updateRallyAltitudeFrame,
   type MissionDomain,
   type SessionScope,
 } from "../lib/mission-draft-typed";
@@ -907,6 +908,7 @@ export function useMission(
         ? updateTypedLatitude(prev, domain, index, valueDeg)
         : updateTypedLongitude(prev, domain, index, valueDeg)),
       moveWaypointOnMap: (index: number, latDeg: number, lonDeg: number) => mutateDomain(domain, (prev) => moveTypedWaypointOnMap(prev, domain, index, latDeg, lonDeg)),
+      updateAltitudeFrame: (index: number, frame: "msl" | "rel_home" | "terrain") => mutateDomain(domain, (prev) => updateRallyAltitudeFrame(prev, index, frame)),
       validate: () => validate(domain),
       upload: () => upload(domain),
       download: () => download(domain),

@@ -784,6 +784,31 @@ export function typedPreviewCoordinates(item: TypedDraftItem): { latitude_deg: n
   };
 }
 
+/** Change the altitude frame on a rally point, preserving lat/lon and resetting altitude to 0. */
+export function updateRallyAltitudeFrame(
+  state: TypedDraftState,
+  index: number,
+  frame: "msl" | "rel_home" | "terrain",
+): TypedDraftState {
+  return withActiveItems(state, "rally", (items, selectedUiId) => ({
+    items: items.map((entry, i) => {
+      if (i !== index || entry.readOnly) return entry;
+      const pt = entry.document as GeoPoint3d;
+      const { latitude_deg, longitude_deg } = geoPoint3dLatLon(pt);
+      let newPt: GeoPoint3d;
+      if (frame === "msl") {
+        newPt = { Msl: { latitude_deg, longitude_deg, altitude_msl_m: 0 } };
+      } else if (frame === "rel_home") {
+        newPt = { RelHome: { latitude_deg, longitude_deg, relative_alt_m: 0 } };
+      } else {
+        newPt = { Terrain: { latitude_deg, longitude_deg, altitude_terrain_m: 0 } };
+      }
+      return { ...entry, document: newPt };
+    }),
+    selectedUiId,
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Internal: command position replacement
 // ---------------------------------------------------------------------------

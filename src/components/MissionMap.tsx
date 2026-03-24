@@ -9,8 +9,9 @@ import { Map as MapIcon, Layers, Satellite } from "lucide-react";
 import type { HomePosition } from "../mission";
 import type { TypedDraftItem } from "../lib/mission-draft-typed";
 import type { PolygonVertex } from "../lib/mission-grid";
-import type { FenceRegion, GeoPoint2d } from "../lib/mavkit-types";
+import type { FenceRegion, GeoPoint2d, GeoPoint3d } from "../lib/mavkit-types";
 import { ensureFenceLayers, updateFenceSource, removeFenceLayers } from "./mission/FenceMapOverlay";
+import { syncRallyMarkers, clearRallyMarkers } from "./mission/RallyMapOverlay";
 
 const DEFAULT_CENTER: [number, number] = [8.545594, 47.397742];
 const DEFAULT_ZOOM = 13;
@@ -60,6 +61,8 @@ type MissionMapProps = {
   fenceRegions?: FenceRegion[];
   selectedFenceIndex?: number | null;
   fenceReturnPoint?: GeoPoint2d | null;
+  rallyPoints?: Array<{ index: number; point: GeoPoint3d }>;
+  selectedRallyIndex?: number | null;
 };
 
 export type { SvsTelemetry };
@@ -73,6 +76,7 @@ export function MissionMap({
   flightPath, replayPosition,
   polygonVertices, isDrawingPolygon, onPolygonClick, onPolygonComplete, onPolygonVertexMove,
   fenceRegions, selectedFenceIndex, fenceReturnPoint,
+  rallyPoints, selectedRallyIndex,
 }: MissionMapProps) {
   type MapLayer = "plan" | "hybrid" | "satellite";
   const [mapLayer, setMapLayer] = useState<MapLayer>("plan");
@@ -86,6 +90,7 @@ export function MissionMap({
   const deviceLocationMarkerRef = useRef<Marker | null>(null);
   const replayMarkerRef = useRef<Marker | null>(null);
   const fenceReturnMarkerRef = useRef<Marker | null>(null);
+  const rallyMarkersRef = useRef<Map<number, Marker>>(new Map());
   const hasSetInitialViewport = useRef(false);
   const onSelectIndexRef = useRef(onSelectIndex);
   const onMoveWaypointRef = useRef(onMoveWaypoint);
@@ -389,6 +394,7 @@ export function MissionMap({
       if (deviceLocationMarkerRef.current) { deviceLocationMarkerRef.current.remove(); deviceLocationMarkerRef.current = null; }
       if (replayMarkerRef.current) { replayMarkerRef.current.remove(); replayMarkerRef.current = null; }
       if (fenceReturnMarkerRef.current) { fenceReturnMarkerRef.current.remove(); fenceReturnMarkerRef.current = null; }
+      clearRallyMarkers(rallyMarkersRef.current);
       removeFenceLayers(map);
       map.remove();
       mapRef.current = null;
@@ -887,6 +893,26 @@ export function MissionMap({
     if (!map || !map.isStyleLoaded()) return;
     updateFenceSource(map, fenceRegions ?? [], selectedFenceIndex ?? null);
   }, [fenceRegions, selectedFenceIndex]);
+
+  // Update rally point markers
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (rallyPoints) {
+      syncRallyMarkers(
+        map,
+        rallyMarkersRef.current,
+        rallyPoints,
+        selectedRallyIndex ?? null,
+        readOnly ?? false,
+        (index) => onSelectIndexRef.current?.(index),
+        (index, lat, lon) => onMoveWaypointRef.current?.(index, lat, lon),
+      );
+    } else {
+      clearRallyMarkers(rallyMarkersRef.current);
+    }
+  }, [rallyPoints, selectedRallyIndex, readOnly]);
 
   // Fence return point marker (green home-style pin)
   useEffect(() => {

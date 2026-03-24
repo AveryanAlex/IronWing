@@ -21,6 +21,7 @@ import {
   insertTypedItemsAfter,
   replaceAllTypedItems,
   updateFenceRegion,
+  updateRallyAltitudeFrame,
   type SessionScope,
 } from "./mission-draft-typed";
 
@@ -407,6 +408,34 @@ describe("mission-draft-typed: rally domain", () => {
     expect(latitude_deg).toBeCloseTo(48.0, 3);
     expect(longitude_deg).toBeCloseTo(9.0, 3);
     expect(geoPoint3dAltitude(pt).value).toBe(45);
+  });
+
+  it("updateRallyAltitudeFrame changes variant and resets altitude", () => {
+    const plan: RallyPlan = { points: [makeRallyPoint(47.5, 8.55, 100)] };
+    const liveScope = scope("rally-frame", "live");
+    const state = replaceTypedDraftFromDownload(createTypedDraftState(), "rally", plan, liveScope);
+
+    // Default is RelHome; change to Msl
+    const updated = updateRallyAltitudeFrame(state, 0, "msl");
+    const pt = typedDraftItems(updated, "rally")[0].document as GeoPoint3d;
+    expect(pt).toHaveProperty("Msl");
+    const { latitude_deg, longitude_deg } = geoPoint3dLatLon(pt);
+    expect(latitude_deg).toBeCloseTo(47.5, 3);
+    expect(longitude_deg).toBeCloseTo(8.55, 3);
+    expect(geoPoint3dAltitude(pt).value).toBe(0);
+    expect(geoPoint3dAltitude(pt).frame).toBe("msl");
+  });
+
+  it("updateRallyAltitudeFrame to terrain resets altitude", () => {
+    const plan: RallyPlan = { points: [makeRallyPoint(47.5, 8.55, 50)] };
+    const liveScope = scope("rally-frame-terrain", "live");
+    const state = replaceTypedDraftFromDownload(createTypedDraftState(), "rally", plan, liveScope);
+
+    const updated = updateRallyAltitudeFrame(state, 0, "terrain");
+    const pt = typedDraftItems(updated, "rally")[0].document as GeoPoint3d;
+    expect(pt).toHaveProperty("Terrain");
+    expect(geoPoint3dAltitude(pt).value).toBe(0);
+    expect(geoPoint3dAltitude(pt).frame).toBe("terrain");
   });
 });
 

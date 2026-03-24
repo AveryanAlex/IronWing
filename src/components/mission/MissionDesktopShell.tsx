@@ -3,6 +3,7 @@ import { MissionPlannerSummary } from "./MissionPlannerSummary";
 import { MissionItemList } from "./MissionItemList";
 import { MissionInspector } from "./MissionInspector";
 import { FenceInspector } from "./FenceInspector";
+import { RallyInspector } from "./RallyInspector";
 import type { useMission } from "../../hooks/use-mission";
 
 type MissionDesktopShellProps = {
@@ -48,6 +49,17 @@ export function MissionDesktopShell({ mission, connected, onCardSelect }: Missio
                   readOnly={current.readOnly}
                   onUpdateRegion={mission.fence.updateRegion}
                 />
+              ) : current.tab === "rally" ? (
+                <RallyInspector
+                  draftItem={current.selectedItem}
+                  index={current.selectedIndex}
+                  previousItem={current.previousItem}
+                  homePosition={current.homePosition}
+                  readOnly={current.readOnly}
+                  onUpdateAltitude={current.updateAltitude}
+                  onUpdateCoordinate={current.updateCoordinate}
+                  onUpdateAltitudeFrame={mission.rally.updateAltitudeFrame}
+                />
               ) : (
                 <MissionInspector
                   missionType={current.tab}
@@ -57,7 +69,7 @@ export function MissionDesktopShell({ mission, connected, onCardSelect }: Missio
                   homePosition={current.homePosition}
                   readOnly={current.readOnly}
                   isSelected={true}
-                  onUpdateCommand={current.tab === "mission" ? mission.mission.updateCommand : undefined}
+                  onUpdateCommand={mission.mission.updateCommand}
                   onUpdateAltitude={current.updateAltitude}
                   onUpdateCoordinate={current.updateCoordinate}
                   onSelect={current.select}
