@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
-import { commandDisplayNameFromVariant } from "../../lib/mavkit-types";
+import { pascalToDisplay } from "../../lib/mavkit-types";
 
 // Variant lists match the union types in mavkit-types.ts exactly.
 // Nav: position-bearing first, then position-less.
@@ -75,7 +75,7 @@ export function CommandPicker({ currentName, onSelect, disabled }: CommandPicker
     <DropdownMenu>
       <DropdownMenuTrigger
         disabled={disabled}
-        className="flex items-center gap-1 rounded border border-border bg-bg-input px-1.5 py-1 text-xs text-text-primary disabled:opacity-50"
+        className="flex w-full items-center justify-between rounded border border-border bg-bg-input px-1.5 py-1 text-xs text-text-primary disabled:opacity-50"
       >
         {currentName}
         <ChevronDown className="h-3 w-3 text-text-muted" />
@@ -97,7 +97,7 @@ export function CommandPicker({ currentName, onSelect, disabled }: CommandPicker
                 className="rounded-md px-2 py-1 text-xs text-text-primary hover:bg-bg-tertiary"
                 onSelect={() => onSelect(group.category, variant)}
               >
-                {commandDisplayNameFromVariant(variant)}
+                {pascalToDisplay(variant)}
               </DropdownMenuItem>
             ))}
           </div>

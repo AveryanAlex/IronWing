@@ -527,11 +527,7 @@ export function commandCategory(
 }
 
 /** Convert a PascalCase variant key to a human-readable display name. */
-export function commandDisplayNameFromVariant(name: string): string {
-  return pascalToDisplay(name);
-}
-
-function pascalToDisplay(name: string): string {
+export function pascalToDisplay(name: string): string {
   // Insert spaces before uppercase letters that follow lowercase letters or
   // before sequences of uppercase followed by lowercase (e.g., "ROILocation" -> "ROI Location").
   return name
@@ -718,6 +714,7 @@ function defaultNavCommand(variant: string, position?: GeoPoint3d): NavCommand {
     case "AttitudeTime":
       return { AttitudeTime: { time_s: 0, roll_deg: 0, pitch_deg: 0, yaw_deg: 0, climb_rate_mps: 0 } };
     default:
+      console.warn(`defaultNavCommand: unknown variant "${variant}", falling back to Waypoint`);
       return { Waypoint: { position: pos(position), hold_time_s: 0, acceptance_radius_m: 0, pass_radius_m: 0, yaw_deg: 0 } };
   }
 }
@@ -809,6 +806,7 @@ function defaultDoCommand(variant: string, position?: GeoPoint3d): DoCommand {
     case "SendScriptMessage":
       return { SendScriptMessage: { id: 0, p1: 0, p2: 0, p3: 0 } };
     default:
+      console.warn(`defaultDoCommand: unknown variant "${variant}", falling back to Jump`);
       return { Jump: { target_index: 0, repeat_count: 0 } };
   }
 }
@@ -822,6 +820,7 @@ function defaultConditionCommand(variant: string): ConditionCommand {
     case "Yaw":
       return { Yaw: { angle_deg: 0, turn_rate_dps: 0, direction: "Clockwise", relative: false } };
     default:
+      console.warn(`defaultConditionCommand: unknown variant "${variant}", falling back to Delay`);
       return { Delay: { delay_s: 0 } };
   }
 }

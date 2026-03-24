@@ -135,8 +135,8 @@ export function ensureFenceLayers(map: MapLibreMap): void {
         "fill-color": [
           "case",
           ["get", "isExclusion"],
-          "rgba(239,68,68,0.12)",
-          "rgba(59,130,246,0.12)",
+          "#ef4444",
+          "#3b82f6",
         ],
         "fill-opacity": ["case", ["get", "isSelected"], 0.25, 0.12],
       },

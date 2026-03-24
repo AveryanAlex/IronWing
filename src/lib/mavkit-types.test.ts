@@ -7,7 +7,7 @@ import type {
 import {
   commandCategory,
   commandDisplayName,
-  commandDisplayNameFromVariant,
+  pascalToDisplay,
   commandHasPosition,
   commandPosition,
   defaultCommand,
@@ -357,11 +357,11 @@ describe("commandDisplayName", () => {
   });
 });
 
-describe("commandDisplayNameFromVariant", () => {
+describe("pascalToDisplay", () => {
   it("converts PascalCase to spaced display name", () => {
-    expect(commandDisplayNameFromVariant("ReturnToLaunch")).toBe("Return To Launch");
-    expect(commandDisplayNameFromVariant("SetRoiNone")).toBe("Set Roi None");
-    expect(commandDisplayNameFromVariant("Waypoint")).toBe("Waypoint");
+    expect(pascalToDisplay("ReturnToLaunch")).toBe("Return To Launch");
+    expect(pascalToDisplay("SetRoiNone")).toBe("Set Roi None");
+    expect(pascalToDisplay("Waypoint")).toBe("Waypoint");
   });
 });
 
