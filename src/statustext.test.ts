@@ -21,9 +21,9 @@ const statusText: StatusTextDomain = {
   provenance: "stream",
   value: {
     entries: [
-      { text: "Boot", severity: "info", timestamp_usec: 100 },
-      { text: "Ready", severity: "notice", timestamp_usec: 200 },
-      { text: "PreArm: GPS", severity: "warning", timestamp_usec: 300 },
+      { sequence: 1, text: "Boot", severity: "info", timestamp_usec: 100 },
+      { sequence: 2, text: "Ready", severity: "notice", timestamp_usec: 200 },
+      { sequence: 3, text: "PreArm: GPS", severity: "warning", timestamp_usec: 300 },
     ],
   },
 };
@@ -86,7 +86,7 @@ describe("status text", () => {
             available: true,
             complete: true,
             provenance: "stream",
-            value: { entries: [{ text: "First", severity: "info", timestamp_usec: 1 }] },
+            value: { entries: [{ sequence: 1, text: "First", severity: "info", timestamp_usec: 1 }] },
           },
         },
       });
@@ -97,7 +97,7 @@ describe("status text", () => {
             available: true,
             complete: true,
             provenance: "stream",
-            value: { entries: [{ text: "Second", severity: "info", timestamp_usec: 2 }] },
+            value: { entries: [{ sequence: 1, text: "Second", severity: "info", timestamp_usec: 2 }] },
           },
         },
       });

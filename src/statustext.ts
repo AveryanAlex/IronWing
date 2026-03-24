@@ -4,7 +4,7 @@ import { createLatestScopedEventHandler, scopedEnvelopeKey } from "./lib/scoped-
 import type { SessionEvent } from "./session";
 
 export type StatusMessage = {
-  sequence?: number;
+  sequence: number;
   text: string;
   severity: string;
   timestamp_usec?: number;
@@ -46,7 +46,7 @@ export async function subscribeStatusText(
     }
 
     for (const entry of entries) {
-      const sequence = entry.sequence ?? -1;
+      const sequence = entry.sequence;
       if (sequence > lastDeliveredSequence) {
         cb(entry);
         lastDeliveredSequence = sequence;
