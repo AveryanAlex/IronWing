@@ -7,7 +7,7 @@ import type { FencePlan, FenceRegion } from "../fence";
 import type { GuidedAction, GuidedDomain, GuidedSession, GuidedState } from "../guided";
 import type { GeoPoint2d, GeoPoint3d, HomePosition, MissionPlan, MissionItem } from "../lib/mavkit-types";
 import type { MissionState } from "../mission";
-import type { ParamProgress, ParamStore } from "../params";
+import type { ParamStore } from "../params";
 import type { RallyPlan } from "../rally";
 import type { PlaybackSnapshot, SessionConnection, SessionDomain, SessionEnvelope, SessionState, SourceKind } from "../session";
 import type { StatusMessage, StatusTextDomain, StatusTextState } from "../statustext";
