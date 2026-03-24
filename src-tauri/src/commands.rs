@@ -713,8 +713,9 @@ pub(crate) async fn param_write_batch(
             emit_scoped(&app_for_bridge, "param://progress", p).await;
         }
     });
-    // The bridge loop ends naturally when handle is dropped at function return;
-    // no need to track in background_tasks for a synchronous write operation.
+    // The bridge task self-terminates when the progress channel closes (i.e. when
+    // `handle` is dropped at function return). Not tracked in background_tasks
+    // because it needs no external cancellation for this synchronous operation.
     drop(bridge_task);
 
     handle.wait().await.map_err(|e| e.to_string())

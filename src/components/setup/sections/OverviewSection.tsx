@@ -269,10 +269,14 @@ function QuickActions({
   const [rebooting, setRebooting] = useState(false);
   const lingerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
+  // Snapshot of the last known counts — preserved for the completion linger window,
+  // since paramProgressCounts returns null for terminal states like "completed".
+  const lastCountsRef = useRef<{ received: number; expected: number | null } | null>(null);
 
   const phase = params.progress ? paramProgressPhase(params.progress) : null;
   const isDownloading = phase === "downloading";
   const counts = params.progress ? paramProgressCounts(params.progress) : null;
+  if (counts !== null) lastCountsRef.current = counts;
 
   // Linger "completed" state for 1.5s, clear timer on transition away
   useEffect(() => {
@@ -376,7 +380,7 @@ function QuickActions({
           </div>
           <span className="text-[10px] text-text-muted">
             {showCompleted && !isDownloading
-              ? `Downloaded ${counts?.received ?? ""} / ${counts?.expected ?? ""} parameters`
+              ? `Downloaded ${lastCountsRef.current?.received ?? ""} / ${lastCountsRef.current?.expected ?? ""} parameters`
               : counts
                 ? `Downloading ${counts.received} / ${counts.expected ?? "?"} parameters`
                 : "Downloading…"}
