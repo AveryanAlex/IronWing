@@ -254,6 +254,14 @@ pub(crate) fn is_bootloader_candidate_port(port: &PortInfo) -> bool {
     )
 }
 
+/// Returns `true` when the port has a known flight-controller VID/PID or product name
+/// but does **not** look like it is already in bootloader mode.
+/// Used to detect boards that are likely running firmware and can be rebooted to bootloader
+/// via a temporary MAVLink session.
+pub(crate) fn is_known_fc_application_port(port: &PortInfo) -> bool {
+    detect_board_id_from_port(port).is_some() && !is_bootloader_candidate_port(port)
+}
+
 fn vid_pid_to_board_id(vid: u16, pid: u16) -> Option<u32> {
     match (vid, pid) {
         // CubePilot
