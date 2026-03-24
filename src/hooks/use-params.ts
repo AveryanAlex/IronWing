@@ -86,47 +86,53 @@ export function useParams(
 
   // Subscribe to param events
   useEffect(() => {
-    let stopStore: (() => void) | null = null;
-    let stopProgress: (() => void) | null = null;
-    let stopSession: (() => void) | null = null;
+    let cancelled = false;
+    const disposers: Array<() => void> = [];
+
+    const registerDisposer = (disposer: () => void) => {
+      if (cancelled) {
+        disposer();
+        return;
+      }
+      disposers.push(disposer);
+    };
 
     (async () => {
-      stopStore = await subscribeParamStore((event) => {
-        if (!eventMatchesCurrentScope(event.envelope)) {
-          return;
-        }
+      try {
+        const subscriptions = await Promise.all([
+          subscribeParamStore((event) => {
+            if (!eventMatchesCurrentScope(event.envelope)) return;
+            setStore(event.value);
+          }),
+          subscribeParamProgress((event) => {
+            if (!eventMatchesCurrentScope(event.envelope)) return;
+            setProgress(event.value);
+          }),
+          subscribeSessionState((event) => {
+            if (event.envelope.source_kind !== "live") return;
 
-        setStore(event.value);
-      });
-      stopProgress = await subscribeParamProgress((event) => {
-        if (!eventMatchesCurrentScope(event.envelope)) {
-          return;
-        }
+            const previous = scopeRef.current;
+            if (previous && !isNewerScopedEnvelope(previous, event.envelope)) return;
 
-        setProgress(event.value);
-      });
-      stopSession = await subscribeSessionState((event) => {
-        if (event.envelope.source_kind !== "live") {
-          return;
+            scopeRef.current = event.envelope;
+            if (previous && !isSameEnvelope(previous, event.envelope)) {
+              resetScopedState();
+            }
+          }),
+        ]);
+        for (const unsub of subscriptions) {
+          registerDisposer(unsub);
         }
-
-        const previous = scopeRef.current;
-        if (previous && !isNewerScopedEnvelope(previous, event.envelope)) {
-          return;
-        }
-
-        scopeRef.current = event.envelope;
-        if (previous && !isSameEnvelope(previous, event.envelope)) {
-          resetScopedState();
-        }
-      });
-
+      } catch {
+        // Subscription setup failed — component is likely unmounting; disposers clean up whatever resolved
+      }
     })();
 
     return () => {
-      stopStore?.();
-      stopProgress?.();
-      stopSession?.();
+      cancelled = true;
+      for (const disposer of disposers) {
+        disposer();
+      }
     };
   }, [eventMatchesCurrentScope, resetScopedState]);
 
