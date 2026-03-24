@@ -22,6 +22,7 @@ enum RecorderState {
     Idle,
     Recording {
         cancel: tokio::sync::oneshot::Sender<()>,
+        handle: tokio::task::JoinHandle<()>,
         file_name: String,
         bytes_written: Arc<AtomicU64>,
     },
@@ -59,7 +60,7 @@ impl TlogRecorderHandle {
         let raw_stream = vehicle.raw().subscribe();
         let (cancel_tx, mut cancel_rx) = tokio::sync::oneshot::channel();
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             use tokio_stream::StreamExt;
             use mavlink::Message;
             tokio::pin!(raw_stream);
@@ -103,18 +104,22 @@ impl TlogRecorderHandle {
         let name = file_name.clone();
         *guard = RecorderState::Recording {
             cancel: cancel_tx,
+            handle,
             file_name,
             bytes_written,
         };
         Ok(name)
     }
 
-    pub(crate) fn stop(&self) {
+    pub(crate) fn stop(&self) -> Option<tokio::task::JoinHandle<()>> {
         let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if let RecorderState::Recording { cancel, .. } =
+        if let RecorderState::Recording { cancel, handle, .. } =
             std::mem::replace(&mut *guard, RecorderState::Idle)
         {
             let _ = cancel.send(());
+            Some(handle)
+        } else {
+            None
         }
     }
 
@@ -144,8 +149,13 @@ pub(crate) async fn recording_start(
 }
 
 #[tauri::command]
-pub(crate) fn recording_stop(state: tauri::State<'_, AppState>) {
-    state.recorder.stop();
+pub(crate) async fn recording_stop(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    if let Some(handle) = state.recorder.stop() {
+        handle
+            .await
+            .map_err(|e| format!("recording task panicked: {e}"))?;
+    }
+    Ok(())
 }
 
 #[tauri::command]

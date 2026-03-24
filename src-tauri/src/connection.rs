@@ -402,7 +402,9 @@ pub(crate) async fn force_disconnect(
     state: &AppState,
     app: &tauri::AppHandle,
 ) -> Result<(), String> {
-    state.recorder.stop();
+    if let Some(handle) = state.recorder.stop() {
+        let _ = handle.await; // best-effort join on disconnect
+    }
     let _ = emit_guided_reset(
         state,
         app,
