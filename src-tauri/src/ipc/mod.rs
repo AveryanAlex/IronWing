@@ -25,7 +25,7 @@ pub(crate) use playback::PlaybackSnapshot;
 pub(crate) use sensor_health::sensor_health_snapshot_from_summary;
 pub(crate) use session::{
     AckSessionSnapshotResult, OpenSessionSnapshot, SessionConnection, SessionSnapshot,
-    SessionStatus, session_connection_from_link_state,
+    SessionStatus, VehicleState, session_connection_from_link_state,
 };
 pub(crate) use status_text::{
     StatusTextEntry, StatusTextSnapshot, push_status_text_entry, status_text_entry_from_value,

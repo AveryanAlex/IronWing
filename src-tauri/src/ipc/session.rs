@@ -27,13 +27,23 @@ pub(crate) enum SessionConnection {
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct VehicleState {
+    pub armed: bool,
+    pub custom_mode: u32,
+    pub mode_name: String,
+    pub system_status: String,
+    pub vehicle_type: String,
+    pub autopilot: String,
+    pub system_id: u8,
+    pub component_id: u8,
+    pub heartbeat_received: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct SessionSnapshot {
     pub status: SessionStatus,
     pub connection: SessionConnection,
-    /// Vehicle state is no longer directly accessible in the new mavkit API.
-    /// This field is kept for frontend contract compatibility but always None
-    /// until the observation-based replacement is wired.
-    pub vehicle_state: Option<serde_json::Value>,
+    pub vehicle_state: Option<VehicleState>,
     pub home_position: Option<HomePosition>,
 }
 

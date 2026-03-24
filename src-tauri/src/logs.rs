@@ -13,6 +13,7 @@ use crate::{
     ipc::{
         DomainProvenance, DomainValue, PlaybackSnapshot, ScopedEvent, SessionConnection,
         SessionEnvelope, SessionSnapshot, SessionStatus, StatusTextSnapshot, SupportSnapshot,
+        VehicleState,
         TelemetrySnapshot as GroupedTelemetrySnapshot,
         playback::{PlaybackSeekResult, PlaybackState},
         status_text_snapshot_from_entries, telemetry_snapshot_from_value,
@@ -147,24 +148,21 @@ impl LogStore {
         telemetry
     }
 
-    /// Construct a vehicle-state–shaped JSON value for the playback session snapshot.
-    /// VehicleState is not publicly accessible in mavkit v0.4.0, so we produce a
-    /// serde_json::Value that matches the frontend contract shape.
-    fn vehicle_state_at(&self, telemetry: &TelemetrySnapshot) -> Option<serde_json::Value> {
+    fn vehicle_state_at(&self, telemetry: &TelemetrySnapshot) -> Option<VehicleState> {
         let armed = telemetry.armed?;
         let custom_mode = telemetry.custom_mode?;
 
-        Some(serde_json::json!({
-            "armed": armed,
-            "custom_mode": custom_mode,
-            "mode_name": format!("Mode {custom_mode}"),
-            "system_status": "active",
-            "vehicle_type": "",
-            "autopilot": "",
-            "system_id": 0,
-            "component_id": 0,
-            "heartbeat_received": false,
-        }))
+        Some(VehicleState {
+            armed,
+            custom_mode,
+            mode_name: format!("Mode {custom_mode}"),
+            system_status: "active".into(),
+            vehicle_type: String::new(),
+            autopilot: String::new(),
+            system_id: 0,
+            component_id: 0,
+            heartbeat_received: false,
+        })
     }
 }
 
