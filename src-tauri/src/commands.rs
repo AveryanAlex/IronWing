@@ -662,16 +662,19 @@ pub(crate) async fn param_download_all(
     let app_for_wait = app.clone();
     let wait_task = tokio::spawn(async move {
         let _ = handle.wait().await;
-        // Clear the abort handle from AppState so the guard resets
+        // Clear the guard on natural completion. Abort paths (param_cancel, disconnect)
+        // clear it themselves before aborting this task, so this is a no-op there.
         app_for_wait.state::<AppState>().param_download_abort.lock().await.take();
     });
 
-    // Store the abort handle — param_cancel will abort this task
+    // Store the abort handle — param_cancel will abort this task.
+    // The wait task is managed exclusively through this handle and is not pushed
+    // into background_tasks, to avoid a double-abort on disconnect teardown.
     let abort_handle = wait_task.abort_handle();
     state.param_download_abort.lock().await.replace(abort_handle);
 
     state.background_tasks.lock().await.push(bridge_task);
-    state.background_tasks.lock().await.push(wait_task);
+    // wait_task is intentionally detached; it is cancelled via param_download_abort.
 
     Ok(())
 }
@@ -710,7 +713,9 @@ pub(crate) async fn param_write_batch(
             emit_scoped(&app_for_bridge, "param://progress", p).await;
         }
     });
-    state.background_tasks.lock().await.push(bridge_task);
+    // The bridge loop ends naturally when handle is dropped at function return;
+    // no need to track in background_tasks for a synchronous write operation.
+    drop(bridge_task);
 
     handle.wait().await.map_err(|e| e.to_string())
 }
