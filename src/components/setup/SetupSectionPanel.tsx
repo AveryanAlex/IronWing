@@ -36,6 +36,7 @@ import { useBreakpoint } from "../../hooks/use-breakpoint";
 import type { UseSetupReturn } from "../../hooks/use-setup";
 import { type SectionStatus, type SetupSectionId } from "../../hooks/use-setup-sections";
 import type { ParamsState } from "../../hooks/use-params";
+import { paramProgressPhase, paramProgressCounts } from "../../params";
 import { SectionStatusIcon } from "./shared/SectionStatusIcon";
 import { formatStagedValue, displayParamValue } from "./shared/param-format-helpers";
 import type { VehicleState, Telemetry, LinkState, HomePosition, FlightModeEntry } from "../../telemetry";
@@ -202,6 +203,10 @@ function StagedParamsBar({ params, onApplySuccess }: { params: ParamsState; onAp
     params.unstageAll();
   }, [params]);
 
+  const writePhase = params.progress ? paramProgressPhase(params.progress) : null;
+  const isWriting = writePhase === "writing";
+  const writeCounts = isWriting && params.progress ? paramProgressCounts(params.progress) : null;
+
   const staged = params.staged;
   const store = params.store;
 
@@ -284,22 +289,44 @@ function StagedParamsBar({ params, onApplySuccess }: { params: ParamsState; onAp
                 })}
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleApply}
-                disabled={applying}
-                className="flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
-              >
-                <Upload size={12} className={applying ? "animate-pulse" : ""} />
-                {applying ? "Applying..." : "Apply All"}
-              </button>
-              <button
-                onClick={handleDiscardAll}
-                disabled={applying}
-                className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-opacity disabled:opacity-40"
-              >
-                <Trash2 size={12} />
-                Discard All
-              </button>
+              {isWriting ? (
+                <div className="flex flex-1 flex-col gap-1">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-bg-tertiary">
+                    <div
+                      className="h-full rounded-full bg-warning transition-all duration-300"
+                      style={{
+                        width: writeCounts && writeCounts.expected
+                          ? `${Math.round((writeCounts.received / writeCounts.expected) * 100)}%`
+                          : "0%",
+                      }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-text-muted">
+                    {writeCounts
+                      ? `Writing ${writeCounts.received} / ${writeCounts.expected ?? "?"} parameters`
+                      : "Writing…"}
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={handleApply}
+                    disabled={applying}
+                    className="flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+                  >
+                    <Upload size={12} className={applying ? "animate-pulse" : ""} />
+                    {applying ? "Applying..." : "Apply All"}
+                  </button>
+                  <button
+                    onClick={handleDiscardAll}
+                    disabled={applying}
+                    className="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition-opacity disabled:opacity-40"
+                  >
+                    <Trash2 size={12} />
+                    Discard All
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
