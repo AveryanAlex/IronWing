@@ -162,6 +162,10 @@ pub(crate) async fn connect_link(
     if let Some(handle) = state.connect_abort.lock().await.take() {
         handle.abort();
     }
+    // Abort any in-flight param download before switching vehicle
+    if let Some(abort) = state.param_download_abort.lock().await.take() {
+        abort.abort();
+    }
     abort_background_tasks(&state).await;
     clear_background_listeners(&state, &app).await;
 
@@ -420,6 +424,10 @@ pub(crate) async fn force_disconnect(
 
     if let Some(handle) = state.connect_abort.lock().await.take() {
         handle.abort();
+    }
+    // Abort any in-flight param download before aborting background tasks
+    if let Some(abort) = state.param_download_abort.lock().await.take() {
+        abort.abort();
     }
     abort_background_tasks(state).await;
     clear_background_listeners(state, app).await;
