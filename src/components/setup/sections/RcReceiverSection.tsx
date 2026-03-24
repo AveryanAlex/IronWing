@@ -4,7 +4,6 @@ import { ParamSelect } from "../primitives/ParamSelect";
 import { ParamBitmaskInput } from "../primitives/ParamBitmaskInput";
 import { getStagedOrCurrent } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
-import type { Telemetry } from "../../../telemetry";
 import { subscribeTelemetryState } from "../../../telemetry";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import { SectionCardHeader } from "../shared/SectionCardHeader";
@@ -71,7 +70,6 @@ function barPercent(value: number): number {
 
 type RcReceiverSectionProps = {
   params: ParamInputParams;
-  telemetry: Telemetry | null;
   connected: boolean;
 };
 

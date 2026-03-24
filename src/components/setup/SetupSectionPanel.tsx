@@ -505,7 +505,7 @@ export function SetupSectionPanel({
       case "calibration":
         return <CalibrationSection params={params} connected={connected} />;
       case "rc_receiver":
-        return <RcReceiverSection params={params} telemetry={telemetry} connected={connected} />;
+        return <RcReceiverSection params={params} connected={connected} />;
       case "gps":
         return <GpsSection params={params} telemetry={telemetry} />;
       case "battery_monitor":
