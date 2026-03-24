@@ -9,6 +9,8 @@ import { Map as MapIcon, Layers, Satellite } from "lucide-react";
 import type { HomePosition } from "../mission";
 import type { TypedDraftItem } from "../lib/mission-draft-typed";
 import type { PolygonVertex } from "../lib/mission-grid";
+import type { FenceRegion, GeoPoint2d } from "../lib/mavkit-types";
+import { ensureFenceLayers, updateFenceSource, removeFenceLayers } from "./mission/FenceMapOverlay";
 
 const DEFAULT_CENTER: [number, number] = [8.545594, 47.397742];
 const DEFAULT_ZOOM = 13;
@@ -55,6 +57,9 @@ type MissionMapProps = {
   onPolygonClick?: (lat: number, lng: number) => void;
   onPolygonComplete?: () => void;
   onPolygonVertexMove?: (index: number, lat: number, lng: number) => void;
+  fenceRegions?: FenceRegion[];
+  selectedFenceIndex?: number | null;
+  fenceReturnPoint?: GeoPoint2d | null;
 };
 
 export type { SvsTelemetry };
@@ -67,6 +72,7 @@ export function MissionMap({
   syntheticVision, svsTelemetry,
   flightPath, replayPosition,
   polygonVertices, isDrawingPolygon, onPolygonClick, onPolygonComplete, onPolygonVertexMove,
+  fenceRegions, selectedFenceIndex, fenceReturnPoint,
 }: MissionMapProps) {
   type MapLayer = "plan" | "hybrid" | "satellite";
   const [mapLayer, setMapLayer] = useState<MapLayer>("plan");
@@ -79,6 +85,7 @@ export function MissionMap({
   const vehicleMarkerRef = useRef<Marker | null>(null);
   const deviceLocationMarkerRef = useRef<Marker | null>(null);
   const replayMarkerRef = useRef<Marker | null>(null);
+  const fenceReturnMarkerRef = useRef<Marker | null>(null);
   const hasSetInitialViewport = useRef(false);
   const onSelectIndexRef = useRef(onSelectIndex);
   const onMoveWaypointRef = useRef(onMoveWaypoint);
@@ -263,7 +270,9 @@ export function MissionMap({
         });
       }
 
-      const ownIds = new Set(["satellite", "hills", LINE_LAYER_ID, "replay-path-line", "grid-polygon-fill", "grid-polygon-line", "polygon-preview-line"]);
+      ensureFenceLayers(map);
+
+      const ownIds = new Set(["satellite", "hills", LINE_LAYER_ID, "replay-path-line", "grid-polygon-fill", "grid-polygon-line", "polygon-preview-line", "fence-fill", "fence-line-inclusion", "fence-line-exclusion"]);
       baseLayerIdsRef.current = map.getStyle().layers
         .filter((l: any) => !ownIds.has(l.id))
         .map((l: any) => l.id);
@@ -379,6 +388,8 @@ export function MissionMap({
       if (vehicleMarkerRef.current) { vehicleMarkerRef.current.remove(); vehicleMarkerRef.current = null; }
       if (deviceLocationMarkerRef.current) { deviceLocationMarkerRef.current.remove(); deviceLocationMarkerRef.current = null; }
       if (replayMarkerRef.current) { replayMarkerRef.current.remove(); replayMarkerRef.current = null; }
+      if (fenceReturnMarkerRef.current) { fenceReturnMarkerRef.current.remove(); fenceReturnMarkerRef.current = null; }
+      removeFenceLayers(map);
       map.remove();
       mapRef.current = null;
       hasSetInitialViewport.current = false;
@@ -869,6 +880,41 @@ export function MissionMap({
       replayMarkerRef.current = null;
     }
   }, [replayPosition, syntheticVision]);
+
+  // Update fence overlay layers
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    updateFenceSource(map, fenceRegions ?? [], selectedFenceIndex ?? null);
+  }, [fenceRegions, selectedFenceIndex]);
+
+  // Fence return point marker (green home-style pin)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (fenceReturnPoint) {
+      const lngLat: [number, number] = [fenceReturnPoint.longitude_deg, fenceReturnPoint.latitude_deg];
+      if (fenceReturnMarkerRef.current) {
+        fenceReturnMarkerRef.current.setLngLat(lngLat);
+      } else {
+        const el = document.createElement("button");
+        el.type = "button";
+        el.className = "mission-pin is-home";
+        el.textContent = "R";
+        el.style.borderColor = "#22c55e";
+        el.style.background = "#22c55e";
+        el.addEventListener("click", (e) => e.stopPropagation());
+
+        fenceReturnMarkerRef.current = new maplibregl.Marker({ element: el, anchor: "center" })
+          .setLngLat(lngLat)
+          .addTo(map);
+      }
+    } else if (fenceReturnMarkerRef.current) {
+      fenceReturnMarkerRef.current.remove();
+      fenceReturnMarkerRef.current = null;
+    }
+  }, [fenceReturnPoint]);
 
   useEffect(() => {
     const map = mapRef.current;

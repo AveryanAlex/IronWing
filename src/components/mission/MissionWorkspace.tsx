@@ -7,7 +7,7 @@ import { MissionAutoGridDialog } from "./MissionAutoGridDialog";
 import type { useSession } from "../../hooks/use-session";
 import type { useMission } from "../../hooks/use-mission";
 import type { useDeviceLocation } from "../../hooks/use-device-location";
-import type { MissionItem } from "../../lib/mavkit-types";
+import type { MissionItem, FenceRegion, FencePlan } from "../../lib/mavkit-types";
 import type { TypedDraftItem } from "../../lib/mission-draft-typed";
 import type { PolygonVertex } from "../../lib/mission-grid";
 import { useState, useCallback } from "react";
@@ -150,6 +150,9 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
               onPolygonClick={handlePolygonClick}
               onPolygonComplete={handlePolygonComplete}
               onPolygonVertexMove={handlePolygonVertexMove}
+              fenceRegions={current.tab === "fence" ? current.draftItems.map(d => d.document as FenceRegion) : undefined}
+              selectedFenceIndex={current.tab === "fence" ? current.selectedIndex : null}
+              fenceReturnPoint={current.tab === "fence" ? (mission.fence.plan as FencePlan).return_point : null}
             />
             {contextMenu && (
               <MapContextMenu
