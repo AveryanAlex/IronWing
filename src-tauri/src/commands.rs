@@ -428,7 +428,7 @@ pub(crate) async fn update_guided_session(
 #[tauri::command]
 pub(crate) async fn stop_guided_session(
     state: tauri::State<'_, AppState>,
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
 ) -> Result<GuidedCommandResult, String> {
     let vehicle = state.vehicle.lock().await.clone();
     let source_kind = state.session_runtime.lock().await.guided_source_kind();
@@ -437,7 +437,6 @@ pub(crate) async fn stop_guided_session(
         .map(live_context_from_vehicle)
         .unwrap_or(GuidedLiveContext::unavailable());
     let result = state.guided_runtime.lock().await.stop(source_kind, context);
-    let _ = app;
     Ok(result)
 }
 

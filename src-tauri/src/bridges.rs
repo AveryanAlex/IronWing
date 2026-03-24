@@ -19,7 +19,7 @@ use crate::ipc::{
     configuration_facts_snapshot_from_param_store, push_status_text_entry,
     sensor_health_snapshot_from_summary, session_connection_from_link_state,
     status_text_entry_from_value, status_text_snapshot_from_entries,
-    support_snapshot_from_sensor_health, telemetry_snapshot_from_value,
+    support_snapshot, telemetry_snapshot_from_value,
 };
 
 pub(crate) static TELEMETRY_INTERVAL_MS: AtomicU64 = AtomicU64::new(200);
@@ -231,12 +231,10 @@ pub(crate) fn spawn_event_bridges(
         tasks.push(tokio::spawn(async move {
             while let Some(sample) = sensor_sub.recv().await {
                 let val: SensorHealthSummary = sample.value;
-                let json_val =
-                    serde_json::to_value(&val).unwrap_or(serde_json::Value::Null);
                 emit_scoped(
                     &handle,
                     "support://state",
-                    support_snapshot_from_sensor_health(&json_val, DomainProvenance::Stream),
+                    support_snapshot(DomainProvenance::Stream),
                 )
                 .await;
                 emit_scoped(

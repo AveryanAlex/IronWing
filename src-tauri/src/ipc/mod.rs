@@ -31,5 +31,5 @@ pub(crate) use status_text::{
     StatusTextEntry, StatusTextSnapshot, push_status_text_entry, status_text_entry_from_value,
     status_text_snapshot_from_entries,
 };
-pub(crate) use support::{SupportSnapshot, support_snapshot_from_sensor_health};
+pub(crate) use support::{SupportSnapshot, support_snapshot};
 pub(crate) use telemetry::{TelemetrySnapshot, telemetry_snapshot_from_value};

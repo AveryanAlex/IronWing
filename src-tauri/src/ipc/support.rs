@@ -19,13 +19,9 @@ fn default_support_state() -> SupportState {
     }
 }
 
-/// Stub kept for call-sites that still reference the old signature.
-/// The old `SensorHealth` type is no longer accessible from the public mavkit
-/// API. Support capabilities are currently static.
-pub(crate) fn support_snapshot_from_sensor_health(
-    _sensor_health: &serde_json::Value,
-    provenance: DomainProvenance,
-) -> SupportSnapshot {
+/// Support capabilities are currently static; the old `SensorHealth` type is
+/// no longer accessible from the public mavkit API.
+pub(crate) fn support_snapshot(provenance: DomainProvenance) -> SupportSnapshot {
     DomainValue::present(default_support_state(), provenance)
 }
 
@@ -35,10 +31,7 @@ mod tests {
 
     #[test]
     fn support_snapshot_exposes_static_capabilities() {
-        let snapshot = support_snapshot_from_sensor_health(
-            &serde_json::Value::Null,
-            DomainProvenance::Stream,
-        );
+        let snapshot = support_snapshot(DomainProvenance::Stream);
         let value = serde_json::to_value(snapshot).expect("serialize support snapshot");
 
         assert_eq!(value["value"]["can_request_prearm_checks"], true);

@@ -30,7 +30,7 @@ mod bridges;
 mod commands;
 mod connection;
 mod e2e_emit;
-#[allow(dead_code)]
+#[allow(dead_code)] // Firmware module is conditionally used via Tauri commands; not all paths are exercised in all builds
 mod firmware;
 mod guided;
 mod helpers;
