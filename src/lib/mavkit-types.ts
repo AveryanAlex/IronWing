@@ -824,3 +824,60 @@ function defaultConditionCommand(variant: string): ConditionCommand {
       return { Delay: { delay_s: 0 } };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Command field update helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Return a new MissionCommand with a single field updated on the inner variant struct.
+ * Skips position fields (handled separately) and unit/string variants.
+ */
+export function withCommandField(
+  cmd: MissionCommand,
+  fieldKey: string,
+  value: unknown,
+): MissionCommand {
+  if ("Nav" in cmd) {
+    const nav = cmd.Nav;
+    if (typeof nav === "string") return cmd;
+    const variantKey = Object.keys(nav)[0] as string;
+    const inner = (nav as Record<string, Record<string, unknown>>)[variantKey];
+    if (inner && fieldKey in inner) {
+      return { Nav: { [variantKey]: { ...inner, [fieldKey]: value } } as unknown as NavCommand };
+    }
+    return cmd;
+  }
+  if ("Do" in cmd) {
+    const d = cmd.Do;
+    if (typeof d === "string") return cmd;
+    const variantKey = Object.keys(d)[0] as string;
+    const inner = (d as Record<string, Record<string, unknown>>)[variantKey];
+    if (inner && fieldKey in inner) {
+      return { Do: { [variantKey]: { ...inner, [fieldKey]: value } } as unknown as DoCommand };
+    }
+    return cmd;
+  }
+  if ("Condition" in cmd) {
+    const c = cmd.Condition;
+    if (typeof c === "string") return cmd;
+    const variantKey = Object.keys(c)[0] as string;
+    const inner = (c as Record<string, Record<string, unknown>>)[variantKey];
+    if (inner && fieldKey in inner) {
+      return { Condition: { [variantKey]: { ...inner, [fieldKey]: value } } as unknown as ConditionCommand };
+    }
+    return cmd;
+  }
+  return cmd;
+}
+
+// ---------------------------------------------------------------------------
+// Enum option maps for string-typed command fields
+// ---------------------------------------------------------------------------
+
+/** Maps field names that are string enums to their valid values. */
+export const COMMAND_ENUM_OPTIONS: Record<string, string[]> = {
+  direction: ["Clockwise", "CounterClockwise"],
+  action: ["Neutral", "Climb", "Descend", "Disable", "Enable", "DisableFloor", "Release", "Grab", "Relax", "LengthControl", "RateControl"],
+  speed_type: ["Airspeed", "Groundspeed"],
+};

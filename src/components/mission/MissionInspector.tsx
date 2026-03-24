@@ -6,6 +6,8 @@ import {
   commandCategory,
   defaultCommand,
   geoPoint3dLatLon,
+  withCommandField,
+  COMMAND_ENUM_OPTIONS,
 } from "../../lib/mavkit-types";
 import type {
   MissionItem,
@@ -38,77 +40,68 @@ type MissionInspectorProps = {
 };
 
 // ---------------------------------------------------------------------------
-// Typed field extraction for display
+// Typed field extraction
 // ---------------------------------------------------------------------------
 
-type FieldEntry = { label: string; value: string };
+type EditableField = {
+  key: string;
+  label: string;
+  type: "number" | "boolean" | "enum";
+  value: number | boolean | string;
+  enumOptions?: string[];
+};
 
-/** Extract human-readable fields from the inner variant of a MissionCommand. */
-function extractCommandFields(cmd: MissionCommand): FieldEntry[] {
-  const entries: FieldEntry[] = [];
+/** Extract editable fields from the inner variant of a MissionCommand. */
+function extractEditableFields(cmd: MissionCommand): EditableField[] {
+  const fields: EditableField[] = [];
 
   function walk(obj: Record<string, unknown>) {
     for (const [key, val] of Object.entries(obj)) {
-      // Skip position — handled separately by coordinate fields
       if (key === "position") continue;
       if (typeof val === "number") {
-        entries.push({ label: fieldLabel(key), value: formatFieldValue(key, val) });
+        fields.push({ key, label: fieldLabel(key), type: "number", value: val });
       } else if (typeof val === "boolean") {
-        entries.push({ label: fieldLabel(key), value: val ? "Yes" : "No" });
+        fields.push({ key, label: fieldLabel(key), type: "boolean", value: val });
       } else if (typeof val === "string") {
-        entries.push({ label: fieldLabel(key), value: val });
+        const options = COMMAND_ENUM_OPTIONS[key];
+        fields.push({
+          key,
+          label: fieldLabel(key),
+          type: "enum",
+          value: val,
+          enumOptions: options ?? [val],
+        });
       }
     }
   }
 
-  // Dig into the externally-tagged enum layers to find the inner struct
   if ("Nav" in cmd) {
     const nav = cmd.Nav;
-    if (typeof nav === "string") return entries; // unit variant like "ReturnToLaunch"
+    if (typeof nav === "string") return fields;
     const key = Object.keys(nav)[0];
     const inner = (nav as Record<string, Record<string, unknown>>)[key];
     if (inner) walk(inner);
   } else if ("Do" in cmd) {
     const d = cmd.Do;
-    if (typeof d === "string") return entries;
+    if (typeof d === "string") return fields;
     const key = Object.keys(d)[0];
     const inner = (d as Record<string, Record<string, unknown>>)[key];
     if (inner) walk(inner);
   } else if ("Condition" in cmd) {
     const c = cmd.Condition;
-    if (typeof c === "string") return entries;
+    if (typeof c === "string") return fields;
     const key = Object.keys(c)[0];
     const inner = (c as Record<string, Record<string, unknown>>)[key];
     if (inner) walk(inner);
-  } else if ("Other" in cmd) {
-    const raw = cmd.Other;
-    entries.push({ label: "Command #", value: String(raw.command) });
-    entries.push({ label: "Frame", value: String(raw.frame) });
-    for (let i = 1; i <= 4; i++) {
-      const val = raw[`param${i}` as keyof typeof raw] as number;
-      if (val !== 0) entries.push({ label: `Param ${i}`, value: String(val) });
-    }
-    if (raw.x !== 0) entries.push({ label: "X", value: String(raw.x) });
-    if (raw.y !== 0) entries.push({ label: "Y", value: String(raw.y) });
-    if (raw.z !== 0) entries.push({ label: "Z", value: String(raw.z) });
   }
 
-  return entries;
+  return fields;
 }
 
 function fieldLabel(key: string): string {
-  // Convert snake_case to Title Case and strip unit suffixes for display
   return key
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatFieldValue(key: string, val: number): string {
-  // Show integers as integers, floats with reasonable precision
-  if (Number.isInteger(val)) return String(val);
-  // Degrees get 7 decimals, everything else 2
-  if (key.includes("deg")) return val.toFixed(7);
-  return val.toFixed(2);
 }
 
 // ---------------------------------------------------------------------------
@@ -140,21 +133,111 @@ function previousPosition(
   return geoPoint3dLatLon(pos);
 }
 
-function TypedFieldsDisplay({ fields }: { fields: FieldEntry[] }) {
+function EditableCommandFields({
+  fields,
+  command,
+  disabled,
+  onUpdateCommand,
+}: {
+  fields: EditableField[];
+  command: MissionCommand;
+  disabled: boolean;
+  onUpdateCommand: (cmd: MissionCommand) => void;
+}) {
   if (fields.length === 0) return null;
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       <span className="text-[10px] font-medium text-text-muted">Parameters</span>
-      <div className="space-y-0.5">
-        {fields.map((f, i) => (
-          <div key={i} className="flex items-center justify-between text-[10px]">
-            <span className="text-text-muted">{f.label}</span>
-            <span className="tabular-nums text-text-primary">{f.value}</span>
-          </div>
-        ))}
-      </div>
+      {fields.map((f) => (
+        <div key={f.key} className="space-y-0.5">
+          <label className="text-[10px] text-text-muted">{f.label}</label>
+          {f.type === "number" && (
+            <NumberFieldInput
+              fieldKey={f.key}
+              value={f.value as number}
+              command={command}
+              disabled={disabled}
+              onUpdateCommand={onUpdateCommand}
+            />
+          )}
+          {f.type === "boolean" && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onUpdateCommand(withCommandField(command, f.key, !(f.value as boolean)))}
+              className={cn(
+                "rounded border px-1.5 py-1 text-xs",
+                f.value
+                  ? "border-accent/40 bg-accent/10 text-accent"
+                  : "border-border bg-bg-input text-text-muted",
+                disabled && "opacity-50",
+              )}
+            >
+              {f.value ? "Yes" : "No"}
+            </button>
+          )}
+          {f.type === "enum" && (
+            <select
+              disabled={disabled}
+              value={f.value as string}
+              onChange={(e) => onUpdateCommand(withCommandField(command, f.key, e.target.value))}
+              className="w-full rounded border border-border bg-bg-input px-1.5 py-1 text-xs text-text-primary"
+            >
+              {f.enumOptions?.map((opt) => (
+                <option key={opt} value={opt}>
+                  {fieldLabel(opt)}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      ))}
     </div>
+  );
+}
+
+/** Number input that commits on blur or Enter, avoiding per-keystroke updates. */
+function NumberFieldInput({
+  fieldKey,
+  value,
+  command,
+  disabled,
+  onUpdateCommand,
+}: {
+  fieldKey: string;
+  value: number;
+  command: MissionCommand;
+  disabled: boolean;
+  onUpdateCommand: (cmd: MissionCommand) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+
+  // Sync external value when not editing
+  const displayValue = focused ? draft : String(value);
+
+  const commit = useCallback(() => {
+    const parsed = parseFloat(draft);
+    if (!Number.isNaN(parsed) && parsed !== value) {
+      onUpdateCommand(withCommandField(command, fieldKey, parsed));
+    } else {
+      setDraft(String(value));
+    }
+  }, [draft, value, command, fieldKey, onUpdateCommand]);
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      disabled={disabled}
+      value={displayValue}
+      onChange={(e) => setDraft(e.target.value)}
+      onFocus={() => { setDraft(String(value)); setFocused(true); }}
+      onBlur={() => { setFocused(false); commit(); }}
+      onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
+      className="w-full rounded border border-border bg-bg-input px-1.5 py-1 text-xs tabular-nums text-text-primary"
+    />
   );
 }
 
@@ -190,8 +273,8 @@ export function MissionInspector({
       ? "Fence Region"
       : "Rally Point";
 
-  const typedFields = useMemo(
-    () => (missionItem ? extractCommandFields(missionItem.command) : []),
+  const editableFields = useMemo(
+    () => (missionItem ? extractEditableFields(missionItem.command) : []),
     [missionItem],
   );
 
@@ -252,7 +335,14 @@ export function MissionInspector({
         </p>
       )}
 
-      <TypedFieldsDisplay fields={typedFields} />
+      {missionItem && onUpdateCommand && (
+        <EditableCommandFields
+          fields={editableFields}
+          command={missionItem.command}
+          disabled={controlReadOnly}
+          onUpdateCommand={(cmd) => onUpdateCommand(index, cmd)}
+        />
+      )}
 
       {position && (
         <>
