@@ -141,7 +141,7 @@ export function useFirmware(): FirmwareController {
   const activePath = deriveFirmwarePath(sessionStatus);
 
   useEffect(() => {
-    firmwareSessionStatus().then(setSessionStatus).catch(() => {});
+    firmwareSessionStatus().then(setSessionStatus).catch(() => { /* best-effort poll; errors are transient */ });
   }, []);
 
   useEffect(() => {

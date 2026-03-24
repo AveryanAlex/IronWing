@@ -270,10 +270,10 @@ export function MissionMap({
 
       if (syntheticVision) {
         // Enable satellite + hillshade, hide vector labels
-        try { map.setLayoutProperty("satellite", "visibility", "visible"); } catch {}
-        try { map.setLayoutProperty("hills", "visibility", "visible"); } catch {}
+        try { map.setLayoutProperty("satellite", "visibility", "visible"); } catch { /* layer may not exist yet */ }
+        try { map.setLayoutProperty("hills", "visibility", "visible"); } catch { /* layer may not exist yet */ }
         for (const id of baseLayerIdsRef.current) {
-          try { map.setLayoutProperty(id, "visibility", "none"); } catch {}
+          try { map.setLayoutProperty(id, "visibility", "none"); } catch { /* layer may not exist yet */ }
         }
         map.setTerrain({ source: "terrainSource", exaggeration: 1.5 });
         map.setSky({
@@ -401,11 +401,11 @@ export function MissionMap({
     const showSat = mapLayer !== "plan";
     const showVector = mapLayer !== "satellite";
 
-    try { map.setLayoutProperty("satellite", "visibility", showSat ? "visible" : "none"); } catch {}
-    try { map.setLayoutProperty("hills", "visibility", showSat ? "visible" : "none"); } catch {}
+    try { map.setLayoutProperty("satellite", "visibility", showSat ? "visible" : "none"); } catch { /* layer may not exist yet */ }
+    try { map.setLayoutProperty("hills", "visibility", showSat ? "visible" : "none"); } catch { /* layer may not exist yet */ }
 
     for (const id of baseLayerIdsRef.current) {
-      try { map.setLayoutProperty(id, "visibility", showVector ? "visible" : "none"); } catch {}
+      try { map.setLayoutProperty(id, "visibility", showVector ? "visible" : "none"); } catch { /* layer may not exist yet */ }
     }
   }, [mapLayer]);
 
