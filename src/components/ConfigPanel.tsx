@@ -3,7 +3,6 @@ import { ChevronDown, Search, Check, X, RotateCw, Lock } from "lucide-react";
 import { SetupCheckbox } from "./setup/shared/SetupCheckbox";
 import type { ParamsState } from "../hooks/use-params";
 import type { Param } from "../params";
-import { paramProgressPhase, paramProgressCounts, isParamTransferActive } from "../params";
 import type { ParamMeta, ParamMetadataMap } from "../param-metadata";
 import { formatStagedValue, displayParamValue } from "./setup/shared/param-format-helpers";
 
@@ -397,9 +396,6 @@ export function ConfigPanel({ params, connected, highlightParam, onHighlightHand
 }
 
 function ParamsTabContent({ params, connected, highlightParam, onHighlightHandled }: ConfigPanelProps) {
-  const phase = params.progress ? paramProgressPhase(params.progress) : null;
-  const writing = phase === "writing";
-  const busy = params.progress ? isParamTransferActive(params.progress) : false;
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scrollToHighlightedParam = useCallback((paramName: string) => {
@@ -476,28 +472,6 @@ function ParamsTabContent({ params, connected, highlightParam, onHighlightHandle
           />
         </div>
       </div>
-
-      {/* Progress bar */}
-      {busy && params.progress && (() => {
-        const counts = paramProgressCounts(params.progress);
-        return counts && (
-          <div className="flex flex-col gap-1">
-            <div className="h-1.5 overflow-hidden rounded-full bg-bg-tertiary">
-              <div
-                className={`h-full rounded-full transition-all ${writing ? "bg-warning" : "bg-accent-blue"}`}
-                style={{
-                  width: counts.expected != null && counts.expected > 0
-                    ? `${(counts.received / counts.expected) * 100}%`
-                    : "0%",
-                }}
-              />
-            </div>
-            <span className="text-[10px] text-text-muted">
-              {writing ? "Writing" : "Downloading"} {counts.received} / {counts.expected ?? "?"} parameters
-            </span>
-          </div>
-        );
-      })()}
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
