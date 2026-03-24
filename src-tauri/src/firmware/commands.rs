@@ -559,6 +559,10 @@ fn serial_bootloader_transition(
         return SerialBootloaderTransition::AlreadyInBootloader;
     }
 
+    if selected_port_info.is_some_and(discovery::is_known_fc_application_port) {
+        return SerialBootloaderTransition::AutoRebootAttemptable;
+    }
+
     if vehicle_connected {
         return SerialBootloaderTransition::TargetMismatch;
     }
@@ -1587,6 +1591,8 @@ mod tests {
             ),
             SerialBootloaderTransition::AutoRebootSupported
         ));
+        // When connected on a different port but selected port has a known FC VID/PID,
+        // auto-reboot is attemptable via a temporary MAVLink session on the selected port.
         assert!(matches!(
             serial_bootloader_transition(
                 "/dev/ttyACM0",
@@ -1596,12 +1602,12 @@ mod tests {
                 }),
                 true,
             ),
-            SerialBootloaderTransition::TargetMismatch
+            SerialBootloaderTransition::AutoRebootAttemptable
         ));
     }
 
     #[test]
-    fn serial_bootloader_transition_requires_live_vehicle_for_auto_reboot_reporting() {
+    fn serial_bootloader_transition_reports_auto_reboot_attemptable_when_no_live_vehicle() {
         let ports = vec![PortInfo {
             port_name: "/dev/ttyACM0".into(),
             vid: Some(0x2DAE),
@@ -1621,12 +1627,13 @@ mod tests {
                 }),
                 false,
             ),
-            SerialBootloaderTransition::ManualBootloaderEntryRequired
+            SerialBootloaderTransition::AutoRebootAttemptable
         ));
     }
 
     #[test]
-    fn serial_bootloader_transition_requires_manual_entry_when_no_safe_reboot_path_exists() {
+    fn serial_bootloader_transition_reports_auto_reboot_attemptable_when_known_fc_and_disconnected(
+    ) {
         let ports = vec![PortInfo {
             port_name: "/dev/ttyACM0".into(),
             vid: Some(0x2DAE),
@@ -1639,7 +1646,7 @@ mod tests {
 
         assert!(matches!(
             serial_bootloader_transition("/dev/ttyACM0", &ports, None, false),
-            SerialBootloaderTransition::ManualBootloaderEntryRequired
+            SerialBootloaderTransition::AutoRebootAttemptable
         ));
     }
 
@@ -1683,6 +1690,25 @@ mod tests {
         assert!(matches!(
             serial_bootloader_transition("/dev/ttyACM0", &ports, None, false),
             SerialBootloaderTransition::ManualBootloaderEntryRequired
+        ));
+    }
+
+    #[test]
+    fn serial_bootloader_transition_reports_auto_reboot_attemptable_for_known_fc_port() {
+        // CubeOrange application-mode VID/PID, no active session
+        let ports = vec![PortInfo {
+            port_name: "/dev/ttyACM0".into(),
+            vid: Some(0x2DAE),
+            pid: Some(0x1058),
+            serial_number: Some("app".into()),
+            manufacturer: Some("Hex".into()),
+            product: Some("CubeOrange".into()),
+            location: None,
+        }];
+
+        assert!(matches!(
+            serial_bootloader_transition("/dev/ttyACM0", &ports, None, false),
+            SerialBootloaderTransition::AutoRebootAttemptable
         ));
     }
 
