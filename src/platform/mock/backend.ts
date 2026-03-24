@@ -913,6 +913,15 @@ function defaultCommandResult(cmd: string, _args: CommandArgs): unknown {
       return "idle";
     case "firmware_session_status":
       return { kind: "idle" };
+    case "firmware_serial_readiness":
+      return {
+        request_token: "mock:firmware_serial_readiness",
+        session_status: { kind: "idle" },
+        readiness: { kind: "advisory" },
+        target_hint: null,
+        validation_pending: false,
+        bootloader_transition: { kind: "manual_bootloader_entry_required" },
+      };
     case "connect_link":
       resetGuided("source_switch", "live source switched");
       if (_args?.request && typeof _args.request === "object") {

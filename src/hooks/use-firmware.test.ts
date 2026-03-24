@@ -1,9 +1,16 @@
-import { describe, it, expect } from "vitest";
+// @vitest-environment jsdom
+import { act, renderHook } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import type {
   FirmwareSessionStatus,
+  SerialFlashOutcome,
   SerialFlowResult,
   DfuRecoveryResult,
   DfuRecoverySource,
+  SerialFlashSource,
+  SerialFlashOptions,
+  SerialReadinessRequest,
+  SerialReadinessResponse,
 } from "../firmware";
 import {
   isFirmwareActive,
@@ -11,8 +18,107 @@ import {
   serialResultToStatus,
   dfuResultToStatus,
   buildDfuApjSource,
-  buildDfuCatalogSource,
+  buildDfuOfficialBootloaderSource,
+  useFirmware,
 } from "./use-firmware";
+
+const firmwareMocks = vi.hoisted(() => ({
+  firmwareSessionStatus: vi.fn(),
+  subscribeFirmwareProgress: vi.fn(),
+  firmwareFlashSerial: vi.fn(),
+  firmwareFlashDfuRecovery: vi.fn(),
+  firmwareSerialReadiness: vi.fn(),
+  firmwareSessionCancel: vi.fn(),
+  firmwareSessionClearCompleted: vi.fn(),
+}));
+
+vi.mock("../firmware", async () => {
+  const actual = await vi.importActual<typeof import("../firmware")>("../firmware");
+  return {
+    ...actual,
+    firmwareSessionStatus: firmwareMocks.firmwareSessionStatus,
+    subscribeFirmwareProgress: firmwareMocks.subscribeFirmwareProgress,
+    firmwareFlashSerial: firmwareMocks.firmwareFlashSerial,
+    firmwareFlashDfuRecovery: firmwareMocks.firmwareFlashDfuRecovery,
+    firmwareSerialReadiness: firmwareMocks.firmwareSerialReadiness,
+    firmwareSessionCancel: firmwareMocks.firmwareSessionCancel,
+    firmwareSessionClearCompleted: firmwareMocks.firmwareSessionClearCompleted,
+  };
+});
+
+beforeEach(() => {
+  vi.useRealTimers();
+  firmwareMocks.firmwareSessionStatus.mockReset();
+  firmwareMocks.subscribeFirmwareProgress.mockReset();
+  firmwareMocks.firmwareFlashSerial.mockReset();
+  firmwareMocks.firmwareFlashDfuRecovery.mockReset();
+  firmwareMocks.firmwareSerialReadiness.mockReset();
+  firmwareMocks.firmwareSessionCancel.mockReset();
+  firmwareMocks.firmwareSessionClearCompleted.mockReset();
+
+  firmwareMocks.firmwareSessionStatus.mockResolvedValue({ kind: "idle" } satisfies FirmwareSessionStatus);
+  firmwareMocks.subscribeFirmwareProgress.mockResolvedValue(() => {});
+  firmwareMocks.firmwareFlashSerial.mockResolvedValue({
+    result: "verified",
+    board_id: 9,
+    bootloader_rev: 4,
+    port: "/dev/ttyACM0",
+  } satisfies SerialFlowResult);
+  firmwareMocks.firmwareFlashDfuRecovery.mockResolvedValue({ result: "verified" } satisfies DfuRecoveryResult);
+  firmwareMocks.firmwareSerialReadiness.mockResolvedValue(buildSerialReadinessResponse());
+  firmwareMocks.firmwareSessionCancel.mockResolvedValue(undefined);
+  firmwareMocks.firmwareSessionClearCompleted.mockResolvedValue(undefined);
+});
+
+function fnv1a64(bytes: number[]): string {
+  let hash = 0xcbf29ce484222325n;
+  for (const byte of bytes) {
+    hash ^= BigInt(byte);
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+
+function pushU64Le(bytes: number[], value: number) {
+  let remaining = BigInt(value);
+  for (let index = 0; index < 8; index += 1) {
+    bytes.push(Number(remaining & 0xffn));
+    remaining >>= 8n;
+  }
+}
+
+function serialReadinessToken(request: SerialReadinessRequest): string {
+  const encoder = new TextEncoder();
+  const sourceIdentity = request.source.kind === "catalog_url"
+    ? `${request.source.url.length}-${fnv1a64([...encoder.encode(request.source.url)])}`
+    : `${request.source.data.length}-${fnv1a64(request.source.data)}`;
+  return `serial-readiness:port=${request.port}:source_kind=${request.source.kind}:source_identity=${sourceIdentity}:full_chip_erase=${request.options?.full_chip_erase ? 1 : 0}`;
+}
+
+const DEFAULT_READINESS_REQUEST: SerialReadinessRequest = {
+  port: "/dev/ttyACM0",
+  source: { kind: "catalog_url", url: "" },
+  options: { full_chip_erase: false },
+};
+
+function buildSerialReadinessResponse(
+  overrides: Partial<SerialReadinessResponse> = {},
+  request: SerialReadinessRequest = DEFAULT_READINESS_REQUEST,
+): SerialReadinessResponse {
+  return {
+    request_token: serialReadinessToken(request),
+    session_status: { kind: "idle" },
+    readiness: { kind: "advisory" },
+    target_hint: null,
+    validation_pending: false,
+    bootloader_transition: { kind: "manual_bootloader_entry_required" },
+    ...overrides,
+  } satisfies SerialReadinessResponse;
+}
+
+function completedSerial(outcome: SerialFlashOutcome): FirmwareSessionStatus {
+  return { kind: "completed", outcome: { path: "serial_primary", outcome } };
+}
 
 const IDLE: FirmwareSessionStatus = { kind: "idle" };
 
@@ -25,7 +131,14 @@ const SERIAL_REBOOTING: FirmwareSessionStatus = { kind: "serial_primary", phase:
 const DFU_IDLE: FirmwareSessionStatus = { kind: "dfu_recovery", phase: "idle" };
 const DFU_DOWNLOADING: FirmwareSessionStatus = { kind: "dfu_recovery", phase: "downloading" };
 const DFU_DETECTING: FirmwareSessionStatus = { kind: "dfu_recovery", phase: "detecting" };
+const DFU_ERASING: FirmwareSessionStatus = { kind: "dfu_recovery", phase: "erasing" };
+const DFU_MANIFESTING_OR_RESETTING: FirmwareSessionStatus = {
+  kind: "dfu_recovery",
+  phase: "manifesting_or_resetting",
+};
 const DFU_VERIFYING: FirmwareSessionStatus = { kind: "dfu_recovery", phase: "verifying" };
+const CANCELLING_SERIAL: FirmwareSessionStatus = { kind: "cancelling", path: "serial_primary" };
+const CANCELLING_DFU: FirmwareSessionStatus = { kind: "cancelling", path: "dfu_recovery" };
 
 describe("isFirmwareActive", () => {
   it("returns false when idle", () => {
@@ -39,9 +152,14 @@ describe("isFirmwareActive", () => {
   });
 
   it("returns true for dfu_recovery in any phase", () => {
-    for (const s of [DFU_IDLE, DFU_DOWNLOADING, DFU_DETECTING, DFU_VERIFYING]) {
+    for (const s of [DFU_IDLE, DFU_DETECTING, DFU_DOWNLOADING, DFU_ERASING, DFU_VERIFYING, DFU_MANIFESTING_OR_RESETTING]) {
       expect(isFirmwareActive(s)).toBe(true);
     }
+  });
+
+  it("returns true while cancelling", () => {
+    expect(isFirmwareActive(CANCELLING_SERIAL)).toBe(true);
+    expect(isFirmwareActive(CANCELLING_DFU)).toBe(true);
   });
 
   it("returns false for completed statuses produced by serialResultToStatus", () => {
@@ -87,6 +205,11 @@ describe("deriveFirmwarePath", () => {
     expect(deriveFirmwarePath(dfuResultToStatus({ result: "verified" }))).toBeNull();
   });
 
+  it("returns active path while cancelling", () => {
+    expect(deriveFirmwarePath(CANCELLING_SERIAL)).toBe("serial_primary");
+    expect(deriveFirmwarePath(CANCELLING_DFU)).toBe("dfu_recovery");
+  });
+
   it("never confuses serial_primary with dfu_recovery", () => {
     expect(deriveFirmwarePath(SERIAL_PROGRAMMING)).toBe("serial_primary");
     expect(deriveFirmwarePath(DFU_DOWNLOADING)).toBe("dfu_recovery");
@@ -96,44 +219,55 @@ describe("deriveFirmwarePath", () => {
 describe("serialResultToStatus", () => {
   it("maps verified to completed serial verified", () => {
     const status = serialResultToStatus({ result: "verified", board_id: 9, bootloader_rev: 4, port: "/dev/ttyACM0" });
-    expect(status).toEqual({
-      kind: "completed",
-      outcome: { path: "serial_primary", outcome: { result: "verified" } },
-    });
+    expect(status).toEqual(completedSerial({
+      result: "verified",
+      board_id: 9,
+      bootloader_rev: 4,
+      port: "/dev/ttyACM0",
+    } satisfies SerialFlashOutcome));
   });
 
   it("maps flashed_but_unverified to completed serial flashed_but_unverified", () => {
     const status = serialResultToStatus({ result: "flashed_but_unverified", board_id: 9, bootloader_rev: 2, port: "/dev/ttyACM0" });
-    expect(status).toEqual({
-      kind: "completed",
-      outcome: { path: "serial_primary", outcome: { result: "flashed_but_unverified" } },
-    });
+    expect(status).toEqual(completedSerial({
+      result: "flashed_but_unverified",
+      board_id: 9,
+      bootloader_rev: 2,
+      port: "/dev/ttyACM0",
+    } satisfies SerialFlashOutcome));
   });
 
-  it("maps reconnect_verified with flash_verified=true to verified", () => {
+  it("maps reconnect_verified with flash_verified=true without collapsing it", () => {
     const status = serialResultToStatus({ result: "reconnect_verified", board_id: 9, bootloader_rev: 4, flash_verified: true });
-    expect(status).toEqual({
-      kind: "completed",
-      outcome: { path: "serial_primary", outcome: { result: "verified" } },
-    });
+    expect(status).toEqual(completedSerial({
+      result: "reconnect_verified",
+      board_id: 9,
+      bootloader_rev: 4,
+      flash_verified: true,
+    } satisfies SerialFlashOutcome));
   });
 
-  it("maps reconnect_verified with flash_verified=false to flashed_but_unverified", () => {
+  it("maps reconnect_verified with flash_verified=false without collapsing it", () => {
     const status = serialResultToStatus({ result: "reconnect_verified", board_id: 9, bootloader_rev: 2, flash_verified: false });
-    expect(status).toEqual({
-      kind: "completed",
-      outcome: { path: "serial_primary", outcome: { result: "flashed_but_unverified" } },
-    });
+    expect(status).toEqual(completedSerial({
+      result: "reconnect_verified",
+      board_id: 9,
+      bootloader_rev: 2,
+      flash_verified: false,
+    } satisfies SerialFlashOutcome));
   });
 
-  it("maps reconnect_failed to flashed_but_unverified", () => {
+  it("maps reconnect_failed without collapsing it", () => {
     const status = serialResultToStatus({
       result: "reconnect_failed", board_id: 9, bootloader_rev: 4, flash_verified: true, reconnect_error: "timeout",
     });
-    expect(status).toEqual({
-      kind: "completed",
-      outcome: { path: "serial_primary", outcome: { result: "flashed_but_unverified" } },
-    });
+    expect(status).toEqual(completedSerial({
+      result: "reconnect_failed",
+      board_id: 9,
+      bootloader_rev: 4,
+      flash_verified: true,
+      reconnect_error: "timeout",
+    } satisfies SerialFlashOutcome));
   });
 
   it("maps failed to completed serial failed with reason", () => {
@@ -144,15 +278,23 @@ describe("serialResultToStatus", () => {
     });
   });
 
+  it("maps cancelled to completed serial cancelled", () => {
+    const status = serialResultToStatus({ result: "cancelled" } satisfies SerialFlowResult);
+    expect(status).toEqual({
+      kind: "completed",
+      outcome: { path: "serial_primary", outcome: { result: "cancelled" } },
+    });
+  });
+
   it("maps board_detection_failed to completed serial recovery_needed with reason", () => {
     const status = serialResultToStatus({ result: "board_detection_failed", reason: "no bootloader found" });
     expect(status).toEqual({
       kind: "completed",
-      outcome: { path: "serial_primary", outcome: { result: "recovery_needed", reason: "no bootloader found" } },
+      outcome: { path: "serial_primary", outcome: { result: "board_detection_failed", reason: "no bootloader found" } },
     });
   });
 
-  it("maps extf_capacity_insufficient to completed serial failed (not recovery_needed)", () => {
+  it("maps extf_capacity_insufficient without collapsing it", () => {
     const status = serialResultToStatus({
       result: "extf_capacity_insufficient",
       reason: "external-flash capacity insufficient: board reports 0 bytes, firmware needs 4 bytes",
@@ -162,7 +304,7 @@ describe("serialResultToStatus", () => {
       outcome: {
         path: "serial_primary",
         outcome: {
-          result: "failed",
+          result: "extf_capacity_insufficient",
           reason: "external-flash capacity insufficient: board reports 0 bytes, firmware needs 4 bytes",
         },
       },
@@ -179,8 +321,8 @@ describe("serialResultToStatus", () => {
       reason: "no bootloader detected",
     });
     if (extfFail.kind === "completed" && boardFail.kind === "completed") {
-      expect(extfFail.outcome.outcome.result).toBe("failed");
-      expect(boardFail.outcome.outcome.result).toBe("recovery_needed");
+      expect(extfFail.outcome.outcome.result).toBe("extf_capacity_insufficient");
+      expect(boardFail.outcome.outcome.result).toBe("board_detection_failed");
     }
   });
 
@@ -238,12 +380,29 @@ describe("dfuResultToStatus", () => {
     }
   });
 
+  it("maps reset_unconfirmed to completed dfu reset_unconfirmed", () => {
+    const status = dfuResultToStatus({ result: "reset_unconfirmed" });
+    expect(status).toEqual({
+      kind: "completed",
+      outcome: { path: "dfu_recovery", outcome: { result: "reset_unconfirmed" } },
+    });
+  });
+
+  it("maps cancelled to completed dfu cancelled", () => {
+    const status = dfuResultToStatus({ result: "cancelled" } satisfies DfuRecoveryResult);
+    expect(status).toEqual({
+      kind: "completed",
+      outcome: { path: "dfu_recovery", outcome: { result: "cancelled" } },
+    });
+  });
+
   it("always produces kind=completed with path=dfu_recovery", () => {
     const results: DfuRecoveryResult[] = [
       { result: "verified" },
       { result: "failed", reason: "r" },
       { result: "driver_guidance", guidance: "g" },
       { result: "platform_unsupported" },
+      { result: "reset_unconfirmed" },
     ];
     for (const r of results) {
       const s = dfuResultToStatus(r);
@@ -310,9 +469,19 @@ describe("locks connection controls while firmware active", () => {
   });
 
   it("locks for all DFU phases", () => {
-    for (const status of [DFU_IDLE, DFU_DOWNLOADING, DFU_DETECTING, DFU_VERIFYING]) {
+    for (const status of [DFU_IDLE, DFU_DETECTING, DFU_DOWNLOADING, DFU_ERASING, DFU_VERIFYING, DFU_MANIFESTING_OR_RESETTING]) {
       expect(computeFormLocked(false, false, isFirmwareActive(status))).toBe(true);
     }
+  });
+
+  it("locks while firmware session is cancelling", () => {
+    expect(computeFormLocked(false, false, isFirmwareActive(CANCELLING_SERIAL))).toBe(true);
+    expect(computeFormLocked(false, false, isFirmwareActive(CANCELLING_DFU))).toBe(true);
+  });
+
+  it("keeps active path while cancelling", () => {
+    expect(deriveFirmwarePath(CANCELLING_SERIAL)).toBe("serial_primary");
+    expect(deriveFirmwarePath(CANCELLING_DFU)).toBe("dfu_recovery");
   });
 });
 
@@ -337,19 +506,19 @@ describe("recovery-needed or unsupported outcomes stay distinct", () => {
     const status = serialResultToStatus({ result: "board_detection_failed", reason: "no bootloader detected" });
     expect(status.kind).toBe("completed");
     if (status.kind === "completed" && status.outcome.path === "serial_primary") {
-      expect(status.outcome.outcome.result).toBe("recovery_needed");
-      if (status.outcome.outcome.result === "recovery_needed") {
+      expect(status.outcome.outcome.result).toBe("board_detection_failed");
+      if (status.outcome.outcome.result === "board_detection_failed") {
         expect(status.outcome.outcome.reason).toContain("no bootloader");
       }
     }
   });
 
-  it("serial reconnect_failed maps to flashed_but_unverified (distinct from failed)", () => {
+  it("serial reconnect_failed remains reconnect_failed (distinct from failed)", () => {
     const status = serialResultToStatus({
       result: "reconnect_failed", board_id: 9, bootloader_rev: 4, flash_verified: true, reconnect_error: "timeout",
     });
     if (status.kind === "completed" && status.outcome.path === "serial_primary") {
-      expect(status.outcome.outcome.result).toBe("flashed_but_unverified");
+      expect(status.outcome.outcome.result).toBe("reconnect_failed");
     }
   });
 
@@ -394,7 +563,7 @@ describe("recovery-needed or unsupported outcomes stay distinct", () => {
       return s.kind;
     });
     const unique = new Set(outcomes);
-    expect(unique.size).toBe(5);
+    expect(unique.size).toBe(6);
   });
 });
 
@@ -413,7 +582,12 @@ describe("full transition sequences", () => {
     expect(deriveFirmwarePath(s2)).toBeNull();
     if (s2.kind === "completed") {
       expect(s2.outcome.path).toBe("serial_primary");
-      expect(s2.outcome.outcome).toEqual({ result: "verified" });
+      expect(s2.outcome.outcome).toEqual({
+        result: "verified",
+        board_id: 9,
+        bootloader_rev: 4,
+        port: "/dev/ttyACM0",
+      });
     }
   });
 
@@ -486,18 +660,17 @@ describe("buildDfuApjSource", () => {
   });
 });
 
-describe("buildDfuCatalogSource", () => {
-  it("creates a catalog_url source from a URL string", () => {
-    const url = "https://firmware.ardupilot.org/Copter/stable/CubeOrange/arducopter.apj";
-    const source: DfuRecoverySource = buildDfuCatalogSource(url);
-    expect(source).toEqual({ kind: "catalog_url", url });
+describe("buildDfuOfficialBootloaderSource", () => {
+  it("creates an official_bootloader source from a board target", () => {
+    const source: DfuRecoverySource = buildDfuOfficialBootloaderSource("CubeOrange");
+    expect(source).toEqual({ kind: "official_bootloader", board_target: "CubeOrange" });
   });
 
   it("is distinct from local_apj_bytes and local_bin_bytes", () => {
-    const cat = buildDfuCatalogSource("https://example.com/fw.apj");
-    expect(cat.kind).toBe("catalog_url");
-    expect(cat.kind).not.toBe("local_apj_bytes");
-    expect(cat.kind).not.toBe("local_bin_bytes");
+    const source = buildDfuOfficialBootloaderSource("CubeOrange");
+    expect(source.kind).toBe("official_bootloader");
+    expect(source.kind).not.toBe("local_apj_bytes");
+    expect(source.kind).not.toBe("local_bin_bytes");
   });
 });
 
@@ -507,16 +680,16 @@ describe("DFU source builder round-trip compatibility", () => {
     expect(source.kind).toBe("local_apj_bytes");
   });
 
-  it("buildDfuCatalogSource output is assignable to DfuRecoverySource", () => {
-    const source: DfuRecoverySource = buildDfuCatalogSource("https://example.com/fw.apj");
-    expect(source.kind).toBe("catalog_url");
+  it("buildDfuOfficialBootloaderSource output is assignable to DfuRecoverySource", () => {
+    const source: DfuRecoverySource = buildDfuOfficialBootloaderSource("CubeOrange");
+    expect(source.kind).toBe("official_bootloader");
   });
 
   it("all three DFU source kinds remain distinct", () => {
     const apj = buildDfuApjSource([0x01]);
-    const catalog = buildDfuCatalogSource("https://example.com/fw.apj");
+    const officialBootloader = buildDfuOfficialBootloaderSource("CubeOrange");
     const bin: DfuRecoverySource = { kind: "local_bin_bytes", data: [0x01] };
-    const kinds = new Set([apj.kind, catalog.kind, bin.kind]);
+    const kinds = new Set([apj.kind, officialBootloader.kind, bin.kind]);
     expect(kinds.size).toBe(3);
   });
 });
@@ -524,7 +697,7 @@ describe("DFU source builder round-trip compatibility", () => {
 // ── Task 9: gap-coverage tests ──
 
 describe("reconnect_failed with flash_verified=false maps to flashed_but_unverified", () => {
-  it("flash_verified=false still maps to flashed_but_unverified (not failed)", () => {
+  it("flash_verified=false still maps to reconnect_failed (not failed)", () => {
     const status = serialResultToStatus({
       result: "reconnect_failed",
       board_id: 9,
@@ -534,21 +707,20 @@ describe("reconnect_failed with flash_verified=false maps to flashed_but_unverif
     });
     expect(status.kind).toBe("completed");
     if (status.kind === "completed" && status.outcome.path === "serial_primary") {
-      expect(status.outcome.outcome.result).toBe("flashed_but_unverified");
+      expect(status.outcome.outcome.result).toBe("reconnect_failed");
     }
   });
 
-  it("flash_verified=false and flash_verified=true both map to flashed_but_unverified for reconnect_failed", () => {
+  it("flash_verified=false and flash_verified=true both preserve reconnect_failed", () => {
     const withTrue = serialResultToStatus({
       result: "reconnect_failed", board_id: 9, bootloader_rev: 4, flash_verified: true, reconnect_error: "e",
     });
     const withFalse = serialResultToStatus({
       result: "reconnect_failed", board_id: 9, bootloader_rev: 2, flash_verified: false, reconnect_error: "e",
     });
-    // Both must be flashed_but_unverified — reconnect_failed is always unverified regardless of flash_verified
     if (withTrue.kind === "completed" && withFalse.kind === "completed") {
-      expect(withTrue.outcome.outcome.result).toBe("flashed_but_unverified");
-      expect(withFalse.outcome.outcome.result).toBe("flashed_but_unverified");
+      expect(withTrue.outcome.outcome.result).toBe("reconnect_failed");
+      expect(withFalse.outcome.outcome.result).toBe("reconnect_failed");
     }
   });
 });
@@ -677,8 +849,380 @@ describe("extf_capacity_insufficient reason string contains hyphenated external-
       reason: "no bootloader detected",
     });
     if (extf.kind === "completed" && recovery.kind === "completed") {
-      expect(extf.outcome.outcome.result).toBe("failed");
-      expect(recovery.outcome.outcome.result).toBe("recovery_needed");
+      expect(extf.outcome.outcome.result).toBe("extf_capacity_insufficient");
+      expect(recovery.outcome.outcome.result).toBe("board_detection_failed");
     }
+  });
+});
+
+describe("useFirmware hook API contract", () => {
+  it("exposes serialReadiness and flashSerial functions", () => {
+    const { result } = renderHook(() => useFirmware());
+    expect(typeof result.current.serialReadiness).toBe("function");
+    expect(typeof result.current.flashSerial).toBe("function");
+  });
+
+  it("exposes official bootloader DFU source building instead of catalog-url helpers", async () => {
+    const device = {
+      vid: 0x0483,
+      pid: 0xdf11,
+      unique_id: "dfu-1",
+      serial_number: null,
+      manufacturer: "STMicroelectronics",
+      product: "STM32 DFU",
+    };
+
+    const { result } = renderHook(() => useFirmware());
+
+    expect(typeof result.current.flashDfuFromOfficialBootloader).toBe("function");
+    expect("flashDfuFromCatalog" in result.current).toBe(false);
+
+    await result.current.flashDfuFromOfficialBootloader(device, "CubeOrange");
+
+    expect(firmwareMocks.firmwareFlashDfuRecovery).toHaveBeenCalledWith(device, {
+      kind: "official_bootloader",
+      board_target: "CubeOrange",
+    });
+  });
+
+  it("serialReadiness forwards request and returns backend response", async () => {
+    const request: SerialReadinessRequest = {
+      port: "/dev/ttyACM0",
+      source: { kind: "catalog_url", url: "https://example.com/fw.apj" },
+    };
+    const response = buildSerialReadinessResponse({
+      session_status: { kind: "serial_primary", phase: "idle" as const },
+      readiness: { kind: "blocked" as const, reason: "session_busy" as const },
+      target_hint: null,
+      validation_pending: false,
+      bootloader_transition: { kind: "manual_bootloader_entry_required" as const },
+    }, request) satisfies SerialReadinessResponse;
+    firmwareMocks.firmwareSerialReadiness.mockResolvedValueOnce(response);
+
+    const { result } = renderHook(() => useFirmware());
+    const actual = await result.current.serialReadiness(request);
+
+    expect(firmwareMocks.firmwareSerialReadiness).toHaveBeenCalledWith(request);
+    expect(actual).toEqual(response);
+  });
+
+  it("flashSerial passes options.full_chip_erase through when provided", async () => {
+    const source: SerialFlashSource = { kind: "local_apj_bytes", data: [1, 2, 3] };
+    const options: SerialFlashOptions = { full_chip_erase: false };
+
+    const { result } = renderHook(() => useFirmware());
+    await result.current.flashSerial("/dev/ttyACM0", 115200, source, options);
+
+    expect(firmwareMocks.firmwareFlashSerial).toHaveBeenCalledWith(
+      "/dev/ttyACM0",
+      115200,
+      source,
+      { full_chip_erase: false },
+    );
+  });
+
+  it("cancel restores prior status when cancel invoke fails", async () => {
+    firmwareMocks.firmwareSessionStatus.mockResolvedValueOnce(SERIAL_PROGRAMMING);
+    firmwareMocks.firmwareSessionCancel.mockRejectedValueOnce(new Error("cancel failed"));
+
+    const { result } = renderHook(() => useFirmware());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.sessionStatus).toEqual(SERIAL_PROGRAMMING);
+
+    await act(async () => {
+      await result.current.cancel();
+    });
+
+    expect(result.current.sessionStatus).toEqual(SERIAL_PROGRAMMING);
+    expect(result.current.sessionStatus.kind).not.toBe("cancelling");
+  });
+
+  it("locks immediately when serial flash starts before backend status poll catches up", async () => {
+    let resolveFlash: ((value: SerialFlowResult) => void) | null = null;
+    firmwareMocks.firmwareFlashSerial.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveFlash = resolve;
+    }));
+
+    const { result } = renderHook(() => useFirmware());
+
+    await act(async () => {
+      void result.current.flashSerial("/dev/ttyACM0", 115200, { kind: "local_apj_bytes", data: [1, 2, 3] });
+    });
+
+    expect(result.current.sessionStatus).toEqual({ kind: "serial_primary", phase: "idle" });
+    expect(result.current.isActive).toBe(true);
+
+    await act(async () => {
+      resolveFlash?.({ result: "verified", board_id: 9, bootloader_rev: 4, port: "/dev/ttyACM0" });
+      await Promise.resolve();
+    });
+  });
+
+  it("keeps the optimistic start cancel-safe until the backend returns cancelled", async () => {
+    let resolveFlash: ((value: SerialFlowResult) => void) | null = null;
+    firmwareMocks.firmwareFlashSerial.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveFlash = resolve;
+    }));
+
+    const { result } = renderHook(() => useFirmware());
+
+    await act(async () => {
+      void result.current.flashSerial("/dev/ttyACM0", 115200, { kind: "local_apj_bytes", data: [1, 2, 3] });
+    });
+
+    await act(async () => {
+      await result.current.cancel();
+    });
+
+    expect(result.current.sessionStatus).toEqual({ kind: "cancelling", path: "serial_primary" });
+    expect(firmwareMocks.firmwareSessionCancel).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFlash?.({ result: "cancelled" } satisfies SerialFlowResult);
+      await Promise.resolve();
+    });
+
+    expect(result.current.sessionStatus).toEqual({
+      kind: "completed",
+      outcome: { path: "serial_primary", outcome: { result: "cancelled" } },
+    });
+  });
+
+  it("preserves completed outcome when poll reports idle before dismissal", async () => {
+    vi.useFakeTimers();
+    firmwareMocks.firmwareSessionStatus.mockResolvedValue({ kind: "idle" });
+
+    const { result } = renderHook(() => useFirmware());
+
+    await act(async () => {
+      await result.current.flashSerial("/dev/ttyACM0", 115200, { kind: "local_apj_bytes", data: [1, 2, 3] });
+    });
+
+    expect(result.current.sessionStatus.kind).toBe("completed");
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+    });
+
+    expect(result.current.sessionStatus.kind).toBe("completed");
+  });
+
+  it("preserves cancelling state when poll reports idle before terminal result", async () => {
+    vi.useFakeTimers();
+    firmwareMocks.firmwareSessionStatus.mockResolvedValue(SERIAL_PROGRAMMING);
+
+    const { result } = renderHook(() => useFirmware());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    firmwareMocks.firmwareSessionStatus.mockResolvedValue({ kind: "idle" });
+
+    await act(async () => {
+      await result.current.cancel();
+    });
+
+    expect(result.current.sessionStatus).toEqual({ kind: "cancelling", path: "serial_primary" });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+    });
+
+    expect(result.current.sessionStatus).toEqual({ kind: "cancelling", path: "serial_primary" });
+  });
+
+  it("consumes backend-produced completed status after cancellation finishes", async () => {
+    vi.useFakeTimers();
+    firmwareMocks.firmwareSessionStatus.mockResolvedValue(SERIAL_PROGRAMMING);
+
+    const { result } = renderHook(() => useFirmware());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.cancel();
+    });
+
+    firmwareMocks.firmwareSessionStatus.mockResolvedValue({
+      kind: "completed",
+      outcome: { path: "serial_primary", outcome: { result: "cancelled" } },
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+    });
+
+    expect(result.current.sessionStatus).toEqual({
+      kind: "completed",
+      outcome: { path: "serial_primary", outcome: { result: "cancelled" } },
+    });
+  });
+
+  it("accepts backend-produced completed status on initial load", async () => {
+    firmwareMocks.firmwareSessionStatus.mockResolvedValueOnce({
+      kind: "completed",
+      outcome: { path: "dfu_recovery", outcome: { result: "reset_unconfirmed" } },
+    });
+
+    const { result } = renderHook(() => useFirmware());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.sessionStatus).toEqual({
+      kind: "completed",
+      outcome: { path: "dfu_recovery", outcome: { result: "reset_unconfirmed" } },
+    });
+  });
+
+  it("accepts backend-produced active DFU phase status on initial load", async () => {
+    firmwareMocks.firmwareSessionStatus.mockResolvedValueOnce({
+      kind: "dfu_recovery",
+      phase: "erasing",
+    });
+
+    const { result } = renderHook(() => useFirmware());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.sessionStatus).toEqual({
+      kind: "dfu_recovery",
+      phase: "erasing",
+    });
+  });
+
+  it("updates to backend-produced active DFU phases while polling", async () => {
+    vi.useFakeTimers();
+    firmwareMocks.firmwareSessionStatus.mockResolvedValue({
+      kind: "dfu_recovery",
+      phase: "detecting",
+    });
+
+    const { result } = renderHook(() => useFirmware());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.sessionStatus).toEqual({
+      kind: "dfu_recovery",
+      phase: "detecting",
+    });
+
+    firmwareMocks.firmwareSessionStatus.mockResolvedValue({
+      kind: "dfu_recovery",
+      phase: "manifesting_or_resetting",
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+    });
+
+    expect(result.current.sessionStatus).toEqual({
+      kind: "dfu_recovery",
+      phase: "manifesting_or_resetting",
+    });
+  });
+
+  it("preserves cancelling state when poll still reports the active serial phase before terminal result", async () => {
+    vi.useFakeTimers();
+    firmwareMocks.firmwareSessionStatus.mockResolvedValue(SERIAL_PROGRAMMING);
+
+    const { result } = renderHook(() => useFirmware());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.cancel();
+    });
+
+    expect(result.current.sessionStatus).toEqual({ kind: "cancelling", path: "serial_primary" });
+
+    firmwareMocks.firmwareSessionStatus.mockResolvedValue(SERIAL_VERIFYING);
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+    });
+
+    expect(result.current.sessionStatus).toEqual({ kind: "cancelling", path: "serial_primary" });
+  });
+
+  it("transitions DFU to cancelling during cancellation request", async () => {
+    firmwareMocks.firmwareSessionStatus.mockResolvedValueOnce(DFU_DOWNLOADING);
+
+    const { result } = renderHook(() => useFirmware());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.cancel();
+    });
+
+    expect(result.current.sessionStatus).toEqual({ kind: "cancelling", path: "dfu_recovery" });
+  });
+
+  it("preserves typed cancelled DFU result through the hook contract", async () => {
+    firmwareMocks.firmwareFlashDfuRecovery.mockResolvedValueOnce({ result: "cancelled" } satisfies DfuRecoveryResult);
+
+    const { result } = renderHook(() => useFirmware());
+
+    await act(async () => {
+      await result.current.flashDfuRecovery(
+        {
+          vid: 0x0483,
+          pid: 0xdf11,
+          unique_id: "dfu-1",
+          serial_number: null,
+          manufacturer: "ST",
+          product: "STM32 DFU",
+        },
+        { kind: "local_bin_bytes", data: [1, 2, 3, 4] },
+      );
+    });
+
+    expect(result.current.sessionStatus).toEqual({
+      kind: "completed",
+      outcome: { path: "dfu_recovery", outcome: { result: "cancelled" } },
+    });
+  });
+
+  it("dismiss clears backend-completed state before returning to idle", async () => {
+    firmwareMocks.firmwareSessionStatus.mockResolvedValueOnce({
+      kind: "completed",
+      outcome: { path: "serial_primary", outcome: { result: "verified" } },
+    });
+
+    const { result } = renderHook(() => useFirmware());
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      result.current.dismiss();
+      await Promise.resolve();
+    });
+
+    expect(firmwareMocks.firmwareSessionClearCompleted).toHaveBeenCalledTimes(1);
+    expect(result.current.sessionStatus).toEqual({ kind: "idle" });
   });
 });

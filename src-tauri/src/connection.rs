@@ -34,6 +34,12 @@ async fn clear_background_listeners(state: &AppState, app: &tauri::AppHandle) {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ActiveLinkTarget {
+    Serial { port: String },
+    Other,
+}
+
 #[derive(Deserialize)]
 pub(crate) struct ConnectRequest {
     transport: LinkEndpoint,
@@ -139,6 +145,7 @@ async fn store_connected_vehicle(
     state: &AppState,
     app: &tauri::AppHandle,
     connected_vehicle: ConnectedVehicle,
+    active_target: ActiveLinkTarget,
 ) -> Result<(), String> {
     let ConnectedVehicle {
         vehicle,
@@ -149,6 +156,7 @@ async fn store_connected_vehicle(
     *state.background_tasks.lock().await = tasks;
     *state.background_listeners.lock().await = listeners;
     *state.vehicle.lock().await = Some(vehicle);
+    *state.active_link_target.lock().await = Some(active_target);
     Ok(())
 }
 
@@ -191,7 +199,7 @@ pub(crate) async fn connect_link(
     match request.transport {
         LinkEndpoint::Udp { bind_addr } => {
             let vehicle = connect_via_address(&state, format!("udpin:{bind_addr}")).await?;
-            store_connected_vehicle(&state, &app, vehicle).await
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await
         }
         LinkEndpoint::Tcp { address } => {
             let mut connected_vehicle =
@@ -200,18 +208,19 @@ pub(crate) async fn connect_link(
             connected_vehicle
                 .tasks
                 .push(tokio::spawn(request_tcp_telemetry_streams(vehicle)));
-            store_connected_vehicle(&state, &app, connected_vehicle).await?;
+            store_connected_vehicle(&state, &app, connected_vehicle, ActiveLinkTarget::Other)
+                .await?;
             Ok(())
         }
         #[cfg(not(target_os = "android"))]
         LinkEndpoint::Serial { port, baud } => {
             let vehicle = connect_via_address(&state, format!("serial:{port}:{baud}")).await?;
-            store_connected_vehicle(&state, &app, vehicle).await
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Serial { port }).await
         }
         LinkEndpoint::BluetoothBle { address } => {
             let vehicle =
                 connect_with_abort(&state, async move { connect_ble(&address).await }).await?;
-            store_connected_vehicle(&state, &app, vehicle).await
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await
         }
         #[cfg(target_os = "android")]
         LinkEndpoint::BluetoothSpp { address } => {
@@ -219,7 +228,7 @@ pub(crate) async fn connect_link(
             let vehicle =
                 connect_with_abort(&state, async move { connect_spp(&spp_app, &address).await })
                     .await?;
-            store_connected_vehicle(&state, &app, vehicle).await
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await
         }
     }
 }
@@ -433,6 +442,7 @@ pub(crate) async fn force_disconnect(
     clear_background_listeners(state, app).await;
 
     let vehicle = state.vehicle.lock().await.take();
+    *state.active_link_target.lock().await = None;
     if let Some(v) = vehicle {
         v.disconnect().await.map_err(|e| e.to_string())?;
     }
@@ -441,6 +451,10 @@ pub(crate) async fn force_disconnect(
 
 pub(crate) async fn is_vehicle_connected(state: &AppState) -> bool {
     state.vehicle.lock().await.is_some()
+}
+
+pub(crate) async fn active_link_target(state: &AppState) -> Option<ActiveLinkTarget> {
+    state.active_link_target.lock().await.clone()
 }
 
 #[cfg(test)]

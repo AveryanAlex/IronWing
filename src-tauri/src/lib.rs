@@ -13,11 +13,12 @@ use commands::{
     set_telemetry_rate, start_guided_session, stop_guided_session, update_guided_session,
     vehicle_takeoff,
 };
-use connection::{connect_link, disconnect_link};
+use connection::{ActiveLinkTarget, connect_link, disconnect_link};
 use firmware::commands::{
-    firmware_catalog_entries, firmware_catalog_targets, firmware_check_dfu_source,
-    firmware_flash_dfu_recovery, firmware_flash_serial, firmware_reboot_to_bootloader,
-    firmware_serial_preflight, firmware_session_cancel, firmware_session_status,
+    firmware_catalog_entries, firmware_catalog_targets, firmware_flash_dfu_recovery,
+    firmware_flash_serial, firmware_reboot_to_bootloader, firmware_recovery_catalog_targets,
+    firmware_serial_preflight, firmware_serial_readiness, firmware_session_cancel,
+    firmware_session_clear_completed, firmware_session_status,
 };
 use firmware::discovery::{firmware_list_dfu_devices, firmware_list_ports};
 use firmware::types::FirmwareSessionHandle;
@@ -40,15 +41,22 @@ mod logs;
 mod recording;
 mod session_runtime;
 
+pub(crate) enum FirmwareAbortHandle {
+    SafeToAbort { handle: tokio::task::AbortHandle },
+    Cooperative { _handle: tokio::task::AbortHandle },
+}
+
 pub(crate) struct AppState {
     pub(crate) vehicle: tokio::sync::Mutex<Option<Vehicle>>,
+    pub(crate) active_link_target: tokio::sync::Mutex<Option<ActiveLinkTarget>>,
     pub(crate) connect_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
     pub(crate) background_tasks: tokio::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>,
     pub(crate) background_listeners: tokio::sync::Mutex<Vec<tauri::EventId>>,
     pub(crate) log_store: tokio::sync::Mutex<Option<LogStore>>,
     pub(crate) recorder: TlogRecorderHandle,
     pub(crate) firmware_session: FirmwareSessionHandle,
-    pub(crate) firmware_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
+    pub(crate) firmware_abort: tokio::sync::Mutex<Option<FirmwareAbortHandle>>,
+    pub(crate) firmware_cancel_requested: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub(crate) param_download_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
     pub(crate) session_runtime: tokio::sync::Mutex<SessionRuntime>,
     pub(crate) guided_runtime: tokio::sync::Mutex<GuidedRuntime>,
@@ -62,6 +70,7 @@ pub(crate) struct AppState {
 pub fn run() {
     let state = AppState {
         vehicle: tokio::sync::Mutex::new(None),
+        active_link_target: tokio::sync::Mutex::new(None),
         connect_abort: tokio::sync::Mutex::new(None),
         background_tasks: tokio::sync::Mutex::new(Vec::new()),
         background_listeners: tokio::sync::Mutex::new(Vec::new()),
@@ -69,6 +78,7 @@ pub fn run() {
         recorder: TlogRecorderHandle::new(),
         firmware_session: FirmwareSessionHandle::new(),
         firmware_abort: tokio::sync::Mutex::new(None),
+        firmware_cancel_requested: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         param_download_abort: tokio::sync::Mutex::new(None),
         session_runtime: tokio::sync::Mutex::new(SessionRuntime::new()),
         guided_runtime: tokio::sync::Mutex::new(GuidedRuntime::default()),
@@ -151,12 +161,14 @@ pub fn run() {
         firmware_flash_serial,
         firmware_session_status,
         firmware_session_cancel,
-        firmware_reboot_to_bootloader,
+        firmware_session_clear_completed,
+        firmware_serial_readiness,
         firmware_serial_preflight,
         firmware_catalog_entries,
         firmware_catalog_targets,
+        firmware_recovery_catalog_targets,
         firmware_flash_dfu_recovery,
-        firmware_check_dfu_source
+        firmware_reboot_to_bootloader
     ]);
 
     builder

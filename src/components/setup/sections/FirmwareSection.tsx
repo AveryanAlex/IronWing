@@ -15,7 +15,7 @@ export function FirmwareSection({ firmware, connected, onSaveParams }: FirmwareS
       <SetupSectionIntro
         icon={Cpu}
         title="Firmware"
-        description="Install, update, or recover your flight controller firmware. Supports serial bootloader flashing and DFU recovery for unresponsive boards."
+        description="Install, update, or recover your flight controller firmware. Supports serial bootloader flashing and DFU bootloader install for unresponsive boards."
       />
       <FirmwareFlashWizard firmware={firmware} connected={connected} onSaveParams={onSaveParams} />
     </div>

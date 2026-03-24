@@ -11,6 +11,10 @@ pub(crate) mod types;
 #[cfg(test)]
 mod tests {
     use super::artifact::*;
+    use super::commands::{
+        evaluate_serial_readiness, normalize_serial_options, serial_readiness_request_token,
+    };
+    use super::serial_uploader::SerialReadError;
     use super::types::*;
     use serde::Serialize;
     use serde_json::json;
@@ -50,20 +54,190 @@ mod tests {
     }
 
     #[test]
+    fn session_contracts_cancelling_status_serializes() {
+        let status = FirmwareSessionStatus::Cancelling {
+            path: FirmwareSessionPath::SerialPrimary,
+        };
+        assert_serializes_to(
+            &status,
+            json!({
+                "kind": "cancelling",
+                "path": "serial_primary"
+            }),
+        );
+    }
+
+    #[test]
+    fn session_contracts_dfu_new_phases_serialize() {
+        let erasing = FirmwareSessionStatus::DfuRecovery {
+            phase: DfuRecoveryPhase::Erasing,
+        };
+        let manifesting_or_resetting = FirmwareSessionStatus::DfuRecovery {
+            phase: DfuRecoveryPhase::ManifestingOrResetting,
+        };
+
+        assert_serializes_to(
+            &erasing,
+            json!({
+                "kind": "dfu_recovery",
+                "phase": "erasing"
+            }),
+        );
+        assert_serializes_to(
+            &manifesting_or_resetting,
+            json!({
+                "kind": "dfu_recovery",
+                "phase": "manifesting_or_resetting"
+            }),
+        );
+    }
+
+    #[test]
     fn session_contracts_serial_terminal_outcomes() {
-        let verified = SerialFlashOutcome::Verified;
-        let unverified = SerialFlashOutcome::FlashedButUnverified;
+        let verified = SerialFlashOutcome::Verified {
+            board_id: 140,
+            bootloader_rev: 5,
+            port: "/dev/ttyACM0".into(),
+        };
+        let cancelled = SerialFlashOutcome::Cancelled;
+        let unverified = SerialFlashOutcome::FlashedButUnverified {
+            board_id: 9,
+            bootloader_rev: 2,
+            port: "/dev/ttyACM1".into(),
+        };
+        let reconnect_failed = SerialFlashOutcome::ReconnectFailed {
+            board_id: 140,
+            bootloader_rev: 5,
+            flash_verified: true,
+            reconnect_error: "timeout waiting for reconnect".into(),
+        };
+        let reconnect_verified = SerialFlashOutcome::ReconnectVerified {
+            board_id: 140,
+            bootloader_rev: 5,
+            flash_verified: true,
+        };
         let failed = SerialFlashOutcome::Failed {
             reason: "timeout".into(),
         };
+        let board_detection_failed = SerialFlashOutcome::BoardDetectionFailed {
+            reason: "no bootloader port observed".into(),
+        };
+        let extf_capacity_insufficient = SerialFlashOutcome::ExtfCapacityInsufficient {
+            reason: "external-flash capacity insufficient".into(),
+        };
 
-        assert_serializes_to(&verified, json!({ "result": "verified" }));
-        assert_serializes_to(&unverified, json!({ "result": "flashed_but_unverified" }));
+        assert_serializes_to(
+            &verified,
+            json!({
+                "result": "verified",
+                "board_id": 140,
+                "bootloader_rev": 5,
+                "port": "/dev/ttyACM0"
+            }),
+        );
+        assert_serializes_to(&cancelled, json!({ "result": "cancelled" }));
+        assert_serializes_to(
+            &unverified,
+            json!({
+                "result": "flashed_but_unverified",
+                "board_id": 9,
+                "bootloader_rev": 2,
+                "port": "/dev/ttyACM1"
+            }),
+        );
+        assert_serializes_to(
+            &reconnect_failed,
+            json!({
+                "result": "reconnect_failed",
+                "board_id": 140,
+                "bootloader_rev": 5,
+                "flash_verified": true,
+                "reconnect_error": "timeout waiting for reconnect"
+            }),
+        );
+        assert_serializes_to(
+            &reconnect_verified,
+            json!({
+                "result": "reconnect_verified",
+                "board_id": 140,
+                "bootloader_rev": 5,
+                "flash_verified": true
+            }),
+        );
         assert_serializes_to(
             &failed,
             json!({
                 "result": "failed",
                 "reason": "timeout"
+            }),
+        );
+        assert_serializes_to(
+            &board_detection_failed,
+            json!({
+                "result": "board_detection_failed",
+                "reason": "no bootloader port observed"
+            }),
+        );
+        assert_serializes_to(
+            &extf_capacity_insufficient,
+            json!({
+                "result": "extf_capacity_insufficient",
+                "reason": "external-flash capacity insufficient"
+            }),
+        );
+    }
+
+    #[test]
+    fn session_contracts_serial_flow_results_serialize() {
+        let reconnect_verified = SerialFlowResult::ReconnectVerified {
+            board_id: 140,
+            bootloader_rev: 5,
+            flash_verified: true,
+        };
+        let reconnect_failed = SerialFlowResult::ReconnectFailed {
+            board_id: 140,
+            bootloader_rev: 5,
+            flash_verified: false,
+            reconnect_error: "timeout waiting for reconnect".into(),
+        };
+        let board_detection_failed = SerialFlowResult::BoardDetectionFailed {
+            reason: "no bootloader port observed".into(),
+        };
+        let extf_capacity_insufficient = SerialFlowResult::ExtfCapacityInsufficient {
+            reason: "external-flash capacity insufficient".into(),
+        };
+
+        assert_serializes_to(
+            &reconnect_verified,
+            json!({
+                "result": "reconnect_verified",
+                "board_id": 140,
+                "bootloader_rev": 5,
+                "flash_verified": true
+            }),
+        );
+        assert_serializes_to(
+            &reconnect_failed,
+            json!({
+                "result": "reconnect_failed",
+                "board_id": 140,
+                "bootloader_rev": 5,
+                "flash_verified": false,
+                "reconnect_error": "timeout waiting for reconnect"
+            }),
+        );
+        assert_serializes_to(
+            &board_detection_failed,
+            json!({
+                "result": "board_detection_failed",
+                "reason": "no bootloader port observed"
+            }),
+        );
+        assert_serializes_to(
+            &extf_capacity_insufficient,
+            json!({
+                "result": "extf_capacity_insufficient",
+                "reason": "external-flash capacity insufficient"
             }),
         );
     }
@@ -93,6 +267,297 @@ mod tests {
                 "guidance": "use serial"
             }),
         );
+    }
+
+    #[test]
+    fn session_contracts_dfu_terminal_results_serialize() {
+        let reset_unconfirmed = super::dfu_recovery::DfuRecoveryResult::ResetUnconfirmed;
+        let driver_guidance = super::dfu_recovery::DfuRecoveryResult::DriverGuidance {
+            guidance: "Install WinUSB via Zadig".into(),
+        };
+        let platform_unsupported = super::dfu_recovery::DfuRecoveryResult::PlatformUnsupported;
+
+        assert_serializes_to(
+            &reset_unconfirmed,
+            json!({
+                "result": "reset_unconfirmed"
+            }),
+        );
+        assert_serializes_to(
+            &driver_guidance,
+            json!({
+                "result": "driver_guidance",
+                "guidance": "Install WinUSB via Zadig"
+            }),
+        );
+        assert_serializes_to(
+            &platform_unsupported,
+            json!({
+                "result": "platform_unsupported"
+            }),
+        );
+    }
+
+    #[test]
+    fn session_contracts_dfu_reset_unconfirmed_outcome_serializes() {
+        let outcome = DfuRecoveryOutcome::ResetUnconfirmed;
+        assert_serializes_to(
+            &outcome,
+            json!({
+                "result": "reset_unconfirmed"
+            }),
+        );
+    }
+
+    #[test]
+    fn session_contracts_dfu_cancelled_result_and_outcome_serialize() {
+        let result = DfuRecoveryResult::Cancelled;
+        let outcome = result.to_outcome();
+
+        assert_serializes_to(&result, json!({ "result": "cancelled" }));
+        assert_serializes_to(&outcome, json!({ "result": "cancelled" }));
+    }
+
+    #[test]
+    fn session_contracts_serial_flash_options_serialize_and_deserialize() {
+        let options = SerialFlashOptions {
+            full_chip_erase: true,
+        };
+
+        assert_serializes_to(
+            &options,
+            json!({
+                "full_chip_erase": true
+            }),
+        );
+
+        let round_trip: SerialFlashOptions =
+            serde_json::from_value(json!({ "full_chip_erase": false })).unwrap();
+        assert!(!round_trip.full_chip_erase);
+    }
+
+    #[test]
+    fn session_contracts_serial_flash_options_default_is_normal_erase() {
+        let options = normalize_serial_options(None).unwrap();
+        assert!(!options.full_chip_erase);
+    }
+
+    #[test]
+    fn session_contracts_serial_readiness_uses_port_source_and_session() {
+        let request = SerialReadinessRequest {
+            port: "/dev/ttyACM0".into(),
+            source: SerialFlashSource::CatalogUrl {
+                url: "https://example.com/fw.apj".into(),
+            },
+            options: None,
+        };
+        let ports = vec![PortInfo {
+            port_name: "/dev/ttyACM0".into(),
+            vid: Some(0x2DAE),
+            pid: Some(0x1058),
+            serial_number: None,
+            manufacturer: None,
+            product: None,
+            location: None,
+        }];
+
+        assert!(evaluate_serial_readiness(
+            &request,
+            &ports,
+            &FirmwareSessionStatus::Idle,
+        ));
+
+        assert!(!evaluate_serial_readiness(
+            &request,
+            &ports,
+            &FirmwareSessionStatus::SerialPrimary {
+                phase: SerialFlashPhase::Idle,
+            },
+        ));
+
+        let unknown_port = SerialReadinessRequest {
+            port: "/dev/ttyACM99".into(),
+            source: SerialFlashSource::CatalogUrl {
+                url: "https://example.com/fw.apj".into(),
+            },
+            options: None,
+        };
+        assert!(!evaluate_serial_readiness(
+            &unknown_port,
+            &ports,
+            &FirmwareSessionStatus::Idle,
+        ));
+    }
+
+    #[test]
+    fn session_contracts_serial_readiness_contracts_serialize() {
+        let request = SerialReadinessRequest {
+            port: "/dev/ttyACM0".into(),
+            source: SerialFlashSource::CatalogUrl {
+                url: "https://example.com/fw.apj".into(),
+            },
+            options: Some(SerialFlashOptions {
+                full_chip_erase: true,
+            }),
+        };
+        let request_token = serial_readiness_request_token(&request);
+        let response = SerialReadinessResponse {
+            request_token: request_token.clone(),
+            session_status: FirmwareSessionStatus::Idle,
+            readiness: SerialReadiness::Advisory,
+            target_hint: Some(SerialReadinessTargetHint {
+                detected_board_id: Some(140),
+            }),
+            validation_pending: false,
+            bootloader_transition: SerialBootloaderTransition::AutoRebootSupported,
+        };
+
+        assert_serializes_to(
+            &request,
+            json!({
+                "port": "/dev/ttyACM0",
+                "source": {
+                    "kind": "catalog_url",
+                    "url": "https://example.com/fw.apj"
+                },
+                "options": {
+                    "full_chip_erase": true
+                }
+            }),
+        );
+        assert_serializes_to(
+            &response,
+            json!({
+                "request_token": request_token,
+                "session_status": {
+                    "kind": "idle"
+                },
+                "readiness": {
+                    "kind": "advisory"
+                },
+                "target_hint": {
+                    "detected_board_id": 140
+                },
+                "validation_pending": false,
+                "bootloader_transition": {
+                    "kind": "auto_reboot_supported"
+                }
+            }),
+        );
+    }
+
+    #[test]
+    fn session_contracts_serial_readiness_blocked_serializes() {
+        let request = SerialReadinessRequest {
+            port: "/dev/ttyUSB1".into(),
+            source: SerialFlashSource::LocalApjBytes {
+                data: vec![1, 2, 3, 4],
+            },
+            options: None,
+        };
+        let request_token = serial_readiness_request_token(&request);
+        let response = SerialReadinessResponse {
+            request_token: request_token.clone(),
+            session_status: FirmwareSessionStatus::SerialPrimary {
+                phase: SerialFlashPhase::Idle,
+            },
+            readiness: SerialReadiness::Blocked {
+                reason: SerialReadinessBlockedReason::SessionBusy,
+            },
+            target_hint: Some(SerialReadinessTargetHint {
+                detected_board_id: None,
+            }),
+            validation_pending: false,
+            bootloader_transition: SerialBootloaderTransition::TargetMismatch,
+        };
+
+        assert_serializes_to(
+            &response,
+            json!({
+                "request_token": request_token,
+                "session_status": {
+                    "kind": "serial_primary",
+                    "phase": "idle"
+                },
+                "readiness": {
+                    "kind": "blocked",
+                    "reason": "session_busy"
+                },
+                "target_hint": {
+                    "detected_board_id": null
+                },
+                "validation_pending": false,
+                "bootloader_transition": {
+                    "kind": "target_mismatch"
+                }
+            }),
+        );
+    }
+
+    #[test]
+    fn session_contracts_serial_bootloader_transition_variants_serialize() {
+        assert_serializes_to(
+            &SerialBootloaderTransition::AutoRebootSupported,
+            json!({ "kind": "auto_reboot_supported" }),
+        );
+        assert_serializes_to(
+            &SerialBootloaderTransition::AlreadyInBootloader,
+            json!({ "kind": "already_in_bootloader" }),
+        );
+        assert_serializes_to(
+            &SerialBootloaderTransition::AutoRebootAttemptable,
+            json!({ "kind": "auto_reboot_attemptable" }),
+        );
+        assert_serializes_to(
+            &SerialBootloaderTransition::ManualBootloaderEntryRequired,
+            json!({ "kind": "manual_bootloader_entry_required" }),
+        );
+        assert_serializes_to(
+            &SerialBootloaderTransition::TargetMismatch,
+            json!({ "kind": "target_mismatch" }),
+        );
+    }
+
+    #[test]
+    fn session_contracts_serial_readiness_request_deserializes_catalog_url() {
+        let request: SerialReadinessRequest = serde_json::from_value(json!({
+            "port": "/dev/ttyACM0",
+            "source": {
+                "kind": "catalog_url",
+                "url": "https://example.com/fw.apj"
+            },
+            "options": {
+                "full_chip_erase": true
+            }
+        }))
+        .unwrap();
+
+        assert_eq!(request.port, "/dev/ttyACM0");
+        assert!(matches!(
+            request.source,
+            SerialFlashSource::CatalogUrl { ref url } if url == "https://example.com/fw.apj"
+        ));
+        assert!(request.options.is_some_and(|options| options.full_chip_erase));
+    }
+
+    #[test]
+    fn session_contracts_serial_readiness_request_deserializes_local_apj_bytes() {
+        let request: SerialReadinessRequest = serde_json::from_value(json!({
+            "port": "/dev/ttyUSB1",
+            "source": {
+                "kind": "local_apj_bytes",
+                "data": [1, 2, 3, 4]
+            },
+            "options": null
+        }))
+        .unwrap();
+
+        assert_eq!(request.port, "/dev/ttyUSB1");
+        assert!(matches!(
+            request.source,
+            SerialFlashSource::LocalApjBytes { ref data } if data == &vec![1, 2, 3, 4]
+        ));
+        assert!(request.options.is_none());
     }
 
     #[test]
@@ -232,6 +697,126 @@ mod tests {
     }
 
     #[test]
+    fn session_mark_cancelling_exposes_cancelling_status() {
+        let session = FirmwareSessionHandle::new();
+        session.try_start_serial().unwrap();
+
+        session.mark_cancelling();
+        assert!(matches!(
+            session.status(),
+            FirmwareSessionStatus::Cancelling {
+                path: FirmwareSessionPath::SerialPrimary
+            }
+        ));
+
+        session.stop();
+        assert!(matches!(session.status(), FirmwareSessionStatus::Idle));
+    }
+
+    #[test]
+    fn session_mark_cancelling_exposes_dfu_cancelling_status() {
+        let session = FirmwareSessionHandle::new();
+        session.try_start_dfu(false).unwrap();
+
+        session.mark_cancelling();
+        assert!(matches!(
+            session.status(),
+            FirmwareSessionStatus::Cancelling {
+                path: FirmwareSessionPath::DfuRecovery
+            }
+        ));
+
+        session.stop();
+        assert!(matches!(session.status(), FirmwareSessionStatus::Idle));
+    }
+
+    #[test]
+    fn session_set_dfu_phase_exposes_runtime_phase_status() {
+        let session = FirmwareSessionHandle::new();
+        session.try_start_dfu(false).unwrap();
+
+        session.set_dfu_phase(DfuRecoveryPhase::Erasing);
+
+        assert!(matches!(
+            session.status(),
+            FirmwareSessionStatus::DfuRecovery {
+                phase: DfuRecoveryPhase::Erasing,
+            }
+        ));
+    }
+
+    #[test]
+    fn session_complete_exposes_backend_terminal_status_until_cleared() {
+        let session = FirmwareSessionHandle::new();
+        session.try_start_serial().unwrap();
+
+        session.complete(FirmwareOutcome::SerialPrimary {
+            outcome: SerialFlashOutcome::Cancelled,
+        });
+
+        assert!(matches!(
+            session.status(),
+            FirmwareSessionStatus::Completed {
+                outcome: FirmwareOutcome::SerialPrimary {
+                    outcome: SerialFlashOutcome::Cancelled,
+                },
+            }
+        ));
+
+        session.stop();
+        assert!(matches!(session.status(), FirmwareSessionStatus::Idle));
+    }
+
+    #[test]
+    fn session_can_restart_after_backend_terminal_status() {
+        let session = FirmwareSessionHandle::new();
+        session.try_start_serial().unwrap();
+        session.complete(FirmwareOutcome::SerialPrimary {
+            outcome: SerialFlashOutcome::Verified {
+                board_id: 140,
+                bootloader_rev: 5,
+                port: "/dev/ttyACM0".into(),
+            },
+        });
+
+        session.try_start_dfu(false).unwrap();
+
+        assert!(matches!(
+            session.status(),
+            FirmwareSessionStatus::DfuRecovery { .. }
+        ));
+    }
+
+    #[test]
+    fn session_clear_completed_resets_terminal_status_to_idle() {
+        let session = FirmwareSessionHandle::new();
+        session.try_start_dfu(false).unwrap();
+        session.complete(FirmwareOutcome::DfuRecovery {
+            outcome: DfuRecoveryOutcome::ResetUnconfirmed,
+        });
+
+        session.clear_completed();
+
+        assert!(matches!(session.status(), FirmwareSessionStatus::Idle));
+    }
+
+    #[test]
+    fn session_clear_completed_does_not_interrupt_active_session() {
+        let session = FirmwareSessionHandle::new();
+        session.try_start_dfu(false).unwrap();
+        session.set_dfu_phase(DfuRecoveryPhase::Erasing);
+
+        session.clear_completed();
+
+        assert!(matches!(
+            session.status(),
+            FirmwareSessionStatus::DfuRecovery {
+                phase: DfuRecoveryPhase::Erasing,
+            }
+        ));
+    }
+
+    #[test]
     fn session_contracts_serial_board_identity_serializes() {
         let board = SerialBoardIdentity {
             board_id: 140,
@@ -258,13 +843,15 @@ mod tests {
             vendor_id: 0x0483,
             product_id: 0xdf11,
             device_label: "STM32 DFU Bootloader".into(),
+            unique_id: "usb-1-2-3:dfu:12345".into(),
         };
         assert_serializes_to(
             &device,
             json!({
                 "vendor_id": 1155,
                 "product_id": 57105,
-                "device_label": "STM32 DFU Bootloader"
+                "device_label": "STM32 DFU Bootloader",
+                "unique_id": "usb-1-2-3:dfu:12345"
             }),
         );
     }
@@ -314,6 +901,7 @@ mod tests {
                 vendor_id: 0x0483,
                 product_id: 0xdf11,
                 device_label: "STM32 DFU".into(),
+                unique_id: "usb-1-2-3:dfu:12345".into(),
             },
         };
         assert_serializes_to(
@@ -323,7 +911,8 @@ mod tests {
                 "device": {
                     "vendor_id": 1155,
                     "product_id": 57105,
-                    "device_label": "STM32 DFU"
+                    "device_label": "STM32 DFU",
+                    "unique_id": "usb-1-2-3:dfu:12345"
                 }
             }),
         );
@@ -810,25 +1399,59 @@ mod tests {
 
     use super::serial_uploader::*;
     use std::collections::VecDeque;
+    use std::rc::Rc;
 
     /// Mock serial I/O for testing. Stores expected writes and scripted reads.
     struct MockSerial {
-        read_buf: VecDeque<u8>,
+        read_steps: VecDeque<MockReadStep>,
         written: Vec<u8>,
         flush_count: usize,
+        read_count: usize,
+        mirrored_written: Option<Rc<RefCell<Vec<u8>>>>,
+        mirrored_read_count: Option<Rc<Cell<usize>>>,
+        get_sync_write_responses: VecDeque<Vec<u8>>,
+        write_failures: VecDeque<FirmwareError>,
+        flush_failures: VecDeque<FirmwareError>,
+    }
+
+    enum MockReadStep {
+        Bytes(VecDeque<u8>),
+        Timeout,
     }
 
     impl MockSerial {
         fn new() -> Self {
             Self {
-                read_buf: VecDeque::new(),
+                read_steps: VecDeque::new(),
                 written: Vec::new(),
                 flush_count: 0,
+                read_count: 0,
+                mirrored_written: None,
+                mirrored_read_count: None,
+                get_sync_write_responses: VecDeque::new(),
+                write_failures: VecDeque::new(),
+                flush_failures: VecDeque::new(),
             }
         }
 
+        fn with_mirrored_written(mut self, mirrored_written: Rc<RefCell<Vec<u8>>>) -> Self {
+            self.mirrored_written = Some(mirrored_written);
+            self
+        }
+
+        fn with_mirrored_read_count(mut self, mirrored_read_count: Rc<Cell<usize>>) -> Self {
+            self.mirrored_read_count = Some(mirrored_read_count);
+            self
+        }
+
         fn queue_read(&mut self, data: &[u8]) {
-            self.read_buf.extend(data);
+            self.read_steps
+                .push_back(MockReadStep::Bytes(data.iter().copied().collect()));
+        }
+
+        fn queue_read_front(&mut self, data: &[u8]) {
+            self.read_steps
+                .push_front(MockReadStep::Bytes(data.iter().copied().collect()));
         }
 
         fn queue_sync_ok(&mut self) {
@@ -837,6 +1460,24 @@ mod tests {
 
         fn queue_u32_le(&mut self, val: u32) {
             self.queue_read(&val.to_le_bytes());
+        }
+
+        fn queue_timeout_reads(&mut self, count: usize) {
+            for _ in 0..count {
+                self.read_steps.push_back(MockReadStep::Timeout);
+            }
+        }
+
+        fn queue_get_sync_write_response(&mut self, data: &[u8]) {
+            self.get_sync_write_responses.push_back(data.to_vec());
+        }
+
+        fn queue_write_failure(&mut self, error: FirmwareError) {
+            self.write_failures.push_back(error);
+        }
+
+        fn queue_flush_failure(&mut self, error: FirmwareError) {
+            self.flush_failures.push_back(error);
         }
 
         fn queue_identify(&mut self, bl_rev: u32, board_id: u32, board_rev: u32, flash_size: u32) {
@@ -858,24 +1499,54 @@ mod tests {
 
     impl SerialIo for MockSerial {
         fn write_all(&mut self, data: &[u8]) -> Result<(), FirmwareError> {
+            if let Some(error) = self.write_failures.pop_front() {
+                return Err(error);
+            }
             self.written.extend_from_slice(data);
-            Ok(())
-        }
-
-        fn read_exact(&mut self, buf: &mut [u8]) -> Result<(), FirmwareError> {
-            for byte in buf.iter_mut() {
-                *byte = self
-                    .read_buf
-                    .pop_front()
-                    .ok_or_else(|| FirmwareError::ProtocolError {
-                        detail: "mock serial: read buffer exhausted (timeout)".into(),
-                    })?;
+            if let Some(mirrored_written) = &self.mirrored_written {
+                mirrored_written.borrow_mut().extend_from_slice(data);
+            }
+            if data == [TEST_GET_SYNC, TEST_EOC]
+                && let Some(response) = self.get_sync_write_responses.pop_front()
+            {
+                self.queue_read_front(&response);
             }
             Ok(())
         }
 
+        fn read(&mut self, buf: &mut [u8]) -> Result<usize, SerialReadError> {
+            self.read_count += 1;
+            if let Some(mirrored_read_count) = &self.mirrored_read_count {
+                mirrored_read_count.set(self.read_count);
+            }
+            let step = self
+                .read_steps
+                .front_mut()
+                .ok_or(SerialReadError::Timeout)?;
+
+            match step {
+                MockReadStep::Timeout => {
+                    self.read_steps.pop_front();
+                    Err(SerialReadError::Timeout)
+                }
+                MockReadStep::Bytes(bytes) => {
+                    let read_len = bytes.len().min(buf.len());
+                    for slot in buf.iter_mut().take(read_len) {
+                        *slot = bytes.pop_front().expect("bytes available");
+                    }
+                    if bytes.is_empty() {
+                        self.read_steps.pop_front();
+                    }
+                    Ok(read_len)
+                }
+            }
+        }
+
         fn flush_input(&mut self) -> Result<(), FirmwareError> {
             self.flush_count += 1;
+            if let Some(error) = self.flush_failures.pop_front() {
+                return Err(error);
+            }
             Ok(())
         }
     }
@@ -888,6 +1559,7 @@ mod tests {
     const TEST_INVALID: u8 = 0x13;
     const TEST_OK: u8 = 0x10;
     const TEST_CHIP_ERASE: u8 = 0x23;
+    const TEST_CHIP_FULL_ERASE: u8 = 0x40;
     const TEST_PROG_MULTI: u8 = 0x27;
     const TEST_GET_CRC: u8 = 0x29;
     const TEST_REBOOT: u8 = 0x30;
@@ -936,10 +1608,10 @@ mod tests {
         mock.queue_read(&[0xFF, TEST_OK]);
         let err = sync(&mut mock).unwrap_err();
         match err {
-            FirmwareError::ProtocolError { detail } => {
-                assert!(detail.contains("INSYNC"), "got: {detail}");
+            FirmwareError::BootloaderSyncMismatch { received } => {
+                assert_eq!(received, 0xFF);
             }
-            other => panic!("expected ProtocolError, got: {other:?}"),
+            other => panic!("expected BootloaderSyncMismatch, got: {other:?}"),
         }
     }
 
@@ -948,13 +1620,10 @@ mod tests {
         let mut mock = MockSerial::new();
         let err = sync(&mut mock).unwrap_err();
         match err {
-            FirmwareError::ProtocolError { detail } => {
-                assert!(
-                    detail.contains("timeout") || detail.contains("exhausted"),
-                    "got: {detail}"
-                );
+            FirmwareError::Timeout { context } => {
+                assert!(context.contains("sync response"), "got: {context}");
             }
-            other => panic!("expected ProtocolError, got: {other:?}"),
+            other => panic!("expected Timeout, got: {other:?}"),
         }
     }
 
@@ -1069,17 +1738,48 @@ mod tests {
     }
 
     #[test]
+    fn serial_uploader_erase_waits_through_initial_timeouts() {
+        let mut mock = MockSerial::new();
+        mock.queue_timeout_reads(2);
+        mock.queue_sync_ok();
+
+        erase(&mut mock).unwrap();
+
+        assert_eq!(mock.written, vec![TEST_CHIP_ERASE, TEST_EOC]);
+    }
+
+    #[test]
+    fn serial_uploader_erase_matches_upstream_timeout_window() {
+        let mut mock = MockSerial::new();
+        mock.queue_timeout_reads(8);
+        mock.queue_sync_ok();
+
+        erase(&mut mock).unwrap();
+
+        assert_eq!(mock.written, vec![TEST_CHIP_ERASE, TEST_EOC]);
+    }
+
+    #[test]
+    fn serial_uploader_erase_allows_delayed_status_after_insync() {
+        let mut mock = MockSerial::new();
+        mock.queue_read(&[TEST_INSYNC]);
+        mock.queue_timeout_reads(8);
+        mock.queue_read(&[TEST_OK]);
+
+        erase(&mut mock).unwrap();
+
+        assert_eq!(mock.written, vec![TEST_CHIP_ERASE, TEST_EOC]);
+    }
+
+    #[test]
     fn serial_uploader_erase_timeout() {
         let mut mock = MockSerial::new();
         let err = erase(&mut mock).unwrap_err();
         match err {
-            FirmwareError::ProtocolError { detail } => {
-                assert!(
-                    detail.contains("timeout") || detail.contains("exhausted"),
-                    "got: {detail}"
-                );
+            FirmwareError::Timeout { context } => {
+                assert!(context.contains("erase sync"), "got: {context}");
             }
-            other => panic!("expected ProtocolError, got: {other:?}"),
+            other => panic!("expected Timeout, got: {other:?}"),
         }
     }
 
@@ -1096,6 +1796,33 @@ mod tests {
         }
     }
 
+    #[test]
+    fn serial_uploader_full_erase_waits_through_initial_timeouts() {
+        let mut mock = MockSerial::new();
+        mock.queue_timeout_reads(2);
+        mock.queue_sync_ok();
+
+        full_erase(&mut mock).unwrap();
+
+        assert_eq!(mock.written, vec![TEST_CHIP_FULL_ERASE, TEST_EOC]);
+    }
+
+    #[test]
+    fn serial_uploader_full_erase_honors_mid_wait_cancellation() {
+        let mut mock = MockSerial::new();
+        mock.queue_timeout_reads(1);
+
+        let cancel_requested = Cell::new(false);
+        let err = full_erase_with_cancel(&mut mock, &|| {
+            let was_requested = cancel_requested.get();
+            cancel_requested.set(true);
+            was_requested
+        })
+        .unwrap_err();
+
+        assert!(matches!(err, FirmwareError::Cancelled));
+    }
+
     // ── Program tests ──
 
     #[test]
@@ -1105,7 +1832,7 @@ mod tests {
         mock.queue_sync_ok();
 
         let mut progress_calls = Vec::new();
-        program(&mut mock, &image, |written, total| {
+        program(&mut mock, &image, &|| false, |written, total| {
             progress_calls.push((written, total));
         })
         .unwrap();
@@ -1127,7 +1854,7 @@ mod tests {
         mock.queue_sync_ok();
 
         let mut progress_calls = Vec::new();
-        program(&mut mock, &image, |written, total| {
+        program(&mut mock, &image, &|| false, |written, total| {
             progress_calls.push((written, total));
         })
         .unwrap();
@@ -1142,7 +1869,7 @@ mod tests {
     fn serial_uploader_program_empty_image() {
         let mut mock = MockSerial::new();
         let mut progress_calls = Vec::new();
-        program(&mut mock, &[], |written, total| {
+        program(&mut mock, &[], &|| false, |written, total| {
             progress_calls.push((written, total));
         })
         .unwrap();
@@ -1155,7 +1882,7 @@ mod tests {
         let mut mock = MockSerial::new();
         let image = vec![0x01, 0x02, 0x03, 0x04];
         mock.queue_read(&[TEST_INSYNC, TEST_FAILED]);
-        let err = program(&mut mock, &image, |_, _| {}).unwrap_err();
+        let err = program(&mut mock, &image, &|| false, |_, _| {}).unwrap_err();
         match err {
             FirmwareError::ProtocolError { detail } => {
                 assert!(detail.contains("FAILED"), "got: {detail}");
@@ -1166,35 +1893,59 @@ mod tests {
 
     // ── CRC tests ──
 
+    fn upstream_crc32(bytes: &[u8], mut state: u32) -> u32 {
+        for &byte in bytes {
+            state ^= byte as u32;
+            for _ in 0..8 {
+                state = if (state & 1) != 0 {
+                    (state >> 1) ^ 0xEDB8_8320
+                } else {
+                    state >> 1
+                };
+            }
+        }
+        state
+    }
+
+    fn upstream_firmware_crc(image: &[u8], flash_size: u32) -> u32 {
+        let mut state = upstream_crc32(image, 0);
+        let mut pos = image.len();
+        while pos < (flash_size as usize).saturating_sub(1) {
+            state = upstream_crc32(&[0xFF, 0xFF, 0xFF, 0xFF], state);
+            pos += 4;
+        }
+        state
+    }
+
+    #[test]
+    fn serial_uploader_firmware_crc_matches_upstream_reference() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 20;
+
+        assert_eq!(
+            firmware_crc(&image, flash_size),
+            upstream_firmware_crc(&image, flash_size)
+        );
+    }
+
     #[test]
     fn serial_uploader_firmware_crc_empty_image() {
         let crc = firmware_crc(&[], 16);
-        let mut hasher = crc32fast::Hasher::new();
-        for _ in 0..4 {
-            hasher.update(&[0xFF, 0xFF, 0xFF, 0xFF]);
-        }
-        assert_eq!(crc, hasher.finalize());
+        assert_eq!(crc, upstream_firmware_crc(&[], 16));
     }
 
     #[test]
     fn serial_uploader_firmware_crc_exact_flash_size() {
         let image = vec![0xAB; 1024];
         let crc = firmware_crc(&image, 1024);
-        let mut hasher = crc32fast::Hasher::new();
-        hasher.update(&image);
-        assert_eq!(crc, hasher.finalize());
+        assert_eq!(crc, upstream_firmware_crc(&image, 1024));
     }
 
     #[test]
     fn serial_uploader_firmware_crc_with_padding() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let crc = firmware_crc(&image, 20);
-        let mut hasher = crc32fast::Hasher::new();
-        hasher.update(&image);
-        for _ in 0..4 {
-            hasher.update(&[0xFF, 0xFF, 0xFF, 0xFF]);
-        }
-        assert_eq!(crc, hasher.finalize());
+        assert_eq!(crc, upstream_firmware_crc(&image, 20));
     }
 
     #[test]
@@ -1258,7 +2009,10 @@ mod tests {
         };
 
         let mut progress = Vec::new();
-        let info = upload(&mut mock, &artifact, |_p, w, t| progress.push((w, t))).unwrap();
+        let info = upload(&mut mock, &artifact, &|| false, |_p, w, t| {
+            progress.push((w, t))
+        })
+        .unwrap();
         assert_eq!(info.bl_rev, 5);
         assert_eq!(info.board_id, 140);
         assert_eq!(info.flash_size, flash_size);
@@ -1283,11 +2037,11 @@ mod tests {
             extf: None,
         };
 
-        let info = upload(&mut mock, &artifact, |_, _, _| {}).unwrap();
+        let info = upload(&mut mock, &artifact, &|| false, |_, _, _| {}).unwrap();
         assert_eq!(info.bl_rev, 2);
         assert_eq!(info.board_id, 9);
         assert!(
-            mock.read_buf.is_empty(),
+            mock.read_steps.is_empty(),
             "no extra reads should have occurred"
         );
     }
@@ -1307,7 +2061,7 @@ mod tests {
             extf: None,
         };
 
-        let err = upload(&mut mock, &artifact, |_, _, _| {}).unwrap_err();
+        let err = upload(&mut mock, &artifact, &|| false, |_, _, _| {}).unwrap_err();
         match err {
             FirmwareError::BoardMismatch { expected, actual } => {
                 assert_eq!(expected, 140);
@@ -1342,7 +2096,7 @@ mod tests {
             extf: None,
         };
 
-        let err = upload(&mut mock, &artifact, |_, _, _| {}).unwrap_err();
+        let err = upload(&mut mock, &artifact, &|| false, |_, _, _| {}).unwrap_err();
         match err {
             FirmwareError::ProtocolError { detail } => {
                 assert!(detail.contains("CRC mismatch"), "got: {detail}");
@@ -1376,7 +2130,10 @@ mod tests {
         };
 
         let mut progress = Vec::new();
-        let info = upload(&mut mock, &artifact, |_p, w, t| progress.push((w, t))).unwrap();
+        let info = upload(&mut mock, &artifact, &|| false, |_p, w, t| {
+            progress.push((w, t))
+        })
+        .unwrap();
         assert_eq!(info.bl_rev, 4);
         let prog_calls: Vec<_> = progress.iter().filter(|(w, _)| *w > 0).cloned().collect();
         assert_eq!(prog_calls.len(), 3);
@@ -1454,6 +2211,7 @@ mod tests {
             devices: vec![DfuDeviceInfo {
                 vid: 0x0483,
                 pid: 0xdf11,
+                unique_id: "0483:df11:12345".into(),
                 serial_number: Some("12345".into()),
                 manufacturer: Some("STMicroelectronics".into()),
                 product: Some("STM32 BOOTLOADER".into()),
@@ -1463,6 +2221,7 @@ mod tests {
         assert!(json.contains("available"), "got: {json}");
         assert!(json.contains("1155"), "vid 0x0483 = 1155, got: {json}");
         assert!(json.contains("57105"), "pid 0xdf11 = 57105, got: {json}");
+        assert!(json.contains("0483:df11:12345"), "got: {json}");
         assert!(json.contains("STMicroelectronics"), "got: {json}");
     }
 
@@ -1489,6 +2248,7 @@ mod tests {
         let device = DfuDeviceInfo {
             vid: 0x0483,
             pid: 0xdf11,
+            unique_id: "0483:df11:stm32".into(),
             serial_number: None,
             manufacturer: Some("STMicroelectronics".into()),
             product: Some("STM32 BOOTLOADER".into()),
@@ -1501,6 +2261,7 @@ mod tests {
         let device = DfuDeviceInfo {
             vid: 0x2DAE,
             pid: 0x1058,
+            unique_id: "2dae:1058:no-serial".into(),
             serial_number: None,
             manufacturer: None,
             product: None,
@@ -1614,11 +2375,43 @@ mod tests {
     }
 
     #[test]
+    fn inventory_detect_bootloader_same_port_reuse_from_product_change() {
+        let before = vec![PortInfo {
+            port_name: "/dev/ttyACM0".into(),
+            vid: Some(0x2DAE),
+            pid: Some(0x1058),
+            serial_number: Some("ABC123".into()),
+            manufacturer: Some("Hex".into()),
+            product: Some("CubeOrange".into()),
+            location: Some("1-2".into()),
+        }];
+        let after = vec![PortInfo {
+            port_name: "/dev/ttyACM0".into(),
+            vid: Some(0x2DAE),
+            pid: Some(0x1058),
+            serial_number: Some("ABC123".into()),
+            manufacturer: Some("Hex".into()),
+            product: Some("CubeOrange Bootloader".into()),
+            location: Some("1-2".into()),
+        }];
+
+        let candidates = detect_bootloader_port(&before, &after);
+
+        assert_eq!(
+            candidates.len(),
+            1,
+            "bootloader product change should count as re-enumeration"
+        );
+        assert_eq!(candidates[0].port_name, "/dev/ttyACM0");
+    }
+
+    #[test]
     fn inventory_filter_dfu_devices() {
         let devices = [
             DfuDeviceInfo {
                 vid: 0x0483,
                 pid: 0xdf11,
+                unique_id: "0483:df11:no-serial".into(),
                 serial_number: None,
                 manufacturer: Some("STMicroelectronics".into()),
                 product: Some("STM32 BOOTLOADER".into()),
@@ -1626,6 +2419,7 @@ mod tests {
             DfuDeviceInfo {
                 vid: 0x2DAE,
                 pid: 0x1058,
+                unique_id: "2dae:1058:no-serial".into(),
                 serial_number: None,
                 manufacturer: None,
                 product: None,
@@ -1635,6 +2429,56 @@ mod tests {
         assert_eq!(dfu_devices.len(), 1);
         assert_eq!(dfu_devices[0].vid, 0x0483);
         assert_eq!(dfu_devices[0].pid, 0xdf11);
+    }
+
+    #[test]
+    fn inventory_dfu_unique_id_includes_topology_and_serial() {
+        let id = build_dfu_unique_id("1-3", &[2, 4], Some("ABC123"));
+        assert_eq!(id, "1-3:2.4:ABC123");
+    }
+
+    #[test]
+    fn inventory_dfu_unique_id_is_stable_across_device_address_changes() {
+        let first = build_dfu_unique_id("1-3", &[2], Some("ABC123"));
+        let reenumbered = build_dfu_unique_id("1-3", &[2], Some("ABC123"));
+
+        assert_eq!(first, reenumbered);
+        assert_eq!(first, "1-3:2:ABC123");
+    }
+
+    #[test]
+    fn inventory_dfu_unique_id_fallbacks_still_distinguish_topology_without_serial() {
+        let on_root = build_dfu_unique_id("1-3", &[], None);
+        let on_hub = build_dfu_unique_id("1-3", &[2], None);
+
+        assert_eq!(on_root, "1-3:root:no-serial");
+        assert_eq!(on_hub, "1-3:2:no-serial");
+        assert_ne!(on_root, on_hub);
+    }
+
+    #[test]
+    fn inventory_resolve_exact_dfu_device_rejects_indistinguishable_duplicates() {
+        let devices = vec![
+            DfuDeviceInfo {
+                vid: 0x0483,
+                pid: 0xdf11,
+                unique_id: "1-3:2:no-serial".into(),
+                serial_number: None,
+                manufacturer: Some("STMicroelectronics".into()),
+                product: Some("STM32 BOOTLOADER".into()),
+            },
+            DfuDeviceInfo {
+                vid: 0x0483,
+                pid: 0xdf11,
+                unique_id: "1-3:2:no-serial".into(),
+                serial_number: None,
+                manufacturer: Some("STMicroelectronics".into()),
+                product: Some("STM32 BOOTLOADER".into()),
+            },
+        ];
+
+        let err = resolve_exact_dfu_device(&devices, "1-3:2:no-serial").unwrap_err();
+        assert!(err.to_string().contains("Disconnect extra devices"));
     }
 
     // ── Board-ID detection from port VID/PID ──
@@ -1665,6 +2509,35 @@ mod tests {
             location: None,
         }];
         assert_eq!(detect_board_id_from_ports(&ports), Some(9));
+    }
+
+    #[test]
+    fn detect_board_id_px4_bootloader_vid_pid_hint() {
+        let ports = vec![PortInfo {
+            port_name: "/dev/ttyACM0".into(),
+            vid: Some(0x26AC),
+            pid: Some(0x0011),
+            serial_number: Some("PX4BL".into()),
+            manufacturer: None,
+            product: None,
+            location: None,
+        }];
+        assert_eq!(detect_board_id_from_ports(&ports), Some(9));
+    }
+
+    #[test]
+    fn detect_board_id_matekf405_te_bootloader_product_hint() {
+        let ports = vec![PortInfo {
+            port_name: "/dev/ttyACM0".into(),
+            vid: Some(0x1209),
+            pid: Some(0x5741),
+            serial_number: Some("36001D001647333135353532".into()),
+            manufacturer: Some("ArduPilot".into()),
+            product: Some("MatekF405-TE-BL".into()),
+            location: Some("pci-0000:02:00.0-usb-0:8:1.0".into()),
+        }];
+
+        assert_eq!(detect_board_id_from_ports(&ports), Some(1054));
     }
 
     #[test]
@@ -2147,11 +3020,15 @@ mod tests {
 
     use super::serial_executor::*;
     use std::cell::{Cell, RefCell};
+    use std::collections::{HashMap, VecDeque as StdVecDeque};
 
     struct MockFlowDeps {
         ports_sequence: RefCell<Vec<Vec<PortInfo>>>,
         port_call_idx: Cell<usize>,
-        serial_mock: RefCell<Option<MockSerial>>,
+        serial_mocks: RefCell<StdVecDeque<MockSerial>>,
+        serial_mocks_by_port: RefCell<HashMap<String, StdVecDeque<MockSerial>>>,
+        open_results: RefCell<StdVecDeque<Result<(), FirmwareError>>>,
+        opened_ports: RefCell<Vec<String>>,
         sleep_calls: RefCell<Vec<u64>>,
         reconnect_results: RefCell<Vec<Result<(), FirmwareError>>>,
         reconnect_call_idx: Cell<usize>,
@@ -2162,7 +3039,10 @@ mod tests {
             Self {
                 ports_sequence: RefCell::new(vec![]),
                 port_call_idx: Cell::new(0),
-                serial_mock: RefCell::new(None),
+                serial_mocks: RefCell::new(StdVecDeque::new()),
+                serial_mocks_by_port: RefCell::new(HashMap::new()),
+                open_results: RefCell::new(StdVecDeque::new()),
+                opened_ports: RefCell::new(vec![]),
                 sleep_calls: RefCell::new(vec![]),
                 reconnect_results: RefCell::new(vec![]),
                 reconnect_call_idx: Cell::new(0),
@@ -2175,7 +3055,24 @@ mod tests {
         }
 
         fn with_serial_mock(mut self, mock: MockSerial) -> Self {
-            self.serial_mock = RefCell::new(Some(mock));
+            self.serial_mocks = RefCell::new(StdVecDeque::from([mock]));
+            self
+        }
+
+        fn with_serial_mocks(mut self, mocks: Vec<MockSerial>) -> Self {
+            self.serial_mocks = RefCell::new(mocks.into());
+            self
+        }
+
+        fn with_serial_mocks_for_port(self, port: &str, mocks: Vec<MockSerial>) -> Self {
+            self.serial_mocks_by_port
+                .borrow_mut()
+                .insert(port.to_string(), mocks.into());
+            self
+        }
+
+        fn with_open_results(mut self, results: Vec<Result<(), FirmwareError>>) -> Self {
+            self.open_results = RefCell::new(results.into());
             self
         }
 
@@ -2200,7 +3097,18 @@ mod tests {
         }
 
         fn open_serial(&self, _port: &str, _baud: u32) -> Result<Box<dyn SerialIo>, FirmwareError> {
-            let mock = self.serial_mock.borrow_mut().take().ok_or_else(|| {
+            self.opened_ports.borrow_mut().push(_port.to_string());
+            if let Some(result) = self.open_results.borrow_mut().pop_front() {
+                result?;
+            }
+            let mock = {
+                let mut serial_mocks_by_port = self.serial_mocks_by_port.borrow_mut();
+                serial_mocks_by_port
+                    .get_mut(_port)
+                    .and_then(StdVecDeque::pop_front)
+            }
+            .or_else(|| self.serial_mocks.borrow_mut().pop_front())
+            .ok_or_else(|| {
                 FirmwareError::ProtocolError {
                     detail: "no mock serial configured".into(),
                 }
@@ -2238,6 +3146,14 @@ mod tests {
         }
     }
 
+    fn make_bootloader_port_named(port_name: &str, serial_number: &str) -> PortInfo {
+        PortInfo {
+            port_name: port_name.into(),
+            serial_number: Some(serial_number.into()),
+            ..make_bootloader_port()
+        }
+    }
+
     fn make_normal_port() -> PortInfo {
         PortInfo {
             port_name: "/dev/ttyACM0".into(),
@@ -2246,6 +3162,26 @@ mod tests {
             serial_number: Some("ABC123".into()),
             manufacturer: None,
             product: None,
+            location: None,
+        }
+    }
+
+    fn make_normal_port_named(port_name: &str, serial_number: &str) -> PortInfo {
+        PortInfo {
+            port_name: port_name.into(),
+            serial_number: Some(serial_number.into()),
+            ..make_normal_port()
+        }
+    }
+
+    fn make_false_positive_bootloader_named_port() -> PortInfo {
+        PortInfo {
+            port_name: "/dev/ttyACM0".into(),
+            vid: Some(0x1209),
+            pid: Some(0x5741),
+            serial_number: Some("APP123".into()),
+            manufacturer: Some("ArduPilot".into()),
+            product: Some("MatekF405-TE-BL".into()),
             location: None,
         }
     }
@@ -2279,6 +3215,36 @@ mod tests {
         mock
     }
 
+    fn make_upload_mock_requiring_explicit_probe_sync(
+        bl_rev: u32,
+        board_id: u32,
+        flash_size: u32,
+        image: &[u8],
+    ) -> MockSerial {
+        let mut mock = MockSerial::new();
+        mock.queue_get_sync_write_response(&[TEST_INSYNC, TEST_OK]);
+        mock.queue_identify(bl_rev, board_id, 0, flash_size);
+        mock.queue_sync_ok();
+        let chunk_count = (image.len() + TEST_PROG_MULTI_MAX - 1) / TEST_PROG_MULTI_MAX.max(1);
+        for _ in 0..chunk_count.max(1) {
+            mock.queue_sync_ok();
+        }
+        if bl_rev >= 3 {
+            let expected_crc = firmware_crc(image, flash_size);
+            mock.queue_u32_le(expected_crc);
+            mock.queue_sync_ok();
+        }
+        mock
+    }
+
+    fn make_probe_only_mock(bl_rev: u32, board_id: u32, flash_size: u32) -> MockSerial {
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok();
+        mock.queue_identify(bl_rev, board_id, 0, flash_size);
+        mock.queue_read(&[TEST_INSYNC, TEST_FAILED]);
+        mock
+    }
+
     #[test]
     fn serial_flow_connected_preflight_verified() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
@@ -2298,7 +3264,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         match &result {
             SerialFlowResult::ReconnectVerified {
@@ -2315,8 +3281,10 @@ mod tests {
 
         let outcome = result.to_outcome();
         match outcome {
-            SerialFlashOutcome::Verified => {}
-            other => panic!("expected Verified outcome, got: {other:?}"),
+            SerialFlashOutcome::ReconnectVerified { flash_verified, .. } => {
+                assert!(flash_verified, "expected reconnect_verified flash outcome")
+            }
+            other => panic!("expected ReconnectVerified outcome, got: {other:?}"),
         }
     }
 
@@ -2339,7 +3307,7 @@ mod tests {
         };
         let artifact = make_test_artifact(9, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         match &result {
             SerialFlowResult::ReconnectVerified { flash_verified, .. } => {
@@ -2350,9 +3318,35 @@ mod tests {
 
         let outcome = result.to_outcome();
         match outcome {
-            SerialFlashOutcome::FlashedButUnverified => {}
-            other => panic!("expected FlashedButUnverified, got: {other:?}"),
+            SerialFlashOutcome::ReconnectVerified { flash_verified, .. } => {
+                assert!(!flash_verified, "expected reconnect_verified flash_verified=false")
+            }
+            other => panic!("expected ReconnectVerified, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn serial_flow_accepts_already_present_bootloader_port_before_polling() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let mock = make_upload_mock(5, 140, flash_size, &image);
+        let bootloader_port = make_bootloader_port();
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![bootloader_port.clone()]])
+            .with_serial_mock(mock)
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: bootloader_port.port_name.clone(),
+            baud: 57600,
+            ports_before: vec![bootloader_port],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
     }
 
     #[test]
@@ -2366,7 +3360,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, vec![0x01]);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         match &result {
             SerialFlowResult::BoardDetectionFailed { reason } => {
@@ -2377,6 +3371,860 @@ mod tests {
             }
             other => panic!("expected BoardDetectionFailed, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn serial_flow_detects_same_tty_reused_when_only_product_changes_to_bootloader() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let reused_bootloader_port = PortInfo {
+            product: Some("CubeOrange Bootloader".into()),
+            manufacturer: Some("Hex".into()),
+            ..make_normal_port()
+        };
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![reused_bootloader_port]])
+            .with_serial_mock(mock)
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyACM0".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+    }
+
+    #[test]
+    fn serial_flow_probes_selected_port_even_without_metadata_change() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let unchanged_port = make_normal_port();
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![unchanged_port.clone()]])
+            .with_serial_mock(mock)
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: unchanged_port.port_name.clone(),
+            baud: 57600,
+            ports_before: vec![unchanged_port],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+    }
+
+    #[test]
+    fn serial_flow_already_in_bootloader_probe_sends_get_sync() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let mirrored_written = Rc::new(RefCell::new(Vec::new()));
+        let mock = make_upload_mock_requiring_explicit_probe_sync(5, 140, flash_size, &image)
+            .with_mirrored_written(mirrored_written.clone());
+        let bootloader_port = make_bootloader_port();
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![bootloader_port.clone()]])
+            .with_serial_mock(mock)
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: bootloader_port.port_name.clone(),
+            baud: 57600,
+            ports_before: vec![bootloader_port],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert!(
+            mirrored_written
+                .borrow()
+                .starts_with(&[TEST_GET_SYNC, TEST_EOC]),
+            "probe should actively send GET_SYNC before waiting for sync bytes"
+        );
+    }
+
+    #[test]
+    fn serial_flow_transition_probe_sends_get_sync() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let mirrored_written = Rc::new(RefCell::new(Vec::new()));
+        let mock = make_upload_mock_requiring_explicit_probe_sync(5, 140, flash_size, &image)
+            .with_mirrored_written(mirrored_written.clone());
+        let bootloader_port = make_bootloader_port();
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![bootloader_port.clone()]])
+            .with_serial_mock(mock)
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyACM0".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert!(
+            mirrored_written
+                .borrow()
+                .starts_with(&[TEST_GET_SYNC, TEST_EOC]),
+            "transition probing should actively send GET_SYNC before waiting for sync bytes"
+        );
+    }
+
+    #[test]
+    fn serial_flow_ignores_false_positive_bootloader_candidate_until_real_bootloader_appears() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+
+        let mut app_mode_mock = MockSerial::new();
+        app_mode_mock.queue_read(&[0xFD, 0x00]);
+
+        let upload_mock = make_upload_mock(5, 140, flash_size, &image);
+        let bootloader_port = make_bootloader_port();
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![
+                vec![make_false_positive_bootloader_named_port()],
+                vec![bootloader_port.clone()],
+            ])
+            .with_serial_mocks(vec![app_mode_mock, upload_mock])
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyACM0".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        match &result {
+            SerialFlowResult::ReconnectVerified { board_id, .. } => {
+                assert_eq!(*board_id, 140);
+            }
+            other => panic!(
+                "expected false positive candidate to be skipped and flash to succeed, got: {other:?}"
+            ),
+        }
+    }
+
+    #[test]
+    fn serial_flow_stale_selected_port_failure_does_not_block_new_bootloader_candidate() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+
+        let stale_selected_port = make_normal_port();
+        let new_bootloader_port = PortInfo {
+            port_name: "/dev/ttyACM1".into(),
+            vid: Some(0x2DAE),
+            pid: Some(0x1016),
+            serial_number: Some("BL456".into()),
+            manufacturer: None,
+            product: None,
+            location: Some("1-2".into()),
+        };
+
+        let upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![
+                stale_selected_port.clone(),
+                new_bootloader_port.clone(),
+            ]])
+            .with_open_results(vec![Err(FirmwareError::ProtocolError {
+                detail: "open serial port /dev/ttyACM0: permission denied".into(),
+            })])
+            .with_serial_mock(upload_mock)
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: stale_selected_port.port_name.clone(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+    }
+
+    #[test]
+    fn serial_flow_prefers_observed_transition_candidate_over_stale_selected_port() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+
+        let stale_selected_port = make_normal_port();
+        let new_bootloader_port = PortInfo {
+            port_name: "/dev/ttyACM1".into(),
+            vid: Some(0x2DAE),
+            pid: Some(0x1016),
+            serial_number: Some("BL456".into()),
+            manufacturer: None,
+            product: None,
+            location: Some("1-2".into()),
+        };
+
+        let upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![
+                stale_selected_port.clone(),
+                new_bootloader_port.clone(),
+            ]])
+            .with_serial_mock(upload_mock)
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: stale_selected_port.port_name.clone(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[new_bootloader_port.port_name],
+            "observed transition candidates must be probed before the stale selected port"
+        );
+    }
+
+    #[test]
+    fn serial_flow_wider_bootloader_candidate_beats_stale_selected_port() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let stale_selected_port = make_normal_port();
+        let wider_bootloader_port = make_bootloader_port_named("/dev/ttyACM1", "BL999");
+
+        let mut stale_selected_mock = MockSerial::new();
+        stale_selected_mock.queue_read(&[0xFD, 0x00]);
+        let upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![
+                stale_selected_port.clone(),
+                wider_bootloader_port.clone(),
+            ]])
+            .with_serial_mocks_for_port(&stale_selected_port.port_name, vec![stale_selected_mock])
+            .with_serial_mocks_for_port(&wider_bootloader_port.port_name, vec![upload_mock])
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: stale_selected_port.port_name.clone(),
+            baud: 57600,
+            ports_before: vec![stale_selected_port.clone(), wider_bootloader_port.clone()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[wider_bootloader_port.port_name],
+            "wider post-reboot bootloader candidates must outrank stale selected-port fallback"
+        );
+    }
+
+    #[test]
+    fn serial_flow_wider_bootloader_nonretryable_failure_does_not_abort_selected_port_success() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let selected_port = make_normal_port();
+        let wider_bootloader_port = make_bootloader_port_named("/dev/ttyACM1", "BL999");
+        let upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![
+                selected_port.clone(),
+                wider_bootloader_port.clone(),
+            ]])
+            .with_open_results(vec![Err(FirmwareError::PortOpenFailed {
+                detail: format!(
+                    "open serial port {}: permission denied",
+                    wider_bootloader_port.port_name
+                ),
+            })])
+            .with_serial_mocks_for_port(&selected_port.port_name, vec![upload_mock])
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: selected_port.port_name.clone(),
+            baud: 57600,
+            ports_before: vec![selected_port.clone(), wider_bootloader_port.clone()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[
+                wider_bootloader_port.port_name.clone(),
+                selected_port.port_name.clone(),
+            ],
+            "nonretryable wider-heuristic failures must behave like misses so later fallback success still wins"
+        );
+    }
+
+    #[test]
+    fn serial_flow_wider_bootloader_candidate_does_not_mask_selected_port_fatal_failure() {
+        let selected_port = make_normal_port();
+        let wider_bootloader_port = make_bootloader_port_named("/dev/ttyACM1", "BL999");
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![
+                selected_port.clone(),
+                wider_bootloader_port.clone(),
+            ]])
+            .with_open_results(vec![
+                Err(FirmwareError::PortOpenFailed {
+                    detail: format!(
+                        "open serial port {}: permission denied",
+                        wider_bootloader_port.port_name
+                    ),
+                }),
+                Err(FirmwareError::PortOpenFailed {
+                    detail: format!(
+                        "open serial port {}: permission denied",
+                        selected_port.port_name
+                    ),
+                }),
+            ]);
+
+        let preflight = PreflightSnapshot {
+            port: selected_port.port_name.clone(),
+            baud: 57600,
+            ports_before: vec![selected_port.clone(), wider_bootloader_port.clone()],
+        };
+        let artifact = make_test_artifact(140, vec![0x01, 0x02, 0x03, 0x04]);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        match result {
+            SerialFlowResult::Failed { reason } => {
+                assert!(reason.contains(&selected_port.port_name), "got: {reason}");
+                assert!(reason.contains("permission denied"), "got: {reason}");
+            }
+            other => panic!(
+                "expected selected-port fatal failure to stay fatal when only wider heuristics preceded it, got: {other:?}"
+            ),
+        }
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[
+                wider_bootloader_port.port_name.clone(),
+                selected_port.port_name.clone(),
+            ],
+            "wider heuristics must not downgrade a selected-port fatal result just by existing"
+        );
+    }
+
+    #[test]
+    fn serial_flow_observed_transition_outcome_beats_selected_port_fatal_fallback() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let selected_port = make_normal_port();
+        let observed_bootloader_port = make_bootloader_port_named("/dev/ttyACM1", "BL111");
+        let wrong_board_probe = make_probe_only_mock(5, 9, flash_size);
+        let mut selected_fatal_probe = MockSerial::new();
+        selected_fatal_probe.queue_flush_failure(FirmwareError::ProtocolError {
+            detail: format!("selected-port fallback probe failed on {}", selected_port.port_name),
+        });
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![
+                vec![selected_port.clone(), observed_bootloader_port.clone()],
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+            ])
+            .with_serial_mocks_for_port(&observed_bootloader_port.port_name, vec![wrong_board_probe])
+            .with_serial_mocks_for_port(&selected_port.port_name, vec![selected_fatal_probe]);
+
+        let preflight = PreflightSnapshot {
+            port: selected_port.port_name.clone(),
+            baud: 57600,
+            ports_before: vec![selected_port.clone()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        match result {
+            SerialFlowResult::BoardDetectionFailed { reason } => {
+                assert!(reason.contains("board mismatch"), "got: {reason}");
+                assert!(
+                    !reason.contains(&selected_port.port_name),
+                    "observed-transition mismatch should outrank selected-port fallback fatal: {reason}"
+                );
+            }
+            other => panic!(
+                "expected observed-transition outcome to outrank selected-port fatal fallback, got: {other:?}"
+            ),
+        }
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[
+                observed_bootloader_port.port_name.clone(),
+                selected_port.port_name.clone(),
+            ],
+            "observed transition must be probed before selected-port fallback and its outcome must carry precedence"
+        );
+    }
+
+    #[test]
+    fn serial_flow_multiple_wider_bootloader_candidates_continue_until_board_match() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let first_wider_bootloader_port = make_bootloader_port_named("/dev/ttyACM1", "BL111");
+        let second_wider_bootloader_port = make_bootloader_port_named("/dev/ttyACM2", "BL222");
+        let first_probe_only_wrong_board = make_probe_only_mock(5, 9, flash_size);
+        let second_upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![
+                first_wider_bootloader_port.clone(),
+                second_wider_bootloader_port.clone(),
+            ]])
+            .with_serial_mocks_for_port(
+                &first_wider_bootloader_port.port_name,
+                vec![first_probe_only_wrong_board],
+            )
+            .with_serial_mocks_for_port(
+                &second_wider_bootloader_port.port_name,
+                vec![second_upload_mock],
+            )
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyUSB9".into(),
+            baud: 57600,
+            ports_before: vec![
+                make_normal_port_named("/dev/ttyUSB9", "APP999"),
+                first_wider_bootloader_port.clone(),
+                second_wider_bootloader_port.clone(),
+            ],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[
+                first_wider_bootloader_port.port_name.clone(),
+                second_wider_bootloader_port.port_name.clone(),
+            ],
+            "board mismatch on one wider bootloader candidate must continue probing later ranked candidates"
+        );
+    }
+
+    #[test]
+    fn serial_flow_unrelated_new_port_matching_board_succeeds_after_board_mismatch() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let wrong_board_port = make_bootloader_port_named("/dev/ttyACM1", "BL111");
+        let unrelated_matching_port = make_bootloader_port_named("/dev/ttyACM2", "BL222");
+        let first_probe_only_wrong_board = make_probe_only_mock(5, 9, flash_size);
+        let second_upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![wrong_board_port.clone(), unrelated_matching_port.clone()]])
+            .with_serial_mocks_for_port(&wrong_board_port.port_name, vec![first_probe_only_wrong_board])
+            .with_serial_mocks_for_port(&unrelated_matching_port.port_name, vec![second_upload_mock])
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyUSB9".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port_named("/dev/ttyUSB9", "APP999")],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[
+                wrong_board_port.port_name.clone(),
+                unrelated_matching_port.port_name.clone(),
+            ],
+            "a new unrelated bootloader port with the right board must still be tried after an earlier board mismatch"
+        );
+    }
+
+    #[test]
+    fn serial_flow_silent_selected_port_uses_bounded_detection_probe_before_retrying_candidates() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let selected_port = make_normal_port();
+        let silent_read_count = Rc::new(Cell::new(0));
+
+        let silent_mock = MockSerial::new().with_mirrored_read_count(silent_read_count.clone());
+
+        let new_bootloader_port = PortInfo {
+            port_name: "/dev/ttyACM1".into(),
+            vid: Some(0x2DAE),
+            pid: Some(0x1016),
+            serial_number: Some("BL456".into()),
+            manufacturer: None,
+            product: None,
+            location: Some("1-2".into()),
+        };
+
+        let upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![
+                vec![selected_port.clone()],
+                vec![selected_port.clone(), new_bootloader_port.clone()],
+            ])
+            .with_serial_mocks(vec![silent_mock, upload_mock])
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: selected_port.port_name.clone(),
+            baud: 57600,
+            ports_before: vec![selected_port.clone()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[selected_port.port_name, new_bootloader_port.port_name],
+            "the executor should retry with later bootloader candidates after a bounded selected-port probe"
+        );
+        assert_eq!(
+            silent_read_count.get(),
+            2,
+            "silent detection probes should stop after the bounded timeout budget instead of consuming the full uploader budget"
+        );
+    }
+
+    #[test]
+    fn serial_flow_retries_transient_open_failure_during_bootloader_transition() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let bootloader_port = make_bootloader_port();
+        let upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![
+                vec![bootloader_port.clone()],
+                vec![bootloader_port.clone()],
+            ])
+            .with_open_results(vec![Err(FirmwareError::PortOpenTransient {
+                detail: "open serial port /dev/ttyACM0: broken pipe".into(),
+            })])
+            .with_serial_mock(upload_mock)
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyACM0".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+    }
+
+    #[test]
+    fn serial_flow_retries_transient_probe_flush_failure_during_bootloader_transition() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let bootloader_port = make_bootloader_port();
+
+        let mut transient_probe_mock = MockSerial::new();
+        transient_probe_mock.queue_flush_failure(FirmwareError::IoTransient {
+            detail: "serial flush: broken pipe".into(),
+        });
+
+        let upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![
+                vec![bootloader_port.clone()],
+                vec![bootloader_port.clone()],
+            ])
+            .with_serial_mocks(vec![transient_probe_mock, upload_mock])
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyACM0".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+    }
+
+    #[test]
+    fn serial_flow_retries_transient_probe_write_failure_during_bootloader_transition() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let bootloader_port = make_bootloader_port();
+
+        let mut transient_probe_mock = MockSerial::new();
+        transient_probe_mock.queue_write_failure(FirmwareError::IoTransient {
+            detail: "serial write: not connected".into(),
+        });
+
+        let upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![
+                vec![bootloader_port.clone()],
+                vec![bootloader_port.clone()],
+            ])
+            .with_serial_mocks(vec![transient_probe_mock, upload_mock])
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyACM0".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+    }
+
+    #[test]
+    fn serial_flow_keeps_non_transition_open_failures_as_real_failures() {
+        let bootloader_port = make_bootloader_port();
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![bootloader_port]])
+            .with_open_results(vec![Err(FirmwareError::PortOpenFailed {
+                detail: "open serial port /dev/ttyACM0: permission denied".into(),
+            })]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyACM0".into(),
+            baud: 57600,
+            ports_before: vec![make_bootloader_port()],
+        };
+        let artifact = make_test_artifact(140, vec![0x01, 0x02, 0x03, 0x04]);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        match result {
+            SerialFlowResult::Failed { reason } => {
+                assert!(reason.contains("permission denied"), "got: {reason}");
+            }
+            other => panic!("expected Failed for non-transition open error, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn serial_flow_observed_transition_nonretryable_open_failure_stays_failed() {
+        let bootloader_port = make_bootloader_port();
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![bootloader_port]])
+            .with_open_results(vec![Err(FirmwareError::PortOpenFailed {
+                detail: "open serial port /dev/ttyACM0: permission denied".into(),
+            })]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyUSB9".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact(140, vec![0x01, 0x02, 0x03, 0x04]);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        match result {
+            SerialFlowResult::Failed { reason } => {
+                assert!(reason.contains("permission denied"), "got: {reason}");
+            }
+            other => panic!(
+                "expected Failed for observed-transition nonretryable open error, got: {other:?}"
+            ),
+        }
+    }
+
+    #[test]
+    fn serial_flow_same_poll_later_observed_transition_candidate_still_probes_after_fatal_failure()
+    {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let first_bootloader_port = make_bootloader_port_named("/dev/ttyACM1", "BL111");
+        let second_bootloader_port = make_bootloader_port_named("/dev/ttyACM2", "BL222");
+        let upload_mock = make_upload_mock(5, 140, flash_size, &image);
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![
+                first_bootloader_port.clone(),
+                second_bootloader_port.clone(),
+            ]])
+            .with_open_results(vec![Err(FirmwareError::PortOpenFailed {
+                detail: format!(
+                    "open serial port {}: permission denied",
+                    first_bootloader_port.port_name
+                ),
+            })])
+            .with_serial_mock(upload_mock)
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyUSB9".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[
+                first_bootloader_port.port_name.clone(),
+                second_bootloader_port.port_name.clone(),
+            ],
+            "a fatal failure on the first observed-transition candidate must not stop probing later candidates from the same poll"
+        );
+    }
+
+    #[test]
+    fn serial_uploader_probe_is_non_destructive_until_upload_begins() {
+        let flash_size = 2_097_152;
+        let mut mock = make_probe_only_mock(5, 140, flash_size);
+
+        let info = probe(&mut mock).unwrap();
+
+        assert_eq!(info.board_id, 140);
+        assert!(!mock.written.contains(&TEST_CHIP_ERASE));
+        assert!(!mock.written.contains(&TEST_PROG_MULTI));
+    }
+
+    #[test]
+    fn serial_uploader_probe_honors_mid_read_cancellation() {
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok();
+        mock.queue_timeout_reads(1);
+        mock.queue_timeout_reads(1);
+
+        let cancel_requested = Cell::new(false);
+        let err = probe_with_cancel(&mut mock, &|| {
+            let was_requested = cancel_requested.get();
+            cancel_requested.set(true);
+            was_requested
+        })
+        .unwrap_err();
+        assert!(matches!(err, FirmwareError::Cancelled));
+    }
+
+    #[test]
+    fn serial_uploader_upload_with_options_honors_probe_cancellation() {
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok();
+        mock.queue_timeout_reads(1);
+
+        let artifact = SerialArtifact {
+            board_id: 140,
+            image: vec![0x01, 0x02, 0x03, 0x04],
+            image_size: 4,
+            summary: "test".into(),
+            extf: None,
+        };
+
+        let cancel_requested = Cell::new(false);
+        let err = upload_with_options(
+            &mut mock,
+            &artifact,
+            &SerialFlashOptions {
+                full_chip_erase: false,
+            },
+            &|| {
+                let was_requested = cancel_requested.get();
+                cancel_requested.set(true);
+                was_requested
+            },
+            |_, _, _| {},
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, FirmwareError::Cancelled));
+    }
+
+    #[test]
+    fn serial_uploader_program_honors_ack_wait_cancellation() {
+        let mut mock = MockSerial::new();
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        mock.queue_timeout_reads(1);
+
+        let cancel_requested = Cell::new(false);
+        let err = program(
+            &mut mock,
+            &image,
+            &|| {
+                let was_requested = cancel_requested.get();
+                cancel_requested.set(true);
+                was_requested
+            },
+            |_, _| {},
+        )
+        .unwrap_err();
+        assert!(matches!(err, FirmwareError::Cancelled));
+    }
+
+    #[test]
+    fn serial_uploader_verify_crc_honors_mid_wait_cancellation() {
+        let image = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        let mut mock = MockSerial::new();
+        mock.queue_timeout_reads(1);
+
+        let cancel_requested = Cell::new(false);
+        let err = verify_crc_with_cancel(&mut mock, &image, 1024, &|| {
+            let was_requested = cancel_requested.get();
+            cancel_requested.set(true);
+            was_requested
+        })
+        .unwrap_err();
+        assert!(matches!(err, FirmwareError::Cancelled));
     }
 
     #[test]
@@ -2407,18 +4255,21 @@ mod tests {
         };
         let artifact = make_test_artifact(140, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         match &result {
-            SerialFlowResult::Verified {
+            SerialFlowResult::ReconnectFailed {
                 board_id,
                 bootloader_rev,
-                ..
+                flash_verified,
+                reconnect_error,
             } => {
                 assert_eq!(*board_id, 140);
                 assert_eq!(*bootloader_rev, 5);
+                assert!(*flash_verified);
+                assert!(reconnect_error.contains("timeout"));
             }
-            other => panic!("expected Verified (flash verified, reconnect failed), got: {other:?}"),
+            other => panic!("expected ReconnectFailed, got: {other:?}"),
         }
     }
 
@@ -2449,19 +4300,102 @@ mod tests {
         };
         let artifact = make_test_artifact(9, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         match &result {
-            SerialFlowResult::FlashedButUnverified {
+            SerialFlowResult::ReconnectFailed {
                 board_id,
                 bootloader_rev,
-                ..
+                flash_verified,
+                reconnect_error,
             } => {
                 assert_eq!(*board_id, 9);
                 assert_eq!(*bootloader_rev, 2);
+                assert!(!flash_verified);
+                assert!(reconnect_error.contains("timeout"));
             }
-            other => panic!("expected FlashedButUnverified, got: {other:?}"),
+            other => panic!("expected ReconnectFailed, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn serial_flow_reconnect_cancellation_returns_cancelled() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let mock = make_upload_mock(5, 140, flash_size, &image);
+        let bootloader_port = make_bootloader_port();
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![bootloader_port]])
+            .with_serial_mock(mock)
+            .with_reconnect_results(vec![Err(FirmwareError::ProtocolError {
+                detail: "reconnect timeout".into(),
+            })]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyACM0".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let cancel_requested = Cell::new(false);
+        let result = execute_serial_flash(
+            &deps,
+            &preflight,
+            &artifact,
+            &|| {
+                let was_requested = cancel_requested.get();
+                cancel_requested.set(true);
+                was_requested
+            },
+            |_, _, _| {},
+        );
+
+        assert!(matches!(result, SerialFlowResult::Cancelled));
+    }
+
+    #[test]
+    fn serial_flow_full_chip_erase_option_reaches_uploader() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152;
+        let bootloader_port = make_bootloader_port();
+        let mirrored_written = Rc::new(RefCell::new(Vec::new()));
+
+        let mut mock = MockSerial::new().with_mirrored_written(mirrored_written.clone());
+        mock.queue_sync_ok();
+        mock.queue_identify(5, 140, 0, flash_size);
+        mock.queue_sync_ok();
+        mock.queue_sync_ok();
+        let expected_crc = firmware_crc(&image, flash_size);
+        mock.queue_u32_le(expected_crc);
+        mock.queue_sync_ok();
+
+        let deps = MockFlowDeps::new()
+            .with_ports_sequence(vec![vec![bootloader_port]])
+            .with_serial_mock(mock)
+            .with_reconnect_results(vec![Ok(())]);
+
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyACM0".into(),
+            baud: 57600,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = make_test_artifact(140, image);
+
+        let result = execute_serial_flash_with_options(
+            &deps,
+            &preflight,
+            &artifact,
+            &SerialFlashOptions {
+                full_chip_erase: true,
+            },
+            &|| false,
+            |_, _, _| {},
+        );
+
+        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert!(mirrored_written.borrow().contains(&TEST_CHIP_FULL_ERASE));
     }
 
     #[test]
@@ -2477,7 +4411,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, vec![0xFF; 8]);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         // Must be a typed serial failure, never DFU
         match &result {
@@ -2489,16 +4423,16 @@ mod tests {
             SerialFlowResult::ReconnectVerified { .. }
             | SerialFlowResult::ReconnectFailed { .. }
             | SerialFlowResult::Verified { .. }
-            | SerialFlowResult::FlashedButUnverified { .. } => {
+            | SerialFlowResult::FlashedButUnverified { .. }
+            | SerialFlowResult::Cancelled => {
                 panic!("should not succeed when board detection fails");
             }
         }
 
-        // Verify the result maps to a recovery-needed outcome, not a DFU outcome
         let outcome = result.to_outcome();
         match outcome {
-            SerialFlashOutcome::RecoveryNeeded { .. } => {}
-            other => panic!("expected RecoveryNeeded outcome (no DFU fallback), got: {other:?}"),
+            SerialFlashOutcome::BoardDetectionFailed { .. } => {}
+            other => panic!("expected BoardDetectionFailed outcome (no DFU fallback), got: {other:?}"),
         }
     }
 
@@ -2523,7 +4457,7 @@ mod tests {
         // Source selection: local artifact (already parsed)
         let artifact = make_test_artifact(140, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         match &result {
             SerialFlowResult::ReconnectVerified {
@@ -2558,7 +4492,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, vec![0x01]);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         match &result {
             SerialFlowResult::Failed { reason } => {
@@ -2569,6 +4503,26 @@ mod tests {
             }
             other => panic!("expected Failed, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn serial_flow_cancellation_requested_stops_before_upload() {
+        let deps = MockFlowDeps::new().with_ports_sequence(vec![vec![make_bootloader_port()]]);
+        let preflight = PreflightSnapshot {
+            port: "/dev/ttyACM0".into(),
+            baud: 115200,
+            ports_before: vec![make_normal_port()],
+        };
+        let artifact = SerialArtifact {
+            board_id: 140,
+            image: vec![0x01, 0x02],
+            image_size: 2,
+            summary: "test".into(),
+            extf: None,
+        };
+
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| true, |_, _, _| {});
+        assert!(matches!(result, SerialFlowResult::Cancelled));
     }
 
     #[test]
@@ -2591,7 +4545,7 @@ mod tests {
         let artifact = make_test_artifact(140, image);
 
         let mut progress_calls = Vec::new();
-        execute_serial_flash(&deps, &preflight, &artifact, |_phase, w, t| {
+        execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_phase, w, t| {
             progress_calls.push((w, t));
         });
 
@@ -2648,6 +4602,10 @@ mod tests {
         };
         let j4 = serde_json::to_string(&failed).unwrap();
         assert!(j4.contains("failed"), "got: {j4}");
+
+        let cancelled = SerialFlowResult::Cancelled;
+        let j_cancelled = serde_json::to_string(&cancelled).unwrap();
+        assert!(j_cancelled.contains("cancelled"), "got: {j_cancelled}");
 
         let board_fail = SerialFlowResult::BoardDetectionFailed {
             reason: "no port".into(),
@@ -2708,7 +4666,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         let outcome = result.to_outcome();
         let session_outcome = FirmwareOutcome::SerialPrimary { outcome };
@@ -2739,7 +4697,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, vec![0x01]);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
         assert!(matches!(
             result,
             SerialFlowResult::BoardDetectionFailed { .. }
@@ -2764,7 +4722,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, vec![0xFF; 4]);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
         let outcome = result.to_outcome();
         let wrapped = FirmwareOutcome::SerialPrimary { outcome };
         let json = serde_json::to_string(&wrapped).unwrap();
@@ -2950,7 +4908,8 @@ mod tests {
     struct MockDfuUsb {
         open_result: Result<(), FirmwareError>,
         download_result: Result<(), FirmwareError>,
-        detach_result: Result<(), FirmwareError>,
+        detach_result: Result<ResetDisposition, FirmwareError>,
+        emit_download_progress: bool,
     }
 
     impl MockDfuUsb {
@@ -2958,7 +4917,8 @@ mod tests {
             Self {
                 open_result: Ok(()),
                 download_result: Ok(()),
-                detach_result: Ok(()),
+                detach_result: Ok(ResetDisposition::Confirmed),
+                emit_download_progress: true,
             }
         }
 
@@ -2976,6 +4936,16 @@ mod tests {
             self.detach_result = Err(err);
             self
         }
+
+        fn with_unconfirmed_reset(mut self) -> Self {
+            self.detach_result = Ok(ResetDisposition::Unconfirmed);
+            self
+        }
+
+        fn with_silent_download_progress(mut self) -> Self {
+            self.emit_download_progress = false;
+            self
+        }
     }
 
     impl DfuUsbAccess for MockDfuUsb {
@@ -2986,15 +4956,16 @@ mod tests {
         fn download(
             &self,
             data: &[u8],
-            progress: &mut dyn FnMut(usize, usize),
+            mut progress: Box<dyn FnMut(usize, usize) + Send + '_>,
         ) -> Result<(), FirmwareError> {
-            // Simulate progress
-            let total = data.len();
-            progress(total, total);
+            if self.emit_download_progress {
+                let total = data.len();
+                progress(total, total);
+            }
             self.download_result.clone()
         }
 
-        fn detach_and_reset(&self) -> Result<(), FirmwareError> {
+        fn detach_and_reset(&self) -> Result<ResetDisposition, FirmwareError> {
             self.detach_result.clone()
         }
     }
@@ -3003,6 +4974,7 @@ mod tests {
         DfuDeviceInfo {
             vid: 0x0483,
             pid: 0xdf11,
+            unique_id: "0483:df11:STM32_BL".into(),
             serial_number: Some("STM32_BL".into()),
             manufacturer: Some("STMicroelectronics".into()),
             product: Some("STM32 BOOTLOADER".into()),
@@ -3013,6 +4985,7 @@ mod tests {
         DfuDeviceInfo {
             vid: 0x2DAE,
             pid: 0x1058,
+            unique_id: "2dae:1058:no-serial".into(),
             serial_number: None,
             manufacturer: Some("SomeVendor".into()),
             product: Some("RandomDevice".into()),
@@ -3028,7 +5001,7 @@ mod tests {
         let bin_data = vec![0x00, 0x20, 0x00, 0x08, 0x01, 0x02, 0x03, 0x04];
 
         let mut progress_calls = Vec::new();
-        let result = execute_dfu_recovery(&usb, &device, &bin_data, |w, t| {
+        let result = execute_dfu_recovery(&usb, &device, &bin_data, &|| false, |w, t| {
             progress_calls.push((w, t));
         });
 
@@ -3046,8 +5019,37 @@ mod tests {
     }
 
     #[test]
+    fn dfu_recovery_emits_staged_phases_in_order() {
+        let usb = MockDfuUsb::success();
+        let device = stm32_dfu_device();
+        let bin_data = vec![0x00, 0x20, 0x00, 0x08, 0x01, 0x02, 0x03, 0x04];
+
+        let mut phases = Vec::new();
+        let result = execute_dfu_recovery_with_phases(
+            &usb,
+            &device,
+            &bin_data,
+            &|| false,
+            |phase| phases.push(phase),
+            |_, _| {},
+        );
+
+        assert!(matches!(result, DfuRecoveryResult::Verified));
+        assert_eq!(
+            phases,
+            vec![
+                DfuRecoveryPhase::Detecting,
+                DfuRecoveryPhase::Erasing,
+                DfuRecoveryPhase::Downloading,
+                DfuRecoveryPhase::ManifestingOrResetting,
+            ]
+        );
+    }
+
+    #[test]
     fn dfu_recovery_outcome_maps_correctly() {
         let verified = DfuRecoveryResult::Verified;
+        let reset_unconfirmed = DfuRecoveryResult::ResetUnconfirmed;
         let failed = DfuRecoveryResult::Failed {
             reason: "usb error".into(),
         };
@@ -3065,6 +5067,10 @@ mod tests {
                 assert!(reason.contains("usb error"), "got: {reason}");
             }
             other => panic!("expected Failed, got: {other:?}"),
+        }
+        match reset_unconfirmed.to_outcome() {
+            DfuRecoveryOutcome::ResetUnconfirmed => {}
+            other => panic!("expected ResetUnconfirmed, got: {other:?}"),
         }
         match driver.to_outcome() {
             DfuRecoveryOutcome::UnsupportedRecoveryPath { guidance } => {
@@ -3088,7 +5094,7 @@ mod tests {
         let device = non_stm32_device();
         let bin_data = vec![0x01, 0x02, 0x03, 0x04];
 
-        let result = execute_dfu_recovery(&usb, &device, &bin_data, |_, _| {});
+        let result = execute_dfu_recovery(&usb, &device, &bin_data, &|| false, |_, _| {});
 
         match &result {
             DfuRecoveryResult::Failed { reason } => {
@@ -3131,7 +5137,7 @@ mod tests {
         let usb = MockDfuUsb::success();
         let device = stm32_dfu_device();
 
-        let result = execute_dfu_recovery(&usb, &device, &[], |_, _| {});
+        let result = execute_dfu_recovery(&usb, &device, &[], &|| false, |_, _| {});
 
         match &result {
             DfuRecoveryResult::Failed { reason } => {
@@ -3141,20 +5147,24 @@ mod tests {
         }
     }
 
-    // ── Windows driver guidance ──
+    // ── USB driver guidance ──
 
     #[test]
-    fn dfu_recovery_windows_driver_guidance() {
+    fn dfu_recovery_usb_driver_guidance() {
         let usb = MockDfuUsb::success().with_open_error(FirmwareError::UsbAccessDenied {
-            guidance: "access denied".into(),
+            guidance: "cannot open USB device: access denied".into(),
         });
         let device = stm32_dfu_device();
         let bin_data = vec![0x01, 0x02, 0x03, 0x04];
 
-        let result = execute_dfu_recovery(&usb, &device, &bin_data, |_, _| {});
+        let result = execute_dfu_recovery(&usb, &device, &bin_data, &|| false, |_, _| {});
 
         match &result {
             DfuRecoveryResult::DriverGuidance { guidance } => {
+                assert!(
+                    guidance.contains("cannot open USB device"),
+                    "should preserve upstream context: {guidance}"
+                );
                 assert!(guidance.contains("WinUSB"), "got: {guidance}");
                 assert!(guidance.contains("Zadig"), "got: {guidance}");
                 assert!(guidance.contains("zadig.akeo.ie"), "got: {guidance}");
@@ -3174,7 +5184,7 @@ mod tests {
 
     #[test]
     fn dfu_recovery_driver_guidance_text_is_comprehensive() {
-        let text = windows_driver_guidance();
+        let text = usb_driver_guidance();
         assert!(text.contains("WinUSB"), "should mention WinUSB: {text}");
         assert!(text.contains("Zadig"), "should mention Zadig: {text}");
         assert!(text.contains("zadig.akeo.ie"), "should link Zadig: {text}");
@@ -3193,7 +5203,7 @@ mod tests {
         let device = stm32_dfu_device();
         let bin_data = vec![0x01, 0x02, 0x03, 0x04];
 
-        let result = execute_dfu_recovery(&usb, &device, &bin_data, |_, _| {});
+        let result = execute_dfu_recovery(&usb, &device, &bin_data, &|| false, |_, _| {});
 
         match &result {
             DfuRecoveryResult::Failed { reason } => {
@@ -3204,6 +5214,33 @@ mod tests {
     }
 
     #[test]
+    fn dfu_recovery_does_not_emit_downloading_before_byte_progress_begins() {
+        let usb = MockDfuUsb::success()
+            .with_silent_download_progress()
+            .with_download_error(FirmwareError::ProtocolError {
+                detail: "erase failed before first byte".into(),
+            });
+        let device = stm32_dfu_device();
+        let bin_data = vec![0x01, 0x02, 0x03, 0x04];
+
+        let mut phases = Vec::new();
+        let result = execute_dfu_recovery_with_phases(
+            &usb,
+            &device,
+            &bin_data,
+            &|| false,
+            |phase| phases.push(phase),
+            |_, _| {},
+        );
+
+        assert!(matches!(result, DfuRecoveryResult::Failed { .. }));
+        assert_eq!(
+            phases,
+            vec![DfuRecoveryPhase::Detecting, DfuRecoveryPhase::Erasing]
+        );
+    }
+
+    #[test]
     fn dfu_recovery_detach_failure() {
         let usb = MockDfuUsb::success().with_detach_error(FirmwareError::ProtocolError {
             detail: "device unresponsive".into(),
@@ -3211,7 +5248,7 @@ mod tests {
         let device = stm32_dfu_device();
         let bin_data = vec![0x01, 0x02, 0x03, 0x04];
 
-        let result = execute_dfu_recovery(&usb, &device, &bin_data, |_, _| {});
+        let result = execute_dfu_recovery(&usb, &device, &bin_data, &|| false, |_, _| {});
 
         match &result {
             DfuRecoveryResult::Failed { reason } => {
@@ -3219,6 +5256,63 @@ mod tests {
             }
             other => panic!("expected Failed, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn dfu_recovery_reset_unconfirmed_when_reset_is_not_confirmable() {
+        let usb = MockDfuUsb::success().with_unconfirmed_reset();
+        let device = stm32_dfu_device();
+        let bin_data = vec![0x01, 0x02, 0x03, 0x04];
+
+        let result = execute_dfu_recovery(&usb, &device, &bin_data, &|| false, |_, _| {});
+
+        match result.to_outcome() {
+            DfuRecoveryOutcome::ResetUnconfirmed => {}
+            other => panic!("expected ResetUnconfirmed outcome, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn dfu_recovery_reset_confirmation_accepts_app_mode_reenumeration() {
+        let mut dfu_polls = vec![Ok(true), Ok(true), Ok(true)].into_iter();
+        let mut app_polls = vec![Ok(false), Ok(false), Ok(true)].into_iter();
+        let mut sleeps = Vec::new();
+
+        let disposition = confirm_reset_with_device_checks(
+            std::time::Duration::from_millis(200),
+            std::time::Duration::from_millis(100),
+            || dfu_polls.next().expect("dfu poll available"),
+            || app_polls.next().expect("app poll available"),
+            |duration| sleeps.push(duration),
+        );
+
+        assert_eq!(disposition, ResetDisposition::Confirmed);
+        assert_eq!(
+            sleeps,
+            vec![
+                std::time::Duration::from_millis(100),
+                std::time::Duration::from_millis(100)
+            ]
+        );
+    }
+
+    #[test]
+    fn dfu_recovery_cancellation_requested_before_download_returns_cancelled() {
+        let usb = MockDfuUsb::success();
+        let device = stm32_dfu_device();
+        let bin_data = vec![0x01, 0x02, 0x03, 0x04];
+
+        let result = execute_dfu_recovery(&usb, &device, &bin_data, &|| true, |_, _| {});
+        let outcome = result.to_outcome();
+
+        assert_eq!(
+            serde_json::to_value(&result).unwrap(),
+            json!({ "result": "cancelled" })
+        );
+        assert_eq!(
+            serde_json::to_value(&outcome).unwrap(),
+            json!({ "result": "cancelled" })
+        );
     }
 
     // ── DFU recovery is separate from serial path ──
@@ -3256,7 +5350,7 @@ mod tests {
         let device = stm32_dfu_device();
         let bin_data = vec![0x01, 0x02, 0x03, 0x04];
 
-        let result = execute_dfu_recovery(&usb, &device, &bin_data, |_, _| {});
+        let result = execute_dfu_recovery(&usb, &device, &bin_data, &|| false, |_, _| {});
         let outcome = result.to_outcome();
         let wrapped = FirmwareOutcome::DfuRecovery { outcome };
         let json = serde_json::to_string(&wrapped).unwrap();
@@ -3278,7 +5372,7 @@ mod tests {
         let device = stm32_dfu_device();
         let bin_data = vec![0x01, 0x02, 0x03, 0x04];
 
-        let result = execute_dfu_recovery(&usb, &device, &bin_data, |_, _| {});
+        let result = execute_dfu_recovery(&usb, &device, &bin_data, &|| false, |_, _| {});
         let outcome = result.to_outcome();
         let session_outcome = FirmwareOutcome::DfuRecovery { outcome };
         let completed = FirmwareSessionStatus::Completed {
@@ -3331,11 +5425,11 @@ mod tests {
         };
         let artifact = make_test_artifact(140, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::Verified),
-            "e2e serial happy path must produce Verified, got: {outcome:?}"
+            matches!(outcome, SerialFlashOutcome::ReconnectVerified { flash_verified: true, .. }),
+            "e2e serial happy path must produce ReconnectVerified(flash_verified=true), got: {outcome:?}"
         );
 
         let wrapped = FirmwareOutcome::SerialPrimary { outcome };
@@ -3363,7 +5457,7 @@ mod tests {
         };
         let artifact = make_test_artifact(140, vec![0xFF; 8]);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         match &result {
             SerialFlowResult::BoardDetectionFailed { .. } => {}
@@ -3372,19 +5466,19 @@ mod tests {
 
         let outcome = result.to_outcome();
         match &outcome {
-            SerialFlashOutcome::RecoveryNeeded { reason } => {
+            SerialFlashOutcome::BoardDetectionFailed { reason } => {
                 assert!(
                     !reason.is_empty(),
-                    "recovery_needed reason must be non-empty: {reason}"
+                    "board_detection_failed reason must be non-empty: {reason}"
                 );
             }
-            other => panic!("e2e serial failure outcome must be RecoveryNeeded, got: {other:?}"),
+            other => panic!("e2e serial failure outcome must be BoardDetectionFailed, got: {other:?}"),
         }
 
         let wrapped = FirmwareOutcome::SerialPrimary { outcome };
         let json = serde_json::to_string(&wrapped).unwrap();
         assert!(json.contains("serial_primary"));
-        assert!(json.contains("recovery_needed"));
+        assert!(json.contains("board_detection_failed"));
         assert!(!json.contains("dfu"));
 
         session.stop();
@@ -3420,15 +5514,15 @@ mod tests {
         };
         let artifact = make_test_artifact(9, image);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::FlashedButUnverified),
-            "BL_REV 2 + reconnect failure must be FlashedButUnverified, got: {outcome:?}"
+            matches!(outcome, SerialFlashOutcome::ReconnectFailed { flash_verified: false, .. }),
+            "BL_REV 2 + reconnect failure must be ReconnectFailed(flash_verified=false), got: {outcome:?}"
         );
 
         let json = serde_json::to_string(&FirmwareOutcome::SerialPrimary { outcome }).unwrap();
-        assert!(json.contains("flashed_but_unverified"));
+        assert!(json.contains("reconnect_failed"));
         assert!(!json.contains("\"verified\""));
 
         session.stop();
@@ -3444,7 +5538,7 @@ mod tests {
         let bin_data = vec![0x00, 0x20, 0x00, 0x08, 0x01, 0x02, 0x03, 0x04];
 
         let mut progress_calls = Vec::new();
-        let result = execute_dfu_recovery(&usb, &device, &bin_data, |w, t| {
+        let result = execute_dfu_recovery(&usb, &device, &bin_data, &|| false, |w, t| {
             progress_calls.push((w, t));
         });
 
@@ -3492,7 +5586,7 @@ mod tests {
         let device = stm32_dfu_device();
         let bin_data = vec![0x01, 0x02, 0x03, 0x04];
 
-        let result = execute_dfu_recovery(&usb, &device, &bin_data, |_, _| {});
+        let result = execute_dfu_recovery(&usb, &device, &bin_data, &|| false, |_, _| {});
         let outcome = result.to_outcome();
 
         match &outcome {
@@ -4040,19 +6134,19 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_source_deserializes_catalog_url() {
-        let json = r#"{"kind":"catalog_url","url":"https://firmware.ardupilot.org/fw.apj"}"#;
+    fn dfu_recovery_source_deserializes_official_bootloader_by_board_target() {
+        let json = r#"{"kind":"official_bootloader","board_target":"CubeOrange"}"#;
         let source: DfuRecoverySource = serde_json::from_str(json).unwrap();
         match source {
-            DfuRecoverySource::CatalogUrl { url } => {
-                assert_eq!(url, "https://firmware.ardupilot.org/fw.apj");
+            DfuRecoverySource::OfficialBootloader { board_target } => {
+                assert_eq!(board_target, "CubeOrange");
             }
-            other => panic!("expected CatalogUrl, got: {other:?}"),
+            other => panic!("expected OfficialBootloader, got: {other:?}"),
         }
     }
 
     #[test]
-    fn dfu_recovery_source_deserializes_local_apj_bytes() {
+    fn dfu_recovery_source_deserializes_manual_local_apj_bytes() {
         let json = r#"{"kind":"local_apj_bytes","data":[1,2,3,4]}"#;
         let source: DfuRecoverySource = serde_json::from_str(json).unwrap();
         match source {
@@ -4064,10 +6158,60 @@ mod tests {
     }
 
     #[test]
+    fn dfu_recovery_source_rejects_catalog_application_image_path() {
+        let json = r#"{"kind":"catalog_url","url":"https://firmware.ardupilot.org/fw.apj"}"#;
+        let result: Result<DfuRecoverySource, _> = serde_json::from_str(json);
+        assert!(
+            result.is_err(),
+            "catalog DFU source should be removed from the backend contract"
+        );
+    }
+
+    #[test]
     fn dfu_recovery_source_rejects_unknown_kind() {
         let json = r#"{"kind":"unknown_source","data":[1]}"#;
         let result: Result<DfuRecoverySource, _> = serde_json::from_str(json);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn dfu_recovery_phase_order_serializes_as_staged_contract() {
+        assert_serializes_to(
+            &vec![
+                DfuRecoveryPhase::Detecting,
+                DfuRecoveryPhase::Erasing,
+                DfuRecoveryPhase::Downloading,
+                DfuRecoveryPhase::ManifestingOrResetting,
+            ],
+            json!([
+                "detecting",
+                "erasing",
+                "downloading",
+                "manifesting_or_resetting"
+            ]),
+        );
+    }
+
+    #[test]
+    fn dfu_recovery_completed_status_preserves_reset_unconfirmed_as_typed_outcome() {
+        let status = FirmwareSessionStatus::Completed {
+            outcome: FirmwareOutcome::DfuRecovery {
+                outcome: DfuRecoveryOutcome::ResetUnconfirmed,
+            },
+        };
+
+        assert_serializes_to(
+            &status,
+            json!({
+                "kind": "completed",
+                "outcome": {
+                    "path": "dfu_recovery",
+                    "outcome": {
+                        "result": "reset_unconfirmed"
+                    }
+                }
+            }),
+        );
     }
 
     #[test]
@@ -4086,6 +6230,7 @@ mod tests {
         let apj_data = ApjFixture::new(140, &internal).with_extf(&external).build();
 
         let err = apj_to_dfu_bin(&apj_data).unwrap_err();
+        let err = err.to_string();
         assert!(
             err.contains("external-flash"),
             "should mention external-flash: {err}"
@@ -4110,7 +6255,7 @@ mod tests {
     fn dfu_recovery_source_invalid_apj_propagates_error() {
         let result = apj_to_dfu_bin(b"not json at all");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("invalid APJ JSON"));
+        assert!(result.unwrap_err().to_string().contains("invalid APJ JSON"));
     }
 
     // ── External-flash protocol constants for test assertions ──
@@ -4189,6 +6334,16 @@ mod tests {
         assert_eq!(info.bl_rev, 5);
         assert_eq!(info.board_id, 140);
         assert_eq!(info.extf_size, 0, "failed extf probe should fall back to 0");
+    }
+
+    #[test]
+    fn serial_uploader_extf_identify_timeout_remains_fatal() {
+        let mut mock = MockSerial::new();
+        queue_identify_base(&mut mock, 5, 140, 0, 2_097_152);
+        mock.queue_timeout_reads(13);
+
+        let err = identify(&mut mock).unwrap_err();
+        assert!(matches!(err, FirmwareError::Timeout { .. }));
     }
 
     #[test]
@@ -4293,6 +6448,48 @@ mod tests {
         validate_extf_capacity(&extf_payload, &info).unwrap();
     }
 
+    #[test]
+    fn serial_uploader_main_capacity_insufficient_fails_before_erase() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok();
+        mock.queue_identify(5, 140, 0, 3);
+
+        let artifact = SerialArtifact {
+            board_id: 140,
+            image,
+            image_size: 4,
+            summary: "oversize fw".into(),
+            extf: None,
+        };
+
+        let err = upload(&mut mock, &artifact, &|| false, |_, _, _| {}).unwrap_err();
+        match err {
+            FirmwareError::InternalFlashCapacityInsufficient {
+                board_capacity,
+                firmware_needs,
+            } => {
+                assert_eq!(board_capacity, 3);
+                assert_eq!(firmware_needs, 4);
+            }
+            other => panic!("expected InternalFlashCapacityInsufficient, got: {other:?}"),
+        }
+
+        assert!(
+            !mock.written.contains(&TEST_CHIP_ERASE),
+            "must NOT erase when internal flash capacity is insufficient"
+        );
+        assert!(
+            !mock.written.contains(&TEST_PROG_MULTI),
+            "must NOT program when internal flash capacity is insufficient"
+        );
+        assert!(
+            !mock.written.contains(&TEST_GET_CRC),
+            "must NOT verify when internal flash capacity is insufficient"
+        );
+    }
+
     // ── External-flash full upload tests ──
 
     /// Build a mock that handles full upload with extf: extf_erase, extf_program, extf_verify,
@@ -4310,7 +6507,8 @@ mod tests {
 
         queue_identify_with_extf(&mut mock, bl_rev, board_id, 0, flash_size, extf_size);
 
-        // extf erase
+        // extf erase: immediate ack, then final completion sync
+        mock.queue_sync_ok();
         mock.queue_sync_ok();
 
         // extf program chunks (padded to 4-byte alignment)
@@ -4368,7 +6566,7 @@ mod tests {
         };
 
         let mut progress = Vec::new();
-        let info = upload(&mut mock, &artifact, |p, w, t| {
+        let info = upload(&mut mock, &artifact, &|| false, |p, w, t| {
             progress.push((p.to_string(), w, t))
         })
         .unwrap();
@@ -4444,7 +6642,7 @@ mod tests {
             extf: None,
         };
 
-        let info = upload(&mut mock, &artifact, |_, _, _| {}).unwrap();
+        let info = upload(&mut mock, &artifact, &|| false, |_, _, _| {}).unwrap();
         assert_eq!(info.bl_rev, 5);
         assert_eq!(info.board_id, 140);
         assert_eq!(info.extf_size, 0);
@@ -4483,7 +6681,7 @@ mod tests {
             }),
         };
 
-        let err = upload(&mut mock, &artifact, |_, _, _| {}).unwrap_err();
+        let err = upload(&mut mock, &artifact, &|| false, |_, _, _| {}).unwrap_err();
         match err {
             FirmwareError::ExtfCapacityInsufficient {
                 board_capacity,
@@ -4511,6 +6709,7 @@ mod tests {
     fn serial_uploader_extf_erase_sends_size_on_wire() {
         let mut mock = MockSerial::new();
         mock.queue_sync_ok();
+        mock.queue_sync_ok();
         let size: u32 = 1_048_576;
         extf_erase(&mut mock, size).unwrap();
         // Wire: EXTF_ERASE + size(4 LE bytes) + EOC
@@ -4524,6 +6723,87 @@ mod tests {
             mock.written, expected,
             "EXTF_ERASE must include 4-byte LE size"
         );
+    }
+
+    #[test]
+    fn serial_uploader_extf_erase_consumes_progress_before_sync() {
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok();
+        mock.queue_read(&[10, 40, 90]);
+        mock.queue_sync_ok();
+
+        extf_erase(&mut mock, 4096).unwrap();
+
+        let expected: Vec<u8> = [
+            &[TEST_EXTF_ERASE],
+            4096u32.to_le_bytes().as_slice(),
+            &[TEST_EOC],
+        ]
+        .concat();
+        assert_eq!(mock.written, expected);
+    }
+
+    #[test]
+    fn serial_uploader_extf_erase_waits_for_ack_then_final_sync() {
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok();
+        mock.queue_timeout_reads(2);
+        mock.queue_read(&[5, 55, 100]);
+        mock.queue_sync_ok();
+
+        extf_erase(&mut mock, 4096).unwrap();
+
+        let expected: Vec<u8> = [
+            &[TEST_EXTF_ERASE],
+            4096u32.to_le_bytes().as_slice(),
+            &[TEST_EOC],
+        ]
+        .concat();
+        assert_eq!(mock.written, expected);
+    }
+
+    #[test]
+    fn serial_uploader_extf_erase_honors_mid_wait_cancellation() {
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok();
+        mock.queue_timeout_reads(1);
+
+        let err = extf_erase_with_cancel(&mut mock, 4096, &|| true).unwrap_err();
+        assert!(matches!(err, FirmwareError::Cancelled));
+    }
+
+    #[test]
+    fn serial_uploader_extf_crc_tolerates_partial_read_before_timeout() {
+        let extf_image = vec![0xCA, 0xFE, 0xBA, 0xBE];
+        let size = extf_image.len() as u32;
+        let expected_crc = firmware_crc(&extf_image, size);
+        let mut mock = MockSerial::new();
+        let crc_bytes = expected_crc.to_le_bytes();
+        mock.queue_read(&crc_bytes[..2]);
+        mock.queue_timeout_reads(1);
+        mock.queue_read(&crc_bytes[2..]);
+        mock.queue_sync_ok();
+
+        extf_verify_crc(&mut mock, &extf_image).unwrap();
+    }
+
+    #[test]
+    fn serial_uploader_erase_wait_loop_honors_mid_wait_cancellation() {
+        let mut mock = MockSerial::new();
+        mock.queue_timeout_reads(1);
+
+        let err = erase_with_cancel(&mut mock, &|| true).unwrap_err();
+        assert!(matches!(err, FirmwareError::Cancelled));
+    }
+
+    #[test]
+    fn serial_uploader_extf_crc_wait_loop_honors_mid_wait_cancellation() {
+        let extf_image = vec![0xCA, 0xFE, 0xBA, 0xBE];
+        let mut mock = MockSerial::new();
+        mock.queue_timeout_reads(1);
+
+        let err = extf_verify_crc_with_cancel(&mut mock, &extf_image, &|| true).unwrap_err();
+        assert!(matches!(err, FirmwareError::Cancelled));
     }
 
     #[test]
@@ -4549,6 +6829,19 @@ mod tests {
     }
 
     #[test]
+    fn serial_uploader_extf_verify_crc_waits_through_longer_timeout_window() {
+        let extf_image = vec![0xCA, 0xFE, 0xBA, 0xBE];
+        let size = extf_image.len() as u32;
+        let expected_crc = firmware_crc(&extf_image, size);
+        let mut mock = MockSerial::new();
+        mock.queue_timeout_reads(8);
+        mock.queue_u32_le(expected_crc);
+        mock.queue_sync_ok();
+
+        extf_verify_crc(&mut mock, &extf_image).unwrap();
+    }
+
+    #[test]
     fn serial_uploader_extf_verify_not_gated_by_bl_rev() {
         // bl_rev 2 with extf should still verify extf CRC
         let image = vec![0x01, 0x02, 0x03, 0x04];
@@ -4560,7 +6853,8 @@ mod tests {
         mock.queue_sync_ok(); // sync
         queue_identify_with_extf(&mut mock, 2, 9, 0, flash_size, extf_size);
 
-        // extf erase
+        // extf erase ack + final sync
+        mock.queue_sync_ok();
         mock.queue_sync_ok();
         // extf program
         mock.queue_sync_ok();
@@ -4588,7 +6882,7 @@ mod tests {
             }),
         };
 
-        let info = upload(&mut mock, &artifact, |_, _, _| {}).unwrap();
+        let info = upload(&mut mock, &artifact, &|| false, |_, _, _| {}).unwrap();
         assert_eq!(info.bl_rev, 2);
         // Extf CRC command must have been sent even at bl_rev 2
         assert!(
@@ -4630,7 +6924,7 @@ mod tests {
         let extf_image = vec![0x01, 0x02, 0x03, 0x04, 0x05];
         let mut mock = MockSerial::new();
         mock.queue_sync_ok(); // program chunk
-        extf_program(&mut mock, &extf_image, |_, _| {}).unwrap();
+        extf_program(&mut mock, &extf_image, &|| false, |_, _| {}).unwrap();
 
         // EXTF_PROG_MULTI + length + data + EOC
         // length should be 8 (padded to 4-byte boundary), not 5
@@ -4673,7 +6967,7 @@ mod tests {
             }),
         };
 
-        upload(&mut mock, &artifact, |_, _, _| {}).unwrap();
+        upload(&mut mock, &artifact, &|| false, |_, _, _| {}).unwrap();
 
         // Find the EXTF_ERASE command in the written bytes and extract the 4-byte LE size
         let erase_pos = mock
@@ -4687,6 +6981,133 @@ mod tests {
         assert_eq!(
             wire_size, extf_payload_size,
             "EXTF_ERASE must send payload size ({extf_payload_size}) not board capacity ({extf_size}); got {wire_size}"
+        );
+    }
+
+    #[test]
+    fn serial_uploader_full_chip_erase_does_not_trigger_extf_erase() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152u32;
+        let extf_size = 1_048_576u32;
+
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok();
+        queue_identify_with_extf(&mut mock, 5, 140, 0, flash_size, extf_size);
+        mock.queue_sync_ok(); // internal erase
+        mock.queue_sync_ok(); // internal program
+        let expected_crc = firmware_crc(&image, flash_size);
+        mock.queue_u32_le(expected_crc);
+        mock.queue_sync_ok();
+
+        let artifact = SerialArtifact {
+            board_id: 140,
+            image: image.clone(),
+            image_size: 4,
+            summary: "test fw".into(),
+            extf: None,
+        };
+
+        upload_with_options(
+            &mut mock,
+            &artifact,
+            &SerialFlashOptions {
+                full_chip_erase: true,
+            },
+            &|| false,
+            |_, _, _| {},
+        )
+        .unwrap();
+
+        assert!(
+            !mock.written.contains(&TEST_EXTF_ERASE),
+            "internal full chip erase must not trigger external-flash erase"
+        );
+    }
+
+    #[test]
+    fn serial_uploader_full_chip_erase_with_extf_payload_keeps_payload_sized_extf_erase() {
+        let image = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+        let extf_image = vec![0xCA, 0xFE, 0xBA, 0xBE];
+        let flash_size = 2_097_152u32;
+        let extf_size = 1_048_576u32;
+
+        let mut mock =
+            make_upload_mock_with_extf(5, 140, flash_size, extf_size, &image, &extf_image);
+
+        let artifact = SerialArtifact {
+            board_id: 140,
+            image,
+            image_size: 8,
+            summary: "test fw".into(),
+            extf: Some(ExternalFlashPayload {
+                image: extf_image.clone(),
+                image_size: 4,
+                declared_size: 4,
+                extflash_total: extf_size,
+            }),
+        };
+
+        upload_with_options(
+            &mut mock,
+            &artifact,
+            &SerialFlashOptions {
+                full_chip_erase: true,
+            },
+            &|| false,
+            |_, _, _| {},
+        )
+        .unwrap();
+
+        let erase_pos = mock
+            .written
+            .iter()
+            .position(|&b| b == TEST_EXTF_ERASE)
+            .expect("extf payload should still issue EXTF_ERASE");
+        let wire_size_bytes = &mock.written[erase_pos + 1..erase_pos + 5];
+        let wire_size = u32::from_le_bytes(wire_size_bytes.try_into().unwrap());
+        assert_eq!(wire_size, extf_image.len() as u32);
+    }
+
+    #[test]
+    fn serial_uploader_full_chip_erase_uses_dedicated_internal_command() {
+        let image = vec![0x01, 0x02, 0x03, 0x04];
+        let flash_size = 2_097_152u32;
+
+        let mut mock = MockSerial::new();
+        mock.queue_sync_ok();
+        queue_identify_with_extf(&mut mock, 5, 140, 0, flash_size, 0);
+        mock.queue_sync_ok();
+        mock.queue_sync_ok();
+        let expected_crc = firmware_crc(&image, flash_size);
+        mock.queue_u32_le(expected_crc);
+        mock.queue_sync_ok();
+
+        let artifact = SerialArtifact {
+            board_id: 140,
+            image: image.clone(),
+            image_size: 4,
+            summary: "test fw".into(),
+            extf: None,
+        };
+
+        upload_with_options(
+            &mut mock,
+            &artifact,
+            &SerialFlashOptions {
+                full_chip_erase: true,
+            },
+            &|| false,
+            |_, _, _| {},
+        )
+        .unwrap();
+
+        assert!(
+            mock.written.contains(&TEST_CHIP_FULL_ERASE),
+            "full chip erase should use dedicated internal erase command"
+        );
+        assert!(
+            !mock.written.contains(&TEST_CHIP_ERASE),
+            "full chip erase should not fall back to normal CHIP_ERASE"
         );
     }
 
@@ -4749,9 +7170,10 @@ mod tests {
         let artifact = make_test_artifact_with_extf(140, image, extf_image, extf_size);
 
         let mut progress_calls: Vec<(String, usize, usize)> = Vec::new();
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |phase, w, t| {
-            progress_calls.push((phase.to_string(), w, t));
-        });
+        let result =
+            execute_serial_flash(&deps, &preflight, &artifact, &|| false, |phase, w, t| {
+                progress_calls.push((phase.to_string(), w, t));
+            });
 
         match &result {
             SerialFlowResult::ReconnectVerified {
@@ -4823,7 +7245,7 @@ mod tests {
         };
         let artifact = make_test_artifact_with_extf(140, image, extf_image, 1_048_576);
 
-        let result = execute_serial_flash(&deps, &preflight, &artifact, |_, _, _| {});
+        let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         match &result {
             SerialFlowResult::ExtfCapacityInsufficient { reason } => {
@@ -4835,14 +7257,13 @@ mod tests {
             other => panic!("expected ExtfCapacityInsufficient, got: {other:?}"),
         }
 
-        // Must map to Failed outcome, NOT RecoveryNeeded
         let outcome = result.to_outcome();
         match outcome {
-            SerialFlashOutcome::Failed { reason } => {
+            SerialFlashOutcome::ExtfCapacityInsufficient { reason } => {
                 assert!(reason.contains("external-flash"), "got: {reason}");
             }
             other => panic!(
-                "ExtfCapacityInsufficient must map to Failed outcome, not RecoveryNeeded; got: {other:?}"
+                "ExtfCapacityInsufficient must preserve its typed outcome; got: {other:?}"
             ),
         }
     }
@@ -4871,7 +7292,7 @@ mod tests {
         let artifact = make_test_artifact_with_extf(140, image, extf_image, extf_size);
 
         let mut phases: Vec<String> = Vec::new();
-        execute_serial_flash(&deps, &preflight, &artifact, |phase, _, _| {
+        execute_serial_flash(&deps, &preflight, &artifact, &|| false, |phase, _, _| {
             if phases.last().map(|p| p.as_str()) != Some(phase) {
                 phases.push(phase.to_string());
             }
@@ -4921,7 +7342,7 @@ mod tests {
         let artifact = make_test_artifact(140, image);
 
         let mut phases: Vec<String> = Vec::new();
-        execute_serial_flash(&deps, &preflight, &artifact, |phase, _, _| {
+        execute_serial_flash(&deps, &preflight, &artifact, &|| false, |phase, _, _| {
             if phases.last().map(|p| p.as_str()) != Some(phase) {
                 phases.push(phase.to_string());
             }
@@ -5042,7 +7463,7 @@ mod tests {
             .build();
         let result = apj_to_dfu_bin(&apj);
         assert!(result.is_err(), "APJ with extf must be rejected for DFU");
-        let msg = result.unwrap_err();
+        let msg = result.unwrap_err().to_string();
         assert!(
             msg.contains("external-flash"),
             "error must mention external-flash; got: {msg:?}"
@@ -5097,27 +7518,25 @@ mod tests {
         );
     }
 
-    // R8: ExtfCapacityInsufficient maps to Failed outcome (not RecoveryNeeded).
     #[test]
-    fn extf_capacity_insufficient_maps_to_failed_not_recovery_needed() {
+    fn extf_capacity_insufficient_maps_to_typed_outcome() {
         let result = SerialFlowResult::ExtfCapacityInsufficient {
             reason: "external-flash capacity insufficient: board reports 0 bytes, firmware needs 4 bytes".into(),
         };
         let outcome = result.to_outcome();
         match outcome {
-            SerialFlashOutcome::Failed { reason } => {
+            SerialFlashOutcome::ExtfCapacityInsufficient { reason } => {
                 assert!(
                     reason.contains("external-flash"),
                     "reason must mention external-flash; got: {reason:?}"
                 );
             }
-            other => panic!("expected Failed, got: {other:?}"),
+            other => panic!("expected ExtfCapacityInsufficient, got: {other:?}"),
         }
     }
 
-    // R9: ReconnectFailed with flash_verified=false maps to FlashedButUnverified.
     #[test]
-    fn reconnect_failed_flash_unverified_maps_to_flashed_but_unverified() {
+    fn reconnect_failed_flash_unverified_maps_to_reconnect_failed() {
         let result = SerialFlowResult::ReconnectFailed {
             board_id: 9,
             bootloader_rev: 4,
@@ -5126,8 +7545,8 @@ mod tests {
         };
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::FlashedButUnverified),
-            "ReconnectFailed(flash_verified=false) must map to FlashedButUnverified; got: {outcome:?}"
+            matches!(outcome, SerialFlashOutcome::ReconnectFailed { flash_verified: false, .. }),
+            "ReconnectFailed(flash_verified=false) must preserve reconnect_failed; got: {outcome:?}"
         );
     }
 
@@ -5311,9 +7730,8 @@ mod tests {
         );
     }
 
-    // R16: SerialFlowResult::ReconnectVerified with flash_verified=true maps to Verified.
     #[test]
-    fn reconnect_verified_flash_true_maps_to_verified() {
+    fn reconnect_verified_flash_true_maps_to_reconnect_verified() {
         let result = SerialFlowResult::ReconnectVerified {
             board_id: 9,
             bootloader_rev: 4,
@@ -5321,14 +7739,13 @@ mod tests {
         };
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::Verified),
-            "ReconnectVerified(flash_verified=true) must map to Verified; got: {outcome:?}"
+            matches!(outcome, SerialFlashOutcome::ReconnectVerified { flash_verified: true, .. }),
+            "ReconnectVerified(flash_verified=true) must preserve reconnect_verified; got: {outcome:?}"
         );
     }
 
-    // R17: SerialFlowResult::ReconnectVerified with flash_verified=false maps to FlashedButUnverified.
     #[test]
-    fn reconnect_verified_flash_false_maps_to_flashed_but_unverified() {
+    fn reconnect_verified_flash_false_maps_to_reconnect_verified() {
         let result = SerialFlowResult::ReconnectVerified {
             board_id: 9,
             bootloader_rev: 2,
@@ -5336,8 +7753,8 @@ mod tests {
         };
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::FlashedButUnverified),
-            "ReconnectVerified(flash_verified=false) must map to FlashedButUnverified; got: {outcome:?}"
+            matches!(outcome, SerialFlashOutcome::ReconnectVerified { flash_verified: false, .. }),
+            "ReconnectVerified(flash_verified=false) must preserve reconnect_verified; got: {outcome:?}"
         );
     }
 
@@ -5347,7 +7764,7 @@ mod tests {
         use crate::firmware::commands::apj_to_dfu_bin;
         let result = apj_to_dfu_bin(b"not json at all");
         assert!(result.is_err(), "invalid JSON must be rejected");
-        let msg = result.unwrap_err();
+        let msg = result.unwrap_err().to_string();
         assert!(
             msg.contains("invalid firmware artifact") || msg.contains("invalid APJ JSON"),
             "error must describe artifact problem; got: {msg:?}"
@@ -5373,10 +7790,8 @@ mod tests {
         );
     }
 
-    // T9-R2: ReconnectFailed with flash_verified=true still maps to FlashedButUnverified.
-    // (reconnect_failed always means unverified regardless of CRC)
     #[test]
-    fn reconnect_failed_flash_true_still_maps_to_flashed_but_unverified() {
+    fn reconnect_failed_flash_true_still_maps_to_reconnect_failed() {
         let result = SerialFlowResult::ReconnectFailed {
             board_id: 140,
             bootloader_rev: 5,
@@ -5385,8 +7800,8 @@ mod tests {
         };
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::FlashedButUnverified),
-            "ReconnectFailed must always map to FlashedButUnverified even with flash_verified=true; got: {outcome:?}"
+            matches!(outcome, SerialFlashOutcome::ReconnectFailed { flash_verified: true, .. }),
+            "ReconnectFailed must preserve reconnect_failed even with flash_verified=true; got: {outcome:?}"
         );
     }
 
@@ -5469,6 +7884,7 @@ mod tests {
                 flash_verified: false,
                 reconnect_error: "e".into(),
             },
+            SerialFlowResult::Cancelled,
             SerialFlowResult::Failed { reason: "r".into() },
             SerialFlowResult::BoardDetectionFailed { reason: "r".into() },
             SerialFlowResult::ExtfCapacityInsufficient { reason: "r".into() },
