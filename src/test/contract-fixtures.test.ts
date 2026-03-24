@@ -580,8 +580,22 @@ function expectParamProgress(value: unknown, label: string): unknown {
     expect(["completed", "failed", "cancelled"]).toContain(value);
     return value;
   }
-  expect(typeof value, `${label} should be a string or object`).toBe("object");
-  return value;
+  const obj = expectRecord(value, label);
+  if ("downloading" in obj) {
+    const d = expectRecord(obj.downloading, `${label}.downloading`);
+    expectNumber(d.received, `${label}.downloading.received`);
+    // expected is Option<u16> → nullable
+    expect(d.expected === null || typeof d.expected === "number").toBe(true);
+    return value;
+  }
+  if ("writing" in obj) {
+    const w = expectRecord(obj.writing, `${label}.writing`);
+    expectNumber(w.index, `${label}.writing.index`);
+    expectNumber(w.total, `${label}.writing.total`);
+    expectString(w.name, `${label}.writing.name`);
+    return value;
+  }
+  throw new Error(`${label}: unrecognised ParamOperationProgress shape`);
 }
 
 function expectOpenSessionSnapshot(value: unknown, label: string): ContractOpenSessionSnapshot {
