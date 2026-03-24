@@ -202,7 +202,7 @@ describe("FirmwareFlashWizard", () => {
     fireEvent.click(screen.getByTestId("firmware-mode-recover"));
     await waitFor(() => expect(screen.getByTestId("firmware-recovery-board-select")).toBeTruthy());
 
-    fireEvent.click(screen.getByLabelText(/i understand that dfu recovery bypasses normal safety checks/i));
+    fireEvent.click(screen.getByLabelText(/i understand that dfu bootloader install bypasses normal safety checks/i));
     expect((screen.getByTestId("firmware-start-dfu") as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.change(screen.getByTestId("firmware-recovery-board-select"), { target: { value: "1" } });
@@ -234,7 +234,7 @@ describe("FirmwareFlashWizard", () => {
     expect(screen.queryByText("Choose .apj file")).toBeNull();
     expect(screen.queryByText("Choose .bin file")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /manual apj\/bin recovery/i }));
+    fireEvent.click(screen.getByRole("button", { name: /manual apj\/bin source/i }));
 
     expect(screen.getByText("Choose .apj file")).toBeTruthy();
     expect(screen.queryByText("Choose .bin file")).toBeNull();
@@ -270,7 +270,7 @@ describe("FirmwareFlashWizard", () => {
       expect(screen.getByTestId("firmware-dfu-recovery-panel")).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /manual apj\/bin recovery/i }));
+    fireEvent.click(screen.getByRole("button", { name: /manual apj\/bin source/i }));
     fireEvent.click(screen.getByRole("button", { name: /use manual apj/i }));
     fireEvent.click(screen.getByText("Choose .apj file"));
 
@@ -278,13 +278,13 @@ describe("FirmwareFlashWizard", () => {
       expect(screen.getByText("recovery.apj")).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByLabelText(/i understand that dfu recovery bypasses normal safety checks/i));
+    fireEvent.click(screen.getByLabelText(/i understand that dfu bootloader install bypasses normal safety checks/i));
 
     await waitFor(() => {
       expect((screen.getByTestId("firmware-start-dfu") as HTMLButtonElement).disabled).toBe(true);
     });
 
-    expect(screen.getByLabelText(/i confirm i am manually supplying the recovery image/i)).toBeTruthy();
+    expect(screen.getByLabelText(/i confirm i am manually supplying the bootloader image/i)).toBeTruthy();
   });
 
   it("resets manual recovery confirmation when switching manual mode", async () => {
@@ -306,14 +306,14 @@ describe("FirmwareFlashWizard", () => {
     fireEvent.click(screen.getByTestId("firmware-mode-recover"));
     await waitFor(() => expect(screen.getByTestId("firmware-dfu-recovery-panel")).toBeTruthy());
 
-    fireEvent.click(screen.getByRole("button", { name: /manual apj\/bin recovery/i }));
-    const confirm = screen.getByLabelText(/i confirm i am manually supplying the recovery image/i) as HTMLInputElement;
+    fireEvent.click(screen.getByRole("button", { name: /manual apj\/bin source/i }));
+    const confirm = screen.getByLabelText(/i confirm i am manually supplying the bootloader image/i) as HTMLInputElement;
     fireEvent.click(confirm);
     expect(confirm.checked).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: /use manual bin/i }));
 
-    expect((screen.getByLabelText(/i confirm i am manually supplying the recovery image/i) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText(/i confirm i am manually supplying the bootloader image/i) as HTMLInputElement).checked).toBe(false);
   });
 
   it("resets manual recovery confirmation when a new dangerous file is chosen", async () => {
@@ -342,19 +342,19 @@ describe("FirmwareFlashWizard", () => {
     fireEvent.click(screen.getByTestId("firmware-mode-recover"));
     await waitFor(() => expect(screen.getByTestId("firmware-dfu-recovery-panel")).toBeTruthy());
 
-    fireEvent.click(screen.getByRole("button", { name: /manual apj\/bin recovery/i }));
+    fireEvent.click(screen.getByRole("button", { name: /manual apj\/bin source/i }));
     fireEvent.click(screen.getByRole("button", { name: /use manual bin/i }));
     fireEvent.click(screen.getByText("Choose .bin file"));
     await waitFor(() => expect(screen.getByText("first.bin")).toBeTruthy());
 
-    const confirm = screen.getByLabelText(/i confirm i am manually supplying the recovery image/i) as HTMLInputElement;
+    const confirm = screen.getByLabelText(/i confirm i am manually supplying the bootloader image/i) as HTMLInputElement;
     fireEvent.click(confirm);
     expect(confirm.checked).toBe(true);
 
     fireEvent.click(screen.getByText("Choose .bin file"));
     await waitFor(() => expect(screen.getByText("second.bin")).toBeTruthy());
 
-    expect((screen.getByLabelText(/i confirm i am manually supplying the recovery image/i) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText(/i confirm i am manually supplying the bootloader image/i) as HTMLInputElement).checked).toBe(false);
   });
 
   it("clears manual APJ extflash blocking when switching back to official bootloader recovery", async () => {
@@ -384,7 +384,7 @@ describe("FirmwareFlashWizard", () => {
       expect(screen.getByTestId("firmware-dfu-recovery-panel")).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /manual apj\/bin recovery/i }));
+    fireEvent.click(screen.getByRole("button", { name: /manual apj\/bin source/i }));
     fireEvent.click(screen.getByRole("button", { name: /use manual apj/i }));
     fireEvent.click(screen.getByText("Choose .apj file"));
 
@@ -392,8 +392,8 @@ describe("FirmwareFlashWizard", () => {
       expect(screen.getByTestId("firmware-extf-block")).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /manual apj\/bin recovery/i }));
-    fireEvent.click(screen.getByLabelText(/i understand that dfu recovery bypasses normal safety checks/i));
+    fireEvent.click(screen.getByRole("button", { name: /manual apj\/bin source/i }));
+    fireEvent.click(screen.getByLabelText(/i understand that dfu bootloader install bypasses normal safety checks/i));
     fireEvent.change(screen.getByTestId("firmware-recovery-board-select"), { target: { value: "0" } });
 
     await waitFor(() => {
@@ -426,7 +426,7 @@ describe("FirmwareFlashWizard", () => {
     });
 
     fireEvent.change(screen.getByTestId("firmware-recovery-board-select"), { target: { value: "0" } });
-    fireEvent.click(screen.getByLabelText(/i understand that dfu recovery bypasses normal safety checks/i));
+    fireEvent.click(screen.getByLabelText(/i understand that dfu bootloader install bypasses normal safety checks/i));
     fireEvent.click(screen.getByTestId("firmware-start-dfu"));
 
     await waitFor(() => {
@@ -481,7 +481,7 @@ describe("FirmwareFlashWizard", () => {
     });
 
     fireEvent.change(screen.getByTestId("firmware-recovery-board-select"), { target: { value: "0" } });
-    fireEvent.click(screen.getByLabelText(/i understand that dfu recovery bypasses normal safety checks/i));
+    fireEvent.click(screen.getByLabelText(/i understand that dfu bootloader install bypasses normal safety checks/i));
     fireEvent.click(screen.getByTestId("firmware-start-dfu"));
 
     await waitFor(() => {
@@ -571,7 +571,7 @@ describe("FirmwareFlashWizard", () => {
     });
 
     expect(screen.getByRole("button", { name: /flash official bootloader/i })).toBeTruthy();
-    expect(screen.getByText(/writes directly to internal flash from the stm32 flash base address/i)).toBeTruthy();
+    expect(screen.getByText(/writes a bootloader directly to internal flash from the stm32 flash base address/i)).toBeTruthy();
     expect(screen.getByText(/after the bootloader is restored, install normal ardupilot firmware through the serial install \/ update path/i)).toBeTruthy();
   });
 
@@ -597,7 +597,7 @@ describe("FirmwareFlashWizard", () => {
       expect(screen.getByTestId("firmware-dfu-recovery-panel")).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /manual apj\/bin recovery/i }));
+    fireEvent.click(screen.getByRole("button", { name: /manual apj\/bin source/i }));
 
     expect(screen.getByText(/manual local files may replace bootloader contents or leave the board non-bootable if the wrong image is used/i)).toBeTruthy();
   });
@@ -626,7 +626,7 @@ describe("FirmwareFlashWizard", () => {
     );
 
     expect(screen.getByTestId("firmware-dfu-recovery-panel")).toBeTruthy();
-    expect(screen.getByText("DFU recovery in progress…")).toBeTruthy();
+    expect(screen.getByText("DFU bootloader install in progress…")).toBeTruthy();
     expect((screen.getByTestId("firmware-mode-install") as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId("firmware-mode-recover") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByTestId("firmware-start-dfu")).toBeNull();
@@ -647,7 +647,7 @@ describe("FirmwareFlashWizard", () => {
     );
 
     expect(
-      screen.getByText("DFU flash completed, but device reset could not be confirmed. Reconnect or power-cycle the board before continuing."),
+      screen.getByText("DFU bootloader install completed, but device reset could not be confirmed. Reconnect or power-cycle the board before continuing."),
     ).toBeTruthy();
   });
 
@@ -698,7 +698,7 @@ describe("FirmwareFlashWizard", () => {
     });
 
     expect(
-      screen.getByText("Board detection failed: no bootloader detected on the selected port. If the board is unresponsive, try DFU recovery mode below."),
+      screen.getByText("Board detection failed: no bootloader detected on the selected port. If the board is unresponsive, try installing a bootloader via DFU below."),
     ).toBeTruthy();
     expect(screen.queryByText("Flash failed: no bootloader detected on the selected port")).toBeNull();
   });

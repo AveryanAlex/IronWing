@@ -124,7 +124,7 @@ function serialOutcomeBanner(outcome: SerialFlashOutcome): { kind: "success" | "
     case "board_detection_failed":
       return {
         kind: "error",
-        message: `Board detection failed: ${outcome.reason}. If the board is unresponsive, try DFU recovery mode below.`,
+        message: `Board detection failed: ${outcome.reason}. If the board is unresponsive, try installing a bootloader via DFU below.`,
       };
     case "extf_capacity_insufficient":
       return {
@@ -331,7 +331,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
 
     if (recoveryLocalApjData && checkApjHasExtf(recoveryLocalApjData)) {
       setExtfBlocked(
-        "This APJ contains an external-flash payload; DFU recovery can only write internal flash.",
+        "This APJ contains an external-flash payload; DFU bootloader install can only write internal flash.",
       );
     }
   }, [manualRecoveryMode, recoveryLocalApjData, showManualRecovery]);
@@ -692,7 +692,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
           )}
         >
           <Shield size={14} />
-          Recover via DFU
+          Install Bootloader (DFU)
         </button>
       </div>
 
@@ -1042,7 +1042,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
         <div data-testid="firmware-dfu-recovery-panel" className="rounded-lg border border-border/50 bg-bg-tertiary/15">
           <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
             <Shield size={14} className="text-warning/70" />
-            <h4 className="text-xs font-semibold text-text-secondary">DFU Recovery Flash</h4>
+            <h4 className="text-xs font-semibold text-text-secondary">DFU Bootloader Install</h4>
           </div>
 
           <div className="flex flex-col gap-3 p-3">
@@ -1050,9 +1050,9 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
             <div className="flex items-start gap-2.5 rounded-lg border border-warning/30 bg-warning/10 p-3">
               <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warning" />
               <div className="flex flex-col gap-1 text-[10px] text-warning">
-                <span className="font-semibold text-[11px]">Recovery flashing — use with caution</span>
+                <span className="font-semibold text-[11px]">Bootloader install — use with caution</span>
                 <span className="leading-relaxed">
-                  DFU mode bypasses the normal bootloader and writes directly to internal flash
+                  DFU mode writes a bootloader directly to internal flash
                   from the STM32 flash base address. Only use this if your board is
                   unresponsive to serial flashing. Put the board in DFU mode by holding the
                   BOOT button during power-on.
@@ -1081,7 +1081,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
               <>
                 <div className="flex items-center gap-2 text-xs text-text-secondary">
                   <Loader2 size={14} className="animate-spin text-warning" />
-                  <span>{isDfuCancelling ? "Cancellation requested… waiting for DFU recovery to stop." : "DFU recovery in progress…"}</span>
+                  <span>{isDfuCancelling ? "Cancellation requested… waiting for DFU install to stop." : "DFU bootloader install in progress…"}</span>
                 </div>
                 {progress && (
                   <ProgressBar pct={progress.pct} label={progress.phase_label} />
@@ -1101,19 +1101,19 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
             {dfuCompleted && dfuOutcome && (
               <>
                 {dfuOutcome.result === "verified" && (
-                  <OutcomeBanner kind="success" message="DFU recovery flash completed successfully." />
+                  <OutcomeBanner kind="success" message="DFU bootloader install completed successfully." />
                 )}
                 {dfuOutcome.result === "cancelled" && (
-                  <OutcomeBanner kind="warning" message="DFU recovery was cancelled before completion." />
+                  <OutcomeBanner kind="warning" message="DFU bootloader install was cancelled before completion." />
                 )}
                 {dfuOutcome.result === "failed" && (
-                  <OutcomeBanner kind="error" message={`DFU flash failed: ${dfuOutcome.reason}`} />
+                  <OutcomeBanner kind="error" message={`DFU bootloader install failed: ${dfuOutcome.reason}`} />
                 )}
                 {dfuOutcome.result === "unsupported_recovery_path" && (
                   <OutcomeBanner kind="warning" message={dfuOutcome.guidance} />
                 )}
                 {dfuOutcome.result === "reset_unconfirmed" && (
-                  <OutcomeBanner kind="warning" message="DFU flash completed, but device reset could not be confirmed. Reconnect or power-cycle the board before continuing." />
+                  <OutcomeBanner kind="warning" message="DFU bootloader install completed, but device reset could not be confirmed. Reconnect or power-cycle the board before continuing." />
                 )}
                 <button
                   onClick={dismiss}
@@ -1191,7 +1191,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
                   <div className="flex items-start gap-2 text-[10px] text-text-muted">
                     <Info size={10} className="mt-0.5 shrink-0" />
                     <span>
-                      Flash official bootloader for the selected board target as the primary DFU recovery action.
+                      Flash official bootloader for the selected board target as the primary DFU install action.
                     </span>
                   </div>
                   {selectedRecoveryBoardTarget && (
@@ -1213,7 +1213,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
                     onClick={() => setShowManualRecovery((value) => !value)}
                     className="self-start rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-tertiary"
                   >
-                    Manual APJ/BIN Recovery
+                    Manual APJ/BIN Source
                   </button>
 
                   {showManualRecovery && (
@@ -1300,7 +1300,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
                           className="mt-0.5 accent-warning"
                         />
                         <span className="text-[10px] leading-relaxed text-text-secondary">
-                          I confirm I am manually supplying the recovery image and have verified it matches this board.
+                          I confirm I am manually supplying the bootloader image and have verified it matches this board.
                         </span>
                       </label>
                     </>
@@ -1314,7 +1314,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
                     <div className="flex flex-col gap-1 text-[10px] text-warning">
                       <span className="font-semibold text-[11px]">This firmware requires external flash</span>
                       <span className="leading-relaxed">
-                        {extfBlocked} DFU recovery cannot write external flash directly.
+                        {extfBlocked} DFU bootloader install cannot write external flash directly.
                         Use the serial Install / Update path to flash this firmware after recovery.
                       </span>
                     </div>
@@ -1330,8 +1330,8 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
                     className="mt-0.5 accent-warning"
                   />
                   <span className="text-[10px] leading-relaxed text-text-secondary">
-                    I understand that DFU recovery bypasses normal safety checks and may require
-                    specific USB drivers. I want to proceed with recovery flashing.
+                    I understand that DFU bootloader install bypasses normal safety checks and may require
+                    specific USB drivers. I want to proceed with bootloader flashing.
                   </span>
                 </label>
 
@@ -1343,7 +1343,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
                   className="flex items-center justify-center gap-2 rounded-md border border-warning/50 bg-warning/10 px-4 py-2 text-xs font-semibold text-warning transition-opacity disabled:opacity-40"
                 >
                   <Usb size={14} />
-                  {isManualRecovery ? "Start Manual Recovery Flash" : "Flash Official Bootloader"}
+                  {isManualRecovery ? "Start Manual Bootloader Flash" : "Flash Official Bootloader"}
                 </button>
               </>
             )}
