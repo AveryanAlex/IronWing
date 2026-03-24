@@ -311,6 +311,8 @@ function expectSessionState(value: unknown, label: string): SessionState {
   expectExactKeys(object, label, ["status", "connection", "vehicle_state", "home_position"]);
   const status = expectString(object.status, `${label}.status`);
   expect(["pending", "active"]).toContain(status);
+  expect(object).toHaveProperty("vehicle_state");
+  expect(object).toHaveProperty("home_position");
   return {
     status: status as SessionState["status"],
     connection: expectSessionConnection(object.connection, `${label}.connection`),
@@ -403,6 +405,7 @@ function expectDomainValue<T>(
   expectExactKeys(object, label, ["available", "complete", "provenance", "value"]);
   const available = expectBoolean(object.available, `${label}.available`);
   const complete = expectBoolean(object.complete, `${label}.complete`);
+  expect(object).toHaveProperty("value");
   return {
     available,
     complete,
@@ -436,6 +439,10 @@ function expectConfigurationFlag(value: unknown, label: string): ContractConfigu
 function expectConfigurationFactsState(value: unknown, label: string): ContractConfigurationFactsState {
   const object = expectRecord(value, label);
   expectExactKeys(object, label, ["frame", "gps", "battery_monitor", "motors_esc"]);
+  expect(object).toHaveProperty("frame");
+  expect(object).toHaveProperty("gps");
+  expect(object).toHaveProperty("battery_monitor");
+  expect(object).toHaveProperty("motors_esc");
   return {
     frame: expectNullable(object.frame ?? null, `${label}.frame`, expectConfigurationFlag),
     gps: expectNullable(object.gps ?? null, `${label}.gps`, expectConfigurationFlag),
@@ -486,6 +493,8 @@ function expectCalibrationStep(value: unknown, label: string): ContractCalibrati
   expectExactKeys(object, label, ["lifecycle", "progress", "report"]);
   const lifecycle = expectString(object.lifecycle, `${label}.lifecycle`);
   expect(["not_started", "running", "complete", "failed"]).toContain(lifecycle);
+  expect(object).toHaveProperty("progress");
+  expect(object).toHaveProperty("report");
   return {
     lifecycle: lifecycle as ContractCalibrationStep["lifecycle"],
     progress: expectNullable(object.progress ?? null, `${label}.progress`, expectCalibrationProgress),
@@ -496,6 +505,9 @@ function expectCalibrationStep(value: unknown, label: string): ContractCalibrati
 function expectCalibrationState(value: unknown, label: string): ContractCalibrationState {
   const object = expectRecord(value, label);
   expectExactKeys(object, label, ["accel", "compass", "radio"]);
+  expect(object).toHaveProperty("accel");
+  expect(object).toHaveProperty("compass");
+  expect(object).toHaveProperty("radio");
   return {
     accel: expectNullable(object.accel ?? null, `${label}.accel`, expectCalibrationStep),
     compass: expectNullable(object.compass ?? null, `${label}.compass`, expectCalibrationStep),
