@@ -17,9 +17,15 @@ export type ParamStore = {
   expected_count: number;
 };
 
-export type ParamTransferCounts = {
+export type DownloadingProgress = {
   received: number;
-  expected: number;
+  expected: number | null;
+};
+
+export type WritingProgress = {
+  index: number;
+  total: number;
+  name: string;
 };
 
 /** Matches mavkit's `ParamOperationProgress` externally-tagged serde enum. */
@@ -27,21 +33,29 @@ export type ParamProgress =
   | "completed"
   | "failed"
   | "cancelled"
-  | { downloading: ParamTransferCounts }
-  | { writing: ParamTransferCounts };
+  | { downloading: DownloadingProgress }
+  | { writing: WritingProgress };
 
 /** Extract the phase name from a progress value. */
-export function paramProgressPhase(p: ParamProgress): "downloading" | "writing" | "completed" | "failed" | "cancelled" {
+export function paramProgressPhase(
+  p: ParamProgress,
+): "downloading" | "writing" | "completed" | "failed" | "cancelled" {
   if (typeof p === "string") return p;
   if ("downloading" in p) return "downloading";
   return "writing";
 }
 
-/** Extract transfer counts, or null for terminal states (completed/failed/cancelled). */
-export function paramProgressCounts(p: ParamProgress): ParamTransferCounts | null {
+/**
+ * Extract normalised { received, expected } counts for progress display.
+ * For writing: maps index→received, total→expected.
+ * Returns null for terminal states.
+ */
+export function paramProgressCounts(
+  p: ParamProgress,
+): { received: number; expected: number | null } | null {
   if (typeof p === "string") return null;
-  if ("downloading" in p) return p.downloading;
-  return p.writing;
+  if ("downloading" in p) return { received: p.downloading.received, expected: p.downloading.expected };
+  return { received: p.writing.index, expected: p.writing.total };
 }
 
 /** True when a transfer is actively running (downloading or writing). */

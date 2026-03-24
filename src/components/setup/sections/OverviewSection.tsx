@@ -786,12 +786,12 @@ function OnboardingOverview({
                   <div
                     className="h-full rounded-full bg-accent transition-all duration-300"
                     style={{
-                      width: `${counts.expected > 0 ? Math.round((counts.received / counts.expected) * 100) : 0}%`,
+                      width: `${counts.expected != null && counts.expected > 0 ? Math.round((counts.received / counts.expected) * 100) : 0}%`,
                     }}
                   />
                 </div>
                 <span className="mt-1 block text-[10px] text-text-muted">
-                  {counts.received} / {counts.expected} parameters
+                  {counts.received} / {counts.expected ?? "?"} parameters
                 </span>
               </div>
             );

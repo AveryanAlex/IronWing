@@ -486,14 +486,14 @@ function ParamsTabContent({ params, connected, highlightParam, onHighlightHandle
               <div
                 className={`h-full rounded-full transition-all ${writing ? "bg-warning" : "bg-accent-blue"}`}
                 style={{
-                  width: counts.expected > 0
+                  width: counts.expected != null && counts.expected > 0
                     ? `${(counts.received / counts.expected) * 100}%`
                     : "0%",
                 }}
               />
             </div>
             <span className="text-[10px] text-text-muted">
-              {writing ? "Writing" : "Downloading"} {counts.received} / {counts.expected} parameters
+              {writing ? "Writing" : "Downloading"} {counts.received} / {counts.expected ?? "?"} parameters
             </span>
           </div>
         );
