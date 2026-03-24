@@ -34,6 +34,7 @@ function makeParams(overrides: Partial<ParamsState> = {}): ParamsState {
     filteredParams: [],
     groupedParams: {},
     download: vi.fn(),
+    cancel: vi.fn(),
     write: vi.fn(),
     saveToFile: vi.fn(),
     loadFromFile: vi.fn(),

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   downloadAllParams,
+  cancelParamDownload,
   writeParam,
   writeBatchParams,
   parseParamFile,
@@ -34,6 +35,7 @@ export type ParamsState = {
   filteredParams: Param[];
   groupedParams: Record<string, Param[]>;
   download: () => Promise<void>;
+  cancel: () => Promise<void>;
   write: (name: string, value: number) => Promise<void>;
   saveToFile: () => Promise<void>;
   loadFromFile: () => Promise<Record<string, number> | undefined>;
@@ -242,14 +244,19 @@ export function useParams(
       return;
     }
     try {
-      const result = await downloadAllParams();
-      toast.success("Parameters downloaded", {
-        description: `${Object.keys(result.params).length} parameters`,
-      });
+      await downloadAllParams();
     } catch (err) {
       toast.error("Parameter download failed", { description: asErrorMessage(err) });
     }
   }, [connected]);
+
+  const cancel = useCallback(async () => {
+    try {
+      await cancelParamDownload();
+    } catch {
+      // cancel is best-effort; no user-visible error
+    }
+  }, []);
 
   const write = useCallback(
     async (name: string, value: number) => {
@@ -408,6 +415,7 @@ export function useParams(
     filteredParams,
     groupedParams,
     download,
+    cancel,
     write,
     saveToFile,
     loadFromFile,
