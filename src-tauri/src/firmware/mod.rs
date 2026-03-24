@@ -505,6 +505,10 @@ mod tests {
             json!({ "kind": "already_in_bootloader" }),
         );
         assert_serializes_to(
+            &SerialBootloaderTransition::AutoRebootAttemptable,
+            json!({ "kind": "auto_reboot_attemptable" }),
+        );
+        assert_serializes_to(
             &SerialBootloaderTransition::ManualBootloaderEntryRequired,
             json!({ "kind": "manual_bootloader_entry_required" }),
         );

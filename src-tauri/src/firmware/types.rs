@@ -299,6 +299,7 @@ pub(crate) struct SerialReadinessResponse {
 pub(crate) enum SerialBootloaderTransition {
     AutoRebootSupported,
     AlreadyInBootloader,
+    AutoRebootAttemptable,
     ManualBootloaderEntryRequired,
     TargetMismatch,
 }
