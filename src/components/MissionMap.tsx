@@ -80,6 +80,7 @@ export function MissionMap({
 }: MissionMapProps) {
   type MapLayer = "plan" | "hybrid" | "satellite";
   const [mapLayer, setMapLayer] = useState<MapLayer>("plan");
+  const [layoutVersion, setLayoutVersion] = useState(0);
   const baseLayerIdsRef = useRef<string[]>([]);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -165,6 +166,33 @@ export function MissionMap({
       interactive: !syntheticVision,
       attributionControl: false,
     });
+
+    const markLayoutReady = () => {
+      const container = map.getContainer();
+      if (container.clientWidth > 0 && container.clientHeight > 0) {
+        setLayoutVersion((value) => value + 1);
+      }
+    };
+
+    const syncMapSize = () => {
+      map.resize();
+      markLayoutReady();
+    };
+
+    const container = containerRef.current;
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            syncMapSize();
+          });
+    resizeObserver?.observe(container);
+
+    const initialResizeFrame = requestAnimationFrame(() => {
+      syncMapSize();
+    });
+
+    window.addEventListener("resize", syncMapSize);
 
     map.setStyle(BASE_STYLE_URL, {
       transformStyle: (_previousStyle, nextStyle) => {
@@ -384,6 +412,9 @@ export function MissionMap({
     mapRef.current = map;
 
     return () => {
+      window.removeEventListener("resize", syncMapSize);
+      cancelAnimationFrame(initialResizeFrame);
+      resizeObserver?.disconnect();
       clearLp();
       for (const m of polygonMarkersRef.current) m.remove();
       polygonMarkersRef.current = [];
@@ -692,6 +723,9 @@ export function MissionMap({
     const map = mapRef.current;
     if (!map || hasSetInitialViewport.current) return;
 
+    const container = map.getContainer();
+    if (container.clientWidth <= 0 || container.clientHeight <= 0) return;
+
     const plottableItems = missionItems.filter(
       (item) => item.preview.latitude_deg !== null && item.preview.longitude_deg !== null,
     );
@@ -707,7 +741,7 @@ export function MissionMap({
 
     map.fitBounds(bounds, { padding: 48, maxZoom: 15, duration: 0 });
     hasSetInitialViewport.current = true;
-  }, [missionItems, homePosition, syntheticVision]);
+  }, [missionItems, homePosition, syntheticVision, layoutVersion]);
 
   useEffect(() => {
     const map = mapRef.current;
