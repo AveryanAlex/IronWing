@@ -49,7 +49,12 @@ type EditableField = {
   type: "number" | "boolean" | "enum";
   value: number | boolean | string;
   enumOptions?: string[];
+  /** Offset added for display and subtracted on commit (e.g. +1 for 0-based indices). */
+  displayOffset?: number;
 };
+
+/** Fields that are 0-based item indices internally but shown 1-based in the UI. */
+const ONE_INDEXED_FIELDS = new Set(["target_index"]);
 
 /** Extract editable fields from the inner variant of a MissionCommand. */
 function extractEditableFields(cmd: MissionCommand): EditableField[] {
@@ -59,7 +64,7 @@ function extractEditableFields(cmd: MissionCommand): EditableField[] {
     for (const [key, val] of Object.entries(obj)) {
       if (key === "position") continue;
       if (typeof val === "number") {
-        fields.push({ key, label: fieldLabel(key), type: "number", value: val });
+        fields.push({ key, label: fieldLabel(key), type: "number", value: val, displayOffset: ONE_INDEXED_FIELDS.has(key) ? 1 : undefined });
       } else if (typeof val === "boolean") {
         fields.push({ key, label: fieldLabel(key), type: "boolean", value: val });
       } else if (typeof val === "string") {
@@ -159,6 +164,7 @@ function EditableCommandFields({
               command={command}
               disabled={disabled}
               onUpdateCommand={onUpdateCommand}
+              displayOffset={f.displayOffset}
             />
           )}
           {f.type === "boolean" && (
@@ -204,27 +210,30 @@ function NumberFieldInput({
   command,
   disabled,
   onUpdateCommand,
+  displayOffset = 0,
 }: {
   fieldKey: string;
   value: number;
   command: MissionCommand;
   disabled: boolean;
   onUpdateCommand: (cmd: MissionCommand) => void;
+  /** Offset added for display and subtracted on commit (e.g. 1 for 0→1 based indices). */
+  displayOffset?: number;
 }) {
-  const [draft, setDraft] = useState(String(value));
+  const shown = value + displayOffset;
+  const [draft, setDraft] = useState(String(shown));
   const [focused, setFocused] = useState(false);
 
-  // Sync external value when not editing
-  const displayValue = focused ? draft : String(value);
+  const displayValue = focused ? draft : String(shown);
 
   const commit = useCallback(() => {
     const parsed = parseFloat(draft);
-    if (!Number.isNaN(parsed) && parsed !== value) {
-      onUpdateCommand(withCommandField(command, fieldKey, parsed));
+    if (!Number.isNaN(parsed) && parsed !== shown) {
+      onUpdateCommand(withCommandField(command, fieldKey, parsed - displayOffset));
     } else {
-      setDraft(String(value));
+      setDraft(String(shown));
     }
-  }, [draft, value, command, fieldKey, onUpdateCommand]);
+  }, [draft, shown, command, fieldKey, displayOffset, onUpdateCommand]);
 
   return (
     <input
@@ -233,7 +242,7 @@ function NumberFieldInput({
       disabled={disabled}
       value={displayValue}
       onChange={(e) => setDraft(e.target.value)}
-      onFocus={() => { setDraft(String(value)); setFocused(true); }}
+      onFocus={() => { setDraft(String(shown)); setFocused(true); }}
       onBlur={() => { setFocused(false); commit(); }}
       onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
       className="w-full rounded border border-border bg-bg-input px-1.5 py-1 text-xs tabular-nums text-text-primary"
