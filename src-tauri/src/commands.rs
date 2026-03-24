@@ -5,6 +5,7 @@ use mavkit::{
     FencePlan, FlightMode, HomePosition, MissionIssue, MissionPlan, ParamStore, ParamWriteResult,
     RallyPlan, format_param_file, parse_param_file, validate_plan,
 };
+use mavkit::dialect::MavCmd;
 use crate::bridges::TELEMETRY_INTERVAL_MS;
 use crate::guided::{emit_guided_snapshot, live_context_from_vehicle};
 use crate::ipc::{
@@ -273,7 +274,7 @@ pub(crate) async fn vehicle_takeoff(
         .await?
         .raw()
         .command_long(
-            22, // MAV_CMD_NAV_TAKEOFF
+            MavCmd::MAV_CMD_NAV_TAKEOFF as u16,
             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, altitude_m],
         )
         .await
@@ -293,12 +294,13 @@ async fn send_guided_goto(
     vehicle
         .raw()
         .command_long(
-            192, // MAV_CMD_DO_REPOSITION
+            MavCmd::MAV_CMD_DO_REPOSITION as u16,
             [
                 -1.0,     // ground speed (unchanged)
                 0.0,      // bitmask
                 0.0,      // loiter radius
                 0.0,      // yaw heading
+                // COMMAND_LONG params are f32 on the wire; ~1 m precision loss is inherent to the protocol.
                 latitude_deg as f32,
                 longitude_deg as f32,
                 altitude_m,
@@ -700,7 +702,7 @@ pub(crate) async fn motor_test(
     with_vehicle(&state)
         .await?
         .ardupilot()
-        .motor_test(motor_instance, throttle_pct, duration_s as u16)
+        .motor_test(motor_instance, throttle_pct, duration_s.clamp(0.0, u16::MAX as f32) as u16)
         .await
         .map_err(|e| e.to_string())
 }
