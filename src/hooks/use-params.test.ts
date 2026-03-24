@@ -20,6 +20,7 @@ let paramProgressListener: ((event: SessionEvent<ParamProgress>) => void) | null
 
 vi.mock("../params", () => ({
   downloadAllParams: vi.fn(),
+  cancelParamDownload: vi.fn(),
   writeParam: vi.fn(),
   writeBatchParams: vi.fn(),
   parseParamFile: vi.fn(),
