@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { MapPin, Home, Trash2, Navigation } from "lucide-react";
 import type { MissionType } from "../mission";
+import type { FenceRegionType } from "../lib/mission-draft-typed";
 
 type MapContextMenuProps = {
   x: number;
@@ -14,12 +15,15 @@ type MapContextMenuProps = {
   onSetHome?: (lat: number, lng: number) => void;
   onDeleteWaypoint?: (seq: number) => void;
   onFlyTo?: (lat: number, lng: number) => void;
+  onAddFenceRegion?: (lat: number, lng: number, type: FenceRegionType) => void;
+  onSetFenceReturnPoint?: (lat: number, lng: number) => void;
   onClose: () => void;
 };
 
 export function MapContextMenu({
   x, y, lat, lng, nearestSeq, mode, missionType,
-  onAddWaypoint, onSetHome, onDeleteWaypoint, onFlyTo, onClose,
+  onAddWaypoint, onSetHome, onDeleteWaypoint, onFlyTo,
+  onAddFenceRegion, onSetFenceReturnPoint, onClose,
 }: MapContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
@@ -67,18 +71,39 @@ export function MapContextMenu({
     >
       {mode === "planner" ? (
         <>
-          <MenuItem icon={<MapPin className="h-3.5 w-3.5" />} label="Add Waypoint Here"
-            onClick={() => onAddWaypoint?.(lat, lng)} />
           {missionType === "mission" && (
-            <MenuItem icon={<Home className="h-3.5 w-3.5" />} label="Set Home Here"
-              onClick={() => onSetHome?.(lat, lng)} />
-          )}
-          {nearestSeq !== null && (
             <>
-              <div className="-mx-1 my-1 h-px bg-border" />
-              <MenuItem icon={<Trash2 className="h-3.5 w-3.5" />} label={`Delete Waypoint #${nearestSeq + 1}`}
-                onClick={() => onDeleteWaypoint?.(nearestSeq)} destructive />
+              <MenuItem icon={<MapPin className="h-3.5 w-3.5" />} label="Add Waypoint Here"
+                onClick={() => onAddWaypoint?.(lat, lng)} />
+              <MenuItem icon={<Home className="h-3.5 w-3.5" />} label="Set Home Here"
+                onClick={() => onSetHome?.(lat, lng)} />
+              {nearestSeq !== null && (
+                <>
+                  <div className="-mx-1 my-1 h-px bg-border" />
+                  <MenuItem icon={<Trash2 className="h-3.5 w-3.5" />} label={`Delete Waypoint #${nearestSeq + 1}`}
+                    onClick={() => onDeleteWaypoint?.(nearestSeq)} destructive />
+                </>
+              )}
             </>
+          )}
+          {missionType === "fence" && (
+            <>
+              <MenuItem icon={<MapPin className="h-3.5 w-3.5" />} label="Add Inclusion Polygon"
+                onClick={() => onAddFenceRegion?.(lat, lng, "inclusion_polygon")} />
+              <MenuItem icon={<MapPin className="h-3.5 w-3.5" />} label="Add Exclusion Polygon"
+                onClick={() => onAddFenceRegion?.(lat, lng, "exclusion_polygon")} />
+              <MenuItem icon={<MapPin className="h-3.5 w-3.5" />} label="Add Inclusion Circle"
+                onClick={() => onAddFenceRegion?.(lat, lng, "inclusion_circle")} />
+              <MenuItem icon={<MapPin className="h-3.5 w-3.5" />} label="Add Exclusion Circle"
+                onClick={() => onAddFenceRegion?.(lat, lng, "exclusion_circle")} />
+              <div className="-mx-1 my-1 h-px bg-border" />
+              <MenuItem icon={<Home className="h-3.5 w-3.5" />} label="Set Return Point"
+                onClick={() => onSetFenceReturnPoint?.(lat, lng)} />
+            </>
+          )}
+          {missionType === "rally" && (
+            <MenuItem icon={<MapPin className="h-3.5 w-3.5" />} label="Add Rally Point Here"
+              onClick={() => onAddWaypoint?.(lat, lng)} />
           )}
         </>
       ) : (

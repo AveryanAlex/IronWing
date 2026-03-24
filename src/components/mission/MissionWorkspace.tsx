@@ -8,7 +8,7 @@ import type { useSession } from "../../hooks/use-session";
 import type { useMission } from "../../hooks/use-mission";
 import type { useDeviceLocation } from "../../hooks/use-device-location";
 import type { MissionItem, FenceRegion, FencePlan, GeoPoint3d } from "../../lib/mavkit-types";
-import type { TypedDraftItem } from "../../lib/mission-draft-typed";
+import type { TypedDraftItem, FenceRegionType } from "../../lib/mission-draft-typed";
 import type { PolygonVertex } from "../../lib/mission-grid";
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
@@ -72,6 +72,22 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
     setAutoGridOpen(true);
     setContextMenu(null);
   }, []);
+
+  const handleAddFenceRegion = useCallback(
+    (lat: number, lng: number, type: FenceRegionType) => {
+      mission.fence.addRegionAt(lat, lng, type);
+      closeContextMenu();
+    },
+    [mission.fence, closeContextMenu],
+  );
+
+  const handleSetFenceReturnPoint = useCallback(
+    (lat: number, lng: number) => {
+      mission.fence.setReturnPoint(lat, lng);
+      closeContextMenu();
+    },
+    [mission.fence, closeContextMenu],
+  );
 
   const handleAutoGridClose = useCallback(() => {
     setAutoGridOpen(false);
@@ -170,6 +186,8 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
                 onAddWaypoint={(lat, lng) => { current.addWaypointAt(lat, lng); closeContextMenu(); }}
                 onSetHome={(lat, lng) => { current.setHomeFromMap(lat, lng); closeContextMenu(); }}
                 onDeleteWaypoint={(seq) => { current.deleteAt(seq); closeContextMenu(); }}
+                onAddFenceRegion={mission.selectedTab === "fence" ? handleAddFenceRegion : undefined}
+                onSetFenceReturnPoint={mission.selectedTab === "fence" ? handleSetFenceReturnPoint : undefined}
                 onClose={closeContextMenu}
               />
             )}

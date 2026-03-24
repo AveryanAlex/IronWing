@@ -63,8 +63,11 @@ import {
   updateTypedLongitude,
   updateFenceRegion,
   updateRallyAltitudeFrame,
+  addFenceRegionAt,
+  setFenceReturnPoint,
   type MissionDomain,
   type SessionScope,
+  type FenceRegionType,
 } from "../lib/mission-draft-typed";
 
 type HomeSource = "vehicle" | "user" | "download" | null;
@@ -849,6 +852,8 @@ export function useMission(
         : updateTypedLongitude(prev, domain, index, valueDeg)),
       moveWaypointOnMap: (index: number, latDeg: number, lonDeg: number) => mutateDomain(domain, (prev) => moveTypedWaypointOnMap(prev, domain, index, latDeg, lonDeg)),
       updateRegion: (index: number, region: FenceRegion) => mutateDomain(domain, (prev) => updateFenceRegion(prev, index, region)),
+      addRegionAt: (latDeg: number, lonDeg: number, type: FenceRegionType) => mutateDomain(domain, (prev) => addFenceRegionAt(prev, latDeg, lonDeg, type)),
+      setReturnPoint: (latDeg: number, lonDeg: number) => mutateDomain(domain, (prev) => setFenceReturnPoint(prev, { latitude_deg: latDeg, longitude_deg: lonDeg })),
       validate: () => validate(domain),
       upload: () => upload(domain),
       download: () => download(domain),

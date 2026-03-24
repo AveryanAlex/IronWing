@@ -500,6 +500,79 @@ export function addTypedWaypointAt(state: TypedDraftState, domain: MissionDomain
   });
 }
 
+export type FenceRegionType = "inclusion_polygon" | "exclusion_polygon" | "inclusion_circle" | "exclusion_circle";
+
+/** Add a fence region of the given type centered at (lat, lon). Polygons get a small ~110m square; circles get a 50m radius. */
+export function addFenceRegionAt(
+  state: TypedDraftState,
+  lat: number,
+  lon: number,
+  type: FenceRegionType,
+): TypedDraftState {
+  const offset = 0.0005; // ~55m at mid-latitudes per axis
+  let region: FenceRegion;
+  if (type === "inclusion_polygon") {
+    region = {
+      inclusion_polygon: {
+        vertices: [
+          { latitude_deg: lat + offset, longitude_deg: lon - offset },
+          { latitude_deg: lat + offset, longitude_deg: lon + offset },
+          { latitude_deg: lat - offset, longitude_deg: lon + offset },
+          { latitude_deg: lat - offset, longitude_deg: lon - offset },
+        ],
+        inclusion_group: 0,
+      },
+    };
+  } else if (type === "exclusion_polygon") {
+    region = {
+      exclusion_polygon: {
+        vertices: [
+          { latitude_deg: lat + offset, longitude_deg: lon - offset },
+          { latitude_deg: lat + offset, longitude_deg: lon + offset },
+          { latitude_deg: lat - offset, longitude_deg: lon + offset },
+          { latitude_deg: lat - offset, longitude_deg: lon - offset },
+        ],
+      },
+    };
+  } else if (type === "inclusion_circle") {
+    region = {
+      inclusion_circle: {
+        center: { latitude_deg: lat, longitude_deg: lon },
+        radius_m: 50,
+        inclusion_group: 0,
+      },
+    };
+  } else {
+    region = {
+      exclusion_circle: {
+        center: { latitude_deg: lat, longitude_deg: lon },
+        radius_m: 50,
+      },
+    };
+  }
+
+  return withActiveItems(state, "fence", (items) => {
+    const draftItem = {
+      uiId: allocateUiId(),
+      index: items.length,
+      document: region,
+      readOnly: false,
+      preview: { latitude_deg: null, longitude_deg: null, altitude_m: null },
+    } satisfies TypedDraftItem;
+    return { items: [...items, draftItem], selectedUiId: draftItem.uiId };
+  });
+}
+
+/** Set the fence return point. Passing null clears it. */
+export function setFenceReturnPoint(state: TypedDraftState, point: { latitude_deg: number; longitude_deg: number } | null): TypedDraftState {
+  const active = activeDraft(state, "fence");
+  const document = { ...(active.document as FencePlan), return_point: point };
+  return replaceActiveDraft(state, "fence", {
+    ...active,
+    document: document as typeof active.document,
+  });
+}
+
 export function insertTypedBefore(state: TypedDraftState, domain: MissionDomain, index: number): TypedDraftState {
   return withActiveItems(state, domain, (items) => {
     if (items.length === 0) {
