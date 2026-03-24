@@ -30,6 +30,7 @@ import {
 } from "../rally";
 import type { Telemetry } from "../telemetry";
 import { subscribeSessionState } from "../session";
+import { asErrorMessage } from "./use-session-helpers";
 import { toast } from "sonner";
 import {
   addTypedWaypoint,
@@ -62,12 +63,6 @@ import {
   type MissionDomain,
   type SessionScope,
 } from "../lib/mission-draft-typed";
-
-function asErrorMessage(error: unknown): string {
-  if (typeof error === "string") return error;
-  if (error instanceof Error) return error.message;
-  return "unexpected error";
-}
 
 type HomeSource = "vehicle" | "user" | "download" | null;
 

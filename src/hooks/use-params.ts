@@ -17,12 +17,7 @@ import { subscribeSessionState, type SessionEnvelope } from "../session";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { toast } from "sonner";
-
-function asErrorMessage(error: unknown): string {
-  if (typeof error === "string") return error;
-  if (error instanceof Error) return error.message;
-  return "unexpected error";
-}
+import { asErrorMessage } from "./use-session-helpers";
 
 export type FilterMode = "all" | "modified" | "standard";
 
