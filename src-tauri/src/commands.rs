@@ -5,6 +5,8 @@ use mavkit::{
     FencePlan, FlightMode, HomePosition, MissionIssue, MissionPlan, ParamStore, ParamWriteResult,
     RallyPlan, format_param_file, parse_param_file, validate_plan,
 };
+use tauri::Manager;
+use crate::bridges::emit_scoped;
 use mavkit::dialect::MavCmd;
 use crate::bridges::TELEMETRY_INTERVAL_MS;
 use crate::guided::{emit_guided_snapshot, live_context_from_vehicle};
@@ -629,15 +631,49 @@ pub(crate) async fn calibrate_gyro(state: tauri::State<'_, AppState>) -> Result<
 #[tauri::command]
 pub(crate) async fn param_download_all(
     state: tauri::State<'_, AppState>,
-) -> Result<ParamStore, String> {
-    with_vehicle(&state)
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    // Guard: reject concurrent download
+    {
+        let guard = state.param_download_abort.lock().await;
+        if guard.is_some() {
+            return Err("parameter download already in progress".to_string());
+        }
+    }
+
+    let handle = with_vehicle(&state)
         .await?
         .params()
         .download_all()
-        .map_err(|e| e.to_string())?
-        .wait()
-        .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    // Spawn progress bridge: relay ParamOperationProgress → param://progress
+    let mut progress_sub = handle.subscribe();
+    let app_for_bridge = app.clone();
+    let bridge_task = tokio::spawn(async move {
+        while let Some(p) = progress_sub.recv().await {
+            emit_scoped(&app_for_bridge, "param://progress", p).await;
+        }
+    });
+
+    // Spawn wait task that owns the handle.
+    // Cancellation works by aborting this task — tokio drops the handle,
+    // which calls ParamOperationHandle::Drop → CancellationToken::cancel().
+    let app_for_wait = app.clone();
+    let wait_task = tokio::spawn(async move {
+        let _ = handle.wait().await;
+        // Clear the abort handle from AppState so the guard resets
+        app_for_wait.state::<AppState>().param_download_abort.lock().await.take();
+    });
+
+    // Store the abort handle — param_cancel will abort this task
+    let abort_handle = wait_task.abort_handle();
+    state.param_download_abort.lock().await.replace(abort_handle);
+
+    state.background_tasks.lock().await.push(bridge_task);
+    state.background_tasks.lock().await.push(wait_task);
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -657,16 +693,26 @@ pub(crate) async fn param_write(
 #[tauri::command]
 pub(crate) async fn param_write_batch(
     state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
     params: Vec<(String, f32)>,
 ) -> Result<Vec<ParamWriteResult>, String> {
-    with_vehicle(&state)
+    let handle = with_vehicle(&state)
         .await?
         .params()
         .write_batch(params)
-        .map_err(|e| e.to_string())?
-        .wait()
-        .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    // Spawn progress bridge: relay ParamOperationProgress → param://progress
+    let mut progress_sub = handle.subscribe();
+    let app_for_bridge = app.clone();
+    let bridge_task = tokio::spawn(async move {
+        while let Some(p) = progress_sub.recv().await {
+            emit_scoped(&app_for_bridge, "param://progress", p).await;
+        }
+    });
+    state.background_tasks.lock().await.push(bridge_task);
+
+    handle.wait().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -679,6 +725,17 @@ pub(crate) fn param_parse_file(contents: String) -> Result<HashMap<String, f32>,
 #[tauri::command]
 pub(crate) fn param_format_file(store: ParamStore) -> String {
     format_param_file(&store)
+}
+
+#[tauri::command]
+pub(crate) async fn param_cancel(
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    // Abort the wait task — its Drop calls ParamOperationHandle::cancel()
+    if let Some(abort) = state.param_download_abort.lock().await.take() {
+        abort.abort();
+    }
+    Ok(())
 }
 
 #[tauri::command]
