@@ -61,6 +61,16 @@ pub(crate) struct OperationFailure {
     pub reason: Reason,
 }
 
+/// Wraps a value with its session envelope for scoped IPC emission.
+// contract_fixtures.rs textually includes this file; the struct is only
+// constructed in runtime code, so suppress the dead_code lint for tests.
+#[cfg_attr(test, allow(dead_code))]
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct ScopedEvent<T> {
+    pub envelope: SessionEnvelope,
+    pub value: T,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

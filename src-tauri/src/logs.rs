@@ -11,8 +11,8 @@ use crate::{
     e2e_emit::emit_event,
     helpers,
     ipc::{
-        DomainProvenance, DomainValue, PlaybackSnapshot, SessionConnection, SessionEnvelope,
-        SessionSnapshot, SessionStatus, StatusTextSnapshot, SupportSnapshot,
+        DomainProvenance, DomainValue, PlaybackSnapshot, ScopedEvent, SessionConnection,
+        SessionEnvelope, SessionSnapshot, SessionStatus, StatusTextSnapshot, SupportSnapshot,
         TelemetrySnapshot as GroupedTelemetrySnapshot,
         playback::{PlaybackSeekResult, PlaybackState},
         status_text_snapshot_from_entries, telemetry_snapshot_from_value,
@@ -68,18 +68,6 @@ pub(crate) struct LogStore {
     entries: Vec<StoredEntry>,
     type_index: HashMap<String, Vec<usize>>,
     playback_cursor_usec: Option<u64>,
-}
-
-#[derive(Serialize, Clone)]
-struct ScopedPlaybackStateEvent {
-    envelope: SessionEnvelope,
-    value: PlaybackState,
-}
-
-#[derive(Serialize, Clone)]
-struct ScopedDomainEvent<T> {
-    envelope: SessionEnvelope,
-    value: T,
 }
 
 pub(crate) struct PlaybackFrame {
@@ -688,7 +676,7 @@ pub(crate) async fn playback_seek(
     emit_event(
         &app,
         "session://state",
-        &ScopedDomainEvent {
+        &ScopedEvent {
             envelope: envelope.clone(),
             value: frame.session.clone(),
         },
@@ -696,7 +684,7 @@ pub(crate) async fn playback_seek(
     emit_event(
         &app,
         "telemetry://state",
-        &ScopedDomainEvent {
+        &ScopedEvent {
             envelope: envelope.clone(),
             value: frame.telemetry.clone(),
         },
@@ -704,7 +692,7 @@ pub(crate) async fn playback_seek(
     emit_event(
         &app,
         "support://state",
-        &ScopedDomainEvent {
+        &ScopedEvent {
             envelope: envelope.clone(),
             value: frame.support.clone(),
         },
@@ -712,7 +700,7 @@ pub(crate) async fn playback_seek(
     emit_event(
         &app,
         "status_text://state",
-        &ScopedDomainEvent {
+        &ScopedEvent {
             envelope: envelope.clone(),
             value: frame.status_text.clone(),
         },
@@ -720,7 +708,7 @@ pub(crate) async fn playback_seek(
     emit_event(
         &app,
         "playback://state",
-        &ScopedPlaybackStateEvent {
+        &ScopedEvent {
             envelope: result.envelope.clone(),
             value: PlaybackState {
                 cursor_usec: result.cursor_usec,

@@ -14,7 +14,7 @@ pub(crate) use calibration::calibration_snapshot_from_sources;
 pub(crate) use configuration_facts::configuration_facts_snapshot_from_param_store;
 pub(crate) use domain::{DomainProvenance, DomainValue};
 pub(crate) use envelope::{
-    OperationFailure, OperationId, Reason, ReasonKind, SessionEnvelope, SourceKind,
+    OperationFailure, OperationId, Reason, ReasonKind, ScopedEvent, SessionEnvelope, SourceKind,
 };
 pub(crate) use guided::{
     GuidedCommandResult, GuidedFailure, GuidedFatalityScope, GuidedLiveContext, GuidedRuntime,

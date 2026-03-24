@@ -1,18 +1,10 @@
 use std::time::Instant;
 
-use serde::Serialize;
-
 use crate::AppState;
 use crate::e2e_emit::emit_event;
 use crate::ipc::{
-    DomainProvenance, GuidedLiveContext, GuidedSnapshot, GuidedTerminationReason, SessionEnvelope,
+    DomainProvenance, GuidedLiveContext, GuidedSnapshot, GuidedTerminationReason, ScopedEvent,
 };
-
-#[derive(Clone, Serialize)]
-struct ScopedGuidedEvent {
-    envelope: SessionEnvelope,
-    value: GuidedSnapshot,
-}
 
 pub(crate) fn live_context_from_vehicle(vehicle: &mavkit::Vehicle) -> GuidedLiveContext {
     let link_connected = vehicle
@@ -52,7 +44,7 @@ pub(crate) async fn emit_guided_snapshot(
         emit_event(
             app,
             "guided://state",
-            &ScopedGuidedEvent {
+            &ScopedEvent {
                 envelope,
                 value: guided,
             },

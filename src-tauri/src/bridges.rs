@@ -15,7 +15,7 @@ use crate::e2e_emit::emit_event;
 use crate::guided::{emit_guided_snapshot, live_context_from_vehicle};
 use crate::ipc::calibration::CalibrationSources;
 use crate::ipc::{
-    DomainProvenance, DomainValue, SessionEnvelope, SessionSnapshot, SessionStatus,
+    DomainProvenance, DomainValue, ScopedEvent, SessionEnvelope, SessionSnapshot, SessionStatus,
     configuration_facts_snapshot_from_param_store, push_status_text_entry,
     sensor_health_snapshot_from_summary, session_connection_from_link_state,
     status_text_entry_from_value, status_text_snapshot_from_entries,
@@ -23,12 +23,6 @@ use crate::ipc::{
 };
 
 pub(crate) static TELEMETRY_INTERVAL_MS: AtomicU64 = AtomicU64::new(200);
-
-#[derive(Debug, Clone, Serialize)]
-struct ScopedEvent<T> {
-    envelope: SessionEnvelope,
-    value: T,
-}
 
 fn build_session_snapshot(
     link_state: &LinkState,
