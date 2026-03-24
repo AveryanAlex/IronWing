@@ -150,6 +150,7 @@ export type SerialReadinessTargetHint = {
 export type SerialBootloaderTransition =
   | { kind: "auto_reboot_supported" }
   | { kind: "already_in_bootloader" }
+  | { kind: "auto_reboot_attemptable" }
   | { kind: "manual_bootloader_entry_required" }
   | { kind: "target_mismatch" };
 

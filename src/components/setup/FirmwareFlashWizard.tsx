@@ -645,7 +645,9 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
     ? "This target will auto-reboot into bootloader when flashing starts because the active MAVLink serial link safely matches the selected port."
     : serialReadinessInfo?.bootloader_transition?.kind === "already_in_bootloader"
       ? "This target is already in bootloader, so flashing can begin without an extra reboot step."
-      : serialReadinessInfo?.bootloader_transition?.kind === "target_mismatch"
+      : serialReadinessInfo?.bootloader_transition?.kind === "auto_reboot_attemptable"
+        ? "A flight controller was detected on this port. It will be automatically rebooted into bootloader when flashing starts."
+        : serialReadinessInfo?.bootloader_transition?.kind === "target_mismatch"
         ? "The backend cannot safely prove the active MAVLink link matches this serial port, so it will not auto-reboot the board. Enter bootloader manually if needed, then start the flash."
         : "This target requires manual bootloader entry before flashing unless it is already rebooted there. If the port changes, refresh and keep this port selected.";
 
