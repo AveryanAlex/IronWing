@@ -76,8 +76,12 @@ export type ParamWriteResult = {
   success: boolean;
 };
 
-export async function downloadAllParams(): Promise<ParamStore> {
-  return invoke<ParamStore>("param_download_all");
+export async function downloadAllParams(): Promise<void> {
+  return invoke<void>("param_download_all");
+}
+
+export async function cancelParamDownload(): Promise<void> {
+  return invoke<void>("param_cancel");
 }
 
 export async function writeParam(name: string, value: number): Promise<Param> {
