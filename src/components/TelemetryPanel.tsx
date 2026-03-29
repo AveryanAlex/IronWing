@@ -1,11 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Collapsible from "@radix-ui/react-collapsible";
+import * as Slider from "@radix-ui/react-slider";
+import { setMessageRate, getAvailableMessageRates } from "../telemetry";
+import type { Settings } from "../hooks/use-settings";
 import type { useSession } from "../hooks/use-session";
 import type { useMission } from "../hooks/use-mission";
 
 type TelemetryPanelProps = {
   vehicle: ReturnType<typeof useSession>;
   mission: ReturnType<typeof useMission>;
+  settings: Settings;
+  updateSettings: (patch: Partial<Settings>) => void;
+  playbackActive?: boolean;
 };
 
 function fmt(value: number | undefined, decimals = 1): string {
@@ -122,14 +128,116 @@ function CellBars({ cells }: { cells?: number[] }) {
   );
 }
 
-export function TelemetryPanel({ vehicle, mission }: TelemetryPanelProps) {
+function RateRow({
+  msg,
+  settings,
+  updateSettings,
+}: {
+  msg: { id: number; name: string };
+  settings: Settings;
+  updateSettings: (patch: Partial<Settings>) => void;
+}) {
+  const isDefault = !(msg.id in settings.messageRates);
+  const currentRate = isDefault ? 4.0 : settings.messageRates[msg.id];
+
+  const handleRateChange = (newRate: number) => {
+    setMessageRate(msg.id, newRate).catch(console.warn);
+    updateSettings({ messageRates: { ...settings.messageRates, [msg.id]: newRate } });
+  };
+
+  const handleDefaultToggle = (checked: boolean) => {
+    if (checked) {
+      const newRates = { ...settings.messageRates };
+      delete newRates[msg.id];
+      updateSettings({ messageRates: newRates });
+    } else {
+      handleRateChange(4.0);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-text-secondary">{msg.name}</span>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <span className="text-[10px] text-text-muted uppercase tracking-wider">Default</span>
+          <input
+            type="checkbox"
+            checked={isDefault}
+            onChange={(e) => handleDefaultToggle(e.target.checked)}
+            className="accent-accent"
+          />
+        </label>
+      </div>
+      <div className="flex items-center gap-3">
+        <Slider.Root
+          className={`relative flex h-5 w-full items-center ${isDefault ? "opacity-50" : ""}`}
+          min={0.1}
+          max={50}
+          step={0.1}
+          value={[currentRate]}
+          onValueChange={([v]) => handleRateChange(v)}
+          disabled={isDefault}
+        >
+          <Slider.Track className="relative h-1 flex-1 rounded-full bg-bg-tertiary">
+            <Slider.Range className="absolute h-full rounded-full bg-accent" />
+          </Slider.Track>
+          <Slider.Thumb className="block h-4 w-4 rounded-full bg-accent shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 disabled:cursor-not-allowed" />
+        </Slider.Root>
+        <span className="w-14 text-right text-[10px] font-mono tabular-nums text-text-secondary">
+          {isDefault ? "--" : `${currentRate.toFixed(1)} Hz`}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export function TelemetryPanel({ vehicle, mission, settings, updateSettings, playbackActive }: TelemetryPanelProps) {
   const { telemetry } = vehicle;
   const [rcOpen, setRcOpen] = useState(false);
+  const [ratesOpen, setRatesOpen] = useState(false);
+  const [messages, setMessages] = useState<Array<{ id: number; name: string }>>([]);
+
+  useEffect(() => {
+    getAvailableMessageRates().then(setMessages).catch(console.warn);
+  }, []);
 
   return (
     <div className="h-full space-y-4 overflow-y-auto p-4">
-      {/* Rate controls section — filled by T9 */}
-      <div data-testid="rate-controls-slot" />
+      <Collapsible.Root
+        open={ratesOpen}
+        onOpenChange={setRatesOpen}
+        className="rounded-lg border border-border bg-bg-secondary p-4"
+      >
+        <Collapsible.Trigger className="flex w-full items-center justify-between group">
+          <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-text-muted group-hover:text-text-secondary">
+            <span className={`transition-transform duration-200 ${ratesOpen ? "rotate-90" : ""}`}>&#9654;</span>
+            Message Rates
+          </h3>
+        </Collapsible.Trigger>
+        <Collapsible.Content className="mt-4 space-y-4 border-t border-border-light pt-4">
+          {playbackActive ? (
+            <div className="text-center text-xs text-text-muted italic py-2">
+              Rate controls unavailable during playback
+            </div>
+          ) : (
+            <>
+              <div className="space-y-4">
+                {messages.map((msg) => (
+                  <RateRow key={msg.id} msg={msg} settings={settings} updateSettings={updateSettings} />
+                ))}
+              </div>
+              <button
+                type="button"
+                className="w-full mt-2 rounded bg-bg-tertiary px-3 py-2 text-xs font-medium text-text-secondary hover:bg-border-light hover:text-text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                onClick={() => updateSettings({ messageRates: {} })}
+              >
+                Reset All to Default
+              </button>
+            </>
+          )}
+        </Collapsible.Content>
+      </Collapsible.Root>
 
       <SectionCard title="Flight">
         <MetricValue label="Altitude" value={fmt(telemetry.altitude_m)} unit="m" />

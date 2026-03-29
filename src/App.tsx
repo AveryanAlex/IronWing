@@ -195,7 +195,13 @@ export default function App() {
             ) : (
               <InsetPanelFrame>
                 {activeTab === "telemetry" ? (
-                  <TelemetryPanel vehicle={effectiveVehicle} mission={mission} />
+                  <TelemetryPanel 
+                    vehicle={effectiveVehicle} 
+                    mission={mission} 
+                    settings={settings} 
+                    updateSettings={updateSettings} 
+                    playbackActive={replayActive} 
+                  />
                 ) : activeTab === "hud" ? (
                   <HudPanel vehicle={effectiveVehicle} mission={mission} svsEnabled={settings.svsEnabled} />
                 ) : activeTab === "mission" ? (
