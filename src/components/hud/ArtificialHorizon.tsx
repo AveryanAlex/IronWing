@@ -83,6 +83,14 @@ export function ArtificialHorizon({ pitch, roll, size, climbRate, groundSpeed }:
         <clipPath id="horizon-clip">
           <rect x={0} y={0} width={width} height={height} />
         </clipPath>
+        <linearGradient id="sky-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="rgba(15, 45, 110, 0.2)" />
+          <stop offset="100%" stopColor="rgba(30, 80, 180, 0.05)" />
+        </linearGradient>
+        <linearGradient id="ground-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="rgba(120, 60, 20, 0.25)" />
+          <stop offset="100%" stopColor="rgba(80, 35, 10, 0.1)" />
+        </linearGradient>
       </defs>
 
       {/* Pitch ladder + horizon, rotated and translated */}
@@ -94,16 +102,16 @@ export function ArtificialHorizon({ pitch, roll, size, climbRate, groundSpeed }:
             y={pitchVal * PX_PER_DEG - bgExtent * 2}
             width={bgExtent * 2}
             height={bgExtent * 2}
-            fill="rgba(20, 60, 140, 0.06)"
+            fill="url(#sky-gradient)"
           />
 
-          {/* Ground fill — semi-transparent green below horizon */}
+          {/* Ground fill — richer brown/amber below horizon */}
           <rect
             x={-bgExtent}
             y={pitchVal * PX_PER_DEG}
             width={bgExtent * 2}
             height={bgExtent * 2}
-            fill="rgba(34, 139, 34, 0.10)"
+            fill="url(#ground-gradient)"
           />
 
           {/* Horizon line — extends well beyond viewport for rotation */}
@@ -117,7 +125,7 @@ export function ArtificialHorizon({ pitch, roll, size, climbRate, groundSpeed }:
             opacity={0.8}
           />
 
-          {/* Pitch ladder */}
+        {/* Pitch ladder */}
           <g transform={`translate(0, ${pitchVal * PX_PER_DEG})`}>
             {pitchLines.map((line) => (
               <g key={line.deg}>
@@ -127,31 +135,33 @@ export function ArtificialHorizon({ pitch, roll, size, climbRate, groundSpeed }:
                   x2={line.halfWidth}
                   y2={line.y}
                   stroke={ACCENT}
-                  strokeWidth={1.5}
-                  strokeDasharray={line.isDashed ? "6 4" : undefined}
-                  opacity={0.6}
+                  strokeWidth={line.showLabel ? 2 : 1}
+                  strokeDasharray={line.isDashed ? "8 6" : undefined}
+                  opacity={line.showLabel ? 0.8 : 0.5}
                 />
                 {line.showLabel && (
                   <>
                     <text
-                      x={-line.halfWidth - 6}
+                      x={-line.halfWidth - 8}
                       y={line.y}
                       textAnchor="end"
                       dominantBaseline="central"
-                      fontSize={10}
+                      fontSize={11}
+                      fontWeight={600}
                       className="hud-svg-text"
-                      opacity={0.6}
+                      opacity={0.8}
                     >
                       {line.deg}
                     </text>
                     <text
-                      x={line.halfWidth + 6}
+                      x={line.halfWidth + 8}
                       y={line.y}
                       textAnchor="start"
                       dominantBaseline="central"
-                      fontSize={10}
+                      fontSize={11}
+                      fontWeight={600}
                       className="hud-svg-text"
-                      opacity={0.6}
+                      opacity={0.8}
                     >
                       {line.deg}
                     </text>
@@ -183,8 +193,8 @@ export function ArtificialHorizon({ pitch, roll, size, climbRate, groundSpeed }:
           d={describeArc(0, 0, rollRadius, -60, 60)}
           fill="none"
           stroke={ACCENT}
-          strokeWidth={1.5}
-          opacity={0.5}
+          strokeWidth={2}
+          opacity={0.6}
         />
 
         {/* Roll ticks */}
@@ -200,7 +210,7 @@ export function ArtificialHorizon({ pitch, roll, size, climbRate, groundSpeed }:
               x1={x1} y1={y1} x2={x2} y2={y2}
               stroke={ACCENT}
               strokeWidth={tick.deg === 0 ? 2.5 : 1.5}
-              opacity={0.7}
+              opacity={tick.deg === 0 ? 0.9 : 0.7}
             />
           );
         })}
@@ -208,19 +218,19 @@ export function ArtificialHorizon({ pitch, roll, size, climbRate, groundSpeed }:
         {/* Roll pointer (moves with roll) */}
         <g transform={`rotate(${-rollVal})`}>
           <polygon
-            points={`0,${-rollRadius + 2} -5,${-rollRadius + 10} 5,${-rollRadius + 10}`}
+            points={`0,${-rollRadius + 2} -6,${-rollRadius + 12} 6,${-rollRadius + 12}`}
             fill={ACCENT}
-            opacity={0.9}
+            opacity={1.0}
           />
         </g>
 
         {/* Fixed top triangle reference (zenith marker) */}
         <polygon
-          points={`0,${-rollRadius - 2} -5,${-rollRadius - 10} 5,${-rollRadius - 10}`}
+          points={`0,${-rollRadius - 2} -6,${-rollRadius - 12} 6,${-rollRadius - 12}`}
           fill="none"
           stroke={ACCENT}
           strokeWidth={1.5}
-          opacity={0.6}
+          opacity={0.8}
         />
       </g>
 

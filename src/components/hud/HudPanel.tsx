@@ -131,7 +131,7 @@ export function HudPanel({ vehicle, mission, svsEnabled }: HudPanelProps) {
             visibleRange={90}
             majorTickInterval={10}
             minorTicksPerMajor={2}
-            size={{ width: Math.min(horizonSize.width, 600), height: 52 }}
+            size={{ width: Math.min(horizonSize.width, 600), height: 48 }}
             circular
             circularRange={360}
             bugValue={telemetry.target_bearing_deg}
@@ -159,7 +159,7 @@ export function HudPanel({ vehicle, mission, svsEnabled }: HudPanelProps) {
             visibleRange={40}
             majorTickInterval={5}
             minorTicksPerMajor={5}
-            size={{ width: 90, height: Math.min(horizonSize.height, 500) }}
+            size={{ width: 80, height: Math.min(horizonSize.height, 500) }}
             unit="m/s"
             label="GS"
             bugValue={telemetry.airspeed_mps}
@@ -185,7 +185,7 @@ export function HudPanel({ vehicle, mission, svsEnabled }: HudPanelProps) {
             visibleRange={200}
             majorTickInterval={20}
             minorTicksPerMajor={4}
-            size={{ width: 90, height: Math.min(horizonSize.height, 500) }}
+            size={{ width: 80, height: Math.min(horizonSize.height, 500) }}
             unit="m"
             label="ALT"
             trendValue={telemetry.climb_rate_mps}

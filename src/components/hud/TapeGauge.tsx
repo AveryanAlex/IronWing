@@ -55,6 +55,7 @@ export function TapeGauge({
       pos: number;
       isMajor: boolean;
       labelText: string | null;
+      isCardinal: boolean;
     }> = [];
 
     const minorInterval = majorTickInterval / minorTicksPerMajor;
@@ -80,16 +81,18 @@ export function TapeGauge({
       const isMajor = Math.abs(val - Math.round(val / majorTickInterval) * majorTickInterval) < minorInterval * 0.1;
 
       let labelText: string | null = null;
+      let isCardinal = false;
       if (isMajor) {
         const rounded = Math.round(displayVal);
         if (circular && HEADING_LABELS[rounded] !== undefined) {
           labelText = HEADING_LABELS[rounded];
+          isCardinal = true;
         } else {
           labelText = String(rounded);
         }
       }
 
-      result.push({ pos, isMajor, labelText });
+      result.push({ pos, isMajor, labelText, isCardinal });
     }
 
     return result;
@@ -131,8 +134,8 @@ export function TapeGauge({
   }, [trendValue, hasValue, span, pxPerUnit]);
 
   // Readout box dimensions
-  const readoutW = isVertical ? width * 0.7 : 52;
-  const readoutH = isVertical ? 24 : height * 0.6;
+  const readoutW = isVertical ? width * 0.75 : 56;
+  const readoutH = isVertical ? 28 : 24;
   const cx = width / 2;
   const cy = height / 2;
 
@@ -171,25 +174,26 @@ export function TapeGauge({
         <g transform={isVertical ? `translate(0, ${fracPx})` : `translate(${fracPx}, 0)`}>
           {ticks.map((tick, i) => {
             if (isVertical) {
-              const tickLen = tick.isMajor ? 12 : 6;
+              const tickLen = tick.isMajor ? 14 : 7;
               const x1 = width - tickLen;
               return (
                 <g key={i}>
                   <line
                     x1={x1} y1={tick.pos} x2={width} y2={tick.pos}
                     className="hud-svg-line"
-                    strokeWidth={tick.isMajor ? 2 : 1}
+                    strokeWidth={tick.isMajor ? 2.5 : 1}
                     opacity={tick.isMajor ? 0.9 : 0.4}
                   />
                   {tick.labelText && (
                     <text
-                      x={x1 - 4}
+                      x={x1 - 6}
                       y={tick.pos}
                       textAnchor="end"
                       dominantBaseline="central"
-                      fontSize={10}
+                      fontSize={11}
+                      fontWeight={tick.isCardinal ? 700 : 500}
                       className="hud-svg-text"
-                      opacity={0.7}
+                      opacity={tick.isCardinal ? 1 : 0.8}
                     >
                       {tick.labelText}
                     </text>
@@ -197,23 +201,24 @@ export function TapeGauge({
                 </g>
               );
             } else {
-              const tickLen = tick.isMajor ? 12 : 6;
+              const tickLen = tick.isMajor ? 14 : 7;
               return (
                 <g key={i}>
                   <line
                     x1={tick.pos} y1={0} x2={tick.pos} y2={tickLen}
                     className="hud-svg-line"
-                    strokeWidth={tick.isMajor ? 2 : 1}
+                    strokeWidth={tick.isMajor ? 2.5 : 1}
                     opacity={tick.isMajor ? 0.9 : 0.4}
                   />
                   {tick.labelText && (
                     <text
                       x={tick.pos}
-                      y={tickLen + 12}
+                      y={tickLen + 14}
                       textAnchor="middle"
-                      fontSize={10}
+                      fontSize={tick.isCardinal ? 13 : 11}
+                      fontWeight={tick.isCardinal ? 700 : 500}
                       className="hud-svg-text"
-                      opacity={0.7}
+                      opacity={tick.isCardinal ? 1 : 0.8}
                     >
                       {tick.labelText}
                     </text>
@@ -284,7 +289,7 @@ export function TapeGauge({
           <>
             {/* Pointer triangle */}
             <polygon
-              points={`${width},${cy} ${width - 8},${cy - 5} ${width - 8},${cy + 5}`}
+              points={`${width},${cy} ${width - 10},${cy - 6} ${width - 10},${cy + 6}`}
               fill={ACCENT}
             />
             <rect
@@ -292,7 +297,7 @@ export function TapeGauge({
               y={cy - readoutH / 2}
               width={readoutW}
               height={readoutH}
-              rx={3}
+              rx={1}
               fill={BG}
               stroke={ACCENT}
               strokeWidth={2}
@@ -302,7 +307,7 @@ export function TapeGauge({
           <>
             {/* Down pointer triangle */}
             <polygon
-              points={`${cx},${0} ${cx - 5},${8} ${cx + 5},${8}`}
+              points={`${cx},${0} ${cx - 6},${10} ${cx + 6},${10}`}
               fill={ACCENT}
             />
             <rect
@@ -310,7 +315,7 @@ export function TapeGauge({
               y={cy - readoutH / 2 + 4}
               width={readoutW}
               height={readoutH}
-              rx={3}
+              rx={1}
               fill={BG}
               stroke={ACCENT}
               strokeWidth={2}
@@ -324,8 +329,8 @@ export function TapeGauge({
           y={isVertical ? cy : cy + 4}
           textAnchor="middle"
           dominantBaseline="central"
-          fontSize={14}
-          fontWeight={700}
+          fontSize={16}
+          fontWeight={800}
           className="hud-svg-text"
         >
           {hasValue ? formatValue(displayValue) : "--"}
