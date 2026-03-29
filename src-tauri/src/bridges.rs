@@ -19,8 +19,8 @@ use crate::ipc::{
     DomainProvenance, DomainValue, ScopedEvent, SessionEnvelope, SessionSnapshot, SessionStatus,
     configuration_facts_snapshot_from_param_store, push_status_text_entry,
     sensor_health_snapshot_from_summary, session_connection_from_link_state,
-    status_text_entry_from_value, status_text_snapshot_from_entries,
-    support_snapshot, telemetry_snapshot_from_value,
+    status_text_entry_from_value, status_text_snapshot_from_entries, support_snapshot,
+    telemetry_snapshot_from_value,
 };
 
 pub(crate) struct SessionContext {
@@ -131,14 +131,35 @@ pub(crate) async fn spawn_event_bridges(
         let bat_remaining = telemetry.battery().remaining_pct();
         let bat_voltage = telemetry.battery().voltage_v();
         let bat_current = telemetry.battery().current_a();
+        let bat_cells = telemetry.battery().cells();
+        let bat_energy = telemetry.battery().energy_consumed_wh();
+        let bat_time_remaining = telemetry.battery().time_remaining_s();
         let gps_quality = telemetry.gps().quality();
         let nav_wp = telemetry.navigation().waypoint();
+        let nav_guidance = telemetry.navigation().guidance();
+        let terrain_clearance = telemetry.terrain().clearance();
+        let rc = telemetry.rc();
+        let rc_channels: Vec<_> = (0..18).filter_map(|index| rc.channel_pwm_us(index)).collect();
+        let rc_rssi = rc.rssi_pct();
+        let actuators = telemetry.actuators();
+        let servo_outputs: Vec<_> = (0..16)
+            .filter_map(|index| actuators.servo_pwm_us(index))
+            .collect();
 
         let handle = app.clone();
         tasks.push(tokio::spawn(async move {
             loop {
                 let ms = TELEMETRY_INTERVAL_MS.load(Ordering::Relaxed);
                 tokio::time::sleep(Duration::from_millis(ms)).await;
+
+                let rc_channel_values: Vec<f64> = rc_channels
+                    .iter()
+                    .filter_map(|channel| channel.latest().map(|s| f64::from(s.value)))
+                    .collect();
+                let servo_output_values: Vec<f64> = servo_outputs
+                    .iter()
+                    .filter_map(|servo| servo.latest().map(|s| f64::from(s.value)))
+                    .collect();
 
                 // Build a flat JSON snapshot keyed to match telemetry_state_from_value()
                 let snapshot = serde_json::json!({
@@ -160,6 +181,9 @@ pub(crate) async fn spawn_event_bridges(
                     "battery_pct": bat_remaining.latest().map(|s| s.value),
                     "battery_voltage_v": bat_voltage.latest().map(|s| s.value),
                     "battery_current_a": bat_current.latest().map(|s| s.value),
+                    "battery_voltage_cells": bat_cells.latest().map(|s| s.value.voltages_v.clone()),
+                    "energy_consumed_wh": bat_energy.latest().map(|s| s.value),
+                    "battery_time_remaining_s": bat_time_remaining.latest().map(|s| f64::from(s.value)),
                     // GPS — extract from nested GpsQuality
                     "gps_fix_type": gps_quality.latest().map(|s| format!("{:?}", s.value.fix_type).to_lowercase()),
                     "gps_satellites": gps_quality.latest().and_then(|s| s.value.satellites.map(|v| v as u64)),
@@ -167,6 +191,13 @@ pub(crate) async fn spawn_event_bridges(
                     // Navigation waypoint — extract from nested WaypointProgress
                     "wp_dist_m": nav_wp.latest().map(|s| s.value.distance_m),
                     "nav_bearing_deg": nav_wp.latest().map(|s| s.value.bearing_deg),
+                    "target_bearing_deg": nav_guidance.latest().map(|s| s.value.bearing_deg),
+                    "xtrack_error_m": nav_guidance.latest().map(|s| s.value.cross_track_error_m),
+                    "terrain_height_m": terrain_clearance.latest().map(|s| s.value.terrain_height_m),
+                    "height_above_terrain_m": terrain_clearance.latest().map(|s| s.value.height_above_terrain_m),
+                    "rc_channels": (!rc_channel_values.is_empty()).then_some(rc_channel_values),
+                    "rc_rssi": rc_rssi.latest().map(|s| f64::from(s.value)),
+                    "servo_outputs": (!servo_output_values.is_empty()).then_some(servo_output_values),
                 });
 
                 let grouped = telemetry_snapshot_from_value(
