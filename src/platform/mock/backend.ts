@@ -953,8 +953,20 @@ function defaultCommandResult(cmd: string, _args: CommandArgs): unknown {
         log_type: "tlog",
       };
     case "set_telemetry_rate":
+    case "set_message_rate":
     case "firmware_session_cancel":
       return undefined;
+    case "get_available_message_rates":
+      return [
+        { id: 33, name: "Global Position" },
+        { id: 30, name: "Attitude" },
+        { id: 24, name: "GPS Raw" },
+        { id: 1, name: "System Status" },
+        { id: 65, name: "RC Channels" },
+        { id: 36, name: "Servo Output" },
+        { id: 74, name: "VFR HUD" },
+        { id: 62, name: "Nav Controller" },
+      ];
     case "disconnect_link":
       if (_args?.request && typeof _args.request === "object") {
         const requestedSessionId = (_args.request as { session_id?: string }).session_id;

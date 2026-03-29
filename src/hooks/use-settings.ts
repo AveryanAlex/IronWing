@@ -3,6 +3,7 @@ import { useState, useCallback } from "react";
 export type Settings = {
   telemetryRateHz: number;
   svsEnabled: boolean;
+  messageRates: Record<number, number>;
 };
 
 const STORAGE_KEY = "mpng_settings";
@@ -10,6 +11,7 @@ const STORAGE_KEY = "mpng_settings";
 const DEFAULTS: Settings = {
   telemetryRateHz: 5,
   svsEnabled: true,
+  messageRates: {},
 };
 
 function loadSettings(): Settings {
@@ -20,6 +22,7 @@ function loadSettings(): Settings {
     return {
       telemetryRateHz: parsed.telemetryRateHz ?? DEFAULTS.telemetryRateHz,
       svsEnabled: parsed.svsEnabled ?? DEFAULTS.svsEnabled,
+      messageRates: parsed.messageRates ?? DEFAULTS.messageRates,
     };
   } catch {
     return DEFAULTS;

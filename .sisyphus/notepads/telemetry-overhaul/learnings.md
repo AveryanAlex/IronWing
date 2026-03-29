@@ -43,9 +43,14 @@
 - `set_message_rate` should use `with_vehicle(&state).await?` plus `command_long(MAV_CMD_SET_MESSAGE_INTERVAL, [...])` and validate the caller-provided Hz range before converting to microseconds.
 - `get_available_message_rates` is a simple static response shape; keeping the curated list in `commands.rs` avoids any frontend-specific source of truth.
 
+### 2026-03-29 Frontend Rate Persistence Follow-up
+- `Settings.messageRates` can persist as a plain record without migration work; `loadSettings()` only needs a nullish fallback to stay backward-compatible with existing `mpng_settings` payloads.
+- Reapplying per-message rates on `vehicle.connected` is enough for reconnects; skipped entries naturally keep the vehicle default.
+- Mock backend command support only needed no-op handling for `set_message_rate` plus a static `get_available_message_rates` list for Playwright coverage.
+
 ## Vehicle Status UI Redesign (Sidebar)
 - Utilized CSS grid with card-style layout for telemetry stats (State, Mode, Alt, Speed, Battery, Heading, GPS).
 - Incorporated status-aware coloring based on existing design tokens (e.g. text-success, text-warning, text-danger for battery).
 - Applied muted styles/placeholders gracefully when disconnected or values missing.
 - Used "transition-colors duration-300" to ensure smooth visual changes in live updates.
-
+- **HUD styling**: Adjusted grid layout and tape widths to improve readability. Refined SVG  using specific CSS filters and integer quantization to keep it smooth. The ArtificialHorizon gradient gives a better aesthetic, matching the pure military style but staying neat.

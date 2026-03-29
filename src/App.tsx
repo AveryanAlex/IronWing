@@ -24,7 +24,7 @@ import { usePlayback } from "./hooks/use-playback";
 import { useBreakpoint } from "./hooks/use-breakpoint";
 import { useDeviceLocation } from "./hooks/use-device-location";
 import { useGuided } from "./hooks/use-guided";
-import { setTelemetryRate } from "./telemetry";
+import { setMessageRate, setTelemetryRate } from "./telemetry";
 import { type FlightPathPoint } from "./playback";
 import type { ActiveTab } from "./types";
 import "./app.css";
@@ -112,6 +112,15 @@ export default function App() {
       console.warn("Failed to apply telemetry rate", error);
     });
   }, [settings.telemetryRateHz]);
+
+  useEffect(() => {
+    if (!vehicle.connected) return;
+    for (const [idStr, rateHz] of Object.entries(settings.messageRates)) {
+      setMessageRate(Number(idStr), rateHz).catch((error) => {
+        console.warn(`Failed to apply message rate for ${idStr}`, error);
+      });
+    }
+  }, [vehicle.connected, settings.messageRates]);
 
   const flightPathCoords = useMemo<[number, number][] | undefined>(() => {
     if (!flightPath || flightPath.length < 2) return undefined;

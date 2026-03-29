@@ -183,3 +183,11 @@ export async function getAvailableModes(): Promise<FlightModeEntry[]> {
 export async function setTelemetryRate(rateHz: number): Promise<void> {
   await invoke("set_telemetry_rate", { rateHz });
 }
+
+export async function setMessageRate(messageId: number, rateHz: number): Promise<void> {
+  await invoke("set_message_rate", { messageId, rateHz });
+}
+
+export async function getAvailableMessageRates(): Promise<Array<{ id: number; name: string }>> {
+  return invoke<Array<{ id: number; name: string }>>("get_available_message_rates");
+}
