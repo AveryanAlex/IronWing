@@ -4,7 +4,7 @@ import { TooltipProvider } from "./components/ui/tooltip";
 import { TopBar } from "./components/TopBar";
 import { BottomNav } from "./components/BottomNav";
 import { Sidebar } from "./components/Sidebar";
-import { MapPanel } from "./components/MapPanel";
+import { OverviewPanel } from "./components/OverviewPanel";
 import { TelemetryPanel } from "./components/TelemetryPanel";
 import { HudPanel } from "./components/hud/HudPanel";
 import { MissionPanel } from "./components/MissionPanel";
@@ -184,17 +184,17 @@ export default function App() {
                 availableModes={vehicle.availableModes}
                 firmware={firmware}
               />
+            ) : activeTab === "overview" ? (
+                <OverviewPanel
+                  vehicle={effectiveVehicle}
+                  guided={guided}
+                  mission={mission}
+                  deviceLocation={deviceLocation}
+                  flightPath={flightPathCoords}
+                />
             ) : (
               <InsetPanelFrame>
-                {activeTab === "overview" ? (
-                    <MapPanel
-                      vehicle={effectiveVehicle}
-                      guided={guided}
-                      mission={mission}
-                      deviceLocation={deviceLocation}
-                      flightPath={flightPathCoords}
-                    />
-                ) : activeTab === "telemetry" ? (
+                {activeTab === "telemetry" ? (
                   <TelemetryPanel vehicle={effectiveVehicle} mission={mission} />
                 ) : activeTab === "hud" ? (
                   <HudPanel vehicle={effectiveVehicle} mission={mission} svsEnabled={settings.svsEnabled} />

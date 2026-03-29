@@ -158,13 +158,12 @@ export function OverviewPanel({
               </div>
             </section>
 
-            {/* Navigation Section */}
             <section>
               <SectionHeader title="Navigation" />
               <div className="grid grid-cols-2 gap-2">
                 <MetricCard 
                   label="WP Progress" 
-                  value={connected && mission?.vehicle?.missionState?.current_index != null ? `${mission.vehicle.missionState.current_index + 1}` : "--"}
+                  value={connected && mission?.vehicle?.activeSeq != null ? `${mission.vehicle.activeSeq + 1} / ${mission.mission.displayTotal}` : "--"}
                 />
                 <MetricCard 
                   label="Dist to WP" 
@@ -175,11 +174,6 @@ export function OverviewPanel({
                   label="Nav Bearing" 
                   value={fInt(t.nav_bearing_deg)} 
                   unit="°" 
-                />
-                <MetricCard 
-                  label="XTrack" 
-                  value={fNum(t.xtrack_error_m, 1)} 
-                  unit="m" 
                 />
               </div>
             </section>
