@@ -1,14 +1,8 @@
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 
-use mavkit::{
-    FencePlan, FlightMode, HomePosition, MissionIssue, MissionPlan, ParamStore, ParamWriteResult,
-    RallyPlan, format_param_file, parse_param_file, validate_plan,
-};
-use tauri::Manager;
-use crate::bridges::emit_scoped;
-use mavkit::dialect::MavCmd;
 use crate::bridges::TELEMETRY_INTERVAL_MS;
+use crate::bridges::emit_scoped;
 use crate::guided::{emit_guided_snapshot, live_context_from_vehicle};
 use crate::ipc::{
     AckSessionSnapshotResult, DomainProvenance, DomainValue, GuidedCommandResult, GuidedFailure,
@@ -18,6 +12,12 @@ use crate::ipc::{
     session_connection_from_link_state, status_text_snapshot_from_entries,
 };
 use crate::{AppState, helpers::with_vehicle};
+use mavkit::dialect::MavCmd;
+use mavkit::{
+    FencePlan, FlightMode, HomePosition, MissionIssue, MissionPlan, ParamStore, ParamWriteResult,
+    RallyPlan, format_param_file, parse_param_file, validate_plan,
+};
+use tauri::Manager;
 
 /// Result of downloading a mission plan from a vehicle.
 /// Home position is extracted from the telemetry home, not from plan items.
@@ -25,6 +25,12 @@ use crate::{AppState, helpers::with_vehicle};
 pub(crate) struct MissionDownload {
     pub plan: MissionPlan,
     pub home: Option<HomePosition>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct MessageRateInfo {
+    id: u32,
+    name: String,
 }
 
 #[cfg(not(target_os = "android"))]
@@ -167,7 +173,11 @@ async fn hydrate_live_snapshot(
     snapshot: &mut OpenSessionSnapshot,
     vehicle: &mavkit::Vehicle,
 ) {
-    let link_state = vehicle.link().state().latest().unwrap_or(mavkit::LinkState::Connecting);
+    let link_state = vehicle
+        .link()
+        .state()
+        .latest()
+        .unwrap_or(mavkit::LinkState::Connecting);
     let param_state = vehicle.params().latest();
     let param_store = param_state
         .as_ref()
@@ -298,10 +308,10 @@ async fn send_guided_goto(
         .command_long(
             MavCmd::MAV_CMD_DO_REPOSITION as u16,
             [
-                -1.0,     // ground speed (unchanged)
-                0.0,      // bitmask
-                0.0,      // loiter radius
-                0.0,      // yaw heading
+                -1.0, // ground speed (unchanged)
+                0.0,  // bitmask
+                0.0,  // loiter radius
+                0.0,  // yaw heading
                 // COMMAND_LONG params are f32 on the wire; ~1 m precision loss is inherent to the protocol.
                 latitude_deg as f32,
                 longitude_deg as f32,
@@ -446,7 +456,80 @@ pub(crate) async fn stop_guided_session(
 pub(crate) async fn get_available_modes(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<FlightMode>, String> {
-    Ok(with_vehicle(&state).await?.available_modes().iter().collect())
+    Ok(with_vehicle(&state)
+        .await?
+        .available_modes()
+        .iter()
+        .collect())
+}
+
+#[tauri::command]
+pub(crate) async fn set_message_rate(
+    state: tauri::State<'_, AppState>,
+    message_id: u32,
+    rate_hz: f32,
+) -> Result<(), String> {
+    if !(0.1..=50.0).contains(&rate_hz) {
+        return Err("rate_hz must be between 0.1 and 50.0".into());
+    }
+
+    let interval_usec = (1_000_000.0 / rate_hz) as i32;
+    with_vehicle(&state)
+        .await?
+        .raw()
+        .command_long(
+            MavCmd::MAV_CMD_SET_MESSAGE_INTERVAL as u16,
+            [
+                message_id as f32,
+                interval_usec as f32,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+            ],
+        )
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) fn get_available_message_rates() -> Vec<MessageRateInfo> {
+    vec![
+        MessageRateInfo {
+            id: 33,
+            name: "Global Position".into(),
+        },
+        MessageRateInfo {
+            id: 30,
+            name: "Attitude".into(),
+        },
+        MessageRateInfo {
+            id: 24,
+            name: "GPS Raw".into(),
+        },
+        MessageRateInfo {
+            id: 1,
+            name: "System Status".into(),
+        },
+        MessageRateInfo {
+            id: 65,
+            name: "RC Channels".into(),
+        },
+        MessageRateInfo {
+            id: 36,
+            name: "Servo Output".into(),
+        },
+        MessageRateInfo {
+            id: 74,
+            name: "VFR HUD".into(),
+        },
+        MessageRateInfo {
+            id: 62,
+            name: "Nav Controller".into(),
+        },
+    ]
 }
 
 #[tauri::command]
@@ -468,7 +551,11 @@ pub(crate) async fn mission_upload(
         .mission()
         .upload(plan)
         .map_err(|e| e.to_string())?;
-    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    state
+        .mission_op_cancel
+        .lock()
+        .await
+        .replace(op.cancel_token());
     let result = op.wait().await.map_err(|e| e.to_string());
     state.mission_op_cancel.lock().await.take();
     result
@@ -479,11 +566,12 @@ pub(crate) async fn mission_download(
     state: tauri::State<'_, AppState>,
 ) -> Result<MissionDownload, String> {
     let vehicle = with_vehicle(&state).await?;
-    let op = vehicle
-        .mission()
-        .download()
-        .map_err(|e| e.to_string())?;
-    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    let op = vehicle.mission().download().map_err(|e| e.to_string())?;
+    state
+        .mission_op_cancel
+        .lock()
+        .await
+        .replace(op.cancel_token());
     let plan = op.wait().await.map_err(|e| e.to_string());
     state.mission_op_cancel.lock().await.take();
     let plan = plan?;
@@ -502,7 +590,11 @@ pub(crate) async fn mission_clear(state: tauri::State<'_, AppState>) -> Result<(
         .mission()
         .clear()
         .map_err(|e| e.to_string())?;
-    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    state
+        .mission_op_cancel
+        .lock()
+        .await
+        .replace(op.cancel_token());
     let result = op.wait().await.map_err(|e| e.to_string());
     state.mission_op_cancel.lock().await.take();
     result
@@ -518,22 +610,28 @@ pub(crate) async fn fence_upload(
         .fence()
         .upload(plan)
         .map_err(|e| e.to_string())?;
-    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    state
+        .mission_op_cancel
+        .lock()
+        .await
+        .replace(op.cancel_token());
     let result = op.wait().await.map_err(|e| e.to_string());
     state.mission_op_cancel.lock().await.take();
     result
 }
 
 #[tauri::command]
-pub(crate) async fn fence_download(
-    state: tauri::State<'_, AppState>,
-) -> Result<FencePlan, String> {
+pub(crate) async fn fence_download(state: tauri::State<'_, AppState>) -> Result<FencePlan, String> {
     let op = with_vehicle(&state)
         .await?
         .fence()
         .download()
         .map_err(|e| e.to_string())?;
-    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    state
+        .mission_op_cancel
+        .lock()
+        .await
+        .replace(op.cancel_token());
     let result = op.wait().await.map_err(|e| e.to_string());
     state.mission_op_cancel.lock().await.take();
     result
@@ -546,7 +644,11 @@ pub(crate) async fn fence_clear(state: tauri::State<'_, AppState>) -> Result<(),
         .fence()
         .clear()
         .map_err(|e| e.to_string())?;
-    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    state
+        .mission_op_cancel
+        .lock()
+        .await
+        .replace(op.cancel_token());
     let result = op.wait().await.map_err(|e| e.to_string());
     state.mission_op_cancel.lock().await.take();
     result
@@ -562,22 +664,28 @@ pub(crate) async fn rally_upload(
         .rally()
         .upload(plan)
         .map_err(|e| e.to_string())?;
-    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    state
+        .mission_op_cancel
+        .lock()
+        .await
+        .replace(op.cancel_token());
     let result = op.wait().await.map_err(|e| e.to_string());
     state.mission_op_cancel.lock().await.take();
     result
 }
 
 #[tauri::command]
-pub(crate) async fn rally_download(
-    state: tauri::State<'_, AppState>,
-) -> Result<RallyPlan, String> {
+pub(crate) async fn rally_download(state: tauri::State<'_, AppState>) -> Result<RallyPlan, String> {
     let op = with_vehicle(&state)
         .await?
         .rally()
         .download()
         .map_err(|e| e.to_string())?;
-    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    state
+        .mission_op_cancel
+        .lock()
+        .await
+        .replace(op.cancel_token());
     let result = op.wait().await.map_err(|e| e.to_string());
     state.mission_op_cancel.lock().await.take();
     result
@@ -590,7 +698,11 @@ pub(crate) async fn rally_clear(state: tauri::State<'_, AppState>) -> Result<(),
         .rally()
         .clear()
         .map_err(|e| e.to_string())?;
-    state.mission_op_cancel.lock().await.replace(op.cancel_token());
+    state
+        .mission_op_cancel
+        .lock()
+        .await
+        .replace(op.cancel_token());
     let result = op.wait().await.map_err(|e| e.to_string());
     state.mission_op_cancel.lock().await.take();
     result
@@ -673,14 +785,23 @@ pub(crate) async fn param_download_all(
         let _ = handle.wait().await;
         // Clear the guard on natural completion. Abort paths (param_cancel, disconnect)
         // clear it themselves before aborting this task, so this is a no-op there.
-        app_for_wait.state::<AppState>().param_download_abort.lock().await.take();
+        app_for_wait
+            .state::<AppState>()
+            .param_download_abort
+            .lock()
+            .await
+            .take();
     });
 
     // Store the abort handle — param_cancel will abort this task.
     // The wait task is managed exclusively through this handle and is not pushed
     // into background_tasks, to avoid a double-abort on disconnect teardown.
     let abort_handle = wait_task.abort_handle();
-    state.param_download_abort.lock().await.replace(abort_handle);
+    state
+        .param_download_abort
+        .lock()
+        .await
+        .replace(abort_handle);
 
     state.background_tasks.lock().await.push(bridge_task);
     // wait_task is intentionally detached; it is cancelled via param_download_abort.
@@ -743,9 +864,7 @@ pub(crate) fn param_format_file(store: ParamStore) -> String {
 }
 
 #[tauri::command]
-pub(crate) async fn param_cancel(
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+pub(crate) async fn param_cancel(state: tauri::State<'_, AppState>) -> Result<(), String> {
     // Abort the wait task — its Drop calls ParamOperationHandle::cancel()
     if let Some(abort) = state.param_download_abort.lock().await.take() {
         abort.abort();
@@ -773,7 +892,11 @@ pub(crate) async fn motor_test(
     with_vehicle(&state)
         .await?
         .ardupilot()
-        .motor_test(motor_instance, throttle_pct, duration_s.clamp(0.0, u16::MAX as f32) as u16)
+        .motor_test(
+            motor_instance,
+            throttle_pct,
+            duration_s.clamp(0.0, u16::MAX as f32) as u16,
+        )
         .await
         .map_err(|e| e.to_string())
 }

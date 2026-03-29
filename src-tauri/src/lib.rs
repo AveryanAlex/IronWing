@@ -4,14 +4,13 @@ use std::sync::atomic::AtomicU64;
 use commands::{
     ack_session_snapshot, arm_vehicle, available_transports, calibrate_accel,
     calibrate_compass_accept, calibrate_compass_cancel, calibrate_compass_start, calibrate_gyro,
-    disarm_vehicle, fence_clear, fence_download, fence_upload, get_available_modes,
-    list_serial_ports_cmd, mission_cancel, mission_clear, mission_download, mission_set_current,
-    mission_upload, mission_validate, motor_test, open_session_snapshot, param_cancel,
-    param_download_all, param_format_file, param_parse_file, param_write, param_write_batch,
-    rally_clear,
-    rally_download, rally_upload, reboot_vehicle, request_prearm_checks, set_flight_mode,
-    set_telemetry_rate, start_guided_session, stop_guided_session, update_guided_session,
-    vehicle_takeoff,
+    disarm_vehicle, fence_clear, fence_download, fence_upload, get_available_message_rates,
+    get_available_modes, list_serial_ports_cmd, mission_cancel, mission_clear, mission_download,
+    mission_set_current, mission_upload, mission_validate, motor_test, open_session_snapshot,
+    param_cancel, param_download_all, param_format_file, param_parse_file, param_write,
+    param_write_batch, rally_clear, rally_download, rally_upload, reboot_vehicle,
+    request_prearm_checks, set_flight_mode, set_message_rate, set_telemetry_rate,
+    start_guided_session, stop_guided_session, update_guided_session, vehicle_takeoff,
 };
 use connection::{ActiveLinkTarget, connect_link, disconnect_link};
 use firmware::commands::{
@@ -32,7 +31,8 @@ mod bridges;
 mod commands;
 mod connection;
 mod e2e_emit;
-#[allow(dead_code)] // Firmware module is conditionally used via Tauri commands; not all paths are exercised in all builds
+#[allow(dead_code)]
+// Firmware module is conditionally used via Tauri commands; not all paths are exercised in all builds
 mod firmware;
 mod guided;
 mod helpers;
@@ -131,6 +131,8 @@ pub fn run() {
         update_guided_session,
         stop_guided_session,
         get_available_modes,
+        get_available_message_rates,
+        set_message_rate,
         set_telemetry_rate,
         param_download_all,
         param_write,
