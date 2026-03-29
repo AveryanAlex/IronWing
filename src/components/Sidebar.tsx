@@ -250,41 +250,55 @@ function SidebarContent({ vehicle, guided, replayActive, firmwareActive }: {
 
       {/* Vehicle Status */}
       <section className="rounded-lg border border-border bg-bg-primary p-3">
-        <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-text-muted">
+        <h3 className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-text-muted">
           <Plane className="h-3.5 w-3.5" /> Vehicle
         </h3>
 
         <div className="grid grid-cols-2 gap-2">
-          <StatusCard icon={<Plane className="h-3 w-3" />} label="State"
-            value={vehicleState ? (vehicleState.armed ? "ARMED" : "DISARMED") : "--"}
-            valueClass={vehicleState?.armed ? "text-danger" : ""}
+          <StatusCard icon={<Plane className="h-3.5 w-3.5" />} label="State"
+            value={!connected ? "--" : vehicleState ? (vehicleState.armed ? "ARMED" : "DISARMED") : "--"}
+            valueClass={!connected ? "text-text-muted opacity-50" : vehicleState?.armed ? "text-accent" : "text-text-muted"}
             testId="telemetry-state-value"
           />
-          <StatusCard icon={<Navigation className="h-3 w-3" />} label="Mode"
-            value={vehicleState?.mode_name ?? "--"}
+          <StatusCard icon={<Navigation className="h-3.5 w-3.5" />} label="Mode"
+            value={!connected ? "--" : vehicleState?.mode_name ?? "--"}
+            valueClass={!connected ? "text-text-muted opacity-50" : ""}
             testId="telemetry-mode-value"
           />
-          <StatusCard icon={<ArrowUp className="h-3 w-3" />} label="Alt"
-            value={`${formatMaybe(telemetry.altitude_m)} m`}
+          <StatusCard icon={<ArrowUp className="h-3.5 w-3.5" />} label="Alt"
+            value={!connected ? "--" : `${formatMaybe(telemetry.altitude_m)} m`}
+            valueClass={!connected ? "text-text-muted opacity-50" : ""}
             testId="telemetry-alt-value"
           />
-          <StatusCard icon={<Gauge className="h-3 w-3" />} label="Speed"
-            value={`${formatMaybe(telemetry.speed_mps)} m/s`}
+          <StatusCard icon={<Gauge className="h-3.5 w-3.5" />} label="Speed"
+            value={!connected ? "--" : `${formatMaybe(telemetry.speed_mps)} m/s`}
+            valueClass={!connected ? "text-text-muted opacity-50" : ""}
             testId="telemetry-speed-value"
           />
-          <StatusCard icon={<Battery className="h-3 w-3" />} label="Battery"
-            value={`${formatMaybe(telemetry.battery_pct)}%`}
+          <StatusCard icon={<Battery className="h-3.5 w-3.5" />} label="Battery"
+            value={!connected ? "--" : `${formatMaybe(telemetry.battery_pct)}%`}
+            valueClass={!connected ? "text-text-muted opacity-50" : (
+              telemetry.battery_pct !== undefined && !Number.isNaN(telemetry.battery_pct)
+                ? (telemetry.battery_pct > 50 ? "text-success" : telemetry.battery_pct >= 20 ? "text-warning" : "text-danger")
+                : ""
+            )}
             testId="telemetry-battery-value"
           />
-          <StatusCard icon={<Compass className="h-3 w-3" />} label="Heading"
-            value={`${formatMaybe(telemetry.heading_deg)}°`}
+          <StatusCard icon={<Compass className="h-3.5 w-3.5" />} label="Heading"
+            value={!connected ? "--" : `${formatMaybe(telemetry.heading_deg)}°`}
+            valueClass={!connected ? "text-text-muted opacity-50" : ""}
             testId="telemetry-heading-value"
           />
-        </div>
-
-        <div data-testid="telemetry-gps-text" className="mt-2 flex items-center gap-1.5 text-xs text-text-muted">
-          <Satellite className="h-3 w-3" />
-          GPS: {telemetry.gps_fix_type ?? "--"}
+          <StatusCard icon={<Satellite className="h-3.5 w-3.5" />} label="GPS"
+            className="col-span-2"
+            value={!connected ? "--" : telemetry.gps_fix_type ?? "--"}
+            valueClass={!connected ? "text-text-muted opacity-50" : (
+              telemetry.gps_fix_type?.toUpperCase().includes("3D") ? "text-success" :
+              telemetry.gps_fix_type?.toUpperCase().includes("2D") ? "text-warning" :
+              "text-danger"
+            )}
+            testId="telemetry-gps-text"
+          />
         </div>
       </section>
 
@@ -459,19 +473,20 @@ function SppDevicePicker({
   );
 }
 
-function StatusCard({ icon, label, value, valueClass, testId }: {
+function StatusCard({ icon, label, value, valueClass, className, testId }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   valueClass?: string;
+  className?: string;
   testId?: string;
 }) {
   return (
-    <div className="rounded-md bg-bg-tertiary/50 px-2.5 py-2" data-testid={testId}>
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-text-muted">
-        {icon} {label}
+    <div className={cn("rounded-lg border border-border bg-bg-secondary p-3 transition-colors duration-300", className)} data-testid={testId}>
+      <div className="flex items-center gap-1.5 text-xs text-text-muted">
+        {icon} <span>{label}</span>
       </div>
-      <div className={cn("mt-0.5 text-sm font-semibold transition-all duration-300", valueClass)}>
+      <div className={cn("mt-1.5 text-lg font-semibold tabular-nums transition-colors duration-300", valueClass || "text-text-primary")}>
         {value}
       </div>
     </div>
