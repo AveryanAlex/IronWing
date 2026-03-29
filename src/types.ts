@@ -1,9 +1,9 @@
-import { Map, Activity, Crosshair, Route, FileText, Settings, Wrench } from "lucide-react";
+import { LayoutDashboard, Activity, Crosshair, Route, FileText, Settings, Wrench } from "lucide-react";
 
-export type ActiveTab = "map" | "telemetry" | "hud" | "mission" | "logs" | "settings" | "setup";
+export type ActiveTab = "overview" | "telemetry" | "hud" | "mission" | "logs" | "settings" | "setup";
 
-export const TABS: { id: ActiveTab; label: string; Icon: typeof Map }[] = [
-  { id: "map", label: "Map", Icon: Map },
+export const TABS: { id: ActiveTab; label: string; Icon: typeof LayoutDashboard }[] = [
+  { id: "overview", label: "Overview", Icon: LayoutDashboard },
   { id: "telemetry", label: "Telemetry", Icon: Activity },
   { id: "hud", label: "HUD", Icon: Crosshair },
   { id: "mission", label: "Mission", Icon: Route },

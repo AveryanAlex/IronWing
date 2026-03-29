@@ -99,7 +99,7 @@ export default function App() {
     guidedDomain: vehicle.guided,
   });
   const { settings, updateSettings } = useSettings();
-  const [activeTab, setActiveTab] = useState<ActiveTab>("map");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
   const { isMobile } = useBreakpoint();
   const deviceLocation = useDeviceLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -177,7 +177,7 @@ export default function App() {
               />
             ) : (
               <InsetPanelFrame>
-                {activeTab === "map" ? (
+                {activeTab === "overview" ? (
                     <MapPanel
                       vehicle={effectiveVehicle}
                       guided={guided}
