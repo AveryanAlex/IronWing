@@ -31,6 +31,7 @@ pub(crate) struct MissionDownload {
 pub(crate) struct MessageRateInfo {
     id: u32,
     name: String,
+    default_rate_hz: f32,
 }
 
 #[cfg(not(target_os = "android"))]
@@ -494,40 +495,51 @@ pub(crate) async fn set_message_rate(
         .map_err(|e| e.to_string())
 }
 
+/// Returns the set of MAVLink messages whose streaming rate is user-configurable,
+/// along with sensible defaults tuned for ArduPilot SITL / Copter. These rates
+/// balance bandwidth and UI responsiveness; actual firmware defaults may differ.
 #[tauri::command]
 pub(crate) fn get_available_message_rates() -> Vec<MessageRateInfo> {
     vec![
         MessageRateInfo {
             id: 33,
             name: "Global Position".into(),
+            default_rate_hz: 4.0,
         },
         MessageRateInfo {
             id: 30,
             name: "Attitude".into(),
+            default_rate_hz: 4.0,
         },
         MessageRateInfo {
             id: 24,
             name: "GPS Raw".into(),
+            default_rate_hz: 2.0,
         },
         MessageRateInfo {
             id: 1,
             name: "System Status".into(),
+            default_rate_hz: 1.0,
         },
         MessageRateInfo {
             id: 65,
             name: "RC Channels".into(),
+            default_rate_hz: 2.0,
         },
         MessageRateInfo {
             id: 36,
             name: "Servo Output".into(),
+            default_rate_hz: 2.0,
         },
         MessageRateInfo {
             id: 74,
             name: "VFR HUD".into(),
+            default_rate_hz: 4.0,
         },
         MessageRateInfo {
             id: 62,
             name: "Nav Controller".into(),
+            default_rate_hz: 2.0,
         },
     ]
 }

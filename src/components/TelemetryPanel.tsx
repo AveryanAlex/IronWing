@@ -1,10 +1,23 @@
 import { useEffect, useState } from "react";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import * as Slider from "@radix-ui/react-slider";
-import { setMessageRate, getAvailableMessageRates } from "../telemetry";
+import { setMessageRate, getAvailableMessageRates, type MessageRateInfo } from "../telemetry";
 import type { Settings } from "../hooks/use-settings";
 import type { useSession } from "../hooks/use-session";
 import type { useMission } from "../hooks/use-mission";
+
+const MIN_RATE = 0.1;
+const MAX_RATE = 50.0;
+const MIN_LOG = Math.log(MIN_RATE);
+const MAX_LOG = Math.log(MAX_RATE);
+
+function rateToPos(rate: number): number {
+  return (Math.log(rate) - MIN_LOG) / (MAX_LOG - MIN_LOG);
+}
+
+function posToRate(pos: number): number {
+  return Math.exp(MIN_LOG + pos * (MAX_LOG - MIN_LOG));
+}
 
 type TelemetryPanelProps = {
   vehicle: ReturnType<typeof useSession>;
@@ -132,33 +145,53 @@ function RateRow({
   msg,
   settings,
   updateSettings,
+  stagedRate,
+  onStageRate,
+  onClearStaged,
+  isLast,
 }: {
-  msg: { id: number; name: string };
+  msg: MessageRateInfo;
   settings: Settings;
   updateSettings: (patch: Partial<Settings>) => void;
+  stagedRate?: number;
+  onStageRate: (rate: number) => void;
+  onClearStaged: () => void;
+  isLast: boolean;
 }) {
-  const isDefault = !(msg.id in settings.messageRates);
-  const currentRate = isDefault ? 4.0 : settings.messageRates[msg.id];
+  const hasStaged = stagedRate !== undefined;
+  const isDefault = !(msg.id in settings.messageRates) && !hasStaged;
+  
+  const activeRate = hasStaged 
+    ? stagedRate 
+    : (msg.id in settings.messageRates ? settings.messageRates[msg.id] : msg.default_rate_hz);
 
-  const handleRateChange = (newRate: number) => {
-    setMessageRate(msg.id, newRate).catch(console.warn);
-    updateSettings({ messageRates: { ...settings.messageRates, [msg.id]: newRate } });
+  const handleRateChange = (pos: number) => {
+    onStageRate(Number(posToRate(pos).toFixed(1)));
   };
 
   const handleDefaultToggle = (checked: boolean) => {
+    onClearStaged();
     if (checked) {
       const newRates = { ...settings.messageRates };
       delete newRates[msg.id];
       updateSettings({ messageRates: newRates });
+      // Tell vehicle to revert to the default rate
+      setMessageRate(msg.id, msg.default_rate_hz).catch(console.warn);
     } else {
-      handleRateChange(4.0);
+      // Stage the default rate as initial custom value so Apply/Discard stays authoritative
+      onStageRate(msg.default_rate_hz);
     }
   };
 
+  const sliderPos = rateToPos(activeRate);
+
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className={`flex flex-col gap-1.5 ${!isLast ? "border-b border-border-light pb-3" : ""}`}>
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-text-secondary">{msg.name}</span>
+        <div className="flex items-center gap-2">
+          {hasStaged && <div className="h-1.5 w-1.5 rounded-full bg-warning" title="Staged change" />}
+          <span className="text-xs font-medium text-text-secondary">{msg.name}</span>
+        </div>
         <label className="flex items-center gap-2 cursor-pointer">
           <span className="text-[10px] text-text-muted uppercase tracking-wider">Default</span>
           <input
@@ -171,22 +204,38 @@ function RateRow({
       </div>
       <div className="flex items-center gap-3">
         <Slider.Root
-          className={`relative flex h-5 w-full items-center ${isDefault ? "opacity-50" : ""}`}
-          min={0.1}
-          max={50}
-          step={0.1}
-          value={[currentRate]}
+          className={`relative flex h-5 w-full items-center ${isDefault ? "cursor-not-allowed" : ""}`}
+          min={0}
+          max={1}
+          step={0.001}
+          value={[sliderPos]}
           onValueChange={([v]) => handleRateChange(v)}
           disabled={isDefault}
         >
           <Slider.Track className="relative h-1 flex-1 rounded-full bg-bg-tertiary">
-            <Slider.Range className="absolute h-full rounded-full bg-accent" />
+            <Slider.Range className={`absolute h-full rounded-full ${isDefault ? "bg-text-muted opacity-50" : "bg-accent"}`} />
           </Slider.Track>
-          <Slider.Thumb className="block h-4 w-4 rounded-full bg-accent shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 disabled:cursor-not-allowed" />
+          {!isDefault && (
+            <Slider.Thumb className="block h-4 w-4 rounded-full bg-accent shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50" />
+          )}
         </Slider.Root>
-        <span className="w-14 text-right text-[10px] font-mono tabular-nums text-text-secondary">
-          {isDefault ? "--" : `${currentRate.toFixed(1)} Hz`}
-        </span>
+        <div className="w-24 shrink-0 flex flex-col items-end justify-center">
+          {isDefault ? (
+            <span className="text-xs font-mono tabular-nums text-text-muted">
+              {msg.default_rate_hz} Hz
+              <span className="ml-1 text-[10px]">(default)</span>
+            </span>
+          ) : (
+            <>
+              <span className="text-xs font-mono tabular-nums text-text-primary">
+                {activeRate.toFixed(1)} Hz
+              </span>
+              <span className="text-[10px] text-text-muted">
+                default: {msg.default_rate_hz}
+              </span>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -196,11 +245,42 @@ export function TelemetryPanel({ vehicle, mission, settings, updateSettings, pla
   const { telemetry } = vehicle;
   const [rcOpen, setRcOpen] = useState(false);
   const [ratesOpen, setRatesOpen] = useState(false);
-  const [messages, setMessages] = useState<Array<{ id: number; name: string }>>([]);
+  const [messages, setMessages] = useState<Array<MessageRateInfo>>([]);
+  const [stagedRates, setStagedRates] = useState<Record<number, number>>({});
 
   useEffect(() => {
     getAvailableMessageRates().then(setMessages).catch(console.warn);
   }, []);
+
+  const hasStaged = Object.keys(stagedRates).length > 0;
+
+  const handleApplyRates = async () => {
+    const entries = Object.entries(stagedRates);
+    const results = await Promise.allSettled(
+      entries.map(([idStr, rate]) => setMessageRate(parseInt(idStr, 10), rate)),
+    );
+
+    const applied: Record<number, number> = {};
+    const failed: Record<number, number> = {};
+    entries.forEach(([idStr, rate], i) => {
+      const id = parseInt(idStr, 10);
+      if (results[i].status === "fulfilled") {
+        applied[id] = rate;
+      } else {
+        failed[id] = rate;
+        console.warn(`Failed to set rate for msg ${id}`, (results[i] as PromiseRejectedResult).reason);
+      }
+    });
+
+    if (Object.keys(applied).length > 0) {
+      updateSettings({ messageRates: { ...settings.messageRates, ...applied } });
+    }
+    setStagedRates(failed);
+  };
+
+  const handleDiscardRates = () => {
+    setStagedRates({});
+  };
 
   return (
     <div className="h-full space-y-4 overflow-y-auto p-4">
@@ -223,14 +303,58 @@ export function TelemetryPanel({ vehicle, mission, settings, updateSettings, pla
           ) : (
             <>
               <div className="space-y-4">
-                {messages.map((msg) => (
-                  <RateRow key={msg.id} msg={msg} settings={settings} updateSettings={updateSettings} />
+                {messages.map((msg, index) => (
+                  <RateRow
+                    key={msg.id}
+                    msg={msg}
+                    settings={settings}
+                    updateSettings={updateSettings}
+                    stagedRate={stagedRates[msg.id]}
+                    onStageRate={(rate) => setStagedRates((prev) => ({ ...prev, [msg.id]: rate }))}
+                    onClearStaged={() => {
+                      setStagedRates((prev) => {
+                        const next = { ...prev };
+                        delete next[msg.id];
+                        return next;
+                      });
+                    }}
+                    isLast={index === messages.length - 1}
+                  />
                 ))}
               </div>
+              
+              {hasStaged && (
+                <div className="flex gap-2 mt-4 pt-4 border-t border-border-light">
+                  <button
+                    type="button"
+                    className="flex-1 rounded bg-bg-tertiary px-3 py-2 text-xs font-medium text-text-secondary hover:bg-border-light hover:text-text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                    onClick={handleDiscardRates}
+                  >
+                    Discard
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 rounded bg-accent px-3 py-2 text-xs font-medium text-bg-primary hover:bg-accent/90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                    onClick={handleApplyRates}
+                  >
+                    Apply Changes
+                  </button>
+                </div>
+              )}
+
               <button
                 type="button"
                 className="w-full mt-2 rounded bg-bg-tertiary px-3 py-2 text-xs font-medium text-text-secondary hover:bg-border-light hover:text-text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-                onClick={() => updateSettings({ messageRates: {} })}
+                onClick={() => {
+                  setStagedRates({});
+                  // Send default rates to vehicle for any previously-customized messages
+                  for (const msg of messages) {
+                    if (msg.id in settings.messageRates) {
+                      setMessageRate(msg.id, msg.default_rate_hz).catch(console.warn);
+                    }
+                  }
+                  updateSettings({ messageRates: {} });
+                }}
               >
                 Reset All to Default
               </button>

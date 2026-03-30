@@ -958,14 +958,14 @@ function defaultCommandResult(cmd: string, _args: CommandArgs): unknown {
       return undefined;
     case "get_available_message_rates":
       return [
-        { id: 33, name: "Global Position" },
-        { id: 30, name: "Attitude" },
-        { id: 24, name: "GPS Raw" },
-        { id: 1, name: "System Status" },
-        { id: 65, name: "RC Channels" },
-        { id: 36, name: "Servo Output" },
-        { id: 74, name: "VFR HUD" },
-        { id: 62, name: "Nav Controller" },
+        { id: 33, name: "Global Position", default_rate_hz: 4.0 },
+        { id: 30, name: "Attitude", default_rate_hz: 4.0 },
+        { id: 24, name: "GPS Raw", default_rate_hz: 2.0 },
+        { id: 1, name: "System Status", default_rate_hz: 1.0 },
+        { id: 65, name: "RC Channels", default_rate_hz: 2.0 },
+        { id: 36, name: "Servo Output", default_rate_hz: 2.0 },
+        { id: 74, name: "VFR HUD", default_rate_hz: 4.0 },
+        { id: 62, name: "Nav Controller", default_rate_hz: 2.0 },
       ];
     case "disconnect_link":
       if (_args?.request && typeof _args.request === "object") {

@@ -188,6 +188,12 @@ export async function setMessageRate(messageId: number, rateHz: number): Promise
   await invoke("set_message_rate", { messageId, rateHz });
 }
 
-export async function getAvailableMessageRates(): Promise<Array<{ id: number; name: string }>> {
-  return invoke<Array<{ id: number; name: string }>>("get_available_message_rates");
+export type MessageRateInfo = {
+  id: number;
+  name: string;
+  default_rate_hz: number;
+};
+
+export async function getAvailableMessageRates(): Promise<MessageRateInfo[]> {
+  return invoke<MessageRateInfo[]>("get_available_message_rates");
 }
