@@ -61,8 +61,8 @@ impl TlogRecorderHandle {
         let (cancel_tx, mut cancel_rx) = tokio::sync::oneshot::channel();
 
         let handle = tokio::spawn(async move {
-            use tokio_stream::StreamExt;
             use mavlink::Message;
+            use tokio_stream::StreamExt;
             tokio::pin!(raw_stream);
             loop {
                 tokio::select! {

@@ -1,6 +1,6 @@
-use mavkit::SensorHealthSummary;
 #[cfg(test)]
 use mavkit::SensorHealthState;
+use mavkit::SensorHealthSummary;
 
 use crate::ipc::{DomainProvenance, DomainValue};
 
@@ -14,7 +14,6 @@ pub(crate) fn sensor_health_snapshot_from_summary(
 ) -> SensorHealthSnapshot {
     DomainValue::present(summary.clone(), provenance)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -34,8 +33,7 @@ mod tests {
             terrain: SensorHealthState::NotPresent,
             geofence: SensorHealthState::Unhealthy,
         };
-        let snapshot =
-            sensor_health_snapshot_from_summary(&summary, DomainProvenance::Stream);
+        let snapshot = sensor_health_snapshot_from_summary(&summary, DomainProvenance::Stream);
 
         let value = serde_json::to_value(snapshot).expect("serialize");
         assert_eq!(value["value"]["gyro"], "healthy");

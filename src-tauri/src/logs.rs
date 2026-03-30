@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::io::Write;
 
+use mavkit::dialect::MavMessage;
 use mavkit::tlog::{TlogEntry, TlogFile};
 use mavlink::Message;
-use mavkit::dialect::MavMessage;
 use serde::Serialize;
 
 use crate::{
@@ -13,8 +13,7 @@ use crate::{
     ipc::{
         DomainProvenance, DomainValue, PlaybackSnapshot, ScopedEvent, SessionConnection,
         SessionEnvelope, SessionSnapshot, SessionStatus, StatusTextSnapshot, SupportSnapshot,
-        VehicleState,
-        TelemetrySnapshot as GroupedTelemetrySnapshot,
+        TelemetrySnapshot as GroupedTelemetrySnapshot, VehicleState,
         playback::{PlaybackSeekResult, PlaybackState},
         status_text_snapshot_from_entries, telemetry_snapshot_from_value,
     },
@@ -1100,12 +1099,12 @@ mod tests {
     use super::*;
     use crate::ipc::SourceKind;
     use ardupilot_binlog::Reader;
-    use mavkit::tlog::TlogEntry;
     use mavkit::dialect::{
         ATTITUDE_DATA, COMMAND_LONG_DATA, GLOBAL_POSITION_INT_DATA, GPS_RAW_INT_DATA,
         HEARTBEAT_DATA, MavAutopilot, MavModeFlag, MavState, MavSysStatusSensor,
         MavSysStatusSensorExtended, MavType, RC_CHANNELS_DATA, SYS_STATUS_DATA, VFR_HUD_DATA,
     };
+    use mavkit::tlog::TlogEntry;
     use std::io::Cursor;
 
     const HEADER_MAGIC: [u8; 2] = [0xA3, 0x95];

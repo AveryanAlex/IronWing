@@ -51,10 +51,10 @@ export function OverviewPanel({
   const s = vehicle.vehicleState;
 
   // Formatting helpers
-  const fNum = (val: number | undefined, dec = 1) => (connected && val !== undefined ? val.toFixed(dec) : "--");
-  const fInt = (val: number | undefined) => (connected && val !== undefined ? Math.round(val).toString() : "--");
+  const fNum = (val: number | undefined, dec = 1) => (connected && val != null && !Number.isNaN(val) ? val.toFixed(dec) : "--");
+  const fInt = (val: number | undefined) => (connected && val != null && !Number.isNaN(val) ? Math.round(val).toString() : "--");
 
-  const batPct = t.battery_pct !== undefined ? t.battery_pct : 0;
+  const batPct = t.battery_pct != null ? t.battery_pct : 0;
   const batColor = batPct > 50 ? "bg-success" : batPct >= 20 ? "bg-warning" : "bg-danger";
   const batText = batPct > 50 ? "text-success" : batPct >= 20 ? "text-warning" : "text-danger";
 

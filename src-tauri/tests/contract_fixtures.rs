@@ -56,8 +56,8 @@ mod ipc {
 
 use std::{fmt::Debug, fs, path::PathBuf};
 
-use mavkit::{Param, ParamStore, ParamType, SensorHealthState, SensorHealthSummary};
 use mavkit::ardupilot::{MagCalProgress, MagCalReport, MagCalStatus};
+use mavkit::{Param, ParamStore, ParamType, SensorHealthState, SensorHealthSummary};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 

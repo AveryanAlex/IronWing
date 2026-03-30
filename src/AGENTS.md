@@ -11,6 +11,8 @@ Frontend app state lives in hooks instantiated by `App.tsx`, then flows down via
 | App bootstrap / top-level routing | `main.tsx`, `App.tsx`, `types.ts` | `App.tsx` is the frontend state hub |
 | Connection + telemetry | `hooks/use-session.ts`, `telemetry.ts` | Connection form state, BLE scan, vehicle actions |
 | Mission editing / playback | `hooks/use-mission.ts`, `components/mission/`, `lib/mission-*` | Draft model + map/shell split |
+| Mission feature UI | `components/mission/AGENTS.md` | Desktop/mobile shells, map overlays, coordinate inputs |
+| Guided flight actions | `hooks/use-guided.ts`, `guided.ts` | Takeoff, goto, session lifecycle |
 | Param staging / metadata | `hooks/use-params.ts`, `components/ConfigPanel.tsx`, `param-metadata.ts` | Staged Map, filter modes, metadata fetch |
 | Setup UI | `components/setup/AGENTS.md` | Panel orchestration, shared primitives, section rules |
 | Platform alias layer | `platform/AGENTS.md` | `@platform/*` imports and mocked-browser split |
@@ -28,7 +30,9 @@ src/
 ├── data/
 ├── platform/
 ├── telemetry.ts / mission.ts / params.ts / logs.ts / recording.ts / firmware.ts
-├── sensor-health.ts / snapshot.ts / statustext.ts / calibration.ts / playback.ts
+├── sensor-health.ts / statustext.ts / calibration.ts / playback.ts
+├── guided.ts / configuration-facts.ts / fence.ts / rally.ts / support.ts / transport.ts
+├── session.ts
 └── param-metadata.ts
 ```
 
@@ -44,9 +48,13 @@ src/
 
 | Hook | Purpose | Local pattern |
 |------|---------|---------------|
-| `useSession` | Connection lifecycle, telemetry, control actions | RAF-coalesced telemetry state; localStorage-backed connection form |
+| `useSession` | Connection lifecycle, telemetry, event subscriptions | RAF-coalesced telemetry state; localStorage-backed connection form |
+| `useSessionActions` | Vehicle arm/disarm/mode actions | Extracted from useSession for separation of concerns |
+| `useGuided` | Guided flight: takeoff, goto, session lifecycle | Client-side validation before IPC; typed command results |
 | `useMission` | Mission CRUD, transfer state, home handling | Wraps pure `lib/mission-*` mutations |
 | `useParams` | Param store, staging, metadata, file I/O | Staging is local `Map<string, number>`; batch apply only |
+| `useSetup` | Setup panel state, section navigation, param highlight | Composes `useSetupSections` + param readiness |
+| `useSetupSections` | Section registration, progress heuristics | Lives with setup subsystem, not general hooks |
 | `useLogs` | Log open/query/summary/progress | `log://progress` is inline event-driven |
 | `useRecording` | TLOG recording UI state | Polls recording status while active |
 | `useFirmware` | Firmware session/progress orchestration | Wraps typed firmware IPC contract |
@@ -66,7 +74,7 @@ src/
 
 ## Data / Lib Conventions
 
-- `lib/mission-draft.ts` owns in-memory mission editing state; do not re-implement waypoint mutation logic in components.
+- `lib/mission-draft-typed.ts` owns in-memory mission editing state; do not re-implement waypoint mutation logic in components.
 - `lib/mission-coordinates.ts` owns degE7 conversion and coordinate math.
 - `lib/mission-grid.ts` owns auto-grid geometry generation.
 - `lib/mission-command-metadata.ts` owns command parameter metadata and labels.
@@ -84,12 +92,16 @@ src/
 
 ### Model frontend tests
 
-- `src/lib/mission-draft.test.ts`
+- `src/lib/mission-draft-typed.test.ts`
 - `src/lib/mission-coordinates.test.ts`
 - `src/lib/mission-grid.test.ts`
 - `src/playback.test.ts`
 - `src/param-metadata.test.ts`
 - `src/hooks/use-firmware.test.ts`
+- `src/hooks/use-guided.test.ts`
+- `src/hooks/use-mission.test.ts`
+- `src/platform/mock/backend.test.ts`
+- `src/test/contract-fixtures.test.ts`
 - `src/components/setup/shared/SetupCheckbox.test.tsx`
 - `src/components/setup/shared/PreviewStagePanel.test.tsx`
 

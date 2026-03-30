@@ -290,8 +290,7 @@ function SidebarContent({ vehicle, guided, replayActive, firmwareActive }: {
             testId="telemetry-heading-value"
           />
           <StatusCard icon={<Satellite className="h-3.5 w-3.5" />} label="GPS"
-            className="col-span-2"
-            value={!connected ? "--" : telemetry.gps_fix_type ?? "--"}
+            value={!connected ? "--" : `${telemetry.gps_fix_type ?? "--"} · ${telemetry.gps_satellites ?? "--"} sats`}
             valueClass={!connected ? "text-text-muted opacity-50" : (
               telemetry.gps_fix_type?.toUpperCase().includes("3D") ? "text-success" :
               telemetry.gps_fix_type?.toUpperCase().includes("2D") ? "text-warning" :
@@ -482,11 +481,11 @@ function StatusCard({ icon, label, value, valueClass, className, testId }: {
   testId?: string;
 }) {
   return (
-    <div className={cn("rounded-lg border border-border bg-bg-secondary p-3 transition-colors duration-300", className)} data-testid={testId}>
+    <div className={cn("rounded-lg border border-border bg-bg-secondary p-2 transition-colors duration-300", className)} data-testid={testId}>
       <div className="flex items-center gap-1.5 text-xs text-text-muted">
         {icon} <span>{label}</span>
       </div>
-      <div className={cn("mt-1.5 text-lg font-semibold tabular-nums transition-colors duration-300", valueClass || "text-text-primary")}>
+      <div className={cn("mt-1 truncate text-base font-semibold tabular-nums transition-colors duration-300", valueClass || "text-text-primary")}>
         {value}
       </div>
     </div>

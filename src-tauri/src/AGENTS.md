@@ -12,6 +12,9 @@ Thin Tauri IPC shell between the React frontend and `mavkit`. This layer owns tr
 | General vehicle/mission/param commands | `commands.rs` | Most Tauri commands live here |
 | Transport setup / connect lifecycle | `connection.rs` | `LinkEndpoint`, BLE/SPP connection paths |
 | Event relays | `bridges.rs`, `e2e_emit.rs` | Watch channels + inline emit wrapper |
+| Session envelope / source tracking | `session_runtime.rs` | Live/playback session state machine |
+| Guided flight runtime | `guided.rs` | Vehicle context extraction, guided snapshot emission |
+| IPC wire contracts | `ipc/AGENTS.md` | Typed event/command payloads, serde conventions |
 | Logs / playback source | `logs.rs` | Dual TLOG/BIN parsing and queries |
 | Recording | `recording.rs` | TLOG recorder lifecycle |
 | Helpers | `helpers.rs` | `with_vehicle()`, `with_log_store()`, `downsample()` |
@@ -22,14 +25,17 @@ Thin Tauri IPC shell between the React frontend and `mavkit`. This layer owns tr
 | File | Purpose |
 |------|---------|
 | `lib.rs` | Entry point, plugin setup, command registration |
-| `commands.rs` | Vehicle, mission, param, calibration commands |
+| `commands.rs` | Vehicle, mission, param, calibration, guided commands |
 | `connection.rs` | Transport setup, connect/disconnect lifecycle |
 | `bridges.rs` | Watch-channel relays for frontend events |
 | `e2e_emit.rs` | Unified emit wrapper for the native webview |
 | `bluetooth.rs` | BLE scan and permissions helpers |
+| `session_runtime.rs` | Session envelope state machine (live/playback tracking, pending sessions, seek epochs) |
+| `guided.rs` | Guided flight helpers and snapshot emission |
 | `logs.rs` | Log parsing, summary, track/path export, CSV export |
 | `recording.rs` | TLOG recording lifecycle |
 | `helpers.rs` | Shared guards and utilities |
+| `ipc/` | Wire-type contract layer for all IPC-facing payloads |
 | `firmware/` | Firmware flashing, DFU recovery, catalog, typed session model |
 | `main.rs` | Binary stub calling `ironwing::run()` |
 
@@ -38,11 +44,22 @@ Thin Tauri IPC shell between the React frontend and `mavkit`. This layer owns tr
 ```rust
 pub(crate) struct AppState {
     pub(crate) vehicle: tokio::sync::Mutex<Option<Vehicle>>,
-    pub(crate) connect_abort: tokio::sync::Mutex<Option<AbortHandle>>,
+    pub(crate) active_link_target: tokio::sync::Mutex<Option<ActiveLinkTarget>>,
+    pub(crate) connect_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
+    pub(crate) background_tasks: tokio::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>,
+    pub(crate) background_listeners: tokio::sync::Mutex<Vec<tauri::EventId>>,
     pub(crate) log_store: tokio::sync::Mutex<Option<LogStore>>,
     pub(crate) recorder: TlogRecorderHandle,
     pub(crate) firmware_session: FirmwareSessionHandle,
-    pub(crate) firmware_abort: tokio::sync::Mutex<Option<AbortHandle>>,
+    pub(crate) firmware_abort: tokio::sync::Mutex<Option<FirmwareAbortHandle>>,
+    pub(crate) firmware_cancel_requested: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub(crate) param_download_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
+    pub(crate) mission_op_cancel: tokio::sync::Mutex<Option<MissionCancelToken>>,
+    pub(crate) session_runtime: tokio::sync::Mutex<SessionRuntime>,
+    pub(crate) guided_runtime: tokio::sync::Mutex<GuidedRuntime>,
+    pub(crate) session_context: tokio::sync::Mutex<bridges::SessionContext>,
+    pub(crate) status_text_history: tokio::sync::Mutex<Vec<StatusTextEntry>>,
+    pub(crate) next_status_text_sequence: AtomicU64,
 }
 ```
 

@@ -10,9 +10,11 @@ Modern ground control station for MAVLink vehicles. Tauri v2 app with a React/Ty
 |------|----------|-------|
 | Frontend state, IPC bridges, UI patterns | `src/AGENTS.md` | Hook ownership, bridge wrappers, frontend tests |
 | Platform alias boundary (`@platform/*`) | `src/platform/AGENTS.md` | Build-time Tauri vs mocked-browser split |
+| Mission feature UI | `src/components/mission/AGENTS.md` | Desktop/mobile shells, map overlays, transfer status |
 | Setup UI and staging flow | `src/components/setup/AGENTS.md` | Shared primitives, panel orchestration |
 | Per-section setup rules | `src/components/setup/sections/AGENTS.md` | Section anatomy, docs links, helper placement |
 | Rust shell, commands, bridges, recording, logs | `src-tauri/src/AGENTS.md` | AppState, command patterns, event relays |
+| IPC wire contracts | `src-tauri/src/ipc/AGENTS.md` | Typed payloads, serde conventions, envelope model |
 | Firmware flashing / DFU recovery | `src-tauri/src/firmware/AGENTS.md` | Session model, serial vs DFU paths |
 | Playwright E2E | `e2e/AGENTS.md` | Mocked browser workflow, spec conventions |
 | Native WebDriver E2E | `e2e-native/AGENTS.md` | Real Tauri + Rust + SITL smoke lane |
@@ -108,7 +110,7 @@ React (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavki
 
 ## Known Quirks
 
-- IPC event names use URI-style strings such as `telemetry://state`, `session://state`, `mission://state`, `param://store`, `param://progress`, `sensor_health://state`, `calibration://state`, `compass://cal_progress`, `compass://cal_report`, `configuration_facts://state`, `status_text://state`, `support://state`, and `firmware://progress`.
+- IPC event names use URI-style strings such as `telemetry://state`, `session://state`, `mission://state`, `param://store`, `param://progress`, `sensor_health://state`, `calibration://state`, `compass://cal_progress`, `compass://cal_report`, `configuration_facts://state`, `status_text://state`, `support://state`, `guided://state`, `playback://state`, `log://progress`, and `firmware://progress`.
 - `mpng_settings` is a legacy localStorage key name and should not be renamed casually.
 - `mav.tlog`, `mav.tlog.raw`, and `mav.parm` at repo root are developer SITL artifacts, not committed fixtures.
 - Parameter metadata is fetched at runtime from `autotest.ardupilot.org` via the platform HTTP layer and cached locally.

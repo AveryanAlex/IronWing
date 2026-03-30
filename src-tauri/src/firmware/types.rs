@@ -717,9 +717,7 @@ impl FirmwareSessionHandle {
         let guard = self.state.lock().unwrap_or_else(|e| e.into_inner());
         match *guard {
             SessionState::Idle => FirmwareSessionStatus::Idle,
-            SessionState::SerialPrimary { phase } => {
-                FirmwareSessionStatus::SerialPrimary { phase }
-            }
+            SessionState::SerialPrimary { phase } => FirmwareSessionStatus::SerialPrimary { phase },
             SessionState::DfuRecovery { phase } => FirmwareSessionStatus::DfuRecovery { phase },
             SessionState::Cancelling { path } => FirmwareSessionStatus::Cancelling { path },
             SessionState::Completed { ref outcome } => FirmwareSessionStatus::Completed {

@@ -537,7 +537,11 @@ mod tests {
             request.source,
             SerialFlashSource::CatalogUrl { ref url } if url == "https://example.com/fw.apj"
         ));
-        assert!(request.options.is_some_and(|options| options.full_chip_erase));
+        assert!(
+            request
+                .options
+                .is_some_and(|options| options.full_chip_erase)
+        );
     }
 
     #[test]
@@ -3108,10 +3112,8 @@ mod tests {
                     .and_then(StdVecDeque::pop_front)
             }
             .or_else(|| self.serial_mocks.borrow_mut().pop_front())
-            .ok_or_else(|| {
-                FirmwareError::ProtocolError {
-                    detail: "no mock serial configured".into(),
-                }
+            .ok_or_else(|| FirmwareError::ProtocolError {
+                detail: "no mock serial configured".into(),
             })?;
             Ok(Box::new(mock))
         }
@@ -3319,7 +3321,10 @@ mod tests {
         let outcome = result.to_outcome();
         match outcome {
             SerialFlashOutcome::ReconnectVerified { flash_verified, .. } => {
-                assert!(!flash_verified, "expected reconnect_verified flash_verified=false")
+                assert!(
+                    !flash_verified,
+                    "expected reconnect_verified flash_verified=false"
+                )
             }
             other => panic!("expected ReconnectVerified, got: {other:?}"),
         }
@@ -3754,7 +3759,10 @@ mod tests {
         let wrong_board_probe = make_probe_only_mock(5, 9, flash_size);
         let mut selected_fatal_probe = MockSerial::new();
         selected_fatal_probe.queue_flush_failure(FirmwareError::ProtocolError {
-            detail: format!("selected-port fallback probe failed on {}", selected_port.port_name),
+            detail: format!(
+                "selected-port fallback probe failed on {}",
+                selected_port.port_name
+            ),
         });
 
         let deps = MockFlowDeps::new()
@@ -3765,7 +3773,10 @@ mod tests {
                 vec![],
                 vec![],
             ])
-            .with_serial_mocks_for_port(&observed_bootloader_port.port_name, vec![wrong_board_probe])
+            .with_serial_mocks_for_port(
+                &observed_bootloader_port.port_name,
+                vec![wrong_board_probe],
+            )
             .with_serial_mocks_for_port(&selected_port.port_name, vec![selected_fatal_probe]);
 
         let preflight = PreflightSnapshot {
@@ -3857,9 +3868,18 @@ mod tests {
         let second_upload_mock = make_upload_mock(5, 140, flash_size, &image);
 
         let deps = MockFlowDeps::new()
-            .with_ports_sequence(vec![vec![wrong_board_port.clone(), unrelated_matching_port.clone()]])
-            .with_serial_mocks_for_port(&wrong_board_port.port_name, vec![first_probe_only_wrong_board])
-            .with_serial_mocks_for_port(&unrelated_matching_port.port_name, vec![second_upload_mock])
+            .with_ports_sequence(vec![vec![
+                wrong_board_port.clone(),
+                unrelated_matching_port.clone(),
+            ]])
+            .with_serial_mocks_for_port(
+                &wrong_board_port.port_name,
+                vec![first_probe_only_wrong_board],
+            )
+            .with_serial_mocks_for_port(
+                &unrelated_matching_port.port_name,
+                vec![second_upload_mock],
+            )
             .with_reconnect_results(vec![Ok(())]);
 
         let preflight = PreflightSnapshot {
@@ -4432,7 +4452,9 @@ mod tests {
         let outcome = result.to_outcome();
         match outcome {
             SerialFlashOutcome::BoardDetectionFailed { .. } => {}
-            other => panic!("expected BoardDetectionFailed outcome (no DFU fallback), got: {other:?}"),
+            other => {
+                panic!("expected BoardDetectionFailed outcome (no DFU fallback), got: {other:?}")
+            }
         }
     }
 
@@ -5428,7 +5450,13 @@ mod tests {
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::ReconnectVerified { flash_verified: true, .. }),
+            matches!(
+                outcome,
+                SerialFlashOutcome::ReconnectVerified {
+                    flash_verified: true,
+                    ..
+                }
+            ),
             "e2e serial happy path must produce ReconnectVerified(flash_verified=true), got: {outcome:?}"
         );
 
@@ -5472,7 +5500,9 @@ mod tests {
                     "board_detection_failed reason must be non-empty: {reason}"
                 );
             }
-            other => panic!("e2e serial failure outcome must be BoardDetectionFailed, got: {other:?}"),
+            other => {
+                panic!("e2e serial failure outcome must be BoardDetectionFailed, got: {other:?}")
+            }
         }
 
         let wrapped = FirmwareOutcome::SerialPrimary { outcome };
@@ -5517,7 +5547,13 @@ mod tests {
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::ReconnectFailed { flash_verified: false, .. }),
+            matches!(
+                outcome,
+                SerialFlashOutcome::ReconnectFailed {
+                    flash_verified: false,
+                    ..
+                }
+            ),
             "BL_REV 2 + reconnect failure must be ReconnectFailed(flash_verified=false), got: {outcome:?}"
         );
 
@@ -7262,9 +7298,9 @@ mod tests {
             SerialFlashOutcome::ExtfCapacityInsufficient { reason } => {
                 assert!(reason.contains("external-flash"), "got: {reason}");
             }
-            other => panic!(
-                "ExtfCapacityInsufficient must preserve its typed outcome; got: {other:?}"
-            ),
+            other => {
+                panic!("ExtfCapacityInsufficient must preserve its typed outcome; got: {other:?}")
+            }
         }
     }
 
@@ -7545,7 +7581,13 @@ mod tests {
         };
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::ReconnectFailed { flash_verified: false, .. }),
+            matches!(
+                outcome,
+                SerialFlashOutcome::ReconnectFailed {
+                    flash_verified: false,
+                    ..
+                }
+            ),
             "ReconnectFailed(flash_verified=false) must preserve reconnect_failed; got: {outcome:?}"
         );
     }
@@ -7739,7 +7781,13 @@ mod tests {
         };
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::ReconnectVerified { flash_verified: true, .. }),
+            matches!(
+                outcome,
+                SerialFlashOutcome::ReconnectVerified {
+                    flash_verified: true,
+                    ..
+                }
+            ),
             "ReconnectVerified(flash_verified=true) must preserve reconnect_verified; got: {outcome:?}"
         );
     }
@@ -7753,7 +7801,13 @@ mod tests {
         };
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::ReconnectVerified { flash_verified: false, .. }),
+            matches!(
+                outcome,
+                SerialFlashOutcome::ReconnectVerified {
+                    flash_verified: false,
+                    ..
+                }
+            ),
             "ReconnectVerified(flash_verified=false) must preserve reconnect_verified; got: {outcome:?}"
         );
     }
@@ -7800,7 +7854,13 @@ mod tests {
         };
         let outcome = result.to_outcome();
         assert!(
-            matches!(outcome, SerialFlashOutcome::ReconnectFailed { flash_verified: true, .. }),
+            matches!(
+                outcome,
+                SerialFlashOutcome::ReconnectFailed {
+                    flash_verified: true,
+                    ..
+                }
+            ),
             "ReconnectFailed must preserve reconnect_failed even with flash_verified=true; got: {outcome:?}"
         );
     }

@@ -1,8 +1,8 @@
-use mavkit::{Vehicle, VehicleConfig};
-use mavlink::MessageData;
 use mavkit::dialect::{
     ATTITUDE_DATA, GLOBAL_POSITION_INT_DATA, GPS_RAW_INT_DATA, MavCmd, SYS_STATUS_DATA,
 };
+use mavkit::{Vehicle, VehicleConfig};
+use mavlink::MessageData;
 use serde::Deserialize;
 use std::future::Future;
 use std::sync::atomic::Ordering;

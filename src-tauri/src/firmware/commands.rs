@@ -219,14 +219,10 @@ pub(crate) async fn firmware_flash_serial(
                 let _ = vehicle.disconnect().await;
             }
             Ok(Err(e)) => {
-                tracing::warn!(
-                    "temporary MAVLink connection to {port} failed (proceeding): {e}"
-                );
+                tracing::warn!("temporary MAVLink connection to {port} failed (proceeding): {e}");
             }
             Err(_) => {
-                tracing::warn!(
-                    "temporary MAVLink connection to {port} timed out (proceeding)"
-                );
+                tracing::warn!("temporary MAVLink connection to {port} timed out (proceeding)");
             }
         }
     }
@@ -517,9 +513,10 @@ pub(crate) fn serial_readiness_request_token(request: &SerialReadinessRequest) -
 
 fn serial_readiness_source_identity(source: &SerialFlashSource) -> (&'static str, String) {
     match source {
-        SerialFlashSource::CatalogUrl { url } => {
-            ("catalog_url", serial_readiness_content_identity(url.as_bytes()))
-        }
+        SerialFlashSource::CatalogUrl { url } => (
+            "catalog_url",
+            serial_readiness_content_identity(url.as_bytes()),
+        ),
         SerialFlashSource::LocalApjBytes { data } => {
             ("local_apj_bytes", serial_readiness_content_identity(data))
         }
@@ -1600,12 +1597,7 @@ mod tests {
         }];
 
         assert!(matches!(
-            serial_bootloader_transition(
-                "/dev/ttyACM0",
-                &ports,
-                None,
-                false,
-            ),
+            serial_bootloader_transition("/dev/ttyACM0", &ports, None, false,),
             SerialBootloaderTransition::AlreadyInBootloader
         ));
     }
@@ -1674,8 +1666,8 @@ mod tests {
     }
 
     #[test]
-    fn serial_bootloader_transition_reports_auto_reboot_attemptable_when_known_fc_and_disconnected(
-    ) {
+    fn serial_bootloader_transition_reports_auto_reboot_attemptable_when_known_fc_and_disconnected()
+    {
         let ports = vec![PortInfo {
             port_name: "/dev/ttyACM0".into(),
             vid: Some(0x2DAE),
