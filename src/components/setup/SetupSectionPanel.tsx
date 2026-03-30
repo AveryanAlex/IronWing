@@ -473,7 +473,14 @@ export function SetupSectionPanel({
   );
 
   const handleStagedApplySuccess = useCallback(() => {
-    if (activeSection === "flight_modes" || activeSection === "failsafe") {
+    if (
+      activeSection === "flight_modes" ||
+      activeSection === "failsafe" ||
+      activeSection === "rtl_return" ||
+      activeSection === "geofence" ||
+      activeSection === "initial_params" ||
+      activeSection === "serial_ports"
+    ) {
       confirmSection(activeSection);
     }
   }, [activeSection, confirmSection]);

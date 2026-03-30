@@ -26,6 +26,10 @@ type SetupFactsInput = {
 const USER_CONFIRMED_SECTIONS: ReadonlySet<SetupSectionId> = new Set([
     "flight_modes",
     "failsafe",
+    "rtl_return",
+    "geofence",
+    "initial_params",
+    "serial_ports",
 ]);
 
 function statusFromConfigured(flag: { configured: boolean } | null | undefined): SectionStatus {

@@ -444,6 +444,10 @@ describe("deriveSetupSectionStatuses", () => {
             confirmed_sections: {
                 flight_modes: true,
                 failsafe: false,
+                rtl_return: true,
+                geofence: false,
+                initial_params: true,
+                serial_ports: true,
             },
             support: {
                 available: false,
@@ -473,5 +477,9 @@ describe("deriveSetupSectionStatuses", () => {
 
         expect(statuses.get("flight_modes")).toBe("complete");
         expect(statuses.get("failsafe")).toBe("not_started");
+        expect(statuses.get("rtl_return")).toBe("complete");
+        expect(statuses.get("geofence")).toBe("not_started");
+        expect(statuses.get("initial_params")).toBe("complete");
+        expect(statuses.get("serial_ports")).toBe("complete");
     });
 });
