@@ -33,7 +33,12 @@ export function SetupSectionIntro({
             <p className="mt-0.5 text-[10px] leading-relaxed text-text-muted">
               {description}
             </p>
-            <DocsLink docsUrl={docsUrl} docsLabel={docsLabel} className="mt-1" />
+            <DocsLink
+              docsUrl={docsUrl}
+              docsLabel={docsLabel}
+              variant="inline"
+              className="mt-1"
+            />
           </div>
         </div>
         {actionSlot && <div className="shrink-0">{actionSlot}</div>}

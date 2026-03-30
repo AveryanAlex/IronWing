@@ -11,7 +11,10 @@ export type CommonTopic =
   | "compass_calibration"
   | "prearm_safety_checks"
   | "optional_hardware"
-  | "tuning";
+  | "tuning"
+  | "serial_ports"
+  | "servo_outputs"
+  | "flight_mode_configuration";
 
 const COMMON_BASE = "https://ardupilot.org/copter/docs";
 
@@ -25,6 +28,10 @@ const COMMON_TOPICS: Record<CommonTopic, string> = {
   prearm_safety_checks: `${COMMON_BASE}/common-prearm-safety-checks.html`,
   optional_hardware: `${COMMON_BASE}/common-optional-hardware.html`,
   tuning: `${COMMON_BASE}/common-tuning.html`,
+  serial_ports: `${COMMON_BASE}/common-serial-options.html`,
+  servo_outputs: `${COMMON_BASE}/common-rcoutput-mapping.html`,
+  flight_mode_configuration:
+    "https://ardupilot.org/planner/docs/common-rc-transmitter-flight-mode-configuration.html",
 };
 
 export type VehicleSpecificTopic =
@@ -40,7 +47,8 @@ export type VehicleSpecificTopic =
   | "esc_calibration"
   | "arming"
   | "mandatory_hardware_config"
-  | "simple_super_simple_modes";
+  | "simple_super_simple_modes"
+  | "full_parameter_list";
 
 const VEHICLE_TOPICS: Record<
   VehicleSpecificTopic,
@@ -110,6 +118,11 @@ const VEHICLE_TOPICS: Record<
     copter: "https://ardupilot.org/copter/docs/simpleandsuper-simple-modes.html",
     plane: null,
     rover: null,
+  },
+  full_parameter_list: {
+    copter: "https://ardupilot.org/copter/docs/parameters.html",
+    plane: "https://ardupilot.org/plane/docs/parameters.html",
+    rover: "https://ardupilot.org/rover/docs/parameters.html",
   },
 };
 

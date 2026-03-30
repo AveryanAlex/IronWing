@@ -5,8 +5,6 @@ import {
   commonTopics,
   vehicleSpecificTopics,
   type VehicleSlug,
-  type CommonTopic,
-  type VehicleSpecificTopic,
 } from "./ardupilot-docs";
 
 describe("resolveDocsUrl", () => {
@@ -26,8 +24,32 @@ describe("resolveDocsUrl", () => {
       for (const topic of commonTopics()) {
         const url = resolveDocsUrl(topic);
         expect(url).not.toBeNull();
-        expect(url).toContain("ardupilot.org/copter/docs/common-");
+        expect(url).toMatch(/^https:\/\/ardupilot\.org\/.+\.html$/);
       }
+    });
+
+    it("resolves serial_ports to the common serial options URL", () => {
+      expect(resolveDocsUrl("serial_ports")).toBe(
+        "https://ardupilot.org/copter/docs/common-serial-options.html",
+      );
+    });
+
+    it("resolves servo_outputs to the common RC output mapping URL", () => {
+      expect(resolveDocsUrl("servo_outputs")).toBe(
+        "https://ardupilot.org/copter/docs/common-rcoutput-mapping.html",
+      );
+    });
+
+    it("resolves flight_mode_configuration to the planner docs URL", () => {
+      expect(resolveDocsUrl("flight_mode_configuration")).toBe(
+        "https://ardupilot.org/planner/docs/common-rc-transmitter-flight-mode-configuration.html",
+      );
+    });
+
+    it("keeps flight_mode_configuration on the planner domain", () => {
+      expect(resolveDocsUrl("flight_mode_configuration")).not.toContain(
+        "https://ardupilot.org/copter/docs/",
+      );
     });
 
     it("resolves prearm_safety_checks to common URL", () => {
@@ -84,6 +106,23 @@ describe("resolveDocsUrl", () => {
       expect(resolveDocsUrl("simple_super_simple_modes", "copter")).toBe(
         "https://ardupilot.org/copter/docs/simpleandsuper-simple-modes.html",
       );
+    });
+
+    it("resolves full_parameter_list for every vehicle family", () => {
+      expect(resolveDocsUrl("full_parameter_list", "copter")).toBe(
+        "https://ardupilot.org/copter/docs/parameters.html",
+      );
+      expect(resolveDocsUrl("full_parameter_list", "plane")).toBe(
+        "https://ardupilot.org/plane/docs/parameters.html",
+      );
+      expect(resolveDocsUrl("full_parameter_list", "rover")).toBe(
+        "https://ardupilot.org/rover/docs/parameters.html",
+      );
+    });
+
+    it("returns null for full_parameter_list without a vehicle slug", () => {
+      expect(resolveDocsUrl("full_parameter_list")).toBeNull();
+      expect(resolveDocsUrl("full_parameter_list", null)).toBeNull();
     });
 
     it("returns null for simple_super_simple_modes on plane and rover", () => {
@@ -193,12 +232,12 @@ describe("isKnownTopic", () => {
 });
 
 describe("topic lists", () => {
-  it("commonTopics returns 9 entries", () => {
-    expect(commonTopics()).toHaveLength(9);
+  it("commonTopics returns 12 entries", () => {
+    expect(commonTopics()).toHaveLength(12);
   });
 
-  it("vehicleSpecificTopics returns 13 entries", () => {
-    expect(vehicleSpecificTopics()).toHaveLength(13);
+  it("vehicleSpecificTopics returns 14 entries", () => {
+    expect(vehicleSpecificTopics()).toHaveLength(14);
   });
 
   it("no overlap between common and vehicle-specific topics", () => {
