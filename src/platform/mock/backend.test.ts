@@ -711,6 +711,58 @@ describe("mock guided backend parity", () => {
   });
 });
 
+describe("mock backend actuation parity", () => {
+  beforeEach(() => {
+    getMockPlatformController().reset();
+  });
+
+  it("accepts set_servo and rc_override once a live vehicle exists", async () => {
+    await invokeMockCommand("connect_link", {
+      request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
+    });
+
+    await expect(invokeMockCommand("set_servo", { instance: 3, pwmUs: 1500 })).resolves.toBeUndefined();
+    await expect(invokeMockCommand("rc_override", {
+      channels: [
+        { channel: 1, value: { kind: "pwm", pwm_us: 1500 } },
+        { channel: 2, value: { kind: "release" } },
+        { channel: 3, value: { kind: "ignore" } },
+      ],
+    })).resolves.toBeUndefined();
+  });
+
+  it("surfaces disconnected actuation calls as rejected invokes", async () => {
+    await expect(invokeMockCommand("set_servo", { instance: 3, pwmUs: 1500 })).rejects.toThrow("not connected");
+    await expect(invokeMockCommand("rc_override", {
+      channels: [{ channel: 1, value: { kind: "release" } }],
+    })).rejects.toThrow("not connected");
+  });
+
+  it("rejects malformed actuation payloads instead of silently coercing them", async () => {
+    await invokeMockCommand("connect_link", {
+      request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
+    });
+
+    await expect(invokeMockCommand("set_servo", { instance: 3 })).rejects.toThrow(
+      "missing or invalid set_servo.pwmUs",
+    );
+    await expect(invokeMockCommand("set_servo", { instance: 0, pwmUs: 1500 })).rejects.toThrow(
+      "set_servo instance must be in 1..=16, got 0",
+    );
+    await expect(invokeMockCommand("rc_override", {
+      channels: [{ channel: 1, value: {} }],
+    })).rejects.toThrow("missing or invalid rc_override.channels[0].value.kind");
+    await expect(invokeMockCommand("rc_override", {
+      channels: [{ channel: 19, value: { kind: "release" } }],
+    })).rejects.toThrow("rc override channel must be 1..=18, got 19");
+    await expect(invokeMockCommand("rc_override", {
+      channels: [{ channel: 4, value: { kind: "pwm", pwm_us: 0 } }],
+    })).rejects.toThrow(
+      "rc override pwm 0 is reserved for release; use RcOverrideChannelValue::Release or RcOverride::release()",
+    );
+  });
+});
+
 describe("mock backend firmware readiness defaults", () => {
   beforeEach(() => {
     getMockPlatformController().reset();

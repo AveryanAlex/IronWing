@@ -4,3 +4,6 @@ members = [
     "crates/tauri-plugin-bluetooth-classic",
 ]
 resolver = "2"
+
+[patch."https://github.com/AveryanAlex/mavkit.git"]
+mavkit = { path = "../mavkit" }

@@ -15,7 +15,8 @@ use crate::{AppState, helpers::with_vehicle};
 use mavkit::dialect::MavCmd;
 use mavkit::{
     FencePlan, FlightMode, HomePosition, MissionIssue, MissionPlan, ParamStore, ParamWriteResult,
-    RallyPlan, format_param_file, parse_param_file, validate_plan,
+    RallyPlan, RcOverride, RcOverrideChannelValue, format_param_file, parse_param_file,
+    validate_plan,
 };
 use tauri::Manager;
 
@@ -32,6 +33,32 @@ pub(crate) struct MessageRateInfo {
     id: u32,
     name: String,
     default_rate_hz: f32,
+}
+
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(crate) enum RcOverrideChannelValueWire {
+    Ignore,
+    Release,
+    Pwm { pwm_us: u16 },
+}
+
+impl TryFrom<RcOverrideChannelValueWire> for RcOverrideChannelValue {
+    type Error = mavkit::VehicleError;
+
+    fn try_from(value: RcOverrideChannelValueWire) -> Result<Self, Self::Error> {
+        match value {
+            RcOverrideChannelValueWire::Ignore => Ok(RcOverrideChannelValue::Ignore),
+            RcOverrideChannelValueWire::Release => Ok(RcOverrideChannelValue::Release),
+            RcOverrideChannelValueWire::Pwm { pwm_us } => RcOverrideChannelValue::pwm(pwm_us),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+pub(crate) struct RcOverrideChannelWire {
+    channel: u8,
+    value: RcOverrideChannelValueWire,
 }
 
 #[cfg(not(target_os = "android"))]
@@ -909,6 +936,40 @@ pub(crate) async fn motor_test(
             throttle_pct,
             duration_s.clamp(0.0, u16::MAX as f32) as u16,
         )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn set_servo(
+    state: tauri::State<'_, AppState>,
+    instance: u8,
+    pwm_us: u16,
+) -> Result<(), String> {
+    with_vehicle(&state)
+        .await?
+        .ardupilot()
+        .set_servo(instance, pwm_us)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn rc_override(
+    state: tauri::State<'_, AppState>,
+    channels: Vec<RcOverrideChannelWire>,
+) -> Result<(), String> {
+    let mut overrides = RcOverride::new();
+    for channel in channels {
+        let value = RcOverrideChannelValue::try_from(channel.value).map_err(|e| e.to_string())?;
+        overrides
+            .set(channel.channel, value)
+            .map_err(|e| e.to_string())?;
+    }
+
+    with_vehicle(&state)
+        .await?
+        .rc_override(overrides)
         .await
         .map_err(|e| e.to_string())
 }

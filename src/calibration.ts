@@ -5,6 +5,16 @@ import type { DomainValue } from "./lib/domain-status";
 import type { MagCalProgress, MagCalReport } from "./sensor-health";
 import type { SessionEvent } from "./session";
 
+export type RcOverrideChannelValue =
+  | { kind: "ignore" }
+  | { kind: "release" }
+  | { kind: "pwm"; pwm_us: number };
+
+export type RcOverrideChannel = {
+  channel: number;
+  value: RcOverrideChannelValue;
+};
+
 export type CalibrationLifecycle = "not_started" | "running" | "complete" | "failed";
 
 export type CalibrationStep = {
@@ -56,6 +66,17 @@ export function calibrateCompassCancel(compassMask: number = 0): Promise<void> {
 
 export function motorTest(motorInstance: number, throttlePct: number, durationS: number): Promise<void> {
   return invoke("motor_test", { motorInstance, throttlePct, durationS });
+}
+
+export function setServo(instance: number, pwmUs: number): Promise<void> {
+  return invoke("set_servo", { instance, pwmUs });
+}
+
+/**
+ * RC overrides are transient; callers must resend at their required control cadence.
+ */
+export function rcOverride(channels: RcOverrideChannel[]): Promise<void> {
+  return invoke("rc_override", { channels });
 }
 
 export function rebootVehicle(): Promise<void> {

@@ -8,8 +8,8 @@ use commands::{
     get_available_modes, list_serial_ports_cmd, mission_cancel, mission_clear, mission_download,
     mission_set_current, mission_upload, mission_validate, motor_test, open_session_snapshot,
     param_cancel, param_download_all, param_format_file, param_parse_file, param_write,
-    param_write_batch, rally_clear, rally_download, rally_upload, reboot_vehicle,
-    request_prearm_checks, set_flight_mode, set_message_rate, set_telemetry_rate,
+    param_write_batch, rally_clear, rally_download, rally_upload, rc_override, reboot_vehicle,
+    request_prearm_checks, set_flight_mode, set_message_rate, set_servo, set_telemetry_rate,
     start_guided_session, stop_guided_session, update_guided_session, vehicle_takeoff,
 };
 use connection::{ActiveLinkTarget, connect_link, disconnect_link};
@@ -147,6 +147,8 @@ pub fn run() {
         calibrate_compass_cancel,
         reboot_vehicle,
         motor_test,
+        set_servo,
+        rc_override,
         request_prearm_checks,
         crate::logs::log_open,
         crate::logs::log_query,

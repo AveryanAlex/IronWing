@@ -18,30 +18,30 @@ type SessionConnection =
 
 type TransportDescriptor =
   | {
-      kind: "udp";
-      label: string;
-      available: boolean;
-      validation: { bind_addr_required: boolean };
-    }
+    kind: "udp";
+    label: string;
+    available: boolean;
+    validation: { bind_addr_required: boolean };
+  }
   | {
-      kind: "tcp";
-      label: string;
-      available: boolean;
-      validation: { address_required: boolean };
-    }
+    kind: "tcp";
+    label: string;
+    available: boolean;
+    validation: { address_required: boolean };
+  }
   | {
-      kind: "serial";
-      label: string;
-      available: boolean;
-      validation: { port_required: boolean; baud_required: boolean };
-      default_baud: number;
-    }
+    kind: "serial";
+    label: string;
+    available: boolean;
+    validation: { port_required: boolean; baud_required: boolean };
+    default_baud: number;
+  }
   | {
-      kind: "bluetooth_ble" | "bluetooth_spp";
-      label: string;
-      available: boolean;
-      validation: { address_required: boolean };
-    };
+    kind: "bluetooth_ble" | "bluetooth_spp";
+    label: string;
+    available: boolean;
+    validation: { address_required: boolean };
+  };
 
 export type MockLiveVehicleState = {
   armed: boolean;
@@ -329,6 +329,69 @@ function takeoffContextError(): string | null {
   return null;
 }
 
+function requireConnectedVehicle() {
+  if (!mockState.liveVehicleAvailable) {
+    throw new Error("not connected");
+  }
+}
+
+function requireFiniteInteger(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value)) {
+    throw new Error(`missing or invalid ${label}`);
+  }
+
+  return value;
+}
+
+function validateSetServoArgs(args: CommandArgs) {
+  const instance = requireFiniteInteger(args?.instance, "set_servo.instance");
+  const pwmUs = requireFiniteInteger(args?.pwmUs, "set_servo.pwmUs");
+
+  if (instance < 1 || instance > 16) {
+    throw new Error(`set_servo instance must be in 1..=16, got ${instance}`);
+  }
+  if (pwmUs < 1000 || pwmUs > 2000) {
+    throw new Error(`set_servo pwm_us must be in 1000..=2000 microseconds, got ${pwmUs}`);
+  }
+}
+
+function validateRcOverrideArgs(args: CommandArgs) {
+  if (!Array.isArray(args?.channels)) {
+    throw new Error("missing or invalid rc_override.channels");
+  }
+
+  for (const [index, entry] of args.channels.entries()) {
+    if (!entry || typeof entry !== "object") {
+      throw new Error(`missing or invalid rc_override.channels[${index}]`);
+    }
+
+    const channel = requireFiniteInteger((entry as { channel?: unknown }).channel, `rc_override.channels[${index}].channel`);
+    if (channel < 1 || channel > 18) {
+      throw new Error(`rc override channel must be 1..=18, got ${channel}`);
+    }
+
+    const value = (entry as { value?: unknown }).value;
+    if (!value || typeof value !== "object") {
+      throw new Error(`missing or invalid rc_override.channels[${index}].value`);
+    }
+
+    const kind = (value as { kind?: unknown }).kind;
+    if (kind !== "ignore" && kind !== "release" && kind !== "pwm") {
+      throw new Error(`missing or invalid rc_override.channels[${index}].value.kind`);
+    }
+
+    if (kind === "pwm") {
+      const pwmUs = requireFiniteInteger((value as { pwm_us?: unknown }).pwm_us, `rc_override.channels[${index}].value.pwm_us`);
+      if (pwmUs === 0) {
+        throw new Error("rc override pwm 0 is reserved for release; use RcOverrideChannelValue::Release or RcOverride::release()");
+      }
+      if (pwmUs === 65535) {
+        throw new Error("rc override pwm 65535 is reserved for ignore; use RcOverrideChannelValue::Ignore or RcOverride::ignore()");
+      }
+    }
+  }
+}
+
 function emitGuidedStateIfLiveActive() {
   if (!mockState.liveEnvelope) {
     return;
@@ -468,20 +531,20 @@ export type MockPlatformEvent = {
 
 export type MockCommandBehavior =
   | {
-      type: "resolve";
-      result?: unknown;
-      emit?: MockPlatformEvent[];
-      delayMs?: number;
-    }
+    type: "resolve";
+    result?: unknown;
+    emit?: MockPlatformEvent[];
+    delayMs?: number;
+  }
   | {
-      type: "reject";
-      error: string;
-      emit?: MockPlatformEvent[];
-      delayMs?: number;
-    }
+    type: "reject";
+    error: string;
+    emit?: MockPlatformEvent[];
+    delayMs?: number;
+  }
   | {
-      type: "defer";
-    };
+    type: "defer";
+  };
 
 export type MockInvocation = {
   cmd: string;
@@ -612,7 +675,7 @@ function liveGuidedDomain(provenance: "bootstrap" | "stream" = "bootstrap") {
       entered_at_unix_msec: mockState.guided.entered_at_unix_msec,
       blocking_reason: null,
       termination: mockState.guidedTermination,
-        last_command: mockState.guidedLastCommand,
+      last_command: mockState.guidedLastCommand,
       actions: {
         start: { allowed: false, blocking_reason: "operation_in_progress" },
         update: { allowed: true, blocking_reason: null },
@@ -987,6 +1050,14 @@ function defaultCommandResult(cmd: string, _args: CommandArgs): unknown {
       mockState.liveVehicleArmed = false;
       mockState.liveVehicleModeName = "Stabilize";
       resetGuided("disconnect", "live vehicle disconnected");
+      return undefined;
+    case "set_servo":
+      requireConnectedVehicle();
+      validateSetServoArgs(_args);
+      return undefined;
+    case "rc_override":
+      requireConnectedVehicle();
+      validateRcOverrideArgs(_args);
       return undefined;
     case "vehicle_takeoff": {
       const contextError = takeoffContextError();
