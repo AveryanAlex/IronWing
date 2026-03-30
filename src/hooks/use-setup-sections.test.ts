@@ -1,13 +1,17 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+import { renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   computeOverallProgress,
   computeSectionStatuses,
   SECTION_IDS,
   TRACKABLE_SECTIONS,
+  useSetupSections,
   type SectionStatus,
   type SetupFactDomains,
   type SetupSectionId,
 } from "./use-setup-sections";
+import type { VehicleState } from "../telemetry";
 
 function makeFacts(overrides: Partial<SetupFactDomains> = {}): SetupFactDomains {
   return {
@@ -16,6 +20,20 @@ function makeFacts(overrides: Partial<SetupFactDomains> = {}): SetupFactDomains 
     configurationFacts: { available: false, complete: false, provenance: "stream", value: null },
     calibration: { available: false, complete: false, provenance: "stream", value: null },
     ...overrides,
+  };
+}
+
+function makeVehicleState(systemId = 1): VehicleState {
+  return {
+    armed: false,
+    custom_mode: 0,
+    mode_name: "Stabilize",
+    system_status: "standby",
+    vehicle_type: "quadrotor",
+    autopilot: "ardupilotmega",
+    system_id: systemId,
+    component_id: 1,
+    heartbeat_received: true,
   };
 }
 
@@ -170,6 +188,71 @@ describe("computeOverallProgress", () => {
       completed: 2,
       total: TRACKABLE_COUNT,
       percentage: Math.round((2 / TRACKABLE_COUNT) * 100),
+    });
+  });
+});
+
+describe("useSetupSections", () => {
+  let storage: Record<string, string>;
+
+  beforeEach(() => {
+    storage = {};
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => storage[key] ?? null,
+        setItem: (key: string, value: string) => {
+          storage[key] = value;
+        },
+        removeItem: (key: string) => {
+          delete storage[key];
+        },
+        clear: () => {
+          storage = {};
+        },
+      },
+    });
+  });
+
+  it("falls back to overview when persisted state points at the removed firmware section", async () => {
+    localStorage.setItem(
+      "ironwing_setup_section_42",
+      JSON.stringify({ activeSection: "firmware", confirmed: { flight_modes: true } }),
+    );
+
+    const { result } = renderHook(() => useSetupSections(makeVehicleState(42), makeFacts()));
+
+    expect(result.current.activeSection).toBe("overview");
+
+    await waitFor(() => {
+      expect(JSON.parse(localStorage.getItem("ironwing_setup_section_42") ?? "{}")).toMatchObject({
+        activeSection: "overview",
+        confirmed: { flight_modes: true },
+      });
+    });
+  });
+
+  it("resets to overview when the vehicle changes to persisted stale firmware state", async () => {
+    localStorage.setItem(
+      "ironwing_setup_section_7",
+      JSON.stringify({ activeSection: "firmware", confirmed: { failsafe: true } }),
+    );
+
+    const { result, rerender } = renderHook(
+      ({ vehicleState }) => useSetupSections(vehicleState, makeFacts()),
+      { initialProps: { vehicleState: makeVehicleState(1) } },
+    );
+
+    expect(result.current.activeSection).toBe("overview");
+
+    rerender({ vehicleState: makeVehicleState(7) });
+
+    await waitFor(() => {
+      expect(result.current.activeSection).toBe("overview");
+      expect(JSON.parse(localStorage.getItem("ironwing_setup_section_7") ?? "{}")).toMatchObject({
+        activeSection: "overview",
+        confirmed: { failsafe: true },
+      });
     });
   });
 });

@@ -17,29 +17,22 @@ impl ManifestCache {
     }
 
     pub(crate) fn get_if_fresh(&self) -> Option<Vec<u8>> {
-        let ts_path = self.cache_dir.join(TIMESTAMP_FILENAME);
-        let data_path = self.cache_dir.join(CACHE_FILENAME);
-
-        let ts_str = fs::read_to_string(&ts_path).ok()?;
-        let stored_epoch: u64 = ts_str.trim().parse().ok()?;
-        let stored_time = SystemTime::UNIX_EPOCH + Duration::from_secs(stored_epoch);
-
-        let age = SystemTime::now()
-            .duration_since(stored_time)
-            .unwrap_or(Duration::MAX);
-
-        if age > self.max_age {
+        if !self.is_fresh() {
             return None;
         }
 
-        fs::read(&data_path).ok()
+        self.get_cached()
+    }
+
+    pub(crate) fn get_cached(&self) -> Option<Vec<u8>> {
+        fs::read(self.data_path()).ok()
     }
 
     pub(crate) fn store(&self, data: &[u8]) -> Result<(), std::io::Error> {
         fs::create_dir_all(&self.cache_dir)?;
 
-        let data_path = self.cache_dir.join(CACHE_FILENAME);
-        let ts_path = self.cache_dir.join(TIMESTAMP_FILENAME);
+        let data_path = self.data_path();
+        let ts_path = self.timestamp_path();
 
         let mut file = fs::File::create(&data_path)?;
         file.write_all(data)?;
@@ -51,5 +44,31 @@ impl ManifestCache {
         fs::write(&ts_path, now.to_string())?;
 
         Ok(())
+    }
+
+    fn is_fresh(&self) -> bool {
+        let ts_str = match fs::read_to_string(self.timestamp_path()) {
+            Ok(ts_str) => ts_str,
+            Err(_) => return false,
+        };
+        let stored_epoch: u64 = match ts_str.trim().parse() {
+            Ok(stored_epoch) => stored_epoch,
+            Err(_) => return false,
+        };
+        let stored_time = SystemTime::UNIX_EPOCH + Duration::from_secs(stored_epoch);
+
+        let age = SystemTime::now()
+            .duration_since(stored_time)
+            .unwrap_or(Duration::MAX);
+
+        age <= self.max_age
+    }
+
+    fn data_path(&self) -> PathBuf {
+        self.cache_dir.join(CACHE_FILENAME)
+    }
+
+    fn timestamp_path(&self) -> PathBuf {
+        self.cache_dir.join(TIMESTAMP_FILENAME)
     }
 }

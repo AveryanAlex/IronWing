@@ -20,7 +20,7 @@ export function BottomNav({ activeTab, onTabChange, isConnecting, connected, con
       className="w-full shrink-0 overflow-x-auto overflow-y-hidden border-t border-border bg-bg-secondary"
       style={{ paddingBottom: "var(--safe-area-bottom, 0px)" }}
     >
-      <div className="flex min-w-[360px] items-center justify-around">
+      <div className="flex min-w-[440px] items-center justify-around">
         <button
           onClick={onSidebarOpen}
           className="flex flex-col items-center justify-center gap-0.5 px-2 py-2"

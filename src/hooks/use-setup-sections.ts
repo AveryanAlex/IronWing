@@ -28,8 +28,7 @@ export type SetupSectionId =
   | "initial_params"
   | "pid_tuning"
   | "peripherals"
-  | "full_parameters"
-  | "firmware";
+  | "full_parameters";
 
 export type SectionStatus = "unknown" | "not_started" | "in_progress" | "failed" | "complete";
 
@@ -62,7 +61,6 @@ export const SECTION_IDS: SetupSectionId[] = [
   "pid_tuning",
   "peripherals",
   "full_parameters",
-  "firmware",
 ];
 
 /**
@@ -94,6 +92,10 @@ type PersistedSections = {
 
 function storageKey(sysId: number): string {
   return `ironwing_setup_section_${sysId}`;
+}
+
+function isSetupSectionId(value: unknown): value is SetupSectionId {
+  return typeof value === "string" && (SECTION_IDS as string[]).includes(value);
 }
 
 function loadPersisted(key: string): PersistedSections | null {
@@ -174,7 +176,7 @@ export function useSetupSections(
   // Active section from persisted or default
   const [activeSection, setActiveSectionRaw] = useState<SetupSectionId>(() => {
     const saved = loadPersisted(storageKey(sysId));
-    if (saved && (SECTION_IDS as string[]).includes(saved.activeSection)) {
+    if (saved && isSetupSectionId(saved.activeSection)) {
       return saved.activeSection;
     }
     return "overview";
@@ -183,7 +185,7 @@ export function useSetupSections(
   // Sync active section when key changes (vehicle switch)
   useEffect(() => {
     const saved = loadPersisted(key);
-    if (saved && (SECTION_IDS as string[]).includes(saved.activeSection)) {
+    if (saved && isSetupSectionId(saved.activeSection)) {
       setActiveSectionRaw(saved.activeSection);
     } else {
       setActiveSectionRaw("overview");
@@ -211,7 +213,7 @@ export function useSetupSections(
 
   // Navigation
   const setActiveSection = useCallback((id: SetupSectionId) => {
-    if ((SECTION_IDS as string[]).includes(id)) {
+    if (isSetupSectionId(id)) {
       setActiveSectionRaw(id);
     }
   }, []);

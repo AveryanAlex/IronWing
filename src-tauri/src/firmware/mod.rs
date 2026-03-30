@@ -2804,12 +2804,13 @@ mod tests {
         let cached = cache.get_if_fresh();
         assert!(cached.is_some(), "fresh cache should return data");
         assert_eq!(cached.unwrap(), test_data);
+        assert_eq!(cache.get_cached().unwrap(), test_data);
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn catalog_cache_expired_returns_none() {
+    fn catalog_cache_expired_returns_none_but_preserves_cached_bytes() {
         let dir = std::env::temp_dir().join(format!(
             "ironwing_test_cache_expired_{}",
             std::process::id()
@@ -2824,12 +2825,13 @@ mod tests {
 
         let cached = cache.get_if_fresh();
         assert!(cached.is_none(), "expired cache should return None");
+        assert_eq!(cache.get_cached().unwrap(), test_data);
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn catalog_cache_corrupt_returns_none() {
+    fn catalog_cache_invalid_timestamp_preserves_cached_bytes_for_stale_fallback() {
         let dir = std::env::temp_dir().join(format!(
             "ironwing_test_cache_corrupt_{}",
             std::process::id()
@@ -2837,12 +2839,38 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
 
+        let test_data = b"corrupt";
         std::fs::write(dir.join("manifest.timestamp"), "not_a_number").unwrap();
-        std::fs::write(dir.join("manifest.json.gz"), b"corrupt").unwrap();
+        std::fs::write(dir.join("manifest.json.gz"), test_data).unwrap();
 
         let cache = ManifestCache::new(dir.clone(), std::time::Duration::from_secs(3600));
-        let cached = cache.get_if_fresh();
-        assert!(cached.is_none(), "corrupt timestamp should return None");
+        assert!(
+            cache.get_if_fresh().is_none(),
+            "invalid timestamp should skip the fresh-cache path"
+        );
+        assert_eq!(cache.get_cached().unwrap(), test_data);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn catalog_cache_missing_timestamp_preserves_cached_bytes_for_stale_fallback() {
+        let dir = std::env::temp_dir().join(format!(
+            "ironwing_test_cache_missing_timestamp_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let test_data = make_manifest_gz(&[sample_entry(140, "apj", "4.5.0", "fmuv3")]);
+        std::fs::write(dir.join("manifest.json.gz"), &test_data).unwrap();
+
+        let cache = ManifestCache::new(dir.clone(), std::time::Duration::from_secs(3600));
+        assert!(
+            cache.get_if_fresh().is_none(),
+            "missing timestamp should skip the fresh-cache path"
+        );
+        assert_eq!(cache.get_cached().unwrap(), test_data);
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -2857,6 +2885,7 @@ mod tests {
 
         let cache = ManifestCache::new(dir, std::time::Duration::from_secs(3600));
         assert!(cache.get_if_fresh().is_none());
+        assert!(cache.get_cached().is_none());
     }
 
     // ── Catalog client tests ──
@@ -2899,13 +2928,11 @@ mod tests {
         let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(3600));
         let gz = make_manifest_gz(&[sample_entry(140, "apj", "4.5.0", "fmuv3")]);
 
-        // Prime cache via a first call
         let gz_for_prime = gz.clone();
         client
             .get_entries_for_board(140, || Ok(gz_for_prime))
             .unwrap();
 
-        // Second call should NOT invoke fetcher
         let results = client
             .get_entries_for_board(140, || {
                 panic!("fetcher should not be called when cache is fresh")
@@ -2930,7 +2957,6 @@ mod tests {
         let old_gz = make_manifest_gz(&[sample_entry(140, "apj", "4.4.0", "fmuv3")]);
         let new_gz = make_manifest_gz(&[sample_entry(140, "apj", "4.5.0", "fmuv3")]);
 
-        // Prime with old data
         let old_gz_clone = old_gz.clone();
         client
             .get_entries_for_board(140, || Ok(old_gz_clone))
@@ -2938,7 +2964,6 @@ mod tests {
 
         std::thread::sleep(std::time::Duration::from_millis(50));
 
-        // Should refetch since TTL=0
         let new_gz_clone = new_gz.clone();
         let results = client
             .get_entries_for_board(140, || Ok(new_gz_clone))
@@ -2951,9 +2976,67 @@ mod tests {
     }
 
     #[test]
-    fn catalog_client_propagates_fetch_error() {
-        let dir =
-            std::env::temp_dir().join(format!("ironwing_test_client_err_{}", std::process::id()));
+    fn catalog_client_falls_back_to_stale_cache_when_refresh_fails() {
+        let dir = std::env::temp_dir().join(format!(
+            "ironwing_test_client_stale_fallback_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(0));
+        let stale_gz = make_manifest_gz(&[sample_entry(140, "apj", "4.4.0", "fmuv3")]);
+        let cache = ManifestCache::new(dir.clone(), std::time::Duration::from_secs(0));
+        cache.store(&stale_gz).unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        let results = client
+            .get_entries_for_board(140, || {
+                Err(FirmwareError::CatalogUnavailable {
+                    reason: "network unreachable".into(),
+                })
+            })
+            .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].version, "4.4.0");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn catalog_client_falls_back_to_stale_cache_when_timestamp_is_missing() {
+        let dir = std::env::temp_dir().join(format!(
+            "ironwing_test_client_missing_timestamp_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let stale_gz = make_manifest_gz(&[sample_entry(140, "apj", "4.4.0", "fmuv3")]);
+        std::fs::write(dir.join("manifest.json.gz"), &stale_gz).unwrap();
+
+        let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(3600));
+        let results = client
+            .get_entries_for_board(140, || {
+                Err(FirmwareError::CatalogUnavailable {
+                    reason: "manifest request timed out".into(),
+                })
+            })
+            .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].version, "4.4.0");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn catalog_client_propagates_fetch_error_when_no_usable_cache_exists() {
+        let dir = std::env::temp_dir().join(format!(
+            "ironwing_test_client_no_cache_{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&dir);
 
         let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(3600));
@@ -2967,7 +3050,43 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             FirmwareError::CatalogUnavailable { reason } => {
-                assert!(reason.contains("network"), "got: {reason}");
+                assert!(reason.contains("no cached manifest was available"), "got: {reason}");
+                assert!(reason.contains("network unreachable"), "got: {reason}");
+            }
+            other => panic!("expected CatalogUnavailable, got: {other:?}"),
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn catalog_client_reports_unusable_stale_cache_after_refresh_failure() {
+        let dir = std::env::temp_dir().join(format!(
+            "ironwing_test_client_bad_stale_cache_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        std::fs::write(dir.join("manifest.timestamp"), "0").unwrap();
+        std::fs::write(dir.join("manifest.json.gz"), b"not gzip data").unwrap();
+
+        let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(0));
+        let result = client.get_entries_for_board(140, || {
+            Err(FirmwareError::CatalogUnavailable {
+                reason: "manifest request timed out".into(),
+            })
+        });
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            FirmwareError::CatalogUnavailable { reason } => {
+                assert!(reason.contains("stale cached manifest was unusable"), "got: {reason}");
+                assert!(reason.contains("timed out"), "got: {reason}");
+                assert!(
+                    reason.contains("gzip") || reason.contains("decompression"),
+                    "got: {reason}"
+                );
             }
             other => panic!("expected CatalogUnavailable, got: {other:?}"),
         }
@@ -2992,7 +3111,6 @@ mod tests {
         let gz_clone = gz.clone();
         client.get_entries_for_board(140, || Ok(gz_clone)).unwrap();
 
-        // Query different board from cache
         let results = client
             .get_entries_for_board(9, || panic!("should use cache"))
             .unwrap();

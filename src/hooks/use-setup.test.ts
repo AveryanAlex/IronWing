@@ -141,17 +141,17 @@ describe("useSetup", () => {
     expect(setActiveSection).toHaveBeenCalledWith("overview");
   });
 
-  it("keeps firmware accessible while setup facts are still unavailable", async () => {
+  it("shows setup overview while disconnected without rewriting persisted section state", async () => {
     const params = makeParams({ metadata: null });
     const setActiveSection = vi.fn();
 
     useSetupSections.mockReturnValue(
-      makeSections({ activeSection: "firmware", setActiveSection }),
+      makeSections({ activeSection: "gps", setActiveSection }),
     );
 
-    const { result } = await renderUseSetup(params, null, makeUnavailableFacts(), true);
+    const { result } = await renderUseSetup(params, null, makeUnavailableFacts(), false);
 
-    expect(result.current.effectiveSection).toBe("firmware");
+    expect(result.current.effectiveSection).toBe("overview");
     expect(setActiveSection).not.toHaveBeenCalled();
   });
 

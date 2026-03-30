@@ -18,7 +18,6 @@ import {
   Activity,
   Puzzle,
   Sliders,
-  Cpu,
   ChevronDown,
   ChevronRight,
   Circle,
@@ -62,8 +61,6 @@ import { InitialParamsSection } from "./sections/InitialParamsSection";
 import { PidTuningSection } from "./sections/PidTuningSection";
 import { PeripheralsSection } from "./sections/PeripheralsSection";
 import { FullParametersSection } from "./sections/FullParametersSection";
-import { FirmwareSection } from "./sections/FirmwareSection";
-import type { FirmwareController } from "../../hooks/use-firmware";
 
 // ---------------------------------------------------------------------------
 // Section metadata
@@ -81,8 +78,7 @@ export type SetupGroupId =
   | "hardware"
   | "safety"
   | "tuning"
-  | "peripherals_advanced"
-  | "firmware";
+  | "peripherals_advanced";
 
 export type SetupGroup = {
   id: SetupGroupId;
@@ -114,8 +110,6 @@ export const SETUP_SECTIONS: SetupSection[] = [
   // Peripherals
   { id: "peripherals", label: "Peripherals", icon: Puzzle, group: "peripherals_advanced" },
   { id: "full_parameters", label: "Full Parameters", icon: Sliders, group: "peripherals_advanced" },
-  // Firmware
-  { id: "firmware", label: "Firmware", icon: Cpu, group: "firmware" },
 ];
 
 export const SECTION_GROUPS: SetupGroup[] = [
@@ -144,11 +138,6 @@ export const SECTION_GROUPS: SetupGroup[] = [
     label: "Peripherals",
     sections: ["peripherals", "full_parameters"],
   },
-  {
-    id: "firmware",
-    label: "Firmware",
-    sections: ["firmware"],
-  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -165,7 +154,6 @@ export type SetupSectionPanelProps = {
   sensorHealth: SensorHealth | null;
   homePosition: HomePosition | null;
   availableModes: FlightModeEntry[];
-  firmware: FirmwareController;
 };
 
 // ---------------------------------------------------------------------------
@@ -417,7 +405,7 @@ function SectionNav({
                 {group.sections.map((sectionId) => {
                   const section = sectionMap.get(sectionId);
                   if (!section) return null;
-                  const isLocked = !setupReady && sectionId !== "overview" && sectionId !== "firmware";
+                  const isLocked = !setupReady && sectionId !== "overview";
                   return (
                     <SectionNavItem
                       key={sectionId}
@@ -452,7 +440,6 @@ export function SetupSectionPanel({
   sensorHealth,
   homePosition,
   availableModes,
-  firmware,
 }: SetupSectionPanelProps) {
   const { isMobile } = useBreakpoint();
   const {
@@ -509,7 +496,7 @@ export function SetupSectionPanel({
   const ActiveIcon = activeSectionMeta?.icon ?? Circle;
 
   const sectionContent = (() => {
-    if (!connected && activeSection !== "firmware") return <DisconnectedGate />;
+    if (!connected) return <DisconnectedGate />;
     switch (effectiveSection) {
       case "overview":
         return (
@@ -584,8 +571,6 @@ export function SetupSectionPanel({
             onHighlightHandled={handleHighlightHandled}
           />
         );
-      case "firmware":
-        return <FirmwareSection firmware={firmware} connected={connected} onSaveParams={params.saveToFile} />;
     }
   })();
 

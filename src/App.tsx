@@ -10,6 +10,7 @@ import { HudPanel } from "./components/hud/HudPanel";
 import { MissionPanel } from "./components/MissionPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { LogsPanel } from "./components/LogsPanel";
+import { FirmwarePanel } from "./components/FirmwarePanel";
 import { SetupSectionPanel } from "./components/setup/SetupSectionPanel";
 import { InsetPanelFrame } from "./components/InsetPanelFrame";
 import { useSession } from "./hooks/use-session";
@@ -172,48 +173,49 @@ export default function App() {
             style={{ paddingTop: isMobile ? "calc(var(--safe-area-top, 0px) + 0.25rem)" : undefined }}
           >
             {activeTab === "setup" ? (
-                <SetupSectionPanel
-                  connected={vehicle.connected}
-                  vehicleState={vehicle.vehicleState}
-                  telemetry={vehicle.telemetry}
-                  linkState={vehicle.linkState}
-                  setup={setup}
-                  support={vehicle.support}
-                  sensorHealth={vehicle.sensorHealth.value}
-                  homePosition={vehicle.homePosition}
+              <SetupSectionPanel
+                connected={vehicle.connected}
+                vehicleState={vehicle.vehicleState}
+                telemetry={vehicle.telemetry}
+                linkState={vehicle.linkState}
+                setup={setup}
+                support={vehicle.support}
+                sensorHealth={vehicle.sensorHealth.value}
+                homePosition={vehicle.homePosition}
                 availableModes={vehicle.availableModes}
-                firmware={firmware}
               />
             ) : activeTab === "overview" ? (
-                <OverviewPanel
-                  vehicle={effectiveVehicle}
-                  guided={guided}
-                  mission={mission}
-                  deviceLocation={deviceLocation}
-                  flightPath={flightPathCoords}
-                />
+              <OverviewPanel
+                vehicle={effectiveVehicle}
+                guided={guided}
+                mission={mission}
+                deviceLocation={deviceLocation}
+                flightPath={flightPathCoords}
+              />
             ) : (
               <InsetPanelFrame>
                 {activeTab === "telemetry" ? (
-                  <TelemetryPanel 
-                    vehicle={effectiveVehicle} 
-                    mission={mission} 
-                    settings={settings} 
-                    updateSettings={updateSettings} 
-                    playbackActive={replayActive} 
+                  <TelemetryPanel
+                    vehicle={effectiveVehicle}
+                    mission={mission}
+                    settings={settings}
+                    updateSettings={updateSettings}
+                    playbackActive={replayActive}
                   />
                 ) : activeTab === "hud" ? (
                   <HudPanel vehicle={effectiveVehicle} mission={mission} svsEnabled={settings.svsEnabled} />
                 ) : activeTab === "mission" ? (
                   <MissionPanel vehicle={vehicle} mission={mission} deviceLocation={deviceLocation} isMobile={isMobile} />
                 ) : activeTab === "logs" ? (
-                    <LogsPanel
-                      logs={logs}
-                      recording={recording}
-                      connected={vehicle.connected}
-                      playback={playback}
-                      onFlightPath={handleFlightPath}
-                    />
+                  <LogsPanel
+                    logs={logs}
+                    recording={recording}
+                    connected={vehicle.connected}
+                    playback={playback}
+                    onFlightPath={handleFlightPath}
+                  />
+                ) : activeTab === "firmware" ? (
+                  <FirmwarePanel firmware={firmware} connected={vehicle.connected} onSaveParams={params.saveToFile} />
                 ) : (
                   <SettingsPanel settings={settings} updateSettings={updateSettings} />
                 )}

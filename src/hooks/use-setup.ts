@@ -51,7 +51,7 @@ export function useSetup(
   const setupReady = paramsLoaded && params.metadata !== null;
 
   useEffect(() => {
-    if (connected && !setupReady && activeSection !== "overview" && activeSection !== "firmware") {
+    if (connected && !setupReady && activeSection !== "overview") {
       setActiveSection("overview");
     }
   }, [activeSection, connected, setActiveSection, setupReady]);
@@ -63,7 +63,7 @@ export function useSetup(
   }, [clearHighlight]);
 
   const effectiveSection = useMemo<SetupSectionId>(
-    () => (!setupReady && activeSection !== "firmware" ? "overview" : activeSection),
+    () => (!setupReady ? "overview" : activeSection),
     [activeSection, setupReady],
   );
 

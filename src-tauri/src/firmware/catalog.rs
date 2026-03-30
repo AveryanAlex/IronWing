@@ -420,15 +420,43 @@ impl CatalogClient {
     where
         F: FnOnce() -> Result<Vec<u8>, FirmwareError>,
     {
-        let gz_data = match self.cache.get_if_fresh() {
-            Some(cached) => cached,
-            None => {
-                let fresh = fetcher()?;
+        if let Some(cached) = self.cache.get_if_fresh() {
+            return parse_manifest_gz(&cached);
+        }
+
+        match fetcher() {
+            Ok(fresh) => {
                 let _ = self.cache.store(&fresh);
-                fresh
+                parse_manifest_gz(&fresh)
             }
-        };
-        parse_manifest_gz(&gz_data)
+            Err(fetch_err) => match self.cache.get_cached() {
+                Some(stale) => parse_manifest_gz(&stale).map_err(|cache_err| {
+                    combine_manifest_refresh_and_stale_cache_error(fetch_err, cache_err)
+                }),
+                None => Err(manifest_refresh_without_cache_error(fetch_err)),
+            },
+        }
+    }
+}
+
+fn manifest_refresh_without_cache_error(fetch_err: FirmwareError) -> FirmwareError {
+    FirmwareError::CatalogUnavailable {
+        reason: format!(
+            "manifest refresh failed and no cached manifest was available: {}",
+            fetch_err
+        ),
+    }
+}
+
+fn combine_manifest_refresh_and_stale_cache_error(
+    fetch_err: FirmwareError,
+    cache_err: FirmwareError,
+) -> FirmwareError {
+    FirmwareError::CatalogUnavailable {
+        reason: format!(
+            "manifest refresh failed and stale cached manifest was unusable: refresh error: {}; stale cache error: {}",
+            fetch_err, cache_err
+        ),
     }
 }
 
