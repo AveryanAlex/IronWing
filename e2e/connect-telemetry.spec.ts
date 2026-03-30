@@ -30,7 +30,7 @@ const telemetry = {
       battery_pct: 87.2,
     },
     gps: {
-      fix_type: "3D Fix",
+      fix_type: "fix_3d",
     },
     radio: {
       rc_channels: [1500, 1500, 1100, 1500],

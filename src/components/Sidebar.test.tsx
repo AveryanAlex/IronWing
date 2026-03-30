@@ -13,7 +13,7 @@ function createVehicle() {
       mode_name: "LOITER",
       system_status: "ACTIVE",
       vehicle_type: "copter",
-      autopilot: "ardupilotmega",
+      autopilot: "ardu_pilot_mega",
       system_id: 1,
       component_id: 1,
       heartbeat_received: true,

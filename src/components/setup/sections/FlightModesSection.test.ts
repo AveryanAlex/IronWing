@@ -48,9 +48,10 @@ describe("vehicleTypeToPreset", () => {
     expect(vehicleTypeToPreset("Hexarotor")).toBe("copter");
   });
 
-  it("detects plane", () => {
+  it("detects plane and vtol", () => {
     expect(vehicleTypeToPreset("Fixed_Wing")).toBe("plane");
     expect(vehicleTypeToPreset("Plane")).toBe("plane");
+    expect(vehicleTypeToPreset("vtol")).toBe("plane");
   });
 
   it("detects rover", () => {

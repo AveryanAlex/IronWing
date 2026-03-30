@@ -24,6 +24,7 @@ const SLUG_MAP: Record<string, string> = {
   helicopter: "ArduCopter",
   coaxial: "ArduCopter",
   fixed_wing: "ArduPlane",
+  vtol: "ArduPlane",
   ground_rover: "Rover",
 };
 

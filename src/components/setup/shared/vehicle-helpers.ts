@@ -68,7 +68,8 @@ export type VtolProfile = {
 
 export function isPlaneVehicleType(vehicleState: VehicleState | null): boolean {
   if (!vehicleState) return false;
-  return vehicleState.vehicle_type.toLowerCase().includes("fixed_wing");
+  const t = vehicleState.vehicle_type.toLowerCase();
+  return t.includes("fixed_wing") || t === "vtol";
 }
 
 export function isCopterVehicleType(vehicleState: VehicleState | null): boolean {

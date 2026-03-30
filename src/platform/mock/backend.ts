@@ -145,7 +145,7 @@ function normalizedLiveVehicleState(mockVehicleState?: Partial<MockLiveVehicleSt
     mode_name: modeName,
     system_status: mockVehicleState?.system_status ?? "active",
     vehicle_type: mockVehicleState?.vehicle_type ?? "quadrotor",
-    autopilot: mockVehicleState?.autopilot ?? "ardupilotmega",
+    autopilot: mockVehicleState?.autopilot ?? "ardu_pilot_mega",
     system_id: mockVehicleState?.system_id ?? 1,
     component_id: mockVehicleState?.component_id ?? 1,
     heartbeat_received: mockVehicleState?.heartbeat_received ?? true,

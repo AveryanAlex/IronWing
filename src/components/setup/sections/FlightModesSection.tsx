@@ -66,7 +66,7 @@ export function vehicleTypeToPreset(vehicleType: string | undefined): VehiclePre
   ) {
     return "copter";
   }
-  if (lower.includes("plane") || lower.includes("fixed_wing")) return "plane";
+  if (lower.includes("plane") || lower.includes("fixed_wing") || lower === "vtol") return "plane";
   if (lower.includes("rover") || lower.includes("ground_rover") || lower.includes("boat"))
     return "rover";
   return null;

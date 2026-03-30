@@ -5,5 +5,5 @@ members = [
 ]
 resolver = "2"
 
-[patch."https://github.com/AveryanAlex/mavkit.git"]
-mavkit = { path = "../mavkit" }
+# [patch."https://github.com/AveryanAlex/mavkit.git"]
+# mavkit = { path = "../mavkit" }

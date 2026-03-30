@@ -12,8 +12,9 @@ describe("vehicleTypeToSlug", () => {
     expect(vehicleTypeToSlug("coaxial")).toBe("ArduCopter");
   });
 
-  it("maps plane to ArduPlane", () => {
+  it("maps plane and vtol to ArduPlane", () => {
     expect(vehicleTypeToSlug("fixed_wing")).toBe("ArduPlane");
+    expect(vehicleTypeToSlug("vtol")).toBe("ArduPlane");
   });
 
   it("maps rover to Rover", () => {

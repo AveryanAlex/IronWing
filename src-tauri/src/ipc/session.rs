@@ -1,5 +1,8 @@
 use mavkit::mission::MissionState;
-use mavkit::{HomePosition, LinkState, ParamOperationProgress, ParamStore};
+use mavkit::{
+    AutopilotType, HomePosition, LinkState, ParamOperationProgress, ParamStore, SystemStatus,
+    VehicleType,
+};
 
 use crate::ipc::calibration::CalibrationSnapshot;
 use crate::ipc::configuration_facts::ConfigurationFactsSnapshot;
@@ -31,9 +34,9 @@ pub(crate) struct VehicleState {
     pub armed: bool,
     pub custom_mode: u32,
     pub mode_name: String,
-    pub system_status: String,
-    pub vehicle_type: String,
-    pub autopilot: String,
+    pub system_status: SystemStatus,
+    pub vehicle_type: VehicleType,
+    pub autopilot: AutopilotType,
     pub system_id: u8,
     pub component_id: u8,
     pub heartbeat_received: bool,

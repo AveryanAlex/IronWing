@@ -47,6 +47,7 @@ impl SessionContext {
 
 pub(crate) static TELEMETRY_INTERVAL_MS: AtomicU64 = AtomicU64::new(200);
 
+
 async fn snapshot_from_context(handle: &tauri::AppHandle) -> DomainValue<SessionSnapshot> {
     let state: tauri::State<'_, AppState> = handle.state();
     let ctx = state.session_context.lock().await;
@@ -88,6 +89,23 @@ async fn reconcile_guided_runtime(handle: &tauri::AppHandle, vehicle: &Vehicle) 
     }
 }
 
+/// Maps `dialect::MavSeverity` to the lowercase snake_case names used on the
+/// IPC wire. `dialect::MavSeverity` is a generated mavlink enum without a
+/// `Serialize` impl, so we map it by hand here.
+fn mav_severity_name(severity: mavkit::dialect::MavSeverity) -> &'static str {
+    use mavkit::dialect::MavSeverity::*;
+    match severity {
+        MAV_SEVERITY_EMERGENCY => "emergency",
+        MAV_SEVERITY_ALERT => "alert",
+        MAV_SEVERITY_CRITICAL => "critical",
+        MAV_SEVERITY_ERROR => "error",
+        MAV_SEVERITY_WARNING => "warning",
+        MAV_SEVERITY_NOTICE => "notice",
+        MAV_SEVERITY_INFO => "info",
+        MAV_SEVERITY_DEBUG => "debug",
+    }
+}
+
 pub(crate) async fn spawn_event_bridges(
     app: &tauri::AppHandle,
     vehicle: &Vehicle,
@@ -103,9 +121,9 @@ pub(crate) async fn spawn_event_bridges(
             armed: false,
             custom_mode: 0,
             mode_name: "unknown".into(),
-            system_status: "active".into(),
-            vehicle_type: format!("{:?}", identity.vehicle_type).to_lowercase(),
-            autopilot: format!("{:?}", identity.autopilot).to_lowercase(),
+            system_status: mavkit::SystemStatus::Active,
+            vehicle_type: identity.vehicle_type,
+            autopilot: identity.autopilot,
             system_id: identity.system_id,
             component_id: identity.component_id,
             heartbeat_received: true,
@@ -185,7 +203,7 @@ pub(crate) async fn spawn_event_bridges(
                     "energy_consumed_wh": bat_energy.latest().map(|s| s.value),
                     "battery_time_remaining_s": bat_time_remaining.latest().map(|s| f64::from(s.value)),
                     // GPS — extract from nested GpsQuality
-                    "gps_fix_type": gps_quality.latest().map(|s| format!("{:?}", s.value.fix_type).to_lowercase()),
+                    "gps_fix_type": gps_quality.latest().map(|s| s.value.fix_type),
                     "gps_satellites": gps_quality.latest().and_then(|s| s.value.satellites.map(|v| v as u64)),
                     "gps_hdop": gps_quality.latest().and_then(|s| s.value.hdop),
                     // Navigation waypoint — extract from nested WaypointProgress
@@ -334,12 +352,9 @@ pub(crate) async fn spawn_event_bridges(
         tasks.push(tokio::spawn(async move {
             while let Some(sample) = status_sub.recv().await {
                 let msg = sample.value;
-                // StatusTextEvent contains dialect::MavSeverity which doesn't
-                // implement Serialize. Build the JSON value the IPC layer expects
-                // by hand.
                 let msg_json = serde_json::json!({
                     "text": msg.text,
-                    "severity": format!("{:?}", msg.severity),
+                    "severity": mav_severity_name(msg.severity),
                     "id": msg.id,
                     "source_system": msg.source_system,
                     "source_component": msg.source_component,
@@ -436,4 +451,45 @@ pub(crate) async fn spawn_event_bridges(
     }
 
     tasks
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ipc::session::VehicleState;
+    use mavkit::{AutopilotType, VehicleType};
+
+    /// Guard against the serde wire format drifting — multi-word enum variants
+    /// must serialize as snake_case strings so the frontend can match them.
+    #[test]
+    fn vehicle_state_serializes_vehicle_type_as_snake_case() {
+        let state = VehicleState {
+            armed: false,
+            custom_mode: 0,
+            mode_name: String::new(),
+            system_status: mavkit::SystemStatus::Standby,
+            vehicle_type: VehicleType::FixedWing,
+            autopilot: AutopilotType::ArduPilotMega,
+            system_id: 1,
+            component_id: 1,
+            heartbeat_received: false,
+        };
+        let json = serde_json::to_value(&state).expect("serialize VehicleState");
+        assert_eq!(json["vehicle_type"], "fixed_wing");
+        assert_eq!(json["autopilot"], "ardu_pilot_mega");
+        assert_eq!(json["system_status"], "standby");
+    }
+
+    #[test]
+    fn mav_severity_name_maps_all_variants_to_lowercase() {
+        use mavkit::dialect::MavSeverity::*;
+        assert_eq!(mav_severity_name(MAV_SEVERITY_EMERGENCY), "emergency");
+        assert_eq!(mav_severity_name(MAV_SEVERITY_ALERT), "alert");
+        assert_eq!(mav_severity_name(MAV_SEVERITY_CRITICAL), "critical");
+        assert_eq!(mav_severity_name(MAV_SEVERITY_ERROR), "error");
+        assert_eq!(mav_severity_name(MAV_SEVERITY_WARNING), "warning");
+        assert_eq!(mav_severity_name(MAV_SEVERITY_NOTICE), "notice");
+        assert_eq!(mav_severity_name(MAV_SEVERITY_INFO), "info");
+        assert_eq!(mav_severity_name(MAV_SEVERITY_DEBUG), "debug");
+    }
 }

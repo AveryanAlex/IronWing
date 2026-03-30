@@ -97,7 +97,7 @@ describe("useSetup", () => {
       mode_name: "Stabilize",
       system_status: "standby",
       vehicle_type: "quadrotor",
-      autopilot: "ardupilotmega",
+      autopilot: "ardu_pilot_mega",
       system_id: 42,
       component_id: 1,
       heartbeat_received: true,

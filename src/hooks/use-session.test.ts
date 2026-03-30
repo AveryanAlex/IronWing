@@ -259,7 +259,7 @@ describe("useSession", () => {
             value: {
               status: "active",
               connection: { kind: "disconnected" },
-              vehicle_state: { armed: true, custom_mode: 6, mode_name: "Auto", system_status: "active", vehicle_type: "quad", autopilot: "ardupilotmega", system_id: 1, component_id: 1, heartbeat_received: true },
+              vehicle_state: { armed: true, custom_mode: 6, mode_name: "Auto", system_status: "active", vehicle_type: "quad", autopilot: "ardu_pilot_mega", system_id: 1, component_id: 1, heartbeat_received: true },
               home_position: null,
             },
           },

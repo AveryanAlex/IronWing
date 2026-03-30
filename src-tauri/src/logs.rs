@@ -155,9 +155,9 @@ impl LogStore {
             armed,
             custom_mode,
             mode_name: format!("Mode {custom_mode}"),
-            system_status: "active".into(),
-            vehicle_type: String::new(),
-            autopilot: String::new(),
+            system_status: mavkit::SystemStatus::Active,
+            vehicle_type: Default::default(),
+            autopilot: Default::default(),
             system_id: 0,
             component_id: 0,
             heartbeat_received: false,
@@ -341,16 +341,17 @@ pub(crate) struct FlightSummary {
     gps_sats_max: Option<u32>,
 }
 
-fn gps_fix_type_name(val: f64) -> String {
+/// Maps a raw GPS fix_type u8 to the same snake_case names as
+/// `mavkit::GpsFixType`'s serde output so the wire format is consistent
+/// between live and playback paths.
+fn gps_fix_type_name(val: f64) -> &'static str {
     match val as u8 {
-        0 => "no_gps".into(),
-        1 => "no_fix".into(),
-        2 => "fix_2d".into(),
-        3 => "fix_3d".into(),
-        4 => "dgps".into(),
-        5 => "rtk_float".into(),
-        6 => "rtk_fixed".into(),
-        _ => format!("fix_{}", val as u8),
+        2 => "fix_2d",
+        3 => "fix_3d",
+        4 => "dgps",
+        5 => "rtk_float",
+        6 => "rtk_fixed",
+        _ => "no_fix",
     }
 }
 
@@ -386,7 +387,7 @@ fn apply_tlog_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
             snap.battery_pct = f.get("battery_remaining").copied();
         }
         "GPS_RAW_INT" => {
-            snap.gps_fix_type = f.get("fix_type").map(|v| gps_fix_type_name(*v));
+            snap.gps_fix_type = f.get("fix_type").map(|v| gps_fix_type_name(*v).into());
             snap.gps_satellites = f.get("satellites_visible").copied();
             snap.gps_hdop = f.get("eph").copied();
         }
@@ -441,7 +442,7 @@ fn apply_bin_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
             snap.longitude_deg = f.get("Lng").map(|v| v / 1e7);
             snap.speed_mps = f.get("Spd").copied();
             snap.heading_deg = f.get("GCrs").copied();
-            snap.gps_fix_type = f.get("Status").map(|v| gps_fix_type_name(*v));
+            snap.gps_fix_type = f.get("Status").map(|v| gps_fix_type_name(*v).into());
             snap.gps_satellites = f.get("NSats").copied();
             snap.gps_hdop = f.get("HDop").copied();
         }
@@ -1481,15 +1482,15 @@ mod tests {
     }
 
     #[test]
-    fn gps_fix_type_name_named_variants_and_unknown() {
-        assert_eq!(gps_fix_type_name(0.0), "no_gps");
+    fn gps_fix_type_name_matches_mavkit_serde_variants() {
+        assert_eq!(gps_fix_type_name(0.0), "no_fix");
         assert_eq!(gps_fix_type_name(1.0), "no_fix");
         assert_eq!(gps_fix_type_name(2.0), "fix_2d");
         assert_eq!(gps_fix_type_name(3.0), "fix_3d");
         assert_eq!(gps_fix_type_name(4.0), "dgps");
         assert_eq!(gps_fix_type_name(5.0), "rtk_float");
         assert_eq!(gps_fix_type_name(6.0), "rtk_fixed");
-        assert_eq!(gps_fix_type_name(99.0), "fix_99");
+        assert_eq!(gps_fix_type_name(99.0), "no_fix");
     }
 
     #[test]
