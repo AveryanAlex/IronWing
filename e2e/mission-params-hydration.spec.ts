@@ -72,7 +72,8 @@ test("mission and params hydrate without legacy vehicle snapshot fallback", asyn
 
   await page.getByRole("button", { name: "Mission" }).click();
   await expect(page.locator("[data-mission-vehicle-card]")).toContainText("Vehicle Items");
-  await expect(page.locator("[data-mission-vehicle-card]")).toContainText("5");
+  await expect(page.locator("[data-mission-vehicle-card]")).toContainText("—");
+  await expect(page.locator("[data-mission-vehicle-card]")).not.toContainText("5");
   await expect(page.locator("[data-mission-vehicle-card]")).toContainText("#3");
 
   await page.getByRole("button", { name: "Setup" }).click();
