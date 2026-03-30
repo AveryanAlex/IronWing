@@ -1,5 +1,15 @@
-import { useMemo } from "react";
-import { AlertTriangle, Info, Plane, SlidersHorizontal } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Gauge,
+  Info,
+  Loader2,
+  Plane,
+  SlidersHorizontal,
+} from "lucide-react";
+import { Button } from "../../ui/button";
+import { setServo } from "../../../calibration";
+import { PwmChannelBars } from "../shared/PwmChannelBars";
 import { ParamSelect } from "../primitives/ParamSelect";
 import { ParamNumberInput } from "../primitives/ParamNumberInput";
 import { ParamToggle } from "../primitives/ParamToggle";
@@ -7,18 +17,25 @@ import type { ParamInputParams } from "../primitives/param-helpers";
 import type { VehicleState, Telemetry } from "../../../telemetry";
 import { isPlaneVehicleType as isPlane } from "../shared/vehicle-helpers";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { SectionCardHeader } from "../shared/SectionCardHeader";
+import {
+  clampServoCommandPwm,
+  deriveServoTestTargets,
+  isMotorServoFunction,
+  readServoOutputPwm,
+  type ServoTestTarget,
+} from "./servo-test-helpers";
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const MOTOR_FUNCTION_MIN = 33;
-const MOTOR_FUNCTION_MAX = 40;
 const MAX_SERVO_INDEX = 32;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+function clampTargetPwm(target: ServoTestTarget, value: number): number {
+  const clamped = clampServoCommandPwm(value);
+  return Math.max(target.minPwm, Math.min(target.maxPwm, clamped));
+}
+
+function formatPwm(value: number): string {
+  return `${Math.round(value)} µs`;
+}
 
 function detectServoIndices(params: ParamInputParams): number[] {
   const indices: number[] = [];
@@ -31,26 +48,27 @@ function detectServoIndices(params: ParamInputParams): number[] {
   return indices;
 }
 
-function isMotorFunction(functionValue: number | null): boolean {
-  if (functionValue == null) return false;
-  return functionValue >= MOTOR_FUNCTION_MIN && functionValue <= MOTOR_FUNCTION_MAX;
-}
-
-function hasAnyMotorAssignment(
-  indices: number[],
-  params: ParamInputParams,
-): boolean {
+function hasAnyMotorAssignment(indices: number[], params: ParamInputParams): boolean {
   for (const i of indices) {
-    const val = params.store?.params[`SERVO${i}_FUNCTION`]?.value ?? null;
-    const staged = params.staged.get(`SERVO${i}_FUNCTION`);
-    if (isMotorFunction(staged ?? val)) return true;
+    const paramName = `SERVO${i}_FUNCTION`;
+    const currentValue = params.store?.params[paramName]?.value ?? null;
+    const stagedValue = params.staged.get(paramName);
+    if (isMotorServoFunction(stagedValue ?? currentValue)) return true;
   }
   return false;
 }
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
+function asErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+
+  return "Unknown actuation error";
+}
 
 function MotorAssignmentBanner() {
   return (
@@ -89,6 +107,382 @@ function PlaneGuidanceBanner() {
   );
 }
 
+function ServoTesterCard({
+  params,
+  telemetry,
+}: {
+  params: ParamInputParams;
+  telemetry: Telemetry | null;
+}) {
+  const targets = useMemo(
+    () => deriveServoTestTargets(params),
+    [params.store, params.staged, params.metadata],
+  );
+  const supportedTargets = useMemo(
+    () => targets.filter((target) => target.supported),
+    [targets],
+  );
+  const unsupportedTargets = useMemo(
+    () => targets.filter((target) => !target.supported),
+    [targets],
+  );
+
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [commandedPwm, setCommandedPwm] = useState<number>(1500);
+  const [activeCommand, setActiveCommand] = useState<{
+    index: number;
+    pwm: number;
+  } | null>(null);
+  const [lastCommand, setLastCommand] = useState<{
+    index: number;
+    pwm: number;
+  } | null>(null);
+  const [commandError, setCommandError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!supportedTargets.some((target) => target.index === selectedIndex)) {
+      setSelectedIndex(supportedTargets[0]?.index ?? null);
+    }
+  }, [selectedIndex, supportedTargets]);
+
+  const selectedTarget = useMemo(
+    () => supportedTargets.find((target) => target.index === selectedIndex) ?? null,
+    [selectedIndex, supportedTargets],
+  );
+
+  useEffect(() => {
+    if (!selectedTarget) return;
+    setCommandedPwm(selectedTarget.defaultPwm);
+    setCommandError(null);
+  }, [selectedTarget]);
+
+  const liveReadback = selectedTarget
+    ? readServoOutputPwm(selectedTarget.index, telemetry)
+    : null;
+  const hasLiveServoFrame = Array.isArray(telemetry?.servo_outputs);
+  const selectedLastCommand =
+    selectedTarget && lastCommand?.index === selectedTarget.index ? lastCommand : null;
+  const selectedActiveCommand =
+    selectedTarget && activeCommand?.index === selectedTarget.index ? activeCommand : null;
+
+  const updateCommandedPwm = useCallback(
+    (nextValue: number) => {
+      if (!selectedTarget || !Number.isFinite(nextValue)) return;
+      setCommandedPwm(clampTargetPwm(selectedTarget, nextValue));
+    },
+    [selectedTarget],
+  );
+
+  const sendServoCommand = useCallback(
+    async (requestedPwm: number) => {
+      if (!selectedTarget) return;
+
+      const safePwm = clampTargetPwm(selectedTarget, requestedPwm);
+      setActiveCommand({ index: selectedTarget.index, pwm: safePwm });
+      setCommandError(null);
+      setCommandedPwm(safePwm);
+
+      try {
+        await setServo(selectedTarget.index, safePwm);
+        setLastCommand({ index: selectedTarget.index, pwm: safePwm });
+      } catch (error) {
+        setCommandError(asErrorMessage(error));
+      } finally {
+        setActiveCommand(null);
+      }
+    },
+    [selectedTarget],
+  );
+
+  const statusCopy = selectedTarget
+    ? selectedActiveCommand
+      ? {
+        tone: "border-accent/20 bg-accent/5 text-accent",
+        body: `Sending ${formatPwm(selectedActiveCommand.pwm)} to ${selectedTarget.functionLabel} on ${selectedTarget.outputLabel}.`,
+      }
+      : commandError
+        ? {
+          tone: "border-danger/20 bg-danger/5 text-danger",
+          body: `Servo test failed: ${commandError}`,
+        }
+        : selectedLastCommand
+          ? liveReadback != null
+            ? {
+              tone: "border-success/20 bg-success/5 text-success",
+              body: `Last command ${formatPwm(selectedLastCommand.pwm)}. Live readback is ${formatPwm(liveReadback)}.`,
+            }
+            : !hasLiveServoFrame
+              ? {
+                tone: "border-warning/20 bg-warning/5 text-warning",
+                body: `Last command ${formatPwm(selectedLastCommand.pwm)} sent. Waiting for live servo output telemetry.`,
+              }
+              : {
+                tone: "border-warning/20 bg-warning/5 text-warning",
+                body: `Last command ${formatPwm(selectedLastCommand.pwm)} sent, but ${selectedTarget.outputLabel} is missing from the latest readback frame.`,
+              }
+          : !hasLiveServoFrame
+            ? {
+              tone: "border-warning/20 bg-warning/5 text-warning",
+              body: "Waiting for live servo output telemetry. Commands stay manual until readback arrives.",
+            }
+            : liveReadback == null
+              ? {
+                tone: "border-warning/20 bg-warning/5 text-warning",
+                body: `${selectedTarget.outputLabel} is not present in the current live servo readback frame.`,
+              }
+              : {
+                tone: "border-border bg-bg-secondary/60 text-text-secondary",
+                body: `Live readback ${formatPwm(liveReadback)}. Adjust the target PWM, then send an explicit test command.`,
+              }
+    : null;
+
+  return (
+    <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
+      <SectionCardHeader icon={Gauge} title="Servo Tester" />
+
+      <div className="flex flex-col gap-4">
+        <p className="text-xs leading-relaxed text-text-secondary">
+          Select a configured non-motor output, then send an explicit trim or raw
+          PWM command. Commands stay inside the bridged 1000–2000 µs safety window,
+          and live servo telemetry provides the readback proof.
+        </p>
+
+        {targets.length === 0 ? (
+          <div className="rounded-md border border-border bg-bg-secondary/60 px-3 py-2.5 text-xs text-text-muted">
+            No configured non-motor servo outputs are available for live testing yet.
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-text-muted">
+                  Test targets
+                </span>
+                <span className="text-[10px] text-text-muted">
+                  {supportedTargets.length} supported / {unsupportedTargets.length} unavailable
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {supportedTargets.map((target) => {
+                  const selected = target.index === selectedTarget?.index;
+                  return (
+                    <button
+                      key={target.index}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setSelectedIndex(target.index)}
+                      className={`rounded-md border px-3 py-2 text-left transition-colors ${selected
+                          ? "border-accent/40 bg-accent/10 text-accent"
+                          : "border-border bg-bg-secondary text-text-secondary hover:bg-bg-tertiary/50"
+                        }`}
+                    >
+                      <div className="text-xs font-medium text-inherit">
+                        {target.functionLabel}
+                      </div>
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-current/80">
+                        {target.outputLabel}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {unsupportedTargets.length > 0 && (
+              <div className="rounded-md border border-warning/20 bg-warning/5 px-3 py-2.5 text-xs text-text-secondary">
+                <div className="mb-1 text-[10px] uppercase tracking-wider text-warning">
+                  Unavailable in live tester
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {unsupportedTargets.map((target) => (
+                    <span
+                      key={target.index}
+                      className="rounded bg-warning/10 px-2 py-1 font-mono text-[10px] text-warning"
+                    >
+                      {target.outputLabel} · {target.functionLabel}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-text-secondary">
+                  {unsupportedTargets[0]?.unavailableReason}
+                </p>
+              </div>
+            )}
+
+            {!selectedTarget ? (
+              <div className="rounded-md border border-warning/20 bg-warning/5 px-3 py-2.5 text-xs text-text-secondary">
+                The current configuration only exposes SERVO17–32 targets, which are
+                outside the live tester bridge surface.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                  <div className="rounded-md border border-border bg-bg-secondary/60 px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-text-muted">
+                      Target
+                    </div>
+                    <div className="mt-1 text-xs font-medium text-text-primary">
+                      {selectedTarget.functionLabel}
+                    </div>
+                    <div className="font-mono text-[10px] text-text-muted">
+                      {selectedTarget.outputLabel}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border bg-bg-secondary/60 px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-text-muted">
+                      Safe range
+                    </div>
+                    <div className="mt-1 text-xs font-medium text-text-primary">
+                      {formatPwm(selectedTarget.minPwm)} – {formatPwm(selectedTarget.maxPwm)}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border bg-bg-secondary/60 px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-text-muted">
+                      Trim default
+                    </div>
+                    <div className="mt-1 text-xs font-medium text-text-primary">
+                      {formatPwm(selectedTarget.trimPwm)}
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-border bg-bg-secondary/60 px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-text-muted">
+                      Commanded
+                    </div>
+                    <div className="mt-1 text-xs font-medium text-text-primary">
+                      {formatPwm(commandedPwm)}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  aria-live="polite"
+                  className={`rounded-md border px-3 py-2.5 text-xs ${statusCopy?.tone ?? "border-border bg-bg-secondary/60 text-text-secondary"}`}
+                >
+                  <div className="flex items-start gap-2">
+                    {selectedActiveCommand ? (
+                      <Loader2 size={14} className="mt-0.5 shrink-0 animate-spin" />
+                    ) : commandError ? (
+                      <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                    ) : (
+                      <Info size={14} className="mt-0.5 shrink-0" />
+                    )}
+                    <span>{statusCopy?.body}</span>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                  <div className="rounded-md border border-border bg-bg-secondary/60 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-[10px] uppercase tracking-wider text-text-muted">
+                        Raw PWM command
+                      </span>
+                      <span className="text-xs font-medium text-text-primary">
+                        {formatPwm(commandedPwm)}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                      <input
+                        aria-label={`Raw PWM slider for ${selectedTarget.outputLabel}`}
+                        type="range"
+                        min={selectedTarget.minPwm}
+                        max={selectedTarget.maxPwm}
+                        step={1}
+                        value={commandedPwm}
+                        onChange={(event) => updateCommandedPwm(Number(event.target.value))}
+                        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-bg-tertiary accent-accent"
+                      />
+
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor={`servo-pwm-input-${selectedTarget.index}`}
+                          className="text-[10px] uppercase tracking-wider text-text-muted"
+                        >
+                          PWM
+                        </label>
+                        <input
+                          id={`servo-pwm-input-${selectedTarget.index}`}
+                          aria-label={`Raw PWM input for ${selectedTarget.outputLabel}`}
+                          type="number"
+                          min={selectedTarget.minPwm}
+                          max={selectedTarget.maxPwm}
+                          step={1}
+                          value={commandedPwm}
+                          onChange={(event) => updateCommandedPwm(Number(event.target.value))}
+                          className="w-28 rounded border border-border bg-bg-input px-2 py-1.5 text-xs font-mono text-text-primary focus:border-accent focus:outline-none"
+                        />
+                        <span className="text-[10px] text-text-muted">µs</span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => void sendServoCommand(selectedTarget.trimPwm)}
+                          disabled={selectedActiveCommand != null}
+                        >
+                          Send trim
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => void sendServoCommand(commandedPwm)}
+                          disabled={selectedActiveCommand != null}
+                        >
+                          Send PWM
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-border bg-bg-secondary/60 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-[10px] uppercase tracking-wider text-text-muted">
+                        Live readback
+                      </span>
+                      <span className="font-mono text-[11px] text-text-primary">
+                        {liveReadback != null ? formatPwm(liveReadback) : "--"}
+                      </span>
+                    </div>
+
+                    {liveReadback != null ? (
+                      <div className="flex flex-col gap-2">
+                        <PwmChannelBars
+                          items={[
+                            {
+                              key: `servo-${selectedTarget.index}`,
+                              channel: selectedTarget.index,
+                              label: selectedTarget.outputLabel,
+                              value: liveReadback,
+                              annotations: [selectedTarget.functionLabel],
+                            },
+                          ]}
+                          className="sm:grid-cols-1 xl:grid-cols-1"
+                        />
+                        <p className="text-[10px] text-text-muted">
+                          Readback comes from telemetry.servo_outputs[{selectedTarget.index - 1}] when the vehicle publishes it.
+                        </p>
+                      </div>
+                    ) : !hasLiveServoFrame ? (
+                      <p className="text-xs text-text-muted">
+                        Waiting for live servo output telemetry before readback can confirm the command.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-text-muted">
+                        {selectedTarget.outputLabel} is not present in the latest servo readback frame.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ServoRow({
   index,
   params,
@@ -100,15 +494,14 @@ function ServoRow({
   const functionParam = `${prefix}_FUNCTION`;
   const functionValue = params.store?.params[functionParam]?.value ?? null;
   const stagedFunction = params.staged.get(functionParam);
-  const isMotor = isMotorFunction(stagedFunction ?? functionValue);
+  const isMotor = isMotorServoFunction(stagedFunction ?? functionValue);
 
   return (
     <div
-      className={`flex flex-col gap-2 rounded-lg border p-3 transition-colors ${
-        isMotor
+      className={`flex flex-col gap-2 rounded-lg border p-3 transition-colors ${isMotor
           ? "border-warning/20 bg-warning/5"
           : "border-border bg-bg-tertiary/50"
-      }`}
+        }`}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center">
@@ -167,24 +560,16 @@ function ServoRow({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 type ServoOutputsSectionProps = {
   params: ParamInputParams;
   vehicleState: VehicleState | null;
   telemetry: Telemetry | null;
 };
 
-// ---------------------------------------------------------------------------
-// Main section
-// ---------------------------------------------------------------------------
-
 export function ServoOutputsSection({
   params,
   vehicleState,
-  telemetry: _telemetry,
+  telemetry,
 }: ServoOutputsSectionProps) {
   const servoIndices = useMemo(() => detectServoIndices(params), [params.store]);
   const showMotorBanner = useMemo(
@@ -211,14 +596,13 @@ export function ServoOutputsSection({
       <SetupSectionIntro
         icon={SlidersHorizontal}
         title="Servo Outputs"
-        description="Assign functions, set PWM range, and reverse direction for each servo output. Motor outputs are assigned automatically by your frame type."
+        description="Assign functions, set PWM range, reverse direction, and live-test configured control surfaces without changing the per-output editor layout."
       />
 
-      {/* Info banners */}
       {showMotorBanner && <MotorAssignmentBanner />}
       {showPlaneBanner && <PlaneGuidanceBanner />}
+      <ServoTesterCard params={params} telemetry={telemetry} />
 
-      {/* Servo table — one card per output */}
       <div className="flex flex-col gap-2">
         {servoIndices.map((index) => (
           <ServoRow key={index} index={index} params={params} />
