@@ -110,7 +110,7 @@
             (with pkgs; [
               android-studio
               cargo-tauri
-              nodejs_20
+              nodejs_latest
               pnpm
               pkg-config
               nixfmt
