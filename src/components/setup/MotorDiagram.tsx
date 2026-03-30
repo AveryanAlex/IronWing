@@ -1,13 +1,18 @@
 import { useMemo } from "react";
-import { getMotorLayout, type MotorLayout } from "../../data/motor-layouts";
+import {
+  getApMotorDiagramModel,
+  type MotorDiagramEntry,
+  type MotorDiagramModel,
+} from "./shared/vtol-layouts";
 
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
 type MotorDiagramProps = {
-  frameClass: number;
-  frameType: number;
+  frameClass?: number | null;
+  frameType?: number | null;
+  model?: MotorDiagramModel | null;
   activeMotor?: number | null;
   size?: number;
 };
@@ -68,6 +73,29 @@ function arrowheadPoints(cx: number, cy: number, r: number, cw: boolean): string
   return `${tipX},${tipY} ${p1x},${p1y} ${p2x},${p2y}`;
 }
 
+function AirframeOverlay({ model }: { model: MotorDiagramModel }) {
+  if (model.overlay === "none") return null;
+
+  if (model.overlay === "tiltrotor") {
+    return (
+      <g className="stroke-accent/40 fill-none">
+        <line x1={44} y1={74} x2={156} y2={74} strokeWidth={5} strokeLinecap="round" />
+        <line x1={CENTER} y1={74} x2={CENTER} y2={150} strokeWidth={5} strokeLinecap="round" />
+        <line x1={58} y1={64} x2={70} y2={74} strokeWidth={3} strokeLinecap="round" />
+        <line x1={142} y1={64} x2={130} y2={74} strokeWidth={3} strokeLinecap="round" />
+      </g>
+    );
+  }
+
+  return (
+    <g className="stroke-accent/40 fill-none">
+      <line x1={CENTER} y1={34} x2={CENTER} y2={168} strokeWidth={5} strokeLinecap="round" />
+      <line x1={54} y1={108} x2={146} y2={108} strokeWidth={5} strokeLinecap="round" />
+      <path d="M 92 38 L 100 26 L 108 38" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+    </g>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Motor circle + label + rotation indicator
 // ---------------------------------------------------------------------------
@@ -78,7 +106,7 @@ function MotorCircle({
   cy,
   isActive,
 }: {
-  motor: MotorLayout;
+  motor: MotorDiagramEntry;
   cx: number;
   cy: number;
   isActive: boolean;
@@ -89,7 +117,6 @@ function MotorCircle({
 
   return (
     <g>
-      {/* Active glow ring */}
       {isActive && (
         <circle
           cx={cx}
@@ -108,7 +135,6 @@ function MotorCircle({
         </circle>
       )}
 
-      {/* Motor circle */}
       <circle
         cx={cx}
         cy={cy}
@@ -116,12 +142,13 @@ function MotorCircle({
         className={
           isActive
             ? "fill-accent/20 stroke-accent"
-            : "fill-bg-secondary stroke-accent"
+            : motor.role === "tilt"
+              ? "fill-accent/10 stroke-accent"
+              : "fill-bg-secondary stroke-accent"
         }
         strokeWidth={2}
       />
 
-      {/* Rotation arc + arrowhead */}
       {hasRotation && (
         <>
           <path
@@ -138,7 +165,6 @@ function MotorCircle({
         </>
       )}
 
-      {/* Unknown rotation indicator */}
       {!hasRotation && (
         <text
           x={cx}
@@ -151,7 +177,19 @@ function MotorCircle({
         </text>
       )}
 
-      {/* Motor number label */}
+      {motor.role === "tilt" && (
+        <text
+          x={cx}
+          y={cy - MOTOR_RADIUS - 12}
+          textAnchor="middle"
+          className="fill-accent"
+          fontSize={7}
+          fontWeight={700}
+        >
+          tilt
+        </text>
+      )}
+
       <text
         x={cx}
         y={cy + LABEL_FONT_SIZE * 0.35}
@@ -171,32 +209,46 @@ function MotorCircle({
 // ---------------------------------------------------------------------------
 
 export function MotorDiagram({
-  frameClass,
-  frameType,
+  frameClass = null,
+  frameType = null,
+  model = null,
   activeMotor = null,
   size = 200,
 }: MotorDiagramProps) {
-  const layout = useMemo(
-    () => getMotorLayout(frameClass, frameType),
-    [frameClass, frameType],
-  );
+  const resolvedModel = useMemo(() => {
+    if (model) return model;
+    if (frameClass == null || frameType == null) return null;
+    return getApMotorDiagramModel(frameClass, frameType);
+  }, [model, frameClass, frameType]);
 
   const motorPositions = useMemo(() => {
-    if (!layout) return [];
-    return layout.motors.map((m) => ({
-      motor: m,
-      cx: CENTER + m.rollFactor * SPREAD,
-      cy: CENTER - m.pitchFactor * SPREAD,
-    }));
-  }, [layout]);
+    if (!resolvedModel || resolvedModel.status === "unsupported") return [];
 
-  if (!layout) {
+    return resolvedModel.motors.map((motor) => ({
+      motor,
+      cx: CENTER + motor.rollFactor * SPREAD,
+      cy: CENTER - motor.pitchFactor * SPREAD,
+    }));
+  }, [resolvedModel]);
+
+  if (!resolvedModel) {
     return (
       <div
-        className="flex items-center justify-center rounded-lg border border-border bg-bg-tertiary/50 text-xs text-text-muted"
+        className="flex items-center justify-center rounded-lg border border-border bg-bg-tertiary/50 px-3 text-center text-xs text-text-muted"
         style={{ width: size, height: size }}
       >
         No layout available
+      </div>
+    );
+  }
+
+  if (resolvedModel.status === "unsupported") {
+    return (
+      <div
+        className="flex items-center justify-center rounded-lg border border-warning/30 bg-warning/10 px-3 text-center text-xs leading-relaxed text-warning"
+        style={{ width: size, height: size }}
+      >
+        {resolvedModel.message ?? "Unsupported VTOL layout"}
       </div>
     );
   }
@@ -207,7 +259,10 @@ export function MotorDiagram({
       width={size}
       height={size}
       className="select-none"
+      aria-label={`${resolvedModel.className} ${resolvedModel.typeName} motor diagram`}
     >
+      <AirframeOverlay model={resolvedModel} />
+
       {motorPositions.map(({ motor, cx, cy }) => (
         <line
           key={`arm-${motor.motorNumber}`}

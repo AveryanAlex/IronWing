@@ -201,6 +201,8 @@ describe("FrameOrientationSection", () => {
 
     expect(screen.getByText("Tilt-Rotor QuadPlane Frame")).toBeTruthy();
     expect(screen.getByText(/Tilt-rotor QuadPlane detected/i)).toBeTruthy();
+    expect(screen.getByText(/Custom tilt-rotor preview shown/i)).toBeTruthy();
+    expect(screen.queryByText(/No layout available/i)).toBeNull();
   });
 
   it("renders tailsitter specific copy for QuadPlane tailsitter profiles", () => {
@@ -218,6 +220,25 @@ describe("FrameOrientationSection", () => {
 
     expect(screen.getByText("Tailsitter QuadPlane Frame")).toBeTruthy();
     expect(screen.getByText(/Tailsitter QuadPlane detected/i)).toBeTruthy();
+  });
+
+  it("fails loudly for unsupported VTOL layouts instead of showing a generic empty preview", () => {
+    renderSection({
+      params: makeParams({
+        store: {
+          Q_ENABLE: 1,
+          Q_FRAME_CLASS: 10,
+          Q_FRAME_TYPE: 0,
+          AHRS_ORIENTATION: 0,
+        },
+      }),
+    });
+
+    expect(
+      screen.getByText(/outside the known lift-motor layouts/i),
+    ).toBeTruthy();
+    expect(screen.getByText(/Unsupported VTOL layout/i)).toBeTruthy();
+    expect(screen.queryByText(/No layout available/i)).toBeNull();
   });
 
   it("surfaces incomplete frame metadata instead of crashing when Q_FRAME enums are missing", () => {

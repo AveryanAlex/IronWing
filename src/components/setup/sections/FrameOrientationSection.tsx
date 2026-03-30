@@ -9,6 +9,7 @@ import {
   deriveVtolProfile,
   getVehicleSlug,
 } from "../shared/vehicle-helpers";
+import { getVtolLayoutModel } from "../shared/vtol-layouts";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import { SectionCardHeader } from "../shared/SectionCardHeader";
 import { resolveDocsUrl } from "../../../data/ardupilot-docs";
@@ -117,6 +118,10 @@ function FrameSelectionPanel({
     () => deriveVtolProfile(vehicleState, params),
     [vehicleState, params],
   );
+  const vtolLayoutModel = useMemo(
+    () => getVtolLayoutModel(profile),
+    [profile],
+  );
 
   const frameClassParam = profile.frameClassParam;
   const frameTypeParam = profile.frameTypeParam;
@@ -206,15 +211,28 @@ function FrameSelectionPanel({
           </div>
         )}
 
+        {vtolLayoutModel?.message && vtolLayoutModel.status !== "unsupported" && (
+          <div className="mt-3">
+            <Callout tone="info">
+              {vtolLayoutModel.message}
+            </Callout>
+          </div>
+        )}
+
         {frameClass != null && frameType != null && (
           <div className="mt-4 flex flex-col items-center gap-2 rounded-md border border-border/50 bg-bg-secondary/40 py-4">
             <MotorDiagram
-              frameClass={frameClass}
-              frameType={frameType}
+              model={profile.frameParamFamily === "quadplane" ? vtolLayoutModel : undefined}
+              frameClass={profile.frameParamFamily === "quadplane" ? null : frameClass}
+              frameType={profile.frameParamFamily === "quadplane" ? null : frameType}
               size={180}
             />
             <span className="text-[10px] text-text-muted">
-              Motor layout preview
+              {vtolLayoutModel?.status === "unsupported"
+                ? "Unsupported VTOL layout"
+                : vtolLayoutModel?.source === "custom"
+                  ? "Custom VTOL layout preview"
+                  : "Motor layout preview"}
             </span>
           </div>
         )}
