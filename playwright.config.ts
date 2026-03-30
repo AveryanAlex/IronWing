@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const PLAYWRIGHT_PORT = 4173;
 const PLAYWRIGHT_HOST = "127.0.0.1";
+const PLAYWRIGHT_PORT = Number(process.env.E2E_PORT) || 4173;
 const PLAYWRIGHT_BASE_URL = `http://${PLAYWRIGHT_HOST}:${PLAYWRIGHT_PORT}`;
 const PNPM_COMMAND = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
