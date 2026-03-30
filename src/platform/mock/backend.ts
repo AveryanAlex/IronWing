@@ -369,6 +369,28 @@ function validateSetServoArgs(args: CommandArgs) {
   }
 }
 
+function validateMotorTestArgs(args: CommandArgs) {
+  const motorInstance = requireFiniteInteger(args?.motorInstance, "motor_test.motorInstance");
+  const throttlePct = args?.throttlePct;
+  const durationS = args?.durationS;
+
+  if (motorInstance < 1 || motorInstance > 8) {
+    throw new Error(`motor_test motorInstance must be in 1..=8, got ${motorInstance}`);
+  }
+  if (typeof throttlePct !== "number" || !Number.isFinite(throttlePct)) {
+    throw new Error("missing or invalid motor_test.throttlePct");
+  }
+  if (throttlePct < 0 || throttlePct > 100) {
+    throw new Error(`motor_test throttlePct must be in 0..=100, got ${throttlePct}`);
+  }
+  if (typeof durationS !== "number" || !Number.isFinite(durationS)) {
+    throw new Error("missing or invalid motor_test.durationS");
+  }
+  if (durationS <= 0) {
+    throw new Error(`motor_test durationS must be greater than 0, got ${durationS}`);
+  }
+}
+
 function validateRcOverrideArgs(args: CommandArgs) {
   if (!Array.isArray(args?.channels)) {
     throw new Error("missing or invalid rc_override.channels");
@@ -1487,6 +1509,10 @@ function defaultCommandResult(cmd: string, _args: CommandArgs): unknown {
     case "set_servo":
       requireConnectedVehicle();
       validateSetServoArgs(_args);
+      return undefined;
+    case "motor_test":
+      requireConnectedVehicle();
+      validateMotorTestArgs(_args);
       return undefined;
     case "rc_override":
       requireConnectedVehicle();

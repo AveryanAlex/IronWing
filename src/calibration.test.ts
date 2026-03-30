@@ -11,6 +11,19 @@ describe("calibration bridge actuation wrappers", () => {
     invoke.mockReset();
   });
 
+  it("invokes motor_test with snake_case command name and camelCase args", async () => {
+    invoke.mockResolvedValue(undefined);
+    const { motorTest } = await import("./calibration");
+
+    await motorTest(4, 5, 2);
+
+    expect(invoke).toHaveBeenCalledWith("motor_test", {
+      motorInstance: 4,
+      throttlePct: 5,
+      durationS: 2,
+    });
+  });
+
   it("invokes set_servo with snake_case command name and camelCase args", async () => {
     invoke.mockResolvedValue(undefined);
     const { setServo } = await import("./calibration");
