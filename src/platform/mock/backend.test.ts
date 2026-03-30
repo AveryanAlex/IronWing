@@ -3,6 +3,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MissionState, TransferProgress } from "../../mission";
 import type { ParamProgress, ParamStore } from "../../params";
 import type { OpenSessionSnapshot, SessionEvent } from "../../session";
+import type {
+  CatalogEntry,
+  CatalogTargetSummary,
+  DfuRecoveryResult,
+  DfuScanResult,
+  InventoryResult,
+  PortInfo,
+  SerialFlowResult,
+  SerialPreflightInfo,
+  SerialReadinessRequest,
+} from "../../firmware";
 
 import { getMockPlatformController, invokeMockCommand, listenMockEvent } from "./backend";
 
@@ -763,19 +774,237 @@ describe("mock backend actuation parity", () => {
   });
 });
 
-describe("mock backend firmware readiness defaults", () => {
+describe("mock firmware backend parity", () => {
   beforeEach(() => {
     getMockPlatformController().reset();
   });
 
-  it("returns the full firmware_serial_readiness contract", async () => {
-    await expect(invokeMockCommand("firmware_serial_readiness")).resolves.toEqual({
-      request_token: "mock:firmware_serial_readiness",
+  const expectedPorts: PortInfo[] = [
+    {
+      port_name: "/dev/ttyACM0",
+      vid: null,
+      pid: null,
+      serial_number: null,
+      manufacturer: "Hex",
+      product: null,
+      location: null,
+    },
+  ];
+
+  const serialReadinessRequest: SerialReadinessRequest = {
+    port: "/dev/ttyACM0",
+    source: { kind: "catalog_url", url: "https://example.com/cubeorange-copter.apj" },
+    options: { full_chip_erase: false },
+  };
+
+  it("implements the firmware commands used by the standalone tab with frontend-shaped responses", async () => {
+    const preflight = await invokeMockCommand<SerialPreflightInfo>("firmware_serial_preflight");
+    expect(preflight).toEqual({
+      vehicle_connected: false,
+      param_count: 0,
+      has_params_to_backup: false,
+      available_ports: expectedPorts,
+      detected_board_id: null,
+      session_ready: true,
+      session_status: { kind: "idle" },
+    });
+
+    await expect(invokeMockCommand("firmware_session_status")).resolves.toEqual({ kind: "idle" });
+    await expect(invokeMockCommand("firmware_session_clear_completed")).resolves.toBeUndefined();
+
+    const ports = await invokeMockCommand<InventoryResult>("firmware_list_ports");
+    expect(ports).toEqual({ kind: "available", ports: expectedPorts });
+
+    const dfuDevices = await invokeMockCommand<DfuScanResult>("firmware_list_dfu_devices");
+    expect(dfuDevices).toEqual({
+      kind: "available",
+      devices: [
+        {
+          vid: 0x0483,
+          pid: 0xdf11,
+          unique_id: "mock-dfu-1",
+          serial_number: "DFU0001",
+          manufacturer: "STMicroelectronics",
+          product: "STM32 BOOTLOADER",
+        },
+      ],
+    });
+
+    const targets = await invokeMockCommand<CatalogTargetSummary[]>("firmware_catalog_targets");
+    expect(targets).toEqual([
+      {
+        board_id: 140,
+        platform: "CubeOrange",
+        brand_name: "Cube Orange",
+        manufacturer: "Hex",
+        vehicle_types: ["Copter", "Plane"],
+        latest_version: "4.5.0",
+      },
+      {
+        board_id: 9,
+        platform: "fmuv2",
+        brand_name: null,
+        manufacturer: null,
+        vehicle_types: ["Plane"],
+        latest_version: "4.4.0",
+      },
+    ]);
+
+    const recoveryTargets = await invokeMockCommand<CatalogTargetSummary[]>("firmware_recovery_catalog_targets");
+    expect(recoveryTargets).toEqual([
+      {
+        board_id: 140,
+        platform: "CubeOrange",
+        brand_name: "Cube Orange",
+        manufacturer: "Hex",
+        vehicle_types: ["Copter", "Plane"],
+        latest_version: "4.5.0",
+      },
+    ]);
+
+    const entries = await invokeMockCommand<CatalogEntry[]>("firmware_catalog_entries", {
+      boardId: 140,
+      platform: "CubeOrange",
+    });
+    expect(entries).toEqual([
+      {
+        board_id: 140,
+        platform: "CubeOrange",
+        vehicle_type: "Copter",
+        version: "4.5.0",
+        version_type: "stable",
+        format: "apj",
+        url: "https://example.com/cubeorange-copter.apj",
+        image_size: 123_456,
+        latest: true,
+        git_sha: "abc1234",
+        brand_name: "Cube Orange",
+        manufacturer: "Hex",
+      },
+      {
+        board_id: 140,
+        platform: "CubeOrange",
+        vehicle_type: "Plane",
+        version: "4.5.0",
+        version_type: "stable",
+        format: "apj",
+        url: "https://example.com/cubeorange-plane.apj",
+        image_size: 123_400,
+        latest: false,
+        git_sha: "abc5678",
+        brand_name: "Cube Orange",
+        manufacturer: "Hex",
+      },
+    ]);
+
+    const readiness = await invokeMockCommand("firmware_serial_readiness", {
+      request: serialReadinessRequest,
+    });
+    expect(readiness).toEqual({
+      request_token: "serial-readiness:port=/dev/ttyACM0:source_kind=catalog_url:source_identity=41-c7f40b36334f961c:full_chip_erase=0",
       session_status: { kind: "idle" },
       readiness: { kind: "advisory" },
       target_hint: null,
-      validation_pending: false,
+      validation_pending: true,
       bootloader_transition: { kind: "manual_bootloader_entry_required" },
     });
+
+    const serialResult = await invokeMockCommand<SerialFlowResult>("firmware_flash_serial", {
+      request: {
+        port: "/dev/ttyACM0",
+        baud: 115200,
+        source: { kind: "catalog_url", url: "https://example.com/cubeorange-copter.apj" },
+        options: { full_chip_erase: false },
+      },
+    });
+    expect(serialResult).toEqual({
+      result: "verified",
+      board_id: 140,
+      bootloader_rev: 5,
+      port: "/dev/ttyACM0",
+    });
+
+    const dfuResult = await invokeMockCommand<DfuRecoveryResult>("firmware_flash_dfu_recovery", {
+      request: {
+        device: {
+          vid: 0x0483,
+          pid: 0xdf11,
+          unique_id: "mock-dfu-1",
+          serial_number: "DFU0001",
+          manufacturer: "STMicroelectronics",
+          product: "STM32 BOOTLOADER",
+        },
+        source: { kind: "official_bootloader", board_target: "CubeOrange" },
+      },
+    });
+    expect(dfuResult).toEqual({ result: "verified" });
+  });
+
+  it("returns blocked serial readiness states instead of inventing usable defaults", async () => {
+    await expect(invokeMockCommand("firmware_serial_readiness", {
+      request: {
+        port: "",
+        source: { kind: "catalog_url", url: "" },
+        options: { full_chip_erase: false },
+      },
+    })).resolves.toMatchObject({ readiness: { kind: "blocked", reason: "port_unselected" } });
+
+    await expect(invokeMockCommand("firmware_serial_readiness", {
+      request: {
+        port: "/dev/ttyUSB9",
+        source: { kind: "catalog_url", url: "https://example.com/cubeorange-copter.apj" },
+        options: { full_chip_erase: false },
+      },
+    })).resolves.toMatchObject({ readiness: { kind: "blocked", reason: "port_unavailable" } });
+
+    await expect(invokeMockCommand("firmware_serial_readiness", {
+      request: {
+        port: "/dev/ttyACM0",
+        source: { kind: "catalog_url", url: "" },
+        options: { full_chip_erase: false },
+      },
+    })).resolves.toMatchObject({ readiness: { kind: "blocked", reason: "source_missing" } });
+  });
+
+  it("rejects malformed firmware command payloads loudly", async () => {
+    await expect(invokeMockCommand("firmware_catalog_entries", {})).rejects.toThrow(
+      "missing or invalid firmware_catalog_entries.boardId",
+    );
+    await expect(invokeMockCommand("firmware_serial_readiness", {})).rejects.toThrow(
+      "missing or invalid firmware_serial_readiness.request",
+    );
+    await expect(invokeMockCommand("firmware_flash_serial", {
+      request: { baud: 115200, source: { kind: "catalog_url", url: "https://example.com/cubeorange-copter.apj" } },
+    })).rejects.toThrow("missing or invalid firmware_flash_serial.request.port");
+    await expect(invokeMockCommand("firmware_flash_dfu_recovery", {
+      request: {
+        device: {
+          vid: 0x0483,
+          pid: 0xdf11,
+          unique_id: "",
+          serial_number: "DFU0001",
+          manufacturer: "STMicroelectronics",
+          product: "STM32 BOOTLOADER",
+        },
+        source: { kind: "official_bootloader", board_target: "CubeOrange" },
+      },
+    })).rejects.toThrow("missing or invalid firmware_flash_dfu_recovery.request.device.unique_id");
+  });
+
+  it("surfaces rejected firmware starts without papering over controller overrides", async () => {
+    const controller = getMockPlatformController();
+    controller.setCommandBehavior("firmware_flash_serial", {
+      type: "reject",
+      error: "serial bootloader handshake failed",
+    });
+
+    await expect(invokeMockCommand("firmware_flash_serial", {
+      request: {
+        port: "/dev/ttyACM0",
+        baud: 115200,
+        source: { kind: "catalog_url", url: "https://example.com/cubeorange-copter.apj" },
+        options: { full_chip_erase: false },
+      },
+    })).rejects.toBe("serial bootloader handshake failed");
   });
 });
