@@ -17,6 +17,7 @@ export type MotorDiagramModel = {
   overlay: MotorDiagramOverlay;
   motors: MotorDiagramEntry[];
   hasLiftMotorSurface: boolean;
+  hasMotorTestSurface: boolean;
   message: string | null;
 };
 
@@ -56,6 +57,7 @@ function buildUnsupportedModel(message: string): MotorDiagramModel {
     overlay: "none",
     motors: [],
     hasLiftMotorSurface: false,
+    hasMotorTestSurface: false,
     message,
   };
 }
@@ -75,6 +77,7 @@ export function getApMotorDiagramModel(
     overlay: "none",
     motors: cloneMotors(layout.motors),
     hasLiftMotorSurface: layout.motors.length > 0,
+    hasMotorTestSurface: layout.motors.length > 0,
     message: null,
   };
 }
@@ -93,6 +96,7 @@ function buildCustomTiltrotorModel(): MotorDiagramModel {
     overlay: "tiltrotor",
     motors,
     hasLiftMotorSurface: true,
+    hasMotorTestSurface: true,
     message:
       "Custom tilt-rotor preview shown because this QuadPlane layout is outside the AP_Motors dataset.",
   };
@@ -107,8 +111,9 @@ function buildCustomTailsitterModel(): MotorDiagramModel {
     overlay: "tailsitter",
     motors: CUSTOM_TAILSITTER_MOTORS,
     hasLiftMotorSurface: false,
+    hasMotorTestSurface: true,
     message:
-      "Custom tailsitter preview shown. This layout does not expose a dedicated lift-motor surface for motor testing here yet.",
+      "Custom tailsitter preview shown. Use Motor Test below to verify propulsion motor direction; lift-motor parameter controls stay unavailable for this layout.",
   };
 }
 

@@ -86,6 +86,7 @@ describe("deriveMotorTestRows", () => {
         overlay: "none",
         motors: [],
         hasLiftMotorSurface: false,
+        hasMotorTestSurface: false,
         message: null,
       }),
     ).toEqual([]);

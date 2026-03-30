@@ -28,6 +28,7 @@ import {
   getApMotorDiagramModel,
   type MotorDiagramModel,
 } from "../shared/vtol-layouts";
+import { deriveMotorTestRows, type MotorTestRow } from "./motor-test-helpers";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import { SectionCardHeader } from "../shared/SectionCardHeader";
 import { resolveDocsUrl } from "../../../data/ardupilot-docs";
@@ -82,6 +83,31 @@ type MotorsEscSectionProps = {
   vehicleState: VehicleState | null;
   connected: boolean;
 };
+
+type DirectionResult = "correct" | "reversed";
+
+function getExpectedDirectionBadge(direction: MotorTestRow["expectedDirection"]): {
+  label: string;
+  className: string;
+} {
+  switch (direction) {
+    case "cw":
+      return {
+        label: "CW ↻",
+        className: "border-accent/30 bg-accent/10 text-accent",
+      };
+    case "ccw":
+      return {
+        label: "CCW ↺",
+        className: "border-success/30 bg-success/10 text-success",
+      };
+    default:
+      return {
+        label: "? Unknown",
+        className: "border-border-light bg-bg-secondary text-text-muted",
+      };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // ESC Protocol card
@@ -182,7 +208,7 @@ function VtolMotorSurfaceCard({
         {missingMotorParams.length > 0 && (
           <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2.5 text-warning">
             QuadPlane lift-motor parameters are not fully loaded yet. Refresh parameters before
-            calibrating or testing VTOL motors. Missing: {" "}
+            calibrating or tuning the VTOL-specific lift-motor controls. Missing: {" "}
             {missingMotorParams.map((name, index) => (
               <span key={name}>
                 {index > 0 ? ", " : ""}
@@ -194,10 +220,9 @@ function VtolMotorSurfaceCard({
           </div>
         )}
 
-        {layoutModel?.status === "preview-only" && (
+        {layoutModel?.status === "preview-only" && layoutModel.hasMotorTestSurface && !layoutModel.hasLiftMotorSurface && (
           <div className="rounded-md border border-border-light bg-bg-secondary/50 px-3 py-2.5">
-            Motor Test stays hidden for this VTOL layout because the airframe does not expose a
-            distinct lift-motor surface here yet.
+            Motor Test is available below for propulsion-direction checks on this VTOL layout. VTOL-specific lift-motor parameter cards stay hidden because the airframe does not expose a dedicated lift-motor surface here.
           </div>
         )}
       </div>
@@ -212,9 +237,11 @@ function VtolMotorSurfaceCard({
 function MotorTestCard({
   connected,
   layoutModel,
+  rows,
 }: {
   connected: boolean;
   layoutModel: MotorDiagramModel | null;
+  rows: MotorTestRow[];
 }) {
   const [propsConfirmed, setPropsConfirmed] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
@@ -222,9 +249,14 @@ function MotorTestCard({
   const [throttle, setThrottle] = useState(3);
   const [activeMotor, setActiveMotor] = useState<number | null>(null);
   const [cooldown, setCooldown] = useState(false);
+  const [testedMotors, setTestedMotors] = useState<Set<number>>(() => new Set());
+  const [directionResult, setDirectionResult] = useState<Map<number, DirectionResult>>(
+    () => new Map(),
+  );
   const cooldownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const motorCount = layoutModel?.motors.length ?? 0;
+  const verifiedCount = rows.filter((row) => directionResult.has(row.motorNumber)).length;
+  const isFullyVerified = rows.length > 0 && verifiedCount === rows.length;
 
   const handleToggleEnable = useCallback(() => {
     if (!enabled) {
@@ -246,24 +278,41 @@ function MotorTestCard({
 
   const handleMotorTest = useCallback(
     async (instance: number) => {
-      if (!connected || cooldown || activeMotor !== null) return;
+      if (!connected || !enabled || cooldown || activeMotor !== null) return;
       const clampedThrottle = Math.min(throttle, MAX_THROTTLE_PCT);
+      let succeeded = false;
       setActiveMotor(instance);
       try {
         await motorTest(instance, clampedThrottle, MOTOR_TEST_DURATION_S);
+        succeeded = true;
       } catch (err) {
         toast.error(`Motor ${instance} test failed`, {
           description: err instanceof Error ? err.message : String(err),
         });
       } finally {
+        if (succeeded) {
+          setTestedMotors((previous) => {
+            const next = new Set(previous);
+            next.add(instance);
+            return next;
+          });
+        }
         setActiveMotor(null);
         setCooldown(true);
         if (cooldownTimer.current) clearTimeout(cooldownTimer.current);
         cooldownTimer.current = setTimeout(() => setCooldown(false), COOLDOWN_MS);
       }
     },
-    [connected, cooldown, activeMotor, throttle],
+    [activeMotor, connected, cooldown, enabled, throttle],
   );
+
+  const handleDirectionResult = useCallback((motorNumber: number, result: DirectionResult) => {
+    setDirectionResult((previous) => {
+      const next = new Map(previous);
+      next.set(motorNumber, result);
+      return next;
+    });
+  }, []);
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
@@ -275,6 +324,19 @@ function MotorTestCard({
       )}
 
       <SectionCardHeader icon={Shield} title="Motor Test" />
+
+      {rows.length > 0 && (
+        <div className="mb-4 flex items-center justify-end">
+          <span
+            className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${isFullyVerified
+                ? "border-success/30 bg-success/10 text-success"
+                : "border-border-light bg-bg-secondary/60 text-text-muted"
+              }`}
+          >
+            {verifiedCount}/{rows.length} verified
+          </span>
+        </div>
+      )}
 
       {layoutModel && (
         <div className="mb-4 flex justify-center">
@@ -292,20 +354,18 @@ function MotorTestCard({
           role="switch"
           aria-checked={enabled}
           onClick={handleToggleEnable}
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
-            enabled ? "bg-danger" : "bg-bg-tertiary"
-          }`}
+          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${enabled ? "bg-danger" : "bg-bg-tertiary"
+            }`}
         >
           <span
-            className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-              enabled ? "translate-x-4" : "translate-x-0"
-            }`}
+            className={`pointer-events-none block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${enabled ? "translate-x-4" : "translate-x-0"
+              }`}
           />
         </button>
       </div>
 
-      {enabled && (
-        <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4">
+        {enabled && (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <label className="text-[10px] uppercase tracking-wider text-text-muted">
@@ -327,31 +387,108 @@ function MotorTestCard({
               <span>{MAX_THROTTLE_PCT}% max</span>
             </div>
           </div>
+        )}
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {Array.from({ length: motorCount }, (_, i) => (
-              <Button
-                key={i}
-                variant="secondary"
-                size="sm"
-                disabled={!connected || cooldown || activeMotor !== null}
-                onClick={() => handleMotorTest(i + 1)}
-                className="relative"
-              >
-                {activeMotor === i + 1 ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <span>Motor {i + 1}</span>
-                )}
-              </Button>
-            ))}
+        {rows.length === 0 ? (
+          <div className="rounded-md border border-border-light bg-bg-secondary/50 px-3 py-3 text-xs text-text-secondary">
+            Motor layout data is not available yet. Load the frame parameters to map ArduPilot test order and expected direction.
           </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {rows.map((row) => {
+              const badge = getExpectedDirectionBadge(row.expectedDirection);
+              const wasTested = testedMotors.has(row.motorNumber);
+              const result = directionResult.get(row.motorNumber);
 
-          {cooldown && (
-            <p className="text-[10px] text-text-muted">Cooldown — wait before next test...</p>
-          )}
-        </div>
-      )}
+              return (
+                <div
+                  key={`${row.testOrder}-${row.motorNumber}`}
+                  className="rounded-md border border-border-light bg-bg-secondary/50 px-3 py-3"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-text-primary">
+                          Motor {row.motorNumber}
+                        </span>
+                        <span className="rounded-full border border-border-light bg-bg-tertiary px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-text-muted">
+                          {row.roleLabel}
+                        </span>
+                        <span
+                          className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${badge.className}`}
+                        >
+                          {badge.label}
+                        </span>
+                        <span className="text-[10px] uppercase tracking-wider text-text-muted">
+                          Test #{row.testOrder}
+                        </span>
+                      </div>
+                      <p className="text-[10px] leading-relaxed text-text-muted">
+                        Verify the observed rotation matches the expected direction after this motor test completes.
+                      </p>
+                    </div>
+
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={!connected || !enabled || cooldown || activeMotor !== null}
+                      onClick={() => handleMotorTest(row.motorNumber)}
+                      aria-label={`Test motor ${row.motorNumber}`}
+                      className="shrink-0"
+                    >
+                      {activeMotor === row.motorNumber ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" />
+                          <span>Testing…</span>
+                        </>
+                      ) : (
+                        <span>Test motor {row.motorNumber}</span>
+                      )}
+                    </Button>
+                  </div>
+
+                  {wasTested && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
+                        Observed direction
+                      </span>
+                      <Button
+                        variant={result === "correct" ? "default" : "secondary"}
+                        size="sm"
+                        onClick={() => handleDirectionResult(row.motorNumber, "correct")}
+                      >
+                        Correct
+                      </Button>
+                      <Button
+                        variant={result === "reversed" ? "destructive" : "secondary"}
+                        size="sm"
+                        onClick={() => handleDirectionResult(row.motorNumber, "reversed")}
+                      >
+                        Reversed
+                      </Button>
+                      {result && (
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider ${result === "correct"
+                              ? "border-success/30 bg-success/10 text-success"
+                              : "border-danger/30 bg-danger/10 text-danger"
+                            }`}
+                        >
+                          {result === "correct" ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+                          {result}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {cooldown && (
+          <p className="text-[10px] text-text-muted">Cooldown — wait before next test...</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -638,10 +775,16 @@ export function MotorsEscSection({
     vtolLayoutModel.status !== "unsupported" &&
     vtolLayoutModel.hasLiftMotorSurface;
 
+  const quadPlaneMotorTestSurface =
+    profile.frameParamFamily === "quadplane" &&
+    vtolLayoutModel != null &&
+    vtolLayoutModel.status !== "unsupported" &&
+    vtolLayoutModel.hasMotorTestSurface;
+
   const missingQuadPlaneMotorParams = quadPlaneLiftSurface
     ? Object.values(QUADPLANE_MOTOR_PARAMS).filter(
-        (name) => !hasStoreParam(params, name),
-      )
+      (name) => !hasStoreParam(params, name),
+    )
     : [];
 
   const quadPlaneMotorControlsReady =
@@ -660,8 +803,13 @@ export function MotorsEscSection({
     (profile.frameParamFamily !== "quadplane" ||
       vtolLayoutModel?.status === "preview-only");
 
-  const showMotorControlCards = profile.isCopter || quadPlaneMotorControlsReady;
+  const showMotorParamCards = profile.isCopter || quadPlaneMotorControlsReady;
+  const showMotorTestCard = profile.isCopter || quadPlaneMotorTestSurface;
   const activeLayoutModel = profile.isCopter ? copterLayoutModel : vtolLayoutModel;
+  const motorTestRows = useMemo(
+    () => deriveMotorTestRows(activeLayoutModel),
+    [activeLayoutModel],
+  );
   const slug = getVehicleSlug(vehicleState);
   const motorsDocsUrl = resolveDocsUrl("motors_esc", slug);
   const escCalDocsUrl = resolveDocsUrl("esc_calibration", slug);
@@ -676,7 +824,7 @@ export function MotorsEscSection({
         docsLabel="Motor Setup Docs"
       />
 
-      {showMotorControlCards && (
+      {showMotorParamCards && (
         <EscProtocolCard params={params} pwmTypeParam={activeMotorParams.pwmType} />
       )}
 
@@ -687,7 +835,7 @@ export function MotorsEscSection({
         />
       )}
 
-      {showMotorControlCards && vtolLayoutModel && !profile.isCopter && (
+      {showMotorParamCards && vtolLayoutModel && !profile.isCopter && (
         <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
           <SectionCardHeader icon={Info} title="VTOL Motor Layout" />
           <div className="flex items-center gap-3 text-xs text-text-secondary">
@@ -705,14 +853,15 @@ export function MotorsEscSection({
         </div>
       )}
 
-      {showMotorControlCards && (
+      {showMotorTestCard && (
         <MotorTestCard
           connected={connected}
           layoutModel={activeLayoutModel}
+          rows={motorTestRows}
         />
       )}
 
-      {showMotorControlCards && (
+      {showMotorParamCards && (
         <EscCalibrationCard
           params={params}
           escCalDocsUrl={escCalDocsUrl}
@@ -720,7 +869,7 @@ export function MotorsEscSection({
         />
       )}
 
-      {showMotorControlCards && (
+      {showMotorParamCards && (
         <MotorRangeCard params={params} paramNames={activeMotorParams} />
       )}
 

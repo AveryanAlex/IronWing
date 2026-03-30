@@ -45,6 +45,7 @@ describe("getApMotorDiagramModel", () => {
     expect(model?.status).toBe("supported");
     expect(model?.motors).toHaveLength(4);
     expect(model?.hasLiftMotorSurface).toBe(true);
+    expect(model?.hasMotorTestSurface).toBe(true);
   });
 });
 
@@ -70,6 +71,7 @@ describe("getVtolLayoutModel", () => {
 
     expect(model?.source).toBe("ap-motors");
     expect(model?.overlay).toBe("tiltrotor");
+    expect(model?.hasMotorTestSurface).toBe(true);
     expect(model?.motors.some((motor) => motor.role === "tilt")).toBe(true);
   });
 
@@ -87,10 +89,11 @@ describe("getVtolLayoutModel", () => {
     expect(model?.status).toBe("supported");
     expect(model?.overlay).toBe("tiltrotor");
     expect(model?.hasLiftMotorSurface).toBe(true);
+    expect(model?.hasMotorTestSurface).toBe(true);
     expect(model?.message).toMatch(/custom tilt-rotor preview/i);
   });
 
-  it("returns a preview-only custom tailsitter model when no lift-motor surface exists", () => {
+  it("keeps custom tailsitter layouts preview-only while still exposing motor-test surface metadata", () => {
     const model = getVtolLayoutModel(
       makeProfile({
         frameClassValue: 10,
@@ -104,6 +107,7 @@ describe("getVtolLayoutModel", () => {
     expect(model?.status).toBe("preview-only");
     expect(model?.overlay).toBe("tailsitter");
     expect(model?.hasLiftMotorSurface).toBe(false);
+    expect(model?.hasMotorTestSurface).toBe(true);
     expect(model?.motors).toHaveLength(2);
   });
 
@@ -117,6 +121,7 @@ describe("getVtolLayoutModel", () => {
 
     expect(model?.status).toBe("unsupported");
     expect(model?.hasLiftMotorSurface).toBe(false);
+    expect(model?.hasMotorTestSurface).toBe(false);
     expect(model?.message).toMatch(/outside the known lift-motor layouts/i);
   });
 });
