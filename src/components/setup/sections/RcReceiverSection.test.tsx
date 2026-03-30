@@ -58,6 +58,43 @@ afterEach(() => {
 });
 
 describe("RcReceiverSection", () => {
+  it("shows staged RC serial protocol assignments after rerender", () => {
+    const store = makeStore({
+      RCMAP_ROLL: 1,
+      RCMAP_PITCH: 2,
+      RCMAP_THROTTLE: 3,
+      RCMAP_YAW: 4,
+      RC_PROTOCOLS: 0,
+      RSSI_TYPE: 3,
+      SERIAL2_PROTOCOL: 1,
+    });
+
+    const { rerender } = renderSection({
+      params: makeParams({
+        store,
+        staged: new Map(),
+      }),
+    });
+
+    expect(screen.getByText(/No serial port configured for RC input/i)).toBeTruthy();
+    expect(screen.queryByText("SERIAL2")).toBeNull();
+
+    rerender(
+      <RcReceiverSection
+        params={makeParams({
+          store,
+          staged: new Map([["SERIAL2_PROTOCOL", 23]]),
+        })}
+        connected
+        telemetry={null}
+      />,
+    );
+
+    expect(screen.getByText(/RC input configured on:/i)).toBeTruthy();
+    expect(screen.getByText("SERIAL2")).toBeTruthy();
+    expect(screen.queryByText(/No serial port configured for RC input/i)).toBeNull();
+  });
+
   it("renders up to 18 live channels with RSSI and mapping badges", () => {
     renderSection({
       telemetry: {

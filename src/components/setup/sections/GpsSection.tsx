@@ -15,27 +15,12 @@ import type { ParamInputParams } from "../primitives/param-helpers";
 import type { Telemetry } from "../../../telemetry";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import { SectionCardHeader } from "../shared/SectionCardHeader";
+import { findGpsSerialPorts } from "../shared/serial-helpers";
 import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** ArduPilot serial port protocol 5 = GPS. Scan SERIAL0..SERIAL8. */
-const SERIAL_INDICES = [0, 1, 2, 3, 4, 5, 6, 7, 8];
-const GPS_PROTOCOL = 5;
-
-function findGpsSerialPorts(params: ParamInputParams): string[] {
-  const ports: string[] = [];
-  for (const i of SERIAL_INDICES) {
-    const name = `SERIAL${i}_PROTOCOL`;
-    const val = getStagedOrCurrent(name, params);
-    if (val === GPS_PROTOCOL) {
-      ports.push(`SERIAL${i}`);
-    }
-  }
-  return ports;
-}
 
 /**
  * Resolve GPS1_TYPE vs GPS_TYPE.

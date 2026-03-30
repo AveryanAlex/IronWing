@@ -7,16 +7,15 @@ import type { ParamInputParams } from "../primitives/param-helpers";
 import type { Telemetry } from "../../../telemetry";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import { SectionCardHeader } from "../shared/SectionCardHeader";
-import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import { PwmChannelBars, type PwmChannelBarItem } from "../shared/PwmChannelBars";
+import { findRcSerialPorts } from "../shared/serial-helpers";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const MAX_RC_CHANNELS = 18;
-const RC_SERIAL_PROTOCOL = 23; // SERIALn_PROTOCOL value for RC input
-const MAX_SERIAL_PORTS = 10; // SERIAL0..SERIAL9
 
 const CHANNEL_OPTIONS = Array.from({ length: 16 }, (_, i) => ({
   value: i + 1,
@@ -44,20 +43,6 @@ const MAPPING_PRESETS: { label: string; values: Record<string, number> }[] = [
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Scan param store for serial ports configured as RC input (protocol 23). */
-function findRcSerialPorts(params: ParamInputParams): string[] {
-  if (!params.store) return [];
-  const ports: string[] = [];
-  for (let i = 0; i < MAX_SERIAL_PORTS; i++) {
-    const name = `SERIAL${i}_PROTOCOL`;
-    const value = params.store.params[name]?.value;
-    if (value === RC_SERIAL_PROTOCOL) {
-      ports.push(`SERIAL${i}`);
-    }
-  }
-  return ports;
-}
 
 function isValidRcPwm(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 500 && value <= 3000;
@@ -124,7 +109,10 @@ type RcReceiverSectionProps = {
 // ---------------------------------------------------------------------------
 
 function ReceiverProtocolPanel({ params }: { params: ParamInputParams }) {
-  const rcSerialPorts = useMemo(() => findRcSerialPorts(params), [params.store]);
+  const rcSerialPorts = useMemo(
+    () => findRcSerialPorts(params),
+    [params.store, params.staged],
+  );
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
