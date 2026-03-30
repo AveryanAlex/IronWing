@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  deriveVtolProfile,
   isPlaneVehicleType,
   isCopterVehicleType,
   isRoverVehicleType,
@@ -8,6 +9,7 @@ import {
 } from "./vehicle-helpers";
 import type { VehicleState } from "../../../telemetry";
 import type { ParamInputParams } from "../primitives/param-helpers";
+import type { ParamStore } from "../../../params";
 
 function vs(vehicle_type: string): VehicleState {
   return {
@@ -23,17 +25,24 @@ function vs(vehicle_type: string): VehicleState {
   };
 }
 
-function makeParams(params: Record<string, number> | null): ParamInputParams {
-  const store = params
-    ? {
-        params: Object.fromEntries(
-          Object.entries(params).map(([k, v]) => [k, { value: v }]),
-        ),
-      }
-    : null;
+function makeStore(entries: Record<string, number>): ParamStore {
+  const params: ParamStore["params"] = {};
+  let index = 0;
+
+  for (const [name, value] of Object.entries(entries)) {
+    params[name] = { name, value, param_type: "real32", index: index++ };
+  }
+
+  return { params, expected_count: index };
+}
+
+function makeParams(
+  params: Record<string, number> | null,
+  staged: Record<string, number> = {},
+): ParamInputParams {
   return {
-    store: store as ParamInputParams["store"],
-    staged: new Map(),
+    store: params ? makeStore(params) : null,
+    staged: new Map(Object.entries(staged)),
     metadata: null,
     stage: () => {},
   };
@@ -145,6 +154,114 @@ describe("hasQuadPlaneParams", () => {
 
   it("returns false when store is null", () => {
     expect(hasQuadPlaneParams(makeParams(null))).toBe(false);
+  });
+});
+
+describe("deriveVtolProfile", () => {
+  it("treats a plain plane with only Q_ENABLE as VTOL-capable but not yet enabled", () => {
+    const profile = deriveVtolProfile(
+      vs("Fixed_Wing"),
+      makeParams({ Q_ENABLE: 0 }),
+    );
+
+    expect(profile.supportsVtol).toBe(true);
+    expect(profile.hasVtolToggle).toBe(true);
+    expect(profile.quadPlaneEnabled).toBe(false);
+    expect(profile.frameParamFamily).toBeNull();
+    expect(profile.planeVtolState).toBe("plain-plane");
+  });
+
+  it("shows an enable-pending state when Q_ENABLE is staged before refresh", () => {
+    const profile = deriveVtolProfile(
+      vs("Fixed_Wing"),
+      makeParams({ Q_ENABLE: 0 }, { Q_ENABLE: 1 }),
+    );
+
+    expect(profile.quadPlaneEnabled).toBe(true);
+    expect(profile.quadPlaneEnabledInStore).toBe(false);
+    expect(profile.awaitingParamRefresh).toBe(true);
+    expect(profile.planeVtolState).toBe("enable-pending");
+    expect(profile.rebootRequiredBeforeTesting).toBe(true);
+  });
+
+  it("switches to QuadPlane frame ownership after refreshed Q_FRAME params appear", () => {
+    const profile = deriveVtolProfile(
+      vs("Fixed_Wing"),
+      makeParams({
+        Q_ENABLE: 1,
+        Q_FRAME_CLASS: 1,
+        Q_FRAME_TYPE: 1,
+      }),
+    );
+
+    expect(profile.quadPlaneEnabled).toBe(true);
+    expect(profile.frameParamFamily).toBe("quadplane");
+    expect(profile.frameClassParam).toBe("Q_FRAME_CLASS");
+    expect(profile.frameTypeParam).toBe("Q_FRAME_TYPE");
+    expect(profile.planeVtolState).toBe("vtol-ready");
+    expect(profile.subtype).toBe("standard");
+  });
+
+  it("keeps partial Q_FRAME availability explicit instead of pretending to be configured", () => {
+    const profile = deriveVtolProfile(
+      vs("Fixed_Wing"),
+      makeParams({
+        Q_ENABLE: 1,
+        Q_FRAME_CLASS: 1,
+      }),
+    );
+
+    expect(profile.hasPartialQuadPlaneParams).toBe(true);
+    expect(profile.frameParamFamily).toBeNull();
+    expect(profile.planeVtolState).toBe("partial-refresh");
+  });
+
+  it("detects tilt-rotor QuadPlane subtypes", () => {
+    const profile = deriveVtolProfile(
+      vs("Fixed_Wing"),
+      makeParams({
+        Q_ENABLE: 1,
+        Q_FRAME_CLASS: 10,
+        Q_FRAME_TYPE: 0,
+        Q_TILT_ENABLE: 1,
+      }),
+    );
+
+    expect(profile.subtype).toBe("tiltrotor");
+    expect(profile.tiltEnabled).toBe(true);
+    expect(profile.tailsitterEnabled).toBe(false);
+  });
+
+  it("detects tailsitter QuadPlane subtypes", () => {
+    const profile = deriveVtolProfile(
+      vs("Fixed_Wing"),
+      makeParams({
+        Q_ENABLE: 1,
+        Q_FRAME_CLASS: 10,
+        Q_FRAME_TYPE: 0,
+        Q_TAILSIT_ENABLE: 1,
+      }),
+    );
+
+    expect(profile.subtype).toBe("tailsitter");
+    expect(profile.tailsitterEnabled).toBe(true);
+    expect(profile.tiltEnabled).toBe(false);
+  });
+
+  it("flags unsupported compound VTOL subtype combinations", () => {
+    const profile = deriveVtolProfile(
+      vs("Fixed_Wing"),
+      makeParams({
+        Q_ENABLE: 1,
+        Q_FRAME_CLASS: 10,
+        Q_FRAME_TYPE: 0,
+        Q_TILT_ENABLE: 1,
+        Q_TAILSIT_ENABLE: 1,
+      }),
+    );
+
+    expect(profile.subtype).toBe("compound");
+    expect(profile.hasUnsupportedSubtype).toBe(true);
   });
 });
 
