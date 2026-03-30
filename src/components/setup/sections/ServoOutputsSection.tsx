@@ -4,7 +4,7 @@ import { ParamSelect } from "../primitives/ParamSelect";
 import { ParamNumberInput } from "../primitives/ParamNumberInput";
 import { ParamToggle } from "../primitives/ParamToggle";
 import type { ParamInputParams } from "../primitives/param-helpers";
-import type { VehicleState } from "../../../telemetry";
+import type { VehicleState, Telemetry } from "../../../telemetry";
 import { isPlaneVehicleType as isPlane } from "../shared/vehicle-helpers";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 
@@ -174,6 +174,7 @@ function ServoRow({
 type ServoOutputsSectionProps = {
   params: ParamInputParams;
   vehicleState: VehicleState | null;
+  telemetry: Telemetry | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -183,6 +184,7 @@ type ServoOutputsSectionProps = {
 export function ServoOutputsSection({
   params,
   vehicleState,
+  telemetry: _telemetry,
 }: ServoOutputsSectionProps) {
   const servoIndices = useMemo(() => detectServoIndices(params), [params.store]);
   const showMotorBanner = useMemo(

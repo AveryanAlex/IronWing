@@ -1,20 +1,20 @@
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { Radio, Shuffle, Signal, Activity, Info } from "lucide-react";
 import { ParamSelect } from "../primitives/ParamSelect";
 import { ParamBitmaskInput } from "../primitives/ParamBitmaskInput";
 import { getStagedOrCurrent } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
-import { subscribeTelemetryState } from "../../../telemetry";
+import type { Telemetry } from "../../../telemetry";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import { SectionCardHeader } from "../shared/SectionCardHeader";
 import { resolveDocsUrl } from "../../../data/ardupilot-docs";
-import { selectTelemetryView } from "../../../lib/telemetry-selectors";
+import { PwmChannelBars, type PwmChannelBarItem } from "../shared/PwmChannelBars";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const CHANNEL_COUNT = 8;
+const MAX_RC_CHANNELS = 18;
 const RC_SERIAL_PROTOCOL = 23; // SERIALn_PROTOCOL value for RC input
 const MAX_SERIAL_PORTS = 10; // SERIAL0..SERIAL9
 
@@ -23,6 +23,13 @@ const CHANNEL_OPTIONS = Array.from({ length: 16 }, (_, i) => ({
   label: `Channel ${i + 1}`,
 }));
 
+const PRIMARY_CONTROL_MAPPINGS = [
+  { paramName: "RCMAP_ROLL", label: "Roll" },
+  { paramName: "RCMAP_PITCH", label: "Pitch" },
+  { paramName: "RCMAP_THROTTLE", label: "Throttle" },
+  { paramName: "RCMAP_YAW", label: "Yaw" },
+] as const;
+
 const MAPPING_PRESETS: { label: string; values: Record<string, number> }[] = [
   {
     label: "Mode 2 (AETR)",
@@ -30,15 +37,9 @@ const MAPPING_PRESETS: { label: string; values: Record<string, number> }[] = [
   },
   {
     label: "Mode 1 (AERT)",
-    values: { RCMAP_ROLL: 1, RCMAP_PITCH: 2, RCMAP_THROTTLE: 1, RCMAP_YAW: 4 },
+    values: { RCMAP_ROLL: 1, RCMAP_PITCH: 3, RCMAP_THROTTLE: 2, RCMAP_YAW: 4 },
   },
 ];
-
-// Correct Mode 1 mapping: Throttle on right stick (ch2), Pitch on left (ch3)
-MAPPING_PRESETS[1] = {
-  label: "Mode 1 (AERT)",
-  values: { RCMAP_ROLL: 1, RCMAP_PITCH: 3, RCMAP_THROTTLE: 2, RCMAP_YAW: 4 },
-};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -58,10 +59,54 @@ function findRcSerialPorts(params: ParamInputParams): string[] {
   return ports;
 }
 
-/** Clamp a PWM value to 800–2200 and return percentage position. */
-function barPercent(value: number): number {
-  const clamped = Math.max(800, Math.min(2200, value));
-  return ((clamped - 800) / 1400) * 100;
+function isValidRcPwm(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 500 && value <= 3000;
+}
+
+function buildPrimaryControlBadges(params: ParamInputParams): Map<number, string[]> {
+  const badges = new Map<number, string[]>();
+
+  for (const mapping of PRIMARY_CONTROL_MAPPINGS) {
+    const channel = getStagedOrCurrent(mapping.paramName, params);
+    if (typeof channel !== "number" || !Number.isInteger(channel) || channel < 1 || channel > MAX_RC_CHANNELS) {
+      continue;
+    }
+
+    const existing = badges.get(channel) ?? [];
+    existing.push(mapping.label);
+    badges.set(channel, existing);
+  }
+
+  return badges;
+}
+
+function buildLiveRcChannelItems(
+  rcChannels: Telemetry["rc_channels"],
+  mappedBadges: Map<number, string[]>,
+): PwmChannelBarItem[] {
+  if (!rcChannels?.length) return [];
+
+  const items: PwmChannelBarItem[] = [];
+  for (let index = 0; index < Math.min(rcChannels.length, MAX_RC_CHANNELS); index++) {
+    const value = rcChannels[index];
+    if (!isValidRcPwm(value)) continue;
+
+    const channel = index + 1;
+    items.push({
+      channel,
+      value,
+      annotations: mappedBadges.get(channel),
+    });
+  }
+
+  return items;
+}
+
+function getRssiColor(rssi: number | null): string {
+  if (rssi == null) return "text-text-muted";
+  if (rssi > 70) return "text-success";
+  if (rssi >= 30) return "text-warning";
+  return "text-danger";
 }
 
 // ---------------------------------------------------------------------------
@@ -71,6 +116,7 @@ function barPercent(value: number): number {
 type RcReceiverSectionProps = {
   params: ParamInputParams;
   connected: boolean;
+  telemetry: Telemetry | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -184,7 +230,6 @@ function ChannelMappingPanel({ params }: { params: ParamInputParams }) {
           />
         </div>
 
-        {/* Presets */}
         <div className="flex items-center gap-2">
           <span className="text-[10px] uppercase tracking-wider text-text-muted">Presets</span>
           {MAPPING_PRESETS.map((preset) => (
@@ -241,73 +286,61 @@ function RssiPanel({ params }: { params: ParamInputParams }) {
 // Live RC Channel Bars
 // ---------------------------------------------------------------------------
 
-function LiveRcBars({ connected }: { connected: boolean }) {
-  const [channels, setChannels] = useState<number[]>([]);
-  const [rssi, setRssi] = useState<number | undefined>();
+function LiveRcBars({
+  connected,
+  telemetry,
+  params,
+}: {
+  connected: boolean;
+  telemetry: Telemetry | null;
+  params: ParamInputParams;
+}) {
+  const mappedBadges = useMemo(() => buildPrimaryControlBadges(params), [params.store, params.staged]);
+  const channelItems = useMemo(
+    () => buildLiveRcChannelItems(telemetry?.rc_channels, mappedBadges),
+    [telemetry?.rc_channels, mappedBadges],
+  );
 
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
+  const rssi = telemetry?.rc_rssi;
+  const normalizedRssi = typeof rssi === "number" && Number.isFinite(rssi) ? Math.round(rssi) : null;
 
-    (async () => {
-      unlisten = await subscribeTelemetryState((domain) => {
-        const telemetry = selectTelemetryView(domain);
-        const rc = telemetry.rc_channels;
-        if (rc && rc.length > 0) {
-          setChannels(rc.slice(0, CHANNEL_COUNT));
-        }
-        if (telemetry.rc_rssi != null) {
-          setRssi(telemetry.rc_rssi);
-        }
-      });
-    })();
-
-    return () => {
-      unlisten?.();
-    };
-  }, []);
-
-  if (!connected) {
-    return (
-      <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-        <SectionCardHeader icon={Activity} title="Live RC Channels" />
-        <p className="text-xs text-text-muted">Connect to a vehicle to see live RC values.</p>
-      </div>
-    );
-  }
+  const statusLabel = !connected ? "Disconnected" : channelItems.length > 0 ? `${channelItems.length} live` : "Waiting";
+  const statusTone = !connected
+    ? "bg-danger/10 text-danger"
+    : channelItems.length > 0
+      ? "bg-success/10 text-success"
+      : "bg-warning/10 text-warning";
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Activity size={14} className="text-accent" />
           <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
             Live RC Channels
           </h3>
-        </div>
-        {rssi != null && (
-          <span className="flex items-center gap-1 text-[10px] font-mono text-text-muted">
-            <Signal size={10} />
-            RSSI {rssi}%
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusTone}`}>
+            {statusLabel}
           </span>
-        )}
+        </div>
+        <span className={`flex items-center gap-1 font-mono text-[10px] ${getRssiColor(normalizedRssi)}`}>
+          <Signal size={10} />
+          {normalizedRssi == null ? "RSSI --" : `RSSI ${normalizedRssi}%`}
+        </span>
       </div>
 
-      {channels.length === 0 ? (
-        <p className="text-xs text-text-muted">Waiting for RC channel data...</p>
+      {!connected ? (
+        <p className="text-xs text-text-muted">Connect to a vehicle to see live RC values.</p>
+      ) : channelItems.length === 0 ? (
+        <div className="rounded-md border border-warning/20 bg-warning/5 px-3 py-2.5 text-xs text-text-secondary">
+          Waiting for live RC channel data. Move the transmitter sticks or switches, or confirm the receiver link is active.
+        </div>
       ) : (
-        <div className="flex flex-col gap-1">
-          {channels.map((value, i) => (
-            <div key={i} className="flex items-center gap-2 text-[11px]">
-              <span className="w-10 shrink-0 font-mono text-text-muted">CH{i + 1}</span>
-              <div className="relative flex-1 h-3 rounded bg-bg-tertiary overflow-hidden">
-                <div
-                  className="absolute top-0 h-full w-0.5 bg-accent-blue rounded"
-                  style={{ left: `${barPercent(value)}%` }}
-                />
-              </div>
-              <span className="w-10 shrink-0 text-right font-mono text-text-muted">{value}</span>
-            </div>
-          ))}
+        <div className="flex flex-col gap-2">
+          <PwmChannelBars items={channelItems} />
+          <p className="text-[10px] text-text-muted">
+            Roll, Pitch, Throttle, and Yaw badges reflect the current RCMAP assignments when they point at a valid live channel.
+          </p>
         </div>
       )}
     </div>
@@ -321,6 +354,7 @@ function LiveRcBars({ connected }: { connected: boolean }) {
 export function RcReceiverSection({
   params,
   connected,
+  telemetry,
 }: RcReceiverSectionProps) {
   const rcDocsUrl = resolveDocsUrl("radio_calibration");
 
@@ -336,7 +370,7 @@ export function RcReceiverSection({
       <ReceiverProtocolPanel params={params} />
       <ChannelMappingPanel params={params} />
       <RssiPanel params={params} />
-      <LiveRcBars connected={connected} />
+      <LiveRcBars connected={connected} telemetry={telemetry} params={params} />
     </div>
   );
 }

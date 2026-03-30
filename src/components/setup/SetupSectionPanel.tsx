@@ -519,7 +519,7 @@ export function SetupSectionPanel({
       case "calibration":
         return <CalibrationSection params={params} connected={connected} />;
       case "rc_receiver":
-        return <RcReceiverSection params={params} connected={connected} />;
+        return <RcReceiverSection params={params} connected={connected} telemetry={telemetry} />;
       case "gps":
         return <GpsSection params={params} telemetry={telemetry} />;
       case "battery_monitor":
@@ -527,7 +527,7 @@ export function SetupSectionPanel({
       case "motors_esc":
         return <MotorsEscSection params={params} vehicleState={vehicleState} connected={connected} />;
       case "servo_outputs":
-        return <ServoOutputsSection params={params} vehicleState={vehicleState} />;
+        return <ServoOutputsSection params={params} vehicleState={vehicleState} telemetry={telemetry} />;
       case "serial_ports":
         return <SerialPortsSection params={params} />;
       case "flight_modes":
