@@ -21,6 +21,7 @@ export default defineConfig({
   },
   build: {
     target: "es2022",
+    chunkSizeWarningLimit: 3000,
   },
   server: {
     host: process.env.TAURI_ENV_PLATFORM === "android" ? "0.0.0.0" : "localhost",
