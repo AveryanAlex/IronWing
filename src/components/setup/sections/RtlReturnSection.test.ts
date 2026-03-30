@@ -215,6 +215,33 @@ describe("RtlReturnSection rendering", () => {
         expect(screen.queryByText("Final Altitude")).toBeNull();
         expect(screen.queryByText("Minimum Climb")).toBeNull();
     });
+
+    it("binds the rover branch to RTL_SPEED and WP_RADIUS instead of copter altitude params", () => {
+        const { container } = renderSection({
+            params: makeParams({
+                store: makeStore({
+                    RTL_SPEED: 250,
+                    WP_RADIUS: 2,
+                }),
+            }),
+            vehicleState: makeVehicleState("rover"),
+        });
+
+        const speedInput = container.querySelector(
+            '[data-setup-param="RTL_SPEED"] input',
+        ) as HTMLInputElement | null;
+        const radiusInput = container.querySelector(
+            '[data-setup-param="WP_RADIUS"] input',
+        ) as HTMLInputElement | null;
+
+        expect(toDisplayValue(250, 100)).toBe(2.5);
+        expect(toRawValue(2.5, 100)).toBe(250);
+        expect(speedInput?.value).toBe("2.50");
+        expect(radiusInput?.value).toBe("2");
+        expect(container.querySelector('[data-setup-param="RTL_ALT"]')).toBeNull();
+        expect(container.querySelector('[data-setup-param="RTL_ALT_FINAL"]')).toBeNull();
+        expect(container.querySelector('[data-setup-param="RTL_CLIMB_MIN"]')).toBeNull();
+    });
 });
 
 describe("RTL docs URLs", () => {

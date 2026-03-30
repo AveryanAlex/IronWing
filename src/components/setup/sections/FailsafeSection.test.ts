@@ -100,6 +100,31 @@ describe("FAILSAFE_DEFAULTS tables", () => {
         expect(names).not.toContain("FS_CRASH_CHECK");
     });
 
+    it("rover defaults preserve the audited action and timeout preview structure", () => {
+        expect(FAILSAFE_DEFAULTS_ROVER).toEqual([
+            {
+                paramName: "FS_ACTION",
+                value: 1,
+                label: "Radio / GCS → RTL",
+            },
+            {
+                paramName: "FS_TIMEOUT",
+                value: 5,
+                label: "GCS Timeout → 5 s",
+            },
+            {
+                paramName: "BATT_FS_LOW_ACT",
+                value: 2,
+                label: "Low Battery → RTL",
+            },
+            {
+                paramName: "BATT_FS_CRT_ACT",
+                value: 1,
+                label: "Critical Battery → Land",
+            },
+        ]);
+    });
+
     it("plane defaults do not include copter-only params", () => {
         const names = FAILSAFE_DEFAULTS_PLANE.map((d) => d.paramName);
         expect(names).not.toContain("FS_THR_ENABLE");
@@ -177,6 +202,45 @@ describe("buildDefaultsPreview", () => {
         expect(names).toContain("FS_TIMEOUT");
         expect(names).not.toContain("FS_THR_ENABLE");
         expect(names).not.toContain("FS_GCS_ENABLE");
+    });
+
+    it("marks rover preview entries against rover-specific current values", () => {
+        const params = makeParams({
+            store: makeStore({
+                FS_ACTION: 0,
+                FS_TIMEOUT: 5,
+                BATT_FS_LOW_ACT: 0,
+                BATT_FS_CRT_ACT: 1,
+            }),
+        });
+        const preview = buildDefaultsPreview(false, true, params);
+
+        expect(preview).toEqual([
+            expect.objectContaining({
+                paramName: "FS_ACTION",
+                currentValue: 0,
+                newValue: 1,
+                willChange: true,
+            }),
+            expect.objectContaining({
+                paramName: "FS_TIMEOUT",
+                currentValue: 5,
+                newValue: 5,
+                willChange: false,
+            }),
+            expect.objectContaining({
+                paramName: "BATT_FS_LOW_ACT",
+                currentValue: 0,
+                newValue: 2,
+                willChange: true,
+            }),
+            expect.objectContaining({
+                paramName: "BATT_FS_CRT_ACT",
+                currentValue: 1,
+                newValue: 1,
+                willChange: false,
+            }),
+        ]);
     });
 
     it("marks willChange=false when current value already matches default", () => {

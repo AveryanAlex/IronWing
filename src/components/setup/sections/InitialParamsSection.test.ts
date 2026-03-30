@@ -220,6 +220,18 @@ describe("InitialParamsSection rover gating", () => {
         expect(screen.queryByText("Vehicle Inputs")).toBeNull();
         expect(screen.queryByText(/Stage All Recommended/i)).toBeNull();
     });
+
+    it("keeps rover out of the copter calculator formulas and computed preview", () => {
+        renderSection({
+            params: makeRenderParams({ SERVO1_FUNCTION: 26 }),
+            vehicleState: makeVehicleState("rover"),
+        });
+
+        expect(screen.queryByText(/Reference: 9" prop \+ 4S LiPo/i)).toBeNull();
+        expect(screen.queryByText("Computed Parameters")).toBeNull();
+        expect(screen.queryByText(/MOT_THST_EXPO/i)).toBeNull();
+        expect(screen.queryByText(/INS_GYRO_FILTER/i)).toBeNull();
+    });
 });
 
 describe("plain fixed-wing gating", () => {

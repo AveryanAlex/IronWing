@@ -78,6 +78,19 @@ describe("GeofenceSection vehicle-family branching", () => {
         ).toBeTruthy();
     });
 
+    it("keeps rover and plane branches free of the copter-only altitude-min control", () => {
+        const { container: roverContainer, unmount } = renderSection("rover");
+
+        expect(roverContainer.querySelector('[data-setup-param="FENCE_ALT_MIN"]')).toBeNull();
+        expect(roverContainer.querySelector('[data-setup-param="FENCE_ALT_MAX"]')).toBeNull();
+
+        unmount();
+
+        const { container: planeContainer } = renderSection("fixed_wing");
+        expect(planeContainer.querySelector('[data-setup-param="FENCE_ALT_MIN"]')).toBeNull();
+        expect(planeContainer.querySelector('[data-setup-param="FENCE_ALT_MAX"]')).toBeTruthy();
+    });
+
     it("shows plane altitude max without copter-only altitude min or circle radius", () => {
         const { container } = renderSection("fixed_wing");
 
