@@ -147,6 +147,14 @@ function renderCompletedSerialOutcome(outcome: SerialFlashOutcome) {
   );
 }
 
+async function chooseCatalogTarget(name: string | RegExp) {
+  await waitFor(() => {
+    expect(screen.getByTestId("firmware-catalog-target-chooser")).toBeTruthy();
+  });
+
+  fireEvent.click(screen.getByRole("button", { name }));
+}
+
 describe("FirmwareFlashWizard", () => {
   it("defaults DFU recovery to board target + official bootloader without a peer source chooser", async () => {
     const firmware = makeFirmware(
@@ -526,10 +534,8 @@ describe("FirmwareFlashWizard", () => {
 
     render(<FirmwareFlashWizard firmware={firmware} connected={false} />);
 
-    await waitFor(() => expect(screen.getByTestId("firmware-catalog-target-select")).toBeTruthy());
-
-    fireEvent.change(screen.getByTestId("firmware-catalog-target-select"), { target: { value: "0" } });
-    fireEvent.change(screen.getByTestId("firmware-catalog-target-select"), { target: { value: "1" } });
+    await chooseCatalogTarget(/CubeOrange/i);
+    await chooseCatalogTarget(/fmuv2/i);
 
     second.resolve([
       { board_id: 9, platform: "fmuv2", vehicle_type: "Plane", version: "4.4.0", version_type: "stable", format: "apj", url: "https://example.com/fmuv2.apj", image_size: 123, latest: true, git_sha: "def", brand_name: null, manufacturer: null },
@@ -545,6 +551,174 @@ describe("FirmwareFlashWizard", () => {
     await waitFor(() => {
       expect(screen.getByText(/Plane 4.4.0 — fmuv2/i)).toBeTruthy();
       expect(screen.queryByText(/Copter 4.5.0 — CubeOrange/i)).toBeNull();
+    });
+  });
+
+  it("filters the manual chooser and disables serial start when search hides the selected target", async () => {
+    const firmware = makeFirmware(
+      { kind: "idle" },
+      {
+        preflight: vi.fn().mockResolvedValue({
+          vehicle_connected: false,
+          param_count: 0,
+          has_params_to_backup: false,
+          available_ports: [{ port_name: "/dev/ttyACM0", vid: null, pid: null, serial_number: null, manufacturer: null, product: null, location: null }],
+          detected_board_id: null,
+          session_ready: true,
+          session_status: { kind: "idle" as const },
+        }),
+        catalogTargets: vi.fn().mockResolvedValue([
+          { board_id: 140, platform: "CubeOrange", brand_name: "Cube Orange", manufacturer: "Hex", vehicle_types: ["Copter"], latest_version: "4.5.0" },
+          { board_id: 201, platform: "MatekH743", brand_name: "Matek H743", manufacturer: "Matek", vehicle_types: ["Copter"], latest_version: "4.5.1" },
+        ]),
+        catalogEntries: vi.fn().mockResolvedValue([
+          { board_id: 140, platform: "CubeOrange", vehicle_type: "Copter", version: "4.5.0", version_type: "stable", format: "apj", url: "https://example.com/cubeorange.apj", image_size: 123, latest: true, git_sha: "abc", brand_name: "Cube Orange", manufacturer: "Hex" },
+        ]),
+        serialReadiness: resolvedSerialReadiness({
+          target_hint: { detected_board_id: null },
+        }),
+      },
+    );
+
+    render(<FirmwareFlashWizard firmware={firmware} connected={false} />);
+
+    await chooseCatalogTarget(/Cube Orange/i);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("firmware-catalog-select")).toBeTruthy();
+      expect((screen.getByTestId("firmware-start-serial") as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    fireEvent.change(screen.getByTestId("firmware-catalog-target-search"), { target: { value: "rover" } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("firmware-catalog-target-no-matches")).toBeTruthy();
+      expect(screen.getByTestId("firmware-catalog-target-selection-hidden")).toBeTruthy();
+      expect((screen.getByTestId("firmware-start-serial") as HTMLButtonElement).disabled).toBe(true);
+    });
+  });
+
+  it("shows retryable serial target-list errors and recovers after retry", async () => {
+    const catalogTargets = vi.fn()
+      .mockRejectedValueOnce(new Error("catalog targets unavailable"))
+      .mockRejectedValueOnce(new Error("catalog targets unavailable"))
+      .mockResolvedValue([
+        { board_id: 140, platform: "CubeOrange", brand_name: "Cube Orange", manufacturer: "Hex", vehicle_types: ["Copter"], latest_version: "4.5.0" },
+      ]);
+
+    const firmware = makeFirmware(
+      { kind: "idle" },
+      {
+        preflight: vi.fn().mockResolvedValue({
+          vehicle_connected: false,
+          param_count: 0,
+          has_params_to_backup: false,
+          available_ports: [{ port_name: "/dev/ttyACM0", vid: null, pid: null, serial_number: null, manufacturer: null, product: null, location: null }],
+          detected_board_id: null,
+          session_ready: true,
+          session_status: { kind: "idle" as const },
+        }),
+        catalogTargets,
+        serialReadiness: resolvedSerialReadiness({
+          readiness: { kind: "blocked", reason: "source_missing" },
+          target_hint: { detected_board_id: null },
+        }),
+      },
+    );
+
+    render(<FirmwareFlashWizard firmware={firmware} connected={false} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("firmware-catalog-target-error")).toBeTruthy();
+      expect(screen.queryByTestId("firmware-catalog-target-results")).toBeNull();
+    });
+
+    fireEvent.click(screen.getByTestId("firmware-catalog-target-retry"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("firmware-catalog-target-results")).toBeTruthy();
+      expect(screen.queryByTestId("firmware-catalog-target-error")).toBeNull();
+    });
+  });
+
+  it("shows retryable serial catalog entry errors and recovers after retry", async () => {
+    const catalogEntries = vi.fn()
+      .mockRejectedValueOnce(new Error("catalog offline"))
+      .mockResolvedValue([
+        { board_id: 140, platform: "CubeOrange", vehicle_type: "Copter", version: "4.5.0", version_type: "stable", format: "apj", url: "https://example.com/cubeorange.apj", image_size: 123, latest: true, git_sha: "abc", brand_name: "Cube Orange", manufacturer: "Hex" },
+      ]);
+
+    const firmware = makeFirmware(
+      { kind: "idle" },
+      {
+        preflight: vi.fn().mockResolvedValue({
+          vehicle_connected: false,
+          param_count: 0,
+          has_params_to_backup: false,
+          available_ports: [{ port_name: "/dev/ttyACM0", vid: null, pid: null, serial_number: null, manufacturer: null, product: null, location: null }],
+          detected_board_id: null,
+          session_ready: true,
+          session_status: { kind: "idle" as const },
+        }),
+        catalogTargets: vi.fn().mockResolvedValue([
+          { board_id: 140, platform: "CubeOrange", brand_name: "Cube Orange", manufacturer: "Hex", vehicle_types: ["Copter"], latest_version: "4.5.0" },
+        ]),
+        catalogEntries,
+        serialReadiness: resolvedSerialReadiness({
+          target_hint: { detected_board_id: null },
+        }),
+      },
+    );
+
+    render(<FirmwareFlashWizard firmware={firmware} connected={false} />);
+
+    await chooseCatalogTarget(/Cube Orange/i);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("firmware-catalog-entry-error")).toBeTruthy();
+      expect(screen.queryByTestId("firmware-catalog-select")).toBeNull();
+    });
+
+    fireEvent.click(screen.getByTestId("firmware-catalog-entry-retry"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("firmware-catalog-select")).toBeTruthy();
+      expect(screen.queryByTestId("firmware-catalog-entry-error")).toBeNull();
+    });
+  });
+
+  it("shows retryable recovery target load errors and recovers after retry", async () => {
+    const recoveryCatalogTargets = vi.fn()
+      .mockRejectedValueOnce(new Error("recovery timeout"))
+      .mockResolvedValue([
+        { board_id: 140, platform: "CubeOrange", brand_name: "Cube Orange", manufacturer: "Hex", vehicle_types: ["Copter"], latest_version: "4.5.0" },
+      ]);
+
+    const firmware = makeFirmware(
+      { kind: "idle" },
+      {
+        listDfuDevices: vi.fn().mockResolvedValue({
+          kind: "available",
+          devices: [{ vid: 0x0483, pid: 0xdf11, unique_id: "dfu-1", serial_number: null, manufacturer: "ST", product: "STM32 DFU" }],
+        }),
+        recoveryCatalogTargets,
+      },
+    );
+
+    render(<FirmwareFlashWizard firmware={firmware} connected={false} />);
+
+    fireEvent.click(screen.getByTestId("firmware-mode-recover"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("firmware-recovery-target-error")).toBeTruthy();
+      expect(screen.queryByTestId("firmware-recovery-target-empty")).toBeNull();
+    });
+
+    fireEvent.click(screen.getByTestId("firmware-recovery-target-retry"));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Choose official bootloader target…")).toBeTruthy();
+      expect(screen.queryByTestId("firmware-recovery-target-error")).toBeNull();
     });
   });
 
@@ -1371,13 +1545,13 @@ describe("FirmwareFlashWizard", () => {
     render(<FirmwareFlashWizard firmware={firmware} connected={false} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("firmware-catalog-target-select")).toBeTruthy();
+      expect(screen.getByTestId("firmware-catalog-target-chooser")).toBeTruthy();
       expect(screen.getByText(/no usb board hint is available yet/i)).toBeTruthy();
       expect(screen.queryByTestId("firmware-catalog-select")).toBeNull();
       expect((screen.getByTestId("firmware-start-serial") as HTMLButtonElement).disabled).toBe(true);
     });
 
-    fireEvent.change(screen.getByTestId("firmware-catalog-target-select"), { target: { value: "0" } });
+    await chooseCatalogTarget(/CubeOrange/i);
 
     await waitFor(() => {
       expect(screen.getByTestId("firmware-catalog-select")).toBeTruthy();
@@ -1463,7 +1637,7 @@ describe("FirmwareFlashWizard", () => {
     render(<FirmwareFlashWizard firmware={firmware} connected={false} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("firmware-catalog-target-select")).toBeTruthy();
+      expect(screen.getByTestId("firmware-catalog-target-chooser")).toBeTruthy();
       expect(screen.getByText(/SerialOnlyBoard/)).toBeTruthy();
       expect(screen.queryByTestId("firmware-catalog-select")).toBeNull();
     });
@@ -1506,11 +1680,7 @@ describe("FirmwareFlashWizard", () => {
 
     render(<FirmwareFlashWizard firmware={firmware} connected={false} />);
 
-    await waitFor(() => {
-      expect(screen.getByTestId("firmware-catalog-target-select")).toBeTruthy();
-    });
-
-    fireEvent.change(screen.getByTestId("firmware-catalog-target-select"), { target: { value: "1" } });
+    await chooseCatalogTarget(/CubeOrangePlus/i);
 
     await waitFor(() => {
       expect(catalogEntries).toHaveBeenCalledWith(140, "CubeOrangePlus");

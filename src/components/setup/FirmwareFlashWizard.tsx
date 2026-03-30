@@ -15,7 +15,6 @@ import {
 import { cn } from "../../lib/utils";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
-import { toast } from "sonner";
 import type { useFirmware } from "../../hooks/use-firmware";
 import type {
   PortInfo,
@@ -26,6 +25,13 @@ import type {
   SerialReadinessRequest,
   SerialReadinessResponse,
 } from "../../firmware";
+import {
+  ALL_TARGET_VEHICLE_TYPES,
+  catalogTargetKey,
+  filterCatalogTargets,
+  listCatalogTargetVehicleTypes,
+  sanitizeCatalogTargetSummaries,
+} from "./firmware-target-filter";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -167,6 +173,18 @@ function serialReadinessRequestToken(request: SerialReadinessRequest): string {
   return `serial-readiness:port=${request.port}:source_kind=${request.source.kind}:source_identity=${sourceIdentity}:full_chip_erase=${request.options?.full_chip_erase ? 1 : 0}`;
 }
 
+function describeLoadError(error: unknown, fallback: string): string {
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error;
+  }
+
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
 // ---------------------------------------------------------------------------
 // Wizard
 // ---------------------------------------------------------------------------
@@ -204,7 +222,11 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
   const [selectedCatalogIdx, setSelectedCatalogIdx] = useState(0);
   const [catalogTargetsList, setCatalogTargetsList] = useState<CatalogTargetSummary[]>([]);
   const [catalogTargetsLoading, setCatalogTargetsLoading] = useState(false);
-  const [selectedCatalogTargetIdx, setSelectedCatalogTargetIdx] = useState<number | null>(null);
+  const [catalogTargetsError, setCatalogTargetsError] = useState<string | null>(null);
+  const [catalogEntriesError, setCatalogEntriesError] = useState<string | null>(null);
+  const [selectedCatalogTargetKey, setSelectedCatalogTargetKey] = useState<string | null>(null);
+  const [catalogTargetSearch, setCatalogTargetSearch] = useState("");
+  const [catalogTargetVehicleType, setCatalogTargetVehicleType] = useState<string>(ALL_TARGET_VEHICLE_TYPES);
   const [detectedBoardId, setDetectedBoardId] = useState<number | null>(null);
   const [detectedBoardHintNeedsManualFallback, setDetectedBoardHintNeedsManualFallback] = useState(false);
   const [localApjData, setLocalApjData] = useState<number[] | null>(null);
@@ -230,6 +252,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
   // ── Recovery catalog state ────────────────────────────────────────────
   const [recoveryTargets, setRecoveryTargets] = useState<CatalogTargetSummary[]>([]);
   const [recoveryTargetsLoading, setRecoveryTargetsLoading] = useState(false);
+  const [recoveryTargetsError, setRecoveryTargetsError] = useState<string | null>(null);
   const [selectedRecoveryTarget, setSelectedRecoveryTarget] = useState<number | null>(null);
   const [recoveryLocalApjData, setRecoveryLocalApjData] = useState<number[] | null>(null);
   const [recoveryLocalApjName, setRecoveryLocalApjName] = useState<string | null>(null);
@@ -308,9 +331,13 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
   useEffect(() => {
     setDetectedBoardId(null);
     setDetectedBoardHintNeedsManualFallback(false);
+    setCatalogTargetsError(null);
+    setCatalogEntriesError(null);
     setCatalogList([]);
     setSelectedCatalogIdx(0);
-    setSelectedCatalogTargetIdx(null);
+    setSelectedCatalogTargetKey(null);
+    setCatalogTargetSearch("");
+    setCatalogTargetVehicleType(ALL_TARGET_VEHICLE_TYPES);
   }, [selectedPort]);
 
   // Scan for DFU devices and fetch recovery targets when entering recovery mode
@@ -381,17 +408,17 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
 
   const loadCatalogTargets = useCallback(async () => {
     setCatalogTargetsLoading(true);
+    setCatalogTargetsError(null);
     try {
-      const targets = await catalogTargets();
+      const targets = sanitizeCatalogTargetSummaries(await catalogTargets());
       setCatalogTargetsList(targets);
-      setSelectedCatalogTargetIdx(null);
-      setCatalogList([]);
-      setSelectedCatalogIdx(0);
-    } catch {
-      setCatalogTargetsList([]);
-      setCatalogList([]);
-      setSelectedCatalogIdx(0);
-      setSelectedCatalogTargetIdx(null);
+      setSelectedCatalogTargetKey((current) => (
+        current && targets.some((target) => catalogTargetKey(target) === current)
+          ? current
+          : null
+      ));
+    } catch (error) {
+      setCatalogTargetsError(describeLoadError(error, "Could not load supported board targets from the firmware catalog."));
     } finally {
       setCatalogTargetsLoading(false);
     }
@@ -402,6 +429,9 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
     if (boardId <= 0) return;
     const requestId = ++catalogRequestIdRef.current;
     setCatalogLoading(true);
+    setCatalogEntriesError(null);
+    setCatalogList([]);
+    setSelectedCatalogIdx(0);
     try {
       const entries = await catalogEntries(boardId, platform);
       if (catalogRequestIdRef.current !== requestId) return;
@@ -413,12 +443,9 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
       } else if (source === "detected_hint") {
         setDetectedBoardHintNeedsManualFallback(false);
       }
-    } catch (err) {
+    } catch (error) {
       if (catalogRequestIdRef.current !== requestId) return;
-      toast.error("Failed to load catalog", {
-        description: typeof err === "string" ? err : err instanceof Error ? err.message : "unknown error",
-      });
-      setCatalogList([]);
+      setCatalogEntriesError(describeLoadError(error, "Could not load firmware versions for the selected board target."));
       if (source === "detected_hint") {
         setDetectedBoardHintNeedsManualFallback(true);
         await loadCatalogTargets();
@@ -441,24 +468,48 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
   // ── Recovery target fetch ─────────────────────────────────────────────
   const fetchRecoveryTargets = useCallback(async () => {
     setRecoveryTargetsLoading(true);
+    setRecoveryTargetsError(null);
     try {
-      const targets = await recoveryCatalogTargets();
+      const targets = sanitizeCatalogTargetSummaries(await recoveryCatalogTargets());
       setRecoveryTargets(targets);
-      setSelectedRecoveryTarget(null);
-    } catch {
-      setRecoveryTargets([]);
-      setSelectedRecoveryTarget(null);
+      setSelectedRecoveryTarget((current) => (
+        current !== null && targets[current] ? current : null
+      ));
+    } catch (error) {
+      setRecoveryTargetsError(describeLoadError(error, "Could not load official bootloader targets from the recovery catalog."));
     } finally {
       setRecoveryTargetsLoading(false);
     }
   }, [recoveryCatalogTargets]);
 
+  const filteredCatalogTargets = useMemo(
+    () => filterCatalogTargets(catalogTargetsList, {
+      searchText: catalogTargetSearch,
+      vehicleType: catalogTargetVehicleType,
+    }),
+    [catalogTargetSearch, catalogTargetVehicleType, catalogTargetsList],
+  );
+  const catalogTargetVehicleTypes = useMemo(
+    () => listCatalogTargetVehicleTypes(catalogTargetsList),
+    [catalogTargetsList],
+  );
+  const selectedCatalogTarget = useMemo(
+    () => catalogTargetsList.find((target) => catalogTargetKey(target) === selectedCatalogTargetKey) ?? null,
+    [catalogTargetsList, selectedCatalogTargetKey],
+  );
+  const selectedCatalogTargetVisible = selectedCatalogTargetKey === null
+    || filteredCatalogTargets.some((match) => match.key === selectedCatalogTargetKey);
+
   // ── Serial action ─────────────────────────────────────────────────────
   const selectedCatalogEntry = catalogList[selectedCatalogIdx] ?? null;
   const selectedCatalogUrl = selectedCatalogEntry?.url ?? "";
   const hasSerialInputs = !!selectedPort && (
-    (sourceMode === "catalog" && selectedCatalogEntry !== null) ||
-    (sourceMode === "local" && localApjData !== null)
+    (sourceMode === "catalog"
+      && selectedCatalogEntry !== null
+      && (detectedBoardId !== null && !detectedBoardHintNeedsManualFallback
+        ? true
+        : selectedCatalogTarget !== null && selectedCatalogTargetVisible))
+    || (sourceMode === "local" && localApjData !== null)
   );
 
   const serialReadinessRequest = useMemo(() => (
@@ -655,6 +706,22 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
     ? "Firmware compatibility will be validated after bootloader sync before erase/program begins."
     : null;
 
+  const handleSelectCatalogTarget = useCallback((target: CatalogTargetSummary) => {
+    setSelectedCatalogTargetKey(catalogTargetKey(target));
+    void fetchCatalog(target.board_id, target.platform, "manual");
+  }, [fetchCatalog]);
+
+  const retryCatalogEntries = useCallback(() => {
+    if (selectedCatalogTarget) {
+      void fetchCatalog(selectedCatalogTarget.board_id, selectedCatalogTarget.platform, "manual");
+      return;
+    }
+
+    if (detectedBoardId !== null) {
+      void fetchCatalog(detectedBoardId, undefined, "detected_hint");
+    }
+  }, [detectedBoardId, fetchCatalog, selectedCatalogTarget]);
+
   // =====================================================================
   // RENDER
   // =====================================================================
@@ -845,6 +912,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
                           </span>
                         </div>
                       )}
+
                       {(detectedBoardId === null || detectedBoardHintNeedsManualFallback) && (
                         <>
                           {detectedBoardHintNeedsManualFallback && (
@@ -855,53 +923,135 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
                               </span>
                             </div>
                           )}
-                          {catalogTargetsLoading && (
-                            <div className="flex items-center gap-1.5 text-[10px] text-text-muted">
-                              <Loader2 size={10} className="animate-spin" />
-                              <span>Loading supported targets…</span>
+
+                          <div data-testid="firmware-catalog-target-chooser" className="flex flex-col gap-2 rounded-md border border-border/50 bg-bg-primary/40 p-2">
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                              <input
+                                data-testid="firmware-catalog-target-search"
+                                type="search"
+                                value={catalogTargetSearch}
+                                onChange={(e) => setCatalogTargetSearch(e.target.value)}
+                                placeholder="Search board target, brand, manufacturer, or board ID"
+                                className="flex-1 rounded-md border border-border bg-bg-primary px-2 py-1.5 text-xs text-text-primary"
+                                disabled={isActive || catalogTargetsLoading}
+                              />
+                              <select
+                                data-testid="firmware-catalog-target-vehicle-filter"
+                                value={catalogTargetVehicleType}
+                                onChange={(e) => setCatalogTargetVehicleType(e.target.value)}
+                                className="rounded-md border border-border bg-bg-primary px-2 py-1.5 text-xs text-text-primary sm:w-40"
+                                disabled={isActive || catalogTargetsLoading || catalogTargetVehicleTypes.length === 0}
+                              >
+                                <option value={ALL_TARGET_VEHICLE_TYPES}>All vehicle types</option>
+                                {catalogTargetVehicleTypes.map((vehicleType) => (
+                                  <option key={vehicleType} value={vehicleType}>{vehicleType}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {catalogTargetsError && (
+                              <div data-testid="firmware-catalog-target-error" className="flex flex-col gap-2 rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-[10px] text-danger sm:flex-row sm:items-center sm:justify-between">
+                                <span>{catalogTargetsError}</span>
+                                <button
+                                  type="button"
+                                  data-testid="firmware-catalog-target-retry"
+                                  onClick={() => void loadCatalogTargets()}
+                                  disabled={catalogTargetsLoading}
+                                  className="self-start rounded-md border border-danger/30 bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-danger transition-colors hover:bg-danger/5 disabled:opacity-40"
+                                >
+                                  Retry target list
+                                </button>
+                              </div>
+                            )}
+
+                            {catalogTargetsLoading && (
+                              <div className="flex items-center gap-1.5 text-[10px] text-text-muted">
+                                <Loader2 size={10} className="animate-spin" />
+                                <span>Loading supported targets…</span>
+                              </div>
+                            )}
+
+                            {!catalogTargetsLoading && filteredCatalogTargets.length > 0 && (
+                              <div data-testid="firmware-catalog-target-results" className="flex max-h-48 flex-col gap-1 overflow-y-auto pr-1">
+                                {filteredCatalogTargets.map((match) => {
+                                  const selected = match.key === selectedCatalogTargetKey;
+                                  return (
+                                    <button
+                                      key={match.key}
+                                      type="button"
+                                      aria-pressed={selected}
+                                      onClick={() => handleSelectCatalogTarget(match.target)}
+                                      className={cn(
+                                        "flex flex-col items-start gap-1 rounded-md border px-2.5 py-2 text-left transition-colors",
+                                        selected
+                                          ? "border-accent/40 bg-accent/10"
+                                          : "border-border bg-bg-secondary hover:bg-bg-tertiary",
+                                      )}
+                                    >
+                                      <span className="text-xs font-medium text-text-primary">{match.label}</span>
+                                      <span className="text-[10px] text-text-secondary">{match.metadata.join(" • ")}</span>
+                                      <span className="text-[10px] text-text-muted">{match.vehicleTypesLabel}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {!catalogTargetsLoading && !catalogTargetsError && catalogTargetsList.length === 0 && (
+                              <div data-testid="firmware-catalog-target-empty" className="flex items-start gap-2 text-[10px] text-text-muted">
+                                <Info size={10} className="mt-0.5 shrink-0" />
+                                <span>No supported board targets are available from the catalog right now. Retry or choose a local APJ.</span>
+                              </div>
+                            )}
+
+                            {!catalogTargetsLoading && catalogTargetsList.length > 0 && filteredCatalogTargets.length === 0 && (
+                              <div data-testid="firmware-catalog-target-no-matches" className="flex items-start gap-2 text-[10px] text-text-muted">
+                                <Info size={10} className="mt-0.5 shrink-0" />
+                                <span>No board targets match this search. Clear the search or choose a different vehicle type.</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {selectedCatalogTarget && (
+                            <div data-testid="firmware-catalog-target-selected" className="rounded-md border border-accent/20 bg-accent/5 px-2.5 py-2 text-[10px] text-text-secondary">
+                              Manual target selected: <span className="font-medium text-text-primary">{selectedCatalogTarget.brand_name ?? selectedCatalogTarget.platform}</span>
+                              {selectedCatalogTarget.brand_name && selectedCatalogTarget.brand_name !== selectedCatalogTarget.platform && (
+                                <span className="text-text-muted"> ({selectedCatalogTarget.platform})</span>
+                              )}
                             </div>
                           )}
-                          <select
-                            data-testid="firmware-catalog-target-select"
-                            value={selectedCatalogTargetIdx ?? ""}
-                            onChange={(e) => {
-                              const rawValue = e.target.value;
-                              if (rawValue === "") {
-                                setSelectedCatalogTargetIdx(null);
-                                setCatalogList([]);
-                                setSelectedCatalogIdx(0);
-                                return;
-                              }
 
-                              const nextIdx = Number(rawValue);
-                              setSelectedCatalogTargetIdx(nextIdx);
-                              const nextTarget = catalogTargetsList[nextIdx];
-                              if (nextTarget) {
-                                fetchCatalog(nextTarget.board_id, nextTarget.platform, "manual");
-                              }
-                            }}
-                            className="rounded-md border border-border bg-bg-primary px-2 py-1.5 text-xs text-text-primary"
-                            disabled={isActive || catalogTargetsLoading || catalogTargetsList.length === 0}
-                          >
-                            <option value="">
-                              {catalogTargetsLoading ? "Loading targets…" : catalogTargetsList.length > 0 ? "Choose target…" : "No targets available"}
-                            </option>
-                            {catalogTargetsList.map((target, i) => (
-                              <option key={`${target.board_id}-${target.platform}`} value={i}>
-                                {target.platform}
-                                {target.brand_name ? ` — ${target.brand_name}` : ""}
-                                {target.latest_version ? ` (${target.latest_version})` : ""}
-                              </option>
-                            ))}
-                          </select>
+                          {selectedCatalogTarget && !selectedCatalogTargetVisible && (
+                            <div data-testid="firmware-catalog-target-selection-hidden" className="flex items-start gap-2 text-[10px] text-text-muted">
+                              <Info size={10} className="mt-0.5 shrink-0" />
+                              <span>The selected target is hidden by the current search or vehicle filter. Clear the filter or choose a visible target before flashing.</span>
+                            </div>
+                          )}
                         </>
                       )}
+
                       {catalogLoading && (
                         <div className="flex items-center gap-1.5 text-[10px] text-text-muted">
                           <Loader2 size={10} className="animate-spin" />
                           <span>Loading catalog…</span>
                         </div>
                       )}
+
+                      {catalogEntriesError && (
+                        <div data-testid="firmware-catalog-entry-error" className="flex flex-col gap-2 rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-[10px] text-danger sm:flex-row sm:items-center sm:justify-between">
+                          <span>{catalogEntriesError}</span>
+                          <button
+                            type="button"
+                            data-testid="firmware-catalog-entry-retry"
+                            onClick={() => void retryCatalogEntries()}
+                            disabled={catalogLoading || (selectedCatalogTarget === null && detectedBoardId === null)}
+                            className="self-start rounded-md border border-danger/30 bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-danger transition-colors hover:bg-danger/5 disabled:opacity-40"
+                          >
+                            Retry catalog load
+                          </button>
+                        </div>
+                      )}
+
                       {catalogList.length > 0 && (
                         <select
                           data-testid="firmware-catalog-select"
@@ -919,18 +1069,19 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
                           ))}
                         </select>
                       )}
-                      {catalogList.length === 0 && !catalogLoading && detectedBoardId !== null && !detectedBoardHintNeedsManualFallback && (
+
+                      {catalogList.length === 0 && !catalogLoading && detectedBoardId !== null && !detectedBoardHintNeedsManualFallback && !catalogEntriesError && (
                         <div className="flex items-start gap-2 text-[10px] text-text-muted">
                           <Info size={10} className="mt-0.5 shrink-0" />
                           <span>No firmware found for board ID {detectedBoardId}</span>
                         </div>
                       )}
-                      {catalogList.length === 0 && !catalogLoading && detectedBoardId === null && (
+                      {catalogList.length === 0 && !catalogLoading && detectedBoardId === null && !catalogEntriesError && (
                         <div className="flex items-start gap-2 text-[10px] text-text-muted">
                           <Info size={10} className="mt-0.5 shrink-0" />
                           <span>
                             {catalogTargetsList.length > 0
-                              ? "Select a target above to keep the serial install path usable without USB hinting. Catalog flashing will stay blocked until you explicitly choose one."
+                              ? "Select a board target above to keep the serial install path usable without USB hinting. Catalog flashing will stay blocked until you explicitly choose one."
                               : "No USB hint is available yet. Refresh ports or choose a local APJ if you do not want to wait for a manual catalog target list."}
                           </span>
                         </div>
@@ -1140,7 +1291,7 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
                       disabled={isActive}
                     >
                       {dfuDevices.length === 0 && <option value="">No DFU devices found</option>}
-                      {dfuDevices.map((d, i) => (
+                      {dfuDevices.map((d) => (
                         <option key={d.unique_id} value={d.unique_id}>
                           {d.product ?? `DFU ${d.vid.toString(16)}:${d.pid.toString(16)}`}
                           {d.serial_number ? ` (${d.serial_number})` : ""}
@@ -1163,12 +1314,26 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
                   <label className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
                     Board Target
                   </label>
+                  {recoveryTargetsError && (
+                    <div data-testid="firmware-recovery-target-error" className="flex flex-col gap-2 rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-[10px] text-danger sm:flex-row sm:items-center sm:justify-between">
+                      <span>{recoveryTargetsError}</span>
+                      <button
+                        type="button"
+                        data-testid="firmware-recovery-target-retry"
+                        onClick={() => void fetchRecoveryTargets()}
+                        disabled={recoveryTargetsLoading}
+                        className="self-start rounded-md border border-danger/30 bg-bg-primary px-2.5 py-1 text-[10px] font-medium text-danger transition-colors hover:bg-danger/5 disabled:opacity-40"
+                      >
+                        Retry target list
+                      </button>
+                    </div>
+                  )}
                   <select
                     data-testid="firmware-recovery-board-select"
                       value={selectedRecoveryTarget ?? ""}
                       onChange={(e) => setSelectedRecoveryTarget(e.target.value === "" ? null : Number(e.target.value))}
                       className="rounded-md border border-border bg-bg-secondary px-2 py-1.5 text-xs text-text-primary"
-                      disabled={isActive || recoveryTargetsLoading}
+                      disabled={isActive || recoveryTargetsLoading || recoveryTargets.length === 0}
                     >
                       <option value="">
                         {recoveryTargetsLoading
@@ -1178,13 +1343,19 @@ export function FirmwareFlashWizard({ firmware, connected, onSaveParams }: Firmw
                             : "Choose official bootloader target…"}
                       </option>
                       {recoveryTargets.map((t, i) => (
-                        <option key={i} value={i}>
+                        <option key={catalogTargetKey(t)} value={i}>
                           {t.brand_name ?? t.platform} — {t.vehicle_types.join("/")}
                         {t.manufacturer ? ` (${t.manufacturer})` : ""}
                         {t.latest_version ? ` v${t.latest_version}` : ""}
                       </option>
                     ))}
                   </select>
+                  {!recoveryTargetsLoading && !recoveryTargetsError && recoveryTargets.length === 0 && (
+                    <div data-testid="firmware-recovery-target-empty" className="flex items-start gap-2 text-[10px] text-text-muted">
+                      <Info size={10} className="mt-0.5 shrink-0" />
+                      <span>No official bootloader targets are available right now. Retry this list or use a manual APJ/BIN source below.</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="rounded-md border border-border/50 bg-bg-secondary/50 p-2.5">
