@@ -55,7 +55,7 @@ type MissionMapProps = {
   selectedIndex: number | null;
   onSelectIndex?: (index: number | null) => void;
   onMoveWaypoint?: (index: number, latDeg: number, lonDeg: number) => void;
-  onBlankMapClick?: (lat: number, lng: number) => void;
+  onBlankMapClick?: (lat: number, lng: number, modifiers?: { altKey: boolean }) => void;
   onContextMenu?: (lat: number, lng: number, screenX: number, screenY: number) => void;
   readOnly?: boolean;
   vehiclePosition?: { latitude_deg: number; longitude_deg: number; heading_deg: number } | null;
@@ -399,7 +399,7 @@ export function MissionMap({
           return;
         }
 
-        onBlankMapClickRef.current?.(event.lngLat.lat, event.lngLat.lng);
+        onBlankMapClickRef.current?.(event.lngLat.lat, event.lngLat.lng, { altKey: event.originalEvent.altKey });
       });
 
       map.on("dblclick", (event: MapMouseEvent) => {

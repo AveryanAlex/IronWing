@@ -48,6 +48,17 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
     }
   }, [current.tab]);
 
+  useEffect(() => {
+    if (!chainModeActive) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setChainModeActive(false);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [chainModeActive]);
+
   const handleMapSelect = useCallback(
     (seq: number | null) => {
       if (isDrawingPolygon) return;
@@ -138,13 +149,14 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
     ));
   }, []);
 
-  const handleBlankMapClick = useCallback((lat: number, lng: number) => {
-    if (!chainModeEnabled) {
-      return;
-    }
-    current.addWaypointAt(lat, lng);
-    setContextMenu(null);
-  }, [chainModeEnabled, current]);
+  const handleBlankMapClick = useCallback(
+    (lat: number, lng: number, modifiers?: { altKey: boolean }) => {
+      if (!chainModeEnabled && !modifiers?.altKey) return;
+      current.addWaypointAt(lat, lng);
+      setContextMenu(null);
+    },
+    [chainModeEnabled, current],
+  );
 
   const handleGridGenerate = useCallback(
     (items: MissionItem[], mode: "after_selected" | "replace_all") => {

@@ -46,10 +46,13 @@ vi.mock("react-resizable-panels", () => ({
 }));
 
 vi.mock("../MissionMap", () => ({
-  MissionMap: ({ onBlankMapClick, isDrawingPolygon }: { onBlankMapClick?: (lat: number, lng: number) => void; isDrawingPolygon?: boolean }) => (
+  MissionMap: ({ onBlankMapClick, isDrawingPolygon }: { onBlankMapClick?: (lat: number, lng: number, modifiers?: { altKey: boolean }) => void; isDrawingPolygon?: boolean }) => (
     <div>
       <button data-testid="mission-map-blank-click" onClick={() => onBlankMapClick?.(47.41, 8.56)}>
         Blank map
+      </button>
+      <button data-testid="mission-map-alt-click" onClick={() => onBlankMapClick?.(47.41, 8.56, { altKey: true })}>
+        Alt blank map
       </button>
       <span data-testid="mission-map-drawing-state">{isDrawingPolygon ? "drawing" : "idle"}</span>
     </div>
@@ -239,6 +242,46 @@ describe("MissionWorkspace", () => {
     expect(screen.getByTestId("mission-map-drawing-state").textContent).toBe("idle");
 
     fireEvent.click(screen.getByTestId("mission-map-blank-click"));
+    expect(addWaypointAt).toHaveBeenCalledWith(47.41, 8.56);
+  });
+
+  it("exits chain mode when Escape is pressed", () => {
+    const vehicle = { connected: true, vehiclePosition: null, missionState: { current_index: null } };
+    const deviceLocation = { location: null };
+    render(
+      <MissionWorkspace
+        vehicle={vehicle as never}
+        mission={createMission("mission") as never}
+        deviceLocation={deviceLocation as never}
+      />,
+    );
+
+    const chainButton = screen.getByTestId("mission-chain-mode");
+    fireEvent.click(chainButton);
+    expect(chainButton.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(chainButton.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("adds a waypoint on Alt+click even when chain mode is off", () => {
+    const addWaypointAt = vi.fn();
+    const vehicle = { connected: true, vehiclePosition: null, missionState: { current_index: null } };
+    const deviceLocation = { location: null };
+    render(
+      <MissionWorkspace
+        vehicle={vehicle as never}
+        mission={createMission("mission", addWaypointAt) as never}
+        deviceLocation={deviceLocation as never}
+      />,
+    );
+
+    // Chain mode is off by default — plain blank click should not add a waypoint
+    fireEvent.click(screen.getByTestId("mission-map-blank-click"));
+    expect(addWaypointAt).not.toHaveBeenCalled();
+
+    // Alt+click should add a waypoint regardless
+    fireEvent.click(screen.getByTestId("mission-map-alt-click"));
     expect(addWaypointAt).toHaveBeenCalledWith(47.41, 8.56);
   });
 
