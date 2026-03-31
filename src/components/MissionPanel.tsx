@@ -22,23 +22,50 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export function MissionPanel({ vehicle, mission, deviceLocation, isMobile }: MissionPanelProps) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== "z") {
-        return;
-      }
-      if (isEditableTarget(event.target) || isEditableTarget(document.activeElement)) {
-        return;
-      }
+      const editable = isEditableTarget(event.target) || isEditableTarget(document.activeElement);
 
-      if (event.shiftKey) {
-        if (!mission.current.canRedo) return;
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "z") {
+        if (editable) return;
+
+        if (event.shiftKey) {
+          if (!mission.current.canRedo) return;
+          event.preventDefault();
+          mission.current.redo();
+          return;
+        }
+
+        if (!mission.current.canUndo) return;
         event.preventDefault();
-        mission.current.redo();
+        mission.current.undo();
         return;
       }
 
-      if (!mission.current.canUndo) return;
-      event.preventDefault();
-      mission.current.undo();
+      if (event.key === "Delete" || event.key === "Backspace") {
+        if (editable) return;
+        if (mission.current.selectedCount === 0) return;
+        event.preventDefault();
+        mission.current.bulkDelete();
+        return;
+      }
+
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        if (editable) return;
+        const { selectedIndex, displayTotal } = mission.current;
+        if (selectedIndex === null) return;
+        const next = event.key === "ArrowDown" ? selectedIndex + 1 : selectedIndex - 1;
+        if (next < 0 || next >= displayTotal) return;
+        event.preventDefault();
+        mission.current.select(next);
+        return;
+      }
+
+      if (event.key === "Escape") {
+        if (editable) return;
+        if (mission.current.selectedCount === 0) return;
+        event.preventDefault();
+        mission.current.deselectAll();
+        return;
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
