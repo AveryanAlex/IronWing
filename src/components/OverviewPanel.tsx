@@ -18,17 +18,19 @@ function MetricCard({
   value,
   unit,
   valueClass = "text-text-primary",
+  className = "",
 }: {
   label: string;
   value: React.ReactNode;
   unit?: string;
   valueClass?: string;
+  className?: string;
 }) {
   return (
-    <div className="bg-bg-tertiary/50 border border-border-light rounded-lg p-3 flex flex-col justify-center">
-      <div className="flex items-baseline gap-1">
-        <span className={`text-xl font-semibold tabular-nums font-mono ${valueClass}`}>{value}</span>
-        {unit && <span className="text-xs text-text-muted">{unit}</span>}
+    <div className={`bg-bg-tertiary/50 border border-border-light rounded-lg p-3 flex flex-col justify-center min-w-0 ${className}`}>
+      <div className="flex items-baseline gap-1 min-w-0">
+        <span className={`text-xl font-semibold tabular-nums font-mono truncate min-w-0 ${valueClass}`}>{value}</span>
+        {unit && <span className="text-xs text-text-muted shrink-0">{unit}</span>}
       </div>
       <span className="text-xs text-text-muted mt-1">{label}</span>
     </div>
@@ -89,14 +91,14 @@ export function OverviewPanel({
             <section>
               <SectionHeader title="Status" />
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-bg-tertiary/50 border border-border-light rounded-lg p-3 flex flex-col justify-center">
-                  <span className="text-xl font-semibold text-text-primary">
+                <div className="bg-bg-tertiary/50 border border-border-light rounded-lg p-3 flex flex-col justify-center min-w-0">
+                  <span className="text-xl font-semibold text-text-primary truncate">
                     {connected && s ? (s.mode_name || "Unknown") : "--"}
                   </span>
                   <span className="text-xs text-text-muted mt-1">Mode</span>
                 </div>
-                <div className="bg-bg-tertiary/50 border border-border-light rounded-lg p-3 flex flex-col justify-center">
-                  <span className={`text-xl font-semibold ${connected && s?.armed ? "text-accent" : "text-text-muted"}`}>
+                <div className="bg-bg-tertiary/50 border border-border-light rounded-lg p-3 flex flex-col justify-center min-w-0">
+                  <span className={`text-xl font-semibold truncate ${connected && s?.armed ? "text-accent" : "text-text-muted"}`}>
                     {connected && s ? (s.armed ? "ARMED" : "DISARMED") : "--"}
                   </span>
                   <span className="text-xs text-text-muted mt-1">Arm State</span>
@@ -146,14 +148,15 @@ export function OverviewPanel({
             <section>
               <SectionHeader title="GPS" />
               <div className="grid grid-cols-2 gap-2">
-                <MetricCard 
-                  label="Fix" 
-                  value={connected ? fixTypeStr : "--"} 
+                <MetricCard
+                  label="Fix"
+                  value={connected ? fixTypeStr : "--"}
                   valueClass={fixColor}
+                  className="col-span-2"
                 />
-                <MetricCard 
-                  label="Satellites" 
-                  value={fInt(t.gps_satellites)} 
+                <MetricCard
+                  label="Satellites"
+                  value={fInt(t.gps_satellites)}
                 />
               </div>
             </section>
