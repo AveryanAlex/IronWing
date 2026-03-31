@@ -115,7 +115,7 @@ export function MissionWorkspaceHeader({
           <Button size="sm" variant="secondary" disabled={anyTransferActive} onClick={mission.importKmlFile}>
             <FileUp className="h-3.5 w-3.5" /> Import KML
           </Button>
-          <Button size="sm" variant="secondary" disabled={anyTransferActive} onClick={mission.exportPlanFile}>
+          <Button size="sm" variant="secondary" disabled={anyTransferActive} onClick={() => mission.exportPlanFile()}>
             <FileDown className="h-3.5 w-3.5" /> Export
           </Button>
           <Button size="sm" disabled={current.transferUi.active || !connected} onClick={current.upload}>

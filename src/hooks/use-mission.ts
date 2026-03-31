@@ -130,6 +130,11 @@ type MissionTab = {
     label: string;
 };
 
+type MissionPlanningSpeeds = {
+    cruiseSpeedMps: number;
+    hoverSpeedMps: number;
+};
+
 type DomainPlanMap = {
     mission: MissionPlan;
     fence: FencePlan;
@@ -327,6 +332,7 @@ export function useMission(
     const [history, setHistory] = useState<DraftHistoryState>(createEmptyHistory);
     const [operations, setOperations] = useState<DomainOperations>(createEmptyOperations);
     const [currentScope, setCurrentScope] = useState<SessionScope | null>(null);
+    const [importedMissionSpeeds, setImportedMissionSpeeds] = useState<MissionPlanningSpeeds | null>(null);
 
     const scopeRef = useRef<SessionScope | null>(null);
     const typedDraftStateRef = useRef(typedDraftState);
@@ -335,6 +341,7 @@ export function useMission(
     const homeSourceRef = useRef(homeSource);
     const operationsRef = useRef(operations);
     const nextOperationTokenRef = useRef(1);
+    const exportMissionSpeedsRef = useRef<MissionPlanningSpeeds | null>(null);
 
     useEffect(() => { typedDraftStateRef.current = typedDraftState; }, [typedDraftState]);
     useEffect(() => { missionHomeStateRef.current = missionHomeState; }, [missionHomeState]);
@@ -538,6 +545,15 @@ export function useMission(
         setOperations(next);
     }, []);
 
+    const resetMissionPlanningSpeeds = useCallback(() => {
+        exportMissionSpeedsRef.current = null;
+        setImportedMissionSpeeds(null);
+    }, []);
+
+    const setExportSpeeds = useCallback((speeds: MissionPlanningSpeeds) => {
+        exportMissionSpeedsRef.current = speeds;
+    }, []);
+
     const cancelActiveTransfer = useCallback(() => {
         void Promise.resolve(cancelMissionTransfer()).catch(() => {
             // Best-effort transfer abort; stale-result guards still prevent mutation.
@@ -553,8 +569,9 @@ export function useMission(
             setProgress(null);
             resetOperations();
             resetHistory();
+            resetMissionPlanningSpeeds();
         }
-    }, [cancelActiveTransfer, connected, resetHistory, resetOperations]);
+    }, [cancelActiveTransfer, connected, resetHistory, resetMissionPlanningSpeeds, resetOperations]);
 
     useEffect(() => {
         if (vehicleHomePosition && homeSource !== "user" && homeSource !== "download") {
@@ -566,13 +583,14 @@ export function useMission(
         if (!bootstrapScope) return;
         if (!scopeMatches(scopeRef.current, bootstrapScope)) {
             resetHistory();
+            resetMissionPlanningSpeeds();
         }
         scopeRef.current = bootstrapScope;
         setCurrentScope((prev) => scopeMatches(prev, bootstrapScope) ? prev : bootstrapScope);
         commitTypedDraftState(setTypedDraftScope(typedDraftStateRef.current, bootstrapScope));
         commitMissionHomeState(setMissionHomeScope(missionHomeStateRef.current, bootstrapScope), homeSourceRef.current);
         setMissionState(bootstrapMissionState);
-    }, [bootstrapMissionState, bootstrapScope, commitMissionHomeState, commitTypedDraftState, resetHistory]);
+    }, [bootstrapMissionState, bootstrapScope, commitMissionHomeState, commitTypedDraftState, resetHistory, resetMissionPlanningSpeeds]);
 
     useEffect(() => {
         let cancelled = false;
@@ -625,6 +643,7 @@ export function useMission(
                         commitMissionHomeState(moveDirtyMissionHomeToRecoverable(missionHomeStateRef.current, nextScope), null);
                         resetOperations();
                         resetHistory();
+                        resetMissionPlanningSpeeds();
                         setProgress(null);
                         setIssues(createEmptyIssues());
                         setLastOpStatus({ mission: "", fence: "", rally: "" });
@@ -650,7 +669,7 @@ export function useMission(
                 dispose();
             }
         };
-    }, [cancelActiveTransfer, commitMissionHomeState, commitTypedDraftState, resetHistory, resetHomeInputs, resetOperations]);
+    }, [cancelActiveTransfer, commitMissionHomeState, commitTypedDraftState, resetHistory, resetHomeInputs, resetMissionPlanningSpeeds, resetOperations]);
 
     const isPlaybackScope = useCallback(() => scopeRef.current?.source_kind === "playback", []);
 
@@ -775,6 +794,7 @@ export function useMission(
                     replaceMissionHomeFromDownload(missionHomeStateRef.current, result.home, operation.scope ?? EMPTY_SCOPE),
                     result.home ? "download" : null,
                 );
+                resetMissionPlanningSpeeds();
             }
             resetHistory(domain);
             setIssues((prev) => ({ ...prev, [domain]: [] }));
@@ -789,7 +809,7 @@ export function useMission(
         } finally {
             finishOperation(domain, "download", operation.token);
         }
-    }, [bridges, commitMissionHomeState, commitTypedDraftState, connected, finishOperation, isCurrentOperation, resetHistory, startOperation]);
+    }, [bridges, commitMissionHomeState, commitTypedDraftState, connected, finishOperation, isCurrentOperation, resetHistory, resetMissionPlanningSpeeds, startOperation]);
 
     const clear = useCallback(async (domain: MissionDomain) => {
         if (!connected) { toast.error("Connect to vehicle before clear"); return; }
@@ -806,6 +826,7 @@ export function useMission(
                     replaceMissionHomeFromDownload(missionHomeStateRef.current, null, operation.scope ?? EMPTY_SCOPE),
                     null,
                 );
+                resetMissionPlanningSpeeds();
             }
             resetHistory(domain);
             setIssues((prev) => ({ ...prev, [domain]: [] }));
@@ -820,7 +841,7 @@ export function useMission(
         } finally {
             finishOperation(domain, "clear", operation.token);
         }
-    }, [bridges, commitMissionHomeState, commitTypedDraftState, connected, finishOperation, isCurrentOperation, rejectIfPlaybackReadonly, resetHistory, startOperation]);
+    }, [bridges, commitMissionHomeState, commitTypedDraftState, connected, finishOperation, isCurrentOperation, rejectIfPlaybackReadonly, resetHistory, resetMissionPlanningSpeeds, startOperation]);
 
     const cancel = useCallback(async () => {
         if (!connected) return;
@@ -947,6 +968,10 @@ export function useMission(
             const contents = await readTextFile(path);
             const result = parsePlanFile(contents);
             const scope = scopeRef.current ?? EMPTY_SCOPE;
+            const nextImportedSpeeds = {
+                cruiseSpeedMps: result.cruiseSpeed,
+                hoverSpeedMps: result.hoverSpeed,
+            };
 
             const nextState = replaceTypedDraftFromDownload(
                 replaceTypedDraftFromDownload(
@@ -965,6 +990,8 @@ export function useMission(
                 replaceMissionHomeFromDownload(missionHomeStateRef.current, result.home, scope),
                 result.home ? "download" : null,
             );
+            setImportedMissionSpeeds(nextImportedSpeeds);
+            exportMissionSpeedsRef.current = nextImportedSpeeds;
             resetHistory();
             setIssues(createEmptyIssues());
             setLastOpStatus({ mission: "Imported", fence: "Imported", rally: "Imported" });
@@ -982,7 +1009,7 @@ export function useMission(
         }
     }, [anyTransferActive, commitMissionHomeState, commitTypedDraftState, isPlaybackScope, resetHistory]);
 
-    const exportPlanFile = useCallback(async () => {
+    const exportPlanFile = useCallback(async (overrides?: MissionPlanningSpeeds) => {
         if (anyTransferActive) {
             toast.error("Wait for the active transfer to finish before exporting");
             return;
@@ -994,11 +1021,14 @@ export function useMission(
             });
             if (!path) return;
 
+            const missionPlanningSpeeds = overrides ?? exportMissionSpeedsRef.current ?? importedMissionSpeeds;
             const result = exportQgcPlanFile({
                 mission: currentPlan("mission"),
                 home: currentHome(),
                 fence: currentPlan("fence"),
                 rally: currentPlan("rally"),
+                cruiseSpeed: missionPlanningSpeeds?.cruiseSpeedMps,
+                hoverSpeed: missionPlanningSpeeds?.hoverSpeedMps,
             });
             await writeTextFile(path, `${JSON.stringify(result.json, null, 2)}\n`);
 
@@ -1012,7 +1042,7 @@ export function useMission(
         } catch (err) {
             toast.error("Failed to export plan", { description: asErrorMessage(err) });
         }
-    }, [anyTransferActive, currentHome, currentPlan]);
+    }, [anyTransferActive, currentHome, currentPlan, importedMissionSpeeds]);
 
     const importKmlFile = useCallback(async () => {
         if (isPlaybackScope()) {
@@ -1055,6 +1085,9 @@ export function useMission(
             }
 
             commitTypedDraftState(nextState);
+            if (affectedDomains.includes("mission")) {
+                resetMissionPlanningSpeeds();
+            }
             for (const domain of affectedDomains) {
                 resetHistory(domain);
             }
@@ -1083,7 +1116,7 @@ export function useMission(
         } catch (err) {
             toast.error("Failed to import KML/KMZ", { description: asErrorMessage(err) });
         }
-    }, [anyTransferActive, commitTypedDraftState, isPlaybackScope, resetHistory]);
+    }, [anyTransferActive, commitTypedDraftState, isPlaybackScope, resetHistory, resetMissionPlanningSpeeds]);
 
     const mission = useMemo(() => {
         const domain: MissionDomain = "mission";
@@ -1130,6 +1163,8 @@ export function useMission(
             homeLatInput,
             homeLonInput,
             homeAltInput,
+            importedSpeeds: importedMissionSpeeds,
+            setExportSpeeds,
             select: (index: number | null) => setSelectedIndex(domain, index),
             toggleSelect: (index: number) => toggleSelectedIndex(domain, index),
             selectRange: (fromIndex: number, toIndex: number) => selectRange(domain, fromIndex, toIndex),
@@ -1188,6 +1223,7 @@ export function useMission(
         homeLatInput,
         homeLonInput,
         homeSource,
+        importedMissionSpeeds,
         isPlaybackScope,
         issues.mission,
         lastOpStatus.mission,
@@ -1197,6 +1233,7 @@ export function useMission(
         redo,
         setArbitraryHome,
         setCurrent,
+        setExportSpeeds,
         setHomeAltInputValue,
         setHomeFromMap,
         setHomeLatInputValue,

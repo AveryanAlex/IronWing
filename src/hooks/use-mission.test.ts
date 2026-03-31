@@ -971,6 +971,8 @@ describe("useMission", () => {
                     RelHome: { latitude_deg: 40.15, longitude_deg: -73.18, relative_alt_m: 30 },
                 }],
             },
+            cruiseSpeed: 22,
+            hoverSpeed: 6,
         });
 
         openDialog.mockResolvedValueOnce("/tmp/import.plan");
@@ -989,6 +991,7 @@ describe("useMission", () => {
         expect(result.current.fence.draftItems).toHaveLength(1);
         expect(result.current.rally.draftItems).toHaveLength(1);
         expect(result.current.mission.homePosition).toEqual({ latitude_deg: 40.12, longitude_deg: -73.25, altitude_m: 12 });
+        expect(result.current.mission.importedSpeeds).toEqual({ cruiseSpeedMps: 22, hoverSpeedMps: 6 });
         expect(result.current.mission.canUndo).toBe(false);
         expect(result.current.fence.canUndo).toBe(false);
         expect(result.current.rally.canUndo).toBe(false);
@@ -1018,6 +1021,7 @@ describe("useMission", () => {
             result.current.fence.addWaypoint();
             result.current.rally.addWaypoint();
             result.current.mission.updateHomeFromVehicle();
+            result.current.mission.setExportSpeeds({ cruiseSpeedMps: 24, hoverSpeedMps: 8 });
         });
 
         saveDialog.mockResolvedValueOnce("/tmp/export.plan");
@@ -1035,13 +1039,15 @@ describe("useMission", () => {
 
         const exportedJson = JSON.parse(writeTextFile.mock.calls[0][1] as string) as {
             fileType?: string;
-            mission?: { items?: unknown[]; plannedHomePosition?: number[] };
+            mission?: { items?: unknown[]; plannedHomePosition?: number[]; cruiseSpeed?: number; hoverSpeed?: number };
             geoFence?: { polygons?: unknown[]; circles?: unknown[] };
             rallyPoints?: { points?: unknown[] };
         };
         expect(exportedJson.fileType).toBe("Plan");
         expect(exportedJson.mission?.items).toHaveLength(1);
         expect(exportedJson.mission?.plannedHomePosition).toEqual([47.55, 8.55, 120]);
+        expect(exportedJson.mission?.cruiseSpeed).toBe(24);
+        expect(exportedJson.mission?.hoverSpeed).toBe(8);
         expect((exportedJson.geoFence?.polygons?.length ?? 0) + (exportedJson.geoFence?.circles?.length ?? 0)).toBe(1);
         expect(exportedJson.rallyPoints?.points).toHaveLength(1);
     });
