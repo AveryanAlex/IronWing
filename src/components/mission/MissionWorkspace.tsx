@@ -10,9 +10,10 @@ import type { useMission } from "../../hooks/use-mission";
 import type { useDeviceLocation } from "../../hooks/use-device-location";
 import { useMissionTerrain } from "../../hooks/use-mission-terrain";
 import type { MissionItem, FenceRegion, GeoPoint3d } from "../../lib/mavkit-types";
+import type { MissionIssue } from "../../mission";
 import type { TypedDraftItem, FenceRegionType } from "../../lib/mission-draft-typed";
 import type { PolygonVertex } from "../../lib/mission-grid";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { findNearestWaypoint } from "./mission-helpers";
 import { useSettings } from "../../hooks/use-settings";
@@ -34,7 +35,8 @@ type ContextMenuState = {
 export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWorkspaceProps) {
   const current = mission.current;
   const { settings, updateSettings } = useSettings();
-  const terrain = useMissionTerrain(current.draftItems, current.homePosition, current.tab, settings.terrainSafetyMarginM);
+  const [terrainRetryKey, setTerrainRetryKey] = useState(0);
+  const terrain = useMissionTerrain(current.draftItems, current.homePosition, current.tab, settings.terrainSafetyMarginM, terrainRetryKey);
   const terrainWarnings = terrain.warningsByIndex ?? undefined;
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [flyToKey, setFlyToKey] = useState(0);
@@ -43,6 +45,38 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
   const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
   const [polygonVertices, setPolygonVertices] = useState<PolygonVertex[]>([]);
   const chainModeEnabled = current.tab === "mission" && chainModeActive && !isDrawingPolygon;
+
+  const terrainIssues = useMemo<MissionIssue[]>(() => {
+    if (!terrainWarnings) return [];
+    const issues: MissionIssue[] = [];
+    for (const [index, warning] of terrainWarnings) {
+      if (warning === "below_terrain") {
+        issues.push({
+          severity: "error",
+          code: "terrain_below",
+          seq: index,
+          message: `Waypoint ${index + 1} is below terrain`,
+        });
+      } else if (warning === "near_terrain") {
+        issues.push({
+          severity: "warning",
+          code: "terrain_near",
+          seq: index,
+          message: `Waypoint ${index + 1} is near terrain`,
+        });
+      }
+    }
+    return issues;
+  }, [terrainWarnings]);
+
+  const allIssues = useMemo<MissionIssue[]>(
+    () => [...current.issues, ...terrainIssues],
+    [current.issues, terrainIssues],
+  );
+
+  const handleTerrainRetry = useCallback(() => {
+    setTerrainRetryKey((k) => k + 1);
+  }, []);
 
   useEffect(() => {
     if (current.tab !== "mission") {
@@ -265,6 +299,7 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
                 height={120}
                 safetyMarginM={settings.terrainSafetyMarginM}
                 onSafetyMarginChange={(value) => updateSettings({ terrainSafetyMarginM: value })}
+                onRetry={handleTerrainRetry}
               />
             )}
           </div>
@@ -283,13 +318,13 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
           />
         </Panel>
       </Group>
-      {current.issues.length > 0 && (
+      {allIssues.length > 0 && (
         <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-sm">
           <h4 className="mb-1 font-semibold text-warning">
-            Validation Issues ({current.issues.length})
+            Validation Issues ({allIssues.length})
           </h4>
           <ul className="list-inside list-disc space-y-0.5 text-xs text-text-secondary">
-            {current.issues.map((issue, i) => (
+            {allIssues.map((issue, i) => (
               <li key={`${issue.code}-${i}`}>
                 <span className={issue.severity === "error" ? "text-danger" : "text-warning"}>
                   [{issue.severity}]

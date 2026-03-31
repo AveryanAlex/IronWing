@@ -308,6 +308,7 @@ describe("MissionWorkspace", () => {
       missionTab.current.homePosition,
       "mission",
       10,
+      0,
     );
     expect(screen.getByTestId("mission-terrain-profile").getAttribute("data-height")).toBe("120");
 

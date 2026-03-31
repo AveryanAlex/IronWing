@@ -32,6 +32,8 @@ export function useMissionTerrain(
   homePosition: HomePosition | null,
   tab: string,
   safetyMarginM: number = TERRAIN_WARNING_NEAR_THRESHOLD_M,
+  /** Increment to force a re-fetch, e.g. on user-initiated retry. */
+  retryKey: number = 0,
 ): UseMissionTerrainResult {
   const cacheRef = useRef<TileCache | null>(null);
   const requestIdRef = useRef(0);
@@ -105,7 +107,7 @@ export function useMissionTerrain(
     return () => {
       disposed = true;
     };
-  }, [pathSignature, tab, safetyMarginM]);
+  }, [pathSignature, tab, safetyMarginM, retryKey]);
 
   return result;
 }

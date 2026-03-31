@@ -14,6 +14,7 @@ type MissionTerrainProfileProps = {
   height?: number;
   safetyMarginM?: number;
   onSafetyMarginChange?: (value: number) => void;
+  onRetry?: () => void;
 };
 
 type MarkerDescriptor = {
@@ -40,6 +41,7 @@ export function MissionTerrainProfile({
   height = 120,
   safetyMarginM = 10,
   onSafetyMarginChange,
+  onRetry,
 }: MissionTerrainProfileProps) {
   const hasRenderableProfile = status === "ready" && profile !== null && profile.points.length > 0;
   const compact = height <= 88;
@@ -176,9 +178,20 @@ export function MissionTerrainProfile({
             </p>
           </div>
         </div>
-        <span className="rounded-full border border-border/60 bg-bg-primary/80 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-text-muted">
-          {status === "error" ? "Offline" : "Idle"}
-        </span>
+        <div className="flex items-center gap-2">
+          {status === "error" && onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="rounded bg-bg-tertiary px-3 py-1 text-xs font-medium text-text-secondary hover:bg-bg-quaternary"
+            >
+              Retry
+            </button>
+          )}
+          <span className="rounded-full border border-border/60 bg-bg-primary/80 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-text-muted">
+            {status === "error" ? "Offline" : "Idle"}
+          </span>
+        </div>
       </section>
     );
   }
