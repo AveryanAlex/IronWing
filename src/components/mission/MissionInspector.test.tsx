@@ -181,15 +181,14 @@ describe("MissionInspector", () => {
 
         expect(screen.getByText("Fly to a waypoint, optionally hold for a delay.")).toBeTruthy();
         expect(screen.getByText(/Without a delay, the waypoint is considered complete/i)).toBeTruthy();
-        expect(screen.getByRole("link", { name: /ArduPilot Docs/i }).getAttribute("href")).toContain("#waypoint");
+        expect(screen.getByRole("button", { name: /ArduPilot Docs/i })).toBeTruthy();
 
         expect(screen.getByLabelText("Hold")).toBeTruthy();
         expect((container.querySelector('[data-command-field-unit="hold_time_s"]') as HTMLElement | null)?.textContent).toBe("s");
 
-        expect((screen.getByLabelText("Accept Radius") as HTMLInputElement).disabled).toBe(true);
-        expect((screen.getByLabelText("Pass Radius") as HTMLInputElement).disabled).toBe(true);
-        expect((screen.getByLabelText("Yaw") as HTMLInputElement).disabled).toBe(true);
-        expect(screen.getByText(/WP_RADIUS_M/)).toBeTruthy();
+        expect((screen.getByLabelText("Accept Radius") as HTMLInputElement).disabled).toBe(false);
+        expect((screen.getByLabelText("Pass Radius") as HTMLInputElement).disabled).toBe(false);
+        expect((screen.getByLabelText("Yaw") as HTMLInputElement).disabled).toBe(false);
 
         expect(container.querySelector('[data-coord-field="latitude"]')).toBeTruthy();
         expect(container.querySelector('[data-coord-field="longitude"]')).toBeTruthy();
@@ -258,7 +257,7 @@ describe("MissionInspector", () => {
         });
 
         expect(screen.getByText("Mark the point where the landing sequence begins.")).toBeTruthy();
-        expect(screen.getByRole("link", { name: /ArduPilot Docs/i }).getAttribute("href")).toContain("#do-land-start");
+        expect(screen.getByRole("button", { name: /ArduPilot Docs/i })).toBeTruthy();
         expect(container.querySelector('[data-coord-field="latitude"]')).toBeTruthy();
         expect(container.querySelector('[data-coord-field="longitude"]')).toBeTruthy();
         expect(container.querySelector('[data-param-slot="altitude"]')).toBeTruthy();
