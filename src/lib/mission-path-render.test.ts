@@ -291,6 +291,15 @@ describe("buildMissionRenderFeatures", () => {
     });
   });
 
+  it("skips loiter circle when radius is zero", () => {
+    const center = offsetPoint(home, 45, 150);
+    const features = buildMissionRenderFeatures(home, [
+      loiterTurns(0, center.lat, center.lon, 0),
+    ]);
+
+    expect(features.loiterCircles).toHaveLength(0);
+  });
+
   it("tracks DO_LAND_START and flags landing legs", () => {
     const wp1 = offsetPoint(home, 90, 100);
     const landStartPoint = offsetPoint(home, 90, 200);

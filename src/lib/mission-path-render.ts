@@ -268,7 +268,7 @@ export function buildMissionRenderFeatures(
       classified,
     });
 
-    if (classified.kind === "loiter") {
+    if (classified.kind === "loiter" && classified.radius_m > 0) {
       features.loiterCircles.push(buildLoiterCircleFeature(classified, item.index));
     }
   }
