@@ -814,6 +814,9 @@ export function useMission(
             pushHistorySnapshot(domain, downloadSnapshot);
             setIssues((prev) => ({ ...prev, [domain]: [] }));
             setLastOpStatus((prev) => ({ ...prev, [domain]: "Downloaded" }));
+            setTimeout(() => {
+              setLastOpStatus((prev) => prev[domain] === "Downloaded" ? { ...prev, [domain]: null } : prev);
+            }, 3000);
             toast.success(`${missionLabel(domain)} downloaded`, { description: `${planItemCount(domain, result.plan)} items` });
         } catch (err) {
             if (!isCurrentOperation(domain, operation.token, operation.scope)) return;
@@ -848,6 +851,9 @@ export function useMission(
             pushHistorySnapshot(domain, clearSnapshot);
             setIssues((prev) => ({ ...prev, [domain]: [] }));
             setLastOpStatus((prev) => ({ ...prev, [domain]: "Cleared" }));
+            setTimeout(() => {
+              setLastOpStatus((prev) => prev[domain] === "Cleared" ? { ...prev, [domain]: null } : prev);
+            }, 3000);
             toast.success(`${missionLabel(domain)} cleared`);
         } catch (err) {
             if (!isCurrentOperation(domain, operation.token, operation.scope)) return;
