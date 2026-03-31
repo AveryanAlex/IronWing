@@ -212,4 +212,19 @@ describe("computeTerrainProfile", () => {
     const waypointCustom = customResult.points.find((p) => p.isWaypoint && p.index === 0);
     expect(waypointCustom?.warning).toBe("near_terrain");
   });
+
+  it("renders loiter commands as flat horizontal segments", () => {
+    const points: PathPoint[] = [
+      { latitude_deg: 0, longitude_deg: 0, altitude_m: 100, frame: "rel_home", index: 0, isHome: false },
+      { latitude_deg: 0.001, longitude_deg: 0, altitude_m: 50, frame: "rel_home", index: 1, isHome: false, isLoiter: true, loiterRadius_m: 30 },
+      { latitude_deg: 0.002, longitude_deg: 0, altitude_m: 100, frame: "rel_home", index: 2, isHome: false },
+    ];
+    const sampler = () => 0;
+    const result = computeTerrainProfile(points, sampler, 0);
+    // Find profile points belonging to the loiter (index 1)
+    const loiterPoints = result.points.filter((p) => p.index === 1);
+    expect(loiterPoints.length).toBeGreaterThanOrEqual(2);
+    const altitudes = loiterPoints.map((p) => p.flightMsl);
+    expect(new Set(altitudes).size).toBe(1);
+  });
 });

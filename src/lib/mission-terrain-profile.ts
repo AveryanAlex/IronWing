@@ -30,6 +30,11 @@ export type ProfileResult = {
 export const TERRAIN_WARNING_NEAR_THRESHOLD_M = 10;
 export const DEFAULT_PROFILE_MAX_SPACING_M = 50;
 
+/** Minimum flat-segment span for a loiter dwell on the terrain profile, in metres.
+ *  When a loiter radius is zero or very small, this ensures the flat line is still
+ *  visible on the chart. */
+const LOITER_MIN_SPAN_M = 60;
+
 export type TerrainProfileOptions = {
   /** Safety margin in metres below which flight altitude is classified as "near_terrain". Defaults to TERRAIN_WARNING_NEAR_THRESHOLD_M. */
   safetyMarginM?: number;
@@ -104,6 +109,21 @@ export function densifyPath(points: PathPoint[], maxSpacing_m: number): Densifie
       segmentT: 1,
       isWaypoint: true,
     });
+
+    // Loiter commands dwell at a fixed altitude; insert a second point at the
+    // far edge of the loiter circle so the profile shows a flat horizontal
+    // segment rather than a single spike.
+    if (end.isLoiter) {
+      const span = Math.max(LOITER_MIN_SPAN_M, (end.loiterRadius_m ?? 0) * 2);
+      densified.push({
+        ...end,
+        distance_m: endDistance + span,
+        segmentStartIndex: index - 1,
+        segmentEndIndex: index,
+        segmentT: 1,
+        isWaypoint: true,
+      });
+    }
   }
 
   return densified;
