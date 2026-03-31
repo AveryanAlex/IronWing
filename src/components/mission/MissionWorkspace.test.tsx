@@ -2,8 +2,30 @@
 
 import type { ReactNode } from "react";
 import { fireEvent, render, screen, cleanup } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MissionWorkspace } from "./MissionWorkspace";
+
+const { terrainHookMock, terrainProfilePropsMock } = vi.hoisted(() => ({
+  terrainHookMock: vi.fn(),
+  terrainProfilePropsMock: vi.fn(),
+}));
+
+vi.mock("../../hooks/use-mission-terrain", () => ({
+  useMissionTerrain: (...args: unknown[]) => terrainHookMock(...args),
+}));
+
+vi.mock("./MissionTerrainProfile", () => ({
+  MissionTerrainProfile: (props: { status: string; height?: number }) => {
+    terrainProfilePropsMock(props);
+    return (
+      <div
+        data-testid="mission-terrain-profile"
+        data-status={props.status}
+        data-height={props.height ?? 120}
+      />
+    );
+  },
+}));
 
 vi.mock("../ui/tooltip", () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -122,6 +144,16 @@ function createMission(tab: "mission" | "fence" | "rally" = "mission", addWaypoi
 }
 
 describe("MissionWorkspace", () => {
+  beforeEach(() => {
+    terrainHookMock.mockReset();
+    terrainProfilePropsMock.mockReset();
+    terrainHookMock.mockReturnValue({
+      status: "ready",
+      profile: { points: [], warningsByIndex: new Map() },
+      warningsByIndex: new Map(),
+    });
+  });
+
   afterEach(() => {
     cleanup();
   });
@@ -186,5 +218,43 @@ describe("MissionWorkspace", () => {
 
     fireEvent.click(screen.getByTestId("mission-map-blank-click"));
     expect(addWaypointAt).toHaveBeenCalledWith(47.41, 8.56);
+  });
+
+  it("shows the terrain profile only for the mission tab and wires the terrain hook into it", () => {
+    const vehicle = { connected: true, vehiclePosition: null, missionState: { current_index: null } };
+    const deviceLocation = { location: null };
+    const missionTab = createMission("mission");
+    const { rerender } = render(
+      <MissionWorkspace
+        vehicle={vehicle as never}
+        mission={missionTab as never}
+        deviceLocation={deviceLocation as never}
+      />,
+    );
+
+    expect(terrainHookMock).toHaveBeenCalledWith(
+      missionTab.current.draftItems,
+      missionTab.current.homePosition,
+      "mission",
+    );
+    expect(screen.getByTestId("mission-terrain-profile").getAttribute("data-height")).toBe("120");
+
+    const props = terrainProfilePropsMock.mock.calls[terrainProfilePropsMock.mock.calls.length - 1]?.[0] as {
+      selectedIndex: number | null;
+      onSelectIndex?: (index: number | null) => void;
+    };
+    expect(props.selectedIndex).toBeNull();
+    expect(props.onSelectIndex).toBe(missionTab.current.select);
+
+    rerender(
+      <MissionWorkspace
+        vehicle={vehicle as never}
+        mission={createMission("fence") as never}
+        deviceLocation={deviceLocation as never}
+      />,
+    );
+
+    expect(screen.queryByTestId("mission-terrain-profile")).toBeNull();
+    expect(terrainHookMock.mock.calls[terrainHookMock.mock.calls.length - 1]?.[2]).toBe("fence");
   });
 });

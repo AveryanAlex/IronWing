@@ -2,8 +2,30 @@
 
 import type { ReactNode } from "react";
 import { fireEvent, render, screen, cleanup } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MissionMobileDrawer } from "./MissionMobileDrawer";
+
+const { terrainHookMock, terrainProfilePropsMock } = vi.hoisted(() => ({
+  terrainHookMock: vi.fn(),
+  terrainProfilePropsMock: vi.fn(),
+}));
+
+vi.mock("../../hooks/use-mission-terrain", () => ({
+  useMissionTerrain: (...args: unknown[]) => terrainHookMock(...args),
+}));
+
+vi.mock("./MissionTerrainProfile", () => ({
+  MissionTerrainProfile: (props: { status: string; height?: number }) => {
+    terrainProfilePropsMock(props);
+    return (
+      <div
+        data-testid="mission-terrain-profile"
+        data-status={props.status}
+        data-height={props.height ?? 120}
+      />
+    );
+  },
+}));
 
 vi.mock("../ui/tooltip", () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -31,9 +53,9 @@ vi.mock("./MissionAutoGridDialog", () => ({
   MissionAutoGridDialog: ({ children }: { children?: ReactNode }) => <div data-testid="mission-auto-grid-dialog">{children}</div>,
 }));
 
-function createMission(addWaypointAt = vi.fn()) {
+function createMission(tab: "mission" | "fence" | "rally" = "mission", addWaypointAt = vi.fn()) {
   const current = {
-    tab: "mission" as const,
+    tab,
     draftItems: [],
     homePosition: null,
     selectedIndex: null,
@@ -79,7 +101,7 @@ function createMission(addWaypointAt = vi.fn()) {
       { id: "fence", label: "Fence" },
       { id: "rally", label: "Rally" },
     ],
-    selectedTab: "mission" as const,
+    selectedTab: tab,
     selectTab: vi.fn(),
     current,
     vehicle: { missionState: { current_index: null } },
@@ -102,6 +124,16 @@ function createMission(addWaypointAt = vi.fn()) {
 }
 
 describe("MissionMobileDrawer", () => {
+  beforeEach(() => {
+    terrainHookMock.mockReset();
+    terrainProfilePropsMock.mockReset();
+    terrainHookMock.mockReturnValue({
+      status: "ready",
+      profile: { points: [], warningsByIndex: new Map() },
+      warningsByIndex: new Map(),
+    });
+  });
+
   afterEach(() => {
     cleanup();
   });
@@ -111,7 +143,7 @@ describe("MissionMobileDrawer", () => {
     render(
       <MissionMobileDrawer
         vehicle={{ connected: true, vehiclePosition: null, missionState: { current_index: null } } as never}
-        mission={createMission(addWaypointAt) as never}
+        mission={createMission("mission", addWaypointAt) as never}
         deviceLocation={{ location: null } as never}
       />,
     );
@@ -122,5 +154,39 @@ describe("MissionMobileDrawer", () => {
 
     expect(chainButton.getAttribute("aria-pressed")).toBe("true");
     expect(addWaypointAt).toHaveBeenCalledWith(47.5, 8.6);
+  });
+
+  it("shows the compact terrain profile only for the mission tab", () => {
+    const missionTab = createMission("mission");
+    const { rerender } = render(
+      <MissionMobileDrawer
+        vehicle={{ connected: true, vehiclePosition: null, missionState: { current_index: null } } as never}
+        mission={missionTab as never}
+        deviceLocation={{ location: null } as never}
+      />,
+    );
+
+    expect(terrainHookMock).toHaveBeenCalledWith(
+      missionTab.current.draftItems,
+      missionTab.current.homePosition,
+      "mission",
+    );
+    expect(screen.getByTestId("mission-terrain-profile").getAttribute("data-height")).toBe("80");
+
+    const props = terrainProfilePropsMock.mock.calls[terrainProfilePropsMock.mock.calls.length - 1]?.[0] as {
+      onSelectIndex?: (index: number | null) => void;
+    };
+    expect(props.onSelectIndex).toBe(missionTab.current.select);
+
+    rerender(
+      <MissionMobileDrawer
+        vehicle={{ connected: true, vehiclePosition: null, missionState: { current_index: null } } as never}
+        mission={createMission("fence") as never}
+        deviceLocation={{ location: null } as never}
+      />,
+    );
+
+    expect(screen.queryByTestId("mission-terrain-profile")).toBeNull();
+    expect(terrainHookMock.mock.calls[terrainHookMock.mock.calls.length - 1]?.[2]).toBe("fence");
   });
 });

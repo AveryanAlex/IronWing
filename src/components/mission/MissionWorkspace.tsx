@@ -4,9 +4,11 @@ import { MapContextMenu } from "../MapContextMenu";
 import { MissionWorkspaceHeader } from "./MissionWorkspaceHeader";
 import { MissionDesktopShell } from "./MissionDesktopShell";
 import { MissionAutoGridDialog } from "./MissionAutoGridDialog";
+import { MissionTerrainProfile } from "./MissionTerrainProfile";
 import type { useSession } from "../../hooks/use-session";
 import type { useMission } from "../../hooks/use-mission";
 import type { useDeviceLocation } from "../../hooks/use-device-location";
+import { useMissionTerrain } from "../../hooks/use-mission-terrain";
 import type { MissionItem, FenceRegion, GeoPoint3d } from "../../lib/mavkit-types";
 import type { TypedDraftItem, FenceRegionType } from "../../lib/mission-draft-typed";
 import type { PolygonVertex } from "../../lib/mission-grid";
@@ -30,6 +32,7 @@ type ContextMenuState = {
 
 export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWorkspaceProps) {
   const current = mission.current;
+  const terrain = useMissionTerrain(current.draftItems, current.homePosition, current.tab);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [flyToKey, setFlyToKey] = useState(0);
   const [autoGridOpen, setAutoGridOpen] = useState(false);
@@ -173,66 +176,78 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
 
       <Group orientation="horizontal" className="flex-1 overflow-hidden">
         <Panel defaultSize="65" minSize="40">
-          <div
-            data-mission-map-region
-            className="relative h-full overflow-hidden rounded-lg border border-border"
-          >
-            <MissionMap
-              missionItems={current.draftItems as TypedDraftItem[]}
-              homePosition={current.homePosition}
-              selectedIndex={current.selectedIndex}
-              onSelectIndex={handleMapSelect}
-              onMoveWaypoint={current.moveWaypointOnMap}
-              onBlankMapClick={handleBlankMapClick}
-              onContextMenu={handleContextMenu}
-              readOnly={current.readOnly}
-              deviceLocation={deviceLocation.location}
-              vehiclePosition={vehicle.vehiclePosition}
-              currentMissionSeq={current.tab === "mission" ? mission.vehicle.missionState?.current_index ?? null : null}
-              flyToSelectedKey={flyToKey}
-              polygonVertices={autoGridOpen ? polygonVertices : undefined}
-              isDrawingPolygon={isDrawingPolygon}
-              onPolygonClick={handlePolygonClick}
-              onPolygonComplete={handlePolygonComplete}
-              onPolygonVertexMove={handlePolygonVertexMove}
-              fenceRegions={current.tab === "fence" ? current.draftItems.map(d => d.document as FenceRegion) : undefined}
-              selectedFenceIndex={current.tab === "fence" ? current.selectedIndex : null}
-              fenceReturnPoint={current.tab === "fence" ? mission.fence.returnPoint : null}
-              rallyPoints={current.tab === "rally"
-                ? current.draftItems.map(d => ({ index: d.index, point: d.document as GeoPoint3d }))
-                : undefined}
-              selectedRallyIndex={current.tab === "rally" ? current.selectedIndex : null}
-            />
-            {contextMenu && (
-              <MapContextMenu
-                x={contextMenu.x}
-                y={contextMenu.y}
-                lat={contextMenu.lat}
-                lng={contextMenu.lng}
-                nearestSeq={contextMenu.nearestSeq}
-                mode="planner"
-                missionType={mission.selectedTab}
-                onAddWaypoint={(lat, lng) => { current.addWaypointAt(lat, lng); closeContextMenu(); }}
-                onSetHome={(lat, lng) => { current.setHomeFromMap(lat, lng); closeContextMenu(); }}
-                onDeleteWaypoint={(seq) => { current.deleteAt(seq); closeContextMenu(); }}
-                onAddFenceRegion={mission.selectedTab === "fence" ? handleAddFenceRegion : undefined}
-                onSetFenceReturnPoint={mission.selectedTab === "fence" ? handleSetFenceReturnPoint : undefined}
-                onClose={closeContextMenu}
-              />
-            )}
-            {autoGridOpen && (
-              <MissionAutoGridDialog
-                polygon={polygonVertices}
-                isDrawing={isDrawingPolygon}
-                onStartDraw={handleStartDraw}
-                onStopDraw={handleStopDraw}
-                onClearPolygon={handleClearPolygon}
-                onGenerate={handleGridGenerate}
-                onClose={handleAutoGridClose}
-                selectedSeq={current.selectedIndex}
+          <div className="flex h-full min-h-0 flex-col gap-2">
+            <div
+              data-mission-map-region
+              className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border"
+            >
+              <MissionMap
+                missionItems={current.draftItems as TypedDraftItem[]}
                 homePosition={current.homePosition}
-                anchorX={12}
-                anchorY={48}
+                selectedIndex={current.selectedIndex}
+                onSelectIndex={handleMapSelect}
+                onMoveWaypoint={current.moveWaypointOnMap}
+                onBlankMapClick={handleBlankMapClick}
+                onContextMenu={handleContextMenu}
+                readOnly={current.readOnly}
+                deviceLocation={deviceLocation.location}
+                vehiclePosition={vehicle.vehiclePosition}
+                currentMissionSeq={current.tab === "mission" ? mission.vehicle.missionState?.current_index ?? null : null}
+                flyToSelectedKey={flyToKey}
+                polygonVertices={autoGridOpen ? polygonVertices : undefined}
+                isDrawingPolygon={isDrawingPolygon}
+                onPolygonClick={handlePolygonClick}
+                onPolygonComplete={handlePolygonComplete}
+                onPolygonVertexMove={handlePolygonVertexMove}
+                fenceRegions={current.tab === "fence" ? current.draftItems.map(d => d.document as FenceRegion) : undefined}
+                selectedFenceIndex={current.tab === "fence" ? current.selectedIndex : null}
+                fenceReturnPoint={current.tab === "fence" ? mission.fence.returnPoint : null}
+                rallyPoints={current.tab === "rally"
+                  ? current.draftItems.map(d => ({ index: d.index, point: d.document as GeoPoint3d }))
+                  : undefined}
+                selectedRallyIndex={current.tab === "rally" ? current.selectedIndex : null}
+              />
+              {contextMenu && (
+                <MapContextMenu
+                  x={contextMenu.x}
+                  y={contextMenu.y}
+                  lat={contextMenu.lat}
+                  lng={contextMenu.lng}
+                  nearestSeq={contextMenu.nearestSeq}
+                  mode="planner"
+                  missionType={mission.selectedTab}
+                  onAddWaypoint={(lat, lng) => { current.addWaypointAt(lat, lng); closeContextMenu(); }}
+                  onSetHome={(lat, lng) => { current.setHomeFromMap(lat, lng); closeContextMenu(); }}
+                  onDeleteWaypoint={(seq) => { current.deleteAt(seq); closeContextMenu(); }}
+                  onAddFenceRegion={mission.selectedTab === "fence" ? handleAddFenceRegion : undefined}
+                  onSetFenceReturnPoint={mission.selectedTab === "fence" ? handleSetFenceReturnPoint : undefined}
+                  onClose={closeContextMenu}
+                />
+              )}
+              {autoGridOpen && (
+                <MissionAutoGridDialog
+                  polygon={polygonVertices}
+                  isDrawing={isDrawingPolygon}
+                  onStartDraw={handleStartDraw}
+                  onStopDraw={handleStopDraw}
+                  onClearPolygon={handleClearPolygon}
+                  onGenerate={handleGridGenerate}
+                  onClose={handleAutoGridClose}
+                  selectedSeq={current.selectedIndex}
+                  homePosition={current.homePosition}
+                  anchorX={12}
+                  anchorY={48}
+                />
+              )}
+            </div>
+
+            {current.tab === "mission" && (
+              <MissionTerrainProfile
+                profile={terrain.profile}
+                status={terrain.status}
+                selectedIndex={current.selectedIndex}
+                onSelectIndex={current.select}
+                height={120}
               />
             )}
           </div>
