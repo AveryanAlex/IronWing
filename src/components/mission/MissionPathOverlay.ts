@@ -5,6 +5,7 @@ export const MISSION_PATH_SOURCE_ID = "mission-path";
 export const MISSION_PATH_LINE_LAYER_ID = "mission-path-lines";
 export const MISSION_PATH_LOITER_FILL_LAYER_ID = "mission-path-loiter-fill";
 export const MISSION_PATH_LOITER_STROKE_LAYER_ID = "mission-path-loiter-stroke";
+export const MISSION_PATH_LOITER_ARROW_LAYER_ID = "mission-path-loiter-arrows";
 export const MISSION_PATH_LABEL_LAYER_ID = "mission-path-labels";
 
 type MissionPathFeatureProperties = {
@@ -163,6 +164,28 @@ export function ensureMissionPathLayers(
     } as any);
   }
 
+  if (!map.getLayer(MISSION_PATH_LOITER_ARROW_LAYER_ID)) {
+    map.addLayer({
+      id: MISSION_PATH_LOITER_ARROW_LAYER_ID,
+      type: "symbol",
+      source: MISSION_PATH_SOURCE_ID,
+      filter: ["==", ["get", "kind"], "loiter"],
+      layout: {
+        "symbol-placement": "line",
+        "symbol-spacing": 80,
+        "text-field": "▸",
+        "text-size": 14,
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+        "text-rotation-alignment": "map",
+        "text-keep-upright": false,
+      },
+      paint: {
+        "text-color": "#78d6ff",
+      },
+    } as any);
+  }
+
   if (!map.getLayer(MISSION_PATH_LABEL_LAYER_ID)) {
     map.addLayer({
       id: MISSION_PATH_LABEL_LAYER_ID,
@@ -216,6 +239,7 @@ export function updateMissionPathSource(
 export function removeMissionPathLayers(map: MapLibreMap): void {
   for (const layerId of [
     MISSION_PATH_LABEL_LAYER_ID,
+    MISSION_PATH_LOITER_ARROW_LAYER_ID,
     MISSION_PATH_LOITER_STROKE_LAYER_ID,
     MISSION_PATH_LOITER_FILL_LAYER_ID,
     MISSION_PATH_LINE_LAYER_ID,

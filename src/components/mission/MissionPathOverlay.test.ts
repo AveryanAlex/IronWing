@@ -13,6 +13,7 @@ import {
   ensureMissionPathLayers,
   MISSION_PATH_LABEL_LAYER_ID,
   MISSION_PATH_LINE_LAYER_ID,
+  MISSION_PATH_LOITER_ARROW_LAYER_ID,
   MISSION_PATH_LOITER_FILL_LAYER_ID,
   MISSION_PATH_LOITER_STROKE_LAYER_ID,
   MISSION_PATH_SOURCE_ID,
@@ -238,11 +239,12 @@ describe("MissionPathOverlay layer management", () => {
     ensureMissionPathLayers(map as never, true);
 
     expect(map.addSource).toHaveBeenCalledTimes(1);
-    expect(map.addLayer).toHaveBeenCalledTimes(4);
+    expect(map.addLayer).toHaveBeenCalledTimes(5);
     expect(map.getSource(MISSION_PATH_SOURCE_ID)).toBeDefined();
     expect(map.getLayer(MISSION_PATH_LINE_LAYER_ID)).toBeDefined();
     expect(map.getLayer(MISSION_PATH_LOITER_FILL_LAYER_ID)).toBeDefined();
     expect(map.getLayer(MISSION_PATH_LOITER_STROKE_LAYER_ID)).toBeDefined();
+    expect(map.getLayer(MISSION_PATH_LOITER_ARROW_LAYER_ID)).toBeDefined();
     expect(map.getLayer(MISSION_PATH_LABEL_LAYER_ID)).toBeDefined();
     expect(map.layers.get(MISSION_PATH_LABEL_LAYER_ID)?.layout?.visibility).toBe("visible");
   });
@@ -278,6 +280,7 @@ describe("MissionPathOverlay layer management", () => {
 
     expect(map.removeLayer.mock.calls.map(([id]) => id)).toEqual([
       MISSION_PATH_LABEL_LAYER_ID,
+      MISSION_PATH_LOITER_ARROW_LAYER_ID,
       MISSION_PATH_LOITER_STROKE_LAYER_ID,
       MISSION_PATH_LOITER_FILL_LAYER_ID,
       MISSION_PATH_LINE_LAYER_ID,
