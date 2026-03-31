@@ -6,7 +6,15 @@ import rallyFixtureJson from "../../tests/contracts/rally.plan.json";
 import type { FencePlan, HomePosition, MissionPlan, RallyPlan } from "./mavkit-types";
 import { exportPlanFile, missionFrameFromNumeric, missionFrameToNumeric, parsePlanFile } from "./mission-plan-io";
 
-function makePlanJson(items: unknown[], extras: Record<string, unknown> = {}) {
+function makePlanJson(
+    items: unknown[],
+    extras: {
+        mission?: Record<string, unknown>;
+        [key: string]: unknown;
+    } = {},
+) {
+    const { mission: missionExtras = {}, ...planExtras } = extras;
+
     return {
         fileType: "Plan",
         version: 1,
@@ -19,12 +27,25 @@ function makePlanJson(items: unknown[], extras: Record<string, unknown> = {}) {
             hoverSpeed: 5,
             plannedHomePosition: [47.397742, 8.545594, 488],
             items,
+            ...missionExtras,
         },
-        ...extras,
+        ...planExtras,
     };
 }
 
 describe("mission-plan-io: parsePlanFile", () => {
+    it("returns explicit planning speeds from a QGC plan", () => {
+        const result = parsePlanFile(makePlanJson([], {
+            mission: {
+                cruiseSpeed: 21,
+                hoverSpeed: 8,
+            },
+        }));
+
+        expect(result.cruiseSpeed).toBe(21);
+        expect(result.hoverSpeed).toBe(8);
+    });
+
     it("parses mission-only plans with typed commands and preserves unknown commands as Other", () => {
         const input = makePlanJson([
             {
@@ -264,6 +285,8 @@ describe("mission-plan-io: parsePlanFile", () => {
         expect(result.home).toBeNull();
         expect(result.fence).toEqual({ return_point: null, regions: [] });
         expect(result.rally).toEqual({ points: [] });
+        expect(result.cruiseSpeed).toBe(15);
+        expect(result.hoverSpeed).toBe(5);
         expect(result.mission.items).toHaveLength(1);
         expect(result.warnings).toEqual([]);
     });
@@ -342,12 +365,40 @@ describe("mission-plan-io: exportPlanFile", () => {
 
         expect(exported.warnings).toEqual([]);
         expect(exported.json.fileType).toBe("Plan");
+        expect(exported.json.mission?.cruiseSpeed).toBe(15);
+        expect(exported.json.mission?.hoverSpeed).toBe(5);
         expect(exported.json.mission?.items?.map((item) => (item as { doJumpId?: number }).doJumpId)).toEqual([1, 2, 3]);
         expect(exported.json.mission?.items?.map((item) => (item as { frame?: number }).frame)).toEqual([0, 3, 10]);
 
         const reparsed = parsePlanFile(exported.json);
         expect(reparsed.mission).toEqual(mission);
         expect(reparsed.home).toEqual({ latitude_deg: 47.0, longitude_deg: 8.0, altitude_m: 450 });
+    });
+
+    it("writes custom planning speeds when provided for export", () => {
+        const exported = exportPlanFile({
+            mission: { items: [] },
+            home: null,
+            fence: { return_point: null, regions: [] },
+            rally: { points: [] },
+            cruiseSpeed: 19,
+            hoverSpeed: 6,
+        });
+
+        expect(exported.json.mission?.cruiseSpeed).toBe(19);
+        expect(exported.json.mission?.hoverSpeed).toBe(6);
+    });
+
+    it("falls back to default planning speeds when export overrides are absent", () => {
+        const exported = exportPlanFile({
+            mission: { items: [] },
+            home: null,
+            fence: { return_point: null, regions: [] },
+            rally: { points: [] },
+        });
+
+        expect(exported.json.mission?.cruiseSpeed).toBe(15);
+        expect(exported.json.mission?.hoverSpeed).toBe(5);
     });
 
     it("exports fixture-shaped mission/fence/rally state and surfaces lossy warnings where expected", () => {

@@ -123,6 +123,8 @@ type ExportPlanInput = {
     home: HomePosition | null;
     fence: FencePlan;
     rally: RallyPlan;
+    cruiseSpeed?: number;
+    hoverSpeed?: number;
 };
 
 export type PlanParseResult = {
@@ -130,6 +132,8 @@ export type PlanParseResult = {
     home: HomePosition | null;
     fence: FencePlan;
     rally: RallyPlan;
+    cruiseSpeed: number;
+    hoverSpeed: number;
     warnings: string[];
 };
 
@@ -252,6 +256,10 @@ function numberOrZero(value: unknown): number {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+function numberOrDefault(value: unknown, fallback: number): number {
+    return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
 export function missionFrameFromNumeric(frame: number): MissionFrame {
     switch (frame) {
         case MAV_FRAME_GLOBAL:
@@ -287,11 +295,13 @@ export function parsePlanFile(input: string | object): PlanParseResult {
         home: parseHomePosition(missionSection.plannedHomePosition),
         fence: parseFencePlan(json?.geoFence, warnings),
         rally: parseRallyPlan(json?.rallyPoints, warnings),
+        cruiseSpeed: numberOrDefault(missionSection.cruiseSpeed, DEFAULT_CRUISE_SPEED_MPS),
+        hoverSpeed: numberOrDefault(missionSection.hoverSpeed, DEFAULT_HOVER_SPEED_MPS),
         warnings,
     };
 }
 
-export function exportPlanFile({ mission, home, fence, rally }: ExportPlanInput): PlanExportResult {
+export function exportPlanFile({ mission, home, fence, rally, cruiseSpeed, hoverSpeed }: ExportPlanInput): PlanExportResult {
     const warnings: string[] = [];
     const missionItems = mission.items.map((item, index) => exportMissionItem(item, index, warnings));
     const plannedHomePosition: [number, number, number] = home
@@ -306,8 +316,8 @@ export function exportPlanFile({ mission, home, fence, rally }: ExportPlanInput)
             version: QGC_MISSION_VERSION,
             firmwareType: DEFAULT_FIRMWARE_TYPE,
             vehicleType: DEFAULT_VEHICLE_TYPE,
-            cruiseSpeed: DEFAULT_CRUISE_SPEED_MPS,
-            hoverSpeed: DEFAULT_HOVER_SPEED_MPS,
+            cruiseSpeed: numberOrDefault(cruiseSpeed, DEFAULT_CRUISE_SPEED_MPS),
+            hoverSpeed: numberOrDefault(hoverSpeed, DEFAULT_HOVER_SPEED_MPS),
             plannedHomePosition,
             items: missionItems,
         },
