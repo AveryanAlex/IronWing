@@ -31,7 +31,7 @@ import {
     uploadRally,
     type RallyPlan,
 } from "../rally";
-import { exportPlanFile as exportQgcPlanFile, parsePlanFile } from "../lib/mission-plan-io";
+import { exportPlanFile as exportQgcPlanFile, parsePlanFile, type PlanParseResult } from "../lib/mission-plan-io";
 import { parseKml, parseKmz } from "../lib/mission-kml-io";
 import type { Telemetry } from "../telemetry";
 import { subscribeSessionState } from "../session";
@@ -333,6 +333,7 @@ export function useMission(
     const [operations, setOperations] = useState<DomainOperations>(createEmptyOperations);
     const [currentScope, setCurrentScope] = useState<SessionScope | null>(null);
     const [importedMissionSpeeds, setImportedMissionSpeeds] = useState<MissionPlanningSpeeds | null>(null);
+    const [pendingImport, setPendingImport] = useState<PlanParseResult | null>(null);
 
     const scopeRef = useRef<SessionScope | null>(null);
     const typedDraftStateRef = useRef(typedDraftState);
@@ -949,6 +950,65 @@ export function useMission(
             || progressForDomain(progress, "rally").active;
     }, [progress]);
 
+    const applyPlanImport = useCallback((result: PlanParseResult, choice: "replace" | "append") => {
+        const scope = scopeRef.current ?? EMPTY_SCOPE;
+        const nextImportedSpeeds = {
+            cruiseSpeedMps: result.cruiseSpeed,
+            hoverSpeedMps: result.hoverSpeed,
+        };
+
+        if (choice === "replace") {
+            const nextState = replaceTypedDraftFromDownload(
+                replaceTypedDraftFromDownload(
+                    replaceTypedDraftFromDownload(typedDraftStateRef.current, "mission", result.mission, scope),
+                    "fence",
+                    result.fence,
+                    scope,
+                ),
+                "rally",
+                result.rally,
+                scope,
+            );
+            commitTypedDraftState(nextState);
+            commitMissionHomeState(
+                replaceMissionHomeFromDownload(missionHomeStateRef.current, result.home, scope),
+                result.home ? "download" : null,
+            );
+            resetHistory();
+            setLastOpStatus({ mission: "Imported", fence: "Imported", rally: "Imported" });
+        } else {
+            // Append: insert new items after the last existing item in each domain.
+            let nextState = typedDraftStateRef.current;
+            const existingMissionCount = typedDraftItems(nextState, "mission").length;
+            const existingFenceCount = typedDraftItems(nextState, "fence").length;
+            const existingRallyCount = typedDraftItems(nextState, "rally").length;
+            if (result.mission.items.length > 0) {
+                nextState = insertTypedItemsAfter(nextState, "mission", existingMissionCount - 1, result.mission.items);
+            }
+            if (result.fence.regions.length > 0) {
+                nextState = insertTypedItemsAfter(nextState, "fence", existingFenceCount - 1, result.fence.regions);
+            }
+            if (result.rally.points.length > 0) {
+                nextState = insertTypedItemsAfter(nextState, "rally", existingRallyCount - 1, result.rally.points);
+            }
+            commitTypedDraftState(nextState);
+            setLastOpStatus({ mission: "Appended", fence: "Appended", rally: "Appended" });
+        }
+
+        setImportedMissionSpeeds(nextImportedSpeeds);
+        exportMissionSpeedsRef.current = nextImportedSpeeds;
+        setIssues(createEmptyIssues());
+
+        const countsDescription = `Mission ${result.mission.items.length} • Fence ${result.fence.regions.length} • Rally ${result.rally.points.length}`;
+        if (result.warnings.length > 0) {
+            toast.warning("Plan imported with warnings", {
+                description: `${countsDescription} • ${result.warnings.join(" ")}`,
+            });
+        } else {
+            toast.success("Plan imported", { description: countsDescription });
+        }
+    }, [commitMissionHomeState, commitTypedDraftState, resetHistory]);
+
     const importPlanFile = useCallback(async () => {
         if (isPlaybackScope()) {
             toast.error("Mission planning is read-only in playback");
@@ -967,47 +1027,31 @@ export function useMission(
 
             const contents = await readTextFile(path);
             const result = parsePlanFile(contents);
-            const scope = scopeRef.current ?? EMPTY_SCOPE;
-            const nextImportedSpeeds = {
-                cruiseSpeedMps: result.cruiseSpeed,
-                hoverSpeedMps: result.hoverSpeed,
-            };
 
-            const nextState = replaceTypedDraftFromDownload(
-                replaceTypedDraftFromDownload(
-                    replaceTypedDraftFromDownload(typedDraftStateRef.current, "mission", result.mission, scope),
-                    "fence",
-                    result.fence,
-                    scope,
-                ),
-                "rally",
-                result.rally,
-                scope,
-            );
+            // If the editor already has content, pause and ask the user whether to
+            // replace or append. Auto-replace when the editor is empty.
+            const hasExistingContent =
+                typedDraftItems(typedDraftStateRef.current, "mission").length > 0
+                || typedDraftItems(typedDraftStateRef.current, "fence").length > 0
+                || typedDraftItems(typedDraftStateRef.current, "rally").length > 0;
 
-            commitTypedDraftState(nextState);
-            commitMissionHomeState(
-                replaceMissionHomeFromDownload(missionHomeStateRef.current, result.home, scope),
-                result.home ? "download" : null,
-            );
-            setImportedMissionSpeeds(nextImportedSpeeds);
-            exportMissionSpeedsRef.current = nextImportedSpeeds;
-            resetHistory();
-            setIssues(createEmptyIssues());
-            setLastOpStatus({ mission: "Imported", fence: "Imported", rally: "Imported" });
-
-            const countsDescription = `Mission ${result.mission.items.length} • Fence ${result.fence.regions.length} • Rally ${result.rally.points.length}`;
-            if (result.warnings.length > 0) {
-                toast.warning("Plan imported with warnings", {
-                    description: `${countsDescription} • ${result.warnings.join(" ")}`,
-                });
-            } else {
-                toast.success("Plan imported", { description: countsDescription });
+            if (hasExistingContent) {
+                setPendingImport(result);
+                return;
             }
+
+            applyPlanImport(result, "replace");
         } catch (err) {
             toast.error("Failed to import plan", { description: asErrorMessage(err) });
         }
-    }, [anyTransferActive, commitMissionHomeState, commitTypedDraftState, isPlaybackScope, resetHistory]);
+    }, [anyTransferActive, applyPlanImport, isPlaybackScope]);
+
+    const confirmImport = useCallback((choice: "replace" | "append" | "cancel") => {
+        const result = pendingImport;
+        setPendingImport(null);
+        if (choice === "cancel" || !result) return;
+        applyPlanImport(result, choice);
+    }, [applyPlanImport, pendingImport]);
 
     const exportPlanFile = useCallback(async (overrides?: MissionPlanningSpeeds) => {
         if (anyTransferActive) {
@@ -1440,5 +1484,7 @@ export function useMission(
         importPlanFile,
         exportPlanFile,
         importKmlFile,
+        pendingImport,
+        confirmImport,
     };
 }

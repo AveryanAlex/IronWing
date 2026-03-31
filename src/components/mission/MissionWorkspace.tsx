@@ -4,6 +4,7 @@ import { MapContextMenu } from "../MapContextMenu";
 import { MissionWorkspaceHeader } from "./MissionWorkspaceHeader";
 import { MissionDesktopShell } from "./MissionDesktopShell";
 import { MissionAutoGridDialog } from "./MissionAutoGridDialog";
+import { ImportChoiceDialog } from "./ImportChoiceDialog";
 import { MissionTerrainProfile } from "./MissionTerrainProfile";
 import type { useSession } from "../../hooks/use-session";
 import type { useMission } from "../../hooks/use-mission";
@@ -335,6 +336,9 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
             ))}
           </ul>
         </div>
+      )}
+      {mission.pendingImport && (
+        <ImportChoiceDialog onChoice={mission.confirmImport} />
       )}
     </div>
   );

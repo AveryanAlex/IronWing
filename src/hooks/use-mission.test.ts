@@ -987,6 +987,15 @@ describe("useMission", () => {
             multiple: false,
         });
         expect(readTextFile).toHaveBeenCalledWith("/tmp/import.plan");
+
+        // Because the editor already had content, import pauses for user confirmation.
+        expect(result.current.pendingImport).not.toBeNull();
+
+        act(() => {
+            result.current.confirmImport("replace");
+        });
+
+        expect(result.current.pendingImport).toBeNull();
         expect(result.current.mission.draftItems).toHaveLength(1);
         expect(result.current.fence.draftItems).toHaveLength(1);
         expect(result.current.rally.draftItems).toHaveLength(1);
