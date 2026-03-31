@@ -127,76 +127,92 @@ describe("ServoOutputsSection", () => {
         );
     });
 
-    it("renders a shared tester card with supported targets, live readback, and unsupported outputs", async () => {
-        setServo.mockResolvedValue(undefined);
+    it("renders direction tester grouped by function with guidance labels", () => {
+        renderSection();
 
-        renderSection({
-            telemetry: {
-                servo_outputs: [1502, 1608],
-            },
-        });
-
-        expect(screen.getByText("Servo Tester")).toBeTruthy();
-        expect(screen.getByRole("button", { name: /aileron/i })).toBeTruthy();
-        expect(screen.getByRole("button", { name: /elevator/i })).toBeTruthy();
+        expect(screen.getByText("Servo Direction Tester")).toBeTruthy();
+        expect(screen.getAllByText("Aileron").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("Elevator").length).toBeGreaterThan(0);
         expect(screen.getByText(/SERVO17 · Rudder/i)).toBeTruthy();
-        expect(
-            screen.getAllByText((_, element) =>
-                element?.textContent?.includes("Live readback 1502 µs") ?? false,
-            ).length,
-        ).toBeGreaterThan(0);
-        expect(screen.queryByRole("button", { name: /rudder/i })).toBeNull();
-
-        fireEvent.click(screen.getByRole("button", { name: /elevator/i }));
-        expect(
-            screen.getAllByText((_, element) =>
-                element?.textContent?.includes("Live readback 1608 µs") ?? false,
-            ).length,
-        ).toBeGreaterThan(0);
-
-        const pwmInput = screen.getByLabelText(/raw pwm input for SERVO2/i) as HTMLInputElement;
-        fireEvent.change(pwmInput, { target: { value: "2500" } });
-        expect(setServo).not.toHaveBeenCalled();
-        expect(pwmInput.value).toBe("1800");
-
-        fireEvent.click(screen.getByRole("button", { name: /send pwm/i }));
-
-        await waitFor(() => {
-            expect(setServo).toHaveBeenCalledWith(2, 1800);
-        });
+        expect(screen.getAllByText(/Roll left/).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/Pitch down/).length).toBeGreaterThan(0);
     });
 
-    it("shows waiting copy when a command succeeds before live readback telemetry arrives", async () => {
+    it("sends min PWM and shows direction confirmation after success", async () => {
         setServo.mockResolvedValue(undefined);
 
         renderSection();
 
-        fireEvent.click(screen.getByRole("button", { name: /send trim/i }));
+        const sendMinButtons = screen.getAllByRole("button", { name: /send min/i });
+        fireEvent.click(sendMinButtons[0]);
 
         await waitFor(() => {
-            expect(setServo).toHaveBeenCalledWith(1, 1500);
+            expect(setServo).toHaveBeenCalledWith(1, 1000);
         });
 
-        expect(screen.getAllByText(/waiting for live servo output telemetry/i).length).toBeGreaterThan(0);
+        expect(screen.getByRole("button", { name: "Correct" })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Reversed" })).toBeTruthy();
     });
 
-    it("surfaces rejected setServo calls in the card and leaves controls usable", async () => {
+    it("shows error message on failed servo command and keeps buttons usable", async () => {
         setServo.mockRejectedValueOnce(new Error("link dropped"));
 
-        renderSection({
-            telemetry: {
-                servo_outputs: [1498],
-            },
-        });
+        renderSection();
 
-        const sendButton = screen.getByRole("button", { name: /send pwm/i }) as HTMLButtonElement;
-        fireEvent.click(sendButton);
+        const sendMinButtons = screen.getAllByRole("button", { name: /send min/i });
+        fireEvent.click(sendMinButtons[0]);
 
         await waitFor(() => {
-            expect(screen.getByText(/servo test failed: link dropped/i)).toBeTruthy();
+            expect(screen.getByText(/link dropped/i)).toBeTruthy();
         });
 
-        expect(sendButton.disabled).toBe(false);
+        expect((sendMinButtons[0] as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("stages servo reversal when user marks direction as reversed in direction tester", async () => {
+        const stageFn = vi.fn();
+
+        setServo.mockResolvedValue(undefined);
+
+        renderSection({
+            params: makeParams({ stage: stageFn }),
+        });
+
+        const sendMinButtons = screen.getAllByRole("button", { name: /send min/i });
+        fireEvent.click(sendMinButtons[0]);
+
+        await waitFor(() => {
+            expect(setServo).toHaveBeenCalledWith(1, 1000);
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: "Reversed" }));
+
+        const reverseButton = screen.getByRole("button", { name: /reverse servo1/i });
+        fireEvent.click(reverseButton);
+
+        expect(stageFn).toHaveBeenCalledWith("SERVO1_REVERSED", 1);
+    });
+
+    it("shows disabled 'Reversal staged' button when servo reversal is already staged", async () => {
+        const params = makeParams();
+        params.staged.set("SERVO1_REVERSED", 1);
+
+        setServo.mockResolvedValue(undefined);
+
+        renderSection({ params });
+
+        const sendMinButtons = screen.getAllByRole("button", { name: /send min/i });
+        fireEvent.click(sendMinButtons[0]);
+
+        await waitFor(() => {
+            expect(setServo).toHaveBeenCalled();
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: "Reversed" }));
+
+        const stagedButton = screen.getByRole("button", { name: /reversal staged/i });
+        expect(stagedButton).toBeTruthy();
+        expect((stagedButton as HTMLButtonElement).disabled).toBe(true);
     });
 
     it("shows tilt-rotor guidance and groups VTOL outputs away from lift motors", () => {
