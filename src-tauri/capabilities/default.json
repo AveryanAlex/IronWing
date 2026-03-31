@@ -14,7 +14,8 @@
       "identifier": "http:default",
       "allow": [
         { "url": "https://autotest.ardupilot.org/Parameters/*" },
-        { "url": "https://firmware.ardupilot.org/*" }
+        { "url": "https://firmware.ardupilot.org/*" },
+        { "url": "https://s3.amazonaws.com/elevation-tiles-prod/*" }
       ]
     }
   ]

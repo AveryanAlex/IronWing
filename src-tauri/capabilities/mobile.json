@@ -12,7 +12,10 @@
     "geolocation:default",
     {
       "identifier": "http:default",
-      "allow": [{ "url": "https://autotest.ardupilot.org/Parameters/*" }]
+      "allow": [
+        { "url": "https://autotest.ardupilot.org/Parameters/*" },
+        { "url": "https://s3.amazonaws.com/elevation-tiles-prod/*" }
+      ]
     }
   ]
 }
