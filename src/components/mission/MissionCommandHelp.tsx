@@ -1,4 +1,5 @@
 import { Info, AlertTriangle, ExternalLink } from "lucide-react";
+import { openUrl } from "@platform/core";
 import type { CommandMetadata } from "../../lib/mission-command-metadata";
 
 type MissionCommandHelpProps = {
@@ -34,15 +35,14 @@ export function MissionCommandHelp({ metadata, className }: MissionCommandHelpPr
       )}
 
       {hasDocs && (
-        <a
-          href={metadata.docsUrl!}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
+          onClick={() => { void openUrl(metadata.docsUrl!); }}
           className="mt-1.5 inline-flex items-center gap-1 text-accent hover:underline"
         >
           ArduPilot Docs
           <ExternalLink className="h-2.5 w-2.5" />
-        </a>
+        </button>
       )}
     </div>
   );

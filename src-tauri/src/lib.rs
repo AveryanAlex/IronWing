@@ -95,7 +95,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_blec::init());
+        .plugin(tauri_plugin_blec::init())
+        .plugin(tauri_plugin_opener::init());
     #[cfg(target_os = "android")]
     {
         builder = builder

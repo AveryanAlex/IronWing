@@ -39,6 +39,7 @@
     "@tauri-apps/plugin-fs": "^2.4.5",
     "@tauri-apps/plugin-geolocation": "^2.3.2",
     "@tauri-apps/plugin-http": "^2.3.0",
+    "@tauri-apps/plugin-opener": "^2.5.3",
     "clsx": "^2.1.1",
     "fflate": "^0.8.2",
     "lucide-react": "^0.575.0",
