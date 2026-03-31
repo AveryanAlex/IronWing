@@ -345,6 +345,7 @@ export function useMission(
     const [importedMissionSpeeds, setImportedMissionSpeeds] = useState<MissionPlanningSpeeds | null>(null);
     const [pendingImport, setPendingImport] = useState<PlanParseResult | null>(null);
     const [pendingExport, setPendingExport] = useState<PendingExport | null>(null);
+    const [importError, setImportError] = useState<{ title: string; details: string } | null>(null);
 
     const scopeRef = useRef<SessionScope | null>(null);
     const typedDraftStateRef = useRef(typedDraftState);
@@ -1053,7 +1054,7 @@ export function useMission(
 
             applyPlanImport(result, "replace");
         } catch (err) {
-            toast.error("Failed to import plan", { description: asErrorMessage(err) });
+            setImportError({ title: "Failed to import plan", details: asErrorMessage(err) });
         }
     }, [anyTransferActive, applyPlanImport, isPlaybackScope]);
 
@@ -1145,6 +1146,10 @@ export function useMission(
         setPendingExport(null);
     }, []);
 
+    const clearImportError = useCallback(() => {
+        setImportError(null);
+    }, []);
+
     const importKmlFile = useCallback(async () => {
         if (isPlaybackScope()) {
             toast.error("Mission planning is read-only in playback");
@@ -1215,7 +1220,7 @@ export function useMission(
                 toast.success("KML imported", { description });
             }
         } catch (err) {
-            toast.error("Failed to import KML/KMZ", { description: asErrorMessage(err) });
+            setImportError({ title: "Failed to import KML/KMZ", details: asErrorMessage(err) });
         }
     }, [anyTransferActive, commitTypedDraftState, isPlaybackScope, resetHistory, resetMissionPlanningSpeeds]);
 
@@ -1546,5 +1551,7 @@ export function useMission(
         pendingExport,
         confirmExport,
         cancelExport,
+        importError,
+        clearImportError,
     };
 }
