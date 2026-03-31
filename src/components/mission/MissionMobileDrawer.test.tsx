@@ -93,6 +93,7 @@ function createMission(tab: "mission" | "fence" | "rally" = "mission", addWaypoi
     upload: vi.fn(),
     download: vi.fn(),
     clear: vi.fn(),
+    clearLocal: vi.fn(),
     setHomeFromMap: vi.fn(),
     updateHomeFromVehicle: vi.fn(),
     select: vi.fn(),

@@ -60,6 +60,7 @@ function createMission(options?: { currentTransferActive?: boolean; fenceTransfe
       upload: vi.fn(),
       download: vi.fn(),
       clear: vi.fn(),
+      clearLocal: vi.fn(),
       updateHomeFromVehicle: vi.fn(),
       recoverDraft: vi.fn(),
     },

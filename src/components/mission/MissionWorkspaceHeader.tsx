@@ -7,6 +7,7 @@ import {
   ArrowDown,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   X,
   SkipForward,
   Grid3X3,
@@ -18,6 +19,12 @@ import {
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "../ui/dropdown-menu";
 import type { useMission } from "../../hooks/use-mission";
 
 type MissionWorkspaceHeaderProps = {
@@ -124,9 +131,21 @@ export function MissionWorkspaceHeader({
           <Button size="sm" disabled={current.transferUi.active || !connected} onClick={current.download}>
             <Download className="h-3.5 w-3.5" /> Read
           </Button>
-          <Button variant="destructive" size="sm" disabled={current.transferUi.active || !connected} onClick={current.clear}>
-            <Trash2 className="h-3.5 w-3.5" /> Clear
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="destructive" size="sm" disabled={current.transferUi.active}>
+                <Trash2 className="h-3.5 w-3.5" /> Clear <ChevronDown className="ml-0.5 h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={current.clearLocal}>
+                Clear draft
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!connected} onSelect={current.clear}>
+                Clear on vehicle
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

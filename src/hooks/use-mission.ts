@@ -866,6 +866,23 @@ export function useMission(
         }
     }, [bridges, captureHistorySnapshot, commitMissionHomeState, commitTypedDraftState, connected, finishOperation, isCurrentOperation, pushHistorySnapshot, rejectIfPlaybackReadonly, resetMissionPlanningSpeeds, startOperation]);
 
+    const clearLocal = useCallback((domain: MissionDomain) => {
+        if (rejectIfPlaybackReadonly(domain)) return;
+        const scope = scopeRef.current ?? EMPTY_SCOPE;
+        const snapshot = captureHistorySnapshot(domain);
+        commitTypedDraftState(replaceTypedDraftFromDownload(typedDraftStateRef.current, domain, emptyDomainPlan(domain), scope));
+        if (domain === "mission") {
+            commitMissionHomeState(
+                replaceMissionHomeFromDownload(missionHomeStateRef.current, null, scope),
+                null,
+            );
+            resetMissionPlanningSpeeds();
+        }
+        pushHistorySnapshot(domain, snapshot);
+        setIssues((prev) => ({ ...prev, [domain]: [] }));
+        toast.success(`${missionLabel(domain)} draft cleared`);
+    }, [captureHistorySnapshot, commitMissionHomeState, commitTypedDraftState, pushHistorySnapshot, rejectIfPlaybackReadonly, resetMissionPlanningSpeeds]);
+
     const cancel = useCallback(async () => {
         if (!connected) return;
         try {
@@ -1316,6 +1333,7 @@ export function useMission(
             upload: () => upload(domain),
             download: () => download(domain),
             clear: () => clear(domain),
+            clearLocal: () => clearLocal(domain),
             cancel,
             undo: () => undo(domain),
             redo: () => redo(domain),
@@ -1337,6 +1355,7 @@ export function useMission(
     }, [
         cancel,
         clear,
+        clearLocal,
         commitMissionHomeState,
         commitTypedDraftState,
         currentScope,
@@ -1447,6 +1466,7 @@ export function useMission(
             upload: () => upload(domain),
             download: () => download(domain),
             clear: () => clear(domain),
+            clearLocal: () => clearLocal(domain),
             cancel,
             undo: () => undo(domain),
             redo: () => redo(domain),
@@ -1461,7 +1481,7 @@ export function useMission(
                 resetHistory(domain);
             },
         };
-    }, [cancel, clear, commitTypedDraftState, currentScope, download, history.fence.future.length, history.fence.past.length, isPlaybackScope, issues.fence, lastOpStatus.fence, mutateDomain, progress, redo, resetHistory, setSelectedIndex, toggleSelectedIndex, selectRange, bulkUpdateSelectedAltitude, bulkDeleteSelected, typedDraftState, undo, upload, validate, visibleOperations.fence]);
+    }, [cancel, clear, clearLocal, commitTypedDraftState, currentScope, download, history.fence.future.length, history.fence.past.length, isPlaybackScope, issues.fence, lastOpStatus.fence, mutateDomain, progress, redo, resetHistory, setSelectedIndex, toggleSelectedIndex, selectRange, bulkUpdateSelectedAltitude, bulkDeleteSelected, typedDraftState, undo, upload, validate, visibleOperations.fence]);
 
     const rally = useMemo(() => {
         const domain: MissionDomain = "rally";
@@ -1529,6 +1549,7 @@ export function useMission(
             upload: () => upload(domain),
             download: () => download(domain),
             clear: () => clear(domain),
+            clearLocal: () => clearLocal(domain),
             cancel,
             undo: () => undo(domain),
             redo: () => redo(domain),
@@ -1543,7 +1564,7 @@ export function useMission(
                 resetHistory(domain);
             },
         };
-    }, [cancel, clear, commitTypedDraftState, currentScope, download, history.rally.future.length, history.rally.past.length, isPlaybackScope, issues.rally, lastOpStatus.rally, mutateDomain, progress, redo, resetHistory, setSelectedIndex, toggleSelectedIndex, selectRange, bulkUpdateSelectedAltitude, bulkDeleteSelected, typedDraftState, undo, upload, validate, visibleOperations.rally]);
+    }, [cancel, clear, clearLocal, commitTypedDraftState, currentScope, download, history.rally.future.length, history.rally.past.length, isPlaybackScope, issues.rally, lastOpStatus.rally, mutateDomain, progress, redo, resetHistory, setSelectedIndex, toggleSelectedIndex, selectRange, bulkUpdateSelectedAltitude, bulkDeleteSelected, typedDraftState, undo, upload, validate, visibleOperations.rally]);
 
     const current = selectedTab === "mission" ? mission : selectedTab === "fence" ? fence : rally;
     const vehicle = useMemo(() => ({
