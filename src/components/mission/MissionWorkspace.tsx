@@ -188,6 +188,24 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
     ));
   }, []);
 
+  const handleToggleSelect = useCallback(
+    (index: number) => {
+      current.toggleSelect(index);
+    },
+    [current],
+  );
+
+  const handleRectangleSelect = useCallback(
+    (indices: number[]) => {
+      if (indices.length === 0) return;
+      current.select(indices[0]);
+      for (let i = 1; i < indices.length; i++) {
+        current.toggleSelect(indices[i]);
+      }
+    },
+    [current],
+  );
+
   const handleBlankMapClick = useCallback(
     (lat: number, lng: number, modifiers?: { altKey: boolean }) => {
       if (!chainModeEnabled && !modifiers?.altKey) return;
@@ -239,6 +257,8 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
                 selectedIndex={current.selectedIndex}
                 selectedUiIds={current.selectedUiIds}
                 onSelectIndex={handleMapSelect}
+                onToggleSelect={handleToggleSelect}
+                onRectangleSelect={handleRectangleSelect}
                 onMoveWaypoint={current.moveWaypointOnMap}
                 onBlankMapClick={handleBlankMapClick}
                 onContextMenu={handleContextMenu}

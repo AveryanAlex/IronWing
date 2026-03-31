@@ -81,6 +81,8 @@ type MissionMapProps = {
   rallyPoints?: Array<{ index: number; point: GeoPoint3d }>;
   selectedRallyIndex?: number | null;
   selectedUiIds?: Set<number>;
+  onToggleSelect?: (index: number) => void;
+  onRectangleSelect?: (indices: number[]) => void;
 };
 
 export type { SvsTelemetry };
@@ -132,6 +134,8 @@ export function MissionMap({
   fenceRegions, selectedFenceIndex, fenceReturnPoint,
   rallyPoints, selectedRallyIndex,
   selectedUiIds,
+  onToggleSelect,
+  onRectangleSelect,
 }: MissionMapProps) {
   type MapLayer = "plan" | "hybrid" | "satellite";
   const [mapLayer, setMapLayer] = useState<MapLayer>("plan");
@@ -169,6 +173,9 @@ export function MissionMap({
   const polygonMarkersRef = useRef<Marker[]>([]);
   const missionItemsRef = useRef(missionItems);
   const homePositionRef = useRef(homePosition);
+  const onToggleSelectRef = useRef(onToggleSelect);
+  const onRectangleSelectRef = useRef(onRectangleSelect);
+  const [dragRect, setDragRect] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
 
   useEffect(() => {
     onSelectIndexRef.current = onSelectIndex;
@@ -186,7 +193,9 @@ export function MissionMap({
     missionItemsRef.current = missionItems;
     homePositionRef.current = homePosition;
     currentMissionSeqRef.current = currentMissionSeq;
-  }, [onSelectIndex, onMoveWaypoint, onBlankMapClick, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, polygonVertices, missionItems, homePosition, currentMissionSeq]);
+    onToggleSelectRef.current = onToggleSelect;
+    onRectangleSelectRef.current = onRectangleSelect;
+  }, [onSelectIndex, onMoveWaypoint, onBlankMapClick, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, polygonVertices, missionItems, homePosition, currentMissionSeq, onToggleSelect, onRectangleSelect]);
 
   const missionRenderFeatures = useMemo(
     () => buildMissionRenderFeatures(homePosition, missionItems, { currentSeq: currentMissionSeq }),
@@ -463,6 +472,60 @@ export function MissionMap({
       }
     });
 
+    // Alt+drag rectangle selection
+    let rectStart: { x: number; y: number } | null = null;
+    const mapCanvas = map.getCanvas();
+
+    const onRectMouseDown = (e: MouseEvent) => {
+      if (!e.altKey) return;
+      // Prevent map pan while drawing the selection rect
+      map.dragPan.disable();
+      const rect = mapCanvas.getBoundingClientRect();
+      rectStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      setDragRect({ startX: rectStart.x, startY: rectStart.y, endX: rectStart.x, endY: rectStart.y });
+    };
+
+    const onRectMouseMove = (e: MouseEvent) => {
+      if (!rectStart) return;
+      const rect = mapCanvas.getBoundingClientRect();
+      const endX = e.clientX - rect.left;
+      const endY = e.clientY - rect.top;
+      setDragRect({ startX: rectStart.x, startY: rectStart.y, endX, endY });
+    };
+
+    const onRectMouseUp = (e: MouseEvent) => {
+      if (!rectStart) return;
+      map.dragPan.enable();
+
+      const rect = mapCanvas.getBoundingClientRect();
+      const endX = e.clientX - rect.left;
+      const endY = e.clientY - rect.top;
+
+      const minX = Math.min(rectStart.x, endX);
+      const maxX = Math.max(rectStart.x, endX);
+      const minY = Math.min(rectStart.y, endY);
+      const maxY = Math.max(rectStart.y, endY);
+
+      // Only select if drag was meaningful (avoids firing on a plain Alt+click)
+      if (maxX - minX > 4 || maxY - minY > 4) {
+        const hits: number[] = [];
+        for (const [index, marker] of markersRef.current.entries()) {
+          const pt = map.project(marker.getLngLat());
+          if (pt.x >= minX && pt.x <= maxX && pt.y >= minY && pt.y <= maxY) {
+            hits.push(index);
+          }
+        }
+        onRectangleSelectRef.current?.(hits);
+      }
+
+      rectStart = null;
+      setDragRect(null);
+    };
+
+    mapCanvas.addEventListener("mousedown", onRectMouseDown);
+    mapCanvas.addEventListener("mousemove", onRectMouseMove);
+    mapCanvas.addEventListener("mouseup", onRectMouseUp);
+
     mapRef.current = map;
 
     return () => {
@@ -470,6 +533,9 @@ export function MissionMap({
       cancelAnimationFrame(initialResizeFrame);
       resizeObserver?.disconnect();
       clearLp();
+      mapCanvas.removeEventListener("mousedown", onRectMouseDown);
+      mapCanvas.removeEventListener("mousemove", onRectMouseMove);
+      mapCanvas.removeEventListener("mouseup", onRectMouseUp);
       for (const m of polygonMarkersRef.current) m.remove();
       polygonMarkersRef.current = [];
       for (const marker of markersRef.current.values()) marker.remove();
@@ -586,6 +652,10 @@ export function MissionMap({
         markerEl.addEventListener("click", (e) => {
           e.stopPropagation();
           if (longPressFiredRef.current) { longPressFiredRef.current = false; return; }
+          if (e.ctrlKey || e.metaKey) {
+            onToggleSelectRef.current?.(item.index);
+            return;
+          }
           onSelectIndexRef.current?.(item.index);
         });
 
@@ -1044,6 +1114,17 @@ export function MissionMap({
   return (
     <div className="relative h-full w-full">
       <div className="h-full w-full" ref={containerRef} />
+      {dragRect && (
+        <div
+          className="pointer-events-none absolute z-50 border-2 border-accent/70 bg-accent/10"
+          style={{
+            left: Math.min(dragRect.startX, dragRect.endX),
+            top: Math.min(dragRect.startY, dragRect.endY),
+            width: Math.abs(dragRect.endX - dragRect.startX),
+            height: Math.abs(dragRect.endY - dragRect.startY),
+          }}
+        />
+      )}
       {!syntheticVision && (
         <div className="map-locate-group" style={{ top: 12, left: 12, bottom: "auto", right: "auto" }}>
           <button onClick={() => setMapLayer("plan")} className={`map-locate-btn${mapLayer === "plan" ? " is-active" : ""}`} title="Map">
