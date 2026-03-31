@@ -203,6 +203,7 @@ export function ensureMissionPathLayers(
       type: "symbol",
       source: MISSION_PATH_SOURCE_ID,
       filter: ["==", ["get", "kind"], "label"],
+      minzoom: 10,
       layout: {
         "text-field": ["get", "label"],
         "text-size": 11,
