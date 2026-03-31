@@ -18,7 +18,9 @@ import {
   computeMissionStatistics,
 } from "../../lib/mission-statistics";
 import { computeFenceStats } from "../../lib/fence-statistics";
+import { computeRallyStats } from "../../lib/rally-statistics";
 import type { FencePlan } from "../../fence";
+import type { RallyPlan } from "../../rally";
 import { MissionHomeCard } from "./MissionHomeCard";
 import { MissionVehicleCard } from "./MissionVehicleCard";
 import { MissionTransferStatus } from "./MissionTransferStatus";
@@ -246,6 +248,11 @@ export function MissionPlannerSummary({ mission, connected }: MissionPlannerSumm
     missionType === "fence" ? (current.plan as FencePlan).regions : [],
   );
 
+  const rallyStats = computeRallyStats(
+    missionType === "rally" ? (current.plan as RallyPlan).points : [],
+    current.homePosition,
+  );
+
   return (
     <div className="space-y-2">
       <SetupSectionIntro
@@ -457,6 +464,44 @@ export function MissionPlannerSummary({ mission, connected }: MissionPlannerSumm
               label="Total area"
               value={formatArea(fenceStats.totalAreaM2)}
               hint="Sum of enclosed areas across all regions"
+            />
+          </div>
+        </div>
+      )}
+
+      {missionType === "rally" && (
+        <div
+          data-testid="rally-planning-stats"
+          className="overflow-hidden rounded-lg border border-border-light bg-[linear-gradient(180deg,rgba(83,180,255,0.09),rgba(83,180,255,0.03))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+        >
+          <div className="mb-3 space-y-1">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-text-muted">
+              Planning envelope
+            </div>
+            <div className="text-sm font-semibold text-text-primary">Rally estimates</div>
+            <p className="max-w-xl text-[10px] leading-relaxed text-text-muted">
+              Point count and furthest distance from home are computed from the live draft.
+            </p>
+          </div>
+
+          <div className="grid gap-2 md:grid-cols-2">
+            <StatTile
+              testId="rally-stats-count"
+              icon={CircleDot}
+              label="Rally points"
+              value={String(rallyStats.pointCount)}
+              hint="Number of alternate return-to-launch locations"
+            />
+            <StatTile
+              testId="rally-stats-max-distance"
+              icon={Route}
+              label="Max distance from home"
+              value={rallyStats.maxDistanceFromHomeM !== null
+                ? formatDistance(rallyStats.maxDistanceFromHomeM)
+                : "—"}
+              hint={rallyStats.maxDistanceFromHomeM !== null
+                ? "Furthest rally point from the home position"
+                : "Home position not yet available"}
             />
           </div>
         </div>
