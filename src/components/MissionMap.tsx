@@ -220,6 +220,7 @@ export function MissionMap({
       maxPitch: 85,
       interactive: !syntheticVision,
       attributionControl: false,
+      boxZoom: false, // Shift+drag is used for rectangle selection instead
     });
 
     const markLayoutReady = () => {
@@ -474,12 +475,12 @@ export function MissionMap({
       }
     });
 
-    // Alt+drag rectangle selection
+    // Shift+drag rectangle selection
     let rectStart: { x: number; y: number } | null = null;
     const mapCanvas = map.getCanvas();
 
     const onRectMouseDown = (e: MouseEvent) => {
-      if (!e.altKey) return;
+      if (!e.shiftKey) return;
       // Prevent map pan while drawing the selection rect
       map.dragPan.disable();
       const rect = mapCanvas.getBoundingClientRect();
@@ -508,7 +509,7 @@ export function MissionMap({
       const minY = Math.min(rectStart.y, endY);
       const maxY = Math.max(rectStart.y, endY);
 
-      // Only select if drag was meaningful (avoids firing on a plain Alt+click)
+      // Only select if drag was meaningful (avoids firing on a plain Shift+click)
       if (maxX - minX > 4 || maxY - minY > 4) {
         const hits: number[] = [];
         for (const [index, marker] of markersRef.current.entries()) {
