@@ -9,6 +9,7 @@ import { Map as MapIcon, Layers, Satellite } from "lucide-react";
 import type { HomePosition } from "../mission";
 import type { TypedDraftItem } from "../lib/mission-draft-typed";
 import type { PolygonVertex } from "../lib/mission-grid";
+import { missionPathLineCoordinates, missionPathPoints, pathLineCoordinates } from "../lib/mission-path";
 import type { FenceRegion, GeoPoint2d, GeoPoint3d } from "../lib/mavkit-types";
 import { ensureFenceLayers, updateFenceSource, removeFenceLayers } from "./mission/FenceMapOverlay";
 import { syncRallyMarkers, clearRallyMarkers } from "./mission/RallyMapOverlay";
@@ -129,16 +130,7 @@ export function MissionMap({
   }, [onSelectIndex, onMoveWaypoint, onBlankMapClick, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, polygonVertices, missionItems, homePosition]);
 
   const missionGeoJson = useMemo(() => {
-    const lineCoordinates: [number, number][] = [];
-
-    if (homePosition) {
-      lineCoordinates.push([homePosition.longitude_deg, homePosition.latitude_deg]);
-    }
-
-    for (const item of missionItems) {
-      if (item.preview.latitude_deg === null || item.preview.longitude_deg === null) continue;
-      lineCoordinates.push([item.preview.longitude_deg, item.preview.latitude_deg]);
-    }
+    const lineCoordinates = missionPathLineCoordinates(homePosition, missionItems);
 
     const features: any[] = [];
     if (lineCoordinates.length >= 2) {
@@ -555,14 +547,15 @@ export function MissionMap({
             if (!m) return;
             const src = m.getSource(SOURCE_ID) as GeoJSONSource | undefined;
             if (!src) return;
-            const lineCoords: [number, number][] = [];
-            const hp = homePositionRef.current;
-            if (hp) lineCoords.push([hp.longitude_deg, hp.latitude_deg]);
-            for (const mi of missionItemsRef.current) {
-              if (mi.preview.latitude_deg === null || mi.preview.longitude_deg === null) continue;
-              if (mi.index === item.index) lineCoords.push([pos.lng, pos.lat]);
-              else lineCoords.push([mi.preview.longitude_deg, mi.preview.latitude_deg]);
-            }
+
+            const lineCoords = pathLineCoordinates(
+              missionPathPoints(homePositionRef.current, missionItemsRef.current).map((point) =>
+                point.index === item.index
+                  ? { ...point, latitude_deg: pos.lat, longitude_deg: pos.lng }
+                  : point,
+              ),
+            );
+
             const feats: any[] = [];
             if (lineCoords.length >= 2) {
               feats.push({ type: "Feature", geometry: { type: "LineString", coordinates: lineCoords }, properties: { kind: "mission-line" } });
