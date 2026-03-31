@@ -231,4 +231,121 @@ describe("MotorsEscSection", () => {
     expect(screen.getByText("Motor Test")).toBeTruthy();
     expect(screen.queryByText("ESC Protocol")).toBeNull();
   });
+
+  it("stages servo reversal when user clicks the reverse button after marking motor reversed", async () => {
+    const stageFn = vi.fn();
+    const params = makeParams({
+      FRAME_CLASS: 1,
+      FRAME_TYPE: 1,
+      MOT_PWM_TYPE: 1,
+      MOT_PWM_MIN: 1000,
+      MOT_PWM_MAX: 2000,
+      MOT_SPIN_ARM: 0.1,
+      MOT_SPIN_MIN: 0.15,
+      MOT_SPIN_MAX: 0.95,
+      SERVO1_FUNCTION: 33,
+      SERVO1_REVERSED: 0,
+      SERVO2_FUNCTION: 34,
+      SERVO2_REVERSED: 0,
+      SERVO3_FUNCTION: 35,
+      SERVO3_REVERSED: 0,
+      SERVO4_FUNCTION: 36,
+      SERVO4_REVERSED: 0,
+    });
+    params.stage = stageFn;
+
+    render(
+      <MotorsEscSection
+        params={params}
+        vehicleState={makeVehicleState("Quadrotor")}
+        connected={true}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("switch", { name: "" }));
+    fireEvent.click(screen.getByRole("button", { name: /props removed/i }));
+    fireEvent.click(screen.getByRole("button", { name: /test motor 1/i }));
+    await waitFor(() => expect(vi.mocked(motorTest)).toHaveBeenCalledWith(1, 3, 2));
+
+    const reversedButton = await screen.findByRole("button", { name: "Reversed" });
+    fireEvent.click(reversedButton);
+
+    const reverseServoButton = screen.getByRole("button", { name: /reverse servo1/i });
+    expect(reverseServoButton).toBeTruthy();
+
+    fireEvent.click(reverseServoButton);
+    expect(stageFn).toHaveBeenCalledWith("SERVO1_REVERSED", 1);
+  });
+
+  it("shows DShot hint instead of reverse button when protocol is DShot", async () => {
+    render(
+      <MotorsEscSection
+        params={makeParams({
+          FRAME_CLASS: 1,
+          FRAME_TYPE: 1,
+          MOT_PWM_TYPE: 4,
+          MOT_PWM_MIN: 1000,
+          MOT_PWM_MAX: 2000,
+          MOT_SPIN_ARM: 0.1,
+          MOT_SPIN_MIN: 0.15,
+          MOT_SPIN_MAX: 0.95,
+          SERVO1_FUNCTION: 33,
+          SERVO1_REVERSED: 0,
+          SERVO2_FUNCTION: 34,
+          SERVO3_FUNCTION: 35,
+          SERVO4_FUNCTION: 36,
+        })}
+        vehicleState={makeVehicleState("Quadrotor")}
+        connected={true}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("switch", { name: "" }));
+    fireEvent.click(screen.getByRole("button", { name: /props removed/i }));
+    fireEvent.click(screen.getByRole("button", { name: /test motor 1/i }));
+    await waitFor(() => expect(vi.mocked(motorTest)).toHaveBeenCalled());
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reversed" }));
+
+    expect(screen.getByText(/reverse via esc configurator/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /reverse servo/i })).toBeNull();
+  });
+
+  it("disables reverse button and shows 'Reversal staged' when the param is already staged", async () => {
+    const params = makeParams({
+      FRAME_CLASS: 1,
+      FRAME_TYPE: 1,
+      MOT_PWM_TYPE: 1,
+      MOT_PWM_MIN: 1000,
+      MOT_PWM_MAX: 2000,
+      MOT_SPIN_ARM: 0.1,
+      MOT_SPIN_MIN: 0.15,
+      MOT_SPIN_MAX: 0.95,
+      SERVO1_FUNCTION: 33,
+      SERVO1_REVERSED: 0,
+      SERVO2_FUNCTION: 34,
+      SERVO3_FUNCTION: 35,
+      SERVO4_FUNCTION: 36,
+    });
+    params.staged.set("SERVO1_REVERSED", 1);
+
+    render(
+      <MotorsEscSection
+        params={params}
+        vehicleState={makeVehicleState("Quadrotor")}
+        connected={true}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("switch", { name: "" }));
+    fireEvent.click(screen.getByRole("button", { name: /props removed/i }));
+    fireEvent.click(screen.getByRole("button", { name: /test motor 1/i }));
+    await waitFor(() => expect(vi.mocked(motorTest)).toHaveBeenCalled());
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reversed" }));
+
+    const reverseButton = screen.getByRole("button", { name: /reversal staged/i });
+    expect(reverseButton).toBeTruthy();
+    expect((reverseButton as HTMLButtonElement).disabled).toBe(true);
+  });
 });
