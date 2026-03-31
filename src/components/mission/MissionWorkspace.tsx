@@ -10,7 +10,7 @@ import type { useDeviceLocation } from "../../hooks/use-device-location";
 import type { MissionItem, FenceRegion, GeoPoint3d } from "../../lib/mavkit-types";
 import type { TypedDraftItem, FenceRegionType } from "../../lib/mission-draft-typed";
 import type { PolygonVertex } from "../../lib/mission-grid";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { findNearestWaypoint } from "./mission-helpers";
 
@@ -33,8 +33,16 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [flyToKey, setFlyToKey] = useState(0);
   const [autoGridOpen, setAutoGridOpen] = useState(false);
+  const [chainModeActive, setChainModeActive] = useState(false);
   const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
   const [polygonVertices, setPolygonVertices] = useState<PolygonVertex[]>([]);
+  const chainModeEnabled = current.tab === "mission" && chainModeActive && !isDrawingPolygon;
+
+  useEffect(() => {
+    if (current.tab !== "mission") {
+      setChainModeActive(false);
+    }
+  }, [current.tab]);
 
   const handleMapSelect = useCallback(
     (seq: number | null) => {
@@ -70,6 +78,11 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
 
   const handleAutoGridOpen = useCallback(() => {
     setAutoGridOpen(true);
+    setContextMenu(null);
+  }, []);
+
+  const handleToggleChainMode = useCallback(() => {
+    setChainModeActive((active) => !active);
     setContextMenu(null);
   }, []);
 
@@ -121,6 +134,14 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
     ));
   }, []);
 
+  const handleBlankMapClick = useCallback((lat: number, lng: number) => {
+    if (!chainModeEnabled) {
+      return;
+    }
+    current.addWaypointAt(lat, lng);
+    setContextMenu(null);
+  }, [chainModeEnabled, current]);
+
   const handleGridGenerate = useCallback(
     (items: MissionItem[], mode: "after_selected" | "replace_all") => {
       const m = mission.mission;
@@ -141,7 +162,14 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
 
   return (
     <div data-mission-workspace className="flex h-full flex-col gap-2">
-      <MissionWorkspaceHeader mission={mission} connected={vehicle.connected} onAutoGrid={handleAutoGridOpen} />
+      <MissionWorkspaceHeader
+        mission={mission}
+        connected={vehicle.connected}
+        onAutoGrid={handleAutoGridOpen}
+        chainModeActive={current.tab === "mission" && chainModeActive}
+        chainModeSuppressed={current.tab === "mission" && chainModeActive && isDrawingPolygon}
+        onToggleChainMode={handleToggleChainMode}
+      />
 
       <Group orientation="horizontal" className="flex-1 overflow-hidden">
         <Panel defaultSize="65" minSize="40">
@@ -155,6 +183,7 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
               selectedIndex={current.selectedIndex}
               onSelectIndex={handleMapSelect}
               onMoveWaypoint={current.moveWaypointOnMap}
+              onBlankMapClick={handleBlankMapClick}
               onContextMenu={handleContextMenu}
               readOnly={current.readOnly}
               deviceLocation={deviceLocation.location}

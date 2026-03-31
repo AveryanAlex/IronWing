@@ -49,7 +49,6 @@ function assignLanes(jumps: Array<{ source: number; target: number }>): JumpArc[
   if (jumps.length === 0) return [];
 
   const arcs: JumpArc[] = jumps.map((j) => ({ ...j, lane: 0 }));
-  // Sort by span size (smaller spans get inner lanes)
   const sorted = [...arcs].sort(
     (a, b) => Math.abs(a.target - a.source) - Math.abs(b.target - b.source),
   );
@@ -59,7 +58,6 @@ function assignLanes(jumps: Array<{ source: number; target: number }>): JumpArc[
     const minRow = Math.min(arc.source, arc.target);
     const maxRow = Math.max(arc.source, arc.target);
 
-    // Find the first lane that doesn't overlap with any already-assigned arc
     let lane = 0;
     let conflict = true;
     while (conflict) {
@@ -69,7 +67,6 @@ function assignLanes(jumps: Array<{ source: number; target: number }>): JumpArc[
         if (other.lane !== lane) continue;
         const otherMin = Math.min(other.source, other.target);
         const otherMax = Math.max(other.source, other.target);
-        // Overlap: ranges intersect
         if (minRow <= otherMax && maxRow >= otherMin) {
           conflict = true;
           lane++;
@@ -140,7 +137,6 @@ function JumpGutter({
 
         return (
           <g key={i}>
-            {/* Dashed vertical line from source to near target */}
             <line
               x1={x}
               y1={sy}
@@ -151,7 +147,6 @@ function JumpGutter({
               strokeWidth={1.5}
               strokeDasharray="3 2"
             />
-            {/* Solid arrow tip */}
             <polygon
               points={
                 goingUp
@@ -161,7 +156,6 @@ function JumpGutter({
               fill="currentColor"
               className="text-text-muted/60"
             />
-            {/* Small horizontal ticks at source and target */}
             <line
               x1={0}
               y1={sy}
@@ -203,6 +197,11 @@ export function MissionItemList({
 
   const arcs = useMemo(() => assignLanes(jumps), [jumps]);
 
+  const finalizeSelection = useCallback((seq: number) => {
+    onCardSelect?.(seq);
+    onSelectAndClose?.();
+  }, [onCardSelect, onSelectAndClose]);
+
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
@@ -216,10 +215,26 @@ export function MissionItemList({
   const handleSelect = useCallback(
     (seq: number) => {
       current.select(seq);
-      onCardSelect?.(seq);
-      onSelectAndClose?.();
+      finalizeSelection(seq);
     },
-    [current, onCardSelect, onSelectAndClose],
+    [current, finalizeSelection],
+  );
+
+  const handleRangeSelect = useCallback(
+    (seq: number) => {
+      const anchorIndex = current.selectionAnchorIndex ?? current.selectedIndex ?? seq;
+      current.selectRange(anchorIndex, seq);
+      finalizeSelection(seq);
+    },
+    [current, finalizeSelection],
+  );
+
+  const handleToggleSelect = useCallback(
+    (seq: number) => {
+      current.toggleSelect(seq);
+      finalizeSelection(seq);
+    },
+    [current, finalizeSelection],
   );
 
   const handleSetCurrent = useCallback(
@@ -261,22 +276,30 @@ export function MissionItemList({
           modifiers={[restrictToVerticalAxis]}
         >
           <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-            {current.draftItems.map((draftItem) => (
-              <MissionItemCard
-                key={draftItem.uiId}
-                draftItem={draftItem}
-                displayIndex={draftItem.index + 1}
-                isSelected={current.selectedIndex === draftItem.index}
-                isActive={mission.vehicle.activeSeq === draftItem.index}
-                missionType={current.tab}
-                readOnly={current.readOnly}
-                onSelect={() => handleSelect(draftItem.index)}
-                onInsertBefore={() => current.insertBefore(draftItem.index)}
-                onInsertAfter={() => current.insertAfter(draftItem.index)}
-                onDelete={() => current.deleteAt(draftItem.index)}
-                onSetCurrent={() => handleSetCurrent(draftItem.index)}
-              />
-            ))}
+            {current.draftItems.map((draftItem) => {
+              const isPrimarySelected = current.selectedIndex === draftItem.index;
+              const isMultiSelected = current.selectedUiIds.has(draftItem.uiId) && !isPrimarySelected;
+
+              return (
+                <MissionItemCard
+                  key={draftItem.uiId}
+                  draftItem={draftItem}
+                  displayIndex={draftItem.index + 1}
+                  isPrimarySelected={isPrimarySelected}
+                  isMultiSelected={isMultiSelected}
+                  isActive={mission.vehicle.activeSeq === draftItem.index}
+                  missionType={current.tab}
+                  readOnly={current.readOnly}
+                  onSelect={() => handleSelect(draftItem.index)}
+                  onShiftClick={() => handleRangeSelect(draftItem.index)}
+                  onCtrlClick={() => handleToggleSelect(draftItem.index)}
+                  onInsertBefore={() => current.insertBefore(draftItem.index)}
+                  onInsertAfter={() => current.insertAfter(draftItem.index)}
+                  onDelete={() => current.deleteAt(draftItem.index)}
+                  onSetCurrent={() => handleSetCurrent(draftItem.index)}
+                />
+              );
+            })}
           </SortableContext>
         </DndContext>
       </div>

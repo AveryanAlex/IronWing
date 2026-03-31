@@ -39,6 +39,7 @@ type MissionMapProps = {
   selectedIndex: number | null;
   onSelectIndex?: (index: number | null) => void;
   onMoveWaypoint?: (index: number, latDeg: number, lonDeg: number) => void;
+  onBlankMapClick?: (lat: number, lng: number) => void;
   onContextMenu?: (lat: number, lng: number, screenX: number, screenY: number) => void;
   readOnly?: boolean;
   vehiclePosition?: { latitude_deg: number; longitude_deg: number; heading_deg: number } | null;
@@ -69,7 +70,7 @@ export type { SvsTelemetry };
 
 export function MissionMap({
   missionItems, homePosition, selectedIndex, onSelectIndex,
-  onMoveWaypoint, onContextMenu, readOnly,
+  onMoveWaypoint, onBlankMapClick, onContextMenu, readOnly,
   vehiclePosition, deviceLocation, followTarget, centerOnVehicleKey, centerOnDeviceKey,
   onUserInteraction, currentMissionSeq, flyToSelectedKey,
   syntheticVision, svsTelemetry,
@@ -95,6 +96,7 @@ export function MissionMap({
   const hasSetInitialViewport = useRef(false);
   const onSelectIndexRef = useRef(onSelectIndex);
   const onMoveWaypointRef = useRef(onMoveWaypoint);
+  const onBlankMapClickRef = useRef(onBlankMapClick);
   const onContextMenuRef = useRef(onContextMenu);
   const readOnlyRef = useRef(readOnly);
   const longPressFiredRef = useRef(false);
@@ -113,6 +115,7 @@ export function MissionMap({
   useEffect(() => {
     onSelectIndexRef.current = onSelectIndex;
     onMoveWaypointRef.current = onMoveWaypoint;
+    onBlankMapClickRef.current = onBlankMapClick;
     onContextMenuRef.current = onContextMenu;
     readOnlyRef.current = readOnly;
     onUserInteractionRef.current = onUserInteraction;
@@ -123,7 +126,7 @@ export function MissionMap({
     polygonVerticesRef.current = polygonVertices;
     missionItemsRef.current = missionItems;
     homePositionRef.current = homePosition;
-  }, [onSelectIndex, onMoveWaypoint, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, polygonVertices, missionItems, homePosition]);
+  }, [onSelectIndex, onMoveWaypoint, onBlankMapClick, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, polygonVertices, missionItems, homePosition]);
 
   const missionGeoJson = useMemo(() => {
     const lineCoordinates: [number, number][] = [];
@@ -184,8 +187,8 @@ export function MissionMap({
       typeof ResizeObserver === "undefined"
         ? null
         : new ResizeObserver(() => {
-            syncMapSize();
-          });
+          syncMapSize();
+        });
     resizeObserver?.observe(container);
 
     const initialResizeFrame = requestAnimationFrame(() => {
@@ -350,6 +353,8 @@ export function MissionMap({
           onPolygonClickRef.current?.(event.lngLat.lat, event.lngLat.lng);
           return;
         }
+
+        onBlankMapClickRef.current?.(event.lngLat.lat, event.lngLat.lng);
       });
 
       map.on("dblclick", (event: MapMouseEvent) => {

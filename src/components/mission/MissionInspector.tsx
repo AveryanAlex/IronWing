@@ -43,6 +43,7 @@ type MissionInspectorProps = {
     onUpdateCommand?: (index: number, command: MissionCommand) => void;
     onUpdateAltitude: (index: number, altitudeM: number) => void;
     onUpdateCoordinate: (index: number, field: "latitude_deg" | "longitude_deg", valueDeg: number) => void;
+    onSetWaypointFromVehicle?: (index: number) => void;
     onSelect: (index: number) => void;
 };
 
@@ -482,6 +483,7 @@ export function MissionInspector({
     onUpdateCommand,
     onUpdateAltitude,
     onUpdateCoordinate,
+    onSetWaypointFromVehicle,
     onSelect,
 }: MissionInspectorProps) {
     const controlReadOnly = readOnly || draftItem.readOnly;
@@ -512,6 +514,7 @@ export function MissionInspector({
     const showCoordinateInputs = Boolean(
         position && !(currentCommandMetadata?.params.x?.hidden || currentCommandMetadata?.params.y?.hidden),
     );
+    const showSetFromVehicle = showCoordinateInputs && missionType === "mission" && !controlReadOnly && Boolean(onSetWaypointFromVehicle);
 
     const ensureSelected = useCallback(() => {
         if (!isSelected) {
@@ -589,23 +592,38 @@ export function MissionInspector({
                         <>
                             <div className="flex items-center gap-1.5 border-t border-border/50 pt-2">
                                 <span className="text-[10px] font-medium text-text-muted">Coordinates</span>
-                                <div className="ml-auto flex rounded border border-border text-[9px]">
-                                    {COORDINATE_MODES.map((m) => (
+                                <div className="ml-auto flex items-center gap-1.5">
+                                    {showSetFromVehicle && (
                                         <button
-                                            key={m.value}
-                                            data-mission-coordinate-mode={m.value}
-                                            aria-pressed={coordMode === m.value}
-                                            onClick={() => setCoordMode(m.value)}
-                                            className={cn(
-                                                "px-1.5 py-0.5 transition-colors",
-                                                coordMode === m.value
-                                                    ? "bg-accent/20 text-accent"
-                                                    : "text-text-muted hover:text-text-secondary",
-                                            )}
+                                            type="button"
+                                            data-mission-set-from-vehicle
+                                            onClick={() => {
+                                                ensureSelected();
+                                                onSetWaypointFromVehicle?.(index);
+                                            }}
+                                            className="rounded border border-accent/30 bg-accent/10 px-2 py-0.5 text-[9px] font-medium text-accent transition-colors hover:bg-accent/15"
                                         >
-                                            {m.label}
+                                            Set from Vehicle
                                         </button>
-                                    ))}
+                                    )}
+                                    <div className="flex rounded border border-border text-[9px]">
+                                        {COORDINATE_MODES.map((m) => (
+                                            <button
+                                                key={m.value}
+                                                data-mission-coordinate-mode={m.value}
+                                                aria-pressed={coordMode === m.value}
+                                                onClick={() => setCoordMode(m.value)}
+                                                className={cn(
+                                                    "px-1.5 py-0.5 transition-colors",
+                                                    coordMode === m.value
+                                                        ? "bg-accent/20 text-accent"
+                                                        : "text-text-muted hover:text-text-secondary",
+                                                )}
+                                            >
+                                                {m.label}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
 

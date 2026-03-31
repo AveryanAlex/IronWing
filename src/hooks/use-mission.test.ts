@@ -920,6 +920,45 @@ describe("useMission", () => {
         expect(result.current.mission.draftItems[0].preview.latitude_deg).not.toBeCloseTo(40.1, 3);
     });
 
+    it("exposes multi-select helpers and bulk mission edits through the hook", async () => {
+        const { useMission } = await import("./use-mission");
+        const { result } = renderHook(() => useMission(true, {} as never, null));
+
+        await waitFor(() => expect(sessionListener).not.toBeNull());
+
+        act(() => {
+            sessionListener?.({
+                envelope: { session_id: "live-bulk-ui", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+            });
+            result.current.mission.addWaypoint();
+            result.current.mission.addWaypoint();
+            result.current.mission.addWaypoint();
+            result.current.mission.select(0);
+            result.current.mission.toggleSelect(2);
+        });
+
+        expect(result.current.mission.selectedIndices).toEqual([0, 2]);
+        expect(result.current.mission.selectedUiIds.size).toBe(2);
+        expect(result.current.mission.selectionAnchorIndex).toBe(2);
+
+        act(() => {
+            result.current.mission.bulkUpdateAltitude(120);
+        });
+
+        expect(result.current.mission.draftItems[0].preview.altitude_m).toBe(120);
+        expect(result.current.mission.draftItems[1].preview.altitude_m).toBe(25);
+        expect(result.current.mission.draftItems[2].preview.altitude_m).toBe(120);
+
+        act(() => {
+            result.current.mission.bulkDelete();
+        });
+
+        expect(result.current.mission.draftItems).toHaveLength(1);
+        expect(result.current.mission.selectedCount).toBe(1);
+        expect(result.current.mission.selectedIndex).toBe(0);
+        expect(result.current.mission.draftItems[0].preview.altitude_m).toBe(25);
+    });
+
     it("rejects setWaypointFromVehicle when telemetry GPS is unavailable", async () => {
         const { useMission } = await import("./use-mission");
         const { result } = renderHook(() => useMission(true, {} as never, null));

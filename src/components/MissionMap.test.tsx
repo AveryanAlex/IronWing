@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, render, waitFor, act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TypedDraftItem } from "../lib/mission-draft-typed";
 
@@ -57,7 +57,7 @@ const {
       }, 0);
     }
 
-    addControl() {}
+    addControl() { }
 
     on(event: string, handler: EventHandler) {
       let bucket = this.handlers.get(event);
@@ -74,6 +74,10 @@ const {
 
     private emit(event: string, ...args: unknown[]) {
       this.handlers.get(event)?.forEach((handler) => handler(...args));
+    }
+
+    trigger(event: string, ...args: unknown[]) {
+      this.emit(event, ...args);
     }
 
     addSource(id: string) {
@@ -120,13 +124,13 @@ const {
       fitBoundsSpy();
     }
 
-    remove() {}
+    remove() { }
 
-    setLayoutProperty() {}
+    setLayoutProperty() { }
 
-    setTerrain() {}
+    setTerrain() { }
 
-    setSky() {}
+    setSky() { }
 
     getCanvas() {
       return this.canvas;
@@ -140,11 +144,11 @@ const {
       return { lat: 0, lng: 0 };
     }
 
-    easeTo() {}
+    easeTo() { }
 
-    flyTo() {}
+    flyTo() { }
 
-    jumpTo() {}
+    jumpTo() { }
 
     getZoom() {
       return 13;
@@ -170,7 +174,7 @@ const {
       return this;
     }
 
-    remove() {}
+    remove() { }
 
     setDraggable(draggable: boolean) {
       this.draggable = draggable;
@@ -200,9 +204,9 @@ const {
     }
   }
 
-  class MockNavigationControl {}
-  class MockGlobeControl {}
-  class MockTerrainControl {}
+  class MockNavigationControl { }
+  class MockGlobeControl { }
+  class MockTerrainControl { }
 
   return {
     mockContainerSize,
@@ -246,7 +250,7 @@ class MockResizeObserver {
     resizeObserverCallbacks.push(this.callback);
   }
 
-  disconnect() {}
+  disconnect() { }
 }
 
 function makeMissionItem(index: number, latitude_deg: number, longitude_deg: number): TypedDraftItem {
@@ -311,5 +315,54 @@ describe("MissionMap", () => {
     await waitFor(() => {
       expect(fitBoundsSpy).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("calls onBlankMapClick for plain map clicks and suppresses it during polygon drawing", async () => {
+    const onBlankMapClick = vi.fn();
+    const onPolygonClick = vi.fn();
+
+    const { rerender } = render(
+      <MissionMap
+        missionItems={[makeMissionItem(0, 47.4, 8.55)]}
+        homePosition={{ latitude_deg: 47.397742, longitude_deg: 8.545594, altitude_m: 0 }}
+        selectedIndex={null}
+        onBlankMapClick={onBlankMapClick}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(getLastMapInstance()).not.toBeNull();
+    });
+
+    act(() => {
+      (getLastMapInstance() as InstanceType<typeof MockMap>).trigger("click", {
+        point: { x: 24, y: 16 },
+        lngLat: { lat: 47.41, lng: 8.56 },
+      });
+    });
+
+    expect(onBlankMapClick).toHaveBeenCalledWith(47.41, 8.56);
+
+    rerender(
+      <MissionMap
+        missionItems={[makeMissionItem(0, 47.4, 8.55)]}
+        homePosition={{ latitude_deg: 47.397742, longitude_deg: 8.545594, altitude_m: 0 }}
+        selectedIndex={null}
+        onBlankMapClick={onBlankMapClick}
+        isDrawingPolygon
+        polygonVertices={[]}
+        onPolygonClick={onPolygonClick}
+      />,
+    );
+
+    act(() => {
+      (getLastMapInstance() as InstanceType<typeof MockMap>).trigger("click", {
+        point: { x: 12, y: 8 },
+        lngLat: { lat: 47.42, lng: 8.57 },
+      });
+    });
+
+    expect(onBlankMapClick).toHaveBeenCalledTimes(1);
+    expect(onPolygonClick).toHaveBeenCalledWith(47.42, 8.57);
   });
 });

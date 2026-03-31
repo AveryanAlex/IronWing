@@ -36,6 +36,8 @@ import { toast } from "sonner";
 import {
     addTypedWaypoint,
     addTypedWaypointAt,
+    bulkDelete,
+    bulkUpdateAltitude,
     createTypedDraftState,
     deleteTypedAt,
     insertTypedAfter,
@@ -50,13 +52,17 @@ import {
     reorderTypedItems,
     replaceAllTypedItems,
     replaceTypedDraftFromDownload,
+    selectTypedDraftRange,
     setTypedDraftScope,
     selectTypedDraftIndex,
+    toggleTypedDraftSelection,
     typedDraftPlan,
     typedDraftItems,
     typedDraftSelectedIndex,
     typedDraftSelectedIndices,
     typedDraftSelectedItem,
+    typedDraftSelectedUiIds,
+    typedDraftSelectionAnchorIndex,
     typedDraftSelectionCount,
     typedDraftPreviousItem,
     updateTypedAltitude,
@@ -677,6 +683,14 @@ export function useMission(
         commitTypedDraftState(selectTypedDraftIndex(typedDraftStateRef.current, domain, index));
     }, [commitTypedDraftState]);
 
+    const toggleSelectedIndex = useCallback((domain: MissionDomain, index: number) => {
+        commitTypedDraftState(toggleTypedDraftSelection(typedDraftStateRef.current, domain, index));
+    }, [commitTypedDraftState]);
+
+    const selectRange = useCallback((domain: MissionDomain, fromIndex: number, toIndex: number) => {
+        commitTypedDraftState(selectTypedDraftRange(typedDraftStateRef.current, domain, fromIndex, toIndex));
+    }, [commitTypedDraftState]);
+
     const mutateDomain = useCallback((domain: MissionDomain, update: (state: ReturnType<typeof createTypedDraftState>) => ReturnType<typeof createTypedDraftState>) => {
         if (rejectIfPlaybackReadonly(domain)) return;
         const previousState = typedDraftStateRef.current;
@@ -687,6 +701,14 @@ export function useMission(
         pushHistorySnapshot(domain, captureHistorySnapshot(domain));
         commitTypedDraftState(nextState);
     }, [captureHistorySnapshot, commitTypedDraftState, pushHistorySnapshot, rejectIfPlaybackReadonly]);
+
+    const bulkUpdateSelectedAltitude = useCallback((domain: MissionDomain, altitudeM: number) => {
+        mutateDomain(domain, (prev) => bulkUpdateAltitude(prev, domain, typedDraftSelectedUiIds(prev, domain), altitudeM));
+    }, [mutateDomain]);
+
+    const bulkDeleteSelected = useCallback((domain: MissionDomain) => {
+        mutateDomain(domain, (prev) => bulkDelete(prev, domain, typedDraftSelectedUiIds(prev, domain)));
+    }, [mutateDomain]);
 
     const validate = useCallback(async (domain: MissionDomain) => {
         const operation = startOperation(domain, "validate");
@@ -901,8 +923,10 @@ export function useMission(
         const visible = currentScope === null || scopeMatches(typedDraftState.active.mission.scope, currentScope);
         const homeVisible = currentScope === null || scopeMatches(missionHomeState.scope, currentScope);
         const draftItems = visible ? typedDraftItems(typedDraftState, domain) : [];
+        const selectedUiIds = visible ? typedDraftSelectedUiIds(typedDraftState, domain) : new Set<number>();
         const selectedIndex = visible ? typedDraftSelectedIndex(typedDraftState, domain) : null;
         const selectedIndices = visible ? typedDraftSelectedIndices(typedDraftState, domain) : [];
+        const selectionAnchorIndex = visible ? typedDraftSelectionAnchorIndex(typedDraftState, domain) : null;
         const selectedCount = visible ? typedDraftSelectionCount(typedDraftState, domain) : 0;
         const selectedItem = visible ? typedDraftSelectedItem(typedDraftState, domain) : null;
         const previousItem = visible ? typedDraftPreviousItem(typedDraftState, domain) : null;
@@ -912,8 +936,10 @@ export function useMission(
             label: missionLabel(domain),
             draftItems,
             plan,
+            selectedUiIds,
             selectedIndex,
             selectedIndices,
+            selectionAnchorIndex,
             selectedCount,
             selectedItem,
             selectedPlanItem: selectedIndex === null ? null : plan.items[selectedIndex] ?? null,
@@ -925,7 +951,9 @@ export function useMission(
             isDirty: visible && (isTypedDraftDirty(typedDraftState, domain) || !sameHome(missionHomeState.active, missionHomeState.snapshot)),
             readOnly: isPlaybackScope(),
             canUndo: history.mission.past.length > 0,
+            undoCount: history.mission.past.length,
             canRedo: history.mission.future.length > 0,
+            redoCount: history.mission.future.length,
             issues: issues.mission,
             roundtripStatus: lastOpStatus.mission,
             transferUi: progressForDomain(progress, domain),
@@ -936,6 +964,9 @@ export function useMission(
             homeLonInput,
             homeAltInput,
             select: (index: number | null) => setSelectedIndex(domain, index),
+            toggleSelect: (index: number) => toggleSelectedIndex(domain, index),
+            selectRange: (fromIndex: number, toIndex: number) => selectRange(domain, fromIndex, toIndex),
+            deselectAll: () => setSelectedIndex(domain, null),
             addWaypoint: () => mutateDomain(domain, (prev) => addTypedWaypoint(prev, domain)),
             addWaypointAt: (latDeg: number, lonDeg: number) => mutateDomain(domain, (prev) => addTypedWaypointAt(prev, domain, latDeg, lonDeg)),
             insertBefore: (index: number) => mutateDomain(domain, (prev) => insertTypedBefore(prev, domain, index)),
@@ -951,6 +982,8 @@ export function useMission(
                 : updateTypedLongitude(prev, domain, index, valueDeg)),
             moveWaypointOnMap: (index: number, latDeg: number, lonDeg: number) => mutateDomain(domain, (prev) => moveTypedWaypointOnMap(prev, domain, index, latDeg, lonDeg)),
             setWaypointFromVehicle,
+            bulkUpdateAltitude: (altitudeM: number) => bulkUpdateSelectedAltitude(domain, altitudeM),
+            bulkDelete: () => bulkDeleteSelected(domain),
             insertGeneratedAfter: (index: number, newItems: MissionItem[]) => mutateDomain(domain, (prev) => insertTypedItemsAfter(prev, domain, index, newItems)),
             replaceAll: (newItems: MissionItem[]) => mutateDomain(domain, (prev) => replaceAllTypedItems(prev, domain, newItems)),
             validate: () => validate(domain),
@@ -1003,6 +1036,10 @@ export function useMission(
         setHomeLonInputValue,
         setSelectedIndex,
         setWaypointFromVehicle,
+        toggleSelectedIndex,
+        selectRange,
+        bulkUpdateSelectedAltitude,
+        bulkDeleteSelected,
         typedDraftState,
         undo,
         updateHomeFromVehicle,
@@ -1016,8 +1053,10 @@ export function useMission(
         const domain: MissionDomain = "fence";
         const visible = currentScope === null || scopeMatches(typedDraftState.active.fence.scope, currentScope);
         const draftItems = visible ? typedDraftItems(typedDraftState, domain) : [];
+        const selectedUiIds = visible ? typedDraftSelectedUiIds(typedDraftState, domain) : new Set<number>();
         const selectedIndex = visible ? typedDraftSelectedIndex(typedDraftState, domain) : null;
         const selectedIndices = visible ? typedDraftSelectedIndices(typedDraftState, domain) : [];
+        const selectionAnchorIndex = visible ? typedDraftSelectionAnchorIndex(typedDraftState, domain) : null;
         const selectedCount = visible ? typedDraftSelectionCount(typedDraftState, domain) : 0;
         const selectedItem = visible ? typedDraftSelectedItem(typedDraftState, domain) : null;
         const previousItem = visible ? typedDraftPreviousItem(typedDraftState, domain) : null;
@@ -1029,8 +1068,10 @@ export function useMission(
             draftItems,
             plan,
             returnPoint: fencePlan.return_point,
+            selectedUiIds,
             selectedIndex,
             selectedIndices,
+            selectionAnchorIndex,
             selectedCount,
             selectedItem,
             selectedPlanItem: selectedIndex === null ? null : fencePlan.regions[selectedIndex] ?? null,
@@ -1040,7 +1081,9 @@ export function useMission(
             isDirty: visible && isTypedDraftDirty(typedDraftState, domain),
             readOnly: isPlaybackScope(),
             canUndo: history.fence.past.length > 0,
+            undoCount: history.fence.past.length,
             canRedo: history.fence.future.length > 0,
+            redoCount: history.fence.future.length,
             issues: issues.fence,
             roundtripStatus: lastOpStatus.fence,
             transferUi: progressForDomain(progress, domain),
@@ -1051,6 +1094,9 @@ export function useMission(
             homeLonInput: "",
             homeAltInput: "",
             select: (index: number | null) => setSelectedIndex(domain, index),
+            toggleSelect: (index: number) => toggleSelectedIndex(domain, index),
+            selectRange: (fromIndex: number, toIndex: number) => selectRange(domain, fromIndex, toIndex),
+            deselectAll: () => setSelectedIndex(domain, null),
             addWaypoint: () => mutateDomain(domain, (prev) => addTypedWaypoint(prev, domain)),
             addWaypointAt: (latDeg: number, lonDeg: number) => mutateDomain(domain, (prev) => addTypedWaypointAt(prev, domain, latDeg, lonDeg)),
             insertBefore: (index: number) => mutateDomain(domain, (prev) => insertTypedBefore(prev, domain, index)),
@@ -1067,6 +1113,8 @@ export function useMission(
             updateRegion: (index: number, region: FenceRegion) => mutateDomain(domain, (prev) => updateFenceRegion(prev, index, region)),
             addRegionAt: (latDeg: number, lonDeg: number, type: FenceRegionType) => mutateDomain(domain, (prev) => addFenceRegionAt(prev, latDeg, lonDeg, type)),
             setReturnPoint: (latDeg: number, lonDeg: number) => mutateDomain(domain, (prev) => setFenceReturnPoint(prev, { latitude_deg: latDeg, longitude_deg: lonDeg })),
+            bulkUpdateAltitude: (altitudeM: number) => bulkUpdateSelectedAltitude(domain, altitudeM),
+            bulkDelete: () => bulkDeleteSelected(domain),
             validate: () => validate(domain),
             upload: () => upload(domain),
             download: () => download(domain),
@@ -1085,14 +1133,16 @@ export function useMission(
                 resetHistory(domain);
             },
         };
-    }, [cancel, clear, commitTypedDraftState, currentScope, download, history.fence.future.length, history.fence.past.length, isPlaybackScope, issues.fence, lastOpStatus.fence, mutateDomain, progress, redo, resetHistory, setSelectedIndex, typedDraftState, undo, upload, validate, visibleOperations.fence]);
+    }, [cancel, clear, commitTypedDraftState, currentScope, download, history.fence.future.length, history.fence.past.length, isPlaybackScope, issues.fence, lastOpStatus.fence, mutateDomain, progress, redo, resetHistory, setSelectedIndex, toggleSelectedIndex, selectRange, bulkUpdateSelectedAltitude, bulkDeleteSelected, typedDraftState, undo, upload, validate, visibleOperations.fence]);
 
     const rally = useMemo(() => {
         const domain: MissionDomain = "rally";
         const visible = currentScope === null || scopeMatches(typedDraftState.active.rally.scope, currentScope);
         const draftItems = visible ? typedDraftItems(typedDraftState, domain) : [];
+        const selectedUiIds = visible ? typedDraftSelectedUiIds(typedDraftState, domain) : new Set<number>();
         const selectedIndex = visible ? typedDraftSelectedIndex(typedDraftState, domain) : null;
         const selectedIndices = visible ? typedDraftSelectedIndices(typedDraftState, domain) : [];
+        const selectionAnchorIndex = visible ? typedDraftSelectionAnchorIndex(typedDraftState, domain) : null;
         const selectedCount = visible ? typedDraftSelectionCount(typedDraftState, domain) : 0;
         const selectedItem = visible ? typedDraftSelectedItem(typedDraftState, domain) : null;
         const previousItem = visible ? typedDraftPreviousItem(typedDraftState, domain) : null;
@@ -1102,8 +1152,10 @@ export function useMission(
             label: missionLabel(domain),
             draftItems,
             plan,
+            selectedUiIds,
             selectedIndex,
             selectedIndices,
+            selectionAnchorIndex,
             selectedCount,
             selectedItem,
             selectedPlanItem: selectedIndex === null ? null : plan.points[selectedIndex] ?? null,
@@ -1113,7 +1165,9 @@ export function useMission(
             isDirty: visible && isTypedDraftDirty(typedDraftState, domain),
             readOnly: isPlaybackScope(),
             canUndo: history.rally.past.length > 0,
+            undoCount: history.rally.past.length,
             canRedo: history.rally.future.length > 0,
+            redoCount: history.rally.future.length,
             issues: issues.rally,
             roundtripStatus: lastOpStatus.rally,
             transferUi: progressForDomain(progress, domain),
@@ -1124,6 +1178,9 @@ export function useMission(
             homeLonInput: "",
             homeAltInput: "",
             select: (index: number | null) => setSelectedIndex(domain, index),
+            toggleSelect: (index: number) => toggleSelectedIndex(domain, index),
+            selectRange: (fromIndex: number, toIndex: number) => selectRange(domain, fromIndex, toIndex),
+            deselectAll: () => setSelectedIndex(domain, null),
             addWaypoint: () => mutateDomain(domain, (prev) => addTypedWaypoint(prev, domain)),
             addWaypointAt: (latDeg: number, lonDeg: number) => mutateDomain(domain, (prev) => addTypedWaypointAt(prev, domain, latDeg, lonDeg)),
             insertBefore: (index: number) => mutateDomain(domain, (prev) => insertTypedBefore(prev, domain, index)),
@@ -1138,6 +1195,8 @@ export function useMission(
                 : updateTypedLongitude(prev, domain, index, valueDeg)),
             moveWaypointOnMap: (index: number, latDeg: number, lonDeg: number) => mutateDomain(domain, (prev) => moveTypedWaypointOnMap(prev, domain, index, latDeg, lonDeg)),
             updateAltitudeFrame: (index: number, frame: "msl" | "rel_home" | "terrain") => mutateDomain(domain, (prev) => updateRallyAltitudeFrame(prev, index, frame)),
+            bulkUpdateAltitude: (altitudeM: number) => bulkUpdateSelectedAltitude(domain, altitudeM),
+            bulkDelete: () => bulkDeleteSelected(domain),
             validate: () => validate(domain),
             upload: () => upload(domain),
             download: () => download(domain),
@@ -1156,7 +1215,7 @@ export function useMission(
                 resetHistory(domain);
             },
         };
-    }, [cancel, clear, commitTypedDraftState, currentScope, download, history.rally.future.length, history.rally.past.length, isPlaybackScope, issues.rally, lastOpStatus.rally, mutateDomain, progress, redo, resetHistory, setSelectedIndex, typedDraftState, undo, upload, validate, visibleOperations.rally]);
+    }, [cancel, clear, commitTypedDraftState, currentScope, download, history.rally.future.length, history.rally.past.length, isPlaybackScope, issues.rally, lastOpStatus.rally, mutateDomain, progress, redo, resetHistory, setSelectedIndex, toggleSelectedIndex, selectRange, bulkUpdateSelectedAltitude, bulkDeleteSelected, typedDraftState, undo, upload, validate, visibleOperations.rally]);
 
     const current = selectedTab === "mission" ? mission : selectedTab === "fence" ? fence : rally;
     const vehicle = useMemo(() => ({

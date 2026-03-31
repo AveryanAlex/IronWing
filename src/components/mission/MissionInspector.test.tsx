@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MissionInspector } from "./MissionInspector";
 import {
@@ -77,6 +77,7 @@ function makeDraftItem(
 
 function renderMissionInspector(options: {
     command: MissionCommand;
+    missionType?: "mission" | "fence" | "rally";
     draftReadOnly?: boolean;
     readOnly?: boolean;
     draftItem?: TypedDraftItem;
@@ -86,11 +87,12 @@ function renderMissionInspector(options: {
     const onUpdateCommand = vi.fn();
     const onUpdateAltitude = vi.fn();
     const onUpdateCoordinate = vi.fn();
+    const onSetWaypointFromVehicle = vi.fn();
     const onSelect = vi.fn();
 
     const result = render(
         <MissionInspector
-            missionType="mission"
+            missionType={options.missionType ?? "mission"}
             draftItem={draftItem}
             index={draftItem.index}
             previousItem={null}
@@ -100,6 +102,7 @@ function renderMissionInspector(options: {
             onUpdateCommand={onUpdateCommand}
             onUpdateAltitude={onUpdateAltitude}
             onUpdateCoordinate={onUpdateCoordinate}
+            onSetWaypointFromVehicle={onSetWaypointFromVehicle}
             onSelect={onSelect}
         />,
     );
@@ -109,11 +112,68 @@ function renderMissionInspector(options: {
         onUpdateCommand,
         onUpdateAltitude,
         onUpdateCoordinate,
+        onSetWaypointFromVehicle,
         onSelect,
     };
 }
 
 describe("MissionInspector", () => {
+    it("renders the set-from-vehicle action for editable mission coordinates and invokes the hook callback", () => {
+        const { onSetWaypointFromVehicle } = renderMissionInspector({
+            command: buildCommand("Nav", "Waypoint", defaultGeoPoint3d(47.3769, 8.5417, 60)),
+        });
+
+        const button = screen.getByRole("button", { name: "Set from Vehicle" });
+        fireEvent.click(button);
+
+        expect(onSetWaypointFromVehicle).toHaveBeenCalledWith(0);
+    });
+
+    it("hides the set-from-vehicle action when coordinates are hidden, the domain is not mission, or the inspector is read-only", () => {
+        const { rerender } = renderMissionInspector({
+            command: buildCommand("Nav", "Takeoff", defaultGeoPoint3d(47.3769, 8.5417, 25)),
+        });
+
+        expect(screen.queryByRole("button", { name: "Set from Vehicle" })).toBeNull();
+
+        rerender(
+            <MissionInspector
+                missionType="rally"
+                draftItem={makeDraftItem(buildCommand("Nav", "Waypoint"))}
+                index={0}
+                previousItem={null}
+                homePosition={null}
+                isSelected
+                onUpdateCommand={vi.fn()}
+                onUpdateAltitude={vi.fn()}
+                onUpdateCoordinate={vi.fn()}
+                onSetWaypointFromVehicle={vi.fn()}
+                onSelect={vi.fn()}
+            />,
+        );
+
+        expect(screen.queryByRole("button", { name: "Set from Vehicle" })).toBeNull();
+
+        rerender(
+            <MissionInspector
+                missionType="mission"
+                draftItem={makeDraftItem(buildCommand("Nav", "Waypoint"), { readOnly: false })}
+                index={0}
+                previousItem={null}
+                homePosition={null}
+                readOnly
+                isSelected
+                onUpdateCommand={vi.fn()}
+                onUpdateAltitude={vi.fn()}
+                onUpdateCoordinate={vi.fn()}
+                onSetWaypointFromVehicle={vi.fn()}
+                onSelect={vi.fn()}
+            />,
+        );
+
+        expect(screen.queryByRole("button", { name: "Set from Vehicle" })).toBeNull();
+    });
+
     it("renders waypoint metadata, disabled unsupported fields, coordinates, altitude, and help text", () => {
         const { container } = renderMissionInspector({
             command: buildCommand("Nav", "Waypoint", defaultGeoPoint3d(47.3769, 8.5417, 60)),

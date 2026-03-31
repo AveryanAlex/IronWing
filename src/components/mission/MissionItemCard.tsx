@@ -1,3 +1,4 @@
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
@@ -33,11 +34,14 @@ function fenceRegionLabel(region: FenceRegion): string {
 type MissionItemCardProps = {
   draftItem: TypedDraftItem;
   displayIndex: number;
-  isSelected: boolean;
+  isPrimarySelected: boolean;
+  isMultiSelected: boolean;
   isActive: boolean;
   missionType: MissionType;
   readOnly: boolean;
   onSelect: () => void;
+  onShiftClick: () => void;
+  onCtrlClick: () => void;
   onInsertBefore: () => void;
   onInsertAfter: () => void;
   onDelete: () => void;
@@ -47,18 +51,23 @@ type MissionItemCardProps = {
 export function MissionItemCard({
   draftItem,
   displayIndex,
-  isSelected,
+  isPrimarySelected,
+  isMultiSelected,
   isActive: isActiveRaw,
   missionType,
   readOnly,
   onSelect,
+  onShiftClick,
+  onCtrlClick,
   onInsertBefore,
   onInsertAfter,
   onDelete,
   onSetCurrent,
 }: MissionItemCardProps) {
   const isMission = missionType === "mission";
-  // Active WP emphasis only applies in Mission mode
+  const isSelected = isPrimarySelected || isMultiSelected;
+  const selectionState = isPrimarySelected ? "primary" : isMultiSelected ? "multi" : "none";
+  // Active WP emphasis only applies in Mission mode.
   const isActive = isMission && isActiveRaw;
   const {
     attributes,
@@ -79,24 +88,38 @@ export function MissionItemCard({
   const altitudeM = draftItem.preview.altitude_m;
   const hasCoords = latDeg !== null && lonDeg !== null;
 
+  const handleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (event.shiftKey) {
+      onShiftClick();
+      return;
+    }
+    if (event.metaKey || event.ctrlKey) {
+      onCtrlClick();
+      return;
+    }
+    onSelect();
+  };
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       data-mission-waypoint-card
       data-seq={draftItem.index}
+      data-selection-state={selectionState}
       className={cn(
         "group relative flex items-stretch rounded-md border text-xs transition-colors",
         isDragging && "z-50 opacity-70 shadow-lg",
-        isSelected
-          ? "border-accent/50 bg-accent/10"
-          : isActive
-            ? "border-success/40 bg-success/5"
-            : "border-border bg-bg-primary hover:border-border-light hover:bg-bg-tertiary/50",
+        isPrimarySelected
+          ? "border-accent bg-accent/12 shadow-[inset_0_0_0_1px_rgba(123,213,251,0.25)]"
+          : isMultiSelected
+            ? "border-accent/40 bg-accent/6"
+            : isActive
+              ? "border-success/40 bg-success/5"
+              : "border-border bg-bg-primary hover:border-border-light hover:bg-bg-tertiary/50",
       )}
-      onClick={onSelect}
+      onClick={handleClick}
     >
-      {/* Drag handle */}
       <button
         data-mission-drag-handle
         className={cn(
@@ -110,23 +133,22 @@ export function MissionItemCard({
         <GripVertical className="h-3.5 w-3.5" />
       </button>
 
-      {/* Main content */}
       <div className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5">
-        {/* Index badge */}
         <div
           className={cn(
             "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold tabular-nums",
-            isActive
-              ? "bg-success/20 text-success"
-              : isSelected
-                ? "bg-accent/20 text-accent"
-                : "bg-bg-tertiary text-text-muted",
+            isPrimarySelected
+              ? "bg-accent/25 text-accent"
+              : isMultiSelected
+                ? "bg-accent/12 text-accent/90"
+                : isActive
+                  ? "bg-success/20 text-success"
+                  : "bg-bg-tertiary text-text-muted",
           )}
         >
           {displayIndex}
         </div>
 
-        {/* Category badge + command name */}
         {"command" in draftItem.document ? (() => {
           const cmd = (draftItem.document as MissionItem).command;
           const cat = commandCategory(cmd);
@@ -159,7 +181,6 @@ export function MissionItemCard({
           </span>
         )}
 
-        {/* Coordinate preview */}
         {hasCoords ? (
           <span className="flex items-center gap-0.5 truncate text-text-muted">
             <MapPin className="h-2.5 w-2.5 shrink-0" />
@@ -171,24 +192,21 @@ export function MissionItemCard({
           <span className="text-text-muted/50">—</span>
         )}
 
-        {/* Altitude */}
         <span className="ml-auto shrink-0 tabular-nums text-text-muted">
           {altitudeM === null ? "—" : `${altitudeM}m`}
         </span>
 
-        {/* Active indicator */}
         {isActive && (
           <Navigation className="h-3 w-3 shrink-0 fill-success text-success" />
         )}
       </div>
 
-      {/* Action buttons — visible on hover or when selected */}
       <div
         className={cn(
           "flex shrink-0 items-center gap-0.5 border-l border-border/50 px-1 transition-opacity",
           isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
         )}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
         <button
           data-mission-insert-before

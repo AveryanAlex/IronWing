@@ -4,6 +4,7 @@ import { MissionItemList } from "./MissionItemList";
 import { MissionInspector } from "./MissionInspector";
 import { FenceInspector } from "./FenceInspector";
 import { RallyInspector } from "./RallyInspector";
+import { BulkEditPanel } from "./BulkEditPanel";
 import type { useMission } from "../../hooks/use-mission";
 
 type MissionDesktopShellProps = {
@@ -14,6 +15,7 @@ type MissionDesktopShellProps = {
 
 export function MissionDesktopShell({ mission, connected, onCardSelect }: MissionDesktopShellProps) {
   const current = mission.current;
+  const showBulkEditor = current.selectedCount > 1;
 
   return (
     <div
@@ -40,7 +42,11 @@ export function MissionDesktopShell({ mission, connected, onCardSelect }: Missio
         <div className="px-2.5 pb-2.5">
           <MissionItemList mission={mission} onCardSelect={onCardSelect} />
 
-          {current.selectedItem && current.selectedIndex !== null && (
+          {showBulkEditor ? (
+            <div className="mt-2">
+              <BulkEditPanel mission={mission} />
+            </div>
+          ) : current.selectedItem && current.selectedIndex !== null ? (
             <div className="mt-2">
               {current.tab === "fence" ? (
                 <FenceInspector
@@ -72,11 +78,12 @@ export function MissionDesktopShell({ mission, connected, onCardSelect }: Missio
                   onUpdateCommand={mission.mission.updateCommand}
                   onUpdateAltitude={current.updateAltitude}
                   onUpdateCoordinate={current.updateCoordinate}
+                  onSetWaypointFromVehicle={mission.mission.setWaypointFromVehicle}
                   onSelect={current.select}
                 />
               )}
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

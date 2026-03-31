@@ -1,7 +1,18 @@
 import {
-  Upload, Download, Trash2,
-  Plus, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, X, SkipForward,
+  Upload,
+  Download,
+  Trash2,
+  Plus,
+  ArrowUp,
+  ArrowDown,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  SkipForward,
   Grid3X3,
+  Undo2,
+  Redo2,
+  Waypoints,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
@@ -11,30 +22,63 @@ type MissionWorkspaceHeaderProps = {
   mission: ReturnType<typeof useMission>;
   connected: boolean;
   onAutoGrid?: () => void;
+  chainModeActive?: boolean;
+  chainModeSuppressed?: boolean;
+  onToggleChainMode?: () => void;
 };
 
 const isMissionOnly = (tab: string) => tab === "mission";
 
-function IconButton({ icon, label, onClick, disabled }: {
+function IconButton({ icon, label, onClick, disabled, dataTestId, active, ariaPressed, className }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  dataTestId?: string;
+  active?: boolean;
+  ariaPressed?: boolean;
+  className?: string;
 }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon" onClick={onClick} disabled={disabled}>
-          {icon}
-        </Button>
+        <span className="inline-flex">
+          <Button
+            data-testid={dataTestId}
+            variant="ghost"
+            size="icon"
+            onClick={onClick}
+            disabled={disabled}
+            aria-pressed={ariaPressed}
+            className={active ? "bg-accent/15 text-accent hover:bg-accent/20 hover:text-accent" : className}
+          >
+            {icon}
+          </Button>
+        </span>
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   );
 }
 
-export function MissionWorkspaceHeader({ mission, connected, onAutoGrid }: MissionWorkspaceHeaderProps) {
+export function MissionWorkspaceHeader({
+  mission,
+  connected,
+  onAutoGrid,
+  chainModeActive = false,
+  chainModeSuppressed = false,
+  onToggleChainMode,
+}: MissionWorkspaceHeaderProps) {
   const current = mission.current;
+  const undoTooltip = current.canUndo ? `Undo (${current.undoCount} available)` : "Undo (0 available)";
+  const redoTooltip = current.canRedo ? `Redo (${current.redoCount} available)` : "Redo (0 available)";
+  const chainTooltip = !isMissionOnly(current.tab)
+    ? "Chain Add is only available in Mission mode"
+    : chainModeSuppressed
+      ? "Chain Add is active but suppressed while drawing a polygon"
+      : chainModeActive
+        ? "Chain Add active — click the map to add successive waypoints"
+        : "Chain Add — click the map to add successive waypoints";
 
   return (
     <div data-mission-workspace-header className="space-y-1">
@@ -76,7 +120,25 @@ export function MissionWorkspaceHeader({ mission, connected, onAutoGrid }: Missi
 
       <div className="flex items-center gap-1">
         <div className="flex items-center gap-0.5">
+          <IconButton icon={<Undo2 className="h-3.5 w-3.5" />} label={undoTooltip} onClick={current.undo} disabled={!current.canUndo} dataTestId="mission-undo" />
+          <IconButton icon={<Redo2 className="h-3.5 w-3.5" />} label={redoTooltip} onClick={current.redo} disabled={!current.canRedo} dataTestId="mission-redo" />
+        </div>
+
+        <div className="mx-0.5 h-4 w-px bg-border" />
+
+        <div className="flex items-center gap-0.5">
           <IconButton icon={<Plus className="h-3.5 w-3.5" />} label="Add Waypoint" onClick={current.addWaypoint} />
+          {onToggleChainMode && (
+            <IconButton
+              icon={<Waypoints className="h-3.5 w-3.5" />}
+              label={chainTooltip}
+              onClick={onToggleChainMode}
+              disabled={!isMissionOnly(current.tab)}
+              dataTestId="mission-chain-mode"
+              active={chainModeActive}
+              ariaPressed={chainModeActive}
+            />
+          )}
           <IconButton icon={<ChevronLeft className="h-3.5 w-3.5" />} label="Insert Before"
             onClick={() => current.insertBefore(current.selectedIndex ?? current.displayTotal)} />
           <IconButton icon={<ChevronRight className="h-3.5 w-3.5" />} label="Insert After"
