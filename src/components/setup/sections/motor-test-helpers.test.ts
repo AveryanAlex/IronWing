@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { getApMotorDiagramModel, getVtolLayoutModel } from "../shared/vtol-layouts";
 import type { VtolProfile } from "../shared/vehicle-helpers";
-import { deriveMotorDirection, deriveMotorTestRows } from "./motor-test-helpers";
+import type { ParamStore } from "../../../params";
+import type { ParamInputParams } from "../primitives/param-helpers";
+import {
+  deriveMotorDirection,
+  deriveMotorTestRows,
+  resolveServoIndexForMotor,
+} from "./motor-test-helpers";
 
 function makeProfile(overrides: Partial<VtolProfile>): VtolProfile {
   return {
@@ -90,5 +96,73 @@ describe("deriveMotorTestRows", () => {
         message: null,
       }),
     ).toEqual([]);
+  });
+});
+
+function makeParamsFixture(
+  entries: Record<string, number>,
+): ParamInputParams {
+  const params: ParamStore["params"] = {};
+  let index = 0;
+  for (const [name, value] of Object.entries(entries)) {
+    params[name] = { name, value, param_type: "real32" as const, index: index++ };
+  }
+  return {
+    store: { params, expected_count: index },
+    staged: new Map(),
+    metadata: null,
+    stage: () => {},
+  };
+}
+
+describe("resolveServoIndexForMotor", () => {
+  it("returns the servo index whose function matches motor number", () => {
+    const params = makeParamsFixture({
+      SERVO1_FUNCTION: 33,
+      SERVO2_FUNCTION: 34,
+      SERVO3_FUNCTION: 35,
+      SERVO4_FUNCTION: 36,
+    });
+    expect(resolveServoIndexForMotor(1, params)).toBe(1);
+    expect(resolveServoIndexForMotor(2, params)).toBe(2);
+    expect(resolveServoIndexForMotor(4, params)).toBe(4);
+  });
+
+  it("returns null when no servo output carries the motor function", () => {
+    const params = makeParamsFixture({
+      SERVO1_FUNCTION: 4,
+      SERVO2_FUNCTION: 19,
+    });
+    expect(resolveServoIndexForMotor(1, params)).toBeNull();
+  });
+
+  it("handles non-sequential servo assignments", () => {
+    const params = makeParamsFixture({
+      SERVO1_FUNCTION: 4,
+      SERVO5_FUNCTION: 33,
+      SERVO9_FUNCTION: 34,
+    });
+    expect(resolveServoIndexForMotor(1, params)).toBe(5);
+    expect(resolveServoIndexForMotor(2, params)).toBe(9);
+  });
+
+  it("returns null when store is null", () => {
+    const params: ParamInputParams = {
+      store: null,
+      staged: new Map(),
+      metadata: null,
+      stage: () => {},
+    };
+    expect(resolveServoIndexForMotor(1, params)).toBeNull();
+  });
+
+  it("respects staged function value over current store value", () => {
+    const params = makeParamsFixture({
+      SERVO1_FUNCTION: 4,
+      SERVO3_FUNCTION: 33,
+    });
+    params.staged.set("SERVO1_FUNCTION", 33);
+    params.staged.set("SERVO3_FUNCTION", 4);
+    expect(resolveServoIndexForMotor(1, params)).toBe(1);
   });
 });
