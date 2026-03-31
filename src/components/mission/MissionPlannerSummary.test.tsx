@@ -2,6 +2,23 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: (key: string) => store[key] ?? null,
+    setItem: (key: string, value: string) => { store[key] = value; },
+    removeItem: (key: string) => { delete store[key]; },
+    clear: () => { store = {}; },
+    get length() { return Object.keys(store).length; },
+    key: (i: number) => Object.keys(store)[i] ?? null,
+  };
+})();
+Object.defineProperty(globalThis, "localStorage", { value: localStorageMock });
+
+afterEach(() => {
+  localStorageMock.clear();
+});
 import type { useMission } from "../../hooks/use-mission";
 import type { TypedDraftItem } from "../../lib/mission-draft-typed";
 import type { MissionCommand } from "../../lib/mavkit-types";
@@ -113,8 +130,8 @@ function makeMissionStub({
     roundtripStatus: "",
     cancel,
     draftItems: [],
-    // FencePlan shape required by computeFenceStats
-    plan: { return_point: null, regions: [] },
+    // FencePlan + RallyPlan shapes required by computeFenceStats/computeRallyStats
+    plan: { return_point: null, regions: [], points: [] },
   };
 
   const mission = {

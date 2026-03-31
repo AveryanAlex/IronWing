@@ -5,6 +5,8 @@ export type Settings = {
   svsEnabled: boolean;
   messageRates: Record<number, number>;
   terrainSafetyMarginM: number;
+  cruiseSpeedMps: number;
+  hoverSpeedMps: number;
 };
 
 const STORAGE_KEY = "mpng_settings";
@@ -14,6 +16,8 @@ const DEFAULTS: Settings = {
   svsEnabled: true,
   messageRates: {},
   terrainSafetyMarginM: 10,
+  cruiseSpeedMps: 15,
+  hoverSpeedMps: 5,
 };
 
 function loadSettings(): Settings {
@@ -26,6 +30,8 @@ function loadSettings(): Settings {
       svsEnabled: parsed.svsEnabled ?? DEFAULTS.svsEnabled,
       messageRates: parsed.messageRates ?? DEFAULTS.messageRates,
       terrainSafetyMarginM: parsed.terrainSafetyMarginM ?? DEFAULTS.terrainSafetyMarginM,
+      cruiseSpeedMps: parsed.cruiseSpeedMps ?? DEFAULTS.cruiseSpeedMps,
+      hoverSpeedMps: parsed.hoverSpeedMps ?? DEFAULTS.hoverSpeedMps,
     };
   } catch {
     return DEFAULTS;

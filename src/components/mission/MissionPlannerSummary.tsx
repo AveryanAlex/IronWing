@@ -26,6 +26,7 @@ import { MissionVehicleCard } from "./MissionVehicleCard";
 import { MissionTransferStatus } from "./MissionTransferStatus";
 import type { useMission } from "../../hooks/use-mission";
 import type { MissionType } from "../../mission";
+import { useSettings } from "../../hooks/use-settings";
 
 type MissionPlannerSummaryProps = {
   mission: ReturnType<typeof useMission>;
@@ -210,12 +211,13 @@ export function MissionPlannerSummary({ mission, connected }: MissionPlannerSumm
   const current = mission.current;
   const missionType = mission.selectedTab;
   const missionDomain = mission.mission;
+  const { settings, updateSettings } = useSettings();
 
   const [cruiseSpeedMps, setCruiseSpeedMps] = useState(
-    () => missionDomain.importedSpeeds?.cruiseSpeedMps ?? DEFAULT_MISSION_PLANNING_PROFILE.cruiseSpeedMps,
+    () => missionDomain.importedSpeeds?.cruiseSpeedMps ?? settings.cruiseSpeedMps,
   );
   const [hoverSpeedMps, setHoverSpeedMps] = useState(
-    () => missionDomain.importedSpeeds?.hoverSpeedMps ?? DEFAULT_MISSION_PLANNING_PROFILE.hoverSpeedMps,
+    () => missionDomain.importedSpeeds?.hoverSpeedMps ?? settings.hoverSpeedMps,
   );
   const [enduranceBudgetMin, setEnduranceBudgetMin] = useState<number | null>(
     DEFAULT_MISSION_PLANNING_PROFILE.enduranceBudgetMin,
@@ -223,19 +225,26 @@ export function MissionPlannerSummary({ mission, connected }: MissionPlannerSumm
 
   useEffect(() => {
     setCruiseSpeedMps(
-      missionDomain.importedSpeeds?.cruiseSpeedMps ?? DEFAULT_MISSION_PLANNING_PROFILE.cruiseSpeedMps,
+      missionDomain.importedSpeeds?.cruiseSpeedMps ?? settings.cruiseSpeedMps,
     );
     setHoverSpeedMps(
-      missionDomain.importedSpeeds?.hoverSpeedMps ?? DEFAULT_MISSION_PLANNING_PROFILE.hoverSpeedMps,
+      missionDomain.importedSpeeds?.hoverSpeedMps ?? settings.hoverSpeedMps,
     );
   }, [
     missionDomain.importedSpeeds?.cruiseSpeedMps,
     missionDomain.importedSpeeds?.hoverSpeedMps,
+    settings.cruiseSpeedMps,
+    settings.hoverSpeedMps,
   ]);
 
   useEffect(() => {
     missionDomain.setExportSpeeds({ cruiseSpeedMps, hoverSpeedMps });
   }, [cruiseSpeedMps, hoverSpeedMps, missionDomain]);
+
+  // Persist speed changes back to settings
+  useEffect(() => {
+    updateSettings({ cruiseSpeedMps, hoverSpeedMps });
+  }, [cruiseSpeedMps, hoverSpeedMps, updateSettings]);
 
   const statistics = computeMissionStatistics(missionDomain.homePosition, missionDomain.draftItems, {
     cruiseSpeedMps,
