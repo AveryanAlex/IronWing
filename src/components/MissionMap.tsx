@@ -146,6 +146,7 @@ export function MissionMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Map<number, Marker>>(new Map());
+  const draggingIndexRef = useRef<number | null>(null);
   const homeMarkerRef = useRef<Marker | null>(null);
   const vehicleMarkerRef = useRef<Marker | null>(null);
   const deviceLocationMarkerRef = useRef<Marker | null>(null);
@@ -555,8 +556,9 @@ export function MissionMap({
     };
   }, []);
 
-  // Update mission path overlay
+  // Update mission path overlay (skip while dragging — drag handler owns the path source)
   useEffect(() => {
+    if (draggingIndexRef.current !== null) return;
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
     updateMissionPathSource(map, missionRenderFeatures, !syntheticVision);
@@ -642,7 +644,11 @@ export function MissionMap({
       const lngLat: [number, number] = [item.preview.longitude_deg, item.preview.latitude_deg];
 
       if (reusable) {
-        reusable.setLngLat(lngLat);
+        // Skip position reset while this marker is being dragged — the drag
+        // handler owns its position until dragend commits the move.
+        if (draggingIndexRef.current !== item.index) {
+          reusable.setLngLat(lngLat);
+        }
         reusable.setDraggable(isDraggable);
       } else {
         const markerEl = document.createElement("button");
@@ -669,6 +675,9 @@ export function MissionMap({
           .addTo(map);
 
         if (isDraggable) {
+          marker.on("dragstart", () => {
+            draggingIndexRef.current = item.index;
+          });
           marker.on("drag", () => {
             const pos = marker.getLngLat();
             const m = mapRef.current;
@@ -687,8 +696,12 @@ export function MissionMap({
             );
           });
           marker.on("dragend", () => {
+            draggingIndexRef.current = null;
             const pos = marker.getLngLat();
             onMoveWaypointRef.current?.(item.index, pos.lat, pos.lng);
+            // Path overlay will be updated by the React effect once the state
+            // change from onMoveWaypoint propagates. The drag handler's last
+            // update keeps lines correct in the meantime.
           });
         }
 
