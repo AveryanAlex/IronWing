@@ -39,6 +39,7 @@ type ContextMenuState = {
 export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: MissionMobileDrawerProps) {
   const current = mission.current;
   const terrain = useMissionTerrain(current.draftItems, current.homePosition, current.tab);
+  const terrainWarnings = terrain.warningsByIndex ?? undefined;
   const showBulkEditor = current.selectedCount > 1;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
@@ -286,6 +287,7 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
 
           <MissionItemList
             mission={mission}
+            terrainWarnings={terrainWarnings}
             onCardSelect={handleCardSelect}
           />
 

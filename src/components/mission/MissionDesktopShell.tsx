@@ -6,14 +6,16 @@ import { FenceInspector } from "./FenceInspector";
 import { RallyInspector } from "./RallyInspector";
 import { BulkEditPanel } from "./BulkEditPanel";
 import type { useMission } from "../../hooks/use-mission";
+import type { TerrainWarning } from "../../lib/mission-terrain-profile";
 
 type MissionDesktopShellProps = {
   mission: ReturnType<typeof useMission>;
   connected: boolean;
+  terrainWarnings?: Map<number, TerrainWarning>;
   onCardSelect?: (seq: number) => void;
 };
 
-export function MissionDesktopShell({ mission, connected, onCardSelect }: MissionDesktopShellProps) {
+export function MissionDesktopShell({ mission, connected, terrainWarnings, onCardSelect }: MissionDesktopShellProps) {
   const current = mission.current;
   const showBulkEditor = current.selectedCount > 1;
 
@@ -40,7 +42,7 @@ export function MissionDesktopShell({ mission, connected, onCardSelect }: Missio
         </div>
 
         <div className="px-2.5 pb-2.5">
-          <MissionItemList mission={mission} onCardSelect={onCardSelect} />
+          <MissionItemList mission={mission} terrainWarnings={terrainWarnings} onCardSelect={onCardSelect} />
 
           {showBulkEditor ? (
             <div className="mt-2">

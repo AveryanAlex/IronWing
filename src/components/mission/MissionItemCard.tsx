@@ -9,12 +9,15 @@ import {
   SkipForward,
   Navigation,
   MapPin,
+  AlertTriangle,
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "../../lib/utils";
 import { commandDisplayName, commandCategory } from "../../lib/mavkit-types";
 import type { MissionItem } from "../../lib/mavkit-types";
 import type { FenceRegion } from "../../lib/mavkit-types";
 import type { TypedDraftItem } from "../../lib/mission-draft-typed";
+import type { TerrainWarning } from "../../lib/mission-terrain-profile";
 import type { MissionType } from "../../mission";
 
 const CATEGORY_BADGE: Record<string, { label: string; className: string }> = {
@@ -22,6 +25,17 @@ const CATEGORY_BADGE: Record<string, { label: string; className: string }> = {
   do: { label: "DO", className: "bg-warning/15 text-warning" },
   condition: { label: "CND", className: "bg-purple-500/15 text-purple-400" },
   other: { label: "RAW", className: "bg-bg-tertiary text-text-muted" },
+};
+
+const TERRAIN_WARNING_META: Record<Exclude<TerrainWarning, "none" | "no_data">, { label: string; className: string }> = {
+  below_terrain: {
+    label: "Below terrain",
+    className: "text-danger",
+  },
+  near_terrain: {
+    label: "Near terrain",
+    className: "text-warning",
+  },
 };
 
 function fenceRegionLabel(region: FenceRegion): string {
@@ -39,6 +53,7 @@ type MissionItemCardProps = {
   isActive: boolean;
   missionType: MissionType;
   readOnly: boolean;
+  terrainWarning?: TerrainWarning;
   onSelect: () => void;
   onShiftClick: () => void;
   onCtrlClick: () => void;
@@ -56,6 +71,7 @@ export function MissionItemCard({
   isActive: isActiveRaw,
   missionType,
   readOnly,
+  terrainWarning = "none",
   onSelect,
   onShiftClick,
   onCtrlClick,
@@ -69,6 +85,10 @@ export function MissionItemCard({
   const selectionState = isPrimarySelected ? "primary" : isMultiSelected ? "multi" : "none";
   // Active WP emphasis only applies in Mission mode.
   const isActive = isMission && isActiveRaw;
+  const visibleTerrainWarning = terrainWarning === "below_terrain" || terrainWarning === "near_terrain"
+    ? terrainWarning
+    : null;
+  const terrainWarningMeta = visibleTerrainWarning ? TERRAIN_WARNING_META[visibleTerrainWarning] : null;
   const {
     attributes,
     listeners,
@@ -117,6 +137,8 @@ export function MissionItemCard({
             : isActive
               ? "border-success/40 bg-success/5"
               : "border-border bg-bg-primary hover:border-border-light hover:bg-bg-tertiary/50",
+        terrainWarning === "below_terrain" && "shadow-[inset_3px_0_0_0_rgba(239,68,68,0.72)]",
+        terrainWarning === "below_terrain" && !isPrimarySelected && !isMultiSelected && !isActive && "border-danger/35 bg-danger/5 hover:border-danger/45 hover:bg-danger/10",
       )}
       onClick={handleClick}
     >
@@ -195,6 +217,24 @@ export function MissionItemCard({
         <span className="ml-auto shrink-0 tabular-nums text-text-muted">
           {altitudeM === null ? "—" : `${altitudeM}m`}
         </span>
+
+        {terrainWarningMeta && visibleTerrainWarning && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                aria-label={terrainWarningMeta.label}
+                title={terrainWarningMeta.label}
+                className={cn("inline-flex shrink-0 items-center justify-center", terrainWarningMeta.className)}
+              >
+                <AlertTriangle
+                  data-terrain-warning={visibleTerrainWarning}
+                  className="h-3.5 w-3.5"
+                />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{terrainWarningMeta.label}</TooltipContent>
+          </Tooltip>
+        )}
 
         {isActive && (
           <Navigation className="h-3 w-3 shrink-0 fill-success text-success" />

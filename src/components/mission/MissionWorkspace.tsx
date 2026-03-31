@@ -33,6 +33,7 @@ type ContextMenuState = {
 export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWorkspaceProps) {
   const current = mission.current;
   const terrain = useMissionTerrain(current.draftItems, current.homePosition, current.tab);
+  const terrainWarnings = terrain.warningsByIndex ?? undefined;
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [flyToKey, setFlyToKey] = useState(0);
   const [autoGridOpen, setAutoGridOpen] = useState(false);
@@ -258,7 +259,12 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
         </Separator>
 
         <Panel defaultSize="35" minSize="25" maxSize="50">
-          <MissionDesktopShell mission={mission} connected={vehicle.connected} onCardSelect={handleCardSelect} />
+          <MissionDesktopShell
+            mission={mission}
+            connected={vehicle.connected}
+            terrainWarnings={terrainWarnings}
+            onCardSelect={handleCardSelect}
+          />
         </Panel>
       </Group>
       {current.issues.length > 0 && (

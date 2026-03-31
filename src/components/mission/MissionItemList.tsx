@@ -17,10 +17,12 @@ import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { MapPin } from "lucide-react";
 import { MissionItemCard } from "./MissionItemCard";
 import type { MissionItem } from "../../lib/mavkit-types";
+import type { TerrainWarning } from "../../lib/mission-terrain-profile";
 import type { useMission } from "../../hooks/use-mission";
 
 type MissionItemListProps = {
   mission: ReturnType<typeof useMission>;
+  terrainWarnings?: Map<number, TerrainWarning>;
   onSelectAndClose?: () => void;
   onCardSelect?: (seq: number) => void;
 };
@@ -174,6 +176,7 @@ function JumpGutter({
 
 export function MissionItemList({
   mission,
+  terrainWarnings,
   onSelectAndClose,
   onCardSelect,
 }: MissionItemListProps) {
@@ -290,6 +293,7 @@ export function MissionItemList({
                   isActive={mission.vehicle.activeSeq === draftItem.index}
                   missionType={current.tab}
                   readOnly={current.readOnly}
+                  terrainWarning={terrainWarnings?.get(draftItem.index) ?? "none"}
                   onSelect={() => handleSelect(draftItem.index)}
                   onShiftClick={() => handleRangeSelect(draftItem.index)}
                   onCtrlClick={() => handleToggleSelect(draftItem.index)}

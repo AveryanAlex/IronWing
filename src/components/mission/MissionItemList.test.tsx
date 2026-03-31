@@ -1,8 +1,16 @@
 // @vitest-environment jsdom
 
+import type { ReactNode } from "react";
 import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MissionItemList } from "./MissionItemList";
+import type { TerrainWarning } from "../../lib/mission-terrain-profile";
+
+vi.mock("../ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
 
 function makeDraftItem(index: number, uiId: number) {
   return {
@@ -84,5 +92,24 @@ describe("MissionItemList", () => {
 
     fireEvent.click(cards[1]!, { ctrlKey: true });
     expect(mission.current.toggleSelect).toHaveBeenCalledWith(1);
+  });
+
+  it("passes terrain warning state through to individual cards by item index", () => {
+    const mission = createMission();
+    const terrainWarnings = new Map<number, TerrainWarning>([
+      [1, "below_terrain"],
+      [2, "near_terrain"],
+    ]);
+
+    const { container } = render(
+      <MissionItemList
+        mission={mission as never}
+        terrainWarnings={terrainWarnings}
+      />,
+    );
+
+    expect(container.querySelector("[data-seq='1'] [data-terrain-warning='below_terrain']")).not.toBeNull();
+    expect(container.querySelector("[data-seq='2'] [data-terrain-warning='near_terrain']")).not.toBeNull();
+    expect(container.querySelector("[data-seq='0'] [data-terrain-warning]")).toBeNull();
   });
 });

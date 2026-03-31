@@ -5,9 +5,10 @@ import { fireEvent, render, screen, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MissionMobileDrawer } from "./MissionMobileDrawer";
 
-const { terrainHookMock, terrainProfilePropsMock } = vi.hoisted(() => ({
+const { terrainHookMock, terrainProfilePropsMock, itemListPropsMock } = vi.hoisted(() => ({
   terrainHookMock: vi.fn(),
   terrainProfilePropsMock: vi.fn(),
+  itemListPropsMock: vi.fn(),
 }));
 
 vi.mock("../../hooks/use-mission-terrain", () => ({
@@ -44,7 +45,12 @@ vi.mock("../MissionMap", () => ({
 
 vi.mock("../MapContextMenu", () => ({ MapContextMenu: () => null }));
 vi.mock("./MissionPlannerSummary", () => ({ MissionPlannerSummary: () => <div>Summary</div> }));
-vi.mock("./MissionItemList", () => ({ MissionItemList: () => <div>Items</div> }));
+vi.mock("./MissionItemList", () => ({
+  MissionItemList: (props: { terrainWarnings?: Map<number, string> }) => {
+    itemListPropsMock(props);
+    return <div>Items</div>;
+  },
+}));
 vi.mock("./MissionInspector", () => ({ MissionInspector: () => <div>Inspector</div> }));
 vi.mock("./FenceInspector", () => ({ FenceInspector: () => <div>Fence inspector</div> }));
 vi.mock("./RallyInspector", () => ({ RallyInspector: () => <div>Rally inspector</div> }));
@@ -127,6 +133,7 @@ describe("MissionMobileDrawer", () => {
   beforeEach(() => {
     terrainHookMock.mockReset();
     terrainProfilePropsMock.mockReset();
+    itemListPropsMock.mockReset();
     terrainHookMock.mockReturnValue({
       status: "ready",
       profile: { points: [], warningsByIndex: new Map() },
@@ -156,8 +163,14 @@ describe("MissionMobileDrawer", () => {
     expect(addWaypointAt).toHaveBeenCalledWith(47.5, 8.6);
   });
 
-  it("shows the compact terrain profile only for the mission tab", () => {
+  it("shows the compact terrain profile only for the mission tab and forwards waypoint warnings into the mobile item list", () => {
     const missionTab = createMission("mission");
+    const terrainWarnings = new Map([[1, "near_terrain"]]);
+    terrainHookMock.mockReturnValue({
+      status: "ready",
+      profile: { points: [], warningsByIndex: terrainWarnings },
+      warningsByIndex: terrainWarnings,
+    });
     const { rerender } = render(
       <MissionMobileDrawer
         vehicle={{ connected: true, vehiclePosition: null, missionState: { current_index: null } } as never}
@@ -177,6 +190,11 @@ describe("MissionMobileDrawer", () => {
       onSelectIndex?: (index: number | null) => void;
     };
     expect(props.onSelectIndex).toBe(missionTab.current.select);
+
+    const itemListProps = itemListPropsMock.mock.calls[itemListPropsMock.mock.calls.length - 1]?.[0] as {
+      terrainWarnings?: Map<number, string>;
+    };
+    expect(itemListProps.terrainWarnings).toBe(terrainWarnings);
 
     rerender(
       <MissionMobileDrawer

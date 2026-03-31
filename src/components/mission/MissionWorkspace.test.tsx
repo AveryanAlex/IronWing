@@ -5,9 +5,10 @@ import { fireEvent, render, screen, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MissionWorkspace } from "./MissionWorkspace";
 
-const { terrainHookMock, terrainProfilePropsMock } = vi.hoisted(() => ({
+const { terrainHookMock, terrainProfilePropsMock, desktopShellPropsMock } = vi.hoisted(() => ({
   terrainHookMock: vi.fn(),
   terrainProfilePropsMock: vi.fn(),
+  desktopShellPropsMock: vi.fn(),
 }));
 
 vi.mock("../../hooks/use-mission-terrain", () => ({
@@ -56,7 +57,12 @@ vi.mock("../MissionMap", () => ({
 }));
 
 vi.mock("../MapContextMenu", () => ({ MapContextMenu: () => null }));
-vi.mock("./MissionDesktopShell", () => ({ MissionDesktopShell: () => <div>Desktop shell</div> }));
+vi.mock("./MissionDesktopShell", () => ({
+  MissionDesktopShell: (props: { terrainWarnings?: Map<number, string> }) => {
+    desktopShellPropsMock(props);
+    return <div>Desktop shell</div>;
+  },
+}));
 vi.mock("./MissionAutoGridDialog", () => ({
   MissionAutoGridDialog: ({ onStartDraw, onStopDraw, onClose }: {
     onStartDraw: () => void;
@@ -147,6 +153,7 @@ describe("MissionWorkspace", () => {
   beforeEach(() => {
     terrainHookMock.mockReset();
     terrainProfilePropsMock.mockReset();
+    desktopShellPropsMock.mockReset();
     terrainHookMock.mockReturnValue({
       status: "ready",
       profile: { points: [], warningsByIndex: new Map() },
@@ -220,10 +227,16 @@ describe("MissionWorkspace", () => {
     expect(addWaypointAt).toHaveBeenCalledWith(47.41, 8.56);
   });
 
-  it("shows the terrain profile only for the mission tab and wires the terrain hook into it", () => {
+  it("shows the terrain profile only for the mission tab, wires the terrain hook into it, and forwards waypoint warnings to the desktop shell", () => {
     const vehicle = { connected: true, vehiclePosition: null, missionState: { current_index: null } };
     const deviceLocation = { location: null };
     const missionTab = createMission("mission");
+    const terrainWarnings = new Map([[2, "below_terrain"]]);
+    terrainHookMock.mockReturnValue({
+      status: "ready",
+      profile: { points: [], warningsByIndex: terrainWarnings },
+      warningsByIndex: terrainWarnings,
+    });
     const { rerender } = render(
       <MissionWorkspace
         vehicle={vehicle as never}
@@ -245,6 +258,11 @@ describe("MissionWorkspace", () => {
     };
     expect(props.selectedIndex).toBeNull();
     expect(props.onSelectIndex).toBe(missionTab.current.select);
+
+    const desktopShellProps = desktopShellPropsMock.mock.calls[desktopShellPropsMock.mock.calls.length - 1]?.[0] as {
+      terrainWarnings?: Map<number, string>;
+    };
+    expect(desktopShellProps.terrainWarnings).toBe(terrainWarnings);
 
     rerender(
       <MissionWorkspace
