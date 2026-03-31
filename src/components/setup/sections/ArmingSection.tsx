@@ -28,6 +28,7 @@ import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import { SectionCardHeader } from "../shared/SectionCardHeader";
 import { DocsLink } from "../shared/DocsLink";
+import { useBreakpoint } from "../../../hooks/use-breakpoint";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -69,6 +70,7 @@ export function ArmingSection({
   const armingRequireValue = getStagedOrCurrent("ARMING_REQUIRE", params);
   const isReady = sensorHealth != null && isPreArmGood(sensorHealth);
   const armed = vehicleState?.armed === true;
+  const { isMobile } = useBreakpoint();
   const canRequestChecks = support.value?.can_request_prearm_checks === true;
   const prearmResetKey = useMemo(
     () => `${vehicleState?.system_id ?? "none"}:${connected}`,
@@ -158,19 +160,39 @@ export function ArmingSection({
         )}
       </div>
 
-      <PrearmStatusPanel
-        connected={connected}
-        canRequestChecks={canRequestChecks}
-        sensorHealth={sensorHealth}
-        resetKey={prearmResetKey}
-        vehicleSlug={vehicleSlug}
-      />
+      {isMobile ? (
+        <>
+          <ArmDisarmControls
+            connected={connected}
+            armed={armed}
+            isReady={isReady}
+          />
 
-      <ArmDisarmControls
-        connected={connected}
-        armed={armed}
-        isReady={isReady}
-      />
+          <PrearmStatusPanel
+            connected={connected}
+            canRequestChecks={canRequestChecks}
+            sensorHealth={sensorHealth}
+            resetKey={prearmResetKey}
+            vehicleSlug={vehicleSlug}
+          />
+        </>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)] xl:items-start">
+          <PrearmStatusPanel
+            connected={connected}
+            canRequestChecks={canRequestChecks}
+            sensorHealth={sensorHealth}
+            resetKey={prearmResetKey}
+            vehicleSlug={vehicleSlug}
+          />
+
+          <ArmDisarmControls
+            connected={connected}
+            armed={armed}
+            isReady={isReady}
+          />
+        </div>
+      )}
     </div>
   );
 }

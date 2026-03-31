@@ -17,13 +17,13 @@ type BottomNavProps = {
 export function BottomNav({ activeTab, onTabChange, isConnecting, connected, connectionError, onSidebarOpen }: BottomNavProps) {
   return (
     <nav
-      className="w-full shrink-0 overflow-x-auto overflow-y-hidden border-t border-border bg-bg-secondary"
+      className="w-full shrink-0 overflow-hidden border-t border-border bg-bg-secondary"
       style={{ paddingBottom: "var(--safe-area-bottom, 0px)" }}
     >
-      <div className="flex min-w-[440px] items-center justify-around">
+      <div className="flex w-full items-stretch">
         <button
           onClick={onSidebarOpen}
-          className="flex flex-col items-center justify-center gap-0.5 px-2 py-2"
+          className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-0.5 py-2"
           aria-label="Vehicle panel"
         >
           <div className={cn(
@@ -33,7 +33,7 @@ export function BottomNav({ activeTab, onTabChange, isConnecting, connected, con
             connectionError ? "bg-danger" :
             "bg-text-muted"
           )} />
-          <span className="text-[10px] text-text-muted">Vehicle</span>
+          <span className="truncate text-[9px] leading-none text-text-muted">Vehicle</span>
         </button>
 
         {TABS.map(({ id, label, Icon }) => (
@@ -41,14 +41,14 @@ export function BottomNav({ activeTab, onTabChange, isConnecting, connected, con
           key={id}
           onClick={() => onTabChange(id)}
           className={cn(
-            "flex flex-col items-center justify-center gap-0.5 px-2 py-2 transition-colors",
+            "flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-0.5 py-2 transition-colors",
             activeTab === id
               ? "text-accent"
               : "text-text-muted"
           )}
         >
           <Icon size={18} />
-          <span className="text-[10px]">{MOBILE_LABELS[id] ?? label}</span>
+          <span className="truncate text-[9px] leading-none">{MOBILE_LABELS[id] ?? label}</span>
         </button>
         ))}
       </div>

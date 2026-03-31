@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures/mock-platform";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import {
   connectAndOpenSetup,
   emitSensorHealth,
@@ -49,9 +49,32 @@ type FlowMockPlatform = MockPlatformController & {
   getInvocations: () => Promise<Array<{ cmd: string; args: Record<string, unknown> | undefined }>>;
 };
 
+type SetupFlowViewport = "desktop" | "radiomaster" | "phone";
+
+async function expectReachable(locator: Locator) {
+  await expect(locator).toBeVisible();
+  await expect(locator).toBeInViewport();
+}
+
+async function expectViewportChrome(page: Page, viewport: SetupFlowViewport) {
+  if (viewport === "radiomaster") {
+    await expectReachable(page.locator("header").getByRole("button", { name: "Firmware", exact: true }));
+    await expectReachable(page.locator("header").getByRole("button", { name: "Setup", exact: true }));
+    return;
+  }
+
+  if (viewport === "phone") {
+    await expectReachable(page.getByRole("button", { name: "Vehicle panel" }));
+    await expectReachable(page.getByRole("button", { name: "Firmware", exact: true }).last());
+    await expectReachable(page.getByRole("button", { name: "Setup", exact: true }).last());
+    await expectReachable(page.locator("button:has(svg.lucide-menu)"));
+  }
+}
+
 async function runCompleteSetupFlow(
   page: Page,
   mockPlatform: FlowMockPlatform,
+  viewport: SetupFlowViewport,
 ) {
   const metadataRequests: string[] = [];
 
@@ -62,6 +85,7 @@ async function runCompleteSetupFlow(
 
   await seedCopterMetadata(page);
   await connectAndOpenSetup(page, mockPlatform);
+  await expectViewportChrome(page, viewport);
 
   await openFirmware(page);
   await expect(page.locator('[data-testid="firmware-panel"]')).toBeVisible();
@@ -79,8 +103,12 @@ async function runCompleteSetupFlow(
 
   await navigateSection(page, "Calibration");
   await page.getByRole("button", { name: /Gyroscope/i }).click();
-  await expect(page.getByRole("button", { name: "Calibrate", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Calibrate", exact: true }).click();
+  const calibrateButton = page.getByRole("button", { name: "Calibrate", exact: true });
+  await expect(calibrateButton).toBeVisible();
+  if (viewport !== "desktop") {
+    await expectReachable(calibrateButton);
+  }
+  await calibrateButton.click();
   await expect.poll(() => mockPlatform.getInvocations()).toContainEqual(
     expect.objectContaining({
       cmd: "calibrate_gyro",
@@ -173,9 +201,16 @@ async function runCompleteSetupFlow(
   await expect(page.getByRole("heading", { name: "Ready to Arm", exact: true })).toBeVisible();
   const sectionArmButton = page.getByRole("main").getByRole("button", { name: "Arm", exact: true });
   await expect(sectionArmButton).toBeEnabled();
+  if (viewport !== "desktop") {
+    await expectReachable(sectionArmButton);
+  }
   await sectionArmButton.click();
-  await expect(page.getByRole("button", { name: "Confirm Arm" })).toBeEnabled();
-  await page.getByRole("button", { name: "Confirm Arm" }).click();
+  const confirmArmButton = page.getByRole("button", { name: "Confirm Arm" });
+  await expect(confirmArmButton).toBeEnabled();
+  if (viewport !== "desktop") {
+    await expectReachable(confirmArmButton);
+  }
+  await confirmArmButton.click();
 
   await expect.poll(() => mockPlatform.getInvocations()).toContainEqual(
     expect.objectContaining({
@@ -196,15 +231,15 @@ async function runCompleteSetupFlow(
 
 test("complete setup flow at desktop viewport", async ({ page, mockPlatform }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await runCompleteSetupFlow(page, mockPlatform);
+  await runCompleteSetupFlow(page, mockPlatform, "desktop");
 });
 
 test("setup flow usable at Radiomaster 1280x720", async ({ page, mockPlatform }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await runCompleteSetupFlow(page, mockPlatform);
+  await runCompleteSetupFlow(page, mockPlatform, "radiomaster");
 });
 
 test("setup flow usable at phone width", async ({ page, mockPlatform }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await runCompleteSetupFlow(page, mockPlatform);
+  await runCompleteSetupFlow(page, mockPlatform, "phone");
 });
