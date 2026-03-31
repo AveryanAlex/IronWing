@@ -70,6 +70,10 @@ export function HudPanel({ vehicle, mission, svsEnabled }: HudPanelProps) {
     ) {
       return null;
     }
+    // Don't render SVS before GPS lock — (0,0) coords produce garbage terrain
+    if (vehiclePosition.latitude_deg === 0 && vehiclePosition.longitude_deg === 0) {
+      return null;
+    }
     return {
       latitude_deg: vehiclePosition.latitude_deg,
       longitude_deg: vehiclePosition.longitude_deg,
