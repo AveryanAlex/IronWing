@@ -215,6 +215,40 @@ describe("ServoOutputsSection", () => {
         expect((stagedButton as HTMLButtonElement).disabled).toBe(true);
     });
 
+    it("sends custom PWM via the raw slider input", async () => {
+        setServo.mockResolvedValue(undefined);
+
+        renderSection();
+
+        const pwmInput = screen.getByLabelText(/pwm input for SERVO1/i) as HTMLInputElement;
+        fireEvent.change(pwmInput, { target: { value: "1200" } });
+
+        fireEvent.click(screen.getAllByRole("button", { name: /send pwm/i })[0]);
+
+        await waitFor(() => {
+            expect(setServo).toHaveBeenCalledWith(1, 1200);
+        });
+    });
+
+    it("clamps raw PWM input to the servo safe range", () => {
+        renderSection();
+
+        const pwmInput = screen.getByLabelText(/pwm input for SERVO1/i) as HTMLInputElement;
+        fireEvent.change(pwmInput, { target: { value: "5000" } });
+        expect(pwmInput.value).toBe("2000");
+    });
+
+    it("shows live readback when telemetry is available", () => {
+        renderSection({
+            telemetry: {
+                servo_outputs: [1502, 1608],
+            },
+        });
+
+        expect(screen.getByText("1502")).toBeTruthy();
+        expect(screen.getByText("1608")).toBeTruthy();
+    });
+
     it("shows tilt-rotor guidance and groups VTOL outputs away from lift motors", () => {
         const params = makeParams({
             store: makeStore({

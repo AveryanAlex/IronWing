@@ -23,7 +23,9 @@ import { deriveVtolProfile } from "../shared/vehicle-helpers";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import { SectionCardHeader } from "../shared/SectionCardHeader";
 import { resolveDocsUrl } from "../../../data/ardupilot-docs";
+import { PwmChannelBars } from "../shared/PwmChannelBars";
 import {
+    clampServoCommandPwm,
     deriveServoTestTargets,
     isMotorServoFunction,
     readServoOutputPwm,
@@ -288,6 +290,10 @@ function groupTargetsByFunction(targets: ServoTestTarget[]): DirectionFunctionGr
 
 type DirectionResult = "correct" | "reversed";
 
+function clampTargetPwm(target: ServoTestTarget, value: number): number {
+    return Math.max(target.minPwm, Math.min(target.maxPwm, clampServoCommandPwm(value)));
+}
+
 function ServoDirectionRow({
     target,
     params,
@@ -297,10 +303,11 @@ function ServoDirectionRow({
     params: ParamInputParams;
     telemetry: Telemetry | null;
 }) {
-    const [activeCommand, setActiveCommand] = useState<"min" | "max" | null>(null);
+    const [activeCommand, setActiveCommand] = useState<string | null>(null);
     const [tested, setTested] = useState(false);
     const [directionResult, setDirectionResult] = useState<DirectionResult | null>(null);
     const [commandError, setCommandError] = useState<string | null>(null);
+    const [commandedPwm, setCommandedPwm] = useState(target.trimPwm);
 
     const guidance = getDirectionGuidance(target.functionValue);
     const liveReadback = readServoOutputPwm(target.index, telemetry);
@@ -309,11 +316,10 @@ function ServoDirectionRow({
     const currentReversed = getStagedOrCurrent(reversedParam, params);
     const reversalStaged = params.staged.has(reversedParam);
 
-    const sendCommand = useCallback(
-        async (which: "min" | "max") => {
+    const sendPwm = useCallback(
+        async (pwm: number, label: string) => {
             if (activeCommand) return;
-            const pwm = which === "min" ? target.minPwm : target.maxPwm;
-            setActiveCommand(which);
+            setActiveCommand(label);
             setCommandError(null);
             try {
                 await setServo(target.index, pwm);
@@ -328,7 +334,15 @@ function ServoDirectionRow({
                 setActiveCommand(null);
             }
         },
-        [activeCommand, target.index, target.minPwm, target.maxPwm],
+        [activeCommand, target.index],
+    );
+
+    const updateCommandedPwm = useCallback(
+        (value: number) => {
+            if (!Number.isFinite(value)) return;
+            setCommandedPwm(clampTargetPwm(target, value));
+        },
+        [target],
     );
 
     return (
@@ -344,45 +358,98 @@ function ServoDirectionRow({
                         </span>
                     )}
                 </div>
-                {liveReadback != null && (
-                    <span className="font-mono text-[10px] text-text-muted">
-                        {Math.round(liveReadback)} µs
-                    </span>
-                )}
+                <span className="font-mono text-[10px] text-text-muted">
+                    {target.minPwm}–{target.maxPwm} µs
+                </span>
             </div>
 
-            <div className="mt-2 flex flex-col gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={activeCommand !== null}
-                        onClick={() => void sendCommand("min")}
-                    >
-                        {activeCommand === "min" ? (
-                            <><Loader2 size={12} className="animate-spin" /> Sending…</>
-                        ) : (
-                            `Send Min (${target.minPwm} µs)`
-                        )}
-                    </Button>
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={activeCommand !== null}
-                        onClick={() => void sendCommand("max")}
-                    >
-                        {activeCommand === "max" ? (
-                            <><Loader2 size={12} className="animate-spin" /> Sending…</>
-                        ) : (
-                            `Send Max (${target.maxPwm} µs)`
-                        )}
-                    </Button>
+            <div className="mt-2 flex flex-col gap-3">
+                {/* Direction test: Send Min / Send Max with guidance */}
+                <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={activeCommand !== null}
+                            onClick={() => void sendPwm(target.minPwm, "min")}
+                        >
+                            {activeCommand === "min" ? (
+                                <><Loader2 size={12} className="animate-spin" /> Sending…</>
+                            ) : (
+                                `Send Min (${target.minPwm} µs)`
+                            )}
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={activeCommand !== null}
+                            onClick={() => void sendPwm(target.maxPwm, "max")}
+                        >
+                            {activeCommand === "max" ? (
+                                <><Loader2 size={12} className="animate-spin" /> Sending…</>
+                            ) : (
+                                `Send Max (${target.maxPwm} µs)`
+                            )}
+                        </Button>
+                    </div>
+                    <div className="flex gap-4 text-[10px] text-text-muted">
+                        <span>Min: {guidance.minLabel}</span>
+                        <span>Max: {guidance.maxLabel}</span>
+                    </div>
                 </div>
 
-                <div className="flex gap-4 text-[10px] text-text-muted">
-                    <span>Min: {guidance.minLabel}</span>
-                    <span>Max: {guidance.maxLabel}</span>
+                {/* Raw PWM control */}
+                <div className="flex flex-col gap-1.5">
+                    <input
+                        aria-label={`PWM slider for ${target.outputLabel}`}
+                        type="range"
+                        min={target.minPwm}
+                        max={target.maxPwm}
+                        step={1}
+                        value={commandedPwm}
+                        onChange={(e) => updateCommandedPwm(Number(e.target.value))}
+                        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-bg-tertiary accent-accent"
+                    />
+                    <div className="flex items-center gap-2">
+                        <input
+                            aria-label={`PWM input for ${target.outputLabel}`}
+                            type="number"
+                            min={target.minPwm}
+                            max={target.maxPwm}
+                            step={1}
+                            value={commandedPwm}
+                            onChange={(e) => updateCommandedPwm(Number(e.target.value))}
+                            className="w-20 rounded border border-border bg-bg-input px-2 py-1 text-xs font-mono text-text-primary focus:border-accent focus:outline-none"
+                        />
+                        <span className="text-[10px] text-text-muted">µs</span>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={activeCommand !== null}
+                            onClick={() => void sendPwm(commandedPwm, "pwm")}
+                        >
+                            {activeCommand === "pwm" ? (
+                                <><Loader2 size={12} className="animate-spin" /> Sending…</>
+                            ) : (
+                                "Send PWM"
+                            )}
+                        </Button>
+                    </div>
                 </div>
+
+                {/* Live readback */}
+                {liveReadback != null && (
+                    <PwmChannelBars
+                        items={[{
+                            key: `servo-${target.index}`,
+                            channel: target.index,
+                            label: target.outputLabel,
+                            value: liveReadback,
+                            annotations: [target.functionLabel],
+                        }]}
+                        className="sm:grid-cols-1 xl:grid-cols-1"
+                    />
+                )}
 
                 {commandError && (
                     <div className="flex items-center gap-1.5 text-xs text-danger">
@@ -391,6 +458,7 @@ function ServoDirectionRow({
                     </div>
                 )}
 
+                {/* Direction confirmation */}
                 {tested && (
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
