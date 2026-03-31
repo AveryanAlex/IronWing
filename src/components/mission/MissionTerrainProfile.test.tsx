@@ -114,14 +114,43 @@ describe("MissionTerrainProfile", () => {
 
     const props = uPlotChartMock.mock.calls[0][0] as {
       height: number;
-      data: unknown[];
-      options: { series: Array<{ label?: string }> };
+      data: unknown[][];
+      options: { series: Array<{ label?: string; stroke?: string; dash?: number[] }> };
     };
 
     expect(props.height).toBe(120);
-    expect(props.data).toHaveLength(3);
+    expect(props.data).toHaveLength(4);
     expect(props.options.series[1]?.label).toBe("Terrain");
     expect(props.options.series[2]?.label).toBe("Flight altitude");
+    expect(props.options.series[3]?.label).toBe("Safety margin");
+  });
+
+  it("passes safety margin data as terrain elevation plus the margin offset", () => {
+    render(
+      <MissionTerrainProfile
+        profile={makeProfile()}
+        status="ready"
+        selectedIndex={null}
+        safetyMarginM={15}
+      />,
+    );
+
+    const props = uPlotChartMock.mock.calls[0][0] as unknown as {
+      data: (number | null)[][];
+      options: { series: Array<{ label?: string; stroke?: string; dash?: number[] }> };
+    };
+
+    // data[3] is the safety margin band: terrainMsl + safetyMarginM for each point
+    const marginSeries = props.data[3];
+    expect(marginSeries[0]).toBe(100 + 15); // terrainMsl=100 at distance=0
+    expect(marginSeries[1]).toBe(105 + 15); // terrainMsl=105 at distance=250
+    expect(marginSeries[2]).toBe(110 + 15); // terrainMsl=110 at distance=500
+    expect(marginSeries[3]).toBe(118 + 15); // terrainMsl=118 at distance=1000
+
+    // Series is styled with amber dashed line
+    const marginSeriesDef = props.options.series[3];
+    expect(marginSeriesDef?.stroke).toBe("rgba(234, 179, 8, 0.5)");
+    expect(marginSeriesDef?.dash).toEqual([4, 4]);
   });
 
   it("renders waypoint markers for each mission path anchor and toggles selection from marker clicks", () => {

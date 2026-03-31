@@ -66,6 +66,9 @@ export function MissionTerrainProfile({
     const distances = points.map((point) => point.distance_m);
     const terrain = points.map((point) => point.terrainMsl);
     const flight = points.map((point) => point.flightMsl);
+    const margin = points.map((point) =>
+      point.terrainMsl !== null ? point.terrainMsl + safetyMarginM : null,
+    );
     const numericValues = [...terrain, ...flight].filter((value): value is number => value !== null && Number.isFinite(value));
     const totalDistance = distances.length > 0 ? distances[distances.length - 1] ?? 0 : 0;
     const distanceUnit: "m" | "km" = totalDistance >= 1000 ? "km" : "m";
@@ -122,11 +125,18 @@ export function MissionTerrainProfile({
           stroke: FLIGHT_STROKE,
           width: 2,
         },
+        {
+          label: "Safety margin",
+          stroke: "rgba(234, 179, 8, 0.5)",
+          fill: "rgba(234, 179, 8, 0.08)",
+          width: 1,
+          dash: [4, 4],
+        },
       ],
     };
 
     return {
-      data: [distances, terrain, flight] as uPlot.AlignedData,
+      data: [distances, terrain, flight, margin] as uPlot.AlignedData,
       options,
       totalDistance,
       distanceUnit,
@@ -134,7 +144,7 @@ export function MissionTerrainProfile({
       maxY,
       warningCount,
     };
-  }, [markers, profile]);
+  }, [markers, profile, safetyMarginM]);
 
   if (status === "loading") {
     return (
