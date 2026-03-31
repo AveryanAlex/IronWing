@@ -17,6 +17,7 @@ import type { MissionIssue } from "../../mission";
 import type { TypedDraftItem, FenceRegionType } from "../../lib/mission-draft-typed";
 import type { PolygonVertex } from "../../lib/mission-grid";
 import { useState, useCallback, useEffect, useMemo } from "react";
+import { Navigation, Home } from "lucide-react";
 import { toast } from "sonner";
 import { findNearestWaypoint } from "./mission-helpers";
 import { useSettings } from "../../hooks/use-settings";
@@ -43,6 +44,8 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
   const terrainWarnings = terrain.warningsByIndex ?? undefined;
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [flyToKey, setFlyToKey] = useState(0);
+  const [centerOnVehicleKey, setCenterOnVehicleKey] = useState(0);
+  const [centerOnHomeKey, setCenterOnHomeKey] = useState(0);
   const [autoGridOpen, setAutoGridOpen] = useState(false);
   const [chainModeActive, setChainModeActive] = useState(false);
   const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
@@ -267,6 +270,8 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
                 vehiclePosition={vehicle.vehiclePosition}
                 currentMissionSeq={current.tab === "mission" ? mission.vehicle.missionState?.current_index ?? null : null}
                 flyToSelectedKey={flyToKey}
+                centerOnVehicleKey={centerOnVehicleKey}
+                centerOnHomeKey={centerOnHomeKey}
                 polygonVertices={autoGridOpen ? polygonVertices : undefined}
                 isDrawingPolygon={isDrawingPolygon}
                 onPolygonClick={handlePolygonClick}
@@ -280,6 +285,26 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
                   : undefined}
                 selectedRallyIndex={current.tab === "rally" ? current.selectedIndex : null}
               />
+              <div className="absolute bottom-3 right-3 z-10 flex flex-col gap-1.5">
+                {vehicle.vehiclePosition && (
+                  <button
+                    className="rounded-lg bg-bg-secondary/80 p-2 text-text-secondary shadow backdrop-blur hover:bg-bg-tertiary hover:text-text-primary"
+                    title="Center on vehicle"
+                    onClick={() => setCenterOnVehicleKey((k) => k + 1)}
+                  >
+                    <Navigation className="h-4 w-4" />
+                  </button>
+                )}
+                {current.homePosition && (
+                  <button
+                    className="rounded-lg bg-bg-secondary/80 p-2 text-text-secondary shadow backdrop-blur hover:bg-bg-tertiary hover:text-text-primary"
+                    title="Center on home"
+                    onClick={() => setCenterOnHomeKey((k) => k + 1)}
+                  >
+                    <Home className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
               {contextMenu && (
                 <MapContextMenu
                   x={contextMenu.x}

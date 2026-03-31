@@ -62,6 +62,7 @@ type MissionMapProps = {
   deviceLocation?: { latitude_deg: number; longitude_deg: number; accuracy_m: number } | null;
   followTarget?: "vehicle" | "device" | null;
   centerOnVehicleKey?: number;
+  centerOnHomeKey?: number;
   centerOnDeviceKey?: number;
   onUserInteraction?: () => void;
   currentMissionSeq?: number | null;
@@ -126,7 +127,7 @@ function updateMissionItemPosition(
 export function MissionMap({
   missionItems, homePosition, selectedIndex, onSelectIndex,
   onMoveWaypoint, onBlankMapClick, onContextMenu, readOnly,
-  vehiclePosition, deviceLocation, followTarget, centerOnVehicleKey, centerOnDeviceKey,
+  vehiclePosition, deviceLocation, followTarget, centerOnVehicleKey, centerOnHomeKey, centerOnDeviceKey,
   onUserInteraction, currentMissionSeq, flyToSelectedKey,
   syntheticVision, svsTelemetry,
   flightPath, replayPosition,
@@ -814,6 +815,19 @@ export function MissionMap({
       duration: 800,
     });
   }, [centerOnVehicleKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // One-shot center on home position
+  useEffect(() => {
+    if (!centerOnHomeKey || !homePosition) return;
+    const map = mapRef.current;
+    if (!map) return;
+    programmaticMoveRef.current = true;
+    map.flyTo({
+      center: [homePosition.longitude_deg, homePosition.latitude_deg],
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 800,
+    });
+  }, [centerOnHomeKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // One-shot center on device
   useEffect(() => {
