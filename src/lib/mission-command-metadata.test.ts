@@ -91,9 +91,9 @@ describe("inspector-relevant metadata spot checks", () => {
     it("keeps waypoint support markers and takeoff coordinate visibility rules", () => {
         const waypoint = getCommandMetadata(16)!;
         expect(waypoint.typedFields?.hold_time_s?.label).toBe("Hold");
-        expect(waypoint.typedFields?.acceptance_radius_m?.supported).toBe(false);
-        expect(waypoint.typedFields?.pass_radius_m?.supported).toBe(false);
-        expect(waypoint.typedFields?.yaw_deg?.supported).toBe(false);
+        expect(waypoint.typedFields?.acceptance_radius_m?.supported).toBeUndefined();
+        expect(waypoint.typedFields?.pass_radius_m?.supported).toBeUndefined();
+        expect(waypoint.typedFields?.yaw_deg?.supported).toBeUndefined();
 
         const takeoff = getCommandMetadata(22)!;
         expect(takeoff.params.x?.hidden).toBe(true);
