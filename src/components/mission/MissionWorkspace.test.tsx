@@ -116,6 +116,15 @@ function createMission(tab: "mission" | "fence" | "rally" = "mission", addWaypoi
     moveWaypointOnMap: vi.fn(),
   };
 
+  const inactiveTransferUi = {
+    active: false,
+    hasProgress: false,
+    progressPct: 0,
+    direction: null,
+    completedItems: 0,
+    totalItems: 0,
+  };
+
   return {
     tabs: [
       { id: "mission", label: "Mission" },
@@ -128,6 +137,9 @@ function createMission(tab: "mission" | "fence" | "rally" = "mission", addWaypoi
     current,
     selectedTabId: tab,
     vehicle: { missionState: { current_index: null } },
+    importPlanFile: vi.fn(),
+    importKmlFile: vi.fn(),
+    exportPlanFile: vi.fn(),
     mission: {
       setCurrent: vi.fn(),
       updateCommand: vi.fn(),
@@ -136,15 +148,18 @@ function createMission(tab: "mission" | "fence" | "rally" = "mission", addWaypoi
       replaceAll: vi.fn(),
       selectedIndex: null,
       displayTotal: 0,
+      transferUi: inactiveTransferUi,
     },
     fence: {
       addRegionAt: vi.fn(),
       setReturnPoint: vi.fn(),
       returnPoint: null,
       updateRegion: vi.fn(),
+      transferUi: inactiveTransferUi,
     },
     rally: {
       updateAltitudeFrame: vi.fn(),
+      transferUi: inactiveTransferUi,
     },
   };
 }
