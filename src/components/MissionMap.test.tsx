@@ -445,10 +445,11 @@ describe("MissionMap", () => {
       (getLastMapInstance() as InstanceType<typeof MockMap>).trigger("click", {
         point: { x: 24, y: 16 },
         lngLat: { lat: 47.41, lng: 8.56 },
+        originalEvent: { altKey: false },
       });
     });
 
-    expect(onBlankMapClick).toHaveBeenCalledWith(47.41, 8.56);
+    expect(onBlankMapClick).toHaveBeenCalledWith(47.41, 8.56, { altKey: false });
 
     rerender(
       <MissionMap
@@ -466,6 +467,7 @@ describe("MissionMap", () => {
       (getLastMapInstance() as InstanceType<typeof MockMap>).trigger("click", {
         point: { x: 12, y: 8 },
         lngLat: { lat: 47.42, lng: 8.57 },
+        originalEvent: { altKey: false },
       });
     });
 
