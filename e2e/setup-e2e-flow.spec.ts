@@ -140,7 +140,8 @@ async function runCompleteSetupFlow(
   await expect(page.getByLabel("Yaw mapped to channel 4")).toBeVisible();
 
   await navigateSection(page, "Servo Outputs");
-  await expect(page.getByText("Waiting for live servo output telemetry before readback can confirm the command.")).toBeVisible();
+  await expect(page.getByText("Servo Direction Tester", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("PWM input for SERVO1")).toBeVisible();
 
   await mockPlatform.emit("telemetry://state", {
     envelope: liveEnvelope,
@@ -151,13 +152,13 @@ async function runCompleteSetupFlow(
     }),
   });
 
-  await expect(page.getByText("1550 µs", { exact: true })).toBeVisible();
-  await expect(page.getByText("Readback comes from telemetry.servo_outputs[0] when the vehicle publishes it.")).toBeVisible();
+  await expect(page.getByLabel("Aileron Left mapped to channel 1")).toBeVisible();
+  await expect(page.getByText("1550", { exact: true })).toBeVisible();
 
-  const pwmInput = page.getByLabel("Raw PWM input for SERVO1");
+  const pwmInput = page.getByLabel("PWM input for SERVO1");
   await pwmInput.fill("2500");
   await expect(pwmInput).toHaveValue("2000");
-  await page.getByRole("button", { name: "Send PWM" }).click();
+  await page.getByRole("button", { name: "Send PWM" }).first().click();
 
   await expect.poll(() => mockPlatform.getInvocations()).toContainEqual(
     expect.objectContaining({
@@ -165,7 +166,6 @@ async function runCompleteSetupFlow(
       args: { instance: 1, pwmUs: 2000 },
     }),
   );
-  await expect(page.getByText("Last command 2000 µs. Live readback is 1550 µs.")).toBeVisible();
 
   await mockPlatform.emit("telemetry://state", {
     envelope: liveEnvelope,
@@ -175,8 +175,6 @@ async function runCompleteSetupFlow(
       servo_outputs: [2000, 1450, 1700],
     }),
   });
-
-  await expect(page.getByText("Last command 2000 µs. Live readback is 2000 µs.")).toBeVisible();
 
   await navigateSection(page, "Motors & ESC");
   await expect(page.getByRole("heading", { name: "Motor Test" })).toBeVisible();

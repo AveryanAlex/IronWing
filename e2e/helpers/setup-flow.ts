@@ -278,7 +278,7 @@ const SECTION_MARKERS: Record<string, string> = {
   Calibration: "Sensor Calibration",
   "RC / Receiver": "Live RC Channels",
   "Motors & ESC": "Motor Test",
-  "Servo Outputs": "Servo Tester",
+  "Servo Outputs": "Servo Direction Tester",
   Arming: "Vehicle Control",
 };
 
