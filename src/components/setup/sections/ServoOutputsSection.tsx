@@ -22,6 +22,7 @@ import type { VehicleState, Telemetry } from "../../../telemetry";
 import { deriveVtolProfile } from "../shared/vehicle-helpers";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import { SectionCardHeader } from "../shared/SectionCardHeader";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import {
     clampServoCommandPwm,
     deriveServoTestTargets,
@@ -773,6 +774,7 @@ export function ServoOutputsSection({
                 icon={SlidersHorizontal}
                 title="Servo Outputs"
                 description="Assign functions, set PWM range, reverse direction, and live-test configured control surfaces without changing the per-output editor layout."
+                docsUrl={resolveDocsUrl("servo_outputs")}
             />
 
             {showMotorBanner && <MotorAssignmentBanner />}

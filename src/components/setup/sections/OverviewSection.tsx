@@ -25,6 +25,7 @@ import {
   BookX,
   type LucideIcon,
 } from "lucide-react";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import { armVehicle, disarmVehicle } from "../../../telemetry";
 import type { VehicleState, Telemetry, HomePosition, LinkState } from "../../../telemetry";
 import { rebootVehicle } from "../../../calibration";
@@ -37,6 +38,8 @@ import { SETUP_SECTIONS, SECTION_GROUPS } from "../SetupSectionPanel";
 import { ParamDisplay } from "../primitives/ParamDisplay";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import { SectionStatusIcon } from "../shared/SectionStatusIcon";
+import { DocsLink } from "../shared/DocsLink";
+import { getVehicleSlug } from "../shared/vehicle-helpers";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -1002,6 +1005,16 @@ export function OverviewSection({
   return (
     <div className="flex flex-col gap-3 p-4">
       <ProgressHeader progress={overallProgress} />
+      <div className="px-1">
+        <DocsLink
+          docsUrl={resolveDocsUrl(
+            "mandatory_hardware_config",
+            getVehicleSlug(vehicleState),
+          )}
+          docsLabel="Setup Guide"
+          variant="inline"
+        />
+      </div>
       <VehicleInfoCard vehicleState={vehicleState} params={params} />
       <QuickActions connected={connected} params={params} />
       <PrearmAndActions

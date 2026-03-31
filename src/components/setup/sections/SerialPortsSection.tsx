@@ -5,6 +5,7 @@ import { getStagedOrCurrent } from "../primitives/param-helpers";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import { SectionCardHeader } from "../shared/SectionCardHeader";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -306,6 +307,7 @@ export function SerialPortsSection({ params }: SerialPortsSectionProps) {
         icon={Cable}
         title="Serial Ports"
         description="Assign protocols and baud rates to each serial port. GPS, telemetry, and RC receiver connections are configured here."
+        docsUrl={resolveDocsUrl("serial_ports")}
       />
 
       {/* Reboot notice — always visible */}

@@ -1,8 +1,13 @@
+// @vitest-environment jsdom
+
+import { createElement } from "react";
+import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import {
   detectSerialPorts,
   detectConflicts,
   EXCLUSIVE_PROTOCOLS,
+  SerialPortsSection,
 } from "./SerialPortsSection";
 import type { SerialPort } from "./SerialPortsSection";
 import type { ParamInputParams } from "../primitives/param-helpers";
@@ -129,5 +134,23 @@ describe("EXCLUSIVE_PROTOCOLS", () => {
     expect(EXCLUSIVE_PROTOCOLS[5]).toBe("GPS");
     expect(EXCLUSIVE_PROTOCOLS[23]).toBe("RCInput");
     expect(EXCLUSIVE_PROTOCOLS[28]).toBe("Scripting");
+  });
+});
+
+describe("SerialPortsSection", () => {
+  it("renders the shared docs link for serial port setup", () => {
+    const params = makeParams({
+      store: makeStore(["SERIAL0_BAUD", "SERIAL0_PROTOCOL"]),
+    });
+
+    render(
+      createElement(SerialPortsSection, {
+        params,
+      }),
+    );
+
+    expect(screen.getByRole("link", { name: /ardupilot docs/i }).getAttribute("href")).toBe(
+      "https://ardupilot.org/copter/docs/common-serial-options.html",
+    );
   });
 });

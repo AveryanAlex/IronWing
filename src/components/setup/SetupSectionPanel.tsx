@@ -574,6 +574,7 @@ export function SetupSectionPanel({
           <FullParametersSection
             params={params}
             connected={connected}
+            vehicleState={vehicleState}
             highlightParam={pendingHighlightParam}
             onHighlightHandled={handleHighlightHandled}
           />

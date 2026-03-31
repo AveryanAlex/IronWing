@@ -303,6 +303,7 @@ export function FlightModesSection({
         icon={Plane}
         title="Flight Modes"
         description="Assign up to 6 flight modes to your RC mode switch channel. Each slot maps a PWM range to a mode so you can switch behaviour in flight."
+        docsUrl={resolveDocsUrl("flight_mode_configuration")}
       />
 
       {/* Current mode banner */}

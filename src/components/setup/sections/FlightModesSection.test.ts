@@ -1,3 +1,7 @@
+// @vitest-environment jsdom
+
+import { createElement } from "react";
+import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import {
   vehicleTypeToPreset,
@@ -8,6 +12,7 @@ import {
   toggleBitmaskBit,
   buildPresetPreview,
   buildPresetPreviewRows,
+  FlightModesSection,
 } from "./FlightModesSection";
 import type { ParamInputParams } from "../primitives/param-helpers";
 import type { ParamStore } from "../../../params";
@@ -253,5 +258,25 @@ describe("buildPresetPreviewRows", () => {
     expect(rows.map((r) => r.paramName)).toEqual([
       "FLTMODE1", "FLTMODE2", "FLTMODE3", "FLTMODE4", "FLTMODE5", "FLTMODE6",
     ]);
+  });
+});
+
+describe("FlightModesSection docs", () => {
+  it("renders the top-level flight mode configuration docs link", () => {
+    render(
+      createElement(FlightModesSection, {
+        params: makeParams({ store: makeStore({ FLTMODE_CH: 5 }) }),
+        vehicleState: {
+          vehicle_type: "Quadrotor",
+          mode_name: "Loiter",
+        } as any,
+        telemetry: null,
+        availableModes: COPTER_MODES,
+      }),
+    );
+
+    expect(screen.getByRole("link", { name: /ardupilot docs/i }).getAttribute("href")).toBe(
+      "https://ardupilot.org/planner/docs/common-rc-transmitter-flight-mode-configuration.html",
+    );
   });
 });

@@ -16,6 +16,7 @@ import {
     isRoverVehicleType as isRover,
 } from "../shared/vehicle-helpers";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import {
     computeTriState,
     toggleGroup,
@@ -384,6 +385,7 @@ export function InitialParamsSection({
                     icon={Calculator}
                     title="Initial Parameters Calculator"
                     description="The initial parameters calculator targets multirotor and QuadPlane vehicles. Rover parameters are configured through their respective setup sections."
+                    docsUrl={resolveDocsUrl("tuning")}
                 />
             </div>
         );
@@ -396,6 +398,7 @@ export function InitialParamsSection({
                     icon={Calculator}
                     title="Initial Parameters Calculator"
                     description="The initial parameters calculator targets multirotor and QuadPlane vehicles. Fixed-wing tuning parameters differ significantly — use the Full Parameters tab for manual configuration."
+                    docsUrl={resolveDocsUrl("tuning")}
                 />
             </div>
         );
@@ -407,6 +410,7 @@ export function InitialParamsSection({
                 icon={Calculator}
                 title="Initial Parameters Calculator"
                 description="Computes recommended starting parameters from your vehicle's physical characteristics. Based on MissionPlanner ConfigInitialParams formulas."
+                docsUrl={resolveDocsUrl("tuning")}
             />
 
             {/* QuadPlane notice */}

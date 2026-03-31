@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import { createElement } from "react";
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, it, expect } from "vitest";
 import {
     computeTriState,
     toggleGroup,
@@ -59,6 +59,10 @@ function renderSection({
         }),
     );
 }
+
+afterEach(() => {
+    cleanup();
+});
 
 describe("computeTriState", () => {
     it("returns 'none' for empty items list", () => {
@@ -208,7 +212,7 @@ describe("hasQuadPlaneParams", () => {
 });
 
 describe("InitialParamsSection rover gating", () => {
-    it("shows the rover-specific guidance instead of the multirotor calculator", () => {
+    it("shows the rover-specific guidance instead of the multirotor calculator and keeps the tuning docs link", () => {
         renderSection({
             params: makeRenderParams({ SERVO1_FUNCTION: 26 }),
             vehicleState: makeVehicleState("rover"),
@@ -217,6 +221,9 @@ describe("InitialParamsSection rover gating", () => {
         expect(
             screen.getByText(/Rover parameters are configured through their respective setup sections/i),
         ).toBeTruthy();
+        expect(screen.getByRole("link", { name: /ardupilot docs/i }).getAttribute("href")).toBe(
+            "https://ardupilot.org/copter/docs/common-tuning.html",
+        );
         expect(screen.queryByText("Vehicle Inputs")).toBeNull();
         expect(screen.queryByText(/Stage All Recommended/i)).toBeNull();
     });
@@ -234,10 +241,37 @@ describe("InitialParamsSection rover gating", () => {
     });
 });
 
+describe("InitialParamsSection multirotor docs", () => {
+    it("renders the tuning docs link for the calculator flow", () => {
+        renderSection({
+            params: makeRenderParams({ SERVO1_FUNCTION: 33 }),
+            vehicleState: makeVehicleState("quadrotor"),
+        });
+
+        expect(screen.getByText("Vehicle Inputs")).toBeTruthy();
+        expect(screen.getByRole("link", { name: /ardupilot docs/i }).getAttribute("href")).toBe(
+            "https://ardupilot.org/copter/docs/common-tuning.html",
+        );
+    });
+});
+
 describe("plain fixed-wing gating", () => {
     function makeStore(p: Record<string, number>): ParamInputParams["store"] {
         return { params: p, expected_count: 0 } as unknown as ParamInputParams["store"];
     }
+
+    it("shows fixed-wing guidance with the shared tuning docs link", () => {
+        renderSection({
+            params: makeRenderParams({ SERVO1_FUNCTION: 4 }),
+            vehicleState: makeVehicleState("Fixed_Wing"),
+        });
+
+        expect(screen.getByText(/Fixed-wing tuning parameters differ significantly/i)).toBeTruthy();
+        expect(screen.getByRole("link", { name: /ardupilot docs/i }).getAttribute("href")).toBe(
+            "https://ardupilot.org/copter/docs/common-tuning.html",
+        );
+        expect(screen.queryByText("Vehicle Inputs")).toBeNull();
+    });
 
     it("plain fixed-wing is detected when isPlane=true and no Q_FRAME_CLASS", () => {
         const vs = { vehicle_type: "Fixed_Wing" } as VehicleState;

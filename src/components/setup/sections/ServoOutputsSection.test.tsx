@@ -119,6 +119,14 @@ afterEach(() => {
 });
 
 describe("ServoOutputsSection", () => {
+    it("renders the shared docs link for servo output mapping", () => {
+        renderSection();
+
+        expect(screen.getByRole("link", { name: /ardupilot docs/i }).getAttribute("href")).toBe(
+            "https://ardupilot.org/copter/docs/common-rcoutput-mapping.html",
+        );
+    });
+
     it("renders a shared tester card with supported targets, live readback, and unsupported outputs", async () => {
         setServo.mockResolvedValue(undefined);
 
