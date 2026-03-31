@@ -5,6 +5,7 @@ import {
   CircleDot,
   Gauge,
   Map,
+  MoveVertical,
   Route,
   TimerReset,
 } from "lucide-react";
@@ -88,6 +89,10 @@ function formatEstimatedTime(estimatedTimeSec: number | null): string {
   const minutes = Math.floor(roundedSeconds / 60);
   const seconds = roundedSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatAltitude(altitudeM: number): string {
+  return `${Math.round(altitudeM)} m`;
 }
 
 function formatEndurance(endurancePct: number | null, isTimeIndeterminate: boolean): string {
@@ -334,6 +339,25 @@ export function MissionPlannerSummary({ mission, connected }: MissionPlannerSumm
               tone={statistics.isTimeIndeterminate ? "warning" : enduranceTone(statistics.endurancePct)}
             />
           </div>
+
+          {statistics.maxAltitudeM !== null && statistics.avgAltitudeM !== null && (
+            <div className="mt-2 grid gap-2 md:grid-cols-2">
+              <StatTile
+                testId="mission-stats-max-altitude"
+                icon={MoveVertical}
+                label="Max altitude"
+                value={formatAltitude(statistics.maxAltitudeM)}
+                hint="Highest waypoint altitude in the mission"
+              />
+              <StatTile
+                testId="mission-stats-avg-altitude"
+                icon={MoveVertical}
+                label="Avg altitude"
+                value={formatAltitude(statistics.avgAltitudeM)}
+                hint="Mean altitude across all positional waypoints"
+              />
+            </div>
+          )}
 
           {statistics.isTimeIndeterminate && (
             <div

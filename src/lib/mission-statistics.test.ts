@@ -404,4 +404,102 @@ describe("computeMissionStatistics", () => {
     expect(stats.isTimeIndeterminate).toBe(false);
     expect(stats.estimatedTimeSec).toBeCloseTo(100 / 15, 3);
   });
+
+  it("returns null maxAltitudeM and avgAltitudeM for an empty mission", () => {
+    const stats = computeMissionStatistics(null, []);
+
+    expect(stats.maxAltitudeM).toBeNull();
+    expect(stats.avgAltitudeM).toBeNull();
+  });
+
+  it("computes maxAltitudeM and avgAltitudeM from positional waypoints", () => {
+    const wp1 = offsetPoint(home, 90, 100);
+    const wp2 = offsetPoint(home, 0, 200);
+
+    // waypoint() helper uses defaultGeoPoint3d with RelHome alt=30
+    // we need different altitudes — use makeDraftItem directly
+    const items = [
+      makeDraftItem(0, {
+        Nav: {
+          Waypoint: {
+            position: defaultGeoPoint3d(wp1.lat, wp1.lon, 10),
+            hold_time_s: 0,
+            acceptance_radius_m: 1,
+            pass_radius_m: 0,
+            yaw_deg: 0,
+          },
+        },
+      }),
+      makeDraftItem(1, {
+        Nav: {
+          Waypoint: {
+            position: defaultGeoPoint3d(wp2.lat, wp2.lon, 50),
+            hold_time_s: 0,
+            acceptance_radius_m: 1,
+            pass_radius_m: 0,
+            yaw_deg: 0,
+          },
+        },
+      }),
+    ];
+
+    const stats = computeMissionStatistics(home, items);
+
+    expect(stats.maxAltitudeM).toBe(50);
+    expect(stats.avgAltitudeM).toBeCloseTo(30, 6);
+  });
+
+  it("includes spline and loiter waypoints in altitude statistics", () => {
+    const wp1 = offsetPoint(home, 90, 100);
+    const wp2 = offsetPoint(home, 0, 200);
+    const wp3 = offsetPoint(home, 45, 300);
+
+    const items = [
+      makeDraftItem(0, {
+        Nav: {
+          Waypoint: {
+            position: defaultGeoPoint3d(wp1.lat, wp1.lon, 20),
+            hold_time_s: 0,
+            acceptance_radius_m: 1,
+            pass_radius_m: 0,
+            yaw_deg: 0,
+          },
+        },
+      }),
+      makeDraftItem(1, {
+        Nav: {
+          SplineWaypoint: {
+            position: defaultGeoPoint3d(wp2.lat, wp2.lon, 40),
+            hold_time_s: 0,
+          },
+        },
+      }),
+      makeDraftItem(2, {
+        Nav: {
+          LoiterTime: {
+            position: defaultGeoPoint3d(wp3.lat, wp3.lon, 60),
+            time_s: 10,
+            direction: "Clockwise",
+            exit_xtrack: false,
+          },
+        },
+      }),
+    ];
+
+    const stats = computeMissionStatistics(home, items);
+
+    expect(stats.maxAltitudeM).toBe(60);
+    expect(stats.avgAltitudeM).toBeCloseTo(40, 6);
+  });
+
+  it("returns null altitude stats when no items have a positional command", () => {
+    const stats = computeMissionStatistics(home, [
+      navDelay(0, 5),
+      attitudeTime(1, 10),
+      conditionDelay(2, 3),
+    ]);
+
+    expect(stats.maxAltitudeM).toBeNull();
+    expect(stats.avgAltitudeM).toBeNull();
+  });
 });

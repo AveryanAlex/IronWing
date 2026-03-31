@@ -1,5 +1,6 @@
 import type { TypedDraftItem } from "./mission-draft-typed";
 import type { HomePosition, MissionItem } from "./mavkit-types";
+import { commandPosition, geoPoint3dAltitude } from "./mavkit-types";
 import { buildMissionRenderFeatures } from "./mission-path-render";
 
 export type MissionPlanningProfile = {
@@ -34,6 +35,8 @@ export type MissionStatistics = {
   isTimeIndeterminate: boolean;
   indeterminateReasons: MissionStatisticsIndeterminateReason[];
   indeterminateItemIndexes: number[];
+  maxAltitudeM: number | null;
+  avgAltitudeM: number | null;
 };
 
 export const DEFAULT_MISSION_PLANNING_PROFILE: MissionPlanningProfile = {
@@ -133,6 +136,20 @@ export function computeMissionStatistics(
     }
   }
 
+  // Gather altitude values from every item that carries a positional command.
+  const altitudes: number[] = [];
+  for (const item of items) {
+    const document = item.document as Partial<MissionItem>;
+    if (!document.command) continue;
+    const position = commandPosition(document.command);
+    if (position !== null) {
+      altitudes.push(geoPoint3dAltitude(position).value);
+    }
+  }
+  const maxAltitudeM = altitudes.length > 0 ? Math.max(...altitudes) : null;
+  const avgAltitudeM =
+    altitudes.length > 0 ? altitudes.reduce((sum, a) => sum + a, 0) / altitudes.length : null;
+
   const cruiseTimeSec =
     travelDistanceM === 0 ? 0 : divideDistanceBySpeed(travelDistanceM, resolvedProfile.cruiseSpeedMps);
   const hoverTimeSec =
@@ -171,6 +188,8 @@ export function computeMissionStatistics(
     isTimeIndeterminate,
     indeterminateReasons: [...indeterminateReasons],
     indeterminateItemIndexes: [...indeterminateItemIndexes].sort((left, right) => left - right),
+    maxAltitudeM,
+    avgAltitudeM,
   };
 }
 
