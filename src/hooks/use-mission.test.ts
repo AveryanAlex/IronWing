@@ -4,6 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MissionState, TransferProgress } from "../mission";
 import type { SessionEnvelope, SessionEvent } from "../session";
 
+const openDialog = vi.fn();
+const saveDialog = vi.fn();
+const readTextFile = vi.fn();
+const writeTextFile = vi.fn();
+const readFile = vi.fn();
+
 const uploadMission = vi.fn();
 const downloadMission = vi.fn();
 const clearMission = vi.fn();
@@ -62,6 +68,17 @@ vi.mock("../session", () => ({
     subscribeSessionState,
 }));
 
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+    open: openDialog,
+    save: saveDialog,
+}));
+
+vi.mock("@tauri-apps/plugin-fs", () => ({
+    readTextFile,
+    writeTextFile,
+    readFile,
+}));
+
 vi.mock("sonner", () => ({ toast }));
 
 describe("useMission", () => {
@@ -70,6 +87,11 @@ describe("useMission", () => {
         missionStateListener = null;
         missionProgressListener = null;
         for (const mock of [
+            openDialog,
+            saveDialog,
+            readTextFile,
+            writeTextFile,
+            readFile,
             uploadMission,
             downloadMission,
             clearMission,
@@ -889,6 +911,199 @@ describe("useMission", () => {
             await result.current.mission.clear();
         });
         expect(result.current.mission.canUndo).toBe(false);
+    });
+
+    it("imports a QGC plan file atomically across mission, fence, rally, and home while resetting undo history", async () => {
+        const { useMission } = await import("./use-mission");
+        const { exportPlanFile: buildPlanFile } = await import("../lib/mission-plan-io");
+        const { result } = renderHook(() => useMission(true, { latitude_deg: 47.55, longitude_deg: 8.55, altitude_m: 120 } as never, null));
+
+        await waitFor(() => expect(sessionListener).not.toBeNull());
+
+        act(() => {
+            sessionListener?.({
+                envelope: { session_id: "live-plan-import", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+            });
+            result.current.mission.addWaypoint();
+            result.current.fence.addWaypoint();
+            result.current.rally.addWaypoint();
+            result.current.mission.updateHomeFromVehicle();
+        });
+
+        expect(result.current.mission.canUndo).toBe(true);
+        expect(result.current.fence.canUndo).toBe(true);
+        expect(result.current.rally.canUndo).toBe(true);
+
+        const fixture = buildPlanFile({
+            mission: {
+                items: [{
+                    command: {
+                        Nav: {
+                            Waypoint: {
+                                position: { RelHome: { latitude_deg: 40.1, longitude_deg: -73.2, relative_alt_m: 75 } },
+                                hold_time_s: 2,
+                                acceptance_radius_m: 1,
+                                pass_radius_m: 0,
+                                yaw_deg: 15,
+                            },
+                        },
+                    },
+                    current: true,
+                    autocontinue: true,
+                }],
+            },
+            home: { latitude_deg: 40.12, longitude_deg: -73.25, altitude_m: 12 },
+            fence: {
+                return_point: null,
+                regions: [{
+                    inclusion_polygon: {
+                        vertices: [
+                            { latitude_deg: 40.1, longitude_deg: -73.2 },
+                            { latitude_deg: 40.11, longitude_deg: -73.21 },
+                            { latitude_deg: 40.12, longitude_deg: -73.19 },
+                        ],
+                        inclusion_group: 0,
+                    },
+                }],
+            },
+            rally: {
+                points: [{
+                    RelHome: { latitude_deg: 40.15, longitude_deg: -73.18, relative_alt_m: 30 },
+                }],
+            },
+        });
+
+        openDialog.mockResolvedValueOnce("/tmp/import.plan");
+        readTextFile.mockResolvedValueOnce(JSON.stringify(fixture.json));
+
+        await act(async () => {
+            await result.current.importPlanFile();
+        });
+
+        expect(openDialog).toHaveBeenCalledWith({
+            filters: [{ name: "QGC Plan", extensions: ["plan"] }],
+            multiple: false,
+        });
+        expect(readTextFile).toHaveBeenCalledWith("/tmp/import.plan");
+        expect(result.current.mission.draftItems).toHaveLength(1);
+        expect(result.current.fence.draftItems).toHaveLength(1);
+        expect(result.current.rally.draftItems).toHaveLength(1);
+        expect(result.current.mission.homePosition).toEqual({ latitude_deg: 40.12, longitude_deg: -73.25, altitude_m: 12 });
+        expect(result.current.mission.canUndo).toBe(false);
+        expect(result.current.fence.canUndo).toBe(false);
+        expect(result.current.rally.canUndo).toBe(false);
+
+        act(() => {
+            result.current.mission.undo();
+            result.current.fence.undo();
+            result.current.rally.undo();
+        });
+
+        expect(result.current.mission.draftItems).toHaveLength(1);
+        expect(result.current.fence.draftItems).toHaveLength(1);
+        expect(result.current.rally.draftItems).toHaveLength(1);
+    });
+
+    it("exports the current mission, fence, rally, and home state to a QGC plan file", async () => {
+        const { useMission } = await import("./use-mission");
+        const { result } = renderHook(() => useMission(true, { latitude_deg: 47.55, longitude_deg: 8.55, altitude_m: 120 } as never, null));
+
+        await waitFor(() => expect(sessionListener).not.toBeNull());
+
+        act(() => {
+            sessionListener?.({
+                envelope: { session_id: "live-plan-export", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+            });
+            result.current.mission.addWaypoint();
+            result.current.fence.addWaypoint();
+            result.current.rally.addWaypoint();
+            result.current.mission.updateHomeFromVehicle();
+        });
+
+        saveDialog.mockResolvedValueOnce("/tmp/export.plan");
+
+        await act(async () => {
+            await result.current.exportPlanFile();
+        });
+
+        expect(saveDialog).toHaveBeenCalledWith({
+            filters: [{ name: "QGC Plan", extensions: ["plan"] }],
+            defaultPath: "mission.plan",
+        });
+        expect(writeTextFile).toHaveBeenCalledTimes(1);
+        expect(writeTextFile).toHaveBeenCalledWith("/tmp/export.plan", expect.any(String));
+
+        const exportedJson = JSON.parse(writeTextFile.mock.calls[0][1] as string) as {
+            fileType?: string;
+            mission?: { items?: unknown[]; plannedHomePosition?: number[] };
+            geoFence?: { polygons?: unknown[]; circles?: unknown[] };
+            rallyPoints?: { points?: unknown[] };
+        };
+        expect(exportedJson.fileType).toBe("Plan");
+        expect(exportedJson.mission?.items).toHaveLength(1);
+        expect(exportedJson.mission?.plannedHomePosition).toEqual([47.55, 8.55, 120]);
+        expect((exportedJson.geoFence?.polygons?.length ?? 0) + (exportedJson.geoFence?.circles?.length ?? 0)).toBe(1);
+        expect(exportedJson.rallyPoints?.points).toHaveLength(1);
+    });
+
+    it("imports KML geometry into mission and fence drafts while resetting affected undo histories", async () => {
+        const { useMission } = await import("./use-mission");
+        const { result } = renderHook(() => useMission(true, {} as never, null));
+
+        await waitFor(() => expect(sessionListener).not.toBeNull());
+
+        act(() => {
+            sessionListener?.({
+                envelope: { session_id: "live-kml-import", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+            });
+            result.current.mission.addWaypoint();
+            result.current.fence.addWaypoint();
+        });
+
+        expect(result.current.mission.canUndo).toBe(true);
+        expect(result.current.fence.canUndo).toBe(true);
+
+        openDialog.mockResolvedValueOnce("/tmp/import.kml");
+        readTextFile.mockResolvedValueOnce(`
+            <kml xmlns="http://www.opengis.net/kml/2.2">
+              <Document>
+                <Placemark>
+                  <name>Boundary</name>
+                  <Polygon>
+                    <outerBoundaryIs>
+                      <LinearRing>
+                        <coordinates>
+                          -73.2000,40.1000,0 -73.2100,40.1100,0 -73.1900,40.1200,0 -73.2000,40.1000,0
+                        </coordinates>
+                      </LinearRing>
+                    </outerBoundaryIs>
+                  </Polygon>
+                </Placemark>
+                <Placemark>
+                  <name>Path</name>
+                  <LineString>
+                    <coordinates>
+                      -73.2500,40.1500,0 -73.2600,40.1600,0 -73.2700,40.1700,0
+                    </coordinates>
+                  </LineString>
+                </Placemark>
+              </Document>
+            </kml>
+        `);
+
+        await act(async () => {
+            await result.current.importKmlFile();
+        });
+
+        expect(openDialog).toHaveBeenCalledWith({
+            filters: [{ name: "KML/KMZ", extensions: ["kml", "kmz"] }],
+            multiple: false,
+        });
+        expect(readTextFile).toHaveBeenCalledWith("/tmp/import.kml");
+        expect(result.current.mission.draftItems).toHaveLength(3);
+        expect(result.current.fence.draftItems).toHaveLength(1);
+        expect(result.current.mission.canUndo).toBe(false);
+        expect(result.current.fence.canUndo).toBe(false);
     });
 
     it("moves a waypoint from live telemetry GPS and exposes selection summaries", async () => {

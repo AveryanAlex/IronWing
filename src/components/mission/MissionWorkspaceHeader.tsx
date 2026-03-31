@@ -13,6 +13,8 @@ import {
   Undo2,
   Redo2,
   Waypoints,
+  FileUp,
+  FileDown,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
@@ -70,6 +72,7 @@ export function MissionWorkspaceHeader({
   onToggleChainMode,
 }: MissionWorkspaceHeaderProps) {
   const current = mission.current;
+  const anyTransferActive = mission.mission.transferUi.active || mission.fence.transferUi.active || mission.rally.transferUi.active;
   const undoTooltip = current.canUndo ? `Undo (${current.undoCount} available)` : "Undo (0 available)";
   const redoTooltip = current.canRedo ? `Redo (${current.redoCount} available)` : "Redo (0 available)";
   const chainTooltip = !isMissionOnly(current.tab)
@@ -106,6 +109,15 @@ export function MissionWorkspaceHeader({
         )}
 
         <div className="ml-auto flex items-center gap-1">
+          <Button size="sm" variant="secondary" disabled={anyTransferActive} onClick={mission.importPlanFile}>
+            <FileUp className="h-3.5 w-3.5" /> Import
+          </Button>
+          <Button size="sm" variant="secondary" disabled={anyTransferActive} onClick={mission.importKmlFile}>
+            <FileUp className="h-3.5 w-3.5" /> Import KML
+          </Button>
+          <Button size="sm" variant="secondary" disabled={anyTransferActive} onClick={mission.exportPlanFile}>
+            <FileDown className="h-3.5 w-3.5" /> Export
+          </Button>
           <Button size="sm" disabled={current.transferUi.active || !connected} onClick={current.upload}>
             <Upload className="h-3.5 w-3.5" /> Write
           </Button>

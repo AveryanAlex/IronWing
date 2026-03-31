@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { readFile, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import {
     cancelMissionTransfer,
     clearMission,
@@ -29,6 +31,8 @@ import {
     uploadRally,
     type RallyPlan,
 } from "../rally";
+import { exportPlanFile as exportQgcPlanFile, parsePlanFile } from "../lib/mission-plan-io";
+import { parseKml, parseKmz } from "../lib/mission-kml-io";
 import type { Telemetry } from "../telemetry";
 import { subscribeSessionState } from "../session";
 import { asErrorMessage } from "./use-session-helpers";
@@ -918,6 +922,169 @@ export function useMission(
         setHomeAltInput(value);
     }, [rejectIfPlaybackReadonly]);
 
+    const anyTransferActive = useMemo(() => {
+        return progressForDomain(progress, "mission").active
+            || progressForDomain(progress, "fence").active
+            || progressForDomain(progress, "rally").active;
+    }, [progress]);
+
+    const importPlanFile = useCallback(async () => {
+        if (isPlaybackScope()) {
+            toast.error("Mission planning is read-only in playback");
+            return;
+        }
+        if (anyTransferActive) {
+            toast.error("Wait for the active transfer to finish before importing");
+            return;
+        }
+        try {
+            const path = await open({
+                filters: [{ name: "QGC Plan", extensions: ["plan"] }],
+                multiple: false,
+            });
+            if (!path || Array.isArray(path)) return;
+
+            const contents = await readTextFile(path);
+            const result = parsePlanFile(contents);
+            const scope = scopeRef.current ?? EMPTY_SCOPE;
+
+            const nextState = replaceTypedDraftFromDownload(
+                replaceTypedDraftFromDownload(
+                    replaceTypedDraftFromDownload(typedDraftStateRef.current, "mission", result.mission, scope),
+                    "fence",
+                    result.fence,
+                    scope,
+                ),
+                "rally",
+                result.rally,
+                scope,
+            );
+
+            commitTypedDraftState(nextState);
+            commitMissionHomeState(
+                replaceMissionHomeFromDownload(missionHomeStateRef.current, result.home, scope),
+                result.home ? "download" : null,
+            );
+            resetHistory();
+            setIssues(createEmptyIssues());
+            setLastOpStatus({ mission: "Imported", fence: "Imported", rally: "Imported" });
+
+            const countsDescription = `Mission ${result.mission.items.length} • Fence ${result.fence.regions.length} • Rally ${result.rally.points.length}`;
+            if (result.warnings.length > 0) {
+                toast.warning("Plan imported with warnings", {
+                    description: `${countsDescription} • ${result.warnings.join(" ")}`,
+                });
+            } else {
+                toast.success("Plan imported", { description: countsDescription });
+            }
+        } catch (err) {
+            toast.error("Failed to import plan", { description: asErrorMessage(err) });
+        }
+    }, [anyTransferActive, commitMissionHomeState, commitTypedDraftState, isPlaybackScope, resetHistory]);
+
+    const exportPlanFile = useCallback(async () => {
+        if (anyTransferActive) {
+            toast.error("Wait for the active transfer to finish before exporting");
+            return;
+        }
+        try {
+            const path = await save({
+                filters: [{ name: "QGC Plan", extensions: ["plan"] }],
+                defaultPath: "mission.plan",
+            });
+            if (!path) return;
+
+            const result = exportQgcPlanFile({
+                mission: currentPlan("mission"),
+                home: currentHome(),
+                fence: currentPlan("fence"),
+                rally: currentPlan("rally"),
+            });
+            await writeTextFile(path, `${JSON.stringify(result.json, null, 2)}\n`);
+
+            if (result.warnings.length > 0) {
+                toast.warning("Plan exported with warnings", {
+                    description: `${path} • ${result.warnings.join(" ")}`,
+                });
+            } else {
+                toast.success("Plan exported", { description: path });
+            }
+        } catch (err) {
+            toast.error("Failed to export plan", { description: asErrorMessage(err) });
+        }
+    }, [anyTransferActive, currentHome, currentPlan]);
+
+    const importKmlFile = useCallback(async () => {
+        if (isPlaybackScope()) {
+            toast.error("Mission planning is read-only in playback");
+            return;
+        }
+        if (anyTransferActive) {
+            toast.error("Wait for the active transfer to finish before importing");
+            return;
+        }
+        try {
+            const path = await open({
+                filters: [{ name: "KML/KMZ", extensions: ["kml", "kmz"] }],
+                multiple: false,
+            });
+            if (!path || Array.isArray(path)) return;
+
+            const result = path.toLowerCase().endsWith(".kmz")
+                ? parseKmz(await readFile(path))
+                : parseKml(await readTextFile(path));
+
+            if (result.fenceRegions.length === 0 && result.missionItems.length === 0) {
+                toast.warning("KML import found no supported geometry", {
+                    description: result.warnings.join(" ") || path,
+                });
+                return;
+            }
+
+            const scope = scopeRef.current ?? EMPTY_SCOPE;
+            let nextState = typedDraftStateRef.current;
+            const affectedDomains: MissionDomain[] = [];
+
+            if (result.missionItems.length > 0) {
+                nextState = replaceTypedDraftFromDownload(nextState, "mission", { items: result.missionItems }, scope);
+                affectedDomains.push("mission");
+            }
+            if (result.fenceRegions.length > 0) {
+                nextState = replaceTypedDraftFromDownload(nextState, "fence", { return_point: null, regions: result.fenceRegions }, scope);
+                affectedDomains.push("fence");
+            }
+
+            commitTypedDraftState(nextState);
+            for (const domain of affectedDomains) {
+                resetHistory(domain);
+            }
+            setIssues((prev) => ({
+                ...prev,
+                mission: affectedDomains.includes("mission") ? [] : prev.mission,
+                fence: affectedDomains.includes("fence") ? [] : prev.fence,
+            }));
+            setLastOpStatus((prev) => ({
+                ...prev,
+                mission: affectedDomains.includes("mission") ? "Imported" : prev.mission,
+                fence: affectedDomains.includes("fence") ? "Imported" : prev.fence,
+            }));
+
+            const importedCounts: string[] = [];
+            if (result.missionItems.length > 0) importedCounts.push(`Mission ${result.missionItems.length}`);
+            if (result.fenceRegions.length > 0) importedCounts.push(`Fence ${result.fenceRegions.length}`);
+            const description = importedCounts.join(" • ");
+            if (result.warnings.length > 0) {
+                toast.warning("KML imported with warnings", {
+                    description: `${description} • ${result.warnings.join(" ")}`,
+                });
+            } else {
+                toast.success("KML imported", { description });
+            }
+        } catch (err) {
+            toast.error("Failed to import KML/KMZ", { description: asErrorMessage(err) });
+        }
+    }, [anyTransferActive, commitTypedDraftState, isPlaybackScope, resetHistory]);
+
     const mission = useMemo(() => {
         const domain: MissionDomain = "mission";
         const visible = currentScope === null || scopeMatches(typedDraftState.active.mission.scope, currentScope);
@@ -1233,5 +1400,8 @@ export function useMission(
         fence,
         rally,
         vehicle,
+        importPlanFile,
+        exportPlanFile,
+        importKmlFile,
     };
 }
