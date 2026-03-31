@@ -31,7 +31,7 @@ import {
     uploadRally,
     type RallyPlan,
 } from "../rally";
-import { exportPlanFile as exportQgcPlanFile, parsePlanFile, type PlanParseResult } from "../lib/mission-plan-io";
+import { exportPlanFile as exportQgcPlanFile, parsePlanFile, type ExportDomain, type PlanParseResult } from "../lib/mission-plan-io";
 import { parseKml, parseKmz } from "../lib/mission-kml-io";
 import type { Telemetry } from "../telemetry";
 import { subscribeSessionState } from "../session";
@@ -84,6 +84,16 @@ import {
 } from "../lib/mission-draft-typed";
 
 type HomeSource = "vehicle" | "user" | "download" | null;
+
+type PendingExport = {
+    path: string;
+    mission: MissionPlan;
+    home: HomePosition | null;
+    fence: FencePlan;
+    rally: RallyPlan;
+    cruiseSpeed: number | undefined;
+    hoverSpeed: number | undefined;
+};
 
 export type TransferUi = {
     active: boolean;
@@ -334,6 +344,7 @@ export function useMission(
     const [currentScope, setCurrentScope] = useState<SessionScope | null>(null);
     const [importedMissionSpeeds, setImportedMissionSpeeds] = useState<MissionPlanningSpeeds | null>(null);
     const [pendingImport, setPendingImport] = useState<PlanParseResult | null>(null);
+    const [pendingExport, setPendingExport] = useState<PendingExport | null>(null);
 
     const scopeRef = useRef<SessionScope | null>(null);
     const typedDraftStateRef = useRef(typedDraftState);
@@ -1053,6 +1064,27 @@ export function useMission(
         applyPlanImport(result, choice);
     }, [applyPlanImport, pendingImport]);
 
+    const writeExport = useCallback(async (pending: PendingExport, excludeDomains: ExportDomain[]) => {
+        const result = exportQgcPlanFile({
+            mission: pending.mission,
+            home: pending.home,
+            fence: pending.fence,
+            rally: pending.rally,
+            cruiseSpeed: pending.cruiseSpeed,
+            hoverSpeed: pending.hoverSpeed,
+            excludeDomains,
+        });
+        await writeTextFile(pending.path, `${JSON.stringify(result.json, null, 2)}\n`);
+
+        if (result.warnings.length > 0) {
+            toast.warning("Plan exported with warnings", {
+                description: `${pending.path} • ${result.warnings.join(" ")}`,
+            });
+        } else {
+            toast.success("Plan exported", { description: pending.path });
+        }
+    }, []);
+
     const exportPlanFile = useCallback(async (overrides?: MissionPlanningSpeeds) => {
         if (anyTransferActive) {
             toast.error("Wait for the active transfer to finish before exporting");
@@ -1066,27 +1098,52 @@ export function useMission(
             if (!path) return;
 
             const missionPlanningSpeeds = overrides ?? exportMissionSpeedsRef.current ?? importedMissionSpeeds;
-            const result = exportQgcPlanFile({
-                mission: currentPlan("mission"),
+            const fence = currentPlan("fence") as FencePlan;
+            const rally = currentPlan("rally") as RallyPlan;
+
+            // When the plan has fence or rally data, show a chooser dialog so the user
+            // can opt-out of exporting domains they don't need in this file.
+            if (fence.regions.length > 0 || rally.points.length > 0) {
+                setPendingExport({
+                    path,
+                    mission: currentPlan("mission") as MissionPlan,
+                    home: currentHome(),
+                    fence,
+                    rally,
+                    cruiseSpeed: missionPlanningSpeeds?.cruiseSpeedMps,
+                    hoverSpeed: missionPlanningSpeeds?.hoverSpeedMps,
+                });
+                return;
+            }
+
+            await writeExport({
+                path,
+                mission: currentPlan("mission") as MissionPlan,
                 home: currentHome(),
-                fence: currentPlan("fence"),
-                rally: currentPlan("rally"),
+                fence,
+                rally,
                 cruiseSpeed: missionPlanningSpeeds?.cruiseSpeedMps,
                 hoverSpeed: missionPlanningSpeeds?.hoverSpeedMps,
-            });
-            await writeTextFile(path, `${JSON.stringify(result.json, null, 2)}\n`);
-
-            if (result.warnings.length > 0) {
-                toast.warning("Plan exported with warnings", {
-                    description: `${path} • ${result.warnings.join(" ")}`,
-                });
-            } else {
-                toast.success("Plan exported", { description: path });
-            }
+            }, []);
         } catch (err) {
             toast.error("Failed to export plan", { description: asErrorMessage(err) });
         }
-    }, [anyTransferActive, currentHome, currentPlan, importedMissionSpeeds]);
+    }, [anyTransferActive, currentHome, currentPlan, importedMissionSpeeds, writeExport]);
+
+    const confirmExport = useCallback(async (excludeDomains: ExportDomain[]) => {
+        const pending = pendingExport;
+        setPendingExport(null);
+        if (!pending) return;
+        try {
+            await writeExport(pending, excludeDomains);
+        } catch (err) {
+            toast.error("Failed to export plan", { description: asErrorMessage(err) });
+        }
+    }, [pendingExport, writeExport]);
+
+    const cancelExport = useCallback(() => {
+        setPendingExport(null);
+    }, []);
 
     const importKmlFile = useCallback(async () => {
         if (isPlaybackScope()) {
@@ -1486,5 +1543,8 @@ export function useMission(
         importKmlFile,
         pendingImport,
         confirmImport,
+        pendingExport,
+        confirmExport,
+        cancelExport,
     };
 }

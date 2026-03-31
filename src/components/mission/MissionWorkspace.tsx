@@ -5,6 +5,7 @@ import { MissionWorkspaceHeader } from "./MissionWorkspaceHeader";
 import { MissionDesktopShell } from "./MissionDesktopShell";
 import { MissionAutoGridDialog } from "./MissionAutoGridDialog";
 import { ImportChoiceDialog } from "./ImportChoiceDialog";
+import { ExportDomainDialog } from "./ExportDomainDialog";
 import { MissionTerrainProfile } from "./MissionTerrainProfile";
 import type { useSession } from "../../hooks/use-session";
 import type { useMission } from "../../hooks/use-mission";
@@ -339,6 +340,14 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
       )}
       {mission.pendingImport && (
         <ImportChoiceDialog onChoice={mission.confirmImport} />
+      )}
+      {mission.pendingExport && (
+        <ExportDomainDialog
+          hasFence={mission.pendingExport.fence.regions.length > 0}
+          hasRally={mission.pendingExport.rally.points.length > 0}
+          onConfirm={mission.confirmExport}
+          onCancel={mission.cancelExport}
+        />
       )}
     </div>
   );

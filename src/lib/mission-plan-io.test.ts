@@ -528,6 +528,70 @@ describe("mission-plan-io: exportPlanFile", () => {
     });
 });
 
+describe("mission-plan-io: exportPlanFile domain exclusion", () => {
+    it("excludes fence from export when domain is disabled", () => {
+        const result = exportPlanFile({
+            mission: { items: [] },
+            home: null,
+            fence: {
+                return_point: null,
+                regions: [
+                    {
+                        inclusion_polygon: {
+                            vertices: [
+                                { latitude_deg: 47.39, longitude_deg: 8.53 },
+                                { latitude_deg: 47.41, longitude_deg: 8.53 },
+                                { latitude_deg: 47.41, longitude_deg: 8.56 },
+                            ],
+                            inclusion_group: 0,
+                        },
+                    },
+                ],
+            },
+            rally: {
+                points: [
+                    { RelHome: { latitude_deg: 47.397, longitude_deg: 8.545, relative_alt_m: 30 } },
+                ],
+            },
+            excludeDomains: ["fence"],
+        });
+
+        expect(result.json.geoFence).toBeUndefined();
+        expect(result.json.rallyPoints?.points).toHaveLength(1);
+    });
+
+    it("excludes rally from export when domain is disabled", () => {
+        const result = exportPlanFile({
+            mission: { items: [] },
+            home: null,
+            fence: {
+                return_point: null,
+                regions: [
+                    {
+                        inclusion_polygon: {
+                            vertices: [
+                                { latitude_deg: 47.39, longitude_deg: 8.53 },
+                                { latitude_deg: 47.41, longitude_deg: 8.53 },
+                                { latitude_deg: 47.41, longitude_deg: 8.56 },
+                            ],
+                            inclusion_group: 0,
+                        },
+                    },
+                ],
+            },
+            rally: {
+                points: [
+                    { RelHome: { latitude_deg: 47.397, longitude_deg: 8.545, relative_alt_m: 30 } },
+                ],
+            },
+            excludeDomains: ["rally"],
+        });
+
+        expect(result.json.geoFence?.polygons).toHaveLength(1);
+        expect(result.json.rallyPoints).toBeUndefined();
+    });
+});
+
 describe("mission-plan-io: frame helpers", () => {
     it("maps QGC numeric frames to typed MissionFrame values and back", () => {
         expect(missionFrameFromNumeric(0)).toBe("Global");

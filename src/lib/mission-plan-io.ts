@@ -118,6 +118,8 @@ type CustomCommandCodec = {
 
 type CommandCodec = GenericCommandCodec | CustomCommandCodec;
 
+export type ExportDomain = "mission" | "fence" | "rally";
+
 type ExportPlanInput = {
     mission: MissionPlan;
     home: HomePosition | null;
@@ -125,6 +127,8 @@ type ExportPlanInput = {
     rally: RallyPlan;
     cruiseSpeed?: number;
     hoverSpeed?: number;
+    /** Domains listed here are omitted from the exported JSON. "mission" exclusion removes waypoints but the mission envelope is still written. */
+    excludeDomains?: ExportDomain[];
 };
 
 export type PlanParseResult = {
@@ -301,9 +305,10 @@ export function parsePlanFile(input: string | object): PlanParseResult {
     };
 }
 
-export function exportPlanFile({ mission, home, fence, rally, cruiseSpeed, hoverSpeed }: ExportPlanInput): PlanExportResult {
+export function exportPlanFile({ mission, home, fence, rally, cruiseSpeed, hoverSpeed, excludeDomains }: ExportPlanInput): PlanExportResult {
     const warnings: string[] = [];
-    const missionItems = mission.items.map((item, index) => exportMissionItem(item, index, warnings));
+    const excluded = new Set(excludeDomains ?? []);
+    const missionItems = excluded.has("mission") ? [] : mission.items.map((item, index) => exportMissionItem(item, index, warnings));
     const plannedHomePosition: [number, number, number] = home
         ? [home.latitude_deg, home.longitude_deg, home.altitude_m]
         : [0, 0, 0];
@@ -323,15 +328,17 @@ export function exportPlanFile({ mission, home, fence, rally, cruiseSpeed, hover
         },
     };
 
-    if (fence.return_point !== null) {
-        warnings.push("Fence return_point is not represented in QGroundControl .plan files and was omitted during export.");
+    if (!excluded.has("fence")) {
+        if (fence.return_point !== null) {
+            warnings.push("Fence return_point is not represented in QGroundControl .plan files and was omitted during export.");
+        }
+
+        if (fence.regions.length > 0) {
+            json.geoFence = exportFencePlan(fence);
+        }
     }
 
-    if (fence.regions.length > 0) {
-        json.geoFence = exportFencePlan(fence);
-    }
-
-    if (rally.points.length > 0) {
+    if (!excluded.has("rally") && rally.points.length > 0) {
         const rallyExport = exportRallyPlan(rally, warnings);
         if (rallyExport.points.length > 0) {
             json.rallyPoints = rallyExport;

@@ -1043,6 +1043,15 @@ describe("useMission", () => {
             filters: [{ name: "QGC Plan", extensions: ["plan"] }],
             defaultPath: "mission.plan",
         });
+
+        // Fence and rally data exist, so the domain chooser dialog is shown before writing.
+        expect(result.current.pendingExport).not.toBeNull();
+        expect(writeTextFile).not.toHaveBeenCalled();
+
+        await act(async () => {
+            await result.current.confirmExport([]);
+        });
+
         expect(writeTextFile).toHaveBeenCalledTimes(1);
         expect(writeTextFile).toHaveBeenCalledWith("/tmp/export.plan", expect.any(String));
 
