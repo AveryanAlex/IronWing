@@ -30,6 +30,11 @@ export type ProfileResult = {
 export const TERRAIN_WARNING_NEAR_THRESHOLD_M = 10;
 export const DEFAULT_PROFILE_MAX_SPACING_M = 50;
 
+export type TerrainProfileOptions = {
+  /** Safety margin in metres below which flight altitude is classified as "near_terrain". Defaults to TERRAIN_WARNING_NEAR_THRESHOLD_M. */
+  safetyMarginM?: number;
+};
+
 export function cumulativeDistances(points: PathPoint[]): number[] {
   if (points.length === 0) return [];
 
@@ -123,11 +128,13 @@ export function computeTerrainProfile(
   points: PathPoint[],
   terrainSampler: (lat: number, lon: number) => number | null,
   homeAltMsl: number | null,
+  options?: TerrainProfileOptions,
 ): ProfileResult {
   if (points.length === 0) {
     return { points: [], warningsByIndex: new Map<number, TerrainWarning>() };
   }
 
+  const safetyMarginM = options?.safetyMarginM ?? TERRAIN_WARNING_NEAR_THRESHOLD_M;
   const densified = densifyPath(points, DEFAULT_PROFILE_MAX_SPACING_M);
   const waypointTerrain = points.map((point) => terrainSampler(point.latitude_deg, point.longitude_deg));
   const waypointFlight = points.map((point, index) =>
@@ -143,7 +150,7 @@ export function computeTerrainProfile(
       ? waypointFlight[point.segmentEndIndex] ?? null
       : interpolateFlightAltitude(waypointFlight, point.segmentStartIndex, point.segmentEndIndex, point.segmentT);
 
-    const warning = classifyWarning(terrainMsl, flightMsl);
+    const warning = classifyWarning(terrainMsl, flightMsl, safetyMarginM);
 
     if (point.isWaypoint && !point.isHome && point.index !== null) {
       warningsByIndex.set(point.index, warning);
@@ -185,11 +192,12 @@ function interpolateFlightAltitude(
 function classifyWarning(
   terrainMsl: number | null,
   flightMsl: number | null,
+  safetyMarginM: number,
 ): TerrainWarning {
   if (terrainMsl === null || flightMsl === null) return "no_data";
 
   const clearance_m = flightMsl - terrainMsl;
   if (clearance_m <= 0) return "below_terrain";
-  if (clearance_m < TERRAIN_WARNING_NEAR_THRESHOLD_M) return "near_terrain";
+  if (clearance_m < safetyMarginM) return "near_terrain";
   return "none";
 }

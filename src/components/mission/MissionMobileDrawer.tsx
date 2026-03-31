@@ -21,6 +21,7 @@ import type { TypedDraftItem } from "../../lib/mission-draft-typed";
 import type { PolygonVertex } from "../../lib/mission-grid";
 import { toast } from "sonner";
 import { findNearestWaypoint } from "./mission-helpers";
+import { useSettings } from "../../hooks/use-settings";
 
 type MissionMobileDrawerProps = {
   vehicle: ReturnType<typeof useSession>;
@@ -38,7 +39,8 @@ type ContextMenuState = {
 
 export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: MissionMobileDrawerProps) {
   const current = mission.current;
-  const terrain = useMissionTerrain(current.draftItems, current.homePosition, current.tab);
+  const { settings, updateSettings } = useSettings();
+  const terrain = useMissionTerrain(current.draftItems, current.homePosition, current.tab, settings.terrainSafetyMarginM);
   const terrainWarnings = terrain.warningsByIndex ?? undefined;
   const showBulkEditor = current.selectedCount > 1;
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -231,6 +233,8 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
             selectedIndex={current.selectedIndex}
             onSelectIndex={current.select}
             height={80}
+            safetyMarginM={settings.terrainSafetyMarginM}
+            onSafetyMarginChange={(value) => updateSettings({ terrainSafetyMarginM: value })}
           />
         )}
 

@@ -4,6 +4,7 @@ export type Settings = {
   telemetryRateHz: number;
   svsEnabled: boolean;
   messageRates: Record<number, number>;
+  terrainSafetyMarginM: number;
 };
 
 const STORAGE_KEY = "mpng_settings";
@@ -12,6 +13,7 @@ const DEFAULTS: Settings = {
   telemetryRateHz: 5,
   svsEnabled: true,
   messageRates: {},
+  terrainSafetyMarginM: 10,
 };
 
 function loadSettings(): Settings {
@@ -23,6 +25,7 @@ function loadSettings(): Settings {
       telemetryRateHz: parsed.telemetryRateHz ?? DEFAULTS.telemetryRateHz,
       svsEnabled: parsed.svsEnabled ?? DEFAULTS.svsEnabled,
       messageRates: parsed.messageRates ?? DEFAULTS.messageRates,
+      terrainSafetyMarginM: parsed.terrainSafetyMarginM ?? DEFAULTS.terrainSafetyMarginM,
     };
   } catch {
     return DEFAULTS;

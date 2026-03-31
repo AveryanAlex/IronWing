@@ -8,6 +8,7 @@ import {
   computeTerrainProfile,
   DEFAULT_PROFILE_MAX_SPACING_M,
   densifyPath,
+  TERRAIN_WARNING_NEAR_THRESHOLD_M,
   type ProfileResult,
   type TerrainWarning,
 } from "../lib/mission-terrain-profile";
@@ -30,6 +31,7 @@ export function useMissionTerrain(
   items: TypedDraftItem[],
   homePosition: HomePosition | null,
   tab: string,
+  safetyMarginM: number = TERRAIN_WARNING_NEAR_THRESHOLD_M,
 ): UseMissionTerrainResult {
   const cacheRef = useRef<TileCache | null>(null);
   const requestIdRef = useRef(0);
@@ -84,6 +86,7 @@ export function useMissionTerrain(
           pathPoints,
           (lat, lon) => terrainByPoint.get(pointKey(lat, lon)) ?? null,
           homePosition?.altitude_m ?? null,
+          { safetyMarginM },
         );
 
         if (disposed || requestId !== requestIdRef.current) return;
@@ -102,7 +105,7 @@ export function useMissionTerrain(
     return () => {
       disposed = true;
     };
-  }, [pathSignature, tab]);
+  }, [pathSignature, tab, safetyMarginM]);
 
   return result;
 }

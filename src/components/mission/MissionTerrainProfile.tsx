@@ -12,6 +12,8 @@ type MissionTerrainProfileProps = {
   selectedIndex: number | null;
   onSelectIndex?: (index: number | null) => void;
   height?: number;
+  safetyMarginM?: number;
+  onSafetyMarginChange?: (value: number) => void;
 };
 
 type MarkerDescriptor = {
@@ -36,6 +38,8 @@ export function MissionTerrainProfile({
   selectedIndex,
   onSelectIndex,
   height = 120,
+  safetyMarginM = 10,
+  onSafetyMarginChange,
 }: MissionTerrainProfileProps) {
   const hasRenderableProfile = status === "ready" && profile !== null && profile.points.length > 0;
   const compact = height <= 88;
@@ -207,6 +211,27 @@ export function MissionTerrainProfile({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2 text-[10px] text-text-muted">
+          {!compact && onSafetyMarginChange && (
+            <label className="flex items-center gap-1">
+              <span>Margin</span>
+              <input
+                type="number"
+                aria-label="Safety margin in metres"
+                min={1}
+                max={500}
+                step={1}
+                value={safetyMarginM}
+                onChange={(e) => {
+                  const parsed = Number(e.target.value);
+                  if (Number.isFinite(parsed) && parsed >= 1) {
+                    onSafetyMarginChange(parsed);
+                  }
+                }}
+                className="w-12 rounded border border-border/60 bg-bg-primary/80 px-1 py-0.5 text-[10px] tabular-nums text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/50"
+              />
+              <span>m</span>
+            </label>
+          )}
           <LegendSwatch label="Terrain" color={TERRAIN_STROKE} fill={TERRAIN_FILL} />
           <LegendSwatch label="Flight" color={FLIGHT_STROKE} />
         </div>

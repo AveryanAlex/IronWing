@@ -193,4 +193,23 @@ describe("computeTerrainProfile", () => {
     const result = computeTerrainProfile(points, () => 100, 500);
     expect(result.points.length).toBeGreaterThan(densifyPath(points, DEFAULT_PROFILE_MAX_SPACING_M).length - 1);
   });
+
+  it("applies a custom safetyMarginM so that 20 m clearance is safe at 10 m but near_terrain at 25 m", () => {
+    // Terrain at 100 m MSL, flight at 120 m MSL → 20 m clearance.
+    // With the default 10 m margin: clearance > 10, so "none".
+    // With a 25 m margin: clearance < 25, so "near_terrain".
+    const points = [
+      point(47, 8, 100, "msl", null, true),
+      point(47, 8.001, 120, "msl", 0),
+    ];
+    const terrainSampler = () => 100;
+
+    const defaultResult = computeTerrainProfile(points, terrainSampler, null);
+    const waypointDefault = defaultResult.points.find((p) => p.isWaypoint && p.index === 0);
+    expect(waypointDefault?.warning).toBe("none");
+
+    const customResult = computeTerrainProfile(points, terrainSampler, null, { safetyMarginM: 25 });
+    const waypointCustom = customResult.points.find((p) => p.isWaypoint && p.index === 0);
+    expect(waypointCustom?.warning).toBe("near_terrain");
+  });
 });

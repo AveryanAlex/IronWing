@@ -15,6 +15,7 @@ import type { PolygonVertex } from "../../lib/mission-grid";
 import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { findNearestWaypoint } from "./mission-helpers";
+import { useSettings } from "../../hooks/use-settings";
 
 type MissionWorkspaceProps = {
   vehicle: ReturnType<typeof useSession>;
@@ -32,7 +33,8 @@ type ContextMenuState = {
 
 export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWorkspaceProps) {
   const current = mission.current;
-  const terrain = useMissionTerrain(current.draftItems, current.homePosition, current.tab);
+  const { settings, updateSettings } = useSettings();
+  const terrain = useMissionTerrain(current.draftItems, current.homePosition, current.tab, settings.terrainSafetyMarginM);
   const terrainWarnings = terrain.warningsByIndex ?? undefined;
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [flyToKey, setFlyToKey] = useState(0);
@@ -261,6 +263,8 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
                 selectedIndex={current.selectedIndex}
                 onSelectIndex={current.select}
                 height={120}
+                safetyMarginM={settings.terrainSafetyMarginM}
+                onSafetyMarginChange={(value) => updateSettings({ terrainSafetyMarginM: value })}
               />
             )}
           </div>
