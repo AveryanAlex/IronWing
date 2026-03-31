@@ -213,6 +213,57 @@ describe("computeTerrainProfile", () => {
     expect(waypointCustom?.warning).toBe("near_terrain");
   });
 
+  it("sets interpolatedFlightMsl equal to flightMsl for straight segments", () => {
+    const points = [
+      point(47, 8, 100, "msl", null, true),
+      point(47 + 100 / 111_320, 8, 120, "msl", 0),
+    ];
+    const result = computeTerrainProfile(points, () => 50, 100);
+
+    for (const p of result.points) {
+      expect(p.interpolatedFlightMsl).toBe(p.flightMsl);
+    }
+  });
+
+  it("populates interpolatedFlightMsl for spline waypoints", () => {
+    const points: PathPoint[] = [
+      { latitude_deg: 47, longitude_deg: 8, altitude_m: 100, frame: "msl", index: null, isHome: true },
+      { latitude_deg: 47.001, longitude_deg: 8.001, altitude_m: 120, frame: "msl", index: 0, isHome: false, isSpline: true },
+      { latitude_deg: 47.002, longitude_deg: 8.002, altitude_m: 140, frame: "msl", index: 1, isHome: false, isSpline: true },
+      { latitude_deg: 47.003, longitude_deg: 8.003, altitude_m: 160, frame: "msl", index: 2, isHome: false },
+    ];
+    const result = computeTerrainProfile(points, () => 50, 100);
+
+    // Every profile point should have a non-null interpolatedFlightMsl.
+    const midSegmentPoints = result.points.filter((p) => !p.isWaypoint);
+    for (const p of midSegmentPoints) {
+      expect(p.interpolatedFlightMsl).not.toBeNull();
+    }
+  });
+
+  it("populates interpolatedFlightMsl for arc waypoints", () => {
+    const points: PathPoint[] = [
+      { latitude_deg: 47, longitude_deg: 8, altitude_m: 100, frame: "msl", index: null, isHome: true },
+      {
+        latitude_deg: 47.001, longitude_deg: 8.001, altitude_m: 130, frame: "msl", index: 0, isHome: false,
+        isArc: true, arcAngleDeg: 90, arcDirection: "Clockwise",
+      },
+      { latitude_deg: 47.002, longitude_deg: 8.002, altitude_m: 150, frame: "msl", index: 1, isHome: false },
+    ];
+    const result = computeTerrainProfile(points, () => 50, 100);
+
+    // Waypoint endpoints should have interpolatedFlightMsl equal to flightMsl.
+    const wp0 = result.points.find((p) => p.isWaypoint && p.index === 0);
+    expect(wp0?.interpolatedFlightMsl).toBe(wp0?.flightMsl);
+
+    // Mid-segment points on the arc segment should also have values.
+    const arcMid = result.points.filter((p) => !p.isWaypoint && !p.isHome);
+    expect(arcMid.length).toBeGreaterThan(0);
+    for (const p of arcMid) {
+      expect(p.interpolatedFlightMsl).not.toBeNull();
+    }
+  });
+
   it("renders loiter commands as flat horizontal segments", () => {
     const points: PathPoint[] = [
       { latitude_deg: 0, longitude_deg: 0, altitude_m: 100, frame: "rel_home", index: 0, isHome: false },

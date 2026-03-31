@@ -13,6 +13,7 @@ import {
   localXYToLatLon,
   type GeoRef,
 } from "./mission-coordinates";
+import { sampleArcPoints, sampleSplinePoints } from "./mission-path-interpolation";
 
 export type MissionRenderCoordinate = [longitude_deg: number, latitude_deg: number];
 
@@ -389,41 +390,8 @@ function sampleSplineSegment(
   control3: GeoRef,
   sampleSteps = SPLINE_SAMPLE_STEPS,
 ): MissionRenderCoordinate[] {
-  const reference = point1;
-  const p0 = latLonToLocalXY(reference, control0.latitude_deg, control0.longitude_deg);
-  const p1 = latLonToLocalXY(reference, point1.latitude_deg, point1.longitude_deg);
-  const p2 = latLonToLocalXY(reference, point2.latitude_deg, point2.longitude_deg);
-  const p3 = latLonToLocalXY(reference, control3.latitude_deg, control3.longitude_deg);
-
-  const coordinates: MissionRenderCoordinate[] = [];
-  for (let step = 0; step <= sampleSteps; step += 1) {
-    const t = step / sampleSteps;
-    const x_m = catmullRomComponent(p0.x_m, p1.x_m, p2.x_m, p3.x_m, t);
-    const y_m = catmullRomComponent(p0.y_m, p1.y_m, p2.y_m, p3.y_m, t);
-    const { lat, lon } = localXYToLatLon(reference, x_m, y_m);
-    coordinates.push([lon, lat]);
-  }
-
-  coordinates[0] = toCoordinate(point1);
-  coordinates[coordinates.length - 1] = toCoordinate(point2);
-  return coordinates;
-}
-
-function catmullRomComponent(
-  p0: number,
-  p1: number,
-  p2: number,
-  p3: number,
-  t: number,
-): number {
-  const t2 = t * t;
-  const t3 = t2 * t;
-  return 0.5 * (
-    2 * p1 +
-    (-p0 + p2) * t +
-    (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
-    (-p0 + 3 * p1 - 3 * p2 + p3) * t3
-  );
+  return sampleSplinePoints(control0, point1, point2, control3, sampleSteps)
+    .map(toCoordinate);
 }
 
 function sampleArcSegment(
@@ -433,51 +401,8 @@ function sampleArcSegment(
   direction: LoiterDirection,
   sampleSteps = ARC_SAMPLE_STEPS,
 ): MissionRenderCoordinate[] | null {
-  if (arcAngleDeg === 0) {
-    return null;
-  }
-
-  const reference = start;
-  const startXY = latLonToLocalXY(reference, start.latitude_deg, start.longitude_deg);
-  const endXY = latLonToLocalXY(reference, end.latitude_deg, end.longitude_deg);
-  const chordX = endXY.x_m - startXY.x_m;
-  const chordY = endXY.y_m - startXY.y_m;
-  const chordLength = Math.hypot(chordX, chordY);
-  if (chordLength === 0) {
-    return null;
-  }
-
-  const theta = Math.abs((arcAngleDeg * Math.PI) / 180);
-  const sinHalf = Math.sin(theta / 2);
-  if (Math.abs(sinHalf) < 1e-9) {
-    return null;
-  }
-
-  const midpointX = (startXY.x_m + endXY.x_m) / 2;
-  const midpointY = (startXY.y_m + endXY.y_m) / 2;
-  const leftNormalX = -chordY / chordLength;
-  const leftNormalY = chordX / chordLength;
-  const normalSign = direction === "CounterClockwise" ? 1 : -1;
-  const centerDistance = chordLength / (2 * Math.tan(theta / 2));
-  const centerX = midpointX + leftNormalX * centerDistance * normalSign;
-  const centerY = midpointY + leftNormalY * centerDistance * normalSign;
-  const radius = Math.hypot(startXY.x_m - centerX, startXY.y_m - centerY);
-  const startAngle = Math.atan2(startXY.y_m - centerY, startXY.x_m - centerX);
-  const sweep = direction === "CounterClockwise" ? theta : -theta;
-
-  const coordinates: MissionRenderCoordinate[] = [];
-  for (let step = 0; step <= sampleSteps; step += 1) {
-    const t = step / sampleSteps;
-    const angle = startAngle + sweep * t;
-    const x_m = centerX + radius * Math.cos(angle);
-    const y_m = centerY + radius * Math.sin(angle);
-    const { lat, lon } = localXYToLatLon(reference, x_m, y_m);
-    coordinates.push([lon, lat]);
-  }
-
-  coordinates[0] = toCoordinate(start);
-  coordinates[coordinates.length - 1] = toCoordinate(end);
-  return coordinates;
+  const points = sampleArcPoints(start, end, arcAngleDeg, direction, sampleSteps);
+  return points?.map(toCoordinate) ?? null;
 }
 
 function buildLoiterCircleFeature(

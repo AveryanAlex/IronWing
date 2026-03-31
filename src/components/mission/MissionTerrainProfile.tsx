@@ -30,6 +30,7 @@ const CHART_PADDING = [10, 10, 18, 42] as const;
 const TERRAIN_STROKE = "#947455";
 const TERRAIN_FILL = "rgba(148, 116, 85, 0.24)";
 const FLIGHT_STROKE = "#7bd5fb";
+const FLIGHT_STRAIGHT_STROKE = "rgba(123, 213, 251, 0.35)";
 const GRID_COLOR = "rgba(226, 232, 240, 0.08)";
 const AXIS_COLOR = "rgba(148, 163, 184, 0.55)";
 
@@ -69,7 +70,18 @@ export function MissionTerrainProfile({
     const margin = points.map((point) =>
       point.terrainMsl !== null ? point.terrainMsl + safetyMarginM : null,
     );
-    const numericValues = [...terrain, ...flight].filter((value): value is number => value !== null && Number.isFinite(value));
+    const interpolatedFlight = points.map((point) => point.interpolatedFlightMsl);
+
+    // Show the dual-path view only when the interpolated path actually differs
+    // from the straight-line path (i.e. the mission has spline or arc segments).
+    const hasCurvedSegments = points.some(
+      (point) => point.interpolatedFlightMsl !== null && point.flightMsl !== null
+        && point.interpolatedFlightMsl !== point.flightMsl,
+    );
+
+    const numericValues = [...terrain, ...flight, ...interpolatedFlight].filter(
+      (value): value is number => value !== null && Number.isFinite(value),
+    );
     const totalDistance = distances.length > 0 ? distances[distances.length - 1] ?? 0 : 0;
     const distanceUnit: "m" | "km" = totalDistance >= 1000 ? "km" : "m";
     const warningCount = markers.filter((marker) => marker.warning === "below_terrain").length;
@@ -121,9 +133,12 @@ export function MissionTerrainProfile({
           width: 2,
         },
         {
-          label: "Flight altitude",
-          stroke: FLIGHT_STROKE,
-          width: 2,
+          // Straight-line DEM sample path — demoted to thin dashed when curved
+          // segments are present, otherwise primary visual.
+          label: hasCurvedSegments ? "Straight path" : "Flight altitude",
+          stroke: hasCurvedSegments ? FLIGHT_STRAIGHT_STROKE : FLIGHT_STROKE,
+          width: hasCurvedSegments ? 1 : 2,
+          dash: hasCurvedSegments ? [4, 4] : undefined,
         },
         {
           label: "Safety margin",
@@ -132,17 +147,25 @@ export function MissionTerrainProfile({
           width: 1,
           dash: [4, 4],
         },
+        {
+          // Interpolated (spline/arc) flight altitude — primary visual when present.
+          label: "Flight altitude",
+          stroke: FLIGHT_STROKE,
+          width: 2,
+          show: hasCurvedSegments,
+        },
       ],
     };
 
     return {
-      data: [distances, terrain, flight, margin] as uPlot.AlignedData,
+      data: [distances, terrain, flight, margin, interpolatedFlight] as uPlot.AlignedData,
       options,
       totalDistance,
       distanceUnit,
       minY,
       maxY,
       warningCount,
+      hasCurvedSegments,
     };
   }, [markers, profile, safetyMarginM]);
 
@@ -257,6 +280,9 @@ export function MissionTerrainProfile({
           )}
           <LegendSwatch label="Terrain" color={TERRAIN_STROKE} fill={TERRAIN_FILL} />
           <LegendSwatch label="Flight" color={FLIGHT_STROKE} />
+          {chartModel.hasCurvedSegments && (
+            <LegendSwatch label="Straight" color={FLIGHT_STRAIGHT_STROKE} dashed />
+          )}
         </div>
       </div>
 
@@ -365,7 +391,7 @@ function formatDistanceSummary(distance_m: number, unit: "m" | "km"): string {
   return `${Math.round(distance_m)} m`;
 }
 
-function LegendSwatch({ label, color, fill }: { label: string; color: string; fill?: string }) {
+function LegendSwatch({ label, color, fill, dashed }: { label: string; color: string; fill?: string; dashed?: boolean }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <span
@@ -373,6 +399,7 @@ function LegendSwatch({ label, color, fill }: { label: string; color: string; fi
         style={{
           borderColor: color,
           background: fill ?? color,
+          borderStyle: dashed ? "dashed" : "solid",
         }}
       />
       <span>{label}</span>

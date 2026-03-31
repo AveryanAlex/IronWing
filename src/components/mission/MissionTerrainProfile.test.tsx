@@ -20,6 +20,7 @@ function makeProfile(): ProfileResult {
         distance_m: 0,
         terrainMsl: 100,
         flightMsl: 120,
+        interpolatedFlightMsl: 120,
         clearance_m: 20,
         warning: "none",
         index: null,
@@ -30,6 +31,7 @@ function makeProfile(): ProfileResult {
         distance_m: 250,
         terrainMsl: 105,
         flightMsl: 124,
+        interpolatedFlightMsl: 124,
         clearance_m: 19,
         warning: "none",
         index: null,
@@ -40,6 +42,7 @@ function makeProfile(): ProfileResult {
         distance_m: 500,
         terrainMsl: 110,
         flightMsl: 108,
+        interpolatedFlightMsl: 108,
         clearance_m: -2,
         warning: "below_terrain",
         index: 0,
@@ -50,6 +53,7 @@ function makeProfile(): ProfileResult {
         distance_m: 1000,
         terrainMsl: 118,
         flightMsl: 125,
+        interpolatedFlightMsl: 125,
         clearance_m: 7,
         warning: "near_terrain",
         index: 1,
@@ -119,10 +123,12 @@ describe("MissionTerrainProfile", () => {
     };
 
     expect(props.height).toBe(120);
-    expect(props.data).toHaveLength(4);
+    expect(props.data).toHaveLength(5);
     expect(props.options.series[1]?.label).toBe("Terrain");
+    // No curved segments in the test data, so series[2] is the primary "Flight altitude".
     expect(props.options.series[2]?.label).toBe("Flight altitude");
     expect(props.options.series[3]?.label).toBe("Safety margin");
+    expect(props.options.series[4]?.label).toBe("Flight altitude");
   });
 
   it("passes safety margin data as terrain elevation plus the margin offset", () => {
