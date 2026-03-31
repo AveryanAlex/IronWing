@@ -113,6 +113,8 @@ function makeMissionStub({
     roundtripStatus: "",
     cancel,
     draftItems: [],
+    // FencePlan shape required by computeFenceStats
+    plan: { return_point: null, regions: [] },
   };
 
   const mission = {
@@ -146,16 +148,20 @@ describe("MissionPlannerSummary", () => {
     expect(screen.getByTestId("mission-stats-time").textContent).toContain("0:07");
   });
 
-  it("does not render the statistics card on fence or rally tabs", () => {
+  it("does not render the mission statistics card on fence or rally tabs", () => {
     const { mission: fenceMission } = makeMissionStub({ selectedTab: "fence" });
     const { rerender } = render(<MissionPlannerSummary mission={fenceMission} connected={true} />);
 
+    // Mission estimates card is hidden on non-mission tabs
     expect(screen.queryByTestId("mission-planning-stats")).toBeNull();
+    // Fence estimates card is shown on the fence tab
+    expect(screen.getByTestId("fence-planning-stats")).toBeTruthy();
 
     const { mission: rallyMission } = makeMissionStub({ selectedTab: "rally" });
     rerender(<MissionPlannerSummary mission={rallyMission} connected={true} />);
 
     expect(screen.queryByTestId("mission-planning-stats")).toBeNull();
+    expect(screen.queryByTestId("fence-planning-stats")).toBeNull();
   });
 
   it("updates the displayed estimate and export speeds when planning inputs change", () => {

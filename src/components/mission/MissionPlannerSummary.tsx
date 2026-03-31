@@ -7,6 +7,8 @@ import {
   Map,
   MoveVertical,
   Route,
+  Scaling,
+  ShieldCheck,
   TimerReset,
 } from "lucide-react";
 import { SetupSectionIntro } from "../setup/shared/SetupSectionIntro";
@@ -15,6 +17,8 @@ import {
   DEFAULT_MISSION_PLANNING_PROFILE,
   computeMissionStatistics,
 } from "../../lib/mission-statistics";
+import { computeFenceStats } from "../../lib/fence-statistics";
+import type { FencePlan } from "../../fence";
 import { MissionHomeCard } from "./MissionHomeCard";
 import { MissionVehicleCard } from "./MissionVehicleCard";
 import { MissionTransferStatus } from "./MissionTransferStatus";
@@ -93,6 +97,13 @@ function formatEstimatedTime(estimatedTimeSec: number | null): string {
 
 function formatAltitude(altitudeM: number): string {
   return `${Math.round(altitudeM)} m`;
+}
+
+function formatArea(areaM2: number): string {
+  if (areaM2 >= 1_000_000) {
+    return `${(areaM2 / 1_000_000).toFixed(3)} km²`;
+  }
+  return `${Math.round(areaM2)} m²`;
 }
 
 function formatEndurance(endurancePct: number | null, isTimeIndeterminate: boolean): string {
@@ -230,6 +241,10 @@ export function MissionPlannerSummary({ mission, connected }: MissionPlannerSumm
     enduranceBudgetMin,
   });
   const blockingItems = statistics.indeterminateItemIndexes.map((index) => `#${index + 1}`).join(", ");
+
+  const fenceStats = computeFenceStats(
+    missionType === "fence" ? (current.plan as FencePlan).regions : [],
+  );
 
   return (
     <div className="space-y-2">
@@ -402,6 +417,47 @@ export function MissionPlannerSummary({ mission, connected }: MissionPlannerSumm
           <div className="mt-2 flex items-center gap-1.5 text-[10px] text-text-muted">
             <Gauge className="h-3.5 w-3.5 text-accent" />
             Export uses the current cruise and hover inputs shown here.
+          </div>
+        </div>
+      )}
+
+      {missionType === "fence" && (
+        <div
+          data-testid="fence-planning-stats"
+          className="overflow-hidden rounded-lg border border-border-light bg-[linear-gradient(180deg,rgba(83,180,255,0.09),rgba(83,180,255,0.03))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+        >
+          <div className="mb-3 space-y-1">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-text-muted">
+              Planning envelope
+            </div>
+            <div className="text-sm font-semibold text-text-primary">Fence estimates</div>
+            <p className="max-w-xl text-[10px] leading-relaxed text-text-muted">
+              Region count, perimeter, and area are computed from the live draft.
+            </p>
+          </div>
+
+          <div className="grid gap-2 md:grid-cols-3">
+            <StatTile
+              testId="fence-stats-regions"
+              icon={ShieldCheck}
+              label="Regions"
+              value={String(fenceStats.regionCount)}
+              hint="Inclusion and exclusion zones in the fence"
+            />
+            <StatTile
+              testId="fence-stats-perimeter"
+              icon={Route}
+              label="Total perimeter"
+              value={formatDistance(fenceStats.totalPerimeterM)}
+              hint="Sum of boundary lengths across all regions"
+            />
+            <StatTile
+              testId="fence-stats-area"
+              icon={Scaling}
+              label="Total area"
+              value={formatArea(fenceStats.totalAreaM2)}
+              hint="Sum of enclosed areas across all regions"
+            />
           </div>
         </div>
       )}
