@@ -28,7 +28,7 @@ import {
   getApMotorDiagramModel,
   type MotorDiagramModel,
 } from "../shared/vtol-layouts";
-import { deriveMotorTestRows, type MotorTestRow } from "./motor-test-helpers";
+import { deriveMotorTestRows, resolveServoIndexForMotor, type MotorTestRow } from "./motor-test-helpers";
 import { SetupSectionIntro } from "../shared/SetupSectionIntro";
 import { SectionCardHeader } from "../shared/SectionCardHeader";
 import { resolveDocsUrl } from "../../../data/ardupilot-docs";
@@ -60,7 +60,7 @@ const QUADPLANE_MOTOR_PARAMS = {
   spinMax: "Q_M_SPIN_MAX",
 };
 
-function isDshot(pwmType: number): boolean {
+function isDshotProtocol(pwmType: number): boolean {
   return pwmType >= 4 && pwmType <= 7;
 }
 
@@ -238,10 +238,14 @@ function MotorTestCard({
   connected,
   layoutModel,
   rows,
+  params,
+  isDshot,
 }: {
   connected: boolean;
   layoutModel: MotorDiagramModel | null;
   rows: MotorTestRow[];
+  params: ParamInputParams;
+  isDshot: boolean;
 }) {
   const [propsConfirmed, setPropsConfirmed] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
@@ -477,6 +481,35 @@ function MotorTestCard({
                           {result}
                         </span>
                       )}
+                      {result === "reversed" && (() => {
+                        const servoIndex = resolveServoIndexForMotor(row.motorNumber, params);
+                        if (servoIndex === null) return null;
+
+                        if (isDshot) {
+                          return (
+                            <span className="text-[10px] leading-relaxed text-text-muted">
+                              Reverse via ESC configurator for DShot
+                            </span>
+                          );
+                        }
+
+                        const reversedParam = `SERVO${servoIndex}_REVERSED`;
+                        const isStaged = params.staged.has(reversedParam);
+
+                        return (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={isStaged}
+                            onClick={() => {
+                              const current = getStagedOrCurrent(reversedParam, params);
+                              params.stage(reversedParam, current === 1 ? 0 : 1);
+                            }}
+                          >
+                            {isStaged ? "Reversal staged" : `Reverse SERVO${servoIndex}`}
+                          </Button>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -519,7 +552,7 @@ function EscCalibrationCard({
 
   const pwmTypeValue = pwmType ?? 0;
 
-  if (isDshot(pwmTypeValue)) {
+  if (isDshotProtocol(pwmTypeValue)) {
     return (
       <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
         <SectionCardHeader icon={Zap} title="ESC Calibration" docsUrl={escCalDocsUrl} docsLabel="ESC Calibration Docs" />
@@ -607,7 +640,7 @@ function MotorRangeCard({
   }
 
   const pwmTypeValue = pwmType ?? 0;
-  const dshotActive = isDshot(pwmTypeValue);
+  const dshotActive = isDshotProtocol(pwmTypeValue);
 
   return (
     <div className="rounded-lg border border-border bg-bg-tertiary/50 p-4">
@@ -794,6 +827,9 @@ export function MotorsEscSection({
     ? QUADPLANE_MOTOR_PARAMS
     : COPTER_MOTOR_PARAMS;
 
+  const activePwmType = getStagedOrCurrent(activeMotorParams.pwmType, params) ?? 0;
+  const dshotActive = isDshotProtocol(activePwmType);
+
   const showVtolGapCard =
     profile.frameParamFamily === "quadplane" &&
     (!quadPlaneMotorControlsReady || vtolLayoutModel?.status === "preview-only");
@@ -858,6 +894,8 @@ export function MotorsEscSection({
           connected={connected}
           layoutModel={activeLayoutModel}
           rows={motorTestRows}
+          params={params}
+          isDshot={dshotActive}
         />
       )}
 
