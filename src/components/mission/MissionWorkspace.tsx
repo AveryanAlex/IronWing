@@ -237,6 +237,7 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
                 missionItems={current.draftItems as TypedDraftItem[]}
                 homePosition={current.homePosition}
                 selectedIndex={current.selectedIndex}
+                selectedUiIds={current.selectedUiIds}
                 onSelectIndex={handleMapSelect}
                 onMoveWaypoint={current.moveWaypointOnMap}
                 onBlankMapClick={handleBlankMapClick}

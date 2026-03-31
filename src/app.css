@@ -108,6 +108,14 @@ body {
   transform: scale(1.08);
 }
 
+.mission-pin.is-multi-selected {
+  background: var(--color-accent);
+  border-color: var(--color-warning);
+  border-width: 3px;
+  transform: scale(1.04);
+  box-shadow: 0 0 0 2px rgba(255, 176, 32, 0.35), 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
 .mission-pin.is-home {
   background: var(--color-success);
 }

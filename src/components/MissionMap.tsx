@@ -80,6 +80,7 @@ type MissionMapProps = {
   fenceReturnPoint?: GeoPoint2d | null;
   rallyPoints?: Array<{ index: number; point: GeoPoint3d }>;
   selectedRallyIndex?: number | null;
+  selectedUiIds?: Set<number>;
 };
 
 export type { SvsTelemetry };
@@ -130,6 +131,7 @@ export function MissionMap({
   polygonVertices, isDrawingPolygon, onPolygonClick, onPolygonComplete, onPolygonVertexMove,
   fenceRegions, selectedFenceIndex, fenceReturnPoint,
   rallyPoints, selectedRallyIndex,
+  selectedUiIds,
 }: MissionMapProps) {
   type MapLayer = "plan" | "hybrid" | "satellite";
   const [mapLayer, setMapLayer] = useState<MapLayer>("plan");
@@ -627,15 +629,18 @@ export function MissionMap({
         markerElement.textContent = String(item.index + 1);
         markerElement.dataset.missionMarkerSeq = String(item.index);
 
-        const isSelected = selectedIndex === item.index;
+        const isPrimarySelected = selectedIndex === item.index;
         const isCurrent = currentMissionSeq === item.index;
-        markerElement.classList.toggle("is-selected", isSelected);
+        const isMultiSelected = !isPrimarySelected && selectedUiIds?.has(item.uiId);
+
+        markerElement.classList.toggle("is-selected", isPrimarySelected);
+        markerElement.classList.toggle("is-multi-selected", !!isMultiSelected);
         markerElement.classList.toggle("is-current", isCurrent);
 
         // Compute state attribute for test/QA selectors
-        const state = isSelected && isCurrent
+        const state = isPrimarySelected && isCurrent
           ? "selected+active"
-          : isSelected
+          : isPrimarySelected
             ? "selected"
             : isCurrent
               ? "active"
@@ -643,7 +648,7 @@ export function MissionMap({
         markerElement.dataset.missionMarkerState = state;
       }
     }
-  }, [missionItems, selectedIndex, readOnly, currentMissionSeq]);
+  }, [missionItems, selectedIndex, readOnly, currentMissionSeq, selectedUiIds]);
 
   // Vehicle marker (skip in SVS mode — the pilot IS the vehicle)
   useEffect(() => {
