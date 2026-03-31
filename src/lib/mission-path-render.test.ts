@@ -327,6 +327,37 @@ describe("buildMissionRenderFeatures", () => {
     });
   });
 
+  it("tags legs with segment-status relative to current mission seq", () => {
+    const wp0 = offsetPoint(home, 0, 100);
+    const wp1 = offsetPoint(home, 90, 200);
+    const wp2 = offsetPoint(home, 180, 300);
+    const wp3 = offsetPoint(home, 270, 400);
+
+    const features = buildMissionRenderFeatures(null, [
+      waypoint(0, wp0.lat, wp0.lon),
+      waypoint(1, wp1.lat, wp1.lon),
+      waypoint(2, wp2.lat, wp2.lon),
+      waypoint(3, wp3.lat, wp3.lon),
+    ], { currentSeq: 2 });
+
+    expect(features.legs).toHaveLength(3);
+    expect(features.legs[0]!.segmentStatus).toBe("completed");
+    expect(features.legs[1]!.segmentStatus).toBe("active");
+    expect(features.legs[2]!.segmentStatus).toBe("upcoming");
+  });
+
+  it("leaves segmentStatus undefined when no currentSeq is given", () => {
+    const wp0 = offsetPoint(home, 0, 100);
+    const wp1 = offsetPoint(home, 90, 200);
+
+    const features = buildMissionRenderFeatures(null, [
+      waypoint(0, wp0.lat, wp0.lon),
+      waypoint(1, wp1.lat, wp1.lon),
+    ]);
+
+    expect(features.legs[0]!.segmentStatus).toBeUndefined();
+  });
+
   it("produces the expected feature counts for a mixed mission", () => {
     const wp1 = offsetPoint(home, 90, 100);
     const spline1 = offsetPoint(home, 60, 220);

@@ -154,8 +154,9 @@ export function MissionMap({
   const longPressFiredRef = useRef(false);
   const onUserInteractionRef = useRef(onUserInteraction);
   const programmaticMoveRef = useRef(false);
+  const currentMissionSeqRef = useRef(currentMissionSeq);
   const missionRenderFeaturesRef = useRef(
-    buildMissionRenderFeatures(homePosition, missionItems),
+    buildMissionRenderFeatures(homePosition, missionItems, { currentSeq: currentMissionSeq }),
   );
   const syntheticVisionRef = useRef(syntheticVision ?? false);
   const onPolygonClickRef = useRef(onPolygonClick);
@@ -182,11 +183,12 @@ export function MissionMap({
     polygonVerticesRef.current = polygonVertices;
     missionItemsRef.current = missionItems;
     homePositionRef.current = homePosition;
-  }, [onSelectIndex, onMoveWaypoint, onBlankMapClick, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, polygonVertices, missionItems, homePosition]);
+    currentMissionSeqRef.current = currentMissionSeq;
+  }, [onSelectIndex, onMoveWaypoint, onBlankMapClick, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, polygonVertices, missionItems, homePosition, currentMissionSeq]);
 
   const missionRenderFeatures = useMemo(
-    () => buildMissionRenderFeatures(homePosition, missionItems),
-    [missionItems, homePosition],
+    () => buildMissionRenderFeatures(homePosition, missionItems, { currentSeq: currentMissionSeq }),
+    [missionItems, homePosition, currentMissionSeq],
   );
 
   useEffect(() => {
@@ -607,7 +609,7 @@ export function MissionMap({
 
             updateMissionPathSource(
               m,
-              buildMissionRenderFeatures(homePositionRef.current, modifiedItems),
+              buildMissionRenderFeatures(homePositionRef.current, modifiedItems, { currentSeq: currentMissionSeqRef.current }),
               !syntheticVisionRef.current,
             );
           });

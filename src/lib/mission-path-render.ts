@@ -31,6 +31,8 @@ export type MissionRenderLeg = {
   isSpline: boolean;
   isArc: boolean;
   isLandingLeg: boolean;
+  /** Relative position of this leg to the actively executing waypoint seq. */
+  segmentStatus?: "completed" | "active" | "upcoming";
 };
 
 export type MissionRenderLoiterCircle = {
@@ -223,6 +225,7 @@ export function classifyMissionRenderCommand(
 export function buildMissionRenderFeatures(
   homePosition: HomePosition | null,
   items: TypedDraftItem[],
+  options?: { currentSeq?: number | null },
 ): MissionRenderFeatures {
   const features: MissionRenderFeatures = {
     legs: [],
@@ -312,14 +315,18 @@ export function buildMissionRenderFeatures(
       current.itemIndex !== null &&
       current.itemIndex >= features.landingStartIndex;
 
+    const fromEndpoint = buildEndpoint(previous);
+    const toEndpoint = buildEndpoint(current);
+
     const leg: MissionRenderLeg = {
       kind,
       coordinates,
-      from: buildEndpoint(previous),
-      to: buildEndpoint(current),
+      from: fromEndpoint,
+      to: toEndpoint,
       isSpline: kind === "spline",
       isArc: kind === "arc",
       isLandingLeg,
+      segmentStatus: classifySegmentStatus(fromEndpoint.itemIndex, toEndpoint.itemIndex, options?.currentSeq),
     };
 
     features.legs.push(leg);
@@ -340,6 +347,28 @@ function buildEndpoint(node: RenderNode): MissionRenderEndpoint {
     longitude_deg: node.position.longitude_deg,
     isHome: node.isHome,
   };
+}
+
+/**
+ * Classify where this leg falls relative to the current executing mission sequence.
+ * A leg is "active" when it spans the currentSeq boundary (from < currentSeq <= to),
+ * "completed" when both endpoints are strictly before currentSeq, and "upcoming" otherwise.
+ * Returns undefined when no currentSeq is provided.
+ */
+function classifySegmentStatus(
+  fromItemIndex: number | null,
+  toItemIndex: number | null,
+  currentSeq: number | null | undefined,
+): MissionRenderLeg["segmentStatus"] {
+  if (currentSeq == null) return undefined;
+
+  // Treat home (itemIndex null) as seq -1 so it always counts as "before" any real seq.
+  const fromSeq = fromItemIndex ?? -1;
+  const toSeq = toItemIndex ?? -1;
+
+  if (toSeq < currentSeq) return "completed";
+  if (fromSeq < currentSeq) return "active";
+  return "upcoming";
 }
 
 function shouldSplineSegment(previous: RenderNode, current: RenderNode): boolean {

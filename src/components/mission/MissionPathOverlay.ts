@@ -16,6 +16,7 @@ type MissionPathFeatureProperties = {
   isSpline?: boolean;
   isArc?: boolean;
   isLandingLeg?: boolean;
+  segmentStatus?: string;
   direction?: string;
   radius_m?: number;
   usesDefaultRadius?: boolean;
@@ -49,6 +50,7 @@ export function missionRenderFeaturesToGeoJson(
         isSpline: leg.isSpline,
         isArc: leg.isArc,
         isLandingLeg: leg.isLandingLeg,
+        segmentStatus: leg.segmentStatus,
       },
     });
   }
@@ -127,8 +129,17 @@ export function ensureMissionPathLayers(
           "#f59e0b",
           "#78d6ff",
         ],
-        "line-width": 4,
-        "line-opacity": 1,
+        "line-width": [
+          "case",
+          ["==", ["get", "segmentStatus"], "active"], 5,
+          4,
+        ],
+        "line-opacity": [
+          "case",
+          ["==", ["get", "segmentStatus"], "completed"], 0.35,
+          ["==", ["get", "segmentStatus"], "active"], 1,
+          0.85,
+        ],
       },
     } as any);
   }

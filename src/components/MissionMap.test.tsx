@@ -506,7 +506,7 @@ describe("MissionMap", () => {
       expect(map?.getSource(MISSION_PATH_SOURCE_ID)?.setData).toHaveBeenCalled();
     });
 
-    expect(buildMissionRenderFeaturesSpy).toHaveBeenCalledWith(homePosition, missionItems);
+    expect(buildMissionRenderFeaturesSpy).toHaveBeenCalledWith(homePosition, missionItems, { currentSeq: undefined });
 
     const map = getLastMapInstance() as InstanceType<typeof MockMap>;
     const source = map.getSource(MISSION_PATH_SOURCE_ID);
