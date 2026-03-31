@@ -379,6 +379,45 @@ export function generateGrid(params: GridParams): GridResult {
 }
 
 // ---------------------------------------------------------------------------
+// Lightweight count estimator (no MissionItem allocation)
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the number of waypoints `generateGrid` would produce for the given
+ * params, or `null` when the params are invalid.  Runs the same scanline
+ * intersection logic but skips back-projection and item construction.
+ */
+export function estimateGridWaypointCount(params: GridParams): number | null {
+  if (validateGridParams(params).length > 0) return null;
+
+  const ref = polygonCentroid(params.polygon);
+  const localPoly = params.polygon.map((v) => {
+    const { x_m, y_m } = latLonToLocalXY(ref, v.latitude_deg, v.longitude_deg);
+    return { x: x_m, y: y_m };
+  });
+
+  const rotAngle = 90 - params.track_angle_deg;
+  const rotPoly = localPoly.map((p) => rotatePoint(p, rotAngle));
+
+  let minY = Infinity, maxY = -Infinity;
+  for (const p of rotPoly) {
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+
+  const spacing = params.lane_spacing_m;
+  const eps = spacing * 1e-6;
+  const firstY = minY + spacing / 2;
+
+  let count = 0;
+  for (let y = firstY; y < maxY - eps; y += spacing) {
+    const xs = scanlineIntersections(rotPoly, y);
+    count += Math.floor(xs.length / 2) * 2;
+  }
+  return count;
+}
+
+// ---------------------------------------------------------------------------
 // Start-corner helpers
 // ---------------------------------------------------------------------------
 

@@ -3,6 +3,7 @@ import {
   generateGrid,
   validateGridParams,
   resolveStartCorner,
+  estimateGridWaypointCount,
   type GridParams,
   type PolygonVertex,
   type GridResult,
@@ -613,5 +614,37 @@ describe("resolveStartCorner", () => {
     const pSW = itemLatLon(itemsSW[0]);
     const pNE = itemLatLon(itemsNE[0]);
     expect(pSW.latitude_deg).not.toBe(pNE.latitude_deg);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// estimateGridWaypointCount
+// ---------------------------------------------------------------------------
+
+describe("estimateGridWaypointCount", () => {
+  it("matches generateGrid item count for a square polygon", () => {
+    const params = defaultParams();
+    const result = generateGrid(params);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(estimateGridWaypointCount(params)).toBe(result.items.length);
+    }
+  });
+
+  it("matches generateGrid item count for varied angles and spacings", () => {
+    for (const angle of [0, 45, 90, 135]) {
+      for (const spacing of [10, 25, 50]) {
+        const params = defaultParams({ track_angle_deg: angle, lane_spacing_m: spacing });
+        const result = generateGrid(params);
+        if (result.ok) {
+          expect(estimateGridWaypointCount(params)).toBe(result.items.length);
+        }
+      }
+    }
+  });
+
+  it("returns null for invalid params", () => {
+    expect(estimateGridWaypointCount(defaultParams({ lane_spacing_m: -1 }))).toBeNull();
+    expect(estimateGridWaypointCount(defaultParams({ polygon: [] }))).toBeNull();
   });
 });

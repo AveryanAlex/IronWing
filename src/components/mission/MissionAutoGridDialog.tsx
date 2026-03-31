@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useCallback, useEffect, useRef, useLayoutEffect, useMemo } from "react";
 import { X, Pencil, Trash2, RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "../ui/button";
 import { toast } from "sonner";
@@ -6,6 +6,7 @@ import {
   generateGrid,
   validateGridParams,
   resolveStartCorner,
+  estimateGridWaypointCount,
   type PolygonVertex,
   type StartCorner,
   type TurnDirection,
@@ -85,6 +86,18 @@ export function MissionAutoGridDialog({
     Number.isFinite(Number(spacing)) &&
     Number(spacing) > 0 &&
     !isDrawing;
+
+  const estimatedCount = useMemo(() => {
+    if (!canGenerate) return null;
+    return estimateGridWaypointCount({
+      polygon,
+      altitude_m: Number(altitude),
+      lane_spacing_m: Number(spacing),
+      track_angle_deg: Number(angle),
+      start_corner: startCorner,
+      turn_direction: turnDirection,
+    });
+  }, [canGenerate, polygon, altitude, spacing, angle, startCorner, turnDirection]);
 
   useEffect(() => {
     if (isDrawing) setParamsVisible(false);
@@ -352,7 +365,9 @@ export function MissionAutoGridDialog({
           disabled={!canGenerate}
           className="w-full"
         >
-          Generate Grid
+          {estimatedCount != null
+            ? `Add ${estimatedCount.toLocaleString()} Waypoints`
+            : "Generate Grid"}
         </Button>
       </div>
     </div>
