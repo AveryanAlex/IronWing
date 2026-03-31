@@ -357,6 +357,14 @@ function requireFiniteInteger(value: unknown, label: string): number {
   return value;
 }
 
+function requireBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`missing or invalid ${label}`);
+  }
+
+  return value;
+}
+
 function validateSetServoArgs(args: CommandArgs) {
   const instance = requireFiniteInteger(args?.instance, "set_servo.instance");
   const pwmUs = requireFiniteInteger(args?.pwmUs, "set_servo.pwmUs");
@@ -426,6 +434,75 @@ function validateRcOverrideArgs(args: CommandArgs) {
       }
     }
   }
+}
+
+function validateArmDisarmArgs(args: CommandArgs, cmd: "arm_vehicle" | "disarm_vehicle") {
+  requireBoolean(args?.force, `${cmd}.force`);
+}
+
+function validateParamWriteBatchArgs(args: CommandArgs): [string, number][] {
+  if (!Array.isArray(args?.params)) {
+    throw new Error("missing or invalid param_write_batch.params");
+  }
+
+  return args.params.map((entry, index) => {
+    if (!Array.isArray(entry) || entry.length !== 2) {
+      throw new Error(`missing or invalid param_write_batch.params[${index}]`);
+    }
+
+    const [name, value] = entry;
+    if (typeof name !== "string" || name.trim().length === 0) {
+      throw new Error(`missing or invalid param_write_batch.params[${index}][0]`);
+    }
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new Error(`missing or invalid param_write_batch.params[${index}][1]`);
+    }
+
+    return [name, value];
+  });
+}
+
+function syncLiveVehicleArmedState(armed: boolean) {
+  mockState.liveVehicleArmed = armed;
+  if (mockState.liveVehicleState) {
+    mockState.liveVehicleState = { ...mockState.liveVehicleState, armed };
+  }
+
+  if (!mockState.liveEnvelope || !mockState.liveVehicleState) {
+    return;
+  }
+
+  emitEvent("session://state", liveSessionStreamEvent(mockState.liveVehicleState).payload);
+  const reconciledGuided = reconcileGuidedAfterLiveVehicleUpdate();
+  if (reconciledGuided) {
+    emitEvent("guided://state", liveGuidedStreamEvent(reconciledGuided).payload);
+    return;
+  }
+
+  emitGuidedStateIfLiveActive();
+}
+
+function applyParamWriteBatch(params: [string, number][]) {
+  if (mockState.liveParamStore) {
+    const nextIndex = Object.keys(mockState.liveParamStore.params).length;
+    params.forEach(([name, value], index) => {
+      const existing = mockState.liveParamStore?.params[name];
+      mockState.liveParamStore!.params[name] = existing
+        ? { ...existing, value }
+        : { name, value, param_type: "real32", index: nextIndex + index };
+    });
+  }
+
+  if (mockState.liveEnvelope && mockState.liveParamStore) {
+    emitEvent("param://store", liveParamStoreStreamEvent(mockState.liveParamStore).payload);
+  }
+
+  return params.map(([name, value]) => ({
+    name,
+    requested_value: value,
+    confirmed_value: value,
+    success: true,
+  }));
 }
 
 function emitGuidedStateIfLiveActive() {
@@ -1518,6 +1595,28 @@ function defaultCommandResult(cmd: string, _args: CommandArgs): unknown {
       requireConnectedVehicle();
       validateRcOverrideArgs(_args);
       return undefined;
+    case "arm_vehicle":
+      requireConnectedVehicle();
+      validateArmDisarmArgs(_args, "arm_vehicle");
+      syncLiveVehicleArmedState(true);
+      return undefined;
+    case "disarm_vehicle":
+      requireConnectedVehicle();
+      validateArmDisarmArgs(_args, "disarm_vehicle");
+      syncLiveVehicleArmedState(false);
+      return undefined;
+    case "calibrate_accel":
+    case "calibrate_gyro":
+    case "calibrate_compass_start":
+    case "calibrate_compass_accept":
+    case "calibrate_compass_cancel":
+    case "reboot_vehicle":
+    case "request_prearm_checks":
+      requireConnectedVehicle();
+      return undefined;
+    case "param_write_batch":
+      requireConnectedVehicle();
+      return applyParamWriteBatch(validateParamWriteBatchArgs(_args));
     case "vehicle_takeoff": {
       const contextError = takeoffContextError();
       if (contextError) {

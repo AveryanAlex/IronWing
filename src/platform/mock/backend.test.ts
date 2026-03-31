@@ -785,6 +785,109 @@ describe("mock backend actuation parity", () => {
   });
 });
 
+describe("mock setup/calibration/arming backend parity", () => {
+  beforeEach(() => {
+    getMockPlatformController().reset();
+  });
+
+  it("arms when connected and rejects when disconnected", async () => {
+    await expect(invokeMockCommand("arm_vehicle", { force: false })).rejects.toThrow("not connected");
+
+    await invokeMockCommand("connect_link", {
+      request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
+    });
+
+    await expect(invokeMockCommand("arm_vehicle", { force: false })).resolves.toBeUndefined();
+
+    const live = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+    expect(live.session.value.vehicle_state.armed).toBe(true);
+    expect(live.guided.value.status).toBe("idle");
+  });
+
+  it("disarms when connected", async () => {
+    await invokeMockCommand("connect_link", {
+      request: {
+        transport: { kind: "udp", bind_addr: "0.0.0.0:14550" },
+        mockVehicleState: { armed: true, modeName: "GUIDED" },
+      },
+    });
+
+    await expect(invokeMockCommand("disarm_vehicle", { force: false })).resolves.toBeUndefined();
+
+    const live = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+    expect(live.session.value.vehicle_state.armed).toBe(false);
+    expect(live.guided.value.blocking_reason).toBe("vehicle_disarmed");
+  });
+
+  it("starts accel calibration when connected and rejects when disconnected", async () => {
+    await expect(invokeMockCommand("calibrate_accel")).rejects.toThrow("not connected");
+
+    await invokeMockCommand("connect_link", {
+      request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
+    });
+
+    await expect(invokeMockCommand("calibrate_accel")).resolves.toBeUndefined();
+  });
+
+  it("starts gyro calibration when connected", async () => {
+    await invokeMockCommand("connect_link", {
+      request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
+    });
+
+    await expect(invokeMockCommand("calibrate_gyro")).resolves.toBeUndefined();
+  });
+
+  it("starts compass calibration when connected", async () => {
+    await invokeMockCommand("connect_link", {
+      request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
+    });
+
+    await expect(invokeMockCommand("calibrate_compass_start", { compassMask: 0 })).resolves.toBeUndefined();
+  });
+
+  it("reboots the vehicle when connected", async () => {
+    await invokeMockCommand("connect_link", {
+      request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
+    });
+
+    await expect(invokeMockCommand("reboot_vehicle")).resolves.toBeUndefined();
+  });
+
+  it("requests prearm checks when connected", async () => {
+    await invokeMockCommand("connect_link", {
+      request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
+    });
+
+    await expect(invokeMockCommand("request_prearm_checks")).resolves.toBeUndefined();
+  });
+
+  it("returns frontend-shaped param write batch results when connected", async () => {
+    await invokeMockCommand("connect_link", {
+      request: {
+        transport: { kind: "udp", bind_addr: "0.0.0.0:14550" },
+        mockParamStore: {
+          expected_count: 2,
+          params: {
+            ARMING_CHECK: { name: "ARMING_CHECK", value: 1, param_type: "uint8", index: 0 },
+            FS_THR_ENABLE: { name: "FS_THR_ENABLE", value: 2, param_type: "uint8", index: 1 },
+          },
+        },
+      },
+    });
+
+    await expect(invokeMockCommand("param_write_batch", {
+      params: [["ARMING_CHECK", 0], ["FS_THR_ENABLE", 1]],
+    })).resolves.toEqual([
+      { name: "ARMING_CHECK", requested_value: 0, confirmed_value: 0, success: true },
+      { name: "FS_THR_ENABLE", requested_value: 1, confirmed_value: 1, success: true },
+    ]);
+
+    const live = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+    expect(live.param_store.params.ARMING_CHECK.value).toBe(0);
+    expect(live.param_store.params.FS_THR_ENABLE.value).toBe(1);
+  });
+});
+
 describe("mock firmware backend parity", () => {
   beforeEach(() => {
     getMockPlatformController().reset();
