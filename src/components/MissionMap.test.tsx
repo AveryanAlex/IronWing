@@ -3,12 +3,23 @@
 import { cleanup, render, waitFor, act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TypedDraftItem } from "../lib/mission-draft-typed";
+import {
+  commandPosition,
+  defaultGeoPoint3d,
+  geoPoint3dAltitude,
+  geoPoint3dLatLon,
+  type MissionCommand,
+  type MissionItem,
+} from "../lib/mavkit-types";
+import { latLonFromBearingDistance } from "../lib/mission-coordinates";
+import { MISSION_PATH_SOURCE_ID } from "./mission/MissionPathOverlay";
 
 const {
   mockContainerSize,
   resizeObserverCallbacks,
   fitBoundsSpy,
   resizeSpy,
+  buildMissionRenderFeaturesSpy,
   setLastMapInstance,
   getLastMapInstance,
   MockMap,
@@ -22,6 +33,7 @@ const {
   const resizeObserverCallbacks: Array<() => void> = [];
   const fitBoundsSpy = vi.fn();
   const resizeSpy = vi.fn();
+  const buildMissionRenderFeaturesSpy = vi.fn();
   type EventHandler = (...args: unknown[]) => void;
   let lastMapInstance: unknown = null;
 
@@ -32,7 +44,7 @@ const {
   class MockMap {
     private readonly container: HTMLDivElement;
     private readonly handlers = new Map<string, Set<EventHandler>>();
-    private readonly layers = new Map<string, { id: string }>();
+    private readonly layers = new Map<string, { id: string; layout?: Record<string, unknown> }>();
     private readonly sources = new Map<string, MockGeoJSONSource>();
     private readonly canvas = document.createElement("canvas");
     private styleLoaded = false;
@@ -92,7 +104,7 @@ const {
       this.sources.delete(id);
     }
 
-    addLayer(layer: { id: string }) {
+    addLayer(layer: { id: string; layout?: Record<string, unknown> }) {
       this.layers.set(layer.id, layer);
     }
 
@@ -126,7 +138,11 @@ const {
 
     remove() { }
 
-    setLayoutProperty() { }
+    setLayoutProperty(id: string, name: string, value: unknown) {
+      const layer = this.layers.get(id);
+      if (!layer) return;
+      layer.layout = { ...(layer.layout ?? {}), [name]: value };
+    }
 
     setTerrain() { }
 
@@ -213,6 +229,7 @@ const {
     resizeObserverCallbacks,
     fitBoundsSpy,
     resizeSpy,
+    buildMissionRenderFeaturesSpy,
     setLastMapInstance: (value: unknown) => {
       lastMapInstance = value;
     },
@@ -237,6 +254,15 @@ vi.mock("maplibre-gl", () => ({
   },
 }));
 
+vi.mock("../lib/mission-path-render", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/mission-path-render")>();
+  buildMissionRenderFeaturesSpy.mockImplementation(actual.buildMissionRenderFeatures);
+  return {
+    ...actual,
+    buildMissionRenderFeatures: buildMissionRenderFeaturesSpy,
+  };
+});
+
 import { MissionMap } from "./MissionMap";
 
 class MockResizeObserver {
@@ -253,26 +279,106 @@ class MockResizeObserver {
   disconnect() { }
 }
 
-function makeMissionItem(index: number, latitude_deg: number, longitude_deg: number): TypedDraftItem {
+function makeMissionItem(command: MissionCommand): MissionItem {
   return {
+    command,
+    current: false,
+    autocontinue: true,
+  };
+}
+
+function makeDraftItem(index: number, command: MissionCommand): TypedDraftItem {
+  const position = commandPosition(command);
+  const preview = position
+    ? (() => {
+      const { latitude_deg, longitude_deg } = geoPoint3dLatLon(position);
+      const { value: altitude_m } = geoPoint3dAltitude(position);
+      return { latitude_deg, longitude_deg, altitude_m };
+    })()
+    : {
+      latitude_deg: null,
+      longitude_deg: null,
+      altitude_m: null,
+    };
+
+  return {
+    uiId: index + 1,
     index,
-    document: {
-      sequence: index,
-      frame: "global_relative_alt",
-      command: "navigate_to_waypoint",
-      params: [0, 0, 0, 0, latitude_deg, longitude_deg, 30],
-      autocontinue: true,
-    },
-    preview: {
-      latitude_deg,
-      longitude_deg,
-      altitude_m: 30,
-      frame: "global_relative_alt",
-    },
-    errors: [],
-    warnings: [],
+    document: makeMissionItem(command),
+    preview,
     readOnly: false,
-  } as unknown as TypedDraftItem;
+  } satisfies TypedDraftItem;
+}
+
+function waypoint(index: number, latitude_deg: number, longitude_deg: number): TypedDraftItem {
+  return makeDraftItem(index, {
+    Nav: {
+      Waypoint: {
+        position: defaultGeoPoint3d(latitude_deg, longitude_deg, 30),
+        hold_time_s: 0,
+        acceptance_radius_m: 1,
+        pass_radius_m: 0,
+        yaw_deg: 0,
+      },
+    },
+  });
+}
+
+function splineWaypoint(index: number, latitude_deg: number, longitude_deg: number): TypedDraftItem {
+  return makeDraftItem(index, {
+    Nav: {
+      SplineWaypoint: {
+        position: defaultGeoPoint3d(latitude_deg, longitude_deg, 30),
+        hold_time_s: 0,
+      },
+    },
+  });
+}
+
+function arcWaypoint(
+  index: number,
+  latitude_deg: number,
+  longitude_deg: number,
+  arc_angle_deg: number,
+  direction: "Clockwise" | "CounterClockwise",
+): TypedDraftItem {
+  return makeDraftItem(index, {
+    Nav: {
+      ArcWaypoint: {
+        position: defaultGeoPoint3d(latitude_deg, longitude_deg, 30),
+        arc_angle_deg,
+        direction,
+      },
+    },
+  });
+}
+
+function loiterTurns(
+  index: number,
+  latitude_deg: number,
+  longitude_deg: number,
+  radius_m: number,
+  direction: "Clockwise" | "CounterClockwise" = "Clockwise",
+): TypedDraftItem {
+  return makeDraftItem(index, {
+    Nav: {
+      LoiterTurns: {
+        position: defaultGeoPoint3d(latitude_deg, longitude_deg, 30),
+        turns: 1,
+        radius_m,
+        direction,
+        exit_xtrack: false,
+      },
+    },
+  });
+}
+
+function offsetPoint(
+  reference: { latitude_deg: number; longitude_deg: number },
+  bearing_deg: number,
+  distance_m: number,
+): { lat: number; lon: number } {
+  return latLonFromBearingDistance(reference, bearing_deg, distance_m);
 }
 
 describe("MissionMap", () => {
@@ -280,6 +386,7 @@ describe("MissionMap", () => {
     cleanup();
     fitBoundsSpy.mockClear();
     resizeSpy.mockClear();
+    buildMissionRenderFeaturesSpy.mockClear();
     resizeObserverCallbacks.length = 0;
     mockContainerSize.width = 0;
     mockContainerSize.height = 0;
@@ -295,7 +402,7 @@ describe("MissionMap", () => {
   it("waits for non-zero container size before initial fitBounds", async () => {
     render(
       <MissionMap
-        missionItems={[makeMissionItem(0, 47.4, 8.55)]}
+        missionItems={[waypoint(0, 47.4, 8.55)]}
         homePosition={{ latitude_deg: 47.397742, longitude_deg: 8.545594, altitude_m: 0 }}
         selectedIndex={null}
       />,
@@ -323,7 +430,7 @@ describe("MissionMap", () => {
 
     const { rerender } = render(
       <MissionMap
-        missionItems={[makeMissionItem(0, 47.4, 8.55)]}
+        missionItems={[waypoint(0, 47.4, 8.55)]}
         homePosition={{ latitude_deg: 47.397742, longitude_deg: 8.545594, altitude_m: 0 }}
         selectedIndex={null}
         onBlankMapClick={onBlankMapClick}
@@ -345,7 +452,7 @@ describe("MissionMap", () => {
 
     rerender(
       <MissionMap
-        missionItems={[makeMissionItem(0, 47.4, 8.55)]}
+        missionItems={[waypoint(0, 47.4, 8.55)]}
         homePosition={{ latitude_deg: 47.397742, longitude_deg: 8.545594, altitude_m: 0 }}
         selectedIndex={null}
         onBlankMapClick={onBlankMapClick}
@@ -364,5 +471,58 @@ describe("MissionMap", () => {
 
     expect(onBlankMapClick).toHaveBeenCalledTimes(1);
     expect(onPolygonClick).toHaveBeenCalledWith(47.42, 8.57);
+  });
+
+  it("pushes mixed spline, arc, loiter, and label features into the mission path overlay", async () => {
+    const homePosition = {
+      latitude_deg: 47.397742,
+      longitude_deg: 8.545594,
+      altitude_m: 488,
+    };
+    const wp1 = offsetPoint(homePosition, 90, 100);
+    const spline1 = offsetPoint(homePosition, 60, 220);
+    const arcTarget = offsetPoint(homePosition, 45, 320);
+    const loiterPoint = offsetPoint(homePosition, 90, 430);
+    const wp2 = offsetPoint(homePosition, 120, 560);
+    const missionItems = [
+      waypoint(0, wp1.lat, wp1.lon),
+      splineWaypoint(1, spline1.lat, spline1.lon),
+      arcWaypoint(2, arcTarget.lat, arcTarget.lon, 60, "CounterClockwise"),
+      loiterTurns(3, loiterPoint.lat, loiterPoint.lon, 80),
+      waypoint(4, wp2.lat, wp2.lon),
+    ];
+
+    render(
+      <MissionMap
+        missionItems={missionItems}
+        homePosition={homePosition}
+        selectedIndex={null}
+      />,
+    );
+
+    await waitFor(() => {
+      const map = getLastMapInstance() as InstanceType<typeof MockMap> | null;
+      expect(map).not.toBeNull();
+      expect(map?.getSource(MISSION_PATH_SOURCE_ID)?.setData).toHaveBeenCalled();
+    });
+
+    expect(buildMissionRenderFeaturesSpy).toHaveBeenCalledWith(homePosition, missionItems);
+
+    const map = getLastMapInstance() as InstanceType<typeof MockMap>;
+    const source = map.getSource(MISSION_PATH_SOURCE_ID);
+    const calls = source?.setData.mock.calls ?? [];
+    const payload = calls[calls.length - 1]?.[0];
+
+    expect(payload?.type).toBe("FeatureCollection");
+    expect(payload?.features).toHaveLength(11);
+    expect(payload?.features.filter((feature: { properties?: { kind?: string } }) => feature.properties?.kind === "loiter")).toHaveLength(1);
+    expect(payload?.features.filter((feature: { properties?: { kind?: string } }) => feature.properties?.kind === "label")).toHaveLength(5);
+    expect(
+      payload?.features.filter((feature: { properties?: { kind?: string } }) =>
+        ["straight", "spline", "arc"].includes(feature.properties?.kind ?? ""),
+      ),
+    ).toHaveLength(5);
+    expect(payload?.features.some((feature: { properties?: { kind?: string } }) => feature.properties?.kind === "spline")).toBe(true);
+    expect(payload?.features.some((feature: { properties?: { kind?: string } }) => feature.properties?.kind === "arc")).toBe(true);
   });
 });
