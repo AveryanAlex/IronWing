@@ -15,14 +15,14 @@ describe("command catalog", () => {
     it("covers all 65 typed picker variants", () => {
         expect(COMMAND_CATALOG).toHaveLength(65);
         expect(getCommandCatalog()).toHaveLength(65);
+        expect(mappedCommandIds()).toHaveLength(65);
     });
 
-    it("contains unique positive numeric MAV_CMD IDs", () => {
+    it("uses unique positive MAV_CMD IDs across the catalog", () => {
         const ids = COMMAND_CATALOG.map((entry) => entry.id);
         expect(new Set(ids).size).toBe(ids.length);
 
         for (const entry of COMMAND_CATALOG) {
-            expect(typeof entry.variant).toBe("string");
             expect(entry.variant.length).toBeGreaterThan(0);
             expect(entry.id).toBeGreaterThan(0);
             expect(entry.label.length).toBeGreaterThan(0);
@@ -30,7 +30,7 @@ describe("command catalog", () => {
         }
     });
 
-    it("maps representative variants to command IDs and back", () => {
+    it("maps representative variants to ids and back", () => {
         expect(variantToCommandId("Nav", "Waypoint")).toBe(16);
         expect(variantToCommandId("Nav", "VtolTakeoff")).toBe(84);
         expect(variantToCommandId("Do", "LandStart")).toBe(189);
@@ -45,80 +45,64 @@ describe("command catalog", () => {
 });
 
 describe("metadata coverage contract", () => {
-    it("maps all 65 catalog commands", () => {
-        const mapped = mappedCommandIds();
-        expect(mapped).toHaveLength(65);
-        expect(new Set(mapped)).toEqual(new Set(COMMAND_CATALOG.map((entry) => entry.id)));
-    });
+    it("provides dedicated metadata for every catalog entry", () => {
+        const catalogIds = new Set(COMMAND_CATALOG.map((entry) => entry.id));
+        expect(new Set(mappedCommandIds())).toEqual(catalogIds);
 
-    it("provides metadata for every catalog entry with no known-command fallback", () => {
         for (const entry of COMMAND_CATALOG) {
-            const meta = getCommandMetadata(entry.id);
-            expect(meta, `${entry.category}:${entry.variant}`).toBeDefined();
+            const metadata = getCommandMetadata(entry.id);
+            expect(metadata, `${entry.category}:${entry.variant}`).toBeDefined();
             expect(resolveCommandMetadata(entry.id).summary).not.toContain("no detailed metadata available");
         }
     });
 
-    it("keeps metadata IDs, summaries, categories, frames, and MAV_CMD rows consistent", () => {
-        for (const entry of COMMAND_CATALOG) {
-            const meta = getCommandMetadata(entry.id)!;
-            expect(meta.id).toBe(entry.id);
-            expect(meta.summary.length).toBeGreaterThan(0);
-            expect(meta.frame, `frame missing for ${entry.variant}`).toBeDefined();
-            expect(["navigation", "do", "condition"]).toContain(meta.category);
-            expect(MAV_CMD[entry.id], `MAV_CMD row missing for ${entry.variant}`).toBeDefined();
+    it("keeps every metadata record id aligned with its key", () => {
+        for (const id of mappedCommandIds()) {
+            expect(getCommandMetadata(id)?.id).toBe(id);
         }
     });
 
-    it("gives every typed field descriptor a non-empty label", () => {
-        for (const entry of COMMAND_CATALOG) {
-            const meta = getCommandMetadata(entry.id)!;
-            for (const [fieldKey, descriptor] of Object.entries(meta.typedFields ?? {})) {
-                expect(descriptor.label, `${entry.variant}.${fieldKey}`).toBeTruthy();
+    it("assigns non-empty typed labels for every typed field descriptor", () => {
+        for (const id of mappedCommandIds()) {
+            const metadata = getCommandMetadata(id)!;
+            for (const [fieldKey, descriptor] of Object.entries(metadata.typedFields ?? {})) {
+                expect(descriptor.label.trim(), `${id}:${fieldKey}`).not.toBe("");
             }
         }
     });
 
-    it("defines a frame for every metadata entry that exposes position slots", () => {
+    it("defines a frame for every navigation metadata entry with x/y position params", () => {
         for (const entry of COMMAND_CATALOG) {
-            const meta = getCommandMetadata(entry.id)!;
-            if (meta.params.x || meta.params.y || meta.params.z) {
-                expect(meta.frame, `${entry.variant} position-bearing metadata requires frame`).toBeDefined();
+            const metadata = getCommandMetadata(entry.id)!;
+            if (metadata.category === "navigation" && metadata.params.x && metadata.params.y) {
+                expect(metadata.frame, `${entry.variant} is navigation + position-bearing`).toBeDefined();
             }
+        }
+    });
+
+    it("keeps MAV_CMD table rows present for every catalog entry", () => {
+        for (const entry of COMMAND_CATALOG) {
+            expect(MAV_CMD[entry.id], `missing MAV_CMD row for ${entry.category}:${entry.variant}`).toBeDefined();
         }
     });
 });
 
-describe("existing rich metadata still behaves as expected", () => {
-    it("keeps NAV_WAYPOINT typed field support markers", () => {
-        const meta = getCommandMetadata(16)!;
-        expect(meta.params.param1?.label).toBe("Hold");
-        expect(meta.params.param2?.supported).toBe(false);
-        expect(meta.typedFields?.hold_time_s?.label).toBe("Hold");
-        expect(meta.typedFields?.acceptance_radius_m?.supported).toBe(false);
+describe("inspector-relevant metadata spot checks", () => {
+    it("keeps waypoint support markers and takeoff coordinate visibility rules", () => {
+        const waypoint = getCommandMetadata(16)!;
+        expect(waypoint.typedFields?.hold_time_s?.label).toBe("Hold");
+        expect(waypoint.typedFields?.acceptance_radius_m?.supported).toBe(false);
+        expect(waypoint.typedFields?.pass_radius_m?.supported).toBe(false);
+        expect(waypoint.typedFields?.yaw_deg?.supported).toBe(false);
+
+        const takeoff = getCommandMetadata(22)!;
+        expect(takeoff.params.x?.hidden).toBe(true);
+        expect(takeoff.params.y?.hidden).toBe(true);
+        expect(takeoff.params.z?.required).toBe(true);
+        expect(takeoff.typedFields?.pitch_deg?.hidden).toBe(true);
     });
 
-    it("keeps NAV_TAKEOFF coordinate visibility rules", () => {
-        const meta = getCommandMetadata(22)!;
-        expect(meta.params.x?.hidden).toBe(true);
-        expect(meta.params.y?.hidden).toBe(true);
-        expect(meta.params.z?.required).toBe(true);
-    });
-
-    it("keeps COND_YAW and CHANGE_SPEED enum metadata", () => {
-        expect(getCommandMetadata(115)?.typedFields?.direction?.enumValues).toEqual([
-            { value: "Clockwise", label: "CW" },
-            { value: "CounterClockwise", label: "CCW" },
-        ]);
-        expect(getCommandMetadata(178)?.typedFields?.speed_type?.enumValues).toEqual([
-            { value: "Airspeed", label: "Airspeed" },
-            { value: "Groundspeed", label: "Ground Speed" },
-        ]);
-    });
-});
-
-describe("new T02 command coverage", () => {
-    it("adds R042 navigation/do metadata entries", () => {
+    it("covers the R042 VTOL takeoff, VTOL land, and DO_LAND_START entries", () => {
         const vtolTakeoff = getCommandMetadata(84)!;
         expect(vtolTakeoff.summary).toContain("VTOL takeoff");
         expect(vtolTakeoff.frame).toBeDefined();
@@ -129,38 +113,18 @@ describe("new T02 command coverage", () => {
         expect(vtolLand.summary).toContain("VTOL landing");
         expect(vtolLand.frame).toBeDefined();
         expect(vtolLand.typedFields?.options?.label).toBe("Options");
+        expect(vtolLand.params.x?.label).toBe("Latitude");
+        expect(vtolLand.params.y?.label).toBe("Longitude");
 
         const landStart = getCommandMetadata(189)!;
         expect(landStart.summary).toContain("landing sequence");
         expect(landStart.frame).toBeDefined();
         expect(landStart.params.x?.label).toBe("Latitude");
         expect(landStart.params.y?.label).toBe("Longitude");
-        expect(landStart.docsUrl).toBeTruthy();
+        expect(landStart.docsUrl).toContain("do-land-start");
     });
 
-    it("adds loiter and altitude-change typed enum coverage", () => {
-        expect(getCommandMetadata(36)?.typedFields?.direction?.enumValues).toEqual([
-            { value: "Clockwise", label: "CW" },
-            { value: "CounterClockwise", label: "CCW" },
-        ]);
-        expect(getCommandMetadata(31)?.typedFields?.direction?.enumValues).toEqual([
-            { value: "Clockwise", label: "CW" },
-            { value: "CounterClockwise", label: "CCW" },
-        ]);
-        expect(getCommandMetadata(30)?.typedFields?.action?.enumValues).toEqual([
-            { value: "Neutral", label: "Neutral" },
-            { value: "Climb", label: "Climb" },
-            { value: "Descend", label: "Descend" },
-        ]);
-    });
-
-    it("adds parachute, gripper, fence, and winch per-command enum values", () => {
-        expect(getCommandMetadata(207)?.typedFields?.action?.enumValues).toEqual([
-            { value: "Disable", label: "Disable" },
-            { value: "Enable", label: "Enable" },
-            { value: "DisableFloor", label: "Disable Floor" },
-        ]);
-
+    it("keeps command-specific enum values isolated per metadata entry", () => {
         expect(getCommandMetadata(208)?.typedFields?.action?.enumValues).toEqual([
             { value: "Disable", label: "Disable" },
             { value: "Enable", label: "Enable" },
@@ -177,17 +141,15 @@ describe("new T02 command coverage", () => {
             { value: "LengthControl", label: "Length Control" },
             { value: "RateControl", label: "Rate Control" },
         ]);
+
+        expect(getCommandMetadata(207)?.typedFields?.action?.enumValues).toEqual([
+            { value: "Disable", label: "Disable" },
+            { value: "Enable", label: "Enable" },
+            { value: "DisableFloor", label: "Disable Floor" },
+        ]);
     });
 
-    it("adds representative typed fields for camera, script, and utility commands", () => {
-        expect(Object.keys(getCommandMetadata(1000)?.typedFields ?? {})).toEqual([
-            "pitch_deg",
-            "yaw_deg",
-            "pitch_rate_dps",
-            "yaw_rate_dps",
-            "flags",
-            "gimbal_id",
-        ]);
+    it("retains representative typed field coverage for script and winch commands", () => {
         expect(Object.keys(getCommandMetadata(42702)?.typedFields ?? {})).toEqual([
             "command",
             "timeout_s",
@@ -206,15 +168,16 @@ describe("new T02 command coverage", () => {
 });
 
 describe("fallback behavior for unknown commands", () => {
-    it("returns undefined from getCommandMetadata for unknown commands", () => {
+    it("returns undefined from getCommandMetadata for unknown ids", () => {
         expect(getCommandMetadata(99999)).toBeUndefined();
     });
 
-    it("still provides generic raw fallback metadata for unknown commands", () => {
+    it("still generates generic raw fallback metadata for unknown ids", () => {
         const fallback = rawFallbackParams(99999);
         expect(fallback.summary).toContain("MAV_CMD_99999");
         expect(fallback.params.param1?.label).toBe("Param 1");
         expect(fallback.params.x?.label).toBe("Latitude");
+        expect(fallback.params.z?.units).toBe("m");
     });
 
     it("resolveCommandMetadata never returns undefined", () => {

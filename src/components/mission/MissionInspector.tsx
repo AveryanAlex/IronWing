@@ -13,10 +13,13 @@ import type {
     MissionCommand,
     GeoPoint3d,
     HomePosition,
+    RawMissionCommand,
 } from "../../lib/mavkit-types";
 import {
+    rawFallbackParams,
     resolveCommandMetadata,
     variantToCommandId,
+    type ParamSlot,
 } from "../../lib/mission-command-metadata";
 import { CommandPicker } from "./CommandPicker";
 import { MissionCommandHelp } from "./MissionCommandHelp";
@@ -122,7 +125,20 @@ function commandVariantData(cmd: MissionCommand): Record<string, unknown> | null
     return null;
 }
 
+function rawCommandData(cmd: MissionCommand): RawMissionCommand | null {
+    if ("Other" in cmd) {
+        return cmd.Other;
+    }
+
+    return null;
+}
+
 function resolveInspectorMetadata(cmd: MissionCommand) {
+    const raw = rawCommandData(cmd);
+    if (raw) {
+        return rawFallbackParams(raw.command);
+    }
+
     const variantInfo = commandVariantName(cmd);
     if (!variantInfo) return null;
 
@@ -147,8 +163,50 @@ function normalizeEnumOptions(
     return [...enumOptions, { value, label: fieldLabel(value) }];
 }
 
+const RAW_FIELD_ORDER: ParamSlot[] = ["param1", "param2", "param3", "param4", "x", "y", "z"];
+
+function withUpdatedCommandField(cmd: MissionCommand, fieldKey: string, value: unknown): MissionCommand {
+    const raw = rawCommandData(cmd);
+    if (raw && fieldKey in raw) {
+        return {
+            Other: {
+                ...raw,
+                [fieldKey]: typeof value === "number" ? value : Number(value),
+            },
+        };
+    }
+
+    return withCommandField(cmd, fieldKey, value);
+}
+
+function extractRawFields(cmd: MissionCommand): EditableField[] {
+    const raw = rawCommandData(cmd);
+    if (!raw) return [];
+
+    const metadata = rawFallbackParams(raw.command);
+
+    return RAW_FIELD_ORDER.map((fieldKey) => {
+        const descriptor = metadata.params[fieldKey];
+        return {
+            key: fieldKey,
+            label: descriptor?.label ?? fieldLabel(fieldKey),
+            type: "number",
+            value: raw[fieldKey],
+            units: descriptor?.units,
+            required: descriptor?.required,
+            supported: descriptor?.supported ?? true,
+            description: descriptor?.description,
+        } satisfies EditableField;
+    });
+}
+
 /** Extract editable fields from the inner variant of a MissionCommand using rich metadata. */
 function extractMetadataFields(cmd: MissionCommand): EditableField[] {
+    const raw = rawCommandData(cmd);
+    if (raw) {
+        return extractRawFields(cmd);
+    }
+
     const inner = commandVariantData(cmd);
     if (!inner) return [];
 
@@ -309,7 +367,7 @@ function EditableCommandFields({
                                 aria-label={f.label}
                                 disabled={fieldDisabled}
                                 title={f.description}
-                                onClick={() => onUpdateCommand(withCommandField(command, f.key, !(f.value as boolean)))}
+                                onClick={() => onUpdateCommand(withUpdatedCommandField(command, f.key, !(f.value as boolean)))}
                                 className={cn(
                                     "rounded border px-1.5 py-1 text-xs",
                                     f.value
@@ -328,7 +386,7 @@ function EditableCommandFields({
                                 disabled={fieldDisabled}
                                 title={f.description}
                                 value={f.value as string}
-                                onChange={(e) => onUpdateCommand(withCommandField(command, f.key, e.target.value))}
+                                onChange={(e) => onUpdateCommand(withUpdatedCommandField(command, f.key, e.target.value))}
                                 className={cn(
                                     "w-full rounded border border-border bg-bg-input px-1.5 py-1 text-xs text-text-primary",
                                     fieldDisabled && "cursor-not-allowed opacity-70",
@@ -384,7 +442,7 @@ function NumberFieldInput({
     const commit = useCallback(() => {
         const parsed = parseFloat(draft);
         if (!Number.isNaN(parsed) && parsed !== shown) {
-            onUpdateCommand(withCommandField(command, fieldKey, parsed - displayOffset));
+            onUpdateCommand(withUpdatedCommandField(command, fieldKey, parsed - displayOffset));
         } else {
             setDraft(String(shown));
         }
