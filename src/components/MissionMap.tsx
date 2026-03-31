@@ -9,9 +9,27 @@ import { Map as MapIcon, Layers, Satellite } from "lucide-react";
 import type { HomePosition } from "../mission";
 import type { TypedDraftItem } from "../lib/mission-draft-typed";
 import type { PolygonVertex } from "../lib/mission-grid";
-import { missionPathLineCoordinates, missionPathPoints, pathLineCoordinates } from "../lib/mission-path";
-import type { FenceRegion, GeoPoint2d, GeoPoint3d } from "../lib/mavkit-types";
+import { buildMissionRenderFeatures } from "../lib/mission-path-render";
+import {
+  commandPosition,
+  type FenceRegion,
+  type GeoPoint2d,
+  type GeoPoint3d,
+  type MissionCommand,
+  type MissionItem,
+  withCommandField,
+  withGeoPoint3dPosition,
+} from "../lib/mavkit-types";
 import { ensureFenceLayers, updateFenceSource, removeFenceLayers } from "./mission/FenceMapOverlay";
+import {
+  ensureMissionPathLayers,
+  MISSION_PATH_LABEL_LAYER_ID,
+  MISSION_PATH_LINE_LAYER_ID,
+  MISSION_PATH_LOITER_FILL_LAYER_ID,
+  MISSION_PATH_LOITER_STROKE_LAYER_ID,
+  removeMissionPathLayers,
+  updateMissionPathSource,
+} from "./mission/MissionPathOverlay";
 import { syncRallyMarkers, clearRallyMarkers } from "./mission/RallyMapOverlay";
 
 const DEFAULT_CENTER: [number, number] = [8.545594, 47.397742];
@@ -21,9 +39,6 @@ const SATELLITE_TILE_URL =
   "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg";
 const DEM_TILE_URL =
   "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
-
-const SOURCE_ID = "mission-items";
-const LINE_LAYER_ID = "mission-line";
 
 type SvsTelemetry = {
   latitude_deg: number;
@@ -69,6 +84,42 @@ type MissionMapProps = {
 
 export type { SvsTelemetry };
 
+function updateMissionItemPosition(
+  item: TypedDraftItem,
+  latitude_deg: number,
+  longitude_deg: number,
+): TypedDraftItem {
+  const preview = {
+    ...item.preview,
+    latitude_deg,
+    longitude_deg,
+  };
+
+  const document = item.document as Partial<MissionItem>;
+  const command = document.command;
+  if (!command || typeof command !== "object") {
+    return { ...item, preview };
+  }
+
+  const position = commandPosition(command as MissionCommand);
+  if (!position) {
+    return { ...item, preview };
+  }
+
+  return {
+    ...item,
+    preview,
+    document: {
+      ...(document as MissionItem),
+      command: withCommandField(
+        command as MissionCommand,
+        "position",
+        withGeoPoint3dPosition(position, latitude_deg, longitude_deg),
+      ),
+    },
+  };
+}
+
 export function MissionMap({
   missionItems, homePosition, selectedIndex, onSelectIndex,
   onMoveWaypoint, onBlankMapClick, onContextMenu, readOnly,
@@ -103,7 +154,10 @@ export function MissionMap({
   const longPressFiredRef = useRef(false);
   const onUserInteractionRef = useRef(onUserInteraction);
   const programmaticMoveRef = useRef(false);
-  const missionGeoJsonRef = useRef<any>({ type: "FeatureCollection", features: [] });
+  const missionRenderFeaturesRef = useRef(
+    buildMissionRenderFeatures(homePosition, missionItems),
+  );
+  const syntheticVisionRef = useRef(syntheticVision ?? false);
   const onPolygonClickRef = useRef(onPolygonClick);
   const onPolygonCompleteRef = useRef(onPolygonComplete);
   const onPolygonVertexMoveRef = useRef(onPolygonVertexMove);
@@ -120,6 +174,7 @@ export function MissionMap({
     onContextMenuRef.current = onContextMenu;
     readOnlyRef.current = readOnly;
     onUserInteractionRef.current = onUserInteraction;
+    syntheticVisionRef.current = syntheticVision ?? false;
     onPolygonClickRef.current = onPolygonClick;
     onPolygonCompleteRef.current = onPolygonComplete;
     onPolygonVertexMoveRef.current = onPolygonVertexMove;
@@ -129,24 +184,14 @@ export function MissionMap({
     homePositionRef.current = homePosition;
   }, [onSelectIndex, onMoveWaypoint, onBlankMapClick, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, polygonVertices, missionItems, homePosition]);
 
-  const missionGeoJson = useMemo(() => {
-    const lineCoordinates = missionPathLineCoordinates(homePosition, missionItems);
-
-    const features: any[] = [];
-    if (lineCoordinates.length >= 2) {
-      features.push({
-        type: "Feature",
-        geometry: { type: "LineString", coordinates: lineCoordinates },
-        properties: { kind: "mission-line" },
-      });
-    }
-
-    return { type: "FeatureCollection" as const, features };
-  }, [missionItems, homePosition]);
+  const missionRenderFeatures = useMemo(
+    () => buildMissionRenderFeatures(homePosition, missionItems),
+    [missionItems, homePosition],
+  );
 
   useEffect(() => {
-    missionGeoJsonRef.current = missionGeoJson;
-  }, [missionGeoJson]);
+    missionRenderFeaturesRef.current = missionRenderFeatures;
+  }, [missionRenderFeatures]);
 
   // Initialize map
   useEffect(() => {
@@ -227,18 +272,12 @@ export function MissionMap({
     }
 
     map.on("style.load", () => {
-      if (!map.getSource(SOURCE_ID)) {
-        map.addSource(SOURCE_ID, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      }
-      if (!map.getLayer(LINE_LAYER_ID)) {
-        map.addLayer({
-          id: LINE_LAYER_ID, type: "line", source: SOURCE_ID,
-          filter: ["==", ["geometry-type"], "LineString"],
-          paint: { "line-color": "#78d6ff", "line-width": 4 },
-        });
-      }
-      const source = map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
-      if (source) source.setData(missionGeoJsonRef.current);
+      ensureMissionPathLayers(map, !syntheticVisionRef.current);
+      updateMissionPathSource(
+        map,
+        missionRenderFeaturesRef.current,
+        !syntheticVisionRef.current,
+      );
 
       // Replay flight path layer
       if (!map.getSource("replay-path")) {
@@ -300,7 +339,21 @@ export function MissionMap({
 
       ensureFenceLayers(map);
 
-      const ownIds = new Set(["satellite", "hills", LINE_LAYER_ID, "replay-path-line", "grid-polygon-fill", "grid-polygon-line", "polygon-preview-line", "fence-fill", "fence-line-inclusion", "fence-line-exclusion"]);
+      const ownIds = new Set([
+        "satellite",
+        "hills",
+        MISSION_PATH_LINE_LAYER_ID,
+        MISSION_PATH_LOITER_FILL_LAYER_ID,
+        MISSION_PATH_LOITER_STROKE_LAYER_ID,
+        MISSION_PATH_LABEL_LAYER_ID,
+        "replay-path-line",
+        "grid-polygon-fill",
+        "grid-polygon-line",
+        "polygon-preview-line",
+        "fence-fill",
+        "fence-line-inclusion",
+        "fence-line-exclusion",
+      ]);
       baseLayerIdsRef.current = map.getStyle().layers
         .filter((l: any) => !ownIds.has(l.id))
         .map((l: any) => l.id);
@@ -423,6 +476,7 @@ export function MissionMap({
       if (replayMarkerRef.current) { replayMarkerRef.current.remove(); replayMarkerRef.current = null; }
       if (fenceReturnMarkerRef.current) { fenceReturnMarkerRef.current.remove(); fenceReturnMarkerRef.current = null; }
       clearRallyMarkers(rallyMarkersRef.current);
+      removeMissionPathLayers(map);
       removeFenceLayers(map);
       map.remove();
       mapRef.current = null;
@@ -430,13 +484,12 @@ export function MissionMap({
     };
   }, []);
 
-  // Update GeoJSON line
+  // Update mission path overlay
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
-    const source = map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
-    if (source) source.setData(missionGeoJson);
-  }, [missionGeoJson]);
+    updateMissionPathSource(map, missionRenderFeatures, !syntheticVision);
+  }, [missionRenderFeatures, syntheticVision]);
 
   // Toggle map layer style (plan / hybrid / satellite)
   useEffect(() => {
@@ -545,22 +598,18 @@ export function MissionMap({
             const pos = marker.getLngLat();
             const m = mapRef.current;
             if (!m) return;
-            const src = m.getSource(SOURCE_ID) as GeoJSONSource | undefined;
-            if (!src) return;
 
-            const lineCoords = pathLineCoordinates(
-              missionPathPoints(homePositionRef.current, missionItemsRef.current).map((point) =>
-                point.index === item.index
-                  ? { ...point, latitude_deg: pos.lat, longitude_deg: pos.lng }
-                  : point,
-              ),
+            const modifiedItems = missionItemsRef.current.map((draftItem) =>
+              draftItem.index === item.index
+                ? updateMissionItemPosition(draftItem, pos.lat, pos.lng)
+                : draftItem,
             );
 
-            const feats: any[] = [];
-            if (lineCoords.length >= 2) {
-              feats.push({ type: "Feature", geometry: { type: "LineString", coordinates: lineCoords }, properties: { kind: "mission-line" } });
-            }
-            src.setData({ type: "FeatureCollection", features: feats });
+            updateMissionPathSource(
+              m,
+              buildMissionRenderFeatures(homePositionRef.current, modifiedItems),
+              !syntheticVisionRef.current,
+            );
           });
           marker.on("dragend", () => {
             const pos = marker.getLngLat();
