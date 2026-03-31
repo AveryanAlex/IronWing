@@ -801,6 +801,8 @@ export function useMission(
         try {
             const result = await bridges[domain].download();
             if (!isCurrentOperation(domain, operation.token, operation.scope)) return;
+            // Capture before replacing so Ctrl+Z restores the pre-download state.
+            const downloadSnapshot = captureHistorySnapshot(domain);
             commitTypedDraftState(replaceTypedDraftFromDownload(typedDraftStateRef.current, domain, result.plan, operation.scope ?? EMPTY_SCOPE));
             if (domain === "mission") {
                 commitMissionHomeState(
@@ -809,7 +811,7 @@ export function useMission(
                 );
                 resetMissionPlanningSpeeds();
             }
-            resetHistory(domain);
+            pushHistorySnapshot(domain, downloadSnapshot);
             setIssues((prev) => ({ ...prev, [domain]: [] }));
             setLastOpStatus((prev) => ({ ...prev, [domain]: "Downloaded" }));
             toast.success(`${missionLabel(domain)} downloaded`, { description: `${planItemCount(domain, result.plan)} items` });
@@ -822,7 +824,7 @@ export function useMission(
         } finally {
             finishOperation(domain, "download", operation.token);
         }
-    }, [bridges, commitMissionHomeState, commitTypedDraftState, connected, finishOperation, isCurrentOperation, resetHistory, resetMissionPlanningSpeeds, startOperation]);
+    }, [bridges, captureHistorySnapshot, commitMissionHomeState, commitTypedDraftState, connected, finishOperation, isCurrentOperation, pushHistorySnapshot, resetMissionPlanningSpeeds, startOperation]);
 
     const clear = useCallback(async (domain: MissionDomain) => {
         if (!connected) { toast.error("Connect to vehicle before clear"); return; }
@@ -833,6 +835,8 @@ export function useMission(
         try {
             await bridges[domain].clear();
             if (!isCurrentOperation(domain, operation.token, operation.scope)) return;
+            // Capture before replacing so Ctrl+Z restores the pre-clear state.
+            const clearSnapshot = captureHistorySnapshot(domain);
             commitTypedDraftState(replaceTypedDraftFromDownload(typedDraftStateRef.current, domain, emptyDomainPlan(domain), operation.scope ?? EMPTY_SCOPE));
             if (domain === "mission") {
                 commitMissionHomeState(
@@ -841,7 +845,7 @@ export function useMission(
                 );
                 resetMissionPlanningSpeeds();
             }
-            resetHistory(domain);
+            pushHistorySnapshot(domain, clearSnapshot);
             setIssues((prev) => ({ ...prev, [domain]: [] }));
             setLastOpStatus((prev) => ({ ...prev, [domain]: "Cleared" }));
             toast.success(`${missionLabel(domain)} cleared`);
@@ -854,7 +858,7 @@ export function useMission(
         } finally {
             finishOperation(domain, "clear", operation.token);
         }
-    }, [bridges, commitMissionHomeState, commitTypedDraftState, connected, finishOperation, isCurrentOperation, rejectIfPlaybackReadonly, resetHistory, resetMissionPlanningSpeeds, startOperation]);
+    }, [bridges, captureHistorySnapshot, commitMissionHomeState, commitTypedDraftState, connected, finishOperation, isCurrentOperation, pushHistorySnapshot, rejectIfPlaybackReadonly, resetMissionPlanningSpeeds, startOperation]);
 
     const cancel = useCallback(async () => {
         if (!connected) return;
@@ -970,6 +974,10 @@ export function useMission(
         };
 
         if (choice === "replace") {
+            // Capture all domain snapshots before replacing so Ctrl+Z restores pre-import state.
+            const missionSnapshot = captureHistorySnapshot("mission");
+            const fenceSnapshot = captureHistorySnapshot("fence");
+            const rallySnapshot = captureHistorySnapshot("rally");
             const nextState = replaceTypedDraftFromDownload(
                 replaceTypedDraftFromDownload(
                     replaceTypedDraftFromDownload(typedDraftStateRef.current, "mission", result.mission, scope),
@@ -986,7 +994,9 @@ export function useMission(
                 replaceMissionHomeFromDownload(missionHomeStateRef.current, result.home, scope),
                 result.home ? "download" : null,
             );
-            resetHistory();
+            pushHistorySnapshot("mission", missionSnapshot);
+            pushHistorySnapshot("fence", fenceSnapshot);
+            pushHistorySnapshot("rally", rallySnapshot);
             setLastOpStatus({ mission: "Imported", fence: "Imported", rally: "Imported" });
         } else {
             // Append: insert new items after the last existing item in each domain.
@@ -1019,7 +1029,7 @@ export function useMission(
         } else {
             toast.success("Plan imported", { description: countsDescription });
         }
-    }, [commitMissionHomeState, commitTypedDraftState, resetHistory]);
+    }, [captureHistorySnapshot, commitMissionHomeState, commitTypedDraftState, pushHistorySnapshot]);
 
     const importPlanFile = useCallback(async () => {
         if (isPlaybackScope()) {
@@ -1190,12 +1200,14 @@ export function useMission(
                 affectedDomains.push("fence");
             }
 
+            // Capture snapshots before replacing so Ctrl+Z restores the pre-import state.
+            const kmlSnapshots = new Map(affectedDomains.map((d) => [d, captureHistorySnapshot(d)]));
             commitTypedDraftState(nextState);
             if (affectedDomains.includes("mission")) {
                 resetMissionPlanningSpeeds();
             }
             for (const domain of affectedDomains) {
-                resetHistory(domain);
+                pushHistorySnapshot(domain, kmlSnapshots.get(domain)!);
             }
             setIssues((prev) => ({
                 ...prev,
@@ -1222,7 +1234,7 @@ export function useMission(
         } catch (err) {
             setImportError({ title: "Failed to import KML/KMZ", details: asErrorMessage(err) });
         }
-    }, [anyTransferActive, commitTypedDraftState, isPlaybackScope, resetHistory, resetMissionPlanningSpeeds]);
+    }, [anyTransferActive, captureHistorySnapshot, commitTypedDraftState, isPlaybackScope, pushHistorySnapshot, resetMissionPlanningSpeeds]);
 
     const mission = useMemo(() => {
         const domain: MissionDomain = "mission";

@@ -859,7 +859,7 @@ describe("useMission", () => {
         expect(result.current.mission.canUndo).toBe(false);
     });
 
-    it("resets history on scope changes, upload, download, and clear", async () => {
+    it("resets history on scope changes and upload; makes download and clear undoable", async () => {
         const { useMission } = await import("./use-mission");
         const { result } = renderHook(() => useMission(true, {} as never, null));
 
@@ -900,7 +900,8 @@ describe("useMission", () => {
         await act(async () => {
             await result.current.mission.download();
         });
-        expect(result.current.mission.canUndo).toBe(false);
+        // The addWaypoint snapshot before download is now on the undo stack.
+        expect(result.current.mission.canUndo).toBe(true);
 
         act(() => {
             result.current.mission.addWaypoint();
@@ -910,10 +911,11 @@ describe("useMission", () => {
         await act(async () => {
             await result.current.mission.clear();
         });
-        expect(result.current.mission.canUndo).toBe(false);
+        // The addWaypoint snapshot before clear is now on the undo stack.
+        expect(result.current.mission.canUndo).toBe(true);
     });
 
-    it("imports a QGC plan file atomically across mission, fence, rally, and home while resetting undo history", async () => {
+    it("imports a QGC plan file atomically across mission, fence, rally, and home while making the operation undoable", async () => {
         const { useMission } = await import("./use-mission");
         const { exportPlanFile: buildPlanFile } = await import("../lib/mission-plan-io");
         const { result } = renderHook(() => useMission(true, { latitude_deg: 47.55, longitude_deg: 8.55, altitude_m: 120 } as never, null));
@@ -1001,9 +1003,10 @@ describe("useMission", () => {
         expect(result.current.rally.draftItems).toHaveLength(1);
         expect(result.current.mission.homePosition).toEqual({ latitude_deg: 40.12, longitude_deg: -73.25, altitude_m: 12 });
         expect(result.current.mission.importedSpeeds).toEqual({ cruiseSpeedMps: 22, hoverSpeedMps: 6 });
-        expect(result.current.mission.canUndo).toBe(false);
-        expect(result.current.fence.canUndo).toBe(false);
-        expect(result.current.rally.canUndo).toBe(false);
+        // The pre-import snapshot is on the undo stack, so undo is available.
+        expect(result.current.mission.canUndo).toBe(true);
+        expect(result.current.fence.canUndo).toBe(true);
+        expect(result.current.rally.canUndo).toBe(true);
 
         act(() => {
             result.current.mission.undo();
@@ -1011,6 +1014,7 @@ describe("useMission", () => {
             result.current.rally.undo();
         });
 
+        // Undo restores the single addWaypoint item added before the import.
         expect(result.current.mission.draftItems).toHaveLength(1);
         expect(result.current.fence.draftItems).toHaveLength(1);
         expect(result.current.rally.draftItems).toHaveLength(1);
@@ -1070,7 +1074,7 @@ describe("useMission", () => {
         expect(exportedJson.rallyPoints?.points).toHaveLength(1);
     });
 
-    it("imports KML geometry into mission and fence drafts while resetting affected undo histories", async () => {
+    it("imports KML geometry into mission and fence drafts while making the operation undoable", async () => {
         const { useMission } = await import("./use-mission");
         const { result } = renderHook(() => useMission(true, {} as never, null));
 
@@ -1126,8 +1130,9 @@ describe("useMission", () => {
         expect(readTextFile).toHaveBeenCalledWith("/tmp/import.kml");
         expect(result.current.mission.draftItems).toHaveLength(3);
         expect(result.current.fence.draftItems).toHaveLength(1);
-        expect(result.current.mission.canUndo).toBe(false);
-        expect(result.current.fence.canUndo).toBe(false);
+        // The pre-import snapshot is on the undo stack, so undo is available.
+        expect(result.current.mission.canUndo).toBe(true);
+        expect(result.current.fence.canUndo).toBe(true);
     });
 
     it("moves a waypoint from live telemetry GPS and exposes selection summaries", async () => {
