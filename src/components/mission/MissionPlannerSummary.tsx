@@ -150,15 +150,15 @@ function StatTile({ icon: Icon, label, value, hint, tone = "default", testId }: 
     <div
       data-testid={testId}
       className={cn(
-        "rounded-lg border px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]",
+        "min-w-0 overflow-hidden rounded-lg border px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]",
         statToneClasses(tone),
       )}
     >
-      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-text-muted">
-        <Icon className="h-3.5 w-3.5 text-accent" />
-        <span>{label}</span>
+      <div className="flex min-w-0 items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-text-muted">
+        <Icon className="h-3.5 w-3.5 shrink-0 text-accent" />
+        <span className="truncate">{label}</span>
       </div>
-      <div className="mt-2 text-sm font-semibold tabular-nums text-current">{value}</div>
+      <div className="mt-2 truncate text-sm font-semibold tabular-nums text-current">{value}</div>
       <div className="mt-1 text-[10px] leading-relaxed text-text-muted">{hint}</div>
     </div>
   );
