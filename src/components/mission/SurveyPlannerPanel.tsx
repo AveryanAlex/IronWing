@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  Camera,
   ChevronDown,
   Crosshair,
-  MapPolygon,
+  Map as MapIcon,
   Plus,
   Search,
   Trash2,
@@ -20,8 +19,8 @@ import {
   searchCameras,
   type CatalogCamera,
 } from "../../lib/survey-camera-catalog";
-import { regionHasManualEdits } from "../../lib/survey-region";
 import type { UseSurveyPlannerResult } from "../../hooks/use-survey-planner";
+import { SurveyRegionCard } from "./SurveyRegionCard";
 
 type SurveyPlannerPanelProps = {
   planner: UseSurveyPlannerResult;
@@ -85,18 +84,6 @@ function groupByBrand(cameras: CatalogCamera[]): Array<{ brand: string; cameras:
     brand,
     cameras: groupedCameras,
   }));
-}
-
-function formatArea(area_m2: number | null | undefined): string {
-  if (!Number.isFinite(area_m2 ?? NaN)) {
-    return "—";
-  }
-
-  if ((area_m2 ?? 0) >= 1_000_000) {
-    return `${((area_m2 ?? 0) / 1_000_000).toFixed(2)} km²`;
-  }
-
-  return `${Math.round(area_m2 ?? 0).toLocaleString()} m²`;
 }
 
 function formatEstimatedCount(count: number | null): string {
@@ -258,7 +245,7 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
     >
       <div className="flex items-center gap-3 border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <MapPolygon className="h-4 w-4 text-accent" />
+          <MapIcon className="h-4 w-4 text-accent" />
           <div>
             <div className="text-sm font-semibold text-text-primary">Survey Planner</div>
             <div className="text-[11px] text-text-muted">
@@ -719,57 +706,19 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
             ) : (
               <div className="space-y-2">
                 {planner.allRegions.map((region, index) => (
-                  <button
-                    type="button"
+                  <SurveyRegionCard
                     key={region.id}
-                    onClick={() => planner.selectRegion(region.id)}
-                    className={cn(
-                      "w-full rounded-lg border px-3 py-3 text-left transition-colors",
-                      planner.activeRegionId === region.id
-                        ? "border-accent bg-accent/10"
-                        : "border-border bg-bg-secondary hover:border-border-light",
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
-                          Region {index + 1}
-                          {regionHasManualEdits(region) ? (
-                            <span className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning">
-                              Edited
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="mt-1 text-xs text-text-muted">
-                          {region.params.crosshatch ? "Crosshatch" : "Single-pass"} · {region.generatedStats?.photoCount?.toLocaleString() ?? 0} photos · {formatArea(region.generatedStats?.area_m2)}
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 gap-1">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            planner.dissolveRegion(region.id);
-                          }}
-                        >
-                          Dissolve
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            planner.deleteRegion(region.id);
-                          }}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  </button>
+                    region={region}
+                    label={`Region ${index + 1}`}
+                    selected={planner.activeRegionId === region.id}
+                    onSelect={() => planner.selectRegion(region.id)}
+                    onDissolve={() => {
+                      planner.dissolveRegion(region.id);
+                    }}
+                    onDelete={() => {
+                      planner.deleteRegion(region.id);
+                    }}
+                  />
                 ))}
               </div>
             )}

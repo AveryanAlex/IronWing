@@ -31,6 +31,17 @@ import {
   updateMissionPathSource,
 } from "./mission/MissionPathOverlay";
 import { syncRallyMarkers, clearRallyMarkers } from "./mission/RallyMapOverlay";
+import {
+  ensureSurveyLayers,
+  removeSurveyLayers,
+  updateSurveyOverlay,
+  type SurveyOverlayData,
+  SURVEY_COVERAGE_FILL_LAYER,
+  SURVEY_COVERAGE_LINE_LAYER,
+  SURVEY_POLYGON_FILL_LAYER,
+  SURVEY_POLYGON_LINE_LAYER,
+  SURVEY_TRANSECT_LAYER,
+} from "./mission/SurveyMapOverlay";
 
 const DEFAULT_CENTER: [number, number] = [8.545594, 47.397742];
 const DEFAULT_ZOOM = 13;
@@ -81,6 +92,7 @@ type MissionMapProps = {
   fenceReturnPoint?: GeoPoint2d | null;
   rallyPoints?: Array<{ index: number; point: GeoPoint3d }>;
   selectedRallyIndex?: number | null;
+  surveyOverlay?: SurveyOverlayData | null;
   selectedUiIds?: Set<number>;
   onToggleSelect?: (index: number) => void;
   onRectangleSelect?: (indices: number[]) => void;
@@ -134,6 +146,7 @@ export function MissionMap({
   polygonVertices, isDrawingPolygon, onPolygonClick, onPolygonComplete, onPolygonVertexMove,
   fenceRegions, selectedFenceIndex, fenceReturnPoint,
   rallyPoints, selectedRallyIndex,
+  surveyOverlay,
   selectedUiIds,
   onToggleSelect,
   onRectangleSelect,
@@ -172,6 +185,7 @@ export function MissionMap({
   const onPolygonVertexMoveRef = useRef(onPolygonVertexMove);
   const isDrawingPolygonRef = useRef(isDrawingPolygon);
   const polygonVerticesRef = useRef(polygonVertices);
+  const surveyOverlayRef = useRef(surveyOverlay);
   const polygonMarkersRef = useRef<Marker[]>([]);
   const missionItemsRef = useRef(missionItems);
   const homePositionRef = useRef(homePosition);
@@ -192,12 +206,13 @@ export function MissionMap({
     onPolygonVertexMoveRef.current = onPolygonVertexMove;
     isDrawingPolygonRef.current = isDrawingPolygon;
     polygonVerticesRef.current = polygonVertices;
+    surveyOverlayRef.current = surveyOverlay;
     missionItemsRef.current = missionItems;
     homePositionRef.current = homePosition;
     currentMissionSeqRef.current = currentMissionSeq;
     onToggleSelectRef.current = onToggleSelect;
     onRectangleSelectRef.current = onRectangleSelect;
-  }, [onSelectIndex, onMoveWaypoint, onBlankMapClick, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, polygonVertices, missionItems, homePosition, currentMissionSeq, onToggleSelect, onRectangleSelect]);
+  }, [onSelectIndex, onMoveWaypoint, onBlankMapClick, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, polygonVertices, surveyOverlay, missionItems, homePosition, currentMissionSeq, onToggleSelect, onRectangleSelect]);
 
   const missionRenderFeatures = useMemo(
     () => buildMissionRenderFeatures(homePosition, missionItems, { currentSeq: currentMissionSeq }),
@@ -354,6 +369,8 @@ export function MissionMap({
       }
 
       ensureFenceLayers(map);
+      ensureSurveyLayers(map);
+      updateSurveyOverlay(map, surveyOverlayRef.current ?? null);
 
       const ownIds = new Set([
         "satellite",
@@ -369,6 +386,11 @@ export function MissionMap({
         "fence-fill",
         "fence-line-inclusion",
         "fence-line-exclusion",
+        SURVEY_POLYGON_FILL_LAYER,
+        SURVEY_POLYGON_LINE_LAYER,
+        SURVEY_COVERAGE_FILL_LAYER,
+        SURVEY_COVERAGE_LINE_LAYER,
+        SURVEY_TRANSECT_LAYER,
       ]);
       baseLayerIdsRef.current = map.getStyle().layers
         .filter((l: any) => !ownIds.has(l.id))
@@ -551,6 +573,7 @@ export function MissionMap({
       clearRallyMarkers(rallyMarkersRef.current);
       removeMissionPathLayers(map);
       removeFenceLayers(map);
+      removeSurveyLayers(map);
       map.remove();
       mapRef.current = null;
       hasSetInitialViewport.current = false;
@@ -1079,6 +1102,13 @@ export function MissionMap({
     if (!map || !map.isStyleLoaded()) return;
     updateFenceSource(map, fenceRegions ?? [], selectedFenceIndex ?? null);
   }, [fenceRegions, selectedFenceIndex]);
+
+  // Update survey overlay layers
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    updateSurveyOverlay(map, surveyOverlay ?? null);
+  }, [surveyOverlay]);
 
   // Update rally point markers
   useEffect(() => {
