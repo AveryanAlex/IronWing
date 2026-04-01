@@ -1,19 +1,41 @@
 import { test, expect } from "./fixtures/mock-platform";
 import {
   bootstrapDesktopMissionEditor,
+  bootstrapMissionEditor,
   clickMapAtRatio,
+  closeMissionMobileDrawer,
   drawPentagonOnMissionMap,
   expectHistoryTooltip,
+  expectMissionDesktopShellVisible,
+  expectMissionDrawerClosed,
+  expectMissionDrawerOpen,
   missionCard,
+  openMissionMobileDrawer,
   waitForMissionPathDebugState,
   waitForTerrainReady,
 } from "./helpers/mission-flow";
+
+test("desktop seed hydrates the mixed mission proof through Read", async ({
+  page,
+  mockPlatform,
+}) => {
+  const preset = await bootstrapMissionEditor(page, mockPlatform, "desktop");
+
+  expect(preset).toMatchObject({ width: 1440, height: 900, isMobile: false });
+  await expectMissionDesktopShellVisible(page);
+  await expect(page.locator("[data-mission-waypoint-card]")).toHaveCount(6);
+  await expect(missionCard(page, 0)).toBeVisible();
+  await waitForTerrainReady(page);
+  await expect(page.locator('[data-testid="mission-stats-state"]')).toContainText("Finite estimate");
+  await expect(page.locator('[data-testid="mission-stats-distance"]')).toBeVisible();
+});
 
 test("desktop workflow proves inspector metadata, history, terrain, render features, and auto-grid", async ({
   page,
   mockPlatform,
 }) => {
   await bootstrapDesktopMissionEditor(page, mockPlatform);
+  await expectMissionDesktopShellVisible(page);
 
   const cards = page.locator("[data-mission-waypoint-card]");
   const undoButton = page.locator('[data-testid="mission-undo"]');
@@ -109,9 +131,6 @@ test("desktop workflow proves inspector metadata, history, terrain, render featu
       .filter((kind): kind is string => Boolean(kind)),
   );
 
-  expect(presentKinds).toEqual(
-    expect.objectContaining ? presentKinds : presentKinds,
-  );
   expect(presentKinds.has("straight")).toBe(true);
   expect(presentKinds.has("spline")).toBe(true);
   expect(presentKinds.has("arc")).toBe(true);
@@ -133,8 +152,8 @@ test("desktop workflow proves inspector metadata, history, terrain, render featu
   await page.locator("[data-mission-grid-draw-toggle]").click();
   await expect(page.locator("[data-mission-grid-draw-toggle]")).toContainText("Draw Area");
 
-  await page.locator("[data-mission-grid-spacing]").fill("80");
-  await page.locator("[data-mission-grid-angle]").fill("15");
+  await page.getByLabel("Spacing (m)").fill("80");
+  await page.getByLabel("Track Angle (°)").fill("15");
   await page.locator("[data-mission-grid-insert-after]").click();
   await expect(page.locator("[data-mission-grid-generate]")).toBeEnabled();
 
@@ -148,4 +167,74 @@ test("desktop workflow proves inspector metadata, history, terrain, render featu
   await expect(page.locator('[data-testid="mission-stats-state"]')).toContainText("Finite estimate");
   await expect(page.locator('[data-testid="mission-stats-distance"]')).toBeVisible();
   await expect.poll(async () => await page.locator('[data-testid="terrain-waypoint-marker"]').count()).toBeGreaterThan(0);
+});
+
+test("Radiomaster viewport keeps desktop mission controls reachable at 1280x720", async ({
+  page,
+  mockPlatform,
+}) => {
+  const preset = await bootstrapMissionEditor(page, mockPlatform, "radiomaster");
+
+  expect(preset).toMatchObject({ width: 1280, height: 720, isMobile: false });
+  await expectMissionDesktopShellVisible(page);
+
+  const cards = page.locator("[data-mission-waypoint-card]");
+  const undoButton = page.locator('[data-testid="mission-undo"]');
+  const redoButton = page.locator('[data-testid="mission-redo"]');
+
+  await expect(cards).toHaveCount(6);
+  await expect(undoButton).toBeVisible();
+  await expect(redoButton).toBeVisible();
+  await expect(undoButton).toHaveAttribute("aria-label", /Undo \([0-9]+ available\)/);
+  await expect(redoButton).toHaveAttribute("aria-label", "Redo (0 available)");
+  await waitForTerrainReady(page);
+  await expect(page.locator('[data-testid="mission-stats-state"]')).toContainText("Finite estimate");
+  await expect(page.locator('[data-testid="mission-stats-distance"]')).toBeVisible();
+
+  await missionCard(page, 0).click();
+  await expect(missionCard(page, 0)).toBeVisible();
+  await expect(page.locator("[data-mission-inspector]")).toBeVisible();
+  await expect(page.locator("[data-mission-command-picker]")).toContainText("Waypoint");
+
+  await undoButton.click();
+  await expect(cards).toHaveCount(0);
+  await expect(redoButton).toBeEnabled();
+
+  await redoButton.click();
+  await expect(cards).toHaveCount(6);
+  await waitForTerrainReady(page);
+  await expect(missionCard(page, 0)).toBeVisible();
+});
+
+test("phone viewport reaches mission list and inspector through the mobile drawer", async ({
+  page,
+  mockPlatform,
+}) => {
+  const preset = await bootstrapMissionEditor(page, mockPlatform, "phone");
+
+  expect(preset).toMatchObject({ width: 390, height: 844, isMobile: true });
+  await expect(page.locator("[data-mission-side-panel]")).toHaveCount(0);
+  await expectMissionDrawerClosed(page);
+
+  await openMissionMobileDrawer(page);
+  await expectMissionDrawerOpen(page);
+  await expect(missionCard(page, 0)).toBeVisible();
+  await expect(page.locator('[data-testid="mission-stats-state"]')).toContainText("Finite estimate");
+  await expect(page.locator('[data-testid="mission-stats-distance"]')).toBeVisible();
+
+  await missionCard(page, 0).click();
+  await expect(page.locator("[data-mission-inspector]")).toBeVisible();
+  await expect(page.locator("[data-mission-command-picker]")).toContainText("Waypoint");
+
+  await closeMissionMobileDrawer(page);
+
+  const chainModeButton = page.locator('[data-testid="mission-chain-mode"]');
+  await chainModeButton.click();
+  await expect(chainModeButton).toHaveAttribute("aria-pressed", "true");
+  await clickMapAtRatio(page, 0.72, 0.24);
+
+  await openMissionMobileDrawer(page);
+  await expect(page.locator("[data-mission-waypoint-card]")).toHaveCount(7);
+  await expect(page.locator('[data-testid="mission-stats-state"]')).toContainText("Finite estimate");
+  await waitForTerrainReady(page);
 });

@@ -44,8 +44,12 @@ function emptyMissionPathGeoJson(): GeoJSON.FeatureCollection<GeoJSON.Geometry, 
 function publishMissionPathDebugGeoJson(
   geoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionPathFeatureProperties>,
 ): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
   const maybeMockWindow = window as Window & { __IRONWING_MOCK_PLATFORM__?: unknown };
-  if (typeof window === "undefined" || !maybeMockWindow.__IRONWING_MOCK_PLATFORM__) {
+  if (!maybeMockWindow.__IRONWING_MOCK_PLATFORM__) {
     return;
   }
 

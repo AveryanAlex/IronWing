@@ -37,7 +37,11 @@ type Fixtures = {
   mockPlatform: MockPlatformFixture;
 };
 
-function withMockController<T>(page: Page, callback: string, ...args: unknown[]) {
+async function withMockController<T>(page: Page, callback: string, ...args: unknown[]) {
+  await page.waitForFunction(() => Boolean(window.__IRONWING_MOCK_PLATFORM__), undefined, {
+    timeout: 10_000,
+  });
+
   return page.evaluate(
     ([methodName, values]) => {
       const controller = window.__IRONWING_MOCK_PLATFORM__;

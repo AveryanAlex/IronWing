@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import type {
+  MockCommandBehavior,
   MockGuidedStateValue,
   MockLiveVehicleState,
   MockMissionState,
@@ -10,9 +11,17 @@ import {
 } from "../fixtures/terrain-tile";
 import { MISSION_EDITOR_FIXTURE } from "../fixtures/mission-editor-fixture";
 
+export type MissionViewportPresetName = "desktop" | "radiomaster" | "phone";
+
+type MissionViewportPreset = {
+  width: number;
+  height: number;
+  isMobile: boolean;
+};
+
 type MissionFlowMockPlatform = {
   reset: () => Promise<void>;
-  setCommandBehavior: (cmd: string, behavior: unknown) => Promise<void>;
+  setCommandBehavior: (cmd: string, behavior: MockCommandBehavior) => Promise<void>;
   resolveDeferredConnectLink: (params: {
     vehicleState: MockLiveVehicleState;
     missionState?: MockMissionState;
@@ -85,14 +94,52 @@ const CONNECTED_MISSION_STATE: MockMissionState = {
   active_op: null,
 };
 
-export async function bootstrapDesktopMissionEditor(
+const MISSION_VIEWPORT_PRESETS: Record<MissionViewportPresetName, MissionViewportPreset> = {
+  desktop: { width: 1440, height: 900, isMobile: false },
+  radiomaster: { width: 1280, height: 720, isMobile: false },
+  phone: { width: 390, height: 844, isMobile: true },
+};
+
+function resolveMissionViewportPreset(name: MissionViewportPresetName): MissionViewportPreset {
+  const preset = MISSION_VIEWPORT_PRESETS[name];
+  if (!preset) {
+    throw new Error(`Unsupported mission viewport preset: ${name}`);
+  }
+  return preset;
+}
+
+export async function applyMissionViewport(
+  page: Page,
+  presetName: MissionViewportPresetName,
+): Promise<MissionViewportPreset> {
+  const preset = resolveMissionViewportPreset(presetName);
+  await page.setViewportSize({ width: preset.width, height: preset.height });
+
+  await expect.poll(() => page.viewportSize()?.width ?? 0).toBe(preset.width);
+  await expect.poll(() => page.viewportSize()?.height ?? 0).toBe(preset.height);
+
+  return preset;
+}
+
+export async function bootstrapMissionEditor(
   page: Page,
   mockPlatform: MissionFlowMockPlatform,
-): Promise<void> {
+  presetName: MissionViewportPresetName = "desktop",
+): Promise<MissionViewportPreset> {
+  const preset = await applyMissionViewport(page, presetName);
+  const vehicleSidebar = page.locator("aside").filter({
+    has: page.getByRole("heading", { name: "Connection" }),
+  });
+
   await installMissionMapMocks(page);
   await seedMissionPlanningSettings(page);
   await page.goto("/");
   await expect(page).toHaveTitle(/IronWing/);
+
+  await expect.poll(() => page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }))).toEqual({
+    width: preset.width,
+    height: preset.height,
+  });
 
   await mockPlatform.reset();
   await mockPlatform.setCommandBehavior("connect_link", { type: "defer" });
@@ -104,9 +151,21 @@ export async function bootstrapDesktopMissionEditor(
   await page.getByRole("button", { name: "Mission" }).click();
   await expect(page.locator("[data-mission-workspace]")).toBeVisible();
 
-  await page.locator('[data-testid="connection-transport-select"]').selectOption("tcp");
-  await page.locator('[data-testid="connection-tcp-address"]').fill("127.0.0.1:5760");
-  await page.locator('[data-testid="connection-connect-btn"]').click();
+  if (preset.isMobile) {
+    await page.getByRole("button", { name: "Vehicle panel" }).click();
+    await expect(vehicleSidebar).toBeVisible();
+  }
+
+  const transportSelect = page.locator('[data-testid="connection-transport-select"]');
+  const tcpAddress = page.locator('[data-testid="connection-tcp-address"]');
+  const connectButton = page.locator('[data-testid="connection-connect-btn"]');
+
+  await transportSelect.scrollIntoViewIfNeeded();
+  await transportSelect.selectOption("tcp");
+  await tcpAddress.scrollIntoViewIfNeeded();
+  await tcpAddress.fill("127.0.0.1:5760");
+  await connectButton.scrollIntoViewIfNeeded();
+  await connectButton.click();
 
   await expect.poll(() => mockPlatform.getLiveEnvelope()).not.toBeNull();
   await mockPlatform.resolveDeferredConnectLink({
@@ -116,6 +175,12 @@ export async function bootstrapDesktopMissionEditor(
   });
 
   await expect(page.locator('[data-testid="connection-status-text"]')).toContainText("Connected");
+
+  if (preset.isMobile) {
+    await vehicleSidebar.getByRole("button").first().click();
+    await expect(vehicleSidebar).toHaveClass(/-translate-x-full/);
+  }
+
   await page.getByRole("button", { name: "Read" }).click();
 
   await expect(page.locator("[data-mission-waypoint-card]")).toHaveCount(
@@ -123,6 +188,15 @@ export async function bootstrapDesktopMissionEditor(
   );
   await waitForTerrainReady(page);
   await expect(page.locator('[data-testid="mission-stats-state"]')).toContainText("Finite estimate");
+
+  return preset;
+}
+
+export async function bootstrapDesktopMissionEditor(
+  page: Page,
+  mockPlatform: MissionFlowMockPlatform,
+): Promise<void> {
+  await bootstrapMissionEditor(page, mockPlatform, "desktop");
 }
 
 export async function installMissionMapMocks(page: Page): Promise<void> {
@@ -169,7 +243,7 @@ export function missionCard(page: Page, seq: number): Locator {
 export async function hoverHistoryButton(page: Page, testId: "mission-undo" | "mission-redo"): Promise<Locator> {
   const button = page.locator(`[data-testid="${testId}"]`);
   await button.hover();
-  return page.getByRole("tooltip").last();
+  return button;
 }
 
 export async function expectHistoryTooltip(
@@ -177,8 +251,44 @@ export async function expectHistoryTooltip(
   testId: "mission-undo" | "mission-redo",
   text: string,
 ): Promise<void> {
-  const tooltip = await hoverHistoryButton(page, testId);
-  await expect(tooltip).toContainText(text);
+  const button = await hoverHistoryButton(page, testId);
+  await expect(button).toHaveAttribute("aria-label", text);
+}
+
+export async function openMissionMobileDrawer(page: Page): Promise<void> {
+  const toggle = page.locator("[data-mission-mobile-panel-toggle]");
+  const drawer = page.locator("[data-mission-mobile-drawer]");
+
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(drawer).toHaveAttribute("data-state", "open");
+}
+
+export async function closeMissionMobileDrawer(page: Page): Promise<void> {
+  const toggle = page.locator("[data-mission-mobile-panel-toggle]");
+  const drawer = page.locator("[data-mission-mobile-drawer]");
+  const closeButton = page.locator("[data-mission-mobile-drawer-close]");
+
+  await expect(drawer).toHaveAttribute("data-state", "open");
+  await closeButton.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(drawer).toHaveAttribute("data-state", "closed");
+}
+
+export async function expectMissionDrawerClosed(page: Page): Promise<void> {
+  await expect(page.locator("[data-mission-mobile-panel-toggle]")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("[data-mission-mobile-drawer]")).toHaveAttribute("data-state", "closed");
+}
+
+export async function expectMissionDrawerOpen(page: Page): Promise<void> {
+  await expect(page.locator("[data-mission-mobile-panel-toggle]")).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("[data-mission-mobile-drawer]")).toHaveAttribute("data-state", "open");
+}
+
+export async function expectMissionDesktopShellVisible(page: Page): Promise<void> {
+  await expect(page.locator("[data-mission-side-panel]")).toBeVisible();
+  await expect(page.locator("[data-mission-mobile-panel-toggle]")).toHaveCount(0);
 }
 
 export async function clickMapAtRatio(

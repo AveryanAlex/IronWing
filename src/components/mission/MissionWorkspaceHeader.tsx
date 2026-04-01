@@ -58,6 +58,8 @@ function IconButton({ icon, label, onClick, disabled, dataTestId, active, ariaPr
             size="icon"
             onClick={onClick}
             disabled={disabled}
+            aria-label={label}
+            title={label}
             aria-pressed={ariaPressed}
             className={active ? "bg-accent/15 text-accent hover:bg-accent/20 hover:text-accent" : className}
           >

@@ -161,6 +161,34 @@ describe("MissionMobileDrawer", () => {
     cleanup();
   });
 
+  it("exposes drawer open and close state through the mobile controls", () => {
+    render(
+      <MissionMobileDrawer
+        vehicle={{ connected: true, vehiclePosition: null, missionState: { current_index: null } } as never}
+        mission={createMission("mission") as never}
+        deviceLocation={{ location: null } as never}
+      />,
+    );
+
+    const toggle = document.querySelector("[data-mission-mobile-panel-toggle]") as HTMLButtonElement | null;
+    const drawer = document.querySelector("[data-mission-mobile-drawer]") as HTMLElement | null;
+    const closeButton = document.querySelector("[data-mission-mobile-drawer-close]") as HTMLButtonElement | null;
+
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(drawer?.getAttribute("data-state")).toBe("closed");
+    expect(drawer?.getAttribute("aria-hidden")).toBe("true");
+
+    fireEvent.click(toggle as HTMLButtonElement);
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+    expect(drawer?.getAttribute("data-state")).toBe("open");
+    expect(drawer?.getAttribute("aria-hidden")).toBe("false");
+
+    fireEvent.click(closeButton as HTMLButtonElement);
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(drawer?.getAttribute("data-state")).toBe("closed");
+    expect(drawer?.getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("wires chain mode blank-map clicks to mission.addWaypointAt on mobile", () => {
     const addWaypointAt = vi.fn();
     render(

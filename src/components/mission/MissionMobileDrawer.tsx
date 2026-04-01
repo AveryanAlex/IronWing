@@ -240,6 +240,8 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
 
         <button
           data-mission-mobile-panel-toggle
+          aria-expanded={drawerOpen}
+          aria-controls="mission-mobile-drawer"
           onClick={() => setDrawerOpen(true)}
           className="flex items-center justify-center gap-1.5 rounded-full border border-border bg-bg-secondary/90 px-3 py-1.5 text-xs font-medium text-text-secondary shadow-lg backdrop-blur-sm transition-colors hover:bg-bg-tertiary hover:text-text-primary"
         >
@@ -249,6 +251,8 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
       </div>
 
       <div
+        data-mission-mobile-backdrop
+        data-state={drawerOpen ? "open" : "closed"}
         className={cn(
           "fixed inset-0 z-40 bg-black/50 transition-opacity duration-200",
           drawerOpen ? "opacity-100" : "pointer-events-none opacity-0"
@@ -257,7 +261,10 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
       />
 
       <aside
+        id="mission-mobile-drawer"
         data-mission-mobile-drawer
+        data-state={drawerOpen ? "open" : "closed"}
+        aria-hidden={!drawerOpen}
         className={cn(
           "fixed inset-x-0 bottom-0 z-50 flex max-h-[70vh] flex-col rounded-t-xl border-t border-border bg-bg-secondary shadow-xl transition-transform duration-200",
           drawerOpen ? "translate-y-0" : "translate-y-full"
@@ -275,6 +282,7 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
             </span>
           </div>
           <button
+            data-mission-mobile-drawer-close
             onClick={() => setDrawerOpen(false)}
             className="rounded p-1 text-text-muted hover:text-text-primary"
           >
