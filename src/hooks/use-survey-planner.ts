@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 
 import type { HomePosition } from "../mission";
 import { generateCorridor, estimateCorridorWaypointCount } from "../lib/corridor-scan";
+import type { ExportableSurveyRegion, ParsedSurveyRegion } from "../lib/mission-plan-io";
 import { resolveStartCorner } from "../lib/mission-grid";
 import type { GeoPoint2d, MissionItem } from "../lib/mavkit-types";
 import {
@@ -23,8 +24,10 @@ import {
     createSurveyDraftExtension,
     createSurveyRegion,
     dissolveSurveyRegion,
+    hydrateSurveyRegion,
     regionHasManualEdits,
     removeSurveyRegion,
+    toExportableSurveyRegion,
     updateSurveyRegion,
     type SurveyDraftExtension,
     type SurveyGenerationResult,
@@ -98,6 +101,9 @@ export type UseSurveyPlannerResult = {
     enterSurveyMode: () => void;
     exitSurveyMode: () => void;
     createRegion: (polygon: GeoPoint2d[]) => SurveyRegion;
+    replaceImportedRegions: (parsed: ParsedSurveyRegion[]) => void;
+    appendImportedRegions: (parsed: ParsedSurveyRegion[]) => void;
+    getExportableRegions: () => ExportableSurveyRegion[];
     selectRegion: (regionId: string) => void;
     deleteRegion: (regionId: string) => void;
     dissolveRegion: (regionId: string) => MissionItem[];
@@ -161,6 +167,17 @@ function orderedRegions(extension: SurveyDraftExtension): SurveyRegion[] {
 
 function regionBlockPosition(extension: SurveyDraftExtension, regionId: string): number | null {
     return extension.surveyRegionOrder.find((block) => block.regionId === regionId)?.position ?? null;
+}
+
+function orderedParsedRegions(parsed: ParsedSurveyRegion[]): ParsedSurveyRegion[] {
+    return parsed
+        .map((region, index) => ({ region, index }))
+        .sort((left, right) => left.region.position - right.region.position || left.index - right.index)
+        .map(({ region }) => region);
+}
+
+function maxSurveyRegionPosition(extension: SurveyDraftExtension): number {
+    return extension.surveyRegionOrder.reduce((maxPosition, block) => Math.max(maxPosition, block.position), -1);
 }
 
 function syncRegionWithPlannerState(
@@ -427,6 +444,73 @@ export function useSurveyPlanner({
     const createRegion = useCallback((polygon: GeoPoint2d[]) => {
         return createRegionFromGeometry(polygon, "grid");
     }, [createRegionFromGeometry]);
+
+    const replaceImportedRegions = useCallback((parsedRegions: ParsedSurveyRegion[]) => {
+        const orderedParsed = orderedParsedRegions(parsedRegions);
+        let nextRegions = createSurveyDraftExtension();
+        const hydratedRegions = orderedParsed.map((parsedRegion) => {
+            const hydrated = hydrateSurveyRegion(parsedRegion);
+            nextRegions = addSurveyRegion(nextRegions, hydrated, parsedRegion.position - 1);
+            return hydrated;
+        });
+
+        commitRegions(nextRegions);
+
+        const firstRegion = hydratedRegions[0] ?? null;
+        if (!firstRegion) {
+            commitActiveRegionId(null);
+            commitSelectedCamera(null);
+            commitParams(DEFAULT_PARAMS);
+            setSurveyMode(false);
+            return;
+        }
+
+        commitActiveRegionId(firstRegion.id);
+        commitPatternType(firstRegion.patternType);
+        commitSelectedCamera(firstRegion.camera);
+        commitParams(firstRegion.params);
+        setSurveyMode(true);
+    }, [commitActiveRegionId, commitParams, commitPatternType, commitRegions, commitSelectedCamera]);
+
+    const appendImportedRegions = useCallback((parsedRegions: ParsedSurveyRegion[]) => {
+        const orderedParsed = orderedParsedRegions(parsedRegions);
+        if (orderedParsed.length === 0) {
+            return;
+        }
+
+        const positionOffset = maxSurveyRegionPosition(regionsRef.current) + 1;
+        let nextRegions = regionsRef.current;
+        const hydratedRegions = orderedParsed.map((parsedRegion) => {
+            const hydrated = hydrateSurveyRegion(parsedRegion);
+            nextRegions = addSurveyRegion(nextRegions, hydrated, positionOffset + parsedRegion.position - 1);
+            return hydrated;
+        });
+
+        commitRegions(nextRegions);
+        setSurveyMode(true);
+
+        const currentActiveRegionId = activeRegionIdRef.current;
+        if (currentActiveRegionId && nextRegions.surveyRegions.has(currentActiveRegionId)) {
+            return;
+        }
+
+        const firstImportedRegion = hydratedRegions[0] ?? null;
+        if (!firstImportedRegion) {
+            return;
+        }
+
+        commitActiveRegionId(firstImportedRegion.id);
+        commitPatternType(firstImportedRegion.patternType);
+        commitSelectedCamera(firstImportedRegion.camera);
+        commitParams(firstImportedRegion.params);
+    }, [commitActiveRegionId, commitParams, commitPatternType, commitRegions, commitSelectedCamera]);
+
+    const getExportableRegions = useCallback(() => {
+        return regionsRef.current.surveyRegionOrder.flatMap((block) => {
+            const region = regionsRef.current.surveyRegions.get(block.regionId);
+            return region ? [toExportableSurveyRegion(region, block.position)] : [];
+        });
+    }, []);
 
     const deleteRegion = useCallback((regionId: string) => {
         const nextRegions = removeSurveyRegion(regionsRef.current, regionId);
@@ -778,6 +862,9 @@ export function useSurveyPlanner({
         enterSurveyMode,
         exitSurveyMode,
         createRegion,
+        replaceImportedRegions,
+        appendImportedRegions,
+        getExportableRegions,
         selectRegion,
         deleteRegion,
         dissolveRegion,

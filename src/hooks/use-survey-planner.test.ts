@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as corridorScan from "../lib/corridor-scan";
 import * as structureScan from "../lib/structure-scan";
+import type { ParsedSurveyRegion } from "../lib/mission-plan-io";
+import type { GeoPoint2d, MissionItem } from "../lib/mavkit-types";
+import { defaultGeoPoint3d } from "../lib/mavkit-types";
 import type { CatalogCamera } from "../lib/survey-camera-catalog";
 import { useSurveyPlanner } from "./use-survey-planner";
 
@@ -77,6 +80,63 @@ const SURVEY_CAMERA: CatalogCamera = {
     landscape: true,
     fixedOrientation: false,
 };
+
+function makeWaypoint(lat: number, lon: number, alt: number): MissionItem {
+    return {
+        command: {
+            Nav: {
+                Waypoint: {
+                    position: defaultGeoPoint3d(lat, lon, alt),
+                    hold_time_s: 0,
+                    acceptance_radius_m: 1,
+                    pass_radius_m: 0,
+                    yaw_deg: 0,
+                },
+            },
+        },
+        current: false,
+        autocontinue: true,
+    };
+}
+
+function makeParsedRegion(overrides: Partial<ParsedSurveyRegion> = {}): ParsedSurveyRegion {
+    return {
+        patternType: "grid",
+        position: 0,
+        polygon: POLYGON,
+        polyline: [],
+        camera: SURVEY_CAMERA,
+        params: {
+            altitude_m: 65,
+            frontOverlap_pct: 83,
+        },
+        embeddedItems: [makeWaypoint(47.3969, 8.5465, 55)],
+        qgcPassthrough: {
+            complexItemType: "survey",
+            TransectStyleComplexItem: {
+                CameraCalc: {
+                    CameraName: SURVEY_CAMERA.canonicalName,
+                    SensorWidth: SURVEY_CAMERA.sensorWidth_mm,
+                    SensorHeight: SURVEY_CAMERA.sensorHeight_mm,
+                    ImageWidth: SURVEY_CAMERA.imageWidth_px,
+                    ImageHeight: SURVEY_CAMERA.imageHeight_px,
+                    FocalLength: SURVEY_CAMERA.focalLength_mm,
+                    Landscape: SURVEY_CAMERA.landscape,
+                    FixedOrientation: SURVEY_CAMERA.fixedOrientation,
+                },
+            },
+        },
+        warnings: ["Unsupported CameraTriggerInTurnAround preserved."],
+        ...overrides,
+    };
+}
+
+function offsetPoints(points: GeoPoint2d[], latOffset: number, lonOffset: number): GeoPoint2d[] {
+    return points.map((point) => ({
+        latitude_deg: point.latitude_deg + latOffset,
+        longitude_deg: point.longitude_deg + lonOffset,
+    }));
+}
 
 afterEach(() => {
     localStorage.clear();
@@ -591,6 +651,191 @@ describe("useSurveyPlanner", () => {
         expect(result.current.activeRegion?.generatedLayers).toHaveLength(1);
         expect(result.current.activeRegion?.generatedStats?.layerCount).toBe(1);
         expect(result.current.formattedStats?.layerCount).toBe("1");
+    });
+
+    it("replaceImportedRegions clears existing regions and hydrates imported metadata", () => {
+        const { result } = renderHook(() => useSurveyPlanner({
+            homePosition: HOME_POSITION,
+            cruiseSpeed_mps: 14,
+        }));
+
+        act(() => {
+            result.current.createRegion(POLYGON);
+        });
+        const previousRegionId = result.current.activeRegionId;
+
+        const importedCorridor = makeParsedRegion({
+            patternType: "corridor",
+            position: 0,
+            polygon: [],
+            polyline: POLYLINE,
+            params: {
+                leftWidth_m: 70,
+                rightWidth_m: 75,
+            },
+        });
+        const importedStructure = makeParsedRegion({
+            patternType: "structure",
+            position: 3,
+            polygon: offsetPoints(POLYGON, 0.01, 0.01),
+            polyline: [],
+            params: {
+                structureHeight_m: 32,
+                layerCount: 5,
+            },
+        });
+
+        act(() => {
+            result.current.replaceImportedRegions([importedStructure, importedCorridor]);
+        });
+
+        expect(result.current.surveyMode).toBe(true);
+        expect(result.current.allRegions).toHaveLength(2);
+        expect(result.current.regions.surveyRegions.has(previousRegionId as string)).toBe(false);
+        expect(result.current.regions.surveyRegionOrder).toEqual([
+            { regionId: result.current.allRegions[0]!.id, position: 0 },
+            { regionId: result.current.allRegions[1]!.id, position: 3 },
+        ]);
+        expect(result.current.activeRegionId).toBe(result.current.allRegions[0]?.id ?? null);
+        expect(result.current.activeRegion?.patternType).toBe("corridor");
+        expect(result.current.activeRegion?.polyline).toEqual(POLYLINE);
+        expect(result.current.activeRegion?.params.leftWidth_m).toBe(70);
+        expect(result.current.activeRegion?.params.rightWidth_m).toBe(75);
+    });
+
+    it("appendImportedRegions keeps existing regions and appends imported offsets after them", () => {
+        const { result } = renderHook(() => useSurveyPlanner({
+            homePosition: HOME_POSITION,
+            cruiseSpeed_mps: 14,
+        }));
+
+        act(() => {
+            result.current.createRegion(POLYGON);
+        });
+        const existingRegionId = result.current.activeRegionId;
+
+        const importedCorridor = makeParsedRegion({
+            patternType: "corridor",
+            position: 0,
+            polygon: [],
+            polyline: POLYLINE,
+        });
+        const importedGrid = makeParsedRegion({
+            patternType: "grid",
+            position: 2,
+            polygon: offsetPoints(POLYGON, 0.02, 0.02),
+            polyline: [],
+        });
+
+        act(() => {
+            result.current.appendImportedRegions([importedGrid, importedCorridor]);
+        });
+
+        expect(result.current.allRegions).toHaveLength(3);
+        expect(result.current.allRegions[0]?.id).toBe(existingRegionId);
+        expect(result.current.regions.surveyRegionOrder).toEqual([
+            { regionId: result.current.allRegions[0]!.id, position: 0 },
+            { regionId: result.current.allRegions[1]!.id, position: 1 },
+            { regionId: result.current.allRegions[2]!.id, position: 3 },
+        ]);
+        expect(result.current.activeRegionId).toBe(existingRegionId);
+        expect(result.current.activeRegion?.patternType).toBe("grid");
+    });
+
+    it("getExportableRegions returns ordered positions and imported export data", () => {
+        const { result } = renderHook(() => useSurveyPlanner({
+            homePosition: HOME_POSITION,
+            cruiseSpeed_mps: 14,
+        }));
+
+        const importedGrid = makeParsedRegion({
+            patternType: "grid",
+            position: 0,
+            polygon: POLYGON,
+            polyline: [],
+        });
+        const importedStructure = makeParsedRegion({
+            patternType: "structure",
+            position: 4,
+            polygon: offsetPoints(POLYGON, 0.03, 0.03),
+            polyline: [],
+            params: {
+                structureHeight_m: 28,
+                scanDistance_m: 17,
+            },
+        });
+
+        act(() => {
+            result.current.replaceImportedRegions([importedStructure, importedGrid]);
+        });
+
+        const exportable = result.current.getExportableRegions();
+
+        expect(exportable).toHaveLength(2);
+        expect(exportable.map((region) => region.position)).toEqual([0, 4]);
+        expect(exportable[0]).toEqual(expect.objectContaining({
+            patternType: "grid",
+            polygon: POLYGON,
+            camera: SURVEY_CAMERA,
+        }));
+        expect(exportable[1]).toEqual(expect.objectContaining({
+            patternType: "structure",
+            position: 4,
+        }));
+        expect(exportable[1]?.params.structureHeight_m).toBe(28);
+        expect(exportable[1]?.params.scanDistance_m).toBe(17);
+    });
+
+    it("imported region with null camera remains selectable and visible in planner state", () => {
+        const { result } = renderHook(() => useSurveyPlanner({
+            homePosition: HOME_POSITION,
+            cruiseSpeed_mps: 14,
+        }));
+
+        act(() => {
+            result.current.replaceImportedRegions([makeParsedRegion({
+                camera: null,
+                qgcPassthrough: {
+                    complexItemType: "survey",
+                    TransectStyleComplexItem: {
+                        CameraCalc: {
+                            CameraName: "Manual (no camera specs)",
+                        },
+                    },
+                },
+            })]);
+        });
+
+        expect(result.current.activeRegion).not.toBeNull();
+        expect(result.current.activeRegion?.polygon).toEqual(POLYGON);
+        expect(result.current.selectedCamera).toBeNull();
+        expect(result.current.activeRegion?.camera).toBeNull();
+        expect(result.current.canGenerate).toBe(false);
+    });
+
+    it("imported region preserves qgcPassthrough and importWarnings through planner state", () => {
+        const { result } = renderHook(() => useSurveyPlanner({
+            homePosition: HOME_POSITION,
+            cruiseSpeed_mps: 14,
+        }));
+
+        const imported = makeParsedRegion({
+            qgcPassthrough: {
+                complexItemType: "survey",
+                customField: {
+                    keep: true,
+                },
+            },
+            warnings: ["preserve me"],
+        });
+
+        act(() => {
+            result.current.replaceImportedRegions([imported]);
+        });
+
+        expect(result.current.activeRegion?.qgcPassthrough).toEqual(imported.qgcPassthrough);
+        expect(result.current.activeRegion?.importWarnings).toEqual(["preserve me"]);
+        expect(result.current.getExportableRegions()[0]?.qgcPassthrough).toEqual(imported.qgcPassthrough);
     });
 
     it("dissolves a generated region into mission items and forwards them to mission mutators", async () => {

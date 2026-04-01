@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { ParsedSurveyRegion } from "./mission-plan-io";
 import type { TypedDraftItem } from "./mission-draft-typed";
 import type { MissionItem } from "./mavkit-types";
 import { defaultGeoPoint3d } from "./mavkit-types";
@@ -17,11 +18,13 @@ import {
     dissolveRegion,
     dissolveSurveyRegion,
     flattenRegionsToItems,
+    hydrateSurveyRegion,
     markItemEdited,
     moveSurveyRegionTo,
     regionHasManualEdits,
     regionItemCount,
     removeSurveyRegion,
+    toExportableSurveyRegion,
     updateSurveyRegion,
 } from "./survey-region";
 
@@ -216,6 +219,38 @@ function makeCorridorSuccessResult(items: MissionItem[]): CorridorResult {
             captureMode: "distance",
         },
         corridorPolygon: CORRIDOR_POLYGON,
+    };
+}
+
+function makeParsedRegion(overrides: Partial<ParsedSurveyRegion> = {}): ParsedSurveyRegion {
+    return {
+        patternType: "grid",
+        position: 0,
+        polygon: POLYGON,
+        polyline: [],
+        camera: { canonicalName: CAMERA.canonicalName },
+        params: {
+            altitude_m: 65,
+            frontOverlap_pct: 82,
+        },
+        embeddedItems: [makeWaypoint(47.14, 8.14, 55)],
+        qgcPassthrough: {
+            complexItemType: "survey",
+            TransectStyleComplexItem: {
+                CameraCalc: {
+                    CameraName: CAMERA.canonicalName,
+                    SensorWidth: CAMERA.sensorWidth_mm,
+                    SensorHeight: CAMERA.sensorHeight_mm,
+                    ImageWidth: CAMERA.imageWidth_px,
+                    ImageHeight: CAMERA.imageHeight_px,
+                    FocalLength: CAMERA.focalLength_mm,
+                    Landscape: CAMERA.landscape,
+                    FixedOrientation: CAMERA.fixedOrientation,
+                },
+            },
+        },
+        warnings: ["CameraTriggerInTurnAround was preserved."],
+        ...overrides,
     };
 }
 
@@ -448,6 +483,74 @@ describe("survey-region", () => {
         const removed = removeSurveyRegion(dissolved.extension, first.id);
         expect(removed.surveyRegions.size).toBe(0);
         expect(removed.surveyRegionOrder).toEqual([]);
+    });
+
+    it("hydrateSurveyRegion merges defaults, passthrough-backed camera data, and import metadata", () => {
+        const parsed = makeParsedRegion({
+            patternType: "corridor",
+            position: 2,
+            polygon: [],
+            polyline: POLYLINE,
+            params: {
+                leftWidth_m: 80,
+                turnaroundDistance_m: 12,
+            },
+        });
+
+        const region = hydrateSurveyRegion(parsed);
+
+        expect(region.patternType).toBe("corridor");
+        expect(region.polyline).toEqual(POLYLINE);
+        expect(region.polygon).toEqual([]);
+        expect(region.cameraId).toBe(CAMERA.canonicalName);
+        expect(region.camera).toEqual(expect.objectContaining({
+            canonicalName: CAMERA.canonicalName,
+            sensorWidth_mm: CAMERA.sensorWidth_mm,
+            sensorHeight_mm: CAMERA.sensorHeight_mm,
+            imageWidth_px: CAMERA.imageWidth_px,
+            imageHeight_px: CAMERA.imageHeight_px,
+            focalLength_mm: CAMERA.focalLength_mm,
+            landscape: CAMERA.landscape,
+            fixedOrientation: CAMERA.fixedOrientation,
+        }));
+        expect(region.params.leftWidth_m).toBe(80);
+        expect(region.params.rightWidth_m).toBe(50);
+        expect(region.params.turnaroundDistance_m).toBe(12);
+        expect(region.generatedItems).toEqual(parsed.embeddedItems);
+        expect(region.qgcPassthrough).toEqual(parsed.qgcPassthrough);
+        expect(region.importWarnings).toEqual(parsed.warnings);
+
+        (parsed.qgcPassthrough.TransectStyleComplexItem as { CameraCalc?: { CameraName?: string } }).CameraCalc!.CameraName = "changed";
+        expect((region.qgcPassthrough?.TransectStyleComplexItem as { CameraCalc?: { CameraName?: string } }).CameraCalc?.CameraName)
+            .toBe(CAMERA.canonicalName);
+    });
+
+    it("toExportableSurveyRegion preserves positions, passthrough camera recovery, and manual edits", () => {
+        const parsed = makeParsedRegion();
+        const editedItem = makeWaypoint(47.5, 8.5, 80);
+        const region = markItemEdited(hydrateSurveyRegion(parsed), 0, editedItem);
+        region.camera = null;
+
+        const exportable = toExportableSurveyRegion(region, 7);
+
+        expect(exportable.position).toBe(7);
+        expect(exportable.patternType).toBe("grid");
+        expect(exportable.polygon).toEqual(POLYGON);
+        expect(exportable.polyline).toEqual([]);
+        expect(exportable.camera).toEqual(expect.objectContaining({
+            canonicalName: CAMERA.canonicalName,
+            sensorWidth_mm: CAMERA.sensorWidth_mm,
+            sensorHeight_mm: CAMERA.sensorHeight_mm,
+            imageWidth_px: CAMERA.imageWidth_px,
+            imageHeight_px: CAMERA.imageHeight_px,
+            focalLength_mm: CAMERA.focalLength_mm,
+            landscape: CAMERA.landscape,
+            fixedOrientation: CAMERA.fixedOrientation,
+        }));
+        expect(exportable.embeddedItems).toEqual([editedItem]);
+        expect(exportable.qgcPassthrough).toEqual(parsed.qgcPassthrough);
+        expect(exportable.params.altitude_m).toBe(65);
+        expect(exportable.params.frontOverlap_pct).toBe(82);
     });
 
     it("dissolve empty region and region with no generation return empty arrays", () => {

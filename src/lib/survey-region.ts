@@ -1,4 +1,5 @@
 import type { TypedDraftItem } from "./mission-draft-typed";
+import type { ExportableSurveyRegion, ParsedSurveyRegion } from "./mission-plan-io";
 import type { StartCorner, TurnDirection } from "./mission-grid";
 import type { GeoPoint2d, MissionItem } from "./mavkit-types";
 import type { CatalogCamera } from "./survey-camera-catalog";
@@ -62,6 +63,8 @@ export type SurveyRegion = {
     errors: SurveyGenerationError[];
     manualEdits: Map<number, MissionItem>;
     collapsed: boolean;
+    qgcPassthrough?: Record<string, unknown>;
+    importWarnings?: string[];
 };
 
 export type SurveyRegionBlock = {
@@ -131,6 +134,18 @@ function clonePoints(points: GeoPoint2d[]): GeoPoint2d[] {
     return points.map((point) => ({ ...point }));
 }
 
+function cloneJsonValue<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function cloneJsonRecord(value: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+    return value ? cloneJsonValue(value) : undefined;
+}
+
+function cloneWarnings(warnings: string[] | undefined): string[] | undefined {
+    return warnings ? [...warnings] : undefined;
+}
+
 function cloneRegion(region: SurveyRegion): SurveyRegion {
     return {
         ...region,
@@ -146,6 +161,8 @@ function cloneRegion(region: SurveyRegion): SurveyRegion {
         errors: cloneErrors(region.errors),
         manualEdits: new Map(region.manualEdits),
         camera: region.camera ? { ...region.camera } : null,
+        qgcPassthrough: cloneJsonRecord(region.qgcPassthrough),
+        importWarnings: cloneWarnings(region.importWarnings),
     };
 }
 
@@ -175,6 +192,150 @@ function isMissionItemDocument(document: TypedDraftItem["document"]): document i
     return typeof document === "object" && document !== null && "command" in document;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+    return value && typeof value === "object" && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : null;
+}
+
+function stringOrNull(value: unknown): string | null {
+    return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function pickFirstString(...values: unknown[]): string | null {
+    for (const value of values) {
+        const candidate = stringOrNull(value);
+        if (candidate) {
+            return candidate;
+        }
+    }
+
+    return null;
+}
+
+function pickFirstBoolean(...values: unknown[]): boolean | null {
+    for (const value of values) {
+        if (typeof value === "boolean") {
+            return value;
+        }
+    }
+
+    return null;
+}
+
+function pickFirstFinitePositive(...values: unknown[]): number | null {
+    for (const value of values) {
+        if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+            return value;
+        }
+    }
+
+    return null;
+}
+
+function pickFirstFiniteNonNegative(...values: unknown[]): number | null {
+    for (const value of values) {
+        if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+            return value;
+        }
+    }
+
+    return null;
+}
+
+function defaultParamsForPatternType(patternType: SurveyPatternType): SurveyRegionParams {
+    return {
+        ...DEFAULT_REGION_PARAMS,
+        leftWidth_m: patternType === "corridor" ? DEFAULT_CORRIDOR_WIDTH_M : DEFAULT_REGION_PARAMS.leftWidth_m,
+        rightWidth_m: patternType === "corridor" ? DEFAULT_CORRIDOR_WIDTH_M : DEFAULT_REGION_PARAMS.rightWidth_m,
+    };
+}
+
+function extractPassthroughCameraCalc(qgcPassthrough: Record<string, unknown> | undefined): Record<string, unknown> | null {
+    const passthrough = asRecord(qgcPassthrough);
+    if (!passthrough) {
+        return null;
+    }
+
+    const transectStyle = asRecord(passthrough.TransectStyleComplexItem);
+    return asRecord(transectStyle?.CameraCalc) ?? asRecord(passthrough.CameraCalc);
+}
+
+function toHydratedCatalogCamera(
+    camera: Partial<CatalogCamera> | null,
+    qgcPassthrough: Record<string, unknown> | undefined,
+): CatalogCamera | null {
+    if (!camera) {
+        return null;
+    }
+
+    const cameraCalc = extractPassthroughCameraCalc(qgcPassthrough);
+    const canonicalName = pickFirstString(camera.canonicalName, cameraCalc?.CameraName);
+    const brand = pickFirstString(camera.brand, canonicalName);
+    const model = pickFirstString(camera.model, canonicalName);
+    const sensorWidth_mm = pickFirstFinitePositive(camera.sensorWidth_mm, cameraCalc?.SensorWidth);
+    const sensorHeight_mm = pickFirstFinitePositive(camera.sensorHeight_mm, cameraCalc?.SensorHeight);
+    const imageWidth_px = pickFirstFinitePositive(camera.imageWidth_px, cameraCalc?.ImageWidth);
+    const imageHeight_px = pickFirstFinitePositive(camera.imageHeight_px, cameraCalc?.ImageHeight);
+    const focalLength_mm = pickFirstFinitePositive(camera.focalLength_mm, cameraCalc?.FocalLength);
+
+    if (
+        !canonicalName
+        || !brand
+        || !model
+        || sensorWidth_mm === null
+        || sensorHeight_mm === null
+        || imageWidth_px === null
+        || imageHeight_px === null
+        || focalLength_mm === null
+    ) {
+        return null;
+    }
+
+    const hydrated: CatalogCamera = {
+        canonicalName,
+        brand,
+        model,
+        sensorWidth_mm,
+        sensorHeight_mm,
+        imageWidth_px,
+        imageHeight_px,
+        focalLength_mm,
+        landscape: pickFirstBoolean(camera.landscape, cameraCalc?.Landscape) ?? true,
+        fixedOrientation: pickFirstBoolean(camera.fixedOrientation, cameraCalc?.FixedOrientation) ?? false,
+    };
+
+    const minTriggerInterval_s = pickFirstFiniteNonNegative(camera.minTriggerInterval_s, cameraCalc?.MinTriggerInterval);
+    if (minTriggerInterval_s !== null) {
+        hydrated.minTriggerInterval_s = minTriggerInterval_s;
+    }
+
+    return hydrated;
+}
+
+function resolveExportCamera(region: SurveyRegion): CatalogCamera | null {
+    if (region.camera) {
+        return { ...region.camera };
+    }
+
+    if (!region.cameraId && !region.qgcPassthrough) {
+        return null;
+    }
+
+    const camera = toHydratedCatalogCamera(
+        region.cameraId
+            ? {
+                canonicalName: region.cameraId,
+                brand: region.cameraId,
+                model: region.cameraId,
+            }
+            : null,
+        region.qgcPassthrough,
+    );
+
+    return camera ? { ...camera } : null;
+}
+
 export function createSurveyRegion(
     geometry: GeoPoint2d[],
     patternType: SurveyPatternType = "grid",
@@ -188,11 +349,7 @@ export function createSurveyRegion(
         corridorPolygon: [],
         cameraId: null,
         camera: null,
-        params: {
-            ...DEFAULT_REGION_PARAMS,
-            leftWidth_m: isCorridor ? DEFAULT_CORRIDOR_WIDTH_M : DEFAULT_REGION_PARAMS.leftWidth_m,
-            rightWidth_m: isCorridor ? DEFAULT_CORRIDOR_WIDTH_M : DEFAULT_REGION_PARAMS.rightWidth_m,
-        },
+        params: defaultParamsForPatternType(patternType),
         generatedItems: [],
         generatedTransects: [],
         generatedCrosshatch: [],
@@ -210,6 +367,44 @@ export function createCorridorRegion(polyline: GeoPoint2d[]): SurveyRegion {
 
 export function createStructureRegion(polygon: GeoPoint2d[]): SurveyRegion {
     return createSurveyRegion(polygon, "structure");
+}
+
+export function hydrateSurveyRegion(parsed: ParsedSurveyRegion): SurveyRegion {
+    const region = parsed.patternType === "corridor"
+        ? createCorridorRegion(parsed.polyline)
+        : parsed.patternType === "structure"
+            ? createStructureRegion(parsed.polygon)
+            : createSurveyRegion(parsed.polygon);
+    const cameraId = stringOrNull(parsed.camera?.canonicalName);
+    const hydratedCamera = toHydratedCatalogCamera(parsed.camera, parsed.qgcPassthrough);
+
+    return {
+        ...region,
+        polygon: clonePoints(parsed.polygon),
+        polyline: clonePoints(parsed.polyline),
+        cameraId: cameraId ?? hydratedCamera?.canonicalName ?? null,
+        camera: hydratedCamera,
+        params: {
+            ...defaultParamsForPatternType(parsed.patternType),
+            ...parsed.params,
+        },
+        generatedItems: cloneMissionItems(parsed.embeddedItems),
+        qgcPassthrough: cloneJsonValue(parsed.qgcPassthrough),
+        importWarnings: [...parsed.warnings],
+    };
+}
+
+export function toExportableSurveyRegion(region: SurveyRegion, position: number): ExportableSurveyRegion {
+    return {
+        patternType: region.patternType,
+        polygon: clonePoints(region.polygon),
+        polyline: clonePoints(region.polyline),
+        camera: resolveExportCamera(region),
+        params: { ...region.params },
+        embeddedItems: dissolveRegion(region),
+        qgcPassthrough: cloneJsonValue(region.qgcPassthrough ?? {}),
+        position: normalizePosition(position),
+    };
 }
 
 export function regionItemCount(region: SurveyRegion): number {
