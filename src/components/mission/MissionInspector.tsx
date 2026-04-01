@@ -548,13 +548,15 @@ export function MissionInspector({
             <div className="space-y-0.5">
                 <label className="text-[10px] text-text-muted">Command</label>
                 {isMissionItem && !controlReadOnly && onUpdateCommand ? (
-                    <CommandPicker
-                        currentName={displayName}
-                        onSelect={(cat, variant) => {
-                            const newCmd = defaultCommand(cat, variant, position ?? undefined);
-                            onUpdateCommand(index, newCmd);
-                        }}
-                    />
+                    <div data-mission-command-picker>
+                        <CommandPicker
+                            currentName={displayName}
+                            onSelect={(cat, variant) => {
+                                const newCmd = defaultCommand(cat, variant, position ?? undefined);
+                                onUpdateCommand(index, newCmd);
+                            }}
+                        />
+                    </div>
                 ) : (
                     <div className="rounded border border-border bg-bg-input px-1.5 py-1 text-xs text-text-primary">
                         {displayName}
@@ -572,7 +574,7 @@ export function MissionInspector({
             )}
 
             {draftItem.readOnly && (
-                <p className="rounded border border-warning/30 bg-warning/5 px-2 py-1 text-[10px] text-warning/80">
+                <p data-mission-command-raw-readonly className="rounded border border-warning/30 bg-warning/5 px-2 py-1 text-[10px] text-warning/80">
                     Raw/unsupported item preserved read-only.
                 </p>
             )}

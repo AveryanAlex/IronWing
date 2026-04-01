@@ -258,6 +258,7 @@ export function MissionAutoGridDialog({
               <label className="block space-y-0.5">
                 <span className="text-[10px] font-medium text-text-muted">Track Angle (°)</span>
                 <input
+                  data-mission-grid-angle
                   type="number"
                   value={angle}
                   onChange={(e) => setAngle(e.target.value)}
@@ -310,6 +311,7 @@ export function MissionAutoGridDialog({
               <span className="text-[10px] font-medium text-text-muted">Insert Mode</span>
               <div className="flex gap-1">
                 <button
+                  data-mission-grid-insert-after
                   onClick={() => setInsertMode("after_selected")}
                   className={`flex-1 rounded-md border px-2 py-1 text-[11px] transition-colors ${
                     insertMode === "after_selected"
@@ -320,6 +322,7 @@ export function MissionAutoGridDialog({
                   After #{selectedSeq !== null ? selectedSeq + 1 : "—"}
                 </button>
                 <button
+                  data-mission-grid-insert-replace
                   onClick={() => setInsertMode("replace_all")}
                   className={`flex-1 rounded-md border px-2 py-1 text-[11px] transition-colors ${
                     insertMode === "replace_all"
@@ -373,3 +376,6 @@ export function MissionAutoGridDialog({
     </div>
   );
 }
+
+
+

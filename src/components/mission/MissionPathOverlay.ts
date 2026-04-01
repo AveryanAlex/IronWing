@@ -27,8 +27,43 @@ type MissionPathFeatureProperties = {
   bearing_deg?: number;
 };
 
+declare global {
+  interface Window {
+    __IRONWING_MISSION_DEBUG__?: {
+      missionPathGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionPathFeatureProperties>;
+      missionPathFeatureKinds: Record<string, number>;
+      missionPathUpdateCount: number;
+    };
+  }
+}
+
 function emptyMissionPathGeoJson(): GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionPathFeatureProperties> {
   return { type: "FeatureCollection", features: [] };
+}
+
+function publishMissionPathDebugGeoJson(
+  geoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionPathFeatureProperties>,
+): void {
+  const maybeMockWindow = window as Window & { __IRONWING_MOCK_PLATFORM__?: unknown };
+  if (typeof window === "undefined" || !maybeMockWindow.__IRONWING_MOCK_PLATFORM__) {
+    return;
+  }
+
+  const missionPathFeatureKinds = geoJson.features.reduce<Record<string, number>>((counts, feature) => {
+    const kind = feature.properties?.kind;
+    if (!kind) {
+      return counts;
+    }
+    counts[kind] = (counts[kind] ?? 0) + 1;
+    return counts;
+  }, {});
+
+  const previousUpdateCount = window.__IRONWING_MISSION_DEBUG__?.missionPathUpdateCount ?? 0;
+  window.__IRONWING_MISSION_DEBUG__ = {
+    missionPathGeoJson: geoJson,
+    missionPathFeatureKinds,
+    missionPathUpdateCount: previousUpdateCount + 1,
+  };
 }
 
 export function missionRenderFeaturesToGeoJson(
@@ -236,7 +271,9 @@ export function updateMissionPathSource(
   const source = map.getSource(MISSION_PATH_SOURCE_ID) as GeoJSONSource | undefined;
   if (!source) return;
 
-  source.setData(missionRenderFeaturesToGeoJson(features));
+  const geoJson = missionRenderFeaturesToGeoJson(features);
+  publishMissionPathDebugGeoJson(geoJson);
+  source.setData(geoJson);
 
   if (map.getLayer(MISSION_PATH_LABEL_LAYER_ID)) {
     map.setLayoutProperty(

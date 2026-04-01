@@ -527,4 +527,39 @@ describe("MissionMap", () => {
     expect(payload?.features.some((feature: { properties?: { kind?: string } }) => feature.properties?.kind === "spline")).toBe(true);
     expect(payload?.features.some((feature: { properties?: { kind?: string } }) => feature.properties?.kind === "arc")).toBe(true);
   });
+
+  it("publishes the latest mission-path payload on the mock-only debug surface", async () => {
+    (window as Window & { __IRONWING_MOCK_PLATFORM__?: unknown }).__IRONWING_MOCK_PLATFORM__ = {} as any;
+    const homePosition = {
+      latitude_deg: 47.397742,
+      longitude_deg: 8.545594,
+      altitude_m: 488,
+    };
+
+    render(
+      <MissionMap
+        missionItems={[
+          waypoint(0, 47.4, 8.55),
+          splineWaypoint(1, 47.401, 8.551),
+          arcWaypoint(2, 47.402, 8.552, 45, "Clockwise"),
+          loiterTurns(3, 47.403, 8.553, 40),
+        ]}
+        homePosition={homePosition}
+        selectedIndex={null}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(window.__IRONWING_MISSION_DEBUG__?.missionPathGeoJson.features.length).toBeGreaterThan(0);
+    });
+
+    expect(window.__IRONWING_MISSION_DEBUG__?.missionPathFeatureKinds).toMatchObject({
+      straight: expect.any(Number),
+      spline: expect.any(Number),
+      arc: expect.any(Number),
+      loiter: expect.any(Number),
+      label: expect.any(Number),
+    });
+    expect(window.__IRONWING_MISSION_DEBUG__?.missionPathUpdateCount).toBeGreaterThan(0);
+  });
 });
