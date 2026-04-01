@@ -9,6 +9,7 @@ import {
   expectMissionDesktopShellVisible,
   expectMissionDrawerClosed,
   expectMissionDrawerOpen,
+  getSurveyDebugState,
   missionCard,
   openMissionMobileDrawer,
   waitForMissionPathDebugState,
@@ -194,6 +195,96 @@ test("desktop workflow proves inspector metadata, history, terrain, render featu
   await expect(page.locator('[data-testid="mission-stats-state"]')).toContainText("Finite estimate");
   await expect(page.locator('[data-testid="mission-stats-distance"]')).toBeVisible();
   await expect(cards).toHaveCount(5);
+});
+
+test("desktop corridor survey workflow generates a corridor overlay from a drawn polyline", async ({
+  page,
+  mockPlatform,
+}) => {
+  await bootstrapDesktopMissionEditor(page, mockPlatform);
+  await expectMissionDesktopShellVisible(page);
+
+  await page.locator("[data-mission-auto-grid-open]").click();
+  const surveyPanel = page.locator("[data-survey-planner-panel]");
+  await expect(surveyPanel).toBeVisible();
+
+  const corridorPatternButton = surveyPanel.getByRole("button", { name: "Corridor", exact: true });
+  await corridorPatternButton.click();
+  await expect(corridorPatternButton).toHaveAttribute("aria-pressed", "true");
+  await expect(surveyPanel.getByLabel("Left width")).toBeVisible();
+  await expect(surveyPanel.getByLabel("Right width")).toBeVisible();
+  await expect(surveyPanel.getByLabel("Track angle")).toHaveCount(0);
+
+  const drawButton = surveyPanel.getByRole("button", { name: /draw line|stop drawing/i });
+  await drawButton.click();
+  await expect(drawButton).toContainText("Stop drawing");
+
+  for (const [xRatio, yRatio] of [
+    [0.26, 0.24],
+    [0.44, 0.34],
+    [0.63, 0.28],
+    [0.78, 0.48],
+  ] as const) {
+    await clickMapAtRatio(page, xRatio, yRatio);
+  }
+
+  await expect(surveyPanel).toContainText(/4 vertices — click the map to add more points, then press Done or Enter\./i);
+
+  await surveyPanel.getByRole("button", { name: "Done" }).click();
+  const plannerRegionCard = surveyPanel.locator("[data-survey-region-card]");
+  await expect(plannerRegionCard).toHaveCount(1);
+  await expect(plannerRegionCard).toContainText("Region 1");
+  await expect(plannerRegionCard).toContainText("Corridor");
+  await expect(surveyPanel).toContainText(/4 vertices on the corridor path\./i);
+
+  const generateButton = page.locator("[data-survey-generate]");
+  await expect(generateButton).toBeDisabled();
+
+  await surveyPanel.getByLabel("Search cameras").fill("DJI Mavic 3E");
+  await surveyPanel.getByRole("button", { name: /DJI Mavic 3E/i }).click();
+  await expect(surveyPanel).toContainText("Selected camera");
+  await expect(surveyPanel).toContainText("DJI Mavic 3E");
+
+  await surveyPanel.getByLabel("Left width").fill("65");
+  await surveyPanel.getByLabel("Right width").fill("45");
+  await surveyPanel.getByLabel("Turnaround distance").fill("30");
+  await expect(generateButton).toBeEnabled();
+
+  const previousSurveyUpdateCount = (await getSurveyDebugState(page))?.surveyUpdateCount ?? 0;
+
+  await generateButton.click();
+
+  await expect(surveyPanel).toContainText("Survey stats");
+  await expect(surveyPanel).toContainText(/Photos/i);
+  await expect(surveyPanel).toContainText(/GSD/i);
+  await expect(surveyPanel).toContainText(/Area/i);
+  await expect(surveyPanel).toContainText(/Flight time/i);
+  await expect(surveyPanel).toContainText(/Lanes/i);
+
+  await expect.poll(async () => {
+    return (await getSurveyDebugState(page))?.surveyUpdateCount ?? 0;
+  }).toBeGreaterThan(previousSurveyUpdateCount);
+
+  const surveyDebug = await getSurveyDebugState(page);
+  if (!surveyDebug) {
+    throw new Error("Survey debug state was not published for the corridor workflow.");
+  }
+
+  expect(surveyDebug.patternType).toBe("corridor");
+  expect(surveyDebug.centerlineGeoJson.features).toHaveLength(1);
+  expect(surveyDebug.centerlineGeoJson.features[0]?.geometry?.type).toBe("LineString");
+  expect(surveyDebug.transectsGeoJson.features.length).toBeGreaterThan(0);
+  expect(surveyDebug.coverageGeoJson.features.length).toBeGreaterThan(0);
+  expect(surveyDebug.coverageGeoJson.features[0]?.geometry?.type).toBe("Polygon");
+  expect(surveyDebug.coverageGeoJson.features[0]?.properties?.crosshatch).toBe(false);
+  expect(surveyDebug.coverageGeoJson.features[0]?.properties?.laneSpacing_m ?? 0).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: /close survey planner/i }).click();
+  await expect(page.locator("[data-mission-side-panel]")).toHaveAttribute("data-survey-mode", "closed");
+  const missionRegionCard = page.locator("[data-survey-region-card]");
+  await expect(missionRegionCard).toHaveCount(1);
+  await expect(missionRegionCard).toContainText("Corridor");
+  await expect(missionRegionCard).toContainText(/photos/i);
 });
 
 test("Radiomaster viewport keeps desktop mission controls reachable at 1280x720", async ({

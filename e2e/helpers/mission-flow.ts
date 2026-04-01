@@ -46,6 +46,7 @@ type MissionPathDebugState = {
 } | null;
 
 type SurveyDebugState = {
+  patternType?: "grid" | "corridor";
   polygonGeoJson: {
     type: string;
     features: Array<{ geometry?: { type?: string } }>;
@@ -56,7 +57,11 @@ type SurveyDebugState = {
   };
   coverageGeoJson: {
     type: string;
-    features: Array<{ properties?: { crosshatch?: boolean; laneSpacing_m?: number } }>;
+    features: Array<{ geometry?: { type?: string }; properties?: { crosshatch?: boolean; laneSpacing_m?: number } }>;
+  };
+  centerlineGeoJson: {
+    type: string;
+    features: Array<{ geometry?: { type?: string } }>;
   };
   surveyUpdateCount: number;
 } | null;
