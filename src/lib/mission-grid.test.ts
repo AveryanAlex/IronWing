@@ -16,20 +16,104 @@ import {
   type MissionItem,
   type GeoPoint3d,
 } from "./mavkit-types";
+import {
+  latLonToLocalXY,
+  localXYToLatLon,
+  type GeoRef,
+} from "./mission-coordinates";
 
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
 
-/** ~100m square polygon near Zurich (47.38°N, 8.54°E). */
-function squarePolygon(): PolygonVertex[] {
-  return [
-    { latitude_deg: 47.38, longitude_deg: 8.54 },
-    { latitude_deg: 47.38, longitude_deg: 8.5414 },
-    { latitude_deg: 47.3809, longitude_deg: 8.5414 },
-    { latitude_deg: 47.3809, longitude_deg: 8.54 },
-  ];
+type LocalPoint = { x: number; y: number };
+
+type OddPolygonFixture = {
+  name: string;
+  polygon: PolygonVertex[];
+};
+
+type OddPolygonCase = {
+  name: string;
+  polygon: PolygonVertex[];
+  trackAngleDeg: number;
+  laneSpacingM: number;
+};
+
+const TEST_REF: GeoRef = {
+  latitude_deg: 47.38,
+  longitude_deg: 8.54,
+};
+
+const BOUNDARY_EPSILON_M = 0.05;
+const REPRESENTATIVE_TRACK_ANGLES_DEG = [0, 27, 74, 133];
+const REPRESENTATIVE_LANE_SPACINGS_M = [16, 29];
+
+function polygonFromOffsets(
+  offsets: LocalPoint[],
+  ref: GeoRef = TEST_REF,
+): PolygonVertex[] {
+  return offsets.map(({ x, y }) => {
+    const { lat, lon } = localXYToLatLon(ref, x, y);
+    return {
+      latitude_deg: lat,
+      longitude_deg: lon,
+    };
+  });
 }
+
+/** ~100m square polygon near Zurich in local XY metres. */
+function squarePolygon(): PolygonVertex[] {
+  return polygonFromOffsets([
+    { x: 0, y: 0 },
+    { x: 105, y: 0 },
+    { x: 105, y: 100 },
+    { x: 0, y: 100 },
+  ]);
+}
+
+const ODD_POLYGON_FIXTURES: OddPolygonFixture[] = [
+  {
+    name: "triangle",
+    polygon: polygonFromOffsets([
+      { x: -95, y: -60 },
+      { x: 105, y: -35 },
+      { x: 20, y: 120 },
+    ]),
+  },
+  {
+    name: "pentagon",
+    polygon: polygonFromOffsets([
+      { x: -95, y: -30 },
+      { x: -20, y: -105 },
+      { x: 85, y: -70 },
+      { x: 110, y: 20 },
+      { x: 0, y: 115 },
+    ]),
+  },
+  {
+    name: "odd concave polygon",
+    polygon: polygonFromOffsets([
+      { x: -110, y: -70 },
+      { x: 105, y: -60 },
+      { x: 35, y: 10 },
+      { x: 95, y: 100 },
+      { x: -85, y: 90 },
+    ]),
+  },
+];
+
+const ODD_POLYGON_CASES: OddPolygonCase[] = ODD_POLYGON_FIXTURES.flatMap(
+  ({ name, polygon }) =>
+    REPRESENTATIVE_TRACK_ANGLES_DEG.flatMap((trackAngleDeg) =>
+      REPRESENTATIVE_LANE_SPACINGS_M.map((laneSpacingM) => ({
+        name: `${name} at ${trackAngleDeg}° / ${laneSpacingM}m`,
+        polygon,
+        trackAngleDeg,
+        laneSpacingM,
+      })),
+    ),
+);
 
 function defaultParams(overrides?: Partial<GridParams>): GridParams {
   return {
@@ -62,12 +146,115 @@ function itemPosition(item: MissionItem): GeoPoint3d {
   return pos;
 }
 
-function itemLatLon(item: MissionItem): { latitude_deg: number; longitude_deg: number } {
+function itemLatLon(item: MissionItem): {
+  latitude_deg: number;
+  longitude_deg: number;
+} {
   return geoPoint3dLatLon(itemPosition(item));
 }
 
 function itemAlt(item: MissionItem): number {
   return geoPoint3dAltitude(itemPosition(item)).value;
+}
+
+function polygonCentroid(polygon: PolygonVertex[]): GeoRef {
+  let latitudeSum = 0;
+  let longitudeSum = 0;
+  for (const vertex of polygon) {
+    latitudeSum += vertex.latitude_deg;
+    longitudeSum += vertex.longitude_deg;
+  }
+  return {
+    latitude_deg: latitudeSum / polygon.length,
+    longitude_deg: longitudeSum / polygon.length,
+  };
+}
+
+function polygonToLocalXY(
+  polygon: PolygonVertex[],
+  ref: GeoRef = polygonCentroid(polygon),
+): LocalPoint[] {
+  return polygon.map((vertex) => {
+    const { x_m, y_m } = latLonToLocalXY(
+      ref,
+      vertex.latitude_deg,
+      vertex.longitude_deg,
+    );
+    return { x: x_m, y: y_m };
+  });
+}
+
+function itemToLocalXY(item: MissionItem, ref: GeoRef): LocalPoint {
+  const { latitude_deg, longitude_deg } = itemLatLon(item);
+  const { x_m, y_m } = latLonToLocalXY(ref, latitude_deg, longitude_deg);
+  return { x: x_m, y: y_m };
+}
+
+function distancePointToSegmentM(point: LocalPoint, start: LocalPoint, end: LocalPoint): number {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) {
+    return Math.hypot(point.x - start.x, point.y - start.y);
+  }
+
+  const projection =
+    ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared;
+  const clampedProjection = Math.max(0, Math.min(1, projection));
+  const closestX = start.x + dx * clampedProjection;
+  const closestY = start.y + dy * clampedProjection;
+  return Math.hypot(point.x - closestX, point.y - closestY);
+}
+
+function localPolygonContainsInclusive(
+  polygon: LocalPoint[],
+  point: LocalPoint,
+  epsilonM = BOUNDARY_EPSILON_M,
+): boolean {
+  for (let i = 0; i < polygon.length; i++) {
+    const start = polygon[i];
+    const end = polygon[(i + 1) % polygon.length];
+    if (distancePointToSegmentM(point, start, end) <= epsilonM) {
+      return true;
+    }
+  }
+
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i];
+    const b = polygon[j];
+    const intersects = (a.y > point.y) !== (b.y > point.y);
+    if (!intersects) continue;
+
+    const xAtPointY = ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x;
+    if (point.x < xAtPointY) inside = !inside;
+  }
+
+  return inside;
+}
+
+function assertAllWaypointsInsideOrOnPolygon(params: GridParams): MissionItem[] {
+  const items = assertOk(generateGrid(params));
+  const ref = polygonCentroid(params.polygon);
+  const localPolygon = polygonToLocalXY(params.polygon, ref);
+  const outsideWaypoints = items.flatMap((item, index) => {
+    const localPoint = itemToLocalXY(item, ref);
+    if (localPolygonContainsInclusive(localPolygon, localPoint)) {
+      return [];
+    }
+
+    const { latitude_deg, longitude_deg } = itemLatLon(item);
+    return [{
+      index,
+      latitude_deg,
+      longitude_deg,
+      x_m: localPoint.x,
+      y_m: localPoint.y,
+    }];
+  });
+
+  expect(outsideWaypoints).toEqual([]);
+  return items;
 }
 
 // ---------------------------------------------------------------------------
@@ -227,22 +414,8 @@ describe("generateGrid", () => {
     }
   });
 
-  it("all generated waypoints are inside or near the polygon bounds", () => {
-    const poly = squarePolygon();
-    const items = assertOk(generateGrid(defaultParams()));
-
-    const latMin = Math.min(...poly.map((v) => v.latitude_deg)) - 0.001;
-    const latMax = Math.max(...poly.map((v) => v.latitude_deg)) + 0.001;
-    const lonMin = Math.min(...poly.map((v) => v.longitude_deg)) - 0.001;
-    const lonMax = Math.max(...poly.map((v) => v.longitude_deg)) + 0.001;
-
-    for (const item of items) {
-      const { latitude_deg, longitude_deg } = itemLatLon(item);
-      expect(latitude_deg).toBeGreaterThan(latMin);
-      expect(latitude_deg).toBeLessThan(latMax);
-      expect(longitude_deg).toBeGreaterThan(lonMin);
-      expect(longitude_deg).toBeLessThan(lonMax);
-    }
+  it("keeps every square waypoint inside or on the polygon boundary", () => {
+    assertAllWaypointsInsideOrOnPolygon(defaultParams());
   });
 
   it("NavWaypoint fields have expected defaults (hold=0, acceptance=1, pass=0, yaw=0)", () => {
@@ -256,6 +429,31 @@ describe("generateGrid", () => {
       expect(wp.yaw_deg).toBe(0);
     }
   });
+});
+
+// ---------------------------------------------------------------------------
+// Odd-polygon containment regressions
+// ---------------------------------------------------------------------------
+
+describe("odd-polygon containment regressions", () => {
+  it("treats boundary points on edges and vertices as contained", () => {
+    const square = polygonToLocalXY(squarePolygon(), TEST_REF);
+    expect(localPolygonContainsInclusive(square, { x: 0, y: 0 })).toBe(true);
+    expect(localPolygonContainsInclusive(square, { x: 52.5, y: 0 })).toBe(true);
+    expect(localPolygonContainsInclusive(square, { x: 52.5, y: 100 })).toBe(true);
+  });
+
+  for (const { name, polygon, trackAngleDeg, laneSpacingM } of ODD_POLYGON_CASES) {
+    it(`keeps ${name} waypoints inside or on the polygon boundary`, () => {
+      assertAllWaypointsInsideOrOnPolygon(
+        defaultParams({
+          polygon,
+          track_angle_deg: trackAngleDeg,
+          lane_spacing_m: laneSpacingM,
+        }),
+      );
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -529,18 +727,6 @@ describe("edge cases", () => {
     }
   });
 
-  it("handles triangle polygon", () => {
-    const tri: PolygonVertex[] = [
-      { latitude_deg: 47.38, longitude_deg: 8.54 },
-      { latitude_deg: 47.38, longitude_deg: 8.542 },
-      { latitude_deg: 47.382, longitude_deg: 8.541 },
-    ];
-    const items = assertOk(
-      generateGrid(defaultParams({ polygon: tri, lane_spacing_m: 20 })),
-    );
-    expect(items.length).toBeGreaterThan(0);
-  });
-
   it("handles negative altitude (below home)", () => {
     const items = assertOk(generateGrid(defaultParams({ altitude_m: -10 })));
     for (const item of items) {
@@ -642,6 +828,21 @@ describe("estimateGridWaypointCount", () => {
       }
     }
   });
+
+  for (const { name, polygon, trackAngleDeg, laneSpacingM } of ODD_POLYGON_CASES) {
+    it(`matches generateGrid item count for ${name}`, () => {
+      const params = defaultParams({
+        polygon,
+        track_angle_deg: trackAngleDeg,
+        lane_spacing_m: laneSpacingM,
+      });
+      const result = generateGrid(params);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(estimateGridWaypointCount(params)).toBe(result.items.length);
+      }
+    });
+  }
 
   it("returns null for invalid params", () => {
     expect(estimateGridWaypointCount(defaultParams({ lane_spacing_m: -1 }))).toBeNull();
