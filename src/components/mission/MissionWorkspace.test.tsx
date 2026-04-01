@@ -4,17 +4,20 @@ import type { ReactNode } from "react";
 import { fireEvent, render, screen, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MissionWorkspace } from "./MissionWorkspace";
+import { createCorridorRegion } from "../../lib/survey-region";
 
 const {
   terrainHookMock,
   surveyHookMock,
   terrainProfilePropsMock,
   desktopShellPropsMock,
+  missionMapPropsMock,
 } = vi.hoisted(() => ({
   terrainHookMock: vi.fn(),
   surveyHookMock: vi.fn(),
   terrainProfilePropsMock: vi.fn(),
   desktopShellPropsMock: vi.fn(),
+  missionMapPropsMock: vi.fn(),
 }));
 
 vi.mock("../../hooks/use-mission-terrain", () => ({
@@ -60,17 +63,26 @@ vi.mock("react-resizable-panels", () => ({
 }));
 
 vi.mock("../MissionMap", () => ({
-  MissionMap: ({ onBlankMapClick, isDrawingPolygon }: { onBlankMapClick?: (lat: number, lng: number, modifiers?: { altKey: boolean }) => void; isDrawingPolygon?: boolean }) => (
-    <div>
-      <button data-testid="mission-map-blank-click" onClick={() => onBlankMapClick?.(47.41, 8.56)}>
-        Blank map
-      </button>
-      <button data-testid="mission-map-alt-click" onClick={() => onBlankMapClick?.(47.41, 8.56, { altKey: true })}>
-        Alt blank map
-      </button>
-      <span data-testid="mission-map-drawing-state">{isDrawingPolygon ? "drawing" : "idle"}</span>
-    </div>
-  ),
+  MissionMap: (props: {
+    onBlankMapClick?: (lat: number, lng: number, modifiers?: { altKey: boolean }) => void;
+    isDrawingPolygon?: boolean;
+    drawingMode?: "polygon" | "polyline";
+    corridorPreview?: Array<{ latitude_deg: number; longitude_deg: number }>;
+    surveyOverlay?: Record<string, unknown> | null;
+  }) => {
+    missionMapPropsMock(props);
+    return (
+      <div>
+        <button data-testid="mission-map-blank-click" onClick={() => props.onBlankMapClick?.(47.41, 8.56)}>
+          Blank map
+        </button>
+        <button data-testid="mission-map-alt-click" onClick={() => props.onBlankMapClick?.(47.41, 8.56, { altKey: true })}>
+          Alt blank map
+        </button>
+        <span data-testid="mission-map-drawing-state">{props.isDrawingPolygon ? "drawing" : "idle"}</span>
+      </div>
+    );
+  },
 }));
 
 vi.mock("../MapContextMenu", () => ({ MapContextMenu: () => null }));
@@ -84,6 +96,7 @@ vi.mock("./MissionDesktopShell", () => ({
 function createSurveyPlanner(overrides: Record<string, unknown> = {}) {
   return {
     surveyMode: false,
+    patternType: "grid",
     activeRegionId: null,
     regions: { surveyRegions: new Map(), surveyRegionOrder: [] },
     isDrawing: false,
@@ -101,6 +114,8 @@ function createSurveyPlanner(overrides: Record<string, unknown> = {}) {
       captureMode: "distance",
       startCorner: "bottom_left",
       turnDirection: "clockwise",
+      leftWidth_m: 0,
+      rightWidth_m: 0,
     },
     isGenerating: false,
     showCustomCameraForm: false,
@@ -121,7 +136,9 @@ function createSurveyPlanner(overrides: Record<string, unknown> = {}) {
     stopDraw: vi.fn(),
     addVertex: vi.fn(),
     completePolygon: vi.fn(() => null),
+    completeLine: vi.fn(() => null),
     moveVertex: vi.fn(),
+    setPatternType: vi.fn(),
     setCamera: vi.fn(),
     setParam: vi.fn(),
     generate: vi.fn(async () => null),
@@ -231,6 +248,7 @@ describe("MissionWorkspace", () => {
     surveyHookMock.mockReset();
     terrainProfilePropsMock.mockReset();
     desktopShellPropsMock.mockReset();
+    missionMapPropsMock.mockReset();
     terrainHookMock.mockReturnValue({
       status: "ready",
       profile: { points: [], warningsByIndex: new Map() },
@@ -420,5 +438,100 @@ describe("MissionWorkspace", () => {
 
     expect(screen.queryByTestId("mission-terrain-profile")).toBeNull();
     expect(terrainHookMock.mock.calls[terrainHookMock.mock.calls.length - 1]?.[2]).toBe("fence");
+  });
+
+  it("passes polyline drawing mode and a live corridor preview to the map while drawing a corridor", () => {
+    const planner = createSurveyPlanner({
+      patternType: "corridor",
+      isDrawing: true,
+      drawingVertices: [
+        { latitude_deg: 47.397742, longitude_deg: 8.545594 },
+        { latitude_deg: 47.397142, longitude_deg: 8.546394 },
+      ],
+      params: {
+        sideOverlap_pct: 70,
+        frontOverlap_pct: 80,
+        altitude_m: 50,
+        trackAngle_deg: 0,
+        orientation: "landscape",
+        crosshatch: false,
+        turnaroundDistance_m: 0,
+        terrainFollow: false,
+        captureMode: "distance",
+        startCorner: "bottom_left",
+        turnDirection: "clockwise",
+        leftWidth_m: 45,
+        rightWidth_m: 55,
+      },
+    });
+    surveyHookMock.mockReturnValue(planner);
+
+    render(
+      <MissionWorkspace
+        vehicle={{ connected: true, vehiclePosition: null, missionState: { current_index: null } } as never}
+        mission={createMission("mission") as never}
+        deviceLocation={{ location: null } as never}
+      />,
+    );
+
+    const missionMapProps = missionMapPropsMock.mock.calls[missionMapPropsMock.mock.calls.length - 1]?.[0] as {
+      drawingMode?: string;
+      corridorPreview?: Array<{ latitude_deg: number; longitude_deg: number }>;
+    };
+    expect(missionMapProps.drawingMode).toBe("polyline");
+    expect(missionMapProps.corridorPreview?.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("publishes corridor overlay data with pattern type, centerline, and corridor polygon", () => {
+    const region = createCorridorRegion([
+      { latitude_deg: 47.397742, longitude_deg: 8.545594 },
+      { latitude_deg: 47.397142, longitude_deg: 8.546394 },
+      { latitude_deg: 47.396642, longitude_deg: 8.547194 },
+    ]);
+    region.corridorPolygon = [
+      { latitude_deg: 47.3978, longitude_deg: 8.5454 },
+      { latitude_deg: 47.3980, longitude_deg: 8.5458 },
+      { latitude_deg: 47.3968, longitude_deg: 8.5473 },
+      { latitude_deg: 47.3965, longitude_deg: 8.5469 },
+      { latitude_deg: 47.3978, longitude_deg: 8.5454 },
+    ];
+    region.generatedTransects = [[
+      { latitude_deg: 47.3976, longitude_deg: 8.5458 },
+      { latitude_deg: 47.3969, longitude_deg: 8.5467 },
+    ]];
+    region.generatedStats = {
+      gsd_m: 0.023,
+      photoCount: 96,
+      area_m2: 12_500,
+      triggerDistance_m: 18,
+      laneSpacing_m: 24,
+      laneCount: 6,
+      crosshatchLaneCount: 0,
+    };
+    surveyHookMock.mockReturnValue(createSurveyPlanner({
+      patternType: "corridor",
+      activeRegion: region,
+      activeRegionId: region.id,
+      allRegions: [region],
+    }));
+
+    render(
+      <MissionWorkspace
+        vehicle={{ connected: true, vehiclePosition: null, missionState: { current_index: null } } as never}
+        mission={createMission("mission") as never}
+        deviceLocation={{ location: null } as never}
+      />,
+    );
+
+    const missionMapProps = missionMapPropsMock.mock.calls[missionMapPropsMock.mock.calls.length - 1]?.[0] as {
+      surveyOverlay?: {
+        patternType?: string;
+        centerline?: Array<{ latitude_deg: number; longitude_deg: number }>;
+        corridorPolygon?: Array<{ latitude_deg: number; longitude_deg: number }>;
+      } | null;
+    };
+    expect(missionMapProps.surveyOverlay?.patternType).toBe("corridor");
+    expect(missionMapProps.surveyOverlay?.centerline).toEqual(region.polyline);
+    expect(missionMapProps.surveyOverlay?.corridorPolygon).toEqual(region.corridorPolygon);
   });
 });

@@ -36,6 +36,7 @@ import {
   removeSurveyLayers,
   updateSurveyOverlay,
   type SurveyOverlayData,
+  SURVEY_CENTERLINE_LAYER,
   SURVEY_COVERAGE_FILL_LAYER,
   SURVEY_COVERAGE_LINE_LAYER,
   SURVEY_POLYGON_FILL_LAYER,
@@ -84,6 +85,8 @@ type MissionMapProps = {
   replayPosition?: { latitude_deg: number; longitude_deg: number; heading_deg: number } | null;
   polygonVertices?: PolygonVertex[];
   isDrawingPolygon?: boolean;
+  drawingMode?: "polygon" | "polyline";
+  corridorPreview?: GeoPoint2d[];
   onPolygonClick?: (lat: number, lng: number) => void;
   onPolygonComplete?: () => void;
   onPolygonVertexMove?: (index: number, lat: number, lng: number) => void;
@@ -143,7 +146,7 @@ export function MissionMap({
   onUserInteraction, currentMissionSeq, flyToSelectedKey,
   syntheticVision, svsTelemetry,
   flightPath, replayPosition,
-  polygonVertices, isDrawingPolygon, onPolygonClick, onPolygonComplete, onPolygonVertexMove,
+  polygonVertices, isDrawingPolygon, drawingMode = "polygon", corridorPreview, onPolygonClick, onPolygonComplete, onPolygonVertexMove,
   fenceRegions, selectedFenceIndex, fenceReturnPoint,
   rallyPoints, selectedRallyIndex,
   surveyOverlay,
@@ -184,6 +187,7 @@ export function MissionMap({
   const onPolygonCompleteRef = useRef(onPolygonComplete);
   const onPolygonVertexMoveRef = useRef(onPolygonVertexMove);
   const isDrawingPolygonRef = useRef(isDrawingPolygon);
+  const drawingModeRef = useRef(drawingMode);
   const polygonVerticesRef = useRef(polygonVertices);
   const surveyOverlayRef = useRef(surveyOverlay);
   const polygonMarkersRef = useRef<Marker[]>([]);
@@ -205,6 +209,7 @@ export function MissionMap({
     onPolygonCompleteRef.current = onPolygonComplete;
     onPolygonVertexMoveRef.current = onPolygonVertexMove;
     isDrawingPolygonRef.current = isDrawingPolygon;
+    drawingModeRef.current = drawingMode;
     polygonVerticesRef.current = polygonVertices;
     surveyOverlayRef.current = surveyOverlay;
     missionItemsRef.current = missionItems;
@@ -212,7 +217,9 @@ export function MissionMap({
     currentMissionSeqRef.current = currentMissionSeq;
     onToggleSelectRef.current = onToggleSelect;
     onRectangleSelectRef.current = onRectangleSelect;
-  }, [onSelectIndex, onMoveWaypoint, onBlankMapClick, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, polygonVertices, surveyOverlay, missionItems, homePosition, currentMissionSeq, onToggleSelect, onRectangleSelect]);
+  }, [onSelectIndex, onMoveWaypoint, onBlankMapClick, onContextMenu, readOnly, onUserInteraction, onPolygonClick, onPolygonComplete, onPolygonVertexMove, isDrawingPolygon, drawingMode, polygonVertices, surveyOverlay, missionItems, homePosition, currentMissionSeq, onToggleSelect, onRectangleSelect]);
+
+  const activeDrawingMode = drawingMode ?? "polygon";
 
   const missionRenderFeatures = useMemo(
     () => buildMissionRenderFeatures(homePosition, missionItems, { currentSeq: currentMissionSeq }),
@@ -368,6 +375,29 @@ export function MissionMap({
         });
       }
 
+      if (!map.getSource("corridor-preview")) {
+        map.addSource("corridor-preview", {
+          type: "geojson",
+          data: { type: "Feature", geometry: { type: "Polygon", coordinates: [] }, properties: {} },
+        });
+      }
+      if (!map.getLayer("corridor-preview-fill")) {
+        map.addLayer({
+          id: "corridor-preview-fill",
+          type: "fill",
+          source: "corridor-preview",
+          paint: { "fill-color": "#84cc16", "fill-opacity": 0.12 },
+        });
+      }
+      if (!map.getLayer("corridor-preview-line")) {
+        map.addLayer({
+          id: "corridor-preview-line",
+          type: "line",
+          source: "corridor-preview",
+          paint: { "line-color": "#84cc16", "line-width": 2, "line-opacity": 0.75 },
+        });
+      }
+
       ensureFenceLayers(map);
       ensureSurveyLayers(map);
       updateSurveyOverlay(map, surveyOverlayRef.current ?? null);
@@ -383,6 +413,8 @@ export function MissionMap({
         "grid-polygon-fill",
         "grid-polygon-line",
         "polygon-preview-line",
+        "corridor-preview-fill",
+        "corridor-preview-line",
         "fence-fill",
         "fence-line-inclusion",
         "fence-line-exclusion",
@@ -390,6 +422,7 @@ export function MissionMap({
         SURVEY_POLYGON_LINE_LAYER,
         SURVEY_COVERAGE_FILL_LAYER,
         SURVEY_COVERAGE_LINE_LAYER,
+        SURVEY_CENTERLINE_LAYER,
         SURVEY_TRANSECT_LAYER,
       ]);
       baseLayerIdsRef.current = map.getStyle().layers
@@ -425,8 +458,7 @@ export function MissionMap({
         if (longPressFiredRef.current) { longPressFiredRef.current = false; return; }
         if (isDrawingPolygonRef.current) {
           const verts = polygonVerticesRef.current;
-          // Close polygon by clicking the first vertex when 3+ points exist
-          if (verts && verts.length >= 3) {
+          if (drawingModeRef.current === "polygon" && verts && verts.length >= 3) {
             const firstPt = map.project([verts[0].longitude_deg, verts[0].latitude_deg]);
             if (Math.hypot(firstPt.x - event.point.x, firstPt.y - event.point.y) < 20) {
               onPolygonCompleteRef.current?.();
@@ -441,7 +473,7 @@ export function MissionMap({
       });
 
       map.on("dblclick", (event: MapMouseEvent) => {
-        if (isDrawingPolygonRef.current) {
+        if (isDrawingPolygonRef.current && drawingModeRef.current === "polygon") {
           event.preventDefault();
         }
       });
@@ -924,6 +956,23 @@ export function MissionMap({
     const source = map.getSource("grid-polygon") as GeoJSONSource | undefined;
     if (!source) return;
 
+    if (activeDrawingMode === "polyline") {
+      if (polygonVertices && polygonVertices.length >= 2) {
+        source.setData({
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: polygonVertices.map((v) => [v.longitude_deg, v.latitude_deg]) },
+          properties: {},
+        });
+      } else {
+        source.setData({
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: [] },
+          properties: {},
+        });
+      }
+      return;
+    }
+
     if (polygonVertices && polygonVertices.length >= 3) {
       const ring = polygonVertices.map((v) => [v.longitude_deg, v.latitude_deg] as [number, number]);
       ring.push(ring[0]);
@@ -945,7 +994,18 @@ export function MissionMap({
         properties: {},
       });
     }
-  }, [polygonVertices]);
+  }, [activeDrawingMode, polygonVertices]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    try {
+      map.setLayoutProperty("grid-polygon-fill", "visibility", activeDrawingMode === "polyline" ? "none" : "visible");
+    } catch {
+      /* layer may not exist yet */
+    }
+  }, [activeDrawingMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -966,16 +1026,21 @@ export function MissionMap({
         existing.setLngLat(lngLat);
         const el = existing.getElement();
         el.textContent = String(i + 1);
-        el.classList.toggle("is-closeable", i === 0 && isDrawingPolygon === true && vertices.length >= 3);
+        el.classList.toggle("is-closeable", activeDrawingMode === "polygon" && i === 0 && isDrawingPolygon === true && vertices.length >= 3);
       } else {
         const el = document.createElement("div");
         el.className = "polygon-vertex" + (i === 0 ? " is-first" : "");
         el.textContent = String(i + 1);
-        if (i === 0 && isDrawingPolygon && vertices.length >= 3) el.classList.add("is-closeable");
+        if (activeDrawingMode === "polygon" && i === 0 && isDrawingPolygon && vertices.length >= 3) el.classList.add("is-closeable");
 
         el.addEventListener("click", (e) => {
           e.stopPropagation();
-          if (i === 0 && isDrawingPolygonRef.current && (polygonVerticesRef.current?.length ?? 0) >= 3) {
+          if (
+            i === 0
+            && isDrawingPolygonRef.current
+            && drawingModeRef.current === "polygon"
+            && (polygonVerticesRef.current?.length ?? 0) >= 3
+          ) {
             onPolygonCompleteRef.current?.();
           }
         });
@@ -993,7 +1058,11 @@ export function MissionMap({
           const coords = verts.map((vv, j) =>
             j === i ? [pos.lng, pos.lat] as [number, number] : [vv.longitude_deg, vv.latitude_deg] as [number, number]
           );
-          if (coords.length >= 3) {
+          if (drawingModeRef.current === "polyline") {
+            if (coords.length >= 2) {
+              src.setData({ type: "Feature", geometry: { type: "LineString", coordinates: coords }, properties: {} });
+            }
+          } else if (coords.length >= 3) {
             src.setData({ type: "Feature", geometry: { type: "Polygon", coordinates: [[...coords, coords[0]]] }, properties: {} });
           } else if (coords.length >= 2) {
             src.setData({ type: "Feature", geometry: { type: "LineString", coordinates: coords }, properties: {} });
@@ -1008,7 +1077,7 @@ export function MissionMap({
         polygonMarkersRef.current.push(marker);
       }
     }
-  }, [polygonVertices, isDrawingPolygon]);
+  }, [polygonVertices, isDrawingPolygon, activeDrawingMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1030,7 +1099,7 @@ export function MissionMap({
       const cursor: [number, number] = [e.lngLat.lng, e.lngLat.lat];
       const last: [number, number] = [verts[verts.length - 1].longitude_deg, verts[verts.length - 1].latitude_deg];
       const coords: [number, number][] = [last, cursor];
-      if (verts.length >= 2) {
+      if (drawingModeRef.current === "polygon" && verts.length >= 2) {
         coords.push([verts[0].longitude_deg, verts[0].latitude_deg]);
       }
       src.setData({ type: "Feature", geometry: { type: "LineString", coordinates: coords }, properties: {} });
@@ -1045,6 +1114,33 @@ export function MissionMap({
       }
     };
   }, [isDrawingPolygon]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    const source = map.getSource("corridor-preview") as GeoJSONSource | undefined;
+    if (!source) return;
+
+    if (corridorPreview && corridorPreview.length >= 3) {
+      const ring = corridorPreview.map((point) => [point.longitude_deg, point.latitude_deg] as [number, number]);
+      const first = ring[0];
+      const last = ring[ring.length - 1];
+      if (first && last && (first[0] !== last[0] || first[1] !== last[1])) {
+        ring.push(first);
+      }
+      source.setData({
+        type: "Feature",
+        geometry: { type: "Polygon", coordinates: [ring] },
+        properties: {},
+      });
+    } else {
+      source.setData({
+        type: "Feature",
+        geometry: { type: "Polygon", coordinates: [] },
+        properties: {},
+      });
+    }
+  }, [corridorPreview]);
 
   // Update replay flight path
   useEffect(() => {

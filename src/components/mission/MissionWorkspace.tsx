@@ -13,9 +13,12 @@ import type { useMission } from "../../hooks/use-mission";
 import type { useDeviceLocation } from "../../hooks/use-device-location";
 import { useMissionTerrain } from "../../hooks/use-mission-terrain";
 import { useSurveyPlanner } from "../../hooks/use-survey-planner";
-import type { FenceRegion, GeoPoint3d } from "../../lib/mavkit-types";
+import type { FenceRegion, GeoPoint2d, GeoPoint3d } from "../../lib/mavkit-types";
 import type { MissionIssue } from "../../mission";
 import type { TypedDraftItem, FenceRegionType } from "../../lib/mission-draft-typed";
+import type { SurveyOverlayData } from "./SurveyMapOverlay";
+import type { SurveyRegion } from "../../lib/survey-region";
+import { computeCorridorPolygon } from "../../lib/corridor-scan";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { Navigation, Home } from "lucide-react";
 import { toast } from "sonner";
@@ -35,6 +38,55 @@ type ContextMenuState = {
   lng: number;
   nearestSeq: number | null;
 } | null;
+
+function buildSurveyOverlay(region: SurveyRegion | null): SurveyOverlayData | null {
+  if (!region) {
+    return null;
+  }
+
+  if (region.patternType === "corridor") {
+    if (region.polyline.length < 2 || region.corridorPolygon.length < 3) {
+      return null;
+    }
+
+    return {
+      patternType: "corridor",
+      polygon: region.polygon,
+      centerline: region.polyline,
+      corridorPolygon: region.corridorPolygon,
+      transects: region.generatedTransects,
+      crosshatchTransects: region.generatedCrosshatch,
+      laneSpacing_m: region.generatedStats?.laneSpacing_m ?? 0,
+    };
+  }
+
+  if (region.polygon.length < 3) {
+    return null;
+  }
+
+  return {
+    patternType: "grid",
+    polygon: region.polygon,
+    transects: region.generatedTransects,
+    crosshatchTransects: region.generatedCrosshatch,
+    laneSpacing_m: region.generatedStats?.laneSpacing_m ?? 0,
+  };
+}
+
+function buildCorridorPreview(
+  isDrawing: boolean,
+  patternType: "grid" | "corridor",
+  drawingVertices: GeoPoint2d[],
+  leftWidth_m: number,
+  rightWidth_m: number,
+): GeoPoint2d[] | undefined {
+  if (!isDrawing || patternType !== "corridor" || drawingVertices.length < 2) {
+    return undefined;
+  }
+
+  const polygon = computeCorridorPolygon(drawingVertices, leftWidth_m, rightWidth_m);
+  return polygon.length >= 3 ? polygon : undefined;
+}
 
 export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWorkspaceProps) {
   const current = mission.current;
@@ -57,6 +109,31 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
     cruiseSpeed_mps: mission.mission.importedSpeeds?.cruiseSpeedMps ?? settings.cruiseSpeedMps,
   });
   const chainModeEnabled = current.tab === "mission" && chainModeActive && !survey.isDrawing;
+
+  const drawingMode = survey.isDrawing
+    ? survey.patternType === "corridor"
+      ? "polyline"
+      : "polygon"
+    : undefined;
+
+  const corridorPreview = useMemo(
+    () => buildCorridorPreview(
+      survey.isDrawing,
+      survey.patternType,
+      survey.drawingVertices,
+      survey.params.leftWidth_m,
+      survey.params.rightWidth_m,
+    ),
+    [survey.drawingVertices, survey.isDrawing, survey.params.leftWidth_m, survey.params.rightWidth_m, survey.patternType],
+  );
+
+  const surveyOverlay = useMemo(() => {
+    if (current.tab !== "mission" || survey.isDrawing) {
+      return null;
+    }
+
+    return buildSurveyOverlay(survey.activeRegion);
+  }, [current.tab, survey.activeRegion, survey.isDrawing]);
 
   const terrainIssues = useMemo<MissionIssue[]>(() => {
     if (!terrainWarnings) return [];
@@ -185,24 +262,6 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
     }
   }, [survey]);
 
-  const surveyOverlay = useMemo(() => {
-    if (survey.isDrawing || current.tab !== "mission") {
-      return null;
-    }
-
-    const activeRegion = survey.activeRegion;
-    if (!activeRegion || activeRegion.polygon.length < 3) {
-      return null;
-    }
-
-    return {
-      polygon: activeRegion.polygon,
-      transects: activeRegion.generatedTransects,
-      crosshatchTransects: activeRegion.generatedCrosshatch,
-      laneSpacing_m: activeRegion.generatedStats?.laneSpacing_m ?? 0,
-    };
-  }, [current.tab, survey.activeRegion, survey.isDrawing]);
-
   const surveyPanel = useMemo(() => (
     <SurveyPlannerPanel planner={survey} />
   ), [survey]);
@@ -273,8 +332,10 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
                 centerOnHomeKey={centerOnHomeKey}
                 polygonVertices={survey.isDrawing ? survey.drawingVertices : undefined}
                 isDrawingPolygon={survey.isDrawing}
+                drawingMode={drawingMode}
+                corridorPreview={corridorPreview}
                 onPolygonClick={survey.addVertex}
-                onPolygonComplete={survey.completePolygon}
+                onPolygonComplete={survey.patternType === "corridor" ? survey.completeLine : survey.completePolygon}
                 onPolygonVertexMove={survey.moveVertex}
                 surveyOverlay={surveyOverlay}
                 fenceRegions={current.tab === "fence" ? current.draftItems.map(d => d.document as FenceRegion) : undefined}

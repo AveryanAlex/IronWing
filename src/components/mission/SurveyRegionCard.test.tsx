@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createSurveyRegion } from "../../lib/survey-region";
+import { createCorridorRegion, createSurveyRegion } from "../../lib/survey-region";
 import { SurveyRegionCard } from "./SurveyRegionCard";
 
 const POLYGON = [
@@ -13,8 +13,13 @@ const POLYGON = [
   { latitude_deg: 47.396642, longitude_deg: 8.545594 },
 ];
 
-function createRegion() {
-  const region = createSurveyRegion(POLYGON);
+const POLYLINE = [
+  { latitude_deg: 47.397742, longitude_deg: 8.545594 },
+  { latitude_deg: 47.397142, longitude_deg: 8.546394 },
+  { latitude_deg: 47.396642, longitude_deg: 8.547194 },
+];
+
+function applyStats(region: ReturnType<typeof createSurveyRegion>) {
   region.generatedStats = {
     gsd_m: 0.023,
     photoCount: 128,
@@ -32,12 +37,24 @@ afterEach(() => {
 });
 
 describe("SurveyRegionCard", () => {
-  it("renders the collapsed region summary", () => {
-    const region = createRegion();
+  it("renders grid, crosshatch grid, and corridor pattern labels", () => {
+    const gridRegion = applyStats(createSurveyRegion(POLYGON));
+    const crosshatchRegion = applyStats(createSurveyRegion(POLYGON));
+    crosshatchRegion.params.crosshatch = true;
+    const corridorRegion = createCorridorRegion(POLYLINE);
+    corridorRegion.generatedStats = {
+      gsd_m: 0.023,
+      photoCount: 96,
+      area_m2: 12_500,
+      triggerDistance_m: 18,
+      laneSpacing_m: 24,
+      laneCount: 6,
+      crosshatchLaneCount: 0,
+    };
 
-    render(
+    const { rerender } = render(
       <SurveyRegionCard
-        region={region}
+        region={gridRegion}
         label="Region 1"
         selected={false}
         onSelect={() => undefined}
@@ -46,10 +63,36 @@ describe("SurveyRegionCard", () => {
       />,
     );
 
-    expect(screen.getByText("Region 1")).toBeTruthy();
-    expect(screen.getByText("Single-pass")).toBeTruthy();
-    expect(screen.getByText(/128 photos/i)).toBeTruthy();
-    expect(screen.getByText("18,500 m²")).toBeTruthy();
+    expect(screen.getByText("Grid")).toBeTruthy();
+    expect(screen.getByText("8 lanes")).toBeTruthy();
+
+    rerender(
+      <SurveyRegionCard
+        region={crosshatchRegion}
+        label="Region 1"
+        selected={false}
+        onSelect={() => undefined}
+        onDissolve={() => undefined}
+        onDelete={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("Crosshatch grid")).toBeTruthy();
+
+    rerender(
+      <SurveyRegionCard
+        region={corridorRegion}
+        label="Region 1"
+        selected={false}
+        onSelect={() => undefined}
+        onDissolve={() => undefined}
+        onDelete={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("Corridor")).toBeTruthy();
+    expect(screen.getByText("6 lanes")).toBeTruthy();
+    expect(screen.getByText("12,500 m²")).toBeTruthy();
   });
 
   it("calls onSelect when the card summary is clicked", () => {
@@ -57,7 +100,7 @@ describe("SurveyRegionCard", () => {
 
     render(
       <SurveyRegionCard
-        region={createRegion()}
+        region={applyStats(createSurveyRegion(POLYGON))}
         label="Region 1"
         selected={false}
         onSelect={onSelect}
@@ -77,7 +120,7 @@ describe("SurveyRegionCard", () => {
 
     render(
       <SurveyRegionCard
-        region={createRegion()}
+        region={applyStats(createSurveyRegion(POLYGON))}
         label="Region 1"
         selected={true}
         onSelect={() => undefined}
@@ -94,7 +137,7 @@ describe("SurveyRegionCard", () => {
   });
 
   it("shows the edited badge when the region has manual edits", () => {
-    const region = createRegion();
+    const region = applyStats(createSurveyRegion(POLYGON));
     region.manualEdits.set(0, {
       command: {
         Nav: {

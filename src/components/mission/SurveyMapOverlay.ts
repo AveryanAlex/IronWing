@@ -16,6 +16,8 @@ export const SURVEY_TRANSECT_LAYER = "survey-transects-line";
 export const SURVEY_COVERAGE_SOURCE = "survey-coverage";
 export const SURVEY_COVERAGE_FILL_LAYER = "survey-coverage-fill";
 export const SURVEY_COVERAGE_LINE_LAYER = "survey-coverage-line";
+export const SURVEY_CENTERLINE_SOURCE = "survey-centerline";
+export const SURVEY_CENTERLINE_LAYER = "survey-centerline-line";
 
 type LocalPoint = { x: number; y: number };
 
@@ -29,8 +31,15 @@ type SurveyCoverageFeatureProperties = {
   laneSpacing_m: number;
 };
 
+type SurveyCenterlineFeatureProperties = {
+  kind: "centerline";
+};
+
 export type SurveyOverlayData = {
+  patternType?: "grid" | "corridor";
   polygon: GeoPoint2d[];
+  centerline?: GeoPoint2d[];
+  corridorPolygon?: GeoPoint2d[];
   transects: SurveyTransect[];
   crosshatchTransects: SurveyTransect[];
   laneSpacing_m: number;
@@ -39,9 +48,11 @@ export type SurveyOverlayData = {
 declare global {
   interface Window {
     __IRONWING_SURVEY_DEBUG__?: {
+      patternType?: "grid" | "corridor";
       polygonGeoJson: GeoJSON.FeatureCollection<GeoJSON.Polygon, SurveyPolygonFeatureProperties>;
       transectsGeoJson: GeoJSON.FeatureCollection<GeoJSON.LineString, SurveyTransectFeatureProperties>;
       coverageGeoJson: GeoJSON.FeatureCollection<GeoJSON.Polygon, SurveyCoverageFeatureProperties>;
+      centerlineGeoJson: GeoJSON.FeatureCollection<GeoJSON.LineString, SurveyCenterlineFeatureProperties>;
       surveyUpdateCount: number;
     };
   }
@@ -57,6 +68,13 @@ function emptyPolygonCollection<T extends Record<string, unknown>>(): GeoJSON.Fe
 function emptyTransectCollection(): GeoJSON.FeatureCollection<
   GeoJSON.LineString,
   SurveyTransectFeatureProperties
+> {
+  return { type: "FeatureCollection", features: [] };
+}
+
+function emptyLineCollection<T extends Record<string, unknown>>(): GeoJSON.FeatureCollection<
+  GeoJSON.LineString,
+  T
 > {
   return { type: "FeatureCollection", features: [] };
 }
@@ -265,15 +283,22 @@ function bufferConvexHull(points: LocalPoint[], buffer_m: number): LocalPoint[] 
   });
 }
 
-function polygonToFeature(
+function polygonToFeature<T extends Record<string, unknown>>(
   polygon: GeoPoint2d[],
-): GeoJSON.Feature<GeoJSON.Polygon, SurveyPolygonFeatureProperties> | null {
+  properties: T,
+): GeoJSON.Feature<GeoJSON.Polygon, T> | null {
   if (polygon.length < 3) {
     return null;
   }
 
   const ring: [number, number][] = polygon.map((point) => [point.longitude_deg, point.latitude_deg]);
-  ring.push(ring[0]!);
+  if (ring.length > 0) {
+    const first = ring[0]!;
+    const last = ring[ring.length - 1]!;
+    if (first[0] !== last[0] || first[1] !== last[1]) {
+      ring.push(first);
+    }
+  }
 
   return {
     type: "Feature",
@@ -281,8 +306,25 @@ function polygonToFeature(
       type: "Polygon",
       coordinates: [ring],
     },
+    properties,
+  };
+}
+
+function centerlineToFeature(
+  line: GeoPoint2d[],
+): GeoJSON.Feature<GeoJSON.LineString, SurveyCenterlineFeatureProperties> | null {
+  if (line.length < 2) {
+    return null;
+  }
+
+  return {
+    type: "Feature",
+    geometry: {
+      type: "LineString",
+      coordinates: line.map((point) => [point.longitude_deg, point.latitude_deg]),
+    },
     properties: {
-      kind: "survey_region",
+      kind: "centerline",
     },
   };
 }
@@ -323,9 +365,11 @@ export function computeCoveragePolygon(
 }
 
 function publishSurveyDebugGeoJson(
+  patternType: "grid" | "corridor" | undefined,
   polygonGeoJson: GeoJSON.FeatureCollection<GeoJSON.Polygon, SurveyPolygonFeatureProperties>,
   transectsGeoJson: GeoJSON.FeatureCollection<GeoJSON.LineString, SurveyTransectFeatureProperties>,
   coverageGeoJson: GeoJSON.FeatureCollection<GeoJSON.Polygon, SurveyCoverageFeatureProperties>,
+  centerlineGeoJson: GeoJSON.FeatureCollection<GeoJSON.LineString, SurveyCenterlineFeatureProperties>,
 ): void {
   if (typeof window === "undefined") {
     return;
@@ -338,9 +382,11 @@ function publishSurveyDebugGeoJson(
 
   const previousUpdateCount = window.__IRONWING_SURVEY_DEBUG__?.surveyUpdateCount ?? 0;
   window.__IRONWING_SURVEY_DEBUG__ = {
+    patternType,
     polygonGeoJson,
     transectsGeoJson,
     coverageGeoJson,
+    centerlineGeoJson,
     surveyUpdateCount: previousUpdateCount + 1,
   };
 }
@@ -364,6 +410,13 @@ export function ensureSurveyLayers(map: MapLibreMap): void {
     map.addSource(SURVEY_COVERAGE_SOURCE, {
       type: "geojson",
       data: emptyPolygonCollection<SurveyCoverageFeatureProperties>(),
+    });
+  }
+
+  if (!map.getSource(SURVEY_CENTERLINE_SOURCE)) {
+    map.addSource(SURVEY_CENTERLINE_SOURCE, {
+      type: "geojson",
+      data: emptyLineCollection<SurveyCenterlineFeatureProperties>(),
     });
   }
 
@@ -417,6 +470,24 @@ export function ensureSurveyLayers(map: MapLibreMap): void {
     } as never);
   }
 
+  if (!map.getLayer(SURVEY_CENTERLINE_LAYER)) {
+    map.addLayer({
+      id: SURVEY_CENTERLINE_LAYER,
+      type: "line",
+      source: SURVEY_CENTERLINE_SOURCE,
+      layout: {
+        "line-cap": "round",
+        "line-join": "round",
+      },
+      paint: {
+        "line-color": "#78d6ff",
+        "line-width": 2,
+        "line-dasharray": [2, 2],
+        "line-opacity": 0.85,
+      },
+    } as never);
+  }
+
   if (!map.getLayer(SURVEY_TRANSECT_LAYER)) {
     map.addLayer({
       id: SURVEY_TRANSECT_LAYER,
@@ -440,11 +511,14 @@ export function updateSurveyOverlay(map: MapLibreMap, data: SurveyOverlayData | 
   const polygonSource = map.getSource(SURVEY_POLYGON_SOURCE) as GeoJSONSource | undefined;
   const transectSource = map.getSource(SURVEY_TRANSECT_SOURCE) as GeoJSONSource | undefined;
   const coverageSource = map.getSource(SURVEY_COVERAGE_SOURCE) as GeoJSONSource | undefined;
-  if (!polygonSource || !transectSource || !coverageSource) {
+  const centerlineSource = map.getSource(SURVEY_CENTERLINE_SOURCE) as GeoJSONSource | undefined;
+  if (!polygonSource || !transectSource || !coverageSource || !centerlineSource) {
     return;
   }
 
-  const polygonFeature = data ? polygonToFeature(data.polygon) : null;
+  const polygonFeature = data
+    ? polygonToFeature<SurveyPolygonFeatureProperties>(data.polygon, { kind: "survey_region" })
+    : null;
   const polygonGeoJson: GeoJSON.FeatureCollection<GeoJSON.Polygon, SurveyPolygonFeatureProperties> = polygonFeature
     ? { type: "FeatureCollection", features: [polygonFeature] }
     : emptyPolygonCollection<SurveyPolygonFeatureProperties>();
@@ -454,25 +528,43 @@ export function updateSurveyOverlay(map: MapLibreMap, data: SurveyOverlayData | 
     : emptyTransectCollection();
 
   const coverageFeature = data
-    ? computeCoveragePolygon(
-        [...data.transects, ...data.crosshatchTransects],
-        data.crosshatchTransects.length > 0,
-        data.laneSpacing_m,
-      )
+    ? data.patternType === "corridor"
+      ? polygonToFeature<SurveyCoverageFeatureProperties>(
+          data.corridorPolygon ?? [],
+          {
+            kind: "coverage",
+            crosshatch: false,
+            laneSpacing_m: data.laneSpacing_m,
+          },
+        )
+      : computeCoveragePolygon(
+          [...data.transects, ...data.crosshatchTransects],
+          data.crosshatchTransects.length > 0,
+          data.laneSpacing_m,
+        )
     : null;
   const coverageGeoJson: GeoJSON.FeatureCollection<GeoJSON.Polygon, SurveyCoverageFeatureProperties> = coverageFeature
     ? { type: "FeatureCollection", features: [coverageFeature] }
     : emptyPolygonCollection<SurveyCoverageFeatureProperties>();
 
+  const centerlineFeature = data?.patternType === "corridor"
+    ? centerlineToFeature(data.centerline ?? [])
+    : null;
+  const centerlineGeoJson: GeoJSON.FeatureCollection<GeoJSON.LineString, SurveyCenterlineFeatureProperties> = centerlineFeature
+    ? { type: "FeatureCollection", features: [centerlineFeature] }
+    : emptyLineCollection<SurveyCenterlineFeatureProperties>();
+
   polygonSource.setData(polygonGeoJson);
   transectSource.setData(transectsGeoJson);
   coverageSource.setData(coverageGeoJson);
-  publishSurveyDebugGeoJson(polygonGeoJson, transectsGeoJson, coverageGeoJson);
+  centerlineSource.setData(centerlineGeoJson);
+  publishSurveyDebugGeoJson(data?.patternType, polygonGeoJson, transectsGeoJson, coverageGeoJson, centerlineGeoJson);
 }
 
 export function removeSurveyLayers(map: MapLibreMap): void {
   for (const layerId of [
     SURVEY_TRANSECT_LAYER,
+    SURVEY_CENTERLINE_LAYER,
     SURVEY_COVERAGE_LINE_LAYER,
     SURVEY_COVERAGE_FILL_LAYER,
     SURVEY_POLYGON_LINE_LAYER,
@@ -485,6 +577,7 @@ export function removeSurveyLayers(map: MapLibreMap): void {
 
   for (const sourceId of [
     SURVEY_TRANSECT_SOURCE,
+    SURVEY_CENTERLINE_SOURCE,
     SURVEY_COVERAGE_SOURCE,
     SURVEY_POLYGON_SOURCE,
   ]) {

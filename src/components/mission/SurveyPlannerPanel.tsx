@@ -44,6 +44,11 @@ const CAPTURE_MODE_LABELS = {
   hover: "Hover capture",
 } as const;
 
+const PATTERN_OPTIONS = [
+  { value: "grid", label: "Grid" },
+  { value: "corridor", label: "Corridor" },
+] as const;
+
 function createEmptyCustomCameraForm(): CustomCameraFormState {
   return {
     brand: "",
@@ -155,6 +160,8 @@ function StatTile({ label, value, hint }: { label: string; value: string; hint?:
 export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [customCameraForm, setCustomCameraForm] = useState<CustomCameraFormState>(() => createEmptyCustomCameraForm());
+  const isCorridorPattern = planner.patternType === "corridor";
+  const generateLabel = isCorridorPattern ? "Generate corridor" : "Generate survey";
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -165,6 +172,25 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
 
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
+  }, [planner]);
+
+  useEffect(() => {
+    const handleCompleteCorridor = (event: KeyboardEvent) => {
+      if (event.key !== "Enter" || !planner.isDrawing || planner.patternType !== "corridor" || planner.drawingVertices.length < 2) {
+        return;
+      }
+
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+        return;
+      }
+
+      event.preventDefault();
+      planner.completeLine();
+    };
+
+    document.addEventListener("keydown", handleCompleteCorridor);
+    return () => document.removeEventListener("keydown", handleCompleteCorridor);
   }, [planner]);
 
   useEffect(() => {
@@ -249,7 +275,7 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
           <div>
             <div className="text-sm font-semibold text-text-primary">Survey Planner</div>
             <div className="text-[11px] text-text-muted">
-              Draw an area, choose a camera, and preview a generated survey.
+              Draw an area or path, choose a camera, and preview the generated flight.
             </div>
           </div>
         </div>
@@ -274,6 +300,31 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="space-y-4">
+          <section className="space-y-3 rounded-lg border border-border bg-bg-primary p-3">
+            <SectionTitle title="Pattern" />
+            <div className="inline-flex rounded-lg border border-border bg-bg-tertiary/40 p-1" role="group" aria-label="Pattern type">
+              {PATTERN_OPTIONS.map((option) => {
+                const selected = planner.patternType === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => planner.setPatternType(option.value)}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                      selected
+                        ? "bg-accent text-white shadow-sm"
+                        : "text-text-secondary hover:text-text-primary",
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
           <section className="space-y-2">
             <SectionTitle title="Camera" />
             <label className="relative block">
@@ -535,17 +586,47 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
                   className="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm text-text-primary"
                 />
               </label>
-              <label className="space-y-1 text-xs text-text-secondary">
-                <span>Track angle (°)</span>
-                <input
-                  aria-label="Track angle"
-                  type="number"
-                  step="1"
-                  value={planner.params.trackAngle_deg}
-                  onChange={(event) => planner.setParam("trackAngle_deg", Number(event.target.value))}
-                  className="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm text-text-primary"
-                />
-              </label>
+              {!isCorridorPattern ? (
+                <label className="space-y-1 text-xs text-text-secondary">
+                  <span>Track angle (°)</span>
+                  <input
+                    aria-label="Track angle"
+                    type="number"
+                    step="1"
+                    value={planner.params.trackAngle_deg}
+                    onChange={(event) => planner.setParam("trackAngle_deg", Number(event.target.value))}
+                    className="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm text-text-primary"
+                  />
+                </label>
+              ) : null}
+              {isCorridorPattern ? (
+                <>
+                  <label className="space-y-1 text-xs text-text-secondary">
+                    <span>Left width (m)</span>
+                    <input
+                      aria-label="Left width"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={planner.params.leftWidth_m}
+                      onChange={(event) => planner.setParam("leftWidth_m", Number(event.target.value))}
+                      className="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm text-text-primary"
+                    />
+                  </label>
+                  <label className="space-y-1 text-xs text-text-secondary">
+                    <span>Right width (m)</span>
+                    <input
+                      aria-label="Right width"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={planner.params.rightWidth_m}
+                      onChange={(event) => planner.setParam("rightWidth_m", Number(event.target.value))}
+                      className="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm text-text-primary"
+                    />
+                  </label>
+                </>
+              ) : null}
             </div>
 
             <div className="space-y-2">
@@ -573,19 +654,21 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
 
           <section className="space-y-3 rounded-lg border border-border bg-bg-primary p-3">
             <SectionTitle title="Capture & routing" />
-            <div className="space-y-2 rounded-md border border-border bg-bg-secondary/70 p-3">
-              <label className="flex items-start gap-2 text-sm text-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={planner.params.crosshatch}
-                  onChange={(event) => planner.setParam("crosshatch", event.target.checked)}
-                />
-                <span>
-                  <span className="font-medium text-text-primary">Crosshatch</span>
-                  <span className="mt-1 block text-xs text-text-muted">Adds an orthogonal pass and roughly doubles flight time.</span>
-                </span>
-              </label>
-            </div>
+            {!isCorridorPattern ? (
+              <div className="space-y-2 rounded-md border border-border bg-bg-secondary/70 p-3">
+                <label className="flex items-start gap-2 text-sm text-text-secondary">
+                  <input
+                    type="checkbox"
+                    checked={planner.params.crosshatch}
+                    onChange={(event) => planner.setParam("crosshatch", event.target.checked)}
+                  />
+                  <span>
+                    <span className="font-medium text-text-primary">Crosshatch</span>
+                    <span className="mt-1 block text-xs text-text-muted">Adds an orthogonal pass and roughly doubles flight time.</span>
+                  </span>
+                </label>
+              </div>
+            ) : null}
 
             <div className="grid gap-2 md:grid-cols-2">
               <label className="space-y-1 text-xs text-text-secondary">
@@ -624,26 +707,52 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
             </label>
           </section>
 
-          <section className="space-y-3 rounded-lg border border-border bg-bg-primary p-3">
-            <SectionTitle title="Polygon" />
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant={planner.isDrawing ? "destructive" : "secondary"} onClick={planner.isDrawing ? planner.stopDraw : planner.startDraw}>
-                <Crosshair className="h-3.5 w-3.5" />
-                {planner.isDrawing ? "Stop drawing" : "Draw area"}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => planner.activeRegionId ? planner.deleteRegion(planner.activeRegionId) : planner.stopDraw()} disabled={!planner.activeRegionId && planner.drawingVertices.length === 0}>
-                <Trash2 className="h-3.5 w-3.5" />
-                Clear
-              </Button>
-            </div>
-            <div className="text-xs text-text-muted">
-              {planner.isDrawing
-                ? `${planner.drawingVertices.length} ${planner.drawingVertices.length === 1 ? "vertex" : "vertices"} — click the map to add more points.`
-                : activeRegion
-                  ? `${activeRegion.polygon.length} ${activeRegion.polygon.length === 1 ? "vertex" : "vertices"} in the active region.`
-                  : "No polygon yet — start drawing on the map."}
-            </div>
-          </section>
+          {isCorridorPattern ? (
+            <section className="space-y-3 rounded-lg border border-border bg-bg-primary p-3">
+              <SectionTitle title="Corridor path" />
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant={planner.isDrawing ? "destructive" : "secondary"} onClick={planner.isDrawing ? planner.stopDraw : planner.startDraw}>
+                  <Crosshair className="h-3.5 w-3.5" />
+                  {planner.isDrawing ? "Stop drawing" : "Draw line"}
+                </Button>
+                <Button size="sm" onClick={planner.completeLine} disabled={!planner.isDrawing || planner.drawingVertices.length < 2}>
+                  Done
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => planner.activeRegionId ? planner.deleteRegion(planner.activeRegionId) : planner.stopDraw()} disabled={!planner.activeRegionId && planner.drawingVertices.length === 0}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Clear
+                </Button>
+              </div>
+              <div className="text-xs text-text-muted">
+                {planner.isDrawing
+                  ? `${planner.drawingVertices.length} ${planner.drawingVertices.length === 1 ? "vertex" : "vertices"} — click the map to add more points, then press Done or Enter.`
+                  : activeRegion
+                    ? `${activeRegion.polyline.length} ${activeRegion.polyline.length === 1 ? "vertex" : "vertices"} on the corridor path.`
+                    : "No corridor path yet — start drawing on the map."}
+              </div>
+            </section>
+          ) : (
+            <section className="space-y-3 rounded-lg border border-border bg-bg-primary p-3">
+              <SectionTitle title="Polygon" />
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant={planner.isDrawing ? "destructive" : "secondary"} onClick={planner.isDrawing ? planner.stopDraw : planner.startDraw}>
+                  <Crosshair className="h-3.5 w-3.5" />
+                  {planner.isDrawing ? "Stop drawing" : "Draw area"}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => planner.activeRegionId ? planner.deleteRegion(planner.activeRegionId) : planner.stopDraw()} disabled={!planner.activeRegionId && planner.drawingVertices.length === 0}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Clear
+                </Button>
+              </div>
+              <div className="text-xs text-text-muted">
+                {planner.isDrawing
+                  ? `${planner.drawingVertices.length} ${planner.drawingVertices.length === 1 ? "vertex" : "vertices"} — click the map to add more points.`
+                  : activeRegion
+                    ? `${activeRegion.polygon.length} ${activeRegion.polygon.length === 1 ? "vertex" : "vertices"} in the active region.`
+                    : "No polygon yet — start drawing on the map."}
+              </div>
+            </section>
+          )}
 
           {activeRegion?.errors.length ? (
             <section className="space-y-2 rounded-lg border border-danger/30 bg-danger/10 p-3">
@@ -674,7 +783,7 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
           <section className="space-y-3 rounded-lg border border-border bg-bg-primary p-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="text-sm font-semibold text-text-primary">Generate survey</div>
+                <div className="text-sm font-semibold text-text-primary">{generateLabel}</div>
                 <div className="text-xs text-text-muted">{formatEstimatedCount(planner.estimatedWaypointCount)}</div>
               </div>
               {planner.activeRegionHasManualEdits ? (
@@ -693,7 +802,7 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
               disabled={!planner.canGenerate}
             >
               {planner.activeRegionHasManualEdits ? <AlertTriangle className="h-4 w-4" /> : null}
-              Generate survey ({planner.estimatedWaypointCount?.toLocaleString() ?? "—"})
+              {generateLabel} ({planner.estimatedWaypointCount?.toLocaleString() ?? "—"})
             </Button>
           </section>
 
@@ -701,7 +810,7 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
             <SectionTitle title="Regions" />
             {planner.allRegions.length === 0 ? (
               <div className="rounded-md border border-dashed border-border px-3 py-4 text-sm text-text-muted">
-                Survey regions will appear here after you close a polygon.
+                Survey regions will appear here after you close a polygon or finish a corridor path.
               </div>
             ) : (
               <div className="space-y-2">

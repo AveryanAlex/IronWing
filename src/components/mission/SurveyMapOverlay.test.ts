@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { computeCoveragePolygon } from "./SurveyMapOverlay";
+import { computeCoveragePolygon, updateSurveyOverlay } from "./SurveyMapOverlay";
 import type { SurveyTransect } from "../../lib/survey-grid";
 
 const PRIMARY_TRANSECTS: SurveyTransect[] = [
@@ -13,6 +13,30 @@ const PRIMARY_TRANSECTS: SurveyTransect[] = [
     { latitude_deg: 47.396642, longitude_deg: 8.547194 },
   ],
 ];
+
+function createMapStub() {
+  const polygonSource = { setData: vi.fn() };
+  const transectSource = { setData: vi.fn() };
+  const coverageSource = { setData: vi.fn() };
+  const centerlineSource = { setData: vi.fn() };
+
+  const sources = new Map<string, { setData: ReturnType<typeof vi.fn> }>([
+    ["survey-polygon", polygonSource],
+    ["survey-transects", transectSource],
+    ["survey-coverage", coverageSource],
+    ["survey-centerline", centerlineSource],
+  ]);
+
+  return {
+    map: {
+      getSource: (id: string) => sources.get(id),
+    },
+    polygonSource,
+    transectSource,
+    coverageSource,
+    centerlineSource,
+  };
+}
 
 describe("computeCoveragePolygon", () => {
   it("returns a closed polygon ring for the buffered transect hull", () => {
@@ -44,5 +68,47 @@ describe("computeCoveragePolygon", () => {
     expect(primary?.properties.crosshatch).toBe(false);
     expect(crosshatch?.properties.crosshatch).toBe(true);
     expect(primary?.properties.laneSpacing_m).toBe(24);
+  });
+});
+
+describe("updateSurveyOverlay", () => {
+  it("publishes corridor polygon, centerline, and transects to the correct sources", () => {
+    const { map, polygonSource, transectSource, coverageSource, centerlineSource } = createMapStub();
+    const corridorPolygon = [
+      { latitude_deg: 47.3978, longitude_deg: 8.5455 },
+      { latitude_deg: 47.3980, longitude_deg: 8.5460 },
+      { latitude_deg: 47.3973, longitude_deg: 8.5473 },
+      { latitude_deg: 47.3969, longitude_deg: 8.5468 },
+      { latitude_deg: 47.3978, longitude_deg: 8.5455 },
+    ];
+    const centerline = [
+      { latitude_deg: 47.397742, longitude_deg: 8.545594 },
+      { latitude_deg: 47.397142, longitude_deg: 8.546394 },
+      { latitude_deg: 47.396642, longitude_deg: 8.547194 },
+    ];
+
+    updateSurveyOverlay(map as never, {
+      patternType: "corridor",
+      polygon: [],
+      centerline,
+      corridorPolygon,
+      transects: PRIMARY_TRANSECTS,
+      crosshatchTransects: [],
+      laneSpacing_m: 24,
+    });
+
+    expect(polygonSource.setData).toHaveBeenCalledWith({ type: "FeatureCollection", features: [] });
+
+    const coverageGeoJson = coverageSource.setData.mock.calls[0]?.[0] as GeoJSON.FeatureCollection<GeoJSON.Polygon>;
+    expect(coverageGeoJson.features).toHaveLength(1);
+    expect(coverageGeoJson.features[0]?.geometry.coordinates[0]?.[0]).toEqual([8.5455, 47.3978]);
+
+    const centerlineGeoJson = centerlineSource.setData.mock.calls[0]?.[0] as GeoJSON.FeatureCollection<GeoJSON.LineString>;
+    expect(centerlineGeoJson.features).toHaveLength(1);
+    expect(centerlineGeoJson.features[0]?.geometry.coordinates).toEqual(centerline.map((point) => [point.longitude_deg, point.latitude_deg]));
+
+    const transectsGeoJson = transectSource.setData.mock.calls[0]?.[0] as GeoJSON.FeatureCollection<GeoJSON.LineString>;
+    expect(transectsGeoJson.features).toHaveLength(2);
+    expect(transectsGeoJson.features[0]?.properties?.kind).toBe("primary");
   });
 });

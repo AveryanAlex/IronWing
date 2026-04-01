@@ -28,6 +28,23 @@ function formatArea(area_m2: number | null | undefined): string {
   return `${Math.round(area_m2 ?? 0).toLocaleString()} m²`;
 }
 
+function formatLaneCount(laneCount: number | null | undefined): string | null {
+  if (!Number.isFinite(laneCount ?? NaN)) {
+    return null;
+  }
+
+  const rounded = Math.round(laneCount ?? 0);
+  return `${rounded.toLocaleString()} ${rounded === 1 ? "lane" : "lanes"}`;
+}
+
+function regionPatternLabel(region: SurveyRegion): string {
+  if (region.patternType === "corridor") {
+    return "Corridor";
+  }
+
+  return region.params.crosshatch ? "Crosshatch grid" : "Grid";
+}
+
 export function SurveyRegionCard({
   region,
   label,
@@ -37,8 +54,9 @@ export function SurveyRegionCard({
   onDelete,
 }: SurveyRegionCardProps) {
   const hasManualEdits = regionHasManualEdits(region);
-  const patternLabel = region.params.crosshatch ? "Crosshatch" : "Single-pass";
+  const patternLabel = regionPatternLabel(region);
   const photoCount = region.generatedStats?.photoCount?.toLocaleString() ?? "0";
+  const laneCount = formatLaneCount(region.generatedStats?.laneCount);
 
   return (
     <div
@@ -82,6 +100,12 @@ export function SurveyRegionCard({
             <span>{photoCount} photos</span>
             <span>•</span>
             <span>{formatArea(region.generatedStats?.area_m2)}</span>
+            {laneCount ? (
+              <>
+                <span>•</span>
+                <span>{laneCount}</span>
+              </>
+            ) : null}
           </div>
         </div>
 

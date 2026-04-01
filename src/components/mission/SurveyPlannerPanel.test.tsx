@@ -10,11 +10,14 @@ import type { UseSurveyPlannerResult } from "../../hooks/use-survey-planner";
 import {
   addSurveyRegion,
   applyGenerationResult,
+  createCorridorRegion,
   createSurveyDraftExtension,
   createSurveyRegion,
+  type SurveyRegion,
 } from "../../lib/survey-region";
 import type { CatalogCamera } from "../../lib/survey-camera-catalog";
 import type { MissionItem } from "../../lib/mavkit-types";
+import type { CorridorResult } from "../../lib/corridor-scan";
 import type { SurveyResult } from "../../lib/survey-grid";
 import { defaultGeoPoint3d } from "../../lib/mavkit-types";
 
@@ -23,6 +26,12 @@ const POLYGON = [
   { latitude_deg: 47.397742, longitude_deg: 8.547194 },
   { latitude_deg: 47.396642, longitude_deg: 8.547194 },
   { latitude_deg: 47.396642, longitude_deg: 8.545594 },
+];
+
+const POLYLINE = [
+  { latitude_deg: 47.397742, longitude_deg: 8.545594 },
+  { latitude_deg: 47.397242, longitude_deg: 8.546194 },
+  { latitude_deg: 47.396642, longitude_deg: 8.547194 },
 ];
 
 const SURVEY_CAMERA: CatalogCamera = {
@@ -103,6 +112,47 @@ function makeSurveyResult(items: MissionItem[]): SurveyResult {
   };
 }
 
+function makeCorridorResult(items: MissionItem[]): CorridorResult {
+  return {
+    ok: true,
+    items,
+    transects: [[
+      { latitude_deg: 47.3976, longitude_deg: 8.5457 },
+      { latitude_deg: 47.3970, longitude_deg: 8.5465 },
+    ]],
+    crosshatchTransects: [],
+    stats: {
+      gsd_m: 0.023,
+      photoCount: 96,
+      area_m2: 12_500,
+      triggerDistance_m: 18,
+      laneSpacing_m: 24,
+      laneCount: 6,
+      crosshatchLaneCount: 0,
+    },
+    params: {
+      polyline: POLYLINE,
+      camera: SURVEY_CAMERA,
+      orientation: "landscape",
+      altitude_m: 60,
+      sideOverlap_pct: 70,
+      frontOverlap_pct: 80,
+      leftWidth_m: 50,
+      rightWidth_m: 60,
+      turnaroundDistance_m: 10,
+      terrainFollow: false,
+      captureMode: "distance",
+    },
+    corridorPolygon: [
+      { latitude_deg: 47.3978, longitude_deg: 8.5454 },
+      { latitude_deg: 47.3980, longitude_deg: 8.5458 },
+      { latitude_deg: 47.3968, longitude_deg: 8.5473 },
+      { latitude_deg: 47.3965, longitude_deg: 8.5469 },
+      { latitude_deg: 47.3978, longitude_deg: 8.5454 },
+    ],
+  };
+}
+
 function createPlannerStub(overrides: Partial<UseSurveyPlannerResult> = {}): UseSurveyPlannerResult {
   const region = createSurveyRegion(POLYGON);
   region.cameraId = SURVEY_CAMERA.canonicalName;
@@ -151,6 +201,33 @@ function createPlannerStub(overrides: Partial<UseSurveyPlannerResult> = {}): Use
   };
 }
 
+function createCorridorPlannerStub(overrides: Partial<UseSurveyPlannerResult> = {}): UseSurveyPlannerResult {
+  const region = createCorridorRegion(POLYLINE);
+  region.cameraId = SURVEY_CAMERA.canonicalName;
+  region.camera = SURVEY_CAMERA;
+  region.params.leftWidth_m = 50;
+  region.params.rightWidth_m = 60;
+
+  const corridorRegion = overrides.formattedStats
+    ? applyGenerationResult(region, makeCorridorResult([
+        makeWaypoint(47.3972, 8.5458, 60),
+        makeWaypoint(47.3969, 8.5466, 60),
+      ]))
+    : region;
+  const regions = addSurveyRegion(createSurveyDraftExtension(), corridorRegion, -1);
+
+  return createPlannerStub({
+    patternType: "corridor",
+    activeRegionId: corridorRegion.id,
+    activeRegion: corridorRegion,
+    allRegions: [corridorRegion],
+    regions,
+    params: corridorRegion.params,
+    estimatedWaypointCount: 96,
+    ...overrides,
+  });
+}
+
 function PlannerHarness({
   canGenerate = true,
   withStats = false,
@@ -171,7 +248,7 @@ function PlannerHarness({
       baseRegion.manualEdits.set(0, makeWaypoint(47.3971, 8.5461, 60));
     }
 
-    const activeRegion = withStats
+    const activeRegion: SurveyRegion = withStats
       ? applyGenerationResult(baseRegion, makeSurveyResult([
           makeWaypoint(47.3972, 8.5458, 60),
           makeWaypoint(47.3969, 8.5466, 60),
@@ -252,5 +329,40 @@ describe("SurveyPlannerPanel", () => {
 
     expect(screen.getByText(/manual edits will be replaced on regeneration/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /generate survey/i }).textContent).toContain("Generate survey");
+  });
+
+  it("switches pattern type through the segmented selector", () => {
+    const planner = createPlannerStub();
+    render(<SurveyPlannerPanel planner={planner} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Corridor" }));
+    expect(planner.setPatternType).toHaveBeenCalledWith("corridor");
+  });
+
+  it("shows corridor controls and suppresses grid-only controls in corridor mode", () => {
+    render(<SurveyPlannerPanel planner={createCorridorPlannerStub()} />);
+
+    expect(screen.getByText("Corridor path")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /draw line/i })).toBeTruthy();
+    expect(screen.getByLabelText("Left width")).toBeTruthy();
+    expect(screen.getByLabelText("Right width")).toBeTruthy();
+    expect(screen.queryByLabelText("Track angle")).toBeNull();
+    expect(screen.queryByText("Crosshatch")).toBeNull();
+    expect(screen.getByRole("button", { name: /generate corridor/i })).toBeTruthy();
+  });
+
+  it("completes a corridor line from the Done button and the Enter key", () => {
+    const planner = createCorridorPlannerStub({
+      isDrawing: true,
+      drawingVertices: POLYLINE,
+    });
+
+    render(<SurveyPlannerPanel planner={planner} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
+    expect(planner.completeLine).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(document, { key: "Enter" });
+    expect(planner.completeLine).toHaveBeenCalledTimes(2);
   });
 });
