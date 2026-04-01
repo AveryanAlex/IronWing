@@ -80,6 +80,11 @@ type SurveyDebugState = {
   surveyUpdateCount: number;
 } | null;
 
+export type GridSurveyWorkflowOptions = {
+  isMobile?: boolean;
+  openSurveyMode?: (page: Page) => Promise<void>;
+};
+
 const MOCK_MAP_STYLE = {
   version: 8,
   name: "IronWing Mission E2E",
@@ -395,4 +400,73 @@ export async function waitForSurveyDebugState(page: Page): Promise<NonNullable<S
   }
 
   return debugState;
+}
+
+export async function runGridSurveyWorkflow(
+  page: Page,
+  options: GridSurveyWorkflowOptions = {},
+): Promise<void> {
+  const { isMobile = false, openSurveyMode } = options;
+
+  if (isMobile) {
+    throw new Error("runGridSurveyWorkflow does not support mobile workflows yet.");
+  }
+
+  const openSurveyModeAction =
+    openSurveyMode ??
+    (async (activePage: Page) => {
+      await activePage.locator("[data-mission-auto-grid-open]").click();
+    });
+
+  await openSurveyModeAction(page);
+
+  const surveyPanel = page.locator("[data-survey-planner-panel]");
+  const sidePanel = page.locator("[data-mission-side-panel]");
+  const chainModeButton = page.locator('[data-testid="mission-chain-mode"]');
+  const drawButton = surveyPanel.locator("button").filter({ hasText: /draw area|stop drawing/i }).first();
+  const generateButton = page.locator("[data-survey-generate]");
+  const regionCard = page.locator("[data-survey-region-card]");
+
+  await expect(surveyPanel).toBeVisible();
+  await expect(sidePanel).toHaveAttribute("data-survey-mode", "open");
+
+  await drawButton.click();
+  await expect(drawButton).toContainText("Stop drawing");
+  await expect(chainModeButton).toHaveAttribute("aria-pressed", "false");
+
+  await drawPentagonOnMissionMap(page);
+  await clickMapAtRatio(page, 0.32, 0.24);
+  await expect(surveyPanel).toContainText("Region 1");
+  await expect(surveyPanel).toContainText(/5 vertices in the active region/i);
+
+  await expect(generateButton).toBeDisabled();
+
+  await page.getByLabel("Search cameras").fill("DJI Mavic 3E");
+  await surveyPanel.getByRole("button", { name: /DJI Mavic 3E/i }).click();
+  await expect(surveyPanel).toContainText("Selected camera");
+  await expect(surveyPanel).toContainText("DJI Mavic 3E");
+  await expect(generateButton).toBeEnabled();
+
+  await page.getByLabel("Front overlap").fill("82");
+  await page.getByLabel("Side overlap").fill("74");
+  await page.getByLabel("Track angle").fill("15");
+  await page.getByLabel("Turnaround distance").fill("20");
+
+  await generateButton.click();
+
+  await expect(surveyPanel).toContainText("Survey stats");
+  await expect(surveyPanel).toContainText(/Flight time/i);
+  await expect(surveyPanel).toContainText(/Lanes/i);
+
+  const surveyDebug = await waitForSurveyDebugState(page);
+  expect(surveyDebug.polygonGeoJson.features).toHaveLength(1);
+  expect(surveyDebug.coverageGeoJson.features.length).toBeGreaterThan(0);
+  expect(surveyDebug.transectsGeoJson.features.length).toBeGreaterThan(0);
+  expect(surveyDebug.coverageGeoJson.features[0]?.properties?.crosshatch).toBe(false);
+  expect(surveyDebug.coverageGeoJson.features[0]?.properties?.laneSpacing_m ?? 0).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: /close survey planner/i }).click();
+  await expect(sidePanel).toHaveAttribute("data-survey-mode", "closed");
+  await expect(regionCard).toHaveCount(1);
+  await expect(regionCard).toContainText(/photos/i);
 }
