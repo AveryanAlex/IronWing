@@ -5,14 +5,24 @@ import { fireEvent, render, screen, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MissionWorkspace } from "./MissionWorkspace";
 
-const { terrainHookMock, terrainProfilePropsMock, desktopShellPropsMock } = vi.hoisted(() => ({
+const {
+  terrainHookMock,
+  surveyHookMock,
+  terrainProfilePropsMock,
+  desktopShellPropsMock,
+} = vi.hoisted(() => ({
   terrainHookMock: vi.fn(),
+  surveyHookMock: vi.fn(),
   terrainProfilePropsMock: vi.fn(),
   desktopShellPropsMock: vi.fn(),
 }));
 
 vi.mock("../../hooks/use-mission-terrain", () => ({
   useMissionTerrain: (...args: unknown[]) => terrainHookMock(...args),
+}));
+
+vi.mock("../../hooks/use-survey-planner", () => ({
+  useSurveyPlanner: (...args: unknown[]) => surveyHookMock(...args),
 }));
 
 vi.mock("./MissionTerrainProfile", () => ({
@@ -26,6 +36,10 @@ vi.mock("./MissionTerrainProfile", () => ({
       />
     );
   },
+}));
+
+vi.mock("./SurveyPlannerPanel", () => ({
+  SurveyPlannerPanel: () => <div data-testid="survey-planner-panel">Survey Planner</div>,
 }));
 
 vi.mock("../ui/tooltip", () => ({
@@ -61,24 +75,62 @@ vi.mock("../MissionMap", () => ({
 
 vi.mock("../MapContextMenu", () => ({ MapContextMenu: () => null }));
 vi.mock("./MissionDesktopShell", () => ({
-  MissionDesktopShell: (props: { terrainWarnings?: Map<number, string> }) => {
+  MissionDesktopShell: (props: Record<string, unknown>) => {
     desktopShellPropsMock(props);
     return <div>Desktop shell</div>;
   },
 }));
-vi.mock("./MissionAutoGridDialog", () => ({
-  MissionAutoGridDialog: ({ onStartDraw, onStopDraw, onClose }: {
-    onStartDraw: () => void;
-    onStopDraw: () => void;
-    onClose: () => void;
-  }) => (
-    <div data-testid="mission-auto-grid-dialog">
-      <button data-testid="mission-auto-grid-start" onClick={onStartDraw}>Start draw</button>
-      <button data-testid="mission-auto-grid-stop" onClick={onStopDraw}>Stop draw</button>
-      <button data-testid="mission-auto-grid-close" onClick={onClose}>Close</button>
-    </div>
-  ),
-}));
+
+function createSurveyPlanner(overrides: Record<string, unknown> = {}) {
+  return {
+    surveyMode: false,
+    activeRegionId: null,
+    regions: { surveyRegions: new Map(), surveyRegionOrder: [] },
+    isDrawing: false,
+    drawingVertices: [],
+    selectedCamera: null,
+    params: {
+      sideOverlap_pct: 70,
+      frontOverlap_pct: 80,
+      altitude_m: 50,
+      trackAngle_deg: 0,
+      orientation: "landscape",
+      crosshatch: false,
+      turnaroundDistance_m: 0,
+      terrainFollow: false,
+      captureMode: "distance",
+      startCorner: "bottom_left",
+      turnDirection: "clockwise",
+    },
+    isGenerating: false,
+    showCustomCameraForm: false,
+    canGenerate: false,
+    activeRegion: null,
+    allRegions: [],
+    estimatedWaypointCount: null,
+    formattedStats: null,
+    activeRegionFlightTime_s: null,
+    activeRegionHasManualEdits: false,
+    enterSurveyMode: vi.fn(),
+    exitSurveyMode: vi.fn(),
+    createRegion: vi.fn(),
+    selectRegion: vi.fn(),
+    deleteRegion: vi.fn(),
+    dissolveRegion: vi.fn(() => []),
+    startDraw: vi.fn(),
+    stopDraw: vi.fn(),
+    addVertex: vi.fn(),
+    completePolygon: vi.fn(() => null),
+    moveVertex: vi.fn(),
+    setCamera: vi.fn(),
+    setParam: vi.fn(),
+    generate: vi.fn(async () => null),
+    openCustomCameraForm: vi.fn(),
+    closeCustomCameraForm: vi.fn(),
+    saveCustomCamera: vi.fn(),
+    ...overrides,
+  };
+}
 
 function createMission(tab: "mission" | "fence" | "rally" = "mission", addWaypointAt = vi.fn()) {
   const current = {
@@ -88,6 +140,8 @@ function createMission(tab: "mission" | "fence" | "rally" = "mission", addWaypoi
     selectedIndex: null,
     selectedItem: null,
     previousItem: null,
+    selectedUiIds: new Set<number>(),
+    selectedCount: 0,
     readOnly: false,
     transferUi: { active: false },
     operation: { active: false },
@@ -117,6 +171,7 @@ function createMission(tab: "mission" | "fence" | "rally" = "mission", addWaypoi
     setHomeFromMap: vi.fn(),
     updateHomeFromVehicle: vi.fn(),
     select: vi.fn(),
+    toggleSelect: vi.fn(),
     moveWaypointOnMap: vi.fn(),
   };
 
@@ -152,6 +207,8 @@ function createMission(tab: "mission" | "fence" | "rally" = "mission", addWaypoi
       replaceAll: vi.fn(),
       selectedIndex: null,
       displayTotal: 0,
+      homePosition: null,
+      importedSpeeds: null,
       transferUi: inactiveTransferUi,
     },
     fence: {
@@ -171,6 +228,7 @@ function createMission(tab: "mission" | "fence" | "rally" = "mission", addWaypoi
 describe("MissionWorkspace", () => {
   beforeEach(() => {
     terrainHookMock.mockReset();
+    surveyHookMock.mockReset();
     terrainProfilePropsMock.mockReset();
     desktopShellPropsMock.mockReset();
     terrainHookMock.mockReturnValue({
@@ -178,6 +236,7 @@ describe("MissionWorkspace", () => {
       profile: { points: [], warningsByIndex: new Map() },
       warningsByIndex: new Map(),
     });
+    surveyHookMock.mockReturnValue(createSurveyPlanner());
   });
 
   afterEach(() => {
@@ -217,11 +276,14 @@ describe("MissionWorkspace", () => {
     expect(addWaypointAt).toHaveBeenCalledTimes(1);
   });
 
-  it("suppresses chain mode while auto-grid polygon drawing is active without deactivating the toggle", () => {
+  it("suppresses chain mode while survey polygon drawing is active without deactivating the toggle", () => {
     const addWaypointAt = vi.fn();
     const vehicle = { connected: true, vehiclePosition: null, missionState: { current_index: null } };
     const deviceLocation = { location: null };
-    const { container } = render(
+    const drawingPlanner = createSurveyPlanner({ isDrawing: true, drawingVertices: [{ latitude_deg: 47.4, longitude_deg: 8.5 }] });
+    surveyHookMock.mockReturnValueOnce(createSurveyPlanner()).mockReturnValue(drawingPlanner);
+
+    const { rerender } = render(
       <MissionWorkspace
         vehicle={vehicle as never}
         mission={createMission("mission", addWaypointAt) as never}
@@ -230,20 +292,20 @@ describe("MissionWorkspace", () => {
     );
 
     fireEvent.click(screen.getByTestId("mission-chain-mode"));
-    fireEvent.click(container.querySelector("[data-mission-auto-grid-open]") as HTMLButtonElement);
-    fireEvent.click(screen.getByTestId("mission-auto-grid-start"));
+
+    rerender(
+      <MissionWorkspace
+        vehicle={vehicle as never}
+        mission={createMission("mission", addWaypointAt) as never}
+        deviceLocation={deviceLocation as never}
+      />,
+    );
 
     expect(screen.getByTestId("mission-map-drawing-state").textContent).toBe("drawing");
     expect(screen.getByTestId("mission-chain-mode").getAttribute("aria-pressed")).toBe("true");
 
     fireEvent.click(screen.getByTestId("mission-map-blank-click"));
     expect(addWaypointAt).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByTestId("mission-auto-grid-stop"));
-    expect(screen.getByTestId("mission-map-drawing-state").textContent).toBe("idle");
-
-    fireEvent.click(screen.getByTestId("mission-map-blank-click"));
-    expect(addWaypointAt).toHaveBeenCalledWith(47.41, 8.56);
   });
 
   it("exits chain mode when Escape is pressed", () => {
@@ -277,13 +339,36 @@ describe("MissionWorkspace", () => {
       />,
     );
 
-    // Chain mode is off by default — plain blank click should not add a waypoint
     fireEvent.click(screen.getByTestId("mission-map-blank-click"));
     expect(addWaypointAt).not.toHaveBeenCalled();
 
-    // Alt+click should add a waypoint regardless
     fireEvent.click(screen.getByTestId("mission-map-alt-click"));
     expect(addWaypointAt).toHaveBeenCalledWith(47.41, 8.56);
+  });
+
+  it("forwards survey mode and panel props to the desktop shell and wires the survey toggle", () => {
+    const planner = createSurveyPlanner({ surveyMode: true });
+    surveyHookMock.mockReturnValue(planner);
+    const vehicle = { connected: true, vehiclePosition: null, missionState: { current_index: null } };
+    const deviceLocation = { location: null };
+
+    render(
+      <MissionWorkspace
+        vehicle={vehicle as never}
+        mission={createMission("mission") as never}
+        deviceLocation={deviceLocation as never}
+      />,
+    );
+
+    const desktopShellProps = desktopShellPropsMock.mock.calls[desktopShellPropsMock.mock.calls.length - 1]?.[0] as {
+      surveyMode?: boolean;
+      surveyPanel?: ReactNode;
+    };
+    expect(desktopShellProps.surveyMode).toBe(true);
+    expect(desktopShellProps.surveyPanel).toBeTruthy();
+
+    fireEvent.click(document.querySelector("[data-survey-mode-toggle]") as HTMLButtonElement);
+    expect(planner.enterSurveyMode).toHaveBeenCalledTimes(1);
   });
 
   it("shows the terrain profile only for the mission tab, wires the terrain hook into it, and forwards waypoint warnings to the desktop shell", () => {

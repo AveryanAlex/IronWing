@@ -16,13 +16,21 @@ import {
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { MapPin } from "lucide-react";
 import { MissionItemCard } from "./MissionItemCard";
+import { SurveyRegionCard } from "./SurveyRegionCard";
 import type { MissionItem } from "../../lib/mavkit-types";
 import type { TerrainWarning } from "../../lib/mission-terrain-profile";
 import type { useMission } from "../../hooks/use-mission";
+import type { SurveyRegion, SurveyRegionBlock } from "../../lib/survey-region";
 
 type MissionItemListProps = {
   mission: ReturnType<typeof useMission>;
   terrainWarnings?: Map<number, TerrainWarning>;
+  surveyRegions?: Map<string, SurveyRegion>;
+  surveyRegionOrder?: SurveyRegionBlock[];
+  activeSurveyRegionId?: string | null;
+  onSelectSurveyRegion?: (regionId: string) => void;
+  onDissolveSurveyRegion?: (regionId: string) => void;
+  onDeleteSurveyRegion?: (regionId: string) => void;
   onSelectAndClose?: () => void;
   onCardSelect?: (seq: number) => void;
 };
@@ -32,6 +40,16 @@ type JumpArc = {
   target: number;
   lane: number;
 };
+
+type OrderedSurveyRegion = {
+  region: SurveyRegion;
+  position: number;
+  orderIndex: number;
+};
+
+type MissionListEntry =
+  | { kind: "item"; draftItem: ReturnType<typeof useMission>["current"]["draftItems"][number] }
+  | { kind: "survey_region"; orderedRegion: OrderedSurveyRegion };
 
 /** Extract DoJump source→target pairs from mission items. */
 function extractJumps(items: ReturnType<typeof useMission>["current"]["draftItems"]): Array<{ source: number; target: number }> {
@@ -177,6 +195,12 @@ function JumpGutter({
 export function MissionItemList({
   mission,
   terrainWarnings,
+  surveyRegions,
+  surveyRegionOrder,
+  activeSurveyRegionId,
+  onSelectSurveyRegion,
+  onDissolveSurveyRegion,
+  onDeleteSurveyRegion,
   onSelectAndClose,
   onCardSelect,
 }: MissionItemListProps) {
@@ -199,6 +223,63 @@ export function MissionItemList({
   );
 
   const arcs = useMemo(() => assignLanes(jumps), [jumps]);
+
+  const orderedSurveyRegions = useMemo<OrderedSurveyRegion[]>(() => {
+    if (!surveyRegions || !surveyRegionOrder || current.tab !== "mission") {
+      return [];
+    }
+
+    return surveyRegionOrder
+      .map((block, orderIndex) => {
+        const region = surveyRegions.get(block.regionId);
+        if (!region) {
+          return null;
+        }
+        return {
+          region,
+          position: Math.max(0, Math.trunc(block.position)),
+          orderIndex,
+        } satisfies OrderedSurveyRegion;
+      })
+      .filter((entry): entry is OrderedSurveyRegion => entry !== null)
+      .sort((left, right) => left.position - right.position || left.orderIndex - right.orderIndex);
+  }, [current.tab, surveyRegionOrder, surveyRegions]);
+
+  const listEntries = useMemo<MissionListEntry[]>(() => {
+    if (orderedSurveyRegions.length === 0) {
+      return current.draftItems.map((draftItem) => ({ kind: "item", draftItem }));
+    }
+
+    const entries: MissionListEntry[] = [];
+    let regionIndex = 0;
+
+    const appendRegionsAt = (position: number) => {
+      while (regionIndex < orderedSurveyRegions.length && orderedSurveyRegions[regionIndex]?.position === position) {
+        entries.push({
+          kind: "survey_region",
+          orderedRegion: orderedSurveyRegions[regionIndex]!,
+        });
+        regionIndex += 1;
+      }
+    };
+
+    appendRegionsAt(0);
+
+    current.draftItems.forEach((draftItem, index) => {
+      entries.push({ kind: "item", draftItem });
+      appendRegionsAt(index + 1);
+    });
+
+    while (regionIndex < orderedSurveyRegions.length) {
+      entries.push({
+        kind: "survey_region",
+        orderedRegion: orderedSurveyRegions[regionIndex]!,
+      });
+      regionIndex += 1;
+    }
+
+    return entries;
+  }, [current.draftItems, orderedSurveyRegions]);
 
   const finalizeSelection = useCallback((seq: number) => {
     onCardSelect?.(seq);
@@ -248,7 +329,7 @@ export function MissionItemList({
     [current, mission.mission],
   );
 
-  if (current.draftItems.length === 0) {
+  if (listEntries.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
         <MapPin className="h-8 w-8 text-text-muted/30" />
@@ -279,7 +360,26 @@ export function MissionItemList({
           modifiers={[restrictToVerticalAxis]}
         >
           <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-            {current.draftItems.map((draftItem) => {
+            {listEntries.map((entry) => {
+              if (entry.kind === "survey_region") {
+                const { orderedRegion } = entry;
+                return (
+                  <SurveyRegionCard
+                    key={orderedRegion.region.id}
+                    region={orderedRegion.region}
+                    label={`Region ${orderedRegion.orderIndex + 1}`}
+                    selected={activeSurveyRegionId === orderedRegion.region.id}
+                    onSelect={() => {
+                      onSelectSurveyRegion?.(orderedRegion.region.id);
+                      onSelectAndClose?.();
+                    }}
+                    onDissolve={() => onDissolveSurveyRegion?.(orderedRegion.region.id)}
+                    onDelete={() => onDeleteSurveyRegion?.(orderedRegion.region.id)}
+                  />
+                );
+              }
+
+              const { draftItem } = entry;
               const isPrimarySelected = current.selectedIndex === draftItem.index;
               const isMultiSelected = current.selectedUiIds.has(draftItem.uiId) && !isPrimarySelected;
 

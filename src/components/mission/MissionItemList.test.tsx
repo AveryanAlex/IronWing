@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react";
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MissionItemList } from "./MissionItemList";
 import type { TerrainWarning } from "../../lib/mission-terrain-profile";
+import { addSurveyRegion, createSurveyDraftExtension, createSurveyRegion } from "../../lib/survey-region";
 
 vi.mock("../ui/tooltip", () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -111,5 +112,47 @@ describe("MissionItemList", () => {
     expect(container.querySelector("[data-seq='1'] [data-terrain-warning='below_terrain']")).not.toBeNull();
     expect(container.querySelector("[data-seq='2'] [data-terrain-warning='near_terrain']")).not.toBeNull();
     expect(container.querySelector("[data-seq='0'] [data-terrain-warning]")).toBeNull();
+  });
+
+  it("interleaves survey regions among regular mission items and wires the region actions", () => {
+    const mission = createMission();
+    const region = createSurveyRegion([
+      { latitude_deg: 47.4, longitude_deg: 8.55 },
+      { latitude_deg: 47.41, longitude_deg: 8.56 },
+      { latitude_deg: 47.405, longitude_deg: 8.57 },
+    ]);
+    const regions = addSurveyRegion(createSurveyDraftExtension(), region, 0);
+    const onSelectSurveyRegion = vi.fn();
+    const onDissolveSurveyRegion = vi.fn();
+    const onDeleteSurveyRegion = vi.fn();
+
+    const { container } = render(
+      <MissionItemList
+        mission={mission as never}
+        surveyRegions={regions.surveyRegions}
+        surveyRegionOrder={regions.surveyRegionOrder}
+        activeSurveyRegionId={region.id}
+        onSelectSurveyRegion={onSelectSurveyRegion}
+        onDissolveSurveyRegion={onDissolveSurveyRegion}
+        onDeleteSurveyRegion={onDeleteSurveyRegion}
+      />,
+    );
+
+    const orderedCards = Array.from(
+      container.querySelectorAll("[data-mission-waypoint-card], [data-survey-region-card]"),
+    );
+    expect(orderedCards).toHaveLength(4);
+    expect(orderedCards[0]?.getAttribute("data-seq")).toBe("0");
+    expect(orderedCards[1]?.getAttribute("data-survey-region-card")).toBe(region.id);
+    expect(orderedCards[2]?.getAttribute("data-seq")).toBe("1");
+
+    fireEvent.click(screen.getByRole("button", { name: /select region 1/i }));
+    expect(onSelectSurveyRegion).toHaveBeenCalledWith(region.id);
+
+    fireEvent.click(screen.getByRole("button", { name: /dissolve region 1/i }));
+    expect(onDissolveSurveyRegion).toHaveBeenCalledWith(region.id);
+
+    fireEvent.click(screen.getByRole("button", { name: /delete region 1/i }));
+    expect(onDeleteSurveyRegion).toHaveBeenCalledWith(region.id);
   });
 });

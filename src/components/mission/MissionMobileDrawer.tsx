@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { ChevronUp, X, MapPin } from "lucide-react";
 import { MissionMap } from "../MissionMap";
 import { MapContextMenu } from "../MapContextMenu";
@@ -9,16 +9,16 @@ import { MissionInspector } from "./MissionInspector";
 import { FenceInspector } from "./FenceInspector";
 import { RallyInspector } from "./RallyInspector";
 import { BulkEditPanel } from "./BulkEditPanel";
-import { MissionAutoGridDialog } from "./MissionAutoGridDialog";
 import { MissionTerrainProfile } from "./MissionTerrainProfile";
+import { SurveyPlannerPanel } from "./SurveyPlannerPanel";
 import { cn } from "../../lib/utils";
 import type { useSession } from "../../hooks/use-session";
 import type { useMission } from "../../hooks/use-mission";
 import type { useDeviceLocation } from "../../hooks/use-device-location";
 import { useMissionTerrain } from "../../hooks/use-mission-terrain";
-import type { MissionItem } from "../../lib/mavkit-types";
+import { useSurveyPlanner } from "../../hooks/use-survey-planner";
+import type { FenceRegion, GeoPoint3d } from "../../lib/mavkit-types";
 import type { TypedDraftItem } from "../../lib/mission-draft-typed";
-import type { PolygonVertex } from "../../lib/mission-grid";
 import { toast } from "sonner";
 import { findNearestWaypoint } from "./mission-helpers";
 import { useSettings } from "../../hooks/use-settings";
@@ -46,21 +46,36 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [flyToKey, setFlyToKey] = useState(0);
-  const [autoGridOpen, setAutoGridOpen] = useState(false);
   const [chainModeActive, setChainModeActive] = useState(false);
-  const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
-  const [polygonVertices, setPolygonVertices] = useState<PolygonVertex[]>([]);
-  const chainModeEnabled = current.tab === "mission" && chainModeActive && !isDrawingPolygon;
+  const survey = useSurveyPlanner({
+    homePosition: mission.mission.homePosition,
+    missionMutators: {
+      selectedIndex: mission.mission.selectedIndex,
+      displayTotal: mission.mission.displayTotal,
+      insertGeneratedAfter: mission.mission.insertGeneratedAfter,
+    },
+    cruiseSpeed_mps: mission.mission.importedSpeeds?.cruiseSpeedMps ?? settings.cruiseSpeedMps,
+  });
+  const chainModeEnabled = current.tab === "mission" && chainModeActive && !survey.isDrawing;
 
   useEffect(() => {
     if (current.tab !== "mission") {
       setChainModeActive(false);
+      if (survey.surveyMode) {
+        survey.exitSurveyMode();
+      }
     }
-  }, [current.tab]);
+  }, [current.tab, survey]);
+
+  useEffect(() => {
+    if (survey.surveyMode) {
+      setDrawerOpen(true);
+    }
+  }, [survey.surveyMode]);
 
   const handleMapSelect = useCallback(
     (seq: number | null) => {
-      if (isDrawingPolygon) return;
+      if (survey.isDrawing) return;
       current.select(seq);
       if (seq !== null) {
         requestAnimationFrame(() => {
@@ -69,7 +84,7 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
         });
       }
     },
-    [current, isDrawingPolygon],
+    [current, survey.isDrawing],
   );
 
   const handleCardSelect = useCallback(
@@ -81,57 +96,64 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
 
   const handleContextMenu = useCallback(
     (lat: number, lng: number, x: number, y: number) => {
-      if (isDrawingPolygon) return;
+      if (survey.isDrawing) return;
       const nearestSeq = findNearestWaypoint(current.draftItems, lat, lng);
       setContextMenu({ x, y, lat, lng, nearestSeq });
     },
-    [current.draftItems, isDrawingPolygon]
+    [current.draftItems, survey.isDrawing]
   );
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
-  const handleAutoGridOpen = useCallback(() => {
-    setAutoGridOpen(true);
+  const handleEnterSurveyMode = useCallback(() => {
+    survey.enterSurveyMode();
     setContextMenu(null);
-    setDrawerOpen(false);
-  }, []);
+    setDrawerOpen(true);
+  }, [survey]);
 
   const handleToggleChainMode = useCallback(() => {
     setChainModeActive((active) => !active);
     setContextMenu(null);
   }, []);
 
-  const handleAutoGridClose = useCallback(() => {
-    setAutoGridOpen(false);
-    setIsDrawingPolygon(false);
-  }, []);
+  const handleSelectSurveyRegion = useCallback((regionId: string) => {
+    survey.selectRegion(regionId);
+  }, [survey]);
 
-  const handleStartDraw = useCallback(() => {
-    setPolygonVertices([]);
-    setIsDrawingPolygon(true);
-  }, []);
+  const handleDeleteSurveyRegion = useCallback((regionId: string) => {
+    survey.deleteRegion(regionId);
+  }, [survey]);
 
-  const handleStopDraw = useCallback(() => {
-    setIsDrawingPolygon(false);
-  }, []);
+  const handleDissolveSurveyRegion = useCallback((regionId: string) => {
+    const dissolvedItems = survey.dissolveRegion(regionId);
+    if (dissolvedItems.length > 0) {
+      toast.success("Survey region dissolved", {
+        description: `${dissolvedItems.length} waypoint${dissolvedItems.length === 1 ? "" : "s"} inserted into the mission`,
+      });
+    }
+  }, [survey]);
 
-  const handleClearPolygon = useCallback(() => {
-    setPolygonVertices([]);
-  }, []);
+  const surveyOverlay = useMemo(() => {
+    if (survey.isDrawing || current.tab !== "mission") {
+      return null;
+    }
 
-  const handlePolygonClick = useCallback((lat: number, lng: number) => {
-    setPolygonVertices((prev) => [...prev, { latitude_deg: lat, longitude_deg: lng }]);
-  }, []);
+    const activeRegion = survey.activeRegion;
+    if (!activeRegion || activeRegion.polygon.length < 3) {
+      return null;
+    }
 
-  const handlePolygonComplete = useCallback(() => {
-    setIsDrawingPolygon(false);
-  }, []);
+    return {
+      polygon: activeRegion.polygon,
+      transects: activeRegion.generatedTransects,
+      crosshatchTransects: activeRegion.generatedCrosshatch,
+      laneSpacing_m: activeRegion.generatedStats?.laneSpacing_m ?? 0,
+    };
+  }, [current.tab, survey.activeRegion, survey.isDrawing]);
 
-  const handlePolygonVertexMove = useCallback((index: number, lat: number, lng: number) => {
-    setPolygonVertices(prev => prev.map((v, i) =>
-      i === index ? { latitude_deg: lat, longitude_deg: lng } : v
-    ));
-  }, []);
+  const surveyPanel = useMemo(() => (
+    <SurveyPlannerPanel planner={survey} />
+  ), [survey]);
 
   const handleBlankMapClick = useCallback((lat: number, lng: number) => {
     if (!chainModeEnabled) {
@@ -141,32 +163,15 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
     setContextMenu(null);
   }, [chainModeEnabled, current]);
 
-  const handleGridGenerate = useCallback(
-    (items: MissionItem[], mode: "after_selected" | "replace_all") => {
-      const m = mission.mission;
-      if (mode === "replace_all") {
-        m.replaceAll(items);
-        toast.success("Grid generated", { description: `${items.length} waypoints (replaced)` });
-      } else {
-        const insertAfter = m.selectedIndex ?? m.displayTotal - 1;
-        m.insertGeneratedAfter(insertAfter, items);
-        toast.success("Grid generated", { description: `${items.length} waypoints inserted` });
-      }
-      setAutoGridOpen(false);
-      setIsDrawingPolygon(false);
-      setPolygonVertices([]);
-    },
-    [mission.mission],
-  );
-
   return (
     <div data-mission-workspace className="flex h-full flex-col gap-2">
       <MissionWorkspaceHeader
         mission={mission}
         connected={vehicle.connected}
-        onAutoGrid={handleAutoGridOpen}
+        onEnterSurveyMode={handleEnterSurveyMode}
+        surveyModeActive={survey.surveyMode}
         chainModeActive={current.tab === "mission" && chainModeActive}
-        chainModeSuppressed={current.tab === "mission" && chainModeActive && isDrawingPolygon}
+        chainModeSuppressed={current.tab === "mission" && chainModeActive && survey.isDrawing}
         onToggleChainMode={handleToggleChainMode}
       />
 
@@ -188,11 +193,19 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
             vehiclePosition={vehicle.vehiclePosition}
             currentMissionSeq={current.tab === "mission" ? mission.vehicle.missionState?.current_index ?? null : null}
             flyToSelectedKey={flyToKey}
-            polygonVertices={autoGridOpen ? polygonVertices : undefined}
-            isDrawingPolygon={isDrawingPolygon}
-            onPolygonClick={handlePolygonClick}
-            onPolygonComplete={handlePolygonComplete}
-            onPolygonVertexMove={handlePolygonVertexMove}
+            polygonVertices={survey.isDrawing ? survey.drawingVertices : undefined}
+            isDrawingPolygon={survey.isDrawing}
+            onPolygonClick={survey.addVertex}
+            onPolygonComplete={survey.completePolygon}
+            onPolygonVertexMove={survey.moveVertex}
+            surveyOverlay={surveyOverlay}
+            fenceRegions={current.tab === "fence" ? current.draftItems.map(d => d.document as FenceRegion) : undefined}
+            selectedFenceIndex={current.tab === "fence" ? current.selectedIndex : null}
+            fenceReturnPoint={current.tab === "fence" ? mission.fence.returnPoint : null}
+            rallyPoints={current.tab === "rally"
+              ? current.draftItems.map(d => ({ index: d.index, point: d.document as GeoPoint3d }))
+              : undefined}
+            selectedRallyIndex={current.tab === "rally" ? current.selectedIndex : null}
           />
           {contextMenu && (
             <MapContextMenu
@@ -207,21 +220,6 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
               onSetHome={(lat, lng) => { current.setHomeFromMap(lat, lng); closeContextMenu(); }}
               onDeleteWaypoint={(seq) => { current.deleteAt(seq); closeContextMenu(); }}
               onClose={closeContextMenu}
-            />
-          )}
-          {autoGridOpen && (
-            <MissionAutoGridDialog
-              polygon={polygonVertices}
-              isDrawing={isDrawingPolygon}
-              onStartDraw={handleStartDraw}
-              onStopDraw={handleStopDraw}
-              onClearPolygon={handleClearPolygon}
-              onGenerate={handleGridGenerate}
-              onClose={handleAutoGridClose}
-              selectedSeq={current.selectedIndex}
-              homePosition={current.homePosition}
-              anchorX={12}
-              anchorY={12}
             />
           )}
         </div>
@@ -264,6 +262,7 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
         id="mission-mobile-drawer"
         data-mission-mobile-drawer
         data-state={drawerOpen ? "open" : "closed"}
+        data-survey-mode={survey.surveyMode ? "open" : "closed"}
         aria-hidden={!drawerOpen}
         className={cn(
           "fixed inset-x-0 bottom-0 z-50 flex max-h-[70vh] flex-col rounded-t-xl border-t border-border bg-bg-secondary shadow-xl transition-transform duration-200",
@@ -275,11 +274,19 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
           <div className="flex items-center gap-2">
             <MapPin className="h-3.5 w-3.5 text-accent" />
             <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">
-              {current.tab === "mission" ? "Waypoints" : current.tab === "fence" ? "Fence" : "Rally"}
+              {survey.surveyMode
+                ? "Survey"
+                : current.tab === "mission"
+                  ? "Waypoints"
+                  : current.tab === "fence"
+                    ? "Fence"
+                    : "Rally"}
             </span>
-            <span className="text-xs tabular-nums text-text-muted">
-              ({current.displayTotal})
-            </span>
+            {!survey.surveyMode ? (
+              <span className="text-xs tabular-nums text-text-muted">
+                ({current.displayTotal})
+              </span>
+            ) : null}
           </div>
           <button
             data-mission-mobile-drawer-close
@@ -292,60 +299,70 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
 
         <div className="mx-auto -mt-1 mb-2 h-1 w-10 rounded-full bg-border" />
 
-        <div className="flex-1 overflow-y-auto px-4 pb-2">
-          <div className="mb-3">
-            <MissionPlannerSummary mission={mission} connected={vehicle.connected} />
+        {survey.surveyMode ? (
+          <div className="flex-1 overflow-hidden px-4 pb-2">{surveyPanel}</div>
+        ) : (
+          <div className="flex-1 overflow-y-auto px-4 pb-2">
+            <div className="mb-3">
+              <MissionPlannerSummary mission={mission} connected={vehicle.connected} />
+            </div>
+
+            <MissionItemList
+              mission={mission}
+              terrainWarnings={terrainWarnings}
+              surveyRegions={survey.regions.surveyRegions}
+              surveyRegionOrder={survey.regions.surveyRegionOrder}
+              activeSurveyRegionId={survey.activeRegionId}
+              onSelectSurveyRegion={handleSelectSurveyRegion}
+              onDissolveSurveyRegion={handleDissolveSurveyRegion}
+              onDeleteSurveyRegion={handleDeleteSurveyRegion}
+              onCardSelect={handleCardSelect}
+            />
+
+            {showBulkEditor ? (
+              <div className="mt-3">
+                <BulkEditPanel mission={mission} />
+              </div>
+            ) : current.selectedItem && current.selectedIndex !== null ? (
+              <div className="mt-3">
+                {current.tab === "fence" ? (
+                  <FenceInspector
+                    draftItem={current.selectedItem}
+                    index={current.selectedIndex}
+                    readOnly={current.readOnly}
+                    onUpdateRegion={mission.fence.updateRegion}
+                  />
+                ) : current.tab === "rally" ? (
+                  <RallyInspector
+                    draftItem={current.selectedItem}
+                    index={current.selectedIndex}
+                    previousItem={current.previousItem}
+                    homePosition={current.homePosition}
+                    readOnly={current.readOnly}
+                    onUpdateAltitude={current.updateAltitude}
+                    onUpdateCoordinate={current.updateCoordinate}
+                    onUpdateAltitudeFrame={mission.rally.updateAltitudeFrame}
+                  />
+                ) : (
+                  <MissionInspector
+                    missionType={current.tab}
+                    draftItem={current.selectedItem}
+                    index={current.selectedIndex}
+                    previousItem={current.previousItem}
+                    homePosition={current.homePosition}
+                    readOnly={current.readOnly}
+                    isSelected={true}
+                    onUpdateCommand={current.tab === "mission" ? mission.mission.updateCommand : undefined}
+                    onUpdateAltitude={current.updateAltitude}
+                    onUpdateCoordinate={current.updateCoordinate}
+                    onSetWaypointFromVehicle={mission.mission.setWaypointFromVehicle}
+                    onSelect={current.select}
+                  />
+                )}
+              </div>
+            ) : null}
           </div>
-
-          <MissionItemList
-            mission={mission}
-            terrainWarnings={terrainWarnings}
-            onCardSelect={handleCardSelect}
-          />
-
-          {showBulkEditor ? (
-            <div className="mt-3">
-              <BulkEditPanel mission={mission} />
-            </div>
-          ) : current.selectedItem && current.selectedIndex !== null ? (
-            <div className="mt-3">
-              {current.tab === "fence" ? (
-                <FenceInspector
-                  draftItem={current.selectedItem}
-                  index={current.selectedIndex}
-                  readOnly={current.readOnly}
-                  onUpdateRegion={mission.fence.updateRegion}
-                />
-              ) : current.tab === "rally" ? (
-                <RallyInspector
-                  draftItem={current.selectedItem}
-                  index={current.selectedIndex}
-                  previousItem={current.previousItem}
-                  homePosition={current.homePosition}
-                  readOnly={current.readOnly}
-                  onUpdateAltitude={current.updateAltitude}
-                  onUpdateCoordinate={current.updateCoordinate}
-                  onUpdateAltitudeFrame={mission.rally.updateAltitudeFrame}
-                />
-              ) : (
-                <MissionInspector
-                  missionType={current.tab}
-                  draftItem={current.selectedItem}
-                  index={current.selectedIndex}
-                  previousItem={current.previousItem}
-                  homePosition={current.homePosition}
-                  readOnly={current.readOnly}
-                  isSelected={true}
-                  onUpdateCommand={current.tab === "mission" ? mission.mission.updateCommand : undefined}
-                  onUpdateAltitude={current.updateAltitude}
-                  onUpdateCoordinate={current.updateCoordinate}
-                  onSetWaypointFromVehicle={mission.mission.setWaypointFromVehicle}
-                  onSelect={current.select}
-                />
-              )}
-            </div>
-          ) : null}
-        </div>
+        )}
       </aside>
 
       {current.issues.length > 0 && !drawerOpen && (

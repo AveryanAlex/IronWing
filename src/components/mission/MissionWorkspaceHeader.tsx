@@ -30,7 +30,8 @@ import type { useMission } from "../../hooks/use-mission";
 type MissionWorkspaceHeaderProps = {
   mission: ReturnType<typeof useMission>;
   connected: boolean;
-  onAutoGrid?: () => void;
+  onEnterSurveyMode?: () => void;
+  surveyModeActive?: boolean;
   chainModeActive?: boolean;
   chainModeSuppressed?: boolean;
   onToggleChainMode?: () => void;
@@ -75,7 +76,8 @@ function IconButton({ icon, label, onClick, disabled, dataTestId, active, ariaPr
 export function MissionWorkspaceHeader({
   mission,
   connected,
-  onAutoGrid,
+  onEnterSurveyMode,
+  surveyModeActive = false,
   chainModeActive = false,
   chainModeSuppressed = false,
   onToggleChainMode,
@@ -235,17 +237,20 @@ export function MissionWorkspaceHeader({
             <span className="ml-auto inline-flex">
               <Button
                 data-mission-auto-grid-open
+                data-survey-mode-toggle
                 variant="ghost"
                 size="icon"
                 disabled={!isMissionOnly(current.tab)}
-                onClick={onAutoGrid}
+                onClick={onEnterSurveyMode}
+                aria-pressed={surveyModeActive}
+                className={surveyModeActive ? "bg-accent/15 text-accent hover:bg-accent/20 hover:text-accent" : undefined}
               >
                 <Grid3X3 className="h-3.5 w-3.5" />
               </Button>
             </span>
           </TooltipTrigger>
           <TooltipContent>
-            {isMissionOnly(current.tab) ? "Auto Grid" : "Auto Grid is only available in Mission mode"}
+            {isMissionOnly(current.tab) ? "Survey planner" : "Survey planner is only available in Mission mode"}
           </TooltipContent>
         </Tooltip>
       </div>

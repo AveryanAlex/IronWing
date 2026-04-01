@@ -3,19 +3,19 @@ import { MissionMap } from "../MissionMap";
 import { MapContextMenu } from "../MapContextMenu";
 import { MissionWorkspaceHeader } from "./MissionWorkspaceHeader";
 import { MissionDesktopShell } from "./MissionDesktopShell";
-import { MissionAutoGridDialog } from "./MissionAutoGridDialog";
 import { ImportChoiceDialog } from "./ImportChoiceDialog";
 import { ImportErrorDialog } from "./ImportErrorDialog";
 import { ExportDomainDialog } from "./ExportDomainDialog";
 import { MissionTerrainProfile } from "./MissionTerrainProfile";
+import { SurveyPlannerPanel } from "./SurveyPlannerPanel";
 import type { useSession } from "../../hooks/use-session";
 import type { useMission } from "../../hooks/use-mission";
 import type { useDeviceLocation } from "../../hooks/use-device-location";
 import { useMissionTerrain } from "../../hooks/use-mission-terrain";
-import type { MissionItem, FenceRegion, GeoPoint3d } from "../../lib/mavkit-types";
+import { useSurveyPlanner } from "../../hooks/use-survey-planner";
+import type { FenceRegion, GeoPoint3d } from "../../lib/mavkit-types";
 import type { MissionIssue } from "../../mission";
 import type { TypedDraftItem, FenceRegionType } from "../../lib/mission-draft-typed";
-import type { PolygonVertex } from "../../lib/mission-grid";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { Navigation, Home } from "lucide-react";
 import { toast } from "sonner";
@@ -46,11 +46,17 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
   const [flyToKey, setFlyToKey] = useState(0);
   const [centerOnVehicleKey, setCenterOnVehicleKey] = useState(0);
   const [centerOnHomeKey, setCenterOnHomeKey] = useState(0);
-  const [autoGridOpen, setAutoGridOpen] = useState(false);
   const [chainModeActive, setChainModeActive] = useState(false);
-  const [isDrawingPolygon, setIsDrawingPolygon] = useState(false);
-  const [polygonVertices, setPolygonVertices] = useState<PolygonVertex[]>([]);
-  const chainModeEnabled = current.tab === "mission" && chainModeActive && !isDrawingPolygon;
+  const survey = useSurveyPlanner({
+    homePosition: mission.mission.homePosition,
+    missionMutators: {
+      selectedIndex: mission.mission.selectedIndex,
+      displayTotal: mission.mission.displayTotal,
+      insertGeneratedAfter: mission.mission.insertGeneratedAfter,
+    },
+    cruiseSpeed_mps: mission.mission.importedSpeeds?.cruiseSpeedMps ?? settings.cruiseSpeedMps,
+  });
+  const chainModeEnabled = current.tab === "mission" && chainModeActive && !survey.isDrawing;
 
   const terrainIssues = useMemo<MissionIssue[]>(() => {
     if (!terrainWarnings) return [];
@@ -87,8 +93,11 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
   useEffect(() => {
     if (current.tab !== "mission") {
       setChainModeActive(false);
+      if (survey.surveyMode) {
+        survey.exitSurveyMode();
+      }
     }
-  }, [current.tab]);
+  }, [current.tab, survey]);
 
   useEffect(() => {
     if (!chainModeActive) return;
@@ -103,7 +112,7 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
 
   const handleMapSelect = useCallback(
     (seq: number | null) => {
-      if (isDrawingPolygon) return;
+      if (survey.isDrawing) return;
       current.select(seq);
       if (seq !== null) {
         requestAnimationFrame(() => {
@@ -112,7 +121,7 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
         });
       }
     },
-    [current, isDrawingPolygon],
+    [current, survey.isDrawing],
   );
 
   const handleCardSelect = useCallback(
@@ -124,19 +133,19 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
 
   const handleContextMenu = useCallback(
     (lat: number, lng: number, x: number, y: number) => {
-      if (isDrawingPolygon) return;
+      if (survey.isDrawing) return;
       const nearestSeq = findNearestWaypoint(current.draftItems, lat, lng);
       setContextMenu({ x, y, lat, lng, nearestSeq });
     },
-    [current.draftItems, isDrawingPolygon]
+    [current.draftItems, survey.isDrawing]
   );
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
-  const handleAutoGridOpen = useCallback(() => {
-    setAutoGridOpen(true);
+  const handleEnterSurveyMode = useCallback(() => {
+    survey.enterSurveyMode();
     setContextMenu(null);
-  }, []);
+  }, [survey]);
 
   const handleToggleChainMode = useCallback(() => {
     setChainModeActive((active) => !active);
@@ -159,37 +168,44 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
     [mission.fence, closeContextMenu],
   );
 
-  const handleAutoGridClose = useCallback(() => {
-    setAutoGridOpen(false);
-    setIsDrawingPolygon(false);
-  }, []);
+  const handleSelectSurveyRegion = useCallback((regionId: string) => {
+    survey.selectRegion(regionId);
+  }, [survey]);
 
-  const handleStartDraw = useCallback(() => {
-    setPolygonVertices([]);
-    setIsDrawingPolygon(true);
-  }, []);
+  const handleDeleteSurveyRegion = useCallback((regionId: string) => {
+    survey.deleteRegion(regionId);
+  }, [survey]);
 
-  const handleStopDraw = useCallback(() => {
-    setIsDrawingPolygon(false);
-  }, []);
+  const handleDissolveSurveyRegion = useCallback((regionId: string) => {
+    const dissolvedItems = survey.dissolveRegion(regionId);
+    if (dissolvedItems.length > 0) {
+      toast.success("Survey region dissolved", {
+        description: `${dissolvedItems.length} waypoint${dissolvedItems.length === 1 ? "" : "s"} inserted into the mission`,
+      });
+    }
+  }, [survey]);
 
-  const handleClearPolygon = useCallback(() => {
-    setPolygonVertices([]);
-  }, []);
+  const surveyOverlay = useMemo(() => {
+    if (survey.isDrawing || current.tab !== "mission") {
+      return null;
+    }
 
-  const handlePolygonClick = useCallback((lat: number, lng: number) => {
-    setPolygonVertices((prev) => [...prev, { latitude_deg: lat, longitude_deg: lng }]);
-  }, []);
+    const activeRegion = survey.activeRegion;
+    if (!activeRegion || activeRegion.polygon.length < 3) {
+      return null;
+    }
 
-  const handlePolygonComplete = useCallback(() => {
-    setIsDrawingPolygon(false);
-  }, []);
+    return {
+      polygon: activeRegion.polygon,
+      transects: activeRegion.generatedTransects,
+      crosshatchTransects: activeRegion.generatedCrosshatch,
+      laneSpacing_m: activeRegion.generatedStats?.laneSpacing_m ?? 0,
+    };
+  }, [current.tab, survey.activeRegion, survey.isDrawing]);
 
-  const handlePolygonVertexMove = useCallback((index: number, lat: number, lng: number) => {
-    setPolygonVertices(prev => prev.map((v, i) =>
-      i === index ? { latitude_deg: lat, longitude_deg: lng } : v
-    ));
-  }, []);
+  const surveyPanel = useMemo(() => (
+    <SurveyPlannerPanel planner={survey} />
+  ), [survey]);
 
   const handleToggleSelect = useCallback(
     (index: number) => {
@@ -218,32 +234,15 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
     [chainModeEnabled, current],
   );
 
-  const handleGridGenerate = useCallback(
-    (items: MissionItem[], mode: "after_selected" | "replace_all") => {
-      const m = mission.mission;
-      if (mode === "replace_all") {
-        m.replaceAll(items);
-        toast.success("Grid generated", { description: `${items.length} waypoints (replaced)` });
-      } else {
-        const insertAfter = m.selectedIndex ?? m.displayTotal - 1;
-        m.insertGeneratedAfter(insertAfter, items);
-        toast.success("Grid generated", { description: `${items.length} waypoints inserted` });
-      }
-      setAutoGridOpen(false);
-      setIsDrawingPolygon(false);
-      setPolygonVertices([]);
-    },
-    [mission.mission],
-  );
-
   return (
     <div data-mission-workspace className="flex h-full flex-col gap-2">
       <MissionWorkspaceHeader
         mission={mission}
         connected={vehicle.connected}
-        onAutoGrid={handleAutoGridOpen}
+        onEnterSurveyMode={handleEnterSurveyMode}
+        surveyModeActive={survey.surveyMode}
         chainModeActive={current.tab === "mission" && chainModeActive}
-        chainModeSuppressed={current.tab === "mission" && chainModeActive && isDrawingPolygon}
+        chainModeSuppressed={current.tab === "mission" && chainModeActive && survey.isDrawing}
         onToggleChainMode={handleToggleChainMode}
       />
 
@@ -272,11 +271,12 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
                 flyToSelectedKey={flyToKey}
                 centerOnVehicleKey={centerOnVehicleKey}
                 centerOnHomeKey={centerOnHomeKey}
-                polygonVertices={autoGridOpen ? polygonVertices : undefined}
-                isDrawingPolygon={isDrawingPolygon}
-                onPolygonClick={handlePolygonClick}
-                onPolygonComplete={handlePolygonComplete}
-                onPolygonVertexMove={handlePolygonVertexMove}
+                polygonVertices={survey.isDrawing ? survey.drawingVertices : undefined}
+                isDrawingPolygon={survey.isDrawing}
+                onPolygonClick={survey.addVertex}
+                onPolygonComplete={survey.completePolygon}
+                onPolygonVertexMove={survey.moveVertex}
+                surveyOverlay={surveyOverlay}
                 fenceRegions={current.tab === "fence" ? current.draftItems.map(d => d.document as FenceRegion) : undefined}
                 selectedFenceIndex={current.tab === "fence" ? current.selectedIndex : null}
                 fenceReturnPoint={current.tab === "fence" ? mission.fence.returnPoint : null}
@@ -322,21 +322,6 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
                   onClose={closeContextMenu}
                 />
               )}
-              {autoGridOpen && (
-                <MissionAutoGridDialog
-                  polygon={polygonVertices}
-                  isDrawing={isDrawingPolygon}
-                  onStartDraw={handleStartDraw}
-                  onStopDraw={handleStopDraw}
-                  onClearPolygon={handleClearPolygon}
-                  onGenerate={handleGridGenerate}
-                  onClose={handleAutoGridClose}
-                  selectedSeq={current.selectedIndex}
-                  homePosition={current.homePosition}
-                  anchorX={12}
-                  anchorY={48}
-                />
-              )}
             </div>
 
             {current.tab === "mission" && (
@@ -363,6 +348,14 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
             mission={mission}
             connected={vehicle.connected}
             terrainWarnings={terrainWarnings}
+            surveyMode={survey.surveyMode}
+            surveyPanel={surveyPanel}
+            surveyRegions={survey.regions.surveyRegions}
+            surveyRegionOrder={survey.regions.surveyRegionOrder}
+            activeSurveyRegionId={survey.activeRegionId}
+            onSelectSurveyRegion={handleSelectSurveyRegion}
+            onDissolveSurveyRegion={handleDissolveSurveyRegion}
+            onDeleteSurveyRegion={handleDeleteSurveyRegion}
             onCardSelect={handleCardSelect}
           />
         </Panel>
