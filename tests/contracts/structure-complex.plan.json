@@ -1,0 +1,82 @@
+{
+  "fileType": "Plan",
+  "version": 1,
+  "groundStation": "QGroundControl",
+  "mission": {
+    "version": 2,
+    "firmwareType": 12,
+    "vehicleType": 2,
+    "cruiseSpeed": 15,
+    "hoverSpeed": 5,
+    "plannedHomePosition": [47.397742, 8.545594, 488],
+    "items": [
+      {
+        "type": "SimpleItem",
+        "autoContinue": true,
+        "command": 22,
+        "doJumpId": 1,
+        "frame": 3,
+        "params": [12, 0, 0, 0, 47.4025, 8.5508, 30]
+      },
+      {
+        "type": "ComplexItem",
+        "complexItemType": "StructureScan",
+        "version": 2,
+        "Altitude": 60,
+        "CameraCalc": {
+          "AdjustedFootprintFrontal": 110.2,
+          "AdjustedFootprintSide": 165.3,
+          "CameraName": "Sony ILCE-QX1",
+          "DistanceToSurface": 18,
+          "DistanceToSurfaceRelative": true,
+          "FixedOrientation": false,
+          "FocalLength": 16,
+          "FrontalOverlap": 72,
+          "ImageDensity": 20,
+          "ImageHeight": 3632,
+          "ImageWidth": 5456,
+          "Landscape": true,
+          "MinTriggerInterval": 0.5,
+          "SensorHeight": 15.4,
+          "SensorWidth": 23.2,
+          "SideOverlap": 67,
+          "ValueSetIsDistance": true,
+          "version": 1
+        },
+        "Layers": 4,
+        "StructureHeight": 24,
+        "altitudeRelative": true,
+        "polygon": [
+          [47.4027, 8.5510],
+          [47.4031, 8.5516],
+          [47.4026, 8.5520],
+          [47.4022, 8.5514]
+        ],
+        "Items": [
+          {
+            "type": "SimpleItem",
+            "autoContinue": true,
+            "command": 16,
+            "frame": 3,
+            "params": [0, 0, 0, 0, 47.4028, 8.5512, 60]
+          },
+          {
+            "type": "SimpleItem",
+            "autoContinue": true,
+            "command": 16,
+            "frame": 3,
+            "params": [0, 0, 0, 0, 47.4024, 8.5518, 60]
+          }
+        ]
+      },
+      {
+        "type": "SimpleItem",
+        "autoContinue": true,
+        "command": 20,
+        "doJumpId": 3,
+        "frame": 2,
+        "params": [0, 0, 0, 0, 0, 0, 0]
+      }
+    ]
+  }
+}

@@ -3,8 +3,19 @@ import { describe, expect, it } from "vitest";
 import fenceFixtureJson from "../../tests/contracts/fence.plan.json";
 import missionFixtureJson from "../../tests/contracts/mission.plan.json";
 import rallyFixtureJson from "../../tests/contracts/rally.plan.json";
+import corridorComplexFixtureJson from "../../tests/contracts/corridor-complex.plan.json";
+import structureComplexFixtureJson from "../../tests/contracts/structure-complex.plan.json";
+import surveyComplexFixtureJson from "../../tests/contracts/survey-complex.plan.json";
+import type { CatalogCamera } from "./survey-camera-catalog";
 import type { FencePlan, HomePosition, MissionPlan, RallyPlan } from "./mavkit-types";
-import { exportPlanFile, missionFrameFromNumeric, missionFrameToNumeric, parsePlanFile } from "./mission-plan-io";
+import {
+    exportPlanFile,
+    missionFrameFromNumeric,
+    missionFrameToNumeric,
+    parsePlanFile,
+    type ExportableSurveyRegion,
+    type ParsedSurveyRegion,
+} from "./mission-plan-io";
 
 function makePlanJson(
     items: unknown[],
@@ -30,6 +41,19 @@ function makePlanJson(
             ...missionExtras,
         },
         ...planExtras,
+    };
+}
+
+function toExportableSurveyRegion(region: ParsedSurveyRegion): ExportableSurveyRegion {
+    return {
+        patternType: region.patternType,
+        polygon: region.polygon.map((point) => ({ ...point })),
+        polyline: region.polyline.map((point) => ({ ...point })),
+        camera: region.camera as CatalogCamera | null,
+        params: { ...region.params },
+        embeddedItems: region.embeddedItems.map((item) => ({ ...item })),
+        qgcPassthrough: JSON.parse(JSON.stringify(region.qgcPassthrough)) as Record<string, unknown>,
+        position: region.position,
     };
 }
 
@@ -226,11 +250,148 @@ describe("mission-plan-io: parsePlanFile", () => {
         expect(result.warnings).toEqual([]);
     });
 
-    it("flattens ComplexItems with embedded SimpleItems and warns about lost survey metadata", () => {
+    it("parses survey ComplexItems into surveyRegions and preserves embedded mission items", () => {
+        const result = parsePlanFile(surveyComplexFixtureJson);
+        const survey = result.surveyRegions[0];
+
+        expect(result.mission.items).toHaveLength(2);
+        expect(result.surveyRegions).toHaveLength(2);
+        expect(survey).toMatchObject({
+            patternType: "grid",
+            position: 1,
+            polygon: [
+                { latitude_deg: 47.3981, longitude_deg: 8.5451 },
+                { latitude_deg: 47.3984, longitude_deg: 8.5463 },
+                { latitude_deg: 47.3977, longitude_deg: 8.5468 },
+                { latitude_deg: 47.3974, longitude_deg: 8.5455 },
+            ],
+            camera: {
+                canonicalName: "Sony ILCE-QX1",
+                focalLength_mm: 16,
+                imageWidth_px: 5456,
+                imageHeight_px: 3632,
+            },
+            params: {
+                altitude_m: 120,
+                sideOverlap_pct: 70,
+                frontOverlap_pct: 75,
+                trackAngle_deg: 32,
+                orientation: "landscape",
+                crosshatch: true,
+                turnaroundDistance_m: 18,
+                terrainFollow: false,
+                captureMode: "distance",
+                startCorner: "bottom_left",
+            },
+        });
+        expect(survey.embeddedItems).toHaveLength(2);
+        expect(survey.embeddedItems[1]?.command).toEqual({ Nav: "ReturnToLaunch" });
+        expect(survey.qgcPassthrough.flyAlternateTransects).toBe(true);
+        expect((survey.qgcPassthrough.TransectStyleComplexItem as { CameraTriggerInTurnAround?: boolean }).CameraTriggerInTurnAround).toBe(true);
+        expect(result.warnings).toEqual(
+            expect.arrayContaining([
+                expect.stringContaining("flyAlternateTransects is not modeled"),
+                expect.stringContaining("CameraTriggerInTurnAround is not modeled"),
+            ]),
+        );
+    });
+
+    it("imports manual-camera surveys as camera-less regions with explicit warnings", () => {
+        const result = parsePlanFile(surveyComplexFixtureJson);
+        const manualSurvey = result.surveyRegions[1];
+
+        expect(manualSurvey).toMatchObject({
+            patternType: "grid",
+            position: 1,
+            camera: null,
+            params: {
+                altitude_m: 55,
+                sideOverlap_pct: 65,
+                frontOverlap_pct: 80,
+                orientation: "portrait",
+                terrainFollow: true,
+                captureMode: "hover",
+                turnaroundDistance_m: 9,
+            },
+        });
+        expect(manualSurvey.embeddedItems).toHaveLength(1);
+        expect(result.warnings).toEqual(
+            expect.arrayContaining([
+                expect.stringContaining("Manual (no camera specs)"),
+            ]),
+        );
+    });
+
+    it("parses corridor ComplexItems with polyline geometry and symmetric width mapping", () => {
+        const result = parsePlanFile(corridorComplexFixtureJson);
+        const corridor = result.surveyRegions[0];
+        const customCameraCorridor = result.surveyRegions[1];
+
+        expect(result.mission.items).toHaveLength(2);
+        expect(result.surveyRegions).toHaveLength(2);
+        expect(corridor).toMatchObject({
+            patternType: "corridor",
+            position: 1,
+            polyline: [
+                { latitude_deg: 47.4001, longitude_deg: 8.548 },
+                { latitude_deg: 47.4008, longitude_deg: 8.5486 },
+                { latitude_deg: 47.4014, longitude_deg: 8.549 },
+            ],
+            params: {
+                altitude_m: 80,
+                sideOverlap_pct: 60,
+                frontOverlap_pct: 65,
+                orientation: "portrait",
+                turnaroundDistance_m: 12,
+                terrainFollow: true,
+                captureMode: "distance",
+                leftWidth_m: 35,
+                rightWidth_m: 35,
+            },
+        });
+        expect(customCameraCorridor?.camera).toBeNull();
+        expect(result.warnings).toEqual(
+            expect.arrayContaining([
+                expect.stringContaining("Custom Camera"),
+            ]),
+        );
+    });
+
+    it("parses structure ComplexItems into structure survey regions", () => {
+        const result = parsePlanFile(structureComplexFixtureJson);
+        const structure = result.surveyRegions[0];
+
+        expect(result.mission.items).toHaveLength(2);
+        expect(result.surveyRegions).toHaveLength(1);
+        expect(structure).toMatchObject({
+            patternType: "structure",
+            position: 1,
+            polygon: [
+                { latitude_deg: 47.4027, longitude_deg: 8.551 },
+                { latitude_deg: 47.4031, longitude_deg: 8.5516 },
+                { latitude_deg: 47.4026, longitude_deg: 8.552 },
+                { latitude_deg: 47.4022, longitude_deg: 8.5514 },
+            ],
+            camera: {
+                canonicalName: "Sony ILCE-QX1",
+            },
+            params: {
+                altitude_m: 60,
+                sideOverlap_pct: 67,
+                frontOverlap_pct: 72,
+                structureHeight_m: 24,
+                scanDistance_m: 18,
+                layerCount: 4,
+            },
+        });
+        expect(structure.embeddedItems).toHaveLength(2);
+    });
+
+    it("still flattens unknown ComplexItems with embedded SimpleItems for backward compatibility", () => {
         const input = makePlanJson([
             {
                 type: "ComplexItem",
-                complexItemType: "survey",
+                complexItemType: "MadeUpPattern",
                 TransectStyleComplexItem: {
                     Items: [
                         {
@@ -254,6 +415,7 @@ describe("mission-plan-io: parsePlanFile", () => {
 
         const result = parsePlanFile(input);
 
+        expect(result.surveyRegions).toEqual([]);
         expect(result.mission.items).toHaveLength(2);
         expect(result.mission.items[0].current).toBe(true);
         expect(result.mission.items[1].command).toEqual({ Nav: "ReturnToLaunch" });
@@ -525,6 +687,154 @@ describe("mission-plan-io: exportPlanFile", () => {
         expect(reparsed.fence).toEqual(input.fence);
         expect(reparsed.rally).toEqual(input.rally);
         expect(exported.json.mission?.items?.map((item) => (item as { doJumpId?: number }).doJumpId)).toEqual([1, 2, 3]);
+    });
+
+    it("exports survey regions back as interleaved ComplexItems alongside SimpleItems", () => {
+        const parsedSurvey = parsePlanFile(surveyComplexFixtureJson);
+        const exportableSurvey = toExportableSurveyRegion(parsedSurvey.surveyRegions[0]!);
+
+        const exported = exportPlanFile({
+            mission: parsedSurvey.mission,
+            surveyRegions: [exportableSurvey],
+            home: parsedSurvey.home,
+            fence: parsedSurvey.fence,
+            rally: parsedSurvey.rally,
+        });
+
+        expect(exported.json.mission?.items?.map((item) => (item as { type?: string }).type)).toEqual([
+            "SimpleItem",
+            "ComplexItem",
+            "SimpleItem",
+        ]);
+        expect(exported.json.mission?.items?.[1]).toMatchObject({
+            type: "ComplexItem",
+            complexItemType: "survey",
+            version: 5,
+            angle: 32,
+            entryLocation: 2,
+        });
+    });
+
+    it("roundtrips survey, corridor, and structure ComplexItems with geometry, camera calc, and placement preserved", () => {
+        const survey = parsePlanFile(surveyComplexFixtureJson).surveyRegions[0]!;
+        const corridor = parsePlanFile(corridorComplexFixtureJson).surveyRegions[0]!;
+        const structure = parsePlanFile(structureComplexFixtureJson).surveyRegions[0]!;
+
+        const mission: MissionPlan = {
+            items: [
+                {
+                    command: { Nav: "ReturnToLaunch" },
+                    current: true,
+                    autocontinue: true,
+                },
+                {
+                    command: {
+                        Nav: {
+                            Waypoint: {
+                                position: {
+                                    RelHome: {
+                                        latitude_deg: 47.41,
+                                        longitude_deg: 8.56,
+                                        relative_alt_m: 40,
+                                    },
+                                },
+                                hold_time_s: 0,
+                                acceptance_radius_m: 0,
+                                pass_radius_m: 0,
+                                yaw_deg: 0,
+                            },
+                        },
+                    },
+                    current: false,
+                    autocontinue: true,
+                },
+            ],
+        };
+
+        const exported = exportPlanFile({
+            mission,
+            surveyRegions: [
+                { ...toExportableSurveyRegion(survey), position: 0 },
+                { ...toExportableSurveyRegion(corridor), position: 1 },
+                { ...toExportableSurveyRegion(structure), position: 2 },
+            ],
+            home: null,
+            fence: { return_point: null, regions: [] },
+            rally: { points: [] },
+        });
+        const reparsed = parsePlanFile(exported.json);
+
+        expect(reparsed.mission.items).toHaveLength(2);
+        expect(reparsed.surveyRegions.map((region) => region.patternType)).toEqual(["grid", "corridor", "structure"]);
+        expect(reparsed.surveyRegions.map((region) => region.position)).toEqual([0, 1, 2]);
+        expect(reparsed.surveyRegions[0]).toMatchObject({
+            polygon: survey.polygon,
+            params: { trackAngle_deg: 32, startCorner: "bottom_left" },
+            camera: { canonicalName: "Sony ILCE-QX1" },
+        });
+        expect(reparsed.surveyRegions[1]).toMatchObject({
+            polyline: corridor.polyline,
+            params: { leftWidth_m: 35, rightWidth_m: 35 },
+            camera: { canonicalName: "Sony ILCE-QX1" },
+        });
+        expect(reparsed.surveyRegions[2]).toMatchObject({
+            polygon: structure.polygon,
+            params: { structureHeight_m: 24, layerCount: 4, scanDistance_m: 18 },
+            camera: { canonicalName: "Sony ILCE-QX1" },
+        });
+    });
+
+    it("preserves unsupported survey passthrough fields on export and warns explicitly", () => {
+        const parsedSurvey = parsePlanFile(surveyComplexFixtureJson);
+        const exportableSurvey = toExportableSurveyRegion(parsedSurvey.surveyRegions[0]!);
+
+        const exported = exportPlanFile({
+            mission: parsedSurvey.mission,
+            surveyRegions: [exportableSurvey],
+            home: parsedSurvey.home,
+            fence: parsedSurvey.fence,
+            rally: parsedSurvey.rally,
+        });
+
+        const complex = exported.json.mission?.items?.[1] as {
+            flyAlternateTransects?: boolean;
+            TransectStyleComplexItem?: { CameraTriggerInTurnAround?: boolean };
+        };
+
+        expect(complex.flyAlternateTransects).toBe(true);
+        expect(complex.TransectStyleComplexItem?.CameraTriggerInTurnAround).toBe(true);
+        expect(exported.warnings).toEqual(
+            expect.arrayContaining([
+                expect.stringContaining("flyAlternateTransects is preserved"),
+                expect.stringContaining("CameraTriggerInTurnAround is preserved"),
+            ]),
+        );
+    });
+
+    it("warns when exporting asymmetric corridor widths to QGC's symmetric CorridorWidth", () => {
+        const parsedCorridor = parsePlanFile(corridorComplexFixtureJson);
+        const exportableCorridor = toExportableSurveyRegion(parsedCorridor.surveyRegions[0]!);
+        exportableCorridor.params.leftWidth_m = 20;
+        exportableCorridor.params.rightWidth_m = 60;
+
+        const exported = exportPlanFile({
+            mission: { items: [] },
+            surveyRegions: [{ ...exportableCorridor, position: 0 }],
+            home: null,
+            fence: { return_point: null, regions: [] },
+            rally: { points: [] },
+        });
+
+        expect(exported.json.mission?.items?.[0]).toMatchObject({
+            type: "ComplexItem",
+            complexItemType: "CorridorScan",
+            CorridorWidth: 60,
+        });
+        expect(exported.warnings).toEqual(
+            expect.arrayContaining([
+                expect.stringContaining("symmetric QGC CorridorWidth"),
+            ]),
+        );
     });
 });
 

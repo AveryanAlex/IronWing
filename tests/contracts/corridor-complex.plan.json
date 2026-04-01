@@ -1,0 +1,141 @@
+{
+  "fileType": "Plan",
+  "version": 1,
+  "groundStation": "QGroundControl",
+  "mission": {
+    "version": 2,
+    "firmwareType": 12,
+    "vehicleType": 2,
+    "cruiseSpeed": 15,
+    "hoverSpeed": 5,
+    "plannedHomePosition": [47.397742, 8.545594, 488],
+    "items": [
+      {
+        "type": "SimpleItem",
+        "autoContinue": true,
+        "command": 16,
+        "doJumpId": 1,
+        "frame": 3,
+        "params": [0, 0, 0, 0, 47.3996, 8.5478, 35]
+      },
+      {
+        "type": "ComplexItem",
+        "complexItemType": "CorridorScan",
+        "version": 3,
+        "CorridorWidth": 35,
+        "EntryPoint": 0,
+        "polyline": [
+          [47.4001, 8.5480],
+          [47.4008, 8.5486],
+          [47.4014, 8.5490]
+        ],
+        "TransectStyleComplexItem": {
+          "version": 1,
+          "CameraCalc": {
+            "AdjustedFootprintFrontal": 96.4,
+            "AdjustedFootprintSide": 144.1,
+            "CameraName": "Sony ILCE-QX1",
+            "DistanceToSurface": 80,
+            "DistanceToSurfaceRelative": true,
+            "FixedOrientation": false,
+            "FocalLength": 16,
+            "FrontalOverlap": 65,
+            "ImageDensity": 18,
+            "ImageHeight": 3632,
+            "ImageWidth": 5456,
+            "Landscape": false,
+            "MinTriggerInterval": 0.25,
+            "SensorHeight": 15.4,
+            "SensorWidth": 23.2,
+            "SideOverlap": 60,
+            "ValueSetIsDistance": true,
+            "version": 1
+          },
+          "CameraTriggerInTurnAround": false,
+          "FollowTerrain": true,
+          "HoverAndCapture": false,
+          "Items": [
+            {
+              "type": "SimpleItem",
+              "autoContinue": true,
+              "command": 16,
+              "frame": 3,
+              "params": [0, 0, 0, 0, 47.4004, 8.5482, 80]
+            },
+            {
+              "type": "SimpleItem",
+              "autoContinue": true,
+              "command": 16,
+              "frame": 3,
+              "params": [0, 0, 0, 0, 47.4011, 8.5488, 80]
+            }
+          ],
+          "Refly90Degrees": false,
+          "TurnAroundDistance": 12,
+          "VisualTransectPoints": [
+            [47.4002, 8.5481],
+            [47.4009, 8.5487],
+            [47.4013, 8.5489]
+          ]
+        }
+      },
+      {
+        "type": "ComplexItem",
+        "complexItemType": "CorridorScan",
+        "version": 4,
+        "CorridorWidth": 42,
+        "EntryPoint": 1,
+        "polyline": [
+          [47.4017, 8.5492],
+          [47.4021, 8.5499]
+        ],
+        "TransectStyleComplexItem": {
+          "version": 1,
+          "CameraCalc": {
+            "CameraName": "Custom Camera",
+            "DistanceToSurface": 65,
+            "DistanceToSurfaceRelative": true,
+            "FixedOrientation": true,
+            "FocalLength": 24,
+            "FrontalOverlap": 68,
+            "ImageHeight": 3000,
+            "ImageWidth": 4000,
+            "Landscape": true,
+            "MinTriggerInterval": 1,
+            "SensorHeight": 13.2,
+            "SensorWidth": 17.3,
+            "SideOverlap": 55,
+            "ValueSetIsDistance": true,
+            "version": 1
+          },
+          "CameraTriggerInTurnAround": false,
+          "FollowTerrain": false,
+          "HoverAndCapture": true,
+          "Items": [
+            {
+              "type": "SimpleItem",
+              "autoContinue": true,
+              "command": 16,
+              "frame": 3,
+              "params": [0, 0, 0, 0, 47.4019, 8.5496, 65]
+            }
+          ],
+          "Refly90Degrees": false,
+          "TurnAroundDistance": 8,
+          "VisualTransectPoints": [
+            [47.4018, 8.5494],
+            [47.4020, 8.5498]
+          ]
+        }
+      },
+      {
+        "type": "SimpleItem",
+        "autoContinue": true,
+        "command": 20,
+        "doJumpId": 4,
+        "frame": 2,
+        "params": [0, 0, 0, 0, 0, 0, 0]
+      }
+    ]
+  }
+}
