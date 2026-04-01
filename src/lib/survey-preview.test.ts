@@ -14,6 +14,7 @@ import {
 import type { GeoPoint2d, MissionItem } from "./mavkit-types";
 import { defaultGeoPoint3d } from "./mavkit-types";
 import { latLonToLocalXY, localXYToLatLon, type GeoRef } from "./mission-coordinates";
+import type { StructureScanStats } from "./structure-scan";
 import type { SurveyStats, SurveyTransect } from "./survey-grid";
 
 const TEST_REF: GeoRef = {
@@ -255,6 +256,34 @@ describe("formatSurveyStats", () => {
     const km2Formatted = formatSurveyStats({ ...baseStats, area_m2: 1_500_000 }, null);
     expect(km2Formatted.area).toBe("1.50 km²");
     expect(km2Formatted.flightTime).toBe("—");
+  });
+
+  it("formats structure scan stats with layer-centric fields", () => {
+    const structureStats: StructureScanStats = {
+      gsd_m: 0.018,
+      photoCount: 36,
+      layerCount: 3,
+      photosPerLayer: 12,
+      layerSpacing_m: 8,
+      triggerDistance_m: 14,
+      estimatedFlightTime_s: 180,
+    };
+
+    const formatted = formatSurveyStats(structureStats, 185);
+
+    expect(formatted).toEqual({
+      gsd: "1.8 cm/px",
+      photoCount: "36",
+      area: "—",
+      triggerDistance: "14.0 m",
+      laneSpacing: "—",
+      laneCount: "—",
+      crosshatchLaneCount: "—",
+      flightTime: "3:05",
+      layerCount: "3",
+      photosPerLayer: "12",
+      layerSpacing: "8.0 m",
+    });
   });
 });
 

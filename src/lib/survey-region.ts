@@ -5,6 +5,12 @@ import type { CatalogCamera } from "./survey-camera-catalog";
 import type { CameraOrientation } from "./survey-camera";
 import type { CorridorResult, CorridorValidationError } from "./corridor-scan";
 import type {
+    StructureScanLayer,
+    StructureScanResult,
+    StructureScanStats,
+    StructureScanValidationError,
+} from "./structure-scan";
+import type {
     GridValidationError,
     SurveyCaptureMode,
     SurveyResult,
@@ -12,9 +18,12 @@ import type {
     SurveyTransect,
 } from "./survey-grid";
 
-export type SurveyPatternType = "grid" | "corridor";
-export type SurveyGenerationError = GridValidationError | CorridorValidationError;
-export type SurveyGenerationResult = SurveyResult | CorridorResult;
+export type SurveyPatternType = "grid" | "corridor" | "structure";
+export type SurveyGenerationError = GridValidationError | CorridorValidationError | StructureScanValidationError;
+export type SurveyGenerationResult = SurveyResult | CorridorResult | StructureScanResult;
+export type SurveyGeneratedStats =
+    | (SurveyStats & Partial<StructureScanStats>)
+    | (StructureScanStats & Partial<SurveyStats>);
 
 export type SurveyRegionParams = {
     sideOverlap_pct: number;
@@ -30,6 +39,10 @@ export type SurveyRegionParams = {
     turnDirection: TurnDirection;
     leftWidth_m: number;
     rightWidth_m: number;
+    structureHeight_m: number;
+    scanDistance_m: number;
+    layerCount: number;
+    layerOrder: "bottom_to_top" | "top_to_bottom";
 };
 
 export type SurveyRegion = {
@@ -44,7 +57,8 @@ export type SurveyRegion = {
     generatedItems: MissionItem[];
     generatedTransects: SurveyTransect[];
     generatedCrosshatch: SurveyTransect[];
-    generatedStats: SurveyStats | null;
+    generatedLayers: StructureScanLayer[];
+    generatedStats: SurveyGeneratedStats | null;
     errors: SurveyGenerationError[];
     manualEdits: Map<number, MissionItem>;
     collapsed: boolean;
@@ -74,6 +88,10 @@ const DEFAULT_REGION_PARAMS: SurveyRegionParams = {
     turnDirection: "clockwise",
     leftWidth_m: 0,
     rightWidth_m: 0,
+    structureHeight_m: 20,
+    scanDistance_m: 15,
+    layerCount: 3,
+    layerOrder: "bottom_to_top",
 };
 
 const DEFAULT_CORRIDOR_WIDTH_M = 50;
@@ -94,7 +112,14 @@ function cloneTransects(transects: SurveyTransect[]): SurveyTransect[] {
     return transects.map((transect) => transect.map((point) => ({ ...point })));
 }
 
-function cloneStats(stats: SurveyStats | null): SurveyStats | null {
+function cloneLayers(layers: StructureScanLayer[]): StructureScanLayer[] {
+    return layers.map((layer) => ({
+        ...layer,
+        orbitPoints: layer.orbitPoints.map((point) => ({ ...point })),
+    }));
+}
+
+function cloneStats(stats: SurveyGeneratedStats | null): SurveyGeneratedStats | null {
     return stats ? { ...stats } : null;
 }
 
@@ -116,6 +141,7 @@ function cloneRegion(region: SurveyRegion): SurveyRegion {
         generatedItems: cloneMissionItems(region.generatedItems),
         generatedTransects: cloneTransects(region.generatedTransects),
         generatedCrosshatch: cloneTransects(region.generatedCrosshatch),
+        generatedLayers: cloneLayers(region.generatedLayers),
         generatedStats: cloneStats(region.generatedStats),
         errors: cloneErrors(region.errors),
         manualEdits: new Map(region.manualEdits),
@@ -170,6 +196,7 @@ export function createSurveyRegion(
         generatedItems: [],
         generatedTransects: [],
         generatedCrosshatch: [],
+        generatedLayers: [],
         generatedStats: null,
         errors: [],
         manualEdits: new Map<number, MissionItem>(),
@@ -179,6 +206,10 @@ export function createSurveyRegion(
 
 export function createCorridorRegion(polyline: GeoPoint2d[]): SurveyRegion {
     return createSurveyRegion(polyline, "corridor");
+}
+
+export function createStructureRegion(polygon: GeoPoint2d[]): SurveyRegion {
+    return createSurveyRegion(polygon, "structure");
 }
 
 export function regionItemCount(region: SurveyRegion): number {
@@ -195,8 +226,9 @@ export function applyGenerationResult(region: SurveyRegion, result: SurveyGenera
 
     if (result.ok) {
         next.generatedItems = cloneMissionItems(result.items);
-        next.generatedTransects = cloneTransects(result.transects);
-        next.generatedCrosshatch = cloneTransects(result.crosshatchTransects);
+        next.generatedTransects = "transects" in result ? cloneTransects(result.transects) : [];
+        next.generatedCrosshatch = "crosshatchTransects" in result ? cloneTransects(result.crosshatchTransects) : [];
+        next.generatedLayers = "layers" in result ? cloneLayers(result.layers) : [];
         next.generatedStats = cloneStats(result.stats);
         next.corridorPolygon = "corridorPolygon" in result ? clonePoints(result.corridorPolygon) : [];
         next.errors = [];

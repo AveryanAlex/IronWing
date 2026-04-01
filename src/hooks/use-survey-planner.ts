@@ -19,6 +19,7 @@ import {
     addSurveyRegion,
     applyGenerationResult,
     createCorridorRegion,
+    createStructureRegion,
     createSurveyDraftExtension,
     createSurveyRegion,
     dissolveSurveyRegion,
@@ -31,6 +32,10 @@ import {
     type SurveyRegion,
     type SurveyRegionParams,
 } from "../lib/survey-region";
+import {
+    estimateStructureScanWaypointCount,
+    generateStructureScan,
+} from "../lib/structure-scan";
 import {
     estimateSurveyWaypointCount,
     generateSurvey,
@@ -53,6 +58,10 @@ const DEFAULT_PARAMS: SurveyRegionParams = {
     turnDirection: "clockwise",
     leftWidth_m: 0,
     rightWidth_m: 0,
+    structureHeight_m: 20,
+    scanDistance_m: 15,
+    layerCount: 3,
+    layerOrder: "bottom_to_top",
 };
 
 export type SurveyPlannerMissionMutators = {
@@ -294,6 +303,23 @@ export function useSurveyPlanner({
             });
         }
 
+        if (activeRegion.patternType === "structure") {
+            return estimateStructureScanWaypointCount({
+                polygon: activeRegion.polygon,
+                camera: selectedCamera,
+                orientation: params.orientation,
+                altitude_m: params.altitude_m,
+                structureHeight_m: params.structureHeight_m,
+                scanDistance_m: params.scanDistance_m,
+                layerCount: params.layerCount,
+                layerOrder: params.layerOrder,
+                sideOverlap_pct: params.sideOverlap_pct,
+                frontOverlap_pct: params.frontOverlap_pct,
+                terrainFollow: params.terrainFollow,
+                captureMode: params.captureMode,
+            });
+        }
+
         return estimateSurveyWaypointCount({
             polygon: activeRegion.polygon,
             camera: selectedCamera,
@@ -374,7 +400,9 @@ export function useSurveyPlanner({
     const createRegionFromGeometry = useCallback((geometry: GeoPoint2d[], nextPatternType: SurveyPatternType) => {
         const nextRegion = nextPatternType === "corridor"
             ? createCorridorRegion(clonePoints(geometry))
-            : createSurveyRegion(clonePoints(geometry));
+            : nextPatternType === "structure"
+                ? createStructureRegion(clonePoints(geometry))
+                : createSurveyRegion(clonePoints(geometry));
         const seededRegion = syncRegionWithPlannerState(
             nextRegion,
             selectedCameraRef.current,
@@ -463,7 +491,8 @@ export function useSurveyPlanner({
             return null;
         }
 
-        const region = createRegionFromGeometry(drawingVertices, "grid");
+        const nextPatternType = patternTypeRef.current === "structure" ? "structure" : "grid";
+        const region = createRegionFromGeometry(drawingVertices, nextPatternType);
         setIsDrawing(false);
         setDrawingVertices([]);
         return region;
@@ -510,12 +539,14 @@ export function useSurveyPlanner({
             ));
             const nextParams = {
                 ...region.params,
-                startCorner: resolveRegionStartCorner(
-                    polygon,
-                    homePosition,
-                    region.params.trackAngle_deg,
-                    region.params.startCorner,
-                ),
+                startCorner: region.patternType === "grid"
+                    ? resolveRegionStartCorner(
+                        polygon,
+                        homePosition,
+                        region.params.trackAngle_deg,
+                        region.params.startCorner,
+                    )
+                    : region.params.startCorner,
             };
 
             return {
@@ -646,8 +677,9 @@ export function useSurveyPlanner({
         );
         setIsGenerating(true);
         try {
-            const result = regionForGeneration.patternType === "corridor"
-                ? await generateCorridor({
+            let result: SurveyGenerationResult;
+            if (regionForGeneration.patternType === "corridor") {
+                result = await generateCorridor({
                     polyline: regionForGeneration.polyline,
                     camera: currentSelectedCamera,
                     orientation: currentParams.orientation,
@@ -660,8 +692,25 @@ export function useSurveyPlanner({
                     terrainFollow: currentParams.terrainFollow,
                     terrainLookup,
                     captureMode: currentParams.captureMode,
-                })
-                : await generateSurvey({
+                });
+            } else if (regionForGeneration.patternType === "structure") {
+                result = await generateStructureScan({
+                    polygon: regionForGeneration.polygon,
+                    camera: currentSelectedCamera,
+                    orientation: currentParams.orientation,
+                    altitude_m: currentParams.altitude_m,
+                    structureHeight_m: currentParams.structureHeight_m,
+                    scanDistance_m: currentParams.scanDistance_m,
+                    layerCount: currentParams.layerCount,
+                    layerOrder: currentParams.layerOrder,
+                    sideOverlap_pct: currentParams.sideOverlap_pct,
+                    frontOverlap_pct: currentParams.frontOverlap_pct,
+                    terrainFollow: currentParams.terrainFollow,
+                    terrainLookup,
+                    captureMode: currentParams.captureMode,
+                });
+            } else {
+                result = await generateSurvey({
                     polygon: regionForGeneration.polygon,
                     camera: currentSelectedCamera,
                     orientation: currentParams.orientation,
@@ -677,6 +726,7 @@ export function useSurveyPlanner({
                     terrainLookup,
                     captureMode: currentParams.captureMode,
                 });
+            }
 
             commitRegions(updateSurveyRegion(regionsRef.current, regionForGeneration.id, (region) => (
                 applyGenerationResult(

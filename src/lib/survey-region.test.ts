@@ -5,11 +5,13 @@ import type { MissionItem } from "./mavkit-types";
 import { defaultGeoPoint3d } from "./mavkit-types";
 import type { CatalogCamera } from "./survey-camera-catalog";
 import type { CorridorResult } from "./corridor-scan";
+import type { StructureScanResult } from "./structure-scan";
 import type { SurveyResult, SurveyStats, SurveyTransect } from "./survey-grid";
 import {
     addSurveyRegion,
     applyGenerationResult,
     createCorridorRegion,
+    createStructureRegion,
     createSurveyDraftExtension,
     createSurveyRegion,
     dissolveRegion,
@@ -108,6 +110,62 @@ function makeStats(): SurveyStats {
     };
 }
 
+function makeStructureSuccessResult(items: MissionItem[]): StructureScanResult {
+    return {
+        ok: true,
+        items,
+        layers: [
+            {
+                altitude_m: 56,
+                gimbalPitch_deg: -12,
+                orbitPoints: [
+                    { latitude_deg: 47.11, longitude_deg: 8.11 },
+                    { latitude_deg: 47.12, longitude_deg: 8.11 },
+                    { latitude_deg: 47.12, longitude_deg: 8.12 },
+                    { latitude_deg: 47.11, longitude_deg: 8.12 },
+                    { latitude_deg: 47.11, longitude_deg: 8.11 },
+                ],
+                photoCount: 4,
+            },
+            {
+                altitude_m: 62,
+                gimbalPitch_deg: 0,
+                orbitPoints: [
+                    { latitude_deg: 47.111, longitude_deg: 8.111 },
+                    { latitude_deg: 47.121, longitude_deg: 8.111 },
+                    { latitude_deg: 47.121, longitude_deg: 8.121 },
+                    { latitude_deg: 47.111, longitude_deg: 8.121 },
+                    { latitude_deg: 47.111, longitude_deg: 8.111 },
+                ],
+                photoCount: 4,
+            },
+        ],
+        stats: {
+            gsd_m: 0.012,
+            photoCount: 8,
+            layerCount: 2,
+            photosPerLayer: 4,
+            layerSpacing_m: 6,
+            triggerDistance_m: 10,
+            estimatedFlightTime_s: 84,
+        },
+        params: {
+            polygon: POLYGON,
+            camera: CAMERA,
+            orientation: "landscape",
+            altitude_m: 50,
+            structureHeight_m: 12,
+            scanDistance_m: 15,
+            layerCount: 2,
+            layerOrder: "bottom_to_top",
+            sideOverlap_pct: 70,
+            frontOverlap_pct: 80,
+            terrainFollow: false,
+            captureMode: "distance",
+        },
+    };
+}
+
 function makeSuccessResult(items: MissionItem[]): SurveyResult {
     return {
         ok: true,
@@ -186,7 +244,12 @@ describe("survey-region", () => {
             turnDirection: "clockwise",
             leftWidth_m: 0,
             rightWidth_m: 0,
+            structureHeight_m: 20,
+            scanDistance_m: 15,
+            layerCount: 3,
+            layerOrder: "bottom_to_top",
         });
+        expect(region.generatedLayers).toEqual([]);
         expect(regionItemCount(region)).toBe(0);
         expect(region.collapsed).toBe(false);
         expect(region.errors).toEqual([]);
@@ -202,6 +265,19 @@ describe("survey-region", () => {
         expect(region.corridorPolygon).toEqual([]);
         expect(region.params.leftWidth_m).toBe(50);
         expect(region.params.rightWidth_m).toBe(50);
+    });
+
+    it("createStructureRegion stores polygon geometry with structure defaults", () => {
+        const region = createStructureRegion(POLYGON);
+
+        expect(region.patternType).toBe("structure");
+        expect(region.polygon).toEqual(POLYGON);
+        expect(region.polyline).toEqual([]);
+        expect(region.generatedLayers).toEqual([]);
+        expect(region.params.structureHeight_m).toBe(20);
+        expect(region.params.scanDistance_m).toBe(15);
+        expect(region.params.layerCount).toBe(3);
+        expect(region.params.layerOrder).toBe("bottom_to_top");
     });
 
     it("applyGenerationResult with ok result populates items and stats and clears manual edits", () => {
@@ -235,6 +311,21 @@ describe("survey-region", () => {
         expect(updated.generatedCrosshatch).toEqual([]);
         expect(updated.generatedStats?.crosshatchLaneCount).toBe(0);
         expect(updated.corridorPolygon).toEqual(CORRIDOR_POLYGON);
+    });
+
+    it("applyGenerationResult stores structure layers for structure results", () => {
+        const generatedItems = [makeWaypoint(47.11, 8.11, 56), makeWaypoint(47.12, 8.12, 62)];
+        const updated = applyGenerationResult(createStructureRegion(POLYGON), makeStructureSuccessResult(generatedItems));
+
+        expect(updated.patternType).toBe("structure");
+        expect(updated.generatedItems).toEqual(generatedItems);
+        expect(updated.generatedTransects).toEqual([]);
+        expect(updated.generatedCrosshatch).toEqual([]);
+        expect(updated.generatedLayers).toHaveLength(2);
+        expect(updated.generatedLayers[0]?.altitude_m).toBe(56);
+        expect(updated.generatedStats?.layerCount).toBe(2);
+        expect(updated.generatedStats?.photosPerLayer).toBe(4);
+        expect(updated.corridorPolygon).toEqual([]);
     });
 
     it("applyGenerationResult with error result populates errors and keeps previous items", () => {

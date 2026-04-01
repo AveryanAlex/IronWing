@@ -6,6 +6,7 @@ import {
   type MissionItem,
 } from "./mavkit-types";
 import type { ImageFootprint } from "./survey-camera";
+import type { StructureScanStats } from "./structure-scan";
 import type { SurveyStats, SurveyTransect } from "./survey-grid";
 
 export type FormattedSurveyStats = {
@@ -17,6 +18,9 @@ export type FormattedSurveyStats = {
   laneCount: string;
   crosshatchLaneCount: string;
   flightTime: string;
+  layerCount?: string;
+  photosPerLayer?: string;
+  layerSpacing?: string;
 };
 
 export type SurveyTransectFeatureProperties = {
@@ -177,9 +181,27 @@ export function surveyTransectsToGeoJson(
 }
 
 export function formatSurveyStats(
-  stats: SurveyStats,
+  stats: SurveyStats | StructureScanStats,
   flightTime_s: number | null,
 ): FormattedSurveyStats {
+  if (isStructureStats(stats)) {
+    return {
+      gsd: Number.isFinite(stats.gsd_m)
+        ? `${GSD_CM_FORMATTER.format(stats.gsd_m * 100)} cm/px`
+        : "—",
+      photoCount: formatCount(stats.photoCount),
+      area: "—",
+      triggerDistance: formatDistanceMeters(stats.triggerDistance_m),
+      laneSpacing: "—",
+      laneCount: "—",
+      crosshatchLaneCount: "—",
+      flightTime: formatDurationMinSec(flightTime_s),
+      layerCount: formatCount(stats.layerCount),
+      photosPerLayer: formatCount(stats.photosPerLayer),
+      layerSpacing: formatDistanceMeters(stats.layerSpacing_m),
+    };
+  }
+
   return {
     gsd: Number.isFinite(stats.gsd_m)
       ? `${GSD_CM_FORMATTER.format(stats.gsd_m * 100)} cm/px`
@@ -385,4 +407,8 @@ function formatDurationMinSec(seconds: number | null): string {
 
 function isFinitePositive(value: number): boolean {
   return Number.isFinite(value) && value > 0;
+}
+
+function isStructureStats(stats: SurveyStats | StructureScanStats): stats is StructureScanStats {
+  return "layerCount" in stats && "photosPerLayer" in stats && "layerSpacing_m" in stats;
 }

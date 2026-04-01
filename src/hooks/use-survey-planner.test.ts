@@ -4,6 +4,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as corridorScan from "../lib/corridor-scan";
+import * as structureScan from "../lib/structure-scan";
 import type { CatalogCamera } from "../lib/survey-camera-catalog";
 import { useSurveyPlanner } from "./use-survey-planner";
 
@@ -95,6 +96,24 @@ function createCorridorRegionInHook(result: { current: ReturnType<typeof useSurv
     let region = null;
     act(() => {
         region = result.current.completeLine();
+    });
+
+    return region;
+}
+
+function createStructureRegionInHook(result: { current: ReturnType<typeof useSurveyPlanner> }, points: typeof POLYGON) {
+    act(() => {
+        result.current.setPatternType("structure");
+        result.current.startDraw();
+    });
+
+    act(() => {
+        points.forEach((point) => result.current.addVertex(point.latitude_deg, point.longitude_deg));
+    });
+
+    let region = null;
+    act(() => {
+        region = result.current.completePolygon();
     });
 
     return region;
@@ -235,6 +254,37 @@ describe("useSurveyPlanner", () => {
         expect(result.current.activeRegion?.params.rightWidth_m).toBe(50);
     });
 
+    it("completePolygon creates a structure region when structure pattern is active", () => {
+        const { result } = renderHook(() => useSurveyPlanner({
+            homePosition: HOME_POSITION,
+            cruiseSpeed_mps: 14,
+        }));
+
+        let region = null;
+        act(() => {
+            result.current.setPatternType("structure");
+            result.current.startDraw();
+        });
+
+        act(() => {
+            POLYGON.forEach((point) => result.current.addVertex(point.latitude_deg, point.longitude_deg));
+        });
+
+        act(() => {
+            region = result.current.completePolygon();
+        });
+
+        expect(region).not.toBeNull();
+        expect(result.current.isDrawing).toBe(false);
+        expect(result.current.patternType).toBe("structure");
+        expect(result.current.activeRegion?.patternType).toBe("structure");
+        expect(result.current.activeRegion?.polygon).toEqual(POLYGON);
+        expect(result.current.activeRegion?.polyline).toEqual([]);
+        expect(result.current.activeRegion?.params.structureHeight_m).toBe(20);
+        expect(result.current.activeRegion?.params.scanDistance_m).toBe(15);
+        expect(result.current.activeRegion?.params.layerCount).toBe(3);
+    });
+
     it("corridor canGenerate requires a polyline, camera, and positive widths", () => {
         const { result } = renderHook(() => useSurveyPlanner({
             homePosition: HOME_POSITION,
@@ -312,6 +362,42 @@ describe("useSurveyPlanner", () => {
         });
         expect(result.current.patternType).toBe("corridor");
         expect(result.current.activeRegion?.patternType).toBe("corridor");
+    });
+
+    it("selecting a structure region restores the planner pattern type and params", () => {
+        const { result } = renderHook(() => useSurveyPlanner({
+            homePosition: HOME_POSITION,
+            cruiseSpeed_mps: 14,
+        }));
+
+        act(() => {
+            result.current.createRegion(POLYGON);
+        });
+        const gridRegionId = result.current.activeRegionId as string;
+
+        createStructureRegionInHook(result, POLYGON);
+        const structureRegionId = result.current.activeRegionId as string;
+
+        act(() => {
+            result.current.setParam("structureHeight_m", 35);
+            result.current.setParam("scanDistance_m", 18);
+            result.current.setParam("layerCount", 5);
+        });
+
+        act(() => {
+            result.current.selectRegion(gridRegionId);
+        });
+        expect(result.current.patternType).toBe("grid");
+        expect(result.current.activeRegion?.patternType).toBe("grid");
+
+        act(() => {
+            result.current.selectRegion(structureRegionId);
+        });
+        expect(result.current.patternType).toBe("structure");
+        expect(result.current.activeRegion?.patternType).toBe("structure");
+        expect(result.current.params.structureHeight_m).toBe(35);
+        expect(result.current.params.scanDistance_m).toBe(18);
+        expect(result.current.params.layerCount).toBe(5);
     });
 
     it("generates a survey and stores the result on the active region", async () => {
@@ -421,6 +507,90 @@ describe("useSurveyPlanner", () => {
             POLYLINE[2],
             POLYLINE[0],
         ]);
+    });
+
+    it("dispatches structure generation for structure regions", async () => {
+        const generateStructureSpy = vi.spyOn(structureScan, "generateStructureScan").mockResolvedValue({
+            ok: true,
+            items: [{
+                command: {
+                    Do: {
+                        CamTriggerDistance: {
+                            meters: 10,
+                            trigger_now: true,
+                        },
+                    },
+                },
+                current: false,
+                autocontinue: true,
+            }],
+            layers: [{
+                altitude_m: 56,
+                gimbalPitch_deg: -10,
+                orbitPoints: [
+                    POLYGON[0],
+                    POLYGON[1],
+                    POLYGON[2],
+                    POLYGON[3],
+                    POLYGON[0],
+                ],
+                photoCount: 4,
+            }],
+            stats: {
+                gsd_m: 0.015,
+                photoCount: 4,
+                layerCount: 1,
+                photosPerLayer: 4,
+                layerSpacing_m: 12,
+                triggerDistance_m: 10,
+                estimatedFlightTime_s: 42,
+            },
+            params: {
+                polygon: POLYGON,
+                camera: SURVEY_CAMERA,
+                orientation: "landscape",
+                altitude_m: 50,
+                structureHeight_m: 12,
+                scanDistance_m: 18,
+                layerCount: 1,
+                layerOrder: "bottom_to_top",
+                sideOverlap_pct: 70,
+                frontOverlap_pct: 80,
+                terrainFollow: false,
+                captureMode: "distance",
+            },
+        });
+
+        const { result } = renderHook(() => useSurveyPlanner({
+            homePosition: HOME_POSITION,
+            cruiseSpeed_mps: 14,
+        }));
+
+        createStructureRegionInHook(result, POLYGON);
+
+        act(() => {
+            result.current.setCamera(SURVEY_CAMERA);
+            result.current.setParam("structureHeight_m", 12);
+            result.current.setParam("scanDistance_m", 18);
+            result.current.setParam("layerCount", 1);
+        });
+
+        await act(async () => {
+            await result.current.generate();
+        });
+
+        expect(generateStructureSpy).toHaveBeenCalledTimes(1);
+        expect(generateStructureSpy).toHaveBeenCalledWith(expect.objectContaining({
+            polygon: POLYGON,
+            structureHeight_m: 12,
+            scanDistance_m: 18,
+            layerCount: 1,
+            camera: SURVEY_CAMERA,
+        }));
+        expect(result.current.activeRegion?.patternType).toBe("structure");
+        expect(result.current.activeRegion?.generatedLayers).toHaveLength(1);
+        expect(result.current.activeRegion?.generatedStats?.layerCount).toBe(1);
+        expect(result.current.formattedStats?.layerCount).toBe("1");
     });
 
     it("dissolves a generated region into mission items and forwards them to mission mutators", async () => {

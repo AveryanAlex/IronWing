@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { fireEvent, render, screen, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MissionWorkspace } from "./MissionWorkspace";
-import { createCorridorRegion } from "../../lib/survey-region";
+import { createCorridorRegion, createStructureRegion } from "../../lib/survey-region";
 
 const {
   terrainHookMock,
@@ -533,5 +533,81 @@ describe("MissionWorkspace", () => {
     expect(missionMapProps.surveyOverlay?.patternType).toBe("corridor");
     expect(missionMapProps.surveyOverlay?.centerline).toEqual(region.polyline);
     expect(missionMapProps.surveyOverlay?.corridorPolygon).toEqual(region.corridorPolygon);
+  });
+
+  it("publishes structure overlay data with orbit rings and altitude labels", () => {
+    const region = createStructureRegion([
+      { latitude_deg: 47.397742, longitude_deg: 8.545594 },
+      { latitude_deg: 47.397742, longitude_deg: 8.547194 },
+      { latitude_deg: 47.396642, longitude_deg: 8.547194 },
+      { latitude_deg: 47.396642, longitude_deg: 8.545594 },
+    ]);
+    region.generatedLayers = [
+      {
+        altitude_m: 56,
+        gimbalPitch_deg: -10,
+        orbitPoints: [
+          { latitude_deg: 47.3979, longitude_deg: 8.5455 },
+          { latitude_deg: 47.3980, longitude_deg: 8.5471 },
+          { latitude_deg: 47.3965, longitude_deg: 8.5472 },
+          { latitude_deg: 47.3964, longitude_deg: 8.5456 },
+          { latitude_deg: 47.3979, longitude_deg: 8.5455 },
+        ],
+        photoCount: 4,
+      },
+      {
+        altitude_m: 62,
+        gimbalPitch_deg: 0,
+        orbitPoints: [
+          { latitude_deg: 47.39795, longitude_deg: 8.54545 },
+          { latitude_deg: 47.39805, longitude_deg: 8.54715 },
+          { latitude_deg: 47.39645, longitude_deg: 8.54725 },
+          { latitude_deg: 47.39635, longitude_deg: 8.54565 },
+          { latitude_deg: 47.39795, longitude_deg: 8.54545 },
+        ],
+        photoCount: 4,
+      },
+    ];
+    region.generatedStats = {
+      gsd_m: 0.015,
+      photoCount: 8,
+      layerCount: 2,
+      photosPerLayer: 4,
+      layerSpacing_m: 6,
+      triggerDistance_m: 10,
+      estimatedFlightTime_s: 84,
+    };
+    surveyHookMock.mockReturnValue(createSurveyPlanner({
+      patternType: "structure",
+      activeRegion: region,
+      activeRegionId: region.id,
+      allRegions: [region],
+    }));
+
+    render(
+      <MissionWorkspace
+        vehicle={{ connected: true, vehiclePosition: null, missionState: { current_index: null } } as never}
+        mission={createMission("mission") as never}
+        deviceLocation={{ location: null } as never}
+      />,
+    );
+
+    const missionMapProps = missionMapPropsMock.mock.calls[missionMapPropsMock.mock.calls.length - 1]?.[0] as {
+      surveyOverlay?: {
+        patternType?: string;
+        transects?: Array<Array<{ latitude_deg: number; longitude_deg: number }>>;
+        orbitRings?: Array<Array<{ latitude_deg: number; longitude_deg: number }>>;
+        orbitLabels?: Array<{ point: { latitude_deg: number; longitude_deg: number }; altitude_m: number }>;
+        layerSpacing_m?: number;
+      } | null;
+    };
+    expect(missionMapProps.surveyOverlay?.patternType).toBe("structure");
+    expect(missionMapProps.surveyOverlay?.transects).toEqual(region.generatedLayers.map((layer) => layer.orbitPoints));
+    expect(missionMapProps.surveyOverlay?.orbitRings).toEqual(region.generatedLayers.map((layer) => layer.orbitPoints));
+    expect(missionMapProps.surveyOverlay?.orbitLabels).toEqual([
+      { point: region.generatedLayers[0]!.orbitPoints[0]!, altitude_m: 56 },
+      { point: region.generatedLayers[1]!.orbitPoints[0]!, altitude_m: 62 },
+    ]);
+    expect(missionMapProps.surveyOverlay?.layerSpacing_m).toBe(6);
   });
 });

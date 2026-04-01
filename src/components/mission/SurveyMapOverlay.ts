@@ -36,19 +36,22 @@ type SurveyCenterlineFeatureProperties = {
 };
 
 export type SurveyOverlayData = {
-  patternType?: "grid" | "corridor";
+  patternType?: "grid" | "corridor" | "structure";
   polygon: GeoPoint2d[];
   centerline?: GeoPoint2d[];
   corridorPolygon?: GeoPoint2d[];
   transects: SurveyTransect[];
   crosshatchTransects: SurveyTransect[];
   laneSpacing_m: number;
+  layerSpacing_m?: number;
+  orbitRings?: GeoPoint2d[][];
+  orbitLabels?: Array<{ point: GeoPoint2d; altitude_m: number }>;
 };
 
 declare global {
   interface Window {
     __IRONWING_SURVEY_DEBUG__?: {
-      patternType?: "grid" | "corridor";
+      patternType?: "grid" | "corridor" | "structure";
       polygonGeoJson: GeoJSON.FeatureCollection<GeoJSON.Polygon, SurveyPolygonFeatureProperties>;
       transectsGeoJson: GeoJSON.FeatureCollection<GeoJSON.LineString, SurveyTransectFeatureProperties>;
       coverageGeoJson: GeoJSON.FeatureCollection<GeoJSON.Polygon, SurveyCoverageFeatureProperties>;
@@ -365,7 +368,7 @@ export function computeCoveragePolygon(
 }
 
 function publishSurveyDebugGeoJson(
-  patternType: "grid" | "corridor" | undefined,
+  patternType: "grid" | "corridor" | "structure" | undefined,
   polygonGeoJson: GeoJSON.FeatureCollection<GeoJSON.Polygon, SurveyPolygonFeatureProperties>,
   transectsGeoJson: GeoJSON.FeatureCollection<GeoJSON.LineString, SurveyTransectFeatureProperties>,
   coverageGeoJson: GeoJSON.FeatureCollection<GeoJSON.Polygon, SurveyCoverageFeatureProperties>,
@@ -530,18 +533,18 @@ export function updateSurveyOverlay(map: MapLibreMap, data: SurveyOverlayData | 
   const coverageFeature = data
     ? data.patternType === "corridor"
       ? polygonToFeature<SurveyCoverageFeatureProperties>(
-          data.corridorPolygon ?? [],
-          {
-            kind: "coverage",
-            crosshatch: false,
-            laneSpacing_m: data.laneSpacing_m,
-          },
-        )
+        data.corridorPolygon ?? [],
+        {
+          kind: "coverage",
+          crosshatch: false,
+          laneSpacing_m: data.laneSpacing_m,
+        },
+      )
       : computeCoveragePolygon(
-          [...data.transects, ...data.crosshatchTransects],
-          data.crosshatchTransects.length > 0,
-          data.laneSpacing_m,
-        )
+        [...data.transects, ...data.crosshatchTransects],
+        data.crosshatchTransects.length > 0,
+        data.laneSpacing_m,
+      )
     : null;
   const coverageGeoJson: GeoJSON.FeatureCollection<GeoJSON.Polygon, SurveyCoverageFeatureProperties> = coverageFeature
     ? { type: "FeatureCollection", features: [coverageFeature] }

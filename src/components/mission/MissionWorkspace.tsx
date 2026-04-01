@@ -64,6 +64,33 @@ function buildSurveyOverlay(region: SurveyRegion | null): SurveyOverlayData | nu
     return null;
   }
 
+  if (region.patternType === "structure") {
+    const orbitRings = region.generatedLayers
+      .map((layer) => layer.orbitPoints)
+      .filter((ring) => ring.length >= 2);
+    const layerSpacing_m = region.generatedStats && "layerSpacing_m" in region.generatedStats
+      ? region.generatedStats.layerSpacing_m
+      : 0;
+
+    return {
+      patternType: "structure",
+      polygon: region.polygon,
+      transects: orbitRings,
+      crosshatchTransects: [],
+      laneSpacing_m: 0,
+      layerSpacing_m,
+      orbitRings,
+      orbitLabels: region.generatedLayers.flatMap((layer) => {
+        const point = layer.orbitPoints[0];
+        if (!point) {
+          return [];
+        }
+
+        return [{ point, altitude_m: layer.altitude_m }];
+      }),
+    };
+  }
+
   return {
     patternType: "grid",
     polygon: region.polygon,
@@ -75,7 +102,7 @@ function buildSurveyOverlay(region: SurveyRegion | null): SurveyOverlayData | nu
 
 function buildCorridorPreview(
   isDrawing: boolean,
-  patternType: "grid" | "corridor",
+  patternType: SurveyRegion["patternType"],
   drawingVertices: GeoPoint2d[],
   leftWidth_m: number,
   rightWidth_m: number,
