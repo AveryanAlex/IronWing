@@ -287,6 +287,88 @@ test("desktop corridor survey workflow generates a corridor overlay from a drawn
   await expect(missionRegionCard).toContainText(/photos/i);
 });
 
+test("desktop structure scan workflow generates orbit overlay from a drawn polygon", async ({
+  page,
+  mockPlatform,
+}) => {
+  await bootstrapDesktopMissionEditor(page, mockPlatform);
+  await expectMissionDesktopShellVisible(page);
+
+  await page.locator("[data-mission-auto-grid-open]").click();
+  const surveyPanel = page.locator("[data-survey-planner-panel]");
+  await expect(surveyPanel).toBeVisible();
+
+  const structurePatternButton = surveyPanel.getByRole("button", { name: "Structure", exact: true });
+  await structurePatternButton.click();
+  await expect(structurePatternButton).toHaveAttribute("aria-pressed", "true");
+  await expect(surveyPanel.getByLabel("Structure height")).toBeVisible();
+  await expect(surveyPanel.getByLabel("Scan distance")).toBeVisible();
+  await expect(surveyPanel.getByLabel("Layer count")).toBeVisible();
+  await expect(surveyPanel.getByLabel("Track angle")).toHaveCount(0);
+  await expect(surveyPanel.getByText("Crosshatch", { exact: true })).toHaveCount(0);
+
+  const drawButton = surveyPanel.getByRole("button", { name: /draw footprint|stop drawing/i });
+  await drawButton.click();
+  await expect(drawButton).toContainText("Stop drawing");
+
+  await drawPentagonOnMissionMap(page);
+  await clickMapAtRatio(page, 0.32, 0.24);
+
+  const plannerRegionCard = surveyPanel.locator("[data-survey-region-card]");
+  await expect(plannerRegionCard).toHaveCount(1);
+  await expect(plannerRegionCard).toContainText("Structure scan");
+  await expect(surveyPanel).toContainText(/5 vertices in the active footprint\./i);
+
+  const generateButton = page.locator("[data-survey-generate]");
+  await expect(generateButton).toBeDisabled();
+
+  await surveyPanel.getByLabel("Search cameras").fill("DJI Mavic 3E");
+  await surveyPanel.getByRole("button", { name: /DJI Mavic 3E/i }).click();
+  await expect(surveyPanel).toContainText("Selected camera");
+  await expect(surveyPanel).toContainText("DJI Mavic 3E");
+
+  await surveyPanel.getByLabel("Altitude").fill("42");
+  await surveyPanel.getByLabel("Structure height").fill("48");
+  await surveyPanel.getByLabel("Scan distance").fill("18");
+  await surveyPanel.getByLabel("Layer count").fill("4");
+  await expect(generateButton).toBeEnabled();
+
+  const previousSurveyUpdateCount = (await getSurveyDebugState(page))?.surveyUpdateCount ?? 0;
+
+  await generateButton.click();
+
+  await expect(surveyPanel).toContainText("Survey stats");
+  await expect(surveyPanel).toContainText(/Layers/i);
+
+  await expect.poll(async () => {
+    return (await getSurveyDebugState(page))?.surveyUpdateCount ?? 0;
+  }).toBeGreaterThan(previousSurveyUpdateCount);
+
+  const surveyDebug = await getSurveyDebugState(page);
+  if (!surveyDebug) {
+    throw new Error("Survey debug state was not published for the structure workflow.");
+  }
+
+  expect(surveyDebug.patternType).toBe("structure");
+  expect(surveyDebug.orbitRingsGeoJson.features).toHaveLength(4);
+  expect(surveyDebug.orbitRingsGeoJson.features.every((feature) => feature.geometry?.type === "LineString")).toBe(true);
+  expect(
+    surveyDebug.orbitRingsGeoJson.features.every((feature) => (feature.geometry?.coordinates?.length ?? 0) >= 4),
+  ).toBe(true);
+  expect(surveyDebug.orbitLabelsGeoJson.features).toHaveLength(4);
+  expect(surveyDebug.orbitLabelsGeoJson.features.every((feature) => feature.geometry?.type === "Point")).toBe(true);
+  expect(
+    surveyDebug.orbitLabelsGeoJson.features.every((feature) => / m$/.test(feature.properties?.label ?? "")),
+  ).toBe(true);
+
+  await page.getByRole("button", { name: /close survey planner/i }).click();
+  await expect(page.locator("[data-mission-side-panel]")).toHaveAttribute("data-survey-mode", "closed");
+  const missionRegionCard = page.locator("[data-survey-region-card]");
+  await expect(missionRegionCard).toHaveCount(1);
+  await expect(missionRegionCard).toContainText("Structure scan");
+  await expect(missionRegionCard).toContainText(/photos/i);
+});
+
 test("Radiomaster viewport keeps desktop mission controls reachable at 1280x720", async ({
   page,
   mockPlatform,

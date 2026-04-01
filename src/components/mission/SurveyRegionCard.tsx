@@ -28,7 +28,21 @@ function formatArea(area_m2: number | null | undefined): string {
   return `${Math.round(area_m2 ?? 0).toLocaleString()} m²`;
 }
 
-function formatLaneCount(laneCount: number | null | undefined): string | null {
+function formatGeneratedPathCount(region: SurveyRegion): string | null {
+  if (region.patternType === "structure") {
+    const layerCount = region.generatedStats && "layerCount" in region.generatedStats
+      ? region.generatedStats.layerCount
+      : null;
+
+    if (!Number.isFinite(layerCount ?? NaN)) {
+      return null;
+    }
+
+    const rounded = Math.round(layerCount ?? 0);
+    return `${rounded.toLocaleString()} ${rounded === 1 ? "layer" : "layers"}`;
+  }
+
+  const laneCount = region.generatedStats?.laneCount;
   if (!Number.isFinite(laneCount ?? NaN)) {
     return null;
   }
@@ -40,6 +54,10 @@ function formatLaneCount(laneCount: number | null | undefined): string | null {
 function regionPatternLabel(region: SurveyRegion): string {
   if (region.patternType === "corridor") {
     return "Corridor";
+  }
+
+  if (region.patternType === "structure") {
+    return "Structure scan";
   }
 
   return region.params.crosshatch ? "Crosshatch grid" : "Grid";
@@ -56,7 +74,7 @@ export function SurveyRegionCard({
   const hasManualEdits = regionHasManualEdits(region);
   const patternLabel = regionPatternLabel(region);
   const photoCount = region.generatedStats?.photoCount?.toLocaleString() ?? "0";
-  const laneCount = formatLaneCount(region.generatedStats?.laneCount);
+  const pathCount = formatGeneratedPathCount(region);
 
   return (
     <div
@@ -100,10 +118,10 @@ export function SurveyRegionCard({
             <span>{photoCount} photos</span>
             <span>•</span>
             <span>{formatArea(region.generatedStats?.area_m2)}</span>
-            {laneCount ? (
+            {pathCount ? (
               <>
                 <span>•</span>
-                <span>{laneCount}</span>
+                <span>{pathCount}</span>
               </>
             ) : null}
           </div>

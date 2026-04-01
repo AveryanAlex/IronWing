@@ -18,6 +18,10 @@ export const SURVEY_COVERAGE_FILL_LAYER = "survey-coverage-fill";
 export const SURVEY_COVERAGE_LINE_LAYER = "survey-coverage-line";
 export const SURVEY_CENTERLINE_SOURCE = "survey-centerline";
 export const SURVEY_CENTERLINE_LAYER = "survey-centerline-line";
+export const SURVEY_ORBIT_RING_SOURCE = "survey-orbit-rings";
+export const SURVEY_ORBIT_RING_LAYER = "survey-orbit-rings-line";
+export const SURVEY_ORBIT_LABEL_SOURCE = "survey-orbit-labels";
+export const SURVEY_ORBIT_LABEL_LAYER = "survey-orbit-labels-symbol";
 
 type LocalPoint = { x: number; y: number };
 
@@ -33,6 +37,21 @@ type SurveyCoverageFeatureProperties = {
 
 type SurveyCenterlineFeatureProperties = {
   kind: "centerline";
+};
+
+type SurveyOrbitRingFeatureProperties = {
+  kind: "orbit_ring";
+  layerIndex: number;
+  altitude_m: number;
+  opacity: number;
+  color: string;
+};
+
+type SurveyOrbitLabelFeatureProperties = {
+  kind: "orbit_label";
+  layerIndex: number;
+  altitude_m: number;
+  label: string;
 };
 
 export type SurveyOverlayData = {
@@ -56,6 +75,8 @@ declare global {
       transectsGeoJson: GeoJSON.FeatureCollection<GeoJSON.LineString, SurveyTransectFeatureProperties>;
       coverageGeoJson: GeoJSON.FeatureCollection<GeoJSON.Polygon, SurveyCoverageFeatureProperties>;
       centerlineGeoJson: GeoJSON.FeatureCollection<GeoJSON.LineString, SurveyCenterlineFeatureProperties>;
+      orbitRingsGeoJson: GeoJSON.FeatureCollection<GeoJSON.LineString, SurveyOrbitRingFeatureProperties>;
+      orbitLabelsGeoJson: GeoJSON.FeatureCollection<GeoJSON.Point, SurveyOrbitLabelFeatureProperties>;
       surveyUpdateCount: number;
     };
   }
@@ -77,6 +98,13 @@ function emptyTransectCollection(): GeoJSON.FeatureCollection<
 
 function emptyLineCollection<T extends Record<string, unknown>>(): GeoJSON.FeatureCollection<
   GeoJSON.LineString,
+  T
+> {
+  return { type: "FeatureCollection", features: [] };
+}
+
+function emptyPointCollection<T extends Record<string, unknown>>(): GeoJSON.FeatureCollection<
+  GeoJSON.Point,
   T
 > {
   return { type: "FeatureCollection", features: [] };
@@ -332,6 +360,96 @@ function centerlineToFeature(
   };
 }
 
+function ringToCoordinates(ring: GeoPoint2d[]): [number, number][] {
+  const coordinates = ring.map((point) => [point.longitude_deg, point.latitude_deg] as [number, number]);
+  if (coordinates.length === 0) {
+    return coordinates;
+  }
+
+  const first = coordinates[0]!;
+  const last = coordinates[coordinates.length - 1]!;
+  if (first[0] !== last[0] || first[1] !== last[1]) {
+    coordinates.push(first);
+  }
+
+  return coordinates;
+}
+
+function orbitRingColor(layerIndex: number, layerCount: number): string {
+  const palette = ["#c084fc", "#a855f7", "#8b5cf6", "#7c3aed", "#6d28d9"];
+  if (layerCount <= 1) {
+    return palette[0]!;
+  }
+
+  const ratio = Math.max(0, Math.min(1, layerIndex / Math.max(layerCount - 1, 1)));
+  return palette[Math.min(palette.length - 1, Math.round(ratio * (palette.length - 1)))]!;
+}
+
+function orbitRingOpacity(layerIndex: number, layerCount: number): number {
+  if (layerCount <= 1) {
+    return 0.95;
+  }
+
+  return 0.45 + (layerIndex / Math.max(layerCount - 1, 1)) * 0.45;
+}
+
+function altitudeLabel(altitude_m: number): string {
+  return `${Math.round(altitude_m).toLocaleString()} m`;
+}
+
+function orbitRingsToGeoJson(
+  orbitRings: GeoPoint2d[][],
+  orbitLabels: Array<{ point: GeoPoint2d; altitude_m: number }>,
+): GeoJSON.FeatureCollection<GeoJSON.LineString, SurveyOrbitRingFeatureProperties> {
+  const features = orbitRings.flatMap((ring, layerIndex) => {
+    if (ring.length < 2) {
+      return [];
+    }
+
+    const altitude_m = orbitLabels[layerIndex]?.altitude_m ?? 0;
+    return [{
+      type: "Feature",
+      geometry: {
+        type: "LineString",
+        coordinates: ringToCoordinates(ring),
+      },
+      properties: {
+        kind: "orbit_ring",
+        layerIndex,
+        altitude_m,
+        opacity: orbitRingOpacity(layerIndex, orbitRings.length),
+        color: orbitRingColor(layerIndex, orbitRings.length),
+      },
+    } satisfies GeoJSON.Feature<GeoJSON.LineString, SurveyOrbitRingFeatureProperties>];
+  });
+
+  return {
+    type: "FeatureCollection",
+    features,
+  };
+}
+
+function orbitLabelsToGeoJson(
+  orbitLabels: Array<{ point: GeoPoint2d; altitude_m: number }>,
+): GeoJSON.FeatureCollection<GeoJSON.Point, SurveyOrbitLabelFeatureProperties> {
+  return {
+    type: "FeatureCollection",
+    features: orbitLabels.map(({ point, altitude_m }, layerIndex) => ({
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [point.longitude_deg, point.latitude_deg],
+      },
+      properties: {
+        kind: "orbit_label",
+        layerIndex,
+        altitude_m,
+        label: altitudeLabel(altitude_m),
+      },
+    })),
+  };
+}
+
 export function computeCoveragePolygon(
   transects: SurveyTransect[],
   crosshatch: boolean,
@@ -373,6 +491,8 @@ function publishSurveyDebugGeoJson(
   transectsGeoJson: GeoJSON.FeatureCollection<GeoJSON.LineString, SurveyTransectFeatureProperties>,
   coverageGeoJson: GeoJSON.FeatureCollection<GeoJSON.Polygon, SurveyCoverageFeatureProperties>,
   centerlineGeoJson: GeoJSON.FeatureCollection<GeoJSON.LineString, SurveyCenterlineFeatureProperties>,
+  orbitRingsGeoJson: GeoJSON.FeatureCollection<GeoJSON.LineString, SurveyOrbitRingFeatureProperties>,
+  orbitLabelsGeoJson: GeoJSON.FeatureCollection<GeoJSON.Point, SurveyOrbitLabelFeatureProperties>,
 ): void {
   if (typeof window === "undefined") {
     return;
@@ -390,6 +510,8 @@ function publishSurveyDebugGeoJson(
     transectsGeoJson,
     coverageGeoJson,
     centerlineGeoJson,
+    orbitRingsGeoJson,
+    orbitLabelsGeoJson,
     surveyUpdateCount: previousUpdateCount + 1,
   };
 }
@@ -420,6 +542,20 @@ export function ensureSurveyLayers(map: MapLibreMap): void {
     map.addSource(SURVEY_CENTERLINE_SOURCE, {
       type: "geojson",
       data: emptyLineCollection<SurveyCenterlineFeatureProperties>(),
+    });
+  }
+
+  if (!map.getSource(SURVEY_ORBIT_RING_SOURCE)) {
+    map.addSource(SURVEY_ORBIT_RING_SOURCE, {
+      type: "geojson",
+      data: emptyLineCollection<SurveyOrbitRingFeatureProperties>(),
+    });
+  }
+
+  if (!map.getSource(SURVEY_ORBIT_LABEL_SOURCE)) {
+    map.addSource(SURVEY_ORBIT_LABEL_SOURCE, {
+      type: "geojson",
+      data: emptyPointCollection<SurveyOrbitLabelFeatureProperties>(),
     });
   }
 
@@ -491,6 +627,46 @@ export function ensureSurveyLayers(map: MapLibreMap): void {
     } as never);
   }
 
+  if (!map.getLayer(SURVEY_ORBIT_RING_LAYER)) {
+    map.addLayer({
+      id: SURVEY_ORBIT_RING_LAYER,
+      type: "line",
+      source: SURVEY_ORBIT_RING_SOURCE,
+      layout: {
+        "line-cap": "round",
+        "line-join": "round",
+      },
+      paint: {
+        "line-color": ["coalesce", ["get", "color"], "#8b5cf6"],
+        "line-width": 2.5,
+        "line-dasharray": [3, 2],
+        "line-opacity": ["coalesce", ["get", "opacity"], 0.85],
+      },
+    } as never);
+  }
+
+  if (!map.getLayer(SURVEY_ORBIT_LABEL_LAYER)) {
+    map.addLayer({
+      id: SURVEY_ORBIT_LABEL_LAYER,
+      type: "symbol",
+      source: SURVEY_ORBIT_LABEL_SOURCE,
+      minzoom: 11,
+      layout: {
+        "text-field": ["get", "label"],
+        "text-size": 11,
+        "text-anchor": "left",
+        "text-offset": [0.9, 0],
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+      },
+      paint: {
+        "text-color": "#f5f3ff",
+        "text-halo-color": "rgba(15, 23, 42, 0.95)",
+        "text-halo-width": 1.25,
+      },
+    } as never);
+  }
+
   if (!map.getLayer(SURVEY_TRANSECT_LAYER)) {
     map.addLayer({
       id: SURVEY_TRANSECT_LAYER,
@@ -515,7 +691,9 @@ export function updateSurveyOverlay(map: MapLibreMap, data: SurveyOverlayData | 
   const transectSource = map.getSource(SURVEY_TRANSECT_SOURCE) as GeoJSONSource | undefined;
   const coverageSource = map.getSource(SURVEY_COVERAGE_SOURCE) as GeoJSONSource | undefined;
   const centerlineSource = map.getSource(SURVEY_CENTERLINE_SOURCE) as GeoJSONSource | undefined;
-  if (!polygonSource || !transectSource || !coverageSource || !centerlineSource) {
+  const orbitRingSource = map.getSource(SURVEY_ORBIT_RING_SOURCE) as GeoJSONSource | undefined;
+  const orbitLabelSource = map.getSource(SURVEY_ORBIT_LABEL_SOURCE) as GeoJSONSource | undefined;
+  if (!polygonSource || !transectSource || !coverageSource || !centerlineSource || !orbitRingSource || !orbitLabelSource) {
     return;
   }
 
@@ -527,7 +705,9 @@ export function updateSurveyOverlay(map: MapLibreMap, data: SurveyOverlayData | 
     : emptyPolygonCollection<SurveyPolygonFeatureProperties>();
 
   const transectsGeoJson = data
-    ? surveyTransectsToGeoJson(data.transects, data.crosshatchTransects)
+    ? data.patternType === "structure"
+      ? emptyTransectCollection()
+      : surveyTransectsToGeoJson(data.transects, data.crosshatchTransects)
     : emptyTransectCollection();
 
   const coverageFeature = data
@@ -540,11 +720,13 @@ export function updateSurveyOverlay(map: MapLibreMap, data: SurveyOverlayData | 
           laneSpacing_m: data.laneSpacing_m,
         },
       )
-      : computeCoveragePolygon(
-        [...data.transects, ...data.crosshatchTransects],
-        data.crosshatchTransects.length > 0,
-        data.laneSpacing_m,
-      )
+      : data.patternType === "structure"
+        ? null
+        : computeCoveragePolygon(
+          [...data.transects, ...data.crosshatchTransects],
+          data.crosshatchTransects.length > 0,
+          data.laneSpacing_m,
+        )
     : null;
   const coverageGeoJson: GeoJSON.FeatureCollection<GeoJSON.Polygon, SurveyCoverageFeatureProperties> = coverageFeature
     ? { type: "FeatureCollection", features: [coverageFeature] }
@@ -557,16 +739,36 @@ export function updateSurveyOverlay(map: MapLibreMap, data: SurveyOverlayData | 
     ? { type: "FeatureCollection", features: [centerlineFeature] }
     : emptyLineCollection<SurveyCenterlineFeatureProperties>();
 
+  const orbitRingsGeoJson = data?.patternType === "structure"
+    ? orbitRingsToGeoJson(data.orbitRings ?? [], data.orbitLabels ?? [])
+    : emptyLineCollection<SurveyOrbitRingFeatureProperties>();
+
+  const orbitLabelsGeoJson = data?.patternType === "structure"
+    ? orbitLabelsToGeoJson(data.orbitLabels ?? [])
+    : emptyPointCollection<SurveyOrbitLabelFeatureProperties>();
+
   polygonSource.setData(polygonGeoJson);
   transectSource.setData(transectsGeoJson);
   coverageSource.setData(coverageGeoJson);
   centerlineSource.setData(centerlineGeoJson);
-  publishSurveyDebugGeoJson(data?.patternType, polygonGeoJson, transectsGeoJson, coverageGeoJson, centerlineGeoJson);
+  orbitRingSource.setData(orbitRingsGeoJson);
+  orbitLabelSource.setData(orbitLabelsGeoJson);
+  publishSurveyDebugGeoJson(
+    data?.patternType,
+    polygonGeoJson,
+    transectsGeoJson,
+    coverageGeoJson,
+    centerlineGeoJson,
+    orbitRingsGeoJson,
+    orbitLabelsGeoJson,
+  );
 }
 
 export function removeSurveyLayers(map: MapLibreMap): void {
   for (const layerId of [
     SURVEY_TRANSECT_LAYER,
+    SURVEY_ORBIT_LABEL_LAYER,
+    SURVEY_ORBIT_RING_LAYER,
     SURVEY_CENTERLINE_LAYER,
     SURVEY_COVERAGE_LINE_LAYER,
     SURVEY_COVERAGE_FILL_LAYER,
@@ -580,6 +782,8 @@ export function removeSurveyLayers(map: MapLibreMap): void {
 
   for (const sourceId of [
     SURVEY_TRANSECT_SOURCE,
+    SURVEY_ORBIT_LABEL_SOURCE,
+    SURVEY_ORBIT_RING_SOURCE,
     SURVEY_CENTERLINE_SOURCE,
     SURVEY_COVERAGE_SOURCE,
     SURVEY_POLYGON_SOURCE,

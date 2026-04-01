@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createCorridorRegion, createSurveyRegion } from "../../lib/survey-region";
+import { createCorridorRegion, createStructureRegion, createSurveyRegion } from "../../lib/survey-region";
 import { SurveyRegionCard } from "./SurveyRegionCard";
 
 const POLYGON = [
@@ -19,7 +19,7 @@ const POLYLINE = [
   { latitude_deg: 47.396642, longitude_deg: 8.547194 },
 ];
 
-function applyStats(region: ReturnType<typeof createSurveyRegion>) {
+function applyStats(region: ReturnType<typeof createSurveyRegion> | ReturnType<typeof createCorridorRegion> | ReturnType<typeof createStructureRegion>) {
   region.generatedStats = {
     gsd_m: 0.023,
     photoCount: 128,
@@ -37,7 +37,7 @@ afterEach(() => {
 });
 
 describe("SurveyRegionCard", () => {
-  it("renders grid, crosshatch grid, and corridor pattern labels", () => {
+  it("renders grid, crosshatch grid, corridor, and structure pattern labels", () => {
     const gridRegion = applyStats(createSurveyRegion(POLYGON));
     const crosshatchRegion = applyStats(createSurveyRegion(POLYGON));
     crosshatchRegion.params.crosshatch = true;
@@ -50,6 +50,16 @@ describe("SurveyRegionCard", () => {
       laneSpacing_m: 24,
       laneCount: 6,
       crosshatchLaneCount: 0,
+    };
+    const structureRegion = createStructureRegion(POLYGON);
+    structureRegion.generatedStats = {
+      gsd_m: 0.018,
+      photoCount: 64,
+      layerCount: 4,
+      photosPerLayer: 16,
+      layerSpacing_m: 12,
+      triggerDistance_m: 16,
+      estimatedFlightTime_s: 420,
     };
 
     const { rerender } = render(
@@ -93,6 +103,20 @@ describe("SurveyRegionCard", () => {
     expect(screen.getByText("Corridor")).toBeTruthy();
     expect(screen.getByText("6 lanes")).toBeTruthy();
     expect(screen.getByText("12,500 m²")).toBeTruthy();
+
+    rerender(
+      <SurveyRegionCard
+        region={structureRegion}
+        label="Region 1"
+        selected={false}
+        onSelect={() => undefined}
+        onDissolve={() => undefined}
+        onDelete={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("Structure scan")).toBeTruthy();
+    expect(screen.getByText("4 layers")).toBeTruthy();
   });
 
   it("calls onSelect when the card summary is clicked", () => {

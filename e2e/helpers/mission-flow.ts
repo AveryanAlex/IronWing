@@ -46,7 +46,7 @@ type MissionPathDebugState = {
 } | null;
 
 type SurveyDebugState = {
-  patternType?: "grid" | "corridor";
+  patternType?: "grid" | "corridor" | "structure";
   polygonGeoJson: {
     type: string;
     features: Array<{ geometry?: { type?: string } }>;
@@ -62,6 +62,20 @@ type SurveyDebugState = {
   centerlineGeoJson: {
     type: string;
     features: Array<{ geometry?: { type?: string } }>;
+  };
+  orbitRingsGeoJson: {
+    type: string;
+    features: Array<{
+      geometry?: { type?: string; coordinates?: unknown[] };
+      properties?: { altitude_m?: number; layerIndex?: number; opacity?: number; color?: string };
+    }>;
+  };
+  orbitLabelsGeoJson: {
+    type: string;
+    features: Array<{
+      geometry?: { type?: string };
+      properties?: { altitude_m?: number; label?: string; layerIndex?: number };
+    }>;
   };
   surveyUpdateCount: number;
 } | null;

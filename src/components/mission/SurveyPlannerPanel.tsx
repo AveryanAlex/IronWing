@@ -47,6 +47,7 @@ const CAPTURE_MODE_LABELS = {
 const PATTERN_OPTIONS = [
   { value: "grid", label: "Grid" },
   { value: "corridor", label: "Corridor" },
+  { value: "structure", label: "Structure" },
 ] as const;
 
 function createEmptyCustomCameraForm(): CustomCameraFormState {
@@ -161,7 +162,12 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [customCameraForm, setCustomCameraForm] = useState<CustomCameraFormState>(() => createEmptyCustomCameraForm());
   const isCorridorPattern = planner.patternType === "corridor";
-  const generateLabel = isCorridorPattern ? "Generate corridor" : "Generate survey";
+  const isStructurePattern = planner.patternType === "structure";
+  const generateLabel = isStructurePattern
+    ? "Generate structure scan"
+    : isCorridorPattern
+      ? "Generate corridor"
+      : "Generate survey";
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -586,7 +592,47 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
                   className="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm text-text-primary"
                 />
               </label>
-              {!isCorridorPattern ? (
+              {isStructurePattern ? (
+                <>
+                  <label className="space-y-1 text-xs text-text-secondary">
+                    <span>Structure height (m)</span>
+                    <input
+                      aria-label="Structure height"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={planner.params.structureHeight_m}
+                      onChange={(event) => planner.setParam("structureHeight_m", Number(event.target.value))}
+                      className="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm text-text-primary"
+                    />
+                  </label>
+                  <label className="space-y-1 text-xs text-text-secondary">
+                    <span>Scan distance (m)</span>
+                    <input
+                      aria-label="Scan distance"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={planner.params.scanDistance_m}
+                      onChange={(event) => planner.setParam("scanDistance_m", Number(event.target.value))}
+                      className="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm text-text-primary"
+                    />
+                  </label>
+                  <label className="space-y-1 text-xs text-text-secondary">
+                    <span>Layer count</span>
+                    <input
+                      aria-label="Layer count"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={planner.params.layerCount}
+                      onChange={(event) => planner.setParam("layerCount", Number(event.target.value))}
+                      className="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm text-text-primary"
+                    />
+                  </label>
+                </>
+              ) : null}
+              {!isCorridorPattern && !isStructurePattern ? (
                 <label className="space-y-1 text-xs text-text-secondary">
                   <span>Track angle (°)</span>
                   <input
@@ -629,6 +675,28 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
               ) : null}
             </div>
 
+            {isStructurePattern ? (
+              <div className="space-y-2">
+                <div className="text-xs text-text-secondary">Layer order</div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant={planner.params.layerOrder === "bottom_to_top" ? "default" : "secondary"}
+                    onClick={() => planner.setParam("layerOrder", "bottom_to_top")}
+                  >
+                    Bottom to top
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={planner.params.layerOrder === "top_to_bottom" ? "default" : "secondary"}
+                    onClick={() => planner.setParam("layerOrder", "top_to_bottom")}
+                  >
+                    Top to bottom
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="space-y-2">
               <div className="text-xs text-text-secondary">Orientation</div>
               <div className="flex gap-2">
@@ -654,7 +722,7 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
 
           <section className="space-y-3 rounded-lg border border-border bg-bg-primary p-3">
             <SectionTitle title="Capture & routing" />
-            {!isCorridorPattern ? (
+            {!isCorridorPattern && !isStructurePattern ? (
               <div className="space-y-2 rounded-md border border-border bg-bg-secondary/70 p-3">
                 <label className="flex items-start gap-2 text-sm text-text-secondary">
                   <input
@@ -733,11 +801,11 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
             </section>
           ) : (
             <section className="space-y-3 rounded-lg border border-border bg-bg-primary p-3">
-              <SectionTitle title="Polygon" />
+              <SectionTitle title={isStructurePattern ? "Footprint" : "Polygon"} />
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant={planner.isDrawing ? "destructive" : "secondary"} onClick={planner.isDrawing ? planner.stopDraw : planner.startDraw}>
                   <Crosshair className="h-3.5 w-3.5" />
-                  {planner.isDrawing ? "Stop drawing" : "Draw area"}
+                  {planner.isDrawing ? "Stop drawing" : isStructurePattern ? "Draw footprint" : "Draw area"}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => planner.activeRegionId ? planner.deleteRegion(planner.activeRegionId) : planner.stopDraw()} disabled={!planner.activeRegionId && planner.drawingVertices.length === 0}>
                   <Trash2 className="h-3.5 w-3.5" />
@@ -748,8 +816,10 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
                 {planner.isDrawing
                   ? `${planner.drawingVertices.length} ${planner.drawingVertices.length === 1 ? "vertex" : "vertices"} — click the map to add more points.`
                   : activeRegion
-                    ? `${activeRegion.polygon.length} ${activeRegion.polygon.length === 1 ? "vertex" : "vertices"} in the active region.`
-                    : "No polygon yet — start drawing on the map."}
+                    ? `${activeRegion.polygon.length} ${activeRegion.polygon.length === 1 ? "vertex" : "vertices"} in the active ${isStructurePattern ? "footprint" : "region"}.`
+                    : isStructurePattern
+                      ? "No structure footprint yet — start drawing on the map."
+                      : "No polygon yet — start drawing on the map."}
               </div>
             </section>
           )}
@@ -775,7 +845,15 @@ export function SurveyPlannerPanel({ planner }: SurveyPlannerPanelProps) {
                 <StatTile label="GSD" value={planner.formattedStats.gsd} />
                 <StatTile label="Area" value={planner.formattedStats.area} />
                 <StatTile label="Flight time" value={planner.formattedStats.flightTime} />
-                <StatTile label="Lanes" value={planner.formattedStats.laneCount} hint={`Crosshatch ${planner.formattedStats.crosshatchLaneCount}`} />
+                <StatTile
+                  label={isStructurePattern ? "Layers" : "Lanes"}
+                  value={isStructurePattern ? planner.formattedStats.layerCount ?? "—" : planner.formattedStats.laneCount}
+                  hint={isStructurePattern
+                    ? planner.formattedStats.layerSpacing
+                      ? `Spacing ${planner.formattedStats.layerSpacing}`
+                      : undefined
+                    : `Crosshatch ${planner.formattedStats.crosshatchLaneCount}`}
+                />
               </div>
             </section>
           ) : null}
