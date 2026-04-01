@@ -12,6 +12,7 @@ import {
   missionCard,
   openMissionMobileDrawer,
   waitForMissionPathDebugState,
+  waitForSurveyDebugState,
   waitForTerrainReady,
 } from "./helpers/mission-flow";
 
@@ -30,7 +31,7 @@ test("desktop seed hydrates the mixed mission proof through Read", async ({
   await expect(page.locator('[data-testid="mission-stats-distance"]')).toBeVisible();
 });
 
-test("desktop workflow proves inspector metadata, history, terrain, render features, and auto-grid", async ({
+test("desktop workflow proves inspector metadata, history, terrain, render features, and survey planning", async ({
   page,
   mockPlatform,
 }) => {
@@ -143,30 +144,56 @@ test("desktop workflow proves inspector metadata, history, terrain, render featu
   expect(featureKinds.label).toBeGreaterThan(0);
 
   await page.locator("[data-mission-auto-grid-open]").click();
-  await expect(page.locator("[data-mission-auto-grid-dialog]")).toBeVisible();
+  const surveyPanel = page.locator("[data-survey-planner-panel]");
+  await expect(surveyPanel).toBeVisible();
+  await expect(page.locator("[data-mission-side-panel]")).toHaveAttribute("data-survey-mode", "open");
 
-  await page.locator("[data-mission-grid-draw-toggle]").click();
-  await expect(page.locator("[data-mission-grid-draw-toggle]")).toContainText("Stop Drawing");
+  const drawButton = surveyPanel.locator("button").filter({ hasText: /draw area|stop drawing/i }).first();
+  await drawButton.click();
+  await expect(drawButton).toContainText("Stop drawing");
+  await expect(chainModeButton).toHaveAttribute("aria-pressed", "false");
 
   await drawPentagonOnMissionMap(page);
-  await page.locator("[data-mission-grid-draw-toggle]").click();
-  await expect(page.locator("[data-mission-grid-draw-toggle]")).toContainText("Draw Area");
+  await clickMapAtRatio(page, 0.32, 0.24);
+  await expect(surveyPanel).toContainText("Region 1");
+  await expect(surveyPanel).toContainText(/5 vertices in the active region/i);
 
-  await page.getByLabel("Spacing (m)").fill("80");
-  await page.getByLabel("Track Angle (°)").fill("15");
-  await page.locator("[data-mission-grid-insert-after]").click();
-  await expect(page.locator("[data-mission-grid-generate]")).toBeEnabled();
+  const generateButton = page.locator("[data-survey-generate]");
+  await expect(generateButton).toBeDisabled();
 
-  const beforeAutoGridCount = await cards.count();
-  await page.locator("[data-mission-grid-generate]").click();
+  await page.getByLabel("Search cameras").fill("DJI Mavic 3E");
+  await surveyPanel.getByRole("button", { name: /DJI Mavic 3E/i }).click();
+  await expect(surveyPanel).toContainText("Selected camera");
+  await expect(surveyPanel).toContainText("DJI Mavic 3E");
+  await expect(generateButton).toBeEnabled();
 
-  await expect(page.locator("[data-mission-auto-grid-dialog]")).toHaveCount(0);
-  await expect.poll(async () => await cards.count()).toBeGreaterThan(beforeAutoGridCount);
+  await page.getByLabel("Front overlap").fill("82");
+  await page.getByLabel("Side overlap").fill("74");
+  await page.getByLabel("Track angle").fill("15");
+  await page.getByLabel("Turnaround distance").fill("20");
+
+  await generateButton.click();
+
+  await expect(surveyPanel).toContainText("Survey stats");
+  await expect(surveyPanel).toContainText(/Flight time/i);
+  await expect(surveyPanel).toContainText(/Lanes/i);
+
+  const surveyDebug = await waitForSurveyDebugState(page);
+  expect(surveyDebug.polygonGeoJson.features).toHaveLength(1);
+  expect(surveyDebug.coverageGeoJson.features.length).toBeGreaterThan(0);
+  expect(surveyDebug.transectsGeoJson.features.length).toBeGreaterThan(0);
+  expect(surveyDebug.coverageGeoJson.features[0]?.properties?.crosshatch).toBe(false);
+  expect(surveyDebug.coverageGeoJson.features[0]?.properties?.laneSpacing_m ?? 0).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: /close survey planner/i }).click();
+  await expect(page.locator("[data-mission-side-panel]")).toHaveAttribute("data-survey-mode", "closed");
+  await expect(page.locator("[data-survey-region-card]")).toHaveCount(1);
+  await expect(page.locator("[data-survey-region-card]")).toContainText(/photos/i);
+
   await waitForTerrainReady(page);
-
   await expect(page.locator('[data-testid="mission-stats-state"]')).toContainText("Finite estimate");
   await expect(page.locator('[data-testid="mission-stats-distance"]')).toBeVisible();
-  await expect.poll(async () => await page.locator('[data-testid="terrain-waypoint-marker"]').count()).toBeGreaterThan(0);
+  await expect(cards).toHaveCount(5);
 });
 
 test("Radiomaster viewport keeps desktop mission controls reachable at 1280x720", async ({

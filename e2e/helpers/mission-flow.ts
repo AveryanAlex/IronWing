@@ -45,6 +45,22 @@ type MissionPathDebugState = {
   missionPathUpdateCount: number;
 } | null;
 
+type SurveyDebugState = {
+  polygonGeoJson: {
+    type: string;
+    features: Array<{ geometry?: { type?: string } }>;
+  };
+  transectsGeoJson: {
+    type: string;
+    features: Array<{ properties?: { kind?: string } }>;
+  };
+  coverageGeoJson: {
+    type: string;
+    features: Array<{ properties?: { crosshatch?: boolean; laneSpacing_m?: number } }>;
+  };
+  surveyUpdateCount: number;
+} | null;
+
 const MOCK_MAP_STYLE = {
   version: 8,
   name: "IronWing Mission E2E",
@@ -337,6 +353,26 @@ export async function waitForMissionPathDebugState(page: Page): Promise<NonNulla
   const debugState = await getMissionPathDebugState(page);
   if (!debugState) {
     throw new Error("Mission-path debug state was not published.");
+  }
+
+  return debugState;
+}
+
+export async function getSurveyDebugState(page: Page): Promise<SurveyDebugState> {
+  return page.evaluate(() => {
+    return (window as Window & { __IRONWING_SURVEY_DEBUG__?: SurveyDebugState }).__IRONWING_SURVEY_DEBUG__ ?? null;
+  });
+}
+
+export async function waitForSurveyDebugState(page: Page): Promise<NonNullable<SurveyDebugState>> {
+  await expect.poll(async () => {
+    const debugState = await getSurveyDebugState(page);
+    return debugState?.surveyUpdateCount ?? 0;
+  }).toBeGreaterThan(0);
+
+  const debugState = await getSurveyDebugState(page);
+  if (!debugState) {
+    throw new Error("Survey debug state was not published.");
   }
 
   return debugState;

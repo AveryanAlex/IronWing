@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import type { HomePosition } from "../mission";
 import { resolveStartCorner } from "../lib/mission-grid";
@@ -186,6 +186,42 @@ export function useSurveyPlanner({
     const [isGenerating, setIsGenerating] = useState(false);
     const [showCustomCameraForm, setShowCustomCameraForm] = useState(false);
 
+    const regionsRef = useRef(regions);
+    const activeRegionIdRef = useRef(activeRegionId);
+    const selectedCameraRef = useRef(selectedCamera);
+    const paramsRef = useRef(params);
+
+    regionsRef.current = regions;
+    activeRegionIdRef.current = activeRegionId;
+    selectedCameraRef.current = selectedCamera;
+    paramsRef.current = params;
+
+    const commitRegions = useCallback((next: SurveyDraftExtension) => {
+        regionsRef.current = next;
+        setRegions(next);
+        return next;
+    }, []);
+
+    const commitActiveRegionId = useCallback((next: string | null) => {
+        activeRegionIdRef.current = next;
+        setActiveRegionId(next);
+        return next;
+    }, []);
+
+    const commitSelectedCamera = useCallback((next: CatalogCamera | null) => {
+        const nextCamera = next ? { ...next } : null;
+        selectedCameraRef.current = nextCamera;
+        setSelectedCameraState(nextCamera);
+        return nextCamera;
+    }, []);
+
+    const commitParams = useCallback((next: SurveyRegionParams) => {
+        const nextParams = { ...next };
+        paramsRef.current = nextParams;
+        setParamsState(nextParams);
+        return nextParams;
+    }, []);
+
     const activeRegion = useMemo(
         () => (activeRegionId ? regions.surveyRegions.get(activeRegionId) ?? null : null),
         [activeRegionId, regions],
@@ -252,75 +288,79 @@ export function useSurveyPlanner({
     }, []);
 
     const selectRegion = useCallback((regionId: string) => {
-        const region = regions.surveyRegions.get(regionId);
+        const region = regionsRef.current.surveyRegions.get(regionId);
         if (!region) {
             return;
         }
 
-        setActiveRegionId(regionId);
-        setSelectedCameraState(region.camera ? { ...region.camera } : null);
-        setParamsState({ ...region.params });
-    }, [regions.surveyRegions]);
+        commitActiveRegionId(regionId);
+        commitSelectedCamera(region.camera);
+        commitParams(region.params);
+    }, [commitActiveRegionId, commitParams, commitSelectedCamera]);
 
     const createRegion = useCallback((polygon: GeoPoint2d[]) => {
         const nextRegion = createSurveyRegion(clonePolygon(polygon));
-        const seededRegion = syncRegionWithPlannerState(nextRegion, selectedCamera, params, homePosition);
+        const seededRegion = syncRegionWithPlannerState(
+            nextRegion,
+            selectedCameraRef.current,
+            paramsRef.current,
+            homePosition,
+        );
 
-        setRegions((current) => addSurveyRegion(current, seededRegion, regionInsertionIndex(missionMutators)));
-        setActiveRegionId(seededRegion.id);
-        setSelectedCameraState(seededRegion.camera ? { ...seededRegion.camera } : null);
-        setParamsState({ ...seededRegion.params });
+        commitRegions(addSurveyRegion(
+            regionsRef.current,
+            seededRegion,
+            regionInsertionIndex(missionMutators),
+        ));
+        commitActiveRegionId(seededRegion.id);
+        commitSelectedCamera(seededRegion.camera);
+        commitParams(seededRegion.params);
         setSurveyMode(true);
 
         return seededRegion;
-    }, [homePosition, missionMutators, params, selectedCamera]);
+    }, [commitActiveRegionId, commitParams, commitRegions, commitSelectedCamera, homePosition, missionMutators]);
 
     const deleteRegion = useCallback((regionId: string) => {
-        setRegions((current) => removeSurveyRegion(current, regionId));
-        setActiveRegionId((currentActiveId) => {
-            if (currentActiveId !== regionId) {
-                return currentActiveId;
-            }
+        const nextRegions = removeSurveyRegion(regionsRef.current, regionId);
+        commitRegions(nextRegions);
 
-            const remaining = allRegions.filter((region) => region.id !== regionId);
-            const nextRegion = remaining[0] ?? null;
-            if (nextRegion) {
-                setSelectedCameraState(nextRegion.camera ? { ...nextRegion.camera } : null);
-                setParamsState({ ...nextRegion.params });
-            }
-            return nextRegion?.id ?? null;
-        });
-    }, [allRegions]);
+        if (activeRegionIdRef.current !== regionId) {
+            return;
+        }
+
+        const nextRegion = orderedRegions(nextRegions)[0] ?? null;
+        commitActiveRegionId(nextRegion?.id ?? null);
+        if (nextRegion) {
+            commitSelectedCamera(nextRegion.camera);
+            commitParams(nextRegion.params);
+        }
+    }, [commitActiveRegionId, commitParams, commitRegions, commitSelectedCamera]);
 
     const dissolveRegion = useCallback((regionId: string) => {
-        const currentRegion = regions.surveyRegions.get(regionId);
+        const currentRegion = regionsRef.current.surveyRegions.get(regionId);
         if (!currentRegion) {
             return [];
         }
 
-        const dissolveResult = dissolveSurveyRegion(regions, regionId);
-        const blockPosition = regionBlockPosition(regions, regionId);
+        const dissolveResult = dissolveSurveyRegion(regionsRef.current, regionId);
+        const blockPosition = regionBlockPosition(regionsRef.current, regionId);
 
-        setRegions(dissolveResult.extension);
-        setActiveRegionId((currentActiveId) => {
-            if (currentActiveId !== regionId) {
-                return currentActiveId;
-            }
-
+        commitRegions(dissolveResult.extension);
+        if (activeRegionIdRef.current === regionId) {
             const nextRegion = orderedRegions(dissolveResult.extension)[0] ?? null;
+            commitActiveRegionId(nextRegion?.id ?? null);
             if (nextRegion) {
-                setSelectedCameraState(nextRegion.camera ? { ...nextRegion.camera } : null);
-                setParamsState({ ...nextRegion.params });
+                commitSelectedCamera(nextRegion.camera);
+                commitParams(nextRegion.params);
             }
-            return nextRegion?.id ?? null;
-        });
+        }
 
         if (dissolveResult.dissolvedItems.length > 0 && missionMutators?.insertGeneratedAfter) {
             missionMutators.insertGeneratedAfter((blockPosition ?? 0) - 1, dissolveResult.dissolvedItems);
         }
 
         return dissolveResult.dissolvedItems;
-    }, [missionMutators, regions]);
+    }, [commitActiveRegionId, commitParams, commitRegions, commitSelectedCamera, missionMutators]);
 
     const startDraw = useCallback(() => {
         setSurveyMode(true);
@@ -357,11 +397,12 @@ export function useSurveyPlanner({
             return;
         }
 
-        if (!activeRegionId) {
+        const currentActiveRegionId = activeRegionIdRef.current;
+        if (!currentActiveRegionId) {
             return;
         }
 
-        setRegions((current) => updateSurveyRegion(current, activeRegionId, (region) => {
+        commitRegions(updateSurveyRegion(regionsRef.current, currentActiveRegionId, (region) => {
             const polygon = region.polygon.map((point, pointIndex) => (
                 pointIndex === index ? nextPoint : clonePoint(point)
             ));
@@ -381,110 +422,123 @@ export function useSurveyPlanner({
                 params: nextParams,
             };
         }));
-    }, [activeRegionId, homePosition, isDrawing]);
+    }, [commitRegions, homePosition, isDrawing]);
 
     const setCamera = useCallback((camera: CatalogCamera | null) => {
-        setSelectedCameraState(camera ? { ...camera } : null);
-
-        const nextOrientation = camera ? defaultOrientationForCamera(camera) : params.orientation;
-        setParamsState((current) => ({
-            ...current,
+        const nextCamera = commitSelectedCamera(camera);
+        const nextOrientation = nextCamera ? defaultOrientationForCamera(nextCamera) : paramsRef.current.orientation;
+        const nextParams = commitParams({
+            ...paramsRef.current,
             orientation: nextOrientation,
-        }));
-
-        if (camera) {
-            addRecentCamera(camera.canonicalName);
-        }
-
-        if (!activeRegionId) {
-            return;
-        }
-
-        setRegions((current) => updateSurveyRegion(current, activeRegionId, (region) => ({
-            ...region,
-            cameraId: camera?.canonicalName ?? null,
-            camera: camera ? { ...camera } : null,
-            params: {
-                ...region.params,
-                orientation: nextOrientation,
-            },
-        })));
-    }, [activeRegionId, params.orientation]);
-
-    const setParam = useCallback(<K extends keyof SurveyRegionParams>(key: K, value: SurveyRegionParams[K]) => {
-        setParamsState((current) => {
-            const nextParams = {
-                ...current,
-                [key]: value,
-            };
-
-            const polygon = activeRegion?.polygon ?? [];
-            if (key === "trackAngle_deg") {
-                nextParams.startCorner = resolveRegionStartCorner(
-                    polygon,
-                    homePosition,
-                    nextParams.trackAngle_deg,
-                    nextParams.startCorner,
-                );
-            }
-
-            return nextParams;
         });
 
-        if (!activeRegionId) {
+        if (nextCamera) {
+            addRecentCamera(nextCamera.canonicalName);
+        }
+
+        const currentActiveRegionId = activeRegionIdRef.current;
+        if (!currentActiveRegionId) {
             return;
         }
 
-        setRegions((current) => updateSurveyRegion(current, activeRegionId, (region) => {
-            const nextParams = {
+        commitRegions(updateSurveyRegion(regionsRef.current, currentActiveRegionId, (region) => ({
+            ...region,
+            cameraId: nextCamera?.canonicalName ?? null,
+            camera: nextCamera ? { ...nextCamera } : null,
+            params: {
+                ...region.params,
+                orientation: nextParams.orientation,
+            },
+        })));
+    }, [commitParams, commitRegions, commitSelectedCamera]);
+
+    const setParam = useCallback(<K extends keyof SurveyRegionParams>(key: K, value: SurveyRegionParams[K]) => {
+        const currentActiveRegionId = activeRegionIdRef.current;
+        const currentPolygon = currentActiveRegionId
+            ? regionsRef.current.surveyRegions.get(currentActiveRegionId)?.polygon ?? []
+            : [];
+        const nextParams = {
+            ...paramsRef.current,
+            [key]: value,
+        };
+
+        if (key === "trackAngle_deg") {
+            nextParams.startCorner = resolveRegionStartCorner(
+                currentPolygon,
+                homePosition,
+                nextParams.trackAngle_deg,
+                nextParams.startCorner,
+            );
+        }
+
+        commitParams(nextParams);
+
+        if (!currentActiveRegionId) {
+            return;
+        }
+
+        commitRegions(updateSurveyRegion(regionsRef.current, currentActiveRegionId, (region) => {
+            const updatedParams = {
                 ...region.params,
                 [key]: value,
             };
 
             if (key === "trackAngle_deg") {
-                nextParams.startCorner = resolveRegionStartCorner(
+                updatedParams.startCorner = resolveRegionStartCorner(
                     region.polygon,
                     homePosition,
-                    nextParams.trackAngle_deg,
-                    nextParams.startCorner,
+                    updatedParams.trackAngle_deg,
+                    updatedParams.startCorner,
                 );
             }
 
             return {
                 ...region,
-                params: nextParams,
+                params: updatedParams,
             };
         }));
-    }, [activeRegion, activeRegionId, homePosition]);
+    }, [commitParams, commitRegions, homePosition]);
 
     const generate = useCallback(async () => {
-        if (!activeRegion || !selectedCamera) {
+        const currentActiveRegionId = activeRegionIdRef.current;
+        const currentSelectedCamera = selectedCameraRef.current;
+        const currentActiveRegion = currentActiveRegionId
+            ? regionsRef.current.surveyRegions.get(currentActiveRegionId) ?? null
+            : null;
+
+        if (!currentActiveRegion || !currentSelectedCamera) {
             return null;
         }
 
-        const regionForGeneration = syncRegionWithPlannerState(activeRegion, selectedCamera, params, homePosition);
+        const currentParams = paramsRef.current;
+        const regionForGeneration = syncRegionWithPlannerState(
+            currentActiveRegion,
+            currentSelectedCamera,
+            currentParams,
+            homePosition,
+        );
         setIsGenerating(true);
         try {
             const result = await generateSurvey({
                 polygon: regionForGeneration.polygon,
-                camera: selectedCamera,
-                orientation: params.orientation,
-                altitude_m: params.altitude_m,
-                sideOverlap_pct: params.sideOverlap_pct,
-                frontOverlap_pct: params.frontOverlap_pct,
-                trackAngle_deg: params.trackAngle_deg,
-                startCorner: params.startCorner,
-                turnDirection: params.turnDirection,
-                crosshatch: params.crosshatch,
-                turnaroundDistance_m: params.turnaroundDistance_m,
-                terrainFollow: params.terrainFollow,
+                camera: currentSelectedCamera,
+                orientation: currentParams.orientation,
+                altitude_m: currentParams.altitude_m,
+                sideOverlap_pct: currentParams.sideOverlap_pct,
+                frontOverlap_pct: currentParams.frontOverlap_pct,
+                trackAngle_deg: currentParams.trackAngle_deg,
+                startCorner: currentParams.startCorner,
+                turnDirection: currentParams.turnDirection,
+                crosshatch: currentParams.crosshatch,
+                turnaroundDistance_m: currentParams.turnaroundDistance_m,
+                terrainFollow: currentParams.terrainFollow,
                 terrainLookup,
-                captureMode: params.captureMode,
+                captureMode: currentParams.captureMode,
             });
 
-            setRegions((current) => updateSurveyRegion(current, regionForGeneration.id, (region) => (
+            commitRegions(updateSurveyRegion(regionsRef.current, regionForGeneration.id, (region) => (
                 applyGenerationResult(
-                    syncRegionWithPlannerState(region, selectedCamera, params, homePosition),
+                    syncRegionWithPlannerState(region, currentSelectedCamera, currentParams, homePosition),
                     result,
                 )
             )));
@@ -493,7 +547,7 @@ export function useSurveyPlanner({
         } finally {
             setIsGenerating(false);
         }
-    }, [activeRegion, homePosition, params, selectedCamera, terrainLookup]);
+    }, [commitRegions, homePosition, terrainLookup]);
 
     const openCustomCameraForm = useCallback(() => {
         setShowCustomCameraForm(true);

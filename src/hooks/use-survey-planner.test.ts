@@ -6,6 +6,31 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CatalogCamera } from "../lib/survey-camera-catalog";
 import { useSurveyPlanner } from "./use-survey-planner";
 
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: (key: string) => store[key] ?? null,
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
+    get length() {
+      return Object.keys(store).length;
+    },
+    key: (index: number) => Object.keys(store)[index] ?? null,
+  };
+})();
+
+Object.defineProperty(globalThis, "localStorage", {
+  value: localStorageMock,
+  configurable: true,
+});
+
 const POLYGON = [
   { latitude_deg: 47.397742, longitude_deg: 8.545594 },
   { latitude_deg: 47.397742, longitude_deg: 8.547194 },
