@@ -136,6 +136,7 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
     cruiseSpeed_mps: mission.mission.importedSpeeds?.cruiseSpeedMps ?? settings.cruiseSpeedMps,
   });
   const chainModeEnabled = current.tab === "mission" && chainModeActive && !survey.isDrawing;
+  const { setSurveyImportCallbacks, setSurveyExportCallback } = mission;
 
   const drawingMode = survey.isDrawing
     ? survey.patternType === "corridor"
@@ -193,6 +194,19 @@ export function MissionWorkspace({ vehicle, mission, deviceLocation }: MissionWo
   const handleTerrainRetry = useCallback(() => {
     setTerrainRetryKey((k) => k + 1);
   }, []);
+
+  useEffect(() => {
+    setSurveyImportCallbacks({
+      onReplace: survey.replaceImportedRegions,
+      onAppend: survey.appendImportedRegions,
+    });
+    setSurveyExportCallback(survey.getExportableRegions);
+
+    return () => {
+      setSurveyImportCallbacks({});
+      setSurveyExportCallback(undefined);
+    };
+  }, [setSurveyExportCallback, setSurveyImportCallbacks, survey.appendImportedRegions, survey.getExportableRegions, survey.replaceImportedRegions]);
 
   useEffect(() => {
     if (current.tab !== "mission") {

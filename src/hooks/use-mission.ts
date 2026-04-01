@@ -31,7 +31,14 @@ import {
     uploadRally,
     type RallyPlan,
 } from "../rally";
-import { exportPlanFile as exportQgcPlanFile, parsePlanFile, type ExportDomain, type PlanParseResult } from "../lib/mission-plan-io";
+import {
+    exportPlanFile as exportQgcPlanFile,
+    parsePlanFile,
+    type ExportDomain,
+    type ExportableSurveyRegion,
+    type ParsedSurveyRegion,
+    type PlanParseResult,
+} from "../lib/mission-plan-io";
 import { parseKml, parseKmz } from "../lib/mission-kml-io";
 import type { Telemetry } from "../telemetry";
 import { subscribeSessionState } from "../session";
@@ -85,9 +92,15 @@ import {
 
 type HomeSource = "vehicle" | "user" | "download" | null;
 
+type SurveyImportCallbacks = {
+    onReplace?: (regions: ParsedSurveyRegion[]) => void;
+    onAppend?: (regions: ParsedSurveyRegion[]) => void;
+};
+
 type PendingExport = {
     path: string;
     mission: MissionPlan;
+    surveyRegions: ExportableSurveyRegion[];
     home: HomePosition | null;
     fence: FencePlan;
     rally: RallyPlan;
@@ -355,6 +368,8 @@ export function useMission(
     const operationsRef = useRef(operations);
     const nextOperationTokenRef = useRef(1);
     const exportMissionSpeedsRef = useRef<MissionPlanningSpeeds | null>(null);
+    const surveyImportCallbacksRef = useRef<SurveyImportCallbacks>({});
+    const surveyExportCallbackRef = useRef<(() => ExportableSurveyRegion[]) | null>(null);
 
     useEffect(() => { typedDraftStateRef.current = typedDraftState; }, [typedDraftState]);
     useEffect(() => { missionHomeStateRef.current = missionHomeState; }, [missionHomeState]);
@@ -565,6 +580,14 @@ export function useMission(
 
     const setExportSpeeds = useCallback((speeds: MissionPlanningSpeeds) => {
         exportMissionSpeedsRef.current = speeds;
+    }, []);
+
+    const setSurveyImportCallbacks = useCallback((callbacks: SurveyImportCallbacks) => {
+        surveyImportCallbacksRef.current = callbacks;
+    }, []);
+
+    const setSurveyExportCallback = useCallback((callback?: () => ExportableSurveyRegion[]) => {
+        surveyExportCallbackRef.current = callback ?? null;
     }, []);
 
     const cancelActiveTransfer = useCallback(() => {
@@ -1017,6 +1040,7 @@ export function useMission(
                 replaceMissionHomeFromDownload(missionHomeStateRef.current, result.home, scope),
                 result.home ? "download" : null,
             );
+            surveyImportCallbacksRef.current.onReplace?.(result.surveyRegions);
             pushHistorySnapshot("mission", missionSnapshot);
             pushHistorySnapshot("fence", fenceSnapshot);
             pushHistorySnapshot("rally", rallySnapshot);
@@ -1037,6 +1061,7 @@ export function useMission(
                 nextState = insertTypedItemsAfter(nextState, "rally", existingRallyCount - 1, result.rally.points);
             }
             commitTypedDraftState(nextState);
+            surveyImportCallbacksRef.current.onAppend?.(result.surveyRegions);
             setLastOpStatus({ mission: "Appended", fence: "Appended", rally: "Appended" });
         }
 
@@ -1044,7 +1069,7 @@ export function useMission(
         exportMissionSpeedsRef.current = nextImportedSpeeds;
         setIssues(createEmptyIssues());
 
-        const countsDescription = `Mission ${result.mission.items.length} • Fence ${result.fence.regions.length} • Rally ${result.rally.points.length}`;
+        const countsDescription = `Mission ${result.mission.items.length} • Fence ${result.fence.regions.length} • Rally ${result.rally.points.length} • Survey ${result.surveyRegions.length}`;
         if (result.warnings.length > 0) {
             toast.warning("Plan imported with warnings", {
                 description: `${countsDescription} • ${result.warnings.join(" ")}`,
@@ -1101,6 +1126,7 @@ export function useMission(
     const writeExport = useCallback(async (pending: PendingExport, excludeDomains: ExportDomain[]) => {
         const result = exportQgcPlanFile({
             mission: pending.mission,
+            surveyRegions: pending.surveyRegions,
             home: pending.home,
             fence: pending.fence,
             rally: pending.rally,
@@ -1132,6 +1158,7 @@ export function useMission(
             if (!path) return;
 
             const missionPlanningSpeeds = overrides ?? exportMissionSpeedsRef.current ?? importedMissionSpeeds;
+            const surveyRegions = surveyExportCallbackRef.current?.() ?? [];
             const fence = currentPlan("fence") as FencePlan;
             const rally = currentPlan("rally") as RallyPlan;
 
@@ -1141,6 +1168,7 @@ export function useMission(
                 setPendingExport({
                     path,
                     mission: currentPlan("mission") as MissionPlan,
+                    surveyRegions,
                     home: currentHome(),
                     fence,
                     rally,
@@ -1153,6 +1181,7 @@ export function useMission(
             await writeExport({
                 path,
                 mission: currentPlan("mission") as MissionPlan,
+                surveyRegions,
                 home: currentHome(),
                 fence,
                 rally,
@@ -1584,6 +1613,8 @@ export function useMission(
         vehicle,
         importPlanFile,
         exportPlanFile,
+        setSurveyImportCallbacks,
+        setSurveyExportCallback,
         importKmlFile,
         pendingImport,
         confirmImport,

@@ -136,6 +136,7 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
     cruiseSpeed_mps: mission.mission.importedSpeeds?.cruiseSpeedMps ?? settings.cruiseSpeedMps,
   });
   const chainModeEnabled = current.tab === "mission" && chainModeActive && !survey.isDrawing;
+  const { setSurveyImportCallbacks, setSurveyExportCallback } = mission;
 
   const drawingMode = survey.isDrawing
     ? survey.patternType === "corridor"
@@ -161,6 +162,19 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
 
     return buildSurveyOverlay(survey.activeRegion);
   }, [current.tab, survey.activeRegion, survey.isDrawing]);
+
+  useEffect(() => {
+    setSurveyImportCallbacks({
+      onReplace: survey.replaceImportedRegions,
+      onAppend: survey.appendImportedRegions,
+    });
+    setSurveyExportCallback(survey.getExportableRegions);
+
+    return () => {
+      setSurveyImportCallbacks({});
+      setSurveyExportCallback(undefined);
+    };
+  }, [setSurveyExportCallback, setSurveyImportCallbacks, survey.appendImportedRegions, survey.getExportableRegions, survey.replaceImportedRegions]);
 
   useEffect(() => {
     if (current.tab !== "mission") {

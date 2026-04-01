@@ -129,6 +129,9 @@ function createSurveyPlanner(overrides: Record<string, unknown> = {}) {
     enterSurveyMode: vi.fn(),
     exitSurveyMode: vi.fn(),
     createRegion: vi.fn(),
+    replaceImportedRegions: vi.fn(),
+    appendImportedRegions: vi.fn(),
+    getExportableRegions: vi.fn(() => []),
     selectRegion: vi.fn(),
     deleteRegion: vi.fn(),
     dissolveRegion: vi.fn(() => []),
@@ -216,6 +219,8 @@ function createMission(tab: "mission" | "fence" | "rally" = "mission", addWaypoi
     importPlanFile: vi.fn(),
     importKmlFile: vi.fn(),
     exportPlanFile: vi.fn(),
+    setSurveyImportCallbacks: vi.fn(),
+    setSurveyExportCallback: vi.fn(),
     mission: {
       setCurrent: vi.fn(),
       updateCommand: vi.fn(),
@@ -259,6 +264,26 @@ describe("MissionWorkspace", () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it("registers survey import/export bridge callbacks with the mission hook", () => {
+    const planner = createSurveyPlanner();
+    surveyHookMock.mockReturnValue(planner);
+    const mission = createMission("mission");
+
+    render(
+      <MissionWorkspace
+        vehicle={{ connected: true, vehiclePosition: null, missionState: { current_index: null } } as never}
+        mission={mission as never}
+        deviceLocation={{ location: null } as never}
+      />,
+    );
+
+    expect(mission.setSurveyImportCallbacks).toHaveBeenCalledWith({
+      onReplace: planner.replaceImportedRegions,
+      onAppend: planner.appendImportedRegions,
+    });
+    expect(mission.setSurveyExportCallback).toHaveBeenCalledWith(planner.getExportableRegions);
   });
 
   it("keeps chain mode active across blank-map waypoint additions and clears it when leaving the mission tab", () => {

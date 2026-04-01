@@ -155,6 +155,42 @@ describe("useMission", () => {
         return { promise, resolve, reject };
     }
 
+    function makeExportableSurveyRegion() {
+        return {
+            patternType: "grid" as const,
+            polygon: [
+                { latitude_deg: 47.4, longitude_deg: 8.55 },
+                { latitude_deg: 47.41, longitude_deg: 8.56 },
+                { latitude_deg: 47.39, longitude_deg: 8.58 },
+            ],
+            polyline: [],
+            camera: {
+                canonicalName: "Custom Survey Cam",
+                brand: "Custom",
+                model: "Survey Cam",
+                sensorWidth_mm: 23.5,
+                sensorHeight_mm: 15.6,
+                imageWidth_px: 6000,
+                imageHeight_px: 4000,
+                focalLength_mm: 24,
+                landscape: true,
+                fixedOrientation: false,
+            },
+            params: {
+                altitude_m: 60,
+                sideOverlap_pct: 70,
+                frontOverlap_pct: 80,
+                trackAngle_deg: 15,
+                orientation: "landscape" as const,
+                startCorner: "bottom_left" as const,
+                turnDirection: "clockwise" as const,
+            },
+            embeddedItems: [],
+            qgcPassthrough: {},
+            position: 0,
+        };
+    }
+
     it("hydrates mission state from grouped bootstrap values before any stream event", async () => {
         const { useMission } = await import("./use-mission");
         const bootstrapEnvelope = {
@@ -1020,6 +1056,145 @@ describe("useMission", () => {
         expect(result.current.rally.draftItems).toHaveLength(1);
     });
 
+    it("calls the survey replace callback when importing QGC ComplexItems into an empty editor", async () => {
+        const { useMission } = await import("./use-mission");
+        const { exportPlanFile: buildPlanFile } = await import("../lib/mission-plan-io");
+        const onReplace = vi.fn();
+        const onAppend = vi.fn();
+        const { result } = renderHook(() => useMission(true, {} as never, null));
+
+        await waitFor(() => expect(sessionListener).not.toBeNull());
+
+        act(() => {
+            sessionListener?.({
+                envelope: { session_id: "live-complex-import", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+            });
+            result.current.setSurveyImportCallbacks({ onReplace, onAppend });
+        });
+
+        const fixture = buildPlanFile({
+            mission: { items: [] },
+            surveyRegions: [makeExportableSurveyRegion()],
+            home: null,
+            fence: { return_point: null, regions: [] },
+            rally: { points: [] },
+            cruiseSpeed: 18,
+            hoverSpeed: 6,
+        });
+
+        openDialog.mockResolvedValueOnce("/tmp/import-complex.plan");
+        readTextFile.mockResolvedValueOnce(JSON.stringify(fixture.json));
+
+        await act(async () => {
+            await result.current.importPlanFile();
+        });
+
+        expect(onReplace).toHaveBeenCalledTimes(1);
+        expect(onAppend).not.toHaveBeenCalled();
+        expect(onReplace.mock.calls[0]?.[0]).toMatchObject([
+            expect.objectContaining({ patternType: "grid", position: 0 }),
+        ]);
+        expect(result.current.pendingImport).toBeNull();
+    });
+
+    it("calls the survey append callback when appending imported QGC ComplexItems", async () => {
+        const { useMission } = await import("./use-mission");
+        const { exportPlanFile: buildPlanFile } = await import("../lib/mission-plan-io");
+        const onReplace = vi.fn();
+        const onAppend = vi.fn();
+        const { result } = renderHook(() => useMission(true, {} as never, null));
+
+        await waitFor(() => expect(sessionListener).not.toBeNull());
+
+        act(() => {
+            sessionListener?.({
+                envelope: { session_id: "live-complex-append", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+            });
+            result.current.setSurveyImportCallbacks({ onReplace, onAppend });
+            result.current.mission.addWaypoint();
+        });
+
+        const fixture = buildPlanFile({
+            mission: { items: [] },
+            surveyRegions: [makeExportableSurveyRegion()],
+            home: null,
+            fence: { return_point: null, regions: [] },
+            rally: { points: [] },
+            cruiseSpeed: 18,
+            hoverSpeed: 6,
+        });
+
+        openDialog.mockResolvedValueOnce("/tmp/append-complex.plan");
+        readTextFile.mockResolvedValueOnce(JSON.stringify(fixture.json));
+
+        await act(async () => {
+            await result.current.importPlanFile();
+        });
+
+        expect(result.current.pendingImport).not.toBeNull();
+
+        act(() => {
+            result.current.confirmImport("append");
+        });
+
+        expect(onAppend).toHaveBeenCalledTimes(1);
+        expect(onReplace).not.toHaveBeenCalled();
+        expect(onAppend.mock.calls[0]?.[0]).toMatchObject([
+            expect.objectContaining({ patternType: "grid", position: 0 }),
+        ]);
+        expect(result.current.mission.draftItems).toHaveLength(1);
+    });
+
+    it("keeps plain QGC plan imports working when no survey callbacks are registered", async () => {
+        const { useMission } = await import("./use-mission");
+        const { exportPlanFile: buildPlanFile } = await import("../lib/mission-plan-io");
+        const { result } = renderHook(() => useMission(true, {} as never, null));
+
+        await waitFor(() => expect(sessionListener).not.toBeNull());
+
+        act(() => {
+            sessionListener?.({
+                envelope: { session_id: "live-simple-import", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+            });
+        });
+
+        const fixture = buildPlanFile({
+            mission: {
+                items: [{
+                    command: {
+                        Nav: {
+                            Waypoint: {
+                                position: { RelHome: { latitude_deg: 40.1, longitude_deg: -73.2, relative_alt_m: 75 } },
+                                hold_time_s: 2,
+                                acceptance_radius_m: 1,
+                                pass_radius_m: 0,
+                                yaw_deg: 15,
+                            },
+                        },
+                    },
+                    current: true,
+                    autocontinue: true,
+                }],
+            },
+            home: null,
+            fence: { return_point: null, regions: [] },
+            rally: { points: [] },
+            cruiseSpeed: 22,
+            hoverSpeed: 6,
+        });
+
+        openDialog.mockResolvedValueOnce("/tmp/import-simple.plan");
+        readTextFile.mockResolvedValueOnce(JSON.stringify(fixture.json));
+
+        await act(async () => {
+            await result.current.importPlanFile();
+        });
+
+        expect(result.current.pendingImport).toBeNull();
+        expect(result.current.mission.draftItems).toHaveLength(1);
+        expect(result.current.mission.importedSpeeds).toEqual({ cruiseSpeedMps: 22, hoverSpeedMps: 6 });
+    });
+
     it("exports the current mission, fence, rally, and home state to a QGC plan file", async () => {
         const { useMission } = await import("./use-mission");
         const { result } = renderHook(() => useMission(true, { latitude_deg: 47.55, longitude_deg: 8.55, altitude_m: 120 } as never, null));
@@ -1072,6 +1247,37 @@ describe("useMission", () => {
         expect(exportedJson.mission?.hoverSpeed).toBe(8);
         expect((exportedJson.geoFence?.polygons?.length ?? 0) + (exportedJson.geoFence?.circles?.length ?? 0)).toBe(1);
         expect(exportedJson.rallyPoints?.points).toHaveLength(1);
+    });
+
+    it("includes survey planner regions as QGC ComplexItems during plan export", async () => {
+        const { useMission } = await import("./use-mission");
+        const getSurveyRegions = vi.fn(() => [makeExportableSurveyRegion()]);
+        const { result } = renderHook(() => useMission(true, {} as never, null));
+
+        await waitFor(() => expect(sessionListener).not.toBeNull());
+
+        act(() => {
+            sessionListener?.({
+                envelope: { session_id: "live-survey-export", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+            });
+            result.current.setSurveyExportCallback(getSurveyRegions);
+        });
+
+        saveDialog.mockResolvedValueOnce("/tmp/export-survey.plan");
+
+        await act(async () => {
+            await result.current.exportPlanFile();
+        });
+
+        expect(getSurveyRegions).toHaveBeenCalledTimes(1);
+        expect(writeTextFile).toHaveBeenCalledWith("/tmp/export-survey.plan", expect.any(String));
+
+        const exportedJson = JSON.parse(writeTextFile.mock.calls[0][1] as string) as {
+            mission?: { items?: Array<{ type?: string; complexItemType?: string }> };
+        };
+        expect(exportedJson.mission?.items).toMatchObject([
+            expect.objectContaining({ type: "ComplexItem", complexItemType: "survey" }),
+        ]);
     });
 
     it("imports KML geometry into mission and fence drafts while making the operation undoable", async () => {
