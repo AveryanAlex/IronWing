@@ -3,6 +3,8 @@ import rawData from "../data/camera-metadata.json";
 import type { CameraSpec } from "./survey-camera";
 
 const CUSTOM_CAMERA_STORAGE_KEY = "ironwing_custom_cameras";
+const RECENT_CAMERA_STORAGE_KEY = "ironwing_recent_cameras";
+const MAX_RECENT_CAMERAS = 6;
 
 type RawCatalogCamera = {
     canonicalName?: unknown;
@@ -181,6 +183,43 @@ function writeStoredCustomCameras(cameras: CatalogCamera[]): void {
     }
 }
 
+function readStoredRecentCameraNames(): string[] {
+    if (typeof localStorage === "undefined") {
+        return [];
+    }
+
+    try {
+        const raw = localStorage.getItem(RECENT_CAMERA_STORAGE_KEY);
+        if (!raw) {
+            return [];
+        }
+
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed)) {
+            return [];
+        }
+
+        return parsed.filter((value): value is string => typeof value === "string");
+    } catch {
+        return [];
+    }
+}
+
+function writeStoredRecentCameraNames(canonicalNames: string[]): void {
+    if (typeof localStorage === "undefined") {
+        return;
+    }
+
+    try {
+        localStorage.setItem(
+            RECENT_CAMERA_STORAGE_KEY,
+            JSON.stringify(canonicalNames.slice(0, MAX_RECENT_CAMERAS)),
+        );
+    } catch {
+        // Ignore storage unavailability or quota errors.
+    }
+}
+
 const builtinCameras = parseCatalogFile(rawData);
 
 export function getBuiltinCameras(): CatalogCamera[] {
@@ -223,6 +262,37 @@ export function deleteCustomCamera(canonicalName: string): void {
 
     const next = getCustomCameras().filter((camera) => camera.canonicalName !== normalizedName);
     writeStoredCustomCameras(next);
+}
+
+export function getRecentCameras(): CatalogCamera[] {
+    const allCameras = getAllCameras();
+    const byCanonicalName = new Map(allCameras.map((camera) => [camera.canonicalName, camera]));
+    const seen = new Set<string>();
+
+    return readStoredRecentCameraNames()
+        .map((canonicalName) => byCanonicalName.get(canonicalName))
+        .filter((camera): camera is CatalogCamera => Boolean(camera))
+        .filter((camera) => {
+            if (seen.has(camera.canonicalName)) {
+                return false;
+            }
+            seen.add(camera.canonicalName);
+            return true;
+        })
+        .map(cloneCamera);
+}
+
+export function addRecentCamera(canonicalName: string): void {
+    const normalizedName = canonicalName.trim();
+    if (normalizedName.length === 0 || !findCamera(normalizedName)) {
+        return;
+    }
+
+    const next = [
+        normalizedName,
+        ...readStoredRecentCameraNames().filter((value) => value !== normalizedName),
+    ];
+    writeStoredRecentCameraNames(next);
 }
 
 export function getAllCameras(): CatalogCamera[] {

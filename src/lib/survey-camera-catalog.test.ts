@@ -3,11 +3,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+    addRecentCamera,
     deleteCustomCamera,
     findCamera,
     getAllCameras,
     getBuiltinCameras,
     getCustomCameras,
+    getRecentCameras,
     saveCustomCamera,
     searchCameras,
     type CatalogCamera,
@@ -116,6 +118,25 @@ describe("survey camera catalog", () => {
 
         expect(getCustomCameras()).toEqual([]);
         expect(findCamera(CUSTOM_CAMERA.canonicalName)).toBeUndefined();
+    });
+
+    it("tracks recent cameras in most-recent-first order and filters unknown entries", () => {
+        addRecentCamera("DJI Mavic 3E");
+        addRecentCamera("Sony A7R IV");
+        addRecentCamera("DJI Mavic 3E");
+        addRecentCamera("Unknown Camera");
+
+        expect(getRecentCameras().map((camera) => camera.canonicalName)).toEqual([
+            "DJI Mavic 3E",
+            "Sony A7R IV",
+        ]);
+    });
+
+    it("includes recent custom cameras once they are saved", () => {
+        saveCustomCamera(CUSTOM_CAMERA);
+        addRecentCamera(CUSTOM_CAMERA.canonicalName);
+
+        expect(getRecentCameras()).toEqual([CUSTOM_CAMERA]);
     });
 
     it("lets a custom camera override a builtin entry with the same canonicalName", () => {
