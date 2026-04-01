@@ -1,0 +1,292 @@
+import { describe, expect, it } from "vitest";
+
+import type { TypedDraftItem } from "./mission-draft-typed";
+import type { MissionItem } from "./mavkit-types";
+import { defaultGeoPoint3d } from "./mavkit-types";
+import type { CatalogCamera } from "./survey-camera-catalog";
+import type { SurveyResult, SurveyStats, SurveyTransect } from "./survey-grid";
+import {
+    addSurveyRegion,
+    applyGenerationResult,
+    createSurveyDraftExtension,
+    createSurveyRegion,
+    dissolveRegion,
+    dissolveSurveyRegion,
+    flattenRegionsToItems,
+    markItemEdited,
+    moveSurveyRegionTo,
+    regionHasManualEdits,
+    regionItemCount,
+    removeSurveyRegion,
+    updateSurveyRegion,
+} from "./survey-region";
+
+const POLYGON = [
+    { latitude_deg: 47.1, longitude_deg: 8.1 },
+    { latitude_deg: 47.2, longitude_deg: 8.1 },
+    { latitude_deg: 47.2, longitude_deg: 8.2 },
+    { latitude_deg: 47.1, longitude_deg: 8.2 },
+];
+
+const CAMERA: CatalogCamera = {
+    canonicalName: "sony-rx1r",
+    brand: "Sony",
+    model: "RX1R",
+    sensorWidth_mm: 35.8,
+    sensorHeight_mm: 23.9,
+    imageWidth_px: 7952,
+    imageHeight_px: 5304,
+    focalLength_mm: 35,
+    landscape: true,
+    fixedOrientation: false,
+};
+
+function makeWaypoint(lat: number, lon: number, alt: number): MissionItem {
+    return {
+        command: {
+            Nav: {
+                Waypoint: {
+                    position: defaultGeoPoint3d(lat, lon, alt),
+                    hold_time_s: 0,
+                    acceptance_radius_m: 1,
+                    pass_radius_m: 0,
+                    yaw_deg: 0,
+                },
+            },
+        },
+        current: false,
+        autocontinue: true,
+    };
+}
+
+function makeDraftItem(index: number, item: MissionItem): TypedDraftItem {
+    return {
+        uiId: index + 1,
+        index,
+        document: item,
+        readOnly: false,
+        preview: {
+            latitude_deg: null,
+            longitude_deg: null,
+            altitude_m: null,
+        },
+    };
+}
+
+function makeTransect(startLat: number, startLon: number, endLat: number, endLon: number): SurveyTransect {
+    return [
+        { latitude_deg: startLat, longitude_deg: startLon },
+        { latitude_deg: endLat, longitude_deg: endLon },
+    ];
+}
+
+function makeStats(): SurveyStats {
+    return {
+        gsd_m: 0.018,
+        photoCount: 24,
+        area_m2: 18000,
+        triggerDistance_m: 12,
+        laneSpacing_m: 18,
+        laneCount: 4,
+        crosshatchLaneCount: 2,
+    };
+}
+
+function makeSuccessResult(items: MissionItem[]): SurveyResult {
+    return {
+        ok: true,
+        items,
+        transects: [makeTransect(47.1, 8.1, 47.2, 8.1)],
+        crosshatchTransects: [makeTransect(47.1, 8.15, 47.2, 8.15)],
+        stats: makeStats(),
+        params: {
+            polygon: POLYGON,
+            camera: CAMERA,
+            orientation: "landscape",
+            altitude_m: 50,
+            sideOverlap_pct: 70,
+            frontOverlap_pct: 80,
+            trackAngle_deg: 0,
+            startCorner: "bottom_left",
+            turnDirection: "clockwise",
+            crosshatch: true,
+            turnaroundDistance_m: 0,
+            terrainFollow: false,
+            captureMode: "distance",
+        },
+    };
+}
+
+describe("survey-region", () => {
+    it("createSurveyRegion produces valid defaults with sensible param values", () => {
+        const region = createSurveyRegion(POLYGON);
+
+        expect(region.id).toMatch(/^survey-region-\d+$/);
+        expect(region.polygon).toEqual(POLYGON);
+        expect(region.cameraId).toBeNull();
+        expect(region.camera).toBeNull();
+        expect(region.params).toEqual({
+            sideOverlap_pct: 70,
+            frontOverlap_pct: 80,
+            altitude_m: 50,
+            trackAngle_deg: 0,
+            orientation: "landscape",
+            crosshatch: false,
+            turnaroundDistance_m: 0,
+            terrainFollow: false,
+            captureMode: "distance",
+            startCorner: "bottom_left",
+            turnDirection: "clockwise",
+        });
+        expect(regionItemCount(region)).toBe(0);
+        expect(region.collapsed).toBe(false);
+        expect(region.errors).toEqual([]);
+        expect(regionHasManualEdits(region)).toBe(false);
+    });
+
+    it("applyGenerationResult with ok result populates items and stats and clears manual edits", () => {
+        const generatedItems = [makeWaypoint(47.11, 8.11, 50), makeWaypoint(47.12, 8.12, 50)];
+        const manualEdit = makeWaypoint(47.13, 8.13, 55);
+        const seeded = markItemEdited(
+            applyGenerationResult(createSurveyRegion(POLYGON), makeSuccessResult([makeWaypoint(47.1, 8.1, 50)])),
+            0,
+            manualEdit,
+        );
+
+        const updated = applyGenerationResult(seeded, makeSuccessResult(generatedItems));
+
+        expect(updated.generatedItems).toEqual(generatedItems);
+        expect(updated.generatedTransects).toEqual([makeTransect(47.1, 8.1, 47.2, 8.1)]);
+        expect(updated.generatedCrosshatch).toEqual([makeTransect(47.1, 8.15, 47.2, 8.15)]);
+        expect(updated.generatedStats).toEqual(makeStats());
+        expect(updated.errors).toEqual([]);
+        expect(updated.manualEdits.size).toBe(0);
+        expect(regionHasManualEdits(updated)).toBe(false);
+    });
+
+    it("applyGenerationResult with error result populates errors and keeps previous items", () => {
+        const generatedItems = [makeWaypoint(47.11, 8.11, 50), makeWaypoint(47.12, 8.12, 50)];
+        const seeded = applyGenerationResult(createSurveyRegion(POLYGON), makeSuccessResult(generatedItems));
+
+        const updated = applyGenerationResult(seeded, {
+            ok: false,
+            errors: [{ code: "invalid_overlap", message: "side overlap is invalid" }],
+        });
+
+        expect(updated.generatedItems).toEqual(generatedItems);
+        expect(updated.generatedStats).toEqual(makeStats());
+        expect(updated.errors).toEqual([{ code: "invalid_overlap", message: "side overlap is invalid" }]);
+        expect(updated.manualEdits.size).toBe(0);
+    });
+
+    it("markItemEdited records edits and regionHasManualEdits returns true", () => {
+        const region = applyGenerationResult(
+            createSurveyRegion(POLYGON),
+            makeSuccessResult([makeWaypoint(47.11, 8.11, 50), makeWaypoint(47.12, 8.12, 50)]),
+        );
+        const editedItem = makeWaypoint(47.22, 8.22, 65);
+
+        const updated = markItemEdited(region, 1, editedItem);
+
+        expect(updated.manualEdits.get(1)).toEqual(editedItem);
+        expect(regionHasManualEdits(updated)).toBe(true);
+    });
+
+    it("dissolveRegion applies manual edits over generated items", () => {
+        const generated = [makeWaypoint(47.11, 8.11, 50), makeWaypoint(47.12, 8.12, 50)];
+        const editedItem = makeWaypoint(47.5, 8.5, 70);
+        const region = markItemEdited(
+            applyGenerationResult(createSurveyRegion(POLYGON), makeSuccessResult(generated)),
+            1,
+            editedItem,
+        );
+
+        expect(dissolveRegion(region)).toEqual([generated[0], editedItem]);
+    });
+
+    it("flattenRegionsToItems correctly interleaves regular items and region items in order", () => {
+        const draftItems = [
+            makeDraftItem(0, makeWaypoint(47.01, 8.01, 30)),
+            makeDraftItem(1, makeWaypoint(47.02, 8.02, 30)),
+            makeDraftItem(2, makeWaypoint(47.03, 8.03, 30)),
+        ];
+
+        const startRegion = applyGenerationResult(
+            createSurveyRegion(POLYGON),
+            makeSuccessResult([makeWaypoint(47.11, 8.11, 50)]),
+        );
+        const middleRegion = markItemEdited(
+            applyGenerationResult(
+                createSurveyRegion(POLYGON),
+                makeSuccessResult([makeWaypoint(47.21, 8.21, 50), makeWaypoint(47.22, 8.22, 50)]),
+            ),
+            0,
+            makeWaypoint(47.25, 8.25, 60),
+        );
+
+        let extension = createSurveyDraftExtension();
+        extension = addSurveyRegion(extension, middleRegion, 0);
+        extension = addSurveyRegion(extension, startRegion, -1);
+
+        expect(flattenRegionsToItems(draftItems, extension)).toEqual([
+            makeWaypoint(47.11, 8.11, 50),
+            makeWaypoint(47.01, 8.01, 30),
+            makeWaypoint(47.25, 8.25, 60),
+            makeWaypoint(47.22, 8.22, 50),
+            makeWaypoint(47.02, 8.02, 30),
+            makeWaypoint(47.03, 8.03, 30),
+        ]);
+    });
+
+    it("addSurveyRegion, moveSurveyRegionTo, updateSurveyRegion, removeSurveyRegion, and dissolveSurveyRegion manage the extension", () => {
+        const first = applyGenerationResult(
+            createSurveyRegion(POLYGON),
+            makeSuccessResult([makeWaypoint(47.11, 8.11, 50)]),
+        );
+        const second = applyGenerationResult(
+            createSurveyRegion(POLYGON),
+            makeSuccessResult([makeWaypoint(47.21, 8.21, 50), makeWaypoint(47.22, 8.22, 50)]),
+        );
+
+        let extension = createSurveyDraftExtension();
+        extension = addSurveyRegion(extension, first, 0);
+        extension = addSurveyRegion(extension, second, 1);
+
+        expect(extension.surveyRegionOrder).toEqual([
+            { regionId: first.id, position: 1 },
+            { regionId: second.id, position: 2 },
+        ]);
+
+        extension = moveSurveyRegionTo(extension, second.id, 0);
+        expect(extension.surveyRegionOrder).toEqual([
+            { regionId: second.id, position: 0 },
+            { regionId: first.id, position: 1 },
+        ]);
+
+        extension = updateSurveyRegion(extension, second.id, (region) => ({
+            ...region,
+            collapsed: true,
+            cameraId: CAMERA.canonicalName,
+            camera: CAMERA,
+        }));
+        expect(extension.surveyRegions.get(second.id)?.collapsed).toBe(true);
+        expect(extension.surveyRegions.get(second.id)?.cameraId).toBe(CAMERA.canonicalName);
+
+        const dissolved = dissolveSurveyRegion(extension, second.id);
+        expect(dissolved.dissolvedItems).toEqual([makeWaypoint(47.21, 8.21, 50), makeWaypoint(47.22, 8.22, 50)]);
+        expect(dissolved.extension.surveyRegions.has(second.id)).toBe(false);
+        expect(dissolved.extension.surveyRegionOrder).toEqual([{ regionId: first.id, position: 1 }]);
+
+        const removed = removeSurveyRegion(dissolved.extension, first.id);
+        expect(removed.surveyRegions.size).toBe(0);
+        expect(removed.surveyRegionOrder).toEqual([]);
+    });
+
+    it("dissolve empty region and region with no generation return empty arrays", () => {
+        const emptyRegion = createSurveyRegion(POLYGON);
+        const extension = addSurveyRegion(createSurveyDraftExtension(), emptyRegion, 0);
+
+        expect(dissolveRegion(emptyRegion)).toEqual([]);
+        expect(dissolveSurveyRegion(extension, emptyRegion.id).dissolvedItems).toEqual([]);
+    });
+});
