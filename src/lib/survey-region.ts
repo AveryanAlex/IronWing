@@ -3,6 +3,7 @@ import type { StartCorner, TurnDirection } from "./mission-grid";
 import type { GeoPoint2d, MissionItem } from "./mavkit-types";
 import type { CatalogCamera } from "./survey-camera-catalog";
 import type { CameraOrientation } from "./survey-camera";
+import type { CorridorResult, CorridorValidationError } from "./corridor-scan";
 import type {
     GridValidationError,
     SurveyCaptureMode,
@@ -10,6 +11,10 @@ import type {
     SurveyStats,
     SurveyTransect,
 } from "./survey-grid";
+
+export type SurveyPatternType = "grid" | "corridor";
+export type SurveyGenerationError = GridValidationError | CorridorValidationError;
+export type SurveyGenerationResult = SurveyResult | CorridorResult;
 
 export type SurveyRegionParams = {
     sideOverlap_pct: number;
@@ -23,11 +28,16 @@ export type SurveyRegionParams = {
     captureMode: SurveyCaptureMode;
     startCorner: StartCorner;
     turnDirection: TurnDirection;
+    leftWidth_m: number;
+    rightWidth_m: number;
 };
 
 export type SurveyRegion = {
     id: string;
+    patternType: SurveyPatternType;
     polygon: GeoPoint2d[];
+    polyline: GeoPoint2d[];
+    corridorPolygon: GeoPoint2d[];
     cameraId: string | null;
     camera: CatalogCamera | null;
     params: SurveyRegionParams;
@@ -35,7 +45,7 @@ export type SurveyRegion = {
     generatedTransects: SurveyTransect[];
     generatedCrosshatch: SurveyTransect[];
     generatedStats: SurveyStats | null;
-    errors: GridValidationError[];
+    errors: SurveyGenerationError[];
     manualEdits: Map<number, MissionItem>;
     collapsed: boolean;
 };
@@ -62,7 +72,11 @@ const DEFAULT_REGION_PARAMS: SurveyRegionParams = {
     captureMode: "distance",
     startCorner: "bottom_left",
     turnDirection: "clockwise",
+    leftWidth_m: 0,
+    rightWidth_m: 0,
 };
+
+const DEFAULT_CORRIDOR_WIDTH_M = 50;
 
 let nextSurveyRegionId = 1;
 
@@ -84,18 +98,20 @@ function cloneStats(stats: SurveyStats | null): SurveyStats | null {
     return stats ? { ...stats } : null;
 }
 
-function cloneErrors(errors: GridValidationError[]): GridValidationError[] {
+function cloneErrors(errors: SurveyGenerationError[]): SurveyGenerationError[] {
     return errors.map((error) => ({ ...error }));
 }
 
-function clonePolygon(polygon: GeoPoint2d[]): GeoPoint2d[] {
-    return polygon.map((point) => ({ ...point }));
+function clonePoints(points: GeoPoint2d[]): GeoPoint2d[] {
+    return points.map((point) => ({ ...point }));
 }
 
 function cloneRegion(region: SurveyRegion): SurveyRegion {
     return {
         ...region,
-        polygon: clonePolygon(region.polygon),
+        polygon: clonePoints(region.polygon),
+        polyline: clonePoints(region.polyline),
+        corridorPolygon: clonePoints(region.corridorPolygon),
         params: { ...region.params },
         generatedItems: cloneMissionItems(region.generatedItems),
         generatedTransects: cloneTransects(region.generatedTransects),
@@ -133,13 +149,24 @@ function isMissionItemDocument(document: TypedDraftItem["document"]): document i
     return typeof document === "object" && document !== null && "command" in document;
 }
 
-export function createSurveyRegion(polygon: GeoPoint2d[]): SurveyRegion {
+export function createSurveyRegion(
+    geometry: GeoPoint2d[],
+    patternType: SurveyPatternType = "grid",
+): SurveyRegion {
+    const isCorridor = patternType === "corridor";
     return {
         id: allocateSurveyRegionId(),
-        polygon: clonePolygon(polygon),
+        patternType,
+        polygon: isCorridor ? [] : clonePoints(geometry),
+        polyline: isCorridor ? clonePoints(geometry) : [],
+        corridorPolygon: [],
         cameraId: null,
         camera: null,
-        params: { ...DEFAULT_REGION_PARAMS },
+        params: {
+            ...DEFAULT_REGION_PARAMS,
+            leftWidth_m: isCorridor ? DEFAULT_CORRIDOR_WIDTH_M : DEFAULT_REGION_PARAMS.leftWidth_m,
+            rightWidth_m: isCorridor ? DEFAULT_CORRIDOR_WIDTH_M : DEFAULT_REGION_PARAMS.rightWidth_m,
+        },
         generatedItems: [],
         generatedTransects: [],
         generatedCrosshatch: [],
@@ -150,6 +177,10 @@ export function createSurveyRegion(polygon: GeoPoint2d[]): SurveyRegion {
     };
 }
 
+export function createCorridorRegion(polyline: GeoPoint2d[]): SurveyRegion {
+    return createSurveyRegion(polyline, "corridor");
+}
+
 export function regionItemCount(region: SurveyRegion): number {
     return region.generatedItems.length;
 }
@@ -158,7 +189,7 @@ export function regionHasManualEdits(region: SurveyRegion): boolean {
     return region.manualEdits.size > 0;
 }
 
-export function applyGenerationResult(region: SurveyRegion, result: SurveyResult): SurveyRegion {
+export function applyGenerationResult(region: SurveyRegion, result: SurveyGenerationResult): SurveyRegion {
     const next = cloneRegion(region);
     next.manualEdits = new Map<number, MissionItem>();
 
@@ -167,6 +198,7 @@ export function applyGenerationResult(region: SurveyRegion, result: SurveyResult
         next.generatedTransects = cloneTransects(result.transects);
         next.generatedCrosshatch = cloneTransects(result.crosshatchTransects);
         next.generatedStats = cloneStats(result.stats);
+        next.corridorPolygon = "corridorPolygon" in result ? clonePoints(result.corridorPolygon) : [];
         next.errors = [];
         return next;
     }

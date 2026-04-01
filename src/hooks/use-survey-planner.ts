@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import type { HomePosition } from "../mission";
+import { generateCorridor, estimateCorridorWaypointCount } from "../lib/corridor-scan";
 import { resolveStartCorner } from "../lib/mission-grid";
 import type { GeoPoint2d, MissionItem } from "../lib/mavkit-types";
 import {
@@ -17,6 +18,7 @@ import {
 import {
     addSurveyRegion,
     applyGenerationResult,
+    createCorridorRegion,
     createSurveyDraftExtension,
     createSurveyRegion,
     dissolveSurveyRegion,
@@ -24,15 +26,18 @@ import {
     removeSurveyRegion,
     updateSurveyRegion,
     type SurveyDraftExtension,
+    type SurveyGenerationResult,
+    type SurveyPatternType,
     type SurveyRegion,
     type SurveyRegionParams,
 } from "../lib/survey-region";
 import {
     estimateSurveyWaypointCount,
     generateSurvey,
-    type SurveyResult,
     type TerrainLookup,
 } from "../lib/survey-grid";
+
+const DEFAULT_CORRIDOR_WIDTH_M = 50;
 
 const DEFAULT_PARAMS: SurveyRegionParams = {
     sideOverlap_pct: 70,
@@ -46,6 +51,8 @@ const DEFAULT_PARAMS: SurveyRegionParams = {
     captureMode: "distance",
     startCorner: "bottom_left",
     turnDirection: "clockwise",
+    leftWidth_m: 0,
+    rightWidth_m: 0,
 };
 
 export type SurveyPlannerMissionMutators = {
@@ -63,6 +70,7 @@ export type UseSurveyPlannerOptions = {
 
 export type UseSurveyPlannerResult = {
     surveyMode: boolean;
+    patternType: SurveyPatternType;
     activeRegionId: string | null;
     regions: SurveyDraftExtension;
     isDrawing: boolean;
@@ -88,10 +96,12 @@ export type UseSurveyPlannerResult = {
     stopDraw: () => void;
     addVertex: (latitude_deg: number, longitude_deg: number) => void;
     completePolygon: () => SurveyRegion | null;
+    completeLine: () => SurveyRegion | null;
     moveVertex: (index: number, latitude_deg: number, longitude_deg: number) => void;
+    setPatternType: (type: SurveyPatternType) => void;
     setCamera: (camera: CatalogCamera | null) => void;
     setParam: <K extends keyof SurveyRegionParams>(key: K, value: SurveyRegionParams[K]) => void;
-    generate: () => Promise<SurveyResult | null>;
+    generate: () => Promise<SurveyGenerationResult | null>;
     openCustomCameraForm: () => void;
     closeCustomCameraForm: () => void;
     saveCustomCamera: (camera: CatalogCamera) => CatalogCamera;
@@ -101,8 +111,8 @@ function clonePoint(point: GeoPoint2d): GeoPoint2d {
     return { ...point };
 }
 
-function clonePolygon(polygon: GeoPoint2d[]): GeoPoint2d[] {
-    return polygon.map(clonePoint);
+function clonePoints(points: GeoPoint2d[]): GeoPoint2d[] {
+    return points.map(clonePoint);
 }
 
 function defaultOrientationForCamera(camera: CatalogCamera): SurveyRegionParams["orientation"] {
@@ -150,23 +160,48 @@ function syncRegionWithPlannerState(
     params: SurveyRegionParams,
     homePosition: HomePosition | null,
 ): SurveyRegion {
-    const nextPolygon = clonePolygon(region.polygon);
+    const nextPolygon = clonePoints(region.polygon);
+    const nextPolyline = clonePoints(region.polyline);
     const nextParams = {
         ...params,
-        startCorner: resolveRegionStartCorner(
-            nextPolygon,
-            homePosition,
-            params.trackAngle_deg,
-            params.startCorner,
-        ),
+        startCorner: region.patternType === "grid"
+            ? resolveRegionStartCorner(
+                nextPolygon,
+                homePosition,
+                params.trackAngle_deg,
+                params.startCorner,
+            )
+            : params.startCorner,
     };
 
     return {
         ...region,
         polygon: nextPolygon,
+        polyline: nextPolyline,
+        corridorPolygon: clonePoints(region.corridorPolygon),
         cameraId: selectedCamera?.canonicalName ?? null,
         camera: selectedCamera ? { ...selectedCamera } : null,
         params: nextParams,
+    };
+}
+
+function paramsForPatternType(
+    current: SurveyRegionParams,
+    nextPatternType: SurveyPatternType,
+): SurveyRegionParams {
+    if (nextPatternType === "corridor") {
+        return {
+            ...current,
+            crosshatch: false,
+            leftWidth_m: current.leftWidth_m > 0 ? current.leftWidth_m : DEFAULT_CORRIDOR_WIDTH_M,
+            rightWidth_m: current.rightWidth_m > 0 ? current.rightWidth_m : DEFAULT_CORRIDOR_WIDTH_M,
+        };
+    }
+
+    return {
+        ...current,
+        leftWidth_m: 0,
+        rightWidth_m: 0,
     };
 }
 
@@ -177,6 +212,7 @@ export function useSurveyPlanner({
     terrainLookup,
 }: UseSurveyPlannerOptions): UseSurveyPlannerResult {
     const [surveyMode, setSurveyMode] = useState(false);
+    const [patternTypeState, setPatternTypeState] = useState<SurveyPatternType>("grid");
     const [activeRegionId, setActiveRegionId] = useState<string | null>(null);
     const [regions, setRegions] = useState<SurveyDraftExtension>(() => createSurveyDraftExtension());
     const [isDrawing, setIsDrawing] = useState(false);
@@ -186,15 +222,23 @@ export function useSurveyPlanner({
     const [isGenerating, setIsGenerating] = useState(false);
     const [showCustomCameraForm, setShowCustomCameraForm] = useState(false);
 
+    const patternTypeRef = useRef(patternTypeState);
     const regionsRef = useRef(regions);
     const activeRegionIdRef = useRef(activeRegionId);
     const selectedCameraRef = useRef(selectedCamera);
     const paramsRef = useRef(params);
 
+    patternTypeRef.current = patternTypeState;
     regionsRef.current = regions;
     activeRegionIdRef.current = activeRegionId;
     selectedCameraRef.current = selectedCamera;
     paramsRef.current = params;
+
+    const commitPatternType = useCallback((next: SurveyPatternType) => {
+        patternTypeRef.current = next;
+        setPatternTypeState(next);
+        return next;
+    }, []);
 
     const commitRegions = useCallback((next: SurveyDraftExtension) => {
         regionsRef.current = next;
@@ -232,6 +276,22 @@ export function useSurveyPlanner({
     const estimatedWaypointCount = useMemo(() => {
         if (!activeRegion || !selectedCamera) {
             return null;
+        }
+
+        if (activeRegion.patternType === "corridor") {
+            return estimateCorridorWaypointCount({
+                polyline: activeRegion.polyline,
+                camera: selectedCamera,
+                orientation: params.orientation,
+                altitude_m: params.altitude_m,
+                sideOverlap_pct: params.sideOverlap_pct,
+                frontOverlap_pct: params.frontOverlap_pct,
+                leftWidth_m: params.leftWidth_m,
+                rightWidth_m: params.rightWidth_m,
+                turnaroundDistance_m: params.turnaroundDistance_m,
+                terrainFollow: params.terrainFollow,
+                captureMode: params.captureMode,
+            });
         }
 
         return estimateSurveyWaypointCount({
@@ -272,9 +332,21 @@ export function useSurveyPlanner({
         [activeRegion],
     );
 
-    const canGenerate = Boolean(
-        surveyMode && activeRegion && selectedCamera && !isDrawing && !isGenerating && estimatedWaypointCount !== null,
-    );
+    const canGenerate = useMemo(() => {
+        if (!surveyMode || !activeRegion || !selectedCamera || isDrawing || isGenerating || estimatedWaypointCount === null) {
+            return false;
+        }
+
+        if (activeRegion.patternType === "corridor") {
+            return (
+                activeRegion.polyline.length >= 2
+                && params.leftWidth_m > 0
+                && params.rightWidth_m > 0
+            );
+        }
+
+        return activeRegion.polygon.length >= 3;
+    }, [activeRegion, estimatedWaypointCount, isDrawing, isGenerating, params.leftWidth_m, params.rightWidth_m, selectedCamera, surveyMode]);
 
     const enterSurveyMode = useCallback(() => {
         setSurveyMode(true);
@@ -294,16 +366,19 @@ export function useSurveyPlanner({
         }
 
         commitActiveRegionId(regionId);
+        commitPatternType(region.patternType);
         commitSelectedCamera(region.camera);
         commitParams(region.params);
-    }, [commitActiveRegionId, commitParams, commitSelectedCamera]);
+    }, [commitActiveRegionId, commitParams, commitPatternType, commitSelectedCamera]);
 
-    const createRegion = useCallback((polygon: GeoPoint2d[]) => {
-        const nextRegion = createSurveyRegion(clonePolygon(polygon));
+    const createRegionFromGeometry = useCallback((geometry: GeoPoint2d[], nextPatternType: SurveyPatternType) => {
+        const nextRegion = nextPatternType === "corridor"
+            ? createCorridorRegion(clonePoints(geometry))
+            : createSurveyRegion(clonePoints(geometry));
         const seededRegion = syncRegionWithPlannerState(
             nextRegion,
             selectedCameraRef.current,
-            paramsRef.current,
+            paramsForPatternType(paramsRef.current, nextPatternType),
             homePosition,
         );
 
@@ -313,12 +388,17 @@ export function useSurveyPlanner({
             regionInsertionIndex(missionMutators),
         ));
         commitActiveRegionId(seededRegion.id);
+        commitPatternType(seededRegion.patternType);
         commitSelectedCamera(seededRegion.camera);
         commitParams(seededRegion.params);
         setSurveyMode(true);
 
         return seededRegion;
-    }, [commitActiveRegionId, commitParams, commitRegions, commitSelectedCamera, homePosition, missionMutators]);
+    }, [commitActiveRegionId, commitParams, commitPatternType, commitRegions, commitSelectedCamera, homePosition, missionMutators]);
+
+    const createRegion = useCallback((polygon: GeoPoint2d[]) => {
+        return createRegionFromGeometry(polygon, "grid");
+    }, [createRegionFromGeometry]);
 
     const deleteRegion = useCallback((regionId: string) => {
         const nextRegions = removeSurveyRegion(regionsRef.current, regionId);
@@ -331,10 +411,11 @@ export function useSurveyPlanner({
         const nextRegion = orderedRegions(nextRegions)[0] ?? null;
         commitActiveRegionId(nextRegion?.id ?? null);
         if (nextRegion) {
+            commitPatternType(nextRegion.patternType);
             commitSelectedCamera(nextRegion.camera);
             commitParams(nextRegion.params);
         }
-    }, [commitActiveRegionId, commitParams, commitRegions, commitSelectedCamera]);
+    }, [commitActiveRegionId, commitParams, commitPatternType, commitRegions, commitSelectedCamera]);
 
     const dissolveRegion = useCallback((regionId: string) => {
         const currentRegion = regionsRef.current.surveyRegions.get(regionId);
@@ -350,6 +431,7 @@ export function useSurveyPlanner({
             const nextRegion = orderedRegions(dissolveResult.extension)[0] ?? null;
             commitActiveRegionId(nextRegion?.id ?? null);
             if (nextRegion) {
+                commitPatternType(nextRegion.patternType);
                 commitSelectedCamera(nextRegion.camera);
                 commitParams(nextRegion.params);
             }
@@ -360,7 +442,7 @@ export function useSurveyPlanner({
         }
 
         return dissolveResult.dissolvedItems;
-    }, [commitActiveRegionId, commitParams, commitRegions, commitSelectedCamera, missionMutators]);
+    }, [commitActiveRegionId, commitParams, commitPatternType, commitRegions, commitSelectedCamera, missionMutators]);
 
     const startDraw = useCallback(() => {
         setSurveyMode(true);
@@ -381,11 +463,22 @@ export function useSurveyPlanner({
             return null;
         }
 
-        const region = createRegion(drawingVertices);
+        const region = createRegionFromGeometry(drawingVertices, "grid");
         setIsDrawing(false);
         setDrawingVertices([]);
         return region;
-    }, [createRegion, drawingVertices]);
+    }, [createRegionFromGeometry, drawingVertices]);
+
+    const completeLine = useCallback(() => {
+        if (drawingVertices.length < 2) {
+            return null;
+        }
+
+        const region = createRegionFromGeometry(drawingVertices, "corridor");
+        setIsDrawing(false);
+        setDrawingVertices([]);
+        return region;
+    }, [createRegionFromGeometry, drawingVertices]);
 
     const moveVertex = useCallback((index: number, latitude_deg: number, longitude_deg: number) => {
         const nextPoint = { latitude_deg, longitude_deg };
@@ -403,6 +496,15 @@ export function useSurveyPlanner({
         }
 
         commitRegions(updateSurveyRegion(regionsRef.current, currentActiveRegionId, (region) => {
+            if (region.patternType === "corridor") {
+                return {
+                    ...region,
+                    polyline: region.polyline.map((point, pointIndex) => (
+                        pointIndex === index ? nextPoint : clonePoint(point)
+                    )),
+                };
+            }
+
             const polygon = region.polygon.map((point, pointIndex) => (
                 pointIndex === index ? nextPoint : clonePoint(point)
             ));
@@ -423,6 +525,22 @@ export function useSurveyPlanner({
             };
         }));
     }, [commitRegions, homePosition, isDrawing]);
+
+    const setPatternType = useCallback((nextPatternType: SurveyPatternType) => {
+        commitPatternType(nextPatternType);
+        setSurveyMode(true);
+        setIsDrawing(false);
+        setDrawingVertices([]);
+        commitParams(paramsForPatternType(paramsRef.current, nextPatternType));
+
+        const currentActiveRegionId = activeRegionIdRef.current;
+        const currentActiveRegion = currentActiveRegionId
+            ? regionsRef.current.surveyRegions.get(currentActiveRegionId) ?? null
+            : null;
+        if (currentActiveRegion && currentActiveRegion.patternType !== nextPatternType) {
+            commitActiveRegionId(null);
+        }
+    }, [commitActiveRegionId, commitParams, commitPatternType]);
 
     const setCamera = useCallback((camera: CatalogCamera | null) => {
         const nextCamera = commitSelectedCamera(camera);
@@ -454,9 +572,10 @@ export function useSurveyPlanner({
 
     const setParam = useCallback(<K extends keyof SurveyRegionParams>(key: K, value: SurveyRegionParams[K]) => {
         const currentActiveRegionId = activeRegionIdRef.current;
-        const currentPolygon = currentActiveRegionId
-            ? regionsRef.current.surveyRegions.get(currentActiveRegionId)?.polygon ?? []
-            : [];
+        const currentRegion = currentActiveRegionId
+            ? regionsRef.current.surveyRegions.get(currentActiveRegionId) ?? null
+            : null;
+        const currentPolygon = currentRegion?.patternType === "grid" ? currentRegion.polygon : [];
         const nextParams = {
             ...paramsRef.current,
             [key]: value,
@@ -471,6 +590,10 @@ export function useSurveyPlanner({
             );
         }
 
+        if (patternTypeRef.current === "corridor") {
+            nextParams.crosshatch = false;
+        }
+
         commitParams(nextParams);
 
         if (!currentActiveRegionId) {
@@ -483,13 +606,17 @@ export function useSurveyPlanner({
                 [key]: value,
             };
 
-            if (key === "trackAngle_deg") {
+            if (region.patternType === "grid" && key === "trackAngle_deg") {
                 updatedParams.startCorner = resolveRegionStartCorner(
                     region.polygon,
                     homePosition,
                     updatedParams.trackAngle_deg,
                     updatedParams.startCorner,
                 );
+            }
+
+            if (region.patternType === "corridor") {
+                updatedParams.crosshatch = false;
             }
 
             return {
@@ -519,22 +646,37 @@ export function useSurveyPlanner({
         );
         setIsGenerating(true);
         try {
-            const result = await generateSurvey({
-                polygon: regionForGeneration.polygon,
-                camera: currentSelectedCamera,
-                orientation: currentParams.orientation,
-                altitude_m: currentParams.altitude_m,
-                sideOverlap_pct: currentParams.sideOverlap_pct,
-                frontOverlap_pct: currentParams.frontOverlap_pct,
-                trackAngle_deg: currentParams.trackAngle_deg,
-                startCorner: currentParams.startCorner,
-                turnDirection: currentParams.turnDirection,
-                crosshatch: currentParams.crosshatch,
-                turnaroundDistance_m: currentParams.turnaroundDistance_m,
-                terrainFollow: currentParams.terrainFollow,
-                terrainLookup,
-                captureMode: currentParams.captureMode,
-            });
+            const result = regionForGeneration.patternType === "corridor"
+                ? await generateCorridor({
+                    polyline: regionForGeneration.polyline,
+                    camera: currentSelectedCamera,
+                    orientation: currentParams.orientation,
+                    altitude_m: currentParams.altitude_m,
+                    sideOverlap_pct: currentParams.sideOverlap_pct,
+                    frontOverlap_pct: currentParams.frontOverlap_pct,
+                    leftWidth_m: currentParams.leftWidth_m,
+                    rightWidth_m: currentParams.rightWidth_m,
+                    turnaroundDistance_m: currentParams.turnaroundDistance_m,
+                    terrainFollow: currentParams.terrainFollow,
+                    terrainLookup,
+                    captureMode: currentParams.captureMode,
+                })
+                : await generateSurvey({
+                    polygon: regionForGeneration.polygon,
+                    camera: currentSelectedCamera,
+                    orientation: currentParams.orientation,
+                    altitude_m: currentParams.altitude_m,
+                    sideOverlap_pct: currentParams.sideOverlap_pct,
+                    frontOverlap_pct: currentParams.frontOverlap_pct,
+                    trackAngle_deg: currentParams.trackAngle_deg,
+                    startCorner: currentParams.startCorner,
+                    turnDirection: currentParams.turnDirection,
+                    crosshatch: currentParams.crosshatch,
+                    turnaroundDistance_m: currentParams.turnaroundDistance_m,
+                    terrainFollow: currentParams.terrainFollow,
+                    terrainLookup,
+                    captureMode: currentParams.captureMode,
+                });
 
             commitRegions(updateSurveyRegion(regionsRef.current, regionForGeneration.id, (region) => (
                 applyGenerationResult(
@@ -567,6 +709,7 @@ export function useSurveyPlanner({
 
     return {
         surveyMode,
+        patternType: patternTypeState,
         activeRegionId,
         regions,
         isDrawing,
@@ -592,7 +735,9 @@ export function useSurveyPlanner({
         stopDraw,
         addVertex,
         completePolygon,
+        completeLine,
         moveVertex,
+        setPatternType,
         setCamera,
         setParam,
         generate,

@@ -4,10 +4,12 @@ import type { TypedDraftItem } from "./mission-draft-typed";
 import type { MissionItem } from "./mavkit-types";
 import { defaultGeoPoint3d } from "./mavkit-types";
 import type { CatalogCamera } from "./survey-camera-catalog";
+import type { CorridorResult } from "./corridor-scan";
 import type { SurveyResult, SurveyStats, SurveyTransect } from "./survey-grid";
 import {
     addSurveyRegion,
     applyGenerationResult,
+    createCorridorRegion,
     createSurveyDraftExtension,
     createSurveyRegion,
     dissolveRegion,
@@ -26,6 +28,20 @@ const POLYGON = [
     { latitude_deg: 47.2, longitude_deg: 8.1 },
     { latitude_deg: 47.2, longitude_deg: 8.2 },
     { latitude_deg: 47.1, longitude_deg: 8.2 },
+];
+
+const POLYLINE = [
+    { latitude_deg: 47.1, longitude_deg: 8.1 },
+    { latitude_deg: 47.15, longitude_deg: 8.16 },
+    { latitude_deg: 47.2, longitude_deg: 8.2 },
+];
+
+const CORRIDOR_POLYGON = [
+    { latitude_deg: 47.09, longitude_deg: 8.08 },
+    { latitude_deg: 47.22, longitude_deg: 8.21 },
+    { latitude_deg: 47.21, longitude_deg: 8.23 },
+    { latitude_deg: 47.08, longitude_deg: 8.1 },
+    { latitude_deg: 47.09, longitude_deg: 8.08 },
 ];
 
 const CAMERA: CatalogCamera = {
@@ -117,12 +133,43 @@ function makeSuccessResult(items: MissionItem[]): SurveyResult {
     };
 }
 
+function makeCorridorSuccessResult(items: MissionItem[]): CorridorResult {
+    return {
+        ok: true,
+        items,
+        transects: [makeTransect(47.1, 8.1, 47.12, 8.12)],
+        crosshatchTransects: [],
+        stats: {
+            ...makeStats(),
+            laneCount: 3,
+            crosshatchLaneCount: 0,
+        },
+        params: {
+            polyline: POLYLINE,
+            camera: CAMERA,
+            orientation: "landscape",
+            altitude_m: 50,
+            sideOverlap_pct: 70,
+            frontOverlap_pct: 80,
+            leftWidth_m: 50,
+            rightWidth_m: 60,
+            turnaroundDistance_m: 10,
+            terrainFollow: false,
+            captureMode: "distance",
+        },
+        corridorPolygon: CORRIDOR_POLYGON,
+    };
+}
+
 describe("survey-region", () => {
     it("createSurveyRegion produces valid defaults with sensible param values", () => {
         const region = createSurveyRegion(POLYGON);
 
         expect(region.id).toMatch(/^survey-region-\d+$/);
+        expect(region.patternType).toBe("grid");
         expect(region.polygon).toEqual(POLYGON);
+        expect(region.polyline).toEqual([]);
+        expect(region.corridorPolygon).toEqual([]);
         expect(region.cameraId).toBeNull();
         expect(region.camera).toBeNull();
         expect(region.params).toEqual({
@@ -137,11 +184,24 @@ describe("survey-region", () => {
             captureMode: "distance",
             startCorner: "bottom_left",
             turnDirection: "clockwise",
+            leftWidth_m: 0,
+            rightWidth_m: 0,
         });
         expect(regionItemCount(region)).toBe(0);
         expect(region.collapsed).toBe(false);
         expect(region.errors).toEqual([]);
         expect(regionHasManualEdits(region)).toBe(false);
+    });
+
+    it("createCorridorRegion stores the polyline and corridor defaults", () => {
+        const region = createCorridorRegion(POLYLINE);
+
+        expect(region.patternType).toBe("corridor");
+        expect(region.polygon).toEqual([]);
+        expect(region.polyline).toEqual(POLYLINE);
+        expect(region.corridorPolygon).toEqual([]);
+        expect(region.params.leftWidth_m).toBe(50);
+        expect(region.params.rightWidth_m).toBe(50);
     });
 
     it("applyGenerationResult with ok result populates items and stats and clears manual edits", () => {
@@ -159,9 +219,22 @@ describe("survey-region", () => {
         expect(updated.generatedTransects).toEqual([makeTransect(47.1, 8.1, 47.2, 8.1)]);
         expect(updated.generatedCrosshatch).toEqual([makeTransect(47.1, 8.15, 47.2, 8.15)]);
         expect(updated.generatedStats).toEqual(makeStats());
+        expect(updated.corridorPolygon).toEqual([]);
         expect(updated.errors).toEqual([]);
         expect(updated.manualEdits.size).toBe(0);
         expect(regionHasManualEdits(updated)).toBe(false);
+    });
+
+    it("applyGenerationResult stores corridor polygons for corridor results", () => {
+        const generatedItems = [makeWaypoint(47.11, 8.11, 50), makeWaypoint(47.12, 8.12, 50)];
+        const updated = applyGenerationResult(createCorridorRegion(POLYLINE), makeCorridorSuccessResult(generatedItems));
+
+        expect(updated.patternType).toBe("corridor");
+        expect(updated.generatedItems).toEqual(generatedItems);
+        expect(updated.generatedTransects).toEqual([makeTransect(47.1, 8.1, 47.12, 8.12)]);
+        expect(updated.generatedCrosshatch).toEqual([]);
+        expect(updated.generatedStats?.crosshatchLaneCount).toBe(0);
+        expect(updated.corridorPolygon).toEqual(CORRIDOR_POLYGON);
     });
 
     it("applyGenerationResult with error result populates errors and keeps previous items", () => {
@@ -204,7 +277,7 @@ describe("survey-region", () => {
         expect(dissolveRegion(region)).toEqual([generated[0], editedItem]);
     });
 
-    it("flattenRegionsToItems correctly interleaves regular items and region items in order", () => {
+    it("flattenRegionsToItems correctly interleaves regular items and mixed region items in order", () => {
         const draftItems = [
             makeDraftItem(0, makeWaypoint(47.01, 8.01, 30)),
             makeDraftItem(1, makeWaypoint(47.02, 8.02, 30)),
@@ -215,19 +288,23 @@ describe("survey-region", () => {
             createSurveyRegion(POLYGON),
             makeSuccessResult([makeWaypoint(47.11, 8.11, 50)]),
         );
-        const middleRegion = markItemEdited(
+        const middleCorridorRegion = markItemEdited(
             applyGenerationResult(
-                createSurveyRegion(POLYGON),
-                makeSuccessResult([makeWaypoint(47.21, 8.21, 50), makeWaypoint(47.22, 8.22, 50)]),
+                createCorridorRegion(POLYLINE),
+                makeCorridorSuccessResult([makeWaypoint(47.21, 8.21, 50), makeWaypoint(47.22, 8.22, 50)]),
             ),
             0,
             makeWaypoint(47.25, 8.25, 60),
         );
 
         let extension = createSurveyDraftExtension();
-        extension = addSurveyRegion(extension, middleRegion, 0);
+        extension = addSurveyRegion(extension, middleCorridorRegion, 0);
         extension = addSurveyRegion(extension, startRegion, -1);
 
+        expect(extension.surveyRegionOrder).toEqual([
+            { regionId: startRegion.id, position: 0 },
+            { regionId: middleCorridorRegion.id, position: 1 },
+        ]);
         expect(flattenRegionsToItems(draftItems, extension)).toEqual([
             makeWaypoint(47.11, 8.11, 50),
             makeWaypoint(47.01, 8.01, 30),

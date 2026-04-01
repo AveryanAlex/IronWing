@@ -112,6 +112,7 @@ function createPlannerStub(overrides: Partial<UseSurveyPlannerResult> = {}): Use
 
   return {
     surveyMode: true,
+    patternType: region.patternType,
     activeRegionId: region.id,
     regions,
     isDrawing: false,
@@ -137,7 +138,9 @@ function createPlannerStub(overrides: Partial<UseSurveyPlannerResult> = {}): Use
     stopDraw: vi.fn(),
     addVertex: vi.fn(),
     completePolygon: vi.fn(() => region),
+    completeLine: vi.fn(() => region),
     moveVertex: vi.fn(),
+    setPatternType: vi.fn(),
     setCamera: vi.fn(),
     setParam: vi.fn(),
     generate: vi.fn(async () => null),
