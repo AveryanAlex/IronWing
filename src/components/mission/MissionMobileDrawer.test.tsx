@@ -279,16 +279,21 @@ describe("MissionMobileDrawer", () => {
 
     const toggle = document.querySelector("[data-mission-mobile-panel-toggle]") as HTMLButtonElement | null;
     const drawer = document.querySelector("[data-mission-mobile-drawer]") as HTMLElement | null;
+    const backdrop = document.querySelector("[data-mission-mobile-backdrop]") as HTMLElement | null;
     const closeButton = document.querySelector("[data-mission-mobile-drawer-close]") as HTMLButtonElement | null;
 
     expect(toggle?.getAttribute("aria-expanded")).toBe("false");
     expect(drawer?.getAttribute("data-state")).toBe("closed");
     expect(drawer?.getAttribute("aria-hidden")).toBe("true");
+    expect(backdrop?.getAttribute("data-state")).toBe("closed");
 
     fireEvent.click(toggle as HTMLButtonElement);
     expect(toggle?.getAttribute("aria-expanded")).toBe("true");
     expect(drawer?.getAttribute("data-state")).toBe("open");
     expect(drawer?.getAttribute("aria-hidden")).toBe("false");
+    expect(backdrop?.getAttribute("data-state")).toBe("open");
+    expect(backdrop?.className).toContain("opacity-100");
+    expect(backdrop?.className).not.toContain("pointer-events-none");
 
     fireEvent.click(closeButton as HTMLButtonElement);
     expect(toggle?.getAttribute("aria-expanded")).toBe("false");
@@ -327,8 +332,12 @@ describe("MissionMobileDrawer", () => {
     );
 
     const drawer = document.querySelector("[data-mission-mobile-drawer]") as HTMLElement | null;
+    const backdrop = document.querySelector("[data-mission-mobile-backdrop]") as HTMLElement | null;
     expect(drawer?.getAttribute("data-state")).toBe("open");
     expect(drawer?.getAttribute("data-survey-mode")).toBe("open");
+    expect(backdrop?.getAttribute("data-state")).toBe("open");
+    expect(backdrop?.className).toContain("pointer-events-none");
+    expect(backdrop?.className).toContain("opacity-0");
     expect(screen.getByTestId("survey-planner-panel")).toBeTruthy();
 
     fireEvent.click(document.querySelector("[data-survey-mode-toggle]") as HTMLButtonElement);

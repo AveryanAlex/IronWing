@@ -409,3 +409,28 @@ test("phone viewport reaches mission list and inspector through the mobile drawe
   await expect(page.locator('[data-testid="mission-stats-state"]')).toContainText("Finite estimate");
   await waitForTerrainReady(page);
 });
+
+test("phone viewport proves full grid survey workflow at 390x844", async ({
+  page,
+  mockPlatform,
+}) => {
+  const preset = await bootstrapMissionEditor(page, mockPlatform, "phone");
+  const mobileDrawer = page.locator("[data-mission-mobile-drawer]");
+
+  expect(preset).toMatchObject({ width: 390, height: 844, isMobile: true });
+  await expect(page.locator("[data-mission-side-panel]")).toHaveCount(0);
+  await expectMissionDrawerClosed(page);
+
+  await page.locator("[data-mission-auto-grid-open]").click();
+  await expectMissionDrawerOpen(page);
+  await expect(mobileDrawer).toHaveAttribute("data-survey-mode", "open");
+
+  await runGridSurveyWorkflow(page, { isMobile: true });
+
+  await expect(mobileDrawer).toHaveAttribute("data-state", "open");
+  await expect(mobileDrawer).toHaveAttribute("data-survey-mode", "closed");
+  await expect(mobileDrawer.locator("[data-survey-region-card]")).toBeVisible();
+  await waitForTerrainReady(page);
+  await expect(page.locator('[data-testid="mission-stats-state"]')).toContainText("Finite estimate");
+  await expect(page.locator('[data-testid="mission-stats-distance"]')).toBeVisible();
+});

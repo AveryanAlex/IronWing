@@ -336,16 +336,32 @@ export async function clickMapAtRatio(
   xRatio: number,
   yRatio: number,
 ): Promise<void> {
-  const box = await page.locator("[data-mission-map-region]").boundingBox();
-  if (!box) {
-    throw new Error("Mission map region is not visible.");
+  const mapViewport = page.locator("[data-mission-map-region]").first();
+  const box = await mapViewport.boundingBox();
+  const viewport = page.viewportSize();
+  if (!box || !viewport) {
+    throw new Error("Mission map viewport is not visible.");
   }
 
-  await page.mouse.click(box.x + box.width * xRatio, box.y + box.height * yRatio);
+  const visibleLeft = Math.max(box.x, 0);
+  const visibleTop = Math.max(box.y, 0);
+  const visibleRight = Math.min(box.x + box.width, viewport.width);
+  const visibleBottom = Math.min(box.y + box.height, viewport.height);
+  const visibleWidth = visibleRight - visibleLeft;
+  const visibleHeight = visibleBottom - visibleTop;
+
+  if (visibleWidth <= 0 || visibleHeight <= 0) {
+    throw new Error(`Mission map viewport is clipped offscreen: ${JSON.stringify({ box, viewport })}`);
+  }
+
+  await page.mouse.click(visibleLeft + visibleWidth * xRatio, visibleTop + visibleHeight * yRatio);
 }
 
-export async function drawPentagonOnMissionMap(page: Page): Promise<void> {
-  const pentagonPoints: Array<[number, number]> = [
+export async function drawPentagonOnMissionMap(
+  page: Page,
+  points?: Array<[number, number]>,
+): Promise<void> {
+  const pentagonPoints = points ?? [
     [0.32, 0.24],
     [0.56, 0.18],
     [0.72, 0.34],
@@ -407,10 +423,29 @@ export async function runGridSurveyWorkflow(
   options: GridSurveyWorkflowOptions = {},
 ): Promise<void> {
   const { isMobile = false, openSurveyMode } = options;
-
-  if (isMobile) {
-    throw new Error("runGridSurveyWorkflow does not support mobile workflows yet.");
-  }
+  const surveyShell = isMobile
+    ? page.locator("[data-mission-mobile-drawer]")
+    : page.locator("[data-mission-side-panel]");
+  const surveyPanel = surveyShell.locator("[data-survey-planner-panel]");
+  const chainModeButton = page.locator('[data-testid="mission-chain-mode"]');
+  const drawButton = surveyPanel.locator("button").filter({ hasText: /draw area|stop drawing/i }).first();
+  const generateButton = surveyPanel.locator("[data-survey-generate]");
+  const regionCard = surveyShell.locator("[data-survey-region-card]");
+  const cameraSearch = surveyPanel.getByLabel("Search cameras");
+  const frontOverlap = surveyPanel.getByLabel("Front overlap");
+  const sideOverlap = surveyPanel.getByLabel("Side overlap");
+  const trackAngle = surveyPanel.getByLabel("Track angle");
+  const turnaroundDistance = surveyPanel.getByLabel("Turnaround distance");
+  const closeSurveyPlannerButton = surveyPanel.getByRole("button", { name: /close survey planner/i });
+  const surveyPolygonPoints: Array<[number, number]> | undefined = isMobile
+    ? [
+        [0.14, 0.10],
+        [0.24, 0.05],
+        [0.30, 0.14],
+      ]
+    : undefined;
+  const surveyPolygonClosePoint: [number, number] = surveyPolygonPoints?.[0] ?? [0.32, 0.24];
+  const expectedVertexCount = surveyPolygonPoints?.length ?? 5;
 
   const openSurveyModeAction =
     openSurveyMode ??
@@ -418,40 +453,49 @@ export async function runGridSurveyWorkflow(
       await activePage.locator("[data-mission-auto-grid-open]").click();
     });
 
-  await openSurveyModeAction(page);
+  if (!(await surveyPanel.isVisible())) {
+    await openSurveyModeAction(page);
+  }
 
-  const surveyPanel = page.locator("[data-survey-planner-panel]");
-  const sidePanel = page.locator("[data-mission-side-panel]");
-  const chainModeButton = page.locator('[data-testid="mission-chain-mode"]');
-  const drawButton = surveyPanel.locator("button").filter({ hasText: /draw area|stop drawing/i }).first();
-  const generateButton = page.locator("[data-survey-generate]");
-  const regionCard = page.locator("[data-survey-region-card]");
+  const scrollIfNeeded = async (locator: Locator): Promise<void> => {
+    if (isMobile) {
+      await locator.scrollIntoViewIfNeeded();
+    }
+  };
 
   await expect(surveyPanel).toBeVisible();
-  await expect(sidePanel).toHaveAttribute("data-survey-mode", "open");
+  await expect(surveyShell).toHaveAttribute("data-survey-mode", "open");
 
+  await scrollIfNeeded(drawButton);
   await drawButton.click();
   await expect(drawButton).toContainText("Stop drawing");
   await expect(chainModeButton).toHaveAttribute("aria-pressed", "false");
 
-  await drawPentagonOnMissionMap(page);
-  await clickMapAtRatio(page, 0.32, 0.24);
+  await drawPentagonOnMissionMap(page, surveyPolygonPoints);
+  await clickMapAtRatio(page, surveyPolygonClosePoint[0], surveyPolygonClosePoint[1]);
+
   await expect(surveyPanel).toContainText("Region 1");
-  await expect(surveyPanel).toContainText(/5 vertices in the active region/i);
+  await expect(surveyPanel).toContainText(new RegExp(`${expectedVertexCount} vertices in the active region`, "i"));
 
   await expect(generateButton).toBeDisabled();
 
-  await page.getByLabel("Search cameras").fill("DJI Mavic 3E");
+  await scrollIfNeeded(cameraSearch);
+  await cameraSearch.fill("DJI Mavic 3E");
   await surveyPanel.getByRole("button", { name: /DJI Mavic 3E/i }).click();
   await expect(surveyPanel).toContainText("Selected camera");
   await expect(surveyPanel).toContainText("DJI Mavic 3E");
   await expect(generateButton).toBeEnabled();
 
-  await page.getByLabel("Front overlap").fill("82");
-  await page.getByLabel("Side overlap").fill("74");
-  await page.getByLabel("Track angle").fill("15");
-  await page.getByLabel("Turnaround distance").fill("20");
+  await scrollIfNeeded(frontOverlap);
+  await frontOverlap.fill("82");
+  await scrollIfNeeded(sideOverlap);
+  await sideOverlap.fill("74");
+  await scrollIfNeeded(trackAngle);
+  await trackAngle.fill("15");
+  await scrollIfNeeded(turnaroundDistance);
+  await turnaroundDistance.fill("20");
 
+  await scrollIfNeeded(generateButton);
   await generateButton.click();
 
   await expect(surveyPanel).toContainText("Survey stats");
@@ -465,8 +509,14 @@ export async function runGridSurveyWorkflow(
   expect(surveyDebug.coverageGeoJson.features[0]?.properties?.crosshatch).toBe(false);
   expect(surveyDebug.coverageGeoJson.features[0]?.properties?.laneSpacing_m ?? 0).toBeGreaterThan(0);
 
-  await page.getByRole("button", { name: /close survey planner/i }).click();
-  await expect(sidePanel).toHaveAttribute("data-survey-mode", "closed");
+  await scrollIfNeeded(closeSurveyPlannerButton);
+  await closeSurveyPlannerButton.click();
+  await expect(surveyShell).toHaveAttribute("data-survey-mode", "closed");
+
+  if (isMobile) {
+    await expect(surveyShell).toHaveAttribute("data-state", "open");
+  }
+
   await expect(regionCard).toHaveCount(1);
   await expect(regionCard).toContainText(/photos/i);
 }

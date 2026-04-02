@@ -355,7 +355,7 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
         data-state={drawerOpen ? "open" : "closed"}
         className={cn(
           "fixed inset-0 z-40 bg-black/50 transition-opacity duration-200",
-          drawerOpen ? "opacity-100" : "pointer-events-none opacity-0"
+          drawerOpen && !survey.surveyMode ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={() => setDrawerOpen(false)}
       />
@@ -367,7 +367,8 @@ export function MissionMobileDrawer({ vehicle, mission, deviceLocation }: Missio
         data-survey-mode={survey.surveyMode ? "open" : "closed"}
         aria-hidden={!drawerOpen}
         className={cn(
-          "fixed inset-x-0 bottom-0 z-50 flex max-h-[70vh] flex-col rounded-t-xl border-t border-border bg-bg-secondary shadow-xl transition-transform duration-200",
+          "fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-xl border-t border-border bg-bg-secondary shadow-xl transition-transform duration-200",
+          survey.surveyMode && survey.isDrawing ? "max-h-[40vh]" : "max-h-[70vh]",
           drawerOpen ? "translate-y-0" : "translate-y-full"
         )}
         style={{ paddingBottom: "calc(var(--safe-area-bottom, 0px) + 0.5rem)" }}
