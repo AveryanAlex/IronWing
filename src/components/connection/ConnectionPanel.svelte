@@ -401,21 +401,25 @@ function updateField<K extends keyof ConnectionValues>(field: K, value: Connecti
       <dl class="mt-4 grid gap-3 sm:grid-cols-2">
         <div class="rounded-2xl border border-border bg-bg-secondary/70 p-3">
           <dt class="text-xs uppercase tracking-[0.16em] text-text-muted">Last phase</dt>
-          <dd class="mt-2 text-sm font-semibold text-text-primary">{$store.lastPhase}</dd>
+          <dd class="mt-2 text-sm font-semibold text-text-primary" data-testid="connection-diagnostics-last-phase">
+            {$store.lastPhase}
+          </dd>
         </div>
         <div class="rounded-2xl border border-border bg-bg-secondary/70 p-3">
           <dt class="text-xs uppercase tracking-[0.16em] text-text-muted">Active source</dt>
-          <dd class="mt-2 text-sm font-semibold text-text-primary">{$store.activeSource ?? "none"}</dd>
+          <dd class="mt-2 text-sm font-semibold text-text-primary" data-testid="connection-diagnostics-active-source">
+            {$store.activeSource ?? "none"}
+          </dd>
         </div>
         <div class="rounded-2xl border border-border bg-bg-secondary/70 p-3">
           <dt class="text-xs uppercase tracking-[0.16em] text-text-muted">Envelope</dt>
-          <dd class="mt-2 break-all font-mono text-xs text-text-secondary">
+          <dd class="mt-2 break-all font-mono text-xs text-text-secondary" data-testid="connection-diagnostics-envelope">
             {$store.activeEnvelope ? `${$store.activeEnvelope.session_id} · rev ${$store.activeEnvelope.reset_revision}` : "no active session"}
           </dd>
         </div>
         <div class="rounded-2xl border border-border bg-bg-secondary/70 p-3">
           <dt class="text-xs uppercase tracking-[0.16em] text-text-muted">Bootstrap</dt>
-          <dd class="mt-2 text-sm font-semibold text-text-primary">
+          <dd class="mt-2 text-sm font-semibold text-text-primary" data-testid="connection-diagnostics-bootstrap">
             {$store.hydrated ? "ready" : "initializing"}
           </dd>
         </div>

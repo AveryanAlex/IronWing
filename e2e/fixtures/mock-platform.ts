@@ -23,6 +23,20 @@ export const runtimeSelectors = {
   bootstrapFailureMessage: '[data-testid="app-bootstrap-failure-message"]',
 } as const;
 
+export const connectionSelectors = {
+  statusText: '[data-testid="connection-status-text"]',
+  transportSelect: '[data-testid="connection-transport-select"]',
+  tcpAddress: '[data-testid="connection-tcp-address"]',
+  connectButton: '[data-testid="connection-connect-btn"]',
+  cancelButton: '[data-testid="connection-cancel-btn"]',
+  disconnectButton: '[data-testid="connection-disconnect-btn"]',
+  errorMessage: '[data-testid="connection-error-message"]',
+  diagnosticsLastPhase: '[data-testid="connection-diagnostics-last-phase"]',
+  diagnosticsActiveSource: '[data-testid="connection-diagnostics-active-source"]',
+  diagnosticsEnvelope: '[data-testid="connection-diagnostics-envelope"]',
+  diagnosticsBootstrap: '[data-testid="connection-diagnostics-bootstrap"]',
+} as const;
+
 type MockPlatformFixture = {
   reset: () => Promise<void>;
   setCommandBehavior: (cmd: string, behavior: MockCommandBehavior) => Promise<void>;
