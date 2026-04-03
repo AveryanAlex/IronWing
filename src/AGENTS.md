@@ -1,40 +1,43 @@
-# Frontend (Svelte + TypeScript; legacy React still present)
+# Frontend (active Svelte runtime + archived React reference)
 
-> Cutover note (M004/S01): the shipped frontend now boots from `src/main.ts` and mounts `src/App.svelte`. The old React runtime root moved to `src-old/runtime/`. The legacy hook/component guidance below still describes code that remains in-repo for reference during the rewrite, not the active runtime path.
+> Active runtime note (M004/S04): the shipped frontend boots from `src/main.ts` and mounts `src/App.svelte`. The remaining React-era source tree now lives under `src-old/legacy/`; treat it as archived context only.
 
 ## Overview
 
-The active frontend boot path is now a minimal Svelte runtime. Bridge files in `src/*.ts` and the `src/platform/*` boundary remain the main non-UI seams to preserve during the rewrite.
+The active frontend surface is the Svelte shell plus the shared TypeScript bridges, stores, and domain helpers it uses. `src/` should describe the shipped runtime; archived React components/hooks no longer live here.
 
 ## Formatting
 
 - Run `pnpm run frontend:format` to apply the active frontend Biome baseline.
 - Run `pnpm run frontend:format:check` to verify the same scope without writing changes.
-- The initial Biome rollout is intentionally limited to the shipped Svelte shell, its bootstrap helpers, and nearby tooling files.
-- `src-old/` and the still-legacy `src/**/*.tsx` surfaces stay out of scope until their rewrite slices land.
+- The active formatter baseline is intentionally centered on the shipped Svelte shell, its bootstrap helpers, and nearby tooling files.
+- Do not import from `src-old/legacy/` or `src-old/runtime/` into active `src/` code.
 
 ## Where To Look
 
 | Task | Location | Notes |
 |------|----------|-------|
-| App bootstrap / top-level shell | `main.ts`, `App.svelte`, `app/App.svelte`, `lib/stores/runtime.ts` | Active Svelte mount path, shell composition, and bootstrap failure markers |
-| Connection + telemetry | `hooks/use-session.ts`, `telemetry.ts` | Connection form state, BLE scan, vehicle actions |
-| Mission editing / playback | `hooks/use-mission.ts`, `components/mission/`, `lib/mission-*` | Draft model + map/shell split |
-| Mission feature UI | `components/mission/AGENTS.md` | Desktop/mobile shells, map overlays, coordinate inputs |
-| Guided flight actions | `hooks/use-guided.ts`, `guided.ts` | Takeoff, goto, session lifecycle |
-| Param staging / metadata | `hooks/use-params.ts`, `components/ConfigPanel.tsx`, `param-metadata.ts` | Staged Map, filter modes, metadata fetch |
-| Setup UI | `components/setup/AGENTS.md` | Panel orchestration, shared primitives, section rules |
+| App bootstrap / top-level shell | `main.ts`, `App.svelte`, `app/App.svelte`, `app/shell/*`, `lib/stores/runtime.ts` | Active Svelte mount path, shell composition, bootstrap failure markers |
+| Active connection surface | `components/connection/ConnectionPanel.svelte` | Connection form and diagnostics used by the shipped shell |
+| Active status + telemetry cards | `components/status/VehicleStatusCard.svelte`, `components/telemetry/TelemetrySummary.svelte` | Compact runtime cards mounted by `AppShell.svelte` |
+| Session/store architecture | `lib/stores/session.ts`, `lib/platform/session.ts`, `telemetry.ts`, `session.ts`, `transport.ts` | Shared state, IPC wrappers, transport contracts |
+| Runtime stores and notifications | `lib/stores/*`, `lib/toasts.ts`, `lib/components/*` | Store contracts and reusable Svelte-side helpers |
 | Platform alias layer | `platform/AGENTS.md` | `@platform/*` imports and mocked-browser split |
+| Archived React frontend reference | `../src-old/legacy/README.md` | Legacy hooks/components/tests retained for rewrite context |
 
 ## Structure
 
 ```text
 src/
-├── App.tsx
-├── main.tsx
-├── types.ts
+├── main.ts
+├── App.svelte
+├── app/
+│   ├── App.svelte
+│   └── shell/
 ├── components/
-├── hooks/
+│   ├── connection/
+│   ├── status/
+│   └── telemetry/
 ├── lib/
 ├── data/
 ├── platform/
@@ -47,75 +50,44 @@ src/
 
 ## State + IPC Conventions
 
-- No Context, Redux, or Zustand. Shared app state is created in hooks and passed down from `App.tsx`.
-- Bridge modules import from `@platform/core`, `@platform/event`, or `@platform/http` only.
-- Each bridge exports typed wrapper functions around `invoke()` or `listen()`.
+- Active frontend IPC imports go through `@platform/core`, `@platform/event`, or `@platform/http` only.
+- Bridge modules export typed wrapper functions around `invoke()` or `listen()`.
 - Event payloads use Rust serde output names (snake_case).
-- `App.tsx` computes `effectiveVehicle` by overlaying replay telemetry over live telemetry during playback.
+- Shared runtime state belongs in Svelte stores and neutral TypeScript helpers, not revived React hooks.
+- Keep the shipped runtime graph reachable from `src/main.ts` on `.svelte` and neutral `.ts` modules only.
 
-## Hooks
+## Active Component Patterns
 
-| Hook | Purpose | Local pattern |
-|------|---------|---------------|
-| `useSession` | Connection lifecycle, telemetry, event subscriptions | RAF-coalesced telemetry state; localStorage-backed connection form |
-| `useSessionActions` | Vehicle arm/disarm/mode actions | Extracted from useSession for separation of concerns |
-| `useGuided` | Guided flight: takeoff, goto, session lifecycle | Client-side validation before IPC; typed command results |
-| `useMission` | Mission CRUD, transfer state, home handling | Wraps pure `lib/mission-*` mutations |
-| `useParams` | Param store, staging, metadata, file I/O | Staging is local `Map<string, number>`; batch apply only |
-| `useSetup` | Setup panel state, section navigation, param highlight | Composes `useSetupSections` + param readiness |
-| `useSetupSections` | Section registration, progress heuristics | Lives with setup subsystem, not general hooks |
-| `useLogs` | Log open/query/summary/progress | `log://progress` is inline event-driven |
-| `useRecording` | TLOG recording UI state | Polls recording status while active |
-| `useFirmware` | Firmware session/progress orchestration | Wraps typed firmware IPC contract |
-| `usePlayback` | Client-side playback loop | RAF timeline, not backend playback |
-| `useSettings` | Persisted UI settings | Uses legacy `mpng_settings` key |
-| `useBreakpoint` | Responsive breakpoint state | `isMobile` means `< lg`, not `< md` |
-| `useDeviceLocation` | Browser/native geolocation wrapper | Platform-aware fallback logic |
-
-## Component Patterns
-
-- `MissionMap.tsx` is the heavy MapLibre integration point; mission shells wrap it rather than duplicating map logic.
-- `components/mission/` splits shared mission content from desktop/mobile shells; map and editor content are reused across both.
-- `components/setup/` is its own subsystem. Follow `components/setup/AGENTS.md` and `components/setup/sections/AGENTS.md` before adding a new setup flow.
-- `components/ui/` are thin primitives; avoid adding app-specific state there.
-- `components/hud/` are pure SVG instruments.
-- `components/charts/` use uPlot canvas patterns, not React/SVG chart abstractions.
+- `app/shell/AppShell.svelte` owns the shipped responsive shell composition.
+- `components/connection/`, `components/status/`, and `components/telemetry/` are the only active feature surfaces under `src/components/` today.
+- Prefer neutral helpers under `src/lib/` when logic must be shared between multiple active surfaces.
+- If you need archived React behavior for reference, read it in `src-old/legacy/` and port the intent instead of importing the old module.
 
 ## Data / Lib Conventions
 
-- `lib/mission-draft-typed.ts` owns in-memory mission editing state; do not re-implement waypoint mutation logic in components.
-- `lib/mission-coordinates.ts` owns degE7 conversion and coordinate math.
-- `lib/mission-grid.ts` owns auto-grid geometry generation.
-- `lib/mission-command-metadata.ts` owns command parameter metadata and labels.
+- Keep pure shared contracts in neutral `.ts` modules under `src/lib/` or top-level bridge/domain files.
+- `lib/setup-sections.ts` holds the active, framework-neutral setup progress contract that remains relevant after the React archive.
 - `data/ardupilot-docs.ts` is the only place to add ArduPilot docs URLs.
-- `data/battery-presets.ts` and `data/motor-layouts.ts` are shared reference data, not section-local constants.
+- `data/battery-presets.ts` and `data/motor-layouts.ts` are shared reference data, not feature-local constants.
 
 ## Tests
 
 - `pnpm test` runs Vitest. Global environment is `node`.
 - Use `// @vitest-environment jsdom` only on files that truly need DOM rendering.
-- Use `@testing-library/react` semantic queries for focused component behavior tests.
-- Prefer pure helper extraction first, especially in setup and mission UI.
-- Do not add `readFileSync()` + source-text assertions against `.tsx` files.
-- `src/platform/import-boundary.test.ts` is the one allowed source-scan exception because it enforces the `@platform/*` boundary.
+- Prefer `@testing-library/svelte` for active UI behavior; keep legacy `@testing-library/react` coverage quarantined under `src-old/legacy/`.
+- `src/platform/import-boundary.test.ts` is the intentional source-scan guardrail for keeping the active runtime off React-era imports.
 
-### Model frontend tests
+### Active frontend tests
 
-- `src/lib/mission-draft-typed.test.ts`
-- `src/lib/mission-coordinates.test.ts`
-- `src/lib/mission-grid.test.ts`
-- `src/playback.test.ts`
-- `src/param-metadata.test.ts`
-- `src/hooks/use-firmware.test.ts`
-- `src/hooks/use-guided.test.ts`
-- `src/hooks/use-mission.test.ts`
-- `src/platform/mock/backend.test.ts`
+- `src/app/App.test.ts`
+- `src/components/connection/ConnectionPanel.test.ts`
+- `src/lib/stores/*.test.ts`
 - `src/test/contract-fixtures.test.ts`
-- `src/components/setup/shared/SetupCheckbox.test.tsx`
-- `src/components/setup/shared/PreviewStagePanel.test.tsx`
+- `src/test/svelte-harness.test.ts`
+- `src/test/svelte-async-harness.test.ts`
 
 ## Notes
 
 - `param-metadata.ts` fetches ArduPilot XML through the platform HTTP layer and parses it with `DOMParser`.
-- `RcReceiverSection.tsx` and `RadioCalibWizard.tsx` are intentional exceptions that subscribe to live events directly.
+- `src-old/legacy/` is intentionally excluded from the active build/test lanes; use it as rewrite context, not a dependency source.
 - If you change SITL runtime port math, update `scripts/workflow/runtime.mjs` and its tests.

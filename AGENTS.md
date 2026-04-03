@@ -2,17 +2,19 @@
 
 ## Overview
 
-Modern ground control station for MAVLink vehicles. Tauri v2 app with a React/TypeScript frontend, a Rust Tauri shell, and the `mavkit` SDK as the domain layer. Desktop targets Linux/macOS/Windows; Android is supported with platform-gated transports and plugins.
+Modern ground control station for MAVLink vehicles. Tauri v2 app with a **Svelte/TypeScript frontend** for the shipped runtime, a Rust Tauri shell, and the `mavkit` SDK as the domain layer. Desktop targets Linux/macOS/Windows; Android is supported with platform-gated transports and plugins.
+
+The retired React frontend is preserved under `src-old/legacy/` and `src-old/runtime/` for reference only. Treat that tree as archived context, not active product surface.
 
 ## Where To Look
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Frontend state, IPC bridges, UI patterns | `src/AGENTS.md` | Hook ownership, bridge wrappers, frontend tests |
+| Active frontend shell, stores, IPC bridges | `src/AGENTS.md` | Shipped Svelte runtime, bridge wrappers, active frontend tests |
+| Archived mission React UI reference | `src-old/legacy/components/mission/AGENTS.md` | Legacy desktop/mobile shells, map overlays, transfer status |
+| Archived setup React UI reference | `src-old/legacy/components/setup/AGENTS.md` | Legacy shared primitives, panel orchestration |
+| Archived per-section setup rules | `src-old/legacy/components/setup/sections/AGENTS.md` | Legacy section anatomy, docs links, helper placement |
 | Platform alias boundary (`@platform/*`) | `src/platform/AGENTS.md` | Build-time Tauri vs mocked-browser split |
-| Mission feature UI | `src/components/mission/AGENTS.md` | Desktop/mobile shells, map overlays, transfer status |
-| Setup UI and staging flow | `src/components/setup/AGENTS.md` | Shared primitives, panel orchestration |
-| Per-section setup rules | `src/components/setup/sections/AGENTS.md` | Section anatomy, docs links, helper placement |
 | Rust shell, commands, bridges, recording, logs | `src-tauri/src/AGENTS.md` | AppState, command patterns, event relays |
 | IPC wire contracts | `src-tauri/src/ipc/AGENTS.md` | Typed payloads, serde conventions, envelope model |
 | Firmware flashing / DFU recovery | `src-tauri/src/firmware/AGENTS.md` | Session model, serial vs DFU paths |
@@ -55,12 +57,13 @@ Run commands from the repo root. Nix (`flake.nix` + `.envrc`) is the canonical r
 ## Architecture
 
 ```text
-React (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavkit
+Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavkit
 ```
 
-- Frontend owns presentation, local staging state, playback UI, and map interactions.
-- Tauri shell owns transport setup, command dispatch, event relays, logging, recording, and firmware flows.
+- The active frontend owns shipped presentation, local store state, and browser-facing composition.
+- The Tauri shell owns transport setup, command dispatch, event relays, logging, recording, and firmware flows.
 - `mavkit` owns MAVLink vehicle/session behavior.
+- Archived React code under `src-old/legacy/` is reference material only and must not be imported into the active runtime.
 
 ## Cross-layer Conventions
 
@@ -98,7 +101,7 @@ React (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavki
 
 - Prefer behavior/contract tests over implementation-detail tests.
 - Use Vitest for unit and focused jsdom component behavior; use Playwright for mocked browser flows and WebDriverIO for the thin native desktop smoke lane.
-- Do not add source-grep tests against `.tsx` source. Source scanning is only acceptable for real architectural guardrails.
+- Do not add source-grep tests against active Svelte or archived React source except for intentional architectural guardrails.
 - Layer-specific test guidance lives in `src/AGENTS.md`, `src-tauri/src/AGENTS.md`, `e2e/AGENTS.md`, and `e2e-native/AGENTS.md`.
 - Keep native desktop coverage intentionally thin and high-value; broad UI coverage still belongs in the mocked Playwright suite.
 

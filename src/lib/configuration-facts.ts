@@ -1,4 +1,4 @@
-import { SECTION_IDS, type SectionStatus, type SetupSectionId } from "../hooks/use-setup-sections";
+import { SECTION_IDS, type SectionStatus, type SetupSectionId } from "./setup-sections";
 import { isPreArmGood, type SensorHealthDomain } from "../sensor-health";
 import type { ConfigurationFactsDomain } from "../configuration-facts";
 import type { CalibrationDomain } from "../calibration";

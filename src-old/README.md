@@ -1,12 +1,17 @@
-# Legacy React runtime quarantine
+# Legacy frontend quarantine
 
-This directory holds the retired React frontend runtime that existed before milestone `M004-tk9luk` switched IronWing to a fresh Svelte boot path.
+This directory holds archived frontend code that is intentionally outside the shipped runtime.
+
+## Layout
+
+- `src-old/runtime/` — the retired React entrypoint (`main.tsx` / `App.tsx`) that existed before milestone `M004-tk9luk` switched IronWing to the Svelte boot path.
+- `src-old/legacy/` — the remaining React-era components, hooks, and related proof files moved out of active `src/` during the quarantine sweep.
 
 ## Status
 
-- `src-old/runtime/main.tsx` and `src-old/runtime/App.tsx` are preserved for reference only.
 - Nothing under `src-old/` is part of the shipped frontend entrypoint.
 - The active runtime now boots from `src/main.ts` and mounts `src/App.svelte`.
+- The only active UI surface left under `src/components/` is the Svelte runtime set (`connection/`, `status/`, and `telemetry/`).
 
 ## Guardrail
 

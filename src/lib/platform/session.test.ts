@@ -88,6 +88,24 @@ describe("loadConnectionForm", () => {
     });
   });
 
+  it("pins TCP mode and address to the env-aware defaults for SITL-native builds", () => {
+    const storage = {
+      getItem: () =>
+        JSON.stringify({
+          mode: "serial",
+          tcpAddress: "127.0.0.1:9999",
+          serialPort: "/dev/ttyUSB0",
+          followVehicle: false,
+        }),
+    };
+
+    expect(loadConnectionForm(storage, defaults)).toEqual({
+      ...defaults,
+      serialPort: "/dev/ttyUSB0",
+      followVehicle: false,
+    });
+  });
+
   it("falls back to the provided defaults when persisted state is malformed", () => {
     const storage = {
       getItem: () => "{not-json",

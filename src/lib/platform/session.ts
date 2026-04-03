@@ -157,7 +157,17 @@ export function loadConnectionForm(
 ): SessionConnectionFormState {
   try {
     const raw = storage?.getItem(SESSION_CONNECTION_STORAGE_KEY);
-    return raw ? { ...defaults, ...JSON.parse(raw) } : { ...defaults };
+    if (!raw) {
+      return { ...defaults };
+    }
+
+    const merged = { ...defaults, ...JSON.parse(raw) } as SessionConnectionFormState;
+    if (defaults.mode === "tcp") {
+      merged.mode = defaults.mode;
+      merged.tcpAddress = defaults.tcpAddress;
+    }
+
+    return merged;
   } catch {
     return { ...defaults };
   }

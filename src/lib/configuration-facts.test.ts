@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { computeOverallProgress } from "../hooks/use-setup-sections";
+import { computeOverallProgress } from "./setup-sections";
 
 const { listen } = vi.hoisted(() => ({
     listen: vi.fn(),
