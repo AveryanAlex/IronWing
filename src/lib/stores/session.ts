@@ -755,26 +755,32 @@ export function createSessionStore(service: SessionService = createSessionServic
   };
 }
 
+export type SessionStore = ReturnType<typeof createSessionStore>;
+
+export function createSessionViewStore(store: Pick<SessionStore, "subscribe">) {
+  return derived(store, ($session) => {
+    const lifecycle = createSessionLifecycleView(
+      $session.activeEnvelope,
+      $session.sessionDomain,
+      $session.optimisticConnection,
+    );
+
+    return {
+      ...lifecycle,
+      telemetry: selectTelemetryView($session.telemetryDomain),
+      vehicleState: lifecycle.session?.vehicle_state ?? null,
+      homePosition: lifecycle.session?.home_position ?? null,
+      vehiclePosition: selectVehiclePosition($session.telemetryDomain),
+      connected: lifecycle.linkState === "connected",
+      isConnecting: lifecycle.linkState === "connecting",
+      selectedTransportDescriptor:
+        $session.transportDescriptors.find((descriptor) => descriptor.kind === $session.connectionForm.mode) ?? null,
+    };
+  });
+}
+
 export const session = createSessionStore();
 
 export const sessionBootstrap = derived(session, ($session) => $session.bootstrap);
 
-export const sessionView = derived(session, ($session) => {
-  const lifecycle = createSessionLifecycleView(
-    $session.activeEnvelope,
-    $session.sessionDomain,
-    $session.optimisticConnection,
-  );
-
-  return {
-    ...lifecycle,
-    telemetry: selectTelemetryView($session.telemetryDomain),
-    vehicleState: lifecycle.session?.vehicle_state ?? null,
-    homePosition: lifecycle.session?.home_position ?? null,
-    vehiclePosition: selectVehiclePosition($session.telemetryDomain),
-    connected: lifecycle.linkState === "connected",
-    isConnecting: lifecycle.linkState === "connecting",
-    selectedTransportDescriptor:
-      $session.transportDescriptors.find((descriptor) => descriptor.kind === $session.connectionForm.mode) ?? null,
-  };
-});
+export const sessionView = createSessionViewStore(session);
