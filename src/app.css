@@ -71,8 +71,121 @@ html, body, #root {
 body {
   color-scheme: dark;
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-  background: var(--color-bg-primary);
+  background:
+    radial-gradient(circle at top, rgba(18, 185, 255, 0.18), transparent 38%),
+    linear-gradient(180deg, #12171d 0%, #0d1117 100%);
   color: var(--color-text-primary);
+}
+
+.runtime-shell,
+.bootstrap-failure-surface {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: clamp(24px, 5vw, 48px);
+}
+
+.runtime-shell__content,
+.bootstrap-failure-surface {
+  width: min(100%, 960px);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, white 15%);
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(23, 30, 39, 0.96), rgba(15, 20, 27, 0.98));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  padding: clamp(24px, 5vw, 40px);
+}
+
+.runtime-eyebrow {
+  margin: 0 0 12px;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.runtime-title {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+.runtime-copy {
+  margin: 18px 0 0;
+  max-width: 52rem;
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.runtime-diagnostic-grid {
+  margin: 32px 0 0;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.runtime-card {
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, white 12%);
+  border-radius: 18px;
+  background: rgba(18, 23, 29, 0.76);
+  padding: 16px 18px;
+}
+
+.runtime-card--wide {
+  grid-column: 1 / -1;
+}
+
+.runtime-card-label {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.runtime-card-value {
+  margin: 10px 0 0;
+  color: var(--color-text-primary);
+  font-size: 1rem;
+  font-weight: 550;
+}
+
+.runtime-card-value--mono {
+  font-family: "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", monospace;
+  font-size: 0.95rem;
+}
+
+.runtime-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(18, 185, 255, 0.12);
+  color: var(--color-accent);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-transform: lowercase;
+}
+
+.runtime-status-pill[data-runtime-phase="booting"] {
+  background: rgba(255, 176, 32, 0.14);
+  color: var(--color-warning);
+}
+
+.runtime-status-pill[data-runtime-phase="ready"] {
+  background: rgba(87, 227, 139, 0.14);
+  color: var(--color-success);
+}
+
+.runtime-status-pill[data-runtime-phase="failed"] {
+  background: rgba(255, 68, 68, 0.14);
+  color: var(--color-danger);
 }
 
 /* Map markers — must stay as regular CSS since MapLibre creates DOM elements */
