@@ -6,6 +6,7 @@ This directory holds archived frontend code that is intentionally outside the sh
 
 - `src-old/runtime/` — the retired React entrypoint (`main.tsx` / `App.tsx`) that existed before milestone `M004-tk9luk` switched IronWing to the Svelte boot path.
 - `src-old/legacy/` — the remaining React-era components, hooks, and related proof files moved out of active `src/` during the quarantine sweep.
+- `src-old/e2e/` — archived Playwright/browser proofs for the retired setup, mission, guided, and firmware surfaces. These remain as rewrite context only and are not part of the active verification lane.
 
 ## Status
 

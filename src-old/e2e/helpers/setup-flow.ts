@@ -4,9 +4,9 @@ import type {
   MockLiveVehicleState,
   MockParamProgressState,
   MockParamStoreState,
-} from "../../src/platform/mock/backend";
-import type { SensorHealth } from "../../src/sensor-health";
-import type { SupportState } from "../../src/support";
+} from "../../../src/platform/mock/backend";
+import type { SensorHealth } from "../../../src/sensor-health";
+import type { SupportState } from "../../../src/support";
 
 export type MockPlatformController = {
   reset: () => Promise<void>;

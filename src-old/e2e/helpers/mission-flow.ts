@@ -4,7 +4,7 @@ import type {
   MockGuidedStateValue,
   MockLiveVehicleState,
   MockMissionState,
-} from "../../src/platform/mock/backend";
+} from "../../../src/platform/mock/backend";
 import {
   DEFAULT_TERRARIUM_TILE_PNG,
   TERRARIUM_TILE_CONTENT_TYPE,

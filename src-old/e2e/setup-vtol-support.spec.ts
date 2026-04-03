@@ -5,7 +5,7 @@ import type {
   MockLiveVehicleState,
   MockParamProgressState,
   MockParamStoreState,
-} from "../src/platform/mock/backend";
+} from "../../src/platform/mock/backend";
 
 const ARDUPLANE_METADATA_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <paramfile>

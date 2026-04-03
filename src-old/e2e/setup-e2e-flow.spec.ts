@@ -12,8 +12,8 @@ import {
   standardVehicleState,
 } from "./helpers/setup-flow";
 import type { MockPlatformController } from "./helpers/setup-flow";
-import type { SensorHealth } from "../src/sensor-health";
-import type { SupportState } from "../src/support";
+import type { SensorHealth } from "../../src/sensor-health";
+import type { SupportState } from "../../src/support";
 
 function streamTelemetry(radio: { rc_channels?: number[]; rc_rssi?: number; servo_outputs?: number[] }) {
   return {

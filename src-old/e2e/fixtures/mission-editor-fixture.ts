@@ -1,4 +1,4 @@
-import type { FencePlan } from "../../src/fence";
+import type { FencePlan } from "../../../src/fence";
 import type {
   GeoPoint2d,
   HomePosition,
@@ -6,10 +6,10 @@ import type {
   MissionItem,
   MissionPlan,
   RallyPlan,
-} from "../../src/lib/mavkit-types";
-import { defaultGeoPoint3d } from "../../src/lib/mavkit-types";
-import { latLonFromBearingDistance } from "../../src/lib/mission-coordinates";
-import { exportPlanFile } from "../../src/lib/mission-plan-io";
+} from "../../../src/lib/mavkit-types";
+import { defaultGeoPoint3d } from "../../../src/lib/mavkit-types";
+import { latLonFromBearingDistance } from "../../../src/lib/mission-coordinates";
+import { exportPlanFile } from "../../../src/lib/mission-plan-io";
 
 export type MissionEditorFixture = {
   missionDownload: {
