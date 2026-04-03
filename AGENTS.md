@@ -102,6 +102,7 @@ Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavk
 - Prefer behavior/contract tests over implementation-detail tests.
 - Use Vitest for unit and focused jsdom component behavior; use Playwright for mocked browser flows and WebDriverIO for the thin native desktop smoke lane.
 - Do not add source-grep tests against active Svelte or archived React source except for intentional architectural guardrails.
+- `src/platform/import-boundary.test.ts` is the quarantine guardrail: active `src/`, `e2e/`, and `e2e-native/` must stay free of archived React source imports, archived test imports, and React-era file re-entry.
 - Layer-specific test guidance lives in `src/AGENTS.md`, `src-tauri/src/AGENTS.md`, `e2e/AGENTS.md`, and `e2e-native/AGENTS.md`.
 - Keep native desktop coverage intentionally thin and high-value; broad UI coverage still belongs in the mocked Playwright suite.
 

@@ -22,8 +22,9 @@
 
 ## Spec Conventions
 
-- Use stable `data-testid` selectors that already exist in the frontend.
+- Use stable `data-testid` selectors that already exist in the active Svelte frontend.
 - Assert only the thinnest real-stack behavior needed: window loads, TCP defaults are injected, connect succeeds, live telemetry arrives, disconnect returns to Idle.
+- Keep selectors and assertions anchored to the shipped shell/runtime cards; do not reach into archived `src-old/` surfaces or resurrect legacy proof helpers.
 - Keep `maxInstances: 1`; do not parallelize native sessions.
 - Prefer expanding coverage by adding a few high-value flows, not by mirroring the browser-only Playwright suite.
 

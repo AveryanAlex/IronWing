@@ -75,7 +75,7 @@ src/
 - `pnpm test` runs Vitest. Global environment is `node`.
 - Use `// @vitest-environment jsdom` only on files that truly need DOM rendering.
 - Prefer `@testing-library/svelte` for active UI behavior; keep legacy `@testing-library/react` coverage quarantined under `src-old/legacy/`.
-- `src/platform/import-boundary.test.ts` is the intentional source-scan guardrail for keeping the active runtime off React-era imports.
+- `src/platform/import-boundary.test.ts` is the intentional quarantine guardrail: active `src/`, `e2e/`, and `e2e-native/` may not import archived React source, archived tests, or reintroduce React-era `.tsx/.jsx` files.
 
 ### Active frontend tests
 
