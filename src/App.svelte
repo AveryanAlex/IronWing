@@ -1,5 +1,5 @@
 <script lang="ts">
-  import RuntimeApp from "./app/App.svelte";
+import RuntimeApp from "./app/App.svelte";
 </script>
 
 <RuntimeApp />

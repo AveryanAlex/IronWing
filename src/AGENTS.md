@@ -6,11 +6,18 @@
 
 The active frontend boot path is now a minimal Svelte runtime. Bridge files in `src/*.ts` and the `src/platform/*` boundary remain the main non-UI seams to preserve during the rewrite.
 
+## Formatting
+
+- Run `pnpm run frontend:format` to apply the active frontend Biome baseline.
+- Run `pnpm run frontend:format:check` to verify the same scope without writing changes.
+- The initial Biome rollout is intentionally limited to the shipped Svelte shell, its bootstrap helpers, and nearby tooling files.
+- `src-old/` and the still-legacy `src/**/*.tsx` surfaces stay out of scope until their rewrite slices land.
+
 ## Where To Look
 
 | Task | Location | Notes |
 |------|----------|-------|
-| App bootstrap / top-level routing | `main.tsx`, `App.tsx`, `types.ts` | `App.tsx` is the frontend state hub |
+| App bootstrap / top-level shell | `main.ts`, `App.svelte`, `app/App.svelte`, `lib/stores/runtime.ts` | Active Svelte mount path, shell composition, and bootstrap failure markers |
 | Connection + telemetry | `hooks/use-session.ts`, `telemetry.ts` | Connection form state, BLE scan, vehicle actions |
 | Mission editing / playback | `hooks/use-mission.ts`, `components/mission/`, `lib/mission-*` | Draft model + map/shell split |
 | Mission feature UI | `components/mission/AGENTS.md` | Desktop/mobile shells, map overlays, coordinate inputs |

@@ -62,7 +62,9 @@ select {
   cursor: pointer;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   width: 100%;
   height: 100%;
   margin: 0;
@@ -226,7 +228,9 @@ body {
   border-color: var(--color-warning);
   border-width: 3px;
   transform: scale(1.04);
-  box-shadow: 0 0 0 2px rgba(255, 176, 32, 0.35), 0 2px 12px rgba(0, 0, 0, 0.35);
+  box-shadow:
+    0 0 0 2px rgba(255, 176, 32, 0.35),
+    0 2px 12px rgba(0, 0, 0, 0.35);
 }
 
 .mission-pin.is-home {
@@ -258,7 +262,9 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform 0.15s ease, background 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
   font-variant-numeric: tabular-nums;
 }
 
@@ -269,8 +275,13 @@ body {
 }
 
 @keyframes pulse-current {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.5); }
-  50% { box-shadow: 0 0 0 8px rgba(255, 68, 68, 0); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(255, 68, 68, 0);
+  }
 }
 
 /* Polygon vertex markers for auto-grid drawing */
@@ -289,7 +300,10 @@ body {
   align-items: center;
   justify-content: center;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
-  transition: background-color 0.15s, border-color 0.15s, transform 0.15s;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    transform 0.15s;
 }
 
 .polygon-vertex:active {
@@ -366,7 +380,9 @@ body {
   background: #4285f4;
   border: 3px solid white;
   border-radius: 50%;
-  box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.3), 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 0 0 2px rgba(66, 133, 244, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* Param navigation highlight — applied transiently via JS, auto-fades */

@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit",
     "frontend:typecheck": "tsc --noEmit",
     "frontend:build": "tsc --noEmit && vite build",
+    "frontend:format": "biome format --write .",
+    "frontend:format:check": "biome check .",
     "rust:check": "cargo check --workspace",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
@@ -52,6 +54,7 @@
     "uplot": "^1.6.32"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.10",
     "@playwright/test": "^1.58.2",
     "@sveltejs/vite-plugin-svelte": "4.0.4",
     "@tauri-apps/cli": "^2.10.1",

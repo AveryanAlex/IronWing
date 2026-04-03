@@ -1,11 +1,7 @@
 import { mount } from "svelte";
 import App from "./App.svelte";
 import "./app.css";
-import {
-  markRuntimeFailure,
-  markRuntimeReady,
-  renderBootstrapFailureMarkup,
-} from "./lib/stores/runtime";
+import { markRuntimeFailure, markRuntimeReady, renderBootstrapFailureMarkup } from "./lib/stores/runtime";
 
 const rootTargetId = "root";
 const target = document.getElementById(rootTargetId);

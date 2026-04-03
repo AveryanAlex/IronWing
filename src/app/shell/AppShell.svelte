@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { runtime, runtimeTestIds } from "../../lib/stores/runtime";
+import { runtime, runtimeTestIds } from "../../lib/stores/runtime";
 </script>
 
 <main
