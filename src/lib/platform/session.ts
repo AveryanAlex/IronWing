@@ -60,16 +60,14 @@ export type SessionConnectionFormState = {
   followVehicle: boolean;
 };
 
-export const sessionConnectionDefaults: SessionConnectionFormState = {
-  mode: "udp",
-  udpBind: "0.0.0.0:14550",
-  tcpAddress: defaultTcpAddress(),
-  serialPort: "",
-  baud: 57600,
-  selectedBtDevice: "",
-  takeoffAlt: "10",
-  followVehicle: true,
+export type SessionConnectionEnv = {
+  VITE_IRONWING_SITL_MODE?: string;
+  VITE_IRONWING_SITL_TCP_PORT?: string;
 };
+
+export const DEFAULT_TCP_ADDRESS = "127.0.0.1:5760";
+
+export const sessionConnectionDefaults: SessionConnectionFormState = resolveSessionConnectionDefaults();
 
 export type SessionServiceEventHandlers = {
   onSession: (event: SessionEvent<SessionDomain>) => void;
@@ -155,12 +153,13 @@ export async function subscribeAll(handlers: SessionServiceEventHandlers): Promi
 
 export function loadConnectionForm(
   storage: Pick<Storage, "getItem"> | null = getBrowserStorage(),
+  defaults: SessionConnectionFormState = sessionConnectionDefaults,
 ): SessionConnectionFormState {
   try {
     const raw = storage?.getItem(SESSION_CONNECTION_STORAGE_KEY);
-    return raw ? { ...sessionConnectionDefaults, ...JSON.parse(raw) } : { ...sessionConnectionDefaults };
+    return raw ? { ...defaults, ...JSON.parse(raw) } : { ...defaults };
   } catch {
-    return { ...sessionConnectionDefaults };
+    return { ...defaults };
   }
 }
 
@@ -196,13 +195,34 @@ export function toLinkState(connection: SessionConnection | undefined): LinkStat
   }
 }
 
-function defaultTcpAddress() {
-  const port = Number.parseInt(import.meta.env.VITE_IRONWING_SITL_TCP_PORT ?? "", 10);
+export function resolveSessionConnectionDefaults(
+  env: SessionConnectionEnv = import.meta.env as SessionConnectionEnv,
+): SessionConnectionFormState {
+  const mode = resolveSitlMode(env.VITE_IRONWING_SITL_MODE);
+
+  return {
+    mode,
+    udpBind: "0.0.0.0:14550",
+    tcpAddress: defaultTcpAddress(env),
+    serialPort: "",
+    baud: 57600,
+    selectedBtDevice: "",
+    takeoffAlt: "10",
+    followVehicle: true,
+  };
+}
+
+export function resolveSitlMode(mode: string | undefined): TransportType {
+  return mode === "tcp" ? "tcp" : "udp";
+}
+
+export function defaultTcpAddress(env: SessionConnectionEnv = import.meta.env as SessionConnectionEnv) {
+  const port = Number.parseInt(env.VITE_IRONWING_SITL_TCP_PORT ?? "", 10);
   if (Number.isFinite(port) && port > 0) {
     return `127.0.0.1:${port}`;
   }
 
-  return "127.0.0.1:5760";
+  return DEFAULT_TCP_ADDRESS;
 }
 
 function getBrowserStorage(): Storage | null {

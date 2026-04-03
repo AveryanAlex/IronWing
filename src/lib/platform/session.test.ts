@@ -1,0 +1,98 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  DEFAULT_TCP_ADDRESS,
+  defaultTcpAddress,
+  loadConnectionForm,
+  resolveSessionConnectionDefaults,
+  resolveSitlMode,
+  type SessionConnectionFormState,
+} from "./session";
+
+describe("resolveSitlMode", () => {
+  it("preselects tcp only for the supported SITL mode", () => {
+    expect(resolveSitlMode("tcp")).toBe("tcp");
+    expect(resolveSitlMode("udp")).toBe("udp");
+    expect(resolveSitlMode("serial")).toBe("udp");
+    expect(resolveSitlMode("bogus")).toBe("udp");
+    expect(resolveSitlMode(undefined)).toBe("udp");
+  });
+});
+
+describe("defaultTcpAddress", () => {
+  it("uses the configured SITL tcp port when it is valid", () => {
+    expect(defaultTcpAddress({ VITE_IRONWING_SITL_TCP_PORT: "5771" })).toBe("127.0.0.1:5771");
+  });
+
+  it("falls back to the shipped tcp address for invalid port values", () => {
+    expect(defaultTcpAddress({ VITE_IRONWING_SITL_TCP_PORT: "" })).toBe(DEFAULT_TCP_ADDRESS);
+    expect(defaultTcpAddress({ VITE_IRONWING_SITL_TCP_PORT: "0" })).toBe(DEFAULT_TCP_ADDRESS);
+    expect(defaultTcpAddress({ VITE_IRONWING_SITL_TCP_PORT: "-1" })).toBe(DEFAULT_TCP_ADDRESS);
+    expect(defaultTcpAddress({ VITE_IRONWING_SITL_TCP_PORT: "not-a-port" })).toBe(DEFAULT_TCP_ADDRESS);
+  });
+});
+
+describe("resolveSessionConnectionDefaults", () => {
+  it("preseeds the shipped shell to tcp for native and dev SITL builds", () => {
+    expect(
+      resolveSessionConnectionDefaults({
+        VITE_IRONWING_SITL_MODE: "tcp",
+        VITE_IRONWING_SITL_TCP_PORT: "5768",
+      }),
+    ).toMatchObject({
+      mode: "tcp",
+      tcpAddress: "127.0.0.1:5768",
+      udpBind: "0.0.0.0:14550",
+      baud: 57600,
+    });
+  });
+
+  it("falls back predictably when the SITL mode or tcp port is malformed", () => {
+    expect(
+      resolveSessionConnectionDefaults({
+        VITE_IRONWING_SITL_MODE: "serial",
+        VITE_IRONWING_SITL_TCP_PORT: "bad-port",
+      }),
+    ).toMatchObject({
+      mode: "udp",
+      tcpAddress: DEFAULT_TCP_ADDRESS,
+    });
+
+    expect(
+      resolveSessionConnectionDefaults({
+        VITE_IRONWING_SITL_MODE: "tcp",
+        VITE_IRONWING_SITL_TCP_PORT: "bad-port",
+      }),
+    ).toMatchObject({
+      mode: "tcp",
+      tcpAddress: DEFAULT_TCP_ADDRESS,
+    });
+  });
+});
+
+describe("loadConnectionForm", () => {
+  const defaults: SessionConnectionFormState = resolveSessionConnectionDefaults({
+    VITE_IRONWING_SITL_MODE: "tcp",
+    VITE_IRONWING_SITL_TCP_PORT: "5769",
+  });
+
+  it("merges persisted values onto the env-aware defaults", () => {
+    const storage = {
+      getItem: () => JSON.stringify({ followVehicle: false, takeoffAlt: "20" }),
+    };
+
+    expect(loadConnectionForm(storage, defaults)).toEqual({
+      ...defaults,
+      followVehicle: false,
+      takeoffAlt: "20",
+    });
+  });
+
+  it("falls back to the provided defaults when persisted state is malformed", () => {
+    const storage = {
+      getItem: () => "{not-json",
+    };
+
+    expect(loadConnectionForm(storage, defaults)).toEqual(defaults);
+  });
+});
