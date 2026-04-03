@@ -1,6 +1,10 @@
 import {
+  applyShellViewport,
   connectionSelectors,
   expect,
+  expectDockedVehiclePanel,
+  expectShellChrome,
+  liveSurfaceSelectors,
   runtimeSelectors,
   test,
 } from "./fixtures/mock-platform";
@@ -61,9 +65,7 @@ const statusTextDomain = {
   complete: true,
   provenance: "stream",
   value: {
-    entries: [
-      { text: "Ready", severity: "notice", timestamp_usec: 1000 },
-    ],
+    entries: [{ text: "Ready", severity: "notice", timestamp_usec: 1000 }],
   },
 };
 
@@ -72,6 +74,7 @@ test.describe("Happy path: mocked connect and telemetry", () => {
     page,
     mockPlatform,
   }) => {
+    await applyShellViewport(page, "desktop");
     await page.goto("/");
     await mockPlatform.reset();
     await mockPlatform.waitForRuntimeSurface();
@@ -93,6 +96,8 @@ test.describe("Happy path: mocked connect and telemetry", () => {
 
     await expect(shell).toBeVisible();
     await expect(heading).toContainText("Svelte runtime online");
+    await expectShellChrome(page, "desktop");
+    await expectDockedVehiclePanel(page, "desktop");
     await expect(connectBtn).toBeVisible({ timeout: 15_000 });
     await expect(statusText).toContainText("Idle");
     await expect(bootstrapDiagnostics).toContainText("ready");
@@ -151,13 +156,13 @@ test.describe("Happy path: mocked connect and telemetry", () => {
     await expect(envelopeDiagnostics).toContainText(liveEnvelope?.session_id ?? "session-");
     await expect(errorMessage).toHaveCount(0);
 
-    await expect(page.locator('[data-testid="telemetry-state-value"]')).toContainText("DISARMED");
-    await expect(page.locator('[data-testid="telemetry-mode-value"]')).toContainText("LOITER");
-    await expect(page.locator('[data-testid="telemetry-alt-value"]')).toContainText("12.4 m");
-    await expect(page.locator('[data-testid="telemetry-speed-value"]')).toContainText("4.8 m/s");
-    await expect(page.locator('[data-testid="telemetry-battery-value"]')).toContainText("87.2%");
-    await expect(page.locator('[data-testid="telemetry-heading-value"]')).toContainText("182°");
-    await expect(page.locator('[data-testid="telemetry-gps-text"]')).toContainText("GPS: fix_3d · 14 sats");
+    await expect(page.locator(liveSurfaceSelectors.stateValue)).toContainText("DISARMED");
+    await expect(page.locator(liveSurfaceSelectors.modeValue)).toContainText("LOITER");
+    await expect(page.locator(liveSurfaceSelectors.altitudeValue)).toContainText("12.4 m");
+    await expect(page.locator(liveSurfaceSelectors.speedValue)).toContainText("4.8 m/s");
+    await expect(page.locator(liveSurfaceSelectors.batteryValue)).toContainText("87.2%");
+    await expect(page.locator(liveSurfaceSelectors.headingValue)).toContainText("182°");
+    await expect(page.locator(liveSurfaceSelectors.gpsText)).toContainText("GPS: fix_3d · 14 sats");
 
     await disconnectBtn.click();
 

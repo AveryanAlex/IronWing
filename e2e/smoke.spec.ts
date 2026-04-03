@@ -1,6 +1,15 @@
-import { test, expect, runtimeSelectors } from "./fixtures/mock-platform";
+import {
+  applyShellViewport,
+  connectionSelectors,
+  expect,
+  expectDockedVehiclePanel,
+  expectShellChrome,
+  runtimeSelectors,
+  test,
+} from "./fixtures/mock-platform";
 
 test("active Svelte shell boots with runtime diagnostics in browser-only mode", async ({ page, mockPlatform }) => {
+  await applyShellViewport(page, "desktop");
   await page.goto("/");
   await mockPlatform.waitForRuntimeSurface();
 
@@ -13,5 +22,8 @@ test("active Svelte shell boots with runtime diagnostics in browser-only mode", 
   await expect(page.locator(runtimeSelectors.bootedAt)).not.toContainText("Awaiting bootstrap completion");
   await expect(page.locator(runtimeSelectors.entrypoint)).toContainText("src/app/App.svelte");
   await expect(page.locator(runtimeSelectors.quarantineBoundary)).toContainText("src-old/runtime");
+  await expectShellChrome(page, "desktop");
+  await expectDockedVehiclePanel(page, "desktop");
+  await expect(page.locator(connectionSelectors.connectButton)).toBeVisible();
   await expect(page.locator(runtimeSelectors.bootstrapFailure)).toHaveCount(0);
 });

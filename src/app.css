@@ -79,7 +79,13 @@ body {
   color: var(--color-text-primary);
 }
 
-.runtime-shell,
+.runtime-shell {
+  min-height: 100%;
+  display: flex;
+  justify-content: center;
+  padding: clamp(20px, 4vw, 40px);
+}
+
 .bootstrap-failure-surface {
   min-height: 100%;
   display: grid;
@@ -89,12 +95,57 @@ body {
 
 .runtime-shell__content,
 .bootstrap-failure-surface {
-  width: min(100%, 960px);
+  width: min(100%, 1440px);
   border: 1px solid color-mix(in srgb, var(--color-border) 85%, white 15%);
   border-radius: 28px;
-  background: linear-gradient(180deg, rgba(23, 30, 39, 0.96), rgba(15, 20, 27, 0.98));
+  background:
+    radial-gradient(circle at top right, rgba(18, 185, 255, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(23, 30, 39, 0.96), rgba(15, 20, 27, 0.99));
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
-  padding: clamp(24px, 5vw, 40px);
+  backdrop-filter: blur(18px);
+}
+
+.runtime-shell__content {
+  display: grid;
+  gap: 24px;
+  padding: clamp(20px, 4vw, 36px);
+}
+
+.app-shell-frame {
+  position: relative;
+  overflow: clip;
+}
+
+.app-shell-header {
+  display: grid;
+  gap: 24px;
+}
+
+.app-shell-header__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.app-shell-header__copy {
+  min-width: 0;
+}
+
+.app-shell-mobile-toggle {
+  align-self: flex-start;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 60%, white 15%);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(18, 185, 255, 0.24), rgba(18, 185, 255, 0.12));
+  color: var(--color-text-primary);
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  padding: 0.8rem 1rem;
+  box-shadow: 0 12px 32px rgba(18, 185, 255, 0.18);
+}
+
+.app-shell-mobile-toggle:hover {
+  background: linear-gradient(180deg, rgba(18, 185, 255, 0.3), rgba(18, 185, 255, 0.16));
 }
 
 .runtime-eyebrow {
@@ -117,17 +168,21 @@ body {
 
 .runtime-copy {
   margin: 18px 0 0;
-  max-width: 52rem;
+  max-width: 56rem;
   color: var(--color-text-secondary);
   font-size: 1rem;
   line-height: 1.7;
 }
 
-.runtime-diagnostic-grid {
-  margin: 32px 0 0;
+.runtime-diagnostic-grid,
+.app-shell-summary-grid {
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.runtime-diagnostic-grid {
+  margin: 32px 0 0;
 }
 
 .runtime-card {
@@ -188,6 +243,110 @@ body {
 .runtime-status-pill[data-runtime-phase="failed"] {
   background: rgba(255, 68, 68, 0.14);
   color: var(--color-danger);
+}
+
+.app-shell-layout {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+}
+
+.app-shell-layout__vehicle-panel,
+.app-shell-layout__main {
+  min-width: 0;
+}
+
+.app-shell-live-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.app-shell-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(5, 9, 14, 0.72);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.app-shell-drawer-backdrop[data-state="open"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.app-shell-drawer {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  padding: 0 12px calc(var(--safe-area-bottom, 0px) + 12px);
+  transform: translateY(calc(100% + var(--safe-area-bottom, 0px)));
+  transition: transform 220ms ease;
+  pointer-events: none;
+}
+
+.app-shell-drawer[data-state="open"] {
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.app-shell-drawer__sheet {
+  width: min(100%, 760px);
+  max-height: min(82dvh, 760px);
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--color-border) 82%, white 18%);
+  border-radius: 28px 28px 0 0;
+  background:
+    radial-gradient(circle at top, rgba(18, 185, 255, 0.18), transparent 32%),
+    linear-gradient(180deg, rgba(23, 30, 39, 0.98), rgba(12, 17, 24, 0.98));
+  box-shadow: 0 -20px 70px rgba(0, 0, 0, 0.36);
+  padding: 18px 18px calc(var(--safe-area-bottom, 0px) + 18px);
+}
+
+.app-shell-drawer__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.app-shell-drawer__close {
+  border: 1px solid color-mix(in srgb, var(--color-border-light) 85%, white 15%);
+  border-radius: 999px;
+  background: rgba(18, 23, 29, 0.86);
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.7rem 0.95rem;
+}
+
+.app-shell-drawer__close:hover {
+  border-color: color-mix(in srgb, var(--color-accent) 50%, white 20%);
+  color: var(--color-accent);
+}
+
+@media (min-width: 768px) {
+  .app-shell-header__hero {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .app-shell-layout[data-shell-tier="tablet"],
+  .app-shell-layout[data-shell-tier="desktop"],
+  .app-shell-layout[data-shell-tier="wide"] {
+    grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .app-shell-live-grid {
+    gap: 24px;
+  }
 }
 
 /* Map markers — must stay as regular CSS since MapLibre creates DOM elements */

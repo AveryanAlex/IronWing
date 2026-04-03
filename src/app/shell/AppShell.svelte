@@ -1,3 +1,5 @@
+<svelte:options runes={false} />
+
 <script lang="ts">
 import { onMount } from "svelte";
 import { Toaster } from "svelte-sonner";
@@ -6,11 +8,38 @@ import ConnectionPanel from "../../components/connection/ConnectionPanel.svelte"
 import VehicleStatusCard from "../../components/status/VehicleStatusCard.svelte";
 import TelemetrySummary from "../../components/telemetry/TelemetrySummary.svelte";
 import { runtime, runtimeTestIds } from "../../lib/stores/runtime";
-import { session } from "../../lib/stores/session";
+import { session, type SessionStore } from "../../lib/stores/session";
+import AppShellHeader from "./AppShellHeader.svelte";
+import { createShellChromeStore } from "./chrome-state";
+import VehiclePanelDrawer from "./VehiclePanelDrawer.svelte";
+
+export let store: SessionStore = session;
+
+const chrome = createShellChromeStore();
+
+let vehiclePanelOpen = false;
+let activeEnvelopeText = "no active session";
+let drawerState: "open" | "closed" | "docked" = "docked";
 
 onMount(() => {
-  void session.initialize();
+  void store.initialize();
 });
+
+$: activeEnvelopeText = $store.activeEnvelope
+  ? `${$store.activeEnvelope.session_id} · rev ${$store.activeEnvelope.reset_revision}`
+  : "no active session";
+$: drawerState = $chrome.vehiclePanelMode === "drawer" ? (vehiclePanelOpen ? "open" : "closed") : "docked";
+$: if ($chrome.vehiclePanelMode !== "drawer" && vehiclePanelOpen) {
+  vehiclePanelOpen = false;
+}
+
+function toggleVehiclePanel() {
+  vehiclePanelOpen = !vehiclePanelOpen;
+}
+
+function closeVehiclePanel() {
+  vehiclePanelOpen = false;
+}
 </script>
 
 <Toaster closeButton richColors />
@@ -18,66 +47,41 @@ onMount(() => {
 <main
   class="runtime-shell"
   data-runtime-phase={$runtime.bootstrapState}
+  data-shell-tier={$chrome.tier}
   data-testid={runtimeTestIds.shell}
 >
-  <section class="runtime-shell__content">
-    <header class="flex flex-col gap-6">
-      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div class="max-w-3xl">
-          <p class="runtime-eyebrow" data-testid={runtimeTestIds.runtimeMarker}>IronWing active runtime</p>
-          <h1 class="runtime-title" data-testid={runtimeTestIds.heading}>Svelte runtime online</h1>
-          <p class="runtime-copy">
-            The active frontend boot path now mounts the first rewritten live surface: a Svelte-native session
-            panel, vehicle status seed card, and telemetry summary backed by the new singleton store boundary.
-          </p>
+  <section class="runtime-shell__content app-shell-frame" data-shell-tier={$chrome.tier}>
+    <AppShellHeader
+      activeEnvelopeText={activeEnvelopeText}
+      activeSource={$store.activeSource}
+      bootedAt={$runtime.bootedAt}
+      bootstrapState={$runtime.bootstrapState}
+      drawerState={drawerState}
+      entrypoint={$runtime.entrypoint}
+      framework={$runtime.framework}
+      lastPhase={$store.lastPhase}
+      legacyBoundary={$runtime.legacyRuntimeLocation}
+      handleVehiclePanelToggle={toggleVehiclePanel}
+      showVehiclePanelButton={$chrome.vehiclePanelMode === "drawer"}
+      tier={$chrome.tier}
+      vehiclePanelOpen={vehiclePanelOpen}
+    />
+
+    <div class="app-shell-layout" data-shell-tier={$chrome.tier}>
+      {#if $chrome.vehiclePanelMode === "docked"}
+        <aside class="app-shell-layout__vehicle-panel">
+          <ConnectionPanel {store} />
+        </aside>
+      {/if}
+
+      <section class="app-shell-layout__main">
+        <div class="app-shell-live-grid">
+          <VehicleStatusCard {store} />
+          <TelemetrySummary {store} />
         </div>
-
-        <dl class="grid gap-3 sm:grid-cols-2 lg:w-[420px] lg:shrink-0">
-          <div class="runtime-card">
-            <dt class="runtime-card-label">Framework</dt>
-            <dd class="runtime-card-value" data-testid={runtimeTestIds.framework}>{$runtime.framework}</dd>
-          </div>
-          <div class="runtime-card">
-            <dt class="runtime-card-label">Bootstrap state</dt>
-            <dd class="runtime-card-value">
-              <span
-                class="runtime-status-pill"
-                data-runtime-phase={$runtime.bootstrapState}
-                data-testid={runtimeTestIds.bootstrapState}
-              >
-                {$runtime.bootstrapState}
-              </span>
-            </dd>
-          </div>
-          <div class="runtime-card">
-            <dt class="runtime-card-label">Boot time</dt>
-            <dd class="runtime-card-value" data-testid={runtimeTestIds.bootedAt}>
-              {$runtime.bootedAt ?? "Awaiting bootstrap completion"}
-            </dd>
-          </div>
-          <div class="runtime-card">
-            <dt class="runtime-card-label">Entrypoint</dt>
-            <dd class="runtime-card-value runtime-card-value--mono" data-testid={runtimeTestIds.entrypoint}>
-              {$runtime.entrypoint}
-            </dd>
-          </div>
-          <div class="runtime-card sm:col-span-2">
-            <dt class="runtime-card-label">Legacy quarantine boundary</dt>
-            <dd class="runtime-card-value runtime-card-value--mono" data-testid={runtimeTestIds.quarantineBoundary}>
-              {$runtime.legacyRuntimeLocation}
-            </dd>
-          </div>
-        </dl>
-      </div>
-    </header>
-
-    <div class="mt-8 grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-      <ConnectionPanel />
-
-      <div class="grid gap-5">
-        <VehicleStatusCard />
-        <TelemetrySummary />
-      </div>
+      </section>
     </div>
   </section>
+
+  <VehiclePanelDrawer {store} onClose={closeVehiclePanel} open={vehiclePanelOpen && $chrome.vehiclePanelMode === "drawer"} />
 </main>

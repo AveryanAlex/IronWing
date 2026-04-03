@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import type {
   MockCommandBehavior,
   MockGuidedStateValue,
@@ -21,6 +21,11 @@ export const runtimeSelectors = {
   quarantineBoundary: '[data-testid="app-runtime-quarantine-boundary"]',
   bootstrapFailure: '[data-testid="app-bootstrap-failure"]',
   bootstrapFailureMessage: '[data-testid="app-bootstrap-failure-message"]',
+  shellTier: '[data-testid="app-shell-tier"]',
+  drawerState: '[data-testid="app-shell-drawer-state"]',
+  vehiclePanelButton: '[data-testid="app-shell-vehicle-panel-btn"]',
+  vehiclePanelDrawer: '[data-testid="app-shell-vehicle-panel-drawer"]',
+  vehiclePanelClose: '[data-testid="app-shell-vehicle-panel-close"]',
 } as const;
 
 export const connectionSelectors = {
@@ -36,6 +41,43 @@ export const connectionSelectors = {
   diagnosticsEnvelope: '[data-testid="connection-diagnostics-envelope"]',
   diagnosticsBootstrap: '[data-testid="connection-diagnostics-bootstrap"]',
 } as const;
+
+export const liveSurfaceSelectors = {
+  stateValue: '[data-testid="telemetry-state-value"]',
+  modeValue: '[data-testid="telemetry-mode-value"]',
+  altitudeValue: '[data-testid="telemetry-alt-value"]',
+  speedValue: '[data-testid="telemetry-speed-value"]',
+  batteryValue: '[data-testid="telemetry-battery-value"]',
+  headingValue: '[data-testid="telemetry-heading-value"]',
+  gpsText: '[data-testid="telemetry-gps-text"]',
+} as const;
+
+export const shellViewportPresets = {
+  desktop: {
+    width: 1440,
+    height: 900,
+    tier: "wide",
+    drawerState: "docked",
+    label: "desktop shell",
+  },
+  radiomaster: {
+    width: 1280,
+    height: 720,
+    tier: "wide",
+    drawerState: "docked",
+    label: "Radiomaster 1280x720 shell",
+  },
+  phone: {
+    width: 390,
+    height: 844,
+    tier: "phone",
+    drawerState: "closed",
+    label: "phone shell",
+  },
+} as const;
+
+export type ShellViewportPresetName = keyof typeof shellViewportPresets;
+export type ShellViewportPreset = (typeof shellViewportPresets)[ShellViewportPresetName];
 
 type MockPlatformFixture = {
   reset: () => Promise<void>;
@@ -57,13 +99,28 @@ type MockPlatformFixture = {
     guidedState: MockGuidedStateValue;
   }) => Promise<boolean>;
   getInvocations: () => Promise<MockInvocation[]>;
-  getLiveEnvelope: () => Promise<{ session_id: string; source_kind: "live" | "playback"; seek_epoch: number; reset_revision: number } | null>;
+  getLiveEnvelope: () => Promise<{
+    session_id: string;
+    source_kind: "live" | "playback";
+    seek_epoch: number;
+    reset_revision: number;
+  } | null>;
   waitForRuntimeSurface: () => Promise<void>;
 };
 
 type Fixtures = {
   mockPlatform: MockPlatformFixture;
 };
+
+function resolveShellViewportPreset(presetName: ShellViewportPresetName): ShellViewportPreset {
+  const preset = shellViewportPresets[presetName];
+  if (!preset) {
+    throw new Error(
+      `Unsupported shell viewport preset: ${presetName}. Use one of: ${Object.keys(shellViewportPresets).join(", ")}.`,
+    );
+  }
+  return preset;
+}
 
 async function waitForMockController(page: Page) {
   await page.waitForFunction(() => Boolean(window.__IRONWING_MOCK_PLATFORM__), undefined, {
@@ -96,6 +153,116 @@ async function withMockController<T>(page: Page, callback: string, ...args: unkn
     },
     [callback, args],
   );
+}
+
+export async function assertShellViewport(page: Page, presetName: ShellViewportPresetName): Promise<ShellViewportPreset> {
+  const preset = resolveShellViewportPreset(presetName);
+
+  await expect
+    .poll(() => page.viewportSize()?.width ?? 0, {
+      message: `${preset.label} should apply width ${preset.width}px before shell assertions continue.`,
+    })
+    .toBe(preset.width);
+  await expect
+    .poll(() => page.viewportSize()?.height ?? 0, {
+      message: `${preset.label} should apply height ${preset.height}px before shell assertions continue.`,
+    })
+    .toBe(preset.height);
+  await expect
+    .poll(() => page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight })), {
+      message: `${preset.label} should reach the app with the same viewport dimensions Playwright set.`,
+    })
+    .toEqual({ width: preset.width, height: preset.height });
+
+  return preset;
+}
+
+export async function applyShellViewport(page: Page, presetName: ShellViewportPresetName): Promise<ShellViewportPreset> {
+  const preset = resolveShellViewportPreset(presetName);
+  await page.setViewportSize({ width: preset.width, height: preset.height });
+  await assertShellViewport(page, presetName);
+  return preset;
+}
+
+export async function expectShellChrome(page: Page, presetName: ShellViewportPresetName): Promise<ShellViewportPreset> {
+  const preset = await assertShellViewport(page, presetName);
+
+  await expect(
+    page.locator(runtimeSelectors.shellTier),
+    `${preset.label} should report the ${preset.tier} shell tier through the shared shell diagnostics card.`,
+  ).toContainText(preset.tier);
+  await expect(
+    page.locator(runtimeSelectors.drawerState),
+    `${preset.label} should report the ${preset.drawerState} vehicle-panel state through the shared shell diagnostics card.`,
+  ).toContainText(preset.drawerState);
+
+  return preset;
+}
+
+export function liveSurfaceLocator(page: Page, selector: keyof typeof liveSurfaceSelectors): Locator {
+  return page.locator(liveSurfaceSelectors[selector]);
+}
+
+export async function expectDockedVehiclePanel(page: Page, presetName: Extract<ShellViewportPresetName, "desktop" | "radiomaster">): Promise<void> {
+  const preset = await expectShellChrome(page, presetName);
+
+  await expect(
+    page.locator(runtimeSelectors.vehiclePanelButton),
+    `${preset.label} should not render the phone-only Vehicle panel drawer button.`,
+  ).toHaveCount(0);
+  await expect(
+    page.locator(connectionSelectors.connectButton),
+    `${preset.label} should keep the connection surface docked and immediately reachable.`,
+  ).toBeVisible();
+}
+
+export async function openVehiclePanelDrawer(page: Page): Promise<void> {
+  const drawerButton = page.getByRole("button", { name: "Vehicle panel" });
+  const drawer = page.locator(runtimeSelectors.vehiclePanelDrawer);
+  const connectButton = page.locator(connectionSelectors.connectButton);
+
+  await expect(
+    drawerButton,
+    "Phone tier must expose a Vehicle panel button; if this fails, update the shared shell selectors in e2e/fixtures/mock-platform.ts instead of hard-coding coordinates in the spec.",
+  ).toBeVisible();
+  await expect(
+    connectButton,
+    "Phone tier should keep the connection surface out of reach until the Vehicle panel drawer is opened.",
+  ).toHaveCount(0);
+
+  await drawerButton.click();
+
+  await expect(
+    drawer,
+    "Opening the Vehicle panel should switch the shared shell drawer into the open state.",
+  ).toHaveAttribute("data-state", "open");
+  await expect(
+    page.locator(runtimeSelectors.drawerState),
+    "Opening the Vehicle panel should update the shell diagnostics card to the open state.",
+  ).toContainText("open");
+  await expect(
+    connectButton,
+    "Vehicle panel drawer opened, but the connection surface is still unreachable. Keep selectors in e2e/fixtures/mock-platform.ts aligned with the shell.",
+  ).toBeVisible();
+}
+
+export async function closeVehiclePanelDrawer(page: Page): Promise<void> {
+  const drawer = page.locator(runtimeSelectors.vehiclePanelDrawer);
+  const closeButton = page.locator(runtimeSelectors.vehiclePanelClose);
+
+  await expect(
+    closeButton,
+    "Phone drawer close control is missing; keep the shared shell selectors in e2e/fixtures/mock-platform.ts aligned with the drawer markup.",
+  ).toBeVisible();
+  await closeButton.click();
+  await expect(drawer, "Closing the Vehicle panel should collapse the drawer surface.").toHaveAttribute(
+    "data-state",
+    "closed",
+  );
+  await expect(
+    page.locator(runtimeSelectors.drawerState),
+    "Closing the Vehicle panel should update the shell diagnostics card to the closed state.",
+  ).toContainText("closed");
 }
 
 export const test = base.extend<Fixtures>({
