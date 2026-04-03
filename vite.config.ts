@@ -1,17 +1,13 @@
 import { defineConfig } from "vite";
-import { svelte, vitePreprocess } from "@sveltejs/vite-plugin-svelte";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath, URL } from "url";
+import svelteConfig from "./svelte.config";
 
 const platformDir = process.env.IRONWING_PLATFORM === "mock" ? "mock" : "tauri";
 
 export default defineConfig({
-  plugins: [
-    svelte({
-      preprocess: vitePreprocess(),
-    }),
-    tailwindcss(),
-  ],
+  plugins: [svelte(svelteConfig), tailwindcss()],
   resolve: {
     alias: {
       "@platform/core": fileURLToPath(new URL(`src/platform/${platformDir}/core.ts`, import.meta.url)),
