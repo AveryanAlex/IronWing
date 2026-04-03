@@ -10,6 +10,19 @@ import type {
   MockParamStoreState,
 } from "../../src/platform/mock/backend";
 
+export const runtimeSelectors = {
+  shell: '[data-testid="app-shell"]',
+  heading: '[data-testid="app-shell-heading"]',
+  runtimeMarker: '[data-testid="app-runtime-marker"]',
+  framework: '[data-testid="app-runtime-framework"]',
+  bootstrapState: '[data-testid="app-bootstrap-state"]',
+  bootedAt: '[data-testid="app-runtime-booted-at"]',
+  entrypoint: '[data-testid="app-runtime-entrypoint"]',
+  quarantineBoundary: '[data-testid="app-runtime-quarantine-boundary"]',
+  bootstrapFailure: '[data-testid="app-bootstrap-failure"]',
+  bootstrapFailureMessage: '[data-testid="app-bootstrap-failure-message"]',
+} as const;
+
 type MockPlatformFixture = {
   reset: () => Promise<void>;
   setCommandBehavior: (cmd: string, behavior: MockCommandBehavior) => Promise<void>;
@@ -31,16 +44,31 @@ type MockPlatformFixture = {
   }) => Promise<boolean>;
   getInvocations: () => Promise<MockInvocation[]>;
   getLiveEnvelope: () => Promise<{ session_id: string; source_kind: "live" | "playback"; seek_epoch: number; reset_revision: number } | null>;
+  waitForRuntimeSurface: () => Promise<void>;
 };
 
 type Fixtures = {
   mockPlatform: MockPlatformFixture;
 };
 
-async function withMockController<T>(page: Page, callback: string, ...args: unknown[]) {
+async function waitForMockController(page: Page) {
   await page.waitForFunction(() => Boolean(window.__IRONWING_MOCK_PLATFORM__), undefined, {
     timeout: 10_000,
   });
+}
+
+async function waitForRuntimeSurface(page: Page) {
+  await page.waitForFunction(
+    (selectors) => Boolean(document.querySelector(selectors.shell) || document.querySelector(selectors.bootstrapFailure)),
+    runtimeSelectors,
+    {
+      timeout: 10_000,
+    },
+  );
+}
+
+async function withMockController<T>(page: Page, callback: string, ...args: unknown[]) {
+  await waitForMockController(page);
 
   return page.evaluate(
     ([methodName, values]) => {
@@ -73,6 +101,7 @@ export const test = base.extend<Fixtures>({
       resolveDeferredConnectLink: (params) => withMockController(page, "resolveDeferredConnectLink", params),
       getInvocations: () => withMockController(page, "getInvocations"),
       getLiveEnvelope: () => withMockController(page, "getLiveEnvelope"),
+      waitForRuntimeSurface: () => waitForRuntimeSurface(page),
     });
   },
 });
