@@ -1,12 +1,17 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import { svelte, vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath, URL } from "url";
 
 const platformDir = process.env.IRONWING_PLATFORM === "mock" ? "mock" : "tauri";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    svelte({
+      preprocess: vitePreprocess(),
+    }),
+    tailwindcss(),
+  ],
   resolve: {
     alias: {
       "@platform/core": fileURLToPath(new URL(`src/platform/${platformDir}/core.ts`, import.meta.url)),

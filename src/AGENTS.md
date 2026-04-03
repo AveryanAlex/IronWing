@@ -1,8 +1,10 @@
-# Frontend (React + TypeScript)
+# Frontend (Svelte + TypeScript; legacy React still present)
+
+> Cutover note (M004/S01): the shipped frontend now boots from `src/main.ts` and mounts `src/App.svelte`. The old React runtime root moved to `src-old/runtime/`. The legacy hook/component guidance below still describes code that remains in-repo for reference during the rewrite, not the active runtime path.
 
 ## Overview
 
-Frontend app state lives in hooks instantiated by `App.tsx`, then flows down via props. Bridge files in `src/*.ts` wrap IPC and event subscriptions; feature components consume those bridges through hooks, not by talking to Tauri directly.
+The active frontend boot path is now a minimal Svelte runtime. Bridge files in `src/*.ts` and the `src/platform/*` boundary remain the main non-UI seams to preserve during the rewrite.
 
 ## Where To Look
 
