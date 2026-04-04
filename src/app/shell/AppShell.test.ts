@@ -370,8 +370,11 @@ describe("AppShell", () => {
     expect(screen.getByRole("button", { name: "Mission" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Logs" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Firmware" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Settings" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Setup" })).toBeTruthy();
+    const setupTab = screen.getByRole("button", { name: "Setup" });
+    const appSettingsTab = screen.getByRole("button", { name: "App settings" });
+    expect(setupTab).toBeTruthy();
+    expect(appSettingsTab).toBeTruthy();
+    expect(Boolean(setupTab.compareDocumentPosition(appSettingsTab) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
 
     await fireEvent.click(screen.getByRole("button", { name: "Telemetry" }));
     await waitFor(() => {
@@ -382,7 +385,7 @@ describe("AppShell", () => {
     expect(screen.queryByTestId("telemetry-state-value")).toBeNull();
   });
 
-  it("switches to the settings workspace from the active shell", async () => {
+  it("switches to the setup workspace from the active shell", async () => {
     await renderShellAt(1440, {
       snapshot: createSnapshot({
         param_store: {
@@ -399,7 +402,7 @@ describe("AppShell", () => {
     await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
 
     await waitFor(() => {
-      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("settings");
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("setup");
     });
 
     expect(screen.queryByTestId("telemetry-state-value")).toBeNull();
@@ -408,13 +411,13 @@ describe("AppShell", () => {
     expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-ARMING_CHECK`).textContent).toContain("ARMING_CHECK");
   });
 
-  it("shows an explicit unavailable settings workspace state when the active scope has no bootstrap data", async () => {
+  it("shows an explicit unavailable setup workspace state when the active scope has no bootstrap data", async () => {
     await renderShellAt(1440);
 
     await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
 
     await waitFor(() => {
-      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("settings");
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("setup");
     });
 
     expect(screen.getByTestId(parameterWorkspaceTestIds.state).textContent?.trim()).toBe("Connect to load");
@@ -458,7 +461,7 @@ describe("AppShell", () => {
 
     await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
     await waitFor(() => {
-      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("settings");
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("setup");
     });
 
     await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`), {
@@ -493,7 +496,7 @@ describe("AppShell", () => {
 
     await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
     await waitFor(() => {
-      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("settings");
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("setup");
     });
 
     expect(screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-ARMING_CHECK`).textContent).toContain("3");
@@ -535,7 +538,7 @@ describe("AppShell", () => {
 
     await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
     await waitFor(() => {
-      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("settings");
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("setup");
     });
 
     await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`), {

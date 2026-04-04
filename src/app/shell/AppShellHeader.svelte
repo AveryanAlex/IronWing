@@ -66,10 +66,6 @@ function connectionIndicatorClass(tone: ConnectionTone): string {
       return "is-neutral";
   }
 }
-
-function shouldShowWorkspaceIcon(workspace: AppShellWorkspace): boolean {
-  return workspace === "setup" || workspace === "settings";
-}
 </script>
 
 <header class="app-shell-header">
@@ -115,7 +111,7 @@ function shouldShowWorkspaceIcon(workspace: AppShellWorkspace): boolean {
         onclick={() => onSelectWorkspace(workspace.key)}
         type="button"
       >
-        {#if shouldShowWorkspaceIcon(workspace.key)}
+        {#if workspace.key === "setup" || workspace.key === "settings"}
           {#if workspace.key === "setup"}
             <svg aria-hidden="true" focusable="false" height="14" viewBox="0 0 16 16" width="14">
               <path

@@ -1,0 +1,261 @@
+import { emitGuidedStateIfLiveActive, liveGuidedStreamEvent, reconcileGuidedAfterLiveVehicleUpdate } from "./guided";
+import { mockState, requireLiveEnvelope, resetGuided } from "./runtime";
+import { applyMockMissionState } from "./mission";
+import { applyMockParamState } from "./params";
+import type {
+  CommandArgs,
+  MockLiveVehicleState,
+  MockMissionState,
+  MockParamProgressState,
+  MockParamStoreState,
+  MockPlatformEvent,
+  TransportDescriptor,
+} from "./types";
+
+export function requireConnectedVehicle() {
+  if (!mockState.liveVehicleAvailable) {
+    throw new Error("not connected");
+  }
+}
+
+function requireFiniteInteger(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value)) {
+    throw new Error(`missing or invalid ${label}`);
+  }
+
+  return value;
+}
+
+function requireBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`missing or invalid ${label}`);
+  }
+
+  return value;
+}
+
+export function validateSetServoArgs(args: CommandArgs) {
+  const instance = requireFiniteInteger(args?.instance, "set_servo.instance");
+  const pwmUs = requireFiniteInteger(args?.pwmUs, "set_servo.pwmUs");
+
+  if (instance < 1 || instance > 16) {
+    throw new Error(`set_servo instance must be in 1..=16, got ${instance}`);
+  }
+  if (pwmUs < 1000 || pwmUs > 2000) {
+    throw new Error(`set_servo pwm_us must be in 1000..=2000 microseconds, got ${pwmUs}`);
+  }
+}
+
+export function validateMotorTestArgs(args: CommandArgs) {
+  const motorInstance = requireFiniteInteger(args?.motorInstance, "motor_test.motorInstance");
+  const throttlePct = args?.throttlePct;
+  const durationS = args?.durationS;
+
+  if (motorInstance < 1 || motorInstance > 8) {
+    throw new Error(`motor_test motorInstance must be in 1..=8, got ${motorInstance}`);
+  }
+  if (typeof throttlePct !== "number" || !Number.isFinite(throttlePct)) {
+    throw new Error("missing or invalid motor_test.throttlePct");
+  }
+  if (throttlePct < 0 || throttlePct > 100) {
+    throw new Error(`motor_test throttlePct must be in 0..=100, got ${throttlePct}`);
+  }
+  if (typeof durationS !== "number" || !Number.isFinite(durationS)) {
+    throw new Error("missing or invalid motor_test.durationS");
+  }
+  if (durationS <= 0) {
+    throw new Error(`motor_test durationS must be greater than 0, got ${durationS}`);
+  }
+}
+
+export function validateRcOverrideArgs(args: CommandArgs) {
+  if (!Array.isArray(args?.channels)) {
+    throw new Error("missing or invalid rc_override.channels");
+  }
+
+  for (const [index, entry] of args.channels.entries()) {
+    if (!entry || typeof entry !== "object") {
+      throw new Error(`missing or invalid rc_override.channels[${index}]`);
+    }
+
+    const channel = requireFiniteInteger((entry as { channel?: unknown }).channel, `rc_override.channels[${index}].channel`);
+    if (channel < 1 || channel > 18) {
+      throw new Error(`rc override channel must be 1..=18, got ${channel}`);
+    }
+
+    const value = (entry as { value?: unknown }).value;
+    if (!value || typeof value !== "object") {
+      throw new Error(`missing or invalid rc_override.channels[${index}].value`);
+    }
+
+    const kind = (value as { kind?: unknown }).kind;
+    if (kind !== "ignore" && kind !== "release" && kind !== "pwm") {
+      throw new Error(`missing or invalid rc_override.channels[${index}].value.kind`);
+    }
+
+    if (kind === "pwm") {
+      const pwmUs = requireFiniteInteger((value as { pwm_us?: unknown }).pwm_us, `rc_override.channels[${index}].value.pwm_us`);
+      if (pwmUs === 0) {
+        throw new Error("rc override pwm 0 is reserved for release; use RcOverrideChannelValue::Release or RcOverride::release()");
+      }
+      if (pwmUs === 65535) {
+        throw new Error("rc override pwm 65535 is reserved for ignore; use RcOverrideChannelValue::Ignore or RcOverride::ignore()");
+      }
+    }
+  }
+}
+
+export function validateArmDisarmArgs(args: CommandArgs, cmd: "arm_vehicle" | "disarm_vehicle") {
+  requireBoolean(args?.force, `${cmd}.force`);
+}
+
+export function normalizedLiveVehicleState(mockVehicleState?: Partial<MockLiveVehicleState> & { modeName?: string } | null): MockLiveVehicleState {
+  const modeName = mockVehicleState?.mode_name ?? mockVehicleState?.modeName ?? "Stabilize";
+  return {
+    armed: mockVehicleState?.armed ?? false,
+    custom_mode: mockVehicleState?.custom_mode ?? (modeName.toUpperCase() === "GUIDED" ? 4 : 0),
+    mode_name: modeName,
+    system_status: mockVehicleState?.system_status ?? "active",
+    vehicle_type: mockVehicleState?.vehicle_type ?? "quadrotor",
+    autopilot: mockVehicleState?.autopilot ?? "ardu_pilot_mega",
+    system_id: mockVehicleState?.system_id ?? 1,
+    component_id: mockVehicleState?.component_id ?? 1,
+    heartbeat_received: mockVehicleState?.heartbeat_received ?? true,
+  };
+}
+
+export function applyMockLiveVehicleState(mockVehicleState?: Partial<MockLiveVehicleState> & { modeName?: string } | null) {
+  const normalized = normalizedLiveVehicleState(mockVehicleState);
+  mockState.liveVehicleAvailable = true;
+  mockState.liveVehicleState = normalized;
+  mockState.liveVehicleArmed = normalized.armed;
+  mockState.liveVehicleModeName = normalized.mode_name;
+}
+
+export function clearLiveVehicleState() {
+  mockState.liveVehicleAvailable = false;
+  mockState.liveVehicleState = null;
+  mockState.liveMissionState = null;
+  mockState.liveParamStore = null;
+  mockState.liveParamProgress = null;
+  mockState.liveVehicleArmed = false;
+  mockState.liveVehicleModeName = "Stabilize";
+}
+
+export function connectLink(args: CommandArgs) {
+  resetGuided("source_switch", "live source switched");
+  if (args?.request && typeof args.request === "object") {
+    const request = args.request as ConnectLinkRequest;
+    applyMockLiveVehicleState(request.mockVehicleState);
+    applyMockMissionState(request.mockMissionState);
+    applyMockParamState(request.mockParamStore, request.mockParamProgress);
+    return;
+  }
+
+  applyMockLiveVehicleState();
+  applyMockMissionState();
+  applyMockParamState();
+}
+
+export function disconnectLink(args: CommandArgs) {
+  if (args?.request && typeof args.request === "object") {
+    const requestedSessionId = (args.request as { session_id?: string }).session_id;
+    if (requestedSessionId) {
+      if (!mockState.liveEnvelope) {
+        throw new Error(`session_id mismatch: no active session for ${requestedSessionId}`);
+      }
+      if (mockState.liveEnvelope.session_id !== requestedSessionId) {
+        throw new Error(`session_id mismatch: expected ${mockState.liveEnvelope.session_id}, got ${requestedSessionId}`);
+      }
+    }
+  }
+
+  clearLiveVehicleState();
+  resetGuided("disconnect", "live vehicle disconnected");
+}
+
+export function emitLiveSessionState(vehicleState: MockLiveVehicleState, emitEvent: (event: string, payload: unknown) => void) {
+  applyMockLiveVehicleState(vehicleState);
+  emitEvent("session://state", liveSessionStreamEvent(vehicleState).payload);
+  const reconciledGuided = reconcileGuidedAfterLiveVehicleUpdate();
+  if (reconciledGuided) {
+    emitEvent("guided://state", liveGuidedStreamEvent(reconciledGuided).payload);
+  }
+}
+
+export function syncLiveVehicleArmedState(armed: boolean, emitEvent: (event: string, payload: unknown) => void) {
+  mockState.liveVehicleArmed = armed;
+  if (mockState.liveVehicleState) {
+    mockState.liveVehicleState = { ...mockState.liveVehicleState, armed };
+  }
+
+  if (!mockState.liveEnvelope || !mockState.liveVehicleState) {
+    return;
+  }
+
+  emitEvent("session://state", liveSessionStreamEvent(mockState.liveVehicleState).payload);
+  const reconciledGuided = reconcileGuidedAfterLiveVehicleUpdate();
+  if (reconciledGuided) {
+    emitEvent("guided://state", liveGuidedStreamEvent(reconciledGuided).payload);
+    return;
+  }
+
+  emitGuidedStateIfLiveActive(emitEvent);
+}
+
+export function liveSessionStreamEvent(vehicleState: MockLiveVehicleState): MockPlatformEvent {
+  return {
+    event: "session://state",
+    payload: {
+      envelope: requireLiveEnvelope(),
+      value: {
+        available: true,
+        complete: true,
+        provenance: "stream",
+        value: {
+          status: "active",
+          connection: { kind: "connected" },
+          vehicle_state: vehicleState,
+          home_position: null,
+        },
+      },
+    },
+  };
+}
+
+export function availableTransportDescriptors(): TransportDescriptor[] {
+  return [
+    {
+      kind: "udp",
+      label: "UDP",
+      available: true,
+      validation: { bind_addr_required: true },
+    },
+    {
+      kind: "tcp",
+      label: "TCP",
+      available: true,
+      validation: { address_required: true },
+    },
+    {
+      kind: "serial",
+      label: "Serial",
+      available: true,
+      validation: { port_required: true, baud_required: true },
+      default_baud: 57600,
+    },
+    {
+      kind: "bluetooth_ble",
+      label: "BLE",
+      available: true,
+      validation: { address_required: true },
+    },
+  ];
+}
+
+export type ConnectLinkRequest = {
+  mockVehicleState?: Partial<MockLiveVehicleState> & { modeName?: string };
+  mockMissionState?: Partial<MockMissionState>;
+  mockParamStore?: MockParamStoreState;
+  mockParamProgress?: MockParamProgressState;
+};
