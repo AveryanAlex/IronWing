@@ -188,6 +188,8 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
         { id: 74, name: "VFR HUD", default_rate_hz: 4.0 },
         { id: 62, name: "Nav Controller", default_rate_hz: 2.0 },
       ];
+    case "get_available_modes":
+      return [];
     case "disconnect_link":
       disconnectLink(args);
       return undefined;

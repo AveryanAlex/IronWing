@@ -203,6 +203,18 @@ export async function applyShellViewport(page: Page, presetName: ShellViewportPr
   return preset;
 }
 
+export async function expectRuntimeDiagnostics(page: Page): Promise<void> {
+  await expect(
+    page.locator(runtimeSelectors.shell),
+    "The active runtime shell did not mount; runtime diagnostics should stay available under the shared shell test ids.",
+  ).toHaveAttribute("data-runtime-phase", "ready");
+  await expect(page.locator(runtimeSelectors.framework)).toContainText("Svelte 5");
+  await expect(page.locator(runtimeSelectors.bootstrapState)).toContainText("ready");
+  await expect(page.locator(runtimeSelectors.bootedAt)).not.toContainText("Starting up");
+  await expect(page.locator(runtimeSelectors.entrypoint)).toContainText("src/app/App.svelte");
+  await expect(page.locator(runtimeSelectors.quarantineBoundary)).toContainText("src-old/runtime");
+}
+
 export async function expectShellChrome(page: Page, presetName: ShellViewportPresetName): Promise<ShellViewportPreset> {
   const preset = await assertShellViewport(page, presetName);
 

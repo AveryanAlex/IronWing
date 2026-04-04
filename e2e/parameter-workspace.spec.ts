@@ -133,7 +133,7 @@ test.describe("parameter workspace batch apply", () => {
     await expect(page.locator(parameterWorkspaceSelectors.reviewSummary)).toContainText("still need attention");
 
     const invocations = await mockPlatform.getInvocations();
-    const batchInvocation = invocations.findLast((entry) => entry.cmd === "param_write_batch");
+    const batchInvocation = [...invocations].reverse().find((entry) => entry.cmd === "param_write_batch");
     expect(batchInvocation?.args).toEqual({
       params: [["ARMING_CHECK", 3], ["FS_THR_ENABLE", 4]],
     });

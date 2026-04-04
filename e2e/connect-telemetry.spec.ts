@@ -3,6 +3,7 @@ import {
   connectionSelectors,
   expect,
   expectDockedVehiclePanel,
+  expectRuntimeDiagnostics,
   expectShellChrome,
   liveSurfaceSelectors,
   runtimeSelectors,
@@ -81,7 +82,6 @@ test.describe("Happy path: mocked connect and telemetry", () => {
     await mockPlatform.setCommandBehavior("connect_link", { type: "defer" });
 
     const shell = page.locator(runtimeSelectors.shell);
-    const heading = page.locator(runtimeSelectors.heading);
     const statusText = page.locator(connectionSelectors.statusText);
     const connectBtn = page.locator(connectionSelectors.connectButton);
     const cancelBtn = page.locator(connectionSelectors.cancelButton);
@@ -95,7 +95,7 @@ test.describe("Happy path: mocked connect and telemetry", () => {
     const errorMessage = page.locator(connectionSelectors.errorMessage);
 
     await expect(shell).toBeVisible();
-    await expect(heading).toContainText("Svelte runtime online");
+    await expectRuntimeDiagnostics(page);
     await expectShellChrome(page, "desktop");
     await expectDockedVehiclePanel(page, "desktop");
     await expect(connectBtn).toBeVisible({ timeout: 15_000 });
@@ -162,7 +162,7 @@ test.describe("Happy path: mocked connect and telemetry", () => {
     await expect(page.locator(liveSurfaceSelectors.speedValue)).toContainText("4.8 m/s");
     await expect(page.locator(liveSurfaceSelectors.batteryValue)).toContainText("87.2%");
     await expect(page.locator(liveSurfaceSelectors.headingValue)).toContainText("182°");
-    await expect(page.locator(liveSurfaceSelectors.gpsText)).toContainText("GPS: fix_3d · 14 sats");
+    await expect(page.locator(liveSurfaceSelectors.gpsText)).toContainText("GPS: 3D fix · 14 sats");
 
     await disconnectBtn.click();
 
