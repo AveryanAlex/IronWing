@@ -66,6 +66,11 @@ function createState(overrides: Partial<ParamsStoreState> = {}): ParamsStoreStat
     metadataState: "ready",
     metadataError: null,
     stagedEdits: {},
+    retainedFailures: {},
+    applyPhase: "idle",
+    applyError: null,
+    applyProgress: null,
+    scopeClearWarning: null,
     lastNotice: null,
     ...overrides,
   };
@@ -79,22 +84,33 @@ function createHarnessStore(initialState: ParamsStoreState): ParamsStore {
     initialize: async () => undefined,
     reset: () => undefined,
     clearStagedEdits: () => {
-      backing.update((state) => ({ ...state, stagedEdits: {} }));
+      backing.update((state) => ({
+        ...state,
+        stagedEdits: {},
+        retainedFailures: {},
+        applyPhase: "idle",
+        applyError: null,
+        applyProgress: null,
+      }));
     },
     discardStagedEdit: (name: string) => {
       backing.update((state) => {
         const stagedEdits = { ...state.stagedEdits };
+        const retainedFailures = { ...state.retainedFailures };
         delete stagedEdits[name];
-        return { ...state, stagedEdits };
+        delete retainedFailures[name];
+        return { ...state, stagedEdits, retainedFailures };
       });
     },
     stageParameterEdit: (item: ParameterWorkspaceItem, nextValue: number) => {
       backing.update((state) => {
         const stagedEdits = { ...state.stagedEdits };
+        const retainedFailures = { ...state.retainedFailures };
         const currentValue = state.paramStore?.params[item.name]?.value ?? item.value;
         if (nextValue === currentValue) {
           delete stagedEdits[item.name];
-          return { ...state, stagedEdits };
+          delete retainedFailures[item.name];
+          return { ...state, stagedEdits, retainedFailures };
         }
 
         stagedEdits[item.name] = {
@@ -110,10 +126,12 @@ function createHarnessStore(initialState: ParamsStoreState): ParamsStore {
           rebootRequired: item.rebootRequired,
           order: item.order,
         };
+        delete retainedFailures[item.name];
 
-        return { ...state, stagedEdits };
+        return { ...state, stagedEdits, retainedFailures, scopeClearWarning: null };
       });
     },
+    applyStagedEdits: async () => undefined,
   } as ParamsStore;
 }
 
@@ -126,22 +144,33 @@ function createMutableHarnessStore(initialState: ParamsStoreState) {
       initialize: async () => undefined,
       reset: () => undefined,
       clearStagedEdits: () => {
-        backing.update((state) => ({ ...state, stagedEdits: {} }));
+        backing.update((state) => ({
+          ...state,
+          stagedEdits: {},
+          retainedFailures: {},
+          applyPhase: "idle",
+          applyError: null,
+          applyProgress: null,
+        }));
       },
       discardStagedEdit: (name: string) => {
         backing.update((state) => {
           const stagedEdits = { ...state.stagedEdits };
+          const retainedFailures = { ...state.retainedFailures };
           delete stagedEdits[name];
-          return { ...state, stagedEdits };
+          delete retainedFailures[name];
+          return { ...state, stagedEdits, retainedFailures };
         });
       },
       stageParameterEdit: (item: ParameterWorkspaceItem, nextValue: number) => {
         backing.update((state) => {
           const stagedEdits = { ...state.stagedEdits };
+          const retainedFailures = { ...state.retainedFailures };
           const currentValue = state.paramStore?.params[item.name]?.value ?? item.value;
           if (nextValue === currentValue) {
             delete stagedEdits[item.name];
-            return { ...state, stagedEdits };
+            delete retainedFailures[item.name];
+            return { ...state, stagedEdits, retainedFailures };
           }
 
           stagedEdits[item.name] = {
@@ -157,10 +186,12 @@ function createMutableHarnessStore(initialState: ParamsStoreState) {
             rebootRequired: item.rebootRequired,
             order: item.order,
           };
+          delete retainedFailures[item.name];
 
-          return { ...state, stagedEdits };
+          return { ...state, stagedEdits, retainedFailures, scopeClearWarning: null };
         });
       },
+      applyStagedEdits: async () => undefined,
     } as ParamsStore,
     updateState(next: (state: ParamsStoreState) => ParamsStoreState) {
       backing.update(next);
@@ -173,6 +204,28 @@ afterEach(() => {
 });
 
 describe("ParameterWorkspace", () => {
+  it("renders scope, progress, metadata, and scope-clear diagnostics from the parameter domain", () => {
+    const store = createHarnessStore(createState({
+      activeEnvelope: {
+        session_id: "session-2",
+        source_kind: "playback",
+        seek_epoch: 1,
+        reset_revision: 4,
+      },
+      paramProgress: { writing: { index: 1, total: 2, name: "ARMING_CHECK" } },
+      metadataState: "loading",
+      scopeClearWarning: "Parameter scope changed. Staged edits were cleared; review current values and restage against the active session.",
+    }));
+
+    render(withParameterWorkspaceContext(store, ParameterWorkspace));
+
+    expect(screen.getByTestId(parameterWorkspaceTestIds.scope).textContent).toContain("session-2");
+    expect(screen.getByTestId(parameterWorkspaceTestIds.scope).textContent).toContain("playback");
+    expect(screen.getByTestId(parameterWorkspaceTestIds.progress).textContent).toContain("writing · 1/2");
+    expect(screen.getByTestId(parameterWorkspaceTestIds.metadata).textContent).toContain("Loading parameter info");
+    expect(screen.getByTestId(parameterWorkspaceTestIds.notice).textContent).toContain("Staged edits were cleared");
+  });
+
   it("renders an explicit bootstrapping state while the scoped parameter snapshot is still pending", () => {
     const store = createHarnessStore(createState({
       hydrated: false,

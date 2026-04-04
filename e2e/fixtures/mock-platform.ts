@@ -52,6 +52,25 @@ export const liveSurfaceSelectors = {
   gpsText: '[data-testid="telemetry-gps-text"]',
 } as const;
 
+export const parameterWorkspaceSelectors = {
+  workspaceButton: '[data-testid="app-shell-parameter-workspace-btn"]',
+  root: '[data-testid="parameter-workspace"]',
+  state: '[data-testid="parameter-workspace-state"]',
+  scope: '[data-testid="parameter-domain-scope"]',
+  progress: '[data-testid="parameter-domain-progress"]',
+  metadata: '[data-testid="parameter-domain-metadata"]',
+  notice: '[data-testid="parameter-domain-notice"]',
+  pendingCount: '[data-testid="parameter-workspace-pending-count"]',
+  reviewTray: '[data-testid="app-shell-parameter-review-tray"]',
+  reviewSurface: '[data-testid="app-shell-parameter-review-surface"]',
+  reviewCount: '[data-testid="app-shell-parameter-review-count"]',
+  reviewSummary: '[data-testid="app-shell-parameter-review-summary"]',
+  reviewProgress: '[data-testid="app-shell-parameter-review-progress"]',
+  reviewWarning: '[data-testid="app-shell-parameter-review-warning"]',
+  reviewToggle: '[data-testid="app-shell-parameter-review-toggle"]',
+  reviewApply: '[data-testid="app-shell-parameter-review-apply"]',
+} as const;
+
 export const shellViewportPresets = {
   desktop: {
     width: 1440,
@@ -201,6 +220,55 @@ export async function expectShellChrome(page: Page, presetName: ShellViewportPre
 
 export function liveSurfaceLocator(page: Page, selector: keyof typeof liveSurfaceSelectors): Locator {
   return page.locator(liveSurfaceSelectors[selector]);
+}
+
+export function parameterInputLocator(page: Page, name: string): Locator {
+  return page.locator(`[data-testid="parameter-workspace-input-${name}"]`);
+}
+
+export function parameterStageButtonLocator(page: Page, name: string): Locator {
+  return page.locator(`[data-testid="parameter-workspace-stage-btn-${name}"]`);
+}
+
+export function parameterReviewRowLocator(page: Page, name: string): Locator {
+  return page.locator(`[data-testid="app-shell-parameter-review-row-${name}"]`);
+}
+
+export function parameterReviewFailureLocator(page: Page, name: string): Locator {
+  return page.locator(`[data-testid="app-shell-parameter-review-failure-${name}"]`);
+}
+
+export function parameterReviewRetryLocator(page: Page, name: string): Locator {
+  return page.locator(`[data-testid="app-shell-parameter-review-retry-${name}"]`);
+}
+
+export async function openParameterWorkspace(page: Page): Promise<void> {
+  const workspaceButton = page.locator(parameterWorkspaceSelectors.workspaceButton);
+  await expect(
+    workspaceButton,
+    "Parameter workspace entry point is missing; keep the shared selectors in e2e/fixtures/mock-platform.ts aligned with the shell header.",
+  ).toBeVisible();
+  await workspaceButton.click();
+  await expect(
+    page.locator(parameterWorkspaceSelectors.root),
+    "Parameter workspace did not mount after selecting Setup.",
+  ).toBeVisible();
+}
+
+export async function stageParameterValue(page: Page, name: string, value: string): Promise<void> {
+  const input = parameterInputLocator(page, name);
+  const stageButton = parameterStageButtonLocator(page, name);
+
+  await expect(
+    input,
+    `Parameter input ${name} is missing; keep the shared selectors in e2e/fixtures/mock-platform.ts aligned with the workspace markup.`,
+  ).toBeVisible();
+  await input.fill(value);
+  await expect(
+    stageButton,
+    `Stage button for ${name} is missing; keep the shared selectors in e2e/fixtures/mock-platform.ts aligned with the workspace markup.`,
+  ).toBeVisible();
+  await stageButton.click();
 }
 
 export async function expectDockedVehiclePanel(page: Page, presetName: Extract<ShellViewportPresetName, "desktop" | "radiomaster">): Promise<void> {

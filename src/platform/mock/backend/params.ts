@@ -62,9 +62,24 @@ export function applyParamWriteBatch(params: [string, number][]) {
 }
 
 export function writeParamBatch(args: CommandArgs, emitEvent: (event: string, payload: unknown) => void) {
-  const result = applyParamWriteBatch(validateParamWriteBatchArgs(args));
-  if (mockState.liveEnvelope && mockState.liveParamStore) {
-    emitEvent("param://store", liveParamStoreStreamEvent(mockState.liveParamStore).payload);
+  const params = validateParamWriteBatchArgs(args);
+  const result = applyParamWriteBatch(params);
+  if (mockState.liveEnvelope) {
+    for (const [index, [name]] of params.entries()) {
+      emitEvent("param://progress", liveParamProgressStreamEvent({
+        writing: {
+          index: index + 1,
+          total: params.length,
+          name,
+        },
+      }).payload);
+    }
+
+    if (mockState.liveParamStore) {
+      emitEvent("param://store", liveParamStoreStreamEvent(mockState.liveParamStore).payload);
+    }
+
+    emitEvent("param://progress", liveParamProgressStreamEvent("completed").payload);
   }
 
   return result;

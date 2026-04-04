@@ -1,10 +1,11 @@
 import { get, writable } from "svelte/store";
 
 import type { ParamMetadataMap } from "../../param-metadata";
-import type { ParamProgress, ParamStore } from "../../params";
+import type { ParamProgress, ParamStore, ParamWriteResult } from "../../params";
 import type { SessionEnvelope } from "../../session";
 import { shouldDropEvent, type SourceKind } from "../../session";
 import type { ParameterWorkspaceItem } from "../params/workspace-sections";
+import { formatParamValue } from "../params/workspace-sections";
 import {
   createParamsService,
   type ParamsService,
@@ -32,13 +33,32 @@ import {
 import type { SessionStore, SessionStorePhase, SessionStoreState } from "./session";
 import { session } from "./session";
 
-export type { ParameterWorkspaceItemView, ParameterWorkspaceSectionView, ParameterWorkspaceView, ParameterWorkspaceViewStore };
+export type {
+  ParameterWorkspaceItemView,
+  ParameterWorkspaceSectionView,
+  ParameterWorkspaceView,
+  ParameterWorkspaceViewStore,
+};
 export type { StagedParameterEdit };
 export { createParameterWorkspaceViewStore };
 
 export type ParamsMetadataState = "idle" | "loading" | "ready" | "unavailable";
 export type ParamsDomainPhase = "idle" | "subscribing" | "bootstrapping" | "ready" | "unavailable" | "stream-error";
 export type ParameterWorkspaceStatus = "bootstrapping" | "unavailable" | "empty" | "ready";
+export type ParamsApplyPhase = "idle" | "applying" | "failed" | "partial-failure";
+
+export type ParameterApplyProgress = {
+  completed: number;
+  total: number;
+  activeName: string | null;
+};
+
+export type RetainedParameterFailure = {
+  name: string;
+  requestedValue: number;
+  confirmedValue: number | null;
+  message: string;
+};
 
 export type ParamsStoreState = {
   hydrated: boolean;
@@ -56,10 +76,27 @@ export type ParamsStoreState = {
   metadataState: ParamsMetadataState;
   metadataError: string | null;
   stagedEdits: Record<string, StagedParameterEdit>;
+  retainedFailures: Record<string, RetainedParameterFailure>;
+  applyPhase: ParamsApplyPhase;
+  applyError: string | null;
+  applyProgress: ParameterApplyProgress | null;
+  scopeClearWarning: string | null;
   lastNotice: string | null;
 };
 
 type SessionReadable = Pick<SessionStore, "subscribe">;
+
+type BatchWriteFailure = RetainedParameterFailure;
+
+type BatchWriteOutcome = {
+  successes: Array<{ name: string; confirmedValue: number }>;
+  failures: BatchWriteFailure[];
+  batchError: string | null;
+};
+
+const APPLY_BATCH_TIMEOUT_MS = 15_000;
+const MALFORMED_BATCH_RESULT_MESSAGE = "The vehicle returned an unexpected batch result.";
+const APPLY_TIMEOUT_MESSAGE = "Parameter apply timed out. Review the retained rows and retry.";
 
 function createInitialState(): ParamsStoreState {
   return {
@@ -78,6 +115,11 @@ function createInitialState(): ParamsStoreState {
     metadataState: "idle",
     metadataError: null,
     stagedEdits: {},
+    retainedFailures: {},
+    applyPhase: "idle",
+    applyError: null,
+    applyProgress: null,
+    scopeClearWarning: null,
     lastNotice: null,
   };
 }
@@ -94,6 +136,11 @@ export function createParamsStore(
   let lastBootstrapStoreRef: ParamStore | null = null;
   let lastBootstrapProgressRef: ParamProgress | null = null;
   let metadataRequestId = 0;
+  let applyRequestId = 0;
+
+  function invalidateInFlightApply() {
+    applyRequestId += 1;
+  }
 
   function applyBootstrapState(sessionState: SessionStoreState, envelopeChanged: boolean) {
     const nextEnvelope = sessionState.activeEnvelope;
@@ -101,8 +148,14 @@ export function createParamsStore(
     const nextStore = normalizeParamStore(sessionState.bootstrap.paramStore);
     const nextProgress = normalizeParamProgress(sessionState.bootstrap.paramProgress);
 
+    if (envelopeChanged) {
+      invalidateInFlightApply();
+    }
+
     store.update((state) => {
       const nextPhase = resolveDomainPhase(sessionState, nextEnvelope, nextStore, state.streamReady);
+      const scopeChangedFromActive = envelopeChanged && state.activeEnvelope !== null;
+      const clearedScopeWarning = scopeChangedFromActive ? buildScopeClearWarning(nextEnvelope) : state.scopeClearWarning;
 
       if (!nextEnvelope) {
         return {
@@ -118,6 +171,12 @@ export function createParamsStore(
           metadata: null,
           metadataState: vehicleType ? state.metadataState : "idle",
           metadataError: null,
+          stagedEdits: scopeChangedFromActive ? {} : state.stagedEdits,
+          retainedFailures: scopeChangedFromActive ? {} : state.retainedFailures,
+          applyPhase: scopeChangedFromActive ? "idle" : state.applyPhase,
+          applyError: scopeChangedFromActive ? null : state.applyError,
+          applyProgress: scopeChangedFromActive ? null : state.applyProgress,
+          scopeClearWarning: clearedScopeWarning,
           lastNotice: envelopeChanged ? "No active session is available for parameter loading." : state.lastNotice,
         };
       }
@@ -125,6 +184,12 @@ export function createParamsStore(
       const shouldReplaceStore = envelopeChanged || nextStore !== null || state.paramStore === null;
       const shouldReplaceProgress = envelopeChanged || nextProgress !== null || state.paramProgress === null;
       const resolvedStore = shouldReplaceStore ? nextStore : state.paramStore;
+      const nextStagedEdits = scopeChangedFromActive
+        ? {}
+        : pruneResolvedStagedEdits(state.stagedEdits, resolvedStore);
+      const nextRetainedFailures = scopeChangedFromActive
+        ? {}
+        : pruneRetainedFailures(state.retainedFailures, nextStagedEdits);
 
       return {
         ...state,
@@ -139,7 +204,12 @@ export function createParamsStore(
         metadata: envelopeChanged ? null : state.metadata,
         metadataState: envelopeChanged ? (vehicleType ? "loading" : "idle") : state.metadataState,
         metadataError: envelopeChanged ? null : state.metadataError,
-        stagedEdits: pruneResolvedStagedEdits(state.stagedEdits, resolvedStore),
+        stagedEdits: nextStagedEdits,
+        retainedFailures: nextRetainedFailures,
+        applyPhase: scopeChangedFromActive ? "idle" : resolveRetainedApplyPhase(nextRetainedFailures, state.applyPhase),
+        applyError: scopeChangedFromActive ? null : Object.keys(nextRetainedFailures).length === 0 ? null : state.applyError,
+        applyProgress: scopeChangedFromActive ? null : state.applyProgress,
+        scopeClearWarning: clearedScopeWarning,
         lastNotice:
           envelopeChanged && nextStore === null
             ? "This session has not provided parameter values yet."
@@ -240,11 +310,17 @@ export function createParamsStore(
         return state;
       }
 
+      const nextStagedEdits = pruneResolvedStagedEdits(state.stagedEdits, nextStore);
+      const nextRetainedFailures = pruneRetainedFailures(state.retainedFailures, nextStagedEdits);
+
       return {
         ...state,
         phase: "ready",
         paramStore: nextStore,
-        stagedEdits: pruneResolvedStagedEdits(state.stagedEdits, nextStore),
+        stagedEdits: nextStagedEdits,
+        retainedFailures: nextRetainedFailures,
+        applyPhase: state.applyPhase === "applying" ? state.applyPhase : resolveRetainedApplyPhase(nextRetainedFailures, state.applyPhase),
+        applyError: Object.keys(nextRetainedFailures).length === 0 && state.applyPhase !== "applying" ? null : state.applyError,
         lastNotice: null,
       };
     });
@@ -266,6 +342,9 @@ export function createParamsStore(
         ...state,
         phase: "ready",
         paramProgress: nextProgress,
+        applyProgress: state.applyPhase === "applying"
+          ? resolveApplyProgress(nextProgress, state.applyProgress)
+          : state.applyProgress,
         lastNotice: null,
       };
     });
@@ -325,25 +404,169 @@ export function createParamsStore(
         return state;
       }
 
+      const stagedEdits = stageParameterEditMap(state.stagedEdits, item, currentValue, nextValue);
+      const retainedFailures = discardRetainedFailureMap(state.retainedFailures, item.name);
+
       return {
         ...state,
-        stagedEdits: stageParameterEditMap(state.stagedEdits, item, currentValue, nextValue),
+        stagedEdits,
+        retainedFailures,
+        applyPhase: state.applyPhase === "applying" ? state.applyPhase : resolveRetainedApplyPhase(retainedFailures, state.applyPhase),
+        applyError: Object.keys(retainedFailures).length === 0 && state.applyPhase !== "applying" ? null : state.applyError,
+        scopeClearWarning: null,
       };
     });
   }
 
   function discardStagedEdit(name: string) {
-    store.update((state) => ({
-      ...state,
-      stagedEdits: discardStagedEditMap(state.stagedEdits, name),
-    }));
+    store.update((state) => {
+      const stagedEdits = discardStagedEditMap(state.stagedEdits, name);
+      const retainedFailures = discardRetainedFailureMap(state.retainedFailures, name);
+      const hasRemainingRows = Object.keys(stagedEdits).length > 0;
+
+      return {
+        ...state,
+        stagedEdits,
+        retainedFailures,
+        applyPhase: state.applyPhase === "applying"
+          ? state.applyPhase
+          : hasRemainingRows
+            ? resolveRetainedApplyPhase(retainedFailures, state.applyPhase)
+            : "idle",
+        applyError: hasRemainingRows ? state.applyError : null,
+        applyProgress: hasRemainingRows ? state.applyProgress : null,
+      };
+    });
   }
 
   function clearStagedEdits() {
     store.update((state) => ({
       ...state,
       stagedEdits: clearStagedEditsMap(state.stagedEdits),
+      retainedFailures: {},
+      applyPhase: "idle",
+      applyError: null,
+      applyProgress: null,
     }));
+  }
+
+  async function applyStagedEdits(targetNames?: string[]) {
+    const state = get(store);
+    if (!state.activeEnvelope || state.applyPhase === "applying") {
+      return;
+    }
+
+    const requestedEdits = selectRequestedEdits(state.stagedEdits, targetNames);
+    if (requestedEdits.length === 0) {
+      return;
+    }
+
+    const requestId = applyRequestId + 1;
+    applyRequestId = requestId;
+    const requestEnvelope = state.activeEnvelope;
+    const requestedParams = requestedEdits.map((edit) => [edit.name, edit.nextValue] as [string, number]);
+
+    store.update((current) => {
+      let retainedFailures = current.retainedFailures;
+      for (const edit of requestedEdits) {
+        retainedFailures = discardRetainedFailureMap(retainedFailures, edit.name);
+      }
+
+      return {
+        ...current,
+        retainedFailures,
+        applyPhase: "applying",
+        applyError: null,
+        applyProgress: {
+          completed: 0,
+          total: requestedEdits.length,
+          activeName: null,
+        },
+      };
+    });
+
+    try {
+      const results = await withTimeout(
+        service.writeBatch(requestedParams),
+        APPLY_BATCH_TIMEOUT_MS,
+        new Error(APPLY_TIMEOUT_MESSAGE),
+      );
+      if (!isCurrentApplyRequest(requestId, requestEnvelope)) {
+        return;
+      }
+
+      const outcome = reconcileBatchWriteResults(requestedEdits, results);
+      store.update((current) => {
+        if (!current.activeEnvelope || !isSameEnvelope(current.activeEnvelope, requestEnvelope)) {
+          return current;
+        }
+
+        const stagedEdits = { ...current.stagedEdits };
+        let retainedFailures = current.retainedFailures;
+        let paramStore = current.paramStore;
+
+        for (const edit of requestedEdits) {
+          retainedFailures = discardRetainedFailureMap(retainedFailures, edit.name);
+        }
+
+        for (const success of outcome.successes) {
+          delete stagedEdits[success.name];
+          paramStore = applySuccessfulWrite(paramStore, success.name, success.confirmedValue);
+        }
+
+        for (const failure of outcome.failures) {
+          retainedFailures = setRetainedFailure(retainedFailures, failure);
+        }
+
+        return {
+          ...current,
+          paramStore,
+          stagedEdits,
+          retainedFailures,
+          applyPhase: resolveOutcomePhase(outcome.failures, requestedEdits.length),
+          applyError: outcome.failures.length === 0 ? null : outcome.batchError,
+          applyProgress: outcome.failures.length === 0 ? null : {
+            completed: outcome.successes.length,
+            total: requestedEdits.length,
+            activeName: null,
+          },
+          scopeClearWarning: current.scopeClearWarning,
+        };
+      });
+    } catch (error) {
+      if (!isCurrentApplyRequest(requestId, requestEnvelope)) {
+        return;
+      }
+
+      const message = service.formatError(error);
+      store.update((current) => {
+        if (!current.activeEnvelope || !isSameEnvelope(current.activeEnvelope, requestEnvelope)) {
+          return current;
+        }
+
+        let retainedFailures = current.retainedFailures;
+        for (const edit of requestedEdits) {
+          retainedFailures = setRetainedFailure(retainedFailures, {
+            name: edit.name,
+            requestedValue: edit.nextValue,
+            confirmedValue: null,
+            message,
+          });
+        }
+
+        return {
+          ...current,
+          retainedFailures,
+          applyPhase: "failed",
+          applyError: message,
+          applyProgress: {
+            completed: 0,
+            total: requestedEdits.length,
+            activeName: null,
+          },
+        };
+      });
+    }
   }
 
   function reset() {
@@ -353,10 +576,18 @@ export function createParamsStore(
     stopSession = null;
     initializePromise = null;
     metadataRequestId += 1;
+    invalidateInFlightApply();
     lastSessionEnvelope = null;
     lastBootstrapStoreRef = null;
     lastBootstrapProgressRef = null;
     store.set(createInitialState());
+  }
+
+  function isCurrentApplyRequest(requestId: number, requestEnvelope: SessionEnvelope) {
+    const current = get(store);
+    return applyRequestId === requestId
+      && current.activeEnvelope !== null
+      && isSameEnvelope(current.activeEnvelope, requestEnvelope);
   }
 
   return {
@@ -365,6 +596,7 @@ export function createParamsStore(
     stageParameterEdit,
     discardStagedEdit,
     clearStagedEdits,
+    applyStagedEdits,
     reset,
   };
 }
@@ -414,4 +646,264 @@ function areEnvelopesEqual(left: SessionEnvelope | null, right: SessionEnvelope 
   }
 
   return isSameEnvelope(left, right);
+}
+
+function selectRequestedEdits(
+  stagedEdits: Record<string, StagedParameterEdit>,
+  targetNames?: string[],
+): StagedParameterEdit[] {
+  const names = targetNames?.length ? new Set(targetNames) : null;
+  return Object.values(stagedEdits)
+    .filter((edit) => names === null || names.has(edit.name))
+    .sort((left, right) => left.order - right.order || left.name.localeCompare(right.name));
+}
+
+function applySuccessfulWrite(
+  paramStore: ParamStore | null,
+  name: string,
+  confirmedValue: number,
+): ParamStore | null {
+  if (!paramStore?.params[name]) {
+    return paramStore;
+  }
+
+  return {
+    ...paramStore,
+    params: {
+      ...paramStore.params,
+      [name]: {
+        ...paramStore.params[name],
+        value: confirmedValue,
+      },
+    },
+  };
+}
+
+function pruneRetainedFailures(
+  retainedFailures: Record<string, RetainedParameterFailure>,
+  stagedEdits: Record<string, StagedParameterEdit>,
+): Record<string, RetainedParameterFailure> {
+  const stagedNames = new Set(Object.keys(stagedEdits));
+  let changed = false;
+  const nextEntries = Object.entries(retainedFailures).filter(([name]) => {
+    const keep = stagedNames.has(name);
+    changed ||= !keep;
+    return keep;
+  });
+
+  return changed ? Object.fromEntries(nextEntries) : retainedFailures;
+}
+
+function discardRetainedFailureMap(
+  retainedFailures: Record<string, RetainedParameterFailure>,
+  name: string,
+): Record<string, RetainedParameterFailure> {
+  if (!(name in retainedFailures)) {
+    return retainedFailures;
+  }
+
+  const nextRetainedFailures = { ...retainedFailures };
+  delete nextRetainedFailures[name];
+  return nextRetainedFailures;
+}
+
+function setRetainedFailure(
+  retainedFailures: Record<string, RetainedParameterFailure>,
+  failure: RetainedParameterFailure,
+): Record<string, RetainedParameterFailure> {
+  return {
+    ...retainedFailures,
+    [failure.name]: failure,
+  };
+}
+
+function resolveRetainedApplyPhase(
+  retainedFailures: Record<string, RetainedParameterFailure>,
+  previousPhase: ParamsApplyPhase,
+): ParamsApplyPhase {
+  if (Object.keys(retainedFailures).length === 0) {
+    return "idle";
+  }
+
+  return previousPhase === "partial-failure" ? "partial-failure" : "failed";
+}
+
+function resolveOutcomePhase(
+  failures: BatchWriteFailure[],
+  requestedCount: number,
+): ParamsApplyPhase {
+  if (failures.length === 0) {
+    return "idle";
+  }
+
+  return failures.length === requestedCount ? "failed" : "partial-failure";
+}
+
+function resolveApplyProgress(
+  progress: ParamProgress,
+  current: ParameterApplyProgress | null,
+): ParameterApplyProgress | null {
+  if (typeof progress === "string") {
+    if (!current) {
+      return null;
+    }
+
+    if (progress === "completed") {
+      return {
+        completed: current.total,
+        total: current.total,
+        activeName: null,
+      };
+    }
+
+    return {
+      ...current,
+      activeName: null,
+    };
+  }
+
+  if ("writing" in progress) {
+    return {
+      completed: progress.writing.index,
+      total: progress.writing.total,
+      activeName: progress.writing.name,
+    };
+  }
+
+  return current;
+}
+
+function buildScopeClearWarning(nextEnvelope: SessionEnvelope | null): string {
+  if (!nextEnvelope) {
+    return "Parameter scope changed. Staged edits were cleared; reconnect and restage against the current session.";
+  }
+
+  return "Parameter scope changed. Staged edits were cleared; review current values and restage against the active session.";
+}
+
+function reconcileBatchWriteResults(
+  requestedEdits: StagedParameterEdit[],
+  results: ParamWriteResult[] | unknown,
+): BatchWriteOutcome {
+  if (!Array.isArray(results)) {
+    return {
+      successes: [],
+      failures: requestedEdits.map((edit) => ({
+        name: edit.name,
+        requestedValue: edit.nextValue,
+        confirmedValue: null,
+        message: MALFORMED_BATCH_RESULT_MESSAGE,
+      })),
+      batchError: MALFORMED_BATCH_RESULT_MESSAGE,
+    };
+  }
+
+  const requestedIndex = new Map(requestedEdits.map((edit) => [edit.name, edit]));
+  const resultIndex = new Map<string, ParamWriteResult>();
+  let batchError: string | null = null;
+
+  for (const entry of results) {
+    const normalized = normalizeWriteResult(entry);
+    if (!normalized) {
+      batchError = MALFORMED_BATCH_RESULT_MESSAGE;
+      continue;
+    }
+
+    if (!requestedIndex.has(normalized.name) || resultIndex.has(normalized.name)) {
+      batchError = MALFORMED_BATCH_RESULT_MESSAGE;
+      continue;
+    }
+
+    resultIndex.set(normalized.name, normalized);
+  }
+
+  const successes: BatchWriteOutcome["successes"] = [];
+  const failures: BatchWriteFailure[] = [];
+
+  for (const edit of requestedEdits) {
+    const result = resultIndex.get(edit.name);
+    if (!result) {
+      failures.push({
+        name: edit.name,
+        requestedValue: edit.nextValue,
+        confirmedValue: null,
+        message: MALFORMED_BATCH_RESULT_MESSAGE,
+      });
+      batchError ??= MALFORMED_BATCH_RESULT_MESSAGE;
+      continue;
+    }
+
+    if (result.success === true) {
+      successes.push({ name: result.name, confirmedValue: result.confirmed_value });
+      continue;
+    }
+
+    failures.push({
+      name: edit.name,
+      requestedValue: edit.nextValue,
+      confirmedValue: result.confirmed_value,
+      message: formatWriteFailureMessage(edit.nextValue, result.confirmed_value),
+    });
+  }
+
+  return {
+    successes,
+    failures,
+    batchError,
+  };
+}
+
+function normalizeWriteResult(value: unknown): ParamWriteResult | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const entry = value as Partial<ParamWriteResult>;
+  if (typeof entry.name !== "string" || entry.name.trim().length === 0) {
+    return null;
+  }
+  if (typeof entry.requested_value !== "number" || !Number.isFinite(entry.requested_value)) {
+    return null;
+  }
+  if (typeof entry.confirmed_value !== "number" || !Number.isFinite(entry.confirmed_value)) {
+    return null;
+  }
+  if (typeof entry.success !== "boolean") {
+    return null;
+  }
+
+  return {
+    name: entry.name,
+    requested_value: entry.requested_value,
+    confirmed_value: entry.confirmed_value,
+    success: entry.success,
+  };
+}
+
+function formatWriteFailureMessage(requestedValue: number, confirmedValue: number): string {
+  if (confirmedValue !== requestedValue) {
+    return `Vehicle kept ${formatParamValue(confirmedValue)} instead of ${formatParamValue(requestedValue)}.`;
+  }
+
+  return "The vehicle rejected this parameter change.";
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  error: Error,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(error), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (reason) => {
+        window.clearTimeout(timer);
+        reject(reason);
+      },
+    );
+  });
 }

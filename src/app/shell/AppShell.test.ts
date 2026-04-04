@@ -213,6 +213,12 @@ function createMockParamsService(
       };
     }),
     fetchMetadata: vi.fn(async () => metadata),
+    writeBatch: vi.fn(async (params: [string, number][]) => params.map(([name, value]) => ({
+      name,
+      requested_value: value,
+      confirmed_value: value,
+      success: true,
+    }))),
     formatError: vi.fn((error: unknown) => (error instanceof Error ? error.message : String(error))),
     ...overrides,
   } satisfies ParamsService;

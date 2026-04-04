@@ -97,6 +97,36 @@ let activeEnvelopeKey = $derived(envelopeKey());
     </p>
   </div>
 
+  <div class="mt-4 grid gap-2 md:grid-cols-3">
+    <p
+      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
+      data-testid={parameterWorkspaceTestIds.scope}
+    >
+      Scope · {$view.activeEnvelopeText}
+    </p>
+    <p
+      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
+      data-testid={parameterWorkspaceTestIds.progress}
+    >
+      Progress · {$view.progressText}
+    </p>
+    <p
+      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
+      data-testid={parameterWorkspaceTestIds.metadata}
+    >
+      Metadata · {$view.metadataText}
+    </p>
+  </div>
+
+  {#if $view.noticeText}
+    <div
+      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-warning"
+      data-testid={parameterWorkspaceTestIds.notice}
+    >
+      {$view.noticeText}
+    </div>
+  {/if}
+
   <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
     <p class="text-sm text-text-secondary">Changes are staged locally so you can review them before applying.</p>
 
@@ -109,7 +139,7 @@ let activeEnvelopeKey = $derived(envelopeKey());
           {$view.stagedCount} pending
         </span>
         <span class="text-xs text-text-muted" data-testid={parameterWorkspaceTestIds.pendingHint}>
-          Review and clear staged edits in the change tray.
+          Review and apply staged edits in the change tray.
         </span>
       </div>
     {/if}

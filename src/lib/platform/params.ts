@@ -2,8 +2,10 @@ import { fetchParamMetadata, type ParamMetadataMap } from "../../param-metadata"
 import {
   subscribeParamProgress,
   subscribeParamStore,
+  writeBatchParams,
   type ParamProgress,
   type ParamStore,
+  type ParamWriteResult,
 } from "../../params";
 import type { SessionEvent } from "../../session";
 import { formatUnknownError } from "../error-format";
@@ -16,6 +18,7 @@ export type ParamsServiceEventHandlers = {
 export type ParamsService = {
   subscribeAll(handlers: ParamsServiceEventHandlers): Promise<() => void>;
   fetchMetadata(vehicleType: string): Promise<ParamMetadataMap | null>;
+  writeBatch(params: [string, number][]): Promise<ParamWriteResult[]>;
   formatError(error: unknown): string;
 };
 
@@ -23,6 +26,7 @@ export function createParamsService(): ParamsService {
   return {
     subscribeAll,
     fetchMetadata: fetchParamMetadata,
+    writeBatch: writeBatchParams,
     formatError: formatUnknownError,
   };
 }

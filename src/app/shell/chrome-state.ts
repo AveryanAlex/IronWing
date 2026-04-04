@@ -26,9 +26,15 @@ export const appShellTestIds = {
   parameterReviewSurface: "app-shell-parameter-review-surface",
   parameterReviewState: "app-shell-parameter-review-state",
   parameterReviewCount: "app-shell-parameter-review-count",
+  parameterReviewSummary: "app-shell-parameter-review-summary",
+  parameterReviewProgress: "app-shell-parameter-review-progress",
+  parameterReviewWarning: "app-shell-parameter-review-warning",
   parameterReviewToggle: "app-shell-parameter-review-toggle",
+  parameterReviewApply: "app-shell-parameter-review-apply",
   parameterReviewClear: "app-shell-parameter-review-clear",
   parameterReviewRowPrefix: "app-shell-parameter-review-row",
+  parameterReviewFailurePrefix: "app-shell-parameter-review-failure",
+  parameterReviewRetryPrefix: "app-shell-parameter-review-retry",
   parameterReviewDiscardPrefix: "app-shell-parameter-review-discard",
 } as const;
 

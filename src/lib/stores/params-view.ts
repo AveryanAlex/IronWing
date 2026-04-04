@@ -10,8 +10,10 @@ import {
 import type { StagedParameterEdit } from "./params-staged-edits";
 import type {
   ParameterWorkspaceStatus,
+  ParamsApplyPhase,
   ParamsMetadataState,
   ParamsStoreState,
+  RetainedParameterFailure,
 } from "./params";
 
 export type ParameterWorkspaceItemView = ParameterWorkspaceItem & {
@@ -25,6 +27,14 @@ export type ParameterWorkspaceSectionView = Omit<ParameterWorkspaceSection, "ite
   items: ParameterWorkspaceItemView[];
 };
 
+export type ParameterWorkspaceStagedEditView = StagedParameterEdit & {
+  failureMessage: string | null;
+  confirmedValueText: string | null;
+  isApplying: boolean;
+  isWriting: boolean;
+  canRetry: boolean;
+};
+
 export type ParameterWorkspaceView = {
   readiness: "ready" | "bootstrapping" | "unavailable" | "degraded";
   status: ParameterWorkspaceStatus;
@@ -34,8 +44,13 @@ export type ParameterWorkspaceView = {
   metadataText: string;
   noticeText: string | null;
   stagedCount: number;
-  stagedEdits: StagedParameterEdit[];
+  stagedEdits: ParameterWorkspaceStagedEditView[];
   sections: ParameterWorkspaceSectionView[];
+  applyPhase: ParamsApplyPhase;
+  applySummaryText: string | null;
+  applyProgressText: string | null;
+  applyButtonText: string;
+  hasRetainedFailures: boolean;
 };
 
 export function createParameterWorkspaceViewStore(store: Readable<ParamsStoreState>) {
@@ -55,7 +70,7 @@ export function createParameterWorkspaceViewStore(store: Readable<ParamsStoreSta
     }
 
     const stagedEdits = Object.values($params.stagedEdits)
-      .map((edit) => mergeStagedEdit(edit, itemIndex.get(edit.name)))
+      .map((edit) => mergeStagedEdit(edit, itemIndex.get(edit.name), $params))
       .filter((edit) => edit.nextValue !== edit.currentValue)
       .sort((left, right) => left.order - right.order || left.name.localeCompare(right.name));
 
@@ -64,14 +79,19 @@ export function createParameterWorkspaceViewStore(store: Readable<ParamsStoreSta
       status,
       activeEnvelope: $params.activeEnvelope,
       activeEnvelopeText: $params.activeEnvelope
-        ? `${$params.activeEnvelope.session_id} · rev ${$params.activeEnvelope.reset_revision}`
+        ? `${$params.activeEnvelope.session_id} · ${$params.activeEnvelope.source_kind} · rev ${$params.activeEnvelope.reset_revision}`
         : "No active session",
       progressText: formatProgressText($params.paramProgress),
       metadataText: formatMetadataText($params.metadataState, $params.metadataError),
-      noticeText: formatNoticeText($params.lastNotice, $params.streamError),
+      noticeText: formatNoticeText($params.scopeClearWarning, $params.lastNotice, $params.streamError),
       stagedCount: stagedEdits.length,
       stagedEdits,
       sections,
+      applyPhase: $params.applyPhase,
+      applySummaryText: formatApplySummaryText($params, stagedEdits.length),
+      applyProgressText: formatApplyProgressText($params),
+      applyButtonText: formatApplyButtonText($params, stagedEdits.length),
+      hasRetainedFailures: Object.keys($params.retainedFailures).length > 0,
     };
   });
 }
@@ -146,7 +166,15 @@ function formatMetadataText(state: ParamsMetadataState, error: string | null): s
   }
 }
 
-function formatNoticeText(lastNotice: string | null, streamError: string | null): string | null {
+function formatNoticeText(
+  scopeClearWarning: string | null,
+  lastNotice: string | null,
+  streamError: string | null,
+): string | null {
+  if (scopeClearWarning) {
+    return scopeClearWarning;
+  }
+
   if (lastNotice) {
     return lastNotice;
   }
@@ -185,12 +213,23 @@ function applyStagedItemState(
 function mergeStagedEdit(
   edit: StagedParameterEdit,
   currentItem: ParameterWorkspaceItemView | undefined,
-): StagedParameterEdit {
+  state: ParamsStoreState,
+): ParameterWorkspaceStagedEditView {
+  const retainedFailure = state.retainedFailures[edit.name];
+  const activeName = state.applyProgress?.activeName ?? null;
+  const isApplying = state.applyPhase === "applying";
+  const isWriting = isApplying && activeName === edit.name;
+
   if (!currentItem) {
     return {
       ...edit,
       nextValueText: formatParamValue(edit.nextValue),
       currentValueText: formatParamValue(edit.currentValue),
+      failureMessage: retainedFailure?.message ?? null,
+      confirmedValueText: retainedFailure ? formatConfirmedValueText(retainedFailure.confirmedValue) : null,
+      isApplying,
+      isWriting,
+      canRetry: Boolean(retainedFailure) && !isApplying,
     };
   }
 
@@ -206,5 +245,76 @@ function mergeStagedEdit(
     units: currentItem.units,
     rebootRequired: currentItem.rebootRequired,
     order: currentItem.order,
+    failureMessage: retainedFailure?.message ?? null,
+    confirmedValueText: retainedFailure ? formatConfirmedValueText(retainedFailure.confirmedValue) : null,
+    isApplying,
+    isWriting,
+    canRetry: Boolean(retainedFailure) && !isApplying,
   };
+}
+
+function formatApplySummaryText(state: ParamsStoreState, stagedCount: number): string | null {
+  if (state.applyPhase === "applying") {
+    const total = state.applyProgress?.total ?? stagedCount;
+    return `Applying ${total} change${total === 1 ? "" : "s"}.`;
+  }
+
+  const retainedFailures = Object.keys(state.retainedFailures).length;
+  if (retainedFailures === 0) {
+    return stagedCount > 0 ? "Ready to apply the queued parameter changes." : null;
+  }
+
+  if (state.applyPhase === "partial-failure") {
+    return `${retainedFailures} change${retainedFailures === 1 ? "" : "s"} still need attention.`;
+  }
+
+  return `${retainedFailures} change${retainedFailures === 1 ? "" : "s"} failed to apply.`;
+}
+
+function formatApplyProgressText(state: ParamsStoreState): string | null {
+  if (!state.applyProgress) {
+    return null;
+  }
+
+  const total = state.applyProgress.total;
+  const completed = state.applyProgress.completed;
+  const activeName = state.applyProgress.activeName;
+  if (state.applyPhase === "applying" && activeName) {
+    return `Writing ${activeName} · ${completed}/${total}`;
+  }
+
+  if (state.applyPhase === "applying") {
+    return `Applying ${completed}/${total}`;
+  }
+
+  if (state.applyPhase === "partial-failure") {
+    return `${completed}/${total} changes confirmed.`;
+  }
+
+  if (state.applyPhase === "failed") {
+    return `${completed}/${total} changes confirmed.`;
+  }
+
+  return null;
+}
+
+function formatApplyButtonText(state: ParamsStoreState, stagedCount: number): string {
+  if (state.applyPhase === "applying") {
+    return "Applying…";
+  }
+
+  const retainedFailures = Object.keys(state.retainedFailures).length;
+  if (retainedFailures > 0 && retainedFailures === stagedCount) {
+    return stagedCount === 1 ? "Retry change" : "Retry changes";
+  }
+
+  return stagedCount === 1 ? "Apply change" : "Apply changes";
+}
+
+function formatConfirmedValueText(confirmedValue: RetainedParameterFailure["confirmedValue"]): string | null {
+  if (typeof confirmedValue !== "number") {
+    return null;
+  }
+
+  return formatParamValue(confirmedValue);
 }

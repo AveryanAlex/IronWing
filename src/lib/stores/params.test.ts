@@ -4,7 +4,7 @@ import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ParamMetadataMap } from "../../param-metadata";
-import type { ParamProgress, ParamStore } from "../../params";
+import type { ParamProgress, ParamStore, ParamWriteResult } from "../../params";
 import type { SessionEnvelope, OpenSessionSnapshot } from "../../session";
 import type { TransportDescriptor } from "../../transport";
 import type {
@@ -218,6 +218,12 @@ function createParamsService(
       };
     }),
     fetchMetadata: vi.fn(async () => metadata),
+    writeBatch: vi.fn(async (params: [string, number][]) => params.map(([name, value]) => ({
+      name,
+      requested_value: value,
+      confirmed_value: value,
+      success: true,
+    }))),
     formatError: vi.fn((error: unknown) => (error instanceof Error ? error.message : String(error))),
     ...overrides,
   } satisfies ParamsService;
@@ -566,5 +572,187 @@ describe("createParamsStore", () => {
       expected_count: 1,
     }));
     expect(get(paramStore).stagedEdits.ARMING_CHECK).toBeUndefined();
+  });
+
+  it("clears successful writes, retains failed rows, and records inline failure detail", async () => {
+    const snapshot = createSnapshot();
+    const { service: sessionService } = createSessionService([snapshot]);
+    const paramsHarness = createParamsService(null, {
+      writeBatch: vi.fn(async () => [
+        { name: "ARMING_CHECK", requested_value: 3, confirmed_value: 3, success: true },
+        { name: "FS_THR_ENABLE", requested_value: 4, confirmed_value: 2, success: false },
+      ]),
+    });
+    const sessionStore = createSessionStore(sessionService);
+    const paramStore = createParamsStore(sessionStore, paramsHarness.service);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+    await waitForMetadata(paramStore);
+
+    const items = get(createParameterWorkspaceViewStore(paramStore)).sections[0]?.items ?? [];
+    paramStore.stageParameterEdit(items.find((entry) => entry.name === "ARMING_CHECK")!, 3);
+    paramStore.stageParameterEdit(items.find((entry) => entry.name === "FS_THR_ENABLE")!, 4);
+
+    await paramStore.applyStagedEdits();
+
+    const state = get(paramStore);
+    expect(state.stagedEdits.ARMING_CHECK).toBeUndefined();
+    expect(state.stagedEdits.FS_THR_ENABLE?.nextValue).toBe(4);
+    expect(state.retainedFailures.FS_THR_ENABLE?.message).toBe("Vehicle kept 2 instead of 4.");
+    expect(state.paramStore?.params.ARMING_CHECK?.value).toBe(3);
+    expect(state.paramStore?.params.FS_THR_ENABLE?.value).toBe(2);
+    expect(state.applyPhase).toBe("partial-failure");
+    expect(state.applyProgress).toEqual({ completed: 1, total: 2, activeName: null });
+  });
+
+  it("treats missing or unexpected batch rows as retained failures without discarding valid successes", async () => {
+    const snapshot = createSnapshot();
+    const { service: sessionService } = createSessionService([snapshot]);
+    const paramsHarness = createParamsService(null, {
+      writeBatch: vi.fn(async () => [
+        { name: "ARMING_CHECK", requested_value: 3, confirmed_value: 3, success: true },
+        { name: "UNKNOWN_PARAM", requested_value: 4, confirmed_value: 4, success: true },
+      ]),
+    });
+    const sessionStore = createSessionStore(sessionService);
+    const paramStore = createParamsStore(sessionStore, paramsHarness.service);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+    await waitForMetadata(paramStore);
+
+    const items = get(createParameterWorkspaceViewStore(paramStore)).sections[0]?.items ?? [];
+    paramStore.stageParameterEdit(items.find((entry) => entry.name === "ARMING_CHECK")!, 3);
+    paramStore.stageParameterEdit(items.find((entry) => entry.name === "FS_THR_ENABLE")!, 4);
+
+    await paramStore.applyStagedEdits();
+
+    const state = get(paramStore);
+    expect(state.stagedEdits.ARMING_CHECK).toBeUndefined();
+    expect(state.stagedEdits.FS_THR_ENABLE?.nextValue).toBe(4);
+    expect(state.retainedFailures.FS_THR_ENABLE?.message).toBe("The vehicle returned an unexpected batch result.");
+    expect(state.applyPhase).toBe("partial-failure");
+  });
+
+  it("keeps pending writes staged when the batch request rejects", async () => {
+    const snapshot = createSnapshot();
+    const { service: sessionService } = createSessionService([snapshot]);
+    const paramsHarness = createParamsService(null, {
+      writeBatch: vi.fn(async () => {
+        throw new Error("mock batch rejected");
+      }),
+    });
+    const sessionStore = createSessionStore(sessionService);
+    const paramStore = createParamsStore(sessionStore, paramsHarness.service);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+    await waitForMetadata(paramStore);
+
+    const item = get(createParameterWorkspaceViewStore(paramStore)).sections[0]?.items.find(
+      (entry) => entry.name === "ARMING_CHECK",
+    );
+    paramStore.stageParameterEdit(item!, 3);
+
+    await paramStore.applyStagedEdits();
+
+    const state = get(paramStore);
+    expect(state.stagedEdits.ARMING_CHECK?.nextValue).toBe(3);
+    expect(state.retainedFailures.ARMING_CHECK?.message).toBe("mock batch rejected");
+    expect(state.applyPhase).toBe("failed");
+  });
+
+  it("clears staged work and ignores stale apply results after a scope reset", async () => {
+    const pendingBatch = deferred<ParamWriteResult[]>();
+    const firstSnapshot = createSnapshot({
+      envelope: createEnvelope("session-1"),
+    });
+    const secondSnapshot = createSnapshot({
+      envelope: createEnvelope("session-2", { reset_revision: 1 }),
+      param_store: createParamStore({
+        params: {
+          ARMING_CHECK: { name: "ARMING_CHECK", value: 6, param_type: "uint8", index: 0 },
+        },
+        expected_count: 1,
+      }),
+    });
+    const { service: sessionService } = createSessionService([firstSnapshot, secondSnapshot]);
+    const paramsHarness = createParamsService(null, {
+      writeBatch: vi.fn(() => pendingBatch.promise),
+    });
+    const sessionStore = createSessionStore(sessionService);
+    const paramStore = createParamsStore(sessionStore, paramsHarness.service);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+    await waitForMetadata(paramStore);
+
+    const item = get(createParameterWorkspaceViewStore(paramStore)).sections[0]?.items.find(
+      (entry) => entry.name === "ARMING_CHECK",
+    );
+    paramStore.stageParameterEdit(item!, 3);
+
+    const applyPromise = paramStore.applyStagedEdits();
+    await flush();
+    await sessionStore.bootstrapSource("live");
+    await flush();
+
+    let state = get(paramStore);
+    expect(state.activeEnvelope?.session_id).toBe("session-2");
+    expect(state.stagedEdits.ARMING_CHECK).toBeUndefined();
+    expect(state.scopeClearWarning).toContain("Staged edits were cleared");
+
+    pendingBatch.resolve([{ name: "ARMING_CHECK", requested_value: 3, confirmed_value: 3, success: true }]);
+    await applyPromise;
+    await flush();
+
+    state = get(paramStore);
+    expect(state.activeEnvelope?.session_id).toBe("session-2");
+    expect(state.paramStore?.params.ARMING_CHECK?.value).toBe(6);
+    expect(state.retainedFailures.ARMING_CHECK).toBeUndefined();
+  });
+
+  it("clears staged edits and warns when switching from live to playback scope", async () => {
+    const liveSnapshot = createSnapshot({
+      envelope: createEnvelope("session-1", { source_kind: "live" }),
+    });
+    const playbackSnapshot = createSnapshot({
+      envelope: createEnvelope("session-1", { source_kind: "playback", seek_epoch: 1, reset_revision: 1 }),
+      session: {
+        available: true,
+        complete: true,
+        provenance: "playback",
+        value: {
+          status: "active",
+          connection: { kind: "disconnected" },
+          vehicle_state: null,
+          home_position: null,
+        },
+      },
+      param_store: null,
+      param_progress: null,
+    });
+    const { service: sessionService } = createSessionService([liveSnapshot, playbackSnapshot]);
+    const paramsHarness = createParamsService(null);
+    const sessionStore = createSessionStore(sessionService);
+    const paramStore = createParamsStore(sessionStore, paramsHarness.service);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+    await waitForMetadata(paramStore);
+
+    const item = get(createParameterWorkspaceViewStore(paramStore)).sections[0]?.items.find(
+      (entry) => entry.name === "ARMING_CHECK",
+    );
+    paramStore.stageParameterEdit(item!, 5);
+
+    await sessionStore.bootstrapSource("playback");
+    await flush();
+
+    const state = get(paramStore);
+    expect(state.activeEnvelope?.source_kind).toBe("playback");
+    expect(state.stagedEdits.ARMING_CHECK).toBeUndefined();
+    expect(state.scopeClearWarning).toContain("active session");
   });
 });
