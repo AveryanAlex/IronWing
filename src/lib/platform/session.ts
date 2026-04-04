@@ -46,6 +46,8 @@ import { subscribeSensorHealthStateEvent, type SensorHealthDomain } from "../../
 import type { StatusTextDomain } from "../../statustext";
 import type { SupportDomain } from "../../support";
 import type { SessionDomain } from "../../session";
+import { formatUnknownError } from "../error-format";
+import { getBrowserStorage, readStorageJson, writeStorageJson } from "../local-storage";
 
 export const SESSION_CONNECTION_STORAGE_KEY = "mpng_connection";
 
@@ -128,7 +130,7 @@ export function createSessionService(): SessionService {
     btScanBle,
     btGetBondedDevices,
     getAvailableModes,
-    formatError: asErrorMessage,
+    formatError: formatUnknownError,
   };
 }
 
@@ -155,39 +157,23 @@ export function loadConnectionForm(
   storage: Pick<Storage, "getItem"> | null = getBrowserStorage(),
   defaults: SessionConnectionFormState = sessionConnectionDefaults,
 ): SessionConnectionFormState {
-  try {
-    const raw = storage?.getItem(SESSION_CONNECTION_STORAGE_KEY);
-    if (!raw) {
-      return { ...defaults };
-    }
-
-    const merged = { ...defaults, ...JSON.parse(raw) } as SessionConnectionFormState;
-    if (defaults.mode === "tcp") {
-      merged.mode = defaults.mode;
-      merged.tcpAddress = defaults.tcpAddress;
-    }
-
-    return merged;
-  } catch {
+  const parsed = readStorageJson(SESSION_CONNECTION_STORAGE_KEY, storage);
+  if (parsed === null) {
     return { ...defaults };
   }
+
+  return normalizeConnectionForm(parsed, defaults);
 }
 
 export function persistConnectionForm(
   state: SessionConnectionFormState,
   storage: Pick<Storage, "setItem"> | null = getBrowserStorage(),
 ) {
-  try {
-    storage?.setItem(SESSION_CONNECTION_STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // Ignore partial localStorage shims in tests and restricted browser contexts.
-  }
+  writeStorageJson(SESSION_CONNECTION_STORAGE_KEY, state, storage);
 }
 
 export function asErrorMessage(error: unknown): string {
-  if (typeof error === "string") return error;
-  if (error instanceof Error) return error.message;
-  return "unexpected error";
+  return formatUnknownError(error);
 }
 
 export function toLinkState(connection: SessionConnection | undefined): LinkState | null {
@@ -235,12 +221,60 @@ export function defaultTcpAddress(env: SessionConnectionEnv = import.meta.env as
   return DEFAULT_TCP_ADDRESS;
 }
 
-function getBrowserStorage(): Storage | null {
-  if (typeof localStorage === "undefined") {
-    return null;
+function normalizeConnectionForm(raw: unknown, defaults: SessionConnectionFormState): SessionConnectionFormState {
+  if (!raw || typeof raw !== "object") {
+    return { ...defaults };
   }
 
-  return localStorage;
+  const parsed = raw as Record<string, unknown>;
+  const normalized: SessionConnectionFormState = { ...defaults };
+
+  if (isTransportType(parsed.mode)) {
+    normalized.mode = parsed.mode;
+  }
+
+  if (typeof parsed.udpBind === "string") {
+    normalized.udpBind = parsed.udpBind;
+  }
+
+  if (typeof parsed.tcpAddress === "string") {
+    normalized.tcpAddress = parsed.tcpAddress;
+  }
+
+  if (typeof parsed.serialPort === "string") {
+    normalized.serialPort = parsed.serialPort;
+  }
+
+  if (typeof parsed.baud === "number" && Number.isFinite(parsed.baud)) {
+    normalized.baud = parsed.baud;
+  }
+
+  if (typeof parsed.selectedBtDevice === "string") {
+    normalized.selectedBtDevice = parsed.selectedBtDevice;
+  }
+
+  if (typeof parsed.takeoffAlt === "string") {
+    normalized.takeoffAlt = parsed.takeoffAlt;
+  }
+
+  if (typeof parsed.followVehicle === "boolean") {
+    normalized.followVehicle = parsed.followVehicle;
+  }
+
+  if (defaults.mode === "tcp") {
+    normalized.mode = defaults.mode;
+    normalized.tcpAddress = defaults.tcpAddress;
+  }
+
+  return normalized;
+}
+
+function isTransportType(value: unknown): value is TransportType {
+  return value === "udp"
+    || value === "tcp"
+    || value === "serial"
+    || value === "bluetooth_ble"
+    || value === "bluetooth_spp";
 }
 
 export type SessionSnapshotState = Pick<

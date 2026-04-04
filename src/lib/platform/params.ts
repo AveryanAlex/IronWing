@@ -6,6 +6,7 @@ import {
   type ParamStore,
 } from "../../params";
 import type { SessionEvent } from "../../session";
+import { formatUnknownError } from "../error-format";
 
 export type ParamsServiceEventHandlers = {
   onStore: (event: SessionEvent<ParamStore>) => void;
@@ -22,7 +23,7 @@ export function createParamsService(): ParamsService {
   return {
     subscribeAll,
     fetchMetadata: fetchParamMetadata,
-    formatError: asErrorMessage,
+    formatError: formatUnknownError,
   };
 }
 
@@ -40,7 +41,5 @@ export async function subscribeAll(handlers: ParamsServiceEventHandlers): Promis
 }
 
 export function asErrorMessage(error: unknown): string {
-  if (typeof error === "string") return error;
-  if (error instanceof Error) return error.message;
-  return "unexpected error";
+  return formatUnknownError(error);
 }

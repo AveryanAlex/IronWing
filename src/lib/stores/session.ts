@@ -1,120 +1,58 @@
 import { derived, get, writable } from "svelte/store";
 
-import { missingDomainValue, type DomainValue } from "../domain-status";
 import {
   createSessionService,
-  createSessionLifecycleView,
   type SessionConnectionFormState,
   type SessionService,
 } from "../platform/session";
-import { selectVehiclePosition } from "../session-selectors";
 import { isNewerScopedEnvelope, isSameEnvelope } from "../scoped-session-events";
-import { selectTelemetryView } from "../telemetry-selectors";
-import { shouldDropEvent, type SessionDomain, type SessionEnvelope, type SessionState, type SourceKind } from "../../session";
-import type { MissionState } from "../../mission";
-import type { ParamProgress, ParamStore } from "../../params";
+import type { CalibrationDomain } from "../../calibration";
 import type { ConfigurationFactsDomain } from "../../configuration-facts";
 import type { GuidedDomain } from "../../guided";
-import type { CalibrationDomain } from "../../calibration";
 import type { SensorHealthDomain } from "../../sensor-health";
+import type {
+  SessionDomain,
+  SessionEnvelope,
+  SourceKind,
+} from "../../session";
 import type { StatusTextDomain } from "../../statustext";
 import type { SupportDomain } from "../../support";
-import type { BluetoothDevice, FlightModeEntry, TelemetryState } from "../../telemetry";
-import type { TransportDescriptor } from "../../transport";
+import type { TelemetryState } from "../../telemetry";
+import type { DomainValue } from "../domain-status";
+import { applyScopedDomainEvent } from "./session-scoped-update";
+import {
+  createSessionBootstrapController,
+  mergeBootstrapSnapshot,
+} from "./session-bootstrap";
+import {
+  createInitialSessionState,
+  type SessionStoreState,
+} from "./session-state";
+import { createSessionViewStore } from "./session-view";
+import { toConnectFormValue } from "../connection/connection-form";
 
-export type SessionStorePhase =
-  | "idle"
-  | "subscribing"
-  | "bootstrapping"
-  | "ready"
-  | "connect-requested"
-  | "disconnect-requested"
-  | "transport-refresh"
-  | "serial-refresh"
-  | "bluetooth-scan"
-  | "bluetooth-refresh";
-
-export type SessionBootstrapState = {
-  missionState: MissionState | null;
-  paramStore: ParamStore | null;
-  paramProgress: ParamProgress | null;
-  playbackCursorUsec: number | null;
-};
-
-export type SessionStoreState = {
-  hydrated: boolean;
-  lastPhase: SessionStorePhase;
-  lastError: string | null;
-  activeEnvelope: SessionEnvelope | null;
-  activeSource: SourceKind | null;
-  sessionDomain: SessionDomain;
-  telemetryDomain: DomainValue<TelemetryState>;
-  support: SupportDomain;
-  sensorHealth: SensorHealthDomain;
-  configurationFacts: ConfigurationFactsDomain;
-  calibration: CalibrationDomain;
-  guided: GuidedDomain;
-  statusText: StatusTextDomain;
-  bootstrap: SessionBootstrapState;
-  connectionForm: SessionConnectionFormState;
-  transportDescriptors: TransportDescriptor[];
-  serialPorts: string[];
-  availableModes: FlightModeEntry[];
-  btDevices: BluetoothDevice[];
-  btScanning: boolean;
-  optimisticConnection: SessionState["connection"] | null;
-};
-
-type BootstrapBuffer = {
-  attempt: number;
-  envelope: SessionEnvelope;
-  session?: SessionDomain;
-  telemetry?: DomainValue<TelemetryState>;
-  support?: SupportDomain;
-  sensorHealth?: SensorHealthDomain;
-  configurationFacts?: ConfigurationFactsDomain;
-  calibration?: CalibrationDomain;
-  guided?: GuidedDomain;
-  statusText?: StatusTextDomain;
-};
-
-function createInitialState(service: SessionService): SessionStoreState {
-  return {
-    hydrated: false,
-    lastPhase: "idle",
-    lastError: null,
-    activeEnvelope: null,
-    activeSource: null,
-    sessionDomain: missingDomainValue<SessionState>("bootstrap"),
-    telemetryDomain: missingDomainValue<TelemetryState>("bootstrap"),
-    support: missingDomainValue("bootstrap"),
-    sensorHealth: missingDomainValue("bootstrap"),
-    configurationFacts: missingDomainValue("bootstrap"),
-    calibration: missingDomainValue("bootstrap"),
-    guided: missingDomainValue("bootstrap"),
-    statusText: missingDomainValue("bootstrap"),
-    bootstrap: {
-      missionState: null,
-      paramStore: null,
-      paramProgress: null,
-      playbackCursorUsec: null,
-    },
-    connectionForm: service.loadConnectionForm(),
-    transportDescriptors: [],
-    serialPorts: [],
-    availableModes: [],
-    btDevices: [],
-    btScanning: false,
-    optimisticConnection: null,
-  };
-}
+export type {
+  SessionBootstrapState,
+  SessionStorePhase,
+  SessionStoreState,
+} from "./session-state";
+export { createSessionViewStore } from "./session-view";
 
 export function createSessionStore(service: SessionService = createSessionService()) {
-  const store = writable<SessionStoreState>(createInitialState(service));
+  const store = writable<SessionStoreState>(createInitialSessionState(service));
   let subscriptions: (() => void) | null = null;
   let initializePromise: Promise<void> | null = null;
-  let bootstrapAttempt = 0;
-  let bootstrapBuffer: BootstrapBuffer | null = null;
+  const bootstrap = createSessionBootstrapController();
+  let availableModesRequestId = 0;
+
+  function completeActionError(error: unknown, patch: Partial<SessionStoreState> = {}) {
+    store.update((state) => ({
+      ...state,
+      ...patch,
+      lastPhase: "ready",
+      lastError: service.formatError(error),
+    }));
+  }
 
   function updateConnectionForm(patch: Partial<SessionConnectionFormState>) {
     store.update((state) => {
@@ -126,18 +64,23 @@ export function createSessionStore(service: SessionService = createSessionServic
 
   function stageBootstrapEvent<T>(
     event: { envelope: SessionEnvelope; value: T },
-    assign: (buffer: BootstrapBuffer, value: T) => void,
+    assign: (buffer: {
+      session?: SessionDomain;
+      telemetry?: DomainValue<TelemetryState>;
+      support?: SupportDomain;
+      sensorHealth?: SensorHealthDomain;
+      configurationFacts?: ConfigurationFactsDomain;
+      calibration?: CalibrationDomain;
+      guided?: GuidedDomain;
+      statusText?: StatusTextDomain;
+    }, value: T) => void,
   ) {
-    if (!bootstrapBuffer || bootstrapBuffer.attempt !== bootstrapAttempt) {
+    const attempt = bootstrap.currentAttempt();
+    if (attempt === 0) {
       return false;
     }
 
-    if (!isSameEnvelope(bootstrapBuffer.envelope, event.envelope)) {
-      return false;
-    }
-
-    assign(bootstrapBuffer, event.value);
-    return true;
+    return bootstrap.stageEvent(attempt, event, assign);
   }
 
   function applySessionEvent(event: { envelope: SessionEnvelope; value: SessionDomain }) {
@@ -147,21 +90,13 @@ export function createSessionStore(service: SessionService = createSessionServic
       return;
     }
 
-    store.update((state) => {
-      if (shouldDropEvent(state.activeEnvelope, event.envelope)) {
-        return state;
-      }
-
-      const nextPhase = event.value.value?.connection.kind === "connecting" ? state.lastPhase : "ready";
-      return {
-        ...state,
-        sessionDomain: event.value,
+    store.update((state) =>
+      applyScopedDomainEvent(state, event, (current, value) => ({
+        sessionDomain: value,
         optimisticConnection: null,
-        lastPhase: nextPhase,
-        activeEnvelope: event.envelope,
-        activeSource: event.envelope.source_kind,
-      };
-    });
+        lastPhase: value.value?.connection.kind === "connecting" ? current.lastPhase : "ready",
+      })),
+    );
 
     void syncAvailableModes();
   }
@@ -173,18 +108,11 @@ export function createSessionStore(service: SessionService = createSessionServic
       return;
     }
 
-    store.update((state) => {
-      if (shouldDropEvent(state.activeEnvelope, event.envelope)) {
-        return state;
-      }
-
-      return {
-        ...state,
-        telemetryDomain: event.value,
-        activeEnvelope: event.envelope,
-        activeSource: event.envelope.source_kind,
-      };
-    });
+    store.update((state) =>
+      applyScopedDomainEvent(state, event, (_current, value) => ({
+        telemetryDomain: value,
+      })),
+    );
   }
 
   function applySupportEvent(event: { envelope: SessionEnvelope; value: SupportDomain }) {
@@ -194,18 +122,11 @@ export function createSessionStore(service: SessionService = createSessionServic
       return;
     }
 
-    store.update((state) => {
-      if (shouldDropEvent(state.activeEnvelope, event.envelope)) {
-        return state;
-      }
-
-      return {
-        ...state,
-        support: event.value,
-        activeEnvelope: event.envelope,
-        activeSource: event.envelope.source_kind,
-      };
-    });
+    store.update((state) =>
+      applyScopedDomainEvent(state, event, (_current, value) => ({
+        support: value,
+      })),
+    );
   }
 
   function applySensorHealthEvent(event: { envelope: SessionEnvelope; value: SensorHealthDomain }) {
@@ -215,18 +136,11 @@ export function createSessionStore(service: SessionService = createSessionServic
       return;
     }
 
-    store.update((state) => {
-      if (shouldDropEvent(state.activeEnvelope, event.envelope)) {
-        return state;
-      }
-
-      return {
-        ...state,
-        sensorHealth: event.value,
-        activeEnvelope: event.envelope,
-        activeSource: event.envelope.source_kind,
-      };
-    });
+    store.update((state) =>
+      applyScopedDomainEvent(state, event, (_current, value) => ({
+        sensorHealth: value,
+      })),
+    );
   }
 
   function applyConfigurationFactsEvent(event: { envelope: SessionEnvelope; value: ConfigurationFactsDomain }) {
@@ -236,18 +150,11 @@ export function createSessionStore(service: SessionService = createSessionServic
       return;
     }
 
-    store.update((state) => {
-      if (shouldDropEvent(state.activeEnvelope, event.envelope)) {
-        return state;
-      }
-
-      return {
-        ...state,
-        configurationFacts: event.value,
-        activeEnvelope: event.envelope,
-        activeSource: event.envelope.source_kind,
-      };
-    });
+    store.update((state) =>
+      applyScopedDomainEvent(state, event, (_current, value) => ({
+        configurationFacts: value,
+      })),
+    );
   }
 
   function applyCalibrationEvent(event: { envelope: SessionEnvelope; value: CalibrationDomain }) {
@@ -257,18 +164,11 @@ export function createSessionStore(service: SessionService = createSessionServic
       return;
     }
 
-    store.update((state) => {
-      if (shouldDropEvent(state.activeEnvelope, event.envelope)) {
-        return state;
-      }
-
-      return {
-        ...state,
-        calibration: event.value,
-        activeEnvelope: event.envelope,
-        activeSource: event.envelope.source_kind,
-      };
-    });
+    store.update((state) =>
+      applyScopedDomainEvent(state, event, (_current, value) => ({
+        calibration: value,
+      })),
+    );
   }
 
   function applyGuidedEvent(event: { envelope: SessionEnvelope; value: GuidedDomain }) {
@@ -278,18 +178,11 @@ export function createSessionStore(service: SessionService = createSessionServic
       return;
     }
 
-    store.update((state) => {
-      if (shouldDropEvent(state.activeEnvelope, event.envelope)) {
-        return state;
-      }
-
-      return {
-        ...state,
-        guided: event.value,
-        activeEnvelope: event.envelope,
-        activeSource: event.envelope.source_kind,
-      };
-    });
+    store.update((state) =>
+      applyScopedDomainEvent(state, event, (_current, value) => ({
+        guided: value,
+      })),
+    );
   }
 
   function applyStatusTextEvent(event: { envelope: SessionEnvelope; value: StatusTextDomain }) {
@@ -299,24 +192,20 @@ export function createSessionStore(service: SessionService = createSessionServic
       return;
     }
 
-    store.update((state) => {
-      if (shouldDropEvent(state.activeEnvelope, event.envelope)) {
-        return state;
-      }
-
-      return {
-        ...state,
-        statusText: event.value,
-        activeEnvelope: event.envelope,
-        activeSource: event.envelope.source_kind,
-      };
-    });
+    store.update((state) =>
+      applyScopedDomainEvent(state, event, (_current, value) => ({
+        statusText: value,
+      })),
+    );
   }
 
   async function syncAvailableModes() {
     const state = get(store);
     const vehicleState = state.sessionDomain.value?.vehicle_state ?? null;
     const connected = state.sessionDomain.value?.connection.kind === "connected";
+    const scopeEnvelope = state.activeEnvelope;
+    const requestId = availableModesRequestId + 1;
+    availableModesRequestId = requestId;
 
     if (!connected || !vehicleState) {
       store.update((current) => ({ ...current, availableModes: [] }));
@@ -325,9 +214,33 @@ export function createSessionStore(service: SessionService = createSessionServic
 
     try {
       const availableModes = await service.getAvailableModes();
+
+      const current = get(store);
+      const sameScope =
+        scopeEnvelope !== null
+        && current.activeEnvelope !== null
+        && isSameEnvelope(current.activeEnvelope, scopeEnvelope);
+      const stillConnected = current.sessionDomain.value?.connection.kind === "connected";
+      if (availableModesRequestId !== requestId || !sameScope || !stillConnected) {
+        return;
+      }
+
       store.update((current) => ({ ...current, availableModes }));
-    } catch {
-      store.update((current) => ({ ...current, availableModes: [] }));
+    } catch (error) {
+      const current = get(store);
+      const sameScope =
+        scopeEnvelope !== null
+        && current.activeEnvelope !== null
+        && isSameEnvelope(current.activeEnvelope, scopeEnvelope);
+      if (availableModesRequestId !== requestId || !sameScope) {
+        return;
+      }
+
+      store.update((current) => ({
+        ...current,
+        availableModes: [],
+        lastError: `Failed to refresh available modes: ${service.formatError(error)}`,
+      }));
     }
   }
 
@@ -357,17 +270,12 @@ export function createSessionStore(service: SessionService = createSessionServic
         };
       });
     } catch (error) {
-      store.update((state) => ({
-        ...state,
-        lastError: service.formatError(error),
-      }));
+      completeActionError(error);
     }
   }
 
   async function bootstrapSource(sourceKind: SourceKind = "live") {
-    const attempt = bootstrapAttempt + 1;
-    bootstrapAttempt = attempt;
-    bootstrapBuffer = null;
+    const attempt = bootstrap.beginAttempt();
 
     store.update((state) => ({
       ...state,
@@ -376,117 +284,36 @@ export function createSessionStore(service: SessionService = createSessionServic
     }));
 
     const snapshot = await service.openSessionSnapshot(sourceKind);
-    bootstrapBuffer = { attempt, envelope: snapshot.envelope };
+    bootstrap.prepareBuffer(attempt, snapshot.envelope);
     const ack = await service.ackSessionSnapshot(snapshot.envelope);
 
     if (ack.result === "rejected") {
-      if (bootstrapBuffer?.attempt === attempt) {
-        bootstrapBuffer = null;
-      }
+      bootstrap.clearAttempt(attempt);
       throw new Error(ack.failure.reason.message);
     }
 
-    if (bootstrapAttempt !== attempt) {
-      if (bootstrapBuffer?.attempt === attempt) {
-        bootstrapBuffer = null;
-      }
+    if (!bootstrap.isCurrentAttempt(attempt)) {
+      bootstrap.clearAttempt(attempt);
       return null;
     }
 
     const acceptedEnvelope = ack.envelope ?? snapshot.envelope;
-    const buffered = bootstrapBuffer?.attempt === attempt ? bootstrapBuffer : null;
+    const buffered = bootstrap.takeBuffer(attempt);
     const current = get(store);
     const snapshotIsStale =
       current.activeEnvelope !== null && !isNewerScopedEnvelope(current.activeEnvelope, acceptedEnvelope);
 
-    store.update((state) => {
-      let nextState: SessionStoreState = {
-        ...state,
-        activeEnvelope: acceptedEnvelope,
-        activeSource: acceptedEnvelope.source_kind,
-        lastPhase: "ready",
-        lastError: null,
-      };
+    store.update((state) =>
+      mergeBootstrapSnapshot({
+        state,
+        snapshot,
+        acceptedEnvelope,
+        buffered,
+        snapshotIsStale,
+      }),
+    );
 
-      if (!snapshotIsStale) {
-        nextState = {
-          ...nextState,
-          sessionDomain: snapshot.session,
-          telemetryDomain: snapshot.telemetry,
-          support: snapshot.support,
-          sensorHealth: snapshot.sensor_health,
-          configurationFacts: snapshot.configuration_facts,
-          calibration: snapshot.calibration,
-          guided: snapshot.guided,
-          statusText: snapshot.status_text,
-          bootstrap: {
-            missionState: snapshot.mission_state ?? null,
-            paramStore: snapshot.param_store ?? null,
-            paramProgress: snapshot.param_progress ?? null,
-            playbackCursorUsec: snapshot.playback.cursor_usec,
-          },
-        };
-      }
-
-      if (buffered && isSameEnvelope(buffered.envelope, acceptedEnvelope)) {
-        if (buffered.session) {
-          nextState = {
-            ...nextState,
-            sessionDomain: buffered.session,
-            optimisticConnection: null,
-          };
-        }
-        if (buffered.telemetry) {
-          nextState = {
-            ...nextState,
-            telemetryDomain: buffered.telemetry,
-          };
-        }
-        if (buffered.support) {
-          nextState = {
-            ...nextState,
-            support: buffered.support,
-          };
-        }
-        if (buffered.sensorHealth) {
-          nextState = {
-            ...nextState,
-            sensorHealth: buffered.sensorHealth,
-          };
-        }
-        if (buffered.configurationFacts) {
-          nextState = {
-            ...nextState,
-            configurationFacts: buffered.configurationFacts,
-          };
-        }
-        if (buffered.calibration) {
-          nextState = {
-            ...nextState,
-            calibration: buffered.calibration,
-          };
-        }
-        if (buffered.guided) {
-          nextState = {
-            ...nextState,
-            guided: buffered.guided,
-          };
-        }
-        if (buffered.statusText) {
-          nextState = {
-            ...nextState,
-            statusText: buffered.statusText,
-          };
-        }
-      }
-
-      return nextState;
-    });
-
-    if (bootstrapBuffer?.attempt === attempt) {
-      bootstrapBuffer = null;
-    }
-
+    bootstrap.clearAttempt(attempt);
     void syncAvailableModes();
     return snapshot;
   }
@@ -518,10 +345,7 @@ export function createSessionStore(service: SessionService = createSessionServic
         await refreshTransportDescriptors();
         await bootstrapSource(sourceKind);
       } catch (error) {
-        store.update((state) => ({
-          ...state,
-          lastError: service.formatError(error),
-        }));
+        completeActionError(error);
       } finally {
         store.update((state) => ({
           ...state,
@@ -546,26 +370,20 @@ export function createSessionStore(service: SessionService = createSessionServic
     if (!descriptor) {
       store.update((current) => ({
         ...current,
+        lastPhase: "ready",
         optimisticConnection: null,
         lastError: `Unsupported transport: ${current.connectionForm.mode}`,
       }));
       return;
     }
 
-    const formValue = {
-      bind_addr: state.connectionForm.udpBind,
-      address:
-        state.connectionForm.mode === "tcp"
-          ? state.connectionForm.tcpAddress
-          : state.connectionForm.selectedBtDevice,
-      port: state.connectionForm.serialPort,
-      baud: state.connectionForm.baud,
-    };
+    const formValue = toConnectFormValue(state.connectionForm);
 
     const validationErrors = service.validateTransportDescriptor(descriptor, formValue);
     if (validationErrors.length > 0) {
       store.update((current) => ({
         ...current,
+        lastPhase: "ready",
         optimisticConnection: null,
         lastError: validationErrors[0],
       }));
@@ -579,11 +397,7 @@ export function createSessionStore(service: SessionService = createSessionServic
       }
       await service.connectSession(service.buildConnectRequest(descriptor, formValue));
     } catch (error) {
-      store.update((current) => ({
-        ...current,
-        optimisticConnection: null,
-        lastError: service.formatError(error),
-      }));
+      completeActionError(error, { optimisticConnection: null });
     }
   }
 
@@ -598,8 +412,8 @@ export function createSessionStore(service: SessionService = createSessionServic
     try {
       await service.disconnectSession();
       await bootstrapSource("live");
-    } catch {
-      // Best-effort cleanup during connect cancellation.
+    } catch (error) {
+      completeActionError(error);
     }
   }
 
@@ -616,10 +430,7 @@ export function createSessionStore(service: SessionService = createSessionServic
       await service.disconnectSession({ session_id: current.activeEnvelope?.session_id });
       await bootstrapSource("live");
     } catch (error) {
-      store.update((state) => ({
-        ...state,
-        lastError: service.formatError(error),
-      }));
+      completeActionError(error);
     }
   }
 
@@ -650,10 +461,7 @@ export function createSessionStore(service: SessionService = createSessionServic
         };
       });
     } catch (error) {
-      store.update((state) => ({
-        ...state,
-        lastError: service.formatError(error),
-      }));
+      completeActionError(error);
     }
   }
 
@@ -687,11 +495,7 @@ export function createSessionStore(service: SessionService = createSessionServic
         };
       });
     } catch (error) {
-      store.update((state) => ({
-        ...state,
-        btScanning: false,
-        lastError: service.formatError(error),
-      }));
+      completeActionError(error, { btScanning: false });
     }
   }
 
@@ -723,10 +527,7 @@ export function createSessionStore(service: SessionService = createSessionServic
         };
       });
     } catch (error) {
-      store.update((state) => ({
-        ...state,
-        lastError: service.formatError(error),
-      }));
+      completeActionError(error);
     }
   }
 
@@ -734,9 +535,9 @@ export function createSessionStore(service: SessionService = createSessionServic
     subscriptions?.();
     subscriptions = null;
     initializePromise = null;
-    bootstrapAttempt = 0;
-    bootstrapBuffer = null;
-    store.set(createInitialState(service));
+    availableModesRequestId += 1;
+    bootstrap.reset();
+    store.set(createInitialSessionState(service));
   }
 
   return {
@@ -757,27 +558,7 @@ export function createSessionStore(service: SessionService = createSessionServic
 
 export type SessionStore = ReturnType<typeof createSessionStore>;
 
-export function createSessionViewStore(store: Pick<SessionStore, "subscribe">) {
-  return derived(store, ($session) => {
-    const lifecycle = createSessionLifecycleView(
-      $session.activeEnvelope,
-      $session.sessionDomain,
-      $session.optimisticConnection,
-    );
-
-    return {
-      ...lifecycle,
-      telemetry: selectTelemetryView($session.telemetryDomain),
-      vehicleState: lifecycle.session?.vehicle_state ?? null,
-      homePosition: lifecycle.session?.home_position ?? null,
-      vehiclePosition: selectVehiclePosition($session.telemetryDomain),
-      connected: lifecycle.linkState === "connected",
-      isConnecting: lifecycle.linkState === "connecting",
-      selectedTransportDescriptor:
-        $session.transportDescriptors.find((descriptor) => descriptor.kind === $session.connectionForm.mode) ?? null,
-    };
-  });
-}
+export type SessionViewStore = ReturnType<typeof createSessionViewStore>;
 
 export const session = createSessionStore();
 

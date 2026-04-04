@@ -113,4 +113,27 @@ describe("loadConnectionForm", () => {
 
     expect(loadConnectionForm(storage, defaults)).toEqual(defaults);
   });
+
+  it("normalizes persisted values and ignores invalid field types", () => {
+    const storage = {
+      getItem: () =>
+        JSON.stringify({
+          mode: "udp",
+          udpBind: 14550,
+          tcpAddress: "127.0.0.1:9999",
+          serialPort: "/dev/ttyUSB0",
+          baud: "57600",
+          selectedBtDevice: "AA:BB:CC",
+          takeoffAlt: 20,
+          followVehicle: false,
+        }),
+    };
+
+    expect(loadConnectionForm(storage, defaults)).toEqual({
+      ...defaults,
+      serialPort: "/dev/ttyUSB0",
+      selectedBtDevice: "AA:BB:CC",
+      followVehicle: false,
+    });
+  });
 });

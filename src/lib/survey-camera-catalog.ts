@@ -1,6 +1,7 @@
 import rawData from "../data/camera-metadata.json";
 
 import type { CameraSpec } from "./survey-camera";
+import { readStorageJson, writeStorageJson } from "./local-storage";
 
 const CUSTOM_CAMERA_STORAGE_KEY = "ironwing_custom_cameras";
 const RECENT_CAMERA_STORAGE_KEY = "ironwing_recent_cameras";
@@ -139,85 +140,40 @@ function parseCatalogFile(raw: unknown): CatalogCamera[] {
 }
 
 function readStoredCustomCameraEntries(): unknown[] {
-    if (typeof localStorage === "undefined") {
-        return [];
+    const parsed = readStorageJson(CUSTOM_CAMERA_STORAGE_KEY);
+    if (Array.isArray(parsed)) {
+        return parsed;
     }
 
-    try {
-        const raw = localStorage.getItem(CUSTOM_CAMERA_STORAGE_KEY);
-        if (!raw) {
-            return [];
-        }
-
-        const parsed = JSON.parse(raw) as unknown;
-        if (Array.isArray(parsed)) {
-            return parsed;
-        }
-
-        if (
-            parsed &&
-            typeof parsed === "object" &&
-            Array.isArray((parsed as RawCatalogFile).cameraMetaData)
-        ) {
-            return (parsed as RawCatalogFile).cameraMetaData as unknown[];
-        }
-
-        return [];
-    } catch {
-        return [];
+    if (
+        parsed &&
+        typeof parsed === "object" &&
+        Array.isArray((parsed as RawCatalogFile).cameraMetaData)
+    ) {
+        return (parsed as RawCatalogFile).cameraMetaData as unknown[];
     }
+
+    return [];
 }
 
 function writeStoredCustomCameras(cameras: CatalogCamera[]): void {
-    if (typeof localStorage === "undefined") {
-        return;
-    }
-
-    try {
-        localStorage.setItem(
-            CUSTOM_CAMERA_STORAGE_KEY,
-            JSON.stringify(cameras.map((camera) => toRawCatalogCamera(camera))),
-        );
-    } catch {
-        // Ignore storage unavailability or quota errors.
-    }
+    writeStorageJson(
+        CUSTOM_CAMERA_STORAGE_KEY,
+        cameras.map((camera) => toRawCatalogCamera(camera)),
+    );
 }
 
 function readStoredRecentCameraNames(): string[] {
-    if (typeof localStorage === "undefined") {
+    const parsed = readStorageJson(RECENT_CAMERA_STORAGE_KEY);
+    if (!Array.isArray(parsed)) {
         return [];
     }
 
-    try {
-        const raw = localStorage.getItem(RECENT_CAMERA_STORAGE_KEY);
-        if (!raw) {
-            return [];
-        }
-
-        const parsed = JSON.parse(raw) as unknown;
-        if (!Array.isArray(parsed)) {
-            return [];
-        }
-
-        return parsed.filter((value): value is string => typeof value === "string");
-    } catch {
-        return [];
-    }
+    return parsed.filter((value): value is string => typeof value === "string");
 }
 
 function writeStoredRecentCameraNames(canonicalNames: string[]): void {
-    if (typeof localStorage === "undefined") {
-        return;
-    }
-
-    try {
-        localStorage.setItem(
-            RECENT_CAMERA_STORAGE_KEY,
-            JSON.stringify(canonicalNames.slice(0, MAX_RECENT_CAMERAS)),
-        );
-    } catch {
-        // Ignore storage unavailability or quota errors.
-    }
+    writeStorageJson(RECENT_CAMERA_STORAGE_KEY, canonicalNames.slice(0, MAX_RECENT_CAMERAS));
 }
 
 const builtinCameras = parseCatalogFile(rawData);
@@ -233,6 +189,7 @@ export function getCustomCameras(): CatalogCamera[] {
             .sort(compareCameras)
             .map(cloneCamera);
     } catch {
+        // Ignore malformed persisted data and fall back to an empty custom-camera list.
         return [];
     }
 }

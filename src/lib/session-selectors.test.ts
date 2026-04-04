@@ -5,7 +5,11 @@ import {
   describeTransportAvailability,
   validateTransportDescriptor,
 } from "../transport";
-import { selectVehiclePosition } from "./session-selectors";
+import {
+  selectConnectionPanelPresentation,
+  selectVehiclePosition,
+  selectVehicleStatusCardView,
+} from "./session-selectors";
 
 describe("session selectors and connect workflow", () => {
   it("selects vehicle position from grouped telemetry navigation data", () => {
@@ -41,5 +45,52 @@ describe("session selectors and connect workflow", () => {
     expect(
       buildConnectRequest(descriptor, { port: "/dev/ttyACM0", baud: 57600 }),
     ).toEqual({ transport: { kind: "serial", port: "/dev/ttyACM0", baud: 57600 } });
+  });
+
+  it("maps vehicle status card display fields and tones", () => {
+    expect(
+      selectVehicleStatusCardView({
+        connected: true,
+        activeSource: "playback",
+        vehicleState: {
+          armed: true,
+          custom_mode: 5,
+          mode_name: "LOITER",
+          system_status: "STANDBY",
+          vehicle_type: "copter",
+          autopilot: "ardupilot",
+          system_id: 1,
+          component_id: 1,
+          heartbeat_received: true,
+        },
+      }),
+    ).toEqual({
+      sessionLabel: "live session",
+      sessionTone: "positive",
+      armStateText: "ARMED",
+      armStateTone: "positive",
+      modeText: "LOITER",
+      systemText: "STANDBY",
+      dataFeedText: "Replay",
+    });
+  });
+
+  it("derives connection panel status and submit lock rules", () => {
+    expect(
+      selectConnectionPanelPresentation({
+        hydrated: true,
+        isConnecting: false,
+        connected: false,
+        selectedTransportAvailable: true,
+        connectionMode: "bluetooth_ble",
+        selectedBtDevice: "",
+        visibleError: "address is required",
+      }),
+    ).toEqual({
+      formLocked: false,
+      connectDisabled: true,
+      statusLabel: "Error",
+      statusTone: "critical",
+    });
   });
 });

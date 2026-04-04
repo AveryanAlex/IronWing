@@ -8,7 +8,7 @@ vi.mock("@platform/event", () => ({
   listen,
 }));
 
-import { selectTelemetryView } from "./telemetry-selectors";
+import { selectTelemetrySummaryView, selectTelemetryView } from "./telemetry-selectors";
 import { subscribeTelemetryState } from "../telemetry";
 
 describe("telemetry selectors", () => {
@@ -37,6 +37,50 @@ describe("telemetry selectors", () => {
     expect(view.battery_pct).toBe(76);
     expect(view.gps_fix_type).toBe("fix_3d");
     expect(view.rc_channels).toEqual([1100, 1500]);
+  });
+
+  it("formats telemetry summary text and tones for connected sessions", () => {
+    const summary = selectTelemetrySummaryView(true, {
+      altitude_m: 12.4,
+      speed_mps: 4.8,
+      battery_pct: 18,
+      heading_deg: 182.1,
+      gps_fix_type: "fix_3d",
+      gps_satellites: 14,
+    });
+
+    expect(summary).toEqual({
+      altitudeText: "12.4 m",
+      speedText: "4.8 m/s",
+      batteryText: "18.0%",
+      batteryTone: "critical",
+      headingText: "182°",
+      gpsText: "GPS: 3D fix · 14 sats",
+      gpsTone: "positive",
+      sessionLabel: "streaming",
+    });
+  });
+
+  it("returns neutral placeholders for disconnected sessions", () => {
+    const summary = selectTelemetrySummaryView(false, {
+      altitude_m: 99,
+      speed_mps: 5,
+      battery_pct: 88,
+      heading_deg: 45,
+      gps_fix_type: "rtk_fixed",
+      gps_satellites: 20,
+    });
+
+    expect(summary).toEqual({
+      altitudeText: "-- m",
+      speedText: "-- m/s",
+      batteryText: "--%",
+      batteryTone: "neutral",
+      headingText: "--°",
+      gpsText: "GPS: --",
+      gpsTone: "neutral",
+      sessionLabel: "waiting for link",
+    });
   });
 
   it("unwraps scoped telemetry payloads from Rust", async () => {

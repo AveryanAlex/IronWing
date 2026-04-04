@@ -1,25 +1,30 @@
-<svelte:options runes={false} />
-
 <script lang="ts">
-import {
-  createParameterWorkspaceViewStore,
-  type ParamsStore,
-} from "../../lib/stores/params";
-import type { ShellTier } from "./chrome-state";
+import { fromStore } from "svelte/store";
+
 import { appShellTestIds } from "./chrome-state";
+import {
+  getParamsStoreContext,
+  getParameterWorkspaceViewStoreContext,
+  getShellChromeStoreContext,
+} from "./runtime-context";
 
-export let store: ParamsStore;
-export let tier: ShellTier = "wide";
-export let open = false;
-export let onToggle: () => void = () => {};
+type Props = {
+  open?: boolean;
+  onToggle?: () => void;
+};
 
-let view = createParameterWorkspaceViewStore(store);
+const store = getParamsStoreContext();
+const chrome = fromStore(getShellChromeStoreContext());
+const parameterView = fromStore(getParameterWorkspaceViewStoreContext());
 
-$: view = createParameterWorkspaceViewStore(store);
-$: surface = tier === "phone" ? "sheet" : "tray";
+let { open = false, onToggle = () => {} }: Props = $props();
+
+let view = $derived(parameterView.current);
+let surface = $derived(chrome.current.tier === "phone" ? "sheet" : "tray");
+let hasRebootFlaggedEdit = $derived(view.stagedEdits.some((edit) => edit.rebootRequired));
 </script>
 
-{#if $view.stagedCount > 0}
+{#if view.stagedCount > 0}
   <section
     class={`pointer-events-auto fixed inset-x-0 bottom-0 z-30 px-3 pb-3 sm:px-4 ${surface === "sheet" ? "" : "md:left-auto md:right-6 md:max-w-2xl"}`}
     data-surface-kind={surface}
@@ -28,23 +33,25 @@ $: surface = tier === "phone" ? "sheet" : "tray";
     <div class="mx-auto max-w-5xl rounded-[26px] border border-border bg-bg-secondary/95 shadow-[0_-24px_80px_rgba(0,0,0,0.28)] backdrop-blur">
       <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
         <div class="min-w-0">
-          <p class="runtime-eyebrow">Shell review tray</p>
+          <p class="runtime-eyebrow">Parameter changes</p>
           <div class="mt-1 flex flex-wrap items-center gap-2">
-            <h2 class="text-base font-semibold tracking-[-0.03em] text-text-primary sm:text-lg">{$view.stagedCount} staged parameter{$view.stagedCount === 1 ? "" : "s"}</h2>
+            <h2 class="text-base font-semibold tracking-[-0.03em] text-text-primary sm:text-lg">
+              {view.stagedCount} pending change{view.stagedCount === 1 ? "" : "s"}
+            </h2>
             <span
               class="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.16em] text-accent"
               data-testid={appShellTestIds.parameterReviewCount}
             >
-              {$view.stagedCount} pending
+              {view.stagedCount} queued
             </span>
-            {#if $view.stagedEdits.some((edit) => edit.rebootRequired)}
+            {#if hasRebootFlaggedEdit}
               <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.16em] text-warning">
-                reboot flagged
+                reboot needed
               </span>
             {/if}
           </div>
           <p class="mt-1 text-sm text-text-secondary">
-            One shared queue stays mounted at the shell so desktop, Radiomaster, and phone layouts all review the same staged edits.
+            Review your staged parameter edits before applying them.
           </p>
         </div>
 
@@ -58,7 +65,7 @@ $: surface = tier === "phone" ? "sheet" : "tray";
             onclick={onToggle}
             type="button"
           >
-            {open ? "Hide review" : "Review staged edits"}
+            {open ? "Hide changes" : "Review changes"}
           </button>
           <button
             class="rounded-full border border-border bg-bg-primary/70 px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-danger/40 hover:text-danger"
@@ -66,7 +73,7 @@ $: surface = tier === "phone" ? "sheet" : "tray";
             onclick={() => store.clearStagedEdits()}
             type="button"
           >
-            Discard all
+            Clear all
           </button>
         </div>
       </div>
@@ -77,7 +84,7 @@ $: surface = tier === "phone" ? "sheet" : "tray";
           data-testid={appShellTestIds.parameterReviewSurface}
         >
           <div class="space-y-3">
-            {#each $view.stagedEdits as edit (edit.name)}
+            {#each view.stagedEdits as edit (edit.name)}
               <article
                 class="rounded-[22px] border border-border bg-bg-primary/80 p-4"
                 data-param-name={edit.name}

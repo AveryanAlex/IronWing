@@ -32,7 +32,7 @@ test("mounts the active Svelte shell through the Vitest harness", () => {
 
   expect(document.title).toBe("IronWing");
   expect(getByTestId(runtimeTestIds.shell).dataset.runtimePhase).toBe("booting");
-  expect(getByTestId(runtimeTestIds.runtimeMarker).textContent).toBe("IronWing active runtime");
-  expect(getByRole("heading", { name: "Svelte runtime online" })).toBeTruthy();
+  expect(getByTestId(runtimeTestIds.runtimeMarker).textContent).toBe("IronWing runtime marker");
+  expect(getByRole("heading", { name: "Ground Control" })).toBeTruthy();
   expect(getByTestId(runtimeTestIds.framework).textContent).toBe("Svelte 5");
 });

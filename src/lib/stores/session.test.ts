@@ -311,6 +311,81 @@ describe("session store", () => {
     expect(lifecycle.linkState).toBe("connected");
   });
 
+  it("does not let a stale bootstrap snapshot rewrite the active scoped state", async () => {
+    const staleAck = deferred<{ result: "accepted" }>();
+    const staleAckRequested = deferred<void>();
+    const snapshots = [
+      createSnapshot({
+        envelope: { session_id: "session-1", source_kind: "live", seek_epoch: 0, reset_revision: 2 },
+        telemetry: {
+          available: true,
+          complete: true,
+          provenance: "bootstrap",
+          value: {
+            flight: { altitude_m: 42 },
+            navigation: { latitude_deg: 47.1, longitude_deg: 8.5, heading_deg: 90 },
+            gps: { fix_type: "fix_3d" },
+          },
+        },
+      }),
+      createSnapshot({
+        envelope: { session_id: "session-1", source_kind: "live", seek_epoch: 0, reset_revision: 1 },
+        telemetry: {
+          available: true,
+          complete: true,
+          provenance: "bootstrap",
+          value: {
+            flight: { altitude_m: 5 },
+            navigation: { latitude_deg: 47.1, longitude_deg: 8.5, heading_deg: 90 },
+            gps: { fix_type: "fix_3d" },
+          },
+        },
+      }),
+    ];
+    let ackCalls = 0;
+    const { service, emit } = createMockService({
+      openSessionSnapshot: vi.fn(async () => snapshots.shift() ?? createSnapshot()),
+      ackSessionSnapshot: vi.fn(async () => {
+        ackCalls += 1;
+        if (ackCalls === 2) {
+          staleAckRequested.resolve();
+          return staleAck.promise;
+        }
+
+        return { result: "accepted" as const };
+      }),
+    });
+    const store = createSessionStore(service);
+
+    await store.initialize();
+    const staleBootstrap = store.bootstrapSource("live");
+    await staleAckRequested.promise;
+
+    emit("onTelemetry", {
+      envelope: { session_id: "session-1", source_kind: "live", seek_epoch: 0, reset_revision: 1 },
+      value: {
+        available: true,
+        complete: true,
+        provenance: "stream",
+        value: {
+          flight: { altitude_m: 99 },
+          navigation: { latitude_deg: 47.1, longitude_deg: 8.5, heading_deg: 90 },
+          gps: { fix_type: "rtk_fixed" },
+        },
+      },
+    });
+
+    staleAck.resolve({ result: "accepted" });
+    await staleBootstrap;
+
+    const state = get(store);
+    const telemetry = selectTelemetryView(state.telemetryDomain);
+    expect(state.activeEnvelope?.reset_revision).toBe(2);
+    expect(state.activeSource).toBe("live");
+    expect(telemetry.altitude_m).toBe(42);
+    expect(telemetry.gps_fix_type).toBe("fix_3d");
+  });
+
   it("ignores stale events from previous session scopes", async () => {
     const { service, emit } = createMockService({
       openSessionSnapshot: vi.fn(async () =>
@@ -367,10 +442,125 @@ describe("session store", () => {
     await store.connect();
 
     const state = get(store);
-    expect(state.lastPhase).toBe("connect-requested");
+    expect(state.lastPhase).toBe("ready");
     expect(state.lastError).toBe("address is required");
     expect(state.optimisticConnection).toBeNull();
     expect(state.activeSource).toBe("live");
     expect(service.connectSession).not.toHaveBeenCalled();
+  });
+
+  it("ignores late available-modes responses after disconnect", async () => {
+    const modesRequest = deferred<Array<{ custom_mode: number; name: string }>>();
+    const { service, emit } = createMockService({
+      getAvailableModes: vi.fn(() => modesRequest.promise),
+    });
+    const store = createSessionStore(service);
+
+    await store.initialize();
+
+    emit("onSession", {
+      envelope: { session_id: "session-1", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+      value: {
+        available: true,
+        complete: true,
+        provenance: "stream",
+        value: {
+          status: "active",
+          connection: { kind: "connected" },
+          vehicle_state: createSnapshot().session.value?.vehicle_state ?? null,
+          home_position: createSnapshot().session.value?.home_position ?? null,
+        },
+      },
+    });
+
+    emit("onSession", {
+      envelope: { session_id: "session-1", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
+      value: {
+        available: true,
+        complete: true,
+        provenance: "stream",
+        value: {
+          status: "active",
+          connection: { kind: "disconnected" },
+          vehicle_state: createSnapshot().session.value?.vehicle_state ?? null,
+          home_position: createSnapshot().session.value?.home_position ?? null,
+        },
+      },
+    });
+
+    modesRequest.resolve([{ custom_mode: 4, name: "GUIDED" }]);
+    await Promise.resolve();
+
+    expect(get(store).availableModes).toEqual([]);
+  });
+
+  it("falls back to an available transport mode and persists it when refresh removes the current mode", async () => {
+    const { service } = createMockService({
+      loadConnectionForm: vi.fn((): SessionConnectionFormState => ({
+        mode: "tcp",
+        udpBind: "0.0.0.0:14550",
+        tcpAddress: "127.0.0.1:5760",
+        serialPort: "",
+        baud: 57600,
+        selectedBtDevice: "",
+        takeoffAlt: "10",
+        followVehicle: true,
+      })),
+      availableTransportDescriptors: vi
+        .fn()
+        .mockResolvedValueOnce(createTransportDescriptors())
+        .mockResolvedValueOnce([createTransportDescriptors()[0]!]),
+    });
+    const store = createSessionStore(service);
+
+    await store.initialize();
+    vi.mocked(service.persistConnectionForm).mockClear();
+
+    await store.refreshTransportDescriptors();
+
+    const state = get(store);
+    expect(state.connectionForm.mode).toBe("udp");
+    expect(service.persistConnectionForm).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "udp" }),
+    );
+  });
+
+  it("auto-selects serial and bluetooth choices only when those fields are empty", async () => {
+    const { service } = createMockService({
+      listSerialPorts: vi
+        .fn()
+        .mockResolvedValueOnce(["/dev/ttyUSB0", "/dev/ttyUSB1"])
+        .mockResolvedValueOnce(["/dev/ttyUSB0", "/dev/ttyUSB1"]),
+      btGetBondedDevices: vi
+        .fn()
+        .mockResolvedValueOnce([{ name: "FC-A", address: "AA:BB", device_type: "classic" as const }])
+        .mockResolvedValueOnce([{ name: "FC-B", address: "CC:DD", device_type: "classic" as const }]),
+    });
+    const store = createSessionStore(service);
+
+    await store.initialize();
+
+    await store.refreshSerialPorts();
+    let state = get(store);
+    expect(state.connectionForm.serialPort).toBe("/dev/ttyUSB0");
+
+    store.updateConnectionForm({ serialPort: "/dev/ttyUSB1" });
+    vi.mocked(service.persistConnectionForm).mockClear();
+    await store.refreshSerialPorts();
+    state = get(store);
+    expect(state.connectionForm.serialPort).toBe("/dev/ttyUSB1");
+    expect(service.persistConnectionForm).not.toHaveBeenCalled();
+
+    store.updateConnectionForm({ selectedBtDevice: "" });
+    await store.refreshBondedDevices();
+    state = get(store);
+    expect(state.connectionForm.selectedBtDevice).toBe("AA:BB");
+
+    store.updateConnectionForm({ selectedBtDevice: "CC:DD" });
+    vi.mocked(service.persistConnectionForm).mockClear();
+    await store.refreshBondedDevices();
+    state = get(store);
+    expect(state.connectionForm.selectedBtDevice).toBe("CC:DD");
+    expect(service.persistConnectionForm).not.toHaveBeenCalled();
   });
 });

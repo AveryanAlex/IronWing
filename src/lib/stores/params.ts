@@ -1,51 +1,44 @@
-import { derived, get, writable, type Readable } from "svelte/store";
+import { get, writable } from "svelte/store";
 
-import type { ParamMeta, ParamMetadataMap } from "../../param-metadata";
-import { paramProgressCounts, paramProgressPhase, type ParamProgress, type ParamStore } from "../../params";
+import type { ParamMetadataMap } from "../../param-metadata";
+import type { ParamProgress, ParamStore } from "../../params";
 import type { SessionEnvelope } from "../../session";
 import { shouldDropEvent, type SourceKind } from "../../session";
-import {
-  buildParameterWorkspaceSections,
-  formatParamValue,
-  type ParameterWorkspaceItem,
-  type ParameterWorkspaceSection,
-} from "../../components/params/parameter-workspace-sections";
+import type { ParameterWorkspaceItem } from "../params/workspace-sections";
 import {
   createParamsService,
   type ParamsService,
 } from "../platform/params";
 import { isSameEnvelope } from "../scoped-session-events";
+import {
+  normalizeMetadataMap,
+  normalizeParamProgress,
+  normalizeParamStore,
+} from "./params-normalization";
+import {
+  clearStagedEdits as clearStagedEditsMap,
+  discardStagedEdit as discardStagedEditMap,
+  pruneResolvedStagedEdits,
+  stageParameterEdit as stageParameterEditMap,
+  type StagedParameterEdit,
+} from "./params-staged-edits";
+import {
+  createParameterWorkspaceViewStore,
+  type ParameterWorkspaceItemView,
+  type ParameterWorkspaceSectionView,
+  type ParameterWorkspaceView,
+  type ParameterWorkspaceViewStore,
+} from "./params-view";
 import type { SessionStore, SessionStorePhase, SessionStoreState } from "./session";
 import { session } from "./session";
+
+export type { ParameterWorkspaceItemView, ParameterWorkspaceSectionView, ParameterWorkspaceView, ParameterWorkspaceViewStore };
+export type { StagedParameterEdit };
+export { createParameterWorkspaceViewStore };
 
 export type ParamsMetadataState = "idle" | "loading" | "ready" | "unavailable";
 export type ParamsDomainPhase = "idle" | "subscribing" | "bootstrapping" | "ready" | "unavailable" | "stream-error";
 export type ParameterWorkspaceStatus = "bootstrapping" | "unavailable" | "empty" | "ready";
-
-export type StagedParameterEdit = {
-  name: string;
-  label: string;
-  rawName: string;
-  description: string | null;
-  currentValue: number;
-  currentValueText: string;
-  nextValue: number;
-  nextValueText: string;
-  units: string | null;
-  rebootRequired: boolean;
-  order: number;
-};
-
-export type ParameterWorkspaceItemView = ParameterWorkspaceItem & {
-  isStaged: boolean;
-  stagedValue: number | null;
-  stagedValueText: string | null;
-  diffText: string | null;
-};
-
-export type ParameterWorkspaceSectionView = Omit<ParameterWorkspaceSection, "items"> & {
-  items: ParameterWorkspaceItemView[];
-};
 
 export type ParamsStoreState = {
   hydrated: boolean;
@@ -66,25 +59,7 @@ export type ParamsStoreState = {
   lastNotice: string | null;
 };
 
-export type ParameterWorkspaceView = {
-  readiness: "ready" | "bootstrapping" | "unavailable" | "degraded";
-  status: ParameterWorkspaceStatus;
-  activeEnvelope: SessionEnvelope | null;
-  activeEnvelopeText: string;
-  progressText: string;
-  metadataText: string;
-  noticeText: string | null;
-  stagedCount: number;
-  stagedEdits: StagedParameterEdit[];
-  sections: ParameterWorkspaceSectionView[];
-};
-
 type SessionReadable = Pick<SessionStore, "subscribe">;
-
-type ParamStoreShape = {
-  params: Record<string, unknown>;
-  expected_count: number;
-};
 
 function createInitialState(): ParamsStoreState {
   return {
@@ -143,7 +118,7 @@ export function createParamsStore(
           metadata: null,
           metadataState: vehicleType ? state.metadataState : "idle",
           metadataError: null,
-          lastNotice: envelopeChanged ? "No active parameter scope is currently available." : state.lastNotice,
+          lastNotice: envelopeChanged ? "No active session is available for parameter loading." : state.lastNotice,
         };
       }
 
@@ -167,7 +142,7 @@ export function createParamsStore(
         stagedEdits: pruneResolvedStagedEdits(state.stagedEdits, resolvedStore),
         lastNotice:
           envelopeChanged && nextStore === null
-            ? "This scope has no parameter bootstrap yet. Waiting for scoped data."
+            ? "This session has not provided parameter values yet."
             : envelopeChanged
               ? null
               : state.lastNotice,
@@ -180,6 +155,7 @@ export function createParamsStore(
   async function ensureMetadata(vehicleType: string | null, envelopeChanged: boolean) {
     const current = get(store);
     if (!vehicleType) {
+      metadataRequestId += 1;
       store.update((state) => ({
         ...state,
         metadata: null,
@@ -257,17 +233,11 @@ export function createParamsStore(
 
     store.update((state) => {
       if (!state.activeEnvelope || shouldDropEvent(state.activeEnvelope, event.envelope) || !isSameEnvelope(state.activeEnvelope, event.envelope)) {
-        return {
-          ...state,
-          lastNotice: `Dropped stale parameter store event for ${event.envelope.session_id}.`,
-        };
+        return state;
       }
 
       if (!nextStore) {
-        return {
-          ...state,
-          lastNotice: "Ignored malformed parameter store update for the active scope.",
-        };
+        return state;
       }
 
       return {
@@ -285,17 +255,11 @@ export function createParamsStore(
 
     store.update((state) => {
       if (!state.activeEnvelope || shouldDropEvent(state.activeEnvelope, event.envelope) || !isSameEnvelope(state.activeEnvelope, event.envelope)) {
-        return {
-          ...state,
-          lastNotice: `Dropped stale parameter progress event for ${event.envelope.session_id}.`,
-        };
+        return state;
       }
 
       if (!nextProgress) {
-        return {
-          ...state,
-          lastNotice: "Ignored malformed parameter progress update for the active scope.",
-        };
+        return state;
       }
 
       return {
@@ -341,8 +305,8 @@ export function createParamsStore(
           streamError: service.formatError(error),
           phase: state.paramStore ? "ready" : "stream-error",
           lastNotice: state.paramStore
-            ? "Parameter stream is unavailable. Showing the last scoped bootstrap snapshot read-only."
-            : "Parameter stream is unavailable for the current scope.",
+            ? "Live parameter updates are unavailable. Showing the last loaded values."
+            : "Live parameter updates are unavailable for this session.",
         }));
       }
     })();
@@ -361,62 +325,25 @@ export function createParamsStore(
         return state;
       }
 
-      const stagedEdits = { ...state.stagedEdits };
-      if (nextValue === currentValue) {
-        delete stagedEdits[item.name];
-        return {
-          ...state,
-          stagedEdits,
-        };
-      }
-
-      stagedEdits[item.name] = {
-        name: item.name,
-        label: item.label,
-        rawName: item.rawName,
-        description: item.description,
-        currentValue,
-        currentValueText: formatParamValue(currentValue),
-        nextValue,
-        nextValueText: formatParamValue(nextValue),
-        units: item.units,
-        rebootRequired: item.rebootRequired,
-        order: item.order,
-      };
-
       return {
         ...state,
-        stagedEdits,
+        stagedEdits: stageParameterEditMap(state.stagedEdits, item, currentValue, nextValue),
       };
     });
   }
 
   function discardStagedEdit(name: string) {
-    store.update((state) => {
-      if (!(name in state.stagedEdits)) {
-        return state;
-      }
-
-      const stagedEdits = { ...state.stagedEdits };
-      delete stagedEdits[name];
-      return {
-        ...state,
-        stagedEdits,
-      };
-    });
+    store.update((state) => ({
+      ...state,
+      stagedEdits: discardStagedEditMap(state.stagedEdits, name),
+    }));
   }
 
   function clearStagedEdits() {
-    store.update((state) => {
-      if (Object.keys(state.stagedEdits).length === 0) {
-        return state;
-      }
-
-      return {
-        ...state,
-        stagedEdits: {},
-      };
-    });
+    store.update((state) => ({
+      ...state,
+      stagedEdits: clearStagedEditsMap(state.stagedEdits),
+    }));
   }
 
   function reset() {
@@ -425,7 +352,7 @@ export function createParamsStore(
     stopSession?.();
     stopSession = null;
     initializePromise = null;
-    metadataRequestId = 0;
+    metadataRequestId += 1;
     lastSessionEnvelope = null;
     lastBootstrapStoreRef = null;
     lastBootstrapProgressRef = null;
@@ -443,44 +370,6 @@ export function createParamsStore(
 }
 
 export type ParamsStore = ReturnType<typeof createParamsStore>;
-
-export function createParameterWorkspaceViewStore(store: Readable<ParamsStoreState>) {
-  return derived(store, ($params): ParameterWorkspaceView => {
-    const status = resolveWorkspaceStatus($params);
-    const readiness = resolveWorkspaceReadiness($params, status);
-    const baseSections = buildParameterWorkspaceSections($params.paramStore, $params.metadata);
-    const sections = baseSections.map((section) => ({
-      ...section,
-      items: section.items.map((item) => applyStagedItemState(item, $params.stagedEdits[item.name])),
-    }));
-    const itemIndex = new Map<string, ParameterWorkspaceItemView>();
-    for (const section of sections) {
-      for (const item of section.items) {
-        itemIndex.set(item.name, item);
-      }
-    }
-
-    const stagedEdits = Object.values($params.stagedEdits)
-      .map((edit) => mergeStagedEdit(edit, itemIndex.get(edit.name)))
-      .filter((edit) => edit.nextValue !== edit.currentValue)
-      .sort((left, right) => left.order - right.order || left.name.localeCompare(right.name));
-
-    return {
-      readiness,
-      status,
-      activeEnvelope: $params.activeEnvelope,
-      activeEnvelopeText: $params.activeEnvelope
-        ? `${$params.activeEnvelope.session_id} · rev ${$params.activeEnvelope.reset_revision}`
-        : "no active parameter scope",
-      progressText: formatProgressText($params.paramProgress),
-      metadataText: formatMetadataText($params.metadataState, $params.metadataError),
-      noticeText: $params.streamError ?? $params.lastNotice,
-      stagedCount: stagedEdits.length,
-      stagedEdits,
-      sections,
-    };
-  });
-}
 
 export const params = createParamsStore();
 
@@ -519,294 +408,10 @@ function resolveReadyPhase(state: ParamsStoreState): ParamsDomainPhase {
   return state.streamReady ? "bootstrapping" : "stream-error";
 }
 
-function resolveWorkspaceStatus(state: ParamsStoreState): ParameterWorkspaceStatus {
-  if (!state.sessionHydrated || state.sessionPhase === "subscribing" || state.sessionPhase === "bootstrapping") {
-    return "bootstrapping";
-  }
-
-  if (!state.activeEnvelope) {
-    return "unavailable";
-  }
-
-  if (!state.paramStore) {
-    return state.paramProgress ? "bootstrapping" : "unavailable";
-  }
-
-  if (Object.keys(state.paramStore.params ?? {}).length === 0) {
-    return "empty";
-  }
-
-  return "ready";
-}
-
-function resolveWorkspaceReadiness(
-  state: ParamsStoreState,
-  status: ParameterWorkspaceStatus,
-): ParameterWorkspaceView["readiness"] {
-  if (state.streamError) {
-    return state.paramStore ? "degraded" : "unavailable";
-  }
-
-  switch (status) {
-    case "ready":
-    case "empty":
-      return "ready";
-    case "bootstrapping":
-      return "bootstrapping";
-    case "unavailable":
-    default:
-      return "unavailable";
-  }
-}
-
-function formatProgressText(progress: ParamProgress | null): string {
-  if (!progress) {
-    return "awaiting parameter progress";
-  }
-
-  const phase = paramProgressPhase(progress);
-  const counts = paramProgressCounts(progress);
-  if (!counts) {
-    return phase;
-  }
-
-  return `${phase} · ${counts.received}/${counts.expected ?? "?"}`;
-}
-
-function formatMetadataText(state: ParamsMetadataState, error: string | null): string {
-  switch (state) {
-    case "ready":
-      return "metadata ready";
-    case "loading":
-      return "metadata loading";
-    case "unavailable":
-      return error ? `metadata unavailable · ${error}` : "metadata unavailable";
-    case "idle":
-    default:
-      return "metadata idle";
-  }
-}
-
 function areEnvelopesEqual(left: SessionEnvelope | null, right: SessionEnvelope | null): boolean {
   if (!left || !right) {
     return left === right;
   }
 
   return isSameEnvelope(left, right);
-}
-
-function applyStagedItemState(
-  item: ParameterWorkspaceItem,
-  stagedEdit: StagedParameterEdit | undefined,
-): ParameterWorkspaceItemView {
-  if (!stagedEdit || stagedEdit.nextValue === item.value) {
-    return {
-      ...item,
-      isStaged: false,
-      stagedValue: null,
-      stagedValueText: null,
-      diffText: null,
-    };
-  }
-
-  const stagedValueText = formatParamValue(stagedEdit.nextValue);
-  return {
-    ...item,
-    isStaged: true,
-    stagedValue: stagedEdit.nextValue,
-    stagedValueText,
-    diffText: `${item.valueText} → ${stagedValueText}`,
-  };
-}
-
-function mergeStagedEdit(
-  edit: StagedParameterEdit,
-  currentItem: ParameterWorkspaceItemView | undefined,
-): StagedParameterEdit {
-  if (!currentItem) {
-    return {
-      ...edit,
-      nextValueText: formatParamValue(edit.nextValue),
-      currentValueText: formatParamValue(edit.currentValue),
-    };
-  }
-
-  return {
-    ...edit,
-    label: currentItem.label,
-    rawName: currentItem.rawName,
-    description: currentItem.description,
-    currentValue: currentItem.value,
-    currentValueText: currentItem.valueText,
-    nextValue: currentItem.stagedValue ?? edit.nextValue,
-    nextValueText: currentItem.stagedValueText ?? formatParamValue(edit.nextValue),
-    units: currentItem.units,
-    rebootRequired: currentItem.rebootRequired,
-    order: currentItem.order,
-  };
-}
-
-function pruneResolvedStagedEdits(
-  stagedEdits: Record<string, StagedParameterEdit>,
-  paramStore: ParamStore | null,
-): Record<string, StagedParameterEdit> {
-  if (Object.keys(stagedEdits).length === 0) {
-    return stagedEdits;
-  }
-
-  const nextEntries = Object.entries(stagedEdits).filter(([name, edit]) => {
-    const currentValue = paramStore?.params[name]?.value;
-    if (typeof currentValue !== "number" || !Number.isFinite(currentValue)) {
-      return true;
-    }
-
-    return currentValue !== edit.nextValue;
-  });
-
-  if (nextEntries.length === Object.keys(stagedEdits).length) {
-    return stagedEdits;
-  }
-
-  return Object.fromEntries(nextEntries);
-}
-
-function normalizeParamStore(value: unknown): ParamStore | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const maybeStore = value as Partial<ParamStoreShape>;
-  if (typeof maybeStore.expected_count !== "number" || !Number.isFinite(maybeStore.expected_count)) {
-    return null;
-  }
-
-  if (!maybeStore.params || typeof maybeStore.params !== "object") {
-    return null;
-  }
-
-  const params: Record<string, ParamStore["params"][string]> = {};
-  for (const [name, entry] of Object.entries(maybeStore.params)) {
-    const normalized = normalizeParamEntry(name, entry);
-    if (normalized) {
-      params[name] = normalized;
-    }
-  }
-
-  return {
-    expected_count: maybeStore.expected_count,
-    params,
-  };
-}
-
-function normalizeParamEntry(name: string, value: unknown) {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const entry = value as Partial<ParamStore["params"][string]>;
-  if (entry.name !== name) {
-    return null;
-  }
-
-  if (typeof entry.value !== "number" || !Number.isFinite(entry.value)) {
-    return null;
-  }
-
-  if (typeof entry.index !== "number" || !Number.isInteger(entry.index)) {
-    return null;
-  }
-
-  if (
-    entry.param_type !== "uint8"
-    && entry.param_type !== "int8"
-    && entry.param_type !== "uint16"
-    && entry.param_type !== "int16"
-    && entry.param_type !== "uint32"
-    && entry.param_type !== "int32"
-    && entry.param_type !== "real32"
-  ) {
-    return null;
-  }
-
-  return {
-    name: entry.name,
-    value: entry.value,
-    index: entry.index,
-    param_type: entry.param_type,
-  };
-}
-
-function normalizeParamProgress(value: unknown): ParamProgress | null {
-  if (value === "completed" || value === "failed" || value === "cancelled") {
-    return value;
-  }
-
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  if ("downloading" in value) {
-    const downloading = (value as { downloading?: { received?: unknown; expected?: unknown } }).downloading;
-    if (!downloading || typeof downloading.received !== "number" || !Number.isFinite(downloading.received)) {
-      return null;
-    }
-
-    if (downloading.expected !== null && (typeof downloading.expected !== "number" || !Number.isFinite(downloading.expected))) {
-      return null;
-    }
-
-    return {
-      downloading: {
-        received: downloading.received,
-        expected: downloading.expected ?? null,
-      },
-    };
-  }
-
-  if ("writing" in value) {
-    const writing = (value as { writing?: { index?: unknown; total?: unknown; name?: unknown } }).writing;
-    if (
-      !writing
-      || typeof writing.index !== "number"
-      || !Number.isFinite(writing.index)
-      || typeof writing.total !== "number"
-      || !Number.isFinite(writing.total)
-      || typeof writing.name !== "string"
-      || writing.name.trim().length === 0
-    ) {
-      return null;
-    }
-
-    return {
-      writing: {
-        index: writing.index,
-        total: writing.total,
-        name: writing.name,
-      },
-    };
-  }
-
-  return null;
-}
-
-function normalizeMetadataMap(map: ParamMetadataMap | null): ParamMetadataMap | null {
-  if (!map) {
-    return null;
-  }
-
-  const normalized = new Map<string, ParamMeta>();
-  for (const [name, meta] of map.entries()) {
-    if (!name || !meta || typeof meta !== "object") {
-      continue;
-    }
-
-    normalized.set(name, {
-      ...meta,
-      humanName: typeof meta.humanName === "string" ? meta.humanName : name,
-      description: typeof meta.description === "string" ? meta.description : "",
-      rebootRequired: meta.rebootRequired === true,
-    });
-  }
-
-  return normalized.size > 0 ? normalized : null;
 }

@@ -9,6 +9,7 @@ import {
     resolveCommandMetadata,
     variantToCommandId,
 } from "./mission-command-metadata";
+import { defaultCommand } from "./mavkit-types";
 import { MAV_CMD } from "./mav-commands";
 
 describe("command catalog", () => {
@@ -16,6 +17,16 @@ describe("command catalog", () => {
         expect(COMMAND_CATALOG).toHaveLength(65);
         expect(getCommandCatalog()).toHaveLength(65);
         expect(mappedCommandIds()).toHaveLength(65);
+    });
+
+    it("keeps catalog ids in stable picker order", () => {
+        expect(COMMAND_CATALOG.map((entry) => entry.id)).toEqual([
+            16, 82, 36, 22, 21, 17, 18, 19, 31, 30, 84, 85, 94, 20, 93, 92, 83, 213, 42702, 42703,
+            177, 601, 600, 193, 178, 194, 179, 189, 188, 191, 195, 201, 197, 205, 1000, 206, 2000, 2001,
+            2500, 2501, 531, 532, 534, 202, 203, 183, 181, 184, 182, 207, 208, 211, 216, 42600, 223,
+            210, 212, 3000, 222, 215, 218, 217,
+            112, 114, 115,
+        ]);
     });
 
     it("uses unique positive MAV_CMD IDs across the catalog", () => {
@@ -45,6 +56,35 @@ describe("command catalog", () => {
 });
 
 describe("metadata coverage contract", () => {
+    it("creates a default typed command for every catalog entry", () => {
+        for (const entry of COMMAND_CATALOG) {
+            const command = defaultCommand(entry.category, entry.variant);
+            expect(command, `${entry.category}:${entry.variant}`).toBeDefined();
+        }
+    });
+
+    it("keeps typedFields aligned with keys on each variant's default payload", () => {
+        for (const entry of COMMAND_CATALOG) {
+            const metadata = getCommandMetadata(entry.id)!;
+            const typedFieldKeys = Object.keys(metadata.typedFields ?? {});
+            if (typedFieldKeys.length === 0) {
+                continue;
+            }
+
+            const command = defaultCommand(entry.category, entry.variant) as Record<string, unknown>;
+            const categoryPayload = command[entry.category] as string | Record<string, Record<string, unknown>>;
+            if (typeof categoryPayload === "string") {
+                expect(typedFieldKeys, `${entry.category}:${entry.variant}`).toEqual([]);
+                continue;
+            }
+
+            const variantPayload = categoryPayload[entry.variant] ?? {};
+            for (const key of typedFieldKeys) {
+                expect(key in variantPayload, `${entry.category}:${entry.variant}.${key}`).toBe(true);
+            }
+        }
+    });
+
     it("provides dedicated metadata for every catalog entry", () => {
         const catalogIds = new Set(COMMAND_CATALOG.map((entry) => entry.id));
         expect(new Set(mappedCommandIds())).toEqual(catalogIds);

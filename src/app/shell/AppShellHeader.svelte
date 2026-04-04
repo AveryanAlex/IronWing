@@ -1,22 +1,51 @@
-<svelte:options runes={false} />
-
 <script lang="ts">
 import { runtimeTestIds } from "../../lib/stores/runtime";
 import { appShellTestIds, type ShellTier } from "./chrome-state";
+import type { AppShellWorkspace } from "./app-shell-controller";
 
-export let framework = "Svelte 5";
-export let bootstrapState: "booting" | "ready" | "failed" = "booting";
-export let bootedAt: string | null = null;
-export let entrypoint = "src/app/App.svelte";
-export let legacyBoundary = "src-old/runtime";
-export let tier: ShellTier = "wide";
-export let drawerState: "open" | "closed" | "docked" = "docked";
-export let showVehiclePanelButton = false;
-export let vehiclePanelOpen = false;
-export let lastPhase = "idle";
-export let activeSource: string | null = null;
-export let activeEnvelopeText = "no active session";
-export let handleVehiclePanelToggle: () => void = () => {};
+type ConnectionTone = "neutral" | "positive" | "caution" | "critical";
+
+type Props = {
+  workspaces?: ReadonlyArray<{ key: AppShellWorkspace; label: string }>;
+  activeWorkspace?: AppShellWorkspace;
+  stagedCount?: number;
+  onSelectWorkspace?: (workspace: AppShellWorkspace) => void;
+  framework?: string;
+  bootstrapState?: "booting" | "ready" | "failed";
+  bootedAt?: string | null;
+  entrypoint?: string;
+  legacyBoundary?: string;
+  tier?: ShellTier;
+  drawerState?: "open" | "closed" | "docked";
+  showVehiclePanelButton?: boolean;
+  vehiclePanelOpen?: boolean;
+  lastPhase?: string;
+  activeSource?: string | null;
+  activeEnvelopeText?: string;
+  connectionTone?: ConnectionTone;
+  handleVehiclePanelToggle?: () => void;
+};
+
+let {
+  workspaces = [],
+  activeWorkspace = "overview",
+  stagedCount = 0,
+  onSelectWorkspace = () => {},
+  framework = "Svelte 5",
+  bootstrapState = "booting",
+  bootedAt = null,
+  entrypoint = "src/app/App.svelte",
+  legacyBoundary = "src-old/runtime",
+  tier = "wide",
+  drawerState = "docked",
+  showVehiclePanelButton = false,
+  vehiclePanelOpen = false,
+  lastPhase = "idle",
+  activeSource = null,
+  activeEnvelopeText = "no active session",
+  connectionTone = "neutral",
+  handleVehiclePanelToggle = () => {},
+}: Props = $props();
 
 const tierLabels: Record<ShellTier, string> = {
   phone: "phone",
@@ -24,17 +53,37 @@ const tierLabels: Record<ShellTier, string> = {
   desktop: "desktop",
   wide: "wide",
 };
+
+function connectionIndicatorClass(tone: ConnectionTone): string {
+  switch (tone) {
+    case "positive":
+      return "is-positive";
+    case "caution":
+      return "is-caution";
+    case "critical":
+      return "is-critical";
+    default:
+      return "is-neutral";
+  }
+}
+
+function shouldShowWorkspaceIcon(workspace: AppShellWorkspace): boolean {
+  return workspace === "setup" || workspace === "settings";
+}
 </script>
 
 <header class="app-shell-header">
-  <div class="app-shell-header__hero">
-    <div class="app-shell-header__copy">
-      <p class="runtime-eyebrow" data-testid={runtimeTestIds.runtimeMarker}>IronWing active runtime</p>
-      <h1 class="runtime-title" data-testid={runtimeTestIds.heading}>Svelte runtime online</h1>
-      <p class="runtime-copy">
-        Responsive ground-station chrome now keeps the live connection, vehicle state, and telemetry proof surfaces on
-        the shipped Svelte path without reaching back into the quarantined React runtime.
-      </p>
+  <div class="app-shell-header__top">
+    <div class="app-shell-header__brand">
+      <div class="app-shell-header__brand-meta">
+        <p class="text-xs font-semibold text-text-secondary">IronWing</p>
+        <span
+          aria-hidden="true"
+          class={`app-shell-header__connection-indicator ${connectionIndicatorClass(connectionTone)}`}
+          data-testid={appShellTestIds.connectionIndicator}
+        ></span>
+      </div>
+      <h1 class="app-shell-header__title" data-testid={runtimeTestIds.heading}>Ground Control</h1>
     </div>
 
     {#if showVehiclePanelButton}
@@ -51,71 +100,62 @@ const tierLabels: Record<ShellTier, string> = {
     {/if}
   </div>
 
-  <dl class="app-shell-summary-grid">
-    <div class="runtime-card">
-      <dt class="runtime-card-label">Framework</dt>
-      <dd class="runtime-card-value" data-testid={runtimeTestIds.framework}>{framework}</dd>
-    </div>
+  <nav aria-label="Primary" class="app-shell-tabs">
+    {#each workspaces as workspace (workspace.key)}
+      <button
+        aria-pressed={activeWorkspace === workspace.key}
+        class={`app-shell-tab ${activeWorkspace === workspace.key ? "is-active" : ""}`}
+        data-testid={
+          workspace.key === "overview"
+            ? appShellTestIds.overviewWorkspaceButton
+            : workspace.key === "setup"
+              ? appShellTestIds.parameterWorkspaceButton
+              : undefined
+        }
+        onclick={() => onSelectWorkspace(workspace.key)}
+        type="button"
+      >
+        {#if shouldShowWorkspaceIcon(workspace.key)}
+          {#if workspace.key === "setup"}
+            <svg aria-hidden="true" focusable="false" height="14" viewBox="0 0 16 16" width="14">
+              <path
+                d="M7.36 1.1a.75.75 0 0 1 1.28 0l.56.96a5.99 5.99 0 0 1 1.13.47l1.03-.3a.75.75 0 0 1 .85.36l.64 1.1a.75.75 0 0 1-.12.91l-.75.77c.08.38.12.76.12 1.14s-.04.76-.12 1.14l.75.77a.75.75 0 0 1 .12.91l-.64 1.1a.75.75 0 0 1-.85.36l-1.03-.3a5.99 5.99 0 0 1-1.13.47l-.56.96a.75.75 0 0 1-1.28 0l-.56-.96a5.99 5.99 0 0 1-1.13-.47l-1.03.3a.75.75 0 0 1-.85-.36l-.64-1.1a.75.75 0 0 1 .12-.91l.75-.77A5.5 5.5 0 0 1 3.8 7.5c0-.38.04-.76.12-1.14l-.75-.77a.75.75 0 0 1-.12-.91l.64-1.1a.75.75 0 0 1 .85-.36l1.03.3a5.99 5.99 0 0 1 1.13-.47l.56-.96ZM8 5.2A2.3 2.3 0 1 0 8 9.8 2.3 2.3 0 0 0 8 5.2Z"
+                fill="currentColor"
+              />
+            </svg>
+          {:else}
+            <svg aria-hidden="true" focusable="false" height="14" viewBox="0 0 16 16" width="14">
+              <path
+                d="M8 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm-4.5 1A1.5 1.5 0 1 0 3.5 6a1.5 1.5 0 0 0 0-2.5Zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm-9 6A1.5 1.5 0 1 0 3.5 12a1.5 1.5 0 0 0 0-2.5Zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM6.4 4h3.2v1H6.4V4Zm0 6h3.2v1H6.4v-1Zm-3-3h9.2v1H3.4V7Z"
+                fill="currentColor"
+              />
+            </svg>
+          {/if}
+        {/if}
+        <span>{workspace.label}</span>
+        {#if workspace.key === "setup" && stagedCount > 0}
+          <span
+            class={`app-shell-tab__badge ${activeWorkspace === "setup" ? "is-active" : ""}`}
+            data-testid={appShellTestIds.parameterWorkspacePendingCount}
+          >
+            {stagedCount}
+          </span>
+        {/if}
+      </button>
+    {/each}
+  </nav>
 
-    <div class="runtime-card">
-      <dt class="runtime-card-label">Bootstrap state</dt>
-      <dd class="runtime-card-value">
-        <span
-          class="runtime-status-pill"
-          data-runtime-phase={bootstrapState}
-          data-testid={runtimeTestIds.bootstrapState}
-        >
-          {bootstrapState}
-        </span>
-      </dd>
-    </div>
-
-    <div class="runtime-card">
-      <dt class="runtime-card-label">Shell tier</dt>
-      <dd class="runtime-card-value" data-testid={appShellTestIds.tier}>{tierLabels[tier]}</dd>
-    </div>
-
-    <div class="runtime-card">
-      <dt class="runtime-card-label">Vehicle panel</dt>
-      <dd class="runtime-card-value" data-testid={appShellTestIds.drawerState}>{drawerState}</dd>
-    </div>
-
-    <div class="runtime-card">
-      <dt class="runtime-card-label">Last phase</dt>
-      <dd class="runtime-card-value" data-testid={appShellTestIds.sessionPhase}>{lastPhase}</dd>
-    </div>
-
-    <div class="runtime-card">
-      <dt class="runtime-card-label">Active source</dt>
-      <dd class="runtime-card-value" data-testid={appShellTestIds.sessionSource}>{activeSource ?? "none"}</dd>
-    </div>
-
-    <div class="runtime-card">
-      <dt class="runtime-card-label">Boot time</dt>
-      <dd class="runtime-card-value" data-testid={runtimeTestIds.bootedAt}>
-        {bootedAt ?? "Awaiting bootstrap completion"}
-      </dd>
-    </div>
-
-    <div class="runtime-card runtime-card--wide">
-      <dt class="runtime-card-label">Active envelope</dt>
-      <dd class="runtime-card-value runtime-card-value--mono" data-testid={appShellTestIds.sessionEnvelope}>
-        {activeEnvelopeText}
-      </dd>
-    </div>
-
-    <div class="runtime-card runtime-card--wide">
-      <dt class="runtime-card-label">Entrypoint</dt>
-      <dd class="runtime-card-value runtime-card-value--mono" data-testid={runtimeTestIds.entrypoint}>
-        {entrypoint}
-      </dd>
-    </div>
-
-    <div class="runtime-card runtime-card--wide">
-      <dt class="runtime-card-label">Legacy quarantine boundary</dt>
-      <dd class="runtime-card-value runtime-card-value--mono" data-testid={runtimeTestIds.quarantineBoundary}>
-        {legacyBoundary}
-      </dd>
-    </div>
-  </dl>
+  <div aria-hidden="true" class="hidden">
+    <span data-testid={runtimeTestIds.runtimeMarker}>IronWing runtime marker</span>
+    <span data-testid={runtimeTestIds.framework}>{framework}</span>
+    <span data-testid={runtimeTestIds.bootstrapState} data-runtime-phase={bootstrapState}>{bootstrapState}</span>
+    <span data-testid={runtimeTestIds.bootedAt}>{bootedAt ?? "Starting up"}</span>
+    <span data-testid={runtimeTestIds.entrypoint}>{entrypoint}</span>
+    <span data-testid={runtimeTestIds.quarantineBoundary}>{legacyBoundary}</span>
+    <span data-testid={appShellTestIds.tier}>{tierLabels[tier]}</span>
+    <span data-testid={appShellTestIds.drawerState}>{drawerState}</span>
+    <span data-testid={appShellTestIds.sessionPhase}>{lastPhase}</span>
+    <span data-testid={appShellTestIds.sessionSource}>{activeSource ?? "none"}</span>
+    <span data-testid={appShellTestIds.sessionEnvelope}>{activeEnvelopeText}</span>
+  </div>
 </header>

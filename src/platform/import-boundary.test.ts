@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { dirname, join, relative, resolve } from "path";
 import { describe, expect, it } from "vitest";
 
@@ -268,7 +268,7 @@ function resolveImport(fromFile: string, specifier: string): ImportEdge {
       .map((extension) => join(absoluteBase, `index${extension}`)),
   ];
 
-  const resolvedCandidate = candidates.find((candidate) => existsSync(candidate));
+  const resolvedCandidate = candidates.find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
   if (!resolvedCandidate) {
     return {
       from: fromFile,
@@ -523,6 +523,17 @@ describe("active runtime boundary helper rules", () => {
     const rule = ACTIVE_RUNTIME_RULES.find((candidate) => candidate.label === ruleLabel);
     expect(rule, `Missing active-runtime rule ${ruleLabel}.`).toBeTruthy();
     expect(findFirstImportViolation([edge], rule!)).toEqual(edge);
+  });
+});
+
+describe("active runtime import resolver", () => {
+  it("prefers facade source files over same-name internal folders", () => {
+    expect(resolveImport("src/lib/survey-region.ts", "./mission-draft-typed").resolved).toBe(
+      "src/lib/mission-draft-typed.ts",
+    );
+    expect(resolveImport("src/lib/survey-region.ts", "./mission-plan-io").resolved).toBe(
+      "src/lib/mission-plan-io.ts",
+    );
   });
 });
 

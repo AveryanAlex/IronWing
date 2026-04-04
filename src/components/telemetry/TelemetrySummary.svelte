@@ -1,115 +1,65 @@
-<svelte:options runes={false} />
-
 <script lang="ts">
-import { createSessionViewStore, session, type SessionStore } from "../../lib/stores/session";
+import { fromStore } from "svelte/store";
 
-export let store: SessionStore = session;
+import { getSessionViewStoreContext } from "../../app/shell/runtime-context";
+import type { TelemetrySummaryTone } from "../../lib/telemetry-selectors";
 
-let view = createSessionViewStore(store);
-let altitudeText = "-- m";
-let speedText = "-- m/s";
-let batteryText = "--%";
-let headingText = "--°";
-let gpsText = "GPS: --";
-let batteryTone = "text-text-primary";
-let gpsTone = "text-text-primary";
+const sessionView = fromStore(getSessionViewStoreContext());
 
-function formatMetric(connected: boolean, value: number | undefined, suffix: string, decimals = 1) {
-  if (!connected || value == null || Number.isNaN(value)) {
-    return `--${suffix}`;
+function toneTextClass(tone: TelemetrySummaryTone): string {
+  switch (tone) {
+    case "positive":
+      return "text-success";
+    case "caution":
+      return "text-warning";
+    case "critical":
+      return "text-danger";
+    default:
+      return "text-text-primary";
   }
-
-  return `${value.toFixed(decimals)}${suffix}`;
 }
 
-function formatWholeMetric(connected: boolean, value: number | undefined, suffix: string) {
-  if (!connected || value == null || Number.isNaN(value)) {
-    return `--${suffix}`;
-  }
-
-  return `${Math.round(value)}${suffix}`;
-}
-
-function batteryClass(connected: boolean, value: number | undefined) {
-  if (!connected || value == null || Number.isNaN(value)) {
-    return "text-text-primary";
-  }
-
-  if (value > 50) {
-    return "text-success";
-  }
-
-  if (value >= 20) {
-    return "text-warning";
-  }
-
-  return "text-danger";
-}
-
-function gpsClass(connected: boolean, value: string | undefined) {
-  const fix = value?.toLowerCase() ?? "";
-  if (!connected || fix.length === 0 || fix === "--") {
-    return "text-text-primary";
-  }
-
-  if (fix.includes("3d") || fix.includes("rtk")) {
-    return "text-success";
-  }
-
-  if (fix.includes("2d")) {
-    return "text-warning";
-  }
-
-  return "text-danger";
-}
-
-$: view = createSessionViewStore(store);
-$: altitudeText = formatMetric($view.connected, $view.telemetry.altitude_m, " m");
-$: speedText = formatMetric($view.connected, $view.telemetry.speed_mps, " m/s");
-$: batteryText = formatMetric($view.connected, $view.telemetry.battery_pct, "%");
-$: headingText = formatWholeMetric($view.connected, $view.telemetry.heading_deg, "°");
-$: gpsText = !$view.connected
-  ? "GPS: --"
-  : `GPS: ${$view.telemetry.gps_fix_type ?? "--"} · ${$view.telemetry.gps_satellites ?? "--"} sats`;
-$: batteryTone = batteryClass($view.connected, $view.telemetry.battery_pct);
-$: gpsTone = gpsClass($view.connected, $view.telemetry.gps_fix_type);
+let view = $derived(sessionView.current);
+let summary = $derived(view.telemetrySummary);
+let batteryTone = $derived(toneTextClass(summary.batteryTone));
+let gpsTone = $derived(toneTextClass(summary.gpsTone));
 </script>
 
-<section class="rounded-[24px] border border-border bg-bg-secondary/80 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+<section class="rounded-lg border border-border bg-bg-primary p-3">
   <div class="flex items-center justify-between gap-3">
     <div>
-      <p class="runtime-eyebrow mb-2">Telemetry summary</p>
-      <h2 class="text-xl font-semibold tracking-[-0.03em] text-text-primary">First live metrics from the new store</h2>
+      <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Telemetry summary</p>
+      <h2 class="mt-1 text-base font-semibold text-text-primary">Live flight metrics</h2>
     </div>
-    <span class="rounded-full bg-bg-primary/70 px-3 py-1 text-xs font-semibold text-text-secondary">
-      {$view.connected ? "streaming" : "waiting for link"}
+    <span class="rounded-md bg-bg-secondary px-2 py-1 text-xs font-semibold text-text-secondary">
+      {summary.sessionLabel}
     </span>
   </div>
 
-  <dl class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-    <div class="rounded-2xl border border-border bg-bg-primary/70 p-4" data-testid="telemetry-alt-value">
+  <dl class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+    <div class="rounded-lg border border-border bg-bg-secondary p-2" data-testid="telemetry-alt-value">
       <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Altitude</dt>
-      <dd class="mt-3 text-lg font-semibold text-text-primary">{altitudeText}</dd>
+      <dd class="mt-1 text-base font-semibold text-text-primary">{summary.altitudeText}</dd>
     </div>
 
-    <div class="rounded-2xl border border-border bg-bg-primary/70 p-4" data-testid="telemetry-speed-value">
+    <div class="rounded-lg border border-border bg-bg-secondary p-2" data-testid="telemetry-speed-value">
       <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Speed</dt>
-      <dd class="mt-3 text-lg font-semibold text-text-primary">{speedText}</dd>
+      <dd class="mt-1 text-base font-semibold text-text-primary">{summary.speedText}</dd>
     </div>
 
-    <div class="rounded-2xl border border-border bg-bg-primary/70 p-4" data-testid="telemetry-battery-value">
+    <div class="rounded-lg border border-border bg-bg-secondary p-2" data-testid="telemetry-battery-value">
       <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Battery</dt>
-      <dd class={`mt-3 text-lg font-semibold ${batteryTone}`}>{batteryText}</dd>
+      <dd class={`mt-1 text-base font-semibold ${batteryTone}`}>{summary.batteryText}</dd>
     </div>
 
-    <div class="rounded-2xl border border-border bg-bg-primary/70 p-4" data-testid="telemetry-heading-value">
+    <div class="rounded-lg border border-border bg-bg-secondary p-2" data-testid="telemetry-heading-value">
       <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Heading</dt>
-      <dd class="mt-3 text-lg font-semibold text-text-primary">{headingText}</dd>
+      <dd class="mt-1 text-base font-semibold text-text-primary">{summary.headingText}</dd>
     </div>
 
-    <div class="rounded-2xl border border-border bg-bg-primary/70 p-4 sm:col-span-2 xl:col-span-1" data-testid="telemetry-gps-text">
+    <div class="rounded-lg border border-border bg-bg-secondary p-2 sm:col-span-2 xl:col-span-1" data-testid="telemetry-gps-text">
       <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">GPS</dt>
-      <dd class={`mt-3 text-base font-semibold ${gpsTone}`}>{gpsText}</dd>
+      <dd class={`mt-1 text-base font-semibold ${gpsTone}`}>{summary.gpsText}</dd>
     </div>
   </dl>
 </section>

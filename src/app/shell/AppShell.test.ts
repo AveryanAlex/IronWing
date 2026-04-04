@@ -10,13 +10,13 @@ vi.mock("svelte-sonner", () => ({
   },
 }));
 
-import AppShell from "./AppShell.svelte";
+import AppShellContent from "./AppShellContent.svelte";
 import {
   appShellTestIds,
   createShellChromeState,
   resolveShellTier,
 } from "./chrome-state";
-import { parameterWorkspaceTestIds } from "../../components/params/parameter-workspace-sections";
+import { parameterWorkspaceTestIds } from "../../components/params/parameter-workspace-test-ids";
 import { createParamsStore } from "../../lib/stores/params";
 import { markRuntimeReady, resetRuntimeState } from "../../lib/stores/runtime";
 import {
@@ -31,6 +31,7 @@ import type {
 } from "../../lib/platform/session";
 import type { OpenSessionSnapshot } from "../../session";
 import type { ParamMetadataMap } from "../../param-metadata";
+import { withShellContexts } from "../../test/context-harnesses";
 import type { TransportDescriptor } from "../../transport";
 
 function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessionSnapshot {
@@ -315,7 +316,7 @@ async function renderShellAt(
   await parameterStore.initialize();
   markRuntimeReady("2026-04-03T12:34:56.000Z");
 
-  render(AppShell, { props: { store, parameterStore } });
+  render(withShellContexts(store, parameterStore, AppShellContent));
 
   await waitFor(() => {
     expect(screen.getByTestId(appShellTestIds.tier)).toBeTruthy();
@@ -353,12 +354,35 @@ describe("AppShell", () => {
     expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("overview");
     expect(screen.queryByTestId(appShellTestIds.vehiclePanelButton)).toBeNull();
     expect(screen.getByTestId("connection-connect-btn")).toBeTruthy();
+    expect(screen.getByTestId("sidebar-telemetry-panel")).toBeTruthy();
+    expect(screen.getByTestId(appShellTestIds.connectionIndicator)).toBeTruthy();
     expect(screen.getByTestId("telemetry-state-value")).toBeTruthy();
     expect(screen.getByTestId("telemetry-alt-value")).toBeTruthy();
     expect(screen.getByTestId(appShellTestIds.sessionEnvelope).textContent).toContain("session-1");
   });
 
-  it("switches to the scoped parameter workspace from the active shell", async () => {
+  it("renders the archived tab shape and switches placeholder workspaces", async () => {
+    await renderShellAt(1440);
+
+    expect(screen.getByRole("button", { name: "Overview" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Telemetry" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "HUD" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Mission" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Logs" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Firmware" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Settings" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Setup" })).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Telemetry" }));
+    await waitFor(() => {
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("telemetry");
+    });
+
+    expect(screen.getByTestId("app-shell-placeholder-telemetry")).toBeTruthy();
+    expect(screen.queryByTestId("telemetry-state-value")).toBeNull();
+  });
+
+  it("switches to the settings workspace from the active shell", async () => {
     await renderShellAt(1440, {
       snapshot: createSnapshot({
         param_store: {
@@ -375,27 +399,27 @@ describe("AppShell", () => {
     await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
 
     await waitFor(() => {
-      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("params");
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("settings");
     });
 
     expect(screen.queryByTestId("telemetry-state-value")).toBeNull();
     expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
-    expect(screen.getByTestId(parameterWorkspaceTestIds.state).textContent?.trim()).toBe("ready");
-    expect(screen.getByTestId(parameterWorkspaceTestIds.scope).textContent).toContain("session-1");
+    expect(screen.getByTestId(parameterWorkspaceTestIds.state).textContent?.trim()).toBe("Settings ready");
+    expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-ARMING_CHECK`).textContent).toContain("ARMING_CHECK");
   });
 
-  it("shows an explicit unavailable parameter workspace state when the active scope has no bootstrap data", async () => {
+  it("shows an explicit unavailable settings workspace state when the active scope has no bootstrap data", async () => {
     await renderShellAt(1440);
 
     await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
 
     await waitFor(() => {
-      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("params");
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("settings");
     });
 
-    expect(screen.getByTestId(parameterWorkspaceTestIds.state).textContent?.trim()).toBe("unavailable");
+    expect(screen.getByTestId(parameterWorkspaceTestIds.state).textContent?.trim()).toBe("Connect to load");
     expect(screen.getByTestId(parameterWorkspaceTestIds.empty).textContent).toContain(
-      "No scoped parameter snapshot is available",
+      "No parameter data available",
     );
   });
 
@@ -434,7 +458,7 @@ describe("AppShell", () => {
 
     await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
     await waitFor(() => {
-      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("params");
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("settings");
     });
 
     await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`), {
@@ -448,7 +472,7 @@ describe("AppShell", () => {
 
     expect(screen.getByTestId(appShellTestIds.parameterReviewTray)).toBeTruthy();
     expect(screen.getByTestId(appShellTestIds.parameterReviewState).textContent?.trim()).toBe("closed");
-    expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 pending");
+    expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 queued");
     expect(screen.getByTestId(appShellTestIds.parameterWorkspacePendingCount).textContent?.trim()).toBe("2");
 
     await fireEvent.click(screen.getByTestId(appShellTestIds.parameterReviewToggle));
@@ -464,12 +488,12 @@ describe("AppShell", () => {
       expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("overview");
     });
 
-    expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 pending");
+    expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 queued");
     expect(screen.queryByTestId(parameterWorkspaceTestIds.root)).toBeNull();
 
     await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
     await waitFor(() => {
-      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("params");
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("settings");
     });
 
     expect(screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-ARMING_CHECK`).textContent).toContain("3");
@@ -484,7 +508,59 @@ describe("AppShell", () => {
     expect(screen.getAllByTestId(appShellTestIds.parameterReviewTray)).toHaveLength(1);
     expect(screen.getByTestId(appShellTestIds.parameterReviewTray).getAttribute("data-surface-kind")).toBe("sheet");
     expect(screen.getByTestId(appShellTestIds.parameterReviewState).textContent?.trim()).toBe("open");
-    expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 pending");
+    expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 queued");
+  });
+
+  it("closes the review tray when staged edits drop to zero", async () => {
+    await renderShellAt(1440, {
+      snapshot: createSnapshot({
+        param_store: {
+          expected_count: 1,
+          params: {
+            ARMING_CHECK: { name: "ARMING_CHECK", value: 1, param_type: "uint8", index: 0 },
+          },
+        },
+        param_progress: "completed",
+      }),
+      metadata: new Map([
+        [
+          "ARMING_CHECK",
+          {
+            humanName: "Arming checks",
+            description: "Controls pre-arm validation.",
+          },
+        ],
+      ]),
+    });
+
+    await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
+    await waitFor(() => {
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("settings");
+    });
+
+    await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`), {
+      target: { value: "3" },
+    });
+    await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-ARMING_CHECK`));
+    await fireEvent.click(screen.getByTestId(appShellTestIds.parameterReviewToggle));
+    await waitFor(() => {
+      expect(screen.getByTestId(appShellTestIds.parameterReviewState).textContent?.trim()).toBe("open");
+    });
+
+    await fireEvent.click(screen.getByTestId(appShellTestIds.parameterReviewClear));
+    await waitFor(() => {
+      expect(screen.queryByTestId(appShellTestIds.parameterReviewTray)).toBeNull();
+    });
+
+    await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`), {
+      target: { value: "4" },
+    });
+    await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-ARMING_CHECK`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(appShellTestIds.parameterReviewTray)).toBeTruthy();
+    });
+    expect(screen.getByTestId(appShellTestIds.parameterReviewState).textContent?.trim()).toBe("closed");
   });
 
   it("exposes a phone-only Vehicle panel drawer while keeping the live status cards visible", async () => {
@@ -504,6 +580,7 @@ describe("AppShell", () => {
 
     expect(screen.getByTestId(appShellTestIds.vehiclePanelDrawer).getAttribute("data-state")).toBe("open");
     expect(screen.getByTestId("connection-connect-btn")).toBeTruthy();
+    expect(screen.getByTestId("sidebar-telemetry-panel")).toBeTruthy();
 
     await fireEvent.click(screen.getByTestId(appShellTestIds.vehiclePanelClose));
     await waitFor(() => {
@@ -553,7 +630,7 @@ describe("AppShell", () => {
       value: undefined,
     });
 
-    render(AppShell, { props: { store, parameterStore } });
+    render(withShellContexts(store, parameterStore, AppShellContent));
 
     await waitFor(() => {
       expect(screen.getByTestId(appShellTestIds.tier).textContent?.trim()).toBe("desktop");

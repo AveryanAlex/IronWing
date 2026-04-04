@@ -16,6 +16,7 @@ import {
     moveTypedWaypointOnMap,
     recoverTypedDraft,
     replaceAllTypedItems,
+    reorderTypedItems,
     replaceTypedDraftFromDownload,
     selectTypedDraftIndex,
     selectTypedDraftRange,
@@ -651,5 +652,83 @@ describe("mission-draft-typed: addTypedWaypoint", () => {
         expect(typedDraftItems(updated, "fence")).toHaveLength(1);
         const region = typedDraftItems(updated, "fence")[0].document as FenceRegion;
         expect("inclusion_polygon" in region).toBe(true);
+    });
+});
+
+describe("mission-draft-typed: invariants", () => {
+    it("keeps mission current flag on first item after reorder and delete", () => {
+        const liveScope = scope("mission-current", "live");
+        const plan: MissionPlan = {
+            items: [makeWaypoint(47.1, 8.1, 25), makeWaypoint(47.2, 8.2, 30), makeWaypoint(47.3, 8.3, 35)],
+        };
+
+        const loaded = replaceTypedDraftFromDownload(createTypedDraftState(), "mission", plan, liveScope);
+        const before = typedDraftItems(loaded, "mission");
+        const reordered = reorderTypedItems(loaded, "mission", before[2].uiId, before[0].uiId);
+        const afterReorder = typedDraftPlan(reordered, "mission").items;
+
+        expect(afterReorder[0]?.current).toBe(true);
+        expect(afterReorder.slice(1).every((item) => !item.current)).toBe(true);
+
+        const deletedFirst = deleteTypedAt(reordered, "mission", 0);
+        const afterDelete = typedDraftPlan(deletedFirst, "mission").items;
+        expect(afterDelete[0]?.current).toBe(true);
+        expect(afterDelete.slice(1).every((item) => !item.current)).toBe(true);
+    });
+
+    it("normalizes mission current flags through replace-all", () => {
+        const liveScope = scope("mission-current-replace-all", "live");
+        const plan: MissionPlan = {
+            items: [makeWaypoint(47.1, 8.1, 25)],
+        };
+
+        const loaded = replaceTypedDraftFromDownload(createTypedDraftState(), "mission", plan, liveScope);
+        const replacement: MissionItem[] = [
+            { ...makeWaypoint(48.1, 9.1, 30), current: false },
+            { ...makeWaypoint(48.2, 9.2, 35), current: true },
+            { ...makeWaypoint(48.3, 9.3, 40), current: true },
+        ];
+
+        const replaced = replaceAllTypedItems(loaded, "mission", replacement);
+        const missionPlanItems = typedDraftPlan(replaced, "mission").items;
+        const missionDraftItems = typedDraftItems(replaced, "mission").map((item) => item.document as MissionItem);
+
+        expect(missionPlanItems[0]?.current).toBe(true);
+        expect(missionPlanItems.slice(1).every((item) => !item.current)).toBe(true);
+        expect(missionDraftItems[0]?.current).toBe(true);
+        expect(missionDraftItems.slice(1).every((item) => !item.current)).toBe(true);
+        expect(missionPlanItems).toEqual(missionDraftItems);
+    });
+
+    it("preserves fence return_point through replace-all and delete mutations", () => {
+        const liveScope = scope("fence-rp-collection", "live");
+        const plan: FencePlan = {
+            return_point: { latitude_deg: 47.0, longitude_deg: 8.0 },
+            regions: [makeFenceRegion(47.2, 8.2), makeFenceRegion(47.3, 8.3)],
+        };
+
+        const loaded = replaceTypedDraftFromDownload(createTypedDraftState(), "fence", plan, liveScope);
+        const replaced = replaceAllTypedItems(loaded, "fence", [makeFenceRegion(47.4, 8.4)]);
+        expect(typedDraftPlan(replaced, "fence").return_point).toEqual({ latitude_deg: 47.0, longitude_deg: 8.0 });
+
+        const deleted = deleteTypedAt(replaced, "fence", 0);
+        expect(typedDraftPlan(deleted, "fence").return_point).toEqual({ latitude_deg: 47.0, longitude_deg: 8.0 });
+    });
+
+    it("selection fallback after bulk delete is uiId-based, not index-based", () => {
+        const liveScope = scope("selection-uiid", "live");
+        const plan: MissionPlan = {
+            items: [makeWaypoint(47.1, 8.1, 25), makeWaypoint(47.2, 8.2, 30), makeWaypoint(47.3, 8.3, 35)],
+        };
+
+        const loaded = replaceTypedDraftFromDownload(createTypedDraftState(), "mission", plan, liveScope);
+        const items = typedDraftItems(loaded, "mission");
+        const reordered = reorderTypedItems(loaded, "mission", items[2].uiId, items[0].uiId);
+        const reorderedItems = typedDraftItems(reordered, "mission");
+
+        const deleted = bulkDelete(reordered, "mission", [reorderedItems[0].uiId, reorderedItems[1].uiId]);
+        expect(typedDraftItems(deleted, "mission")).toHaveLength(1);
+        expect(typedDraftSelectedIndex(deleted, "mission")).toBe(0);
+        expect(typedDraftItems(deleted, "mission")[0].uiId).toBe(reorderedItems[2].uiId);
     });
 });

@@ -19,6 +19,22 @@ import {
 } from "./params";
 import { createSessionStore } from "./session";
 
+function deferred<T>() {
+  let resolve: (value: T) => void;
+  let reject: (reason?: unknown) => void;
+
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+
+  return {
+    promise,
+    resolve: resolve!,
+    reject: reject!,
+  };
+}
+
 function createEnvelope(
   sessionId: string,
   overrides: Partial<SessionEnvelope> = {},
@@ -320,7 +336,7 @@ describe("createParamsStore", () => {
 
     expect(state.activeEnvelope?.session_id).toBe("session-2");
     expect(state.paramStore?.params.ARMING_CHECK?.value).toBe(5);
-    expect(state.lastNotice).toContain("Dropped stale parameter store event");
+    expect(state.lastNotice).toBeNull();
   });
 
   it("keeps raw parameter visibility when metadata is unavailable", async () => {
@@ -341,7 +357,7 @@ describe("createParamsStore", () => {
       name: "ARMING_CHECK",
       label: "ARMING_CHECK",
     });
-    expect(view.metadataText).toContain("metadata unavailable");
+    expect(view.metadataText).toContain("Parameter info unavailable");
   });
 
   it("filters malformed bootstrap entries instead of poisoning the scoped snapshot", async () => {
@@ -367,5 +383,188 @@ describe("createParamsStore", () => {
 
     expect(state.paramStore?.params.ARMING_CHECK?.value).toBe(1);
     expect(state.paramStore?.params.BROKEN).toBeUndefined();
+  });
+
+  it("applies metadata fetches with last-write-wins semantics across scope changes", async () => {
+    const firstMetadata = deferred<ParamMetadataMap | null>();
+    const secondMetadata = deferred<ParamMetadataMap | null>();
+    const firstSnapshot = createSnapshot({
+      envelope: createEnvelope("session-1"),
+      session: {
+        ...createSnapshot().session,
+        value: {
+          ...createSnapshot().session.value!,
+          vehicle_state: {
+            ...createSnapshot().session.value!.vehicle_state!,
+            vehicle_type: "quadrotor",
+          },
+        },
+      },
+    });
+    const secondSnapshot = createSnapshot({
+      envelope: createEnvelope("session-2", { reset_revision: 1 }),
+      session: {
+        ...createSnapshot().session,
+        value: {
+          ...createSnapshot().session.value!,
+          vehicle_state: {
+            ...createSnapshot().session.value!.vehicle_state!,
+            vehicle_type: "fixed_wing",
+          },
+        },
+      },
+    });
+    const { service: sessionService } = createSessionService([firstSnapshot, secondSnapshot]);
+    const { service: paramsService } = createParamsService(null, {
+      fetchMetadata: vi
+        .fn()
+        .mockReturnValueOnce(firstMetadata.promise)
+        .mockReturnValueOnce(secondMetadata.promise),
+    });
+    const sessionStore = createSessionStore(sessionService);
+    const paramStore = createParamsStore(sessionStore, paramsService);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+    await sessionStore.bootstrapSource("live");
+
+    const newest = new Map([
+      ["FS_THR_ENABLE", { humanName: "Newest metadata", description: "latest" }],
+    ]);
+    secondMetadata.resolve(newest);
+    await waitForMetadata(paramStore);
+
+    let state = get(paramStore);
+    expect(state.activeEnvelope?.session_id).toBe("session-2");
+    expect(state.metadata?.get("FS_THR_ENABLE")?.humanName).toBe("Newest metadata");
+
+    const stale = new Map([
+      ["ARMING_CHECK", { humanName: "Stale metadata", description: "old" }],
+    ]);
+    firstMetadata.resolve(stale);
+    await flush();
+
+    state = get(paramStore);
+    expect(state.metadata?.get("FS_THR_ENABLE")?.humanName).toBe("Newest metadata");
+    expect(state.metadata?.get("ARMING_CHECK")?.humanName).toBeUndefined();
+  });
+
+  it("does not allow pre-reset metadata responses to overwrite post-reset state", async () => {
+    const staleMetadata = deferred<ParamMetadataMap | null>();
+    const freshMetadata = deferred<ParamMetadataMap | null>();
+    const { service: sessionService } = createSessionService([createSnapshot()]);
+    const { service: paramsService } = createParamsService(null, {
+      fetchMetadata: vi
+        .fn()
+        .mockReturnValueOnce(staleMetadata.promise)
+        .mockReturnValueOnce(freshMetadata.promise),
+    });
+    const sessionStore = createSessionStore(sessionService);
+    const paramStore = createParamsStore(sessionStore, paramsService);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+
+    paramStore.reset();
+    await paramStore.initialize();
+
+    const newest = new Map([
+      ["FS_THR_ENABLE", { humanName: "Fresh metadata", description: "new" }],
+    ]);
+    freshMetadata.resolve(newest);
+    await waitForMetadata(paramStore);
+
+    let state = get(paramStore);
+    expect(state.metadata?.get("FS_THR_ENABLE")?.humanName).toBe("Fresh metadata");
+
+    const old = new Map([
+      ["ARMING_CHECK", { humanName: "Stale metadata", description: "old" }],
+    ]);
+    staleMetadata.resolve(old);
+    await flush();
+
+    state = get(paramStore);
+    expect(state.metadata?.get("FS_THR_ENABLE")?.humanName).toBe("Fresh metadata");
+    expect(state.metadata?.get("ARMING_CHECK")?.humanName).toBeUndefined();
+  });
+
+  it("ignores in-flight metadata responses after vehicle type becomes unavailable", async () => {
+    const pendingMetadata = deferred<ParamMetadataMap | null>();
+    const firstSnapshot = createSnapshot({
+      envelope: createEnvelope("session-1"),
+    });
+    const secondSnapshot = createSnapshot({
+      envelope: createEnvelope("session-2", { reset_revision: 1 }),
+      session: {
+        ...createSnapshot().session,
+        value: {
+          ...createSnapshot().session.value!,
+          vehicle_state: null,
+        },
+      },
+    });
+    const { service: sessionService } = createSessionService([firstSnapshot, secondSnapshot]);
+    const { service: paramsService } = createParamsService(null, {
+      fetchMetadata: vi.fn().mockReturnValueOnce(pendingMetadata.promise),
+    });
+    const sessionStore = createSessionStore(sessionService);
+    const paramStore = createParamsStore(sessionStore, paramsService);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+    await sessionStore.bootstrapSource("live");
+    await flush();
+
+    let state = get(paramStore);
+    expect(state.activeEnvelope?.session_id).toBe("session-2");
+    expect(state.vehicleType).toBeNull();
+    expect(state.metadata).toBeNull();
+    expect(state.metadataState).toBe("idle");
+
+    pendingMetadata.resolve(new Map([
+      ["ARMING_CHECK", { humanName: "Stale metadata", description: "old" }],
+    ]));
+    await flush();
+
+    state = get(paramStore);
+    expect(state.vehicleType).toBeNull();
+    expect(state.metadata).toBeNull();
+    expect(state.metadataState).toBe("idle");
+    expect(state.metadataError).toBeNull();
+  });
+
+  it("prunes staged edits only when the live backend value matches the staged value", async () => {
+    const snapshot = createSnapshot();
+    const { service: sessionService } = createSessionService([snapshot]);
+    const paramsHarness = createParamsService(null);
+    const sessionStore = createSessionStore(sessionService);
+    const paramStore = createParamsStore(sessionStore, paramsHarness.service);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+    await waitForMetadata(paramStore);
+
+    const item = get(createParameterWorkspaceViewStore(paramStore)).sections[0]?.items.find(
+      (entry) => entry.name === "ARMING_CHECK",
+    );
+    expect(item).toBeDefined();
+    paramStore.stageParameterEdit(item!, 7);
+    expect(get(paramStore).stagedEdits.ARMING_CHECK?.nextValue).toBe(7);
+
+    paramsHarness.emitStore(snapshot.envelope, createParamStore({
+      params: {
+        ARMING_CHECK: { name: "ARMING_CHECK", value: 5, param_type: "uint8", index: 0 },
+      },
+      expected_count: 1,
+    }));
+    expect(get(paramStore).stagedEdits.ARMING_CHECK?.nextValue).toBe(7);
+
+    paramsHarness.emitStore(snapshot.envelope, createParamStore({
+      params: {
+        ARMING_CHECK: { name: "ARMING_CHECK", value: 7, param_type: "uint8", index: 0 },
+      },
+      expected_count: 1,
+    }));
+    expect(get(paramStore).stagedEdits.ARMING_CHECK).toBeUndefined();
   });
 });

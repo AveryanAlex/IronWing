@@ -34,14 +34,14 @@ afterEach(() => {
   resetRuntimeState();
 });
 
-test("renders the minimal runtime shell with stable diagnostics markers", () => {
+test("renders the product shell with stable runtime hooks", () => {
   markRuntimeReady("2026-04-03T12:34:56.000Z");
 
   const { getByRole, getByTestId } = render(App);
 
   expect(document.title).toBe("IronWing");
   expect(getByTestId(runtimeTestIds.shell).dataset.runtimePhase).toBe("ready");
-  expect(getByRole("heading", { name: "Svelte runtime online" })).toBeTruthy();
+  expect(getByRole("heading", { name: "Ground Control" })).toBeTruthy();
   expect(getByTestId(runtimeTestIds.framework).textContent).toBe("Svelte 5");
   expect(getByTestId(runtimeTestIds.bootstrapState).textContent?.trim()).toBe("ready");
   expect(getByTestId(appShellTestIds.tier).textContent?.trim()).toBe("phone");
@@ -51,12 +51,12 @@ test("renders the minimal runtime shell with stable diagnostics markers", () => 
   expect(getByTestId(runtimeTestIds.quarantineBoundary).textContent).toBe("src-old/runtime");
 });
 
-test("surfaces booting diagnostics before the bootstrap harness marks the runtime ready", () => {
+test("surfaces booting runtime hooks before the bootstrap harness marks the runtime ready", () => {
   const { getByTestId } = render(App);
 
   expect(getByTestId(runtimeTestIds.shell).dataset.runtimePhase).toBe("booting");
   expect(getByTestId(runtimeTestIds.bootstrapState).textContent?.trim()).toBe("booting");
   expect(getByTestId(appShellTestIds.tier).textContent?.trim()).toBe("phone");
   expect(getByTestId(appShellTestIds.drawerState).textContent?.trim()).toBe("closed");
-  expect(getByTestId(runtimeTestIds.bootedAt).textContent).toBe("Awaiting bootstrap completion");
+  expect(getByTestId(runtimeTestIds.bootedAt).textContent).toBe("Starting up");
 });

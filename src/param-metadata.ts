@@ -1,4 +1,4 @@
-import { fetch } from "@platform/http";
+import { fetchParamMetadataXml } from "./lib/param-metadata-cache";
 
 export type ParamMeta = {
   humanName: string;
@@ -27,8 +27,6 @@ const SLUG_MAP: Record<string, string> = {
   vtol: "ArduPlane",
   ground_rover: "Rover",
 };
-
-const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export function vehicleTypeToSlug(vehicleType: string): string | null {
   return SLUG_MAP[vehicleType] ?? null;
@@ -135,44 +133,6 @@ export async function fetchParamMetadata(
   const slug = vehicleTypeToSlug(vehicleType);
   if (!slug) return null;
 
-  const cacheKey = `param_meta_${slug}`;
-  const tsKey = `param_meta_${slug}_ts`;
-
-  // Check localStorage cache
-  try {
-    const cached = localStorage.getItem(cacheKey);
-    const ts = localStorage.getItem(tsKey);
-    if (cached && ts) {
-      const age = Date.now() - parseInt(ts, 10);
-      if (age < CACHE_MAX_AGE_MS) {
-        return parseMetadataXml(cached);
-      }
-    }
-  } catch {
-    // localStorage unavailable — continue to fetch
-  }
-
-  // Fetch from ArduPilot
-  try {
-    const url = `https://autotest.ardupilot.org/Parameters/${slug}/apm.pdef.xml`;
-    const resp = await fetch(url);
-    if (!resp.ok) {
-      console.warn(`[param-metadata] fetch failed: ${resp.status}`);
-      return null;
-    }
-    const xml = await resp.text();
-
-    // Cache raw XML
-    try {
-      localStorage.setItem(cacheKey, xml);
-      localStorage.setItem(tsKey, String(Date.now()));
-    } catch {
-      // localStorage full or unavailable
-    }
-
-    return parseMetadataXml(xml);
-  } catch (err) {
-    console.warn("[param-metadata] fetch error:", err);
-    return null;
-  }
+  const xml = await fetchParamMetadataXml(slug);
+  return xml ? parseMetadataXml(xml) : null;
 }

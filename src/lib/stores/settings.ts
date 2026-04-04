@@ -1,5 +1,7 @@
 import { writable } from "svelte/store";
 
+import { getBrowserStorage, readStorageJson, writeStorageJson } from "../local-storage";
+
 export const SETTINGS_STORAGE_KEY = "mpng_settings";
 
 export type Settings = {
@@ -11,47 +13,33 @@ export type Settings = {
   hoverSpeedMps: number;
 };
 
+const DEFAULT_TELEMETRY_RATE_HZ = 5;
+const DEFAULT_SVS_ENABLED = true;
+const DEFAULT_TERRAIN_SAFETY_MARGIN_M = 10;
+const DEFAULT_CRUISE_SPEED_MPS = 15;
+const DEFAULT_HOVER_SPEED_MPS = 5;
+
 export const settingsDefaults: Settings = {
-  telemetryRateHz: 5,
-  svsEnabled: true,
+  telemetryRateHz: DEFAULT_TELEMETRY_RATE_HZ,
+  svsEnabled: DEFAULT_SVS_ENABLED,
   messageRates: {},
-  terrainSafetyMarginM: 10,
-  cruiseSpeedMps: 15,
-  hoverSpeedMps: 5,
+  terrainSafetyMarginM: DEFAULT_TERRAIN_SAFETY_MARGIN_M,
+  cruiseSpeedMps: DEFAULT_CRUISE_SPEED_MPS,
+  hoverSpeedMps: DEFAULT_HOVER_SPEED_MPS,
 };
 
 export function loadSettings(
   storage: Pick<Storage, "getItem"> | null = getBrowserStorage(),
 ): Settings {
-  try {
-    const raw = storage?.getItem(SETTINGS_STORAGE_KEY);
-    if (!raw) {
-      return { ...settingsDefaults };
-    }
-
-    const parsed = JSON.parse(raw) as Partial<Settings>;
-    return {
-      telemetryRateHz: parsed.telemetryRateHz ?? settingsDefaults.telemetryRateHz,
-      svsEnabled: parsed.svsEnabled ?? settingsDefaults.svsEnabled,
-      messageRates: parsed.messageRates ?? settingsDefaults.messageRates,
-      terrainSafetyMarginM: parsed.terrainSafetyMarginM ?? settingsDefaults.terrainSafetyMarginM,
-      cruiseSpeedMps: parsed.cruiseSpeedMps ?? settingsDefaults.cruiseSpeedMps,
-      hoverSpeedMps: parsed.hoverSpeedMps ?? settingsDefaults.hoverSpeedMps,
-    };
-  } catch {
-    return { ...settingsDefaults };
-  }
+  const parsed = readStorageJson(SETTINGS_STORAGE_KEY, storage);
+  return normalizeSettings(parsed);
 }
 
 export function persistSettings(
   settings: Settings,
   storage: Pick<Storage, "setItem"> | null = getBrowserStorage(),
 ) {
-  try {
-    storage?.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // Ignore partial localStorage shims in tests and restricted browser contexts.
-  }
+  writeStorageJson(SETTINGS_STORAGE_KEY, settings, storage);
 }
 
 export function createSettingsStore(
@@ -69,7 +57,7 @@ export function createSettingsStore(
       });
     },
     reset() {
-      const next = { ...settingsDefaults };
+      const next = createSettingsDefaults();
       persistSettings(next, storage);
       store.set(next);
     },
@@ -81,10 +69,57 @@ export function createSettingsStore(
 
 export const settings = createSettingsStore();
 
-function getBrowserStorage(): Storage | null {
-  if (typeof localStorage === "undefined") {
-    return null;
+function normalizeSettings(raw: unknown): Settings {
+  const defaults = createSettingsDefaults();
+  if (!raw || typeof raw !== "object") {
+    return defaults;
   }
 
-  return localStorage;
+  const parsed = raw as Record<string, unknown>;
+
+  return {
+    telemetryRateHz: readFiniteNumber(parsed.telemetryRateHz, defaults.telemetryRateHz),
+    svsEnabled: typeof parsed.svsEnabled === "boolean" ? parsed.svsEnabled : defaults.svsEnabled,
+    messageRates: normalizeMessageRates(parsed.messageRates),
+    terrainSafetyMarginM: readFiniteNumber(parsed.terrainSafetyMarginM, defaults.terrainSafetyMarginM),
+    cruiseSpeedMps: readFiniteNumber(parsed.cruiseSpeedMps, defaults.cruiseSpeedMps),
+    hoverSpeedMps: readFiniteNumber(parsed.hoverSpeedMps, defaults.hoverSpeedMps),
+  };
+}
+
+function normalizeMessageRates(raw: unknown): Record<number, number> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+
+  const normalized: Record<number, number> = {};
+  for (const [messageId, rateHz] of Object.entries(raw)) {
+    if (typeof rateHz !== "number" || !Number.isFinite(rateHz)) {
+      continue;
+    }
+
+    const id = Number.parseInt(messageId, 10);
+    if (!Number.isFinite(id)) {
+      continue;
+    }
+
+    normalized[id] = rateHz;
+  }
+
+  return normalized;
+}
+
+function createSettingsDefaults(): Settings {
+  return {
+    telemetryRateHz: DEFAULT_TELEMETRY_RATE_HZ,
+    svsEnabled: DEFAULT_SVS_ENABLED,
+    messageRates: {},
+    terrainSafetyMarginM: DEFAULT_TERRAIN_SAFETY_MARGIN_M,
+    cruiseSpeedMps: DEFAULT_CRUISE_SPEED_MPS,
+    hoverSpeedMps: DEFAULT_HOVER_SPEED_MPS,
+  };
+}
+
+function readFiniteNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }

@@ -8,7 +8,7 @@ const target = document.getElementById(rootTargetId);
 
 try {
   if (!target) {
-    throw new Error(`IronWing could not find the #${rootTargetId} mount target.`);
+    throw new Error("IronWing couldn't open the main screen.");
   }
 
   mount(App, { target });

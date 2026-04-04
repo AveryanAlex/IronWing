@@ -16,6 +16,7 @@ import type {
   SessionServiceEventHandlers,
 } from "../../lib/platform/session";
 import type { OpenSessionSnapshot } from "../../session";
+import { withSessionContext } from "../../test/context-harnesses";
 import type { TransportDescriptor } from "../../transport";
 
 const { toastError } = vi.hoisted(() => ({
@@ -202,9 +203,9 @@ function createMockService(overrides: Partial<SessionService> = {}) {
 }
 
 function renderSeedSurface(store: SessionStore) {
-  render(ConnectionPanel, { props: { store } });
-  render(VehicleStatusCard, { props: { store } });
-  render(TelemetrySummary, { props: { store } });
+  render(withSessionContext(store, ConnectionPanel));
+  render(withSessionContext(store, VehicleStatusCard));
+  render(withSessionContext(store, TelemetrySummary));
 }
 
 describe("ConnectionPanel", () => {
@@ -280,7 +281,7 @@ describe("ConnectionPanel", () => {
     expect(screen.getByTestId("telemetry-speed-value").textContent).toContain("4.8 m/s");
     expect(screen.getByTestId("telemetry-battery-value").textContent).toContain("87.2%");
     expect(screen.getByTestId("telemetry-heading-value").textContent).toContain("182°");
-    expect(screen.getByTestId("telemetry-gps-text").textContent).toContain("GPS: fix_3d · 14 sats");
+    expect(screen.getByTestId("telemetry-gps-text").textContent).toContain("GPS: 3D fix · 14 sats");
   });
 
   it("submits the rewritten form through the session store connect action", async () => {
@@ -288,7 +289,7 @@ describe("ConnectionPanel", () => {
     const store = createSessionStore(service);
 
     await store.initialize();
-    render(ConnectionPanel, { props: { store } });
+    render(withSessionContext(store, ConnectionPanel));
 
     const transportSelect = screen.getByTestId("connection-transport-select") as HTMLSelectElement;
     await fireEvent.change(transportSelect, { target: { value: "tcp" } });
@@ -308,12 +309,12 @@ describe("ConnectionPanel", () => {
     );
   });
 
-  it("shows validation failures inline and surfaces them through the Svelte toast seam", async () => {
+  it("shows local validation failures inline without raising connection failure toasts", async () => {
     const { service } = createMockService();
     const store = createSessionStore(service);
 
     await store.initialize();
-    render(ConnectionPanel, { props: { store } });
+    render(withSessionContext(store, ConnectionPanel));
 
     const transportSelect = screen.getByTestId("connection-transport-select") as HTMLSelectElement;
     await fireEvent.change(transportSelect, { target: { value: "tcp" } });
@@ -325,10 +326,110 @@ describe("ConnectionPanel", () => {
     await waitFor(() => {
       expect(screen.getByTestId("connection-error-message").textContent).toContain("address is required");
     });
+    expect(screen.getByTestId("connection-status-text").textContent).toContain("Error");
 
     expect(service.connectSession).not.toHaveBeenCalled();
-    expect(toastError).toHaveBeenCalledWith("Connection request failed", {
-      description: "address is required",
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it("recomputes inline validation from current store form updates", async () => {
+    const { service } = createMockService();
+    const store = createSessionStore(service);
+
+    await store.initialize();
+    render(withSessionContext(store, ConnectionPanel));
+
+    const transportSelect = screen.getByTestId("connection-transport-select") as HTMLSelectElement;
+    await fireEvent.change(transportSelect, { target: { value: "tcp" } });
+    await fireEvent.input(screen.getByTestId("connection-tcp-address"), { target: { value: "" } });
+    await fireEvent.click(screen.getByTestId("connection-connect-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("connection-error-message").textContent).toContain("address is required");
+    });
+
+    store.updateConnectionForm({ tcpAddress: "10.0.0.12:5770" });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("connection-error-message")).toBeNull();
+    });
+  });
+
+  it("reflects store-driven form updates after render without re-persist sync loops", async () => {
+    const { service } = createMockService();
+    const store = createSessionStore(service);
+
+    await store.initialize();
+    render(withSessionContext(store, ConnectionPanel));
+    vi.mocked(service.persistConnectionForm).mockClear();
+
+    store.updateConnectionForm({ mode: "tcp", tcpAddress: "10.0.0.25:5770" });
+
+    await waitFor(() => {
+      const transportSelect = screen.getByTestId("connection-transport-select") as HTMLSelectElement;
+      expect(transportSelect.value).toBe("tcp");
+      const addressInput = screen.getByTestId("connection-tcp-address") as HTMLInputElement;
+      expect(addressInput.value).toBe("10.0.0.25:5770");
+    });
+
+    expect(service.persistConnectionForm).toHaveBeenCalledTimes(1);
+
+    store.updateConnectionForm({ tcpAddress: "10.0.0.25:5780" });
+    await waitFor(() => {
+      const addressInput = screen.getByTestId("connection-tcp-address") as HTMLInputElement;
+      expect(addressInput.value).toBe("10.0.0.25:5780");
+    });
+    expect(service.persistConnectionForm).toHaveBeenCalledTimes(2);
+  });
+
+  it("refreshes serial ports automatically on mount and when transport changes to serial", async () => {
+    const loadConnectionForm = vi
+      .fn<() => SessionConnectionFormState>()
+      .mockReturnValueOnce({
+        mode: "serial",
+        udpBind: "0.0.0.0:14550",
+        tcpAddress: "127.0.0.1:5760",
+        serialPort: "",
+        baud: 57600,
+        selectedBtDevice: "",
+        takeoffAlt: "10",
+        followVehicle: true,
+      })
+      .mockReturnValue({
+        mode: "udp",
+        udpBind: "0.0.0.0:14550",
+        tcpAddress: "127.0.0.1:5760",
+        serialPort: "",
+        baud: 57600,
+        selectedBtDevice: "",
+        takeoffAlt: "10",
+        followVehicle: true,
+      });
+
+    const listSerialPorts = vi.fn(async () => ["/dev/ttyUSB0"]);
+    const { service } = createMockService({
+      loadConnectionForm,
+      listSerialPorts,
+    });
+    const store = createSessionStore(service);
+
+    await store.initialize();
+    render(withSessionContext(store, ConnectionPanel));
+
+    await waitFor(() => {
+      expect(listSerialPorts).toHaveBeenCalledTimes(1);
+    });
+
+    store.updateConnectionForm({ mode: "udp" });
+    await waitFor(() => {
+      const transportSelect = screen.getByTestId("connection-transport-select") as HTMLSelectElement;
+      expect(transportSelect.value).toBe("udp");
+    });
+
+    await fireEvent.change(screen.getByTestId("connection-transport-select"), { target: { value: "serial" } });
+
+    await waitFor(() => {
+      expect(listSerialPorts).toHaveBeenCalledTimes(2);
     });
   });
 });

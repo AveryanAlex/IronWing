@@ -1,13 +1,13 @@
-<svelte:options runes={false} />
-
 <script lang="ts">
-import ConnectionPanel from "../../components/connection/ConnectionPanel.svelte";
-import type { SessionStore } from "../../lib/stores/session";
 import { appShellTestIds } from "./chrome-state";
+import VehiclePanelContent from "./VehiclePanelContent.svelte";
 
-export let store: SessionStore;
-export let open = false;
-export let onClose: () => void = () => {};
+type Props = {
+  open?: boolean;
+  onClose?: () => void;
+};
+
+let { open = false, onClose = () => {} }: Props = $props();
 </script>
 
 <div
@@ -28,8 +28,8 @@ export let onClose: () => void = () => {};
   <div class="app-shell-drawer__sheet">
     <div class="app-shell-drawer__header">
       <div>
-        <p class="runtime-eyebrow">Vehicle panel</p>
-        <h2 class="text-2xl font-semibold tracking-[-0.03em] text-text-primary">Connection + session diagnostics</h2>
+        <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Vehicle panel</p>
+        <h2 class="mt-1 text-base font-semibold text-text-primary">Connection & telemetry</h2>
       </div>
 
       <button
@@ -43,7 +43,7 @@ export let onClose: () => void = () => {};
     </div>
 
     {#if open}
-      <ConnectionPanel {store} />
+      <VehiclePanelContent />
     {/if}
   </div>
 </aside>

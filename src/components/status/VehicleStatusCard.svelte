@@ -1,57 +1,66 @@
-<svelte:options runes={false} />
-
 <script lang="ts">
-import { createSessionViewStore, session, type SessionStore } from "../../lib/stores/session";
+import { fromStore } from "svelte/store";
 
-export let store: SessionStore = session;
+import { getSessionViewStoreContext } from "../../app/shell/runtime-context";
+import type { ViewTone } from "../../lib/session-selectors";
 
-let view = createSessionViewStore(store);
-let armState = "--";
-let modeName = "--";
-let systemStatus = "--";
-let sourceText = "none";
+const sessionView = fromStore(getSessionViewStoreContext());
 
-$: view = createSessionViewStore(store);
-$: armState = $view.connected ? ($view.vehicleState?.armed ? "ARMED" : "DISARMED") : "--";
-$: modeName = $view.connected ? ($view.vehicleState?.mode_name ?? "--") : "--";
-$: systemStatus = $view.connected ? ($view.vehicleState?.system_status ?? "--") : "--";
-$: sourceText = $store.activeSource ?? "none";
+function toneTextClass(tone: ViewTone): string {
+  switch (tone) {
+    case "positive":
+      return "text-success";
+    case "caution":
+      return "text-warning";
+    case "critical":
+      return "text-danger";
+    default:
+      return "text-text-primary";
+  }
+}
+
+function sessionBadgeClass(tone: ViewTone): string {
+  return tone === "positive" ? "bg-success/10 text-success" : "bg-bg-primary/70 text-text-secondary";
+}
+
+let view = $derived(sessionView.current);
+let statusCard = $derived(view.vehicleStatusCard);
 </script>
 
-<section class="rounded-[24px] border border-border bg-bg-secondary/80 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+<section class="rounded-lg border border-border bg-bg-primary p-3">
   <div class="flex items-center justify-between gap-3">
     <div>
-      <p class="runtime-eyebrow mb-2">Vehicle status</p>
-      <h2 class="text-xl font-semibold tracking-[-0.03em] text-text-primary">Connection-owned vehicle state</h2>
+      <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Vehicle status</p>
+      <h2 class="mt-1 text-base font-semibold text-text-primary">Live vehicle state</h2>
     </div>
     <span
-      class={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${$view.connected ? "bg-success/10 text-success" : "bg-bg-primary/70 text-text-secondary"}`}
+      class={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold ${sessionBadgeClass(statusCard.sessionTone)}`}
     >
-      {$view.connected ? "live session" : "idle session"}
+      {statusCard.sessionLabel}
     </span>
   </div>
 
-  <dl class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-    <div class="rounded-2xl border border-border bg-bg-primary/70 p-4" data-testid="telemetry-state-value">
+  <dl class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="rounded-lg border border-border bg-bg-secondary p-2" data-testid="telemetry-state-value">
       <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Arm state</dt>
-      <dd class={`mt-3 text-lg font-semibold ${$view.connected && $view.vehicleState?.armed ? "text-success" : "text-text-primary"}`}>
-        {armState}
+      <dd class={`mt-1 text-base font-semibold ${toneTextClass(statusCard.armStateTone)}`}>
+        {statusCard.armStateText}
       </dd>
     </div>
 
-    <div class="rounded-2xl border border-border bg-bg-primary/70 p-4" data-testid="telemetry-mode-value">
+    <div class="rounded-lg border border-border bg-bg-secondary p-2" data-testid="telemetry-mode-value">
       <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mode</dt>
-      <dd class="mt-3 text-lg font-semibold text-text-primary">{modeName}</dd>
+      <dd class="mt-1 text-base font-semibold text-text-primary">{statusCard.modeText}</dd>
     </div>
 
-    <div class="rounded-2xl border border-border bg-bg-primary/70 p-4">
+    <div class="rounded-lg border border-border bg-bg-secondary p-2">
       <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">System</dt>
-      <dd class="mt-3 text-lg font-semibold text-text-primary">{systemStatus}</dd>
+      <dd class="mt-1 text-base font-semibold text-text-primary">{statusCard.systemText}</dd>
     </div>
 
-    <div class="rounded-2xl border border-border bg-bg-primary/70 p-4">
-      <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Source</dt>
-      <dd class="mt-3 text-lg font-semibold text-text-primary">{sourceText}</dd>
+    <div class="rounded-lg border border-border bg-bg-secondary p-2">
+      <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Data feed</dt>
+      <dd class="mt-1 text-base font-semibold text-text-primary">{statusCard.dataFeedText}</dd>
     </div>
   </dl>
 </section>

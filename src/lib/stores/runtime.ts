@@ -87,30 +87,20 @@ export function renderBootstrapFailureMarkup(error: unknown) {
     <section
       class="bootstrap-failure-surface"
       data-runtime-phase="failed"
+      data-app-entrypoint="${initialRuntimeState.entrypoint}"
+      data-mount-target="${initialRuntimeState.mountTarget}"
+      data-compat-boundary="${initialRuntimeState.legacyRuntimeLocation}"
       data-testid="${runtimeTestIds.bootstrapFailure}"
     >
-      <p class="runtime-eyebrow">IronWing bootstrap failure</p>
-      <h1 class="runtime-title">The Svelte runtime failed before the app shell became ready.</h1>
+      <p class="runtime-eyebrow">IronWing couldn't start</p>
+      <h1 class="runtime-title">Something went wrong while opening IronWing.</h1>
+      <p class="runtime-copy">Try restarting the app. If this keeps happening, share the message below with support.</p>
       <p
         class="runtime-copy"
         data-testid="${runtimeTestIds.bootstrapFailureMessage}"
       >
         ${message}
       </p>
-      <dl class="runtime-diagnostic-grid">
-        <div class="runtime-card">
-          <dt class="runtime-card-label">Entrypoint</dt>
-          <dd class="runtime-card-value">${initialRuntimeState.entrypoint}</dd>
-        </div>
-        <div class="runtime-card">
-          <dt class="runtime-card-label">Mount target</dt>
-          <dd class="runtime-card-value">${initialRuntimeState.mountTarget}</dd>
-        </div>
-        <div class="runtime-card">
-          <dt class="runtime-card-label">Legacy boundary</dt>
-          <dd class="runtime-card-value">${initialRuntimeState.legacyRuntimeLocation}</dd>
-        </div>
-      </dl>
     </section>
   `;
 }

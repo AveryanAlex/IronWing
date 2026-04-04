@@ -17,6 +17,7 @@ export const appShellTestIds = {
   sessionPhase: "app-shell-session-phase",
   sessionSource: "app-shell-session-source",
   sessionEnvelope: "app-shell-session-envelope",
+  connectionIndicator: "app-shell-connection-indicator",
   overviewWorkspaceButton: "app-shell-overview-workspace-btn",
   parameterWorkspaceButton: "app-shell-parameter-workspace-btn",
   parameterWorkspacePendingCount: "app-shell-parameter-workspace-pending-count",
