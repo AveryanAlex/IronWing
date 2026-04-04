@@ -16,17 +16,21 @@ import {
   createShellChromeState,
   resolveShellTier,
 } from "./chrome-state";
+import { parameterWorkspaceTestIds } from "../../components/params/parameter-workspace-sections";
+import { createParamsStore } from "../../lib/stores/params";
 import { markRuntimeReady, resetRuntimeState } from "../../lib/stores/runtime";
 import {
   createSessionStore,
   type SessionStore,
 } from "../../lib/stores/session";
+import type { ParamsService, ParamsServiceEventHandlers } from "../../lib/platform/params";
 import type {
   SessionConnectionFormState,
   SessionService,
   SessionServiceEventHandlers,
 } from "../../lib/platform/session";
 import type { OpenSessionSnapshot } from "../../session";
+import type { ParamMetadataMap } from "../../param-metadata";
 import type { TransportDescriptor } from "../../transport";
 
 function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessionSnapshot {
@@ -44,7 +48,17 @@ function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessi
       value: {
         status: "pending",
         connection: { kind: "disconnected" },
-        vehicle_state: null,
+        vehicle_state: {
+          armed: false,
+          custom_mode: 0,
+          mode_name: "Stabilize",
+          system_status: "standby",
+          vehicle_type: "quadrotor",
+          autopilot: "ardu_pilot_mega",
+          system_id: 1,
+          component_id: 1,
+          heartbeat_received: true,
+        },
         home_position: null,
       },
     },
@@ -184,6 +198,32 @@ function createMockService(overrides: Partial<SessionService> = {}) {
   };
 }
 
+function createMockParamsService(
+  metadata: ParamMetadataMap | null = null,
+  overrides: Partial<ParamsService> = {},
+) {
+  let handlers: ParamsServiceEventHandlers | null = null;
+
+  const service = {
+    subscribeAll: vi.fn(async (nextHandlers: ParamsServiceEventHandlers) => {
+      handlers = nextHandlers;
+      return () => {
+        handlers = null;
+      };
+    }),
+    fetchMetadata: vi.fn(async () => metadata),
+    formatError: vi.fn((error: unknown) => (error instanceof Error ? error.message : String(error))),
+    ...overrides,
+  } satisfies ParamsService;
+
+  return {
+    service,
+    hasHandlers() {
+      return handlers !== null;
+    },
+  };
+}
+
 function installViewportController(initialWidth: number, initialHeight = 720) {
   let width = initialWidth;
   let height = initialHeight;
@@ -257,20 +297,39 @@ function installViewportController(initialWidth: number, initialHeight = 720) {
   };
 }
 
-async function renderShellAt(width: number) {
+async function renderShellAt(
+  width: number,
+  options: {
+    snapshot?: OpenSessionSnapshot;
+    metadata?: ParamMetadataMap | null;
+  } = {},
+) {
   const viewport = installViewportController(width);
-  const { service } = createMockService();
+  const { service } = createMockService({
+    openSessionSnapshot: vi.fn(async () => options.snapshot ?? createSnapshot()),
+  });
+  const paramsHarness = createMockParamsService(options.metadata ?? null);
   const store = createSessionStore(service);
+  const parameterStore = createParamsStore(store, paramsHarness.service);
   await store.initialize();
+  await parameterStore.initialize();
   markRuntimeReady("2026-04-03T12:34:56.000Z");
 
-  render(AppShell, { props: { store } });
+  render(AppShell, { props: { store, parameterStore } });
 
   await waitFor(() => {
     expect(screen.getByTestId(appShellTestIds.tier)).toBeTruthy();
   });
 
-  return { viewport, store } satisfies { viewport: ReturnType<typeof installViewportController>; store: SessionStore };
+  return {
+    viewport,
+    store,
+    parameterStore,
+  } satisfies {
+    viewport: ReturnType<typeof installViewportController>;
+    store: SessionStore;
+    parameterStore: ReturnType<typeof createParamsStore>;
+  };
 }
 
 describe("AppShell", () => {
@@ -291,11 +350,141 @@ describe("AppShell", () => {
 
     expect(screen.getByTestId(appShellTestIds.tier).textContent?.trim()).toBe("wide");
     expect(screen.getByTestId(appShellTestIds.drawerState).textContent?.trim()).toBe("docked");
+    expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("overview");
     expect(screen.queryByTestId(appShellTestIds.vehiclePanelButton)).toBeNull();
     expect(screen.getByTestId("connection-connect-btn")).toBeTruthy();
     expect(screen.getByTestId("telemetry-state-value")).toBeTruthy();
     expect(screen.getByTestId("telemetry-alt-value")).toBeTruthy();
     expect(screen.getByTestId(appShellTestIds.sessionEnvelope).textContent).toContain("session-1");
+  });
+
+  it("switches to the scoped parameter workspace from the active shell", async () => {
+    await renderShellAt(1440, {
+      snapshot: createSnapshot({
+        param_store: {
+          expected_count: 2,
+          params: {
+            ARMING_CHECK: { name: "ARMING_CHECK", value: 1, param_type: "uint8", index: 0 },
+            FS_THR_ENABLE: { name: "FS_THR_ENABLE", value: 2, param_type: "uint8", index: 1 },
+          },
+        },
+        param_progress: "completed",
+      }),
+    });
+
+    await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("params");
+    });
+
+    expect(screen.queryByTestId("telemetry-state-value")).toBeNull();
+    expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
+    expect(screen.getByTestId(parameterWorkspaceTestIds.state).textContent?.trim()).toBe("ready");
+    expect(screen.getByTestId(parameterWorkspaceTestIds.scope).textContent).toContain("session-1");
+  });
+
+  it("shows an explicit unavailable parameter workspace state when the active scope has no bootstrap data", async () => {
+    await renderShellAt(1440);
+
+    await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("params");
+    });
+
+    expect(screen.getByTestId(parameterWorkspaceTestIds.state).textContent?.trim()).toBe("unavailable");
+    expect(screen.getByTestId(parameterWorkspaceTestIds.empty).textContent).toContain(
+      "No scoped parameter snapshot is available",
+    );
+  });
+
+  it("mounts one shared review tray, keeps staged edits across workspace toggles, and preserves the queue across shell tiers", async () => {
+    const { viewport } = await renderShellAt(1440, {
+      snapshot: createSnapshot({
+        param_store: {
+          expected_count: 2,
+          params: {
+            ARMING_CHECK: { name: "ARMING_CHECK", value: 1, param_type: "uint8", index: 0 },
+            FS_THR_ENABLE: { name: "FS_THR_ENABLE", value: 2, param_type: "uint8", index: 1 },
+          },
+        },
+        param_progress: "completed",
+      }),
+      metadata: new Map([
+        [
+          "ARMING_CHECK",
+          {
+            humanName: "Arming checks",
+            description: "Controls pre-arm validation.",
+            rebootRequired: true,
+          },
+        ],
+        [
+          "FS_THR_ENABLE",
+          {
+            humanName: "Throttle failsafe",
+            description: "Select the throttle failsafe behavior.",
+          },
+        ],
+      ]),
+    });
+
+    expect(screen.queryByTestId(appShellTestIds.parameterReviewTray)).toBeNull();
+
+    await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
+    await waitFor(() => {
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("params");
+    });
+
+    await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`), {
+      target: { value: "3" },
+    });
+    await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-ARMING_CHECK`));
+    await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-FS_THR_ENABLE`), {
+      target: { value: "4" },
+    });
+    await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-FS_THR_ENABLE`));
+
+    expect(screen.getByTestId(appShellTestIds.parameterReviewTray)).toBeTruthy();
+    expect(screen.getByTestId(appShellTestIds.parameterReviewState).textContent?.trim()).toBe("closed");
+    expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 pending");
+    expect(screen.getByTestId(appShellTestIds.parameterWorkspacePendingCount).textContent?.trim()).toBe("2");
+
+    await fireEvent.click(screen.getByTestId(appShellTestIds.parameterReviewToggle));
+    await waitFor(() => {
+      expect(screen.getByTestId(appShellTestIds.parameterReviewState).textContent?.trim()).toBe("open");
+    });
+
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-ARMING_CHECK`).textContent).toContain("reboot required");
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-FS_THR_ENABLE`).textContent).toContain("4");
+
+    await fireEvent.click(screen.getByTestId(appShellTestIds.overviewWorkspaceButton));
+    await waitFor(() => {
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("overview");
+    });
+
+    expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 pending");
+    expect(screen.queryByTestId(parameterWorkspaceTestIds.root)).toBeNull();
+
+    await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
+    await waitFor(() => {
+      expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("params");
+    });
+
+    expect(screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-ARMING_CHECK`).textContent).toContain("3");
+    expect(screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-FS_THR_ENABLE`).textContent).toContain("4");
+
+    viewport.setSize(390, 720);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(appShellTestIds.tier).textContent?.trim()).toBe("phone");
+    });
+
+    expect(screen.getAllByTestId(appShellTestIds.parameterReviewTray)).toHaveLength(1);
+    expect(screen.getByTestId(appShellTestIds.parameterReviewTray).getAttribute("data-surface-kind")).toBe("sheet");
+    expect(screen.getByTestId(appShellTestIds.parameterReviewState).textContent?.trim()).toBe("open");
+    expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 pending");
   });
 
   it("exposes a phone-only Vehicle panel drawer while keeping the live status cards visible", async () => {
@@ -344,8 +533,11 @@ describe("AppShell", () => {
 
   it("falls back to a desktop-safe docked layout when matchMedia is unavailable", async () => {
     const { service } = createMockService();
+    const paramsHarness = createMockParamsService();
     const store = createSessionStore(service);
+    const parameterStore = createParamsStore(store, paramsHarness.service);
     await store.initialize();
+    await parameterStore.initialize();
     markRuntimeReady("2026-04-03T12:34:56.000Z");
 
     Object.defineProperty(window, "innerWidth", {
@@ -361,7 +553,7 @@ describe("AppShell", () => {
       value: undefined,
     });
 
-    render(AppShell, { props: { store } });
+    render(AppShell, { props: { store, parameterStore } });
 
     await waitFor(() => {
       expect(screen.getByTestId(appShellTestIds.tier).textContent?.trim()).toBe("desktop");

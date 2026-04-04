@@ -17,6 +17,18 @@ export const appShellTestIds = {
   sessionPhase: "app-shell-session-phase",
   sessionSource: "app-shell-session-source",
   sessionEnvelope: "app-shell-session-envelope",
+  overviewWorkspaceButton: "app-shell-overview-workspace-btn",
+  parameterWorkspaceButton: "app-shell-parameter-workspace-btn",
+  parameterWorkspacePendingCount: "app-shell-parameter-workspace-pending-count",
+  activeWorkspace: "app-shell-active-workspace",
+  parameterReviewTray: "app-shell-parameter-review-tray",
+  parameterReviewSurface: "app-shell-parameter-review-surface",
+  parameterReviewState: "app-shell-parameter-review-state",
+  parameterReviewCount: "app-shell-parameter-review-count",
+  parameterReviewToggle: "app-shell-parameter-review-toggle",
+  parameterReviewClear: "app-shell-parameter-review-clear",
+  parameterReviewRowPrefix: "app-shell-parameter-review-row",
+  parameterReviewDiscardPrefix: "app-shell-parameter-review-discard",
 } as const;
 
 export type ShellTier = "phone" | "tablet" | "desktop" | "wide";
