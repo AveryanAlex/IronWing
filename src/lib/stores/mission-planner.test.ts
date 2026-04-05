@@ -4,6 +4,7 @@ import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { HomePosition, MissionPlan, TransferProgress, MissionState } from "../../mission";
+import { defaultGeoPoint3d, type MissionItem } from "../mavkit-types";
 import type { OpenSessionSnapshot, SessionEnvelope } from "../../session";
 import type { TransportDescriptor } from "../../transport";
 import type {
@@ -23,6 +24,10 @@ import type {
 } from "../mission-plan-file-io";
 import type { SurveyDraftExtension } from "../survey-region";
 import { createSurveyDraftExtension, hydrateSurveyRegion } from "../survey-region";
+import { getBuiltinCameras } from "../survey-camera-catalog";
+import type { CorridorResult } from "../corridor-scan";
+import type { StructureScanResult } from "../structure-scan";
+import type { SurveyResult } from "../survey-grid";
 import { createMissionPlannerViewStore, createMissionPlannerStore } from "./mission-planner";
 import { createSessionStore } from "./session";
 
@@ -317,17 +322,72 @@ function makeImportedSurveyExtension(): SurveyDraftExtension {
       sideOverlap_pct: 65,
       frontOverlap_pct: 80,
     },
-    embeddedItems: [
-      {
-        command: { Nav: "ReturnToLaunch" },
-        current: false,
-        autocontinue: true,
-      },
-    ],
+    embeddedItems: [makeManualWaypoint(47.3982, 8.5454, 55)],
     qgcPassthrough: {},
     warnings: ["Preserved survey metadata from import."],
   };
   const region = hydrateSurveyRegion(parsed);
+
+  extension.surveyRegions.set(region.id, region);
+  extension.surveyRegionOrder.push({ regionId: region.id, position: 0 });
+  return extension;
+}
+
+const BUILTIN_CAMERA = getBuiltinCameras()[0]!;
+const SURVEY_POLYGON = [
+  { latitude_deg: 47.3981, longitude_deg: 8.5451 },
+  { latitude_deg: 47.3984, longitude_deg: 8.5463 },
+  { latitude_deg: 47.3977, longitude_deg: 8.5468 },
+];
+const SURVEY_POLYLINE = [
+  { latitude_deg: 47.3981, longitude_deg: 8.5451 },
+  { latitude_deg: 47.3984, longitude_deg: 8.5463 },
+];
+
+function makeManualWaypoint(lat: number, lon: number, alt: number): MissionItem {
+  return {
+    command: {
+      Nav: {
+        Waypoint: {
+          position: defaultGeoPoint3d(lat, lon, alt),
+          hold_time_s: 0,
+          acceptance_radius_m: 1,
+          pass_radius_m: 0,
+          yaw_deg: 0,
+        },
+      },
+    },
+    current: false,
+    autocontinue: true,
+  };
+}
+
+function makeManualCameraImportExtension(): SurveyDraftExtension {
+  const extension = createSurveyDraftExtension();
+  const region = hydrateSurveyRegion({
+    patternType: "grid",
+    position: 0,
+    polygon: SURVEY_POLYGON,
+    polyline: [],
+    camera: null,
+    params: {
+      altitude_m: 55,
+      sideOverlap_pct: 65,
+      frontOverlap_pct: 80,
+    },
+    embeddedItems: [makeManualWaypoint(47.3982, 8.5454, 55)],
+    qgcPassthrough: {
+      TransectStyleComplexItem: {
+        CameraCalc: {
+          CameraName: "Manual (no camera specs)",
+          DistanceToSurface: 55,
+          SideOverlap: 65,
+          FrontalOverlap: 80,
+        },
+      },
+    },
+    warnings: ["Imported survey camera metadata is preserved for export only."],
+  });
 
   extension.surveyRegions.set(region.id, region);
   extension.surveyRegionOrder.push({ regionId: region.id, position: 0 });
@@ -532,5 +592,234 @@ describe("createMissionPlannerStore", () => {
     expect(state.lastError).toContain("malformed mission download");
     expect(state.home).toEqual({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
     expect(state.draftState.active.mission.document.items).toHaveLength(1);
+  });
+
+  it("creates survey blocks after home, manual items, and survey blocks with deterministic ordering", async () => {
+    const sessionHarness = createSessionHarness([createSnapshot({ envelope: createEnvelope("session-1") })]);
+    const plannerHarness = createPlannerServiceHarness();
+    const fileHarness = createFileIoHarness();
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo);
+
+    await sessionStore.initialize();
+    await plannerStore.initialize();
+
+    plannerStore.replaceWorkspace(makeWorkspace());
+
+    const firstRegionId = plannerStore.createSurveyBlock("grid", SURVEY_POLYGON);
+    plannerStore.selectMissionItem(0);
+    const manualAnchorRegionId = plannerStore.createSurveyBlock("corridor", SURVEY_POLYLINE);
+    plannerStore.selectSurveyRegion(firstRegionId);
+    const surveyAnchorRegionId = plannerStore.createSurveyBlock("structure", SURVEY_POLYGON);
+
+    const state = get(plannerStore);
+    const view = get(createMissionPlannerViewStore(plannerStore));
+
+    expect(state.survey.surveyRegionOrder).toEqual([
+      { regionId: firstRegionId, position: 0 },
+      { regionId: surveyAnchorRegionId, position: 0 },
+      { regionId: manualAnchorRegionId, position: 1 },
+    ]);
+    expect(view.surveyOrder).toEqual([
+      { regionId: firstRegionId, position: 0 },
+      { regionId: surveyAnchorRegionId, position: 0 },
+      { regionId: manualAnchorRegionId, position: 1 },
+    ]);
+    expect(view.selectedSurvey).toMatchObject({
+      regionId: surveyAnchorRegionId,
+      patternType: "structure",
+      position: 0,
+      generationState: "blocked",
+    });
+  });
+
+  it("blocks generation for imported camera-less survey regions while preserving their embedded items", async () => {
+    const sessionHarness = createSessionHarness([createSnapshot({ envelope: createEnvelope("session-1") })]);
+    const plannerHarness = createPlannerServiceHarness();
+    const fileHarness = createFileIoHarness();
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo);
+
+    await sessionStore.initialize();
+    await plannerStore.initialize();
+
+    const survey = makeManualCameraImportExtension();
+    const regionId = survey.surveyRegionOrder[0]?.regionId ?? "";
+    plannerStore.replaceWorkspace(makeWorkspace({ survey }));
+    plannerStore.selectSurveyRegion(regionId);
+
+    const result = await plannerStore.generateSurveyRegion(regionId);
+
+    const state = get(plannerStore);
+    const region = state.survey.surveyRegions.get(regionId);
+    const view = get(createMissionPlannerViewStore(plannerStore));
+
+    expect(result).toMatchObject({ status: "blocked" });
+    expect(region?.generatedItems).toHaveLength(1);
+    expect(region?.generationState).toBe("blocked");
+    expect(region?.generationMessage).toContain("Choose a valid camera");
+    expect(view.selectedSurvey).toMatchObject({
+      regionId,
+      generationState: "blocked",
+    });
+  });
+
+  it("prompts before regenerate when survey blocks have manual edits and preserves them on dismissal", async () => {
+    const sessionHarness = createSessionHarness([createSnapshot({ envelope: createEnvelope("session-1") })]);
+    const plannerHarness = createPlannerServiceHarness();
+    const fileHarness = createFileIoHarness();
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo);
+
+    await sessionStore.initialize();
+    await plannerStore.initialize();
+
+    plannerStore.replaceWorkspace(makeWorkspace());
+    const regionId = plannerStore.createSurveyBlock("grid", SURVEY_POLYGON);
+    plannerStore.updateAuthoredSurveyRegion(regionId, (region) => ({
+      ...region,
+      cameraId: BUILTIN_CAMERA.canonicalName,
+      camera: BUILTIN_CAMERA,
+      generatedItems: [makeManualWaypoint(47.399, 8.547, 55)],
+    }));
+    plannerStore.markSurveyRegionItemAsEdited(regionId, 0, makeManualWaypoint(47.3995, 8.5475, 60));
+
+    const result = await plannerStore.generateSurveyRegion(regionId);
+
+    let state = get(plannerStore);
+    expect(result).toMatchObject({ status: "prompted" });
+    expect(state.surveyPrompt).toMatchObject({ kind: "confirm-regenerate", regionId });
+    expect(state.survey.surveyRegions.get(regionId)?.manualEdits.size).toBe(1);
+
+    plannerStore.dismissSurveyPrompt();
+    state = get(plannerStore);
+    expect(state.surveyPrompt).toBeNull();
+    expect(state.survey.surveyRegions.get(regionId)?.manualEdits.size).toBe(1);
+  });
+
+  it("dismisses and confirms dissolve prompts while preserving mixed ordering when blocks become manual items", async () => {
+    const sessionHarness = createSessionHarness([createSnapshot({ envelope: createEnvelope("session-1") })]);
+    const plannerHarness = createPlannerServiceHarness();
+    const fileHarness = createFileIoHarness();
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo);
+
+    await sessionStore.initialize();
+    await plannerStore.initialize();
+
+    plannerStore.replaceWorkspace(makeWorkspace());
+    const firstRegionId = plannerStore.createSurveyBlock("grid", SURVEY_POLYGON);
+    plannerStore.updateAuthoredSurveyRegion(firstRegionId, (region) => ({
+      ...region,
+      cameraId: BUILTIN_CAMERA.canonicalName,
+      camera: BUILTIN_CAMERA,
+      generatedItems: [makeManualWaypoint(47.3982, 8.5454, 50)],
+    }));
+    plannerStore.selectSurveyRegion(firstRegionId);
+    const secondRegionId = plannerStore.createSurveyBlock("corridor", SURVEY_POLYLINE);
+    plannerStore.updateAuthoredSurveyRegion(secondRegionId, (region) => ({
+      ...region,
+      cameraId: BUILTIN_CAMERA.canonicalName,
+      camera: BUILTIN_CAMERA,
+      generatedItems: [makeManualWaypoint(47.3986, 8.5459, 52)],
+    }));
+
+    expect(plannerStore.promptDissolveSurveyRegion(firstRegionId)).toMatchObject({ status: "prompted" });
+    let state = get(plannerStore);
+    expect(state.surveyPrompt).toMatchObject({ kind: "confirm-dissolve", regionId: firstRegionId });
+
+    plannerStore.dismissSurveyPrompt();
+    state = get(plannerStore);
+    expect(state.surveyPrompt).toBeNull();
+    expect(state.survey.surveyRegionOrder).toEqual([
+      { regionId: firstRegionId, position: 0 },
+      { regionId: secondRegionId, position: 0 },
+    ]);
+
+    plannerStore.promptDissolveSurveyRegion(firstRegionId);
+    expect(await plannerStore.confirmSurveyPrompt()).toMatchObject({ status: "dissolved", itemCount: 1 });
+
+    state = get(plannerStore);
+    const transferMission = state.draftState.active.mission.document.items;
+    const effectiveMission = get(createMissionPlannerViewStore(plannerStore)).effectiveMissionItemCount;
+
+    expect(state.survey.surveyRegionOrder).toEqual([{ regionId: secondRegionId, position: 1 }]);
+    expect(transferMission).toHaveLength(2);
+    expect(transferMission[0]).toMatchObject({
+      command: makeManualWaypoint(47.3982, 8.5454, 50).command,
+    });
+    expect(effectiveMission).toBe(3);
+  });
+
+  it("preserves the last generated output when regeneration fails validation", async () => {
+    const sessionHarness = createSessionHarness([createSnapshot({ envelope: createEnvelope("session-1") })]);
+    const plannerHarness = createPlannerServiceHarness();
+    const fileHarness = createFileIoHarness();
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo);
+
+    await sessionStore.initialize();
+    await plannerStore.initialize();
+
+    plannerStore.replaceWorkspace(makeWorkspace());
+    const regionId = plannerStore.createSurveyBlock("grid", SURVEY_POLYGON);
+    const previousItem = makeManualWaypoint(47.3982, 8.5454, 50);
+    plannerStore.updateAuthoredSurveyRegion(regionId, (region) => ({
+      ...region,
+      cameraId: BUILTIN_CAMERA.canonicalName,
+      camera: {
+        ...BUILTIN_CAMERA,
+        focalLength_mm: 0,
+      } as typeof BUILTIN_CAMERA,
+      generatedItems: [previousItem],
+    }));
+
+    const result = await plannerStore.generateSurveyRegion(regionId, true);
+    const state = get(plannerStore);
+    const region = state.survey.surveyRegions.get(regionId);
+
+    expect(result).toMatchObject({ status: "generated", ok: false });
+    expect(region?.generatedItems).toEqual([previousItem]);
+    expect(region?.errors[0]?.code).toBe("invalid_camera");
+    expect(region?.generationState).toBe("idle");
+    expect(region?.generationMessage).toContain("greater than zero");
+  });
+
+  it("preserves the last generated output when survey generation times out", async () => {
+    const sessionHarness = createSessionHarness([createSnapshot({ envelope: createEnvelope("session-1") })]);
+    const plannerHarness = createPlannerServiceHarness();
+    const fileHarness = createFileIoHarness();
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo, {
+      surveyGenerationTimeoutMs: 1,
+      surveyEngines: {
+        grid: vi.fn((): Promise<SurveyResult> => new Promise(() => {})),
+        corridor: vi.fn(async (): Promise<CorridorResult> => ({ ok: false, errors: [] })),
+        structure: vi.fn(async (): Promise<StructureScanResult> => ({ ok: false, errors: [] })),
+      },
+    });
+
+    await sessionStore.initialize();
+    await plannerStore.initialize();
+
+    plannerStore.replaceWorkspace(makeWorkspace());
+    const regionId = plannerStore.createSurveyBlock("grid", SURVEY_POLYGON);
+    const previousItem = makeManualWaypoint(47.3982, 8.5454, 50);
+    plannerStore.updateAuthoredSurveyRegion(regionId, (region) => ({
+      ...region,
+      cameraId: BUILTIN_CAMERA.canonicalName,
+      camera: BUILTIN_CAMERA,
+      generatedItems: [previousItem],
+    }));
+
+    const result = await plannerStore.generateSurveyRegion(regionId, true);
+    const state = get(plannerStore);
+    const region = state.survey.surveyRegions.get(regionId);
+
+    expect(result).toMatchObject({ status: "error" });
+    expect(region?.generatedItems).toEqual([previousItem]);
+    expect(region?.generationState).toBe("blocked");
+    expect(region?.generationMessage).toContain("timed out");
+    expect(state.lastError).toContain("timed out");
   });
 });

@@ -5,6 +5,7 @@ import type { TypedDraftItem } from "./mission-draft-typed";
 import type { MissionItem } from "./mavkit-types";
 import { defaultGeoPoint3d } from "./mavkit-types";
 import type { CatalogCamera } from "./survey-camera-catalog";
+import { getBuiltinCameras } from "./survey-camera-catalog";
 import type { CorridorResult } from "./corridor-scan";
 import type { StructureScanResult } from "./structure-scan";
 import type { SurveyResult, SurveyStats, SurveyTransect } from "./survey-grid";
@@ -61,6 +62,7 @@ const CAMERA: CatalogCamera = {
     landscape: true,
     fixedOrientation: false,
 };
+const BUILTIN_CAMERA = getBuiltinCameras()[0]!;
 
 function makeWaypoint(lat: number, lon: number, alt: number): MissionItem {
     return {
@@ -287,6 +289,8 @@ describe("survey-region", () => {
         expect(region.generatedLayers).toEqual([]);
         expect(regionItemCount(region)).toBe(0);
         expect(region.collapsed).toBe(false);
+        expect(region.generationState).toBe("idle");
+        expect(region.generationMessage).toBeNull();
         expect(region.errors).toEqual([]);
         expect(regionHasManualEdits(region)).toBe(false);
     });
@@ -525,6 +529,16 @@ describe("survey-region", () => {
             .toBe(CAMERA.canonicalName);
     });
 
+    it("hydrateSurveyRegion recovers a full catalog camera from canonicalName-only imports", () => {
+        const region = hydrateSurveyRegion(makeParsedRegion({
+            camera: { canonicalName: BUILTIN_CAMERA.canonicalName },
+            qgcPassthrough: {},
+        }));
+
+        expect(region.cameraId).toBe(BUILTIN_CAMERA.canonicalName);
+        expect(region.camera).toEqual(BUILTIN_CAMERA);
+    });
+
     it("toExportableSurveyRegion preserves positions, passthrough camera recovery, and manual edits", () => {
         const parsed = makeParsedRegion();
         const editedItem = makeWaypoint(47.5, 8.5, 80);
@@ -551,6 +565,20 @@ describe("survey-region", () => {
         expect(exportable.qgcPassthrough).toEqual(parsed.qgcPassthrough);
         expect(exportable.params.altitude_m).toBe(65);
         expect(exportable.params.frontOverlap_pct).toBe(82);
+    });
+
+    it("toExportableSurveyRegion rejects authored regions without a resolvable camera", () => {
+        const region = createSurveyRegion(POLYGON);
+
+        expect(() => toExportableSurveyRegion(region, 0)).toThrow(/resolved camera/i);
+    });
+
+    it("toExportableSurveyRegion rejects malformed authored geometry", () => {
+        const region = createCorridorRegion(POLYLINE.slice(0, 1));
+        region.camera = CAMERA;
+        region.cameraId = CAMERA.canonicalName;
+
+        expect(() => toExportableSurveyRegion(region, 0)).toThrow(/geometry/i);
     });
 
     it("dissolve empty region and region with no generation return empty arrays", () => {

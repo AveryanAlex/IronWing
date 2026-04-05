@@ -2,7 +2,7 @@ import type { TypedDraftItem } from "./mission-draft-typed";
 import type { ExportableSurveyRegion, ParsedSurveyRegion } from "./mission-plan-io";
 import type { StartCorner, TurnDirection } from "./mission-grid";
 import type { GeoPoint2d, MissionItem } from "./mavkit-types";
-import type { CatalogCamera } from "./survey-camera-catalog";
+import { findCamera, type CatalogCamera } from "./survey-camera-catalog";
 import type { CameraOrientation } from "./survey-camera";
 import type { CorridorResult, CorridorValidationError } from "./corridor-scan";
 import type {
@@ -46,6 +46,8 @@ export type SurveyRegionParams = {
     layerOrder: "bottom_to_top" | "top_to_bottom";
 };
 
+export type SurveyRegionGenerationState = "idle" | "blocked" | "generating";
+
 export type SurveyRegion = {
     id: string;
     patternType: SurveyPatternType;
@@ -63,6 +65,8 @@ export type SurveyRegion = {
     errors: SurveyGenerationError[];
     manualEdits: Map<number, MissionItem>;
     collapsed: boolean;
+    generationState: SurveyRegionGenerationState;
+    generationMessage: string | null;
     qgcPassthrough?: Record<string, unknown>;
     importWarnings?: string[];
 };
@@ -160,6 +164,9 @@ function cloneRegion(region: SurveyRegion): SurveyRegion {
         generatedStats: cloneStats(region.generatedStats),
         errors: cloneErrors(region.errors),
         manualEdits: new Map(region.manualEdits),
+        collapsed: region.collapsed,
+        generationState: region.generationState,
+        generationMessage: region.generationMessage,
         camera: region.camera ? { ...region.camera } : null,
         qgcPassthrough: cloneJsonRecord(region.qgcPassthrough),
         importWarnings: cloneWarnings(region.importWarnings),
@@ -186,6 +193,10 @@ function withOrderedBlocks(extension: SurveyDraftExtension): SurveyDraftExtensio
         surveyRegions: new Map(extension.surveyRegions),
         surveyRegionOrder: orderSurveyBlocks(extension.surveyRegionOrder),
     };
+}
+
+export function normalizeSurveyDraftExtension(extension: SurveyDraftExtension): SurveyDraftExtension {
+    return withOrderedBlocks(extension);
 }
 
 function isMissionItemDocument(document: TypedDraftItem["document"]): document is MissionItem {
@@ -318,6 +329,13 @@ function resolveExportCamera(region: SurveyRegion): CatalogCamera | null {
         return { ...region.camera };
     }
 
+    if (region.cameraId) {
+        const catalogCamera = findCamera(region.cameraId);
+        if (catalogCamera) {
+            return catalogCamera;
+        }
+    }
+
     if (!region.cameraId && !region.qgcPassthrough) {
         return null;
     }
@@ -358,6 +376,8 @@ export function createSurveyRegion(
         errors: [],
         manualEdits: new Map<number, MissionItem>(),
         collapsed: false,
+        generationState: "idle",
+        generationMessage: null,
     };
 }
 
@@ -376,7 +396,9 @@ export function hydrateSurveyRegion(parsed: ParsedSurveyRegion): SurveyRegion {
             ? createStructureRegion(parsed.polygon)
             : createSurveyRegion(parsed.polygon);
     const cameraId = stringOrNull(parsed.camera?.canonicalName);
-    const hydratedCamera = toHydratedCatalogCamera(parsed.camera, parsed.qgcPassthrough);
+    const hydratedCamera = cameraId
+        ? findCamera(cameraId) ?? toHydratedCatalogCamera(parsed.camera, parsed.qgcPassthrough)
+        : toHydratedCatalogCamera(parsed.camera, parsed.qgcPassthrough);
 
     return {
         ...region,
@@ -395,11 +417,24 @@ export function hydrateSurveyRegion(parsed: ParsedSurveyRegion): SurveyRegion {
 }
 
 export function toExportableSurveyRegion(region: SurveyRegion, position: number): ExportableSurveyRegion {
+    const camera = resolveExportCamera(region);
+    const hasValidGeometry = region.patternType === "corridor"
+        ? region.polyline.length >= 2
+        : region.polygon.length >= 3;
+
+    if (!hasValidGeometry) {
+        throw new Error(`Survey region ${region.id} is missing enough geometry to export truthfully.`);
+    }
+
+    if (!camera && !region.qgcPassthrough) {
+        throw new Error(`Survey region ${region.id} requires a resolved camera before it can be exported truthfully.`);
+    }
+
     return {
         patternType: region.patternType,
         polygon: clonePoints(region.polygon),
         polyline: clonePoints(region.polyline),
-        camera: resolveExportCamera(region),
+        camera,
         params: { ...region.params },
         embeddedItems: dissolveRegion(region),
         qgcPassthrough: cloneJsonValue(region.qgcPassthrough ?? {}),
@@ -415,9 +450,21 @@ export function regionHasManualEdits(region: SurveyRegion): boolean {
     return region.manualEdits.size > 0;
 }
 
+export function setSurveyRegionGenerationState(
+    region: SurveyRegion,
+    generationState: SurveyRegionGenerationState,
+    generationMessage: string | null,
+): SurveyRegion {
+    const next = cloneRegion(region);
+    next.generationState = generationState;
+    next.generationMessage = generationMessage;
+    return next;
+}
+
 export function applyGenerationResult(region: SurveyRegion, result: SurveyGenerationResult): SurveyRegion {
     const next = cloneRegion(region);
     next.manualEdits = new Map<number, MissionItem>();
+    next.generationState = "idle";
 
     if (result.ok) {
         next.generatedItems = cloneMissionItems(result.items);
@@ -427,10 +474,12 @@ export function applyGenerationResult(region: SurveyRegion, result: SurveyGenera
         next.generatedStats = cloneStats(result.stats);
         next.corridorPolygon = "corridorPolygon" in result ? clonePoints(result.corridorPolygon) : [];
         next.errors = [];
+        next.generationMessage = null;
         return next;
     }
 
     next.errors = cloneErrors(result.errors);
+    next.generationMessage = result.errors[0]?.message ?? null;
     return next;
 }
 
@@ -458,15 +507,37 @@ export function createSurveyDraftExtension(): SurveyDraftExtension {
     };
 }
 
-export function addSurveyRegion(extension: SurveyDraftExtension, region: SurveyRegion, afterIndex: number): SurveyDraftExtension {
+export function insertSurveyRegion(
+    extension: SurveyDraftExtension,
+    region: SurveyRegion,
+    position: number,
+    orderIndex: number,
+): SurveyDraftExtension {
+    const orderedBlocks = orderSurveyBlocks(extension.surveyRegionOrder);
     const next = createSurveyDraftExtension();
     next.surveyRegions = new Map(extension.surveyRegions);
     next.surveyRegions.set(region.id, cloneRegion(region));
-    next.surveyRegionOrder = [
-        ...extension.surveyRegionOrder.map((block) => ({ ...block })),
-        { regionId: region.id, position: normalizePosition(afterIndex + 1) },
-    ];
-    return withOrderedBlocks(next);
+
+    const insertAt = Math.max(0, Math.min(orderIndex, orderedBlocks.length));
+    next.surveyRegionOrder = orderedBlocks.map((block) => ({ ...block }));
+    next.surveyRegionOrder.splice(insertAt, 0, {
+        regionId: region.id,
+        position: normalizePosition(position),
+    });
+
+    return next;
+}
+
+export function addSurveyRegion(extension: SurveyDraftExtension, region: SurveyRegion, afterIndex: number): SurveyDraftExtension {
+    const position = normalizePosition(afterIndex + 1);
+    const orderedBlocks = orderSurveyBlocks(extension.surveyRegionOrder);
+    const orderIndex = orderedBlocks.findIndex((block) => block.position > position);
+    return insertSurveyRegion(
+        extension,
+        region,
+        position,
+        orderIndex === -1 ? orderedBlocks.length : orderIndex,
+    );
 }
 
 export function removeSurveyRegion(extension: SurveyDraftExtension, regionId: string): SurveyDraftExtension {

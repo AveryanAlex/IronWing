@@ -7,6 +7,7 @@ import corridorComplexFixtureJson from "../../tests/contracts/corridor-complex.p
 import structureComplexFixtureJson from "../../tests/contracts/structure-complex.plan.json";
 import surveyComplexFixtureJson from "../../tests/contracts/survey-complex.plan.json";
 import type { CatalogCamera } from "./survey-camera-catalog";
+import { createSurveyRegion, toExportableSurveyRegion as toSurveyRegionExportable } from "./survey-region";
 import type { FencePlan, HomePosition, MissionPlan, RallyPlan } from "./mavkit-types";
 import {
     exportPlanFile,
@@ -782,6 +783,59 @@ describe("mission-plan-io: exportPlanFile", () => {
             params: { structureHeight_m: 24, layerCount: 4, scanDistance_m: 18 },
             camera: { canonicalName: "Sony ILCE-QX1" },
         });
+    });
+
+    it("roundtrips imported camera-less surveys without fabricating a resolved camera", () => {
+        const manualSurvey = parsePlanFile(surveyComplexFixtureJson).surveyRegions[1]!;
+
+        const exported = exportPlanFile({
+            mission: { items: [] },
+            surveyRegions: [toExportableSurveyRegion(manualSurvey)],
+            home: null,
+            fence: { return_point: null, regions: [] },
+            rally: { points: [] },
+        });
+        const reparsed = parsePlanFile(exported.json);
+
+        expect(exported.json.mission?.items?.[0]).toMatchObject({
+            type: "ComplexItem",
+            complexItemType: "survey",
+        });
+        expect(reparsed.surveyRegions[0]).toMatchObject({
+            patternType: "grid",
+            camera: null,
+            params: { altitude_m: 55, sideOverlap_pct: 65, frontOverlap_pct: 80 },
+        });
+    });
+
+    it("preserves same-slot survey block order when exporting multiple ComplexItems", () => {
+        const survey = parsePlanFile(surveyComplexFixtureJson).surveyRegions[0]!;
+        const corridor = parsePlanFile(corridorComplexFixtureJson).surveyRegions[0]!;
+
+        const exported = exportPlanFile({
+            mission: { items: [] },
+            surveyRegions: [
+                { ...toExportableSurveyRegion(survey), position: 0 },
+                { ...toExportableSurveyRegion(corridor), position: 0 },
+            ],
+            home: null,
+            fence: { return_point: null, regions: [] },
+            rally: { points: [] },
+        });
+        const reparsed = parsePlanFile(exported.json);
+
+        expect(reparsed.surveyRegions.map((region) => region.patternType)).toEqual(["grid", "corridor"]);
+        expect(reparsed.surveyRegions.map((region) => region.position)).toEqual([0, 0]);
+    });
+
+    it("fails closed when an authored survey region does not have a resolved export camera", () => {
+        const region = createSurveyRegion([
+            { latitude_deg: 47.3981, longitude_deg: 8.5451 },
+            { latitude_deg: 47.3984, longitude_deg: 8.5463 },
+            { latitude_deg: 47.3977, longitude_deg: 8.5468 },
+        ]);
+
+        expect(() => toSurveyRegionExportable(region, 0)).toThrow(/resolved camera/i);
     });
 
     it("preserves unsupported survey passthrough fields on export and warns explicitly", () => {

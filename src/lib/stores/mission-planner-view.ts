@@ -1,10 +1,12 @@
 import { derived, type Readable } from "svelte/store";
 
+import type { SurveyRegionGenerationState, SurveyPatternType } from "../survey-region";
 import type {
   MissionPlannerActionState,
   MissionPlannerDomainPhase,
   MissionPlannerReplacePrompt,
   MissionPlannerStoreState,
+  MissionPlannerSurveyPrompt,
 } from "./mission-planner";
 import {
   activeTransferMissionPlan,
@@ -26,6 +28,24 @@ export type MissionPlannerReplacePromptView = {
   kind: MissionPlannerReplacePrompt["kind"];
   action: "download" | "import" | "clear" | "recoverable";
   warningCount: number;
+};
+
+export type MissionPlannerSurveyPromptView = {
+  kind: MissionPlannerSurveyPrompt["kind"];
+  regionId: string;
+  message: string;
+};
+
+export type MissionPlannerSelectedSurveyView = {
+  regionId: string;
+  patternType: SurveyPatternType;
+  position: number | null;
+  collapsed: boolean;
+  generationState: SurveyRegionGenerationState;
+  generationMessage: string | null;
+  generatedItemCount: number;
+  manualEditCount: number;
+  errorCount: number;
 };
 
 export type MissionPlannerTransferView = {
@@ -53,6 +73,9 @@ export type MissionPlannerView = {
   fileWarningCount: number;
   validationIssueCount: number;
   replacePrompt: MissionPlannerReplacePromptView | null;
+  surveyPrompt: MissionPlannerSurveyPromptView | null;
+  surveyOrder: Array<{ regionId: string; position: number }>;
+  selectedSurvey: MissionPlannerSelectedSurveyView | null;
   inlineStatus: MissionPlannerInlineStatus;
   activeTransfer: MissionPlannerTransferView | null;
   lastError: string | null;
@@ -63,6 +86,16 @@ export function createMissionPlannerViewStore(store: Readable<MissionPlannerStor
     const status = resolveWorkspaceStatus($planner);
     const readiness = resolveWorkspaceReadiness($planner, status);
     const effectiveMission = activeTransferMissionPlan($planner);
+    const surveyOrder = $planner.survey.surveyRegionOrder
+      .map((block, index) => ({ block, index }))
+      .sort((left, right) => left.block.position - right.block.position || left.index - right.index)
+      .map(({ block }) => ({ regionId: block.regionId, position: block.position }));
+    const selectedSurveyRegion = $planner.selection.kind === "survey-block"
+      ? $planner.survey.surveyRegions.get($planner.selection.regionId) ?? null
+      : null;
+    const selectedSurveyPosition = selectedSurveyRegion
+      ? surveyOrder.find((block) => block.regionId === selectedSurveyRegion.id)?.position ?? null
+      : null;
 
     return {
       status,
@@ -80,6 +113,21 @@ export function createMissionPlannerViewStore(store: Readable<MissionPlannerStor
       fileWarningCount: $planner.fileWarnings.length,
       validationIssueCount: $planner.validationIssues.length,
       replacePrompt: formatReplacePrompt($planner.replacePrompt),
+      surveyPrompt: formatSurveyPrompt($planner.surveyPrompt),
+      surveyOrder,
+      selectedSurvey: selectedSurveyRegion
+        ? {
+          regionId: selectedSurveyRegion.id,
+          patternType: selectedSurveyRegion.patternType,
+          position: selectedSurveyPosition,
+          collapsed: selectedSurveyRegion.collapsed,
+          generationState: selectedSurveyRegion.generationState,
+          generationMessage: selectedSurveyRegion.generationMessage,
+          generatedItemCount: selectedSurveyRegion.generatedItems.length,
+          manualEditCount: selectedSurveyRegion.manualEdits.size,
+          errorCount: selectedSurveyRegion.errors.length,
+        }
+        : null,
       inlineStatus: formatInlineStatus($planner.phase, $planner.activeAction),
       activeTransfer: $planner.transferProgress
         ? {
@@ -147,6 +195,18 @@ function formatReplacePrompt(prompt: MissionPlannerReplacePrompt | null): Missio
     kind: "replace-active",
     action: prompt.action,
     warningCount: prompt.fileWarnings.length,
+  };
+}
+
+function formatSurveyPrompt(prompt: MissionPlannerSurveyPrompt | null): MissionPlannerSurveyPromptView | null {
+  if (!prompt) {
+    return null;
+  }
+
+  return {
+    kind: prompt.kind,
+    regionId: prompt.regionId,
+    message: prompt.message,
   };
 }
 

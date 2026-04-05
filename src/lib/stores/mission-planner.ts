@@ -5,11 +5,12 @@ import type { HomePosition, MissionIssue, MissionPlan, MissionState, TransferPro
 import type { RallyPlan } from "../../rally";
 import type { SessionEnvelope } from "../../session";
 import { shouldDropEvent } from "../../session";
-import type { MissionCommand } from "../mavkit-types";
+import type { MissionCommand, GeoPoint2d, MissionItem } from "../mavkit-types";
 import {
   addTypedWaypoint,
   createTypedDraftState,
   deleteTypedAt,
+  insertTypedItemsAfter,
   isTypedDraftDirty,
   moveTypedDown,
   moveTypedUp,
@@ -19,6 +20,7 @@ import {
   setTypedDraftScope,
   typedDraftItems,
   typedDraftPlan,
+  typedDraftSelectedIndex,
   typedDraftSelectedItem,
   updateTypedAltitude,
   updateTypedCommand,
@@ -40,12 +42,36 @@ import {
 } from "../platform/mission-planner";
 import { isSameEnvelope } from "../scoped-session-events";
 import {
+  applyGenerationResult,
+  createCorridorRegion,
+  createStructureRegion,
   createSurveyDraftExtension,
+  createSurveyRegion,
+  dissolveSurveyRegion,
   flattenRegionsToItems,
   hydrateSurveyRegion,
+  insertSurveyRegion,
+  markItemEdited,
+  removeSurveyRegion,
+  setSurveyRegionGenerationState,
   toExportableSurveyRegion,
+  updateSurveyRegion,
   type SurveyDraftExtension,
+  type SurveyPatternType,
+  type SurveyRegion,
 } from "../survey-region";
+import {
+  buildSurveyGenerationRequest,
+  createSurveyDissolvePrompt,
+  createSurveyRegeneratePrompt,
+  normalizeSurveyAuthoringExtension,
+  reindexSurveyBlocksAfterDissolve,
+  resolveSurveyInsertionSite,
+  runSurveyGenerationRequest,
+  type SurveyAuthoringPrompt,
+  type SurveyAuthoringSelection,
+  type SurveyEngineRunners,
+} from "../mission-survey-authoring";
 import {
   createMissionPlannerViewStore,
   type MissionPlannerViewStore,
@@ -131,6 +157,8 @@ export type MissionPlannerReplacePrompt =
     kind: "recoverable";
   };
 
+export type MissionPlannerSurveyPrompt = SurveyAuthoringPrompt;
+
 export type MissionPlannerStoreState = {
   hydrated: boolean;
   workspaceMounted: boolean;
@@ -146,6 +174,7 @@ export type MissionPlannerStoreState = {
   transferProgress: TransferProgress | null;
   activeAction: MissionPlannerActionState | null;
   replacePrompt: MissionPlannerReplacePrompt | null;
+  surveyPrompt: MissionPlannerSurveyPrompt | null;
   recoverableWorkspace: RecoverableMissionPlannerWorkspace | null;
   draftState: TypedDraftState;
   home: HomePosition | null;
@@ -163,6 +192,8 @@ export type MissionPlannerStoreState = {
 
 export type MissionPlannerStoreOptions = {
   actionTimeoutMs?: number;
+  surveyGenerationTimeoutMs?: number;
+  surveyEngines?: SurveyEngineRunners;
 };
 
 type SessionReadable = Pick<SessionStore, "subscribe">;
@@ -197,6 +228,7 @@ function createInitialState(): MissionPlannerStoreState {
     transferProgress: null,
     activeAction: null,
     replacePrompt: null,
+    surveyPrompt: null,
     recoverableWorkspace: null,
     draftState: setTypedDraftScope(createTypedDraftState(), EMPTY_SCOPE),
     home: null,
@@ -220,6 +252,8 @@ export function createMissionPlannerStore(
   options: MissionPlannerStoreOptions = {},
 ) {
   const actionTimeoutMs = options.actionTimeoutMs ?? ACTION_TIMEOUT_MS;
+  const surveyGenerationTimeoutMs = options.surveyGenerationTimeoutMs ?? actionTimeoutMs;
+  const surveyEngines = options.surveyEngines;
   const store = writable<MissionPlannerStoreState>(createInitialState());
   let initializePromise: Promise<void> | null = null;
   let stopSession: (() => void) | null = null;
@@ -383,13 +417,234 @@ export function createMissionPlannerStore(
     }));
   }
 
+  function normalizePlannerSurveyExtension(survey: SurveyDraftExtension): SurveyDraftExtension {
+    return normalizeSurveyAuthoringExtension(cloneValue(survey));
+  }
+
+  function nextSurveySelection(
+    selection: MissionPlannerSelection,
+    survey: SurveyDraftExtension,
+  ): MissionPlannerSelection {
+    return selection.kind === "survey-block" && !survey.surveyRegions.has(selection.regionId)
+      ? { kind: "home" }
+      : selection;
+  }
+
   function replaceSurveyExtension(survey: SurveyDraftExtension) {
+    const nextSurvey = normalizePlannerSurveyExtension(survey);
     store.update((state) => withResolvedPhase({
       ...state,
-      survey: cloneValue(survey),
+      survey: nextSurvey,
+      selection: nextSurveySelection(state.selection, nextSurvey),
+      surveyPrompt: null,
       validationIssues: [],
       lastError: null,
     }));
+  }
+
+  function updateSurveyState(
+    updater: (survey: SurveyDraftExtension) => SurveyDraftExtension,
+    options: {
+      selection?: MissionPlannerSelection;
+      surveyPrompt?: MissionPlannerSurveyPrompt | null;
+      lastError?: string | null;
+      normalizeSurvey?: boolean;
+    } = {},
+  ) {
+    store.update((state) => {
+      const nextSurvey = updater(state.survey);
+      const survey = options.normalizeSurvey === false
+        ? cloneValue(nextSurvey)
+        : normalizeSurveyAuthoringExtension(nextSurvey);
+      const selection = nextSurveySelection(options.selection ?? state.selection, survey);
+
+      return withResolvedPhase({
+        ...state,
+        survey,
+        selection,
+        surveyPrompt: options.surveyPrompt ?? null,
+        validationIssues: [],
+        lastError: options.lastError ?? null,
+      });
+    });
+  }
+
+  function updateSurveyRegionState(
+    regionId: string,
+    updater: (region: SurveyRegion) => SurveyRegion,
+    options: {
+      selection?: MissionPlannerSelection;
+      surveyPrompt?: MissionPlannerSurveyPrompt | null;
+      lastError?: string | null;
+      normalizeSurvey?: boolean;
+    } = {},
+  ) {
+    updateSurveyState(
+      (survey) => updateSurveyRegion(survey, regionId, updater),
+      {
+        ...options,
+        selection: options.selection ?? { kind: "survey-block", regionId },
+      },
+    );
+  }
+
+  function createSurveyBlock(patternType: SurveyPatternType, geometry: GeoPoint2d[]) {
+    const state = get(store);
+    const selection: SurveyAuthoringSelection = state.selection.kind === "mission-item"
+      ? { kind: "mission-item", index: typedDraftSelectedIndex(state.draftState, "mission") }
+      : state.selection.kind === "survey-block"
+        ? state.selection
+        : { kind: "home" };
+    const site = resolveSurveyInsertionSite(selection, state.survey);
+    const region = patternType === "corridor"
+      ? createCorridorRegion(geometry)
+      : patternType === "structure"
+        ? createStructureRegion(geometry)
+        : createSurveyRegion(geometry);
+
+    updateSurveyState(
+      (survey) => insertSurveyRegion(survey, region, site.position, site.orderIndex),
+      {
+        selection: { kind: "survey-block", regionId: region.id },
+      },
+    );
+
+    return region.id;
+  }
+
+  function updateAuthoredSurveyRegion(
+    regionId: string,
+    updater: (region: SurveyRegion) => SurveyRegion,
+  ) {
+    updateSurveyRegionState(regionId, (region) => {
+      const next = updater(region);
+      return reconcileRegionAfterAuthoringEdit(next);
+    });
+  }
+
+  function setSurveyRegionCollapsed(regionId: string, collapsed: boolean) {
+    updateSurveyRegionState(regionId, (region) => ({
+      ...region,
+      collapsed,
+    }));
+  }
+
+  function deleteSurveyRegionById(regionId: string) {
+    updateSurveyState((survey) => removeSurveyRegion(survey, regionId), {
+      selection: { kind: "home" },
+    });
+  }
+
+  function markSurveyRegionItemAsEdited(regionId: string, localIndex: number, editedItem: MissionItem) {
+    updateSurveyRegionState(regionId, (region) => reconcileRegionAfterAuthoringEdit(markItemEdited(region, localIndex, editedItem)));
+  }
+
+  function promptDissolveSurveyRegion(regionId: string) {
+    const region = get(store).survey.surveyRegions.get(regionId);
+    if (!region) {
+      return { status: "missing" as const };
+    }
+
+    updateSurveyRegionState(regionId, (current) => current, {
+      surveyPrompt: createSurveyDissolvePrompt(region),
+    });
+    return { status: "prompted" as const };
+  }
+
+  async function generateSurveyRegion(regionId: string, force = false) {
+    const current = get(store).survey.surveyRegions.get(regionId);
+    if (!current) {
+      return { status: "missing" as const };
+    }
+
+    const regeneratePrompt = !force ? createSurveyRegeneratePrompt(current) : null;
+    if (regeneratePrompt) {
+      updateSurveyRegionState(regionId, (region) => region, { surveyPrompt: regeneratePrompt });
+      return { status: "prompted" as const };
+    }
+
+    const request = buildSurveyGenerationRequest(current);
+    if (!request.ok) {
+      updateSurveyRegionState(
+        regionId,
+        (region) => setSurveyRegionGenerationState(region, "blocked", request.blockedReason.message),
+      );
+      return { status: "blocked" as const, message: request.blockedReason.message };
+    }
+
+    updateSurveyRegionState(regionId, (region) => setSurveyRegionGenerationState(region, "generating", null));
+
+    try {
+      const result = await withTimeout(
+        runSurveyGenerationRequest(request.request, surveyEngines),
+        surveyGenerationTimeoutMs,
+        new Error("Survey generation timed out. The region was left unchanged; retry when the planner is ready."),
+      );
+
+      updateSurveyRegionState(regionId, (region) => applyGenerationResult(region, result));
+      return { status: "generated" as const, ok: result.ok };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      updateSurveyRegionState(
+        regionId,
+        (region) => setSurveyRegionGenerationState(region, "blocked", message),
+        { lastError: message, normalizeSurvey: false },
+      );
+      return { status: "error" as const, message };
+    }
+  }
+
+  function reconcileRegionAfterAuthoringEdit(region: SurveyRegion): SurveyRegion {
+    const clearedRegion: SurveyRegion = {
+      ...region,
+      errors: [],
+    };
+
+    return normalizeSurveyAuthoringExtension({
+      surveyRegions: new Map([[region.id, clearedRegion]]),
+      surveyRegionOrder: [{ regionId: region.id, position: 0 }],
+    }).surveyRegions.get(region.id) ?? clearedRegion;
+  }
+
+  function dissolveSurveyRegionToMissionItems(regionId: string) {
+    const state = get(store);
+    const region = state.survey.surveyRegions.get(regionId);
+    if (!region) {
+      return { status: "missing" as const };
+    }
+
+    const dissolved = dissolveSurveyRegion(state.survey, regionId);
+    const draftState = insertTypedItemsAfter(
+      state.draftState,
+      "mission",
+      Math.max(-1, (state.survey.surveyRegionOrder.find((entry) => entry.regionId === regionId)?.position ?? 0) - 1),
+      dissolved.dissolvedItems,
+    );
+    const reindexedSurvey = reindexSurveyBlocksAfterDissolve(
+      state.survey,
+      state.draftState.active.mission.draftItems.length,
+      regionId,
+      dissolved.dissolvedItems.length,
+    );
+    const survey = normalizeSurveyAuthoringExtension({
+      surveyRegions: new Map(dissolved.extension.surveyRegions),
+      surveyRegionOrder: reindexedSurvey.surveyRegionOrder,
+    });
+
+    store.update((current) => withResolvedPhase({
+      ...current,
+      draftState,
+      survey,
+      selection: dissolved.dissolvedItems.length > 0 ? { kind: "mission-item" } : { kind: "home" },
+      surveyPrompt: null,
+      validationIssues: [],
+      lastError: null,
+    }));
+
+    return {
+      status: "dissolved" as const,
+      itemCount: dissolved.dissolvedItems.length,
+    };
   }
 
   function updateMissionDraft(
@@ -853,6 +1108,25 @@ export function createMissionPlannerStore(
     }));
   }
 
+  async function confirmSurveyPrompt() {
+    const prompt = get(store).surveyPrompt;
+    if (!prompt) {
+      return { status: "noop" as const };
+    }
+
+    updateSurveyState((survey) => survey, { surveyPrompt: null });
+
+    if (prompt.kind === "confirm-regenerate") {
+      return generateSurveyRegion(prompt.regionId, true);
+    }
+
+    return dissolveSurveyRegionToMissionItems(prompt.regionId);
+  }
+
+  function dismissSurveyPrompt() {
+    updateSurveyState((survey) => survey, { surveyPrompt: null });
+  }
+
   function reset() {
     stopStreams?.();
     stopStreams = null;
@@ -877,6 +1151,7 @@ export function createMissionPlannerStore(
         scopeKey: envelope ? scopedEnvelopeKey(envelope) : null,
       },
       replacePrompt: null,
+      surveyPrompt: null,
       lastError: null,
     }));
 
@@ -947,6 +1222,13 @@ export function createMissionPlannerStore(
     setHome,
     setPlanningSpeeds,
     replaceSurveyExtension,
+    createSurveyBlock,
+    updateAuthoredSurveyRegion,
+    setSurveyRegionCollapsed,
+    deleteSurveyRegionById,
+    generateSurveyRegion,
+    promptDissolveSurveyRegion,
+    markSurveyRegionItemAsEdited,
     downloadFromVehicle,
     importFromPicker,
     exportToPicker,
@@ -956,6 +1238,8 @@ export function createMissionPlannerStore(
     cancelTransfer,
     confirmReplacePrompt,
     dismissReplacePrompt,
+    confirmSurveyPrompt,
+    dismissSurveyPrompt,
     reset,
   };
 }
@@ -1056,6 +1340,9 @@ function applyWorkspacePair(
     draftState = replaceTypedDraftFromDownload(draftState, "rally", cloneValue(pair.active.rally), scope, { markDirty: true });
   }
 
+  const activeSurvey = normalizeSurveyAuthoringExtension(pair.active.survey);
+  const snapshotSurvey = normalizeSurveyAuthoringExtension(pair.snapshot.survey);
+
   return {
     ...state,
     workspaceMounted: true,
@@ -1063,8 +1350,8 @@ function applyWorkspacePair(
     draftState,
     home: cloneValue(pair.active.home),
     homeSnapshot: cloneValue(pair.snapshot.home),
-    survey: cloneValue(pair.active.survey),
-    surveySnapshot: cloneValue(pair.snapshot.survey),
+    survey: activeSurvey,
+    surveySnapshot: snapshotSurvey,
     cruiseSpeed: pair.active.cruiseSpeed,
     hoverSpeed: pair.active.hoverSpeed,
     cruiseSpeedSnapshot: pair.snapshot.cruiseSpeed,
@@ -1073,6 +1360,7 @@ function applyWorkspacePair(
     fileWarnings: [],
     lastError: null,
     activeAction: null,
+    surveyPrompt: null,
   };
 }
 
@@ -1096,23 +1384,22 @@ function workspaceFromImport(input: MissionPlanFileImportData): MissionPlannerWo
     survey.surveyRegionOrder.push({ regionId: region.id, position: normalizePosition(parsed.position) });
   }
 
-  survey.surveyRegionOrder.sort((left, right) => left.position - right.position || left.regionId.localeCompare(right.regionId));
-
   return {
     mission: cloneValue(input.mission),
     fence: cloneValue(input.fence),
     rally: cloneValue(input.rally),
     home: cloneValue(input.home),
-    survey,
+    survey: normalizeSurveyAuthoringExtension(survey),
     cruiseSpeed: input.cruiseSpeed,
     hoverSpeed: input.hoverSpeed,
   };
 }
 
 function exportSurveyRegions(extension: SurveyDraftExtension) {
-  return [...extension.surveyRegionOrder]
-    .sort((left, right) => left.position - right.position || left.regionId.localeCompare(right.regionId))
-    .flatMap((block) => {
+  return extension.surveyRegionOrder
+    .map((block, index) => ({ block, index }))
+    .sort((left, right) => left.block.position - right.block.position || left.index - right.index)
+    .flatMap(({ block }) => {
       const region = extension.surveyRegions.get(block.regionId);
       return region ? [toExportableSurveyRegion(region, block.position)] : [];
     });
@@ -1137,15 +1424,30 @@ function sameSurvey(left: SurveyDraftExtension, right: SurveyDraftExtension): bo
 }
 
 function serializeSurvey(extension: SurveyDraftExtension) {
-  return [...extension.surveyRegionOrder]
-    .sort((left, right) => left.position - right.position || left.regionId.localeCompare(right.regionId))
-    .map((block) => {
+  return extension.surveyRegionOrder
+    .map((block, index) => ({ block, index }))
+    .sort((left, right) => left.block.position - right.block.position || left.index - right.index)
+    .map(({ block }) => {
       const region = extension.surveyRegions.get(block.regionId);
+      let exportable: ReturnType<typeof toExportableSurveyRegion> | null = null;
+      let exportError: string | null = null;
+
+      if (region) {
+        try {
+          exportable = toExportableSurveyRegion(region, block.position);
+        } catch (error) {
+          exportError = error instanceof Error ? error.message : String(error);
+        }
+      }
+
       return {
         position: block.position,
         regionId: block.regionId,
         importWarnings: region?.importWarnings ?? [],
-        exportable: region ? toExportableSurveyRegion(region, block.position) : null,
+        generationState: region?.generationState ?? "idle",
+        generationMessage: region?.generationMessage ?? null,
+        exportable,
+        exportError,
       };
     });
 }
