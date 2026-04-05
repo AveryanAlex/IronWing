@@ -26,6 +26,9 @@ export const mockState: MockBackendState = {
   liveVehicleAvailable: false,
   liveVehicleState: null,
   liveMissionState: null,
+  liveMissionHome: null,
+  liveFencePlan: null,
+  liveRallyPlan: null,
   liveParamStore: null,
   liveParamProgress: null,
   liveVehicleArmed: false,
@@ -49,6 +52,9 @@ export function resetMockState() {
   mockState.liveVehicleAvailable = false;
   mockState.liveVehicleState = null;
   mockState.liveMissionState = null;
+  mockState.liveMissionHome = null;
+  mockState.liveFencePlan = null;
+  mockState.liveRallyPlan = null;
   mockState.liveParamStore = null;
   mockState.liveParamProgress = null;
   mockState.liveVehicleArmed = false;

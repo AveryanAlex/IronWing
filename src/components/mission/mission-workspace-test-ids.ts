@@ -10,6 +10,8 @@ export const missionWorkspaceTestIds = {
   error: "mission-inline-error",
   localNote: "mission-local-note",
   warningPrefix: "mission-inline-warning",
+  warningFile: "mission-inline-warning-file",
+  warningValidation: "mission-inline-warning-validation",
   countsMission: "mission-count-mission-items",
   countsSurvey: "mission-count-survey-blocks",
   countsValidation: "mission-count-validation-issues",

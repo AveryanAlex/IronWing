@@ -1,3 +1,4 @@
+import { missionWorkspaceTestIds } from "../../src/components/mission/mission-workspace-test-ids";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import type { OpenSessionSnapshot } from "../../src/session";
 import type {
@@ -5,6 +6,7 @@ import type {
     MockGuidedStateValue,
     MockInvocation,
     MockLiveVehicleState,
+    MockMissionProgressState,
     MockMissionState,
     MockPlatformEvent,
     MockParamProgressState,
@@ -115,6 +117,63 @@ export const telemetrySettingsSelectors = {
     telemetryError: '[data-testid="app-shell-telemetry-settings-telemetry-error"]',
 } as const;
 
+export const missionWorkspaceSelectors = {
+    root: `[data-testid="${missionWorkspaceTestIds.root}"]`,
+    header: `[data-testid="${missionWorkspaceTestIds.header}"]`,
+    state: `[data-testid="${missionWorkspaceTestIds.state}"]`,
+    scope: `[data-testid="${missionWorkspaceTestIds.scope}"]`,
+    summary: `[data-testid="${missionWorkspaceTestIds.summary}"]`,
+    inlineStatus: `[data-testid="${missionWorkspaceTestIds.inlineStatus}"]`,
+    inlineStatusMessage: `[data-testid="${missionWorkspaceTestIds.inlineStatusMessage}"]`,
+    inlineStatusDetail: `[data-testid="${missionWorkspaceTestIds.inlineStatusDetail}"]`,
+    error: `[data-testid="${missionWorkspaceTestIds.error}"]`,
+    localNote: `[data-testid="${missionWorkspaceTestIds.localNote}"]`,
+    warningFile: `[data-testid="${missionWorkspaceTestIds.warningFile}"]`,
+    warningValidation: `[data-testid="${missionWorkspaceTestIds.warningValidation}"]`,
+    countsMission: `[data-testid="${missionWorkspaceTestIds.countsMission}"]`,
+    countsSurvey: `[data-testid="${missionWorkspaceTestIds.countsSurvey}"]`,
+    countsValidation: `[data-testid="${missionWorkspaceTestIds.countsValidation}"]`,
+    countsWarnings: `[data-testid="${missionWorkspaceTestIds.countsWarnings}"]`,
+    empty: `[data-testid="${missionWorkspaceTestIds.empty}"]`,
+    ready: `[data-testid="${missionWorkspaceTestIds.ready}"]`,
+    entryRead: `[data-testid="${missionWorkspaceTestIds.entryRead}"]`,
+    entryImport: `[data-testid="${missionWorkspaceTestIds.entryImport}"]`,
+    entryNew: `[data-testid="${missionWorkspaceTestIds.entryNew}"]`,
+    toolbarRead: `[data-testid="${missionWorkspaceTestIds.toolbarRead}"]`,
+    toolbarImport: `[data-testid="${missionWorkspaceTestIds.toolbarImport}"]`,
+    toolbarNew: `[data-testid="${missionWorkspaceTestIds.toolbarNew}"]`,
+    toolbarExport: `[data-testid="${missionWorkspaceTestIds.toolbarExport}"]`,
+    toolbarValidate: `[data-testid="${missionWorkspaceTestIds.toolbarValidate}"]`,
+    toolbarUpload: `[data-testid="${missionWorkspaceTestIds.toolbarUpload}"]`,
+    toolbarClear: `[data-testid="${missionWorkspaceTestIds.toolbarClear}"]`,
+    toolbarCancel: `[data-testid="${missionWorkspaceTestIds.toolbarCancel}"]`,
+    prompt: `[data-testid="${missionWorkspaceTestIds.prompt}"]`,
+    promptKind: `[data-testid="${missionWorkspaceTestIds.promptKind}"]`,
+    promptConfirm: `[data-testid="${missionWorkspaceTestIds.promptConfirm}"]`,
+    promptDismiss: `[data-testid="${missionWorkspaceTestIds.promptDismiss}"]`,
+    homeLatitude: `[data-testid="${missionWorkspaceTestIds.homeLatitude}"]`,
+    homeLongitude: `[data-testid="${missionWorkspaceTestIds.homeLongitude}"]`,
+    homeAltitude: `[data-testid="${missionWorkspaceTestIds.homeAltitude}"]`,
+    homeSummary: `[data-testid="${missionWorkspaceTestIds.homeSummary}"]`,
+    map: `[data-testid="${missionWorkspaceTestIds.map}"]`,
+    mapSurface: `[data-testid="${missionWorkspaceTestIds.mapSurface}"]`,
+    mapStatus: `[data-testid="${missionWorkspaceTestIds.mapStatus}"]`,
+    mapSelection: `[data-testid="${missionWorkspaceTestIds.mapSelection}"]`,
+    mapDragState: `[data-testid="${missionWorkspaceTestIds.mapDragState}"]`,
+    mapMarkerCount: `[data-testid="${missionWorkspaceTestIds.mapMarkerCount}"]`,
+    mapSurveyCount: `[data-testid="${missionWorkspaceTestIds.mapSurveyCount}"]`,
+    mapDebug: `[data-testid="${missionWorkspaceTestIds.mapDebug}"]`,
+    listAdd: `[data-testid="${missionWorkspaceTestIds.listAdd}"]`,
+    inspectorSelectionKind: `[data-testid="${missionWorkspaceTestIds.inspectorSelectionKind}"]`,
+    inspectorReadonly: `[data-testid="${missionWorkspaceTestIds.inspectorReadonly}"]`,
+    inspectorCommandSelect: `[data-testid="${missionWorkspaceTestIds.inspectorCommandSelect}"]`,
+    inspectorLatitude: `[data-testid="${missionWorkspaceTestIds.inspectorLatitude}"]`,
+    inspectorLongitude: `[data-testid="${missionWorkspaceTestIds.inspectorLongitude}"]`,
+    inspectorAltitude: `[data-testid="${missionWorkspaceTestIds.inspectorAltitude}"]`,
+    missionMarker: `[data-testid^="${missionWorkspaceTestIds.mapMarkerPrefix}-"]`,
+    surveyHandle: `[data-testid^="${missionWorkspaceTestIds.mapSurveyPrefix}-"]`,
+} as const;
+
 export const shellViewportPresets = {
     desktop: {
         width: 1440,
@@ -154,6 +213,7 @@ type MockPlatformFixture = {
     emitLiveSupportDomain: (support: OpenSessionSnapshot["support"]) => Promise<void>;
     emitLiveStatusTextDomain: (statusText: OpenSessionSnapshot["status_text"]) => Promise<void>;
     emitMissionState: (missionState: MockMissionState) => Promise<void>;
+    emitMissionProgress: (missionProgress: MockMissionProgressState) => Promise<void>;
     emitParamStore: (paramStore: MockParamStoreState) => Promise<void>;
     emitParamProgress: (paramProgress: MockParamProgressState) => Promise<void>;
     emitLiveGuidedState: (guidedState: MockGuidedStateValue) => Promise<void>;
@@ -448,6 +508,33 @@ export async function expectOperatorWorkspace(page: Page): Promise<void> {
     ).toBeVisible();
 }
 
+export async function openMissionWorkspace(page: Page): Promise<void> {
+    const missionButton = page.getByRole("button", { name: "Mission" });
+    await expect(
+        missionButton,
+        "Mission workspace entry point is missing; keep the shared shell workspace labels aligned with the shipped header tabs.",
+    ).toBeVisible();
+    await missionButton.click();
+    await expectMissionWorkspace(page);
+}
+
+export async function expectMissionWorkspace(page: Page): Promise<void> {
+    await expect(
+        page.locator(missionWorkspaceSelectors.root),
+        "The mission workspace root is missing; keep the shared mission selectors in e2e/fixtures/mock-platform.ts aligned with the shipped planner markup.",
+    ).toBeVisible();
+}
+
+export function missionWorkspaceLocator(page: Page, selector: keyof typeof missionWorkspaceSelectors): Locator {
+    return page.locator(missionWorkspaceSelectors[selector]);
+}
+
+export async function readMissionMapDebugSnapshot(page: Page): Promise<unknown> {
+    return page.evaluate(() => {
+        return (window as Window & { __IRONWING_MISSION_MAP_DEBUG__?: unknown }).__IRONWING_MISSION_MAP_DEBUG__ ?? null;
+    });
+}
+
 export function operatorWorkspaceLocator(page: Page, selector: keyof typeof operatorWorkspaceSelectors): Locator {
     return page.locator(operatorWorkspaceSelectors[selector]);
 }
@@ -649,6 +736,7 @@ export const test = base.extend<Fixtures>({
             emitLiveSupportDomain: (support) => emitLiveScopedDomain(page, "support://state", support),
             emitLiveStatusTextDomain: (statusText) => emitLiveScopedDomain(page, "status_text://state", statusText),
             emitMissionState: (missionState) => withMockController(page, "emitMissionState", missionState),
+            emitMissionProgress: (missionProgress) => withMockController(page, "emitMissionProgress", missionProgress),
             emitParamStore: (paramStore) => withMockController(page, "emitParamStore", paramStore),
             emitParamProgress: (paramProgress) => withMockController(page, "emitParamProgress", paramProgress),
             emitLiveGuidedState: (guidedState) => withMockController(page, "emitLiveGuidedState", guidedState),

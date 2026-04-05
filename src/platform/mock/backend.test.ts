@@ -771,6 +771,210 @@ describe("mock guided backend parity", () => {
   });
 });
 
+describe("mock mission backend parity", () => {
+  beforeEach(() => {
+    getMockPlatformController().reset();
+  });
+
+  async function openLiveEnvelope() {
+    await invokeMockCommand("connect_link", {
+      request: {
+        transport: { kind: "udp", bind_addr: "0.0.0.0:14550" },
+        mockVehicleState: {
+          armed: false,
+          mode_name: "Loiter",
+          system_status: "standby",
+          vehicle_type: "copter",
+          autopilot: "ardupilot",
+          system_id: 1,
+          component_id: 1,
+          heartbeat_received: true,
+        },
+      },
+    });
+
+    const live = await invokeMockCommand<OpenSessionSnapshot>("open_session_snapshot", { sourceKind: "live" });
+    await invokeMockCommand("ack_session_snapshot", {
+      sessionId: live.envelope.session_id,
+      seekEpoch: live.envelope.seek_epoch,
+      resetRevision: live.envelope.reset_revision,
+    });
+
+    return live.envelope;
+  }
+
+  it("emits truthful download mission state/progress and returns default mission planner payloads", async () => {
+    const envelope = await openLiveEnvelope();
+    const missionStates: SessionEvent<MissionState>[] = [];
+    const missionProgress: SessionEvent<TransferProgress>[] = [];
+    const unlisteners = [
+      listenMockEvent("mission://state", (payload) => {
+        missionStates.push(payload as SessionEvent<MissionState>);
+      }),
+      listenMockEvent("mission://progress", (payload) => {
+        missionProgress.push(payload as SessionEvent<TransferProgress>);
+      }),
+    ];
+
+    const mission = await invokeMockCommand<any>("mission_download");
+    const fence = await invokeMockCommand<any>("fence_download");
+    const rally = await invokeMockCommand<any>("rally_download");
+    unlisteners.forEach((unlisten) => unlisten());
+
+    expect(mission.plan.items).toHaveLength(2);
+    expect(mission.home).toEqual({ latitude_deg: 47.397742, longitude_deg: 8.545594, altitude_m: 488 });
+    expect(fence.regions).toHaveLength(1);
+    expect(rally.points).toHaveLength(1);
+    expect(missionStates.map((entry) => entry.envelope)).toEqual([envelope, envelope]);
+    expect(missionStates[0]?.value.active_op).toBe("download");
+    expect(missionStates[1]?.value.active_op).toBeNull();
+    expect(missionStates[1]?.value.current_index).toBe(0);
+    expect(missionProgress.map((entry) => entry.value.phase)).toEqual([
+      "request_count",
+      "transfer_items",
+      "await_ack",
+      "completed",
+    ]);
+    const lastMissionProgress = missionProgress[missionProgress.length - 1];
+    expect(lastMissionProgress?.value).toMatchObject({
+      direction: "download",
+      mission_type: "mission",
+      completed_items: 2,
+      total_items: 2,
+      retries_used: 0,
+    });
+  });
+
+  it("persists uploaded mission/fence/rally plans so later downloads stay truthful", async () => {
+    await openLiveEnvelope();
+
+    const uploadedMission = {
+      items: [
+        {
+          command: {
+            Nav: {
+              Waypoint: {
+                position: {
+                  RelHome: {
+                    latitude_deg: 47.52,
+                    longitude_deg: 8.61,
+                    relative_alt_m: 120,
+                  },
+                },
+                hold_time_s: 0,
+                acceptance_radius_m: 1,
+                pass_radius_m: 0,
+                yaw_deg: 0,
+              },
+            },
+          },
+          current: true,
+          autocontinue: true,
+        },
+      ],
+    };
+    const uploadedFence = {
+      return_point: { latitude_deg: 47.53, longitude_deg: 8.62 },
+      regions: [],
+    };
+    const uploadedRally = {
+      points: [
+        {
+          RelHome: {
+            latitude_deg: 47.54,
+            longitude_deg: 8.63,
+            relative_alt_m: 45,
+          },
+        },
+      ],
+    };
+
+    const missionStates: SessionEvent<MissionState>[] = [];
+    const missionProgress: SessionEvent<TransferProgress>[] = [];
+    const unlisteners = [
+      listenMockEvent("mission://state", (payload) => {
+        missionStates.push(payload as SessionEvent<MissionState>);
+      }),
+      listenMockEvent("mission://progress", (payload) => {
+        missionProgress.push(payload as SessionEvent<TransferProgress>);
+      }),
+    ];
+
+    await invokeMockCommand("mission_upload", { plan: uploadedMission });
+    await invokeMockCommand("fence_upload", { plan: uploadedFence });
+    await invokeMockCommand("rally_upload", { plan: uploadedRally });
+
+    const mission = await invokeMockCommand<any>("mission_download");
+    const fence = await invokeMockCommand<any>("fence_download");
+    const rally = await invokeMockCommand<any>("rally_download");
+    unlisteners.forEach((unlisten) => unlisten());
+
+    expect(mission.plan).toEqual(uploadedMission);
+    expect(fence).toEqual(uploadedFence);
+    expect(rally).toEqual(uploadedRally);
+    expect(missionStates.some((entry) => entry.value.active_op === "upload")).toBe(true);
+    expect(missionStates.some((entry) => entry.value.plan?.items[0]?.current === true)).toBe(true);
+    expect(missionProgress.some((entry) => entry.value.direction === "upload" && entry.value.phase === "completed")).toBe(true);
+  });
+
+  it("cancels an in-flight upload loudly and preserves the previously stored mission", async () => {
+    await openLiveEnvelope();
+
+    const originalMission = await invokeMockCommand<any>("mission_download");
+    const replacementMission = {
+      items: [
+        {
+          command: {
+            Nav: {
+              Waypoint: {
+                position: {
+                  RelHome: {
+                    latitude_deg: 47.7,
+                    longitude_deg: 8.7,
+                    relative_alt_m: 80,
+                  },
+                },
+                hold_time_s: 0,
+                acceptance_radius_m: 1,
+                pass_radius_m: 0,
+                yaw_deg: 0,
+              },
+            },
+          },
+          current: true,
+          autocontinue: true,
+        },
+      ],
+    };
+
+    const missionStates: SessionEvent<MissionState>[] = [];
+    const missionProgress: SessionEvent<TransferProgress>[] = [];
+    const unlisteners = [
+      listenMockEvent("mission://state", (payload) => {
+        missionStates.push(payload as SessionEvent<MissionState>);
+      }),
+      listenMockEvent("mission://progress", (payload) => {
+        missionProgress.push(payload as SessionEvent<TransferProgress>);
+      }),
+    ];
+
+    const uploadPromise = invokeMockCommand("mission_upload", { plan: replacementMission });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    await expect(invokeMockCommand("mission_cancel")).resolves.toBeUndefined();
+    await expect(uploadPromise).rejects.toThrow("Mission upload cancelled.");
+
+    const missionAfterCancel = await invokeMockCommand<any>("mission_download");
+    unlisteners.forEach((unlisten) => unlisten());
+
+    expect(missionAfterCancel.plan).toEqual(originalMission.plan);
+    expect(missionProgress.some((entry) => entry.value.phase === "cancelled")).toBe(true);
+    expect(missionProgress.some((entry) => entry.value.phase === "completed")).toBe(true);
+    const lastMissionState = missionStates[missionStates.length - 1];
+    expect(lastMissionState?.value.active_op).toBeNull();
+    expect(lastMissionState?.value.plan).toEqual(originalMission.plan);
+  });
+});
+
 describe("mock backend actuation parity", () => {
   beforeEach(() => {
     getMockPlatformController().reset();

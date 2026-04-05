@@ -587,12 +587,12 @@ export function createMissionPlannerStore(
     try {
       const imported = await fileIo.importFromPicker();
       if (!isCurrentAction(pending)) {
-        return;
+        return { status: "stale" as const };
       }
 
       if (imported.status === "cancelled") {
         clearAction(pending);
-        return;
+        return { status: "cancelled" as const };
       }
 
       const incomingWorkspace = workspaceFromImport(imported.data);
@@ -609,7 +609,12 @@ export function createMissionPlannerStore(
             fileName: imported.fileName,
           },
         }));
-        return;
+        return {
+          status: "prompted" as const,
+          action: "import" as const,
+          fileName: imported.fileName,
+          warningCount: imported.warningCount,
+        };
       }
 
       store.update((state) => withResolvedPhase({
@@ -619,8 +624,15 @@ export function createMissionPlannerStore(
         }, currentScope(state)),
         fileWarnings: [...imported.warnings],
       }));
+
+      return {
+        status: "success" as const,
+        fileName: imported.fileName,
+        warningCount: imported.warningCount,
+      };
     } catch (error) {
       handleActionFailure("import", pending, error, false);
+      return { status: "error" as const };
     }
   }
 
@@ -639,12 +651,12 @@ export function createMissionPlannerStore(
         hoverSpeed: state.hoverSpeed,
       });
       if (!isCurrentAction(pending)) {
-        return;
+        return { status: "stale" as const };
       }
 
       if (result.status === "cancelled") {
         clearAction(pending);
-        return;
+        return { status: "cancelled" as const };
       }
 
       store.update((current) => withResolvedPhase({
@@ -653,8 +665,15 @@ export function createMissionPlannerStore(
         fileWarnings: [...result.warnings],
         lastError: null,
       }));
+
+      return {
+        status: "success" as const,
+        fileName: result.fileName,
+        warningCount: result.warningCount,
+      };
     } catch (error) {
       handleActionFailure("export", pending, error, false);
+      return { status: "error" as const };
     }
   }
 
@@ -725,7 +744,7 @@ export function createMissionPlannerStore(
           fileName: null,
         },
       }));
-      return;
+      return { status: "prompted" as const };
     }
 
     const pending = beginAction("clear", true);
@@ -737,38 +756,43 @@ export function createMissionPlannerStore(
         new Error("Mission clear timed out. The transfer is still pending; cancel it or wait for the vehicle to respond."),
       );
       if (!isCurrentAction(pending)) {
-        return;
+        return { status: "stale" as const };
       }
 
       store.update((current) => withResolvedPhase(applyWorkspacePair(current, {
         active: createEmptyMissionPlannerWorkspace(),
         snapshot: createEmptyMissionPlannerWorkspace(),
       }, currentScope(current))));
+      return { status: "cleared" as const };
     } catch (error) {
       handleActionFailure("clear", pending, error, true);
+      return { status: "error" as const };
     }
   }
 
   async function cancelTransfer() {
     try {
       await service.cancelTransfer();
+      actionRequestId += 1;
       store.update((state) => withResolvedPhase({
         ...state,
         activeAction: null,
         lastError: null,
       }));
+      return { status: "cancelled" as const };
     } catch (error) {
       store.update((state) => withResolvedPhase({
         ...state,
         lastError: service.formatError(error),
       }));
+      return { status: "error" as const };
     }
   }
 
-  function confirmReplacePrompt() {
+  async function confirmReplacePrompt() {
     const prompt = get(store).replacePrompt;
     if (!prompt) {
-      return;
+      return { status: "noop" as const };
     }
 
     if (prompt.kind === "recoverable") {
@@ -788,7 +812,7 @@ export function createMissionPlannerStore(
           lastError: null,
         });
       });
-      return;
+      return { status: "restored" as const };
     }
 
     if (prompt.action === "clear") {
@@ -796,13 +820,12 @@ export function createMissionPlannerStore(
         ...state,
         replacePrompt: null,
       }));
-      void clearVehicle(true);
-      return;
+      return clearVehicle(true);
     }
 
     const incomingWorkspace = prompt.incomingWorkspace;
     if (!incomingWorkspace) {
-      return;
+      return { status: "noop" as const };
     }
 
     store.update((state) => withResolvedPhase({
@@ -814,6 +837,13 @@ export function createMissionPlannerStore(
       fileWarnings: [...prompt.fileWarnings],
       lastError: null,
     }));
+
+    return {
+      status: "replaced" as const,
+      action: prompt.action,
+      warningCount: prompt.fileWarnings.length,
+      fileName: prompt.fileName,
+    };
   }
 
   function dismissReplacePrompt() {

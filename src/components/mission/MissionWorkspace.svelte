@@ -23,12 +23,19 @@ const missionPlannerStore = getMissionPlannerStoreContext();
 const missionPlannerState = fromStore(missionPlannerStore);
 const missionPlannerView = fromStore(getMissionPlannerViewStoreContext());
 
-let localNote = $state<{ scopeKey: string; message: string } | null>(null);
+type LocalNoteTone = "success" | "info" | "warning";
+type LocalNote = {
+  scopeKey: string;
+  message: string;
+  tone: LocalNoteTone;
+};
+
+let localNote = $state<LocalNote | null>(null);
 
 let planner = $derived(missionPlannerState.current);
 let view = $derived(missionPlannerView.current);
 let scopeKey = $derived(scopeToKey(view.activeEnvelope));
-let visibleLocalNote = $derived(localNote?.scopeKey === scopeKey ? localNote.message : null);
+let visibleLocalNote = $derived(localNote?.scopeKey === scopeKey ? localNote : null);
 let hasContent = $derived(plannerHasContent(planner));
 let canUseVehicleActions = $derived(view.activeEnvelope !== null && view.readiness !== "bootstrapping");
 let inlineCopy = $derived(resolveInlineStatusCopy(view, planner));
@@ -97,6 +104,14 @@ function scopeToKey(activeEnvelope: MissionPlannerView["activeEnvelope"]): strin
 
 function clearLocalNote() {
   localNote = null;
+}
+
+function setLocalNote(message: string, tone: LocalNoteTone = "success") {
+  localNote = {
+    scopeKey,
+    message,
+    tone,
+  };
 }
 
 function replacePromptTitle(state: MissionPlannerStoreState): string {
@@ -235,6 +250,18 @@ function statusClass(tone: "info" | "warning"): string {
     : "border-accent/30 bg-accent/10 text-text-primary";
 }
 
+function localNoteClass(tone: LocalNoteTone): string {
+  switch (tone) {
+    case "warning":
+      return "border-warning/40 bg-warning/10 text-warning";
+    case "info":
+      return "border-accent/30 bg-accent/10 text-text-primary";
+    case "success":
+    default:
+      return "border-success/30 bg-success/10 text-success";
+  }
+}
+
 async function handleReadFromVehicle() {
   clearLocalNote();
   await missionPlannerStore.downloadFromVehicle();
@@ -242,19 +269,33 @@ async function handleReadFromVehicle() {
 
 async function handleImportPlan() {
   clearLocalNote();
-  await missionPlannerStore.importFromPicker();
+  const result = await missionPlannerStore.importFromPicker();
+
+  if (result.status === "cancelled") {
+    setLocalNote("Import cancelled. The current mission draft stayed mounted and unchanged.", "info");
+    return;
+  }
+
+  if (result.status === "success") {
+    const fileLabel = result.fileName ?? "the selected .plan";
+    setLocalNote(
+      result.warningCount > 0
+        ? `Imported ${fileLabel}. ${result.warningCount} import warning${result.warningCount === 1 ? " stays" : "s stay"} listed inline.`
+        : `Imported ${fileLabel} into the active workspace.`,
+      result.warningCount > 0 ? "warning" : "success",
+    );
+  }
 }
 
 function handleNewMission() {
   clearLocalNote();
   missionPlannerStore.replaceWorkspace(createEmptyMissionPlannerWorkspace());
-  localNote = {
-    scopeKey,
-    message:
-      canUseVehicleActions
-        ? "Blank mission draft ready. Home, manual list editing, map drag updates, and preserved survey blocks stay mounted in this scope."
-        : "Blank local mission draft ready. Keep editing locally now and reconnect later for vehicle reads, validation, and transfer flows.",
-  };
+  setLocalNote(
+    canUseVehicleActions
+      ? "Blank mission draft ready. Home, manual list editing, map drag updates, and preserved survey blocks stay mounted in this scope."
+      : "Blank local mission draft ready. Keep editing locally now and reconnect later for vehicle reads, validation, and transfer flows.",
+    "success",
+  );
 }
 
 function handleSelectMissionItemFromMap(uiId: number) {
@@ -274,7 +315,22 @@ function handleMoveMissionItemFromMap(uiId: number, latitudeDeg: number, longitu
 
 async function handleExportPlan() {
   clearLocalNote();
-  await missionPlannerStore.exportToPicker();
+  const result = await missionPlannerStore.exportToPicker();
+
+  if (result.status === "cancelled") {
+    setLocalNote("Export cancelled. The current mission draft stayed mounted and unchanged.", "info");
+    return;
+  }
+
+  if (result.status === "success") {
+    const fileLabel = result.fileName ?? "the active .plan file";
+    setLocalNote(
+      result.warningCount > 0
+        ? `Saved ${fileLabel}. ${result.warningCount} export warning${result.warningCount === 1 ? " stays" : "s stay"} listed inline.`
+        : `Saved ${fileLabel} from the active mission workspace.`,
+      result.warningCount > 0 ? "warning" : "success",
+    );
+  }
 }
 
 async function handleValidateMission() {
@@ -289,16 +345,59 @@ async function handleUploadToVehicle() {
 
 async function handleClearVehicle() {
   clearLocalNote();
-  await missionPlannerStore.clearVehicle();
+  const result = await missionPlannerStore.clearVehicle();
+
+  if (result.status === "cleared") {
+    setLocalNote("Vehicle mission cleared. The active workspace reset to an empty local draft.", "success");
+  }
 }
 
 async function handleCancelTransfer() {
-  await missionPlannerStore.cancelTransfer();
+  clearLocalNote();
+  const result = await missionPlannerStore.cancelTransfer();
+
+  if (result.status === "cancelled") {
+    setLocalNote("Cancelled the pending mission transfer. The current draft stayed mounted and retryable.", "warning");
+  }
 }
 
-function confirmPrompt() {
+async function confirmPrompt() {
   clearLocalNote();
-  missionPlannerStore.confirmReplacePrompt();
+  const prompt = planner.replacePrompt;
+  const result = await missionPlannerStore.confirmReplacePrompt();
+
+  if (!prompt) {
+    return;
+  }
+
+  if (prompt.kind === "recoverable" && result.status === "restored") {
+    setLocalNote("Recovered the saved mission draft for this scope.", "success");
+    return;
+  }
+
+  if (prompt.kind !== "replace-active") {
+    return;
+  }
+
+  if (prompt.action === "clear" && result.status === "cleared") {
+    setLocalNote("Vehicle mission cleared. The active workspace reset to an empty local draft.", "success");
+    return;
+  }
+
+  if (prompt.action === "download" && result.status === "replaced") {
+    setLocalNote("Replaced the local draft with the current vehicle mission.", "success");
+    return;
+  }
+
+  if (prompt.action === "import" && result.status === "replaced") {
+    const fileLabel = result.fileName ?? prompt.fileName ?? "the selected .plan";
+    setLocalNote(
+      result.warningCount > 0
+        ? `Imported ${fileLabel}. ${result.warningCount} import warning${result.warningCount === 1 ? " stays" : "s stay"} listed inline.`
+        : `Imported ${fileLabel} into the active workspace.`,
+      result.warningCount > 0 ? "warning" : "success",
+    );
+  }
 }
 
 function dismissPrompt() {
@@ -430,17 +529,17 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
 
   {#if visibleLocalNote}
     <div
-      class="mt-4 rounded-lg border border-success/30 bg-success/10 px-4 py-3 text-sm text-success"
+      class={`mt-4 rounded-lg border px-4 py-3 text-sm ${localNoteClass(visibleLocalNote.tone)}`}
       data-testid={missionWorkspaceTestIds.localNote}
     >
-      {visibleLocalNote}
+      {visibleLocalNote.message}
     </div>
   {/if}
 
   {#if planner.fileWarnings.length > 0}
     <div
       class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning"
-      data-testid={`${missionWorkspaceTestIds.warningPrefix}-file`}
+      data-testid={missionWorkspaceTestIds.warningFile}
     >
       <p class="font-semibold">Import and export warnings</p>
       <ul class="mt-2 list-inside list-disc space-y-1 text-xs">
@@ -454,7 +553,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
   {#if planner.validationIssues.length > 0}
     <div
       class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning"
-      data-testid={`${missionWorkspaceTestIds.warningPrefix}-validation`}
+      data-testid={missionWorkspaceTestIds.warningValidation}
     >
       <p class="font-semibold">Validation issues stay inline with the mission toolbar</p>
       <ul class="mt-2 list-inside list-disc space-y-1 text-xs">

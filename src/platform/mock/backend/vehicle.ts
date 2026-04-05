@@ -194,6 +194,9 @@ export function clearLiveVehicleState() {
   mockState.liveVehicleAvailable = false;
   mockState.liveVehicleState = null;
   mockState.liveMissionState = null;
+  mockState.liveMissionHome = null;
+  mockState.liveFencePlan = null;
+  mockState.liveRallyPlan = null;
   mockState.liveParamStore = null;
   mockState.liveParamProgress = null;
   mockState.liveVehicleArmed = false;

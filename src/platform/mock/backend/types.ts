@@ -1,5 +1,7 @@
-import type { MissionState, TransferProgress } from "../../../mission";
+import type { HomePosition, MissionState, TransferProgress } from "../../../mission";
 import type { ParamProgress, ParamStore } from "../../../params";
+import type { FencePlan } from "../../../fence";
+import type { RallyPlan } from "../../../rally";
 import type {
   CatalogEntry,
   CatalogTargetSummary,
@@ -110,6 +112,9 @@ export type MockBackendState = {
   liveVehicleAvailable: boolean;
   liveVehicleState: MockLiveVehicleState | null;
   liveMissionState: MockMissionState | null;
+  liveMissionHome: HomePosition | null;
+  liveFencePlan: FencePlan | null;
+  liveRallyPlan: RallyPlan | null;
   liveParamStore: MockParamStoreState | null;
   liveParamProgress: MockParamProgressState | null;
   liveVehicleArmed: boolean;
@@ -192,3 +197,4 @@ export type FirmwareModuleTypes = {
   SerialReadinessRequest: SerialReadinessRequest;
   SerialReadinessResponse: SerialReadinessResponse;
 };
+;

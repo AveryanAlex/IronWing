@@ -23,9 +23,20 @@ import {
 } from "./backend/firmware";
 import {
   applyMockMissionState,
+  clearMockMissionPlan,
+  commitMockMissionPlan,
+  currentMissionState,
+  fenceDownloadResult,
   liveMissionProgressStreamEvent,
   liveMissionStateStreamEvent,
   missionDownloadResult,
+  missionProgressState,
+  missionStateWithActiveOperation,
+  missionValidateResult,
+  rallyDownloadResult,
+  setMockMissionCurrentIndex,
+  validateMissionPlanArgs,
+  validateMissionSetCurrentArgs,
 } from "./backend/mission";
 import {
   applyMockParamState,
@@ -131,6 +142,164 @@ function validateNativeSettingsCommand(cmd: string, args: CommandArgs) {
     default:
       return;
   }
+}
+
+const MISSION_TRANSFER_STEP_DELAY_MS = 80;
+
+class MissionTransferCancelledError extends Error {}
+
+type PendingMissionOperation = {
+  kind: "download" | "upload" | "clear";
+  direction: "download" | "upload";
+  totalItems: number;
+  completedItems: number;
+  cancel: () => void;
+  cancelPromise: Promise<never>;
+};
+
+let pendingMissionOperation: PendingMissionOperation | null = null;
+
+function publishMissionState(missionState: MockMissionState) {
+  applyMockMissionState(missionState);
+  if (!mockState.liveEnvelope) {
+    return;
+  }
+
+  emitEvent("mission://state", liveMissionStateStreamEvent(missionState).payload);
+}
+
+function publishMissionProgress(missionProgress: MockMissionProgressState) {
+  if (!mockState.liveEnvelope) {
+    return;
+  }
+
+  emitEvent("mission://progress", liveMissionProgressStreamEvent(missionProgress).payload);
+}
+
+function beginMissionOperation(
+  kind: PendingMissionOperation["kind"],
+  direction: PendingMissionOperation["direction"],
+  totalItems: number,
+): PendingMissionOperation {
+  if (pendingMissionOperation) {
+    throw new Error("another mission transfer is already active");
+  }
+
+  let cancel!: () => void;
+  const cancelPromise = new Promise<never>((_, reject) => {
+    cancel = () => reject(new MissionTransferCancelledError(`Mission ${kind} cancelled.`));
+  });
+
+  const operation: PendingMissionOperation = {
+    kind,
+    direction,
+    totalItems: Math.max(0, totalItems),
+    completedItems: 0,
+    cancel,
+    cancelPromise,
+  };
+  pendingMissionOperation = operation;
+  return operation;
+}
+
+async function waitForMissionOperationStep(operation: PendingMissionOperation, durationMs = MISSION_TRANSFER_STEP_DELAY_MS) {
+  await Promise.race([delay(durationMs), operation.cancelPromise]);
+}
+
+function finalizeMissionOperation(operation: PendingMissionOperation) {
+  if (pendingMissionOperation === operation) {
+    pendingMissionOperation = null;
+  }
+}
+
+function cancelPendingMissionOperation() {
+  const activeOperation = pendingMissionOperation;
+  if (!activeOperation) {
+    return false;
+  }
+
+  pendingMissionOperation = null;
+  activeOperation.cancel();
+  return true;
+}
+
+function missionProgressForPhase(
+  operation: PendingMissionOperation,
+  phase: MockMissionProgressState["phase"],
+  completedItems: number,
+): MockMissionProgressState {
+  const boundedCompletedItems = Math.max(0, Math.min(completedItems, operation.totalItems));
+  operation.completedItems = boundedCompletedItems;
+  return missionProgressState(
+    operation.direction,
+    phase,
+    boundedCompletedItems,
+    operation.totalItems,
+  );
+}
+
+async function runMissionTransfer<T>(params: {
+  kind: PendingMissionOperation["kind"];
+  direction: PendingMissionOperation["direction"];
+  totalItems: number;
+  complete: () => T;
+}): Promise<T> {
+  requireConnectedVehicle();
+
+  const operation = beginMissionOperation(params.kind, params.direction, params.totalItems);
+  publishMissionState(missionStateWithActiveOperation(params.kind));
+
+  try {
+    publishMissionProgress(missionProgressForPhase(operation, "request_count", 0));
+    await waitForMissionOperationStep(operation);
+
+    if (operation.totalItems > 0) {
+      publishMissionProgress(
+        missionProgressForPhase(
+          operation,
+          "transfer_items",
+          Math.max(1, Math.min(operation.totalItems, Math.ceil(operation.totalItems / 2))),
+        ),
+      );
+      await waitForMissionOperationStep(operation);
+    }
+
+    publishMissionProgress(missionProgressForPhase(operation, "await_ack", operation.totalItems));
+    await waitForMissionOperationStep(operation);
+
+    const result = params.complete();
+    publishMissionState(currentMissionState());
+    publishMissionProgress(missionProgressForPhase(operation, "completed", operation.totalItems));
+    return result;
+  } catch (error) {
+    publishMissionState({
+      ...currentMissionState(),
+      active_op: null,
+    });
+
+    if (error instanceof MissionTransferCancelledError) {
+      publishMissionProgress(missionProgressForPhase(operation, "cancelled", operation.completedItems));
+      throw error;
+    }
+
+    publishMissionProgress(missionProgressForPhase(operation, "failed", operation.completedItems));
+    throw error;
+  } finally {
+    finalizeMissionOperation(operation);
+  }
+}
+
+function validateUploadPlanArg(args: CommandArgs, label: string) {
+  return validateMissionPlanArgs(args, label);
+}
+
+function validateStructuredPlanArg<T>(args: CommandArgs, label: string): T {
+  const plan = args?.plan;
+  if (!plan || typeof plan !== "object" || Array.isArray(plan)) {
+    throw new Error(`missing or invalid ${label}`);
+  }
+
+  return structuredClone(plan as T);
 }
 
 function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
@@ -250,42 +419,82 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
       return updateGuidedSession(args, emitEvent);
     case "stop_guided_session":
       return stopGuidedSession();
-    case "mission_upload":
+    case "mission_upload": {
+      const plan = validateUploadPlanArg(args, "mission_upload.plan");
+      return runMissionTransfer({
+        kind: "upload",
+        direction: "upload",
+        totalItems: plan.items.length,
+        complete: () => {
+          commitMockMissionPlan(plan);
+          return undefined;
+        },
+      });
+    }
     case "mission_clear":
-    case "mission_set_current":
-    case "mission_cancel":
-    case "fence_upload":
-    case "fence_clear":
-    case "rally_upload":
-    case "rally_clear":
+      return runMissionTransfer({
+        kind: "clear",
+        direction: "upload",
+        totalItems: currentMissionState().plan?.items.length ?? 0,
+        complete: () => {
+          clearMockMissionPlan();
+          return undefined;
+        },
+      });
+    case "mission_set_current": {
+      requireConnectedVehicle();
+      const seq = validateMissionSetCurrentArgs(args);
+      const plan = currentMissionState().plan;
+      if (plan && seq >= plan.items.length) {
+        throw new Error(`mission_set_current.seq must be less than ${plan.items.length}`);
+      }
+
+      setMockMissionCurrentIndex(seq);
+      publishMissionState(currentMissionState());
       return undefined;
-    case "mission_download":
-      return missionDownloadResult();
+    }
+    case "mission_cancel":
+      requireConnectedVehicle();
+      cancelPendingMissionOperation();
+      return undefined;
+    case "fence_upload":
+      requireConnectedVehicle();
+      mockState.liveFencePlan = validateStructuredPlanArg(args, "fence_upload.plan");
+      return undefined;
+    case "fence_clear":
+      requireConnectedVehicle();
+      mockState.liveFencePlan = { return_point: null, regions: [] };
+      return undefined;
+    case "rally_upload":
+      requireConnectedVehicle();
+      mockState.liveRallyPlan = validateStructuredPlanArg(args, "rally_upload.plan");
+      return undefined;
+    case "rally_clear":
+      requireConnectedVehicle();
+      mockState.liveRallyPlan = { points: [] };
+      return undefined;
+    case "mission_download": {
+      const result = missionDownloadResult();
+      return runMissionTransfer({
+        kind: "download",
+        direction: "download",
+        totalItems: result.plan.items.length,
+        complete: () => {
+          applyMockMissionState({
+            ...currentMissionState(),
+            active_op: null,
+          });
+          return result;
+        },
+      });
+    }
     case "mission_validate":
-      return [];
+      requireConnectedVehicle();
+      return missionValidateResult(args);
     case "fence_download":
-      return {
-        return_point: { latitude_deg: 47.397, longitude_deg: 8.545 },
-        regions: [
-          {
-            inclusion_polygon: {
-              vertices: [
-                { latitude_deg: 47.39, longitude_deg: 8.53 },
-                { latitude_deg: 47.41, longitude_deg: 8.53 },
-                { latitude_deg: 47.41, longitude_deg: 8.56 },
-                { latitude_deg: 47.39, longitude_deg: 8.56 },
-              ],
-              inclusion_group: 0,
-            },
-          },
-        ],
-      };
+      return fenceDownloadResult();
     case "rally_download":
-      return {
-        points: [
-          { RelHome: { latitude_deg: 47.397, longitude_deg: 8.545, relative_alt_m: 30 } },
-        ],
-      };
+      return rallyDownloadResult();
     case "log_close":
       mockState.logOpen = false;
       mockState.playbackEnvelope = null;
@@ -348,6 +557,7 @@ function createController(): MockPlatformController {
     reset() {
       commandBehaviors.clear();
       invocations.length = 0;
+      cancelPendingMissionOperation();
       rejectAllDeferred("Mock platform reset");
       resetMockState();
     },
