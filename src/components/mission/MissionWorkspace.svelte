@@ -12,6 +12,9 @@ import {
 } from "../../lib/stores/mission-planner";
 import type { MissionPlannerInlineStatus, MissionPlannerView } from "../../lib/stores/mission-planner-view";
 import { buildMissionMapView, type MissionMapSelection } from "../../lib/mission-map-view";
+import { localXYToLatLon } from "../../lib/mission-coordinates";
+import type { GeoPoint2d } from "../../lib/mavkit-types";
+import type { SurveyPatternType } from "../../lib/survey-region";
 import MissionDraftList from "./MissionDraftList.svelte";
 import MissionHomeCard from "./MissionHomeCard.svelte";
 import MissionInspector from "./MissionInspector.svelte";
@@ -93,6 +96,113 @@ let mapView = $derived(buildMissionMapView({
   selection: mapSelection,
   currentSeq: mapCurrentSeq,
 }));
+
+const DEFAULT_SURVEY_ANCHOR: GeoPoint2d = {
+  latitude_deg: 47.397742,
+  longitude_deg: 8.545594,
+};
+
+function sentenceCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, " ");
+}
+
+function surveyRegionAnchor(region: NonNullable<typeof selectedSurveyRegion>): GeoPoint2d | null {
+  const geometry = region.patternType === "corridor" ? region.polyline : region.polygon;
+  if (geometry.length === 0) {
+    return null;
+  }
+
+  const totals = geometry.reduce(
+    (sum, point) => ({
+      latitude_deg: sum.latitude_deg + point.latitude_deg,
+      longitude_deg: sum.longitude_deg + point.longitude_deg,
+    }),
+    { latitude_deg: 0, longitude_deg: 0 },
+  );
+
+  return {
+    latitude_deg: totals.latitude_deg / geometry.length,
+    longitude_deg: totals.longitude_deg / geometry.length,
+  };
+}
+
+function resolveSurveyCreationAnchor(state: MissionPlannerStoreState): GeoPoint2d {
+  if (state.selection.kind === "survey-block") {
+    const selectedRegion = state.survey.surveyRegions.get(state.selection.regionId) ?? null;
+    const anchor = selectedRegion ? surveyRegionAnchor(selectedRegion) : null;
+    if (anchor) {
+      return anchor;
+    }
+  }
+
+  if (state.selection.kind === "mission-item") {
+    const selectedItem = state.draftState.active.mission.draftItems.find((item) => item.uiId === state.draftState.active.mission.primarySelectedUiId) ?? null;
+    if (
+      selectedItem
+      && selectedItem.preview.latitude_deg !== null
+      && selectedItem.preview.longitude_deg !== null
+    ) {
+      return {
+        latitude_deg: selectedItem.preview.latitude_deg,
+        longitude_deg: selectedItem.preview.longitude_deg,
+      };
+    }
+  }
+
+  if (state.home) {
+    return {
+      latitude_deg: state.home.latitude_deg,
+      longitude_deg: state.home.longitude_deg,
+    };
+  }
+
+  const firstMissionPoint = state.draftState.active.mission.draftItems.find(
+    (item) => item.preview.latitude_deg !== null && item.preview.longitude_deg !== null,
+  );
+  if (
+    firstMissionPoint
+    && firstMissionPoint.preview.latitude_deg !== null
+    && firstMissionPoint.preview.longitude_deg !== null
+  ) {
+    return {
+      latitude_deg: firstMissionPoint.preview.latitude_deg,
+      longitude_deg: firstMissionPoint.preview.longitude_deg,
+    };
+  }
+
+  const firstSurveyBlock = state.survey.surveyRegionOrder[0]?.regionId;
+  const firstSurveyRegion = firstSurveyBlock ? state.survey.surveyRegions.get(firstSurveyBlock) ?? null : null;
+  const surveyAnchor = firstSurveyRegion ? surveyRegionAnchor(firstSurveyRegion) : null;
+  return surveyAnchor ?? DEFAULT_SURVEY_ANCHOR;
+}
+
+function projectSurveySeed(anchor: GeoPoint2d, x_m: number, y_m: number): GeoPoint2d {
+  const { lat, lon } = localXYToLatLon(anchor, x_m, y_m);
+  return {
+    latitude_deg: lat,
+    longitude_deg: lon,
+  };
+}
+
+function buildSurveySeedGeometry(patternType: SurveyPatternType, state: MissionPlannerStoreState): GeoPoint2d[] {
+  const anchor = resolveSurveyCreationAnchor(state);
+
+  if (patternType === "corridor") {
+    return [
+      projectSurveySeed(anchor, -40, 0),
+      projectSurveySeed(anchor, 0, 20),
+      projectSurveySeed(anchor, 40, 0),
+    ];
+  }
+
+  const halfSpan = patternType === "structure" ? 20 : 35;
+  return [
+    projectSurveySeed(anchor, -halfSpan, -halfSpan),
+    projectSurveySeed(anchor, halfSpan, -halfSpan),
+    projectSurveySeed(anchor, halfSpan, halfSpan),
+    projectSurveySeed(anchor, -halfSpan, halfSpan),
+  ];
+}
 
 function scopeToKey(activeEnvelope: MissionPlannerView["activeEnvelope"]): string {
   if (!activeEnvelope) {
@@ -292,10 +402,36 @@ function handleNewMission() {
   missionPlannerStore.replaceWorkspace(createEmptyMissionPlannerWorkspace());
   setLocalNote(
     canUseVehicleActions
-      ? "Blank mission draft ready. Home, manual list editing, map drag updates, and preserved survey blocks stay mounted in this scope."
+      ? "Blank mission draft ready. Home, manual list editing, survey authoring, and map updates stay mounted in this scope."
       : "Blank local mission draft ready. Keep editing locally now and reconnect later for vehicle reads, validation, and transfer flows.",
     "success",
   );
+}
+
+function handleCreateSurveyBlock(patternType: SurveyPatternType) {
+  clearLocalNote();
+  const regionId = missionPlannerStore.createSurveyBlock(patternType, buildSurveySeedGeometry(patternType, planner));
+  setLocalNote(
+    `Created a ${sentenceCase(patternType)} survey region after the current selection. Adjust geometry, camera, parameters, and generated items from this shared workspace.`,
+    "success",
+  );
+  return regionId;
+}
+
+function handleStartSurveyDraw(patternType: SurveyPatternType) {
+  clearLocalNote();
+  const regionId = missionPlannerStore.createSurveyBlock(patternType, []);
+  setLocalNote(
+    `Started ${sentenceCase(patternType)} survey drawing on the planner map. Finish or cancel the region directly from the shared workspace surface.`,
+    "info",
+  );
+  return regionId;
+}
+
+function handleDeleteSurveyRegion(regionId: string) {
+  clearLocalNote();
+  missionPlannerStore.deleteSurveyRegionById(regionId);
+  setLocalNote("Deleted the selected survey region. The shared mission workspace stayed mounted.", "warning");
 }
 
 function handleSelectMissionItemFromMap(uiId: number) {
@@ -617,16 +753,21 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     >
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mission workspace</p>
       <p class="mt-2 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.summary}>
-        Home, manual mission items, typed command editing, map drag updates, and preserved survey blocks now share one mounted planning workspace instead of the old Mission placeholder shell.
+        Home, manual mission items, first-class survey authoring, typed command editing, and map previews now share one mounted planning workspace instead of the old Mission placeholder shell.
       </p>
 
       <div class="mt-5 space-y-4">
         <MissionMap
+          fallbackReference={resolveSurveyCreationAnchor(planner)}
+          onCreateSurveyRegion={handleStartSurveyDraw}
+          onDeleteSurveyRegion={handleDeleteSurveyRegion}
           onMoveHome={handleMoveHomeFromMap}
           onMoveMissionItem={handleMoveMissionItemFromMap}
           onSelectHome={missionPlannerStore.selectHome}
           onSelectMissionItem={handleSelectMissionItemFromMap}
           onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
+          onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+          selectedSurveyRegion={selectedSurveyRegion}
           view={mapView}
         />
 
@@ -640,13 +781,19 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
             />
 
             <MissionDraftList
+              cruiseSpeed={planner.cruiseSpeed}
               items={missionItems}
               onAddMissionItem={missionPlannerStore.addMissionItem}
+              onAddSurveyBlock={handleCreateSurveyBlock}
               onDeleteMissionItem={missionPlannerStore.deleteMissionItem}
+              onDeleteSurveyRegion={handleDeleteSurveyRegion}
+              onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
               onMoveMissionItemDown={missionPlannerStore.moveMissionItemDownByIndex}
               onMoveMissionItemUp={missionPlannerStore.moveMissionItemUpByIndex}
+              onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
               onSelectMissionItem={missionPlannerStore.selectMissionItem}
               onSelectSurveyBlock={missionPlannerStore.selectSurveyRegion}
+              onSetSurveyRegionCollapsed={missionPlannerStore.setSurveyRegionCollapsed}
               selectedMissionUiId={selectedMissionUiId}
               selectedSurface={planner.selection}
               surveyBlocks={surveyBlocks}
@@ -654,15 +801,24 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
           </div>
 
           <MissionInspector
+            cruiseSpeed={planner.cruiseSpeed}
             home={planner.home}
             item={selectedMissionItem}
+            onConfirmSurveyPrompt={missionPlannerStore.confirmSurveyPrompt}
+            onDeleteSurveyRegion={handleDeleteSurveyRegion}
+            onDismissSurveyPrompt={missionPlannerStore.dismissSurveyPrompt}
+            onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
+            onMarkSurveyRegionItemAsEdited={missionPlannerStore.markSurveyRegionItemAsEdited}
+            onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
             onUpdateAltitude={missionPlannerStore.updateMissionItemAltitude}
             onUpdateCommand={missionPlannerStore.updateMissionItemCommand}
             onUpdateLatitude={missionPlannerStore.updateMissionItemLatitude}
             onUpdateLongitude={missionPlannerStore.updateMissionItemLongitude}
+            onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
             previousItem={previousMissionItem}
             selectedSurveyRegion={selectedSurveyRegion}
             selection={planner.selection}
+            surveyPrompt={view.surveyPrompt}
           />
         </div>
       </div>

@@ -19,7 +19,9 @@ import {
 import type { TypedDraftItem } from "../../lib/mission-draft-typed";
 import type { SurveyRegion } from "../../lib/survey-region";
 import type { MissionPlannerSelection } from "../../lib/stores/mission-planner";
+import type { MissionPlannerSurveyPromptView } from "../../lib/stores/mission-planner-view";
 import MissionCommandPicker from "./MissionCommandPicker.svelte";
+import MissionSurveyInspector from "./MissionSurveyInspector.svelte";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
 type EditableField = {
@@ -38,11 +40,20 @@ type Props = {
   item: TypedDraftItem | null;
   previousItem: TypedDraftItem | null;
   home: HomePosition | null;
+  cruiseSpeed: number;
   selectedSurveyRegion: SurveyRegion | null;
+  surveyPrompt: MissionPlannerSurveyPromptView | null;
   onUpdateCommand: (index: number, command: MissionCommand) => void;
   onUpdateLatitude: (index: number, latitudeDeg: number) => void;
   onUpdateLongitude: (index: number, longitudeDeg: number) => void;
   onUpdateAltitude: (index: number, altitudeM: number) => void;
+  onUpdateSurveyRegion: (regionId: string, updater: (region: SurveyRegion) => SurveyRegion) => void;
+  onGenerateSurveyRegion: (regionId: string) => Promise<unknown> | unknown;
+  onPromptDissolveSurveyRegion: (regionId: string) => void;
+  onDeleteSurveyRegion: (regionId: string) => void;
+  onConfirmSurveyPrompt: () => Promise<unknown> | unknown;
+  onDismissSurveyPrompt: () => void;
+  onMarkSurveyRegionItemAsEdited: (regionId: string, localIndex: number, editedItem: MissionItem) => void;
 };
 
 const RAW_FIELD_ORDER: ParamSlot[] = ["param1", "param2", "param3", "param4", "x", "y", "z"];
@@ -52,11 +63,20 @@ let {
   item,
   previousItem,
   home,
+  cruiseSpeed,
   selectedSurveyRegion,
+  surveyPrompt,
   onUpdateCommand,
   onUpdateLatitude,
   onUpdateLongitude,
   onUpdateAltitude,
+  onUpdateSurveyRegion,
+  onGenerateSurveyRegion,
+  onPromptDissolveSurveyRegion,
+  onDeleteSurveyRegion,
+  onConfirmSurveyPrompt,
+  onDismissSurveyPrompt,
+  onMarkSurveyRegionItemAsEdited,
 }: Props = $props();
 
 function titleCase(value: string) {
@@ -247,26 +267,33 @@ function updateField(fieldKey: string, value: unknown) {
 
   {#if selection.kind === "home"}
     <div class="mt-4 rounded-2xl border border-dashed border-border bg-bg-secondary/60 px-4 py-5 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.inspectorEmpty}>
-      Home is selected. Edit the Home card to set or clear mission origin data, or select a manual mission item to edit typed command fields.
+      Home is selected. Edit the Home card to set or clear mission origin data, or select a manual mission item or survey region to edit it inside the shared workspace.
       {#if home}
         <p class="mt-2 text-xs text-text-muted">Current Home · {home.latitude_deg.toFixed(5)}, {home.longitude_deg.toFixed(5)} · {home.altitude_m.toFixed(1)} m</p>
       {/if}
     </div>
   {:else if selection.kind === "survey-block"}
-    <div class="mt-4 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-5 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.inspectorReadonly}>
-      <p class="font-semibold text-warning">Imported survey block selected</p>
-      {#if selectedSurveyRegion}
-        <p class="mt-2 text-sm text-text-primary">
-          {titleCase(selectedSurveyRegion.patternType)} block · {selectedSurveyRegion.generatedItems.length} generated item{selectedSurveyRegion.generatedItems.length === 1 ? "" : "s"}
+    {#if selectedSurveyRegion}
+      <MissionSurveyInspector
+        cruiseSpeed={cruiseSpeed}
+        onConfirmSurveyPrompt={onConfirmSurveyPrompt}
+        onDeleteRegion={onDeleteSurveyRegion}
+        onDismissSurveyPrompt={onDismissSurveyPrompt}
+        onGenerateRegion={onGenerateSurveyRegion}
+        onMarkGeneratedItemEdited={(regionId, localIndex, editedItem) => onMarkSurveyRegionItemAsEdited(regionId, localIndex, editedItem)}
+        onPromptDissolveRegion={onPromptDissolveSurveyRegion}
+        onUpdateRegion={(regionId, updater) => onUpdateSurveyRegion(regionId, updater)}
+        region={selectedSurveyRegion}
+        {surveyPrompt}
+      />
+    {:else}
+      <div class="mt-4 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-5 text-sm text-warning" data-testid={missionWorkspaceTestIds.inspectorReadonly}>
+        <p class="font-semibold">Survey selection unavailable</p>
+        <p class="mt-2 text-xs text-warning/90">
+          The selected survey region could not be resolved from the active planner state, so the inspector stayed fail-closed instead of rendering broken controls.
         </p>
-        <p class="mt-2 text-xs text-text-secondary">
-          Camera · {selectedSurveyRegion.camera?.canonicalName ?? "Unavailable"} · Polygon vertices {selectedSurveyRegion.polygon.length} · Corridor points {selectedSurveyRegion.polyline.length}
-        </p>
-      {/if}
-      <p class="mt-3 text-xs text-warning">
-        Imported survey blocks stay visible and transferable here, but they remain read-only instead of pretending to be editable manual waypoints.
-      </p>
-    </div>
+      </div>
+    {/if}
   {:else if !item || !missionItem}
     <div class="mt-4 rounded-2xl border border-dashed border-border bg-bg-secondary/60 px-4 py-5 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.inspectorEmpty}>
       Select a manual mission item from the list to edit coordinates and typed command fields.
@@ -323,7 +350,11 @@ function updateField(fieldKey: string, value: unknown) {
                       data-testid={`${missionWorkspaceTestIds.inspectorFieldPrefix}-${field.key}`}
                       inputmode="decimal"
                       onchange={(event) => {
-                        const nextValue = Number((event.currentTarget as HTMLInputElement).value);
+                        const rawValue = (event.currentTarget as HTMLInputElement).value;
+                        if (rawValue.trim().length === 0) {
+                          return;
+                        }
+                        const nextValue = Number(rawValue);
                         if (Number.isFinite(nextValue)) {
                           updateField(field.key, nextValue);
                         }
@@ -376,7 +407,11 @@ function updateField(fieldKey: string, value: unknown) {
                 data-testid={missionWorkspaceTestIds.inspectorLatitude}
                 inputmode="decimal"
                 onchange={(event) => {
-                  const nextValue = Number((event.currentTarget as HTMLInputElement).value);
+                  const rawValue = (event.currentTarget as HTMLInputElement).value;
+                  if (rawValue.trim().length === 0) {
+                    return;
+                  }
+                  const nextValue = Number(rawValue);
                   if (Number.isFinite(nextValue)) {
                     onUpdateLatitude(item.index, nextValue);
                   }
@@ -393,7 +428,11 @@ function updateField(fieldKey: string, value: unknown) {
                 data-testid={missionWorkspaceTestIds.inspectorLongitude}
                 inputmode="decimal"
                 onchange={(event) => {
-                  const nextValue = Number((event.currentTarget as HTMLInputElement).value);
+                  const rawValue = (event.currentTarget as HTMLInputElement).value;
+                  if (rawValue.trim().length === 0) {
+                    return;
+                  }
+                  const nextValue = Number(rawValue);
                   if (Number.isFinite(nextValue)) {
                     onUpdateLongitude(item.index, nextValue);
                   }
@@ -410,7 +449,11 @@ function updateField(fieldKey: string, value: unknown) {
                 data-testid={missionWorkspaceTestIds.inspectorAltitude}
                 inputmode="decimal"
                 onchange={(event) => {
-                  const nextValue = Number((event.currentTarget as HTMLInputElement).value);
+                  const rawValue = (event.currentTarget as HTMLInputElement).value;
+                  if (rawValue.trim().length === 0) {
+                    return;
+                  }
+                  const nextValue = Number(rawValue);
                   if (Number.isFinite(nextValue)) {
                     onUpdateAltitude(item.index, nextValue);
                   }

@@ -1,4 +1,5 @@
 import type { MissionMapView } from "../../lib/mission-map-view";
+import type { SurveyPatternType } from "../../lib/survey-region";
 
 export type MissionMapDebugSnapshot = {
   state: MissionMapView["state"];
@@ -7,6 +8,13 @@ export type MissionMapDebugSnapshot = {
   warnings: string[];
   dragTargetId: string | null;
   dragUpdateCount: number;
+  drawMode: "idle" | "draw" | "edit";
+  drawPatternType: SurveyPatternType | null;
+  drawRegionId: string | null;
+  drawPointCount: number;
+  selectedSurveyRegionId: string | null;
+  activeSurveyVertexCount: number;
+  surveyPreviewFeatureCount: number;
   missionGeoJson: MissionMapView["missionGeoJson"];
   surveyGeoJson: MissionMapView["surveyGeoJson"];
   updateCount: number;

@@ -5,13 +5,14 @@ import {
   localXYToLatLon,
   type GeoRef,
 } from "./mission-coordinates";
-import type { GeoPoint2d, MissionItem } from "./mavkit-types";
+import type { MissionItem } from "./mavkit-types";
 import { commandPosition } from "./mavkit-types";
 import {
   buildMissionRenderFeatures,
   type MissionRenderCoordinate,
   type MissionRenderFeatures,
 } from "./mission-path-render";
+import { buildMissionMapSurveyModel } from "./mission-map-survey";
 import type { SurveyDraftExtension, SurveyPatternType } from "./survey-region";
 
 export const MISSION_MAP_VIEWBOX_SIZE = 1000;
@@ -77,6 +78,16 @@ export type MissionMapSurveyHandle = {
   featureCount: number;
 };
 
+export type MissionMapSurveyVertexHandle = {
+  id: string;
+  regionId: string;
+  index: number;
+  point: MissionMapPoint;
+  selected: boolean;
+  patternType: SurveyPatternType;
+  geometryKind: "polygon" | "polyline";
+};
+
 export type MissionMapLineFeature = {
   id: string;
   kind: string;
@@ -105,10 +116,13 @@ export type MissionMapLabelFeature = {
 export type MissionMapFeatureCounts = {
   markers: number;
   surveyHandles: number;
+  surveyVertexHandles: number;
   missionFeatures: number;
   surveyFeatures: number;
+  surveyPreviewFeatures: number;
   missionFeatureKinds: Record<string, number>;
   surveyFeatureKinds: Record<string, number>;
+  surveyPreviewFeatureKinds: Record<string, number>;
 };
 
 export type MissionMapDragResolution =
@@ -125,12 +139,27 @@ export type MissionMapDragResolution =
     message: string;
   };
 
+export type MissionMapSurveyHandleDragResolution =
+  | {
+    status: "applied";
+    handle: MissionMapSurveyVertexHandle;
+    point: MissionMapPoint;
+    latitude_deg: number;
+    longitude_deg: number;
+  }
+  | {
+    status: "rejected";
+    reason: "handle-not-found" | "viewport-unavailable";
+    message: string;
+  };
+
 export type MissionMapView = {
   state: "empty" | "ready" | "degraded";
   selection: MissionMapSelection;
   viewport: MissionMapViewport | null;
   markers: MissionMapMarker[];
   surveyHandles: MissionMapSurveyHandle[];
+  surveyVertexHandles: MissionMapSurveyVertexHandle[];
   missionLines: MissionMapLineFeature[];
   missionPolygons: MissionMapPolygonFeature[];
   missionLabels: MissionMapLabelFeature[];
@@ -150,21 +179,6 @@ export type MissionMapViewInput = {
   currentSeq?: number | null;
 };
 
-type SurveyHandleCandidate = {
-  regionId: string;
-  label: string;
-  latitude_deg: number;
-  longitude_deg: number;
-  selected: boolean;
-  patternType: SurveyPatternType;
-  featureCount: number;
-};
-
-type SurveyBuildResult = {
-  geoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>;
-  handles: SurveyHandleCandidate[];
-};
-
 export function missionMapMarkerIdForUiId(uiId: number): string {
   return `mission-${uiId}`;
 }
@@ -176,11 +190,26 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
     currentSeq: currentSeq ?? undefined,
   });
   const missionGeoJson = missionRenderFeaturesToGeoJson(renderFeatures);
-  const survey = buildSurveyGeoJson(input.survey, input.selection, warnings);
+  const selectedSurveyRegionId = input.selection.kind === "survey-block" ? input.selection.regionId : null;
+  const survey = buildMissionMapSurveyModel({
+    survey: input.survey,
+    selectedRegionId: selectedSurveyRegionId,
+  });
   const markerCandidates = buildMarkerCandidates(input, warnings);
-  const reference = resolveReference(input.home, markerCandidates, missionGeoJson, survey.geoJson);
+  warnings.push(...survey.warnings);
+
+  const reference = resolveReference(
+    input.home,
+    markerCandidates,
+    missionGeoJson,
+    survey.geoJson,
+    survey.referenceCoordinates,
+  );
   const viewport = reference
-    ? buildMissionMapViewport(reference, collectAllCoordinates(markerCandidates, missionGeoJson, survey.geoJson))
+    ? buildMissionMapViewport(
+      reference,
+      collectAllCoordinates(markerCandidates, missionGeoJson, survey.geoJson, survey.referenceCoordinates),
+    )
     : null;
 
   const markers = viewport
@@ -194,7 +223,14 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
     : [];
 
   const surveyHandles = viewport
-    ? survey.handles.map((handle) => ({
+    ? survey.regionHandles.map((handle) => ({
+      ...handle,
+      point: projectMissionMapCoordinate(viewport, handle),
+    }))
+    : [];
+
+  const surveyVertexHandles = viewport
+    ? survey.vertexHandles.map((handle) => ({
       ...handle,
       point: projectMissionMapCoordinate(viewport, handle),
     }))
@@ -209,6 +245,7 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
 
   const hasRenderableGeometry = markers.length > 0
     || surveyHandles.length > 0
+    || surveyVertexHandles.length > 0
     || missionGeoJson.features.length > 0
     || survey.geoJson.features.length > 0;
 
@@ -220,6 +257,7 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
     viewport,
     markers,
     surveyHandles,
+    surveyVertexHandles,
     missionLines,
     missionPolygons,
     missionLabels,
@@ -231,10 +269,13 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
     counts: {
       markers: markers.length,
       surveyHandles: surveyHandles.length,
+      surveyVertexHandles: surveyVertexHandles.length,
       missionFeatures: missionGeoJson.features.length,
       surveyFeatures: survey.geoJson.features.length,
+      surveyPreviewFeatures: survey.counts.previewFeatures,
       missionFeatureKinds: countFeatureKinds(missionGeoJson),
       surveyFeatureKinds: countFeatureKinds(survey.geoJson),
+      surveyPreviewFeatureKinds: survey.counts.previewFeatureKinds,
     },
   };
 }
@@ -299,6 +340,39 @@ export function resolveMissionMapDrag(
   return {
     status: "applied",
     marker,
+    point: clampedPoint,
+    ...coordinate,
+  };
+}
+
+export function resolveMissionMapSurveyHandleDrag(
+  view: MissionMapView,
+  handleId: string,
+  point: MissionMapPoint,
+): MissionMapSurveyHandleDragResolution {
+  const handle = view.surveyVertexHandles.find((candidate) => candidate.id === handleId);
+  if (!handle) {
+    return {
+      status: "rejected",
+      reason: "handle-not-found",
+      message: "Ignored a stale survey-handle drag because that vertex is no longer present in the active map view.",
+    };
+  }
+
+  if (!view.viewport) {
+    return {
+      status: "rejected",
+      reason: "viewport-unavailable",
+      message: "Ignored the survey-handle drag because the map viewport has no valid geometry yet.",
+    };
+  }
+
+  const clampedPoint = clampMissionMapPoint(view.viewport, point);
+  const coordinate = unprojectMissionMapPoint(view.viewport, clampedPoint);
+
+  return {
+    status: "applied",
+    handle,
     point: clampedPoint,
     ...coordinate,
   };
@@ -418,189 +492,6 @@ function buildMarkerCandidates(
   return markers;
 }
 
-function buildSurveyGeoJson(
-  survey: SurveyDraftExtension,
-  selection: MissionMapSelection,
-  warnings: string[],
-): SurveyBuildResult {
-  const features: Array<GeoJSON.Feature<GeoJSON.Geometry, MissionMapGeoJsonProperties>> = [];
-  const handles: SurveyHandleCandidate[] = [];
-  const orderedBlocks = [...survey.surveyRegionOrder].sort(
-    (left, right) => left.position - right.position || left.regionId.localeCompare(right.regionId),
-  );
-
-  for (const block of orderedBlocks) {
-    const region = survey.surveyRegions.get(block.regionId);
-    if (!region) {
-      warnings.push(`Survey block ${block.regionId} is still referenced in order metadata but its geometry is missing.`);
-      continue;
-    }
-
-    const selected = selection.kind === "survey-block" && selection.regionId === region.id;
-    const pushCount = features.length;
-    let handleLatitude_deg: number | null = null;
-    let handleLongitude_deg: number | null = null;
-
-    const tryHandleCoordinate = (coordinate: GeoPoint2d | null) => {
-      if (handleLatitude_deg === null && handleLongitude_deg === null && coordinate) {
-        handleLatitude_deg = coordinate.latitude_deg;
-        handleLongitude_deg = coordinate.longitude_deg;
-      }
-    };
-
-    if (region.polygon.length >= 3) {
-      features.push({
-        type: "Feature",
-        geometry: {
-          type: "Polygon",
-          coordinates: [closeRing(region.polygon).map(toGeoJsonCoordinate)],
-        },
-        properties: {
-          source: "survey",
-          kind: "survey_polygon",
-          regionId: region.id,
-          selected,
-        },
-      });
-      tryHandleCoordinate(averagePoint(region.polygon));
-    } else if (region.patternType !== "corridor" && region.polygon.length > 0) {
-      warnings.push(`Survey block ${region.id} has an incomplete polygon and only valid geometry will remain visible on the map.`);
-    }
-
-    if (region.corridorPolygon.length >= 3) {
-      features.push({
-        type: "Feature",
-        geometry: {
-          type: "Polygon",
-          coordinates: [closeRing(region.corridorPolygon).map(toGeoJsonCoordinate)],
-        },
-        properties: {
-          source: "survey",
-          kind: "survey_corridor",
-          regionId: region.id,
-          selected,
-        },
-      });
-      tryHandleCoordinate(averagePoint(region.corridorPolygon));
-    } else if (region.corridorPolygon.length > 0) {
-      warnings.push(`Survey block ${region.id} has an incomplete corridor polygon and IronWing kept the rest of the map visible.`);
-    }
-
-    if (region.polyline.length >= 2) {
-      features.push({
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: region.polyline.map(toGeoJsonCoordinate),
-        },
-        properties: {
-          source: "survey",
-          kind: "survey_polyline",
-          regionId: region.id,
-          selected,
-        },
-      });
-      tryHandleCoordinate(midpointOfPoints(region.polyline));
-    } else if (region.patternType === "corridor" && region.polyline.length > 0) {
-      warnings.push(`Survey block ${region.id} has an incomplete centerline and only valid survey geometry will render.`);
-    }
-
-    region.generatedTransects.forEach((transect, index) => {
-      if (transect.length < 2) {
-        return;
-      }
-
-      features.push({
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: transect.map(toGeoJsonCoordinate),
-        },
-        properties: {
-          source: "survey",
-          kind: "survey_transect",
-          regionId: region.id,
-          selected,
-          label: `transect-${index + 1}`,
-        },
-      });
-      tryHandleCoordinate(midpointOfPoints(transect));
-    });
-
-    region.generatedCrosshatch.forEach((transect, index) => {
-      if (transect.length < 2) {
-        return;
-      }
-
-      features.push({
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: transect.map(toGeoJsonCoordinate),
-        },
-        properties: {
-          source: "survey",
-          kind: "survey_crosshatch",
-          regionId: region.id,
-          selected,
-          label: `crosshatch-${index + 1}`,
-        },
-      });
-      tryHandleCoordinate(midpointOfPoints(transect));
-    });
-
-    region.generatedLayers.forEach((layer, index) => {
-      if (layer.orbitPoints.length < 2) {
-        return;
-      }
-
-      features.push({
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: closeRing(layer.orbitPoints).map(toGeoJsonCoordinate),
-        },
-        properties: {
-          source: "survey",
-          kind: "survey_orbit",
-          regionId: region.id,
-          selected,
-          label: `layer-${index + 1}`,
-        },
-      });
-      tryHandleCoordinate(midpointOfPoints(layer.orbitPoints));
-    });
-
-    const featureCount = features.length - pushCount;
-    if (handleLatitude_deg === null || handleLongitude_deg === null || featureCount === 0) {
-      warnings.push(`Survey block ${region.id} has no plottable geometry, so IronWing kept the last valid mission view visible around it.`);
-      continue;
-    }
-
-    handles.push({
-      regionId: region.id,
-      label: region.patternType === "corridor"
-        ? "C"
-        : region.patternType === "structure"
-          ? "S"
-          : "G",
-      latitude_deg: handleLatitude_deg,
-      longitude_deg: handleLongitude_deg,
-      selected,
-      patternType: region.patternType,
-      featureCount,
-    });
-  }
-
-  return {
-    geoJson: {
-      type: "FeatureCollection",
-      features,
-    },
-    handles,
-  };
-}
-
 function projectMissionLines(viewport: MissionMapViewport, features: MissionRenderFeatures): MissionMapLineFeature[] {
   return features.legs
     .filter((leg) => leg.coordinates.length >= 2)
@@ -653,7 +544,7 @@ function projectSurveyFeatures(
       }
 
       lines.push({
-        id: `survey-line-${feature.properties?.regionId ?? index}-${feature.properties?.kind ?? "line"}`,
+        id: `survey-line-${feature.properties?.regionId ?? "regionless"}-${feature.properties?.kind ?? "line"}-${index}`,
         kind: feature.properties?.kind ?? "survey_line",
         points: feature.geometry.coordinates.map(([longitude_deg, latitude_deg]) => projectMissionMapCoordinate(viewport, {
           latitude_deg,
@@ -668,7 +559,7 @@ function projectSurveyFeatures(
 
     if (feature.geometry.type === "Polygon") {
       polygons.push({
-        id: `survey-polygon-${feature.properties?.regionId ?? index}-${feature.properties?.kind ?? "polygon"}`,
+        id: `survey-polygon-${feature.properties?.regionId ?? "regionless"}-${feature.properties?.kind ?? "polygon"}-${index}`,
         kind: feature.properties?.kind ?? "survey_polygon",
         rings: feature.geometry.coordinates.map((ring) => ring.map(([longitude_deg, latitude_deg]) => projectMissionMapCoordinate(viewport, {
           latitude_deg,
@@ -759,6 +650,7 @@ function collectAllCoordinates(
   markers: Array<Omit<MissionMapMarker, "point">>,
   missionGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
   surveyGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
+  extraCoordinates: GeoRef[] = [],
 ): GeoRef[] {
   const coordinates: GeoRef[] = markers.map((marker) => ({
     latitude_deg: marker.latitude_deg,
@@ -767,6 +659,11 @@ function collectAllCoordinates(
 
   appendFeatureCollectionCoordinates(missionGeoJson, coordinates);
   appendFeatureCollectionCoordinates(surveyGeoJson, coordinates);
+  extraCoordinates.forEach((coordinate) => {
+    if (isFiniteGeoRef(coordinate)) {
+      coordinates.push({ ...coordinate });
+    }
+  });
   return coordinates;
 }
 
@@ -775,6 +672,7 @@ function resolveReference(
   markers: Array<Omit<MissionMapMarker, "point">>,
   missionGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
   surveyGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
+  extraCoordinates: GeoRef[] = [],
 ): GeoRef | null {
   if (home) {
     return {
@@ -791,7 +689,7 @@ function resolveReference(
     };
   }
 
-  const allCoordinates = collectAllCoordinates([], missionGeoJson, surveyGeoJson);
+  const allCoordinates = collectAllCoordinates([], missionGeoJson, surveyGeoJson, extraCoordinates);
   return allCoordinates[0] ?? null;
 }
 
@@ -807,33 +705,49 @@ function appendFeatureCollectionCoordinates(
 function appendGeometryCoordinates(geometry: GeoJSON.Geometry, coordinates: GeoRef[]) {
   if (geometry.type === "Point") {
     const [longitude_deg, latitude_deg] = geometry.coordinates;
-    coordinates.push({ latitude_deg, longitude_deg });
+    pushFiniteGeoRef(coordinates, { latitude_deg, longitude_deg });
     return;
   }
 
   if (geometry.type === "LineString" || geometry.type === "MultiPoint") {
     geometry.coordinates.forEach(([longitude_deg, latitude_deg]) => {
-      coordinates.push({ latitude_deg, longitude_deg });
+      pushFiniteGeoRef(coordinates, { latitude_deg, longitude_deg });
     });
     return;
   }
 
   if (geometry.type === "Polygon" || geometry.type === "MultiLineString") {
     geometry.coordinates.flat().forEach(([longitude_deg, latitude_deg]) => {
-      coordinates.push({ latitude_deg, longitude_deg });
+      pushFiniteGeoRef(coordinates, { latitude_deg, longitude_deg });
     });
     return;
   }
 
   if (geometry.type === "MultiPolygon") {
     geometry.coordinates.flat(2).forEach(([longitude_deg, latitude_deg]) => {
-      coordinates.push({ latitude_deg, longitude_deg });
+      pushFiniteGeoRef(coordinates, { latitude_deg, longitude_deg });
     });
     return;
   }
 
   if (geometry.type === "GeometryCollection") {
     geometry.geometries.forEach((child) => appendGeometryCoordinates(child, coordinates));
+  }
+}
+
+function isFiniteGeoRef(coordinate: GeoRef | null | undefined): coordinate is GeoRef {
+  return !!coordinate
+    && Number.isFinite(coordinate.latitude_deg)
+    && Number.isFinite(coordinate.longitude_deg)
+    && coordinate.latitude_deg >= -90
+    && coordinate.latitude_deg <= 90
+    && coordinate.longitude_deg >= -180
+    && coordinate.longitude_deg <= 180;
+}
+
+function pushFiniteGeoRef(coordinates: GeoRef[], coordinate: GeoRef): void {
+  if (isFiniteGeoRef(coordinate)) {
+    coordinates.push(coordinate);
   }
 }
 
@@ -845,56 +759,6 @@ function projectRenderCoordinate(
     latitude_deg: coordinate[1],
     longitude_deg: coordinate[0],
   });
-}
-
-function averagePoint(points: GeoPoint2d[]): GeoPoint2d | null {
-  if (points.length === 0) {
-    return null;
-  }
-
-  const totals = points.reduce(
-    (sum, point) => ({
-      latitude_deg: sum.latitude_deg + point.latitude_deg,
-      longitude_deg: sum.longitude_deg + point.longitude_deg,
-    }),
-    { latitude_deg: 0, longitude_deg: 0 },
-  );
-
-  return {
-    latitude_deg: totals.latitude_deg / points.length,
-    longitude_deg: totals.longitude_deg / points.length,
-  };
-}
-
-function midpointOfPoints(points: GeoPoint2d[]): GeoPoint2d | null {
-  if (points.length === 0) {
-    return null;
-  }
-
-  return points[Math.floor((points.length - 1) / 2)] ?? null;
-}
-
-function closeRing(points: GeoPoint2d[]): GeoPoint2d[] {
-  if (points.length === 0) {
-    return [];
-  }
-
-  const ring = [...points];
-  const first = ring[0];
-  const last = ring[ring.length - 1];
-  if (!first || !last) {
-    return ring;
-  }
-
-  if (first.latitude_deg !== last.latitude_deg || first.longitude_deg !== last.longitude_deg) {
-    ring.push({ ...first });
-  }
-
-  return ring;
-}
-
-function toGeoJsonCoordinate(point: GeoPoint2d): [number, number] {
-  return [point.longitude_deg, point.latitude_deg];
 }
 
 function clamp(value: number, min: number, max: number): number {

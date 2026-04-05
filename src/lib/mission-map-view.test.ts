@@ -5,6 +5,7 @@ import {
   buildMissionMapView,
   missionMapMarkerIdForUiId,
   resolveMissionMapDrag,
+  resolveMissionMapSurveyHandleDrag,
   type MissionMapSelection,
 } from "./mission-map-view";
 import { defaultGeoPoint3d, type HomePosition, type MissionCommand, type MissionItem } from "./mavkit-types";
@@ -156,6 +157,96 @@ describe("buildMissionMapView", () => {
       patternType: "grid",
     });
     expect(view.warnings).toEqual([]);
+  });
+
+  it("projects selected survey vertices and rejects stale vertex drags safely", () => {
+    const survey = createSurveyDraftExtension();
+    const region = hydrateSurveyRegion({
+      patternType: "grid",
+      position: 0,
+      polygon: [
+        { latitude_deg: 47.3981, longitude_deg: 8.5451 },
+        { latitude_deg: 47.3984, longitude_deg: 8.5463 },
+        { latitude_deg: 47.3977, longitude_deg: 8.5468 },
+      ],
+      polyline: [],
+      camera: null,
+      params: {
+        altitude_m: 55,
+        sideOverlap_pct: 65,
+        frontOverlap_pct: 80,
+      },
+      embeddedItems: [],
+      qgcPassthrough: {},
+      warnings: [],
+    });
+
+    survey.surveyRegions.set(region.id, region);
+    survey.surveyRegionOrder.push({ regionId: region.id, position: 0 });
+
+    const view = buildMissionMapView({
+      home: null,
+      missionItems: [],
+      survey,
+      selection: selection({ kind: "survey-block", regionId: region.id }),
+    });
+
+    expect(view.viewport).not.toBeNull();
+    expect(view.surveyVertexHandles).toHaveLength(3);
+    expect(view.counts.surveyVertexHandles).toBe(3);
+
+    const firstHandle = view.surveyVertexHandles[0];
+    const applied = resolveMissionMapSurveyHandleDrag(view, firstHandle.id, { x: 620, y: 280 });
+    const rejected = resolveMissionMapSurveyHandleDrag(view, "missing-handle", { x: 620, y: 280 });
+
+    expect(applied.status).toBe("applied");
+    if (applied.status === "applied") {
+      expect(applied.handle.regionId).toBe(region.id);
+      expect(applied.latitude_deg).not.toBe(region.polygon[0]?.latitude_deg);
+      expect(applied.longitude_deg).not.toBe(region.polygon[0]?.longitude_deg);
+    }
+    expect(rejected).toMatchObject({
+      status: "rejected",
+      reason: "handle-not-found",
+    });
+  });
+
+  it("keeps incomplete selected polygons inspectable through draft lines and vertex handles", () => {
+    const survey = createSurveyDraftExtension();
+    const region = hydrateSurveyRegion({
+      patternType: "structure",
+      position: 0,
+      polygon: [
+        { latitude_deg: 47.3981, longitude_deg: 8.5451 },
+        { latitude_deg: 47.3984, longitude_deg: 8.5463 },
+      ],
+      polyline: [],
+      camera: null,
+      params: {
+        altitude_m: 55,
+        sideOverlap_pct: 65,
+        frontOverlap_pct: 80,
+      },
+      embeddedItems: [],
+      qgcPassthrough: {},
+      warnings: [],
+    });
+
+    survey.surveyRegions.set(region.id, region);
+    survey.surveyRegionOrder.push({ regionId: region.id, position: 0 });
+
+    const view = buildMissionMapView({
+      home: null,
+      missionItems: [],
+      survey,
+      selection: selection({ kind: "survey-block", regionId: region.id }),
+    });
+
+    expect(view.state).toBe("degraded");
+    expect(view.viewport).not.toBeNull();
+    expect(view.surveyLines.some((line) => line.kind === "survey_polygon_draft")).toBe(true);
+    expect(view.surveyVertexHandles).toHaveLength(2);
+    expect(view.warnings.some((warning) => warning.includes("incomplete polygon"))).toBe(true);
   });
 
   it("drops malformed survey geometry and degrades instead of crashing", () => {

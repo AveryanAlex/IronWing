@@ -30,6 +30,8 @@ import type {
 } from "../../lib/mission-plan-file-io";
 import type { SurveyDraftExtension } from "../../lib/survey-region";
 import { createSurveyDraftExtension, hydrateSurveyRegion } from "../../lib/survey-region";
+import { getBuiltinCameras } from "../../lib/survey-camera-catalog";
+import { commandPosition, geoPoint3dAltitude, geoPoint3dLatLon } from "../../lib/mavkit-types";
 import {
   createMissionPlannerStore,
   createMissionPlannerViewStore,
@@ -41,6 +43,8 @@ type RenderableComponent = (...args: any[]) => unknown;
 function asRenderable(component: unknown): RenderableComponent {
   return component as RenderableComponent;
 }
+
+const BUILTIN_CAMERA = getBuiltinCameras().find((camera) => camera.canonicalName === "DJI Mavic 3E") ?? getBuiltinCameras()[0]!;
 
 function deferred<T>() {
   let resolve: (value: T) => void;
@@ -384,6 +388,10 @@ function setMissionMapSurfaceRect() {
   return surface;
 }
 
+function readMissionMapDebug() {
+  return JSON.parse(screen.getByTestId(missionWorkspaceTestIds.mapDebug).textContent ?? "{}");
+}
+
 async function renderWorkspace(options: {
   snapshots?: OpenSessionSnapshot[];
   plannerServiceOverrides?: Partial<MissionPlannerService>;
@@ -615,10 +623,11 @@ describe("MissionWorkspace", () => {
         const waypoint = edited.command.Nav;
         expect(typeof waypoint).toBe("object");
         if (typeof waypoint === "object" && waypoint && "Waypoint" in waypoint) {
+          const position = waypoint.Waypoint.position;
           expect(waypoint.Waypoint.hold_time_s).toBe(12);
-          expect(waypoint.Waypoint.position.RelHome.latitude_deg).toBe(47.55);
-          expect(waypoint.Waypoint.position.RelHome.longitude_deg).toBe(8.66);
-          expect(waypoint.Waypoint.position.RelHome.relative_alt_m).toBe(120);
+          expect(geoPoint3dLatLon(position).latitude_deg).toBe(47.55);
+          expect(geoPoint3dLatLon(position).longitude_deg).toBe(8.66);
+          expect(geoPoint3dAltitude(position).value).toBe(120);
         }
       }
     });
@@ -659,6 +668,258 @@ describe("MissionWorkspace", () => {
     });
   });
 
+  it("creates grid, corridor, and structure survey regions after the current selection inside the shared list", async () => {
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({
+          home: { latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 },
+        }));
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyGrid));
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(1);
+      expect(get(plannerStore).selection.kind).toBe("survey-block");
+    });
+
+    const firstRegionId = get(plannerStore).survey.surveyRegionOrder[0]?.regionId ?? "";
+    const missionUiId = get(plannerStore).draftState.active.mission.draftItems[0]?.uiId ?? -1;
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.itemPrefix}-${missionUiId}`));
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyCorridor));
+
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(2);
+      expect(get(plannerStore).survey.surveyRegionOrder[1]?.position).toBe(1);
+    });
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.surveyPrefix}-${firstRegionId}`));
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyStructure));
+
+    await waitFor(() => {
+      const state = get(plannerStore);
+      expect(state.survey.surveyRegionOrder).toHaveLength(3);
+      expect(state.survey.surveyRegionOrder[0]?.position).toBe(0);
+      expect(state.survey.surveyRegionOrder[1]?.position).toBe(0);
+      expect(state.survey.surveyRegionOrder[2]?.position).toBe(1);
+
+      const orderedPatterns = state.survey.surveyRegionOrder.map((block) => state.survey.surveyRegions.get(block.regionId)?.patternType);
+      expect(orderedPatterns).toEqual(["grid", "structure", "corridor"]);
+    });
+
+    expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("survey-block");
+  });
+
+  it("draws survey regions directly on the blank planner surface and cancels unfinished map sessions safely", async () => {
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({
+          home: { latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 },
+          mission: { items: [] },
+        }));
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+    });
+
+    setMissionMapSurfaceRect();
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawStartGrid));
+    await waitFor(() => {
+      expect(get(plannerStore).selection.kind).toBe("survey-block");
+      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(1);
+    });
+
+    const gridRegionId = get(plannerStore).survey.surveyRegionOrder[0]?.regionId ?? "";
+    expect(gridRegionId).not.toBe("");
+
+    let drawSurface = screen.getByRole("button", { name: /add survey point on planner map/i });
+    await fireEvent.click(drawSurface, { clientX: 160, clientY: 440 });
+    await fireEvent.click(drawSurface, { clientX: 700, clientY: 420 });
+    await fireEvent.click(drawSurface, { clientX: 620, clientY: 180 });
+
+    await waitFor(() => {
+      const region = get(plannerStore).survey.surveyRegions.get(gridRegionId);
+      expect(region?.polygon).toHaveLength(3);
+      expect(readMissionMapDebug().drawMode).toBe("draw");
+      expect(readMissionMapDebug().drawPointCount).toBe(3);
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawFinish));
+
+    await waitFor(() => {
+      expect(readMissionMapDebug().drawMode).toBe("idle");
+      expect(get(plannerStore).selection).toEqual({ kind: "survey-block", regionId: gridRegionId });
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawStartCorridor));
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(2);
+    });
+
+    const corridorRegionId = get(plannerStore).survey.surveyRegionOrder[1]?.regionId ?? "";
+    drawSurface = screen.getByRole("button", { name: /add survey point on planner map/i });
+    await fireEvent.click(drawSurface, { clientX: 280, clientY: 260 });
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawCancel));
+
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegions.has(corridorRegionId)).toBe(false);
+      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(1);
+      expect(readMissionMapDebug().drawMode).toBe("idle");
+    });
+  });
+
+  it("edits selected survey vertices on the map and rejects stale vertex drags after deletion", async () => {
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({
+          home: { latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 },
+        }));
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+    });
+
+    const surface = setMissionMapSurfaceRect();
+    expect(surface).toBeTruthy();
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyGrid));
+    const regionId = get(plannerStore).survey.surveyRegionOrder[0]?.regionId ?? "";
+    expect(regionId).not.toBe("");
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawEdit));
+
+    const firstHandle = screen.getByTestId(`${missionWorkspaceTestIds.mapVertexPrefix}-${regionId}-polygon-0`);
+    const originalPoint = get(plannerStore).survey.surveyRegions.get(regionId)?.polygon[0];
+
+    await fireEvent.pointerDown(firstHandle, { clientX: 220, clientY: 360 });
+    await fireEvent.pointerMove(window, { clientX: 780, clientY: 220 });
+    await fireEvent.pointerUp(window);
+
+    await waitFor(() => {
+      const updatedPoint = get(plannerStore).survey.surveyRegions.get(regionId)?.polygon[0];
+      expect(updatedPoint?.latitude_deg).not.toBe(originalPoint?.latitude_deg);
+      expect(updatedPoint?.longitude_deg).not.toBe(originalPoint?.longitude_deg);
+    });
+
+    const staleHandle = screen.getByTestId(`${missionWorkspaceTestIds.mapVertexPrefix}-${regionId}-polygon-0`);
+    await fireEvent.pointerDown(staleHandle, { clientX: 300, clientY: 300 });
+    plannerStore.deleteSurveyRegionById(regionId);
+    await flush();
+    await fireEvent.pointerMove(window, { clientX: 540, clientY: 160 });
+
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegions.has(regionId)).toBe(false);
+      expect(readMissionMapDebug().warnings.some((warning: string) => warning.includes("stale survey-handle drag"))).toBe(true);
+      expect(get(plannerStore).selection.kind).toBe("home");
+    });
+  });
+
+  it("edits survey parameters, generates nested items, and gates regenerate or dissolve behind explicit prompts", async () => {
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({
+          home: { latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 },
+        }));
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyGrid));
+
+    const regionId = get(plannerStore).survey.surveyRegionOrder[0]?.regionId ?? "";
+    expect(regionId).not.toBe("");
+
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.cameraSearch), {
+      target: { value: BUILTIN_CAMERA.canonicalName },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: new RegExp(`Use ${BUILTIN_CAMERA.canonicalName}`) }));
+    await fireEvent.change(screen.getByTestId(`${missionWorkspaceTestIds.surveyParamPrefix}-altitude_m`), {
+      target: { value: "60" },
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.surveyGenerate));
+
+    await waitFor(() => {
+      const region = get(plannerStore).survey.surveyRegions.get(regionId);
+      expect(region?.camera?.canonicalName).toBe(BUILTIN_CAMERA.canonicalName);
+      expect(region?.params.altitude_m).toBe(60);
+      expect(region?.generatedItems.length ?? 0).toBeGreaterThan(0);
+      expect(screen.getByTestId(`${missionWorkspaceTestIds.surveyGeneratedItemPrefix}-${regionId}-0`)).toBeTruthy();
+    });
+
+    const editableGeneratedIndex = get(plannerStore).survey.surveyRegions.get(regionId)?.generatedItems.findIndex((item) => commandPosition(item.command)) ?? -1;
+    expect(editableGeneratedIndex).toBeGreaterThanOrEqual(0);
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.surveyGeneratedItemPrefix}-${editableGeneratedIndex}`));
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.surveyGeneratedAltitude), {
+      target: { value: "80" },
+    });
+
+    await waitFor(() => {
+      const region = get(plannerStore).survey.surveyRegions.get(regionId);
+      expect(region?.manualEdits.size).toBe(1);
+      expect(screen.getByTestId(`${missionWorkspaceTestIds.surveyGeneratedEditedPrefix}-${editableGeneratedIndex}`).textContent).toContain("Manual edit");
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.surveyGenerate));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.surveyPromptKind).textContent).toContain("confirm-regenerate");
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.surveyPromptDismiss));
+    await waitFor(() => {
+      expect(screen.queryByTestId(missionWorkspaceTestIds.surveyPrompt)).toBeNull();
+      expect(get(plannerStore).survey.surveyRegions.get(regionId)?.manualEdits.size).toBe(1);
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.surveyDissolve));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.surveyPromptKind).textContent).toContain("confirm-dissolve");
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.surveyPromptConfirm));
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegions.has(regionId)).toBe(false);
+      expect(get(plannerStore).draftState.active.mission.document.items.length).toBeGreaterThan(1);
+    });
+  });
+
+  it("falls back to home when the selected survey region is deleted", async () => {
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({
+          home: { latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 },
+        }));
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyStructure));
+
+    const regionId = get(plannerStore).survey.surveyRegionOrder[0]?.regionId ?? "";
+    expect(regionId).not.toBe("");
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.surveyDelete));
+
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegions.has(regionId)).toBe(false);
+      expect(get(plannerStore).selection.kind).toBe("home");
+      expect(screen.queryByTestId(`${missionWorkspaceTestIds.surveyPrefix}-${regionId}`)).toBeNull();
+    });
+  });
+
   it("keeps incomplete home edits local until all three values are valid", async () => {
     const { plannerStore } = await renderWorkspace();
 
@@ -688,7 +949,7 @@ describe("MissionWorkspace", () => {
     });
   });
 
-  it("requires an explicit replace prompt before importing over a dirty draft and keeps the survey block selectable", async () => {
+  it("requires an explicit replace prompt before importing over a dirty draft and keeps camera-missing survey regions editable", async () => {
     const survey = makeImportedSurveyExtension();
     const importedHome = { latitude_deg: 47.39, longitude_deg: 8.53, altitude_m: 488 };
 
@@ -759,7 +1020,20 @@ describe("MissionWorkspace", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("survey-block");
-      expect(screen.getByTestId(missionWorkspaceTestIds.inspectorReadonly).textContent).toContain("Imported survey block selected");
+      expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSurvey)).toBeTruthy();
+      expect((screen.getByTestId(missionWorkspaceTestIds.surveyGenerate) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByTestId(missionWorkspaceTestIds.cameraCurrent).textContent).toContain("Choose a valid camera");
+    });
+
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.cameraSearch), {
+      target: { value: BUILTIN_CAMERA.canonicalName },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: new RegExp(`Use ${BUILTIN_CAMERA.canonicalName}`) }));
+
+    await waitFor(() => {
+      const region = get(plannerStore).survey.surveyRegions.get(regionId!);
+      expect(region?.camera?.canonicalName).toBe(BUILTIN_CAMERA.canonicalName);
+      expect((screen.getByTestId(missionWorkspaceTestIds.surveyGenerate) as HTMLButtonElement).disabled).toBe(false);
     });
 
     expect(get(plannerStore).home).toEqual(importedHome);

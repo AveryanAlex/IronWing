@@ -1,7 +1,7 @@
 <script lang="ts">
 import { commandDisplayName } from "../../lib/mavkit-types";
-import type { SurveyRegion, SurveyRegionBlock } from "../../lib/survey-region";
 import type { TypedDraftItem } from "../../lib/mission-draft-typed";
+import type { SurveyRegion, SurveyRegionBlock, SurveyPatternType } from "../../lib/survey-region";
 import type { MissionPlannerSelection } from "../../lib/stores/mission-planner";
 import MissionSurveyBlockCard from "./MissionSurveyBlockCard.svelte";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
@@ -15,12 +15,18 @@ type Props = {
   surveyBlocks: SurveyListEntry[];
   selectedSurface: MissionPlannerSelection;
   selectedMissionUiId: number | null;
+  cruiseSpeed: number;
   onAddMissionItem: () => void;
+  onAddSurveyBlock: (patternType: SurveyPatternType) => void;
   onSelectMissionItem: (index: number) => void;
   onMoveMissionItemUp: (index: number) => void;
   onMoveMissionItemDown: (index: number) => void;
   onDeleteMissionItem: (index: number) => void;
   onSelectSurveyBlock: (regionId: string) => void;
+  onSetSurveyRegionCollapsed: (regionId: string, collapsed: boolean) => void;
+  onGenerateSurveyRegion: (regionId: string) => Promise<unknown> | unknown;
+  onPromptDissolveSurveyRegion: (regionId: string) => void;
+  onDeleteSurveyRegion: (regionId: string) => void;
 };
 
 type ListEntry =
@@ -32,18 +38,25 @@ let {
   surveyBlocks,
   selectedSurface,
   selectedMissionUiId,
+  cruiseSpeed,
   onAddMissionItem,
+  onAddSurveyBlock,
   onSelectMissionItem,
   onMoveMissionItemUp,
   onMoveMissionItemDown,
   onDeleteMissionItem,
   onSelectSurveyBlock,
+  onSetSurveyRegionCollapsed,
+  onGenerateSurveyRegion,
+  onPromptDissolveSurveyRegion,
+  onDeleteSurveyRegion,
 }: Props = $props();
 
 let orderedEntries = $derived.by<ListEntry[]>(() => {
-  const orderedBlocks = [...surveyBlocks].sort(
-    (left, right) => left.position - right.position || left.regionId.localeCompare(right.regionId),
-  );
+  const orderedBlocks = surveyBlocks
+    .map((block, index) => ({ block, index }))
+    .sort((left, right) => left.block.position - right.block.position || left.index - right.index)
+    .map(({ block }) => block);
   const entries: ListEntry[] = [];
   let blockIndex = 0;
 
@@ -89,17 +102,43 @@ function itemSummary(item: TypedDraftItem) {
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mission list</p>
-      <h3 class="mt-1 text-sm font-semibold text-text-primary">Manual items and preserved imports</h3>
+      <h3 class="mt-1 text-sm font-semibold text-text-primary">Manual items and first-class survey blocks</h3>
     </div>
 
-    <button
-      class="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105"
-      data-testid={missionWorkspaceTestIds.listAdd}
-      onclick={onAddMissionItem}
-      type="button"
-    >
-      Add waypoint
-    </button>
+    <div class="flex flex-wrap gap-2">
+      <button
+        class="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105"
+        data-testid={missionWorkspaceTestIds.listAdd}
+        onclick={onAddMissionItem}
+        type="button"
+      >
+        Add waypoint
+      </button>
+      <button
+        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105"
+        data-testid={missionWorkspaceTestIds.listAddSurveyGrid}
+        onclick={() => onAddSurveyBlock("grid")}
+        type="button"
+      >
+        Grid survey
+      </button>
+      <button
+        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105"
+        data-testid={missionWorkspaceTestIds.listAddSurveyCorridor}
+        onclick={() => onAddSurveyBlock("corridor")}
+        type="button"
+      >
+        Corridor survey
+      </button>
+      <button
+        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105"
+        data-testid={missionWorkspaceTestIds.listAddSurveyStructure}
+        onclick={() => onAddSurveyBlock("structure")}
+        type="button"
+      >
+        Structure survey
+      </button>
+    </div>
   </div>
 
   {#if orderedEntries.length === 0}
@@ -107,7 +146,7 @@ function itemSummary(item: TypedDraftItem) {
       class="mt-4 rounded-2xl border border-dashed border-border bg-bg-secondary/60 px-4 py-6 text-sm text-text-secondary"
       data-testid={missionWorkspaceTestIds.listEmpty}
     >
-      No manual mission items or imported survey blocks yet. Start with a waypoint or import a .plan to preserve survey blocks.
+      No mission items or survey regions yet. Add a waypoint, or create a grid, corridor, or structure survey directly inside this shared workspace.
     </div>
   {:else}
     <div class="mt-4 space-y-3">
@@ -196,11 +235,16 @@ function itemSummary(item: TypedDraftItem) {
           </div>
         {:else}
           <MissionSurveyBlockCard
+            cruiseSpeed={cruiseSpeed}
+            onDelete={() => onDeleteSurveyRegion(entry.block.regionId)}
+            onGenerate={() => onGenerateSurveyRegion(entry.block.regionId)}
+            onPromptDissolve={() => onPromptDissolveSurveyRegion(entry.block.regionId)}
+            onSelect={() => onSelectSurveyBlock(entry.block.regionId)}
+            onToggleCollapsed={(collapsed) => onSetSurveyRegionCollapsed(entry.block.regionId, collapsed)}
             position={entry.block.position}
             region={entry.block.region}
             selected={selectedSurface.kind === "survey-block" && selectedSurface.regionId === entry.block.regionId}
             testId={`${missionWorkspaceTestIds.surveyPrefix}-${entry.block.regionId}`}
-            onSelect={() => onSelectSurveyBlock(entry.block.regionId)}
           />
         {/if}
       {/each}

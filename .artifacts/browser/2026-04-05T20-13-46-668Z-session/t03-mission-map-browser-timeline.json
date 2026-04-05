@@ -1,0 +1,107 @@
+{
+  "entries": [
+    {
+      "id": 1,
+      "tool": "browser_navigate",
+      "status": "error",
+      "durationMs": 7,
+      "beforeUrl": "about:blank",
+      "afterUrl": "about:blank",
+      "line": "#1 | browser_navigate | error | 7ms | screenshot=true, url=\"http://127.0.0.1:4173\" | page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:4173/\nCall log:\n\u001b[2m  - navigating to \"http://127.0.0.1:4173/\", waiting until \"domcontentloaded\"\u001b[22m\n"
+    },
+    {
+      "id": 2,
+      "tool": "browser_navigate",
+      "status": "success",
+      "durationMs": 1977,
+      "beforeUrl": "chrome-error://chromewebdata/",
+      "afterUrl": "http://localhost:5173/",
+      "line": "#2 | browser_navigate | success | 1977ms | screenshot=true, url=\"http://localhost:5173/\" | URL changed to http://localhost:5173/; title changed to IronWing; landmarks 0→16; buttons 2→12 | Warnings: JS: Failed to load resource: the server responded with a status of 404 (Not Found)\nUse browser_get_console_logs/browser_get_network_logs for full diagnostics."
+    },
+    {
+      "id": 3,
+      "tool": "browser_click",
+      "status": "success",
+      "durationMs": 120,
+      "beforeUrl": "http://localhost:5173/",
+      "afterUrl": "http://localhost:5173/",
+      "line": "#3 | browser_click | success | 120ms | selector=\"button.app-shell-tab\" | SOFT-FAIL (no observable state change) | focus changed"
+    },
+    {
+      "id": 4,
+      "tool": "browser_click",
+      "status": "success",
+      "durationMs": 112,
+      "beforeUrl": "http://localhost:5173/",
+      "afterUrl": "http://localhost:5173/",
+      "line": "#4 | browser_click | success | 112ms | selector=\"nav.app-shell-tabs > button:nth-child(4)\" | PASS (target_state_changed) | landmarks 16→14; buttons 11→21; headings changed; visible text changed"
+    },
+    {
+      "id": 5,
+      "tool": "browser_click",
+      "status": "success",
+      "durationMs": 128,
+      "beforeUrl": "http://localhost:5173/",
+      "afterUrl": "http://localhost:5173/",
+      "line": "#5 | browser_click | success | 128ms | selector=\"[data-testid='mission-toolbar-new']\" | SOFT-FAIL (no observable state change) | landmarks 14→18; buttons 21→29; inputs 2→5; headings changed"
+    },
+    {
+      "id": 6,
+      "tool": "browser_batch",
+      "status": "success",
+      "durationMs": 127,
+      "beforeUrl": "http://localhost:5173/",
+      "afterUrl": "http://localhost:5173/",
+      "line": "#6 | browser_batch | success | 127ms | finalSummaryOnly=true, steps=[2], stopOnFailure=true | focus changed; landmarks 18→23; buttons 29→58; inputs 5→17"
+    },
+    {
+      "id": 7,
+      "tool": "browser_batch",
+      "status": "error",
+      "durationMs": 8003,
+      "beforeUrl": "http://localhost:5173/",
+      "afterUrl": "http://localhost:5173/",
+      "line": "#7 | browser_batch | error | 8003ms | finalSummaryOnly=true, steps=[4], stopOnFailure=true | Stopped at step 1 (click) | No meaningful browser-state change detected"
+    },
+    {
+      "id": 8,
+      "tool": "browser_click",
+      "status": "success",
+      "durationMs": 96,
+      "beforeUrl": "http://localhost:5173/",
+      "afterUrl": "http://localhost:5173/",
+      "line": "#8 | browser_click | success | 96ms | x=430, y=650 | SOFT-FAIL (no observable state change) | focus changed; buttons 58→61; inputs 17→19; visible text changed"
+    },
+    {
+      "id": 9,
+      "tool": "browser_click",
+      "status": "success",
+      "durationMs": 96,
+      "beforeUrl": "http://localhost:5173/",
+      "afterUrl": "http://localhost:5173/",
+      "line": "#9 | browser_click | success | 96ms | x=1060, y=620 | SOFT-FAIL (no observable state change) | buttons 61→65; inputs 19→21; visible text changed"
+    },
+    {
+      "id": 10,
+      "tool": "browser_click",
+      "status": "success",
+      "durationMs": 93,
+      "beforeUrl": "http://localhost:5173/",
+      "afterUrl": "http://localhost:5173/",
+      "line": "#10 | browser_click | success | 93ms | x=970, y=210 | SOFT-FAIL (no observable state change) | buttons 65→68; inputs 21→23; visible text changed"
+    },
+    {
+      "id": 11,
+      "tool": "browser_click",
+      "status": "success",
+      "durationMs": 108,
+      "beforeUrl": "http://localhost:5173/",
+      "afterUrl": "http://localhost:5173/",
+      "line": "#11 | browser_click | success | 108ms | selector=\"[data-testid='mission-map-draw-finish']\" | SOFT-FAIL (no observable state change) | focus changed; buttons 68→67; visible text changed"
+    }
+  ],
+  "retained": 11,
+  "totalRecorded": 11,
+  "bounded": false,
+  "summary": "Timeline: 11 browser actions recorded."
+}
