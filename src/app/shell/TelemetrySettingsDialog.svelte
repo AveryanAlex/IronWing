@@ -7,14 +7,8 @@ import type {
   LiveSettingsApplyTarget,
   LiveSettingsStoreState,
 } from "../../lib/stores/live-settings";
-import {
-  hasUnsavedLiveSettings,
-  resolveMessageRateAvailabilityReason,
-} from "../../lib/stores/live-settings";
-import {
-  MESSAGE_RATE_HZ_LIMITS,
-  TELEMETRY_RATE_HZ_LIMITS,
-} from "../../lib/stores/settings";
+import { hasUnsavedLiveSettings, resolveMessageRateAvailabilityReason } from "../../lib/stores/live-settings";
+import { MESSAGE_RATE_HZ_LIMITS, TELEMETRY_RATE_HZ_LIMITS } from "../../lib/stores/settings";
 import { appShellTestIds } from "./chrome-state";
 import OperationalDialog from "./OperationalDialog.svelte";
 import { getLiveSettingsStoreContext } from "./runtime-context";
@@ -83,8 +77,8 @@ function buildDialogStatus(input: {
       kind: "error",
       title: "Telemetry settings are unavailable",
       description:
-        state.catalogError
-        ?? "The shell could not load message-rate metadata. Telemetry cadence edits will stay local until metadata is available again.",
+        state.catalogError ??
+        "The shell could not load message-rate metadata. Telemetry cadence edits will stay local until metadata is available again.",
     };
   }
 
@@ -127,7 +121,8 @@ function buildDialogStatus(input: {
     return {
       kind: "neutral",
       title: "Overrides are queued for reconnect",
-      description: "Confirmed message-rate overrides will reapply when the next live vehicle connection becomes active.",
+      description:
+        "Confirmed message-rate overrides will reapply when the next live vehicle connection becomes active.",
     };
   }
 
@@ -154,10 +149,11 @@ function createMessageRateRows(
   disabledReason: string | null,
 ): MessageRateRowView[] {
   return state.messageRateCatalog.map((entry) => {
-    const confirmedRateHz = entry.id in state.confirmedSettings.messageRates
-      ? state.confirmedSettings.messageRates[entry.id] ?? null
-      : null;
-    const draftRateHz = entry.id in state.draft.messageRates ? state.draft.messageRates[entry.id] ?? null : null;
+    const confirmedRateHz =
+      entry.id in state.confirmedSettings.messageRates
+        ? (state.confirmedSettings.messageRates[entry.id] ?? null)
+        : null;
+    const draftRateHz = entry.id in state.draft.messageRates ? (state.draft.messageRates[entry.id] ?? null) : null;
     const error = inputErrors[entry.id] ?? state.messageRateErrors[entry.id]?.message ?? null;
     const unsaved = confirmedRateHz !== draftRateHz;
 
@@ -223,7 +219,11 @@ function validateTelemetryRateInput(value: string): { value: number | null; erro
   }
 
   const numericValue = Number(trimmed);
-  if (!Number.isInteger(numericValue) || numericValue < TELEMETRY_RATE_HZ_LIMITS.min || numericValue > TELEMETRY_RATE_HZ_LIMITS.max) {
+  if (
+    !Number.isInteger(numericValue) ||
+    numericValue < TELEMETRY_RATE_HZ_LIMITS.min ||
+    numericValue > TELEMETRY_RATE_HZ_LIMITS.max
+  ) {
     return {
       value: null,
       error: `Telemetry cadence must stay between ${TELEMETRY_RATE_HZ_LIMITS.min} and ${TELEMETRY_RATE_HZ_LIMITS.max} Hz.`,
@@ -246,7 +246,11 @@ function validateMessageRateInput(value: string): { value: number | null; error:
   }
 
   const numericValue = Number(trimmed);
-  if (!Number.isFinite(numericValue) || numericValue < MESSAGE_RATE_HZ_LIMITS.min || numericValue > MESSAGE_RATE_HZ_LIMITS.max) {
+  if (
+    !Number.isFinite(numericValue) ||
+    numericValue < MESSAGE_RATE_HZ_LIMITS.min ||
+    numericValue > MESSAGE_RATE_HZ_LIMITS.max
+  ) {
     return {
       value: null,
       error: `Message rates must stay between ${MESSAGE_RATE_HZ_LIMITS.min} and ${MESSAGE_RATE_HZ_LIMITS.max} Hz.`,
@@ -284,10 +288,7 @@ function buildConfirmedSummary(state: Pick<LiveSettingsStoreState, "confirmedSet
 }
 
 function countUnsavedMessageRateRows(state: Pick<LiveSettingsStoreState, "confirmedSettings" | "draft">) {
-  const ids = new Set([
-    ...Object.keys(state.confirmedSettings.messageRates),
-    ...Object.keys(state.draft.messageRates),
-  ]);
+  const ids = new Set([...Object.keys(state.confirmedSettings.messageRates), ...Object.keys(state.draft.messageRates)]);
 
   let count = 0;
   for (const id of ids) {
@@ -296,10 +297,11 @@ function countUnsavedMessageRateRows(state: Pick<LiveSettingsStoreState, "confir
       continue;
     }
 
-    const confirmedRate = numericId in state.confirmedSettings.messageRates
-      ? state.confirmedSettings.messageRates[numericId] ?? null
-      : null;
-    const draftRate = numericId in state.draft.messageRates ? state.draft.messageRates[numericId] ?? null : null;
+    const confirmedRate =
+      numericId in state.confirmedSettings.messageRates
+        ? (state.confirmedSettings.messageRates[numericId] ?? null)
+        : null;
+    const draftRate = numericId in state.draft.messageRates ? (state.draft.messageRates[numericId] ?? null) : null;
     if (confirmedRate !== draftRate) {
       count += 1;
     }
@@ -308,12 +310,11 @@ function countUnsavedMessageRateRows(state: Pick<LiveSettingsStoreState, "confir
   return count;
 }
 
-function collectUnknownMessageRateIds(state: Pick<LiveSettingsStoreState, "confirmedSettings" | "draft" | "messageRateCatalog">) {
+function collectUnknownMessageRateIds(
+  state: Pick<LiveSettingsStoreState, "confirmedSettings" | "draft" | "messageRateCatalog">,
+) {
   const catalogIds = new Set(state.messageRateCatalog.map((entry) => entry.id));
-  const ids = new Set([
-    ...Object.keys(state.confirmedSettings.messageRates),
-    ...Object.keys(state.draft.messageRates),
-  ]);
+  const ids = new Set([...Object.keys(state.confirmedSettings.messageRates), ...Object.keys(state.draft.messageRates)]);
 
   return [...ids]
     .map((value) => Number.parseInt(value, 10))
@@ -390,7 +391,11 @@ async function applyChanges() {
 
   messageRateInputErrors = nextMessageRateErrors;
 
-  if (telemetryValidation.error || Object.keys(nextMessageRateErrors).length > 0 || telemetryValidation.value === null) {
+  if (
+    telemetryValidation.error ||
+    Object.keys(nextMessageRateErrors).length > 0 ||
+    telemetryValidation.value === null
+  ) {
     return;
   }
 
@@ -444,19 +449,16 @@ let globalMessageRateDisabledReason = $derived.by(() => {
 });
 let telemetryFieldError = $derived(telemetryRateInputError ?? liveSettingsView.telemetryRateError);
 let messageRateRows = $derived.by(() =>
-  createMessageRateRows(
-    liveSettingsView,
-    messageRateInputs,
-    messageRateInputErrors,
-    globalMessageRateDisabledReason,
-  ));
+  createMessageRateRows(liveSettingsView, messageRateInputs, messageRateInputErrors, globalMessageRateDisabledReason),
+);
 let dialogStatus = $derived.by(() =>
   buildDialogStatus({
     state: liveSettingsView,
     telemetryInputError: telemetryRateInputError,
     messageRateInputErrors,
     unknownMessageRateIds,
-  }));
+  }),
+);
 let canApply = $derived(!isApplying && (hasUnsavedSettings || hasLocalInputProblems));
 let canDiscard = $derived(!isApplying && (hasUnsavedSettings || hasLocalInputProblems));
 
@@ -476,9 +478,9 @@ $effect(() => {
 
 $effect(() => {
   if (
-    previousApplyPhase === "applying"
-    && previousApplyTarget === "draft"
-    && liveSettingsView.applyPhase !== "applying"
+    previousApplyPhase === "applying" &&
+    previousApplyTarget === "draft" &&
+    liveSettingsView.applyPhase !== "applying"
   ) {
     const toastKey = buildToastKey(liveSettingsView, lastDraftApplySummary);
     if (toastKey && toastKey !== lastToastKey) {

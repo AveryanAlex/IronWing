@@ -103,6 +103,18 @@ export const parameterWorkspaceSelectors = {
     reviewApply: '[data-testid="app-shell-parameter-review-apply"]',
 } as const;
 
+export const telemetrySettingsSelectors = {
+    launcher: '[data-testid="app-shell-telemetry-settings-launcher"]',
+    dialog: '[data-testid="app-shell-telemetry-settings-dialog"]',
+    surface: '[data-testid="app-shell-telemetry-settings-surface"]',
+    close: '[data-testid="app-shell-telemetry-settings-close"]',
+    status: '[data-testid="app-shell-telemetry-settings-status"]',
+    apply: '[data-testid="app-shell-telemetry-settings-apply"]',
+    discard: '[data-testid="app-shell-telemetry-settings-discard"]',
+    telemetryInput: '[data-testid="app-shell-telemetry-settings-telemetry-input"]',
+    telemetryError: '[data-testid="app-shell-telemetry-settings-telemetry-error"]',
+} as const;
+
 export const shellViewportPresets = {
     desktop: {
         width: 1440,
@@ -470,6 +482,31 @@ export function parameterReviewRowLocator(page: Page, name: string): Locator {
 
 export function parameterReviewFailureLocator(page: Page, name: string): Locator {
     return page.locator(`[data-testid="app-shell-parameter-review-failure-${name}"]`);
+}
+
+export function telemetrySettingsRowLocator(page: Page, messageId: number): Locator {
+    return page.locator(`[data-testid="app-shell-telemetry-settings-row-${messageId}"]`);
+}
+
+export function telemetrySettingsRowInputLocator(page: Page, messageId: number): Locator {
+    return page.locator(`[data-testid="app-shell-telemetry-settings-row-input-${messageId}"]`);
+}
+
+export function telemetrySettingsRowErrorLocator(page: Page, messageId: number): Locator {
+    return page.locator(`[data-testid="app-shell-telemetry-settings-row-error-${messageId}"]`);
+}
+
+export async function openTelemetrySettings(page: Page): Promise<void> {
+    const launcher = page.locator(telemetrySettingsSelectors.launcher);
+    await expect(
+        launcher,
+        "Telemetry controls launcher is missing; keep the shared selectors in e2e/fixtures/mock-platform.ts aligned with the shipped vehicle panel markup.",
+    ).toBeVisible();
+    await launcher.click();
+    await expect(
+        page.locator(telemetrySettingsSelectors.dialog),
+        "Telemetry controls dialog did not open; keep the shared selectors in e2e/fixtures/mock-platform.ts aligned with the shipped shell dialog seam.",
+    ).toBeVisible();
 }
 
 export function parameterReviewRetryLocator(page: Page, name: string): Locator {

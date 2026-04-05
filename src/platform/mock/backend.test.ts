@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MissionState, TransferProgress } from "../../mission";
 import type { ParamProgress, ParamStore } from "../../params";
@@ -16,6 +17,54 @@ import type {
 } from "../../firmware";
 
 import { getMockPlatformController, invokeMockCommand, listenMockEvent } from "./backend";
+
+function readRustCommandsSource() {
+  return readFileSync("src-tauri/src/commands.rs", "utf8");
+}
+
+function readRustMessageRateCatalog() {
+  const source = readRustCommandsSource();
+  const functionMatch = source.match(
+    /pub\(crate\) fn get_available_message_rates\(\) -> Vec<MessageRateInfo> \{\s*vec!\[(.*?)\n\s*]\n\}/s,
+  );
+  if (!functionMatch) {
+    throw new Error("Could not locate get_available_message_rates in Rust commands.rs");
+  }
+
+  const entryPattern = /MessageRateInfo \{\s*id: (\d+),\s*name: "([^"]+)"\.into\(\),\s*default_rate_hz: ([0-9.]+),\s*}/g;
+  const entries = [...functionMatch[1].matchAll(entryPattern)].map((match) => ({
+    id: Number(match[1]),
+    name: match[2] ?? "",
+    default_rate_hz: Number(match[3]),
+  }));
+
+  if (entries.length === 0) {
+    throw new Error("Could not parse any Rust message-rate entries");
+  }
+
+  return entries;
+}
+
+function readRustRateLimits() {
+  const source = readRustCommandsSource();
+  const messageRateMatch = source.match(/if !\(([0-9.]+)\.\.=([0-9.]+)\)\.contains\(&rate_hz\)/);
+  const telemetryRateMatch = source.match(/if rate_hz == 0 \|\| rate_hz > (\d+)/);
+
+  if (!messageRateMatch || !telemetryRateMatch) {
+    throw new Error("Could not parse telemetry/message-rate limits from Rust commands.rs");
+  }
+
+  return {
+    messageRate: {
+      min: Number(messageRateMatch[1]),
+      max: Number(messageRateMatch[2]),
+    },
+    telemetryRate: {
+      min: 1,
+      max: Number(telemetryRateMatch[1]),
+    },
+  };
+}
 
 describe("mock guided backend parity", () => {
   beforeEach(() => {
@@ -1152,6 +1201,77 @@ describe("mock firmware backend parity", () => {
         source: { kind: "official_bootloader", board_target: "CubeOrange" },
       },
     })).rejects.toThrow("missing or invalid firmware_flash_dfu_recovery.request.device.unique_id");
+  });
+
+  it("keeps mock message-rate defaults aligned with the Rust command catalog", async () => {
+    const rustCatalog = readRustMessageRateCatalog();
+
+    await expect(invokeMockCommand("get_available_message_rates")).resolves.toEqual(rustCatalog);
+  });
+
+  it("matches Rust telemetry and message-rate validation semantics", async () => {
+    const limits = readRustRateLimits();
+
+    await expect(invokeMockCommand("set_telemetry_rate", { rateHz: limits.telemetryRate.min - 1 })).rejects.toThrow(
+      "rate_hz must be between 1 and 20",
+    );
+    await expect(invokeMockCommand("set_telemetry_rate", { rateHz: limits.telemetryRate.max + 1 })).rejects.toThrow(
+      "rate_hz must be between 1 and 20",
+    );
+
+    await expect(invokeMockCommand("set_message_rate", { messageId: 33, rateHz: 4 })).rejects.toThrow(
+      "not connected",
+    );
+
+    await invokeMockCommand("connect_link", {
+      request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
+    });
+
+    await expect(
+      invokeMockCommand("set_message_rate", { messageId: 33, rateHz: limits.messageRate.min - 0.1 }),
+    ).rejects.toThrow("rate_hz must be between 0.1 and 50.0");
+    await expect(
+      invokeMockCommand("set_message_rate", { messageId: 33, rateHz: limits.messageRate.max + 0.1 }),
+    ).rejects.toThrow("rate_hz must be between 0.1 and 50.0");
+    await expect(invokeMockCommand("set_message_rate", { messageId: 33, rateHz: 4 })).resolves.toBeUndefined();
+  });
+
+  it("rejects malformed telemetry settings payloads loudly", async () => {
+    await expect(invokeMockCommand("set_telemetry_rate", {})).rejects.toThrow(
+      "missing or invalid set_telemetry_rate.rateHz",
+    );
+    await expect(invokeMockCommand("set_message_rate", { rateHz: 4 })).rejects.toThrow(
+      "not connected",
+    );
+
+    await invokeMockCommand("connect_link", {
+      request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
+    });
+
+    await expect(invokeMockCommand("set_message_rate", { rateHz: 4 })).rejects.toThrow(
+      "missing or invalid set_message_rate.messageId",
+    );
+    await expect(invokeMockCommand("set_message_rate", { messageId: 33, rateHz: "fast" })).rejects.toThrow(
+      "missing or invalid set_message_rate.rateHz",
+    );
+  });
+
+  it("does not let overridden settings commands bypass native-like validation", async () => {
+    const controller = getMockPlatformController();
+    controller.setCommandBehavior("set_message_rate", { type: "defer" });
+
+    await expect(invokeMockCommand("set_message_rate", { messageId: 33, rateHz: 4 })).rejects.toThrow(
+      "not connected",
+    );
+    expect(controller.resolveDeferred("set_message_rate")).toBe(false);
+
+    await invokeMockCommand("connect_link", {
+      request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
+    });
+
+    const pending = invokeMockCommand("set_message_rate", { messageId: 33, rateHz: 4 });
+    expect(controller.resolveDeferred("set_message_rate")).toBe(true);
+    await expect(pending).resolves.toBeUndefined();
   });
 
   it("surfaces rejected firmware starts without papering over controller overrides", async () => {

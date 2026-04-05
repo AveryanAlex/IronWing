@@ -34,6 +34,64 @@ function requireBoolean(value: unknown, label: string): boolean {
   return value;
 }
 
+function requireFiniteNumber(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`missing or invalid ${label}`);
+  }
+
+  return value;
+}
+
+export const MOCK_MESSAGE_RATE_CATALOG = [
+  { id: 33, name: "Global Position", default_rate_hz: 4.0 },
+  { id: 30, name: "Attitude", default_rate_hz: 4.0 },
+  { id: 24, name: "GPS Raw", default_rate_hz: 2.0 },
+  { id: 1, name: "System Status", default_rate_hz: 1.0 },
+  { id: 65, name: "RC Channels", default_rate_hz: 2.0 },
+  { id: 36, name: "Servo Output", default_rate_hz: 2.0 },
+  { id: 74, name: "VFR HUD", default_rate_hz: 4.0 },
+  { id: 62, name: "Nav Controller", default_rate_hz: 2.0 },
+] as const;
+
+export const MOCK_MESSAGE_RATE_LIMITS = {
+  min: 0.1,
+  max: 50.0,
+} as const;
+
+export const MOCK_TELEMETRY_RATE_LIMITS = {
+  min: 1,
+  max: 20,
+} as const;
+
+export function availableMessageRates() {
+  return MOCK_MESSAGE_RATE_CATALOG.map((entry) => ({ ...entry }));
+}
+
+export function validateSetTelemetryRateArgs(args: CommandArgs) {
+  const rateHz = requireFiniteInteger(args?.rateHz, "set_telemetry_rate.rateHz");
+
+  if (rateHz < MOCK_TELEMETRY_RATE_LIMITS.min || rateHz > MOCK_TELEMETRY_RATE_LIMITS.max) {
+    throw new Error("rate_hz must be between 1 and 20");
+  }
+
+  return rateHz;
+}
+
+export function validateSetMessageRateArgs(args: CommandArgs) {
+  const messageId = requireFiniteInteger(args?.messageId, "set_message_rate.messageId");
+  const rateHz = requireFiniteNumber(args?.rateHz, "set_message_rate.rateHz");
+
+  if (messageId < 0) {
+    throw new Error(`set_message_rate messageId must be greater than or equal to 0, got ${messageId}`);
+  }
+
+  if (rateHz < MOCK_MESSAGE_RATE_LIMITS.min || rateHz > MOCK_MESSAGE_RATE_LIMITS.max) {
+    throw new Error("rate_hz must be between 0.1 and 50.0");
+  }
+
+  return { messageId, rateHz };
+}
+
 export function validateSetServoArgs(args: CommandArgs) {
   const instance = requireFiniteInteger(args?.instance, "set_servo.instance");
   const pwmUs = requireFiniteInteger(args?.pwmUs, "set_servo.pwmUs");

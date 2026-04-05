@@ -36,13 +36,9 @@ let {
 
 let surfaceKind = $derived(chrome.current.tier === "phone" ? "sheet" : "dialog");
 let surfaceClass = $derived(
-  surfaceKind === "sheet"
-    ? "max-h-[85vh] max-w-none rounded-[28px]"
-    : "mx-auto max-h-[80vh] max-w-3xl rounded-[30px]",
+  surfaceKind === "sheet" ? "max-h-[85vh] max-w-none rounded-[28px]" : "mx-auto max-h-[80vh] max-w-3xl rounded-[30px]",
 );
-let bodyClass = $derived(
-  surfaceKind === "sheet" ? "max-h-[calc(85vh-10rem)]" : "max-h-[calc(80vh-10rem)]",
-);
+let bodyClass = $derived(surfaceKind === "sheet" ? "max-h-[calc(85vh-10rem)]" : "max-h-[calc(80vh-10rem)]");
 
 function handleKeydown(event: KeyboardEvent) {
   if (open && event.key === "Escape") {

@@ -46,6 +46,7 @@ import {
 import { ackSessionSnapshotResult, openSessionSnapshotResult, playbackSeekResult } from "./backend/session";
 import {
   applyMockLiveVehicleState,
+  availableMessageRates,
   availableTransportDescriptors,
   connectLink,
   disconnectLink,
@@ -56,7 +57,9 @@ import {
   validateArmDisarmArgs,
   validateMotorTestArgs,
   validateRcOverrideArgs,
+  validateSetMessageRateArgs,
   validateSetServoArgs,
+  validateSetTelemetryRateArgs,
 } from "./backend/vehicle";
 import type {
   CommandArgs,
@@ -114,6 +117,20 @@ function rejectAllDeferred(error: string) {
     }
   }
   deferredInvocations.clear();
+}
+
+function validateNativeSettingsCommand(cmd: string, args: CommandArgs) {
+  switch (cmd) {
+    case "set_telemetry_rate":
+      validateSetTelemetryRateArgs(args);
+      return;
+    case "set_message_rate":
+      requireConnectedVehicle();
+      validateSetMessageRateArgs(args);
+      return;
+    default:
+      return;
+  }
 }
 
 function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
@@ -180,16 +197,7 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
     case "firmware_session_cancel":
       return undefined;
     case "get_available_message_rates":
-      return [
-        { id: 33, name: "Global Position", default_rate_hz: 4.0 },
-        { id: 30, name: "Attitude", default_rate_hz: 4.0 },
-        { id: 24, name: "GPS Raw", default_rate_hz: 2.0 },
-        { id: 1, name: "System Status", default_rate_hz: 1.0 },
-        { id: 65, name: "RC Channels", default_rate_hz: 2.0 },
-        { id: 36, name: "Servo Output", default_rate_hz: 2.0 },
-        { id: 74, name: "VFR HUD", default_rate_hz: 4.0 },
-        { id: 62, name: "Nav Controller", default_rate_hz: 2.0 },
-      ];
+      return availableMessageRates();
     case "get_available_modes":
       return [];
     case "disconnect_link":
@@ -316,6 +324,7 @@ async function runBehavior<T>(cmd: string, behavior: MockCommandBehavior): Promi
 
 export async function invokeMockCommand<T>(cmd: string, args?: CommandArgs): Promise<T> {
   invocations.push({ cmd, args });
+  validateNativeSettingsCommand(cmd, args);
 
   const behavior = commandBehaviors.get(cmd);
   if (behavior) {

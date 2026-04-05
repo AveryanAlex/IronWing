@@ -71,6 +71,7 @@ export type ParamsStoreState = {
   sessionPhase: SessionStorePhase;
   activeEnvelope: SessionEnvelope | null;
   activeSource: SourceKind | null;
+  liveSessionConnected: boolean;
   vehicleType: string | null;
   paramStore: ParamStore | null;
   paramProgress: ParamProgress | null;
@@ -110,6 +111,7 @@ function createInitialState(): ParamsStoreState {
     sessionPhase: "idle",
     activeEnvelope: null,
     activeSource: null,
+    liveSessionConnected: false,
     vehicleType: null,
     paramStore: null,
     paramProgress: null,
@@ -137,11 +139,66 @@ export function createParamsStore(
   let lastSessionEnvelope: SessionEnvelope | null = null;
   let lastBootstrapStoreRef: ParamStore | null = null;
   let lastBootstrapProgressRef: ParamProgress | null = null;
+  let lastDownloadRequestScopeKey: string | null = null;
   let metadataRequestId = 0;
   let applyRequestId = 0;
 
   function invalidateInFlightApply() {
     applyRequestId += 1;
+  }
+
+  function resolveDownloadRequestScopeKey(state: Pick<ParamsStoreState, "activeEnvelope">) {
+    const envelope = state.activeEnvelope;
+    if (!envelope || envelope.source_kind !== "live") {
+      return null;
+    }
+
+    return `${envelope.session_id}:${envelope.seek_epoch}:${envelope.reset_revision}`;
+  }
+
+  async function maybeStartLiveParamDownload() {
+    const state = get(store);
+    const scopeKey = resolveDownloadRequestScopeKey(state);
+
+    if (!scopeKey) {
+      lastDownloadRequestScopeKey = null;
+      return;
+    }
+
+    if (!state.streamReady || !state.liveSessionConnected) {
+      return;
+    }
+
+    if (state.paramStore || state.paramProgress || lastDownloadRequestScopeKey === scopeKey) {
+      return;
+    }
+
+    lastDownloadRequestScopeKey = scopeKey;
+
+    try {
+      await service.downloadAll();
+      store.update((current) => {
+        if (resolveDownloadRequestScopeKey(current) !== scopeKey || current.paramStore || current.paramProgress) {
+          return current;
+        }
+
+        return {
+          ...current,
+          lastNotice: "Requesting live parameter data from the vehicle.",
+        };
+      });
+    } catch (error) {
+      store.update((current) => {
+        if (resolveDownloadRequestScopeKey(current) !== scopeKey) {
+          return current;
+        }
+
+        return {
+          ...current,
+          lastNotice: `Failed to start parameter download: ${service.formatError(error)}`,
+        };
+      });
+    }
   }
 
   function applyBootstrapState(
@@ -153,6 +210,8 @@ export function createParamsStore(
     const vehicleType = metadataReload.vehicleType;
     const nextStore = normalizeParamStore(sessionState.bootstrap.paramStore);
     const nextProgress = normalizeParamProgress(sessionState.bootstrap.paramProgress);
+    const liveSessionConnected = nextEnvelope?.source_kind === "live"
+      && sessionState.sessionDomain.value?.connection.kind === "connected";
 
     if (envelopeChanged) {
       invalidateInFlightApply();
@@ -171,6 +230,7 @@ export function createParamsStore(
           sessionPhase: sessionState.lastPhase,
           activeEnvelope: null,
           activeSource: null,
+          liveSessionConnected: false,
           vehicleType,
           paramStore: null,
           paramProgress: null,
@@ -204,6 +264,7 @@ export function createParamsStore(
         sessionPhase: sessionState.lastPhase,
         activeEnvelope: nextEnvelope,
         activeSource: nextEnvelope.source_kind,
+        liveSessionConnected,
         vehicleType,
         paramStore: resolvedStore,
         paramProgress: shouldReplaceProgress ? nextProgress : state.paramProgress,
@@ -289,6 +350,9 @@ export function createParamsStore(
     const bootstrapStoreChanged = lastBootstrapStoreRef !== sessionState.bootstrap.paramStore;
     const bootstrapProgressChanged = lastBootstrapProgressRef !== sessionState.bootstrap.paramProgress;
     const metadataReload = resolveMetadataReload(currentState, sessionState, envelopeChanged);
+    const liveSessionConnected = nextEnvelope?.source_kind === "live"
+      && sessionState.sessionDomain.value?.connection.kind === "connected";
+    const liveSessionConnectedChanged = currentState.liveSessionConnected !== liveSessionConnected;
 
     lastSessionEnvelope = nextEnvelope;
     lastBootstrapStoreRef = sessionState.bootstrap.paramStore;
@@ -298,14 +362,22 @@ export function createParamsStore(
       ...state,
       sessionHydrated: sessionState.hydrated,
       sessionPhase: sessionState.lastPhase,
+      liveSessionConnected,
       phase: resolveDomainPhase(sessionState, state.activeEnvelope, state.paramStore, state.streamReady),
     }));
 
-    if (!envelopeChanged && !bootstrapStoreChanged && !bootstrapProgressChanged && !metadataReload.shouldReload) {
+    if (
+      !envelopeChanged
+      && !bootstrapStoreChanged
+      && !bootstrapProgressChanged
+      && !metadataReload.shouldReload
+      && !liveSessionConnectedChanged
+    ) {
       return;
     }
 
     applyBootstrapState(sessionState, envelopeChanged, metadataReload);
+    void maybeStartLiveParamDownload();
   }
 
   function applyStoreEvent(event: { envelope: SessionEnvelope; value: ParamStore }) {
@@ -386,6 +458,7 @@ export function createParamsStore(
           streamError: null,
           phase: resolveReadyPhase(state),
         }));
+        void maybeStartLiveParamDownload();
       } catch (error) {
         store.update((state) => ({
           ...state,
@@ -590,6 +663,7 @@ export function createParamsStore(
     lastSessionEnvelope = null;
     lastBootstrapStoreRef = null;
     lastBootstrapProgressRef = null;
+    lastDownloadRequestScopeKey = null;
     store.set(createInitialState());
   }
 

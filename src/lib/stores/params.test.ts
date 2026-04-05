@@ -236,6 +236,7 @@ function createParamsService(
       };
     }),
     fetchMetadata: vi.fn(async () => metadata),
+    downloadAll: vi.fn(async () => undefined),
     writeBatch: vi.fn(async (params: [string, number][]) => params.map(([name, value]) => ({
       name,
       requested_value: value,
@@ -290,6 +291,24 @@ describe("createParamsStore", () => {
     if (typeof localStorage?.clear === "function") {
       localStorage.clear();
     }
+  });
+
+  it("starts one live parameter download when the connected session has no bootstrap param snapshot yet", async () => {
+    const snapshot = createSnapshot({
+      param_store: null,
+      param_progress: null,
+    });
+    const { service: sessionService } = createSessionService([snapshot]);
+    const paramsHarness = createParamsService(null);
+    const sessionStore = createSessionStore(sessionService);
+    const paramStore = createParamsStore(sessionStore, paramsHarness.service);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+    await flush();
+
+    expect(paramsHarness.service.downloadAll).toHaveBeenCalledTimes(1);
+    expect(get(paramStore).lastNotice).toContain("Requesting live parameter data");
   });
 
   it("hydrates from the scoped session bootstrap and enriches the starter workspace when metadata is available", async () => {
