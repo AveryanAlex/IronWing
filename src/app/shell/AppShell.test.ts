@@ -423,6 +423,107 @@ describe("AppShell", () => {
         expect(screen.getByTestId(parameterWorkspaceTestIds.advancedEntry)).toBeTruthy();
     });
 
+    it("opens the expert browser from a workflow handoff inside the shell and stages raw edits into the shared tray", async () => {
+        await renderShellAt(1440, {
+            snapshot: createSnapshot({
+                param_store: {
+                    expected_count: 5,
+                    params: {
+                        ARMING_CHECK: { name: "ARMING_CHECK", value: 0, param_type: "uint8", index: 0 },
+                        FS_THR_ENABLE: { name: "FS_THR_ENABLE", value: 0, param_type: "uint8", index: 1 },
+                        BATT_FS_LOW_ACT: { name: "BATT_FS_LOW_ACT", value: 0, param_type: "uint8", index: 2 },
+                        BATT_FS_CRT_ACT: { name: "BATT_FS_CRT_ACT", value: 0, param_type: "uint8", index: 3 },
+                        LOG_BITMASK: { name: "LOG_BITMASK", value: 5, param_type: "uint32", index: 4 },
+                    },
+                },
+                param_progress: "completed",
+            }),
+            metadata: new Map([
+                [
+                    "ARMING_CHECK",
+                    {
+                        humanName: "Arming checks",
+                        description: "Controls pre-arm validation.",
+                        rebootRequired: true,
+                        values: [
+                            { code: 0, label: "Disabled" },
+                            { code: 1, label: "All checks" },
+                        ],
+                        userLevel: "Standard",
+                    },
+                ],
+                [
+                    "FS_THR_ENABLE",
+                    {
+                        humanName: "Throttle failsafe",
+                        description: "Select the throttle failsafe behavior.",
+                        values: [
+                            { code: 0, label: "Disabled" },
+                            { code: 1, label: "Enabled always" },
+                        ],
+                        userLevel: "Standard",
+                    },
+                ],
+                [
+                    "BATT_FS_LOW_ACT",
+                    {
+                        humanName: "Low battery action",
+                        description: "Action taken on low battery.",
+                        values: [
+                            { code: 0, label: "None" },
+                            { code: 2, label: "RTL" },
+                        ],
+                    },
+                ],
+                [
+                    "BATT_FS_CRT_ACT",
+                    {
+                        humanName: "Critical battery action",
+                        description: "Action taken on critical battery.",
+                        values: [
+                            { code: 0, label: "None" },
+                            { code: 1, label: "Land" },
+                        ],
+                    },
+                ],
+                [
+                    "LOG_BITMASK",
+                    {
+                        humanName: "Log bitmask",
+                        description: "Enabled log streams.",
+                        bitmask: [
+                            { bit: 0, label: "Fast attitude" },
+                            { bit: 2, label: "PID" },
+                        ],
+                        userLevel: "Advanced",
+                    },
+                ],
+            ]),
+        });
+
+        await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
+        await waitFor(() => {
+            expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("setup");
+        });
+
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.workflowOpenAdvancedPrefix}-safety`));
+
+        expect(screen.getByTestId(parameterWorkspaceTestIds.advancedPanel)).toBeTruthy();
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertHighlightSummary).textContent).toContain(
+            "highlighting 4 parameters",
+        );
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.highlightPrefix}-ARMING_CHECK`)).toBeTruthy();
+
+        await fireEvent.change(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`), {
+            target: { value: "1" },
+        });
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-ARMING_CHECK`));
+
+        expect(screen.getByTestId(appShellTestIds.parameterReviewTray)).toBeTruthy();
+        expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("1 queued");
+        expect(screen.getByTestId(appShellTestIds.parameterWorkspacePendingCount).textContent?.trim()).toBe("1");
+    });
+
     it("shows an explicit unavailable setup workspace state when the active scope has no bootstrap data", async () => {
         await renderShellAt(1440);
 

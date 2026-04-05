@@ -3,8 +3,8 @@ import type {
   ParameterWorkflowCardId,
   ParameterWorkflowSection as ParameterWorkflowSectionModel,
 } from "../../lib/params/parameter-workflows";
-import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
 import ParameterWorkflowCard from "./ParameterWorkflowCard.svelte";
+import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
 
 type BatteryControls = {
   cellCountInput: string;
@@ -31,7 +31,7 @@ let {
   batteryControls?: BatteryControls | null;
   flightControls?: FlightControls | null;
   onStage: (cardId: ParameterWorkflowCardId) => void;
-  onOpenAdvanced: () => void;
+  onOpenAdvanced: (cardId: ParameterWorkflowCardId) => void;
 } = $props();
 </script>
 
@@ -48,8 +48,8 @@ let {
   <div class="mt-4 grid gap-4 xl:grid-cols-2">
     {#each section.cards as card (card.id)}
       <ParameterWorkflowCard
-        {card}
         {batteryControls}
+        {card}
         {flightControls}
         {onOpenAdvanced}
         {onStage}

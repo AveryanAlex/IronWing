@@ -2,9 +2,10 @@
 import { fromStore } from "svelte/store";
 
 import {
-  buildParameterItemModels,
-  type ParameterItemModel,
-} from "../../lib/params/parameter-item-model";
+  buildParameterExpertView,
+  type ParameterExpertFilter,
+  type ParameterExpertRow,
+} from "../../lib/params/parameter-expert-view";
 import {
   buildParameterWorkflowSections,
   type BatteryWorkflowInputs,
@@ -13,17 +14,19 @@ import {
   validateBatteryWorkflowInputs,
   validateFlightWorkflowInputs,
 } from "../../lib/params/parameter-workflows";
-import type {
-  ParameterWorkspaceItemView,
-  ParameterWorkspaceStatus,
-} from "../../lib/stores/params";
+import type { ParameterWorkspaceStatus } from "../../lib/stores/params";
 import {
   getParameterWorkspaceViewStoreContext,
   getParamsStoreContext,
 } from "../../app/shell/runtime-context";
-import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
+import ParameterExpertBrowser from "./ParameterExpertBrowser.svelte";
 import ParameterWorkflowSection from "./ParameterWorkflowSection.svelte";
-import ParameterWorkspaceSection from "./ParameterWorkspaceSection.svelte";
+import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
+
+type ExpertHighlightRequest = {
+  sourceLabel: string;
+  targetNames: string[];
+};
 
 const store = getParamsStoreContext();
 const paramsState = fromStore(store);
@@ -33,6 +36,9 @@ let showAdvanced = $state(false);
 let batteryCellCountInput = $state("4");
 let batteryChemistryIndex = $state(0);
 let flightPropSizeInput = $state("9");
+let expertSearchText = $state("");
+let expertFilter = $state<ParameterExpertFilter>("standard");
+let expertHighlightRequest = $state<ExpertHighlightRequest | null>(null);
 let lastValidBatteryInputs = $state<Required<BatteryWorkflowInputs>>({
   cellCount: 4,
   chemistryIndex: 0,
@@ -78,35 +84,22 @@ let workflowSections = $derived.by(() =>
     flightInputs: effectiveFlightInputs,
   }),
 );
-let advancedSections = $derived.by(() => buildAdvancedSections());
-let advancedAvailable = $derived(advancedSections.length > 0);
+let expertView = $derived.by(() =>
+  buildParameterExpertView({
+    paramStore: params.paramStore,
+    metadata: params.metadata,
+    stagedEdits: params.stagedEdits,
+    retainedFailures: params.retainedFailures,
+    filter: expertFilter,
+    searchText: expertSearchText,
+    highlightTargets: expertHighlightRequest?.targetNames ?? [],
+  }),
+);
+let advancedAvailable = $derived(expertView.totalCount > 0);
+let expertHighlightSourceLabel = $derived(expertHighlightRequest?.sourceLabel ?? null);
 
-function buildAdvancedSections() {
-  if (!params.paramStore) {
-    return [];
-  }
-
-  const items = buildParameterItemModels(params.paramStore, params.metadata).map((item) =>
-    applyStagedItemState(item, params.stagedEdits[item.name]),
-  );
-  if (items.length === 0) {
-    return [];
-  }
-
-  return [
-    {
-      id: "advanced-all",
-      title: "All parameters",
-      description:
-        "Raw parameter access stays separate from the guided starters. Stage direct edits here and review everything in the shared tray.",
-      mode: "fallback" as const,
-      items,
-    },
-  ];
-}
-
-function stageItem(item: ParameterItemModel, nextValue: number) {
-  store.stageParameterEdit(item, nextValue);
+function stageItem(row: ParameterExpertRow, nextValue: number) {
+  store.stageParameterEdit(row, nextValue);
 }
 
 function discardItem(name: string) {
@@ -128,12 +121,35 @@ function stageWorkflowCard(cardId: ParameterWorkflowCardId) {
   }
 }
 
-function openAdvanced() {
+function openAdvanced(options: ExpertHighlightRequest | null = null) {
   showAdvanced = true;
+  if (!options || options.targetNames.length === 0) {
+    expertHighlightRequest = null;
+    return;
+  }
+
+  expertHighlightRequest = {
+    sourceLabel: options.sourceLabel,
+    targetNames: options.targetNames.filter((name) => name.trim().length > 0),
+  };
+}
+
+function openWorkflowAdvanced(cardId: ParameterWorkflowCardId) {
+  const card = workflowSections.flatMap((section) => section.cards).find((entry) => entry.id === cardId);
+  if (!card) {
+    openAdvanced();
+    return;
+  }
+
+  openAdvanced({
+    sourceLabel: card.title,
+    targetNames: card.targetNames,
+  });
 }
 
 function closeAdvanced() {
   showAdvanced = false;
+  expertHighlightRequest = null;
 }
 
 function updateBatteryCellCountInput(value: string) {
@@ -246,29 +262,6 @@ function parsePositiveNumber(value: string): number | null {
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : null;
 }
-
-function applyStagedItemState(
-  item: ParameterItemModel,
-  stagedEdit: typeof params.stagedEdits[string] | undefined,
-): ParameterWorkspaceItemView {
-  if (!stagedEdit || stagedEdit.nextValue === item.value) {
-    return {
-      ...item,
-      isStaged: false,
-      stagedValue: null,
-      stagedValueText: null,
-      diffText: null,
-    };
-  }
-
-  return {
-    ...item,
-    isStaged: true,
-    stagedValue: stagedEdit.nextValue,
-    stagedValueText: stagedEdit.nextValueText,
-    diffText: `${item.valueText} → ${stagedEdit.nextValueText}`,
-  };
-}
 </script>
 
 <section
@@ -282,7 +275,7 @@ function applyStagedItemState(
       <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Parameter workspace</p>
       <h2 class="mt-1 text-base font-semibold text-text-primary">Workflow-first setup</h2>
       <p class="mt-1 text-sm text-text-secondary">
-        Start with a few guided operational changes, then open Advanced parameters for direct raw edits and the same shared review tray.
+        Start with a few guided operational changes, then open Advanced parameters for searchable raw edits, grouped browsing, and the same shared review tray.
       </p>
     </div>
 
@@ -357,7 +350,7 @@ function applyStagedItemState(
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Advanced parameters</p>
           <h3 class="mt-2 text-lg font-semibold text-text-primary">Raw access stays explicit and separate</h3>
           <p class="mt-2 text-sm text-text-secondary">
-            Use direct numeric edits when the guided starters do not fit the current vehicle or parameter info is unavailable.
+            Search, filter, and stage grouped raw parameters here when the guided starters do not fit the current vehicle or metadata is unavailable.
           </p>
         </div>
         <button
@@ -370,16 +363,23 @@ function applyStagedItemState(
         </button>
       </div>
 
-      <div class="mt-4 space-y-4">
-        {#each advancedSections as section (section.id)}
-          <ParameterWorkspaceSection
-            {section}
-            envelopeKey={activeEnvelopeKey}
-            onDiscard={discardItem}
-            onStage={stageItem}
-            readiness={view.readiness}
-          />
-        {/each}
+      <div class="mt-4">
+        <ParameterExpertBrowser
+          envelopeKey={activeEnvelopeKey}
+          filter={expertFilter}
+          highlightSourceLabel={expertHighlightSourceLabel}
+          onDiscard={discardItem}
+          onFilterChange={(nextFilter) => {
+            expertFilter = nextFilter;
+          }}
+          onSearchText={(nextSearchText) => {
+            expertSearchText = nextSearchText;
+          }}
+          onStage={stageItem}
+          readiness={view.readiness}
+          searchText={expertSearchText}
+          view={expertView}
+        />
       </div>
     </div>
   {:else}
@@ -408,9 +408,9 @@ function applyStagedItemState(
                 validationMessage: flightValidation.message,
                 onPropInchesInput: updateFlightPropSizeInput,
               }}
-              {section}
-              onOpenAdvanced={openAdvanced}
+              onOpenAdvanced={openWorkflowAdvanced}
               onStage={stageWorkflowCard}
+              {section}
             />
           {/each}
         {/if}
@@ -423,13 +423,13 @@ function applyStagedItemState(
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Advanced parameters</p>
         <h3 class="mt-2 text-lg font-semibold text-text-primary">Keep raw access explicit</h3>
         <p class="mt-2 text-sm leading-6 text-text-secondary">
-          Open the raw parameter list when you need direct numeric control, fallback access during metadata trouble, or edits outside the guided starters.
+          Open grouped raw browsing when you need searchable direct control, metadata-failure recovery, or edits outside the guided starters.
         </p>
         <button
           class="mt-4 w-full rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={parameterWorkspaceTestIds.advancedButton}
           disabled={!advancedAvailable}
-          onclick={openAdvanced}
+          onclick={() => openAdvanced()}
           type="button"
         >
           {advancedAvailable ? "Open Advanced parameters" : "Advanced parameters unavailable"}

@@ -65,6 +65,7 @@ export type ParameterWorkflowCard = {
     detail: string | null;
     status: ParameterWorkflowCardStatus;
     disabledMessage: string | null;
+    targetNames: string[];
     recommendations: ParameterWorkflowRecommendation[];
     changedCount: number;
     matchingCount: number;
@@ -284,6 +285,7 @@ function buildWorkflowCard(
             detail: metadataLock.detail,
             status: "disabled",
             disabledMessage: metadataLock.detail,
+            targetNames: definitions.map((definition) => definition.name),
             recommendations: [],
             changedCount: 0,
             matchingCount: 0,
@@ -322,6 +324,7 @@ function buildWorkflowCard(
             status: "disabled",
             disabledMessage:
                 "The current vehicle did not expose enough labeled parameters for this guided starter. Open Advanced parameters for raw access.",
+            targetNames: definitions.map((definition) => definition.name),
             recommendations: [],
             changedCount: 0,
             matchingCount: 0,
@@ -336,6 +339,7 @@ function buildWorkflowCard(
         detail: buildDetailText(unavailableCount, recommendations),
         status: "ready",
         disabledMessage: null,
+        targetNames: definitions.map((definition) => definition.name),
         recommendations,
         changedCount,
         matchingCount,

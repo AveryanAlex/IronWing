@@ -32,7 +32,7 @@ let {
   batteryControls?: BatteryControls | null;
   flightControls?: FlightControls | null;
   onStage: (cardId: ParameterWorkflowCardId) => void;
-  onOpenAdvanced: () => void;
+  onOpenAdvanced: (cardId: ParameterWorkflowCardId) => void;
 } = $props();
 
 let validationMessage = $derived(
@@ -210,7 +210,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
       <button
         class="mt-3 rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={`${parameterWorkspaceTestIds.workflowOpenAdvancedPrefix}-${card.id}`}
-        onclick={onOpenAdvanced}
+        onclick={() => onOpenAdvanced(card.id)}
         type="button"
       >
         Open Advanced parameters
@@ -281,17 +281,27 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
 
     <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
-        Queue from this card, then review and apply everything from the shared tray.
+        Queue from this card, inspect the raw parameters, then review and apply everything from the shared tray.
       </p>
-      <button
-        class="rounded-full border border-accent/30 bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={`${parameterWorkspaceTestIds.workflowStageButtonPrefix}-${card.id}`}
-        disabled={stageButtonDisabled()}
-        onclick={() => onStage(card.id)}
-        type="button"
-      >
-        {stageButtonLabel()}
-      </button>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          data-testid={`${parameterWorkspaceTestIds.workflowOpenAdvancedPrefix}-${card.id}`}
+          onclick={() => onOpenAdvanced(card.id)}
+          type="button"
+        >
+          Inspect raw parameters
+        </button>
+        <button
+          class="rounded-full border border-accent/30 bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          data-testid={`${parameterWorkspaceTestIds.workflowStageButtonPrefix}-${card.id}`}
+          disabled={stageButtonDisabled()}
+          onclick={() => onStage(card.id)}
+          type="button"
+        >
+          {stageButtonLabel()}
+        </button>
+      </div>
     </div>
   {/if}
 </article>

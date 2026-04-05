@@ -83,6 +83,8 @@ export const parameterWorkspaceSelectors = {
     metadata: '[data-testid="parameter-domain-metadata"]',
     notice: '[data-testid="parameter-domain-notice"]',
     pendingCount: '[data-testid="parameter-workspace-pending-count"]',
+    advancedButton: '[data-testid="parameter-workspace-advanced-button"]',
+    advancedPanel: '[data-testid="parameter-workspace-advanced-panel"]',
     reviewTray: '[data-testid="app-shell-parameter-review-tray"]',
     reviewSurface: '[data-testid="app-shell-parameter-review-surface"]',
     reviewCount: '[data-testid="app-shell-parameter-review-count"]',
@@ -344,8 +346,23 @@ export async function openParameterWorkspace(page: Page): Promise<void> {
 }
 
 export async function stageParameterValue(page: Page, name: string, value: string): Promise<void> {
-    const input = parameterInputLocator(page, name);
-    const stageButton = parameterStageButtonLocator(page, name);
+    let input = parameterInputLocator(page, name);
+    let stageButton = parameterStageButtonLocator(page, name);
+
+    if (await input.count() === 0) {
+        const advancedButton = page.locator(parameterWorkspaceSelectors.advancedButton);
+        await expect(
+            advancedButton,
+            `Parameter input ${name} is not visible in the workflow-first default view. Advanced parameters must stay reachable through the shared workspace entry point.`,
+        ).toBeVisible();
+        await advancedButton.click();
+        await expect(
+            page.locator(parameterWorkspaceSelectors.advancedPanel),
+            "Advanced parameters did not open before the mocked-browser helper tried to stage a raw edit.",
+        ).toBeVisible();
+        input = parameterInputLocator(page, name);
+        stageButton = parameterStageButtonLocator(page, name);
+    }
 
     await expect(
         input,

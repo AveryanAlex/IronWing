@@ -26,6 +26,7 @@ function createMetadata(): ParamMetadataMap {
                     { code: 0, label: "Disabled" },
                     { code: 1, label: "All checks" },
                 ],
+                userLevel: "Standard",
             },
         ],
         [
@@ -37,6 +38,7 @@ function createMetadata(): ParamMetadataMap {
                     { code: 0, label: "Disabled" },
                     { code: 1, label: "Enabled always" },
                 ],
+                userLevel: "Standard",
             },
         ],
         [
@@ -137,7 +139,48 @@ function createMetadata(): ParamMetadataMap {
                 description: "Yaw acceleration limit.",
             },
         ],
+        [
+            "LOG_BITMASK",
+            {
+                humanName: "Log bitmask",
+                description: "Enabled log streams.",
+                bitmask: [
+                    { bit: 0, label: "Fast attitude" },
+                    { bit: 2, label: "PID" },
+                ],
+                userLevel: "Advanced",
+            },
+        ],
+        [
+            "FORMAT_VERSION",
+            {
+                humanName: "Format version",
+                description: "Current parameter table format version.",
+                readOnly: true,
+            },
+        ],
     ]);
+}
+
+function createParams() {
+    return {
+        ARMING_CHECK: { name: "ARMING_CHECK", value: 0, param_type: "uint8", index: 0 },
+        FS_THR_ENABLE: { name: "FS_THR_ENABLE", value: 0, param_type: "uint8", index: 1 },
+        BATT_FS_LOW_ACT: { name: "BATT_FS_LOW_ACT", value: 0, param_type: "uint8", index: 2 },
+        BATT_FS_CRT_ACT: { name: "BATT_FS_CRT_ACT", value: 0, param_type: "uint8", index: 3 },
+        BATT_ARM_VOLT: { name: "BATT_ARM_VOLT", value: 12.6, param_type: "real32", index: 4 },
+        BATT_LOW_VOLT: { name: "BATT_LOW_VOLT", value: 12.1, param_type: "real32", index: 5 },
+        BATT_CRT_VOLT: { name: "BATT_CRT_VOLT", value: 11.7, param_type: "real32", index: 6 },
+        MOT_BAT_VOLT_MAX: { name: "MOT_BAT_VOLT_MAX", value: 12.6, param_type: "real32", index: 7 },
+        MOT_BAT_VOLT_MIN: { name: "MOT_BAT_VOLT_MIN", value: 11.1, param_type: "real32", index: 8 },
+        MOT_THST_EXPO: { name: "MOT_THST_EXPO", value: 0.35, param_type: "real32", index: 9 },
+        INS_GYRO_FILTER: { name: "INS_GYRO_FILTER", value: 20, param_type: "uint16", index: 10 },
+        ATC_ACCEL_P_MAX: { name: "ATC_ACCEL_P_MAX", value: 10000, param_type: "uint32", index: 11 },
+        ATC_ACCEL_R_MAX: { name: "ATC_ACCEL_R_MAX", value: 10000, param_type: "uint32", index: 12 },
+        ATC_ACCEL_Y_MAX: { name: "ATC_ACCEL_Y_MAX", value: 8000, param_type: "uint32", index: 13 },
+        LOG_BITMASK: { name: "LOG_BITMASK", value: 5, param_type: "uint32", index: 14 },
+        FORMAT_VERSION: { name: "FORMAT_VERSION", value: 3, param_type: "uint32", index: 15 },
+    };
 }
 
 function createState(overrides: Partial<ParamsStoreState> = {}): ParamsStoreState {
@@ -157,23 +200,8 @@ function createState(overrides: Partial<ParamsStoreState> = {}): ParamsStoreStat
         activeSource: "live",
         vehicleType: "quadrotor",
         paramStore: {
-            expected_count: 14,
-            params: {
-                ARMING_CHECK: { name: "ARMING_CHECK", value: 0, param_type: "uint8", index: 0 },
-                FS_THR_ENABLE: { name: "FS_THR_ENABLE", value: 0, param_type: "uint8", index: 1 },
-                BATT_FS_LOW_ACT: { name: "BATT_FS_LOW_ACT", value: 0, param_type: "uint8", index: 2 },
-                BATT_FS_CRT_ACT: { name: "BATT_FS_CRT_ACT", value: 0, param_type: "uint8", index: 3 },
-                BATT_ARM_VOLT: { name: "BATT_ARM_VOLT", value: 12.6, param_type: "real32", index: 4 },
-                BATT_LOW_VOLT: { name: "BATT_LOW_VOLT", value: 12.1, param_type: "real32", index: 5 },
-                BATT_CRT_VOLT: { name: "BATT_CRT_VOLT", value: 11.7, param_type: "real32", index: 6 },
-                MOT_BAT_VOLT_MAX: { name: "MOT_BAT_VOLT_MAX", value: 12.6, param_type: "real32", index: 7 },
-                MOT_BAT_VOLT_MIN: { name: "MOT_BAT_VOLT_MIN", value: 11.1, param_type: "real32", index: 8 },
-                MOT_THST_EXPO: { name: "MOT_THST_EXPO", value: 0.35, param_type: "real32", index: 9 },
-                INS_GYRO_FILTER: { name: "INS_GYRO_FILTER", value: 20, param_type: "uint16", index: 10 },
-                ATC_ACCEL_P_MAX: { name: "ATC_ACCEL_P_MAX", value: 10000, param_type: "uint32", index: 11 },
-                ATC_ACCEL_R_MAX: { name: "ATC_ACCEL_R_MAX", value: 10000, param_type: "uint32", index: 12 },
-                ATC_ACCEL_Y_MAX: { name: "ATC_ACCEL_Y_MAX", value: 8000, param_type: "uint32", index: 13 },
-            },
+            expected_count: 16,
+            params: createParams(),
         },
         paramProgress: "completed",
         metadata: createMetadata(),
@@ -287,6 +315,73 @@ describe("ParameterWorkspace", () => {
         ).toContain("Queued");
     });
 
+    it("opens expert mode from a workflow handoff, preserves expert filters, and highlights the targeted raw rows", async () => {
+        render(withParameterWorkspaceContext(createHarnessStore(createState()), ParameterWorkspace));
+
+        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
+        await fireEvent.input(screen.getByTestId(parameterWorkspaceTestIds.expertSearch), {
+            target: { value: "arming" },
+        });
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-modified`));
+        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedBackButton));
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.workflowOpenAdvancedPrefix}-safety`));
+
+        expect(screen.getByTestId(parameterWorkspaceTestIds.advancedPanel)).toBeTruthy();
+        expect((screen.getByTestId(parameterWorkspaceTestIds.expertSearch) as HTMLInputElement).value).toBe("arming");
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertHighlightSummary).textContent).toContain(
+            "highlighting 4 parameters",
+        );
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertHighlightSummary).textContent).toContain(
+            "outside the current filter",
+        );
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.highlightPrefix}-ARMING_CHECK`)).toBeTruthy();
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.highlightPrefix}-FS_THR_ENABLE`)).toBeTruthy();
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.highlightPrefix}-BATT_FS_LOW_ACT`)).toBeTruthy();
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.highlightPrefix}-BATT_FS_CRT_ACT`)).toBeTruthy();
+    });
+
+    it("supports expert filters, grouped browsing, metadata-aware editors, and direct unstage controls", async () => {
+        render(withParameterWorkspaceContext(createHarnessStore(createState()), ParameterWorkspace));
+
+        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
+
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertRoot)).toBeTruthy();
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`).tagName).toBe("SELECT");
+        expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeNull();
+
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));
+
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.expertGroupPrefix}-LOG`)).toBeTruthy();
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-LOG_BITMASK`).tagName).toBe("INPUT");
+        expect((screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-FORMAT_VERSION`) as HTMLButtonElement).disabled).toBe(
+            true,
+        );
+
+        await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-LOG_BITMASK`), {
+            target: { value: "1" },
+        });
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-LOG_BITMASK`));
+
+        expect(screen.getByTestId(parameterWorkspaceTestIds.pendingCount).textContent).toContain("1 pending");
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-LOG_BITMASK`).textContent).toContain("5");
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-LOG_BITMASK`).textContent).toContain("1");
+
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-standard`));
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertHiddenStaged).textContent).toContain("LOG_BITMASK");
+
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-modified`));
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeTruthy();
+
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.discardButtonPrefix}-LOG_BITMASK`));
+
+        await waitFor(() => {
+            expect(screen.queryByTestId(parameterWorkspaceTestIds.pendingCount)).toBeNull();
+        });
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertNoMatches).textContent).toContain(
+            "No parameters match",
+        );
+    });
+
     it("keeps workflow cards visible but disabled when metadata is unavailable and routes recovery through Advanced parameters", async () => {
         render(withParameterWorkspaceContext(createHarnessStore(createState({
             metadata: null,
@@ -304,7 +399,11 @@ describe("ParameterWorkspace", () => {
         await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
 
         expect(screen.getByTestId(parameterWorkspaceTestIds.advancedPanel)).toBeTruthy();
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertMetadataFallback).textContent).toContain(
+            "falling back to raw parameter names",
+        );
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-ARMING_CHECK`).textContent).toContain("ARMING_CHECK");
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`).tagName).toBe("INPUT");
 
         await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`), {
             target: { value: "1" },
@@ -343,9 +442,9 @@ describe("ParameterWorkspace", () => {
     it("shows already-aligned guided starters without queueing a no-op card", () => {
         render(withParameterWorkspaceContext(createHarnessStore(createState({
             paramStore: {
-                expected_count: 14,
+                expected_count: 16,
                 params: {
-                    ...createState().paramStore!.params,
+                    ...createParams(),
                     ARMING_CHECK: { name: "ARMING_CHECK", value: 1, param_type: "uint8", index: 0 },
                     FS_THR_ENABLE: { name: "FS_THR_ENABLE", value: 1, param_type: "uint8", index: 1 },
                     BATT_FS_LOW_ACT: { name: "BATT_FS_LOW_ACT", value: 2, param_type: "uint8", index: 2 },
