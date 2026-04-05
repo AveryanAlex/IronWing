@@ -1,5 +1,4 @@
 <script lang="ts">
-import { get } from "svelte/store";
 import { fromStore } from "svelte/store";
 
 import {
@@ -12,6 +11,9 @@ import {
   type MissionPlannerStoreState,
 } from "../../lib/stores/mission-planner";
 import type { MissionPlannerInlineStatus, MissionPlannerView } from "../../lib/stores/mission-planner-view";
+import MissionDraftList from "./MissionDraftList.svelte";
+import MissionHomeCard from "./MissionHomeCard.svelte";
+import MissionInspector from "./MissionInspector.svelte";
 import MissionWorkspaceHeader from "./MissionWorkspaceHeader.svelte";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
@@ -28,6 +30,35 @@ let visibleLocalNote = $derived(localNote?.scopeKey === scopeKey ? localNote.mes
 let hasContent = $derived(plannerHasContent(planner));
 let canUseVehicleActions = $derived(view.activeEnvelope !== null && view.readiness !== "bootstrapping");
 let inlineCopy = $derived(resolveInlineStatusCopy(view, planner));
+let missionItems = $derived(planner.draftState.active.mission.draftItems);
+let selectedMissionUiId = $derived(planner.draftState.active.mission.primarySelectedUiId);
+let surveyBlocks = $derived.by(() =>
+  planner.survey.surveyRegionOrder
+    .map((block) => {
+      const region = planner.survey.surveyRegions.get(block.regionId);
+      return region ? { ...block, region } : null;
+    })
+    .filter((block): block is { regionId: string; position: number; region: NonNullable<(typeof block)>["region"] } => block !== null),
+);
+let selectedMissionItem = $derived.by(() => {
+  if (planner.selection.kind !== "mission-item") {
+    return null;
+  }
+
+  return missionItems.find((item) => item.uiId === selectedMissionUiId) ?? null;
+});
+let previousMissionItem = $derived.by(() => {
+  if (!selectedMissionItem || selectedMissionItem.index <= 0) {
+    return null;
+  }
+
+  return missionItems[selectedMissionItem.index - 1] ?? null;
+});
+let selectedSurveyRegion = $derived(
+  planner.selection.kind === "survey-block"
+    ? planner.survey.surveyRegions.get(planner.selection.regionId) ?? null
+    : null,
+);
 
 function scopeToKey(activeEnvelope: MissionPlannerView["activeEnvelope"]): string {
   if (!activeEnvelope) {
@@ -194,8 +225,8 @@ function handleNewMission() {
     scopeKey,
     message:
       canUseVehicleActions
-        ? "Blank mission draft ready in the current scope. Home, list, and map editors build on this mounted shell in the next task."
-        : "Blank local mission draft ready. You can keep editing locally now and reconnect later for vehicle reads, validation, and transfers.",
+        ? "Blank mission draft ready. Home, manual list editing, and preserved survey blocks stay mounted in this scope."
+        : "Blank local mission draft ready. Keep editing locally now and reconnect later for vehicle reads, validation, and transfer flows.",
   };
 }
 
@@ -259,7 +290,7 @@ function buildEntryActionCards(status: MissionPlannerView["status"], vehicleRead
       title: "New mission",
       description: status === "unavailable"
         ? "Start a disconnected local draft now, then reconnect later for validation and transfer flows."
-        : "Start a blank local draft for this scope without reaching back into the archived placeholder runtime.",
+        : "Start a blank local draft with a Home card, list, and typed inspector mounted immediately.",
       disabled: busy,
       testId: missionWorkspaceTestIds.entryNew,
       onclick: handleNewMission,
@@ -283,7 +314,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     canUseVehicleActions={canUseVehicleActions}
     dirty={view.dirty}
     fileWarningCount={view.fileWarningCount}
-    hasContent={hasContent}
+    hasContent={hasContent || view.workspaceMounted}
     missionItemCount={view.missionItemCount}
     onCancelTransfer={handleCancelTransfer}
     onClearVehicle={handleClearVehicle}
@@ -394,7 +425,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     </div>
   {/if}
 
-  {#if view.status === "bootstrapping"}
+  {#if view.status === "bootstrapping" && !view.workspaceMounted}
     <section
       class="mt-4 rounded-[24px] border border-border bg-bg-secondary/60 p-5"
       data-testid={missionWorkspaceTestIds.bootstrapping}
@@ -405,7 +436,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
         IronWing is subscribing the mission planner to the active session scope before entry actions unlock.
       </p>
     </section>
-  {:else if view.status === "unavailable" || view.status === "empty"}
+  {:else if !view.workspaceMounted}
     <section
       class="mt-4 rounded-[24px] border border-border bg-bg-secondary/60 p-5"
       data-testid={view.status === "unavailable" ? missionWorkspaceTestIds.unavailable : missionWorkspaceTestIds.empty}
@@ -417,7 +448,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       <p class="mt-2 text-sm text-text-secondary">
         {view.status === "unavailable"
           ? "The Mission tab is mounted even without an active vehicle scope. Import a .plan or start a blank draft now, then reconnect later for live reads, validation, upload, and clear flows."
-          : "The Mission placeholder is gone. Read from the vehicle, import a .plan, or start a blank draft here before list, inspector, and map editing land on top of this mounted workspace."}
+          : "Start from a vehicle download, a truthful .plan import, or a blank mission. Once you choose an entry action, Home, manual items, and preserved survey blocks stay mounted in the active workspace."}
       </p>
 
       <div class="mt-5 grid gap-3 lg:grid-cols-3">
@@ -443,34 +474,45 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       class="mt-4 rounded-[24px] border border-border bg-bg-secondary/60 p-5"
       data-testid={missionWorkspaceTestIds.ready}
     >
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mission summary</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">The active planner workspace is mounted</h3>
+      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mission workspace</p>
       <p class="mt-2 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.summary}>
-        Manual mission data, preserved survey blocks, home state, and transfer diagnostics now live behind the real Mission tab instead of the old shell placeholder. The next task layers list and inspector editing onto this mounted workspace.
+        Home, manual mission items, typed command editing, and preserved survey blocks now share one mounted planning workspace instead of the old Mission placeholder shell.
       </p>
 
-      <div class="mt-5 grid gap-3 lg:grid-cols-4">
-        <div class="rounded-2xl border border-border bg-bg-primary p-4">
-          <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Home</p>
-          <p class="mt-2 text-sm text-text-primary">
-            {planner.home ? `${planner.home.latitude_deg.toFixed(5)}, ${planner.home.longitude_deg.toFixed(5)} · ${planner.home.altitude_m.toFixed(0)} m` : "No home position set yet"}
-          </p>
+      <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+        <div class="space-y-4">
+          <MissionHomeCard
+            home={planner.home}
+            onChange={missionPlannerStore.setHome}
+            onSelect={missionPlannerStore.selectHome}
+            selected={planner.selection.kind === "home"}
+          />
+
+          <MissionDraftList
+            items={missionItems}
+            onAddMissionItem={missionPlannerStore.addMissionItem}
+            onDeleteMissionItem={missionPlannerStore.deleteMissionItem}
+            onMoveMissionItemDown={missionPlannerStore.moveMissionItemDownByIndex}
+            onMoveMissionItemUp={missionPlannerStore.moveMissionItemUpByIndex}
+            onSelectMissionItem={missionPlannerStore.selectMissionItem}
+            onSelectSurveyBlock={missionPlannerStore.selectSurveyRegion}
+            selectedMissionUiId={selectedMissionUiId}
+            selectedSurface={planner.selection}
+            surveyBlocks={surveyBlocks}
+          />
         </div>
-        <div class="rounded-2xl border border-border bg-bg-primary p-4">
-          <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Manual mission items</p>
-          <p class="mt-2 text-2xl font-semibold text-text-primary">{view.missionItemCount}</p>
-          <p class="mt-1 text-xs text-text-secondary">Survey blocks remain preserved separately.</p>
-        </div>
-        <div class="rounded-2xl border border-border bg-bg-primary p-4">
-          <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Preserved survey blocks</p>
-          <p class="mt-2 text-2xl font-semibold text-text-primary">{view.surveyRegionCount}</p>
-          <p class="mt-1 text-xs text-text-secondary">Imported ComplexItems stay visible without flattening them away.</p>
-        </div>
-        <div class="rounded-2xl border border-border bg-bg-primary p-4">
-          <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Transfer-ready items</p>
-          <p class="mt-2 text-2xl font-semibold text-text-primary">{view.effectiveMissionItemCount}</p>
-          <p class="mt-1 text-xs text-text-secondary">This count includes preserved survey output that would travel on upload/export.</p>
-        </div>
+
+        <MissionInspector
+          home={planner.home}
+          item={selectedMissionItem}
+          onUpdateAltitude={missionPlannerStore.updateMissionItemAltitude}
+          onUpdateCommand={missionPlannerStore.updateMissionItemCommand}
+          onUpdateLatitude={missionPlannerStore.updateMissionItemLatitude}
+          onUpdateLongitude={missionPlannerStore.updateMissionItemLongitude}
+          previousItem={previousMissionItem}
+          selectedSurveyRegion={selectedSurveyRegion}
+          selection={planner.selection}
+        />
       </div>
     </section>
   {/if}

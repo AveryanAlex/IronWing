@@ -410,8 +410,8 @@ describe("MissionWorkspace", () => {
     cleanup();
   });
 
-  it("shows the empty-state entry actions and starts a blank local draft explicitly", async () => {
-    await renderWorkspace();
+  it("shows entry actions first and mounts the real editor after starting a blank mission", async () => {
+    const { plannerStore } = await renderWorkspace();
 
     expect(screen.getByTestId(missionWorkspaceTestIds.root)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.empty)).toBeTruthy();
@@ -422,12 +422,122 @@ describe("MissionWorkspace", () => {
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
 
     await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.localNote).textContent).toContain("Blank mission draft ready");
     });
-    expect(screen.getByTestId(missionWorkspaceTestIds.empty)).toBeTruthy();
+
+    expect(screen.getByTestId(missionWorkspaceTestIds.homeCard)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.draftList)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.listEmpty)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("home");
+    expect(get(plannerStore).workspaceMounted).toBe(true);
   });
 
-  it("requires an explicit replace prompt before importing over a dirty draft", async () => {
+  it("adds, edits, reorders, and deletes manual mission items through the mounted workspace", async () => {
+    const { plannerStore } = await renderWorkspace();
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAdd));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("mission-item");
+    });
+
+    await fireEvent.change(screen.getByTestId(`${missionWorkspaceTestIds.inspectorFieldPrefix}-hold_time_s`), {
+      target: { value: "12" },
+    });
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.inspectorLatitude), {
+      target: { value: "47.55" },
+    });
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.inspectorLongitude), {
+      target: { value: "8.66" },
+    });
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.inspectorAltitude), {
+      target: { value: "120" },
+    });
+
+    await waitFor(() => {
+      const state = get(plannerStore);
+      const edited = state.draftState.active.mission.document.items[0];
+      const waypoint = edited.command.Nav;
+      expect(typeof waypoint).toBe("object");
+      if (typeof waypoint === "object" && waypoint && "Waypoint" in waypoint) {
+        expect(waypoint.Waypoint.hold_time_s).toBe(12);
+        expect(waypoint.Waypoint.position.RelHome.latitude_deg).toBe(47.55);
+        expect(waypoint.Waypoint.position.RelHome.longitude_deg).toBe(8.66);
+        expect(waypoint.Waypoint.position.RelHome.relative_alt_m).toBe(120);
+      }
+    });
+
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.inspectorCommandSelect), {
+      target: { value: "Nav:ReturnToLaunch" },
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId(missionWorkspaceTestIds.inspectorLatitude)).toBeNull();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAdd));
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(2);
+    });
+
+    const stateAfterSecondAdd = get(plannerStore);
+    const firstUiId = stateAfterSecondAdd.draftState.active.mission.draftItems[0]?.uiId;
+    const secondUiId = stateAfterSecondAdd.draftState.active.mission.draftItems[1]?.uiId;
+    expect(firstUiId).toBeTypeOf("number");
+    expect(secondUiId).toBeTypeOf("number");
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.itemMoveUpPrefix}-${secondUiId}`));
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.mission.draftItems[0]?.uiId).toBe(secondUiId);
+    });
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.itemDeletePrefix}-${secondUiId}`));
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(1);
+      expect(get(plannerStore).selection.kind).toBe("mission-item");
+    });
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.itemDeletePrefix}-${firstUiId}`));
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(0);
+      expect(get(plannerStore).selection.kind).toBe("home");
+    });
+  });
+
+  it("keeps incomplete home edits local until all three values are valid", async () => {
+    const { plannerStore } = await renderWorkspace();
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.homeCard)).toBeTruthy();
+    });
+
+    const latitudeInput = screen.getByTestId(missionWorkspaceTestIds.homeLatitude);
+    const longitudeInput = screen.getByTestId(missionWorkspaceTestIds.homeLongitude);
+    const altitudeInput = screen.getByTestId(missionWorkspaceTestIds.homeAltitude);
+
+    await fireEvent.input(latitudeInput, { target: { value: "47.51" } });
+    await fireEvent.blur(latitudeInput);
+    expect(get(plannerStore).home).toBeNull();
+    expect(screen.getByTestId(missionWorkspaceTestIds.homeValidation).textContent).toContain("Enter latitude");
+
+    await fireEvent.input(longitudeInput, { target: { value: "8.61" } });
+    await fireEvent.blur(longitudeInput);
+    expect(get(plannerStore).home).toBeNull();
+
+    await fireEvent.input(altitudeInput, { target: { value: "510" } });
+    await fireEvent.blur(altitudeInput);
+
+    await waitFor(() => {
+      expect(get(plannerStore).home).toEqual({ latitude_deg: 47.51, longitude_deg: 8.61, altitude_m: 510 });
+    });
+  });
+
+  it("requires an explicit replace prompt before importing over a dirty draft and keeps the survey block selectable", async () => {
     const survey = makeImportedSurveyExtension();
     const importedHome = { latitude_deg: 47.39, longitude_deg: 8.53, altitude_m: 488 };
 
@@ -491,10 +601,57 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.countsSurvey).textContent).toContain("1");
     });
 
+    const regionId = get(plannerStore).survey.surveyRegionOrder[0]?.regionId;
+    expect(regionId).toBeTruthy();
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.surveyPrefix}-${regionId}`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("survey-block");
+      expect(screen.getByTestId(missionWorkspaceTestIds.inspectorReadonly).textContent).toContain("Imported survey block selected");
+    });
+
     expect(get(plannerStore).home).toEqual(importedHome);
     expect(screen.getByTestId(`${missionWorkspaceTestIds.warningPrefix}-file`).textContent).toContain(
       "Imported survey region preserved.",
     );
+  });
+
+  it("renders preserved raw mission commands as read-only instead of exposing broken typed editors", async () => {
+    const rawMission: MissionPlan = {
+      items: [
+        {
+          command: {
+            Other: {
+              command: 31000,
+              param1: 1,
+              param2: 2,
+              param3: 3,
+              param4: 4,
+              x: 5,
+              y: 6,
+              z: 7,
+            },
+          },
+          current: true,
+          autocontinue: true,
+        },
+      ],
+    };
+
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({ mission: rawMission }));
+        plannerStore.selectMissionItem(0);
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.inspectorReadonly).textContent).toContain("read-only");
+    });
+
+    expect(screen.queryByTestId(missionWorkspaceTestIds.inspectorCommandPicker)).toBeNull();
+    expect(get(plannerStore).draftState.active.mission.draftItems[0]?.readOnly).toBe(true);
   });
 
   it("keeps repeated read clicks from dispatching while a download is already active and surfaces failures inline", async () => {

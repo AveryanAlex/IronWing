@@ -5,13 +5,24 @@ import type { HomePosition, MissionIssue, MissionPlan, MissionState, TransferPro
 import type { RallyPlan } from "../../rally";
 import type { SessionEnvelope } from "../../session";
 import { shouldDropEvent } from "../../session";
+import type { MissionCommand } from "../mavkit-types";
 import {
+  addTypedWaypoint,
   createTypedDraftState,
+  deleteTypedAt,
   isTypedDraftDirty,
+  moveTypedDown,
+  moveTypedUp,
   replaceTypedDraftFromDownload,
+  selectTypedDraftIndex,
   setTypedDraftScope,
   typedDraftItems,
   typedDraftPlan,
+  typedDraftSelectedItem,
+  updateTypedAltitude,
+  updateTypedCommand,
+  updateTypedLatitude,
+  updateTypedLongitude,
   type SessionScope,
   type TypedDraftState,
 } from "../mission-draft-typed";
@@ -80,6 +91,11 @@ export type RecoverableMissionPlannerWorkspace = {
   snapshot: MissionPlannerWorkspace;
 };
 
+export type MissionPlannerSelection =
+  | { kind: "home" }
+  | { kind: "mission-item" }
+  | { kind: "survey-block"; regionId: string };
+
 export type MissionPlannerReplacePrompt =
   | {
     kind: "replace-active";
@@ -94,6 +110,8 @@ export type MissionPlannerReplacePrompt =
 
 export type MissionPlannerStoreState = {
   hydrated: boolean;
+  workspaceMounted: boolean;
+  selection: MissionPlannerSelection;
   phase: MissionPlannerDomainPhase;
   streamReady: boolean;
   streamError: string | null;
@@ -143,6 +161,8 @@ const ACTION_TIMEOUT_MS = 15_000;
 function createInitialState(): MissionPlannerStoreState {
   return {
     hydrated: false,
+    workspaceMounted: false,
+    selection: { kind: "home" },
     phase: "bootstrapping",
     streamReady: false,
     streamError: null,
@@ -264,6 +284,8 @@ export function createMissionPlannerStore(
 
       return withResolvedPhase({
         ...reset,
+        workspaceMounted: false,
+        selection: { kind: "home" },
         activeEnvelope: nextEnvelope,
         activeSource: nextEnvelope?.source_kind ?? null,
         missionState: nextEnvelope ? sessionState.bootstrap.missionState : null,
@@ -318,6 +340,7 @@ export function createMissionPlannerStore(
     store.update((state) => withResolvedPhase({
       ...state,
       home: cloneValue(home),
+      selection: { kind: "home" },
       validationIssues: [],
       lastError: null,
     }));
@@ -344,6 +367,72 @@ export function createMissionPlannerStore(
       validationIssues: [],
       lastError: null,
     }));
+  }
+
+  function updateMissionDraft(
+    updater: (draftState: TypedDraftState) => TypedDraftState,
+    selection: MissionPlannerSelection = { kind: "mission-item" },
+  ) {
+    store.update((state) => withResolvedPhase({
+      ...state,
+      draftState: updater(state.draftState),
+      selection,
+      validationIssues: [],
+      lastError: null,
+    }));
+  }
+
+  function selectHome() {
+    store.update((state) => withResolvedPhase({
+      ...state,
+      selection: { kind: "home" },
+    }));
+  }
+
+  function selectMissionItem(index: number | null) {
+    updateMissionDraft(
+      (draftState) => selectTypedDraftIndex(draftState, "mission", index),
+      index === null ? { kind: "home" } : { kind: "mission-item" },
+    );
+  }
+
+  function selectSurveyRegion(regionId: string) {
+    store.update((state) => withResolvedPhase({
+      ...state,
+      selection: { kind: "survey-block", regionId },
+    }));
+  }
+
+  function addMissionItem() {
+    updateMissionDraft((draftState) => addTypedWaypoint(draftState, "mission"));
+  }
+
+  function deleteMissionItem(index: number) {
+    updateMissionDraft((draftState) => deleteTypedAt(draftState, "mission", index));
+  }
+
+  function moveMissionItemUpByIndex(index: number) {
+    updateMissionDraft((draftState) => moveTypedUp(draftState, "mission", index));
+  }
+
+  function moveMissionItemDownByIndex(index: number) {
+    updateMissionDraft((draftState) => moveTypedDown(draftState, "mission", index));
+  }
+
+  function updateMissionItemCommand(index: number, command: MissionCommand) {
+    updateMissionDraft((draftState) => updateTypedCommand(draftState, "mission", index, command));
+  }
+
+  function updateMissionItemLatitude(index: number, latitudeDeg: number) {
+    updateMissionDraft((draftState) => updateTypedLatitude(draftState, "mission", index, latitudeDeg));
+  }
+
+  function updateMissionItemLongitude(index: number, longitudeDeg: number) {
+    updateMissionDraft((draftState) => updateTypedLongitude(draftState, "mission", index, longitudeDeg));
+  }
+
+  function updateMissionItemAltitude(index: number, altitudeM: number) {
+    updateMissionDraft((draftState) => updateTypedAltitude(draftState, "mission", index, altitudeM));
   }
 
   async function downloadFromVehicle(force = false) {
@@ -704,6 +793,17 @@ export function createMissionPlannerStore(
     subscribe: store.subscribe,
     initialize,
     replaceWorkspace,
+    selectHome,
+    selectMissionItem,
+    selectSurveyRegion,
+    addMissionItem,
+    deleteMissionItem,
+    moveMissionItemUpByIndex,
+    moveMissionItemDownByIndex,
+    updateMissionItemCommand,
+    updateMissionItemLatitude,
+    updateMissionItemLongitude,
+    updateMissionItemAltitude,
     setHome,
     setPlanningSpeeds,
     replaceSurveyExtension,
@@ -818,6 +918,8 @@ function applyWorkspacePair(
 
   return {
     ...state,
+    workspaceMounted: true,
+    selection: { kind: "home" },
     draftState,
     home: cloneValue(pair.active.home),
     homeSnapshot: cloneValue(pair.snapshot.home),
@@ -962,10 +1064,33 @@ function normalizePosition(position: number): number {
 }
 
 function withResolvedPhase(state: MissionPlannerStoreState): MissionPlannerStoreState {
+  const normalized = normalizeSelection(state);
   return {
-    ...state,
-    phase: resolvePhase(state),
+    ...normalized,
+    phase: resolvePhase(normalized),
   };
+}
+
+function normalizeSelection(state: MissionPlannerStoreState): MissionPlannerStoreState {
+  if (state.selection.kind === "home") {
+    return state;
+  }
+
+  if (state.selection.kind === "mission-item") {
+    return typedDraftSelectedItem(state.draftState, "mission")
+      ? state
+      : {
+        ...state,
+        selection: { kind: "home" },
+      };
+  }
+
+  return state.survey.surveyRegions.has(state.selection.regionId)
+    ? state
+    : {
+      ...state,
+      selection: { kind: "home" },
+    };
 }
 
 function resolvePhase(state: MissionPlannerStoreState): MissionPlannerDomainPhase {

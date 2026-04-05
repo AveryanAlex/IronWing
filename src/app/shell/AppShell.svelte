@@ -1,9 +1,6 @@
 <script lang="ts">
 import { createLiveSettingsStore } from "../../lib/stores/live-settings";
-import {
-  createMissionPlannerStore,
-  createMissionPlannerViewStore,
-} from "../../lib/stores/mission-planner";
+import { createMissionPlannerStore, createMissionPlannerViewStore } from "../../lib/stores/mission-planner";
 import { createOperatorWorkspaceViewStore } from "../../lib/stores/operator-workspace-view";
 import { createParameterWorkspaceViewStore, params } from "../../lib/stores/params";
 import { runtime } from "../../lib/stores/runtime";

@@ -40,6 +40,7 @@ export type MissionPlannerTransferView = {
 export type MissionPlannerView = {
   status: MissionPlannerWorkspaceStatus;
   readiness: "ready" | "bootstrapping" | "unavailable" | "degraded";
+  workspaceMounted: boolean;
   activeEnvelope: MissionPlannerStoreState["activeEnvelope"];
   activeEnvelopeText: string;
   phase: MissionPlannerDomainPhase;
@@ -66,6 +67,7 @@ export function createMissionPlannerViewStore(store: Readable<MissionPlannerStor
     return {
       status,
       readiness,
+      workspaceMounted: $planner.workspaceMounted,
       activeEnvelope: $planner.activeEnvelope,
       activeEnvelopeText: plannerScopeLabel($planner),
       phase: $planner.phase,

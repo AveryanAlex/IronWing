@@ -88,11 +88,7 @@ let connectionTone = $derived.by<"neutral" | "positive" | "caution" | "critical"
 });
 
 onMount(() => {
-  void Promise.all([
-    controller.initialize(),
-    liveSettingsStore.initialize(),
-    missionPlannerStore.initialize(),
-  ]);
+  void Promise.all([controller.initialize(), liveSettingsStore.initialize(), missionPlannerStore.initialize()]);
 });
 
 onDestroy(() => {
