@@ -39,6 +39,19 @@ export const appShellTestIds = {
   parameterReviewFailurePrefix: "app-shell-parameter-review-failure",
   parameterReviewRetryPrefix: "app-shell-parameter-review-retry",
   parameterReviewDiscardPrefix: "app-shell-parameter-review-discard",
+  telemetrySettingsLauncher: "app-shell-telemetry-settings-launcher",
+  telemetrySettingsDialog: "app-shell-telemetry-settings-dialog",
+  telemetrySettingsBackdrop: "app-shell-telemetry-settings-backdrop",
+  telemetrySettingsSurface: "app-shell-telemetry-settings-surface",
+  telemetrySettingsClose: "app-shell-telemetry-settings-close",
+  telemetrySettingsStatus: "app-shell-telemetry-settings-status",
+  telemetrySettingsApply: "app-shell-telemetry-settings-apply",
+  telemetrySettingsDiscard: "app-shell-telemetry-settings-discard",
+  telemetrySettingsTelemetryInput: "app-shell-telemetry-settings-telemetry-input",
+  telemetrySettingsTelemetryError: "app-shell-telemetry-settings-telemetry-error",
+  telemetrySettingsRowPrefix: "app-shell-telemetry-settings-row",
+  telemetrySettingsRowInputPrefix: "app-shell-telemetry-settings-row-input",
+  telemetrySettingsRowErrorPrefix: "app-shell-telemetry-settings-row-error",
 } as const;
 
 export type ShellTier = "phone" | "tablet" | "desktop" | "wide";

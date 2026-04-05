@@ -11,19 +11,23 @@ import { appShellWorkspaces, createAppShellController } from "./app-shell-contro
 import { appShellTestIds } from "./chrome-state";
 import OperatorWorkspace from "./OperatorWorkspace.svelte";
 import ParameterReviewTray from "./ParameterReviewTray.svelte";
+import TelemetrySettingsDialog from "./TelemetrySettingsDialog.svelte";
 import {
+  getLiveSettingsStoreContext,
   getParameterWorkspaceViewStoreContext,
   getParamsStoreContext,
   getRuntimeStoreContext,
   getSessionStoreContext,
   getSessionViewStoreContext,
   getShellChromeStoreContext,
+  setTelemetrySettingsDialogLauncherContext,
 } from "./runtime-context";
 import VehiclePanelDrawer from "./VehiclePanelDrawer.svelte";
 import VehiclePanelContent from "./VehiclePanelContent.svelte";
 
 const sessionStore = getSessionStoreContext();
 const parameterStore = getParamsStoreContext();
+const liveSettingsStore = getLiveSettingsStoreContext();
 const runtimeStore = getRuntimeStoreContext();
 const chromeStore = getShellChromeStoreContext();
 const sessionViewStore = getSessionViewStoreContext();
@@ -46,6 +50,14 @@ const showVehiclePanelButtonStore = fromStore(controller.showVehiclePanelButton)
 const showDockedVehiclePanelStore = fromStore(controller.showDockedVehiclePanel);
 const vehiclePanelDrawerOpenStore = fromStore(controller.vehiclePanelDrawerOpen);
 const sessionView = fromStore(sessionViewStore);
+
+let telemetrySettingsOpen = $state(false);
+
+setTelemetrySettingsDialogLauncherContext({
+  open() {
+    telemetrySettingsOpen = true;
+  },
+});
 
 let activeWorkspace = $derived(activeWorkspaceStore.current);
 let vehiclePanelOpen = $derived(vehiclePanelOpenStore.current);
@@ -73,7 +85,7 @@ let connectionTone = $derived.by<"neutral" | "positive" | "caution" | "critical"
 });
 
 onMount(() => {
-  void controller.initialize();
+  void Promise.all([controller.initialize(), liveSettingsStore.initialize()]);
 });
 
 onDestroy(() => {
@@ -185,4 +197,6 @@ onDestroy(() => {
     onClose={controller.closeVehiclePanel}
     open={vehiclePanelDrawerOpen}
   />
+
+  <TelemetrySettingsDialog onClose={() => (telemetrySettingsOpen = false)} open={telemetrySettingsOpen} />
 </main>

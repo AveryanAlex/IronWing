@@ -1,14 +1,21 @@
 import { createContext } from "svelte";
 import type { Readable } from "svelte/store";
 
-import type { ParamsStore, ParameterWorkspaceViewStore } from "../../lib/stores/params";
+import type {
+  ParamsStore,
+  ParameterWorkspaceViewStore,
+} from "../../lib/stores/params";
 import type { RuntimeState } from "../../lib/stores/runtime";
 import type { SessionStore, SessionViewStore } from "../../lib/stores/session";
 import type { OperatorWorkspaceViewStore } from "../../lib/stores/operator-workspace-view";
+import type { LiveSettingsStore } from "../../lib/stores/live-settings";
 import type { ShellChromeState } from "./chrome-state";
 
 export type RuntimeStore = Readable<RuntimeState>;
 export type ShellChromeStore = Readable<ShellChromeState>;
+export type TelemetrySettingsDialogLauncher = {
+  open(): void;
+};
 
 export const [getSessionStoreContext, setSessionStoreContext] = createContext<SessionStore>();
 export const [getSessionViewStoreContext, setSessionViewStoreContext] = createContext<SessionViewStore>();
@@ -17,3 +24,5 @@ export const [getParamsStoreContext, setParamsStoreContext] = createContext<Para
 export const [getParameterWorkspaceViewStoreContext, setParameterWorkspaceViewStoreContext] = createContext<ParameterWorkspaceViewStore>();
 export const [getRuntimeStoreContext, setRuntimeStoreContext] = createContext<RuntimeStore>();
 export const [getShellChromeStoreContext, setShellChromeStoreContext] = createContext<ShellChromeStore>();
+export const [getLiveSettingsStoreContext, setLiveSettingsStoreContext] = createContext<LiveSettingsStore>();
+export const [getTelemetrySettingsDialogLauncherContext, setTelemetrySettingsDialogLauncherContext] = createContext<TelemetrySettingsDialogLauncher>();

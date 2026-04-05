@@ -7,6 +7,7 @@ vi.mock("svelte-sonner", () => ({
     Toaster: () => null,
     toast: {
         error: vi.fn(),
+        success: vi.fn(),
     },
 }));
 
@@ -704,6 +705,44 @@ describe("AppShell", () => {
         await waitFor(() => {
             expect(screen.getByTestId(appShellTestIds.drawerState).textContent?.trim()).toBe("closed");
         });
+    });
+
+    it("opens one shell-scoped telemetry controls dialog from the rail and reuses it from the phone drawer", async () => {
+        const { viewport } = await renderShellAt(1440);
+
+        await fireEvent.click(screen.getByTestId(appShellTestIds.telemetrySettingsLauncher));
+        await waitFor(() => {
+            expect(screen.getByTestId(appShellTestIds.telemetrySettingsDialog)).toBeTruthy();
+        });
+
+        expect(screen.getByTestId(appShellTestIds.telemetrySettingsDialog).getAttribute("data-surface-kind")).toBe("dialog");
+
+        viewport.setSize(390, 720);
+
+        await waitFor(() => {
+            expect(screen.getByTestId(appShellTestIds.tier).textContent?.trim()).toBe("phone");
+        });
+
+        expect(screen.getByTestId(appShellTestIds.telemetrySettingsDialog).getAttribute("data-surface-kind")).toBe("sheet");
+
+        await fireEvent.click(screen.getByTestId(appShellTestIds.telemetrySettingsClose));
+        await waitFor(() => {
+            expect(screen.queryByTestId(appShellTestIds.telemetrySettingsDialog)).toBeNull();
+        });
+
+        await fireEvent.click(screen.getByRole("button", { name: "Vehicle panel" }));
+        await waitFor(() => {
+            expect(screen.getByTestId(appShellTestIds.drawerState).textContent?.trim()).toBe("open");
+        });
+
+        expect(screen.getByTestId(appShellTestIds.telemetrySettingsLauncher)).toBeTruthy();
+
+        await fireEvent.click(screen.getByTestId(appShellTestIds.telemetrySettingsLauncher));
+        await waitFor(() => {
+            expect(screen.getByTestId(appShellTestIds.telemetrySettingsDialog)).toBeTruthy();
+        });
+
+        expect(screen.getByTestId(appShellTestIds.telemetrySettingsDialog).getAttribute("data-surface-kind")).toBe("sheet");
     });
 
     it("promotes the vehicle panel back to a docked layout at Radiomaster width and closes the phone drawer", async () => {
