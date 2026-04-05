@@ -253,7 +253,15 @@ function pickerMessageClass(tone: PickerMessageTone): string {
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Camera</p>
-        <h4 class="mt-1 text-sm font-semibold text-text-primary">{currentCameraLabel}</h4>
+        <div data-testid={missionWorkspaceTestIds.cameraCurrent}>
+          {#if region.camera}
+            <h4 class="mt-1 text-sm font-semibold text-text-primary">{currentCameraLabel}</h4>
+          {:else if unresolvedCameraMessage}
+            <p class="mt-1 text-xs text-warning">{unresolvedCameraMessage}</p>
+          {:else}
+            <h4 class="mt-1 text-sm font-semibold text-text-primary">{currentCameraLabel}</h4>
+          {/if}
+        </div>
       </div>
 
       {#if region.camera && customCameraNames.has(region.camera.canonicalName)}
@@ -286,10 +294,6 @@ function pickerMessageClass(tone: PickerMessageTone): string {
           </dd>
         </div>
       </dl>
-    {:else if unresolvedCameraMessage}
-      <p class="mt-3 text-xs text-warning" data-testid={missionWorkspaceTestIds.cameraCurrent}>
-        {unresolvedCameraMessage}
-      </p>
     {/if}
   </div>
 

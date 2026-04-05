@@ -1,4 +1,5 @@
 import { missionWorkspaceTestIds } from "../../src/components/mission/mission-workspace-test-ids";
+import type { MissionMapDebugSnapshot } from "../../src/components/mission/mission-map-debug";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import type { OpenSessionSnapshot } from "../../src/session";
 import type {
@@ -157,19 +158,46 @@ export const missionWorkspaceSelectors = {
     homeSummary: `[data-testid="${missionWorkspaceTestIds.homeSummary}"]`,
     map: `[data-testid="${missionWorkspaceTestIds.map}"]`,
     mapSurface: `[data-testid="${missionWorkspaceTestIds.mapSurface}"]`,
+    mapDrawSurface: `[data-testid="${missionWorkspaceTestIds.mapDrawSurface}"]`,
     mapStatus: `[data-testid="${missionWorkspaceTestIds.mapStatus}"]`,
     mapSelection: `[data-testid="${missionWorkspaceTestIds.mapSelection}"]`,
+    mapDrawMode: `[data-testid="${missionWorkspaceTestIds.mapDrawMode}"]`,
     mapDragState: `[data-testid="${missionWorkspaceTestIds.mapDragState}"]`,
     mapMarkerCount: `[data-testid="${missionWorkspaceTestIds.mapMarkerCount}"]`,
     mapSurveyCount: `[data-testid="${missionWorkspaceTestIds.mapSurveyCount}"]`,
+    mapPreviewCount: `[data-testid="${missionWorkspaceTestIds.mapPreviewCount}"]`,
     mapDebug: `[data-testid="${missionWorkspaceTestIds.mapDebug}"]`,
+    mapDrawStartGrid: `[data-testid="${missionWorkspaceTestIds.mapDrawStartGrid}"]`,
+    mapDrawStartCorridor: `[data-testid="${missionWorkspaceTestIds.mapDrawStartCorridor}"]`,
+    mapDrawStartStructure: `[data-testid="${missionWorkspaceTestIds.mapDrawStartStructure}"]`,
+    mapDrawEdit: `[data-testid="${missionWorkspaceTestIds.mapDrawEdit}"]`,
+    mapDrawFinish: `[data-testid="${missionWorkspaceTestIds.mapDrawFinish}"]`,
+    mapDrawCancel: `[data-testid="${missionWorkspaceTestIds.mapDrawCancel}"]`,
     listAdd: `[data-testid="${missionWorkspaceTestIds.listAdd}"]`,
+    listAddSurveyGrid: `[data-testid="${missionWorkspaceTestIds.listAddSurveyGrid}"]`,
+    listAddSurveyCorridor: `[data-testid="${missionWorkspaceTestIds.listAddSurveyCorridor}"]`,
+    listAddSurveyStructure: `[data-testid="${missionWorkspaceTestIds.listAddSurveyStructure}"]`,
     inspectorSelectionKind: `[data-testid="${missionWorkspaceTestIds.inspectorSelectionKind}"]`,
     inspectorReadonly: `[data-testid="${missionWorkspaceTestIds.inspectorReadonly}"]`,
+    inspectorSurvey: `[data-testid="${missionWorkspaceTestIds.inspectorSurvey}"]`,
     inspectorCommandSelect: `[data-testid="${missionWorkspaceTestIds.inspectorCommandSelect}"]`,
     inspectorLatitude: `[data-testid="${missionWorkspaceTestIds.inspectorLatitude}"]`,
     inspectorLongitude: `[data-testid="${missionWorkspaceTestIds.inspectorLongitude}"]`,
     inspectorAltitude: `[data-testid="${missionWorkspaceTestIds.inspectorAltitude}"]`,
+    surveyPrompt: `[data-testid="${missionWorkspaceTestIds.surveyPrompt}"]`,
+    surveyPromptKind: `[data-testid="${missionWorkspaceTestIds.surveyPromptKind}"]`,
+    surveyPromptConfirm: `[data-testid="${missionWorkspaceTestIds.surveyPromptConfirm}"]`,
+    surveyPromptDismiss: `[data-testid="${missionWorkspaceTestIds.surveyPromptDismiss}"]`,
+    cameraPicker: `[data-testid="${missionWorkspaceTestIds.cameraPicker}"]`,
+    cameraCurrent: `[data-testid="${missionWorkspaceTestIds.cameraCurrent}"]`,
+    cameraWarning: `[data-testid="${missionWorkspaceTestIds.cameraWarning}"]`,
+    cameraSearch: `[data-testid="${missionWorkspaceTestIds.cameraSearch}"]`,
+    surveyGenerate: `[data-testid="${missionWorkspaceTestIds.surveyGenerate}"]`,
+    surveyDissolve: `[data-testid="${missionWorkspaceTestIds.surveyDissolve}"]`,
+    surveyDelete: `[data-testid="${missionWorkspaceTestIds.surveyDelete}"]`,
+    surveyGeneratedLatitude: `[data-testid="${missionWorkspaceTestIds.surveyGeneratedLatitude}"]`,
+    surveyGeneratedLongitude: `[data-testid="${missionWorkspaceTestIds.surveyGeneratedLongitude}"]`,
+    surveyGeneratedAltitude: `[data-testid="${missionWorkspaceTestIds.surveyGeneratedAltitude}"]`,
     missionMarker: `[data-testid^="${missionWorkspaceTestIds.mapMarkerPrefix}-"]`,
     surveyHandle: `[data-testid^="${missionWorkspaceTestIds.mapSurveyPrefix}-"]`,
 } as const;
@@ -533,6 +561,33 @@ export async function readMissionMapDebugSnapshot(page: Page): Promise<unknown> 
     return page.evaluate(() => {
         return (window as Window & { __IRONWING_MISSION_MAP_DEBUG__?: unknown }).__IRONWING_MISSION_MAP_DEBUG__ ?? null;
     });
+}
+
+export async function requireMissionMapDebugSnapshot(page: Page, context: string): Promise<MissionMapDebugSnapshot> {
+    const snapshot = await readMissionMapDebugSnapshot(page);
+    if (!isMissionMapDebugSnapshot(snapshot)) {
+        throw new Error(
+            `Mission map debug snapshot was missing or malformed while ${context}. Keep mock-only map diagnostics aligned with src/components/mission/mission-map-debug.ts instead of guessing from the DOM.`,
+        );
+    }
+
+    return snapshot;
+}
+
+function isMissionMapDebugSnapshot(value: unknown): value is MissionMapDebugSnapshot {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return false;
+    }
+
+    const snapshot = value as Partial<MissionMapDebugSnapshot>;
+    return typeof snapshot.state === "string"
+        && Boolean(snapshot.selection && typeof snapshot.selection === "object")
+        && Boolean(snapshot.counts && typeof snapshot.counts === "object")
+        && Array.isArray(snapshot.warnings)
+        && typeof snapshot.drawMode === "string"
+        && typeof snapshot.drawPointCount === "number"
+        && typeof snapshot.selectedSurveyGenerationBlocked === "boolean"
+        && typeof snapshot.updateCount === "number";
 }
 
 export function operatorWorkspaceLocator(page: Page, selector: keyof typeof operatorWorkspaceSelectors): Locator {

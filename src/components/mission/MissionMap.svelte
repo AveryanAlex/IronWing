@@ -21,6 +21,7 @@ import {
   surveyGeometryKind,
   surveyGeometryPoints,
 } from "../../lib/mission-map-survey";
+import { resolveSurveyGenerationBlockedReason } from "../../lib/mission-survey-authoring";
 import type { GeoPoint2d } from "../../lib/mavkit-types";
 import type { SurveyPatternType, SurveyRegion } from "../../lib/survey-region";
 import type { MissionPlannerMapMoveResult } from "../../lib/stores/mission-planner";
@@ -101,6 +102,13 @@ let lastUsableViewport = $state<MissionMapViewport | null>(null);
 let fallbackViewport = $derived(buildMissionMapViewport(fallbackReference, [fallbackReference]));
 let interactiveViewport = $derived(view.viewport ?? lastUsableViewport ?? fallbackViewport);
 let selectedSurveyRegionId = $derived(view.selection.kind === "survey-block" ? view.selection.regionId : null);
+let selectedSurveyGenerationBlockedReason = $derived.by(() => {
+  if (!selectedSurveyRegion || selectedSurveyRegionId !== selectedSurveyRegion.id) {
+    return null;
+  }
+
+  return resolveSurveyGenerationBlockedReason(selectedSurveyRegion);
+});
 let activeSurveyPointCount = $derived.by(() => {
   if (!surveySession || !selectedSurveyRegion || selectedSurveyRegion.id !== surveySession.regionId) {
     return 0;
@@ -156,6 +164,8 @@ let debugPayload = $derived({
   drawRegionId: surveySession?.regionId ?? null,
   drawPointCount: activeSurveyPointCount,
   selectedSurveyRegionId,
+  selectedSurveyGenerationBlocked: selectedSurveyGenerationBlockedReason !== null,
+  selectedSurveyGenerationMessage: selectedSurveyGenerationBlockedReason?.message ?? null,
 });
 
 $effect(() => {
@@ -179,6 +189,8 @@ $effect(() => {
     drawRegionId: surveySession?.regionId ?? null,
     drawPointCount: activeSurveyPointCount,
     selectedSurveyRegionId,
+    selectedSurveyGenerationBlocked: selectedSurveyGenerationBlockedReason !== null,
+    selectedSurveyGenerationMessage: selectedSurveyGenerationBlockedReason?.message ?? null,
     activeSurveyVertexCount: view.counts.surveyVertexHandles,
     surveyPreviewFeatureCount: view.counts.surveyPreviewFeatures,
   });
@@ -932,6 +944,7 @@ function handleKeydown(event: KeyboardEvent) {
           <button
             aria-label="Add survey point on planner map"
             class="mission-map-draw-surface"
+            data-testid={missionWorkspaceTestIds.mapDrawSurface}
             onclick={appendSurveyPointFromSurface}
             onkeydown={handleSurfaceKeydown}
             type="button"

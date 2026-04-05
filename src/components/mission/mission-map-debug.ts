@@ -13,6 +13,8 @@ export type MissionMapDebugSnapshot = {
   drawRegionId: string | null;
   drawPointCount: number;
   selectedSurveyRegionId: string | null;
+  selectedSurveyGenerationBlocked: boolean;
+  selectedSurveyGenerationMessage: string | null;
   activeSurveyVertexCount: number;
   surveyPreviewFeatureCount: number;
   missionGeoJson: MissionMapView["missionGeoJson"];
