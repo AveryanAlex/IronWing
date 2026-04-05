@@ -90,7 +90,7 @@ test.describe("parameter workspace batch apply", () => {
 
     await expect(page.locator(parameterWorkspaceSelectors.state)).toContainText("Settings ready");
     await expect(page.locator(parameterWorkspaceSelectors.scope)).toContainText("live");
-    await expect(page.locator(parameterWorkspaceSelectors.metadata)).toContainText("Parameter info idle");
+    await expect(page.locator(parameterWorkspaceSelectors.metadata)).toContainText("Info ready");
 
     await stageParameterValue(page, "ARMING_CHECK", "3");
     await stageParameterValue(page, "FS_THR_ENABLE", "4");

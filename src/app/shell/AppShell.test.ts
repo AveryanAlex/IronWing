@@ -358,6 +358,9 @@ describe("AppShell", () => {
     expect(screen.getByTestId(appShellTestIds.tier).textContent?.trim()).toBe("wide");
     expect(screen.getByTestId(appShellTestIds.drawerState).textContent?.trim()).toBe("docked");
     expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("overview");
+    expect(screen.getByTestId(appShellTestIds.operatorWorkspace)).toBeTruthy();
+    expect(screen.getByTestId(appShellTestIds.mainViewport)).toBeTruthy();
+    expect(screen.getByTestId(appShellTestIds.vehiclePanelRail).getAttribute("data-panel-state")).toBe("docked");
     expect(screen.queryByTestId(appShellTestIds.vehiclePanelButton)).toBeNull();
     expect(screen.getByTestId("connection-connect-btn")).toBeTruthy();
     expect(screen.getByTestId("sidebar-telemetry-panel")).toBeTruthy();
@@ -497,8 +500,15 @@ describe("AppShell", () => {
       expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("overview");
     });
 
+    expect(screen.getByTestId(appShellTestIds.operatorWorkspace)).toBeTruthy();
     expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 queued");
     expect(screen.queryByTestId(parameterWorkspaceTestIds.root)).toBeNull();
+    expect(
+      screen
+        .getByTestId(appShellTestIds.mainViewport)
+        .closest("[data-has-staged-edits]")
+        ?.getAttribute("data-has-staged-edits"),
+    ).toBe("true");
 
     await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
     await waitFor(() => {
@@ -578,7 +588,9 @@ describe("AppShell", () => {
     const toggle = screen.getByRole("button", { name: "Vehicle panel" });
     expect(screen.getByTestId(appShellTestIds.tier).textContent?.trim()).toBe("phone");
     expect(screen.getByTestId(appShellTestIds.drawerState).textContent?.trim()).toBe("closed");
+    expect(screen.queryByTestId(appShellTestIds.vehiclePanelRail)).toBeNull();
     expect(screen.queryByTestId("connection-connect-btn")).toBeNull();
+    expect(screen.getByTestId(appShellTestIds.operatorWorkspace)).toBeTruthy();
     expect(screen.getByTestId("telemetry-state-value")).toBeTruthy();
     expect(screen.getByTestId("telemetry-alt-value")).toBeTruthy();
 
@@ -612,6 +624,7 @@ describe("AppShell", () => {
     });
 
     expect(screen.getByTestId(appShellTestIds.drawerState).textContent?.trim()).toBe("docked");
+    expect(screen.getByTestId(appShellTestIds.vehiclePanelRail)).toBeTruthy();
     expect(screen.queryByTestId(appShellTestIds.vehiclePanelButton)).toBeNull();
     expect(screen.getByTestId("connection-connect-btn")).toBeTruthy();
     expect(screen.getByTestId(appShellTestIds.vehiclePanelDrawer).getAttribute("data-state")).toBe("closed");
@@ -646,6 +659,7 @@ describe("AppShell", () => {
     });
 
     expect(screen.getByTestId(appShellTestIds.drawerState).textContent?.trim()).toBe("docked");
+    expect(screen.getByTestId(appShellTestIds.vehiclePanelRail)).toBeTruthy();
     expect(screen.getByTestId("connection-connect-btn")).toBeTruthy();
   });
 

@@ -3,10 +3,10 @@ import { derived, type Readable } from "svelte/store";
 import { paramProgressCounts, paramProgressPhase, type ParamProgress } from "../../params";
 import {
   buildParameterWorkspaceSections,
-  formatParamValue,
   type ParameterWorkspaceItem,
   type ParameterWorkspaceSection,
 } from "../params/workspace-sections";
+import { formatParamValue } from "../params/parameter-item-model";
 import type { StagedParameterEdit } from "./params-staged-edits";
 import type {
   ParameterWorkspaceStatus,

@@ -1,20 +1,12 @@
 import type { ParamMetadataMap } from "../../param-metadata";
-import type { Param, ParamStore } from "../../params";
+import type { ParamStore } from "../../params";
+import {
+  buildParameterItemIndex,
+  buildParameterItemModels,
+  type ParameterItemModel,
+} from "./parameter-item-model";
 
-export type ParameterWorkspaceItem = {
-  name: string;
-  label: string;
-  description: string | null;
-  value: number;
-  valueText: string;
-  units: string | null;
-  rebootRequired: boolean;
-  rawName: string;
-  order: number;
-  increment: number | null;
-  range: { min: number; max: number } | null;
-  readOnly: boolean;
-};
+export type ParameterWorkspaceItem = ParameterItemModel;
 
 export type ParameterWorkspaceSection = {
   id: string;
@@ -67,16 +59,17 @@ export function buildParameterWorkspaceSections(
     return [];
   }
 
-  const sorted = Object.values(paramStore.params ?? {}).sort((left, right) => left.index - right.index);
+  const itemIndex = buildParameterItemIndex(paramStore, metadata);
+  const sorted = buildParameterItemModels(paramStore, metadata);
   const used = new Set<string>();
   const sections = starterSections
     .map((section) => {
       const items = section.paramNames
-        .map((name) => paramStore.params[name])
-        .filter((param): param is Param => Boolean(param))
-        .map((param) => {
-          used.add(param.name);
-          return toWorkspaceItem(param, metadata);
+        .map((name) => itemIndex.get(name) ?? null)
+        .filter((item): item is ParameterWorkspaceItem => Boolean(item))
+        .map((item) => {
+          used.add(item.name);
+          return item;
         });
 
       return {
@@ -94,9 +87,8 @@ export function buildParameterWorkspaceSections(
   }
 
   const fallbackItems = sorted
-    .filter((param) => !used.has(param.name))
-    .slice(0, 6)
-    .map((param) => toWorkspaceItem(param, metadata));
+    .filter((item) => !used.has(item.name))
+    .slice(0, 6);
 
   if (fallbackItems.length === 0) {
     return [];
@@ -108,41 +100,4 @@ export function buildParameterWorkspaceSections(
       items: fallbackItems,
     },
   ];
-}
-
-function toWorkspaceItem(param: Param, metadata: ParamMetadataMap | null): ParameterWorkspaceItem {
-  const meta = metadata?.get(param.name);
-
-  return {
-    name: param.name,
-    rawName: param.name,
-    label: meta?.humanName?.trim() || param.name,
-    description: meta?.description?.trim() || null,
-    value: param.value,
-    valueText: formatParamValue(param.value),
-    units: meta?.unitText?.trim() || meta?.units?.trim() || null,
-    rebootRequired: meta?.rebootRequired === true,
-    order: param.index,
-    increment: typeof meta?.increment === "number" && Number.isFinite(meta.increment) ? meta.increment : null,
-    range:
-      typeof meta?.range?.min === "number"
-      && Number.isFinite(meta.range.min)
-      && typeof meta?.range?.max === "number"
-      && Number.isFinite(meta.range.max)
-        ? { min: meta.range.min, max: meta.range.max }
-        : null,
-    readOnly: meta?.readOnly === true,
-  };
-}
-
-export function formatParamValue(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "--";
-  }
-
-  if (Number.isInteger(value)) {
-    return String(value);
-  }
-
-  return value.toFixed(3).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
 }

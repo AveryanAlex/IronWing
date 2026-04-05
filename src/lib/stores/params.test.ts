@@ -135,6 +135,24 @@ function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessi
   };
 }
 
+function createSessionDomain(vehicleType: string | null) {
+  const session = createSnapshot().session;
+  return {
+    ...session,
+    value: session.value
+      ? {
+          ...session.value,
+          vehicle_state: vehicleType
+            ? {
+                ...session.value.vehicle_state!,
+                vehicle_type: vehicleType,
+              }
+            : null,
+        }
+      : null,
+  };
+}
+
 function createTransportDescriptors(): TransportDescriptor[] {
   return [
     {
@@ -364,6 +382,143 @@ describe("createParamsStore", () => {
       label: "ARMING_CHECK",
     });
     expect(view.metadataText).toContain("Parameter info unavailable");
+  });
+
+  it("loads metadata when a vehicle type arrives later on the same session envelope", async () => {
+    const metadata = new Map([
+      ["FS_THR_ENABLE", { humanName: "Throttle failsafe", description: "late metadata" }],
+    ]) as ParamMetadataMap;
+    const snapshot = createSnapshot({
+      session: createSessionDomain(null),
+    });
+    const sessionHarness = createSessionService([snapshot]);
+    const paramsHarness = createParamsService(null, {
+      fetchMetadata: vi.fn().mockResolvedValueOnce(metadata),
+    });
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const paramStore = createParamsStore(sessionStore, paramsHarness.service);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+
+    let state = get(paramStore);
+    expect(state.vehicleType).toBeNull();
+    expect(state.metadataState).toBe("idle");
+
+    sessionHarness.emit("onSession", {
+      envelope: snapshot.envelope,
+      value: createSessionDomain("fixed_wing"),
+    });
+
+    state = await waitForMetadata(paramStore);
+
+    expect(state.vehicleType).toBe("fixed_wing");
+    expect(state.metadataState).toBe("ready");
+    expect(state.metadata?.get("FS_THR_ENABLE")?.humanName).toBe("Throttle failsafe");
+    expect(paramsHarness.service.fetchMetadata).toHaveBeenCalledWith("fixed_wing");
+  });
+
+  it("invalidates stale same-envelope metadata requests when vehicle type changes again", async () => {
+    const firstMetadata = deferred<ParamMetadataMap | null>();
+    const secondMetadata = deferred<ParamMetadataMap | null>();
+    const snapshot = createSnapshot({
+      session: createSessionDomain(null),
+    });
+    const sessionHarness = createSessionService([snapshot]);
+    const paramsHarness = createParamsService(null, {
+      fetchMetadata: vi
+        .fn()
+        .mockReturnValueOnce(firstMetadata.promise)
+        .mockReturnValueOnce(secondMetadata.promise),
+    });
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const paramStore = createParamsStore(sessionStore, paramsHarness.service);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+
+    sessionHarness.emit("onSession", {
+      envelope: snapshot.envelope,
+      value: createSessionDomain("quadrotor"),
+    });
+    await flush();
+
+    expect(get(paramStore).metadataState).toBe("loading");
+
+    sessionHarness.emit("onSession", {
+      envelope: snapshot.envelope,
+      value: createSessionDomain("fixed_wing"),
+    });
+
+    const newest = new Map([
+      ["FS_THR_ENABLE", { humanName: "Newest metadata", description: "latest" }],
+    ]) as ParamMetadataMap;
+    secondMetadata.resolve(newest);
+    let state = await waitForMetadata(paramStore);
+
+    expect(state.vehicleType).toBe("fixed_wing");
+    expect(state.metadata?.get("FS_THR_ENABLE")?.humanName).toBe("Newest metadata");
+    expect(paramsHarness.service.fetchMetadata).toHaveBeenNthCalledWith(1, "quadrotor");
+    expect(paramsHarness.service.fetchMetadata).toHaveBeenNthCalledWith(2, "fixed_wing");
+
+    const stale = new Map([
+      ["ARMING_CHECK", { humanName: "Stale metadata", description: "old" }],
+    ]) as ParamMetadataMap;
+    firstMetadata.resolve(stale);
+    await flush();
+
+    state = get(paramStore);
+    expect(state.metadata?.get("FS_THR_ENABLE")?.humanName).toBe("Newest metadata");
+    expect(state.metadata?.get("ARMING_CHECK")?.humanName).toBeUndefined();
+  });
+
+  it("keeps raw values and staged edits usable when a same-envelope metadata reload fails", async () => {
+    const readyMetadata = new Map([
+      ["ARMING_CHECK", { humanName: "Arming checks", description: "ready metadata" }],
+    ]) as ParamMetadataMap;
+    const snapshot = createSnapshot({
+      session: createSessionDomain("quadrotor"),
+    });
+    const sessionHarness = createSessionService([snapshot]);
+    const paramsHarness = createParamsService(null, {
+      fetchMetadata: vi
+        .fn()
+        .mockResolvedValueOnce(readyMetadata)
+        .mockRejectedValueOnce(new Error("metadata rejected")),
+    });
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const paramStore = createParamsStore(sessionStore, paramsHarness.service);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+    await waitForMetadata(paramStore);
+
+    const item = get(createParameterWorkspaceViewStore(paramStore)).sections[0]?.items.find(
+      (entry) => entry.name === "ARMING_CHECK",
+    );
+    expect(item?.label).toBe("Arming checks");
+
+    paramStore.stageParameterEdit(item!, 7);
+
+    sessionHarness.emit("onSession", {
+      envelope: snapshot.envelope,
+      value: createSessionDomain("fixed_wing"),
+    });
+
+    const state = await waitForMetadata(paramStore);
+    const view = get(createParameterWorkspaceViewStore(paramStore));
+    const stagedItem = view.sections[0]?.items.find((entry) => entry.name === "ARMING_CHECK");
+
+    expect(state.metadata).toBeNull();
+    expect(state.metadataState).toBe("unavailable");
+    expect(state.metadataError).toBe("metadata rejected");
+    expect(state.paramStore?.params.ARMING_CHECK?.value).toBe(1);
+    expect(state.stagedEdits.ARMING_CHECK?.nextValue).toBe(7);
+    expect(stagedItem).toMatchObject({
+      label: "ARMING_CHECK",
+      isStaged: true,
+      stagedValue: 7,
+    });
   });
 
   it("filters malformed bootstrap entries instead of poisoning the scoped snapshot", async () => {

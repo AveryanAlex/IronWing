@@ -4,8 +4,10 @@ import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamProgress, ParamStore, ParamWriteResult } from "../../params";
 import type { SessionEnvelope } from "../../session";
 import { shouldDropEvent, type SourceKind } from "../../session";
-import type { ParameterWorkspaceItem } from "../params/workspace-sections";
-import { formatParamValue } from "../params/workspace-sections";
+import {
+  formatParamValue,
+  type ParameterItemModel,
+} from "../params/parameter-item-model";
 import {
   createParamsService,
   type ParamsService,
@@ -142,9 +144,13 @@ export function createParamsStore(
     applyRequestId += 1;
   }
 
-  function applyBootstrapState(sessionState: SessionStoreState, envelopeChanged: boolean) {
+  function applyBootstrapState(
+    sessionState: SessionStoreState,
+    envelopeChanged: boolean,
+    metadataReload: { vehicleType: string | null; shouldReload: boolean },
+  ) {
     const nextEnvelope = sessionState.activeEnvelope;
-    const vehicleType = sessionState.sessionDomain.value?.vehicle_state?.vehicle_type ?? null;
+    const vehicleType = metadataReload.vehicleType;
     const nextStore = normalizeParamStore(sessionState.bootstrap.paramStore);
     const nextProgress = normalizeParamProgress(sessionState.bootstrap.paramProgress);
 
@@ -201,9 +207,9 @@ export function createParamsStore(
         vehicleType,
         paramStore: resolvedStore,
         paramProgress: shouldReplaceProgress ? nextProgress : state.paramProgress,
-        metadata: envelopeChanged ? null : state.metadata,
-        metadataState: envelopeChanged ? (vehicleType ? "loading" : "idle") : state.metadataState,
-        metadataError: envelopeChanged ? null : state.metadataError,
+        metadata: metadataReload.shouldReload ? null : state.metadata,
+        metadataState: metadataReload.shouldReload ? (vehicleType ? "loading" : "idle") : state.metadataState,
+        metadataError: metadataReload.shouldReload ? null : state.metadataError,
         stagedEdits: nextStagedEdits,
         retainedFailures: nextRetainedFailures,
         applyPhase: scopeChangedFromActive ? "idle" : resolveRetainedApplyPhase(nextRetainedFailures, state.applyPhase),
@@ -219,10 +225,12 @@ export function createParamsStore(
       };
     });
 
-    void ensureMetadata(vehicleType, envelopeChanged);
+    if (metadataReload.shouldReload) {
+      void ensureMetadata(vehicleType, true);
+    }
   }
 
-  async function ensureMetadata(vehicleType: string | null, envelopeChanged: boolean) {
+  async function ensureMetadata(vehicleType: string | null, forceReload = false) {
     const current = get(store);
     if (!vehicleType) {
       metadataRequestId += 1;
@@ -235,7 +243,7 @@ export function createParamsStore(
       return;
     }
 
-    if (!envelopeChanged && (current.metadataState === "ready" || current.metadataState === "unavailable")) {
+    if (!forceReload && (current.metadataState === "ready" || current.metadataState === "unavailable")) {
       return;
     }
 
@@ -275,10 +283,12 @@ export function createParamsStore(
   }
 
   function handleSessionState(sessionState: SessionStoreState) {
+    const currentState = get(store);
     const nextEnvelope = sessionState.activeEnvelope;
     const envelopeChanged = !areEnvelopesEqual(lastSessionEnvelope, nextEnvelope);
     const bootstrapStoreChanged = lastBootstrapStoreRef !== sessionState.bootstrap.paramStore;
     const bootstrapProgressChanged = lastBootstrapProgressRef !== sessionState.bootstrap.paramProgress;
+    const metadataReload = resolveMetadataReload(currentState, sessionState, envelopeChanged);
 
     lastSessionEnvelope = nextEnvelope;
     lastBootstrapStoreRef = sessionState.bootstrap.paramStore;
@@ -291,11 +301,11 @@ export function createParamsStore(
       phase: resolveDomainPhase(sessionState, state.activeEnvelope, state.paramStore, state.streamReady),
     }));
 
-    if (!envelopeChanged && !bootstrapStoreChanged && !bootstrapProgressChanged) {
+    if (!envelopeChanged && !bootstrapStoreChanged && !bootstrapProgressChanged && !metadataReload.shouldReload) {
       return;
     }
 
-    applyBootstrapState(sessionState, envelopeChanged);
+    applyBootstrapState(sessionState, envelopeChanged, metadataReload);
   }
 
   function applyStoreEvent(event: { envelope: SessionEnvelope; value: ParamStore }) {
@@ -393,7 +403,7 @@ export function createParamsStore(
     return initializePromise;
   }
 
-  function stageParameterEdit(item: ParameterWorkspaceItem, nextValue: number) {
+  function stageParameterEdit(item: ParameterItemModel, nextValue: number) {
     if (!Number.isFinite(nextValue)) {
       return;
     }
@@ -646,6 +656,45 @@ function areEnvelopesEqual(left: SessionEnvelope | null, right: SessionEnvelope 
   }
 
   return isSameEnvelope(left, right);
+}
+
+function resolveMetadataReload(
+  state: Pick<ParamsStoreState, "vehicleType" | "metadataState" | "metadata">,
+  sessionState: Pick<SessionStoreState, "sessionDomain">,
+  envelopeChanged: boolean,
+): { vehicleType: string | null; shouldReload: boolean } {
+  const nextVehicleType = normalizeVehicleType(sessionState.sessionDomain.value?.vehicle_state?.vehicle_type ?? null);
+  if (envelopeChanged) {
+    return {
+      vehicleType: nextVehicleType,
+      shouldReload: true,
+    };
+  }
+
+  if (!nextVehicleType) {
+    return {
+      vehicleType: state.vehicleType,
+      shouldReload: false,
+    };
+  }
+
+  const falseIdleState = state.vehicleType === nextVehicleType
+    && state.metadataState === "idle"
+    && state.metadata === null;
+
+  return {
+    vehicleType: nextVehicleType,
+    shouldReload: nextVehicleType !== state.vehicleType || falseIdleState,
+  };
+}
+
+function normalizeVehicleType(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function selectRequestedEdits(

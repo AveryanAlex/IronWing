@@ -1,3 +1,4 @@
+import { createOperatorWorkspaceViewStore } from "../lib/stores/operator-workspace-view";
 import { runtime } from "../lib/stores/runtime";
 import {
   createParameterWorkspaceViewStore,
@@ -9,6 +10,7 @@ import {
 } from "../lib/stores/session";
 import { createShellChromeStore } from "../app/shell/chrome-state";
 import {
+  setOperatorWorkspaceViewStoreContext,
   setParamsStoreContext,
   setParameterWorkspaceViewStoreContext,
   setRuntimeStoreContext,
@@ -59,10 +61,12 @@ export function withShellContexts(
   return function AppShellHarness(...args: any[]) {
     const chrome = createShellChromeStore();
     const sessionView = createSessionViewStore(store);
+    const operatorWorkspaceView = createOperatorWorkspaceViewStore(store);
     const parameterWorkspaceView = createParameterWorkspaceViewStore(parameterStore);
 
     setSessionStoreContext(store);
     setSessionViewStoreContext(sessionView);
+    setOperatorWorkspaceViewStoreContext(operatorWorkspaceView);
     setParamsStoreContext(parameterStore);
     setParameterWorkspaceViewStoreContext(parameterWorkspaceView);
     setRuntimeStoreContext(runtime);

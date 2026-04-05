@@ -4,13 +4,12 @@ import { fromStore } from "svelte/store";
 import { Toaster } from "svelte-sonner";
 
 import ParameterWorkspace from "../../components/params/ParameterWorkspace.svelte";
-import VehicleStatusCard from "../../components/status/VehicleStatusCard.svelte";
-import TelemetrySummary from "../../components/telemetry/TelemetrySummary.svelte";
 import { runtimeTestIds } from "../../lib/stores/runtime";
 import AppShellPlaceholderWorkspace from "./AppShellPlaceholderWorkspace.svelte";
 import AppShellHeader from "./AppShellHeader.svelte";
 import { appShellWorkspaces, createAppShellController } from "./app-shell-controller";
 import { appShellTestIds } from "./chrome-state";
+import OperatorWorkspace from "./OperatorWorkspace.svelte";
 import ParameterReviewTray from "./ParameterReviewTray.svelte";
 import {
   getParameterWorkspaceViewStoreContext,
@@ -92,6 +91,7 @@ onDestroy(() => {
 >
   <section
     class={`runtime-shell__content app-shell-frame ${stagedCount > 0 ? "pb-36 sm:pb-40" : ""}`}
+    data-has-staged-edits={stagedCount > 0 ? "true" : "false"}
     data-shell-tier={$chromeStore.tier}
   >
     <AppShellHeader
@@ -117,21 +117,22 @@ onDestroy(() => {
 
     <div class="app-shell-layout" data-shell-tier={$chromeStore.tier}>
       {#if showDockedVehiclePanel}
-        <aside class="app-shell-layout__vehicle-panel">
+        <aside
+          class="app-shell-layout__vehicle-panel"
+          data-panel-state="docked"
+          data-testid={appShellTestIds.vehiclePanelRail}
+        >
           <VehiclePanelContent />
         </aside>
       {/if}
 
-      <section class="app-shell-layout__main">
+      <section class="app-shell-layout__main" data-testid={appShellTestIds.mainViewport}>
         <span aria-hidden="true" class="sr-only" data-testid={appShellTestIds.activeWorkspace}>
           {activeWorkspace}
         </span>
 
         {#if activeWorkspace === "overview"}
-          <div class="app-shell-live-grid">
-            <VehicleStatusCard />
-            <TelemetrySummary />
-          </div>
+          <OperatorWorkspace />
         {:else if activeWorkspace === "setup"}
           <ParameterWorkspace />
         {:else}

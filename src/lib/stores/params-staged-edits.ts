@@ -1,6 +1,8 @@
-import { formatParamValue, type ParameterWorkspaceItem } from "../params/workspace-sections";
-
 import type { ParamStore } from "../../params";
+import {
+  formatParamValue,
+  type ParameterItemModel,
+} from "../params/parameter-item-model";
 
 export type StagedParameterEdit = {
   name: string;
@@ -18,7 +20,7 @@ export type StagedParameterEdit = {
 
 export function stageParameterEdit(
   stagedEdits: Record<string, StagedParameterEdit>,
-  item: ParameterWorkspaceItem,
+  item: ParameterItemModel,
   currentValue: number,
   nextValue: number,
 ): Record<string, StagedParameterEdit> {
