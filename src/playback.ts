@@ -1,6 +1,5 @@
 import { invoke } from "@platform/core";
-import { listen, type UnlistenFn } from "@platform/event";
-import type { SessionEnvelope, SessionEvent } from "./session";
+import type { SessionEnvelope } from "./session";
 import type { Telemetry, VehicleState } from "./telemetry";
 
 export type FlightPathPoint = {
@@ -47,8 +46,6 @@ export type PlaybackStateSnapshot = {
   barrier_ready: boolean;
 };
 
-export type PlaybackStateEvent = SessionEvent<PlaybackStateSnapshot>;
-
 export type PlaybackSeekResult = {
   envelope: SessionEnvelope;
   cursor_usec: number | null;
@@ -72,12 +69,6 @@ export async function getLogTelemetryTrack(
 
 export async function seekPlayback(cursorUsec: number): Promise<PlaybackSeekResult> {
   return invoke<PlaybackSeekResult>("playback_seek", { cursorUsec });
-}
-
-export async function subscribePlaybackState(
-  cb: (event: PlaybackStateEvent) => void,
-): Promise<UnlistenFn> {
-  return listen<PlaybackStateEvent>("playback://state", (event) => cb(event.payload));
 }
 
 function lerpOpt(

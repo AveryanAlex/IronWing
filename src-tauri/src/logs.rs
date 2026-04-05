@@ -650,6 +650,29 @@ pub(crate) async fn log_open(
     Ok(summary)
 }
 
+fn emit_playback_frame(
+    app: &tauri::AppHandle,
+    envelope: &SessionEnvelope,
+    frame: &PlaybackFrame,
+    seek_result: &PlaybackSeekResult,
+) {
+    emit_event(app, "session://state", &ScopedEvent { envelope: envelope.clone(), value: frame.session.clone() });
+    emit_event(app, "telemetry://state", &ScopedEvent { envelope: envelope.clone(), value: frame.telemetry.clone() });
+    emit_event(app, "support://state", &ScopedEvent { envelope: envelope.clone(), value: frame.support.clone() });
+    emit_event(app, "status_text://state", &ScopedEvent { envelope: envelope.clone(), value: frame.status_text.clone() });
+    emit_event(
+        app,
+        "playback://state",
+        &ScopedEvent {
+            envelope: seek_result.envelope.clone(),
+            value: PlaybackState {
+                cursor_usec: seek_result.cursor_usec,
+                barrier_ready: true,
+            },
+        },
+    );
+}
+
 #[tauri::command]
 pub(crate) async fn playback_seek(
     state: tauri::State<'_, AppState>,
@@ -671,49 +694,7 @@ pub(crate) async fn playback_seek(
         .reset_for_playback("playback source switched");
     let result = store.seek_playback(cursor_usec, envelope.clone());
     let frame = store.playback_frame();
-    emit_event(
-        &app,
-        "session://state",
-        &ScopedEvent {
-            envelope: envelope.clone(),
-            value: frame.session.clone(),
-        },
-    );
-    emit_event(
-        &app,
-        "telemetry://state",
-        &ScopedEvent {
-            envelope: envelope.clone(),
-            value: frame.telemetry.clone(),
-        },
-    );
-    emit_event(
-        &app,
-        "support://state",
-        &ScopedEvent {
-            envelope: envelope.clone(),
-            value: frame.support.clone(),
-        },
-    );
-    emit_event(
-        &app,
-        "status_text://state",
-        &ScopedEvent {
-            envelope: envelope.clone(),
-            value: frame.status_text.clone(),
-        },
-    );
-    emit_event(
-        &app,
-        "playback://state",
-        &ScopedEvent {
-            envelope: result.envelope.clone(),
-            value: PlaybackState {
-                cursor_usec: result.cursor_usec,
-                barrier_ready: true,
-            },
-        },
-    );
+    emit_playback_frame(&app, &envelope, &frame, &result);
     Ok(result)
 }
 

@@ -8,6 +8,15 @@ export function isSameEnvelope(current: SessionEnvelope, incoming: SessionEnvelo
   return scopedEnvelopeKey(current) === scopedEnvelopeKey(incoming);
 }
 
+/**
+ * Monotonic progression check for subscription delivery. Returns true when the
+ * incoming envelope moves forward in reset_revision or seek_epoch, matches the
+ * current scope exactly, or introduces a new source/session context.
+ *
+ * Used by {@link createLatestScopedEventHandler} to build a cursor that only
+ * advances. Compare with `shouldDropEvent` in `session.ts`, which is a strict
+ * scope guard that rejects any mismatch from the active envelope.
+ */
 export function isNewerScopedEnvelope(current: SessionEnvelope | null, incoming: SessionEnvelope): boolean {
   if (!current) return true;
   if (incoming.reset_revision !== current.reset_revision) {

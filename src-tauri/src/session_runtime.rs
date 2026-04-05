@@ -170,26 +170,8 @@ impl SessionRuntime {
         }
 
         active.seek_epoch = active.seek_epoch.saturating_add(1);
-        active.reset_revision = active.reset_revision.saturating_add(1);
         self.last_source_kind = Some(SourceKind::Playback);
         Ok(active.clone())
-    }
-
-    #[allow(dead_code)] // Task 1 session guard remains available for future bridge filtering.
-    pub(crate) fn should_drop_event(&self, envelope: &SessionEnvelope) -> bool {
-        let Some(active) = self.active_envelope_for_source(envelope.source_kind) else {
-            return false;
-        };
-
-        if envelope.session_id != active.session_id {
-            return true;
-        }
-
-        if envelope.seek_epoch != active.seek_epoch {
-            return true;
-        }
-
-        envelope.reset_revision < active.reset_revision
     }
 
     pub(crate) fn current_stream_envelope(&mut self, now: Instant) -> Option<SessionEnvelope> {
@@ -221,11 +203,6 @@ impl SessionRuntime {
     }
 
     #[cfg(test)]
-    fn active_envelope(&self) -> Option<&SessionEnvelope> {
-        self.live_active.as_ref().or(self.playback_active.as_ref())
-    }
-
-    #[cfg(test)]
     fn live_active_envelope(&self) -> Option<&SessionEnvelope> {
         self.live_active.as_ref()
     }
@@ -243,13 +220,6 @@ impl SessionRuntime {
     #[cfg(test)]
     fn pending_ttl(&self) -> Duration {
         self.pending_ttl
-    }
-
-    fn active_envelope_for_source(&self, source_kind: SourceKind) -> Option<&SessionEnvelope> {
-        match source_kind {
-            SourceKind::Live => self.live_active.as_ref(),
-            SourceKind::Playback => self.playback_active.as_ref(),
-        }
     }
 
     fn pending_slot_mut(&mut self, source_kind: SourceKind) -> &mut Option<PendingSession> {
@@ -300,92 +270,6 @@ mod tests {
             snapshot.session.value.expect("session").status,
             SessionStatus::Pending
         );
-    }
-
-    #[test]
-    fn session_runtime_drops_stale_events_from_older_session_id() {
-        let mut runtime = SessionRuntime::new();
-        let first = runtime.open_session_snapshot(SourceKind::Live);
-        assert!(matches!(
-            runtime.ack_session_snapshot(
-                &first.envelope.session_id,
-                first.envelope.seek_epoch,
-                first.envelope.reset_revision
-            ),
-            AckSessionSnapshotResult::Accepted { .. }
-        ));
-
-        let second = runtime.open_session_snapshot(SourceKind::Playback);
-        assert!(matches!(
-            runtime.ack_session_snapshot(
-                &second.envelope.session_id,
-                second.envelope.seek_epoch,
-                second.envelope.reset_revision
-            ),
-            AckSessionSnapshotResult::Accepted { .. }
-        ));
-
-        assert!(!runtime.should_drop_event(&first.envelope));
-    }
-
-    #[test]
-    fn session_runtime_drops_stale_events_from_older_seek_epoch() {
-        let mut runtime = SessionRuntime::new();
-        let _ = runtime.open_session_snapshot(SourceKind::Live);
-        let snapshot = runtime.open_session_snapshot(SourceKind::Live);
-        assert!(matches!(
-            runtime.ack_session_snapshot(
-                &snapshot.envelope.session_id,
-                snapshot.envelope.seek_epoch,
-                snapshot.envelope.reset_revision
-            ),
-            AckSessionSnapshotResult::Accepted { .. }
-        ));
-
-        let mut stale = runtime.active_envelope().expect("active envelope").clone();
-        stale.seek_epoch = stale.seek_epoch.saturating_sub(1);
-
-        assert!(runtime.should_drop_event(&stale));
-    }
-
-    #[test]
-    fn session_runtime_drops_events_from_mismatched_newer_seek_epoch() {
-        let mut runtime = SessionRuntime::new();
-        let _ = runtime.open_session_snapshot(SourceKind::Live);
-        let snapshot = runtime.open_session_snapshot(SourceKind::Live);
-        assert!(matches!(
-            runtime.ack_session_snapshot(
-                &snapshot.envelope.session_id,
-                snapshot.envelope.seek_epoch,
-                snapshot.envelope.reset_revision
-            ),
-            AckSessionSnapshotResult::Accepted { .. }
-        ));
-
-        let mut mismatched = runtime.active_envelope().expect("active envelope").clone();
-        mismatched.seek_epoch = mismatched.seek_epoch.saturating_add(1);
-
-        assert!(runtime.should_drop_event(&mismatched));
-    }
-
-    #[test]
-    fn session_runtime_drops_stale_events_from_older_reset_revision() {
-        let mut runtime = SessionRuntime::new();
-        let _ = runtime.open_session_snapshot(SourceKind::Live);
-        let snapshot = runtime.open_session_snapshot(SourceKind::Playback);
-        assert!(matches!(
-            runtime.ack_session_snapshot(
-                &snapshot.envelope.session_id,
-                snapshot.envelope.seek_epoch,
-                snapshot.envelope.reset_revision
-            ),
-            AckSessionSnapshotResult::Accepted { .. }
-        ));
-
-        let mut stale = runtime.active_envelope().expect("active envelope").clone();
-        stale.reset_revision = stale.reset_revision.saturating_sub(1);
-
-        assert!(runtime.should_drop_event(&stale));
     }
 
     #[test]
@@ -490,10 +374,10 @@ mod tests {
 
         assert_eq!(first.session_id, snapshot.envelope.session_id);
         assert_eq!(first.seek_epoch, snapshot.envelope.seek_epoch + 1);
-        assert_eq!(first.reset_revision, snapshot.envelope.reset_revision + 1);
+        assert_eq!(first.reset_revision, snapshot.envelope.reset_revision);
         assert_eq!(second.session_id, snapshot.envelope.session_id);
         assert_eq!(second.seek_epoch, first.seek_epoch + 1);
-        assert_eq!(second.reset_revision, first.reset_revision + 1);
+        assert_eq!(second.reset_revision, snapshot.envelope.reset_revision);
     }
 
     #[test]

@@ -121,6 +121,15 @@ export async function subscribeStatusTextState(
   return listen<SessionEvent<StatusTextDomain>>("status_text://state", (event) => cb(event.payload));
 }
 
+/**
+ * Strict scope guard for store mutations. Returns true when the incoming event
+ * is outside the current active scope — any session_id or seek_epoch mismatch,
+ * or an older reset_revision. Stores that track an `activeEnvelope` use this to
+ * reject events that don't belong to the exact current context.
+ *
+ * Compare with {@link isNewerScopedEnvelope} in `scoped-session-events.ts`,
+ * which accepts forward-moving envelope changes for subscription delivery.
+ */
 export function shouldDropEvent(active: SessionEnvelope | null, incoming: SessionEnvelope): boolean {
   if (!active) return false;
   if (incoming.session_id !== active.session_id) return true;
