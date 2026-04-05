@@ -886,6 +886,55 @@ describe("mock setup/calibration/arming backend parity", () => {
     expect(live.param_store.params.ARMING_CHECK.value).toBe(0);
     expect(live.param_store.params.FS_THR_ENABLE.value).toBe(1);
   });
+
+  it("parses .param files with the same frontend-shaped response contract as native", async () => {
+    await expect(invokeMockCommand<Record<string, number>>("param_parse_file", {
+      contents: "# comment\nFS_THR_ENABLE,2\nARMING_CHECK,1\n",
+    })).resolves.toEqual({
+      FS_THR_ENABLE: 2,
+      ARMING_CHECK: 1,
+    });
+
+    await expect(invokeMockCommand<Record<string, number>>("param_parse_file", {
+      contents: "",
+    })).resolves.toEqual({});
+  });
+
+  it("formats the provided param snapshot alphabetically for expert export parity", async () => {
+    await expect(invokeMockCommand<string>("param_format_file", {
+      store: {
+        expected_count: 2,
+        params: {
+          ZEBRA: { name: "ZEBRA", value: 1, param_type: "real32", index: 1 },
+          ALPHA: { name: "ALPHA", value: 2, param_type: "uint32", index: 0 },
+        },
+      },
+    })).resolves.toBe("ALPHA,2\nZEBRA,1\n");
+  });
+
+  it("rejects malformed parse and format payloads loudly instead of masking mock drift", async () => {
+    await expect(invokeMockCommand("param_parse_file", {})).rejects.toThrow(
+      "missing or invalid param_parse_file.contents",
+    );
+    await expect(invokeMockCommand("param_parse_file", {
+      contents: "ARMING_CHECK",
+    })).rejects.toThrow("line 1: expected NAME,VALUE");
+    await expect(invokeMockCommand("param_parse_file", {
+      contents: "ARMING_CHECK,not-a-number",
+    })).rejects.toThrow("line 1: invalid value 'not-a-number'");
+
+    await expect(invokeMockCommand("param_format_file", {})).rejects.toThrow(
+      "missing or invalid param_format_file.store",
+    );
+    await expect(invokeMockCommand("param_format_file", {
+      store: {
+        expected_count: 1,
+        params: {
+          ARMING_CHECK: { name: "ARMING_CHECK", value: 1, param_type: "bogus", index: 0 },
+        },
+      },
+    })).rejects.toThrow("missing or invalid param_format_file.store.params.ARMING_CHECK.param_type");
+  });
 });
 
 describe("mock firmware backend parity", () => {

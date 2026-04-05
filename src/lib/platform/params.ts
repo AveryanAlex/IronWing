@@ -1,5 +1,7 @@
 import { fetchParamMetadata, type ParamMetadataMap } from "../../param-metadata";
 import {
+  formatParamFile,
+  parseParamFile,
   subscribeParamProgress,
   subscribeParamStore,
   writeBatchParams,
@@ -19,6 +21,8 @@ export type ParamsService = {
   subscribeAll(handlers: ParamsServiceEventHandlers): Promise<() => void>;
   fetchMetadata(vehicleType: string): Promise<ParamMetadataMap | null>;
   writeBatch(params: [string, number][]): Promise<ParamWriteResult[]>;
+  parseFile(contents: string): Promise<Record<string, number>>;
+  formatFile(store: ParamStore): Promise<string>;
   formatError(error: unknown): string;
 };
 
@@ -27,6 +31,8 @@ export function createParamsService(): ParamsService {
     subscribeAll,
     fetchMetadata: fetchParamMetadata,
     writeBatch: writeBatchParams,
+    parseFile: parseParamFile,
+    formatFile: formatParamFile,
     formatError: formatUnknownError,
   };
 }

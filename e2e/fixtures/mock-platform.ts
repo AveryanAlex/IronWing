@@ -84,7 +84,15 @@ export const parameterWorkspaceSelectors = {
     notice: '[data-testid="parameter-domain-notice"]',
     pendingCount: '[data-testid="parameter-workspace-pending-count"]',
     advancedButton: '[data-testid="parameter-workspace-advanced-button"]',
+    advancedBackButton: '[data-testid="parameter-workspace-advanced-back"]',
     advancedPanel: '[data-testid="parameter-workspace-advanced-panel"]',
+    expertMetadataFallback: '[data-testid="parameter-expert-metadata-fallback"]',
+    expertHighlightSummary: '[data-testid="parameter-expert-highlight-summary"]',
+    expertFileActions: '[data-testid="parameter-expert-file-actions"]',
+    expertFileImportButton: '[data-testid="parameter-expert-file-import"]',
+    expertFileExportButton: '[data-testid="parameter-expert-file-export"]',
+    expertFileStatus: '[data-testid="parameter-expert-file-status"]',
+    expertFileMessage: '[data-testid="parameter-expert-file-message"]',
     reviewTray: '[data-testid="app-shell-parameter-review-tray"]',
     reviewSurface: '[data-testid="app-shell-parameter-review-surface"]',
     reviewCount: '[data-testid="app-shell-parameter-review-count"]',
@@ -151,6 +159,14 @@ type MockPlatformFixture = {
         seek_epoch: number;
         reset_revision: number;
     } | null>;
+    setOpenFile: (contents: string, name?: string) => Promise<void>;
+    cancelOpenFile: (message?: string) => Promise<void>;
+    failOpenFile: (message: string) => Promise<void>;
+    setSaveFileName: (name: string) => Promise<void>;
+    cancelSaveFile: (message?: string) => Promise<void>;
+    failSaveFile: (message: string) => Promise<void>;
+    clearSavedFiles: () => Promise<void>;
+    getSavedFiles: () => Promise<Array<{ name: string; contents: string }>>;
     waitForRuntimeSurface: () => Promise<void>;
     waitForOperatorWorkspace: () => Promise<void>;
 };
@@ -208,6 +224,134 @@ async function withMockController<T>(page: Page, callback: string, ...args: unkn
         },
         [callback, args],
     );
+}
+
+async function withMockFilePicker<T>(page: Page, callback: string, ...args: unknown[]) {
+    return page.evaluate(
+        ([rawMethodName, rawValues]) => {
+            const [methodName, values] = [rawMethodName, rawValues] as [string, unknown[]];
+            const filePicker = (window as typeof window & {
+                __IRONWING_FILE_PICKER__?: Record<string, (...methodArgs: unknown[]) => unknown>;
+            }).__IRONWING_FILE_PICKER__;
+            if (!filePicker) {
+                throw new Error("Mock file picker harness is not available");
+            }
+
+            const method = filePicker[methodName] as (...methodArgs: unknown[]) => T;
+            if (typeof method !== "function") {
+                throw new Error(`Mock file picker method is not available: ${methodName}`);
+            }
+
+            return method(...values);
+        },
+        [callback, args],
+    );
+}
+
+function installMockFilePicker(page: Page) {
+    return page.addInitScript(() => {
+        type FilePickerState = {
+            openMode: "resolve" | "cancel" | "reject";
+            openContents: string;
+            openName: string;
+            openMessage: string;
+            saveMode: "resolve" | "cancel" | "reject";
+            saveName: string;
+            saveMessage: string;
+            savedFiles: Array<{ name: string; contents: string }>;
+            setOpenFile: (contents: string, name?: string) => void;
+            cancelOpenFile: (message?: string) => void;
+            failOpenFile: (message: string) => void;
+            setSaveFileName: (name: string) => void;
+            cancelSaveFile: (message?: string) => void;
+            failSaveFile: (message: string) => void;
+            clearSavedFiles: () => void;
+            getSavedFiles: () => Array<{ name: string; contents: string }>;
+        };
+
+        const mockWindow = window as typeof window & {
+            __IRONWING_FILE_PICKER__?: FilePickerState;
+            showOpenFilePicker?: (options?: { suggestedName?: string }) => Promise<Array<{ getFile: () => Promise<File> }>>;
+            showSaveFilePicker?: (options?: { suggestedName?: string }) => Promise<{
+                name?: string;
+                createWritable: () => Promise<{ write: (contents: unknown) => Promise<void>; close: () => Promise<void> }>;
+            }>;
+        };
+
+        const state: FilePickerState = {
+            openMode: "resolve",
+            openContents: "",
+            openName: "import.param",
+            openMessage: "The user aborted a request.",
+            saveMode: "resolve" as const,
+            saveName: "ironwing-parameters.param",
+            saveMessage: "The user aborted a request.",
+            savedFiles: [] as Array<{ name: string; contents: string }>,
+            setOpenFile(contents: string, name = "import.param") {
+                state.openMode = "resolve";
+                state.openContents = contents;
+                state.openName = name;
+            },
+            cancelOpenFile(message = "The user aborted a request.") {
+                state.openMode = "cancel";
+                state.openMessage = message;
+            },
+            failOpenFile(message: string) {
+                state.openMode = "reject";
+                state.openMessage = message;
+            },
+            setSaveFileName(name: string) {
+                state.saveMode = "resolve";
+                state.saveName = name;
+            },
+            cancelSaveFile(message = "The user aborted a request.") {
+                state.saveMode = "cancel";
+                state.saveMessage = message;
+            },
+            failSaveFile(message: string) {
+                state.saveMode = "reject";
+                state.saveMessage = message;
+            },
+            clearSavedFiles() {
+                state.savedFiles = [];
+            },
+            getSavedFiles() {
+                return state.savedFiles.slice();
+            },
+        };
+
+        mockWindow.__IRONWING_FILE_PICKER__ = state;
+        mockWindow.showOpenFilePicker = async () => {
+            if (state.openMode === "cancel") {
+                throw new DOMException(state.openMessage, "AbortError");
+            }
+            if (state.openMode === "reject") {
+                throw new Error(state.openMessage);
+            }
+
+            const file = new File([state.openContents], state.openName, { type: "text/plain" });
+            return [{ getFile: async () => file }];
+        };
+        mockWindow.showSaveFilePicker = async (options) => {
+            if (state.saveMode === "cancel") {
+                throw new DOMException(state.saveMessage, "AbortError");
+            }
+            if (state.saveMode === "reject") {
+                throw new Error(state.saveMessage);
+            }
+
+            const name = state.saveName || options?.suggestedName || "ironwing-parameters.param";
+            return {
+                name,
+                createWritable: async () => ({
+                    write: async (contents: unknown) => {
+                        state.savedFiles.push({ name, contents: typeof contents === "string" ? contents : String(contents) });
+                    },
+                    close: async () => undefined,
+                }),
+            };
+        };
+    });
 }
 
 async function emitLiveScopedDomain<T>(
@@ -454,6 +598,8 @@ export async function closeVehiclePanelDrawer(page: Page): Promise<void> {
 
 export const test = base.extend<Fixtures>({
     mockPlatform: async ({ page }, use) => {
+        await installMockFilePicker(page);
+
         await use({
             reset: () => withMockController(page, "reset"),
             setCommandBehavior: (cmd, behavior) => withMockController(page, "setCommandBehavior", cmd, behavior),
@@ -472,6 +618,14 @@ export const test = base.extend<Fixtures>({
             resolveDeferredConnectLink: (params) => withMockController(page, "resolveDeferredConnectLink", params),
             getInvocations: () => withMockController(page, "getInvocations"),
             getLiveEnvelope: () => withMockController(page, "getLiveEnvelope"),
+            setOpenFile: (contents, name) => withMockFilePicker(page, "setOpenFile", contents, name),
+            cancelOpenFile: (message) => withMockFilePicker(page, "cancelOpenFile", message),
+            failOpenFile: (message) => withMockFilePicker(page, "failOpenFile", message),
+            setSaveFileName: (name) => withMockFilePicker(page, "setSaveFileName", name),
+            cancelSaveFile: (message) => withMockFilePicker(page, "cancelSaveFile", message),
+            failSaveFile: (message) => withMockFilePicker(page, "failSaveFile", message),
+            clearSavedFiles: () => withMockFilePicker(page, "clearSavedFiles"),
+            getSavedFiles: () => withMockFilePicker(page, "getSavedFiles"),
             waitForRuntimeSurface: () => waitForRuntimeSurface(page),
             waitForOperatorWorkspace: () => waitForOperatorWorkspace(page),
         });

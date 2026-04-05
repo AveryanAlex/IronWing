@@ -29,8 +29,10 @@ import {
 } from "./backend/mission";
 import {
   applyMockParamState,
+  formatParamFile,
   liveParamProgressStreamEvent,
   liveParamStoreStreamEvent,
+  parseParamFile,
   writeParamBatch,
 } from "./backend/params";
 import {
@@ -227,6 +229,10 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
     case "param_write_batch":
       requireConnectedVehicle();
       return writeParamBatch(args, emitEvent);
+    case "param_parse_file":
+      return parseParamFile(args);
+    case "param_format_file":
+      return formatParamFile(args);
     case "vehicle_takeoff":
       vehicleTakeoff(args);
       return undefined;

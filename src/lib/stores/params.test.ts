@@ -242,6 +242,8 @@ function createParamsService(
       confirmed_value: value,
       success: true,
     }))),
+    parseFile: vi.fn(async () => ({})),
+    formatFile: vi.fn(async () => ""),
     formatError: vi.fn((error: unknown) => (error instanceof Error ? error.message : String(error))),
     ...overrides,
   } satisfies ParamsService;

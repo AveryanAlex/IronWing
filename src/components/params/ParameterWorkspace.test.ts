@@ -2,10 +2,15 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { writable } from "svelte/store";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ParamMetadataMap } from "../../param-metadata";
+import type { ParamStore } from "../../params";
 import type { ParameterItemModel } from "../../lib/params/parameter-item-model";
+import {
+    createParameterFileIo,
+    type ParameterFileIoDependencies,
+} from "../../lib/params/parameter-file-io";
 import {
     type ParamsStore,
     type ParamsStoreState,
@@ -162,7 +167,7 @@ function createMetadata(): ParamMetadataMap {
     ]);
 }
 
-function createParams() {
+function createParams(): ParamStore["params"] {
     return {
         ARMING_CHECK: { name: "ARMING_CHECK", value: 0, param_type: "uint8", index: 0 },
         FS_THR_ENABLE: { name: "FS_THR_ENABLE", value: 0, param_type: "uint8", index: 1 },
@@ -275,6 +280,44 @@ function createHarnessStore(initialState: ParamsStoreState): ParamsStore {
         },
         applyStagedEdits: async () => undefined,
     } as ParamsStore;
+}
+
+function createFileIo(overrides: {
+    paramsService?: Partial<Required<NonNullable<ParameterFileIoDependencies["paramsService"]>>>;
+    openTextFile?: NonNullable<ParameterFileIoDependencies["openTextFile"]>;
+    saveTextFile?: NonNullable<ParameterFileIoDependencies["saveTextFile"]>;
+} = {}) {
+    const paramsService: Required<NonNullable<ParameterFileIoDependencies["paramsService"]>> = {
+        parseFile: vi.fn(async () => ({})),
+        formatFile: vi.fn(async () => ""),
+        formatError: vi.fn((error: unknown) => (error instanceof Error ? error.message : String(error))),
+        ...overrides.paramsService,
+    };
+    const openTextFile = vi.fn(overrides.openTextFile ?? (async () => null));
+    const saveTextFile = vi.fn(overrides.saveTextFile ?? (async () => null));
+
+    return {
+        fileIo: createParameterFileIo({
+            paramsService,
+            openTextFile,
+            saveTextFile,
+        }),
+        paramsService,
+        openTextFile,
+        saveTextFile,
+    };
+}
+
+function renderWorkspace(options: {
+    state?: ParamsStoreState;
+    fileIo?: ReturnType<typeof createParameterFileIo>;
+} = {}) {
+    return render(
+        withParameterWorkspaceContext(createHarnessStore(options.state ?? createState()), ParameterWorkspace),
+        {
+            fileIo: options.fileIo,
+        },
+    );
 }
 
 afterEach(() => {
@@ -461,5 +504,172 @@ describe("ParameterWorkspace", () => {
             (screen.getByTestId(`${parameterWorkspaceTestIds.workflowStageButtonPrefix}-safety`) as HTMLButtonElement)
                 .disabled,
         ).toBe(true);
+    });
+
+    it("stages only changed known rows from imported files and reports skipped rows clearly", async () => {
+        const fileIo = createFileIo({
+            openTextFile: async () => ({
+                name: "expert.param",
+                contents: "ARMING_CHECK,1\nINS_GYRO_FILTER,20\nUNKNOWN_PARAM,9\n",
+            }),
+            paramsService: {
+                parseFile: vi.fn(async () => ({
+                    ARMING_CHECK: 1,
+                    INS_GYRO_FILTER: 20,
+                    UNKNOWN_PARAM: 9,
+                })),
+            },
+        });
+
+        renderWorkspace({ fileIo: fileIo.fileIo });
+
+        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
+        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.expertFileImportButton));
+
+        await waitFor(() => {
+            expect(screen.getByTestId(parameterWorkspaceTestIds.pendingCount).textContent).toContain("1 pending");
+        });
+        expect(fileIo.openTextFile).toHaveBeenCalled();
+        expect(fileIo.paramsService.parseFile).toHaveBeenCalledWith(
+            "ARMING_CHECK,1\nINS_GYRO_FILTER,20\nUNKNOWN_PARAM,9\n",
+        );
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertFileMessage).textContent).toContain(
+            "Staged 1 imported change",
+        );
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertFileStatus).textContent).toContain(
+            "Skipped 2 rows",
+        );
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertFileStatus).textContent).toContain(
+            "Unknown rows skipped: 1",
+        );
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertFileStatus).textContent).toContain(
+            "Unchanged rows skipped: 1",
+        );
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertFileStatus).getAttribute("data-staged-count")).toBe("1");
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertFileStatus).getAttribute("data-skipped-count")).toBe("2");
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-ARMING_CHECK`).textContent).toContain("0");
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-ARMING_CHECK`).textContent).toContain("1");
+    });
+
+    it("keeps the staged queue untouched when parameter file parsing fails", async () => {
+        const fileIo = createFileIo({
+            openTextFile: async () => ({
+                name: "broken.param",
+                contents: "ARMING_CHECK",
+            }),
+            paramsService: {
+                parseFile: vi.fn(async () => {
+                    throw new Error("line 1: expected NAME,VALUE");
+                }),
+            },
+        });
+
+        renderWorkspace({ fileIo: fileIo.fileIo });
+
+        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));
+        await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-LOG_BITMASK`), {
+            target: { value: "1" },
+        });
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-LOG_BITMASK`));
+
+        expect(screen.getByTestId(parameterWorkspaceTestIds.pendingCount).textContent).toContain("1 pending");
+
+        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.expertFileImportButton));
+
+        expect(screen.getByTestId(parameterWorkspaceTestIds.pendingCount).textContent).toContain("1 pending");
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertFileMessage).textContent).toContain(
+            "Import failed: line 1: expected NAME,VALUE",
+        );
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertFileStatus).textContent).toContain(
+            "The staged tray was left unchanged",
+        );
+    });
+
+    it("treats picker cancellation as a no-op and keeps existing staged edits", async () => {
+        const fileIo = createFileIo({
+            openTextFile: async () => null,
+        });
+
+        renderWorkspace({ fileIo: fileIo.fileIo });
+
+        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));
+        await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-LOG_BITMASK`), {
+            target: { value: "1" },
+        });
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-LOG_BITMASK`));
+
+        expect(screen.getByTestId(parameterWorkspaceTestIds.pendingCount).textContent).toContain("1 pending");
+
+        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.expertFileImportButton));
+
+        expect(screen.getByTestId(parameterWorkspaceTestIds.pendingCount).textContent).toContain("1 pending");
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertFileMessage).textContent).toContain("Import cancelled.");
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertFileStatus).textContent).toContain(
+            "The staged tray was left unchanged",
+        );
+    });
+
+    it("exports the current param snapshot instead of staged tray values", async () => {
+        const capturedSaves: Array<{ suggestedName: string; contents: string }> = [];
+        const fileIo = createFileIo({
+            paramsService: {
+                formatFile: vi.fn(async (store) => {
+                    expect(store.params.ARMING_CHECK.value).toBe(0);
+                    expect(store.params.FS_THR_ENABLE.value).toBe(0);
+                    return `ARMING_CHECK,${store.params.ARMING_CHECK.value}\nFS_THR_ENABLE,${store.params.FS_THR_ENABLE.value}\n`;
+                }),
+            },
+            saveTextFile: async ({ suggestedName, contents }) => {
+                capturedSaves.push({ suggestedName, contents });
+                return { name: suggestedName };
+            },
+        });
+
+        renderWorkspace({ fileIo: fileIo.fileIo });
+
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.workflowStageButtonPrefix}-safety`));
+        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
+        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.expertFileExportButton));
+
+        expect(screen.getByTestId(parameterWorkspaceTestIds.pendingCount).textContent).toContain("4 pending");
+        expect(fileIo.paramsService.formatFile).toHaveBeenCalledTimes(1);
+        expect(capturedSaves).toEqual([
+            {
+                suggestedName: "ironwing-parameters.param",
+                contents: "ARMING_CHECK,0\nFS_THR_ENABLE,0\n",
+            },
+        ]);
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertFileMessage).textContent).toContain(
+            "Exported 16 current parameters",
+        );
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertFileStatus).textContent).toContain(
+            "Pending tray edits remain local until they are applied",
+        );
+    });
+
+    it("surfaces export failures without disturbing the shared staged queue", async () => {
+        const fileIo = createFileIo({
+            paramsService: {
+                formatFile: vi.fn(async () => {
+                    throw new Error("formatter unavailable");
+                }),
+            },
+        });
+
+        renderWorkspace({ fileIo: fileIo.fileIo });
+
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.workflowStageButtonPrefix}-safety`));
+        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
+        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.expertFileExportButton));
+
+        expect(screen.getByTestId(parameterWorkspaceTestIds.pendingCount).textContent).toContain("4 pending");
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertFileMessage).textContent).toContain(
+            "Export failed: formatter unavailable",
+        );
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertFileStatus).textContent).toContain(
+            "Pending tray edits remain available in the shared review tray",
+        );
     });
 });

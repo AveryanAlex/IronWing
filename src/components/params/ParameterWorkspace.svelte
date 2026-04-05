@@ -7,6 +7,11 @@ import {
   type ParameterExpertRow,
 } from "../../lib/params/parameter-expert-view";
 import {
+  createParameterFileIo,
+  type ParameterFileImportRow,
+  type ParameterFileIo,
+} from "../../lib/params/parameter-file-io";
+import {
   buildParameterWorkflowSections,
   type BatteryWorkflowInputs,
   type FlightWorkflowInputs,
@@ -20,6 +25,7 @@ import {
   getParamsStoreContext,
 } from "../../app/shell/runtime-context";
 import ParameterExpertBrowser from "./ParameterExpertBrowser.svelte";
+import ParameterExpertFileActions from "./ParameterExpertFileActions.svelte";
 import ParameterWorkflowSection from "./ParameterWorkflowSection.svelte";
 import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
 
@@ -27,6 +33,12 @@ type ExpertHighlightRequest = {
   sourceLabel: string;
   targetNames: string[];
 };
+
+let {
+  fileIo = createParameterFileIo(),
+}: {
+  fileIo?: ParameterFileIo;
+} = $props();
 
 const store = getParamsStoreContext();
 const paramsState = fromStore(store);
@@ -104,6 +116,12 @@ function stageItem(row: ParameterExpertRow, nextValue: number) {
 
 function discardItem(name: string) {
   store.discardStagedEdit(name);
+}
+
+function stageImportedRows(rows: ParameterFileImportRow[]) {
+  for (const row of rows) {
+    store.stageParameterEdit(row.item, row.nextValue);
+  }
 }
 
 function stageWorkflowCard(cardId: ParameterWorkflowCardId) {
@@ -361,6 +379,15 @@ function parsePositiveNumber(value: string): number | null {
         >
           Back to workflows
         </button>
+      </div>
+
+      <div class="mt-4">
+        <ParameterExpertFileActions
+          fileIo={fileIo}
+          metadata={params.metadata}
+          onStageImportedRows={stageImportedRows}
+          paramStore={params.paramStore}
+        />
       </div>
 
       <div class="mt-4">
