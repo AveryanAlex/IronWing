@@ -31,7 +31,7 @@ import type {
 import type { SurveyDraftExtension } from "../../lib/survey-region";
 import { createSurveyDraftExtension, hydrateSurveyRegion } from "../../lib/survey-region";
 import { getBuiltinCameras } from "../../lib/survey-camera-catalog";
-import { commandPosition, geoPoint3dAltitude, geoPoint3dLatLon } from "../../lib/mavkit-types";
+import { commandPosition, geoPoint3dAltitude, geoPoint3dLatLon, type FenceRegion } from "../../lib/mavkit-types";
 import {
   createMissionPlannerStore,
   createMissionPlannerViewStore,
@@ -317,6 +317,72 @@ function makeWorkspace(
     survey: overrides.survey ?? createSurveyDraftExtension(),
     cruiseSpeed: overrides.cruiseSpeed ?? 15,
     hoverSpeed: overrides.hoverSpeed ?? 5,
+  };
+}
+
+function makeFencePolygonRegion(inclusion = true): FenceRegion {
+  return inclusion
+    ? {
+      inclusion_polygon: {
+        vertices: [
+          { latitude_deg: 47.401, longitude_deg: 8.551 },
+          { latitude_deg: 47.403, longitude_deg: 8.551 },
+          { latitude_deg: 47.403, longitude_deg: 8.553 },
+          { latitude_deg: 47.401, longitude_deg: 8.553 },
+        ],
+        inclusion_group: 0,
+      },
+    }
+    : {
+      exclusion_polygon: {
+        vertices: [
+          { latitude_deg: 47.404, longitude_deg: 8.554 },
+          { latitude_deg: 47.4055, longitude_deg: 8.554 },
+          { latitude_deg: 47.4055, longitude_deg: 8.556 },
+          { latitude_deg: 47.404, longitude_deg: 8.556 },
+        ],
+      },
+    };
+}
+
+function makeFenceCircleRegion(inclusion = false): FenceRegion {
+  return inclusion
+    ? {
+      inclusion_circle: {
+        center: { latitude_deg: 47.4062, longitude_deg: 8.5572 },
+        radius_m: 90,
+        inclusion_group: 0,
+      },
+    }
+    : {
+      exclusion_circle: {
+        center: { latitude_deg: 47.4062, longitude_deg: 8.5572 },
+        radius_m: 90,
+      },
+    };
+}
+
+function makeFenceWorkspace() {
+  return {
+    ...makeWorkspace({
+      home: { latitude_deg: 47.4, longitude_deg: 8.55, altitude_m: 500 },
+    }),
+    fence: {
+      return_point: { latitude_deg: 47.4075, longitude_deg: 8.5581 },
+      regions: [makeFencePolygonRegion(true), makeFenceCircleRegion(false)],
+    },
+  };
+}
+
+function makePlaybackFenceWorkspace() {
+  return {
+    ...makeWorkspace({
+      home: { latitude_deg: 47.4, longitude_deg: 8.55, altitude_m: 500 },
+    }),
+    fence: {
+      return_point: { latitude_deg: 47.4075, longitude_deg: 8.5581 },
+      regions: [makeFencePolygonRegion(true)],
+    },
   };
 }
 
@@ -989,9 +1055,148 @@ describe("MissionWorkspace", () => {
 
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
     await waitFor(() => {
-      expect(screen.getByTestId(missionWorkspaceTestIds.modeShellTitle).textContent).toContain("Fence continuity shell");
+      expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.fenceInspectorSelectionKind).textContent).toContain("none");
       expect(screen.getByTestId(missionWorkspaceTestIds.warningValidation).textContent).toContain("Survey path drifts outside the lane.");
     });
+  });
+
+  it("switches into fence mode, edits region type/radius, and keeps map/list/inspector selection synchronized", async () => {
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeFenceWorkspace());
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.mapFenceCount).textContent).toContain("3");
+    });
+
+    setMissionMapSurfaceRect();
+
+    const firstFenceUiId = get(plannerStore).draftState.active.fence.draftItems[0]?.uiId;
+    expect(firstFenceUiId).toBeTypeOf("number");
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.fenceRegionPrefix}-${firstFenceUiId}`));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.fenceInspectorSelectionKind).textContent).toContain("fence-region");
+      expect(readMissionMapDebug().fenceSelection).toEqual({ kind: "region", regionUiId: firstFenceUiId });
+    });
+
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.fenceInspectorType), {
+      target: { value: "exclusion_circle" },
+    });
+
+    await waitFor(() => {
+      const region = get(plannerStore).draftState.active.fence.draftItems.find((item) => item.uiId === firstFenceUiId)?.document;
+      expect(region && "exclusion_circle" in region).toBe(true);
+      expect(screen.getByTestId(`${missionWorkspaceTestIds.mapFenceRadiusPrefix}-${firstFenceUiId}`)).toBeTruthy();
+    });
+
+    const radiusHandle = screen.getByTestId(`${missionWorkspaceTestIds.mapFenceRadiusPrefix}-${firstFenceUiId}`);
+    await fireEvent.pointerDown(radiusHandle, { clientX: 620, clientY: 280 });
+    await fireEvent.pointerMove(window, { clientX: 860, clientY: 120 });
+    await fireEvent.pointerUp(window);
+
+    await waitFor(() => {
+      const region = get(plannerStore).draftState.active.fence.draftItems.find((item) => item.uiId === firstFenceUiId)?.document as FenceRegion | undefined;
+      expect(region && "exclusion_circle" in region ? region.exclusion_circle.radius_m : 0).toBeGreaterThan(50);
+      expect(readMissionMapDebug().counts.fenceRadiusHandles).toBe(1);
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.fenceReturnPointCard));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.fenceInspectorSelectionKind).textContent).toContain("return-point");
+      expect(readMissionMapDebug().fenceSelection).toEqual({ kind: "return-point" });
+    });
+
+    const returnLatitude = screen.getByTestId(missionWorkspaceTestIds.fenceReturnLatitude);
+    await fireEvent.focus(returnLatitude);
+    await fireEvent.input(returnLatitude, { target: { value: "47.408" } });
+    await fireEvent.blur(returnLatitude);
+
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.fence.document.return_point).toEqual({ latitude_deg: 47.408, longitude_deg: 8.5581 });
+    });
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.mapFenceRegionPrefix}-${firstFenceUiId}`));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.fenceInspectorSelectionKind).textContent).toContain("fence-region");
+    });
+  });
+
+  it("reopens the targeted fence region from warning actions and rejects stale or read-only fence edits truthfully", async () => {
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeFenceWorkspace());
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    const firstFenceUiId = get(plannerStore).draftState.active.fence.draftItems[0]?.uiId;
+    expect(firstFenceUiId).toBeTypeOf("number");
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.fenceRegionPrefix}-${firstFenceUiId}`));
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.fenceInspectorType), {
+      target: { value: "inclusion_circle" },
+    });
+
+    await waitFor(() => {
+      const region = get(plannerStore).draftState.active.fence.draftItems.find((item) => item.uiId === firstFenceUiId)?.document;
+      expect(region && "inclusion_circle" in region).toBe(true);
+    });
+
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.fenceCircleRadius), {
+      target: { value: "-10" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`${missionWorkspaceTestIds.warningItemPrefix}-0`).textContent).toContain("Blocked action");
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeMission));
+    await fireEvent.click(screen.getByRole("button", { name: /open fence mode/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.fenceInspectorSelectionKind).textContent).toContain("fence-region");
+    });
+
+    const deleted = plannerStore.deleteFenceRegionByUiId(firstFenceUiId!);
+    expect(deleted.status).toBe("applied");
+    const staleSelection = plannerStore.selectFenceRegionByUiId(firstFenceUiId!);
+    expect(staleSelection).toMatchObject({
+      status: "rejected",
+      reason: "region-not-found",
+    });
+  });
+
+  it("keeps fence mode visible but blocks destructive edits truthfully during playback", async () => {
+    const { plannerStore } = await renderWorkspace({
+      snapshots: [
+        createSnapshot({ envelope: createEnvelope("session-1", { source_kind: "playback", seek_epoch: 1, reset_revision: 1 }) }),
+      ],
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makePlaybackFenceWorkspace());
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
+      expect((screen.getByTestId(missionWorkspaceTestIds.fenceAddInclusionPolygon) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByTestId(missionWorkspaceTestIds.fenceReturnPointClear) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    const playbackFenceUiId = get(plannerStore).draftState.active.fence.draftItems[0]?.uiId;
+    const readOnlyDelete = plannerStore.deleteFenceRegionByUiId(playbackFenceUiId!);
+    expect(readOnlyDelete).toMatchObject({
+      status: "rejected",
+      reason: "read-only",
+    });
+    expect(get(plannerStore).blockedReason).toContain("playback");
   });
 
   it("requires an explicit replace prompt before importing over a dirty draft and keeps camera-missing survey regions editable", async () => {

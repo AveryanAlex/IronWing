@@ -1,12 +1,17 @@
 import type { HomePosition } from "../mission";
 import type { TypedDraftItem } from "./mission-draft-typed";
+import type { GeoPoint2d, MissionItem } from "./mavkit-types";
+import { commandPosition } from "./mavkit-types";
+import {
+  buildMissionMapFenceModel,
+  type MissionMapFenceSelection,
+} from "./mission-map-fence";
 import {
   latLonToLocalXY,
   localXYToLatLon,
   type GeoRef,
 } from "./mission-coordinates";
-import type { MissionItem } from "./mavkit-types";
-import { commandPosition } from "./mavkit-types";
+import { haversineM } from "./geo-utils";
 import {
   buildMissionRenderFeatures,
   type MissionRenderCoordinate,
@@ -23,17 +28,20 @@ const PADDING_RATIO = 0.12;
 const MIN_PADDING_M = 20;
 
 type MissionMapGeoJsonProperties = {
-  source: "mission" | "survey";
+  source: "mission" | "survey" | "fence";
   kind: string;
   itemIndex?: number | null;
   uiId?: number | null;
   regionId?: string;
+  regionUiId?: number | null;
   label?: string;
   selected?: boolean;
   current?: boolean;
   draggable?: boolean;
   readOnly?: boolean;
 };
+
+export type MissionMapMode = "mission" | "fence" | "rally";
 
 export type MissionMapSelection =
   | { kind: "home" }
@@ -88,6 +96,47 @@ export type MissionMapSurveyVertexHandle = {
   geometryKind: "polygon" | "polyline";
 };
 
+export type MissionMapFenceRegionHandle = {
+  id: string;
+  regionUiId: number;
+  label: string;
+  point: MissionMapPoint;
+  selected: boolean;
+  inclusion: boolean;
+  geometryKind: "polygon" | "circle";
+  draggable: boolean;
+  latitude_deg: number;
+  longitude_deg: number;
+};
+
+export type MissionMapFenceVertexHandle = {
+  id: string;
+  regionUiId: number;
+  index: number;
+  point: MissionMapPoint;
+  selected: boolean;
+  latitude_deg: number;
+  longitude_deg: number;
+};
+
+export type MissionMapFenceRadiusHandle = {
+  id: string;
+  regionUiId: number;
+  point: MissionMapPoint;
+  selected: boolean;
+  radius_m: number;
+  centerLatitude_deg: number;
+  centerLongitude_deg: number;
+};
+
+export type MissionMapFenceReturnPoint = {
+  id: string;
+  point: MissionMapPoint;
+  selected: boolean;
+  latitude_deg: number;
+  longitude_deg: number;
+};
+
 export type MissionMapLineFeature = {
   id: string;
   kind: string;
@@ -95,6 +144,7 @@ export type MissionMapLineFeature = {
   selected: boolean;
   itemIndex: number | null;
   regionId: string | null;
+  regionUiId: number | null;
 };
 
 export type MissionMapPolygonFeature = {
@@ -104,6 +154,7 @@ export type MissionMapPolygonFeature = {
   selected: boolean;
   itemIndex: number | null;
   regionId: string | null;
+  regionUiId: number | null;
 };
 
 export type MissionMapLabelFeature = {
@@ -117,12 +168,18 @@ export type MissionMapFeatureCounts = {
   markers: number;
   surveyHandles: number;
   surveyVertexHandles: number;
+  fenceRegionHandles: number;
+  fenceVertexHandles: number;
+  fenceRadiusHandles: number;
+  fenceHasReturnPoint: boolean;
   missionFeatures: number;
   surveyFeatures: number;
   surveyPreviewFeatures: number;
+  fenceFeatures: number;
   missionFeatureKinds: Record<string, number>;
   surveyFeatureKinds: Record<string, number>;
   surveyPreviewFeatureKinds: Record<string, number>;
+  fenceFeatureKinds: Record<string, number>;
 };
 
 export type MissionMapDragResolution =
@@ -153,29 +210,68 @@ export type MissionMapSurveyHandleDragResolution =
     message: string;
   };
 
+export type MissionMapFenceHandleDragResolution =
+  | {
+    status: "applied";
+    point: MissionMapPoint;
+    latitude_deg: number;
+    longitude_deg: number;
+  }
+  | {
+    status: "rejected";
+    reason: "handle-not-found" | "handle-not-draggable" | "viewport-unavailable";
+    message: string;
+  };
+
+export type MissionMapFenceRadiusDragResolution =
+  | {
+    status: "applied";
+    handle: MissionMapFenceRadiusHandle;
+    point: MissionMapPoint;
+    radius_m: number;
+  }
+  | {
+    status: "rejected";
+    reason: "handle-not-found" | "viewport-unavailable" | "radius-invalid";
+    message: string;
+  };
+
 export type MissionMapView = {
+  mode: MissionMapMode;
   state: "empty" | "ready" | "degraded";
   selection: MissionMapSelection;
+  fenceSelection: MissionMapFenceSelection;
   viewport: MissionMapViewport | null;
   markers: MissionMapMarker[];
   surveyHandles: MissionMapSurveyHandle[];
   surveyVertexHandles: MissionMapSurveyVertexHandle[];
+  fenceRegionHandles: MissionMapFenceRegionHandle[];
+  fenceVertexHandles: MissionMapFenceVertexHandle[];
+  fenceRadiusHandles: MissionMapFenceRadiusHandle[];
+  fenceReturnPoint: MissionMapFenceReturnPoint | null;
   missionLines: MissionMapLineFeature[];
   missionPolygons: MissionMapPolygonFeature[];
   missionLabels: MissionMapLabelFeature[];
   surveyLines: MissionMapLineFeature[];
   surveyPolygons: MissionMapPolygonFeature[];
+  fenceLines: MissionMapLineFeature[];
+  fencePolygons: MissionMapPolygonFeature[];
   missionGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>;
   surveyGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>;
+  fenceGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>;
   warnings: string[];
   counts: MissionMapFeatureCounts;
 };
 
 export type MissionMapViewInput = {
+  mode?: MissionMapMode;
   home: HomePosition | null;
   missionItems: TypedDraftItem[];
   survey: SurveyDraftExtension;
   selection: MissionMapSelection;
+  fenceDraftItems?: TypedDraftItem[];
+  fenceReturnPoint?: GeoPoint2d | null;
+  fenceSelection?: MissionMapFenceSelection;
   currentSeq?: number | null;
 };
 
@@ -185,6 +281,7 @@ export function missionMapMarkerIdForUiId(uiId: number): string {
 
 export function buildMissionMapView(input: MissionMapViewInput): MissionMapView {
   const warnings: string[] = [];
+  const mode = input.mode ?? "mission";
   const currentSeq = input.currentSeq ?? input.missionItems.find((item) => (item.document as MissionItem).current)?.index ?? null;
   const renderFeatures = buildMissionRenderFeatures(input.home, input.missionItems, {
     currentSeq: currentSeq ?? undefined,
@@ -196,19 +293,40 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
     selectedRegionId: selectedSurveyRegionId,
   });
   const markerCandidates = buildMarkerCandidates(input, warnings);
-  warnings.push(...survey.warnings);
+  const fenceSelection = input.fenceSelection ?? { kind: "none" };
+  const fence = mode === "fence"
+    ? buildMissionMapFenceModel({
+      regions: input.fenceDraftItems ?? [],
+      returnPoint: input.fenceReturnPoint ?? null,
+      selection: fenceSelection,
+    })
+    : buildMissionMapFenceModel({
+      regions: [],
+      returnPoint: null,
+      selection: { kind: "none" },
+    });
+  warnings.push(...survey.warnings, ...fence.warnings);
 
   const reference = resolveReference(
     input.home,
     markerCandidates,
     missionGeoJson,
     survey.geoJson,
+    fence.geoJson,
     survey.referenceCoordinates,
+    fence.referenceCoordinates,
   );
   const viewport = reference
     ? buildMissionMapViewport(
       reference,
-      collectAllCoordinates(markerCandidates, missionGeoJson, survey.geoJson, survey.referenceCoordinates),
+      collectAllCoordinates(
+        markerCandidates,
+        missionGeoJson,
+        survey.geoJson,
+        fence.geoJson,
+        survey.referenceCoordinates,
+        fence.referenceCoordinates,
+      ),
     )
     : null;
 
@@ -236,46 +354,99 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
     }))
     : [];
 
+  const fenceRegionHandles = viewport
+    ? fence.regionHandles.map((handle) => ({
+      ...handle,
+      point: projectMissionMapCoordinate(viewport, handle),
+    }))
+    : [];
+
+  const fenceVertexHandles = viewport
+    ? fence.vertexHandles.map((handle) => ({
+      ...handle,
+      point: projectMissionMapCoordinate(viewport, handle),
+    }))
+    : [];
+
+  const fenceRadiusHandles = viewport
+    ? fence.radiusHandles.map((handle) => ({
+      ...handle,
+      centerLatitude_deg: fence.regionHandles.find((regionHandle) => regionHandle.regionUiId === handle.regionUiId)?.latitude_deg ?? handle.latitude_deg,
+      centerLongitude_deg: fence.regionHandles.find((regionHandle) => regionHandle.regionUiId === handle.regionUiId)?.longitude_deg ?? handle.longitude_deg,
+      point: projectMissionMapCoordinate(viewport, handle),
+    }))
+    : [];
+
+  const fenceReturnPoint = viewport && fence.returnPoint
+    ? {
+      ...fence.returnPoint,
+      point: projectMissionMapCoordinate(viewport, fence.returnPoint),
+    }
+    : null;
+
   const missionLines = viewport ? projectMissionLines(viewport, renderFeatures) : [];
   const missionPolygons = viewport ? projectMissionPolygons(viewport, renderFeatures) : [];
   const missionLabels = viewport ? projectMissionLabels(viewport, renderFeatures) : [];
   const { lines: surveyLines, polygons: surveyPolygons } = viewport
-    ? projectSurveyFeatures(viewport, survey.geoJson)
+    ? projectOverlayFeatures(viewport, survey.geoJson, "survey")
+    : { lines: [], polygons: [] };
+  const { lines: fenceLines, polygons: fencePolygons } = viewport
+    ? projectOverlayFeatures(viewport, fence.geoJson, "fence")
     : { lines: [], polygons: [] };
 
   const hasRenderableGeometry = markers.length > 0
     || surveyHandles.length > 0
     || surveyVertexHandles.length > 0
+    || fenceRegionHandles.length > 0
+    || fenceVertexHandles.length > 0
+    || fenceRadiusHandles.length > 0
+    || fenceReturnPoint !== null
     || missionGeoJson.features.length > 0
-    || survey.geoJson.features.length > 0;
+    || survey.geoJson.features.length > 0
+    || fence.geoJson.features.length > 0;
 
   return {
+    mode,
     state: hasRenderableGeometry
       ? warnings.length > 0 ? "degraded" : "ready"
       : warnings.length > 0 ? "degraded" : "empty",
     selection: input.selection,
+    fenceSelection,
     viewport,
     markers,
     surveyHandles,
     surveyVertexHandles,
+    fenceRegionHandles,
+    fenceVertexHandles,
+    fenceRadiusHandles,
+    fenceReturnPoint,
     missionLines,
     missionPolygons,
     missionLabels,
     surveyLines,
     surveyPolygons,
+    fenceLines,
+    fencePolygons,
     missionGeoJson,
     surveyGeoJson: survey.geoJson,
+    fenceGeoJson: fence.geoJson,
     warnings,
     counts: {
       markers: markers.length,
       surveyHandles: surveyHandles.length,
       surveyVertexHandles: surveyVertexHandles.length,
+      fenceRegionHandles: fenceRegionHandles.length,
+      fenceVertexHandles: fenceVertexHandles.length,
+      fenceRadiusHandles: fenceRadiusHandles.length,
+      fenceHasReturnPoint: fenceReturnPoint !== null,
       missionFeatures: missionGeoJson.features.length,
       surveyFeatures: survey.geoJson.features.length,
       surveyPreviewFeatures: survey.counts.previewFeatures,
+      fenceFeatures: fence.geoJson.features.length,
       missionFeatureKinds: countFeatureKinds(missionGeoJson),
       surveyFeatureKinds: countFeatureKinds(survey.geoJson),
       surveyPreviewFeatureKinds: survey.counts.previewFeatureKinds,
+      fenceFeatureKinds: fence.counts.featureKinds,
     },
   };
 }
@@ -373,6 +544,155 @@ export function resolveMissionMapSurveyHandleDrag(
   return {
     status: "applied",
     handle,
+    point: clampedPoint,
+    ...coordinate,
+  };
+}
+
+export function resolveMissionMapFenceVertexHandleDrag(
+  view: MissionMapView,
+  handleId: string,
+  point: MissionMapPoint,
+): MissionMapFenceHandleDragResolution {
+  const handle = view.fenceVertexHandles.find((candidate) => candidate.id === handleId);
+  if (!handle) {
+    return {
+      status: "rejected",
+      reason: "handle-not-found",
+      message: "Ignored a stale fence-vertex drag because that vertex is no longer present in the active map view.",
+    };
+  }
+
+  if (!view.viewport) {
+    return {
+      status: "rejected",
+      reason: "viewport-unavailable",
+      message: "Ignored the fence-vertex drag because the map viewport has no valid geometry yet.",
+    };
+  }
+
+  const clampedPoint = clampMissionMapPoint(view.viewport, point);
+  const coordinate = unprojectMissionMapPoint(view.viewport, clampedPoint);
+
+  return {
+    status: "applied",
+    point: clampedPoint,
+    ...coordinate,
+  };
+}
+
+export function resolveMissionMapFenceRegionHandleDrag(
+  view: MissionMapView,
+  handleId: string,
+  point: MissionMapPoint,
+): MissionMapFenceHandleDragResolution {
+  const handle = view.fenceRegionHandles.find((candidate) => candidate.id === handleId);
+  if (!handle) {
+    return {
+      status: "rejected",
+      reason: "handle-not-found",
+      message: "Ignored a stale fence-region drag because that handle is no longer present in the active map view.",
+    };
+  }
+
+  if (!handle.draggable) {
+    return {
+      status: "rejected",
+      reason: "handle-not-draggable",
+      message: "Ignored the drag because this fence region is not movable from its current map handle.",
+    };
+  }
+
+  if (!view.viewport) {
+    return {
+      status: "rejected",
+      reason: "viewport-unavailable",
+      message: "Ignored the fence-region drag because the map viewport has no valid geometry yet.",
+    };
+  }
+
+  const clampedPoint = clampMissionMapPoint(view.viewport, point);
+  const coordinate = unprojectMissionMapPoint(view.viewport, clampedPoint);
+
+  return {
+    status: "applied",
+    point: clampedPoint,
+    ...coordinate,
+  };
+}
+
+export function resolveMissionMapFenceRadiusHandleDrag(
+  view: MissionMapView,
+  handleId: string,
+  point: MissionMapPoint,
+): MissionMapFenceRadiusDragResolution {
+  const handle = view.fenceRadiusHandles.find((candidate) => candidate.id === handleId);
+  if (!handle) {
+    return {
+      status: "rejected",
+      reason: "handle-not-found",
+      message: "Ignored a stale fence-radius drag because that handle is no longer present in the active map view.",
+    };
+  }
+
+  if (!view.viewport) {
+    return {
+      status: "rejected",
+      reason: "viewport-unavailable",
+      message: "Ignored the fence-radius drag because the map viewport has no valid geometry yet.",
+    };
+  }
+
+  const clampedPoint = clampMissionMapPoint(view.viewport, point);
+  const coordinate = unprojectMissionMapPoint(view.viewport, clampedPoint);
+  const radius_m = haversineM(
+    handle.centerLatitude_deg,
+    handle.centerLongitude_deg,
+    coordinate.latitude_deg,
+    coordinate.longitude_deg,
+  );
+
+  if (!Number.isFinite(radius_m) || radius_m <= 0) {
+    return {
+      status: "rejected",
+      reason: "radius-invalid",
+      message: "Ignored the fence-radius drag because the resulting radius was not valid.",
+    };
+  }
+
+  return {
+    status: "applied",
+    handle,
+    point: clampedPoint,
+    radius_m,
+  };
+}
+
+export function resolveMissionMapFenceReturnPointDrag(
+  view: MissionMapView,
+  point: MissionMapPoint,
+): MissionMapFenceHandleDragResolution {
+  if (!view.fenceReturnPoint) {
+    return {
+      status: "rejected",
+      reason: "handle-not-found",
+      message: "Ignored a stale fence return-point drag because the return point is no longer present in the active map view.",
+    };
+  }
+
+  if (!view.viewport) {
+    return {
+      status: "rejected",
+      reason: "viewport-unavailable",
+      message: "Ignored the fence return-point drag because the map viewport has no valid geometry yet.",
+    };
+  }
+
+  const clampedPoint = clampMissionMapPoint(view.viewport, point);
+  const coordinate = unprojectMissionMapPoint(view.viewport, clampedPoint);
+
+  return {
+    status: "applied",
     point: clampedPoint,
     ...coordinate,
   };
@@ -502,6 +822,7 @@ function projectMissionLines(viewport: MissionMapViewport, features: MissionRend
       selected: false,
       itemIndex: leg.to.itemIndex,
       regionId: null,
+      regionUiId: null,
     }));
 }
 
@@ -515,6 +836,7 @@ function projectMissionPolygons(viewport: MissionMapViewport, features: MissionR
       selected: false,
       itemIndex: circle.itemIndex,
       regionId: null,
+      regionUiId: null,
     }));
 }
 
@@ -527,9 +849,10 @@ function projectMissionLabels(viewport: MissionMapViewport, features: MissionRen
   }));
 }
 
-function projectSurveyFeatures(
+function projectOverlayFeatures(
   viewport: MissionMapViewport,
   geoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
+  prefix: "survey" | "fence",
 ): {
   lines: MissionMapLineFeature[];
   polygons: MissionMapPolygonFeature[];
@@ -544,8 +867,8 @@ function projectSurveyFeatures(
       }
 
       lines.push({
-        id: `survey-line-${feature.properties?.regionId ?? "regionless"}-${feature.properties?.kind ?? "line"}-${index}`,
-        kind: feature.properties?.kind ?? "survey_line",
+        id: `${prefix}-line-${feature.properties?.regionId ?? feature.properties?.regionUiId ?? "regionless"}-${feature.properties?.kind ?? "line"}-${index}`,
+        kind: feature.properties?.kind ?? `${prefix}_line`,
         points: feature.geometry.coordinates.map(([longitude_deg, latitude_deg]) => projectMissionMapCoordinate(viewport, {
           latitude_deg,
           longitude_deg,
@@ -553,14 +876,15 @@ function projectSurveyFeatures(
         selected: feature.properties?.selected ?? false,
         itemIndex: feature.properties?.itemIndex ?? null,
         regionId: feature.properties?.regionId ?? null,
+        regionUiId: feature.properties?.regionUiId ?? null,
       });
       continue;
     }
 
     if (feature.geometry.type === "Polygon") {
       polygons.push({
-        id: `survey-polygon-${feature.properties?.regionId ?? "regionless"}-${feature.properties?.kind ?? "polygon"}-${index}`,
-        kind: feature.properties?.kind ?? "survey_polygon",
+        id: `${prefix}-polygon-${feature.properties?.regionId ?? feature.properties?.regionUiId ?? "regionless"}-${feature.properties?.kind ?? "polygon"}-${index}`,
+        kind: feature.properties?.kind ?? `${prefix}_polygon`,
         rings: feature.geometry.coordinates.map((ring) => ring.map(([longitude_deg, latitude_deg]) => projectMissionMapCoordinate(viewport, {
           latitude_deg,
           longitude_deg,
@@ -568,6 +892,7 @@ function projectSurveyFeatures(
         selected: feature.properties?.selected ?? false,
         itemIndex: feature.properties?.itemIndex ?? null,
         regionId: feature.properties?.regionId ?? null,
+        regionUiId: feature.properties?.regionUiId ?? null,
       });
     }
   }
@@ -650,7 +975,9 @@ function collectAllCoordinates(
   markers: Array<Omit<MissionMapMarker, "point">>,
   missionGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
   surveyGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
-  extraCoordinates: GeoRef[] = [],
+  fenceGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
+  surveyCoordinates: GeoRef[] = [],
+  fenceCoordinates: GeoRef[] = [],
 ): GeoRef[] {
   const coordinates: GeoRef[] = markers.map((marker) => ({
     latitude_deg: marker.latitude_deg,
@@ -659,7 +986,13 @@ function collectAllCoordinates(
 
   appendFeatureCollectionCoordinates(missionGeoJson, coordinates);
   appendFeatureCollectionCoordinates(surveyGeoJson, coordinates);
-  extraCoordinates.forEach((coordinate) => {
+  appendFeatureCollectionCoordinates(fenceGeoJson, coordinates);
+  surveyCoordinates.forEach((coordinate) => {
+    if (isFiniteGeoRef(coordinate)) {
+      coordinates.push({ ...coordinate });
+    }
+  });
+  fenceCoordinates.forEach((coordinate) => {
     if (isFiniteGeoRef(coordinate)) {
       coordinates.push({ ...coordinate });
     }
@@ -672,7 +1005,9 @@ function resolveReference(
   markers: Array<Omit<MissionMapMarker, "point">>,
   missionGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
   surveyGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
-  extraCoordinates: GeoRef[] = [],
+  fenceGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
+  surveyCoordinates: GeoRef[] = [],
+  fenceCoordinates: GeoRef[] = [],
 ): GeoRef | null {
   if (home) {
     return {
@@ -689,7 +1024,14 @@ function resolveReference(
     };
   }
 
-  const allCoordinates = collectAllCoordinates([], missionGeoJson, surveyGeoJson, extraCoordinates);
+  const allCoordinates = collectAllCoordinates(
+    [],
+    missionGeoJson,
+    surveyGeoJson,
+    fenceGeoJson,
+    surveyCoordinates,
+    fenceCoordinates,
+  );
   return allCoordinates[0] ?? null;
 }
 

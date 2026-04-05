@@ -130,7 +130,7 @@ function attachmentClass(current: MissionPlannerAttachmentState): string {
 
 function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlannerWorkspaceStatus): string {
   if (currentMode === "fence") {
-    return "Fence continuity lives in the active planner shell now: attachment truth, warning review, and file workflow stay visible even before dedicated fence editors expand in the next task.";
+    return "Fence mode now exposes map-first region editing, explicit return-point handling, and sticky warning navigation inside the mounted planner shell.";
   }
 
   if (currentMode === "rally") {

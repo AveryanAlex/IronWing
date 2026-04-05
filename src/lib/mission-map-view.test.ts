@@ -5,10 +5,19 @@ import {
   buildMissionMapView,
   missionMapMarkerIdForUiId,
   resolveMissionMapDrag,
+  resolveMissionMapFenceRadiusHandleDrag,
+  resolveMissionMapFenceVertexHandleDrag,
   resolveMissionMapSurveyHandleDrag,
   type MissionMapSelection,
 } from "./mission-map-view";
-import { defaultGeoPoint3d, type HomePosition, type MissionCommand, type MissionItem } from "./mavkit-types";
+import type { TypedDraftItem } from "./mission-draft-typed";
+import {
+  defaultGeoPoint3d,
+  type FenceRegion,
+  type HomePosition,
+  type MissionCommand,
+  type MissionItem,
+} from "./mavkit-types";
 import { latLonFromBearingDistance } from "./mission-coordinates";
 import { createSurveyDraftExtension, hydrateSurveyRegion } from "./survey-region";
 
@@ -63,6 +72,58 @@ function waypoint(index: number, uiId: number, lat: number, lon: number, current
     longitude_deg: lon,
     current,
   });
+}
+
+function polygonRegion(vertices: Array<{ latitude_deg: number; longitude_deg: number }>, inclusion = true): FenceRegion {
+  return inclusion
+    ? {
+      inclusion_polygon: {
+        vertices,
+        inclusion_group: 0,
+      },
+    }
+    : {
+      exclusion_polygon: {
+        vertices,
+      },
+    };
+}
+
+function circleRegion(lat: number, lon: number, radius_m: number, inclusion = true): FenceRegion {
+  return inclusion
+    ? {
+      inclusion_circle: {
+        center: { latitude_deg: lat, longitude_deg: lon },
+        radius_m,
+        inclusion_group: 0,
+      },
+    }
+    : {
+      exclusion_circle: {
+        center: { latitude_deg: lat, longitude_deg: lon },
+        radius_m,
+      },
+    };
+}
+
+function makeFenceDraftItem(options: {
+  uiId: number;
+  index: number;
+  region: FenceRegion;
+  latitude_deg: number;
+  longitude_deg: number;
+}): TypedDraftItem {
+  return {
+    uiId: options.uiId,
+    index: options.index,
+    document: options.region,
+    readOnly: false,
+    preview: {
+      latitude_deg: options.latitude_deg,
+      longitude_deg: options.longitude_deg,
+      altitude_m: null,
+    },
+  };
 }
 
 function selection(selection: MissionMapSelection = { kind: "home" }): MissionMapSelection {
@@ -334,5 +395,130 @@ describe("buildMissionMapView", () => {
       expect(secondMove.point.x).toBeGreaterThan(firstMove.point.x);
       expect(secondMove.point.y).toBeLessThan(firstMove.point.y);
     }
+  });
+
+  it("projects fence regions, return point truth, and fence drag handles in fence mode", () => {
+    const polygon = polygonRegion([
+      { latitude_deg: 47.3981, longitude_deg: 8.5451 },
+      { latitude_deg: 47.3984, longitude_deg: 8.5461 },
+      { latitude_deg: 47.3977, longitude_deg: 8.5468 },
+      { latitude_deg: 47.3974, longitude_deg: 8.5456 },
+    ]);
+    const circle = circleRegion(47.3989, 8.5472, 80, false);
+
+    const view = buildMissionMapView({
+      mode: "fence",
+      home,
+      missionItems: [waypoint(0, 21, 47.3982, 8.5448)],
+      survey: createSurveyDraftExtension(),
+      selection: selection({ kind: "home" }),
+      fenceDraftItems: [
+        makeFenceDraftItem({ uiId: 301, index: 0, region: polygon, latitude_deg: 47.3979, longitude_deg: 8.5459 }),
+        makeFenceDraftItem({ uiId: 302, index: 1, region: circle, latitude_deg: 47.3989, longitude_deg: 8.5472 }),
+      ],
+      fenceReturnPoint: { latitude_deg: 47.3995, longitude_deg: 8.5478 },
+      fenceSelection: { kind: "region", regionUiId: 301 },
+    });
+
+    expect(view.mode).toBe("fence");
+    expect(view.state).toBe("ready");
+    expect(view.viewport).not.toBeNull();
+    expect(view.counts.fenceFeatures).toBe(3);
+    expect(view.fencePolygons).toHaveLength(2);
+    expect(view.fenceRegionHandles).toHaveLength(2);
+    expect(view.fenceVertexHandles).toHaveLength(4);
+    expect(view.fenceRadiusHandles).toHaveLength(0);
+    expect(view.fenceReturnPoint).toMatchObject({
+      selected: false,
+      latitude_deg: 47.3995,
+      longitude_deg: 8.5478,
+    });
+    expect(view.fenceRegionHandles.find((handle) => handle.regionUiId === 301)?.selected).toBe(true);
+  });
+
+  it("resolves fence vertex and radius drags while rejecting stale fence handles safely", () => {
+    const polygon = polygonRegion([
+      { latitude_deg: 47.3981, longitude_deg: 8.5451 },
+      { latitude_deg: 47.3984, longitude_deg: 8.5461 },
+      { latitude_deg: 47.3977, longitude_deg: 8.5468 },
+    ]);
+    const circle = circleRegion(47.3989, 8.5472, 80, true);
+
+    const polygonView = buildMissionMapView({
+      mode: "fence",
+      home: null,
+      missionItems: [],
+      survey: createSurveyDraftExtension(),
+      selection: selection(),
+      fenceDraftItems: [makeFenceDraftItem({ uiId: 401, index: 0, region: polygon, latitude_deg: 47.3981, longitude_deg: 8.546 })],
+      fenceReturnPoint: null,
+      fenceSelection: { kind: "region", regionUiId: 401 },
+    });
+
+    expect(polygonView.fenceVertexHandles).toHaveLength(3);
+    const movedVertex = resolveMissionMapFenceVertexHandleDrag(polygonView, polygonView.fenceVertexHandles[0]!.id, { x: 640, y: 260 });
+    const staleVertex = resolveMissionMapFenceVertexHandleDrag(polygonView, "missing-fence-vertex", { x: 640, y: 260 });
+
+    expect(movedVertex.status).toBe("applied");
+    if (movedVertex.status === "applied") {
+      expect(movedVertex.latitude_deg).not.toBe(polygonView.fenceVertexHandles[0]!.latitude_deg);
+      expect(movedVertex.longitude_deg).not.toBe(polygonView.fenceVertexHandles[0]!.longitude_deg);
+    }
+    expect(staleVertex).toMatchObject({
+      status: "rejected",
+      reason: "handle-not-found",
+    });
+
+    const circleView = buildMissionMapView({
+      mode: "fence",
+      home: null,
+      missionItems: [],
+      survey: createSurveyDraftExtension(),
+      selection: selection(),
+      fenceDraftItems: [makeFenceDraftItem({ uiId: 402, index: 0, region: circle, latitude_deg: 47.3989, longitude_deg: 8.5472 })],
+      fenceReturnPoint: null,
+      fenceSelection: { kind: "region", regionUiId: 402 },
+    });
+
+    expect(circleView.fenceRadiusHandles).toHaveLength(1);
+    const movedRadius = resolveMissionMapFenceRadiusHandleDrag(circleView, circleView.fenceRadiusHandles[0]!.id, { x: 820, y: 140 });
+    const staleRadius = resolveMissionMapFenceRadiusHandleDrag(circleView, "missing-fence-radius", { x: 820, y: 140 });
+
+    expect(movedRadius.status).toBe("applied");
+    if (movedRadius.status === "applied") {
+      expect(movedRadius.radius_m).toBeGreaterThan(0);
+      expect(movedRadius.radius_m).not.toBe(circleView.fenceRadiusHandles[0]!.radius_m);
+    }
+    expect(staleRadius).toMatchObject({
+      status: "rejected",
+      reason: "handle-not-found",
+    });
+  });
+
+  it("drops malformed fence geometry and degrades instead of drawing the wrong region or return point", () => {
+    const view = buildMissionMapView({
+      mode: "fence",
+      home: null,
+      missionItems: [],
+      survey: createSurveyDraftExtension(),
+      selection: selection(),
+      fenceDraftItems: [
+        makeFenceDraftItem({
+          uiId: 501,
+          index: 0,
+          region: circleRegion(47.3989, 8.5472, 0, false),
+          latitude_deg: 47.3989,
+          longitude_deg: 8.5472,
+        }),
+      ],
+      fenceReturnPoint: { latitude_deg: 999, longitude_deg: 8.5478 },
+      fenceSelection: { kind: "return-point" },
+    });
+
+    expect(view.state).toBe("degraded");
+    expect(view.counts.fenceFeatures).toBe(0);
+    expect(view.fenceReturnPoint).toBeNull();
+    expect(view.warnings.some((warning) => warning.includes("invalid circle center or radius"))).toBe(true);
+    expect(view.warnings.some((warning) => warning.includes("Fence return point was malformed"))).toBe(true);
   });
 });

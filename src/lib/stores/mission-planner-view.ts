@@ -11,6 +11,7 @@ import type {
   MissionPlannerReplacePrompt,
   MissionPlannerStoreState,
   MissionPlannerSurveyPrompt,
+  MissionPlannerWarningActionTarget,
 } from "./mission-planner";
 import {
   activeTransferMissionPlan,
@@ -69,7 +70,7 @@ export type MissionPlannerWarningView = {
   detail: string;
   domain: MissionPlannerMode | "workspace";
   lines: string[];
-  action: { label: string; mode: MissionPlannerMode } | null;
+  action: { label: string; mode: MissionPlannerMode; target: MissionPlannerWarningActionTarget | null } | null;
 };
 
 export type MissionPlannerView = {
@@ -231,7 +232,7 @@ function buildWarningEntries(
       detail: attachment.detail,
       domain: "workspace",
       lines: [],
-      action: { label: "Open mission mode", mode: "mission" },
+      action: { label: "Open mission mode", mode: "mission", target: null },
     });
   }
 
@@ -248,14 +249,19 @@ function buildWarningEntries(
   }
 
   if (state.blockedReason) {
+    const blockedMode = state.blockedMode ?? state.mode;
     warnings.push({
       id: `blocked:${state.blockedReason}`,
       tone: "warning",
       title: "Blocked action",
       detail: state.blockedReason,
-      domain: state.mode,
+      domain: blockedMode,
       lines: [],
-      action: { label: `Open ${state.mode} mode`, mode: state.mode },
+      action: {
+        label: `Open ${blockedMode} mode`,
+        mode: blockedMode,
+        target: blockedMode === "fence" ? state.blockedWarningTarget ?? warningTargetFromFenceSelection(state.fenceSelection) : null,
+      },
     });
   }
 
@@ -272,14 +278,15 @@ function buildWarningEntries(
   }
 
   state.fileWarnings.forEach((warning, index) => {
+    const domain = inferWarningDomain(warning);
     pushIfVisible({
       id: `file-warning:${index}:${warning}`,
       tone: "warning",
       title: "Import / export warning",
       detail: warning,
-      domain: inferWarningDomain(warning),
+      domain,
       lines: [],
-      action: { label: `Open ${inferWarningDomain(warning)} mode`, mode: inferWarningDomain(warning) },
+      action: { label: `Open ${domain} mode`, mode: domain, target: null },
     });
   });
 
@@ -291,11 +298,25 @@ function buildWarningEntries(
       detail: typeof issue.seq === "number" ? `Sequence ${issue.seq}: ${issue.message}` : issue.message,
       domain: "mission",
       lines: [],
-      action: { label: "Open mission mode", mode: "mission" },
+      action: { label: "Open mission mode", mode: "mission", target: null },
     });
   });
 
   return warnings;
+}
+
+function warningTargetFromFenceSelection(
+  selection: MissionPlannerStoreState["fenceSelection"],
+): MissionPlannerWarningActionTarget | null {
+  if (selection.kind === "region") {
+    return { kind: "fence-region", regionUiId: selection.regionUiId };
+  }
+
+  if (selection.kind === "return-point") {
+    return { kind: "fence-return-point" };
+  }
+
+  return null;
 }
 
 function inferWarningDomain(warning: string): MissionPlannerMode {

@@ -10,14 +10,20 @@ import {
   plannerHasContent,
   type MissionPlannerMode,
   type MissionPlannerStoreState,
-  type MissionPlannerWarningView,
 } from "../../lib/stores/mission-planner";
-import type { MissionPlannerInlineStatus, MissionPlannerView } from "../../lib/stores/mission-planner-view";
+import type {
+  MissionPlannerInlineStatus,
+  MissionPlannerView,
+  MissionPlannerWarningView,
+} from "../../lib/stores/mission-planner-view";
 import { buildMissionMapView, type MissionMapSelection } from "../../lib/mission-map-view";
 import { localXYToLatLon } from "../../lib/mission-coordinates";
 import type { GeoPoint2d } from "../../lib/mavkit-types";
+import type { FenceRegionType } from "../../lib/mission-draft-typed";
 import type { SurveyPatternType } from "../../lib/survey-region";
 import MissionDraftList from "./MissionDraftList.svelte";
+import MissionFenceDraftList from "./MissionFenceDraftList.svelte";
+import MissionFenceInspector from "./MissionFenceInspector.svelte";
 import MissionHomeCard from "./MissionHomeCard.svelte";
 import MissionInspector from "./MissionInspector.svelte";
 import MissionMap from "./MissionMap.svelte";
@@ -45,6 +51,8 @@ let hasContent = $derived(plannerHasContent(planner));
 let canUseVehicleActions = $derived(view.canUseVehicleActions);
 let inlineCopy = $derived(resolveInlineStatusCopy(view, planner));
 let missionItems = $derived(planner.draftState.active.mission.draftItems);
+let fenceItems = $derived(planner.draftState.active.fence.draftItems);
+let fenceReturnPoint = $derived(planner.draftState.active.fence.document.return_point);
 let selectedMissionUiId = $derived(planner.draftState.active.mission.primarySelectedUiId);
 let surveyBlocks = $derived.by(() =>
   planner.survey.surveyRegionOrder
@@ -60,6 +68,13 @@ let selectedMissionItem = $derived.by(() => {
   }
 
   return missionItems.find((item) => item.uiId === selectedMissionUiId) ?? null;
+});
+let selectedFenceItem = $derived.by(() => {
+  if (planner.fenceSelection.kind !== "region") {
+    return null;
+  }
+
+  return fenceItems.find((item) => item.uiId === planner.fenceSelection.regionUiId) ?? null;
 });
 let previousMissionItem = $derived.by(() => {
   if (!selectedMissionItem || selectedMissionItem.index <= 0) {
@@ -92,13 +107,18 @@ let mapSelection = $derived.by<MissionMapSelection>(() => {
 });
 let mapCurrentSeq = $derived(planner.missionState?.current_index ?? null);
 let mapView = $derived(buildMissionMapView({
+  mode: view.mode,
   home: planner.home,
   missionItems,
   survey: planner.survey,
   selection: mapSelection,
+  fenceDraftItems: fenceItems,
+  fenceReturnPoint,
+  fenceSelection: planner.fenceSelection,
   currentSeq: mapCurrentSeq,
 }));
 let showMissionEditor = $derived(view.mode === "mission");
+let showFenceEditor = $derived(view.mode === "fence");
 
 const DEFAULT_SURVEY_ANCHOR: GeoPoint2d = {
   latitude_deg: 47.397742,
@@ -384,12 +404,12 @@ function exportReviewChoiceTestId(domain: MissionPlannerMode): string {
 }
 
 function modeShellTitle(mode: MissionPlannerMode): string {
-  return mode === "fence" ? "Fence continuity shell" : "Rally continuity shell";
+  return mode === "fence" ? "Fence map editor" : "Rally continuity shell";
 }
 
 function modeShellBody(mode: MissionPlannerMode, currentView: MissionPlannerView): string {
   return mode === "fence"
-    ? `Fence data is already part of the mounted workspace (${currentView.fenceRegionCount} region${currentView.fenceRegionCount === 1 ? "" : "s"}), and sticky warnings / import review stay visible here. Dedicated fence editing lands in the next task.`
+    ? `Fence mode now exposes ${currentView.fenceRegionCount} region${currentView.fenceRegionCount === 1 ? "" : "s"} plus return-point truth inside the mounted planner workspace.`
     : `Rally data is already part of the mounted workspace (${currentView.rallyPointCount} point${currentView.rallyPointCount === 1 ? "" : "s"}), and sticky warnings / import review stay visible here. Dedicated rally editing lands in the next task.`;
 }
 
@@ -484,6 +504,40 @@ function handleSelectMissionItemFromMap(uiId: number) {
   missionPlannerStore.selectMissionItemByUiId(uiId);
 }
 
+function handleSelectFenceRegion(uiId: number) {
+  clearLocalNote();
+  return missionPlannerStore.selectFenceRegionByUiId(uiId);
+}
+
+function handleSelectFenceReturnPoint() {
+  clearLocalNote();
+  return missionPlannerStore.selectFenceReturnPoint();
+}
+
+function handleAddFenceRegion(type: FenceRegionType, latitudeDeg?: number, longitudeDeg?: number) {
+  clearLocalNote();
+  return missionPlannerStore.addFenceRegion(type, latitudeDeg, longitudeDeg);
+}
+
+function handleDeleteFenceRegion(uiId: number) {
+  clearLocalNote();
+  const result = missionPlannerStore.deleteFenceRegionByUiId(uiId);
+  if (result.status === "applied") {
+    setLocalNote("Deleted the selected fence region. Fence mode stayed mounted so you can keep editing the remaining geometry.", "warning");
+  }
+  return result;
+}
+
+function handleUpdateFenceRegion(uiId: number, region: Parameters<typeof missionPlannerStore.updateFenceRegionByUiId>[1]) {
+  clearLocalNote();
+  return missionPlannerStore.updateFenceRegionByUiId(uiId, region);
+}
+
+function handleSetFenceReturnPoint(point: GeoPoint2d | null) {
+  clearLocalNote();
+  return missionPlannerStore.setFenceReturnPoint(point);
+}
+
 function handleMoveHomeFromMap(latitudeDeg: number, longitudeDeg: number) {
   clearLocalNote();
   return missionPlannerStore.moveHomeOnMap(latitudeDeg, longitudeDeg);
@@ -492,6 +546,21 @@ function handleMoveHomeFromMap(latitudeDeg: number, longitudeDeg: number) {
 function handleMoveMissionItemFromMap(uiId: number, latitudeDeg: number, longitudeDeg: number) {
   clearLocalNote();
   return missionPlannerStore.moveMissionItemOnMapByUiId(uiId, latitudeDeg, longitudeDeg);
+}
+
+function handleMoveFenceVertexFromMap(uiId: number, index: number, latitudeDeg: number, longitudeDeg: number) {
+  clearLocalNote();
+  return missionPlannerStore.moveFenceVertexByUiId(uiId, index, latitudeDeg, longitudeDeg);
+}
+
+function handleMoveFenceCircleCenterFromMap(uiId: number, latitudeDeg: number, longitudeDeg: number) {
+  clearLocalNote();
+  return missionPlannerStore.moveFenceCircleCenterByUiId(uiId, latitudeDeg, longitudeDeg);
+}
+
+function handleUpdateFenceCircleRadiusFromMap(uiId: number, radiusM: number) {
+  clearLocalNote();
+  return missionPlannerStore.updateFenceCircleRadiusByUiId(uiId, radiusM);
 }
 
 async function handleExportPlan() {
@@ -580,8 +649,31 @@ function handleDismissWarning(id: string) {
   missionPlannerStore.dismissWarning(id);
 }
 
-function handleWarningAction(mode: MissionPlannerMode) {
-  missionPlannerStore.setMode(mode);
+function handleWarningAction(action: NonNullable<MissionPlannerWarningView["action"]>) {
+  clearLocalNote();
+  missionPlannerStore.setMode(action.mode);
+
+  if (!action.target) {
+    return;
+  }
+
+  if (action.target.kind === "fence-return-point") {
+    const result = missionPlannerStore.selectFenceReturnPoint();
+    if (result.status === "rejected") {
+      setLocalNote(result.message, "warning");
+    }
+    return;
+  }
+
+  if (action.target.regionUiId === null) {
+    setLocalNote("Fence warning target no longer points at an active region.", "warning");
+    return;
+  }
+
+  const result = missionPlannerStore.selectFenceRegionByUiId(action.target.regionUiId);
+  if (result.status === "rejected") {
+    setLocalNote(result.message, "warning");
+  }
 }
 
 async function confirmPrompt() {
@@ -928,7 +1020,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                   <button
                     class="rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent transition hover:brightness-105"
                     data-testid={`${missionWorkspaceTestIds.warningActionPrefix}-${index}`}
-                    onclick={() => handleWarningAction(warning.action!.mode)}
+                    onclick={() => handleWarningAction(warning.action!)}
                     type="button"
                   >
                     {warning.action.label}
@@ -1017,6 +1109,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
         {#if showMissionEditor}
           <div class="space-y-4">
             <MissionMap
+              blockedReason={planner.blockedReason}
               fallbackReference={resolveSurveyCreationAnchor(planner)}
               onCreateSurveyRegion={handleStartSurveyDraw}
               onDeleteSurveyRegion={handleDeleteSurveyRegion}
@@ -1026,6 +1119,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               onSelectMissionItem={handleSelectMissionItemFromMap}
               onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
               onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+              readOnly={!view.canEdit}
               selectedSurveyRegion={selectedSurveyRegion}
               view={mapView}
             />
@@ -1071,6 +1165,55 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                 selectedSurveyRegion={selectedSurveyRegion}
                 selection={planner.selection}
                 surveyPrompt={view.surveyPrompt}
+              />
+            </div>
+          </div>
+        {:else if showFenceEditor}
+          <div class="space-y-4">
+            <MissionMap
+              blockedReason={planner.blockedReason}
+              fallbackReference={resolveSurveyCreationAnchor(planner)}
+              onAddFenceRegion={handleAddFenceRegion}
+              onClearFenceReturnPoint={() => handleSetFenceReturnPoint(null)}
+              onCreateSurveyRegion={handleStartSurveyDraw}
+              onDeleteSurveyRegion={handleDeleteSurveyRegion}
+              onMoveFenceCircleCenter={handleMoveFenceCircleCenterFromMap}
+              onMoveFenceVertex={handleMoveFenceVertexFromMap}
+              onMoveHome={handleMoveHomeFromMap}
+              onMoveMissionItem={handleMoveMissionItemFromMap}
+              onSelectFenceRegion={handleSelectFenceRegion}
+              onSelectFenceReturnPoint={handleSelectFenceReturnPoint}
+              onSelectHome={missionPlannerStore.selectHome}
+              onSelectMissionItem={handleSelectMissionItemFromMap}
+              onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
+              onSetFenceReturnPoint={(latitudeDeg, longitudeDeg) => handleSetFenceReturnPoint({ latitude_deg: latitudeDeg, longitude_deg: longitudeDeg })}
+              onUpdateFenceCircleRadius={handleUpdateFenceCircleRadiusFromMap}
+              onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+              readOnly={!view.canEdit}
+              selectedSurveyRegion={selectedSurveyRegion}
+              view={mapView}
+            />
+
+            <div class="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+              <MissionFenceDraftList
+                fenceSelection={planner.fenceSelection}
+                items={fenceItems}
+                onAddRegion={handleAddFenceRegion}
+                onClearReturnPoint={() => handleSetFenceReturnPoint(null)}
+                onDeleteRegion={handleDeleteFenceRegion}
+                onSelectRegion={handleSelectFenceRegion}
+                onSelectReturnPoint={handleSelectFenceReturnPoint}
+                readOnly={!view.canEdit}
+                returnPoint={fenceReturnPoint}
+              />
+
+              <MissionFenceInspector
+                item={selectedFenceItem}
+                onSetReturnPoint={handleSetFenceReturnPoint}
+                onUpdateRegion={handleUpdateFenceRegion}
+                readOnly={!view.canEdit}
+                returnPoint={fenceReturnPoint}
+                selection={planner.fenceSelection}
               />
             </div>
           </div>

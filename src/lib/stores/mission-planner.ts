@@ -11,8 +11,9 @@ import {
   type MissionKmlFileImportData,
   type MissionKmlFileIo,
 } from "../mission-kml-file-io";
-import type { MissionCommand, GeoPoint2d, MissionItem } from "../mavkit-types";
+import type { FenceRegion, MissionCommand, GeoPoint2d, MissionItem } from "../mavkit-types";
 import {
+  addFenceRegionAt,
   addTypedWaypoint,
   createTypedDraftState,
   deleteTypedAt,
@@ -23,15 +24,18 @@ import {
   moveTypedWaypointOnMap,
   replaceTypedDraftFromDownload,
   selectTypedDraftIndex,
+  setFenceReturnPoint as setTypedFenceReturnPoint,
   setTypedDraftScope,
   typedDraftItems,
   typedDraftPlan,
   typedDraftSelectedIndex,
   typedDraftSelectedItem,
+  updateFenceRegion as updateTypedFenceRegion,
   updateTypedAltitude,
   updateTypedCommand,
   updateTypedLatitude,
   updateTypedLongitude,
+  type FenceRegionType,
   type SessionScope,
   type TypedDraftState,
 } from "../mission-draft-typed";
@@ -136,6 +140,35 @@ export type MissionPlannerMapMoveResult =
     message: string;
   };
 
+export type MissionPlannerFenceSelection =
+  | { kind: "none" }
+  | { kind: "region"; regionUiId: number | null }
+  | { kind: "return-point" };
+
+export type MissionPlannerWarningActionTarget =
+  | { kind: "fence-region"; regionUiId: number | null }
+  | { kind: "fence-return-point" };
+
+export type MissionPlannerFenceMutationRejectReason =
+  | "invalid-coordinate"
+  | "invalid-geometry"
+  | "invalid-radius"
+  | "read-only"
+  | "region-not-found"
+  | "return-point-missing";
+
+export type MissionPlannerFenceMutationResult =
+  | {
+    status: "applied";
+    target: "region" | "return-point" | "none";
+    regionUiId: number | null;
+  }
+  | {
+    status: "rejected";
+    reason: MissionPlannerFenceMutationRejectReason;
+    message: string;
+  };
+
 export type MissionPlannerWorkspace = {
   mission: MissionPlan;
   fence: FencePlan;
@@ -212,6 +245,7 @@ export type MissionPlannerStoreState = {
   workspaceMounted: boolean;
   mode: MissionPlannerMode;
   selection: MissionPlannerSelection;
+  fenceSelection: MissionPlannerFenceSelection;
   phase: MissionPlannerDomainPhase;
   streamReady: boolean;
   streamError: string | null;
@@ -229,6 +263,8 @@ export type MissionPlannerStoreState = {
   recoverableWorkspace: RecoverableMissionPlannerWorkspace | null;
   dismissedWarningIds: string[];
   blockedReason: string | null;
+  blockedMode: MissionPlannerMode | null;
+  blockedWarningTarget: MissionPlannerWarningActionTarget | null;
   draftState: TypedDraftState;
   home: HomePosition | null;
   homeSnapshot: HomePosition | null;
@@ -273,6 +309,7 @@ function createInitialState(): MissionPlannerStoreState {
     workspaceMounted: false,
     mode: "mission",
     selection: { kind: "home" },
+    fenceSelection: { kind: "none" },
     phase: "bootstrapping",
     streamReady: false,
     streamError: null,
@@ -290,6 +327,8 @@ function createInitialState(): MissionPlannerStoreState {
     recoverableWorkspace: null,
     dismissedWarningIds: [],
     blockedReason: null,
+    blockedMode: null,
+    blockedWarningTarget: null,
     draftState: setTypedDraftScope(createTypedDraftState(), EMPTY_SCOPE),
     home: null,
     homeSnapshot: null,
@@ -448,6 +487,8 @@ export function createMissionPlannerStore(
     return withResolvedPhase({
       ...state,
       blockedReason: message,
+      blockedMode: state.mode,
+      blockedWarningTarget: state.mode === "fence" ? warningTargetFromFenceSelection(state.fenceSelection) : null,
       dismissedWarningIds: clearDismissedWarningIds(state.dismissedWarningIds, ["blocked:"]),
     });
   }
@@ -462,6 +503,8 @@ export function createMissionPlannerStore(
       pendingImportReview: null,
       pendingExportReview: null,
       blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
     }));
   }
 
@@ -907,6 +950,338 @@ export function createMissionPlannerStore(
     };
   }
 
+  function selectFenceRegionByUiId(uiId: number): MissionPlannerFenceMutationResult {
+    const state = get(store);
+    const region = state.draftState.active.fence.draftItems.find((item) => item.uiId === uiId);
+    if (!region) {
+      store.update((current) => withBlockedReason(current, "Ignored a stale fence selection because that region is no longer present in the active draft."));
+      return rejectedFenceMutation("region-not-found", "Ignored a stale fence selection because that region is no longer present in the active draft.");
+    }
+
+    store.update((current) => withResolvedPhase({
+      ...current,
+      draftState: selectTypedDraftIndex(current.draftState, "fence", region.index),
+      fenceSelection: { kind: "region", regionUiId: uiId },
+      blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
+      dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
+    }));
+
+    return {
+      status: "applied",
+      target: "region",
+      regionUiId: uiId,
+    };
+  }
+
+  function selectFenceReturnPoint(): MissionPlannerFenceMutationResult {
+    const state = get(store);
+    if (!state.draftState.active.fence.document.return_point) {
+      store.update((current) => withBlockedReason(current, "Ignored a stale fence return-point selection because this draft does not have a return point yet."));
+      return rejectedFenceMutation("return-point-missing", "Ignored a stale fence return-point selection because this draft does not have a return point yet.");
+    }
+
+    store.update((current) => withResolvedPhase({
+      ...current,
+      fenceSelection: { kind: "return-point" },
+      blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
+      dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
+    }));
+
+    return {
+      status: "applied",
+      target: "return-point",
+      regionUiId: null,
+    };
+  }
+
+  function addFenceRegion(
+    type: FenceRegionType,
+    latitudeDeg?: number,
+    longitudeDeg?: number,
+  ): MissionPlannerFenceMutationResult {
+    const state = get(store);
+    if (!canEditWorkspace(state)) {
+      store.update((current) => withBlockedReason(current, readOnlyMutationMessage(current, "Fence edits")));
+      return rejectedFenceMutation("read-only", readOnlyMutationMessage(state, "Fence edits"));
+    }
+
+    const anchor = resolveFenceAnchorPoint(state);
+    const nextLatitude = typeof latitudeDeg === "number" ? latitudeDeg : anchor.latitude_deg;
+    const nextLongitude = typeof longitudeDeg === "number" ? longitudeDeg : anchor.longitude_deg;
+    if (!isCoordinatePairValid(nextLatitude, nextLongitude)) {
+      store.update((current) => withBlockedReason(current, "Ignored the fence add because the requested map position was invalid."));
+      return rejectedFenceMutation("invalid-coordinate", "Ignored the fence add because the requested map position was invalid.");
+    }
+
+    const draftState = addFenceRegionAt(state.draftState, nextLatitude, nextLongitude, type);
+    const regionUiId = draftState.active.fence.primarySelectedUiId;
+
+    store.update((current) => withResolvedPhase({
+      ...current,
+      draftState,
+      fenceSelection: regionUiId === null ? { kind: "none" } : { kind: "region", regionUiId },
+      blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
+      dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
+    }));
+
+    return {
+      status: "applied",
+      target: regionUiId === null ? "none" : "region",
+      regionUiId,
+    };
+  }
+
+  function deleteFenceRegionByUiId(uiId: number): MissionPlannerFenceMutationResult {
+    const state = get(store);
+    if (!canEditWorkspace(state)) {
+      store.update((current) => withBlockedReason(current, readOnlyMutationMessage(current, "Fence deletes")));
+      return rejectedFenceMutation("read-only", readOnlyMutationMessage(state, "Fence deletes"));
+    }
+
+    const region = state.draftState.active.fence.draftItems.find((item) => item.uiId === uiId);
+    if (!region) {
+      store.update((current) => withBlockedReason(current, "Ignored a stale fence delete because that region is no longer present in the active draft."));
+      return rejectedFenceMutation("region-not-found", "Ignored a stale fence delete because that region is no longer present in the active draft.");
+    }
+
+    const draftState = deleteTypedAt(state.draftState, "fence", region.index);
+    const nextRegion = typedDraftSelectedItem(draftState, "fence");
+    const nextReturnPoint = typedDraftPlan(draftState, "fence").return_point;
+    const fenceSelection = nextRegion
+      ? ({ kind: "region", regionUiId: nextRegion.uiId } satisfies MissionPlannerFenceSelection)
+      : nextReturnPoint
+        ? ({ kind: "return-point" } satisfies MissionPlannerFenceSelection)
+        : ({ kind: "none" } satisfies MissionPlannerFenceSelection);
+
+    store.update((current) => withResolvedPhase({
+      ...current,
+      draftState,
+      fenceSelection,
+      blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
+      dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
+    }));
+
+    return {
+      status: "applied",
+      target: fenceSelection.kind === "region" ? "region" : fenceSelection.kind === "return-point" ? "return-point" : "none",
+      regionUiId: fenceSelection.kind === "region" ? fenceSelection.regionUiId : null,
+    };
+  }
+
+  function updateFenceRegionByUiId(uiId: number, region: FenceRegion): MissionPlannerFenceMutationResult {
+    const validation = validateFenceRegion(region);
+    if (!validation.ok) {
+      store.update((current) => withBlockedReason(current, validation.message));
+      return rejectedFenceMutation("invalid-geometry", validation.message);
+    }
+
+    const state = get(store);
+    if (!canEditWorkspace(state)) {
+      store.update((current) => withBlockedReason(current, readOnlyMutationMessage(current, "Fence edits")));
+      return rejectedFenceMutation("read-only", readOnlyMutationMessage(state, "Fence edits"));
+    }
+
+    const activeRegion = state.draftState.active.fence.draftItems.find((item) => item.uiId === uiId);
+    if (!activeRegion) {
+      store.update((current) => withBlockedReason(current, "Ignored a stale fence edit because that region is no longer present in the active draft."));
+      return rejectedFenceMutation("region-not-found", "Ignored a stale fence edit because that region is no longer present in the active draft.");
+    }
+
+    const draftState = selectTypedDraftIndex(
+      updateTypedFenceRegion(state.draftState, activeRegion.index, cloneValue(region)),
+      "fence",
+      activeRegion.index,
+    );
+
+    store.update((current) => withResolvedPhase({
+      ...current,
+      draftState,
+      fenceSelection: { kind: "region", regionUiId: uiId },
+      blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
+      dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
+    }));
+
+    return {
+      status: "applied",
+      target: "region",
+      regionUiId: uiId,
+    };
+  }
+
+  function setFenceReturnPoint(point: GeoPoint2d | null): MissionPlannerFenceMutationResult {
+    const state = get(store);
+    if (!canEditWorkspace(state)) {
+      store.update((current) => withBlockedReason(current, readOnlyMutationMessage(current, point ? "Fence return-point edits" : "Fence return-point clears")));
+      return rejectedFenceMutation("read-only", readOnlyMutationMessage(state, point ? "Fence return-point edits" : "Fence return-point clears"));
+    }
+
+    if (point !== null && !isCoordinatePairValid(point.latitude_deg, point.longitude_deg)) {
+      store.update((current) => withBlockedReason(current, "Ignored the fence return-point update because the requested coordinate was invalid."));
+      return rejectedFenceMutation("invalid-coordinate", "Ignored the fence return-point update because the requested coordinate was invalid.");
+    }
+
+    const draftState = setTypedFenceReturnPoint(state.draftState, point ? cloneValue(point) : null);
+    const nextSelection = point
+      ? ({ kind: "return-point" } satisfies MissionPlannerFenceSelection)
+      : normalizeFenceSelectionState({
+        ...state,
+        draftState,
+        fenceSelection: state.fenceSelection.kind === "return-point" ? { kind: "none" } : state.fenceSelection,
+      }).fenceSelection;
+
+    store.update((current) => withResolvedPhase({
+      ...current,
+      draftState,
+      fenceSelection: nextSelection,
+      blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
+      dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
+    }));
+
+    return {
+      status: "applied",
+      target: nextSelection.kind === "region" ? "region" : nextSelection.kind === "return-point" ? "return-point" : "none",
+      regionUiId: nextSelection.kind === "region" ? nextSelection.regionUiId : null,
+    };
+  }
+
+  function moveFenceVertexByUiId(
+    uiId: number,
+    vertexIndex: number,
+    latitudeDeg: number,
+    longitudeDeg: number,
+  ): MissionPlannerFenceMutationResult {
+    if (!isCoordinatePairValid(latitudeDeg, longitudeDeg)) {
+      store.update((current) => withBlockedReason(current, "Ignored the fence vertex drag because the map emitted invalid coordinates."));
+      return rejectedFenceMutation("invalid-coordinate", "Ignored the fence vertex drag because the map emitted invalid coordinates.");
+    }
+
+    const state = get(store);
+    const region = state.draftState.active.fence.draftItems.find((item) => item.uiId === uiId)?.document as FenceRegion | undefined;
+    if (!region) {
+      store.update((current) => withBlockedReason(current, "Ignored a stale fence-vertex drag because that region is no longer present in the active draft."));
+      return rejectedFenceMutation("region-not-found", "Ignored a stale fence-vertex drag because that region is no longer present in the active draft.");
+    }
+
+    if ("inclusion_polygon" in region) {
+      const nextVertices = [...region.inclusion_polygon.vertices];
+      if (!nextVertices[vertexIndex]) {
+        store.update((current) => withBlockedReason(current, "Ignored a stale fence-vertex drag because that vertex is no longer present in the active region."));
+        return rejectedFenceMutation("invalid-geometry", "Ignored a stale fence-vertex drag because that vertex is no longer present in the active region.");
+      }
+      nextVertices[vertexIndex] = { latitude_deg: latitudeDeg, longitude_deg: longitudeDeg };
+      return updateFenceRegionByUiId(uiId, {
+        inclusion_polygon: {
+          ...region.inclusion_polygon,
+          vertices: nextVertices,
+        },
+      });
+    }
+
+    if ("exclusion_polygon" in region) {
+      const nextVertices = [...region.exclusion_polygon.vertices];
+      if (!nextVertices[vertexIndex]) {
+        store.update((current) => withBlockedReason(current, "Ignored a stale fence-vertex drag because that vertex is no longer present in the active region."));
+        return rejectedFenceMutation("invalid-geometry", "Ignored a stale fence-vertex drag because that vertex is no longer present in the active region.");
+      }
+      nextVertices[vertexIndex] = { latitude_deg: latitudeDeg, longitude_deg: longitudeDeg };
+      return updateFenceRegionByUiId(uiId, {
+        exclusion_polygon: {
+          ...region.exclusion_polygon,
+          vertices: nextVertices,
+        },
+      });
+    }
+
+    store.update((current) => withBlockedReason(current, "Ignored the fence-vertex drag because only polygon regions expose editable vertices on the planner map."));
+    return rejectedFenceMutation("invalid-geometry", "Ignored the fence-vertex drag because only polygon regions expose editable vertices on the planner map.");
+  }
+
+  function moveFenceCircleCenterByUiId(
+    uiId: number,
+    latitudeDeg: number,
+    longitudeDeg: number,
+  ): MissionPlannerFenceMutationResult {
+    if (!isCoordinatePairValid(latitudeDeg, longitudeDeg)) {
+      store.update((current) => withBlockedReason(current, "Ignored the fence-region drag because the map emitted invalid coordinates."));
+      return rejectedFenceMutation("invalid-coordinate", "Ignored the fence-region drag because the map emitted invalid coordinates.");
+    }
+
+    const state = get(store);
+    const region = state.draftState.active.fence.draftItems.find((item) => item.uiId === uiId)?.document as FenceRegion | undefined;
+    if (!region) {
+      store.update((current) => withBlockedReason(current, "Ignored a stale fence-region drag because that region is no longer present in the active draft."));
+      return rejectedFenceMutation("region-not-found", "Ignored a stale fence-region drag because that region is no longer present in the active draft.");
+    }
+
+    if ("inclusion_circle" in region) {
+      return updateFenceRegionByUiId(uiId, {
+        inclusion_circle: {
+          ...region.inclusion_circle,
+          center: { latitude_deg: latitudeDeg, longitude_deg: longitudeDeg },
+        },
+      });
+    }
+
+    if ("exclusion_circle" in region) {
+      return updateFenceRegionByUiId(uiId, {
+        exclusion_circle: {
+          ...region.exclusion_circle,
+          center: { latitude_deg: latitudeDeg, longitude_deg: longitudeDeg },
+        },
+      });
+    }
+
+    store.update((current) => withBlockedReason(current, "Ignored the fence-region drag because only circle regions expose a movable center handle on the planner map."));
+    return rejectedFenceMutation("invalid-geometry", "Ignored the fence-region drag because only circle regions expose a movable center handle on the planner map.");
+  }
+
+  function updateFenceCircleRadiusByUiId(uiId: number, radiusM: number): MissionPlannerFenceMutationResult {
+    if (!Number.isFinite(radiusM) || radiusM <= 0) {
+      store.update((current) => withBlockedReason(current, "Ignored the fence radius edit because the resulting radius was not greater than zero."));
+      return rejectedFenceMutation("invalid-radius", "Ignored the fence radius edit because the resulting radius was not greater than zero.");
+    }
+
+    const state = get(store);
+    const region = state.draftState.active.fence.draftItems.find((item) => item.uiId === uiId)?.document as FenceRegion | undefined;
+    if (!region) {
+      store.update((current) => withBlockedReason(current, "Ignored a stale fence radius edit because that region is no longer present in the active draft."));
+      return rejectedFenceMutation("region-not-found", "Ignored a stale fence radius edit because that region is no longer present in the active draft.");
+    }
+
+    if ("inclusion_circle" in region) {
+      return updateFenceRegionByUiId(uiId, {
+        inclusion_circle: {
+          ...region.inclusion_circle,
+          radius_m: radiusM,
+        },
+      });
+    }
+
+    if ("exclusion_circle" in region) {
+      return updateFenceRegionByUiId(uiId, {
+        exclusion_circle: {
+          ...region.exclusion_circle,
+          radius_m: radiusM,
+        },
+      });
+    }
+
+    store.update((current) => withBlockedReason(current, "Ignored the fence radius edit because only circle regions expose a radius handle on the planner map."));
+    return rejectedFenceMutation("invalid-geometry", "Ignored the fence radius edit because only circle regions expose a radius handle on the planner map.");
+  }
+
   function beginImportReview(
     source: MissionPlannerImportSource,
     fileName: string | null,
@@ -924,6 +1299,8 @@ export function createMissionPlannerStore(
         choices: buildImportReviewChoices(captureActiveWorkspace(state), incomingWorkspace),
       },
       blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
       dismissedWarningIds: clearDismissedWarningIds(state.dismissedWarningIds, ["blocked:"]),
     }));
   }
@@ -943,6 +1320,8 @@ export function createMissionPlannerStore(
             : choice),
         },
         blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
       });
     });
   }
@@ -966,6 +1345,8 @@ export function createMissionPlannerStore(
       fileWarnings: [...review.warnings],
       dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["file-warning:", "blocked:"]),
       blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
     }));
 
     return {
@@ -981,6 +1362,8 @@ export function createMissionPlannerStore(
       ...state,
       pendingImportReview: null,
       blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
     }));
   }
 
@@ -999,6 +1382,8 @@ export function createMissionPlannerStore(
             : choice),
         },
         blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
       });
     });
   }
@@ -1008,6 +1393,8 @@ export function createMissionPlannerStore(
       ...state,
       pendingExportReview: null,
       blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
     }));
   }
 
@@ -1043,6 +1430,8 @@ export function createMissionPlannerStore(
         fileWarnings: [...result.warnings],
         dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["file-warning:", "blocked:"]),
         blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
       }));
 
       return {
@@ -1117,6 +1506,8 @@ export function createMissionPlannerStore(
         pendingImportReview: null,
         pendingExportReview: null,
         blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
       }));
       return { status: "success" as const };
     } catch (error) {
@@ -1163,6 +1554,8 @@ export function createMissionPlannerStore(
         fileWarnings: [...imported.warnings],
         dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["file-warning:", "blocked:"]),
         blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
       }));
 
       return {
@@ -1219,6 +1612,8 @@ export function createMissionPlannerStore(
           choices,
         },
         blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
       }));
       return { status: "prompted" as const, action: "export" as const };
     }
@@ -1253,6 +1648,8 @@ export function createMissionPlannerStore(
         validationIssues: issues,
         dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["validation-issue:", "blocked:"]),
         blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
       }));
       return { status: "success" as const, issueCount: issues.length };
     } catch (error) {
@@ -1290,6 +1687,8 @@ export function createMissionPlannerStore(
         ...current,
         activeAction: null,
         blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
       }));
       return { status: "success" as const };
     } catch (error) {
@@ -1340,6 +1739,8 @@ export function createMissionPlannerStore(
         pendingImportReview: null,
         pendingExportReview: null,
         blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
       }));
       return { status: "cleared" as const };
     } catch (error) {
@@ -1388,6 +1789,8 @@ export function createMissionPlannerStore(
           recoverableWorkspace: null,
           replacePrompt: null,
           blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
         });
       });
       return { status: "restored" as const };
@@ -1415,6 +1818,8 @@ export function createMissionPlannerStore(
       fileWarnings: [...prompt.fileWarnings],
       dismissedWarningIds: clearDismissedWarningIds(state.dismissedWarningIds, ["file-warning:", "blocked:"]),
       blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
     }));
 
     return {
@@ -1537,6 +1942,8 @@ export function createMissionPlannerStore(
         return withResolvedPhase({
           ...state,
           blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
         });
       }
 
@@ -1559,17 +1966,26 @@ export function createMissionPlannerStore(
     selectMissionItem,
     selectMissionItemByUiId,
     selectSurveyRegion,
+    selectFenceRegionByUiId,
+    selectFenceReturnPoint,
     addMissionItem,
+    addFenceRegion,
     deleteMissionItem,
+    deleteFenceRegionByUiId,
     moveMissionItemUpByIndex,
     moveMissionItemDownByIndex,
     updateMissionItemCommand,
     updateMissionItemLatitude,
     updateMissionItemLongitude,
     updateMissionItemAltitude,
+    updateFenceRegionByUiId,
     moveHomeOnMap,
     moveMissionItemOnMapByUiId,
+    moveFenceVertexByUiId,
+    moveFenceCircleCenterByUiId,
+    updateFenceCircleRadiusByUiId,
     setHome,
+    setFenceReturnPoint,
     setPlanningSpeeds,
     replaceSurveyExtension,
     createSurveyBlock,
@@ -1955,6 +2371,7 @@ function applyWorkspacePair(
     ...state,
     workspaceMounted: true,
     selection: { kind: "home" },
+    fenceSelection: { kind: "none" },
     draftState,
     home: cloneValue(pair.active.home),
     homeSnapshot: cloneValue(pair.snapshot.home),
@@ -2138,7 +2555,7 @@ function clearDismissedWarningIds(ids: string[], prefixes: string[]): string[] {
 }
 
 function withResolvedPhase(state: MissionPlannerStoreState): MissionPlannerStoreState {
-  const normalized = normalizeSelection(state);
+  const normalized = normalizeFenceSelectionState(normalizeSelection(state));
   return {
     ...normalized,
     phase: resolvePhase(normalized),
@@ -2165,6 +2582,65 @@ function normalizeSelection(state: MissionPlannerStoreState): MissionPlannerStor
       ...state,
       selection: { kind: "home" },
     };
+}
+
+function normalizeFenceSelectionState(state: MissionPlannerStoreState): MissionPlannerStoreState {
+  if (state.fenceSelection.kind === "none") {
+    return state;
+  }
+
+  const selectedFenceRegion = typedDraftSelectedItem(state.draftState, "fence");
+  const hasReturnPoint = state.draftState.active.fence.document.return_point !== null;
+
+  if (state.fenceSelection.kind === "return-point") {
+    return hasReturnPoint
+      ? state
+      : selectedFenceRegion
+        ? {
+          ...state,
+          fenceSelection: { kind: "region", regionUiId: selectedFenceRegion.uiId },
+        }
+        : {
+          ...state,
+          fenceSelection: { kind: "none" },
+        };
+  }
+
+  const selectedRegionUiId = state.fenceSelection.kind === "region" ? state.fenceSelection.regionUiId : null;
+  const hasSelectedRegion = selectedRegionUiId !== null
+    && state.draftState.active.fence.draftItems.some((item) => item.uiId === selectedRegionUiId);
+  if (hasSelectedRegion) {
+    return state;
+  }
+
+  return selectedFenceRegion
+    ? {
+      ...state,
+      fenceSelection: { kind: "region", regionUiId: selectedFenceRegion.uiId },
+    }
+    : hasReturnPoint
+      ? {
+        ...state,
+        fenceSelection: { kind: "return-point" },
+      }
+      : {
+        ...state,
+        fenceSelection: { kind: "none" },
+      };
+}
+
+function warningTargetFromFenceSelection(
+  selection: MissionPlannerFenceSelection,
+): MissionPlannerWarningActionTarget | null {
+  if (selection.kind === "region") {
+    return { kind: "fence-region", regionUiId: selection.regionUiId };
+  }
+
+  if (selection.kind === "return-point") {
+    return { kind: "fence-return-point" };
+  }
+
+  return null;
 }
 
 function resolvePhase(state: MissionPlannerStoreState): MissionPlannerDomainPhase {
@@ -2210,6 +2686,150 @@ function resolvePhase(state: MissionPlannerStoreState): MissionPlannerDomainPhas
   }
 
   return "ready";
+}
+
+function resolveFenceAnchorPoint(state: MissionPlannerStoreState): GeoPoint2d {
+  const selectedFenceRegionUiId = state.fenceSelection.kind === "region" ? state.fenceSelection.regionUiId : null;
+  if (selectedFenceRegionUiId !== null) {
+    const selectedFenceRegion = state.draftState.active.fence.draftItems.find((item) => item.uiId === selectedFenceRegionUiId);
+    if (
+      selectedFenceRegion
+      && selectedFenceRegion.preview.latitude_deg !== null
+      && selectedFenceRegion.preview.longitude_deg !== null
+    ) {
+      return {
+        latitude_deg: selectedFenceRegion.preview.latitude_deg,
+        longitude_deg: selectedFenceRegion.preview.longitude_deg,
+      };
+    }
+  }
+
+  if (state.draftState.active.fence.document.return_point) {
+    return cloneValue(state.draftState.active.fence.document.return_point);
+  }
+
+  if (state.home) {
+    return {
+      latitude_deg: state.home.latitude_deg,
+      longitude_deg: state.home.longitude_deg,
+    };
+  }
+
+  const selectedMissionItem = typedDraftSelectedItem(state.draftState, "mission");
+  if (
+    selectedMissionItem
+    && selectedMissionItem.preview.latitude_deg !== null
+    && selectedMissionItem.preview.longitude_deg !== null
+  ) {
+    return {
+      latitude_deg: selectedMissionItem.preview.latitude_deg,
+      longitude_deg: selectedMissionItem.preview.longitude_deg,
+    };
+  }
+
+  const firstMissionItem = state.draftState.active.mission.draftItems.find(
+    (item) => item.preview.latitude_deg !== null && item.preview.longitude_deg !== null,
+  );
+  if (
+    firstMissionItem
+    && firstMissionItem.preview.latitude_deg !== null
+    && firstMissionItem.preview.longitude_deg !== null
+  ) {
+    return {
+      latitude_deg: firstMissionItem.preview.latitude_deg,
+      longitude_deg: firstMissionItem.preview.longitude_deg,
+    };
+  }
+
+  const firstFenceItem = state.draftState.active.fence.draftItems.find(
+    (item) => item.preview.latitude_deg !== null && item.preview.longitude_deg !== null,
+  );
+  if (
+    firstFenceItem
+    && firstFenceItem.preview.latitude_deg !== null
+    && firstFenceItem.preview.longitude_deg !== null
+  ) {
+    return {
+      latitude_deg: firstFenceItem.preview.latitude_deg,
+      longitude_deg: firstFenceItem.preview.longitude_deg,
+    };
+  }
+
+  return {
+    latitude_deg: 47.397742,
+    longitude_deg: 8.545594,
+  };
+}
+
+function validateFenceRegion(region: FenceRegion): { ok: true } | { ok: false; message: string } {
+  if ("inclusion_polygon" in region) {
+    return validateFencePolygon(region.inclusion_polygon.vertices, "Fence inclusion polygons");
+  }
+
+  if ("exclusion_polygon" in region) {
+    return validateFencePolygon(region.exclusion_polygon.vertices, "Fence exclusion polygons");
+  }
+
+  if ("inclusion_circle" in region) {
+    return validateFenceCircle(region.inclusion_circle.center, region.inclusion_circle.radius_m, "Fence inclusion circles");
+  }
+
+  return validateFenceCircle(region.exclusion_circle.center, region.exclusion_circle.radius_m, "Fence exclusion circles");
+}
+
+function validateFencePolygon(
+  vertices: GeoPoint2d[],
+  label: string,
+): { ok: true } | { ok: false; message: string } {
+  if (vertices.length < 3) {
+    return {
+      ok: false,
+      message: `${label} need at least three valid vertices before IronWing will update the active fence region.`,
+    };
+  }
+
+  const invalidVertex = vertices.find((vertex) => !isCoordinatePairValid(vertex.latitude_deg, vertex.longitude_deg));
+  if (invalidVertex) {
+    return {
+      ok: false,
+      message: `${label} rejected malformed coordinates, so the previous fence geometry stayed visible and unchanged.`,
+    };
+  }
+
+  return { ok: true };
+}
+
+function validateFenceCircle(
+  center: GeoPoint2d,
+  radiusM: number,
+  label: string,
+): { ok: true } | { ok: false; message: string } {
+  if (!isCoordinatePairValid(center.latitude_deg, center.longitude_deg)) {
+    return {
+      ok: false,
+      message: `${label} rejected malformed center coordinates, so the previous fence geometry stayed visible and unchanged.`,
+    };
+  }
+
+  if (!Number.isFinite(radiusM) || radiusM <= 0) {
+    return {
+      ok: false,
+      message: `${label} need a radius greater than zero before IronWing will update the active fence region.`,
+    };
+  }
+
+  return { ok: true };
+}
+
+function rejectedFenceMutation(
+  reason: MissionPlannerFenceMutationRejectReason,
+  message: string,
+): MissionPlannerFenceMutationResult {
+  return {
+    status: "rejected",
+    reason,
+    message,
+  };
 }
 
 function isCoordinatePairValid(latitudeDeg: number, longitudeDeg: number): boolean {

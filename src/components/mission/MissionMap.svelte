@@ -4,8 +4,15 @@ import { onDestroy } from "svelte";
 import {
   buildMissionMapViewport,
   resolveMissionMapDrag,
+  resolveMissionMapFenceRadiusHandleDrag,
+  resolveMissionMapFenceRegionHandleDrag,
+  resolveMissionMapFenceReturnPointDrag,
+  resolveMissionMapFenceVertexHandleDrag,
   resolveMissionMapSurveyHandleDrag,
   unprojectMissionMapPoint,
+  type MissionMapFenceRadiusHandle,
+  type MissionMapFenceRegionHandle,
+  type MissionMapFenceVertexHandle,
   type MissionMapLineFeature,
   type MissionMapMarker,
   type MissionMapPoint,
@@ -22,9 +29,13 @@ import {
   surveyGeometryPoints,
 } from "../../lib/mission-map-survey";
 import { resolveSurveyGenerationBlockedReason } from "../../lib/mission-survey-authoring";
-import type { GeoPoint2d } from "../../lib/mavkit-types";
+import type { GeoPoint2d, GeoPoint3d } from "../../lib/mavkit-types";
+import type { FenceRegionType } from "../../lib/mission-draft-typed";
 import type { SurveyPatternType, SurveyRegion } from "../../lib/survey-region";
-import type { MissionPlannerMapMoveResult } from "../../lib/stores/mission-planner";
+import type {
+  MissionPlannerFenceMutationResult,
+  MissionPlannerMapMoveResult,
+} from "../../lib/stores/mission-planner";
 import {
   clearMissionMapDebugSnapshot,
   publishMissionMapDebugSnapshot,
@@ -35,6 +46,8 @@ type Props = {
   view: MissionMapView;
   fallbackReference: GeoPoint2d;
   selectedSurveyRegion: SurveyRegion | null;
+  blockedReason?: string | null;
+  readOnly?: boolean;
   onSelectHome: () => void;
   onSelectMissionItem: (uiId: number) => void;
   onSelectSurveyRegion: (regionId: string) => void;
@@ -43,6 +56,14 @@ type Props = {
   onDeleteSurveyRegion: (regionId: string) => void;
   onMoveHome: (latitudeDeg: number, longitudeDeg: number) => MissionPlannerMapMoveResult;
   onMoveMissionItem: (uiId: number, latitudeDeg: number, longitudeDeg: number) => MissionPlannerMapMoveResult;
+  onSelectFenceRegion?: (uiId: number) => MissionPlannerFenceMutationResult | unknown;
+  onSelectFenceReturnPoint?: () => MissionPlannerFenceMutationResult | unknown;
+  onAddFenceRegion?: (type: FenceRegionType, latitudeDeg: number, longitudeDeg: number) => MissionPlannerFenceMutationResult | unknown;
+  onSetFenceReturnPoint?: (latitudeDeg: number, longitudeDeg: number) => MissionPlannerFenceMutationResult | unknown;
+  onClearFenceReturnPoint?: () => MissionPlannerFenceMutationResult | unknown;
+  onMoveFenceVertex?: (uiId: number, index: number, latitudeDeg: number, longitudeDeg: number) => MissionPlannerFenceMutationResult | unknown;
+  onMoveFenceCircleCenter?: (uiId: number, latitudeDeg: number, longitudeDeg: number) => MissionPlannerFenceMutationResult | unknown;
+  onUpdateFenceCircleRadius?: (uiId: number, radiusM: number) => MissionPlannerFenceMutationResult | unknown;
 };
 
 type ActiveMarkerDrag = {
@@ -61,6 +82,38 @@ type ActiveSurveyHandleDrag = {
   geometryKind: "polygon" | "polyline";
   updateCount: number;
 };
+
+type ActiveFenceDrag =
+  | {
+    kind: "vertex";
+    handleId: string;
+    regionUiId: number;
+    index: number;
+    startLatitude_deg: number;
+    startLongitude_deg: number;
+    updateCount: number;
+  }
+  | {
+    kind: "region";
+    handleId: string;
+    regionUiId: number;
+    startLatitude_deg: number;
+    startLongitude_deg: number;
+    updateCount: number;
+  }
+  | {
+    kind: "radius";
+    handleId: string;
+    regionUiId: number;
+    startRadius_m: number;
+    updateCount: number;
+  }
+  | {
+    kind: "return-point";
+    startLatitude_deg: number;
+    startLongitude_deg: number;
+    updateCount: number;
+  };
 
 type SurveySession = {
   mode: "draw" | "edit";
@@ -82,6 +135,8 @@ let {
   view,
   fallbackReference,
   selectedSurveyRegion,
+  blockedReason = null,
+  readOnly = false,
   onSelectHome,
   onSelectMissionItem,
   onSelectSurveyRegion,
@@ -90,12 +145,22 @@ let {
   onDeleteSurveyRegion,
   onMoveHome,
   onMoveMissionItem,
+  onSelectFenceRegion,
+  onSelectFenceReturnPoint,
+  onAddFenceRegion,
+  onSetFenceReturnPoint,
+  onClearFenceReturnPoint,
+  onMoveFenceVertex,
+  onMoveFenceCircleCenter,
+  onUpdateFenceCircleRadius,
 }: Props = $props();
 
 let surfaceElement = $state<HTMLDivElement | null>(null);
 let activeMarkerDrag = $state<ActiveMarkerDrag | null>(null);
 let activeSurveyHandleDrag = $state<ActiveSurveyHandleDrag | null>(null);
+let activeFenceDrag = $state<ActiveFenceDrag | null>(null);
 let surveySession = $state<SurveySession | null>(null);
+let fencePlacementMode = $state<FenceRegionType | "return-point" | null>(null);
 let localMessage = $state<LocalMapMessage | null>(null);
 let lastUsableViewport = $state<MissionMapViewport | null>(null);
 
@@ -118,12 +183,19 @@ let activeSurveyPointCount = $derived.by(() => {
 });
 let diagnostics = $derived.by(() => {
   const warnings = [...view.warnings];
+  if (blockedReason && view.mode === "fence") {
+    warnings.push(blockedReason);
+  }
   if (localMessage?.tone === "warning") {
     warnings.push(localMessage.text);
   }
   return [...new Set(warnings)];
 });
 let drawModeText = $derived.by(() => {
+  if (view.mode === "fence") {
+    return fencePlacementMode ? `place:${fencePlacementMode}` : "idle";
+  }
+
   if (!surveySession) {
     return "idle";
   }
@@ -139,9 +211,26 @@ let dragStateText = $derived.by(() => {
     return `survey-handle:${activeSurveyHandleDrag.handleId}:${activeSurveyHandleDrag.updateCount}`;
   }
 
+  if (activeFenceDrag) {
+    return `fence-${activeFenceDrag.kind}:${activeFenceDrag.updateCount}`;
+  }
+
   return localMessage?.text ?? "idle";
 });
 let selectionText = $derived.by(() => {
+  if (view.mode === "fence") {
+    if (view.fenceSelection.kind === "return-point") {
+      return "fence return point";
+    }
+
+    if (view.fenceSelection.kind === "region") {
+      const handle = view.fenceRegionHandles.find((candidate) => candidate.regionUiId === view.fenceSelection.regionUiId);
+      return handle ? `fence ${handle.label}` : `fence ${view.fenceSelection.regionUiId}`;
+    }
+
+    return "fence none";
+  }
+
   if (view.selection.kind === "home") {
     return "home";
   }
@@ -153,16 +242,20 @@ let selectionText = $derived.by(() => {
   return view.selection.regionId ? `survey ${view.selection.regionId}` : "survey block";
 });
 let debugPayload = $derived({
+  mode: view.mode,
   state: view.state,
   selection: view.selection,
+  fenceSelection: view.fenceSelection,
   counts: view.counts,
   warnings: diagnostics,
-  dragTargetId: activeMarkerDrag?.markerId ?? activeSurveyHandleDrag?.handleId ?? null,
-  dragUpdateCount: activeMarkerDrag?.updateCount ?? activeSurveyHandleDrag?.updateCount ?? 0,
+  dragTargetId: activeMarkerDrag?.markerId ?? activeSurveyHandleDrag?.handleId ?? activeFenceDrag?.kind ?? null,
+  dragUpdateCount: activeMarkerDrag?.updateCount ?? activeSurveyHandleDrag?.updateCount ?? activeFenceDrag?.updateCount ?? 0,
   drawMode: surveySession?.mode ?? "idle",
   drawPatternType: surveySession?.patternType ?? null,
   drawRegionId: surveySession?.regionId ?? null,
   drawPointCount: activeSurveyPointCount,
+  fencePlacementMode,
+  blockedFenceReason: view.mode === "fence" ? blockedReason : null,
   selectedSurveyRegionId,
   selectedSurveyGenerationBlocked: selectedSurveyGenerationBlockedReason !== null,
   selectedSurveyGenerationMessage: selectedSurveyGenerationBlockedReason?.message ?? null,
@@ -176,23 +269,30 @@ $effect(() => {
 
 $effect(() => {
   publishMissionMapDebugSnapshot({
+    mode: view.mode,
     state: view.state,
     selection: view.selection,
+    fenceSelection: view.fenceSelection,
     counts: view.counts,
     warnings: diagnostics,
-    dragTargetId: activeMarkerDrag?.markerId ?? activeSurveyHandleDrag?.handleId ?? null,
-    dragUpdateCount: activeMarkerDrag?.updateCount ?? activeSurveyHandleDrag?.updateCount ?? 0,
+    dragTargetId: activeMarkerDrag?.markerId ?? activeSurveyHandleDrag?.handleId ?? activeFenceDrag?.kind ?? null,
+    dragUpdateCount: activeMarkerDrag?.updateCount ?? activeSurveyHandleDrag?.updateCount ?? activeFenceDrag?.updateCount ?? 0,
     missionGeoJson: view.missionGeoJson,
     surveyGeoJson: view.surveyGeoJson,
+    fenceGeoJson: view.fenceGeoJson,
     drawMode: surveySession?.mode ?? "idle",
     drawPatternType: surveySession?.patternType ?? null,
     drawRegionId: surveySession?.regionId ?? null,
     drawPointCount: activeSurveyPointCount,
+    fencePlacementMode,
+    blockedFenceReason: view.mode === "fence" ? blockedReason : null,
     selectedSurveyRegionId,
     selectedSurveyGenerationBlocked: selectedSurveyGenerationBlockedReason !== null,
     selectedSurveyGenerationMessage: selectedSurveyGenerationBlockedReason?.message ?? null,
     activeSurveyVertexCount: view.counts.surveyVertexHandles,
     surveyPreviewFeatureCount: view.counts.surveyPreviewFeatures,
+    activeFenceVertexCount: view.counts.fenceVertexHandles,
+    activeFenceRadiusCount: view.counts.fenceRadiusHandles,
   });
 });
 
@@ -237,6 +337,18 @@ function surveyHandleTestId(handle: MissionMapSurveyHandle): string {
 
 function surveyVertexHandleTestId(handle: MissionMapSurveyVertexHandle): string {
   return `${missionWorkspaceTestIds.mapVertexPrefix}-${handle.regionId}-${handle.geometryKind}-${handle.index}`;
+}
+
+function fenceRegionHandleTestId(handle: MissionMapFenceRegionHandle): string {
+  return `${missionWorkspaceTestIds.mapFenceRegionPrefix}-${handle.regionUiId}`;
+}
+
+function fenceVertexHandleTestId(handle: MissionMapFenceVertexHandle): string {
+  return `${missionWorkspaceTestIds.mapFenceVertexPrefix}-${handle.regionUiId}-${handle.index}`;
+}
+
+function fenceRadiusHandleTestId(handle: MissionMapFenceRadiusHandle): string {
+  return `${missionWorkspaceTestIds.mapFenceRadiusPrefix}-${handle.regionUiId}`;
 }
 
 function toPolylinePoints(points: MissionMapPoint[]): string {
@@ -331,6 +443,26 @@ function surveyLineWidth(feature: MissionMapLineFeature): number {
   }
 }
 
+function fencePolygonFill(feature: MissionMapPolygonFeature): string {
+  if (/exclusion/i.test(feature.kind)) {
+    return feature.selected ? "rgba(248, 113, 113, 0.2)" : "rgba(248, 113, 113, 0.12)";
+  }
+
+  return feature.selected ? "rgba(96, 165, 250, 0.18)" : "rgba(96, 165, 250, 0.1)";
+}
+
+function fencePolygonStroke(feature: MissionMapPolygonFeature): string {
+  if (/exclusion/i.test(feature.kind)) {
+    return feature.selected ? "rgba(254, 202, 202, 0.92)" : "rgba(248, 113, 113, 0.78)";
+  }
+
+  return feature.selected ? "rgba(191, 219, 254, 0.92)" : "rgba(96, 165, 250, 0.82)";
+}
+
+function fenceLineColor(feature: MissionMapLineFeature): string {
+  return /exclusion/i.test(feature.kind) ? "rgba(248, 113, 113, 0.88)" : "rgba(96, 165, 250, 0.88)";
+}
+
 function handleMarkerSelection(marker: MissionMapMarker) {
   localMessage = null;
 
@@ -347,6 +479,18 @@ function handleMarkerSelection(marker: MissionMapMarker) {
 function handleSurveySelection(regionId: string) {
   localMessage = null;
   onSelectSurveyRegion(regionId);
+}
+
+function handleFenceRegionSelection(uiId: number) {
+  localMessage = null;
+  const result = onSelectFenceRegion?.(uiId);
+  applyFenceMutationResult(result);
+}
+
+function handleFenceReturnPointSelection() {
+  localMessage = null;
+  const result = onSelectFenceReturnPoint?.();
+  applyFenceMutationResult(result);
 }
 
 function startSurveyDraw(patternType: SurveyPatternType) {
@@ -448,6 +592,36 @@ function cancelSurveySession() {
   activeSurveyHandleDrag = null;
 }
 
+function startFencePlacement(mode: FenceRegionType | "return-point") {
+  if (readOnly) {
+    localMessage = {
+      tone: "warning",
+      text: "Fence editing is read-only in the current planner attachment state.",
+    };
+    return;
+  }
+
+  fencePlacementMode = mode;
+  localMessage = {
+    tone: "info",
+    text: mode === "return-point"
+      ? "Placing a fence return point. Click the planner map to set or move it."
+      : `Placing a ${mode.replace(/_/g, " ")} at the clicked map position.`,
+  };
+}
+
+function cancelFencePlacement() {
+  if (!fencePlacementMode) {
+    return;
+  }
+
+  fencePlacementMode = null;
+  localMessage = {
+    tone: "warning",
+    text: "Cancelled fence placement and kept the current fence geometry unchanged.",
+  };
+}
+
 function startMarkerDrag(event: PointerEvent, marker: MissionMapMarker) {
   handleMarkerSelection(marker);
 
@@ -507,6 +681,120 @@ function startSurveyHandleDrag(event: PointerEvent, handle: MissionMapSurveyVert
   localMessage = null;
 }
 
+function startFenceVertexDrag(event: PointerEvent, handle: MissionMapFenceVertexHandle) {
+  handleFenceRegionSelection(handle.regionUiId);
+
+  if (readOnly) {
+    localMessage = {
+      tone: "warning",
+      text: "Fence editing is read-only in the current planner attachment state.",
+    };
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  activeFenceDrag = {
+    kind: "vertex",
+    handleId: handle.id,
+    regionUiId: handle.regionUiId,
+    index: handle.index,
+    startLatitude_deg: handle.latitude_deg,
+    startLongitude_deg: handle.longitude_deg,
+    updateCount: 0,
+  };
+  localMessage = null;
+}
+
+function startFenceRegionDrag(event: PointerEvent, handle: MissionMapFenceRegionHandle) {
+  handleFenceRegionSelection(handle.regionUiId);
+
+  if (readOnly) {
+    localMessage = {
+      tone: "warning",
+      text: "Fence editing is read-only in the current planner attachment state.",
+    };
+    return;
+  }
+
+  if (!handle.draggable) {
+    localMessage = {
+      tone: "warning",
+      text: "Select a circle fence region before dragging its center handle on the planner map.",
+    };
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  activeFenceDrag = {
+    kind: "region",
+    handleId: handle.id,
+    regionUiId: handle.regionUiId,
+    startLatitude_deg: handle.latitude_deg,
+    startLongitude_deg: handle.longitude_deg,
+    updateCount: 0,
+  };
+  localMessage = null;
+}
+
+function startFenceRadiusDrag(event: PointerEvent, handle: MissionMapFenceRadiusHandle) {
+  handleFenceRegionSelection(handle.regionUiId);
+
+  if (readOnly) {
+    localMessage = {
+      tone: "warning",
+      text: "Fence editing is read-only in the current planner attachment state.",
+    };
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  activeFenceDrag = {
+    kind: "radius",
+    handleId: handle.id,
+    regionUiId: handle.regionUiId,
+    startRadius_m: handle.radius_m,
+    updateCount: 0,
+  };
+  localMessage = null;
+}
+
+function startFenceReturnPointDrag(event: PointerEvent) {
+  handleFenceReturnPointSelection();
+
+  if (!view.fenceReturnPoint) {
+    localMessage = {
+      tone: "warning",
+      text: "Fence return point is not available on the active planner map.",
+    };
+    return;
+  }
+
+  if (readOnly) {
+    localMessage = {
+      tone: "warning",
+      text: "Fence editing is read-only in the current planner attachment state.",
+    };
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  activeFenceDrag = {
+    kind: "return-point",
+    startLatitude_deg: view.fenceReturnPoint.latitude_deg,
+    startLongitude_deg: view.fenceReturnPoint.longitude_deg,
+    updateCount: 0,
+  };
+  localMessage = null;
+}
+
 function cancelActiveMarkerDrag(message: string, restorePosition: boolean) {
   const currentDrag = activeMarkerDrag;
   if (!currentDrag) {
@@ -540,9 +828,70 @@ function cancelActiveSurveyHandleDrag(message: string) {
   };
 }
 
+function cancelActiveFenceDrag(message: string, restorePosition: boolean) {
+  const currentDrag = activeFenceDrag;
+  if (!currentDrag) {
+    localMessage = {
+      tone: "warning",
+      text: message,
+    };
+    return;
+  }
+
+  if (restorePosition) {
+    switch (currentDrag.kind) {
+      case "vertex":
+        onMoveFenceVertex?.(
+          currentDrag.regionUiId,
+          currentDrag.index,
+          currentDrag.startLatitude_deg,
+          currentDrag.startLongitude_deg,
+        );
+        break;
+      case "region":
+        onMoveFenceCircleCenter?.(
+          currentDrag.regionUiId,
+          currentDrag.startLatitude_deg,
+          currentDrag.startLongitude_deg,
+        );
+        break;
+      case "radius":
+        onUpdateFenceCircleRadius?.(currentDrag.regionUiId, currentDrag.startRadius_m);
+        break;
+      case "return-point":
+        onSetFenceReturnPoint?.(currentDrag.startLatitude_deg, currentDrag.startLongitude_deg);
+        break;
+    }
+  }
+
+  activeFenceDrag = null;
+  localMessage = {
+    tone: "warning",
+    text: message,
+  };
+}
+
 function applyMoveResult(result: MissionPlannerMapMoveResult): boolean {
   if (result.status === "rejected") {
     cancelActiveMarkerDrag(result.message, true);
+    return false;
+  }
+
+  localMessage = null;
+  return true;
+}
+
+function applyFenceMutationResult(result: unknown): boolean {
+  if (!result || typeof result !== "object" || !("status" in result)) {
+    return true;
+  }
+
+  if ((result as MissionPlannerFenceMutationResult).status === "rejected") {
+    const rejected = result as Extract<MissionPlannerFenceMutationResult, { status: "rejected" }>;
+    localMessage = {
+      tone: "warning",
+      text: rejected.message,
+    };
     return false;
   }
 
@@ -570,7 +919,7 @@ function projectedPointFromPointer(event: Pick<MouseEvent, "clientX" | "clientY"
 function appendSurveyPoint(point: MissionMapPoint) {
   const currentSession = surveySession;
   const viewport = interactiveViewport;
-  if (!currentSession || !viewport || activeMarkerDrag || activeSurveyHandleDrag) {
+  if (!currentSession || !viewport || activeMarkerDrag || activeSurveyHandleDrag || activeFenceDrag) {
     return;
   }
 
@@ -608,7 +957,60 @@ function appendSurveyPointFromSurface(event: MouseEvent) {
   appendSurveyPoint(point);
 }
 
+function placeFenceFeature(point: MissionMapPoint) {
+  const viewport = interactiveViewport;
+  const placementMode = fencePlacementMode;
+  if (!viewport || !placementMode || activeMarkerDrag || activeSurveyHandleDrag || activeFenceDrag) {
+    return;
+  }
+
+  const { latitude_deg, longitude_deg } = unprojectMissionMapPoint(viewport, point);
+  const result = placementMode === "return-point"
+    ? onSetFenceReturnPoint?.(latitude_deg, longitude_deg)
+    : onAddFenceRegion?.(placementMode, latitude_deg, longitude_deg);
+
+  if (!applyFenceMutationResult(result)) {
+    return;
+  }
+
+  fencePlacementMode = null;
+  localMessage = {
+    tone: "info",
+    text: `Placed ${placementMode === "return-point" ? "the fence return point" : placementMode.replace(/_/g, " ")} on the planner map.`,
+  };
+}
+
+function placeFenceFeatureFromSurface(event: MouseEvent) {
+  const point = projectedPointFromPointer(event);
+  if (!point) {
+    localMessage = {
+      tone: "warning",
+      text: "Ignored the fence placement click because the planner map surface has no usable bounds yet.",
+    };
+    return;
+  }
+
+  placeFenceFeature(point);
+}
+
 function handleSurfaceKeydown(event: KeyboardEvent) {
+  if (view.mode === "fence") {
+    if (!fencePlacementMode || !interactiveViewport) {
+      return;
+    }
+
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    placeFenceFeature({
+      x: interactiveViewport.viewBoxSize / 2,
+      y: interactiveViewport.viewBoxSize / 2,
+    });
+    return;
+  }
+
   if (!surveySession || !interactiveViewport) {
     return;
   }
@@ -658,7 +1060,54 @@ function handlePointerMove(event: PointerEvent) {
     return;
   }
 
-  if (!activeSurveyHandleDrag) {
+  if (activeSurveyHandleDrag) {
+    const nextPoint = projectedPointFromPointer(event);
+    if (!nextPoint) {
+      return;
+    }
+
+    const resolution = resolveMissionMapSurveyHandleDrag(view, activeSurveyHandleDrag.handleId, nextPoint);
+    if (resolution.status === "rejected") {
+      cancelActiveSurveyHandleDrag(resolution.message);
+      return;
+    }
+
+    let applied = false;
+    onUpdateSurveyRegion(activeSurveyHandleDrag.regionId, (current) => {
+      const currentGeometryKind = surveyGeometryKind(current);
+      if (currentGeometryKind !== activeSurveyHandleDrag.geometryKind) {
+        return current;
+      }
+
+      const points = [...surveyGeometryPoints(current)];
+      const point = points[activeSurveyHandleDrag.index];
+      if (!point) {
+        return current;
+      }
+
+      points[activeSurveyHandleDrag.index] = {
+        latitude_deg: resolution.latitude_deg,
+        longitude_deg: resolution.longitude_deg,
+      };
+      applied = true;
+      return setSurveyGeometryPoints(current, points);
+    });
+
+    if (!applied) {
+      cancelActiveSurveyHandleDrag("Ignored a stale survey-handle drag because that vertex no longer exists.");
+      return;
+    }
+
+    onSelectSurveyRegion(activeSurveyHandleDrag.regionId);
+    activeSurveyHandleDrag = {
+      ...activeSurveyHandleDrag,
+      updateCount: activeSurveyHandleDrag.updateCount + 1,
+    };
+    localMessage = null;
+    return;
+  }
+
+  if (!activeFenceDrag) {
     return;
   }
 
@@ -667,44 +1116,91 @@ function handlePointerMove(event: PointerEvent) {
     return;
   }
 
-  const resolution = resolveMissionMapSurveyHandleDrag(view, activeSurveyHandleDrag.handleId, nextPoint);
-  if (resolution.status === "rejected") {
-    cancelActiveSurveyHandleDrag(resolution.message);
-    return;
-  }
-
-  let applied = false;
-  onUpdateSurveyRegion(activeSurveyHandleDrag.regionId, (current) => {
-    const currentGeometryKind = surveyGeometryKind(current);
-    if (currentGeometryKind !== activeSurveyHandleDrag.geometryKind) {
-      return current;
+  if (activeFenceDrag.kind === "vertex") {
+    const resolution = resolveMissionMapFenceVertexHandleDrag(view, activeFenceDrag.handleId, nextPoint);
+    if (resolution.status === "rejected") {
+      cancelActiveFenceDrag(resolution.message, true);
+      return;
     }
 
-    const points = [...surveyGeometryPoints(current)];
-    const point = points[activeSurveyHandleDrag.index];
-    if (!point) {
-      return current;
+    const moved = onMoveFenceVertex?.(
+      activeFenceDrag.regionUiId,
+      activeFenceDrag.index,
+      resolution.latitude_deg,
+      resolution.longitude_deg,
+    );
+    if (!applyFenceMutationResult(moved)) {
+      cancelActiveFenceDrag((moved as Extract<MissionPlannerFenceMutationResult, { status: "rejected" }>)?.message ?? "Fence vertex drag failed.", true);
+      return;
     }
 
-    points[activeSurveyHandleDrag.index] = {
-      latitude_deg: resolution.latitude_deg,
-      longitude_deg: resolution.longitude_deg,
+    activeFenceDrag = {
+      ...activeFenceDrag,
+      updateCount: activeFenceDrag.updateCount + 1,
     };
-    applied = true;
-    return setSurveyGeometryPoints(current, points);
-  });
-
-  if (!applied) {
-    cancelActiveSurveyHandleDrag("Ignored a stale survey-handle drag because that vertex no longer exists.");
     return;
   }
 
-  onSelectSurveyRegion(activeSurveyHandleDrag.regionId);
-  activeSurveyHandleDrag = {
-    ...activeSurveyHandleDrag,
-    updateCount: activeSurveyHandleDrag.updateCount + 1,
+  if (activeFenceDrag.kind === "region") {
+    const resolution = resolveMissionMapFenceRegionHandleDrag(view, activeFenceDrag.handleId, nextPoint);
+    if (resolution.status === "rejected") {
+      cancelActiveFenceDrag(resolution.message, true);
+      return;
+    }
+
+    const moved = onMoveFenceCircleCenter?.(
+      activeFenceDrag.regionUiId,
+      resolution.latitude_deg,
+      resolution.longitude_deg,
+    );
+    if (!applyFenceMutationResult(moved)) {
+      cancelActiveFenceDrag((moved as Extract<MissionPlannerFenceMutationResult, { status: "rejected" }>)?.message ?? "Fence region drag failed.", true);
+      return;
+    }
+
+    activeFenceDrag = {
+      ...activeFenceDrag,
+      updateCount: activeFenceDrag.updateCount + 1,
+    };
+    return;
+  }
+
+  if (activeFenceDrag.kind === "radius") {
+    const resolution = resolveMissionMapFenceRadiusHandleDrag(view, activeFenceDrag.handleId, nextPoint);
+    if (resolution.status === "rejected") {
+      cancelActiveFenceDrag(resolution.message, true);
+      return;
+    }
+
+    const moved = onUpdateFenceCircleRadius?.(activeFenceDrag.regionUiId, resolution.radius_m);
+    if (!applyFenceMutationResult(moved)) {
+      cancelActiveFenceDrag((moved as Extract<MissionPlannerFenceMutationResult, { status: "rejected" }>)?.message ?? "Fence radius drag failed.", true);
+      return;
+    }
+
+    activeFenceDrag = {
+      ...activeFenceDrag,
+      updateCount: activeFenceDrag.updateCount + 1,
+    };
+    return;
+  }
+
+  const resolution = resolveMissionMapFenceReturnPointDrag(view, nextPoint);
+  if (resolution.status === "rejected") {
+    cancelActiveFenceDrag(resolution.message, true);
+    return;
+  }
+
+  const moved = onSetFenceReturnPoint?.(resolution.latitude_deg, resolution.longitude_deg);
+  if (!applyFenceMutationResult(moved)) {
+    cancelActiveFenceDrag((moved as Extract<MissionPlannerFenceMutationResult, { status: "rejected" }>)?.message ?? "Fence return-point drag failed.", true);
+    return;
+  }
+
+  activeFenceDrag = {
+    ...activeFenceDrag,
+    updateCount: activeFenceDrag.updateCount + 1,
   };
-  localMessage = null;
 }
 
 function handlePointerUp() {
@@ -714,6 +1210,10 @@ function handlePointerUp() {
 
   if (activeSurveyHandleDrag) {
     activeSurveyHandleDrag = null;
+  }
+
+  if (activeFenceDrag) {
+    activeFenceDrag = null;
   }
 }
 
@@ -725,6 +1225,11 @@ function handlePointerCancel() {
 
   if (activeSurveyHandleDrag) {
     cancelActiveSurveyHandleDrag("Survey handle drag cancelled. The current geometry stayed at the last valid point.");
+    return;
+  }
+
+  if (activeFenceDrag) {
+    cancelActiveFenceDrag("Fence drag cancelled. Restored the previous fence geometry.", true);
   }
 }
 
@@ -736,6 +1241,18 @@ function handleKeydown(event: KeyboardEvent) {
   if (activeMarkerDrag) {
     event.preventDefault();
     cancelActiveMarkerDrag("Map drag cancelled with Escape. Restored the previous marker position.", true);
+    return;
+  }
+
+  if (activeFenceDrag) {
+    event.preventDefault();
+    cancelActiveFenceDrag("Fence drag cancelled with Escape. Restored the previous fence geometry.", true);
+    return;
+  }
+
+  if (view.mode === "fence" && fencePlacementMode) {
+    event.preventDefault();
+    cancelFencePlacement();
     return;
   }
 
@@ -752,9 +1269,11 @@ function handleKeydown(event: KeyboardEvent) {
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planner map</p>
-      <h3 class="mt-1 text-sm font-semibold text-text-primary">Shared mission geometry</h3>
+      <h3 class="mt-1 text-sm font-semibold text-text-primary">{view.mode === "fence" ? "Fence-first geometry editor" : "Shared mission geometry"}</h3>
       <p class="mt-1 text-xs text-text-secondary">
-        The map, list, and inspector all read from the same mission draft so survey drawing, vertex edits, and preview overlays stay truthful.
+        {view.mode === "fence"
+          ? "Fence regions, return-point truth, and shared Home context stay on one projected map surface so list, inspector, and warning navigation all point at the same geometry."
+          : "The map, list, and inspector all read from the same mission draft so survey drawing, vertex edits, and preview overlays stay truthful."}
       </p>
     </div>
 
@@ -781,62 +1300,130 @@ function handleKeydown(event: KeyboardEvent) {
     </div>
   </div>
 
-  <div class="mt-4 flex flex-wrap gap-2">
-    <button
-      class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.mapDrawStartGrid}
-      disabled={surveySession !== null}
-      onclick={() => startSurveyDraw("grid")}
-      type="button"
-    >
-      Draw grid
-    </button>
-    <button
-      class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.mapDrawStartCorridor}
-      disabled={surveySession !== null}
-      onclick={() => startSurveyDraw("corridor")}
-      type="button"
-    >
-      Draw corridor
-    </button>
-    <button
-      class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.mapDrawStartStructure}
-      disabled={surveySession !== null}
-      onclick={() => startSurveyDraw("structure")}
-      type="button"
-    >
-      Draw structure
-    </button>
-    <button
-      class="rounded-full border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.mapDrawEdit}
-      disabled={surveySession !== null || !selectedSurveyRegion}
-      onclick={startSurveyEdit}
-      type="button"
-    >
-      Edit selected region
-    </button>
-    <button
-      class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.mapDrawFinish}
-      disabled={surveySession === null}
-      onclick={finishSurveySession}
-      type="button"
-    >
-      Finish
-    </button>
-    <button
-      class="rounded-full border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.mapDrawCancel}
-      disabled={surveySession === null}
-      onclick={cancelSurveySession}
-      type="button"
-    >
-      Cancel
-    </button>
-  </div>
+  {#if view.mode === "mission"}
+    <div class="mt-4 flex flex-wrap gap-2">
+      <button
+        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        data-testid={missionWorkspaceTestIds.mapDrawStartGrid}
+        disabled={surveySession !== null}
+        onclick={() => startSurveyDraw("grid")}
+        type="button"
+      >
+        Draw grid
+      </button>
+      <button
+        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        data-testid={missionWorkspaceTestIds.mapDrawStartCorridor}
+        disabled={surveySession !== null}
+        onclick={() => startSurveyDraw("corridor")}
+        type="button"
+      >
+        Draw corridor
+      </button>
+      <button
+        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        data-testid={missionWorkspaceTestIds.mapDrawStartStructure}
+        disabled={surveySession !== null}
+        onclick={() => startSurveyDraw("structure")}
+        type="button"
+      >
+        Draw structure
+      </button>
+      <button
+        class="rounded-full border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        data-testid={missionWorkspaceTestIds.mapDrawEdit}
+        disabled={surveySession !== null || !selectedSurveyRegion}
+        onclick={startSurveyEdit}
+        type="button"
+      >
+        Edit selected region
+      </button>
+      <button
+        class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+        data-testid={missionWorkspaceTestIds.mapDrawFinish}
+        disabled={surveySession === null}
+        onclick={finishSurveySession}
+        type="button"
+      >
+        Finish
+      </button>
+      <button
+        class="rounded-full border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        data-testid={missionWorkspaceTestIds.mapDrawCancel}
+        disabled={surveySession === null}
+        onclick={cancelSurveySession}
+        type="button"
+      >
+        Cancel
+      </button>
+    </div>
+  {:else if view.mode === "fence"}
+    <div class="mt-4 flex flex-wrap gap-2">
+      <button
+        class="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        data-testid={missionWorkspaceTestIds.mapFencePlaceInclusionPolygon}
+        disabled={readOnly}
+        onclick={() => startFencePlacement("inclusion_polygon")}
+        type="button"
+      >
+        Place inclusion polygon
+      </button>
+      <button
+        class="rounded-full border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        data-testid={missionWorkspaceTestIds.mapFencePlaceExclusionPolygon}
+        disabled={readOnly}
+        onclick={() => startFencePlacement("exclusion_polygon")}
+        type="button"
+      >
+        Place exclusion polygon
+      </button>
+      <button
+        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        data-testid={missionWorkspaceTestIds.mapFencePlaceInclusionCircle}
+        disabled={readOnly}
+        onclick={() => startFencePlacement("inclusion_circle")}
+        type="button"
+      >
+        Place inclusion circle
+      </button>
+      <button
+        class="rounded-full border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        data-testid={missionWorkspaceTestIds.mapFencePlaceExclusionCircle}
+        disabled={readOnly}
+        onclick={() => startFencePlacement("exclusion_circle")}
+        type="button"
+      >
+        Place exclusion circle
+      </button>
+      <button
+        class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+        data-testid={missionWorkspaceTestIds.mapFencePlaceReturnPoint}
+        disabled={readOnly}
+        onclick={() => startFencePlacement("return-point")}
+        type="button"
+      >
+        Place return point
+      </button>
+      <button
+        class="rounded-full border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        data-testid={missionWorkspaceTestIds.mapFenceClearReturnPoint}
+        disabled={readOnly || view.fenceReturnPoint === null}
+        onclick={() => applyFenceMutationResult(onClearFenceReturnPoint?.())}
+        type="button"
+      >
+        Clear return point
+      </button>
+      <button
+        class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+        data-testid={missionWorkspaceTestIds.mapFencePlacementCancel}
+        disabled={fencePlacementMode === null}
+        onclick={cancelFencePlacement}
+        type="button"
+      >
+        Cancel placement
+      </button>
+    </div>
+  {/if}
 
   {#if localMessage && localMessage.tone === "info"}
     <div class="mt-3 rounded-2xl border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-text-primary">
@@ -857,18 +1444,33 @@ function handleKeydown(event: KeyboardEvent) {
       <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Survey features</p>
       <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapSurveyCount}>{view.counts.surveyFeatures}</p>
     </div>
-    <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-      <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Preview features</p>
-      <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapPreviewCount}>{view.counts.surveyPreviewFeatures}</p>
-    </div>
-    <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-      <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Survey handles</p>
-      <p class="mt-1 text-sm font-semibold text-text-primary">{view.counts.surveyHandles}</p>
-    </div>
-    <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-      <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Editable vertices</p>
-      <p class="mt-1 text-sm font-semibold text-text-primary">{view.counts.surveyVertexHandles}</p>
-    </div>
+    {#if view.mode === "fence"}
+      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Fence features</p>
+        <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapFenceCount}>{view.counts.fenceFeatures}</p>
+      </div>
+      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Fence vertices</p>
+        <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapFenceVertexCount}>{view.counts.fenceVertexHandles}</p>
+      </div>
+      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Return point</p>
+        <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapFenceReturnPointState}>{view.counts.fenceHasReturnPoint ? "set" : "none"}</p>
+      </div>
+    {:else}
+      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Preview features</p>
+        <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapPreviewCount}>{view.counts.surveyPreviewFeatures}</p>
+      </div>
+      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Survey handles</p>
+        <p class="mt-1 text-sm font-semibold text-text-primary">{view.counts.surveyHandles}</p>
+      </div>
+      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Editable vertices</p>
+        <p class="mt-1 text-sm font-semibold text-text-primary">{view.counts.surveyVertexHandles}</p>
+      </div>
+    {/if}
   </div>
 
   {#if interactiveViewport}
@@ -902,6 +1504,28 @@ function handleKeydown(event: KeyboardEvent) {
               stroke-linecap="round"
               stroke-linejoin="round"
               stroke-width={surveyLineWidth(line)}
+            />
+          {/each}
+
+          {#each view.fencePolygons as polygon (polygon.id)}
+            <polygon
+              fill={fencePolygonFill(polygon)}
+              points={toPolygonPoints(polygon)}
+              stroke={fencePolygonStroke(polygon)}
+              stroke-dasharray={/inclusion/i.test(polygon.kind) ? "8 6" : undefined}
+              stroke-width={polygon.selected ? 4 : 2}
+            />
+          {/each}
+
+          {#each view.fenceLines as line (line.id)}
+            <polyline
+              fill="none"
+              points={toPolylinePoints(line.points)}
+              stroke={fenceLineColor(line)}
+              stroke-dasharray={/inclusion/i.test(line.kind) ? "8 6" : undefined}
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width={line.selected ? 4 : 2.5}
             />
           {/each}
 
@@ -940,12 +1564,12 @@ function handleKeydown(event: KeyboardEvent) {
           {/each}
         </svg>
 
-        {#if surveySession}
+        {#if surveySession || fencePlacementMode}
           <button
-            aria-label="Add survey point on planner map"
+            aria-label={view.mode === "fence" ? "Place fence feature on planner map" : "Add survey point on planner map"}
             class="mission-map-draw-surface"
-            data-testid={missionWorkspaceTestIds.mapDrawSurface}
-            onclick={appendSurveyPointFromSurface}
+            data-testid={view.mode === "fence" ? missionWorkspaceTestIds.mapFencePlacementSurface : missionWorkspaceTestIds.mapDrawSurface}
+            onclick={view.mode === "fence" ? placeFenceFeatureFromSurface : appendSurveyPointFromSurface}
             onkeydown={handleSurfaceKeydown}
             type="button"
           ></button>
@@ -956,14 +1580,18 @@ function handleKeydown(event: KeyboardEvent) {
             class="pointer-events-none absolute inset-x-6 bottom-6 rounded-2xl border border-border/80 bg-bg-primary/88 px-4 py-3 text-sm text-text-secondary"
             data-testid={missionWorkspaceTestIds.mapEmpty}
           >
-            Blank planner surface ready. Draw a grid, corridor, or structure survey here, or add Home and manual mission items to project existing geometry.
+            {view.mode === "fence"
+              ? "Blank fence surface ready. Place an inclusion or exclusion shape, then refine vertices, circle radius, and the return point directly on the planner map."
+              : "Blank planner surface ready. Draw a grid, corridor, or structure survey here, or add Home and manual mission items to project existing geometry."}
           </div>
         {:else if view.state === "degraded"}
           <div
             class="pointer-events-none absolute inset-x-6 bottom-6 rounded-2xl border border-warning/40 bg-bg-primary/88 px-4 py-3 text-sm text-warning"
             data-testid={missionWorkspaceTestIds.mapUnavailable}
           >
-            Some survey geometry degraded, but the planner surface stayed interactive so you can finish drawing, recover selection, or edit the region safely.
+            {view.mode === "fence"
+              ? "Some fence geometry degraded, but the planner surface stayed interactive so you can recover selection, fix malformed regions, or keep editing the return point safely."
+              : "Some survey geometry degraded, but the planner surface stayed interactive so you can finish drawing, recover selection, or edit the region safely."}
           </div>
         {/if}
 
@@ -997,6 +1625,70 @@ function handleKeydown(event: KeyboardEvent) {
             {handle.index + 1}
           </button>
         {/each}
+
+        {#each view.fenceRegionHandles as handle (handle.id)}
+          <button
+            class={`mission-map-fence-handle ${handle.selected ? "is-selected" : ""} ${handle.draggable ? "is-draggable" : ""} ${handle.inclusion ? "is-inclusion" : "is-exclusion"}`}
+            data-testid={fenceRegionHandleTestId(handle)}
+            onclick={(event) => {
+              event.stopPropagation();
+              handleFenceRegionSelection(handle.regionUiId);
+            }}
+            onpointerdown={(event) => startFenceRegionDrag(event, handle)}
+            style={positionStyle(handle.point)}
+            type="button"
+          >
+            {handle.label}
+          </button>
+        {/each}
+
+        {#each view.fenceVertexHandles as handle (handle.id)}
+          <button
+            class={`mission-map-fence-vertex ${handle.selected ? "is-selected" : ""}`}
+            data-testid={fenceVertexHandleTestId(handle)}
+            onclick={(event) => {
+              event.stopPropagation();
+              handleFenceRegionSelection(handle.regionUiId);
+            }}
+            onpointerdown={(event) => startFenceVertexDrag(event, handle)}
+            style={positionStyle(handle.point)}
+            type="button"
+          >
+            {handle.index + 1}
+          </button>
+        {/each}
+
+        {#each view.fenceRadiusHandles as handle (handle.id)}
+          <button
+            class={`mission-map-fence-radius ${handle.selected ? "is-selected" : ""}`}
+            data-testid={fenceRadiusHandleTestId(handle)}
+            onclick={(event) => {
+              event.stopPropagation();
+              handleFenceRegionSelection(handle.regionUiId);
+            }}
+            onpointerdown={(event) => startFenceRadiusDrag(event, handle)}
+            style={positionStyle(handle.point)}
+            type="button"
+          >
+            R
+          </button>
+        {/each}
+
+        {#if view.fenceReturnPoint}
+          <button
+            class={`mission-map-fence-return ${view.fenceReturnPoint.selected ? "is-selected" : ""}`}
+            data-testid={missionWorkspaceTestIds.mapFenceReturnPointHandle}
+            onclick={(event) => {
+              event.stopPropagation();
+              handleFenceReturnPointSelection();
+            }}
+            onpointerdown={startFenceReturnPointDrag}
+            style={positionStyle(view.fenceReturnPoint.point)}
+            type="button"
+          >
+            R
+          </button>
+        {/if}
 
         {#each view.markers as marker (marker.id)}
           <button
@@ -1049,7 +1741,11 @@ function handleKeydown(event: KeyboardEvent) {
 
   .mission-map-marker,
   .mission-map-survey-handle,
-  .mission-map-vertex-handle {
+  .mission-map-vertex-handle,
+  .mission-map-fence-handle,
+  .mission-map-fence-vertex,
+  .mission-map-fence-radius,
+  .mission-map-fence-return {
     position: absolute;
     z-index: 2;
     transform: translate(-50%, -50%);
@@ -1123,5 +1819,58 @@ function handleKeydown(event: KeyboardEvent) {
 
   .mission-map-vertex-handle.is-draggable {
     cursor: grab;
+  }
+
+  .mission-map-fence-handle {
+    min-width: 2rem;
+    height: 2rem;
+    border: 1px solid rgba(96, 165, 250, 0.6);
+    background: rgba(30, 41, 59, 0.92);
+    color: rgb(219, 234, 254);
+    padding: 0 0.45rem;
+    cursor: pointer;
+  }
+
+  .mission-map-fence-handle.is-inclusion {
+    border-color: rgba(96, 165, 250, 0.72);
+    color: rgb(191, 219, 254);
+  }
+
+  .mission-map-fence-handle.is-exclusion {
+    border-color: rgba(248, 113, 113, 0.72);
+    color: rgb(254, 202, 202);
+  }
+
+  .mission-map-fence-handle.is-selected {
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+
+  .mission-map-fence-handle.is-draggable {
+    cursor: grab;
+  }
+
+  .mission-map-fence-vertex,
+  .mission-map-fence-radius,
+  .mission-map-fence-return {
+    width: 1.55rem;
+    height: 1.55rem;
+    border: 1px solid rgba(191, 219, 254, 0.82);
+    background: rgba(15, 23, 42, 0.94);
+    color: rgb(219, 234, 254);
+    cursor: grab;
+  }
+
+  .mission-map-fence-vertex.is-selected,
+  .mission-map-fence-radius.is-selected,
+  .mission-map-fence-return.is-selected {
+    border-color: rgba(250, 204, 21, 0.92);
+    color: rgb(254, 240, 138);
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+
+  .mission-map-fence-return {
+    border-color: rgba(52, 211, 153, 0.82);
+    color: rgb(167, 243, 208);
+    background: rgba(6, 78, 59, 0.92);
   }
 </style>

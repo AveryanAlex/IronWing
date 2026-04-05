@@ -2,8 +2,10 @@ import type { MissionMapView } from "../../lib/mission-map-view";
 import type { SurveyPatternType } from "../../lib/survey-region";
 
 export type MissionMapDebugSnapshot = {
+  mode: MissionMapView["mode"];
   state: MissionMapView["state"];
   selection: MissionMapView["selection"];
+  fenceSelection: MissionMapView["fenceSelection"];
   counts: MissionMapView["counts"];
   warnings: string[];
   dragTargetId: string | null;
@@ -12,13 +14,18 @@ export type MissionMapDebugSnapshot = {
   drawPatternType: SurveyPatternType | null;
   drawRegionId: string | null;
   drawPointCount: number;
+  fencePlacementMode: "inclusion_polygon" | "exclusion_polygon" | "inclusion_circle" | "exclusion_circle" | "return-point" | null;
+  blockedFenceReason: string | null;
   selectedSurveyRegionId: string | null;
   selectedSurveyGenerationBlocked: boolean;
   selectedSurveyGenerationMessage: string | null;
   activeSurveyVertexCount: number;
   surveyPreviewFeatureCount: number;
+  activeFenceVertexCount: number;
+  activeFenceRadiusCount: number;
   missionGeoJson: MissionMapView["missionGeoJson"];
   surveyGeoJson: MissionMapView["surveyGeoJson"];
+  fenceGeoJson: MissionMapView["fenceGeoJson"];
   updateCount: number;
 };
 
