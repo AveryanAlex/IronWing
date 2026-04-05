@@ -13,6 +13,7 @@ import {
   isTypedDraftDirty,
   moveTypedDown,
   moveTypedUp,
+  moveTypedWaypointOnMap,
   replaceTypedDraftFromDownload,
   selectTypedDraftIndex,
   setTypedDraftScope,
@@ -49,6 +50,7 @@ import {
   createMissionPlannerViewStore,
   type MissionPlannerViewStore,
 } from "./mission-planner-view";
+import { parseLatitude, parseLongitude } from "../mission-coordinates";
 import type { SessionStore, SessionStorePhase, SessionStoreState } from "./session";
 import { session } from "./session";
 
@@ -74,6 +76,27 @@ export type MissionPlannerActionState = {
   canCancel: boolean;
   scopeKey: string | null;
 };
+
+export type MissionPlannerMapMoveRejectReason =
+  | "invalid-coordinate"
+  | "home-missing"
+  | "item-not-found"
+  | "item-read-only"
+  | "item-without-position";
+
+export type MissionPlannerMapMoveResult =
+  | {
+    status: "applied";
+    target: "home" | "mission-item";
+    uiId: number | null;
+    latitude_deg: number;
+    longitude_deg: number;
+  }
+  | {
+    status: "rejected";
+    reason: MissionPlannerMapMoveRejectReason;
+    message: string;
+  };
 
 export type MissionPlannerWorkspace = {
   mission: MissionPlan;
@@ -396,6 +419,16 @@ export function createMissionPlannerStore(
     );
   }
 
+  function selectMissionItemByUiId(uiId: number): boolean {
+    const missionItem = get(store).draftState.active.mission.draftItems.find((item) => item.uiId === uiId);
+    if (!missionItem) {
+      return false;
+    }
+
+    selectMissionItem(missionItem.index);
+    return true;
+  }
+
   function selectSurveyRegion(regionId: string) {
     store.update((state) => withResolvedPhase({
       ...state,
@@ -433,6 +466,80 @@ export function createMissionPlannerStore(
 
   function updateMissionItemAltitude(index: number, altitudeM: number) {
     updateMissionDraft((draftState) => updateTypedAltitude(draftState, "mission", index, altitudeM));
+  }
+
+  function moveHomeOnMap(latitudeDeg: number, longitudeDeg: number): MissionPlannerMapMoveResult {
+    if (!isCoordinatePairValid(latitudeDeg, longitudeDeg)) {
+      return rejectedMapMove("invalid-coordinate", "Ignored the Home drag because the map emitted invalid coordinates.");
+    }
+
+    const currentHome = get(store).home;
+    if (!currentHome) {
+      return rejectedMapMove("home-missing", "Ignored the Home drag because this draft does not have a Home marker yet.");
+    }
+
+    store.update((state) => withResolvedPhase({
+      ...state,
+      home: {
+        latitude_deg: latitudeDeg,
+        longitude_deg: longitudeDeg,
+        altitude_m: state.home?.altitude_m ?? currentHome.altitude_m,
+      },
+      selection: { kind: "home" },
+      validationIssues: [],
+      lastError: null,
+    }));
+
+    return {
+      status: "applied",
+      target: "home",
+      uiId: null,
+      latitude_deg: latitudeDeg,
+      longitude_deg: longitudeDeg,
+    };
+  }
+
+  function moveMissionItemOnMapByUiId(
+    uiId: number,
+    latitudeDeg: number,
+    longitudeDeg: number,
+  ): MissionPlannerMapMoveResult {
+    if (!isCoordinatePairValid(latitudeDeg, longitudeDeg)) {
+      return rejectedMapMove("invalid-coordinate", "Ignored the waypoint drag because the map emitted invalid coordinates.");
+    }
+
+    const missionItem = get(store).draftState.active.mission.draftItems.find((item) => item.uiId === uiId);
+    if (!missionItem) {
+      return rejectedMapMove("item-not-found", "Ignored a stale waypoint drag because that mission item is no longer active.");
+    }
+
+    if (missionItem.readOnly) {
+      return rejectedMapMove("item-read-only", "Ignored the waypoint drag because preserved read-only mission items cannot be repositioned on the map.");
+    }
+
+    if (missionItem.preview.latitude_deg === null || missionItem.preview.longitude_deg === null) {
+      return rejectedMapMove("item-without-position", "Ignored the waypoint drag because this mission item does not expose a draggable position.");
+    }
+
+    store.update((state) => withResolvedPhase({
+      ...state,
+      draftState: selectTypedDraftIndex(
+        moveTypedWaypointOnMap(state.draftState, "mission", missionItem.index, latitudeDeg, longitudeDeg),
+        "mission",
+        missionItem.index,
+      ),
+      selection: { kind: "mission-item" },
+      validationIssues: [],
+      lastError: null,
+    }));
+
+    return {
+      status: "applied",
+      target: "mission-item",
+      uiId,
+      latitude_deg: latitudeDeg,
+      longitude_deg: longitudeDeg,
+    };
   }
 
   async function downloadFromVehicle(force = false) {
@@ -795,6 +902,7 @@ export function createMissionPlannerStore(
     replaceWorkspace,
     selectHome,
     selectMissionItem,
+    selectMissionItemByUiId,
     selectSurveyRegion,
     addMissionItem,
     deleteMissionItem,
@@ -804,6 +912,8 @@ export function createMissionPlannerStore(
     updateMissionItemLatitude,
     updateMissionItemLongitude,
     updateMissionItemAltitude,
+    moveHomeOnMap,
+    moveMissionItemOnMapByUiId,
     setHome,
     setPlanningSpeeds,
     replaceSurveyExtension,
@@ -1128,6 +1238,21 @@ function resolvePhase(state: MissionPlannerStoreState): MissionPlannerDomainPhas
   }
 
   return "ready";
+}
+
+function isCoordinatePairValid(latitudeDeg: number, longitudeDeg: number): boolean {
+  return parseLatitude(latitudeDeg).ok && parseLongitude(longitudeDeg).ok;
+}
+
+function rejectedMapMove(
+  reason: MissionPlannerMapMoveRejectReason,
+  message: string,
+): MissionPlannerMapMoveResult {
+  return {
+    status: "rejected",
+    reason,
+    message,
+  };
 }
 
 function cloneValue<T>(value: T): T {

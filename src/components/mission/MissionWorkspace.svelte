@@ -11,9 +11,11 @@ import {
   type MissionPlannerStoreState,
 } from "../../lib/stores/mission-planner";
 import type { MissionPlannerInlineStatus, MissionPlannerView } from "../../lib/stores/mission-planner-view";
+import { buildMissionMapView, type MissionMapSelection } from "../../lib/mission-map-view";
 import MissionDraftList from "./MissionDraftList.svelte";
 import MissionHomeCard from "./MissionHomeCard.svelte";
 import MissionInspector from "./MissionInspector.svelte";
+import MissionMap from "./MissionMap.svelte";
 import MissionWorkspaceHeader from "./MissionWorkspaceHeader.svelte";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
@@ -59,6 +61,31 @@ let selectedSurveyRegion = $derived(
     ? planner.survey.surveyRegions.get(planner.selection.regionId) ?? null
     : null,
 );
+let mapSelection = $derived.by<MissionMapSelection>(() => {
+  if (planner.selection.kind === "home") {
+    return { kind: "home" };
+  }
+
+  if (planner.selection.kind === "mission-item") {
+    return {
+      kind: "mission-item",
+      uiId: selectedMissionUiId,
+    };
+  }
+
+  return {
+    kind: "survey-block",
+    regionId: planner.selection.regionId,
+  };
+});
+let mapCurrentSeq = $derived(planner.missionState?.current_index ?? null);
+let mapView = $derived(buildMissionMapView({
+  home: planner.home,
+  missionItems,
+  survey: planner.survey,
+  selection: mapSelection,
+  currentSeq: mapCurrentSeq,
+}));
 
 function scopeToKey(activeEnvelope: MissionPlannerView["activeEnvelope"]): string {
   if (!activeEnvelope) {
@@ -225,9 +252,24 @@ function handleNewMission() {
     scopeKey,
     message:
       canUseVehicleActions
-        ? "Blank mission draft ready. Home, manual list editing, and preserved survey blocks stay mounted in this scope."
+        ? "Blank mission draft ready. Home, manual list editing, map drag updates, and preserved survey blocks stay mounted in this scope."
         : "Blank local mission draft ready. Keep editing locally now and reconnect later for vehicle reads, validation, and transfer flows.",
   };
+}
+
+function handleSelectMissionItemFromMap(uiId: number) {
+  clearLocalNote();
+  missionPlannerStore.selectMissionItemByUiId(uiId);
+}
+
+function handleMoveHomeFromMap(latitudeDeg: number, longitudeDeg: number) {
+  clearLocalNote();
+  return missionPlannerStore.moveHomeOnMap(latitudeDeg, longitudeDeg);
+}
+
+function handleMoveMissionItemFromMap(uiId: number, latitudeDeg: number, longitudeDeg: number) {
+  clearLocalNote();
+  return missionPlannerStore.moveMissionItemOnMapByUiId(uiId, latitudeDeg, longitudeDeg);
 }
 
 async function handleExportPlan() {
@@ -476,43 +518,54 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     >
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mission workspace</p>
       <p class="mt-2 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.summary}>
-        Home, manual mission items, typed command editing, and preserved survey blocks now share one mounted planning workspace instead of the old Mission placeholder shell.
+        Home, manual mission items, typed command editing, map drag updates, and preserved survey blocks now share one mounted planning workspace instead of the old Mission placeholder shell.
       </p>
 
-      <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-        <div class="space-y-4">
-          <MissionHomeCard
-            home={planner.home}
-            onChange={missionPlannerStore.setHome}
-            onSelect={missionPlannerStore.selectHome}
-            selected={planner.selection.kind === "home"}
-          />
+      <div class="mt-5 space-y-4">
+        <MissionMap
+          onMoveHome={handleMoveHomeFromMap}
+          onMoveMissionItem={handleMoveMissionItemFromMap}
+          onSelectHome={missionPlannerStore.selectHome}
+          onSelectMissionItem={handleSelectMissionItemFromMap}
+          onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
+          view={mapView}
+        />
 
-          <MissionDraftList
-            items={missionItems}
-            onAddMissionItem={missionPlannerStore.addMissionItem}
-            onDeleteMissionItem={missionPlannerStore.deleteMissionItem}
-            onMoveMissionItemDown={missionPlannerStore.moveMissionItemDownByIndex}
-            onMoveMissionItemUp={missionPlannerStore.moveMissionItemUpByIndex}
-            onSelectMissionItem={missionPlannerStore.selectMissionItem}
-            onSelectSurveyBlock={missionPlannerStore.selectSurveyRegion}
-            selectedMissionUiId={selectedMissionUiId}
-            selectedSurface={planner.selection}
-            surveyBlocks={surveyBlocks}
+        <div class="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <div class="space-y-4">
+            <MissionHomeCard
+              home={planner.home}
+              onChange={missionPlannerStore.setHome}
+              onSelect={missionPlannerStore.selectHome}
+              selected={planner.selection.kind === "home"}
+            />
+
+            <MissionDraftList
+              items={missionItems}
+              onAddMissionItem={missionPlannerStore.addMissionItem}
+              onDeleteMissionItem={missionPlannerStore.deleteMissionItem}
+              onMoveMissionItemDown={missionPlannerStore.moveMissionItemDownByIndex}
+              onMoveMissionItemUp={missionPlannerStore.moveMissionItemUpByIndex}
+              onSelectMissionItem={missionPlannerStore.selectMissionItem}
+              onSelectSurveyBlock={missionPlannerStore.selectSurveyRegion}
+              selectedMissionUiId={selectedMissionUiId}
+              selectedSurface={planner.selection}
+              surveyBlocks={surveyBlocks}
+            />
+          </div>
+
+          <MissionInspector
+            home={planner.home}
+            item={selectedMissionItem}
+            onUpdateAltitude={missionPlannerStore.updateMissionItemAltitude}
+            onUpdateCommand={missionPlannerStore.updateMissionItemCommand}
+            onUpdateLatitude={missionPlannerStore.updateMissionItemLatitude}
+            onUpdateLongitude={missionPlannerStore.updateMissionItemLongitude}
+            previousItem={previousMissionItem}
+            selectedSurveyRegion={selectedSurveyRegion}
+            selection={planner.selection}
           />
         </div>
-
-        <MissionInspector
-          home={planner.home}
-          item={selectedMissionItem}
-          onUpdateAltitude={missionPlannerStore.updateMissionItemAltitude}
-          onUpdateCommand={missionPlannerStore.updateMissionItemCommand}
-          onUpdateLatitude={missionPlannerStore.updateMissionItemLatitude}
-          onUpdateLongitude={missionPlannerStore.updateMissionItemLongitude}
-          previousItem={previousMissionItem}
-          selectedSurveyRegion={selectedSurveyRegion}
-          selection={planner.selection}
-        />
       </div>
     </section>
   {/if}

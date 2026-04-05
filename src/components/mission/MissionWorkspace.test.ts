@@ -365,6 +365,25 @@ async function flush() {
   await Promise.resolve();
 }
 
+function setMissionMapSurfaceRect() {
+  const surface = screen.getByTestId(missionWorkspaceTestIds.mapSurface);
+  Object.defineProperty(surface, "getBoundingClientRect", {
+    configurable: true,
+    value: () => ({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 900,
+      bottom: 600,
+      width: 900,
+      height: 600,
+      toJSON: () => ({}),
+    }),
+  });
+  return surface;
+}
+
 async function renderWorkspace(options: {
   snapshots?: OpenSessionSnapshot[];
   plannerServiceOverrides?: Partial<MissionPlannerService>;
@@ -427,10 +446,139 @@ describe("MissionWorkspace", () => {
     });
 
     expect(screen.getByTestId(missionWorkspaceTestIds.homeCard)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.map)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.mapStatus).textContent).toContain("empty");
+    expect(screen.getByTestId(missionWorkspaceTestIds.mapEmpty)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.draftList)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.listEmpty)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("home");
     expect(get(plannerStore).workspaceMounted).toBe(true);
+  });
+
+  it("selects map surfaces and drags Home plus waypoints through the planner store", async () => {
+    const initialHome = { latitude_deg: 47.48, longitude_deg: 8.61, altitude_m: 502 };
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({ home: initialHome }));
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
+    });
+    setMissionMapSurfaceRect();
+
+    const missionUiId = get(plannerStore).draftState.active.mission.draftItems[0]?.uiId;
+    expect(missionUiId).toBeTypeOf("number");
+
+    const waypointMarker = screen.getByTestId(`${missionWorkspaceTestIds.mapMarkerPrefix}-${missionUiId}`);
+    await fireEvent.click(waypointMarker);
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("mission-item");
+    });
+
+    const originalWaypoint = get(plannerStore).draftState.active.mission.draftItems[0]?.preview;
+    expect(originalWaypoint?.latitude_deg).toBeTypeOf("number");
+    expect(originalWaypoint?.longitude_deg).toBeTypeOf("number");
+
+    await fireEvent.pointerDown(waypointMarker, { clientX: 220, clientY: 360 });
+    await fireEvent.pointerMove(window, { clientX: 700, clientY: 220 });
+    await fireEvent.pointerMove(window, { clientX: 780, clientY: 180 });
+    await fireEvent.pointerUp(window);
+
+    await waitFor(() => {
+      const moved = get(plannerStore).draftState.active.mission.draftItems.find((item) => item.uiId === missionUiId);
+      expect(moved?.preview.latitude_deg).not.toBe(originalWaypoint?.latitude_deg);
+      expect(moved?.preview.longitude_deg).not.toBe(originalWaypoint?.longitude_deg);
+    });
+
+    const homeMarker = screen.getByTestId(`${missionWorkspaceTestIds.mapMarkerPrefix}-home`);
+    const originalHome = get(plannerStore).home;
+    expect(originalHome).toEqual(initialHome);
+
+    await fireEvent.pointerDown(homeMarker, { clientX: 120, clientY: 440 });
+    await fireEvent.pointerMove(window, { clientX: 260, clientY: 420 });
+    await fireEvent.pointerUp(window);
+
+    await waitFor(() => {
+      expect(get(plannerStore).home).not.toEqual(originalHome);
+      expect(get(plannerStore).selection.kind).toBe("home");
+    });
+  });
+
+  it("keeps the selected waypoint stable across list reorders while the map stays mounted", async () => {
+    const mission: MissionPlan = {
+      items: [
+        {
+          command: {
+            Nav: {
+              Waypoint: {
+                position: {
+                  RelHome: {
+                    latitude_deg: 47.41,
+                    longitude_deg: 8.55,
+                    relative_alt_m: 20,
+                  },
+                },
+                hold_time_s: 0,
+                acceptance_radius_m: 1,
+                pass_radius_m: 0,
+                yaw_deg: 0,
+              },
+            },
+          },
+          current: true,
+          autocontinue: true,
+        },
+        {
+          command: {
+            Nav: {
+              Waypoint: {
+                position: {
+                  RelHome: {
+                    latitude_deg: 47.42,
+                    longitude_deg: 8.57,
+                    relative_alt_m: 24,
+                  },
+                },
+                hold_time_s: 0,
+                acceptance_radius_m: 1,
+                pass_radius_m: 0,
+                yaw_deg: 0,
+              },
+            },
+          },
+          current: false,
+          autocontinue: true,
+        },
+      ],
+    };
+
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({ mission }));
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
+    });
+
+    const secondUiId = get(plannerStore).draftState.active.mission.draftItems[1]?.uiId;
+    expect(secondUiId).toBeTypeOf("number");
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.mapMarkerPrefix}-${secondUiId}`));
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.mission.primarySelectedUiId).toBe(secondUiId);
+    });
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.itemMoveUpPrefix}-${secondUiId}`));
+
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.mission.draftItems[0]?.uiId).toBe(secondUiId);
+      expect(get(plannerStore).draftState.active.mission.primarySelectedUiId).toBe(secondUiId);
+      expect(screen.getByTestId(`${missionWorkspaceTestIds.mapMarkerPrefix}-${secondUiId}`).getAttribute("data-selected")).toBe("true");
+    });
   });
 
   it("adds, edits, reorders, and deletes manual mission items through the mounted workspace", async () => {
@@ -462,13 +610,16 @@ describe("MissionWorkspace", () => {
     await waitFor(() => {
       const state = get(plannerStore);
       const edited = state.draftState.active.mission.document.items[0];
-      const waypoint = edited.command.Nav;
-      expect(typeof waypoint).toBe("object");
-      if (typeof waypoint === "object" && waypoint && "Waypoint" in waypoint) {
-        expect(waypoint.Waypoint.hold_time_s).toBe(12);
-        expect(waypoint.Waypoint.position.RelHome.latitude_deg).toBe(47.55);
-        expect(waypoint.Waypoint.position.RelHome.longitude_deg).toBe(8.66);
-        expect(waypoint.Waypoint.position.RelHome.relative_alt_m).toBe(120);
+      expect("Nav" in edited.command).toBe(true);
+      if ("Nav" in edited.command) {
+        const waypoint = edited.command.Nav;
+        expect(typeof waypoint).toBe("object");
+        if (typeof waypoint === "object" && waypoint && "Waypoint" in waypoint) {
+          expect(waypoint.Waypoint.hold_time_s).toBe(12);
+          expect(waypoint.Waypoint.position.RelHome.latitude_deg).toBe(47.55);
+          expect(waypoint.Waypoint.position.RelHome.longitude_deg).toBe(8.66);
+          expect(waypoint.Waypoint.position.RelHome.relative_alt_m).toBe(120);
+        }
       }
     });
 
@@ -604,7 +755,7 @@ describe("MissionWorkspace", () => {
     const regionId = get(plannerStore).survey.surveyRegionOrder[0]?.regionId;
     expect(regionId).toBeTruthy();
 
-    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.surveyPrefix}-${regionId}`));
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.mapSurveyPrefix}-${regionId}`));
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("survey-block");
@@ -624,6 +775,7 @@ describe("MissionWorkspace", () => {
           command: {
             Other: {
               command: 31000,
+              frame: "Mission",
               param1: 1,
               param2: 2,
               param3: 3,
