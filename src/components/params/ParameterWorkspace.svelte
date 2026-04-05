@@ -1,19 +1,111 @@
 <script lang="ts">
+import { fromStore } from "svelte/store";
+
 import {
-  type ParameterWorkspaceItemView,
-  type ParameterWorkspaceStatus,
+  buildParameterItemModels,
+  type ParameterItemModel,
+} from "../../lib/params/parameter-item-model";
+import {
+  buildParameterWorkflowSections,
+  type BatteryWorkflowInputs,
+  type FlightWorkflowInputs,
+  type ParameterWorkflowCardId,
+  validateBatteryWorkflowInputs,
+  validateFlightWorkflowInputs,
+} from "../../lib/params/parameter-workflows";
+import type {
+  ParameterWorkspaceItemView,
+  ParameterWorkspaceStatus,
 } from "../../lib/stores/params";
 import {
   getParameterWorkspaceViewStoreContext,
   getParamsStoreContext,
 } from "../../app/shell/runtime-context";
 import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
+import ParameterWorkflowSection from "./ParameterWorkflowSection.svelte";
 import ParameterWorkspaceSection from "./ParameterWorkspaceSection.svelte";
 
 const store = getParamsStoreContext();
-const view = getParameterWorkspaceViewStoreContext();
+const paramsState = fromStore(store);
+const parameterViewStore = fromStore(getParameterWorkspaceViewStoreContext());
 
-function stageItem(item: ParameterWorkspaceItemView, nextValue: number) {
+let showAdvanced = $state(false);
+let batteryCellCountInput = $state("4");
+let batteryChemistryIndex = $state(0);
+let flightPropSizeInput = $state("9");
+let lastValidBatteryInputs = $state<Required<BatteryWorkflowInputs>>({
+  cellCount: 4,
+  chemistryIndex: 0,
+});
+let lastValidFlightInputs = $state<Required<FlightWorkflowInputs>>({
+  propInches: 9,
+});
+
+let params = $derived(paramsState.current);
+let view = $derived(parameterViewStore.current);
+let emptyState = $derived(emptyStateCopy(view.status));
+let activeEnvelopeKey = $derived(envelopeKey(view.activeEnvelope));
+let batteryCellCount = $derived(parseWholeNumber(batteryCellCountInput));
+let batteryValidation = $derived(
+  validateBatteryWorkflowInputs({
+    cellCount: batteryCellCount,
+    chemistryIndex: batteryChemistryIndex,
+  }),
+);
+let effectiveBatteryInputs = $derived(
+  batteryValidation.valid && batteryCellCount !== null
+    ? { cellCount: batteryCellCount, chemistryIndex: batteryChemistryIndex }
+    : lastValidBatteryInputs,
+);
+let flightPropSize = $derived(parsePositiveNumber(flightPropSizeInput));
+let flightValidation = $derived(
+  validateFlightWorkflowInputs({
+    propInches: flightPropSize,
+  }),
+);
+let effectiveFlightInputs = $derived(
+  flightValidation.valid && flightPropSize !== null
+    ? { propInches: flightPropSize }
+    : lastValidFlightInputs,
+);
+let workflowSections = $derived.by(() =>
+  buildParameterWorkflowSections({
+    paramStore: params.paramStore,
+    metadata: params.metadata,
+    metadataState: params.metadataState,
+    stagedEdits: params.stagedEdits,
+    batteryInputs: effectiveBatteryInputs,
+    flightInputs: effectiveFlightInputs,
+  }),
+);
+let advancedSections = $derived.by(() => buildAdvancedSections());
+let advancedAvailable = $derived(advancedSections.length > 0);
+
+function buildAdvancedSections() {
+  if (!params.paramStore) {
+    return [];
+  }
+
+  const items = buildParameterItemModels(params.paramStore, params.metadata).map((item) =>
+    applyStagedItemState(item, params.stagedEdits[item.name]),
+  );
+  if (items.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      id: "advanced-all",
+      title: "All parameters",
+      description:
+        "Raw parameter access stays separate from the guided starters. Stage direct edits here and review everything in the shared tray.",
+      mode: "fallback" as const,
+      items,
+    },
+  ];
+}
+
+function stageItem(item: ParameterItemModel, nextValue: number) {
   store.stageParameterEdit(item, nextValue);
 }
 
@@ -21,13 +113,78 @@ function discardItem(name: string) {
   store.discardStagedEdit(name);
 }
 
-function envelopeKey() {
-  const envelope = $view.activeEnvelope;
-  if (!envelope) {
+function stageWorkflowCard(cardId: ParameterWorkflowCardId) {
+  const card = workflowSections.flatMap((section) => section.cards).find((entry) => entry.id === cardId);
+  if (!card || card.status !== "ready") {
+    return;
+  }
+
+  for (const recommendation of card.recommendations) {
+    if (!recommendation.changed || recommendation.isQueued) {
+      continue;
+    }
+
+    store.stageParameterEdit(recommendation.item, recommendation.proposedValue);
+  }
+}
+
+function openAdvanced() {
+  showAdvanced = true;
+}
+
+function closeAdvanced() {
+  showAdvanced = false;
+}
+
+function updateBatteryCellCountInput(value: string) {
+  batteryCellCountInput = value;
+  const parsed = parseWholeNumber(value);
+  const nextValidation = validateBatteryWorkflowInputs({
+    cellCount: parsed,
+    chemistryIndex: batteryChemistryIndex,
+  });
+  if (nextValidation.valid && parsed !== null) {
+    lastValidBatteryInputs = {
+      cellCount: parsed,
+      chemistryIndex: batteryChemistryIndex,
+    };
+  }
+}
+
+function updateBatteryChemistryIndex(value: number) {
+  batteryChemistryIndex = value;
+  const parsed = parseWholeNumber(batteryCellCountInput);
+  const nextValidation = validateBatteryWorkflowInputs({
+    cellCount: parsed,
+    chemistryIndex: value,
+  });
+  if (nextValidation.valid && parsed !== null) {
+    lastValidBatteryInputs = {
+      cellCount: parsed,
+      chemistryIndex: value,
+    };
+  }
+}
+
+function updateFlightPropSizeInput(value: string) {
+  flightPropSizeInput = value;
+  const parsed = parsePositiveNumber(value);
+  const nextValidation = validateFlightWorkflowInputs({
+    propInches: parsed,
+  });
+  if (nextValidation.valid && parsed !== null) {
+    lastValidFlightInputs = {
+      propInches: parsed,
+    };
+  }
+}
+
+function envelopeKey(activeEnvelope: typeof view.activeEnvelope) {
+  if (!activeEnvelope) {
     return "no-scope";
   }
 
-  return `${envelope.session_id}:${envelope.source_kind}:${envelope.seek_epoch}:${envelope.reset_revision}`;
+  return `${activeEnvelope.session_id}:${activeEnvelope.source_kind}:${activeEnvelope.seek_epoch}:${activeEnvelope.reset_revision}`;
 }
 
 function statusBadgeText(status: ParameterWorkspaceStatus) {
@@ -70,22 +227,62 @@ function emptyStateCopy(status: ParameterWorkspaceStatus) {
   }
 }
 
-let emptyState = $derived(emptyStateCopy($view.status));
-let activeEnvelopeKey = $derived(envelopeKey());
+function parseWholeNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+function parsePositiveNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function applyStagedItemState(
+  item: ParameterItemModel,
+  stagedEdit: typeof params.stagedEdits[string] | undefined,
+): ParameterWorkspaceItemView {
+  if (!stagedEdit || stagedEdit.nextValue === item.value) {
+    return {
+      ...item,
+      isStaged: false,
+      stagedValue: null,
+      stagedValueText: null,
+      diffText: null,
+    };
+  }
+
+  return {
+    ...item,
+    isStaged: true,
+    stagedValue: stagedEdit.nextValue,
+    stagedValueText: stagedEdit.nextValueText,
+    diffText: `${item.valueText} → ${stagedEdit.nextValueText}`,
+  };
+}
 </script>
 
 <section
   class="rounded-lg border border-border bg-bg-primary p-3"
-  data-domain-readiness={$view.readiness}
-  data-workspace-state={$view.status}
+  data-domain-readiness={view.readiness}
+  data-workspace-state={view.status}
   data-testid={parameterWorkspaceTestIds.root}
 >
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Parameter workspace</p>
-      <h2 class="mt-1 text-base font-semibold text-text-primary">Common parameter settings</h2>
+      <h2 class="mt-1 text-base font-semibold text-text-primary">Workflow-first setup</h2>
       <p class="mt-1 text-sm text-text-secondary">
-        Stage and review a focused subset of commonly adjusted parameters for the current vehicle.
+        Start with a few guided operational changes, then open Advanced parameters for direct raw edits and the same shared review tray.
       </p>
     </div>
 
@@ -93,7 +290,7 @@ let activeEnvelopeKey = $derived(envelopeKey());
       class="inline-flex items-center rounded-md border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold text-text-secondary"
       data-testid={parameterWorkspaceTestIds.state}
     >
-      {statusBadgeText($view.status)}
+      {statusBadgeText(view.status)}
     </p>
   </div>
 
@@ -102,68 +299,142 @@ let activeEnvelopeKey = $derived(envelopeKey());
       class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
       data-testid={parameterWorkspaceTestIds.scope}
     >
-      Scope · {$view.activeEnvelopeText}
+      Scope · {view.activeEnvelopeText}
     </p>
     <p
       class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
       data-testid={parameterWorkspaceTestIds.progress}
     >
-      Progress · {$view.progressText}
+      Progress · {view.progressText}
     </p>
     <p
       class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
       data-testid={parameterWorkspaceTestIds.metadata}
     >
-      Metadata · {$view.metadataText}
+      Metadata · {view.metadataText}
     </p>
   </div>
 
-  {#if $view.noticeText}
+  {#if view.noticeText}
     <div
       class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-warning"
       data-testid={parameterWorkspaceTestIds.notice}
     >
-      {$view.noticeText}
+      {view.noticeText}
     </div>
   {/if}
 
   <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
-    <p class="text-sm text-text-secondary">Changes are staged locally so you can review them before applying.</p>
+    <p class="text-sm text-text-secondary">
+      Queue guided recommendations or raw edits here, then review and apply everything from the shared tray.
+    </p>
 
-    {#if $view.stagedCount > 0}
-      <div class="flex flex-wrap items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={parameterWorkspaceTestIds.advancedState}>
+        {showAdvanced ? "advanced" : "workflow"}
+      </span>
+      {#if view.stagedCount > 0}
         <span
           class="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-accent"
           data-testid={parameterWorkspaceTestIds.pendingCount}
         >
-          {$view.stagedCount} pending
+          {view.stagedCount} pending
         </span>
         <span class="text-xs text-text-muted" data-testid={parameterWorkspaceTestIds.pendingHint}>
           Review and apply staged edits in the change tray.
         </span>
-      </div>
-    {/if}
+      {/if}
+    </div>
   </div>
 
-  {#if emptyState}
+  {#if showAdvanced && advancedAvailable}
     <div
-      class="mt-4 rounded-lg border border-border bg-bg-secondary p-4"
-      data-testid={parameterWorkspaceTestIds.empty}
+      class="mt-4 rounded-[24px] border border-border bg-bg-secondary/60 p-4"
+      data-testid={parameterWorkspaceTestIds.advancedPanel}
     >
-      <p class="text-sm font-semibold text-text-primary">{emptyState.title}</p>
-      <p class="mt-2 text-sm text-text-secondary">{emptyState.description}</p>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Advanced parameters</p>
+          <h3 class="mt-2 text-lg font-semibold text-text-primary">Raw access stays explicit and separate</h3>
+          <p class="mt-2 text-sm text-text-secondary">
+            Use direct numeric edits when the guided starters do not fit the current vehicle or parameter info is unavailable.
+          </p>
+        </div>
+        <button
+          class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          data-testid={parameterWorkspaceTestIds.advancedBackButton}
+          onclick={closeAdvanced}
+          type="button"
+        >
+          Back to workflows
+        </button>
+      </div>
+
+      <div class="mt-4 space-y-4">
+        {#each advancedSections as section (section.id)}
+          <ParameterWorkspaceSection
+            {section}
+            envelopeKey={activeEnvelopeKey}
+            onDiscard={discardItem}
+            onStage={stageItem}
+            readiness={view.readiness}
+          />
+        {/each}
+      </div>
     </div>
   {:else}
-    <div class="mt-4 grid gap-4 xl:grid-cols-2">
-      {#each $view.sections as section (`${section.id}:${activeEnvelopeKey}`)}
-        <ParameterWorkspaceSection
-          {section}
-          envelopeKey={activeEnvelopeKey}
-          onDiscard={discardItem}
-          onStage={stageItem}
-          readiness={$view.readiness}
-        />
-      {/each}
+    <div class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <div class="space-y-4">
+        {#if emptyState}
+          <div
+            class="rounded-lg border border-border bg-bg-secondary p-4"
+            data-testid={parameterWorkspaceTestIds.empty}
+          >
+            <p class="text-sm font-semibold text-text-primary">{emptyState.title}</p>
+            <p class="mt-2 text-sm text-text-secondary">{emptyState.description}</p>
+          </div>
+        {:else}
+          {#each workflowSections as section (section.id)}
+            <ParameterWorkflowSection
+              batteryControls={{
+                cellCountInput: batteryCellCountInput,
+                chemistryIndex: batteryChemistryIndex,
+                validationMessage: batteryValidation.message,
+                onCellCountInput: updateBatteryCellCountInput,
+                onChemistryChange: updateBatteryChemistryIndex,
+              }}
+              flightControls={{
+                propInchesInput: flightPropSizeInput,
+                validationMessage: flightValidation.message,
+                onPropInchesInput: updateFlightPropSizeInput,
+              }}
+              {section}
+              onOpenAdvanced={openAdvanced}
+              onStage={stageWorkflowCard}
+            />
+          {/each}
+        {/if}
+      </div>
+
+      <aside
+        class="rounded-[24px] border border-border bg-bg-secondary/60 p-4"
+        data-testid={parameterWorkspaceTestIds.advancedEntry}
+      >
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Advanced parameters</p>
+        <h3 class="mt-2 text-lg font-semibold text-text-primary">Keep raw access explicit</h3>
+        <p class="mt-2 text-sm leading-6 text-text-secondary">
+          Open the raw parameter list when you need direct numeric control, fallback access during metadata trouble, or edits outside the guided starters.
+        </p>
+        <button
+          class="mt-4 w-full rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          data-testid={parameterWorkspaceTestIds.advancedButton}
+          disabled={!advancedAvailable}
+          onclick={openAdvanced}
+          type="button"
+        >
+          {advancedAvailable ? "Open Advanced parameters" : "Advanced parameters unavailable"}
+        </button>
+      </aside>
     </div>
   {/if}
 </section>

@@ -5,10 +5,7 @@ import type { CompactStatusNotice } from "../../statustext";
 import type { ViewTone } from "../../lib/session-selectors";
 import type { OperatorMetricState, OperatorMetricView } from "../../lib/telemetry-selectors";
 import { appShellTestIds } from "./chrome-state";
-import {
-  getOperatorWorkspaceViewStoreContext,
-  getShellChromeStoreContext,
-} from "./runtime-context";
+import { getOperatorWorkspaceViewStoreContext, getShellChromeStoreContext } from "./runtime-context";
 
 const operatorWorkspace = fromStore(getOperatorWorkspaceViewStoreContext());
 const chrome = fromStore(getShellChromeStoreContext());
