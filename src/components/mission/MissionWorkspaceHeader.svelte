@@ -1,24 +1,34 @@
 <script lang="ts">
+import type {
+  MissionPlannerAttachmentState,
+  MissionPlannerMode,
+} from "../../lib/stores/mission-planner";
 import type { MissionPlannerWorkspaceStatus } from "../../lib/stores/mission-planner-view";
 import type { MissionPlannerView } from "../../lib/stores/mission-planner-view";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
 type Props = {
+  mode: MissionPlannerMode;
   status: MissionPlannerWorkspaceStatus;
   readiness: MissionPlannerView["readiness"];
+  attachment: MissionPlannerAttachmentState;
   scopeText: string;
   dirty: boolean;
   missionItemCount: number;
   surveyRegionCount: number;
+  fenceRegionCount: number;
+  rallyPointCount: number;
   validationIssueCount: number;
-  fileWarningCount: number;
+  warningCount: number;
   hasContent: boolean;
   canUseVehicleActions: boolean;
   busy: boolean;
   timedOut: boolean;
   canCancel: boolean;
+  onSelectMode: (mode: MissionPlannerMode) => void;
   onReadFromVehicle: () => void;
   onImportPlan: () => void;
+  onImportKml: () => void;
   onNewMission: () => void;
   onExportPlan: () => void;
   onValidateMission: () => void;
@@ -28,21 +38,27 @@ type Props = {
 };
 
 let {
+  mode,
   status,
   readiness,
+  attachment,
   scopeText,
   dirty,
   missionItemCount,
   surveyRegionCount,
+  fenceRegionCount,
+  rallyPointCount,
   validationIssueCount,
-  fileWarningCount,
+  warningCount,
   hasContent,
   canUseVehicleActions,
   busy,
   timedOut,
   canCancel,
+  onSelectMode,
   onReadFromVehicle,
   onImportPlan,
+  onImportKml,
   onNewMission,
   onExportPlan,
   onValidateMission,
@@ -51,17 +67,23 @@ let {
   onCancelTransfer,
 }: Props = $props();
 
+const modeButtons = [
+  { mode: "mission", label: "Mission", testId: missionWorkspaceTestIds.modeMission },
+  { mode: "fence", label: "Fence", testId: missionWorkspaceTestIds.modeFence },
+  { mode: "rally", label: "Rally", testId: missionWorkspaceTestIds.modeRally },
+] as const;
+
 function statusText(value: MissionPlannerWorkspaceStatus): string {
   switch (value) {
     case "bootstrapping":
-      return "Loading mission scope";
+      return "Loading planner";
     case "unavailable":
-      return "Local-only mode";
+      return "No live session";
     case "empty":
-      return "Mission ready to start";
+      return "Planner ready to start";
     case "ready":
     default:
-      return "Mission workspace active";
+      return "Planner workspace active";
   }
 }
 
@@ -93,17 +115,38 @@ function readinessClass(value: MissionPlannerView["readiness"]): string {
   }
 }
 
-function workspaceSummary(value: MissionPlannerWorkspaceStatus): string {
+function attachmentClass(current: MissionPlannerAttachmentState): string {
+  switch (current.kind) {
+    case "live-attached":
+      return "border-success/30 bg-success/10 text-success";
+    case "local-draft":
+      return "border-accent/30 bg-accent/10 text-accent";
+    case "playback-readonly":
+    case "detached-local":
+    default:
+      return "border-warning/40 bg-warning/10 text-warning";
+  }
+}
+
+function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlannerWorkspaceStatus): string {
+  if (currentMode === "fence") {
+    return "Fence continuity lives in the active planner shell now: attachment truth, warning review, and file workflow stay visible even before dedicated fence editors expand in the next task.";
+  }
+
+  if (currentMode === "rally") {
+    return "Rally continuity shares the same planner shell. Attachment truth, sticky warnings, and mixed-domain export review stay mounted while rally-specific editors land next.";
+  }
+
   switch (value) {
     case "bootstrapping":
-      return "The mission domain is wiring itself to the active scope before planner actions unlock.";
+      return "The planner domain is wiring itself to the active session scope before live actions unlock.";
     case "unavailable":
-      return "Import a .plan or start a local draft now, then reconnect later for vehicle reads and transfers.";
+      return "Import a file or start a local draft now, then reconnect later for live validation and transfer flows.";
     case "empty":
-      return "Start from vehicle data, a .plan import, or a blank draft before deeper list and map editors take over.";
+      return "Start from live data, a truthful file import, or a blank draft before deeper mission, fence, and rally continuity takes over.";
     case "ready":
     default:
-      return "The shipped Mission tab now owns the planner surface, with inline transfer state, replace prompts, and truthful scope diagnostics.";
+      return "Mission, fence, rally, Home, review state, and warning truth now share one mounted planning shell instead of one-shot replace prompts.";
   }
 }
 </script>
@@ -114,11 +157,11 @@ function workspaceSummary(value: MissionPlannerWorkspaceStatus): string {
   data-workspace-state={status}
   data-testid={missionWorkspaceTestIds.header}
 >
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div class="max-w-3xl">
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mission workspace</p>
-      <h2 class="mt-1 text-base font-semibold text-text-primary">Active planner entry shell</h2>
-      <p class="mt-1 text-sm text-text-secondary">{workspaceSummary(status)}</p>
+      <h2 class="mt-1 text-base font-semibold text-text-primary">Planning continuity shell</h2>
+      <p class="mt-1 text-sm text-text-secondary">{workspaceSummary(mode, status)}</p>
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
@@ -127,6 +170,13 @@ function workspaceSummary(value: MissionPlannerWorkspaceStatus): string {
         data-testid={missionWorkspaceTestIds.state}
       >
         {statusText(status)}
+      </span>
+
+      <span
+        class={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${attachmentClass(attachment)}`}
+        data-testid={missionWorkspaceTestIds.attachment}
+      >
+        {attachment.label}
       </span>
 
       <span class="inline-flex items-center rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">
@@ -147,7 +197,29 @@ function workspaceSummary(value: MissionPlannerWorkspaceStatus): string {
     </div>
   </div>
 
-  <div class="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+  <p class="mt-3 text-xs text-text-secondary" data-testid={missionWorkspaceTestIds.attachmentDetail}>
+    {attachment.detail}
+  </p>
+
+  <div class="mt-4 rounded-2xl border border-border bg-bg-secondary/60 p-2" data-testid={missionWorkspaceTestIds.modeShell}>
+    <div class="grid gap-2 sm:grid-cols-3">
+      {#each modeButtons as item (item.mode)}
+        <button
+          class={`rounded-[16px] border px-4 py-3 text-left text-sm font-semibold transition ${item.mode === mode
+            ? "border-accent/40 bg-accent/10 text-accent"
+            : "border-border bg-bg-primary text-text-primary hover:border-accent hover:text-accent"}`}
+          data-testid={item.testId}
+          onclick={() => onSelectMode(item.mode)}
+          type="button"
+        >
+          <span class="block text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mode</span>
+          <span class="mt-1 block">{item.label}</span>
+        </button>
+      {/each}
+    </div>
+  </div>
+
+  <div class="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-7">
     <p
       class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
       data-testid={missionWorkspaceTestIds.scope}
@@ -158,13 +230,19 @@ function workspaceSummary(value: MissionPlannerWorkspaceStatus): string {
       class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
       data-testid={missionWorkspaceTestIds.countsMission}
     >
-      Manual items · {missionItemCount}
+      Mission + Home + Survey · {missionItemCount} / {surveyRegionCount}
     </p>
     <p
       class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={missionWorkspaceTestIds.countsSurvey}
+      data-testid={missionWorkspaceTestIds.countsFence}
     >
-      Survey blocks · {surveyRegionCount}
+      Fence regions · {fenceRegionCount}
+    </p>
+    <p
+      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
+      data-testid={missionWorkspaceTestIds.countsRally}
+    >
+      Rally points · {rallyPointCount}
     </p>
     <p
       class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
@@ -176,7 +254,13 @@ function workspaceSummary(value: MissionPlannerWorkspaceStatus): string {
       class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
       data-testid={missionWorkspaceTestIds.countsWarnings}
     >
-      File warnings · {fileWarningCount}
+      Sticky warnings · {warningCount}
+    </p>
+    <p
+      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
+      data-testid={missionWorkspaceTestIds.countsSurvey}
+    >
+      Survey blocks · {surveyRegionCount}
     </p>
   </div>
 
@@ -201,12 +285,21 @@ function workspaceSummary(value: MissionPlannerWorkspaceStatus): string {
     </button>
     <button
       class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      data-testid={missionWorkspaceTestIds.toolbarImportKml}
+      disabled={busy}
+      onclick={onImportKml}
+      type="button"
+    >
+      Import .kml / .kmz
+    </button>
+    <button
+      class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.toolbarNew}
       disabled={busy}
       onclick={onNewMission}
       type="button"
     >
-      New mission
+      New draft
     </button>
     <button
       class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
@@ -224,7 +317,7 @@ function workspaceSummary(value: MissionPlannerWorkspaceStatus): string {
       onclick={onValidateMission}
       type="button"
     >
-      Validate
+      Validate mission
     </button>
     <button
       class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
@@ -233,7 +326,7 @@ function workspaceSummary(value: MissionPlannerWorkspaceStatus): string {
       onclick={onUploadToVehicle}
       type="button"
     >
-      Upload
+      Upload workspace
     </button>
     <button
       class="rounded-full border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"

@@ -444,6 +444,7 @@ describe("MissionWorkspace", () => {
     expect(screen.getByTestId(missionWorkspaceTestIds.empty)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.entryRead)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.entryImport)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.entryImportKml)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.entryNew)).toBeTruthy();
 
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
@@ -949,6 +950,50 @@ describe("MissionWorkspace", () => {
     });
   });
 
+  it("shows playback read-only truth and keeps validation warnings visible across mode switches", async () => {
+    const { plannerStore, sessionStore } = await renderWorkspace({
+      snapshots: [
+        createSnapshot({ envelope: createEnvelope("session-1", { source_kind: "playback", seek_epoch: 1, reset_revision: 1 }) }),
+        createSnapshot({ envelope: createEnvelope("session-1", { source_kind: "live", seek_epoch: 2, reset_revision: 2 }) }),
+      ],
+      plannerServiceOverrides: {
+        validateMission: vi.fn(async () => [{ code: "geom_warn", message: "Survey path drifts outside the lane.", severity: "warning" as const }]),
+      },
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({
+          home: { latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 },
+        }));
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.attachment).textContent).toContain("Playback read-only");
+    });
+    expect((screen.getByTestId(missionWorkspaceTestIds.toolbarValidate) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId(missionWorkspaceTestIds.homeLatitude) as HTMLInputElement).disabled).toBe(true);
+
+    const playbackWarning = screen.getByTestId(`${missionWorkspaceTestIds.warningItemPrefix}-0`);
+    expect(playbackWarning.textContent).toContain("Playback read-only");
+
+    await sessionStore.bootstrapSource("live");
+    await flush();
+    plannerStore.replaceWorkspace(makeWorkspace());
+    await flush();
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeMission));
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.toolbarValidate));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.warningValidation).textContent).toContain("Survey path drifts outside the lane.");
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.modeShellTitle).textContent).toContain("Fence continuity shell");
+      expect(screen.getByTestId(missionWorkspaceTestIds.warningValidation).textContent).toContain("Survey path drifts outside the lane.");
+    });
+  });
+
   it("requires an explicit replace prompt before importing over a dirty draft and keeps camera-missing survey regions editable", async () => {
     const survey = makeImportedSurveyExtension();
     const importedHome = { latitude_deg: 47.39, longitude_deg: 8.53, altitude_m: 488 };
@@ -994,21 +1039,21 @@ describe("MissionWorkspace", () => {
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.toolbarImport));
 
     await waitFor(() => {
-      expect(screen.getByTestId(missionWorkspaceTestIds.promptKind).textContent).toContain("import-replace");
+      expect(screen.getByTestId(missionWorkspaceTestIds.importReviewTitle).textContent).toContain("survey.plan");
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.promptDismiss));
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.importReviewDismiss));
     await waitFor(() => {
-      expect(screen.queryByTestId(missionWorkspaceTestIds.prompt)).toBeNull();
+      expect(screen.queryByTestId(missionWorkspaceTestIds.importReview)).toBeNull();
     });
     expect(get(plannerStore).home).toEqual({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
 
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.toolbarImport));
     await waitFor(() => {
-      expect(screen.getByTestId(missionWorkspaceTestIds.prompt)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.importReview)).toBeTruthy();
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.promptConfirm));
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.importReviewConfirm));
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.countsSurvey).textContent).toContain("1");
     });
@@ -1037,9 +1082,85 @@ describe("MissionWorkspace", () => {
     });
 
     expect(get(plannerStore).home).toEqual(importedHome);
-    expect(screen.getByTestId(`${missionWorkspaceTestIds.warningPrefix}-file`).textContent).toContain(
+    expect(screen.getByTestId(missionWorkspaceTestIds.warningFile).textContent).toContain(
       "Imported survey region preserved.",
     );
+  });
+
+  it("opens the mixed-domain export chooser and blocks empty chooser submissions", async () => {
+    const { fileHarness } = await renderWorkspace({
+      fileIoOverrides: {
+        exportToPicker: vi.fn(async (): Promise<MissionPlanFileExportResult> => ({
+          status: "success",
+          fileName: "mixed.plan",
+          warningCount: 0,
+          warnings: [],
+          contents: "{}\n",
+        })),
+      },
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace({
+          ...makeWorkspace({
+            home: { latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 },
+          }),
+          fence: {
+            return_point: null,
+            regions: [
+              {
+                inclusion_polygon: {
+                  inclusion_group: 0,
+                  vertices: [
+                    { latitude_deg: 47.4, longitude_deg: 8.5 },
+                    { latitude_deg: 47.41, longitude_deg: 8.5 },
+                    { latitude_deg: 47.41, longitude_deg: 8.51 },
+                  ],
+                },
+              },
+            ],
+          },
+          rally: {
+            points: [
+              {
+                RelHome: {
+                  latitude_deg: 47.42,
+                  longitude_deg: 8.52,
+                  relative_alt_m: 20,
+                },
+              },
+            ],
+          },
+        });
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.toolbarExport));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.exportReviewTitle).textContent).toContain("Choose which planner domains");
+    });
+    expect(fileHarness.fileIo.exportToPicker).not.toHaveBeenCalled();
+
+    for (const domain of ["mission", "fence", "rally"] as const) {
+      const input = screen.getByTestId(`${missionWorkspaceTestIds.exportReviewChoicePrefix}-${domain}`).querySelector("input") as HTMLInputElement;
+      await fireEvent.click(input);
+    }
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.exportReviewConfirm));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.warningRegister).textContent).toContain("Choose at least one planning domain");
+      expect(screen.getByTestId(missionWorkspaceTestIds.exportReview)).toBeTruthy();
+    });
+
+    const fenceOnlyInput = screen.getByTestId(`${missionWorkspaceTestIds.exportReviewChoicePrefix}-fence`).querySelector("input") as HTMLInputElement;
+    await fireEvent.click(fenceOnlyInput);
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.exportReviewConfirm));
+
+    await waitFor(() => {
+      expect(fileHarness.fileIo.exportToPicker).toHaveBeenCalledTimes(1);
+    });
+    expect(fileHarness.fileIo.exportToPicker).toHaveBeenCalledWith(expect.objectContaining({
+      excludeDomains: ["mission", "rally"],
+    }));
   });
 
   it("renders preserved raw mission commands as read-only instead of exposing broken typed editors", async () => {
@@ -1093,7 +1214,7 @@ describe("MissionWorkspace", () => {
     await fireEvent.click(readButton);
 
     await waitFor(() => {
-      expect(screen.getByTestId(missionWorkspaceTestIds.inlineStatusMessage).textContent).toContain("Reading mission");
+      expect(screen.getByTestId(missionWorkspaceTestIds.inlineStatusMessage).textContent).toContain("Reading planning state");
     });
     expect(readButton.disabled).toBe(true);
     expect(plannerHarness.service.downloadWorkspace).toHaveBeenCalledTimes(1);

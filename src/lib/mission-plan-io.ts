@@ -190,7 +190,7 @@ export function exportPlanFile({ mission, surveyRegions, home, fence, rally, cru
     const missionItems = excluded.has("mission")
         ? []
         : exportMissionItemsWithSurveyRegions(mission.items, surveyRegions ?? [], warnings);
-    const plannedHomePosition: [number, number, number] = home
+    const plannedHomePosition: [number, number, number] = home && !excluded.has("mission")
         ? [home.latitude_deg, home.longitude_deg, home.altitude_m]
         : [0, 0, 0];
 

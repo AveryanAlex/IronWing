@@ -428,31 +428,36 @@ describe("createMissionPlannerStore", () => {
     await flush();
 
     let state = get(plannerStore);
+    let view = get(createMissionPlannerViewStore(plannerStore));
     expect(state.activeEnvelope?.session_id).toBe("session-2");
-    expect(state.home).toBeNull();
+    expect(state.home).toEqual({
+      latitude_deg: 47.5,
+      longitude_deg: 8.6,
+      altitude_m: 500,
+    });
     expect(state.recoverableWorkspace?.active.home).toEqual({
       latitude_deg: 47.5,
       longitude_deg: 8.6,
       altitude_m: 500,
     });
     expect(state.recoverableWorkspace?.active.survey.surveyRegionOrder).toHaveLength(1);
+    expect(view.attachment.kind).toBe("detached-local");
+    expect(view.canUseVehicleActions).toBe(false);
 
     await sessionStore.bootstrapSource("live");
     await flush();
 
     state = get(plannerStore);
+    view = get(createMissionPlannerViewStore(plannerStore));
     expect(state.activeEnvelope?.session_id).toBe("session-1");
     expect(state.replacePrompt?.kind).toBe("recoverable");
-
-    plannerStore.confirmReplacePrompt();
-
-    state = get(plannerStore);
     expect(state.home).toEqual({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
     expect(state.survey.surveyRegionOrder).toHaveLength(1);
-    expect(state.recoverableWorkspace).toBeNull();
-
-    const view = get(createMissionPlannerViewStore(plannerStore));
+    plannerStore.confirmReplacePrompt();
+    state = get(plannerStore);
+    view = get(createMissionPlannerViewStore(plannerStore));
     expect(view.replacePrompt).toBeNull();
+    expect(view.attachment.kind).toBe("live-attached");
     expect(view.dirty).toBe(true);
     expect(view.surveyRegionCount).toBe(1);
   });
@@ -551,15 +556,17 @@ describe("createMissionPlannerStore", () => {
     await plannerStore.importFromPicker();
 
     let state = get(plannerStore);
-    expect(state.replacePrompt).toMatchObject({ kind: "replace-active", action: "import" });
+    expect(state.pendingImportReview).not.toBeNull();
+    expect(state.pendingImportReview?.choices.map((choice) => choice.domain)).toEqual(["mission"]);
     expect(state.home).toEqual({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
     expect(state.survey.surveyRegionOrder).toHaveLength(0);
 
-    plannerStore.confirmReplacePrompt();
+    plannerStore.confirmImportReview();
 
     state = get(plannerStore);
     const view = get(createMissionPlannerViewStore(plannerStore));
 
+    expect(state.pendingImportReview).toBeNull();
     expect(state.home).toEqual({ latitude_deg: 47.39, longitude_deg: 8.53, altitude_m: 488 });
     expect(state.survey.surveyRegionOrder).toHaveLength(1);
     expect(state.fileWarnings).toEqual(["Imported survey region preserved."]);
@@ -592,6 +599,34 @@ describe("createMissionPlannerStore", () => {
     expect(state.lastError).toContain("malformed mission download");
     expect(state.home).toEqual({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
     expect(state.draftState.active.mission.document.items).toHaveLength(1);
+  });
+
+  it("marks playback scopes read-only and blocks mounted draft edits while preserving the current workspace", async () => {
+    const sessionHarness = createSessionHarness([
+      createSnapshot({ envelope: createEnvelope("session-1", { source_kind: "playback", seek_epoch: 1, reset_revision: 1 }) }),
+    ]);
+    const plannerHarness = createPlannerServiceHarness();
+    const fileHarness = createFileIoHarness();
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo);
+
+    await sessionStore.initialize("playback");
+    await plannerStore.initialize();
+
+    plannerStore.replaceWorkspace(makeWorkspace({
+      home: { latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 },
+    }));
+    const before = get(plannerStore).home;
+
+    plannerStore.setHome({ latitude_deg: 48, longitude_deg: 9, altitude_m: 550 });
+
+    const state = get(plannerStore);
+    const view = get(createMissionPlannerViewStore(plannerStore));
+
+    expect(view.attachment.kind).toBe("playback-readonly");
+    expect(view.canUseVehicleActions).toBe(false);
+    expect(state.home).toEqual(before);
+    expect(state.blockedReason).toContain("playback");
   });
 
   it("creates survey blocks after home, manual items, and survey blocks with deterministic ordering", async () => {

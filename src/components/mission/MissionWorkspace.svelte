@@ -8,7 +8,9 @@ import {
 import {
   createEmptyMissionPlannerWorkspace,
   plannerHasContent,
+  type MissionPlannerMode,
   type MissionPlannerStoreState,
+  type MissionPlannerWarningView,
 } from "../../lib/stores/mission-planner";
 import type { MissionPlannerInlineStatus, MissionPlannerView } from "../../lib/stores/mission-planner-view";
 import { buildMissionMapView, type MissionMapSelection } from "../../lib/mission-map-view";
@@ -40,7 +42,7 @@ let view = $derived(missionPlannerView.current);
 let scopeKey = $derived(scopeToKey(view.activeEnvelope));
 let visibleLocalNote = $derived(localNote?.scopeKey === scopeKey ? localNote : null);
 let hasContent = $derived(plannerHasContent(planner));
-let canUseVehicleActions = $derived(view.activeEnvelope !== null && view.readiness !== "bootstrapping");
+let canUseVehicleActions = $derived(view.canUseVehicleActions);
 let inlineCopy = $derived(resolveInlineStatusCopy(view, planner));
 let missionItems = $derived(planner.draftState.active.mission.draftItems);
 let selectedMissionUiId = $derived(planner.draftState.active.mission.primarySelectedUiId);
@@ -96,6 +98,7 @@ let mapView = $derived(buildMissionMapView({
   selection: mapSelection,
   currentSeq: mapCurrentSeq,
 }));
+let showMissionEditor = $derived(view.mode === "mission");
 
 const DEFAULT_SURVEY_ANCHOR: GeoPoint2d = {
   latitude_deg: 47.397742,
@@ -231,19 +234,12 @@ function replacePromptTitle(state: MissionPlannerStoreState): string {
   }
 
   if (prompt.kind === "recoverable") {
-    return "Recover the saved draft for this scope?";
+    return "Restore the saved draft for this session family?";
   }
 
-  switch (prompt.action) {
-    case "download":
-      return "Replace the current draft with the vehicle mission?";
-    case "import":
-      return "Replace the current draft with the imported plan?";
-    case "clear":
-      return "Clear the vehicle mission and drop the current draft?";
-    default:
-      return "Replace the current mission draft?";
-  }
+  return prompt.action === "download"
+    ? "Replace the current draft with the vehicle workspace?"
+    : "Clear the vehicle workspace and drop the current local draft?";
 }
 
 function replacePromptBody(state: MissionPlannerStoreState): string {
@@ -253,19 +249,14 @@ function replacePromptBody(state: MissionPlannerStoreState): string {
   }
 
   if (prompt.kind === "recoverable") {
-    return "A recoverable draft was carried forward for this same scope. Restore it explicitly instead of silently replacing the active workspace.";
+    return "A recoverable draft was preserved for this session family. Restore it explicitly instead of silently replacing the active workspace.";
   }
 
   if (prompt.action === "download") {
-    return "Reading from the vehicle would overwrite unsaved local mission work. Keep the current draft or explicitly replace it.";
+    return "Reading from the vehicle would overwrite unsaved local planning work. Keep the current draft or explicitly replace it.";
   }
 
-  if (prompt.action === "import") {
-    const fileName = prompt.fileName ? ` from ${prompt.fileName}` : "";
-    return `Importing${fileName} would overwrite unsaved local mission work. Keep the current draft or explicitly replace it.`;
-  }
-
-  return "Clearing the vehicle would also replace the current dirty mission draft with an empty workspace. Keep the current draft or explicitly replace it.";
+  return "Clearing the vehicle would also replace the current draft with an empty workspace. Keep the current draft or explicitly replace it.";
 }
 
 function replacePromptConfirmLabel(state: MissionPlannerStoreState): string {
@@ -273,7 +264,7 @@ function replacePromptConfirmLabel(state: MissionPlannerStoreState): string {
 }
 
 function replacePromptDismissLabel(state: MissionPlannerStoreState): string {
-  return state.replacePrompt?.kind === "recoverable" ? "Stay with current state" : "Keep current draft";
+  return state.replacePrompt?.kind === "recoverable" ? "Stay with current draft" : "Keep current draft";
 }
 
 function resolveInlineStatusCopy(currentView: MissionPlannerView, state: MissionPlannerStoreState) {
@@ -285,7 +276,7 @@ function resolveInlineStatusCopy(currentView: MissionPlannerView, state: Mission
     return {
       tone: "warning",
       title: "Mission stream degraded",
-      detail: `${state.streamError} Existing local mission data stays mounted instead of falling back to a placeholder shell.`,
+      detail: `${state.streamError} Existing local planning data stays mounted instead of falling back to an empty placeholder shell.`,
     } as const;
   }
 
@@ -303,8 +294,8 @@ function busyStatusCopy(
   if (inlineStatus.timedOut) {
     return {
       tone: "warning",
-      title: "Mission action still pending",
-      detail: "The last mission action timed out, but the underlying transfer may still be active. Cancel it or wait for the vehicle to respond before retrying.",
+      title: "Planner action still pending",
+      detail: "The last planner action timed out, but the underlying transfer may still be active. Cancel it or wait for the vehicle to respond before retrying.",
     } as const;
   }
 
@@ -316,38 +307,38 @@ function busyStatusCopy(
     case "downloading":
       return {
         tone: "info",
-        title: "Reading mission from the vehicle",
-        detail: transferDetail ?? "The current mission scope stays mounted while the download completes.",
+        title: "Reading planning state from the vehicle",
+        detail: transferDetail ?? "The current workspace stays mounted while the download completes.",
       } as const;
     case "uploading":
       return {
         tone: "info",
-        title: "Uploading mission to the vehicle",
+        title: "Uploading planning state to the vehicle",
         detail: transferDetail ?? "The planner keeps the draft visible while the upload completes.",
       } as const;
     case "validating":
       return {
         tone: "info",
-        title: "Validating mission against the active vehicle",
-        detail: "Validation runs inline here so the rest of the shell stays responsive.",
+        title: "Validating the mission bucket against the active vehicle",
+        detail: "Validation stays mission-scoped, even while fence, rally, and Home continuity share the same planner shell.",
       } as const;
     case "clearing":
       return {
         tone: "info",
-        title: "Clearing the vehicle mission",
+        title: "Clearing the vehicle workspace",
         detail: transferDetail ?? "The draft remains mounted until the clear request resolves.",
       } as const;
     case "importing":
       return {
         tone: "info",
-        title: "Importing .plan data",
-        detail: "The current draft stays intact until the imported plan is validated and any replace prompt is resolved.",
+        title: "Importing file content",
+        detail: "The current draft stays intact until the parsed domains are reviewed and applied.",
       } as const;
     case "exporting":
       return {
         tone: "info",
-        title: "Exporting the active workspace",
-        detail: "The workspace stays mounted while IronWing prepares a truthful .plan export.",
+        title: "Exporting the active planner workspace",
+        detail: "The current workspace stays mounted while IronWing prepares a truthful mixed-domain .plan export.",
       } as const;
     default:
       return null;
@@ -372,6 +363,40 @@ function localNoteClass(tone: LocalNoteTone): string {
   }
 }
 
+function warningTestId(warning: MissionPlannerWarningView, index: number): string {
+  if (warning.id.startsWith("file-warning:")) {
+    return missionWorkspaceTestIds.warningFile;
+  }
+
+  if (warning.id.startsWith("validation-issue:")) {
+    return missionWorkspaceTestIds.warningValidation;
+  }
+
+  return `${missionWorkspaceTestIds.warningItemPrefix}-${index}`;
+}
+
+function importReviewChoiceTestId(domain: MissionPlannerMode): string {
+  return `${missionWorkspaceTestIds.importReviewChoicePrefix}-${domain}`;
+}
+
+function exportReviewChoiceTestId(domain: MissionPlannerMode): string {
+  return `${missionWorkspaceTestIds.exportReviewChoicePrefix}-${domain}`;
+}
+
+function modeShellTitle(mode: MissionPlannerMode): string {
+  return mode === "fence" ? "Fence continuity shell" : "Rally continuity shell";
+}
+
+function modeShellBody(mode: MissionPlannerMode, currentView: MissionPlannerView): string {
+  return mode === "fence"
+    ? `Fence data is already part of the mounted workspace (${currentView.fenceRegionCount} region${currentView.fenceRegionCount === 1 ? "" : "s"}), and sticky warnings / import review stay visible here. Dedicated fence editing lands in the next task.`
+    : `Rally data is already part of the mounted workspace (${currentView.rallyPointCount} point${currentView.rallyPointCount === 1 ? "" : "s"}), and sticky warnings / import review stay visible here. Dedicated rally editing lands in the next task.`;
+}
+
+function handleSelectMode(mode: MissionPlannerMode) {
+  missionPlannerStore.setMode(mode);
+}
+
 async function handleReadFromVehicle() {
   clearLocalNote();
   await missionPlannerStore.downloadFromVehicle();
@@ -382,7 +407,7 @@ async function handleImportPlan() {
   const result = await missionPlannerStore.importFromPicker();
 
   if (result.status === "cancelled") {
-    setLocalNote("Import cancelled. The current mission draft stayed mounted and unchanged.", "info");
+    setLocalNote("Import cancelled. The current planner draft stayed mounted and unchanged.", "info");
     return;
   }
 
@@ -390,8 +415,28 @@ async function handleImportPlan() {
     const fileLabel = result.fileName ?? "the selected .plan";
     setLocalNote(
       result.warningCount > 0
-        ? `Imported ${fileLabel}. ${result.warningCount} import warning${result.warningCount === 1 ? " stays" : "s stay"} listed inline.`
+        ? `Imported ${fileLabel}. ${result.warningCount} warning${result.warningCount === 1 ? " stays" : "s stay"} visible in the sticky register.`
         : `Imported ${fileLabel} into the active workspace.`,
+      result.warningCount > 0 ? "warning" : "success",
+    );
+  }
+}
+
+async function handleImportKml() {
+  clearLocalNote();
+  const result = await missionPlannerStore.importKmlFromPicker();
+
+  if (result.status === "cancelled") {
+    setLocalNote("KML/KMZ import cancelled. The current planner draft stayed mounted and unchanged.", "info");
+    return;
+  }
+
+  if (result.status === "success") {
+    const fileLabel = result.fileName ?? `the selected .${result.source}`;
+    setLocalNote(
+      result.warningCount > 0
+        ? `Imported ${fileLabel}. ${result.warningCount} parser warning${result.warningCount === 1 ? " stays" : "s stay"} visible in the sticky register.`
+        : `Imported ${fileLabel} into the planner workspace.`,
       result.warningCount > 0 ? "warning" : "success",
     );
   }
@@ -402,8 +447,8 @@ function handleNewMission() {
   missionPlannerStore.replaceWorkspace(createEmptyMissionPlannerWorkspace());
   setLocalNote(
     canUseVehicleActions
-      ? "Blank mission draft ready. Home, manual list editing, survey authoring, and map updates stay mounted in this scope."
-      : "Blank local mission draft ready. Keep editing locally now and reconnect later for vehicle reads, validation, and transfer flows.",
+      ? "Blank mission draft ready. Mission, fence, rally, Home, and later domain editors stay inside this mounted workspace shell."
+      : "Blank mission draft ready. Keep editing locally now, then reconnect later for live validation and transfer flows.",
     "success",
   );
 }
@@ -431,7 +476,7 @@ function handleStartSurveyDraw(patternType: SurveyPatternType) {
 function handleDeleteSurveyRegion(regionId: string) {
   clearLocalNote();
   missionPlannerStore.deleteSurveyRegionById(regionId);
-  setLocalNote("Deleted the selected survey region. The shared mission workspace stayed mounted.", "warning");
+  setLocalNote("Deleted the selected survey region. The shared planner workspace stayed mounted.", "warning");
 }
 
 function handleSelectMissionItemFromMap(uiId: number) {
@@ -454,7 +499,7 @@ async function handleExportPlan() {
   const result = await missionPlannerStore.exportToPicker();
 
   if (result.status === "cancelled") {
-    setLocalNote("Export cancelled. The current mission draft stayed mounted and unchanged.", "info");
+    setLocalNote("Export cancelled. The current planner draft stayed mounted and unchanged.", "info");
     return;
   }
 
@@ -462,8 +507,42 @@ async function handleExportPlan() {
     const fileLabel = result.fileName ?? "the active .plan file";
     setLocalNote(
       result.warningCount > 0
-        ? `Saved ${fileLabel}. ${result.warningCount} export warning${result.warningCount === 1 ? " stays" : "s stay"} listed inline.`
-        : `Saved ${fileLabel} from the active mission workspace.`,
+        ? `Saved ${fileLabel}. ${result.warningCount} export warning${result.warningCount === 1 ? " stays" : "s stay"} visible in the sticky register.`
+        : `Saved ${fileLabel} from the active planner workspace.`,
+      result.warningCount > 0 ? "warning" : "success",
+    );
+  }
+}
+
+async function handleConfirmImportReview() {
+  clearLocalNote();
+  const result = await missionPlannerStore.confirmImportReview();
+  if (result.status === "applied") {
+    const fileLabel = result.fileName ?? `the selected ${result.source === "plan" ? ".plan" : `.${result.source}`}`;
+    setLocalNote(
+      result.warningCount > 0
+        ? `Applied ${fileLabel}. ${result.warningCount} warning${result.warningCount === 1 ? " stays" : "s stay"} visible in the sticky register.`
+        : `Applied ${fileLabel} to the active workspace.`,
+      result.warningCount > 0 ? "warning" : "success",
+    );
+  }
+}
+
+async function handleConfirmExportReview() {
+  clearLocalNote();
+  const result = await missionPlannerStore.confirmExportReview();
+
+  if (result.status === "cancelled") {
+    setLocalNote("Export cancelled. The domain chooser stayed open with the current selections intact.", "info");
+    return;
+  }
+
+  if (result.status === "success") {
+    const fileLabel = result.fileName ?? "the active .plan file";
+    setLocalNote(
+      result.warningCount > 0
+        ? `Saved ${fileLabel}. ${result.warningCount} export warning${result.warningCount === 1 ? " stays" : "s stay"} visible in the sticky register.`
+        : `Saved ${fileLabel} from the active planner workspace.`,
       result.warningCount > 0 ? "warning" : "success",
     );
   }
@@ -484,7 +563,7 @@ async function handleClearVehicle() {
   const result = await missionPlannerStore.clearVehicle();
 
   if (result.status === "cleared") {
-    setLocalNote("Vehicle mission cleared. The active workspace reset to an empty local draft.", "success");
+    setLocalNote("Vehicle workspace cleared. The active planner reset to an empty local draft.", "success");
   }
 }
 
@@ -493,8 +572,16 @@ async function handleCancelTransfer() {
   const result = await missionPlannerStore.cancelTransfer();
 
   if (result.status === "cancelled") {
-    setLocalNote("Cancelled the pending mission transfer. The current draft stayed mounted and retryable.", "warning");
+    setLocalNote("Cancelled the pending transfer. The current draft stayed mounted and retryable.", "warning");
   }
+}
+
+function handleDismissWarning(id: string) {
+  missionPlannerStore.dismissWarning(id);
+}
+
+function handleWarningAction(mode: MissionPlannerMode) {
+  missionPlannerStore.setMode(mode);
 }
 
 async function confirmPrompt() {
@@ -507,7 +594,7 @@ async function confirmPrompt() {
   }
 
   if (prompt.kind === "recoverable" && result.status === "restored") {
-    setLocalNote("Recovered the saved mission draft for this scope.", "success");
+    setLocalNote("Recovered the saved planner draft for this session family.", "success");
     return;
   }
 
@@ -516,23 +603,12 @@ async function confirmPrompt() {
   }
 
   if (prompt.action === "clear" && result.status === "cleared") {
-    setLocalNote("Vehicle mission cleared. The active workspace reset to an empty local draft.", "success");
+    setLocalNote("Vehicle workspace cleared. The active planner reset to an empty local draft.", "success");
     return;
   }
 
   if (prompt.action === "download" && result.status === "replaced") {
-    setLocalNote("Replaced the local draft with the current vehicle mission.", "success");
-    return;
-  }
-
-  if (prompt.action === "import" && result.status === "replaced") {
-    const fileLabel = result.fileName ?? prompt.fileName ?? "the selected .plan";
-    setLocalNote(
-      result.warningCount > 0
-        ? `Imported ${fileLabel}. ${result.warningCount} import warning${result.warningCount === 1 ? " stays" : "s stay"} listed inline.`
-        : `Imported ${fileLabel} into the active workspace.`,
-      result.warningCount > 0 ? "warning" : "success",
-    );
+    setLocalNote("Replaced the local draft with the current vehicle workspace.", "success");
   }
 }
 
@@ -546,28 +622,37 @@ function buildEntryActionCards(status: MissionPlannerView["status"], vehicleRead
       key: "read",
       title: "Read from Vehicle",
       description: vehicleReady
-        ? "Pull the live mission, fence, rally, and home state into this workspace."
-        : "Reconnect to enable live mission reads; local import and blank-draft entry stay available now.",
+        ? "Pull the live mission, fence, rally, and Home state into this workspace."
+        : "Reconnect to enable live reads; local import and blank-draft entry stay available now.",
       disabled: busy || !vehicleReady,
       testId: missionWorkspaceTestIds.entryRead,
       onclick: handleReadFromVehicle,
       tone: vehicleReady ? "primary" : "secondary",
     },
     {
-      key: "import",
+      key: "import-plan",
       title: "Import .plan",
-      description: "Open a QGroundControl plan file with the browser-safe picker and preserve supported survey blocks.",
+      description: "Open a QGroundControl plan file with the browser-safe picker and review mission, fence, and rally domains explicitly.",
       disabled: busy,
       testId: missionWorkspaceTestIds.entryImport,
       onclick: handleImportPlan,
       tone: "secondary",
     },
     {
+      key: "import-kml",
+      title: "Import .kml / .kmz",
+      description: "Bring KML or KMZ mission/fence geometry through the browser-safe picker and review supported domains before applying.",
+      disabled: busy,
+      testId: missionWorkspaceTestIds.entryImportKml,
+      onclick: handleImportKml,
+      tone: "secondary",
+    },
+    {
       key: "new",
-      title: "New mission",
+      title: "New draft",
       description: status === "unavailable"
         ? "Start a disconnected local draft now, then reconnect later for validation and transfer flows."
-        : "Start a blank local draft with a Home card, list, and typed inspector mounted immediately.",
+        : "Start a blank local draft with Home, mission, fence, rally, and review surfaces mounted immediately.",
       disabled: busy,
       testId: missionWorkspaceTestIds.entryNew,
       onclick: handleNewMission,
@@ -586,28 +671,164 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
   data-testid={missionWorkspaceTestIds.root}
 >
   <MissionWorkspaceHeader
+    attachment={view.attachment}
     busy={view.inlineStatus.busy}
     canCancel={view.inlineStatus.canCancel}
     canUseVehicleActions={canUseVehicleActions}
     dirty={view.dirty}
-    fileWarningCount={view.fileWarningCount}
+    fenceRegionCount={view.fenceRegionCount}
     hasContent={hasContent || view.workspaceMounted}
     missionItemCount={view.missionItemCount}
+    mode={view.mode}
     onCancelTransfer={handleCancelTransfer}
     onClearVehicle={handleClearVehicle}
     onExportPlan={handleExportPlan}
+    onImportKml={handleImportKml}
     onImportPlan={handleImportPlan}
     onNewMission={handleNewMission}
     onReadFromVehicle={handleReadFromVehicle}
+    onSelectMode={handleSelectMode}
     onUploadToVehicle={handleUploadToVehicle}
     onValidateMission={handleValidateMission}
+    rallyPointCount={view.rallyPointCount}
     readiness={view.readiness}
     scopeText={view.activeEnvelopeText}
     status={view.status}
     surveyRegionCount={view.surveyRegionCount}
     timedOut={view.inlineStatus.timedOut}
     validationIssueCount={view.validationIssueCount}
+    warningCount={view.warningCount}
   />
+
+  {#if view.importReview}
+    <section
+      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm text-warning"
+      data-testid={missionWorkspaceTestIds.importReview}
+    >
+      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-warning/80">Import review</p>
+      <h3 class="mt-1 text-base font-semibold text-warning" data-testid={missionWorkspaceTestIds.importReviewTitle}>
+        Review {view.importReview.fileName ?? `.${view.importReview.source}`} before replacing planner domains
+      </h3>
+      <p class="mt-2 text-warning/90">
+        Keep or replace the incoming Mission + Home + Survey, Fence, and Rally buckets independently. Nothing changes until you apply this review.
+      </p>
+
+      {#if view.importReview.warnings.length > 0}
+        <ul class="mt-3 list-inside list-disc space-y-1 text-xs">
+          {#each view.importReview.warnings as warning, index (`${warning}-${index}`)}
+            <li>{warning}</li>
+          {/each}
+        </ul>
+      {/if}
+
+      <div class="mt-4 grid gap-3 lg:grid-cols-3">
+        {#each view.importReview.choices as choice (choice.domain)}
+          <article
+            class="rounded-2xl border border-warning/30 bg-bg-primary/90 p-4 text-text-primary"
+            data-testid={importReviewChoiceTestId(choice.domain)}
+          >
+            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{choice.label}</p>
+            <p class="mt-2 text-xs text-text-secondary">Current · {choice.currentSummary}</p>
+            <p class="mt-1 text-xs text-text-secondary">Incoming · {choice.incomingSummary}</p>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button
+                class={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${!choice.replace
+                  ? "border-success/30 bg-success/10 text-success"
+                  : "border-border bg-bg-secondary text-text-primary hover:border-success hover:text-success"}`}
+                data-testid={`${missionWorkspaceTestIds.importReviewKeepPrefix}-${choice.domain}`}
+                onclick={() => missionPlannerStore.setImportReviewChoice(choice.domain, false)}
+                type="button"
+              >
+                Keep current
+              </button>
+              <button
+                class={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${choice.replace
+                  ? "border-warning/40 bg-warning/10 text-warning"
+                  : "border-border bg-bg-secondary text-text-primary hover:border-warning hover:text-warning"}`}
+                data-testid={`${missionWorkspaceTestIds.importReviewReplacePrefix}-${choice.domain}`}
+                onclick={() => missionPlannerStore.setImportReviewChoice(choice.domain, true)}
+                type="button"
+              >
+                Replace with incoming
+              </button>
+            </div>
+          </article>
+        {/each}
+      </div>
+
+      <div class="mt-4 flex flex-wrap gap-2">
+        <button
+          class="rounded-full border border-warning/40 bg-bg-primary px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105"
+          data-testid={missionWorkspaceTestIds.importReviewConfirm}
+          onclick={handleConfirmImportReview}
+          type="button"
+        >
+          Apply review
+        </button>
+        <button
+          class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          data-testid={missionWorkspaceTestIds.importReviewDismiss}
+          onclick={() => missionPlannerStore.dismissImportReview()}
+          type="button"
+        >
+          Dismiss review
+        </button>
+      </div>
+    </section>
+  {/if}
+
+  {#if view.exportReview}
+    <section
+      class="mt-4 rounded-lg border border-accent/30 bg-accent/10 px-4 py-4 text-sm text-text-primary"
+      data-testid={missionWorkspaceTestIds.exportReview}
+    >
+      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-accent/80">Export chooser</p>
+      <h3 class="mt-1 text-base font-semibold" data-testid={missionWorkspaceTestIds.exportReviewTitle}>
+        Choose which planner domains to include in the exported .plan file
+      </h3>
+      <p class="mt-2 text-text-secondary">
+        Mission includes Home and Survey because QGroundControl stores those inside the mission bucket. Fence and Rally stay independent export buckets.
+      </p>
+
+      <div class="mt-4 grid gap-3 lg:grid-cols-3">
+        {#each view.exportReview.choices as choice (choice.domain)}
+          <label
+            class="flex items-start gap-3 rounded-2xl border border-border bg-bg-primary/90 p-4"
+            data-testid={exportReviewChoiceTestId(choice.domain)}
+          >
+            <input
+              checked={choice.selected}
+              onchange={(event) => missionPlannerStore.setExportReviewChoice(choice.domain, (event.currentTarget as HTMLInputElement).checked)}
+              type="checkbox"
+            />
+            <span>
+              <span class="block text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{choice.label}</span>
+              <span class="mt-2 block text-xs text-text-secondary">{choice.summary}</span>
+            </span>
+          </label>
+        {/each}
+      </div>
+
+      <div class="mt-4 flex flex-wrap gap-2">
+        <button
+          class="rounded-full border border-accent/40 bg-bg-primary px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105"
+          data-testid={missionWorkspaceTestIds.exportReviewConfirm}
+          onclick={handleConfirmExportReview}
+          type="button"
+        >
+          Save .plan
+        </button>
+        <button
+          class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          data-testid={missionWorkspaceTestIds.exportReviewDismiss}
+          onclick={() => missionPlannerStore.dismissExportReview()}
+          type="button"
+        >
+          Close chooser
+        </button>
+      </div>
+    </section>
+  {/if}
 
   {#if planner.replacePrompt}
     <section
@@ -619,11 +840,6 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       </p>
       <h3 class="mt-1 text-base font-semibold text-warning">{replacePromptTitle(planner)}</h3>
       <p class="mt-2">{replacePromptBody(planner)}</p>
-      {#if planner.replacePrompt.kind === "replace-active" && planner.replacePrompt.fileWarnings.length > 0}
-        <p class="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-warning/80">
-          {planner.replacePrompt.fileWarnings.length} import warning{planner.replacePrompt.fileWarnings.length === 1 ? "" : "s"} will carry forward if you replace the current draft.
-        </p>
-      {/if}
       <div class="mt-3 flex flex-wrap gap-2">
         <button
           class="rounded-full border border-warning/40 bg-bg-primary px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105"
@@ -645,15 +861,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     </section>
   {/if}
 
-  {#if view.lastError}
-    <div
-      class="mt-4 rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger"
-      data-testid={missionWorkspaceTestIds.error}
-    >
-      <p class="font-semibold">Mission action failed</p>
-      <p class="mt-1">{view.lastError}</p>
-    </div>
-  {:else if inlineCopy}
+  {#if inlineCopy}
     <div
       class={`mt-4 rounded-lg border px-4 py-3 text-sm ${statusClass(inlineCopy.tone)}`}
       data-testid={missionWorkspaceTestIds.inlineStatus}
@@ -672,34 +880,74 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     </div>
   {/if}
 
-  {#if planner.fileWarnings.length > 0}
+  {#if view.lastError}
     <div
-      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning"
-      data-testid={missionWorkspaceTestIds.warningFile}
+      class="mt-4 rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger"
+      data-testid={missionWorkspaceTestIds.error}
     >
-      <p class="font-semibold">Import and export warnings</p>
-      <ul class="mt-2 list-inside list-disc space-y-1 text-xs">
-        {#each planner.fileWarnings as warning, index (`${warning}-${index}`)}
-          <li>{warning}</li>
-        {/each}
-      </ul>
+      <p class="font-semibold">Planner action failed</p>
+      <p class="mt-1">{view.lastError}</p>
     </div>
   {/if}
 
-  {#if planner.validationIssues.length > 0}
-    <div
-      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning"
-      data-testid={missionWorkspaceTestIds.warningValidation}
+  {#if view.warnings.length > 0}
+    <section
+      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm text-warning"
+      data-testid={missionWorkspaceTestIds.warningRegister}
     >
-      <p class="font-semibold">Validation issues stay inline with the mission toolbar</p>
-      <ul class="mt-2 list-inside list-disc space-y-1 text-xs">
-        {#each planner.validationIssues as issue, index (`${issue.code}-${index}`)}
-          <li>
-            [{issue.severity}] {issue.code}{typeof issue.seq === "number" ? ` @seq ${issue.seq}` : ""}: {issue.message}
-          </li>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.16em] text-warning/80">Sticky warnings</p>
+          <p class="mt-1 text-xs text-warning/90">Warnings and blocked-action reasons stay visible across domain switches until you dismiss them explicitly.</p>
+        </div>
+        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-warning/80">{view.warningCount} visible</p>
+      </div>
+
+      <div class="mt-4 space-y-3">
+        {#each view.warnings as warning, index (warning.id)}
+          <article
+            class="rounded-2xl border border-warning/30 bg-bg-primary/90 px-4 py-3 text-text-primary"
+            data-testid={warningTestId(warning, index)}
+          >
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="max-w-3xl">
+                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{warning.domain}</p>
+                <h3 class="mt-1 text-sm font-semibold">{warning.title}</h3>
+                <p class="mt-1 text-sm text-text-secondary">{warning.detail}</p>
+                {#if warning.lines.length > 0}
+                  <ul class="mt-2 list-inside list-disc space-y-1 text-xs text-text-secondary">
+                    {#each warning.lines as line (`${warning.id}-${line}`)}
+                      <li>{line}</li>
+                    {/each}
+                  </ul>
+                {/if}
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                {#if warning.action}
+                  <button
+                    class="rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent transition hover:brightness-105"
+                    data-testid={`${missionWorkspaceTestIds.warningActionPrefix}-${index}`}
+                    onclick={() => handleWarningAction(warning.action!.mode)}
+                    type="button"
+                  >
+                    {warning.action.label}
+                  </button>
+                {/if}
+                <button
+                  class="rounded-full border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+                  data-testid={`${missionWorkspaceTestIds.warningDismissPrefix}-${index}`}
+                  onclick={() => handleDismissWarning(warning.id)}
+                  type="button"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </article>
         {/each}
-      </ul>
-    </div>
+      </div>
+    </section>
   {/if}
 
   {#if view.status === "bootstrapping" && !view.workspaceMounted}
@@ -707,10 +955,10 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       class="mt-4 rounded-[24px] border border-border bg-bg-secondary/60 p-5"
       data-testid={missionWorkspaceTestIds.bootstrapping}
     >
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mission scope</p>
+      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planner scope</p>
       <h3 class="mt-2 text-lg font-semibold text-text-primary">Loading the planner domain</h3>
       <p class="mt-2 text-sm text-text-secondary">
-        IronWing is subscribing the mission planner to the active session scope before entry actions unlock.
+        IronWing is subscribing the planner workspace to the active session scope before live actions unlock.
       </p>
     </section>
   {:else if !view.workspaceMounted}
@@ -718,17 +966,17 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       class="mt-4 rounded-[24px] border border-border bg-bg-secondary/60 p-5"
       data-testid={view.status === "unavailable" ? missionWorkspaceTestIds.unavailable : missionWorkspaceTestIds.empty}
     >
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mission entry</p>
+      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planner entry</p>
       <h3 class="mt-2 text-lg font-semibold text-text-primary">
-        {view.status === "unavailable" ? "Start planning locally or reconnect for vehicle sync" : "Start this scope with a real mission entry action"}
+        {view.status === "unavailable" ? "Start planning locally or reconnect for live sync" : "Start this scope with a real planner entry action"}
       </h3>
       <p class="mt-2 text-sm text-text-secondary">
         {view.status === "unavailable"
-          ? "The Mission tab is mounted even without an active vehicle scope. Import a .plan or start a blank draft now, then reconnect later for live reads, validation, upload, and clear flows."
-          : "Start from a vehicle download, a truthful .plan import, or a blank mission. Once you choose an entry action, Home, manual items, and preserved survey blocks stay mounted in the active workspace."}
+          ? "The Mission tab stays mounted even without an active vehicle scope. Import .plan, .kml, or .kmz files now, or start a blank draft and reconnect later for live reads, validation, upload, and clear flows."
+          : "Start from a vehicle download, a truthful file import, or a blank planner draft. Once you choose an entry action, Home, warnings, review state, and later domain editors stay mounted in the active workspace."}
       </p>
 
-      <div class="mt-5 grid gap-3 lg:grid-cols-3">
+      <div class="mt-5 grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
         {#each entryCards as card (card.key)}
           <button
             class={`rounded-[20px] border p-4 text-left transition ${card.tone === "primary"
@@ -751,76 +999,91 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       class="mt-4 rounded-[24px] border border-border bg-bg-secondary/60 p-5"
       data-testid={missionWorkspaceTestIds.ready}
     >
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mission workspace</p>
+      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planner workspace</p>
       <p class="mt-2 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.summary}>
-        Home, manual mission items, first-class survey authoring, typed command editing, and map previews now share one mounted planning workspace instead of the old Mission placeholder shell.
+        Mission, fence, rally, Home, sticky warnings, and mixed-domain review now share one mounted planning workspace instead of one-shot replace prompts and placeholder status copy.
       </p>
 
       <div class="mt-5 space-y-4">
-        <MissionMap
-          fallbackReference={resolveSurveyCreationAnchor(planner)}
-          onCreateSurveyRegion={handleStartSurveyDraw}
-          onDeleteSurveyRegion={handleDeleteSurveyRegion}
-          onMoveHome={handleMoveHomeFromMap}
-          onMoveMissionItem={handleMoveMissionItemFromMap}
-          onSelectHome={missionPlannerStore.selectHome}
-          onSelectMissionItem={handleSelectMissionItemFromMap}
-          onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
-          onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
-          selectedSurveyRegion={selectedSurveyRegion}
-          view={mapView}
+        <MissionHomeCard
+          attachment={view.attachment}
+          home={planner.home}
+          mode={view.mode}
+          onChange={missionPlannerStore.setHome}
+          onSelect={missionPlannerStore.selectHome}
+          selected={planner.selection.kind === "home"}
         />
 
-        <div class="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+        {#if showMissionEditor}
           <div class="space-y-4">
-            <MissionHomeCard
-              home={planner.home}
-              onChange={missionPlannerStore.setHome}
-              onSelect={missionPlannerStore.selectHome}
-              selected={planner.selection.kind === "home"}
-            />
-
-            <MissionDraftList
-              cruiseSpeed={planner.cruiseSpeed}
-              items={missionItems}
-              onAddMissionItem={missionPlannerStore.addMissionItem}
-              onAddSurveyBlock={handleCreateSurveyBlock}
-              onDeleteMissionItem={missionPlannerStore.deleteMissionItem}
+            <MissionMap
+              fallbackReference={resolveSurveyCreationAnchor(planner)}
+              onCreateSurveyRegion={handleStartSurveyDraw}
               onDeleteSurveyRegion={handleDeleteSurveyRegion}
-              onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
-              onMoveMissionItemDown={missionPlannerStore.moveMissionItemDownByIndex}
-              onMoveMissionItemUp={missionPlannerStore.moveMissionItemUpByIndex}
-              onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
-              onSelectMissionItem={missionPlannerStore.selectMissionItem}
-              onSelectSurveyBlock={missionPlannerStore.selectSurveyRegion}
-              onSetSurveyRegionCollapsed={missionPlannerStore.setSurveyRegionCollapsed}
-              selectedMissionUiId={selectedMissionUiId}
-              selectedSurface={planner.selection}
-              surveyBlocks={surveyBlocks}
+              onMoveHome={handleMoveHomeFromMap}
+              onMoveMissionItem={handleMoveMissionItemFromMap}
+              onSelectHome={missionPlannerStore.selectHome}
+              onSelectMissionItem={handleSelectMissionItemFromMap}
+              onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
+              onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+              selectedSurveyRegion={selectedSurveyRegion}
+              view={mapView}
             />
-          </div>
 
-          <MissionInspector
-            cruiseSpeed={planner.cruiseSpeed}
-            home={planner.home}
-            item={selectedMissionItem}
-            onConfirmSurveyPrompt={missionPlannerStore.confirmSurveyPrompt}
-            onDeleteSurveyRegion={handleDeleteSurveyRegion}
-            onDismissSurveyPrompt={missionPlannerStore.dismissSurveyPrompt}
-            onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
-            onMarkSurveyRegionItemAsEdited={missionPlannerStore.markSurveyRegionItemAsEdited}
-            onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
-            onUpdateAltitude={missionPlannerStore.updateMissionItemAltitude}
-            onUpdateCommand={missionPlannerStore.updateMissionItemCommand}
-            onUpdateLatitude={missionPlannerStore.updateMissionItemLatitude}
-            onUpdateLongitude={missionPlannerStore.updateMissionItemLongitude}
-            onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
-            previousItem={previousMissionItem}
-            selectedSurveyRegion={selectedSurveyRegion}
-            selection={planner.selection}
-            surveyPrompt={view.surveyPrompt}
-          />
-        </div>
+            <div class="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+              <div class="space-y-4">
+                <MissionDraftList
+                  cruiseSpeed={planner.cruiseSpeed}
+                  items={missionItems}
+                  onAddMissionItem={missionPlannerStore.addMissionItem}
+                  onAddSurveyBlock={handleCreateSurveyBlock}
+                  onDeleteMissionItem={missionPlannerStore.deleteMissionItem}
+                  onDeleteSurveyRegion={handleDeleteSurveyRegion}
+                  onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
+                  onMoveMissionItemDown={missionPlannerStore.moveMissionItemDownByIndex}
+                  onMoveMissionItemUp={missionPlannerStore.moveMissionItemUpByIndex}
+                  onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
+                  onSelectMissionItem={missionPlannerStore.selectMissionItem}
+                  onSelectSurveyBlock={missionPlannerStore.selectSurveyRegion}
+                  onSetSurveyRegionCollapsed={missionPlannerStore.setSurveyRegionCollapsed}
+                  selectedMissionUiId={selectedMissionUiId}
+                  selectedSurface={planner.selection}
+                  surveyBlocks={surveyBlocks}
+                />
+              </div>
+
+              <MissionInspector
+                cruiseSpeed={planner.cruiseSpeed}
+                home={planner.home}
+                item={selectedMissionItem}
+                onConfirmSurveyPrompt={missionPlannerStore.confirmSurveyPrompt}
+                onDeleteSurveyRegion={handleDeleteSurveyRegion}
+                onDismissSurveyPrompt={missionPlannerStore.dismissSurveyPrompt}
+                onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
+                onMarkSurveyRegionItemAsEdited={missionPlannerStore.markSurveyRegionItemAsEdited}
+                onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
+                onUpdateAltitude={missionPlannerStore.updateMissionItemAltitude}
+                onUpdateCommand={missionPlannerStore.updateMissionItemCommand}
+                onUpdateLatitude={missionPlannerStore.updateMissionItemLatitude}
+                onUpdateLongitude={missionPlannerStore.updateMissionItemLongitude}
+                onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+                previousItem={previousMissionItem}
+                selectedSurveyRegion={selectedSurveyRegion}
+                selection={planner.selection}
+                surveyPrompt={view.surveyPrompt}
+              />
+            </div>
+          </div>
+        {:else}
+          <section
+            class="rounded-2xl border border-border bg-bg-primary p-5"
+            data-testid={missionWorkspaceTestIds.modeShell}
+          >
+            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{view.mode} mode</p>
+            <h3 class="mt-2 text-lg font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.modeShellTitle}>{modeShellTitle(view.mode)}</h3>
+            <p class="mt-2 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.modeShellBody}>{modeShellBody(view.mode, view)}</p>
+          </section>
+        {/if}
       </div>
     </section>
   {/if}

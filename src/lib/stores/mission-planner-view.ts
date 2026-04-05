@@ -3,7 +3,11 @@ import { derived, type Readable } from "svelte/store";
 import type { SurveyRegionGenerationState, SurveyPatternType } from "../survey-region";
 import type {
   MissionPlannerActionState,
+  MissionPlannerAttachmentState,
   MissionPlannerDomainPhase,
+  MissionPlannerExportReview,
+  MissionPlannerImportReview,
+  MissionPlannerMode,
   MissionPlannerReplacePrompt,
   MissionPlannerStoreState,
   MissionPlannerSurveyPrompt,
@@ -13,6 +17,7 @@ import {
   plannerHasContent,
   plannerIsDirty,
   plannerScopeLabel,
+  resolveMissionPlannerAttachment,
 } from "./mission-planner";
 
 export type MissionPlannerWorkspaceStatus = "bootstrapping" | "unavailable" | "empty" | "ready";
@@ -26,7 +31,7 @@ export type MissionPlannerInlineStatus = {
 
 export type MissionPlannerReplacePromptView = {
   kind: MissionPlannerReplacePrompt["kind"];
-  action: "download" | "import" | "clear" | "recoverable";
+  action: "download" | "clear" | "recoverable";
   warningCount: number;
 };
 
@@ -57,10 +62,24 @@ export type MissionPlannerTransferView = {
   retriesUsed: number;
 };
 
+export type MissionPlannerWarningView = {
+  id: string;
+  tone: "info" | "warning" | "danger";
+  title: string;
+  detail: string;
+  domain: MissionPlannerMode | "workspace";
+  lines: string[];
+  action: { label: string; mode: MissionPlannerMode } | null;
+};
+
 export type MissionPlannerView = {
   status: MissionPlannerWorkspaceStatus;
   readiness: "ready" | "bootstrapping" | "unavailable" | "degraded";
   workspaceMounted: boolean;
+  mode: MissionPlannerMode;
+  attachment: MissionPlannerAttachmentState;
+  canUseVehicleActions: boolean;
+  canEdit: boolean;
   activeEnvelope: MissionPlannerStoreState["activeEnvelope"];
   activeEnvelopeText: string;
   phase: MissionPlannerDomainPhase;
@@ -72,7 +91,11 @@ export type MissionPlannerView = {
   rallyPointCount: number;
   fileWarningCount: number;
   validationIssueCount: number;
+  warningCount: number;
+  warnings: MissionPlannerWarningView[];
   replacePrompt: MissionPlannerReplacePromptView | null;
+  importReview: MissionPlannerImportReview | null;
+  exportReview: MissionPlannerExportReview | null;
   surveyPrompt: MissionPlannerSurveyPromptView | null;
   surveyOrder: Array<{ regionId: string; position: number }>;
   selectedSurvey: MissionPlannerSelectedSurveyView | null;
@@ -83,6 +106,7 @@ export type MissionPlannerView = {
 
 export function createMissionPlannerViewStore(store: Readable<MissionPlannerStoreState>) {
   return derived(store, ($planner): MissionPlannerView => {
+    const attachment = resolveMissionPlannerAttachment($planner);
     const status = resolveWorkspaceStatus($planner);
     const readiness = resolveWorkspaceReadiness($planner, status);
     const effectiveMission = activeTransferMissionPlan($planner);
@@ -96,11 +120,16 @@ export function createMissionPlannerViewStore(store: Readable<MissionPlannerStor
     const selectedSurveyPosition = selectedSurveyRegion
       ? surveyOrder.find((block) => block.regionId === selectedSurveyRegion.id)?.position ?? null
       : null;
+    const warnings = buildWarningEntries($planner, attachment);
 
     return {
       status,
       readiness,
       workspaceMounted: $planner.workspaceMounted,
+      mode: $planner.mode,
+      attachment,
+      canUseVehicleActions: attachment.canUseVehicleActions,
+      canEdit: attachment.canEdit,
       activeEnvelope: $planner.activeEnvelope,
       activeEnvelopeText: plannerScopeLabel($planner),
       phase: $planner.phase,
@@ -112,7 +141,11 @@ export function createMissionPlannerViewStore(store: Readable<MissionPlannerStor
       rallyPointCount: $planner.draftState.active.rally.document.points.length,
       fileWarningCount: $planner.fileWarnings.length,
       validationIssueCount: $planner.validationIssues.length,
+      warningCount: warnings.length,
+      warnings,
       replacePrompt: formatReplacePrompt($planner.replacePrompt),
+      importReview: $planner.pendingImportReview,
+      exportReview: $planner.pendingExportReview,
       surveyPrompt: formatSurveyPrompt($planner.surveyPrompt),
       surveyOrder,
       selectedSurvey: selectedSurveyRegion
@@ -151,7 +184,7 @@ function resolveWorkspaceStatus(state: MissionPlannerStoreState): MissionPlanner
     return "bootstrapping";
   }
 
-  if (!state.activeEnvelope) {
+  if (!state.workspaceMounted && !state.activeEnvelope) {
     return "unavailable";
   }
 
@@ -176,6 +209,105 @@ function resolveWorkspaceReadiness(
     default:
       return "unavailable";
   }
+}
+
+function buildWarningEntries(
+  state: MissionPlannerStoreState,
+  attachment: MissionPlannerAttachmentState,
+): MissionPlannerWarningView[] {
+  const warnings: MissionPlannerWarningView[] = [];
+
+  const pushIfVisible = (warning: MissionPlannerWarningView) => {
+    if (!state.dismissedWarningIds.includes(warning.id)) {
+      warnings.push(warning);
+    }
+  };
+
+  if (attachment.kind === "playback-readonly" || attachment.kind === "detached-local") {
+    pushIfVisible({
+      id: `attachment:${attachment.kind}`,
+      tone: "warning",
+      title: attachment.label,
+      detail: attachment.detail,
+      domain: "workspace",
+      lines: [],
+      action: { label: "Open mission mode", mode: "mission" },
+    });
+  }
+
+  if (state.streamError) {
+    pushIfVisible({
+      id: `stream-error:${state.streamError}`,
+      tone: "warning",
+      title: "Planner stream degraded",
+      detail: state.streamError,
+      domain: "workspace",
+      lines: [],
+      action: null,
+    });
+  }
+
+  if (state.blockedReason) {
+    warnings.push({
+      id: `blocked:${state.blockedReason}`,
+      tone: "warning",
+      title: "Blocked action",
+      detail: state.blockedReason,
+      domain: state.mode,
+      lines: [],
+      action: { label: `Open ${state.mode} mode`, mode: state.mode },
+    });
+  }
+
+  if (state.lastError) {
+    warnings.push({
+      id: `last-error:${state.lastError}`,
+      tone: "danger",
+      title: "Planner action failed",
+      detail: state.lastError,
+      domain: "workspace",
+      lines: [],
+      action: null,
+    });
+  }
+
+  state.fileWarnings.forEach((warning, index) => {
+    pushIfVisible({
+      id: `file-warning:${index}:${warning}`,
+      tone: "warning",
+      title: "Import / export warning",
+      detail: warning,
+      domain: inferWarningDomain(warning),
+      lines: [],
+      action: { label: `Open ${inferWarningDomain(warning)} mode`, mode: inferWarningDomain(warning) },
+    });
+  });
+
+  state.validationIssues.forEach((issue, index) => {
+    pushIfVisible({
+      id: `validation-issue:${index}:${issue.code}:${issue.message}`,
+      tone: issue.severity === "error" ? "danger" : "warning",
+      title: `${issue.severity === "error" ? "Validation error" : "Validation warning"} · ${issue.code}`,
+      detail: typeof issue.seq === "number" ? `Sequence ${issue.seq}: ${issue.message}` : issue.message,
+      domain: "mission",
+      lines: [],
+      action: { label: "Open mission mode", mode: "mission" },
+    });
+  });
+
+  return warnings;
+}
+
+function inferWarningDomain(warning: string): MissionPlannerMode {
+  if (/rally/i.test(warning)) {
+    return "rally";
+  }
+
+  if (/fence|polygon|kmz|kml/i.test(warning)) {
+    return "fence";
+  }
+
+  return "mission";
 }
 
 function formatReplacePrompt(prompt: MissionPlannerReplacePrompt | null): MissionPlannerReplacePromptView | null {
