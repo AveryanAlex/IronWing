@@ -6,6 +6,7 @@ use mavlink::MessageData;
 use serde::Deserialize;
 use std::future::Future;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 use tauri::Listener;
 #[cfg(target_os = "android")]
 use tauri::Manager;
@@ -13,6 +14,12 @@ use tokio::task::JoinHandle;
 
 use crate::AppState;
 use crate::guided::emit_guided_reset;
+
+/// Total time budget for the entire connect flow (TCP handshake + MAVLink
+/// heartbeat wait).  The underlying `mavlink::connect_async` call has no
+/// built-in timeout for the TCP socket phase, so without a wrapper the
+/// connect can hang for the OS-level TCP timeout (~2 min on Linux).
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 struct ConnectedVehicle {
     vehicle: Vehicle,
@@ -78,7 +85,24 @@ async fn connect_via_address(
     state: &AppState,
     address: String,
 ) -> Result<ConnectedVehicle, String> {
-    let task = tokio::spawn(async move { Vehicle::connect(&address).await });
+    let config = VehicleConfig {
+        connect_timeout: CONNECT_TIMEOUT,
+        ..VehicleConfig::default()
+    };
+    tracing::info!("connecting to {address} (timeout {CONNECT_TIMEOUT:?})");
+    let task = tokio::spawn(async move {
+        let result = tokio::time::timeout(
+            CONNECT_TIMEOUT,
+            Vehicle::connect_with_config(&address, config),
+        )
+        .await;
+        match &result {
+            Ok(Ok(_)) => tracing::info!("vehicle connected to {address}"),
+            Ok(Err(e)) => tracing::warn!("vehicle connect failed for {address}: {e}"),
+            Err(_) => tracing::warn!("vehicle connect timed out for {address}"),
+        }
+        result.map_err(|_| mavkit::VehicleError::Timeout("connecting to vehicle".into()))?
+    });
     *state.connect_abort.lock().await = Some(task.abort_handle());
 
     let vehicle = task
@@ -313,7 +337,11 @@ async fn connect_ble(address: &str) -> Result<ConnectedVehicle, String> {
         dyn mavlink::AsyncMavConnection<mavkit::dialect::MavMessage> + Sync + Send,
     > = Box::new(connection);
 
-    let vehicle = Vehicle::from_connection(connection, VehicleConfig::default())
+    let config = VehicleConfig {
+        connect_timeout: CONNECT_TIMEOUT,
+        ..VehicleConfig::default()
+    };
+    let vehicle = Vehicle::from_connection(connection, config)
         .await
         .map_err(|e| format!("Vehicle connection failed: {e}"))?;
 
@@ -369,7 +397,11 @@ async fn connect_spp(app: &tauri::AppHandle, address: &str) -> Result<ConnectedV
         dyn mavlink::AsyncMavConnection<mavkit::dialect::MavMessage> + Sync + Send,
     > = Box::new(connection);
 
-    let vehicle = Vehicle::from_connection(connection, VehicleConfig::default())
+    let config = VehicleConfig {
+        connect_timeout: CONNECT_TIMEOUT,
+        ..VehicleConfig::default()
+    };
+    let vehicle = Vehicle::from_connection(connection, config)
         .await
         .map_err(|e| format!("Vehicle connection failed: {e}"))?;
 
