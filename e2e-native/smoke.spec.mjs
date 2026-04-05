@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
 
 async function waitForCheckpoint(label, predicate, { timeout = 60_000, timeoutMsg }) {
-  await browser.waitUntil(predicate, {
-    timeout,
-    timeoutMsg,
+  const msg = timeoutMsg || `${label}: timed out after ${timeout / 1000}s`;
+  const hardDeadline = new Promise((_, reject) => {
+    const timer = setTimeout(() => reject(new Error(msg)), timeout);
+    timer.unref();
   });
+
+  await Promise.race([
+    browser.waitUntil(predicate, { timeout, timeoutMsg: msg }),
+    hardDeadline,
+  ]);
   console.log(`[native smoke] ${label}`);
 }
 
