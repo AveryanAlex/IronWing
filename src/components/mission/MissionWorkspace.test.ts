@@ -1,0 +1,558 @@
+// @vitest-environment jsdom
+
+import { get } from "svelte/store";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import MissionWorkspace from "./MissionWorkspace.svelte";
+import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
+import {
+  setMissionPlannerStoreContext,
+  setMissionPlannerViewStoreContext,
+} from "../../app/shell/runtime-context";
+import type { HomePosition, MissionPlan, MissionState, TransferProgress } from "../../mission";
+import type { OpenSessionSnapshot, SessionEnvelope } from "../../session";
+import type { TransportDescriptor } from "../../transport";
+import type {
+  SessionConnectionFormState,
+  SessionService,
+  SessionServiceEventHandlers,
+} from "../../lib/platform/session";
+import type {
+  MissionPlannerService,
+  MissionPlannerServiceEventHandlers,
+  MissionPlannerWorkspaceTransfer,
+} from "../../lib/platform/mission-planner";
+import type {
+  MissionPlanFileExportResult,
+  MissionPlanFileImportResult,
+  MissionPlanFileIo,
+} from "../../lib/mission-plan-file-io";
+import type { SurveyDraftExtension } from "../../lib/survey-region";
+import { createSurveyDraftExtension, hydrateSurveyRegion } from "../../lib/survey-region";
+import {
+  createMissionPlannerStore,
+  createMissionPlannerViewStore,
+} from "../../lib/stores/mission-planner";
+import { createSessionStore } from "../../lib/stores/session";
+
+type RenderableComponent = (...args: any[]) => unknown;
+
+function asRenderable(component: unknown): RenderableComponent {
+  return component as RenderableComponent;
+}
+
+function deferred<T>() {
+  let resolve: (value: T) => void;
+  let reject: (reason?: unknown) => void;
+
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+
+  return {
+    promise,
+    resolve: resolve!,
+    reject: reject!,
+  };
+}
+
+function createEnvelope(
+  sessionId: string,
+  overrides: Partial<SessionEnvelope> = {},
+): SessionEnvelope {
+  return {
+    session_id: sessionId,
+    source_kind: "live",
+    seek_epoch: 0,
+    reset_revision: 0,
+    ...overrides,
+  };
+}
+
+function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessionSnapshot {
+  return {
+    envelope: createEnvelope("session-1"),
+    session: {
+      available: true,
+      complete: true,
+      provenance: "bootstrap",
+      value: {
+        status: "active",
+        connection: { kind: "connected" },
+        vehicle_state: {
+          armed: false,
+          custom_mode: 0,
+          mode_name: "Stabilize",
+          system_status: "standby",
+          vehicle_type: "quadrotor",
+          autopilot: "ardu_pilot_mega",
+          system_id: 1,
+          component_id: 1,
+          heartbeat_received: true,
+        },
+        home_position: null,
+      },
+    },
+    telemetry: {
+      available: false,
+      complete: false,
+      provenance: "bootstrap",
+      value: null,
+    },
+    mission_state: {
+      plan: null,
+      current_index: null,
+      sync: "current",
+      active_op: null,
+    },
+    param_store: null,
+    param_progress: null,
+    support: {
+      available: false,
+      complete: false,
+      provenance: "bootstrap",
+      value: null,
+    },
+    sensor_health: {
+      available: false,
+      complete: false,
+      provenance: "bootstrap",
+      value: null,
+    },
+    configuration_facts: {
+      available: false,
+      complete: false,
+      provenance: "bootstrap",
+      value: null,
+    },
+    calibration: {
+      available: false,
+      complete: false,
+      provenance: "bootstrap",
+      value: null,
+    },
+    guided: {
+      available: false,
+      complete: false,
+      provenance: "bootstrap",
+      value: null,
+    },
+    status_text: {
+      available: true,
+      complete: true,
+      provenance: "bootstrap",
+      value: { entries: [] },
+    },
+    playback: { cursor_usec: null },
+    ...overrides,
+  };
+}
+
+function createTransportDescriptors(): TransportDescriptor[] {
+  return [
+    {
+      kind: "udp",
+      label: "UDP",
+      available: true,
+      validation: { bind_addr_required: true },
+    },
+  ];
+}
+
+function createSessionHarness(
+  snapshots: OpenSessionSnapshot[],
+  overrides: Partial<SessionService> = {},
+) {
+  let handlers: SessionServiceEventHandlers | null = null;
+  const queue = [...snapshots];
+  const defaultConnectionForm: SessionConnectionFormState = {
+    mode: "udp",
+    udpBind: "0.0.0.0:14550",
+    tcpAddress: "127.0.0.1:5760",
+    serialPort: "",
+    baud: 57600,
+    selectedBtDevice: "",
+    takeoffAlt: "10",
+    followVehicle: true,
+  };
+
+  const service = {
+    loadConnectionForm: vi.fn(() => ({ ...defaultConnectionForm })),
+    persistConnectionForm: vi.fn(),
+    openSessionSnapshot: vi.fn(async () => queue.shift() ?? snapshots[snapshots.length - 1]),
+    ackSessionSnapshot: vi.fn(async () => ({ result: "accepted" as const })),
+    subscribeAll: vi.fn(async (nextHandlers: SessionServiceEventHandlers) => {
+      handlers = nextHandlers;
+      return () => {
+        handlers = null;
+      };
+    }),
+    availableTransportDescriptors: vi.fn(async () => createTransportDescriptors()),
+    describeTransportAvailability: vi.fn(() => "UDP available"),
+    validateTransportDescriptor: vi.fn(() => []),
+    buildConnectRequest: vi.fn(() => ({ transport: { kind: "udp" as const, bind_addr: "0.0.0.0:14550" } })),
+    connectSession: vi.fn(async () => undefined),
+    disconnectSession: vi.fn(async () => undefined),
+    listSerialPorts: vi.fn(async () => []),
+    btRequestPermissions: vi.fn(async () => undefined),
+    btScanBle: vi.fn(async () => []),
+    btGetBondedDevices: vi.fn(async () => []),
+    getAvailableModes: vi.fn(async () => []),
+    formatError: vi.fn((error: unknown) => (error instanceof Error ? error.message : String(error))),
+    ...overrides,
+  } satisfies SessionService;
+
+  return {
+    service,
+    emit<K extends keyof SessionServiceEventHandlers>(
+      event: K,
+      payload: Parameters<SessionServiceEventHandlers[K]>[0],
+    ) {
+      if (!handlers) {
+        throw new Error("session handlers are not registered");
+      }
+
+      handlers[event](payload as never);
+    },
+  };
+}
+
+function createPlannerServiceHarness(overrides: Partial<MissionPlannerService> = {}) {
+  let handlers: MissionPlannerServiceEventHandlers | null = null;
+
+  const service = {
+    subscribeAll: vi.fn(async (nextHandlers: MissionPlannerServiceEventHandlers) => {
+      handlers = nextHandlers;
+      return () => {
+        handlers = null;
+      };
+    }),
+    downloadWorkspace: vi.fn(async (): Promise<MissionPlannerWorkspaceTransfer> => ({
+      mission: { items: [] },
+      fence: { return_point: null, regions: [] },
+      rally: { points: [] },
+      home: null,
+    })),
+    uploadWorkspace: vi.fn(async () => undefined),
+    clearWorkspace: vi.fn(async () => undefined),
+    validateMission: vi.fn(async () => []),
+    cancelTransfer: vi.fn(async () => undefined),
+    formatError: vi.fn((error: unknown) => (error instanceof Error ? error.message : String(error))),
+    ...overrides,
+  } satisfies MissionPlannerService;
+
+  return {
+    service,
+    emitMissionState(envelope: SessionEnvelope, value: MissionState) {
+      if (!handlers) {
+        throw new Error("planner handlers are not registered");
+      }
+
+      handlers.onMissionState({ envelope, value });
+    },
+    emitMissionProgress(envelope: SessionEnvelope, value: TransferProgress) {
+      if (!handlers) {
+        throw new Error("planner handlers are not registered");
+      }
+
+      handlers.onMissionProgress({ envelope, value });
+    },
+  };
+}
+
+function createFileIoHarness(overrides: Partial<MissionPlanFileIo> = {}) {
+  const fileIo = {
+    importFromPicker: vi.fn(async (): Promise<MissionPlanFileImportResult> => ({ status: "cancelled" })),
+    exportToPicker: vi.fn(async (): Promise<MissionPlanFileExportResult> => ({ status: "cancelled" })),
+    ...overrides,
+  } satisfies MissionPlanFileIo;
+
+  return { fileIo };
+}
+
+function makeWorkspace(
+  overrides: Partial<{
+    mission: MissionPlan;
+    home: HomePosition | null;
+    survey: SurveyDraftExtension;
+    cruiseSpeed: number;
+    hoverSpeed: number;
+  }> = {},
+) {
+  return {
+    mission: overrides.mission ?? {
+      items: [
+        {
+          command: {
+            Nav: {
+              Waypoint: {
+                position: {
+                  RelHome: {
+                    latitude_deg: 47.4,
+                    longitude_deg: 8.55,
+                    relative_alt_m: 25,
+                  },
+                },
+                hold_time_s: 0,
+                acceptance_radius_m: 1,
+                pass_radius_m: 0,
+                yaw_deg: 0,
+              },
+            },
+          },
+          current: true,
+          autocontinue: true,
+        },
+      ],
+    },
+    fence: { return_point: null, regions: [] },
+    rally: { points: [] },
+    home: overrides.home ?? null,
+    survey: overrides.survey ?? createSurveyDraftExtension(),
+    cruiseSpeed: overrides.cruiseSpeed ?? 15,
+    hoverSpeed: overrides.hoverSpeed ?? 5,
+  };
+}
+
+function makeImportedSurveyExtension(): SurveyDraftExtension {
+  const extension = createSurveyDraftExtension();
+  const parsed = {
+    patternType: "grid" as const,
+    position: 0,
+    polygon: [
+      { latitude_deg: 47.3981, longitude_deg: 8.5451 },
+      { latitude_deg: 47.3984, longitude_deg: 8.5463 },
+      { latitude_deg: 47.3977, longitude_deg: 8.5468 },
+    ],
+    polyline: [],
+    camera: null,
+    params: {
+      altitude_m: 55,
+      sideOverlap_pct: 65,
+      frontOverlap_pct: 80,
+    },
+    embeddedItems: [
+      {
+        command: { Nav: "ReturnToLaunch" as const },
+        current: false,
+        autocontinue: true,
+      },
+    ],
+    qgcPassthrough: {},
+    warnings: ["Preserved survey metadata from import."],
+  };
+  const region = hydrateSurveyRegion(parsed);
+
+  extension.surveyRegions.set(region.id, region);
+  extension.surveyRegionOrder.push({ regionId: region.id, position: 0 });
+  return extension;
+}
+
+function withMissionPlannerContexts(store: ReturnType<typeof createMissionPlannerStore>, component: unknown) {
+  const renderable = asRenderable(component);
+
+  return function MissionPlannerHarness(...args: any[]) {
+    setMissionPlannerStoreContext(store);
+    setMissionPlannerViewStoreContext(createMissionPlannerViewStore(store));
+    return renderable(...args);
+  };
+}
+
+async function flush() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+async function renderWorkspace(options: {
+  snapshots?: OpenSessionSnapshot[];
+  plannerServiceOverrides?: Partial<MissionPlannerService>;
+  fileIoOverrides?: Partial<MissionPlanFileIo>;
+  setup?: (context: {
+    plannerStore: ReturnType<typeof createMissionPlannerStore>;
+    sessionStore: ReturnType<typeof createSessionStore>;
+  }) => Promise<void> | void;
+} = {}) {
+  const sessionHarness = createSessionHarness(options.snapshots ?? [createSnapshot()]);
+  const plannerHarness = createPlannerServiceHarness(options.plannerServiceOverrides);
+  const fileHarness = createFileIoHarness(options.fileIoOverrides);
+  const sessionStore = createSessionStore(sessionHarness.service);
+  const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo);
+
+  await sessionStore.initialize();
+  await plannerStore.initialize();
+
+  if (options.setup) {
+    await options.setup({ plannerStore, sessionStore });
+    await flush();
+  }
+
+  render(withMissionPlannerContexts(plannerStore, MissionWorkspace));
+
+  return {
+    sessionStore,
+    plannerStore,
+    plannerHarness,
+    fileHarness,
+    sessionHarness,
+  };
+}
+
+describe("MissionWorkspace", () => {
+  beforeEach(() => {
+    if (typeof localStorage?.clear === "function") {
+      localStorage.clear();
+    }
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("shows the empty-state entry actions and starts a blank local draft explicitly", async () => {
+    await renderWorkspace();
+
+    expect(screen.getByTestId(missionWorkspaceTestIds.root)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.empty)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.entryRead)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.entryImport)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.entryNew)).toBeTruthy();
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.localNote).textContent).toContain("Blank mission draft ready");
+    });
+    expect(screen.getByTestId(missionWorkspaceTestIds.empty)).toBeTruthy();
+  });
+
+  it("requires an explicit replace prompt before importing over a dirty draft", async () => {
+    const survey = makeImportedSurveyExtension();
+    const importedHome = { latitude_deg: 47.39, longitude_deg: 8.53, altitude_m: 488 };
+
+    const { plannerStore } = await renderWorkspace({
+      fileIoOverrides: {
+        importFromPicker: vi.fn(async (): Promise<MissionPlanFileImportResult> => ({
+          status: "success",
+          fileName: "survey.plan",
+          missionItemCount: 0,
+          surveyRegionCount: 1,
+          fenceRegionCount: 0,
+          rallyPointCount: 0,
+          warningCount: 1,
+          warnings: ["Imported survey region preserved."],
+          data: {
+            mission: { items: [] },
+            fence: { return_point: null, regions: [] },
+            rally: { points: [] },
+            home: importedHome,
+            surveyRegions: Array.from(survey.surveyRegions.values()).map((region) => ({
+              patternType: region.patternType,
+              position: 0,
+              polygon: region.polygon,
+              polyline: region.polyline,
+              camera: region.camera,
+              params: region.params,
+              embeddedItems: region.generatedItems,
+              qgcPassthrough: region.qgcPassthrough ?? {},
+              warnings: region.importWarnings ?? ["Imported survey region preserved."],
+            })),
+            cruiseSpeed: 19,
+            hoverSpeed: 6,
+          },
+        })),
+      },
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace());
+        plannerStore.setHome({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.toolbarImport));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.promptKind).textContent).toContain("import-replace");
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.promptDismiss));
+    await waitFor(() => {
+      expect(screen.queryByTestId(missionWorkspaceTestIds.prompt)).toBeNull();
+    });
+    expect(get(plannerStore).home).toEqual({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.toolbarImport));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.prompt)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.promptConfirm));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.countsSurvey).textContent).toContain("1");
+    });
+
+    expect(get(plannerStore).home).toEqual(importedHome);
+    expect(screen.getByTestId(`${missionWorkspaceTestIds.warningPrefix}-file`).textContent).toContain(
+      "Imported survey region preserved.",
+    );
+  });
+
+  it("keeps repeated read clicks from dispatching while a download is already active and surfaces failures inline", async () => {
+    const pendingDownload = deferred<MissionPlannerWorkspaceTransfer>();
+
+    const { plannerHarness } = await renderWorkspace({
+      plannerServiceOverrides: {
+        downloadWorkspace: vi.fn(() => pendingDownload.promise),
+      },
+    });
+
+    const readButton = screen.getByTestId(missionWorkspaceTestIds.entryRead) as HTMLButtonElement;
+    await fireEvent.click(readButton);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.inlineStatusMessage).textContent).toContain("Reading mission");
+    });
+    expect(readButton.disabled).toBe(true);
+    expect(plannerHarness.service.downloadWorkspace).toHaveBeenCalledTimes(1);
+
+    readButton.click();
+    expect(plannerHarness.service.downloadWorkspace).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId(missionWorkspaceTestIds.toolbarCancel)).toBeTruthy();
+
+    pendingDownload.reject(new Error("mission download failed"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.error).textContent).toContain("mission download failed");
+    });
+  });
+
+  it("shows a same-scope recoverable-draft prompt when returning to a scope and restores it explicitly", async () => {
+    const { plannerStore, sessionStore } = await renderWorkspace({
+      snapshots: [
+        createSnapshot({ envelope: createEnvelope("session-1") }),
+        createSnapshot({ envelope: createEnvelope("session-2", { reset_revision: 1 }) }),
+        createSnapshot({ envelope: createEnvelope("session-1", { reset_revision: 2 }) }),
+      ],
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace());
+        plannerStore.setHome({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
+      },
+    });
+
+    await sessionStore.bootstrapSource("live");
+    await flush();
+    await sessionStore.bootstrapSource("live");
+    await flush();
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.promptKind).textContent).toContain("recoverable-draft");
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.promptConfirm));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId(missionWorkspaceTestIds.prompt)).toBeNull();
+    });
+    expect(get(plannerStore).home).toEqual({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
+  });
+});

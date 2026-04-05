@@ -18,6 +18,7 @@ import {
     resolveShellTier,
 } from "./chrome-state";
 import { parameterWorkspaceTestIds } from "../../components/params/parameter-workspace-test-ids";
+import { missionWorkspaceTestIds } from "../../components/mission/mission-workspace-test-ids";
 import { createParamsStore } from "../../lib/stores/params";
 import { markRuntimeReady, resetRuntimeState } from "../../lib/stores/runtime";
 import {
@@ -373,7 +374,7 @@ describe("AppShell", () => {
         expect(screen.getByTestId(appShellTestIds.sessionEnvelope).textContent).toContain("session-1");
     });
 
-    it("renders the archived tab shape and switches placeholder workspaces", async () => {
+    it("renders the archived tab shape, keeps placeholder tabs where expected, and mounts the real mission workspace", async () => {
         await renderShellAt(1440);
 
         expect(screen.getByRole("button", { name: "Overview" })).toBeTruthy();
@@ -395,6 +396,18 @@ describe("AppShell", () => {
 
         expect(screen.getByTestId("app-shell-placeholder-telemetry")).toBeTruthy();
         expect(screen.queryByTestId("telemetry-state-value")).toBeNull();
+
+        await fireEvent.click(screen.getByRole("button", { name: "Mission" }));
+        await waitFor(() => {
+            expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("mission");
+        });
+
+        expect(screen.getByTestId(missionWorkspaceTestIds.root)).toBeTruthy();
+        expect(screen.queryByTestId("app-shell-placeholder-mission")).toBeNull();
+        expect(screen.getByTestId(missionWorkspaceTestIds.empty)).toBeTruthy();
+        expect(screen.getByTestId(missionWorkspaceTestIds.entryRead)).toBeTruthy();
+        expect(screen.getByTestId(missionWorkspaceTestIds.entryImport)).toBeTruthy();
+        expect(screen.getByTestId(missionWorkspaceTestIds.entryNew)).toBeTruthy();
     });
 
     it("switches to the setup workspace from the active shell", async () => {

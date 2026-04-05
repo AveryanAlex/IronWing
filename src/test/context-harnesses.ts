@@ -14,6 +14,14 @@ import {
   createLiveSettingsStore,
   type LiveSettingsStore,
 } from "../lib/stores/live-settings";
+import {
+  createMissionPlannerStore,
+  createMissionPlannerViewStore,
+  type MissionPlannerStore,
+  type MissionPlannerViewStore,
+} from "../lib/stores/mission-planner";
+import type { MissionPlannerService } from "../lib/platform/mission-planner";
+import type { MissionPlanFileIo } from "../lib/mission-plan-file-io";
 import type { LiveSettingsService } from "../lib/platform/live-settings";
 import {
   createShellChromeState,
@@ -22,6 +30,8 @@ import {
 } from "../app/shell/chrome-state";
 import {
   setLiveSettingsStoreContext,
+  setMissionPlannerStoreContext,
+  setMissionPlannerViewStoreContext,
   setOperatorWorkspaceViewStoreContext,
   setParamsStoreContext,
   setParameterWorkspaceViewStoreContext,
@@ -52,6 +62,38 @@ function createHarnessLiveSettingsService(): LiveSettingsService {
 
 function createHarnessLiveSettingsStore(sessionStore: SessionStore): LiveSettingsStore {
   return createLiveSettingsStore(sessionStore, createHarnessLiveSettingsService(), null);
+}
+
+function createHarnessMissionPlannerService(): MissionPlannerService {
+  return {
+    subscribeAll: async () => () => {},
+    downloadWorkspace: async () => ({
+      mission: { items: [] },
+      fence: { return_point: null, regions: [] },
+      rally: { points: [] },
+      home: null,
+    }),
+    uploadWorkspace: async () => undefined,
+    clearWorkspace: async () => undefined,
+    validateMission: async () => [],
+    cancelTransfer: async () => undefined,
+    formatError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+  } satisfies MissionPlannerService;
+}
+
+function createHarnessMissionPlanFileIo(): MissionPlanFileIo {
+  return {
+    importFromPicker: async () => ({ status: "cancelled" }),
+    exportToPicker: async () => ({ status: "cancelled" }),
+  } satisfies MissionPlanFileIo;
+}
+
+function createHarnessMissionPlannerStore(sessionStore: SessionStore): MissionPlannerStore {
+  return createMissionPlannerStore(
+    sessionStore,
+    createHarnessMissionPlannerService(),
+    createHarnessMissionPlanFileIo(),
+  );
 }
 
 function createStaticShellChromeStore(tier: ShellTier): ShellChromeStore {
@@ -109,7 +151,11 @@ export function withShellContexts(
   store: SessionStore,
   parameterStore: ParamsStore,
   component: unknown,
-  options: { liveSettingsStore?: LiveSettingsStore } = {},
+  options: {
+    liveSettingsStore?: LiveSettingsStore;
+    missionPlannerStore?: MissionPlannerStore;
+    missionPlannerViewStore?: MissionPlannerViewStore;
+  } = {},
 ) {
   const renderable = asRenderable(component);
 
@@ -119,12 +165,16 @@ export function withShellContexts(
     const operatorWorkspaceView = createOperatorWorkspaceViewStore(store);
     const parameterWorkspaceView = createParameterWorkspaceViewStore(parameterStore);
     const liveSettingsStore = options.liveSettingsStore ?? createHarnessLiveSettingsStore(store);
+    const missionPlannerStore = options.missionPlannerStore ?? createHarnessMissionPlannerStore(store);
+    const missionPlannerViewStore = options.missionPlannerViewStore ?? createMissionPlannerViewStore(missionPlannerStore);
 
     setSessionStoreContext(store);
     setSessionViewStoreContext(sessionView);
     setOperatorWorkspaceViewStoreContext(operatorWorkspaceView);
     setParamsStoreContext(parameterStore);
     setParameterWorkspaceViewStoreContext(parameterWorkspaceView);
+    setMissionPlannerStoreContext(missionPlannerStore);
+    setMissionPlannerViewStoreContext(missionPlannerViewStore);
     setRuntimeStoreContext(runtime);
     setShellChromeStoreContext(chrome);
     setLiveSettingsStoreContext(liveSettingsStore);

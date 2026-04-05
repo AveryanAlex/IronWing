@@ -9,6 +9,10 @@ import type { RuntimeState } from "../../lib/stores/runtime";
 import type { SessionStore, SessionViewStore } from "../../lib/stores/session";
 import type { OperatorWorkspaceViewStore } from "../../lib/stores/operator-workspace-view";
 import type { LiveSettingsStore } from "../../lib/stores/live-settings";
+import type {
+  MissionPlannerStore,
+  MissionPlannerViewStore,
+} from "../../lib/stores/mission-planner";
 import type { ShellChromeState } from "./chrome-state";
 
 export type RuntimeStore = Readable<RuntimeState>;
@@ -22,6 +26,8 @@ export const [getSessionViewStoreContext, setSessionViewStoreContext] = createCo
 export const [getOperatorWorkspaceViewStoreContext, setOperatorWorkspaceViewStoreContext] = createContext<OperatorWorkspaceViewStore>();
 export const [getParamsStoreContext, setParamsStoreContext] = createContext<ParamsStore>();
 export const [getParameterWorkspaceViewStoreContext, setParameterWorkspaceViewStoreContext] = createContext<ParameterWorkspaceViewStore>();
+export const [getMissionPlannerStoreContext, setMissionPlannerStoreContext] = createContext<MissionPlannerStore>();
+export const [getMissionPlannerViewStoreContext, setMissionPlannerViewStoreContext] = createContext<MissionPlannerViewStore>();
 export const [getRuntimeStoreContext, setRuntimeStoreContext] = createContext<RuntimeStore>();
 export const [getShellChromeStoreContext, setShellChromeStoreContext] = createContext<ShellChromeStore>();
 export const [getLiveSettingsStoreContext, setLiveSettingsStoreContext] = createContext<LiveSettingsStore>();

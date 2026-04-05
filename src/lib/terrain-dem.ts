@@ -226,11 +226,31 @@ function drawRaster(source: CanvasImageSource, width: number, height: number): I
   const canvas = createRasterCanvas(width, height);
   if (!canvas) return null;
 
-  const context = canvas.getContext("2d", { willReadFrequently: true } as CanvasRenderingContext2DSettings);
+  const context = createRasterContext(canvas);
   if (!context) return null;
 
   context.drawImage(source, 0, 0, width, height);
   return context.getImageData(0, 0, width, height);
+}
+
+function createRasterContext(
+  canvas: OffscreenCanvas | HTMLCanvasElement,
+): OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null {
+  const context = canvas.getContext(
+    "2d",
+    { willReadFrequently: true } as CanvasRenderingContext2DSettings,
+  );
+  if (!isRasterContext(context)) {
+    return null;
+  }
+
+  return context;
+}
+
+function isRasterContext(
+  context: OffscreenCanvasRenderingContext2D | RenderingContext | null,
+): context is OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D {
+  return context !== null && "drawImage" in context && "getImageData" in context;
 }
 
 function createRasterCanvas(width: number, height: number): OffscreenCanvas | HTMLCanvasElement | null {

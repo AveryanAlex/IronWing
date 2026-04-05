@@ -3,6 +3,7 @@ import { onDestroy, onMount } from "svelte";
 import { fromStore } from "svelte/store";
 import { Toaster } from "svelte-sonner";
 
+import MissionWorkspace from "../../components/mission/MissionWorkspace.svelte";
 import ParameterWorkspace from "../../components/params/ParameterWorkspace.svelte";
 import { runtimeTestIds } from "../../lib/stores/runtime";
 import AppShellPlaceholderWorkspace from "./AppShellPlaceholderWorkspace.svelte";
@@ -14,6 +15,7 @@ import ParameterReviewTray from "./ParameterReviewTray.svelte";
 import TelemetrySettingsDialog from "./TelemetrySettingsDialog.svelte";
 import {
   getLiveSettingsStoreContext,
+  getMissionPlannerStoreContext,
   getParameterWorkspaceViewStoreContext,
   getParamsStoreContext,
   getRuntimeStoreContext,
@@ -28,6 +30,7 @@ import VehiclePanelContent from "./VehiclePanelContent.svelte";
 const sessionStore = getSessionStoreContext();
 const parameterStore = getParamsStoreContext();
 const liveSettingsStore = getLiveSettingsStoreContext();
+const missionPlannerStore = getMissionPlannerStoreContext();
 const runtimeStore = getRuntimeStoreContext();
 const chromeStore = getShellChromeStoreContext();
 const sessionViewStore = getSessionViewStoreContext();
@@ -85,10 +88,15 @@ let connectionTone = $derived.by<"neutral" | "positive" | "caution" | "critical"
 });
 
 onMount(() => {
-  void Promise.all([controller.initialize(), liveSettingsStore.initialize()]);
+  void Promise.all([
+    controller.initialize(),
+    liveSettingsStore.initialize(),
+    missionPlannerStore.initialize(),
+  ]);
 });
 
 onDestroy(() => {
+  missionPlannerStore.reset();
   controller.destroy();
 });
 </script>
@@ -160,10 +168,7 @@ onDestroy(() => {
                 title="HUD"
               />
             {:else if activeWorkspace === "mission"}
-              <AppShellPlaceholderWorkspace
-                description="Mission planning and transfer flows will be restored in this workspace."
-                title="Mission"
-              />
+              <MissionWorkspace />
             {:else if activeWorkspace === "logs"}
               <AppShellPlaceholderWorkspace
                 description="Log browsing and playback surfaces are planned for this tab."
