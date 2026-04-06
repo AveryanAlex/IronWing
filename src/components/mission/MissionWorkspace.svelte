@@ -1,9 +1,10 @@
 <script lang="ts">
-import { fromStore } from "svelte/store";
+import { fromStore, readable } from "svelte/store";
 
 import {
   getMissionPlannerStoreContext,
   getMissionPlannerViewStoreContext,
+  getShellChromeStoreContext,
 } from "../../app/shell/runtime-context";
 import {
   createEmptyMissionPlannerWorkspace,
@@ -30,11 +31,17 @@ import MissionMap from "./MissionMap.svelte";
 import MissionRallyDraftList from "./MissionRallyDraftList.svelte";
 import MissionRallyInspector from "./MissionRallyInspector.svelte";
 import MissionWorkspaceHeader from "./MissionWorkspaceHeader.svelte";
+import {
+  missionWorkspaceFallbackChromeState,
+  resolveMissionWorkspaceLayout,
+  type MissionWorkspacePhoneSegment,
+} from "./mission-workspace-layout";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
 const missionPlannerStore = getMissionPlannerStoreContext();
 const missionPlannerState = fromStore(missionPlannerStore);
 const missionPlannerView = fromStore(getMissionPlannerViewStoreContext());
+const shellChromeStore = fromStore(resolveMissionWorkspaceChromeStore());
 
 type LocalNoteTone = "success" | "info" | "warning";
 type LocalNote = {
@@ -43,10 +50,36 @@ type LocalNote = {
   tone: LocalNoteTone;
 };
 
+function resolveMissionWorkspaceChromeStore() {
+  try {
+    return getShellChromeStoreContext();
+  } catch {
+    return readable(missionWorkspaceFallbackChromeState);
+  }
+}
+
 let localNote = $state<LocalNote | null>(null);
+let missionPhoneSegment = $state<MissionWorkspacePhoneSegment>(
+  resolveMissionWorkspaceLayout(missionWorkspaceFallbackChromeState, "mission").phoneSegmentDefault ?? "plan",
+);
 
 let planner = $derived(missionPlannerState.current);
 let view = $derived(missionPlannerView.current);
+let shellChrome = $derived(shellChromeStore.current);
+let workspaceLayout = $derived(resolveMissionWorkspaceLayout(shellChrome, view.mode));
+let missionMapVisible = $derived(!workspaceLayout.showPhoneSegments || missionPhoneSegment === "map");
+let missionPlanVisible = $derived(!workspaceLayout.showPhoneSegments || missionPhoneSegment === "plan");
+let missionSegmentState = $derived(workspaceLayout.showPhoneSegments ? missionPhoneSegment : "all-visible");
+let missionDetailGridClass = $derived(
+  workspaceLayout.detailColumns === "split"
+    ? "grid gap-4 grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]"
+    : "grid gap-4",
+);
+let continuityDetailGridClass = $derived(
+  workspaceLayout.detailColumns === "split"
+    ? "grid gap-4 grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]"
+    : "grid gap-4",
+);
 let scopeKey = $derived(scopeToKey(view.activeEnvelope));
 let visibleLocalNote = $derived(localNote?.scopeKey === scopeKey ? localNote : null);
 let hasContent = $derived(plannerHasContent(planner));
@@ -451,6 +484,10 @@ function modeShellBody(mode: MissionPlannerMode, currentView: MissionPlannerView
 
 function handleSelectMode(mode: MissionPlannerMode) {
   missionPlannerStore.setMode(mode);
+}
+
+function handleSelectMissionPhoneSegment(segment: MissionWorkspacePhoneSegment) {
+  missionPhoneSegment = segment;
 }
 
 async function handleReadFromVehicle() {
@@ -1149,6 +1186,48 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     </section>
   {/if}
 
+  <section
+    class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-6"
+    data-testid={missionWorkspaceTestIds.layoutDiagnostics}
+  >
+    <p
+      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
+      data-testid={missionWorkspaceTestIds.layoutMode}
+    >
+      Layout · {workspaceLayout.mode}
+    </p>
+    <p
+      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
+      data-testid={missionWorkspaceTestIds.layoutTier}
+    >
+      Shell tier · {workspaceLayout.tier} · {workspaceLayout.width}×{workspaceLayout.height}
+    </p>
+    <p
+      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
+      data-testid={missionWorkspaceTestIds.layoutTierMismatch}
+    >
+      Tier sync · {workspaceLayout.tierMismatch ? "mismatch" : "match"}
+    </p>
+    <p
+      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
+      data-testid={missionWorkspaceTestIds.detailColumns}
+    >
+      Detail panels · {workspaceLayout.detailColumns}
+    </p>
+    <p
+      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
+      data-testid={missionWorkspaceTestIds.supportPlacement}
+    >
+      Support panels · {workspaceLayout.supportPlacement}
+    </p>
+    <p
+      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
+      data-testid={missionWorkspaceTestIds.phoneSegmentState}
+    >
+      Mission segment · {missionSegmentState}
+    </p>
+  </section>
+
   {#if view.status === "bootstrapping" && !view.workspaceMounted}
     <section
       class="mt-4 rounded-[24px] border border-border bg-bg-secondary/60 p-5"
@@ -1215,65 +1294,113 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
 
         {#if showMissionEditor}
           <div class="space-y-4">
-            <MissionMap
-              blockedReason={planner.blockedReason}
-              fallbackReference={resolveSurveyCreationAnchor(planner)}
-              onCreateSurveyRegion={handleStartSurveyDraw}
-              onDeleteSurveyRegion={handleDeleteSurveyRegion}
-              onMoveHome={handleMoveHomeFromMap}
-              onMoveMissionItem={handleMoveMissionItemFromMap}
-              onSelectHome={missionPlannerStore.selectHome}
-              onSelectMissionItem={handleSelectMissionItemFromMap}
-              onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
-              onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
-              readOnly={!view.canEdit}
-              readOnlyReason={view.attachment.detail}
-              selectedSurveyRegion={selectedSurveyRegion}
-              view={mapView}
-            />
+            {#if workspaceLayout.showPhoneSegments}
+              <div
+                class="flex items-center gap-2 rounded-2xl border border-border bg-bg-primary p-2"
+                data-testid={missionWorkspaceTestIds.phoneSegmentBar}
+              >
+                <button
+                  class={`flex-1 rounded-[16px] border px-4 py-3 text-sm font-semibold transition ${missionPhoneSegment === "map"
+                    ? "border-accent/40 bg-accent/10 text-accent"
+                    : "border-border bg-bg-secondary text-text-primary hover:border-accent hover:text-accent"}`}
+                  data-active={missionPhoneSegment === "map" ? "true" : "false"}
+                  data-testid={missionWorkspaceTestIds.phoneSegmentMap}
+                  onclick={() => handleSelectMissionPhoneSegment("map")}
+                  type="button"
+                >
+                  Map
+                </button>
+                <button
+                  class={`flex-1 rounded-[16px] border px-4 py-3 text-sm font-semibold transition ${missionPhoneSegment === "plan"
+                    ? "border-accent/40 bg-accent/10 text-accent"
+                    : "border-border bg-bg-secondary text-text-primary hover:border-accent hover:text-accent"}`}
+                  data-active={missionPhoneSegment === "plan" ? "true" : "false"}
+                  data-testid={missionWorkspaceTestIds.phoneSegmentPlan}
+                  onclick={() => handleSelectMissionPhoneSegment("plan")}
+                  type="button"
+                >
+                  Plan
+                </button>
+              </div>
+            {/if}
 
-            <div class="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-              <div class="space-y-4">
-                <MissionDraftList
+            <div
+              class={[
+                "space-y-4",
+                !missionMapVisible && "hidden",
+              ]}
+              data-testid={missionWorkspaceTestIds.mapPane}
+              data-visible={missionMapVisible ? "true" : "false"}
+            >
+              <MissionMap
+                blockedReason={planner.blockedReason}
+                fallbackReference={resolveSurveyCreationAnchor(planner)}
+                onCreateSurveyRegion={handleStartSurveyDraw}
+                onDeleteSurveyRegion={handleDeleteSurveyRegion}
+                onMoveHome={handleMoveHomeFromMap}
+                onMoveMissionItem={handleMoveMissionItemFromMap}
+                onSelectHome={missionPlannerStore.selectHome}
+                onSelectMissionItem={handleSelectMissionItemFromMap}
+                onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
+                onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+                readOnly={!view.canEdit}
+                readOnlyReason={view.attachment.detail}
+                selectedSurveyRegion={selectedSurveyRegion}
+                view={mapView}
+              />
+            </div>
+
+            <div
+              class={[
+                "space-y-4",
+                !missionPlanVisible && "hidden",
+              ]}
+              data-testid={missionWorkspaceTestIds.planPane}
+              data-visible={missionPlanVisible ? "true" : "false"}
+            >
+              <div class={missionDetailGridClass}>
+                <div class="space-y-4">
+                  <MissionDraftList
+                    cruiseSpeed={planner.cruiseSpeed}
+                    items={missionItems}
+                    onAddMissionItem={missionPlannerStore.addMissionItem}
+                    onAddSurveyBlock={handleCreateSurveyBlock}
+                    onDeleteMissionItem={missionPlannerStore.deleteMissionItem}
+                    onDeleteSurveyRegion={handleDeleteSurveyRegion}
+                    onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
+                    onMoveMissionItemDown={missionPlannerStore.moveMissionItemDownByIndex}
+                    onMoveMissionItemUp={missionPlannerStore.moveMissionItemUpByIndex}
+                    onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
+                    onSelectMissionItem={missionPlannerStore.selectMissionItem}
+                    onSelectSurveyBlock={missionPlannerStore.selectSurveyRegion}
+                    onSetSurveyRegionCollapsed={missionPlannerStore.setSurveyRegionCollapsed}
+                    selectedMissionUiId={selectedMissionUiId}
+                    selectedSurface={planner.selection}
+                    surveyBlocks={surveyBlocks}
+                  />
+                </div>
+
+                <MissionInspector
                   cruiseSpeed={planner.cruiseSpeed}
-                  items={missionItems}
-                  onAddMissionItem={missionPlannerStore.addMissionItem}
-                  onAddSurveyBlock={handleCreateSurveyBlock}
-                  onDeleteMissionItem={missionPlannerStore.deleteMissionItem}
+                  home={planner.home}
+                  item={selectedMissionItem}
+                  onConfirmSurveyPrompt={missionPlannerStore.confirmSurveyPrompt}
                   onDeleteSurveyRegion={handleDeleteSurveyRegion}
+                  onDismissSurveyPrompt={missionPlannerStore.dismissSurveyPrompt}
                   onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
-                  onMoveMissionItemDown={missionPlannerStore.moveMissionItemDownByIndex}
-                  onMoveMissionItemUp={missionPlannerStore.moveMissionItemUpByIndex}
+                  onMarkSurveyRegionItemAsEdited={missionPlannerStore.markSurveyRegionItemAsEdited}
                   onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
-                  onSelectMissionItem={missionPlannerStore.selectMissionItem}
-                  onSelectSurveyBlock={missionPlannerStore.selectSurveyRegion}
-                  onSetSurveyRegionCollapsed={missionPlannerStore.setSurveyRegionCollapsed}
-                  selectedMissionUiId={selectedMissionUiId}
-                  selectedSurface={planner.selection}
-                  surveyBlocks={surveyBlocks}
+                  onUpdateAltitude={missionPlannerStore.updateMissionItemAltitude}
+                  onUpdateCommand={missionPlannerStore.updateMissionItemCommand}
+                  onUpdateLatitude={missionPlannerStore.updateMissionItemLatitude}
+                  onUpdateLongitude={missionPlannerStore.updateMissionItemLongitude}
+                  onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+                  previousItem={previousMissionItem}
+                  selectedSurveyRegion={selectedSurveyRegion}
+                  selection={planner.selection}
+                  surveyPrompt={view.surveyPrompt}
                 />
               </div>
-
-              <MissionInspector
-                cruiseSpeed={planner.cruiseSpeed}
-                home={planner.home}
-                item={selectedMissionItem}
-                onConfirmSurveyPrompt={missionPlannerStore.confirmSurveyPrompt}
-                onDeleteSurveyRegion={handleDeleteSurveyRegion}
-                onDismissSurveyPrompt={missionPlannerStore.dismissSurveyPrompt}
-                onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
-                onMarkSurveyRegionItemAsEdited={missionPlannerStore.markSurveyRegionItemAsEdited}
-                onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
-                onUpdateAltitude={missionPlannerStore.updateMissionItemAltitude}
-                onUpdateCommand={missionPlannerStore.updateMissionItemCommand}
-                onUpdateLatitude={missionPlannerStore.updateMissionItemLatitude}
-                onUpdateLongitude={missionPlannerStore.updateMissionItemLongitude}
-                onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
-                previousItem={previousMissionItem}
-                selectedSurveyRegion={selectedSurveyRegion}
-                selection={planner.selection}
-                surveyPrompt={view.surveyPrompt}
-              />
             </div>
           </div>
         {:else if showFenceEditor}
@@ -1303,7 +1430,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               view={mapView}
             />
 
-            <div class="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+            <div class={continuityDetailGridClass}>
               <MissionFenceDraftList
                 fenceSelection={planner.fenceSelection}
                 items={fenceItems}
@@ -1347,7 +1474,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               view={mapView}
             />
 
-            <div class="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+            <div class={continuityDetailGridClass}>
               <MissionRallyDraftList
                 items={rallyItems}
                 onAddPoint={handleAddRallyPoint}

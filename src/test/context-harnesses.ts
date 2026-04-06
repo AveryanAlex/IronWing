@@ -96,10 +96,10 @@ function createHarnessMissionPlannerStore(sessionStore: SessionStore): MissionPl
   );
 }
 
-function createStaticShellChromeStore(tier: ShellTier): ShellChromeStore {
+export function createStaticShellChromeStore(tier: ShellTier): ShellChromeStore {
   switch (tier) {
     case "phone":
-      return readable(createShellChromeState({}, { width: 390, height: 720 }, tier));
+      return readable(createShellChromeState({}, { width: 390, height: 844 }, tier));
     case "tablet":
       return readable(createShellChromeState({ sm: true, md: true }, { width: 834, height: 720 }, tier));
     case "desktop":

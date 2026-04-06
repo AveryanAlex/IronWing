@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { get } from "svelte/store";
+import { get, writable, type Writable } from "svelte/store";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,6 +9,7 @@ import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 import {
   setMissionPlannerStoreContext,
   setMissionPlannerViewStoreContext,
+  setShellChromeStoreContext,
 } from "../../app/shell/runtime-context";
 import type { HomePosition, MissionPlan, MissionState, TransferProgress } from "../../mission";
 import type { OpenSessionSnapshot, SessionEnvelope } from "../../session";
@@ -37,6 +38,8 @@ import {
   createMissionPlannerViewStore,
 } from "../../lib/stores/mission-planner";
 import { createSessionStore } from "../../lib/stores/session";
+import { createShellChromeState } from "../../app/shell/chrome-state";
+import { createStaticShellChromeStore } from "../../test/context-harnesses";
 
 type RenderableComponent = (...args: any[]) => unknown;
 
@@ -446,12 +449,39 @@ function makeImportedSurveyExtension(): SurveyDraftExtension {
   return extension;
 }
 
-function withMissionPlannerContexts(store: ReturnType<typeof createMissionPlannerStore>, component: unknown) {
+function createResponsiveChromeState(width: number, height: number, tierOverride?: string) {
+  return createShellChromeState(
+    {
+      sm: width >= 640,
+      md: width >= 768,
+      lg: width >= 1024,
+      xl: width >= 1280,
+    },
+    { width, height },
+    tierOverride,
+  );
+}
+
+function createResponsiveChromeStore(width: number, height: number, tierOverride?: string) {
+  return writable(createResponsiveChromeState(width, height, tierOverride));
+}
+
+function withMissionPlannerContexts(
+  store: ReturnType<typeof createMissionPlannerStore>,
+  component: unknown,
+  options: {
+    chromeStore?: ReturnType<typeof createStaticShellChromeStore> | Writable<ReturnType<typeof createShellChromeState>>;
+    includeShellChromeContext?: boolean;
+  } = {},
+) {
   const renderable = asRenderable(component);
 
   return function MissionPlannerHarness(...args: any[]) {
     setMissionPlannerStoreContext(store);
     setMissionPlannerViewStoreContext(createMissionPlannerViewStore(store));
+    if (options.includeShellChromeContext !== false) {
+      setShellChromeStoreContext(options.chromeStore ?? createStaticShellChromeStore("wide"));
+    }
     return renderable(...args);
   };
 }
@@ -488,6 +518,8 @@ async function renderWorkspace(options: {
   snapshots?: OpenSessionSnapshot[];
   plannerServiceOverrides?: Partial<MissionPlannerService>;
   fileIoOverrides?: Partial<MissionPlanFileIo>;
+  chromeStore?: ReturnType<typeof createStaticShellChromeStore> | Writable<ReturnType<typeof createShellChromeState>>;
+  includeShellChromeContext?: boolean;
   setup?: (context: {
     plannerStore: ReturnType<typeof createMissionPlannerStore>;
     sessionStore: ReturnType<typeof createSessionStore>;
@@ -507,7 +539,10 @@ async function renderWorkspace(options: {
     await flush();
   }
 
-  render(withMissionPlannerContexts(plannerStore, MissionWorkspace));
+  render(withMissionPlannerContexts(plannerStore, MissionWorkspace, {
+    chromeStore: options.chromeStore,
+    includeShellChromeContext: options.includeShellChromeContext,
+  }));
 
   return {
     sessionStore,
@@ -538,6 +573,9 @@ describe("MissionWorkspace", () => {
     expect(screen.getByTestId(missionWorkspaceTestIds.entryImport)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.entryImportKml)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.entryNew)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("wide");
+    expect(screen.getByTestId(missionWorkspaceTestIds.layoutTier).textContent).toContain("1440×900");
+    expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentState).textContent).toContain("all-visible");
 
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
 
@@ -548,12 +586,120 @@ describe("MissionWorkspace", () => {
 
     expect(screen.getByTestId(missionWorkspaceTestIds.homeCard)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.map)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.mapPane).getAttribute("data-visible")).toBe("true");
+    expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("true");
+    expect(screen.queryByTestId(missionWorkspaceTestIds.phoneSegmentBar)).toBeNull();
     expect(screen.getByTestId(missionWorkspaceTestIds.mapStatus).textContent).toContain("empty");
     expect(screen.getByTestId(missionWorkspaceTestIds.mapEmpty)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.draftList)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.listEmpty)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("home");
     expect(get(plannerStore).workspaceMounted).toBe(true);
+  });
+
+  it("falls back to a desktop-style mission layout when shell chrome context is missing", async () => {
+    await renderWorkspace({ includeShellChromeContext: false });
+
+    expect(screen.getByTestId(missionWorkspaceTestIds.root)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("wide");
+    expect(screen.getByTestId(missionWorkspaceTestIds.layoutTier).textContent).toContain("1440×900");
+    expect(screen.getByTestId(missionWorkspaceTestIds.layoutTierMismatch).textContent).toContain("match");
+    expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentState).textContent).toContain("all-visible");
+  });
+
+  it("derives wide, compact-wide, and phone-segmented mission shells from shell chrome context", async () => {
+    const chromeStore = createResponsiveChromeStore(1440, 900, "wide");
+
+    await renderWorkspace({
+      chromeStore,
+      plannerServiceOverrides: {
+        validateMission: vi.fn(async () => [{
+          code: "waypoint_alt_low",
+          message: "Waypoint altitude is below the safety margin.",
+          severity: "warning" as const,
+        }]),
+      },
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace());
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("wide");
+      expect(screen.getByTestId(missionWorkspaceTestIds.detailColumns).textContent).toContain("split");
+    });
+    expect(screen.queryByTestId(missionWorkspaceTestIds.phoneSegmentBar)).toBeNull();
+    expect(screen.getByTestId(missionWorkspaceTestIds.mapPane).getAttribute("data-visible")).toBe("true");
+    expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("true");
+
+    chromeStore.set(createResponsiveChromeState(1280, 720, "wide"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("compact-wide");
+      expect(screen.getByTestId(missionWorkspaceTestIds.detailColumns).textContent).toContain("stacked");
+      expect(screen.getByTestId(missionWorkspaceTestIds.supportPlacement).textContent).toContain("below");
+    });
+    expect(screen.queryByTestId(missionWorkspaceTestIds.phoneSegmentBar)).toBeNull();
+
+    chromeStore.set(createResponsiveChromeState(390, 844, "phone"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("phone-segmented");
+      expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentBar)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentState).textContent).toContain("plan");
+    });
+    expect(screen.getByTestId(missionWorkspaceTestIds.mapPane).getAttribute("data-visible")).toBe("false");
+    expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("true");
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentMap));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentState).textContent).toContain("map");
+      expect(screen.getByTestId(missionWorkspaceTestIds.mapPane).getAttribute("data-visible")).toBe("true");
+      expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("false");
+    });
+
+    chromeStore.set(createResponsiveChromeState(1440, 900, "wide"));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("wide");
+    });
+
+    chromeStore.set(createResponsiveChromeState(390, 844, "phone"));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentState).textContent).toContain("map");
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.toolbarValidate));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.warningValidation).textContent).toContain("Waypoint altitude is below the safety margin.");
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentPlan));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentState).textContent).toContain("plan");
+      expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("true");
+    });
+    expect(screen.getByTestId(missionWorkspaceTestIds.warningValidation)).toBeTruthy();
+  });
+
+  it("keeps fence editors reachable on phone without reviving mission-only segment controls", async () => {
+    const chromeStore = createResponsiveChromeStore(390, 844, "phone");
+
+    await renderWorkspace({
+      chromeStore,
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeFenceWorkspace());
+        plannerStore.setMode("fence");
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("phone-stack");
+      expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentState).textContent).toContain("all-visible");
+    });
+    expect(screen.queryByTestId(missionWorkspaceTestIds.phoneSegmentBar)).toBeNull();
   });
 
   it("selects map surfaces and drags Home plus waypoints through the planner store", async () => {
