@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onDestroy } from "svelte";
 import { fromStore, readable } from "svelte/store";
 
 import {
@@ -18,9 +19,12 @@ import type {
   MissionPlannerWarningView,
 } from "../../lib/stores/mission-planner-view";
 import { buildMissionMapView, type MissionMapSelection } from "../../lib/mission-map-view";
+import { missionPathPoints } from "../../lib/mission-path";
+import { createMissionTerrainState } from "../../lib/mission-terrain-state";
 import { localXYToLatLon } from "../../lib/mission-coordinates";
 import type { GeoPoint2d } from "../../lib/mavkit-types";
 import type { FenceRegionType } from "../../lib/mission-draft-typed";
+import { settings } from "../../lib/stores/settings";
 import type { SurveyPatternType } from "../../lib/survey-region";
 import MissionDraftList from "./MissionDraftList.svelte";
 import MissionFenceDraftList from "./MissionFenceDraftList.svelte";
@@ -30,6 +34,7 @@ import MissionInspector from "./MissionInspector.svelte";
 import MissionMap from "./MissionMap.svelte";
 import MissionRallyDraftList from "./MissionRallyDraftList.svelte";
 import MissionRallyInspector from "./MissionRallyInspector.svelte";
+import MissionTerrainProfilePanel from "./MissionTerrainProfilePanel.svelte";
 import MissionWorkspaceHeader from "./MissionWorkspaceHeader.svelte";
 import {
   missionWorkspaceFallbackChromeState,
@@ -42,6 +47,9 @@ const missionPlannerStore = getMissionPlannerStoreContext();
 const missionPlannerState = fromStore(missionPlannerStore);
 const missionPlannerView = fromStore(getMissionPlannerViewStoreContext());
 const shellChromeStore = fromStore(resolveMissionWorkspaceChromeStore());
+const terrainStateStore = createMissionTerrainState();
+const terrainState = fromStore(terrainStateStore);
+const settingsStore = fromStore(settings);
 
 type LocalNoteTone = "success" | "info" | "warning";
 type LocalNote = {
@@ -57,6 +65,10 @@ function resolveMissionWorkspaceChromeStore() {
     return readable(missionWorkspaceFallbackChromeState);
   }
 }
+
+onDestroy(() => {
+  terrainStateStore.reset();
+});
 
 let localNote = $state<LocalNote | null>(null);
 let missionPhoneSegment = $state<MissionWorkspacePhoneSegment>(
@@ -80,12 +92,21 @@ let continuityDetailGridClass = $derived(
     ? "grid gap-4 grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]"
     : "grid gap-4",
 );
+let missionSupportSidebar = $derived(workspaceLayout.supportPlacement === "sidebar");
+let missionSupportLayoutClass = $derived(
+  missionSupportSidebar
+    ? "grid items-start gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(20rem,0.9fr)]"
+    : "space-y-4",
+);
 let scopeKey = $derived(scopeToKey(view.activeEnvelope));
 let visibleLocalNote = $derived(localNote?.scopeKey === scopeKey ? localNote : null);
 let hasContent = $derived(plannerHasContent(planner));
 let canUseVehicleActions = $derived(view.canUseVehicleActions);
 let inlineCopy = $derived(resolveInlineStatusCopy(view, planner));
 let missionItems = $derived(planner.draftState.active.mission.draftItems);
+let terrain = $derived(terrainState.current);
+let appSettings = $derived(settingsStore.current);
+let terrainPathPoints = $derived(missionPathPoints(planner.home, missionItems));
 let fenceItems = $derived(planner.draftState.active.fence.draftItems);
 let rallyItems = $derived(planner.draftState.active.rally.draftItems);
 let fenceReturnPoint = $derived(planner.draftState.active.fence.document.return_point);
@@ -488,6 +509,32 @@ function handleSelectMode(mode: MissionPlannerMode) {
 
 function handleSelectMissionPhoneSegment(segment: MissionWorkspacePhoneSegment) {
   missionPhoneSegment = segment;
+}
+
+$effect(() => {
+  terrainStateStore.load({
+    enabled: view.mode === "mission" && view.workspaceMounted,
+    pathPoints: terrainPathPoints,
+    homeAltMsl: planner.home?.altitude_m ?? null,
+    safetyMarginM: appSettings.terrainSafetyMarginM,
+  });
+});
+
+async function handleRetryTerrain() {
+  clearLocalNote();
+  await terrainStateStore.retry();
+}
+
+function handleSelectTerrainWarning(index: number) {
+  clearLocalNote();
+  const target = missionItems.find((item) => item.index === index) ?? null;
+  if (!target) {
+    setLocalNote(`Terrain warning target for mission item ${index + 1} is no longer active.`, "warning");
+    return;
+  }
+
+  missionPlannerStore.setMode("mission");
+  missionPlannerStore.selectMissionItem(index);
 }
 
 async function handleReadFromVehicle() {
@@ -1358,48 +1405,68 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               data-testid={missionWorkspaceTestIds.planPane}
               data-visible={missionPlanVisible ? "true" : "false"}
             >
-              <div class={missionDetailGridClass}>
+              <div class={missionSupportLayoutClass}>
                 <div class="space-y-4">
-                  <MissionDraftList
-                    cruiseSpeed={planner.cruiseSpeed}
-                    items={missionItems}
-                    onAddMissionItem={missionPlannerStore.addMissionItem}
-                    onAddSurveyBlock={handleCreateSurveyBlock}
-                    onDeleteMissionItem={missionPlannerStore.deleteMissionItem}
-                    onDeleteSurveyRegion={handleDeleteSurveyRegion}
-                    onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
-                    onMoveMissionItemDown={missionPlannerStore.moveMissionItemDownByIndex}
-                    onMoveMissionItemUp={missionPlannerStore.moveMissionItemUpByIndex}
-                    onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
-                    onSelectMissionItem={missionPlannerStore.selectMissionItem}
-                    onSelectSurveyBlock={missionPlannerStore.selectSurveyRegion}
-                    onSetSurveyRegionCollapsed={missionPlannerStore.setSurveyRegionCollapsed}
-                    selectedMissionUiId={selectedMissionUiId}
-                    selectedSurface={planner.selection}
-                    surveyBlocks={surveyBlocks}
-                  />
+                  <div class={missionDetailGridClass}>
+                    <div class="space-y-4">
+                      <MissionDraftList
+                        cruiseSpeed={planner.cruiseSpeed}
+                        items={missionItems}
+                        onAddMissionItem={missionPlannerStore.addMissionItem}
+                        onAddSurveyBlock={handleCreateSurveyBlock}
+                        onDeleteMissionItem={missionPlannerStore.deleteMissionItem}
+                        onDeleteSurveyRegion={handleDeleteSurveyRegion}
+                        onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
+                        onMoveMissionItemDown={missionPlannerStore.moveMissionItemDownByIndex}
+                        onMoveMissionItemUp={missionPlannerStore.moveMissionItemUpByIndex}
+                        onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
+                        onSelectMissionItem={missionPlannerStore.selectMissionItem}
+                        onSelectSurveyBlock={missionPlannerStore.selectSurveyRegion}
+                        onSetSurveyRegionCollapsed={missionPlannerStore.setSurveyRegionCollapsed}
+                        selectedMissionUiId={selectedMissionUiId}
+                        selectedSurface={planner.selection}
+                        surveyBlocks={surveyBlocks}
+                      />
+                    </div>
+
+                    <MissionInspector
+                      cruiseSpeed={planner.cruiseSpeed}
+                      home={planner.home}
+                      item={selectedMissionItem}
+                      onConfirmSurveyPrompt={missionPlannerStore.confirmSurveyPrompt}
+                      onDeleteSurveyRegion={handleDeleteSurveyRegion}
+                      onDismissSurveyPrompt={missionPlannerStore.dismissSurveyPrompt}
+                      onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
+                      onMarkSurveyRegionItemAsEdited={missionPlannerStore.markSurveyRegionItemAsEdited}
+                      onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
+                      onUpdateAltitude={missionPlannerStore.updateMissionItemAltitude}
+                      onUpdateCommand={missionPlannerStore.updateMissionItemCommand}
+                      onUpdateLatitude={missionPlannerStore.updateMissionItemLatitude}
+                      onUpdateLongitude={missionPlannerStore.updateMissionItemLongitude}
+                      onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+                      previousItem={previousMissionItem}
+                      selectedSurveyRegion={selectedSurveyRegion}
+                      selection={planner.selection}
+                      surveyPrompt={view.surveyPrompt}
+                    />
+                  </div>
+
+                  {#if !missionSupportSidebar}
+                    <MissionTerrainProfilePanel
+                      onRetry={handleRetryTerrain}
+                      onSelectWarning={handleSelectTerrainWarning}
+                      state={terrain}
+                    />
+                  {/if}
                 </div>
 
-                <MissionInspector
-                  cruiseSpeed={planner.cruiseSpeed}
-                  home={planner.home}
-                  item={selectedMissionItem}
-                  onConfirmSurveyPrompt={missionPlannerStore.confirmSurveyPrompt}
-                  onDeleteSurveyRegion={handleDeleteSurveyRegion}
-                  onDismissSurveyPrompt={missionPlannerStore.dismissSurveyPrompt}
-                  onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
-                  onMarkSurveyRegionItemAsEdited={missionPlannerStore.markSurveyRegionItemAsEdited}
-                  onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
-                  onUpdateAltitude={missionPlannerStore.updateMissionItemAltitude}
-                  onUpdateCommand={missionPlannerStore.updateMissionItemCommand}
-                  onUpdateLatitude={missionPlannerStore.updateMissionItemLatitude}
-                  onUpdateLongitude={missionPlannerStore.updateMissionItemLongitude}
-                  onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
-                  previousItem={previousMissionItem}
-                  selectedSurveyRegion={selectedSurveyRegion}
-                  selection={planner.selection}
-                  surveyPrompt={view.surveyPrompt}
-                />
+                {#if missionSupportSidebar}
+                  <MissionTerrainProfilePanel
+                    onRetry={handleRetryTerrain}
+                    onSelectWarning={handleSelectTerrainWarning}
+                    state={terrain}
+                  />
+                {/if}
               </div>
             </div>
           </div>

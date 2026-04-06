@@ -22,10 +22,23 @@ export type TileSamplePoint = {
 };
 
 export type TerrainFetchFn = typeof globalThis.fetch;
+export type TileFetchOutcome = "ok" | "error" | "no_data";
+
+export type TileFetchResult = {
+  outcome: TileFetchOutcome;
+  tile: Float32Array | null;
+};
+
+export type TerrainSampleSummary = {
+  okTiles: number;
+  errorTiles: number;
+  noDataTiles: number;
+};
 
 export type TileCache = {
   getElevation(lat: number, lon: number, zoom?: number): Promise<number | null>;
   getTileData(zoom: number, tileX: number, tileY: number): Promise<Float32Array | null>;
+  getTileResult(zoom: number, tileX: number, tileY: number): Promise<TileFetchResult>;
   readonly stats: {
     hits: number;
     misses: number;
@@ -61,6 +74,16 @@ export async function fetchTerrainTile(
   tileY: number,
   fetchFn: TerrainFetchFn,
 ): Promise<Float32Array | null> {
+  const result = await fetchTerrainTileResult(zoom, tileX, tileY, fetchFn);
+  return result.tile;
+}
+
+export async function fetchTerrainTileResult(
+  zoom: number,
+  tileX: number,
+  tileY: number,
+  fetchFn: TerrainFetchFn,
+): Promise<TileFetchResult> {
   const url = tileUrl(zoom, tileX, tileY);
   const controller = typeof AbortController === "undefined" ? null : new AbortController();
   const timeoutId =
@@ -72,13 +95,18 @@ export async function fetchTerrainTile(
 
   try {
     const response = await fetchFn(url, controller ? { signal: controller.signal } : undefined);
-    if (!response.ok) return null;
+    if (!response.ok) {
+      return { outcome: "error", tile: null };
+    }
 
     const blob = await response.blob();
     const imageData = await decodeTileImageData(blob);
-    if (!imageData || imageData.width !== TILE_SIZE || imageData.height !== TILE_SIZE) return null;
+    if (!imageData || imageData.width !== TILE_SIZE || imageData.height !== TILE_SIZE) {
+      return { outcome: "no_data", tile: null };
+    }
 
     const decoded = new Float32Array(TILE_SIZE * TILE_SIZE);
+    let hasUsableSample = false;
     for (let pixelIndex = 0; pixelIndex < decoded.length; pixelIndex += 1) {
       const channelIndex = pixelIndex * 4;
       const elevation = decodeTerrarium(
@@ -86,12 +114,19 @@ export async function fetchTerrainTile(
         imageData.data[channelIndex + 1] ?? 0,
         imageData.data[channelIndex + 2] ?? 0,
       );
-      decoded[pixelIndex] = sanitizeElevation(elevation);
+      const sanitized = sanitizeElevation(elevation);
+      decoded[pixelIndex] = sanitized;
+      if (!Number.isNaN(sanitized)) {
+        hasUsableSample = true;
+      }
     }
 
-    return decoded;
+    return {
+      outcome: hasUsableSample ? "ok" : "no_data",
+      tile: hasUsableSample ? decoded : null,
+    };
   } catch {
-    return null;
+    return { outcome: "error", tile: null };
   } finally {
     if (timeoutId !== null) clearTimeout(timeoutId);
   }
@@ -101,15 +136,15 @@ export function createTileCache(
   fetchFn: TerrainFetchFn,
   maxSize = DEFAULT_TILE_CACHE_SIZE,
 ): TileCache {
-  const cache = new Map<string, Promise<Float32Array | null>>();
+  const cache = new Map<string, Promise<TileFetchResult>>();
   const stats = { hits: 0, misses: 0 };
 
-  const touch = (key: string, value: Promise<Float32Array | null>) => {
+  const touch = (key: string, value: Promise<TileFetchResult>) => {
     cache.delete(key);
     cache.set(key, value);
   };
 
-  const getTileData = async (zoom: number, tileX: number, tileY: number): Promise<Float32Array | null> => {
+  const getTileResult = async (zoom: number, tileX: number, tileY: number): Promise<TileFetchResult> => {
     const key = tileKey(zoom, tileX, tileY);
     const existing = cache.get(key);
     if (existing) {
@@ -119,7 +154,12 @@ export function createTileCache(
     }
 
     stats.misses += 1;
-    const pending = fetchTerrainTile(zoom, tileX, tileY, fetchFn);
+    const pending = fetchTerrainTileResult(zoom, tileX, tileY, fetchFn).then((result) => {
+      if (result.outcome !== "ok") {
+        cache.delete(key);
+      }
+      return result;
+    });
     cache.set(key, pending);
 
     while (cache.size > Math.max(1, maxSize)) {
@@ -134,10 +174,14 @@ export function createTileCache(
   return {
     getElevation: async (lat: number, lon: number, zoom = DEFAULT_TERRAIN_ZOOM) => {
       const { tileX, tileY, pixelX, pixelY } = latLonToTile(lat, lon, zoom);
-      const tile = await getTileData(zoom, tileX, tileY);
-      return readTileElevation(tile, pixelX, pixelY);
+      const tile = await getTileResult(zoom, tileX, tileY);
+      return readTileElevation(tile.tile, pixelX, pixelY);
     },
-    getTileData,
+    getTileData: async (zoom: number, tileX: number, tileY: number) => {
+      const tile = await getTileResult(zoom, tileX, tileY);
+      return tile.tile;
+    },
+    getTileResult,
     stats,
   };
 }
@@ -147,7 +191,20 @@ export async function sampleElevations(
   cache: TileCache,
   zoom = DEFAULT_TERRAIN_ZOOM,
 ): Promise<Array<number | null>> {
-  if (points.length === 0) return [];
+  return (await sampleElevationsWithSummary(points, cache, zoom)).elevations;
+}
+
+export async function sampleElevationsWithSummary(
+  points: TerrainPoint[],
+  cache: TileCache,
+  zoom = DEFAULT_TERRAIN_ZOOM,
+): Promise<{ elevations: Array<number | null>; summary: TerrainSampleSummary }> {
+  if (points.length === 0) {
+    return {
+      elevations: [],
+      summary: { okTiles: 0, errorTiles: 0, noDataTiles: 0 },
+    };
+  }
 
   const samples = points.map((point) => ({
     point,
@@ -159,20 +216,39 @@ export async function sampleElevations(
     uniqueTiles.set(tileKey(zoom, sample.tileX, sample.tileY), sample);
   }
 
-  const resolvedTiles = new Map<string, Float32Array | null>();
+  const resolvedTiles = new Map<string, TileFetchResult>();
   await Promise.all(
     Array.from(uniqueTiles.entries()).map(async ([key, sample]) => {
-      resolvedTiles.set(key, await cache.getTileData(zoom, sample.tileX, sample.tileY));
+      resolvedTiles.set(key, await cache.getTileResult(zoom, sample.tileX, sample.tileY));
     }),
   );
 
-  return samples.map(({ sample }) =>
-    readTileElevation(
-      resolvedTiles.get(tileKey(zoom, sample.tileX, sample.tileY)) ?? null,
-      sample.pixelX,
-      sample.pixelY,
+  const summary: TerrainSampleSummary = {
+    okTiles: 0,
+    errorTiles: 0,
+    noDataTiles: 0,
+  };
+
+  for (const result of resolvedTiles.values()) {
+    if (result.outcome === "ok") {
+      summary.okTiles += 1;
+    } else if (result.outcome === "error") {
+      summary.errorTiles += 1;
+    } else {
+      summary.noDataTiles += 1;
+    }
+  }
+
+  return {
+    elevations: samples.map(({ sample }) =>
+      readTileElevation(
+        resolvedTiles.get(tileKey(zoom, sample.tileX, sample.tileY))?.tile ?? null,
+        sample.pixelX,
+        sample.pixelY,
+      ),
     ),
-  );
+    summary,
+  };
 }
 
 function tileUrl(zoom: number, tileX: number, tileY: number): string {

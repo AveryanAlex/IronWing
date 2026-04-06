@@ -843,10 +843,11 @@ export function createMissionPlannerStore(
   }
 
   function selectMissionItem(index: number | null) {
-    updateMissionDraft(
-      (draftState) => selectTypedDraftIndex(draftState, "mission", index),
-      index === null ? { kind: "home" } : { kind: "mission-item" },
-    );
+    store.update((state) => withResolvedPhase({
+      ...state,
+      draftState: selectTypedDraftIndex(state.draftState, "mission", index),
+      selection: index === null ? { kind: "home" } : { kind: "mission-item" },
+    }));
   }
 
   function selectMissionItemByUiId(uiId: number): boolean {

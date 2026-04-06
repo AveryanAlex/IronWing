@@ -4,6 +4,113 @@ import { get, writable, type Writable } from "svelte/store";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const {
+  resetTerrainStateMock,
+  setTerrainStateMock,
+  terrainControllerMock,
+} = vi.hoisted(() => {
+  const createInitialTerrainState = () => ({
+    status: "idle",
+    profile: null,
+    warningsByIndex: new Map<number, string>(),
+    warningSummary: {
+      total: 0,
+      belowTerrain: 0,
+      nearTerrain: 0,
+      noData: 0,
+      actionable: 0,
+    },
+    detail: "Terrain profile is idle. Add positional mission items to sample the route.",
+    lastError: null,
+    isStale: false,
+    canRetry: false,
+    requestedPathPointCount: 0,
+    sampledPathPointCount: 0,
+    tileSummary: {
+      okTiles: 0,
+      errorTiles: 0,
+      noDataTiles: 0,
+    },
+  });
+
+  let currentTerrainState = createInitialTerrainState();
+  const subscribers = new Set<(value: typeof currentTerrainState) => void>();
+
+  const emit = () => {
+    for (const subscriber of subscribers) {
+      subscriber(currentTerrainState);
+    }
+  };
+
+  const terrainControllerMock = {
+    subscribe(run: (value: typeof currentTerrainState) => void) {
+      run(currentTerrainState);
+      subscribers.add(run);
+      return () => {
+        subscribers.delete(run);
+      };
+    },
+    load: vi.fn(async () => undefined),
+    retry: vi.fn(async () => undefined),
+    reset: vi.fn(() => {
+      currentTerrainState = createInitialTerrainState();
+      emit();
+    }),
+  };
+
+  return {
+    terrainControllerMock,
+    setTerrainStateMock(next: Partial<typeof currentTerrainState>) {
+      currentTerrainState = {
+        ...currentTerrainState,
+        ...next,
+        warningsByIndex: next.warningsByIndex ?? currentTerrainState.warningsByIndex,
+        warningSummary: next.warningSummary ?? currentTerrainState.warningSummary,
+        tileSummary: next.tileSummary ?? currentTerrainState.tileSummary,
+      };
+      emit();
+    },
+    resetTerrainStateMock() {
+      currentTerrainState = createInitialTerrainState();
+      terrainControllerMock.load.mockReset();
+      terrainControllerMock.retry.mockReset();
+      terrainControllerMock.reset.mockReset();
+      emit();
+    },
+  };
+});
+
+vi.mock("../../lib/mission-terrain-state", () => ({
+  createMissionTerrainState: vi.fn(() => terrainControllerMock),
+}));
+
+vi.mock("uplot", () => ({
+  default: class UPlotMock {
+    data: unknown;
+    select = { left: 0, top: 0, width: 0, height: 0 };
+
+    constructor(_options: unknown, data: unknown) {
+      this.data = data;
+    }
+
+    destroy() {}
+    setCursor() {}
+    setData(data: unknown) {
+      this.data = data;
+    }
+    setSelect(selection: { left: number; top: number; width: number; height: number }) {
+      this.select = selection;
+    }
+    setSize() {}
+    posToVal(value: number) {
+      return value;
+    }
+    valToPos(value: number) {
+      return value;
+    }
+  },
+}));
+
 import MissionWorkspace from "./MissionWorkspace.svelte";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 import {
@@ -555,6 +662,7 @@ async function renderWorkspace(options: {
 
 describe("MissionWorkspace", () => {
   beforeEach(() => {
+    resetTerrainStateMock();
     if (typeof localStorage?.clear === "function") {
       localStorage.clear();
     }
@@ -700,6 +808,159 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentState).textContent).toContain("all-visible");
     });
     expect(screen.queryByTestId(missionWorkspaceTestIds.phoneSegmentBar)).toBeNull();
+  });
+
+  it("keeps the terrain support panel mounted across wide, compact-wide, and phone mission layouts", async () => {
+    const chromeStore = createResponsiveChromeStore(1440, 900, "wide");
+
+    setTerrainStateMock({
+      detail: "Sampled terrain across 3 points. 1 near terrain.",
+      canRetry: true,
+      warningSummary: {
+        total: 1,
+        belowTerrain: 0,
+        nearTerrain: 1,
+        noData: 0,
+        actionable: 1,
+      },
+      warningsByIndex: new Map([[0, "near_terrain"]]),
+    });
+
+    await renderWorkspace({
+      chromeStore,
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace());
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.terrainPanel)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.terrainWarningCount).textContent).toContain("1 warning");
+      expect(screen.getByTestId(missionWorkspaceTestIds.terrainRetry)).toBeTruthy();
+    });
+
+    chromeStore.set(createResponsiveChromeState(1280, 720, "wide"));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("compact-wide");
+      expect(screen.getByTestId(missionWorkspaceTestIds.terrainPanel)).toBeTruthy();
+    });
+
+    chromeStore.set(createResponsiveChromeState(390, 844, "phone"));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("phone-segmented");
+      expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("true");
+      expect(screen.getByTestId(missionWorkspaceTestIds.terrainPanel)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentMap));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("false");
+      expect(screen.getByTestId(missionWorkspaceTestIds.terrainPanel)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentPlan));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("true");
+      expect(screen.getByTestId(missionWorkspaceTestIds.terrainPanel)).toBeTruthy();
+    });
+  });
+
+  it("jumps terrain warnings to the targeted mission item and refuses stale warning indexes", async () => {
+    const mission: MissionPlan = {
+      items: [
+        {
+          command: {
+            Nav: {
+              Waypoint: {
+                position: {
+                  RelHome: {
+                    latitude_deg: 47.41,
+                    longitude_deg: 8.55,
+                    relative_alt_m: 20,
+                  },
+                },
+                hold_time_s: 0,
+                acceptance_radius_m: 1,
+                pass_radius_m: 0,
+                yaw_deg: 0,
+              },
+            },
+          },
+          current: true,
+          autocontinue: true,
+        },
+        {
+          command: {
+            Nav: {
+              Waypoint: {
+                position: {
+                  RelHome: {
+                    latitude_deg: 47.42,
+                    longitude_deg: 8.57,
+                    relative_alt_m: 12,
+                  },
+                },
+                hold_time_s: 0,
+                acceptance_radius_m: 1,
+                pass_radius_m: 0,
+                yaw_deg: 0,
+              },
+            },
+          },
+          current: false,
+          autocontinue: true,
+        },
+      ],
+    };
+
+    setTerrainStateMock({
+      status: "ready",
+      detail: "Sampled terrain across 5 points. 1 below terrain.",
+      canRetry: true,
+      warningSummary: {
+        total: 1,
+        belowTerrain: 1,
+        nearTerrain: 0,
+        noData: 0,
+        actionable: 1,
+      },
+      warningsByIndex: new Map([[1, "below_terrain"]]),
+    });
+
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({ mission }));
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.terrainPanel)).toBeTruthy();
+      expect(screen.getByTestId(`${missionWorkspaceTestIds.terrainWarningActionPrefix}-1`)).toBeTruthy();
+    });
+
+    const targetUiId = get(plannerStore).draftState.active.mission.draftItems[1]?.uiId;
+    expect(targetUiId).toBeTypeOf("number");
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.terrainWarningActionPrefix}-1`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("mission-item");
+      expect(get(plannerStore).draftState.active.mission.primarySelectedUiId).toBe(targetUiId);
+      expect(screen.getByTestId(`${missionWorkspaceTestIds.itemPrefix}-${targetUiId}`).getAttribute("data-selected")).toBe("true");
+      expect(screen.getByTestId(`${missionWorkspaceTestIds.mapMarkerPrefix}-${targetUiId}`).getAttribute("data-selected")).toBe("true");
+    });
+
+    plannerStore.deleteMissionItem(1);
+    plannerStore.selectHome();
+    await flush();
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.terrainWarningActionPrefix}-1`));
+
+    await waitFor(() => {
+      expect(get(plannerStore).selection.kind).toBe("home");
+      expect(screen.getByTestId(missionWorkspaceTestIds.localNote).textContent).toContain("no longer active");
+    });
   });
 
   it("selects map surfaces and drags Home plus waypoints through the planner store", async () => {
