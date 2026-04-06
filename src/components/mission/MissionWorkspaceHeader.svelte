@@ -134,7 +134,7 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
   }
 
   if (currentMode === "rally") {
-    return "Rally continuity shares the same planner shell. Attachment truth, sticky warnings, and mixed-domain export review stay mounted while rally-specific editors land next.";
+    return "Rally mode now mounts real list, inspector, and map editing inside the same planner shell while Home, attachment truth, sticky warnings, and mixed-domain export review stay visible.";
   }
 
   switch (value) {

@@ -16,16 +16,20 @@ export type MissionMapDebugSnapshot = {
   drawPointCount: number;
   fencePlacementMode: "inclusion_polygon" | "exclusion_polygon" | "inclusion_circle" | "exclusion_circle" | "return-point" | null;
   blockedFenceReason: string | null;
+  readOnlyReason: string | null;
   selectedSurveyRegionId: string | null;
+  selectedRallyPointUiId: number | null;
   selectedSurveyGenerationBlocked: boolean;
   selectedSurveyGenerationMessage: string | null;
   activeSurveyVertexCount: number;
   surveyPreviewFeatureCount: number;
   activeFenceVertexCount: number;
   activeFenceRadiusCount: number;
+  rallyMarkerCount: number;
   missionGeoJson: MissionMapView["missionGeoJson"];
   surveyGeoJson: MissionMapView["surveyGeoJson"];
   fenceGeoJson: MissionMapView["fenceGeoJson"];
+  rallyGeoJson: MissionMapView["rallyGeoJson"];
   updateCount: number;
 };
 

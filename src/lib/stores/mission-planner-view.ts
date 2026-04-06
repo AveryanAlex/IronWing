@@ -260,7 +260,7 @@ function buildWarningEntries(
       action: {
         label: `Open ${blockedMode} mode`,
         mode: blockedMode,
-        target: blockedMode === "fence" ? state.blockedWarningTarget ?? warningTargetFromFenceSelection(state.fenceSelection) : null,
+        target: state.blockedWarningTarget ?? warningTargetFromMode(blockedMode, state),
       },
     });
   }
@@ -314,6 +314,31 @@ function warningTargetFromFenceSelection(
 
   if (selection.kind === "return-point") {
     return { kind: "fence-return-point" };
+  }
+
+  return null;
+}
+
+function warningTargetFromRallySelection(
+  selection: MissionPlannerStoreState["rallySelection"],
+): MissionPlannerWarningActionTarget | null {
+  if (selection.kind === "point") {
+    return { kind: "rally-point", pointUiId: selection.pointUiId };
+  }
+
+  return null;
+}
+
+function warningTargetFromMode(
+  mode: MissionPlannerMode,
+  state: Pick<MissionPlannerStoreState, "fenceSelection" | "rallySelection">,
+): MissionPlannerWarningActionTarget | null {
+  if (mode === "fence") {
+    return warningTargetFromFenceSelection(state.fenceSelection);
+  }
+
+  if (mode === "rally") {
+    return warningTargetFromRallySelection(state.rallySelection);
   }
 
   return null;

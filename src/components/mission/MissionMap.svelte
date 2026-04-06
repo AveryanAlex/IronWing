@@ -35,6 +35,7 @@ import type { SurveyPatternType, SurveyRegion } from "../../lib/survey-region";
 import type {
   MissionPlannerFenceMutationResult,
   MissionPlannerMapMoveResult,
+  MissionPlannerRallyMutationResult,
 } from "../../lib/stores/mission-planner";
 import {
   clearMissionMapDebugSnapshot,
@@ -48,14 +49,17 @@ type Props = {
   selectedSurveyRegion: SurveyRegion | null;
   blockedReason?: string | null;
   readOnly?: boolean;
+  readOnlyReason?: string | null;
   onSelectHome: () => void;
   onSelectMissionItem: (uiId: number) => void;
+  onSelectRallyPoint?: (uiId: number) => MissionPlannerRallyMutationResult | unknown;
   onSelectSurveyRegion: (regionId: string) => void;
   onCreateSurveyRegion: (patternType: SurveyPatternType) => string;
   onUpdateSurveyRegion: (regionId: string, updater: (region: SurveyRegion) => SurveyRegion) => void;
   onDeleteSurveyRegion: (regionId: string) => void;
   onMoveHome: (latitudeDeg: number, longitudeDeg: number) => MissionPlannerMapMoveResult;
   onMoveMissionItem: (uiId: number, latitudeDeg: number, longitudeDeg: number) => MissionPlannerMapMoveResult;
+  onMoveRallyPoint?: (uiId: number, latitudeDeg: number, longitudeDeg: number) => MissionPlannerMapMoveResult;
   onSelectFenceRegion?: (uiId: number) => MissionPlannerFenceMutationResult | unknown;
   onSelectFenceReturnPoint?: () => MissionPlannerFenceMutationResult | unknown;
   onAddFenceRegion?: (type: FenceRegionType, latitudeDeg: number, longitudeDeg: number) => MissionPlannerFenceMutationResult | unknown;
@@ -68,7 +72,7 @@ type Props = {
 
 type ActiveMarkerDrag = {
   markerId: string;
-  kind: "home" | "mission-item";
+  kind: "home" | "mission-item" | "rally-point";
   uiId: number | null;
   startLatitude_deg: number;
   startLongitude_deg: number;
@@ -137,14 +141,17 @@ let {
   selectedSurveyRegion,
   blockedReason = null,
   readOnly = false,
+  readOnlyReason = null,
   onSelectHome,
   onSelectMissionItem,
+  onSelectRallyPoint,
   onSelectSurveyRegion,
   onCreateSurveyRegion,
   onUpdateSurveyRegion,
   onDeleteSurveyRegion,
   onMoveHome,
   onMoveMissionItem,
+  onMoveRallyPoint,
   onSelectFenceRegion,
   onSelectFenceReturnPoint,
   onAddFenceRegion,
@@ -183,7 +190,7 @@ let activeSurveyPointCount = $derived.by(() => {
 });
 let diagnostics = $derived.by(() => {
   const warnings = [...view.warnings];
-  if (blockedReason && view.mode === "fence") {
+  if (blockedReason && (view.mode === "fence" || view.mode === "rally")) {
     warnings.push(blockedReason);
   }
   if (localMessage?.tone === "warning") {
@@ -194,6 +201,10 @@ let diagnostics = $derived.by(() => {
 let drawModeText = $derived.by(() => {
   if (view.mode === "fence") {
     return fencePlacementMode ? `place:${fencePlacementMode}` : "idle";
+  }
+
+  if (view.mode === "rally") {
+    return view.counts.rallyMarkers > 0 ? `rally:${view.counts.rallyMarkers}` : "idle";
   }
 
   if (!surveySession) {
@@ -239,6 +250,10 @@ let selectionText = $derived.by(() => {
     return view.selection.uiId === null ? "mission item" : `mission item ${view.selection.uiId}`;
   }
 
+  if (view.selection.kind === "rally-point") {
+    return view.selection.uiId === null ? "rally point" : `rally point ${view.selection.uiId}`;
+  }
+
   return view.selection.regionId ? `survey ${view.selection.regionId}` : "survey block";
 });
 let debugPayload = $derived({
@@ -256,9 +271,12 @@ let debugPayload = $derived({
   drawPointCount: activeSurveyPointCount,
   fencePlacementMode,
   blockedFenceReason: view.mode === "fence" ? blockedReason : null,
+  readOnlyReason,
   selectedSurveyRegionId,
+  selectedRallyPointUiId: view.selection.kind === "rally-point" ? view.selection.uiId : null,
   selectedSurveyGenerationBlocked: selectedSurveyGenerationBlockedReason !== null,
   selectedSurveyGenerationMessage: selectedSurveyGenerationBlockedReason?.message ?? null,
+  rallyMarkerCount: view.counts.rallyMarkers,
 });
 
 $effect(() => {
@@ -280,19 +298,23 @@ $effect(() => {
     missionGeoJson: view.missionGeoJson,
     surveyGeoJson: view.surveyGeoJson,
     fenceGeoJson: view.fenceGeoJson,
+    rallyGeoJson: view.rallyGeoJson,
     drawMode: surveySession?.mode ?? "idle",
     drawPatternType: surveySession?.patternType ?? null,
     drawRegionId: surveySession?.regionId ?? null,
     drawPointCount: activeSurveyPointCount,
     fencePlacementMode,
     blockedFenceReason: view.mode === "fence" ? blockedReason : null,
+    readOnlyReason,
     selectedSurveyRegionId,
+    selectedRallyPointUiId: view.selection.kind === "rally-point" ? view.selection.uiId : null,
     selectedSurveyGenerationBlocked: selectedSurveyGenerationBlockedReason !== null,
     selectedSurveyGenerationMessage: selectedSurveyGenerationBlockedReason?.message ?? null,
     activeSurveyVertexCount: view.counts.surveyVertexHandles,
     surveyPreviewFeatureCount: view.counts.surveyPreviewFeatures,
     activeFenceVertexCount: view.counts.fenceVertexHandles,
     activeFenceRadiusCount: view.counts.fenceRadiusHandles,
+    rallyMarkerCount: view.counts.rallyMarkers,
   });
 });
 
@@ -471,6 +493,13 @@ function handleMarkerSelection(marker: MissionMapMarker) {
     return;
   }
 
+  if (marker.kind === "rally-point") {
+    if (marker.uiId !== null) {
+      applyRallyMutationResult(onSelectRallyPoint?.(marker.uiId));
+    }
+    return;
+  }
+
   if (marker.uiId !== null) {
     onSelectMissionItem(marker.uiId);
   }
@@ -491,6 +520,24 @@ function handleFenceReturnPointSelection() {
   localMessage = null;
   const result = onSelectFenceReturnPoint?.();
   applyFenceMutationResult(result);
+}
+
+function applyRallyMutationResult(result: unknown): boolean {
+  if (!result || typeof result !== "object" || !("status" in result)) {
+    return true;
+  }
+
+  if ((result as MissionPlannerRallyMutationResult).status === "rejected") {
+    const rejected = result as Extract<MissionPlannerRallyMutationResult, { status: "rejected" }>;
+    localMessage = {
+      tone: "warning",
+      text: rejected.message,
+    };
+    return false;
+  }
+
+  localMessage = null;
+  return true;
 }
 
 function startSurveyDraw(patternType: SurveyPatternType) {
@@ -808,6 +855,10 @@ function cancelActiveMarkerDrag(message: string, restorePosition: boolean) {
   if (restorePosition) {
     if (currentDrag.kind === "home") {
       onMoveHome(currentDrag.startLatitude_deg, currentDrag.startLongitude_deg);
+    } else if (currentDrag.kind === "rally-point") {
+      if (currentDrag.uiId !== null) {
+        onMoveRallyPoint?.(currentDrag.uiId, currentDrag.startLatitude_deg, currentDrag.startLongitude_deg);
+      }
     } else if (currentDrag.uiId !== null) {
       onMoveMissionItem(currentDrag.uiId, currentDrag.startLatitude_deg, currentDrag.startLongitude_deg);
     }
@@ -1041,13 +1092,25 @@ function handlePointerMove(event: PointerEvent) {
 
     const moved = activeMarkerDrag.kind === "home"
       ? onMoveHome(resolution.latitude_deg, resolution.longitude_deg)
-      : activeMarkerDrag.uiId !== null
-        ? onMoveMissionItem(activeMarkerDrag.uiId, resolution.latitude_deg, resolution.longitude_deg)
-        : {
-          status: "rejected",
-          reason: "item-not-found",
-          message: "Ignored the drag because the mission item target disappeared.",
-        } satisfies MissionPlannerMapMoveResult;
+      : activeMarkerDrag.kind === "rally-point"
+        ? activeMarkerDrag.uiId !== null
+          ? onMoveRallyPoint?.(activeMarkerDrag.uiId, resolution.latitude_deg, resolution.longitude_deg) ?? {
+            status: "rejected",
+            reason: "item-not-found",
+            message: "Ignored the drag because the rally point target disappeared.",
+          } satisfies MissionPlannerMapMoveResult
+          : {
+            status: "rejected",
+            reason: "item-not-found",
+            message: "Ignored the drag because the rally point target disappeared.",
+          } satisfies MissionPlannerMapMoveResult
+        : activeMarkerDrag.uiId !== null
+          ? onMoveMissionItem(activeMarkerDrag.uiId, resolution.latitude_deg, resolution.longitude_deg)
+          : {
+            status: "rejected",
+            reason: "item-not-found",
+            message: "Ignored the drag because the mission item target disappeared.",
+          } satisfies MissionPlannerMapMoveResult;
 
     if (!applyMoveResult(moved)) {
       return;
@@ -1269,11 +1332,19 @@ function handleKeydown(event: KeyboardEvent) {
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planner map</p>
-      <h3 class="mt-1 text-sm font-semibold text-text-primary">{view.mode === "fence" ? "Fence-first geometry editor" : "Shared mission geometry"}</h3>
+      <h3 class="mt-1 text-sm font-semibold text-text-primary">
+        {view.mode === "fence"
+          ? "Fence-first geometry editor"
+          : view.mode === "rally"
+            ? "Rally marker editor"
+            : "Shared mission geometry"}
+      </h3>
       <p class="mt-1 text-xs text-text-secondary">
         {view.mode === "fence"
           ? "Fence regions, return-point truth, and shared Home context stay on one projected map surface so list, inspector, and warning navigation all point at the same geometry."
-          : "The map, list, and inspector all read from the same mission draft so survey drawing, vertex edits, and preview overlays stay truthful."}
+          : view.mode === "rally"
+            ? "Rally markers, drag edits, and altitude-frame truth stay on one projected surface so warning navigation, list ordering, and inspector precision all point at the same rally draft."
+            : "The map, list, and inspector all read from the same mission draft so survey drawing, vertex edits, and preview overlays stay truthful."}
       </p>
     </div>
 
@@ -1457,6 +1528,19 @@ function handleKeydown(event: KeyboardEvent) {
         <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Return point</p>
         <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapFenceReturnPointState}>{view.counts.fenceHasReturnPoint ? "set" : "none"}</p>
       </div>
+    {:else if view.mode === "rally"}
+      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Rally markers</p>
+        <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapRallyCount}>{view.counts.rallyMarkers}</p>
+      </div>
+      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Rally features</p>
+        <p class="mt-1 text-sm font-semibold text-text-primary">{view.counts.rallyFeatures}</p>
+      </div>
+      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Read-only truth</p>
+        <p class="mt-1 text-sm font-semibold text-text-primary">{readOnly ? "blocked" : "editable"}</p>
+      </div>
     {:else}
       <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
         <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Preview features</p>
@@ -1582,7 +1666,9 @@ function handleKeydown(event: KeyboardEvent) {
           >
             {view.mode === "fence"
               ? "Blank fence surface ready. Place an inclusion or exclusion shape, then refine vertices, circle radius, and the return point directly on the planner map."
-              : "Blank planner surface ready. Draw a grid, corridor, or structure survey here, or add Home and manual mission items to project existing geometry."}
+              : view.mode === "rally"
+                ? "Blank rally surface ready. Add a rally point from the list, then drag it on the map or refine its coordinates and altitude frame from the inspector."
+                : "Blank planner surface ready. Draw a grid, corridor, or structure survey here, or add Home and manual mission items to project existing geometry."}
           </div>
         {:else if view.state === "degraded"}
           <div
@@ -1591,7 +1677,9 @@ function handleKeydown(event: KeyboardEvent) {
           >
             {view.mode === "fence"
               ? "Some fence geometry degraded, but the planner surface stayed interactive so you can recover selection, fix malformed regions, or keep editing the return point safely."
-              : "Some survey geometry degraded, but the planner surface stayed interactive so you can finish drawing, recover selection, or edit the region safely."}
+              : view.mode === "rally"
+                ? "Some rally geometry degraded, but the planner surface stayed interactive so you can keep the last valid rally markers, recover selection, and avoid moving the wrong point."
+                : "Some survey geometry degraded, but the planner surface stayed interactive so you can finish drawing, recover selection, or edit the region safely."}
           </div>
         {/if}
 
@@ -1692,7 +1780,7 @@ function handleKeydown(event: KeyboardEvent) {
 
         {#each view.markers as marker (marker.id)}
           <button
-            class={`mission-map-marker ${marker.kind === "home" ? "is-home" : ""} ${marker.selected ? "is-selected" : ""} ${marker.current ? "is-current" : ""} ${marker.readOnly ? "is-readonly" : ""}`}
+            class={`mission-map-marker ${marker.kind === "home" ? "is-home" : ""} ${marker.kind === "rally-point" ? "is-rally" : ""} ${marker.selected ? "is-selected" : ""} ${marker.current ? "is-current" : ""} ${marker.readOnly ? "is-readonly" : ""}`}
             data-dragging={activeMarkerDrag?.markerId === marker.id ? "true" : "false"}
             data-selected={marker.selected ? "true" : "false"}
             data-testid={markerTestId(marker)}
@@ -1776,6 +1864,11 @@ function handleKeydown(event: KeyboardEvent) {
 
   .mission-map-marker.is-home {
     background: var(--color-success);
+  }
+
+  .mission-map-marker.is-rally {
+    background: rgb(251, 191, 36);
+    color: #1f2937;
   }
 
   .mission-map-marker.is-current {

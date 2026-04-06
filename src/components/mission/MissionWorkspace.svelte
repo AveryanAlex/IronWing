@@ -27,6 +27,8 @@ import MissionFenceInspector from "./MissionFenceInspector.svelte";
 import MissionHomeCard from "./MissionHomeCard.svelte";
 import MissionInspector from "./MissionInspector.svelte";
 import MissionMap from "./MissionMap.svelte";
+import MissionRallyDraftList from "./MissionRallyDraftList.svelte";
+import MissionRallyInspector from "./MissionRallyInspector.svelte";
 import MissionWorkspaceHeader from "./MissionWorkspaceHeader.svelte";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
@@ -52,8 +54,10 @@ let canUseVehicleActions = $derived(view.canUseVehicleActions);
 let inlineCopy = $derived(resolveInlineStatusCopy(view, planner));
 let missionItems = $derived(planner.draftState.active.mission.draftItems);
 let fenceItems = $derived(planner.draftState.active.fence.draftItems);
+let rallyItems = $derived(planner.draftState.active.rally.draftItems);
 let fenceReturnPoint = $derived(planner.draftState.active.fence.document.return_point);
 let selectedMissionUiId = $derived(planner.draftState.active.mission.primarySelectedUiId);
+let selectedRallyUiId = $derived(planner.rallySelection.kind === "point" ? planner.rallySelection.pointUiId : null);
 let surveyBlocks = $derived.by(() =>
   planner.survey.surveyRegionOrder
     .map((block) => {
@@ -76,6 +80,13 @@ let selectedFenceItem = $derived.by(() => {
 
   return fenceItems.find((item) => item.uiId === planner.fenceSelection.regionUiId) ?? null;
 });
+let selectedRallyItem = $derived.by(() => {
+  if (planner.rallySelection.kind !== "point") {
+    return null;
+  }
+
+  return rallyItems.find((item) => item.uiId === planner.rallySelection.pointUiId) ?? null;
+});
 let previousMissionItem = $derived.by(() => {
   if (!selectedMissionItem || selectedMissionItem.index <= 0) {
     return null;
@@ -88,7 +99,29 @@ let selectedSurveyRegion = $derived(
     ? planner.survey.surveyRegions.get(planner.selection.regionId) ?? null
     : null,
 );
+let homeSelected = $derived.by(() => {
+  if (view.mode === "fence") {
+    return planner.selection.kind === "home" && planner.fenceSelection.kind === "none";
+  }
+
+  if (view.mode === "rally") {
+    return planner.selection.kind === "home" && planner.rallySelection.kind === "none";
+  }
+
+  return planner.selection.kind === "home";
+});
 let mapSelection = $derived.by<MissionMapSelection>(() => {
+  if (view.mode === "rally") {
+    if (planner.rallySelection.kind === "point") {
+      return {
+        kind: "rally-point",
+        uiId: planner.rallySelection.pointUiId,
+      };
+    }
+
+    return { kind: "home" };
+  }
+
   if (planner.selection.kind === "home") {
     return { kind: "home" };
   }
@@ -115,10 +148,13 @@ let mapView = $derived(buildMissionMapView({
   fenceDraftItems: fenceItems,
   fenceReturnPoint,
   fenceSelection: planner.fenceSelection,
+  rallyDraftItems: rallyItems,
+  rallySelection: planner.rallySelection,
   currentSeq: mapCurrentSeq,
 }));
 let showMissionEditor = $derived(view.mode === "mission");
 let showFenceEditor = $derived(view.mode === "fence");
+let showRallyEditor = $derived(view.mode === "rally");
 
 const DEFAULT_SURVEY_ANCHOR: GeoPoint2d = {
   latitude_deg: 47.397742,
@@ -548,6 +584,64 @@ function handleMoveMissionItemFromMap(uiId: number, latitudeDeg: number, longitu
   return missionPlannerStore.moveMissionItemOnMapByUiId(uiId, latitudeDeg, longitudeDeg);
 }
 
+function handleSelectRallyPoint(uiId: number) {
+  clearLocalNote();
+  return missionPlannerStore.selectRallyPointByUiId(uiId);
+}
+
+function handleAddRallyPoint() {
+  clearLocalNote();
+  return missionPlannerStore.addRallyPoint();
+}
+
+function handleDeleteRallyPoint(uiId: number) {
+  clearLocalNote();
+  const result = missionPlannerStore.deleteRallyPointByUiId(uiId);
+  if (result.status === "applied") {
+    setLocalNote("Deleted the selected rally point. Rally mode stayed mounted so you can keep refining the remaining diversion targets.", "warning");
+  }
+  return result;
+}
+
+function handleMoveRallyPointUp(uiId: number) {
+  clearLocalNote();
+  return missionPlannerStore.moveRallyPointUpByUiId(uiId);
+}
+
+function handleMoveRallyPointDown(uiId: number) {
+  clearLocalNote();
+  return missionPlannerStore.moveRallyPointDownByUiId(uiId);
+}
+
+function handleUpdateRallyLatitude(uiId: number, latitudeDeg: number) {
+  clearLocalNote();
+  return missionPlannerStore.updateRallyPointLatitudeByUiId(uiId, latitudeDeg);
+}
+
+function handleUpdateRallyLongitude(uiId: number, longitudeDeg: number) {
+  clearLocalNote();
+  return missionPlannerStore.updateRallyPointLongitudeByUiId(uiId, longitudeDeg);
+}
+
+function handleUpdateRallyAltitude(uiId: number, altitudeM: number) {
+  clearLocalNote();
+  return missionPlannerStore.updateRallyPointAltitudeByUiId(uiId, altitudeM);
+}
+
+function handleUpdateRallyAltitudeFrame(uiId: number, frame: "msl" | "rel_home" | "terrain" | string) {
+  clearLocalNote();
+  const result = missionPlannerStore.updateRallyPointAltitudeFrameByUiId(uiId, frame);
+  if (result.status === "applied") {
+    setLocalNote("Rally altitude frame updated. Latitude and longitude stayed fixed while the frame reset altitude to a safe zero baseline.", "info");
+  }
+  return result;
+}
+
+function handleMoveRallyPointFromMap(uiId: number, latitudeDeg: number, longitudeDeg: number) {
+  clearLocalNote();
+  return missionPlannerStore.moveRallyPointOnMapByUiId(uiId, latitudeDeg, longitudeDeg);
+}
+
 function handleMoveFenceVertexFromMap(uiId: number, index: number, latitudeDeg: number, longitudeDeg: number) {
   clearLocalNote();
   return missionPlannerStore.moveFenceVertexByUiId(uiId, index, latitudeDeg, longitudeDeg);
@@ -659,6 +753,19 @@ function handleWarningAction(action: NonNullable<MissionPlannerWarningView["acti
 
   if (action.target.kind === "fence-return-point") {
     const result = missionPlannerStore.selectFenceReturnPoint();
+    if (result.status === "rejected") {
+      setLocalNote(result.message, "warning");
+    }
+    return;
+  }
+
+  if (action.target.kind === "rally-point") {
+    if (action.target.pointUiId === null) {
+      setLocalNote("Rally warning target no longer points at an active rally point.", "warning");
+      return;
+    }
+
+    const result = missionPlannerStore.selectRallyPointByUiId(action.target.pointUiId);
     if (result.status === "rejected") {
       setLocalNote(result.message, "warning");
     }
@@ -1103,7 +1210,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
           mode={view.mode}
           onChange={missionPlannerStore.setHome}
           onSelect={missionPlannerStore.selectHome}
-          selected={planner.selection.kind === "home"}
+          selected={homeSelected}
         />
 
         {#if showMissionEditor}
@@ -1120,6 +1227,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
               onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
               readOnly={!view.canEdit}
+              readOnlyReason={view.attachment.detail}
               selectedSurveyRegion={selectedSurveyRegion}
               view={mapView}
             />
@@ -1190,6 +1298,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               onUpdateFenceCircleRadius={handleUpdateFenceCircleRadiusFromMap}
               onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
               readOnly={!view.canEdit}
+              readOnlyReason={view.attachment.detail}
               selectedSurveyRegion={selectedSurveyRegion}
               view={mapView}
             />
@@ -1214,6 +1323,50 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                 readOnly={!view.canEdit}
                 returnPoint={fenceReturnPoint}
                 selection={planner.fenceSelection}
+              />
+            </div>
+          </div>
+        {:else if showRallyEditor}
+          <div class="space-y-4">
+            <MissionMap
+              blockedReason={planner.blockedReason}
+              fallbackReference={resolveSurveyCreationAnchor(planner)}
+              onCreateSurveyRegion={handleStartSurveyDraw}
+              onDeleteSurveyRegion={handleDeleteSurveyRegion}
+              onMoveHome={handleMoveHomeFromMap}
+              onMoveMissionItem={handleMoveMissionItemFromMap}
+              onMoveRallyPoint={handleMoveRallyPointFromMap}
+              onSelectHome={missionPlannerStore.selectHome}
+              onSelectMissionItem={handleSelectMissionItemFromMap}
+              onSelectRallyPoint={handleSelectRallyPoint}
+              onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
+              onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+              readOnly={!view.canEdit}
+              readOnlyReason={view.attachment.detail}
+              selectedSurveyRegion={selectedSurveyRegion}
+              view={mapView}
+            />
+
+            <div class="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+              <MissionRallyDraftList
+                items={rallyItems}
+                onAddPoint={handleAddRallyPoint}
+                onDeletePoint={handleDeleteRallyPoint}
+                onMovePointDown={handleMoveRallyPointDown}
+                onMovePointUp={handleMoveRallyPointUp}
+                onSelectPoint={handleSelectRallyPoint}
+                rallySelection={planner.rallySelection}
+                readOnly={!view.canEdit}
+              />
+
+              <MissionRallyInspector
+                item={selectedRallyItem}
+                onUpdateAltitude={handleUpdateRallyAltitude}
+                onUpdateAltitudeFrame={handleUpdateRallyAltitudeFrame}
+                onUpdateLatitude={handleUpdateRallyLatitude}
+                onUpdateLongitude={handleUpdateRallyLongitude}
+                readOnly={!view.canEdit}
+                selection={planner.rallySelection}
               />
             </div>
           </div>

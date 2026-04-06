@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Placemark>
+      <name>Continuity Route</name>
+      <LineString>
+        <coordinates>
+          8.54000,47.37000,0
+          8.55000,47.37600,0
+          8.56250,47.38350,0
+        </coordinates>
+      </LineString>
+    </Placemark>
+    <Placemark>
+      <name>Continuity Fence</name>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              8.53200,47.36800,0
+              8.56900,47.36800,0
+              8.56900,47.39100,0
+              8.53200,47.39100,0
+              8.53200,47.36800,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+    <Placemark>
+      <name>Ignored Marker</name>
+      <Point>
+        <coordinates>8.54600,47.38150,0</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>

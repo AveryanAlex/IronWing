@@ -24,6 +24,19 @@ let syncKey = $derived(home ? `${home.latitude_deg}:${home.longitude_deg}:${home
 let readOnly = $derived(!attachment.canEdit);
 let readOnlyMessage = $derived(readOnly ? attachment.detail : null);
 let modeLabel = $derived(mode === "mission" ? "mission" : mode === "fence" ? "fence" : "rally");
+let homeSyncCopy = $derived.by(() => {
+  switch (attachment.kind) {
+    case "live-attached":
+      return "Live mission reads can refresh Home from the vehicle in this scope, but mission / fence / rally upload and clear flows still do not sync Home automatically. Treat Home as shared planning context, not an exportable domain of its own.";
+    case "local-draft":
+      return "This Home exists only in the current local draft until you explicitly read from the vehicle. Mission / fence / rally upload and clear flows still do not sync Home automatically.";
+    case "playback-readonly":
+      return "Playback keeps the last known Home visible for inspection only. Reads and edits stay blocked here, and mission / fence / rally upload or clear flows do not sync Home automatically.";
+    case "detached-local":
+    default:
+      return "This preserved Home came from another scope. IronWing keeps it visible as truthful planning context, but it is detached from the active scope and will not sync through mission / fence / rally upload or clear actions.";
+  }
+});
 let baseLatitude = $derived(home ? String(home.latitude_deg) : "");
 let baseLongitude = $derived(home ? String(home.longitude_deg) : "");
 let baseAltitude = $derived(home ? String(home.altitude_m) : "");
@@ -126,7 +139,7 @@ function handleEnter(event: KeyboardEvent) {
           : `Set a Home position explicitly for this ${modeLabel} draft; incomplete values stay local until all three fields are valid.`}
       </p>
       <p class="mt-2 text-xs text-text-secondary" data-testid={missionWorkspaceTestIds.homeSync}>
-        Mission reads can refresh Home, but mission / fence / rally upload and clear flows do not sync Home automatically. Treat Home as shared planning context, not an exportable domain of its own.
+        {homeSyncCopy}
       </p>
       {#if readOnlyMessage}
         <p class="mt-2 text-xs text-warning" data-testid={missionWorkspaceTestIds.homeReadOnly}>{readOnlyMessage}</p>

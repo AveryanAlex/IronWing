@@ -10,10 +10,11 @@ import {
   resolveMissionMapSurveyHandleDrag,
   type MissionMapSelection,
 } from "./mission-map-view";
-import type { TypedDraftItem } from "./mission-draft-typed";
+import { missionMapRallyMarkerIdForUiId } from "./mission-map-rally";
 import {
   defaultGeoPoint3d,
   type FenceRegion,
+  type GeoPoint3d,
   type HomePosition,
   type MissionCommand,
   type MissionItem,
@@ -122,6 +123,53 @@ function makeFenceDraftItem(options: {
       latitude_deg: options.latitude_deg,
       longitude_deg: options.longitude_deg,
       altitude_m: null,
+    },
+  };
+}
+
+function makeRallyDraftItem(options: {
+  uiId: number;
+  index: number;
+  point: GeoPoint3d;
+}): TypedDraftItem {
+  const point = options.point;
+  if ("Msl" in point) {
+    return {
+      uiId: options.uiId,
+      index: options.index,
+      document: point,
+      readOnly: false,
+      preview: {
+        latitude_deg: point.Msl.latitude_deg,
+        longitude_deg: point.Msl.longitude_deg,
+        altitude_m: point.Msl.altitude_msl_m,
+      },
+    };
+  }
+
+  if ("Terrain" in point) {
+    return {
+      uiId: options.uiId,
+      index: options.index,
+      document: point,
+      readOnly: false,
+      preview: {
+        latitude_deg: point.Terrain.latitude_deg,
+        longitude_deg: point.Terrain.longitude_deg,
+        altitude_m: point.Terrain.altitude_terrain_m,
+      },
+    };
+  }
+
+  return {
+    uiId: options.uiId,
+    index: options.index,
+    document: point,
+    readOnly: false,
+    preview: {
+      latitude_deg: point.RelHome.latitude_deg,
+      longitude_deg: point.RelHome.longitude_deg,
+      altitude_m: point.RelHome.relative_alt_m,
     },
   };
 }
@@ -395,6 +443,85 @@ describe("buildMissionMapView", () => {
       expect(secondMove.point.x).toBeGreaterThan(firstMove.point.x);
       expect(secondMove.point.y).toBeLessThan(firstMove.point.y);
     }
+  });
+
+  it("projects rally markers with frame-aware counts and resolves rally drags safely", () => {
+    const view = buildMissionMapView({
+      mode: "rally",
+      home: null,
+      missionItems: [],
+      survey: createSurveyDraftExtension(),
+      selection: { kind: "rally-point", uiId: 701 },
+      rallyDraftItems: [
+        makeRallyDraftItem({
+          uiId: 701,
+          index: 0,
+          point: { RelHome: { latitude_deg: 47.3981, longitude_deg: 8.5451, relative_alt_m: 20 } },
+        }),
+        makeRallyDraftItem({
+          uiId: 702,
+          index: 1,
+          point: { Msl: { latitude_deg: 47.3988, longitude_deg: 8.5462, altitude_msl_m: 530 } },
+        }),
+        makeRallyDraftItem({
+          uiId: 703,
+          index: 2,
+          point: { Terrain: { latitude_deg: 47.3994, longitude_deg: 8.5471, altitude_terrain_m: 35 } },
+        }),
+      ],
+      rallySelection: { kind: "point", pointUiId: 701 },
+    });
+
+    expect(view.mode).toBe("rally");
+    expect(view.state).toBe("ready");
+    expect(view.viewport).not.toBeNull();
+    expect(view.counts.rallyMarkers).toBe(3);
+    expect(view.counts.rallyFeatures).toBe(3);
+    expect(view.counts.rallyFeatureKinds).toMatchObject({ rally_point: 3 });
+    expect(view.markers.find((marker) => marker.uiId === 701)).toMatchObject({
+      kind: "rally-point",
+      selected: true,
+      label: "R1",
+    });
+
+    const moved = resolveMissionMapDrag(view, missionMapRallyMarkerIdForUiId(701), { x: 760, y: 180 });
+    const stale = resolveMissionMapDrag(view, "rally-missing", { x: 760, y: 180 });
+
+    expect(moved.status).toBe("applied");
+    if (moved.status === "applied") {
+      expect(moved.marker.kind).toBe("rally-point");
+      expect(moved.latitude_deg).not.toBe(47.3981);
+      expect(moved.longitude_deg).not.toBe(8.5451);
+    }
+    expect(stale).toMatchObject({
+      status: "rejected",
+      reason: "marker-not-found",
+    });
+  });
+
+  it("drops malformed rally points and degrades instead of selecting the wrong marker", () => {
+    const malformedPoint = {
+      RelHome: {
+        latitude_deg: 999,
+        longitude_deg: 8.5451,
+        relative_alt_m: 20,
+      },
+    } as GeoPoint3d;
+
+    const view = buildMissionMapView({
+      mode: "rally",
+      home: null,
+      missionItems: [],
+      survey: createSurveyDraftExtension(),
+      selection: { kind: "rally-point", uiId: 801 },
+      rallyDraftItems: [makeRallyDraftItem({ uiId: 801, index: 0, point: malformedPoint })],
+      rallySelection: { kind: "point", pointUiId: 801 },
+    });
+
+    expect(view.state).toBe("degraded");
+    expect(view.counts.rallyMarkers).toBe(0);
+    expect(view.counts.rallyFeatures).toBe(0);
+    expect(view.warnings.some((warning) => warning.includes("Rally point 1 was malformed"))).toBe(true);
   });
 
   it("projects fence regions, return point truth, and fence drag handles in fence mode", () => {

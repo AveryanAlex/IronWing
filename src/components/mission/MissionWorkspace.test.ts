@@ -386,6 +386,32 @@ function makePlaybackFenceWorkspace() {
   };
 }
 
+function makeRallyWorkspace() {
+  return {
+    ...makeWorkspace({
+      home: { latitude_deg: 47.4, longitude_deg: 8.55, altitude_m: 500 },
+    }),
+    rally: {
+      points: [
+        {
+          RelHome: {
+            latitude_deg: 47.4012,
+            longitude_deg: 8.5512,
+            relative_alt_m: 25,
+          },
+        },
+        {
+          Msl: {
+            latitude_deg: 47.4024,
+            longitude_deg: 8.5528,
+            altitude_msl_m: 530,
+          },
+        },
+      ],
+    },
+  };
+}
+
 function makeImportedSurveyExtension(): SurveyDraftExtension {
   const extension = createSurveyDraftExtension();
   const parsed = {
@@ -1199,6 +1225,149 @@ describe("MissionWorkspace", () => {
     expect(get(plannerStore).blockedReason).toContain("playback");
   });
 
+  it("switches into rally mode, edits altitude frames and coordinates, and keeps map/list/inspector selection synchronized", async () => {
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeRallyWorkspace());
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.mapRallyCount).textContent).toContain("2");
+      expect(screen.getByTestId(missionWorkspaceTestIds.homeSync).textContent).toContain("Live mission reads can refresh Home");
+    });
+
+    const firstRallyUiId = get(plannerStore).draftState.active.rally.draftItems[0]?.uiId;
+    expect(firstRallyUiId).toBeTypeOf("number");
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.rallyPointPrefix}-${firstRallyUiId}`));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.rallyInspectorSelectionKind).textContent).toContain("rally-point");
+      expect(readMissionMapDebug().selectedRallyPointUiId).toBe(firstRallyUiId);
+    });
+
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.rallyAltitudeFrame), {
+      target: { value: "terrain" },
+    });
+
+    await waitFor(() => {
+      const point = get(plannerStore).draftState.active.rally.draftItems.find((item) => item.uiId === firstRallyUiId)?.document;
+      expect(point && "Terrain" in point).toBe(true);
+      if (point && "Terrain" in point) {
+        expect(point.Terrain.altitude_terrain_m).toBe(0);
+      }
+    });
+
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.rallyLatitude), {
+      target: { value: "47.405" },
+    });
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.rallyLongitude), {
+      target: { value: "8.559" },
+    });
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.rallyAltitude), {
+      target: { value: "42" },
+    });
+
+    await waitFor(() => {
+      const point = get(plannerStore).draftState.active.rally.draftItems.find((item) => item.uiId === firstRallyUiId)?.document;
+      expect(point && "Terrain" in point).toBe(true);
+      if (point && "Terrain" in point) {
+        expect(point.Terrain.latitude_deg).toBe(47.405);
+        expect(point.Terrain.longitude_deg).toBe(8.559);
+        expect(point.Terrain.altitude_terrain_m).toBe(42);
+      }
+    });
+
+    setMissionMapSurfaceRect();
+    const marker = screen.getByTestId(`${missionWorkspaceTestIds.mapMarkerPrefix}-${firstRallyUiId}`);
+    const beforeDrag = get(plannerStore).draftState.active.rally.draftItems.find((item) => item.uiId === firstRallyUiId)?.preview;
+
+    await fireEvent.pointerDown(marker, { clientX: 300, clientY: 360 });
+    await fireEvent.pointerMove(window, { clientX: 780, clientY: 180 });
+    await fireEvent.pointerUp(window);
+
+    await waitFor(() => {
+      const afterDrag = get(plannerStore).draftState.active.rally.draftItems.find((item) => item.uiId === firstRallyUiId)?.preview;
+      expect(afterDrag?.latitude_deg).not.toBe(beforeDrag?.latitude_deg);
+      expect(afterDrag?.longitude_deg).not.toBe(beforeDrag?.longitude_deg);
+      expect(readMissionMapDebug().rallyMarkerCount).toBe(2);
+    });
+  });
+
+  it("reopens the targeted rally point from warning actions and keeps stale drags fail-closed", async () => {
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeRallyWorkspace());
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    const firstRallyUiId = get(plannerStore).draftState.active.rally.draftItems[0]?.uiId;
+    expect(firstRallyUiId).toBeTypeOf("number");
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.rallyPointPrefix}-${firstRallyUiId}`));
+    plannerStore.updateRallyPointAltitudeFrameByUiId(firstRallyUiId!, "unsupported-frame");
+    await flush();
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`${missionWorkspaceTestIds.warningItemPrefix}-0`).textContent).toContain("Blocked action");
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeMission));
+    await fireEvent.click(screen.getByRole("button", { name: /open rally mode/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.rallyInspectorSelectionKind).textContent).toContain("rally-point");
+      expect(readMissionMapDebug().selectedRallyPointUiId).toBe(firstRallyUiId);
+    });
+
+    setMissionMapSurfaceRect();
+    const marker = screen.getByTestId(`${missionWorkspaceTestIds.mapMarkerPrefix}-${firstRallyUiId}`);
+    await fireEvent.pointerDown(marker, { clientX: 240, clientY: 340 });
+    plannerStore.deleteRallyPointByUiId(firstRallyUiId!);
+    await flush();
+    await fireEvent.pointerMove(window, { clientX: 640, clientY: 180 });
+
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.rally.draftItems.some((item) => item.uiId === firstRallyUiId)).toBe(false);
+      expect(readMissionMapDebug().warnings.some((warning: string) => warning.includes("stale rally drag"))).toBe(true);
+    });
+  });
+
+  it("keeps rally mode mounted but blocks edits truthfully during playback while Home copy stays explicit", async () => {
+    const { plannerStore } = await renderWorkspace({
+      snapshots: [
+        createSnapshot({ envelope: createEnvelope("session-1", { source_kind: "playback", seek_epoch: 1, reset_revision: 1 }) }),
+      ],
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeRallyWorkspace());
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
+      expect((screen.getByTestId(missionWorkspaceTestIds.rallyAdd) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByTestId(missionWorkspaceTestIds.homeSync).textContent).toContain("Playback keeps the last known Home visible");
+    });
+
+    const playbackRallyUiId = get(plannerStore).draftState.active.rally.draftItems[0]?.uiId;
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.rallyPointPrefix}-${playbackRallyUiId}`));
+    await waitFor(() => {
+      expect((screen.getByTestId(missionWorkspaceTestIds.rallyAltitudeFrame) as HTMLSelectElement).disabled).toBe(true);
+    });
+
+    const readOnlyFrameChange = plannerStore.updateRallyPointAltitudeFrameByUiId(playbackRallyUiId!, "terrain");
+    expect(readOnlyFrameChange).toMatchObject({
+      status: "rejected",
+      reason: "read-only",
+    });
+    expect(get(plannerStore).blockedReason).toContain("playback");
+  });
+
   it("requires an explicit replace prompt before importing over a dirty draft and keeps camera-missing survey regions editable", async () => {
     const survey = makeImportedSurveyExtension();
     const importedHome = { latitude_deg: 47.39, longitude_deg: 8.53, altitude_m: 488 };
@@ -1343,6 +1512,9 @@ describe("MissionWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.exportReviewTitle).textContent).toContain("Choose which planner domains");
     });
+    expect(screen.getByTestId(`${missionWorkspaceTestIds.exportReviewChoicePrefix}-mission`).textContent).toContain("Mission + Home + Survey");
+    expect(screen.getByTestId(`${missionWorkspaceTestIds.exportReviewChoicePrefix}-mission`).textContent).toContain("Home");
+    expect(screen.queryByText(/^Home$/)).toBeNull();
     expect(fileHarness.fileIo.exportToPicker).not.toHaveBeenCalled();
 
     for (const domain of ["mission", "fence", "rally"] as const) {

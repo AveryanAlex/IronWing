@@ -7,6 +7,10 @@ import {
   type MissionMapFenceSelection,
 } from "./mission-map-fence";
 import {
+  buildMissionMapRallyModel,
+  type MissionMapRallySelection,
+} from "./mission-map-rally";
+import {
   latLonToLocalXY,
   localXYToLatLon,
   type GeoRef,
@@ -28,7 +32,7 @@ const PADDING_RATIO = 0.12;
 const MIN_PADDING_M = 20;
 
 type MissionMapGeoJsonProperties = {
-  source: "mission" | "survey" | "fence";
+  source: "mission" | "survey" | "fence" | "rally";
   kind: string;
   itemIndex?: number | null;
   uiId?: number | null;
@@ -46,7 +50,8 @@ export type MissionMapMode = "mission" | "fence" | "rally";
 export type MissionMapSelection =
   | { kind: "home" }
   | { kind: "mission-item"; uiId: number | null }
-  | { kind: "survey-block"; regionId: string | null };
+  | { kind: "survey-block"; regionId: string | null }
+  | { kind: "rally-point"; uiId: number | null };
 
 export type MissionMapPoint = {
   x: number;
@@ -64,7 +69,7 @@ export type MissionMapViewport = {
 
 export type MissionMapMarker = {
   id: string;
-  kind: "home" | "mission-item";
+  kind: "home" | "mission-item" | "rally-point";
   label: string;
   latitude_deg: number;
   longitude_deg: number;
@@ -166,6 +171,7 @@ export type MissionMapLabelFeature = {
 
 export type MissionMapFeatureCounts = {
   markers: number;
+  rallyMarkers: number;
   surveyHandles: number;
   surveyVertexHandles: number;
   fenceRegionHandles: number;
@@ -176,10 +182,12 @@ export type MissionMapFeatureCounts = {
   surveyFeatures: number;
   surveyPreviewFeatures: number;
   fenceFeatures: number;
+  rallyFeatures: number;
   missionFeatureKinds: Record<string, number>;
   surveyFeatureKinds: Record<string, number>;
   surveyPreviewFeatureKinds: Record<string, number>;
   fenceFeatureKinds: Record<string, number>;
+  rallyFeatureKinds: Record<string, number>;
 };
 
 export type MissionMapDragResolution =
@@ -259,6 +267,7 @@ export type MissionMapView = {
   missionGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>;
   surveyGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>;
   fenceGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>;
+  rallyGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>;
   warnings: string[];
   counts: MissionMapFeatureCounts;
 };
@@ -272,6 +281,8 @@ export type MissionMapViewInput = {
   fenceDraftItems?: TypedDraftItem[];
   fenceReturnPoint?: GeoPoint2d | null;
   fenceSelection?: MissionMapFenceSelection;
+  rallyDraftItems?: TypedDraftItem[];
+  rallySelection?: MissionMapRallySelection;
   currentSeq?: number | null;
 };
 
@@ -292,7 +303,19 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
     survey: input.survey,
     selectedRegionId: selectedSurveyRegionId,
   });
-  const markerCandidates = buildMarkerCandidates(input, warnings);
+  const rallySelection = input.rallySelection ?? { kind: "none" };
+  const rally = mode === "rally"
+    ? buildMissionMapRallyModel({
+      points: input.rallyDraftItems ?? [],
+      selection: rallySelection,
+    })
+    : buildMissionMapRallyModel({
+      points: [],
+      selection: { kind: "none" },
+    });
+  const markerCandidates = mode === "rally"
+    ? buildRallyMarkerCandidates(input.home, input.selection, rally)
+    : buildMarkerCandidates(input, warnings);
   const fenceSelection = input.fenceSelection ?? { kind: "none" };
   const fence = mode === "fence"
     ? buildMissionMapFenceModel({
@@ -305,7 +328,7 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
       returnPoint: null,
       selection: { kind: "none" },
     });
-  warnings.push(...survey.warnings, ...fence.warnings);
+  warnings.push(...survey.warnings, ...fence.warnings, ...rally.warnings);
 
   const reference = resolveReference(
     input.home,
@@ -313,8 +336,10 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
     missionGeoJson,
     survey.geoJson,
     fence.geoJson,
+    rally.geoJson,
     survey.referenceCoordinates,
     fence.referenceCoordinates,
+    rally.referenceCoordinates,
   );
   const viewport = reference
     ? buildMissionMapViewport(
@@ -324,8 +349,10 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
         missionGeoJson,
         survey.geoJson,
         fence.geoJson,
+        rally.geoJson,
         survey.referenceCoordinates,
         fence.referenceCoordinates,
+        rally.referenceCoordinates,
       ),
     )
     : null;
@@ -403,7 +430,8 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
     || fenceReturnPoint !== null
     || missionGeoJson.features.length > 0
     || survey.geoJson.features.length > 0
-    || fence.geoJson.features.length > 0;
+    || fence.geoJson.features.length > 0
+    || rally.geoJson.features.length > 0;
 
   return {
     mode,
@@ -430,9 +458,11 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
     missionGeoJson,
     surveyGeoJson: survey.geoJson,
     fenceGeoJson: fence.geoJson,
+    rallyGeoJson: rally.geoJson,
     warnings,
     counts: {
       markers: markers.length,
+      rallyMarkers: markers.filter((marker) => marker.kind === "rally-point").length,
       surveyHandles: surveyHandles.length,
       surveyVertexHandles: surveyVertexHandles.length,
       fenceRegionHandles: fenceRegionHandles.length,
@@ -443,10 +473,12 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
       surveyFeatures: survey.geoJson.features.length,
       surveyPreviewFeatures: survey.counts.previewFeatures,
       fenceFeatures: fence.geoJson.features.length,
+      rallyFeatures: rally.geoJson.features.length,
       missionFeatureKinds: countFeatureKinds(missionGeoJson),
       surveyFeatureKinds: countFeatureKinds(survey.geoJson),
       surveyPreviewFeatureKinds: survey.counts.previewFeatureKinds,
       fenceFeatureKinds: fence.counts.featureKinds,
+      rallyFeatureKinds: countFeatureKinds(rally.geoJson),
     },
   };
 }
@@ -812,6 +844,36 @@ function buildMarkerCandidates(
   return markers;
 }
 
+function buildRallyMarkerCandidates(
+  home: HomePosition | null,
+  selection: MissionMapSelection,
+  rally: ReturnType<typeof buildMissionMapRallyModel>,
+): Array<Omit<MissionMapMarker, "point">> {
+  const markers: Array<Omit<MissionMapMarker, "point">> = [];
+
+  if (home) {
+    markers.push({
+      id: MISSION_MAP_HOME_MARKER_ID,
+      kind: "home",
+      label: "H",
+      latitude_deg: home.latitude_deg,
+      longitude_deg: home.longitude_deg,
+      draggable: true,
+      selected: selection.kind === "home",
+      current: false,
+      readOnly: false,
+      uiId: null,
+      index: null,
+    });
+  }
+
+  for (const marker of rally.markerCandidates) {
+    markers.push(marker);
+  }
+
+  return markers;
+}
+
 function projectMissionLines(viewport: MissionMapViewport, features: MissionRenderFeatures): MissionMapLineFeature[] {
   return features.legs
     .filter((leg) => leg.coordinates.length >= 2)
@@ -976,8 +1038,10 @@ function collectAllCoordinates(
   missionGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
   surveyGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
   fenceGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
+  rallyGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
   surveyCoordinates: GeoRef[] = [],
   fenceCoordinates: GeoRef[] = [],
+  rallyCoordinates: GeoRef[] = [],
 ): GeoRef[] {
   const coordinates: GeoRef[] = markers.map((marker) => ({
     latitude_deg: marker.latitude_deg,
@@ -987,12 +1051,18 @@ function collectAllCoordinates(
   appendFeatureCollectionCoordinates(missionGeoJson, coordinates);
   appendFeatureCollectionCoordinates(surveyGeoJson, coordinates);
   appendFeatureCollectionCoordinates(fenceGeoJson, coordinates);
+  appendFeatureCollectionCoordinates(rallyGeoJson, coordinates);
   surveyCoordinates.forEach((coordinate) => {
     if (isFiniteGeoRef(coordinate)) {
       coordinates.push({ ...coordinate });
     }
   });
   fenceCoordinates.forEach((coordinate) => {
+    if (isFiniteGeoRef(coordinate)) {
+      coordinates.push({ ...coordinate });
+    }
+  });
+  rallyCoordinates.forEach((coordinate) => {
     if (isFiniteGeoRef(coordinate)) {
       coordinates.push({ ...coordinate });
     }
@@ -1006,8 +1076,10 @@ function resolveReference(
   missionGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
   surveyGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
   fenceGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
+  rallyGeoJson: GeoJSON.FeatureCollection<GeoJSON.Geometry, MissionMapGeoJsonProperties>,
   surveyCoordinates: GeoRef[] = [],
   fenceCoordinates: GeoRef[] = [],
+  rallyCoordinates: GeoRef[] = [],
 ): GeoRef | null {
   if (home) {
     return {
@@ -1029,8 +1101,10 @@ function resolveReference(
     missionGeoJson,
     surveyGeoJson,
     fenceGeoJson,
+    rallyGeoJson,
     surveyCoordinates,
     fenceCoordinates,
+    rallyCoordinates,
   );
   return allCoordinates[0] ?? null;
 }

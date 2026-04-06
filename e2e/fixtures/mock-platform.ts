@@ -122,6 +122,8 @@ export const missionWorkspaceSelectors = {
     root: `[data-testid="${missionWorkspaceTestIds.root}"]`,
     header: `[data-testid="${missionWorkspaceTestIds.header}"]`,
     state: `[data-testid="${missionWorkspaceTestIds.state}"]`,
+    attachment: `[data-testid="${missionWorkspaceTestIds.attachment}"]`,
+    attachmentDetail: `[data-testid="${missionWorkspaceTestIds.attachmentDetail}"]`,
     scope: `[data-testid="${missionWorkspaceTestIds.scope}"]`,
     summary: `[data-testid="${missionWorkspaceTestIds.summary}"]`,
     inlineStatus: `[data-testid="${missionWorkspaceTestIds.inlineStatus}"]`,
@@ -129,19 +131,27 @@ export const missionWorkspaceSelectors = {
     inlineStatusDetail: `[data-testid="${missionWorkspaceTestIds.inlineStatusDetail}"]`,
     error: `[data-testid="${missionWorkspaceTestIds.error}"]`,
     localNote: `[data-testid="${missionWorkspaceTestIds.localNote}"]`,
+    warningRegister: `[data-testid="${missionWorkspaceTestIds.warningRegister}"]`,
     warningFile: `[data-testid="${missionWorkspaceTestIds.warningFile}"]`,
     warningValidation: `[data-testid="${missionWorkspaceTestIds.warningValidation}"]`,
     countsMission: `[data-testid="${missionWorkspaceTestIds.countsMission}"]`,
     countsSurvey: `[data-testid="${missionWorkspaceTestIds.countsSurvey}"]`,
+    countsFence: `[data-testid="${missionWorkspaceTestIds.countsFence}"]`,
+    countsRally: `[data-testid="${missionWorkspaceTestIds.countsRally}"]`,
     countsValidation: `[data-testid="${missionWorkspaceTestIds.countsValidation}"]`,
     countsWarnings: `[data-testid="${missionWorkspaceTestIds.countsWarnings}"]`,
     empty: `[data-testid="${missionWorkspaceTestIds.empty}"]`,
     ready: `[data-testid="${missionWorkspaceTestIds.ready}"]`,
+    modeMission: `[data-testid="${missionWorkspaceTestIds.modeMission}"]`,
+    modeFence: `[data-testid="${missionWorkspaceTestIds.modeFence}"]`,
+    modeRally: `[data-testid="${missionWorkspaceTestIds.modeRally}"]`,
     entryRead: `[data-testid="${missionWorkspaceTestIds.entryRead}"]`,
     entryImport: `[data-testid="${missionWorkspaceTestIds.entryImport}"]`,
+    entryImportKml: `[data-testid="${missionWorkspaceTestIds.entryImportKml}"]`,
     entryNew: `[data-testid="${missionWorkspaceTestIds.entryNew}"]`,
     toolbarRead: `[data-testid="${missionWorkspaceTestIds.toolbarRead}"]`,
     toolbarImport: `[data-testid="${missionWorkspaceTestIds.toolbarImport}"]`,
+    toolbarImportKml: `[data-testid="${missionWorkspaceTestIds.toolbarImportKml}"]`,
     toolbarNew: `[data-testid="${missionWorkspaceTestIds.toolbarNew}"]`,
     toolbarExport: `[data-testid="${missionWorkspaceTestIds.toolbarExport}"]`,
     toolbarValidate: `[data-testid="${missionWorkspaceTestIds.toolbarValidate}"]`,
@@ -152,10 +162,21 @@ export const missionWorkspaceSelectors = {
     promptKind: `[data-testid="${missionWorkspaceTestIds.promptKind}"]`,
     promptConfirm: `[data-testid="${missionWorkspaceTestIds.promptConfirm}"]`,
     promptDismiss: `[data-testid="${missionWorkspaceTestIds.promptDismiss}"]`,
+    importReview: `[data-testid="${missionWorkspaceTestIds.importReview}"]`,
+    importReviewTitle: `[data-testid="${missionWorkspaceTestIds.importReviewTitle}"]`,
+    importReviewConfirm: `[data-testid="${missionWorkspaceTestIds.importReviewConfirm}"]`,
+    importReviewDismiss: `[data-testid="${missionWorkspaceTestIds.importReviewDismiss}"]`,
+    exportReview: `[data-testid="${missionWorkspaceTestIds.exportReview}"]`,
+    exportReviewTitle: `[data-testid="${missionWorkspaceTestIds.exportReviewTitle}"]`,
+    exportReviewConfirm: `[data-testid="${missionWorkspaceTestIds.exportReviewConfirm}"]`,
+    exportReviewDismiss: `[data-testid="${missionWorkspaceTestIds.exportReviewDismiss}"]`,
+    homeCard: `[data-testid="${missionWorkspaceTestIds.homeCard}"]`,
     homeLatitude: `[data-testid="${missionWorkspaceTestIds.homeLatitude}"]`,
     homeLongitude: `[data-testid="${missionWorkspaceTestIds.homeLongitude}"]`,
     homeAltitude: `[data-testid="${missionWorkspaceTestIds.homeAltitude}"]`,
     homeSummary: `[data-testid="${missionWorkspaceTestIds.homeSummary}"]`,
+    homeSync: `[data-testid="${missionWorkspaceTestIds.homeSync}"]`,
+    homeReadOnly: `[data-testid="${missionWorkspaceTestIds.homeReadOnly}"]`,
     map: `[data-testid="${missionWorkspaceTestIds.map}"]`,
     mapSurface: `[data-testid="${missionWorkspaceTestIds.mapSurface}"]`,
     mapDrawSurface: `[data-testid="${missionWorkspaceTestIds.mapDrawSurface}"]`,
@@ -166,6 +187,10 @@ export const missionWorkspaceSelectors = {
     mapMarkerCount: `[data-testid="${missionWorkspaceTestIds.mapMarkerCount}"]`,
     mapSurveyCount: `[data-testid="${missionWorkspaceTestIds.mapSurveyCount}"]`,
     mapPreviewCount: `[data-testid="${missionWorkspaceTestIds.mapPreviewCount}"]`,
+    mapFenceCount: `[data-testid="${missionWorkspaceTestIds.mapFenceCount}"]`,
+    mapFenceVertexCount: `[data-testid="${missionWorkspaceTestIds.mapFenceVertexCount}"]`,
+    mapFenceReturnPointState: `[data-testid="${missionWorkspaceTestIds.mapFenceReturnPointState}"]`,
+    mapRallyCount: `[data-testid="${missionWorkspaceTestIds.mapRallyCount}"]`,
     mapDebug: `[data-testid="${missionWorkspaceTestIds.mapDebug}"]`,
     mapDrawStartGrid: `[data-testid="${missionWorkspaceTestIds.mapDrawStartGrid}"]`,
     mapDrawStartCorridor: `[data-testid="${missionWorkspaceTestIds.mapDrawStartCorridor}"]`,
@@ -177,6 +202,15 @@ export const missionWorkspaceSelectors = {
     listAddSurveyGrid: `[data-testid="${missionWorkspaceTestIds.listAddSurveyGrid}"]`,
     listAddSurveyCorridor: `[data-testid="${missionWorkspaceTestIds.listAddSurveyCorridor}"]`,
     listAddSurveyStructure: `[data-testid="${missionWorkspaceTestIds.listAddSurveyStructure}"]`,
+    fenceList: `[data-testid="${missionWorkspaceTestIds.fenceList}"]`,
+    fenceAddInclusionPolygon: `[data-testid="${missionWorkspaceTestIds.fenceAddInclusionPolygon}"]`,
+    fenceAddExclusionPolygon: `[data-testid="${missionWorkspaceTestIds.fenceAddExclusionPolygon}"]`,
+    fenceAddInclusionCircle: `[data-testid="${missionWorkspaceTestIds.fenceAddInclusionCircle}"]`,
+    fenceAddExclusionCircle: `[data-testid="${missionWorkspaceTestIds.fenceAddExclusionCircle}"]`,
+    fenceReturnPointCard: `[data-testid="${missionWorkspaceTestIds.fenceReturnPointCard}"]`,
+    fenceReturnPointClear: `[data-testid="${missionWorkspaceTestIds.fenceReturnPointClear}"]`,
+    rallyList: `[data-testid="${missionWorkspaceTestIds.rallyList}"]`,
+    rallyAdd: `[data-testid="${missionWorkspaceTestIds.rallyAdd}"]`,
     inspectorSelectionKind: `[data-testid="${missionWorkspaceTestIds.inspectorSelectionKind}"]`,
     inspectorReadonly: `[data-testid="${missionWorkspaceTestIds.inspectorReadonly}"]`,
     inspectorSurvey: `[data-testid="${missionWorkspaceTestIds.inspectorSurvey}"]`,
@@ -184,6 +218,14 @@ export const missionWorkspaceSelectors = {
     inspectorLatitude: `[data-testid="${missionWorkspaceTestIds.inspectorLatitude}"]`,
     inspectorLongitude: `[data-testid="${missionWorkspaceTestIds.inspectorLongitude}"]`,
     inspectorAltitude: `[data-testid="${missionWorkspaceTestIds.inspectorAltitude}"]`,
+    fenceInspectorSelectionKind: `[data-testid="${missionWorkspaceTestIds.fenceInspectorSelectionKind}"]`,
+    fenceInspectorType: `[data-testid="${missionWorkspaceTestIds.fenceInspectorType}"]`,
+    fenceCircleRadius: `[data-testid="${missionWorkspaceTestIds.fenceCircleRadius}"]`,
+    rallyInspectorSelectionKind: `[data-testid="${missionWorkspaceTestIds.rallyInspectorSelectionKind}"]`,
+    rallyLatitude: `[data-testid="${missionWorkspaceTestIds.rallyLatitude}"]`,
+    rallyLongitude: `[data-testid="${missionWorkspaceTestIds.rallyLongitude}"]`,
+    rallyAltitude: `[data-testid="${missionWorkspaceTestIds.rallyAltitude}"]`,
+    rallyAltitudeFrame: `[data-testid="${missionWorkspaceTestIds.rallyAltitudeFrame}"]`,
     surveyPrompt: `[data-testid="${missionWorkspaceTestIds.surveyPrompt}"]`,
     surveyPromptKind: `[data-testid="${missionWorkspaceTestIds.surveyPromptKind}"]`,
     surveyPromptConfirm: `[data-testid="${missionWorkspaceTestIds.surveyPromptConfirm}"]`,
@@ -229,6 +271,21 @@ export const shellViewportPresets = {
 export type ShellViewportPresetName = keyof typeof shellViewportPresets;
 export type ShellViewportPreset = (typeof shellViewportPresets)[ShellViewportPresetName];
 
+type MockOpenFileState = {
+    mode: "resolve" | "cancel" | "reject";
+    name: string;
+    type: string;
+    kind: "text" | "binary";
+    size: number;
+    openCount: number;
+};
+
+type MockSavedFile = {
+    name: string;
+    contents: string;
+    size: number;
+};
+
 type MockPlatformFixture = {
     reset: () => Promise<void>;
     setCommandBehavior: (cmd: string, behavior: MockCommandBehavior) => Promise<void>;
@@ -259,14 +316,16 @@ type MockPlatformFixture = {
         seek_epoch: number;
         reset_revision: number;
     } | null>;
-    setOpenFile: (contents: string, name?: string) => Promise<void>;
+    setOpenFile: (contents: string, name?: string, type?: string) => Promise<void>;
+    setOpenBinaryFile: (contents: Uint8Array | ArrayBuffer | number[], name?: string, type?: string) => Promise<void>;
+    getOpenFileState: () => Promise<MockOpenFileState>;
     cancelOpenFile: (message?: string) => Promise<void>;
     failOpenFile: (message: string) => Promise<void>;
     setSaveFileName: (name: string) => Promise<void>;
     cancelSaveFile: (message?: string) => Promise<void>;
     failSaveFile: (message: string) => Promise<void>;
     clearSavedFiles: () => Promise<void>;
-    getSavedFiles: () => Promise<Array<{ name: string; contents: string }>>;
+    getSavedFiles: () => Promise<MockSavedFile[]>;
     waitForRuntimeSurface: () => Promise<void>;
     waitForOperatorWorkspace: () => Promise<void>;
 };
@@ -350,23 +409,35 @@ async function withMockFilePicker<T>(page: Page, callback: string, ...args: unkn
 
 function installMockFilePicker(page: Page) {
     return page.addInitScript(() => {
+        type MockSavedFileRecord = {
+            name: string;
+            contents: string;
+            size: number;
+        };
+
         type FilePickerState = {
             openMode: "resolve" | "cancel" | "reject";
-            openContents: string;
+            openKind: "text" | "binary";
+            openText: string;
+            openBytes: number[];
             openName: string;
+            openType: string;
             openMessage: string;
+            openCount: number;
             saveMode: "resolve" | "cancel" | "reject";
             saveName: string;
             saveMessage: string;
-            savedFiles: Array<{ name: string; contents: string }>;
-            setOpenFile: (contents: string, name?: string) => void;
+            savedFiles: MockSavedFileRecord[];
+            setOpenFile: (contents: string, name?: string, type?: string) => void;
+            setOpenBinaryFile: (contents: Uint8Array | ArrayBuffer | number[], name?: string, type?: string) => void;
+            getOpenFileState: () => MockOpenFileState;
             cancelOpenFile: (message?: string) => void;
             failOpenFile: (message: string) => void;
             setSaveFileName: (name: string) => void;
             cancelSaveFile: (message?: string) => void;
             failSaveFile: (message: string) => void;
             clearSavedFiles: () => void;
-            getSavedFiles: () => Array<{ name: string; contents: string }>;
+            getSavedFiles: () => MockSavedFileRecord[];
         };
 
         const mockWindow = window as typeof window & {
@@ -378,19 +449,75 @@ function installMockFilePicker(page: Page) {
             }>;
         };
 
+        const normalizeBinaryContents = (contents: Uint8Array | ArrayBuffer | number[]): number[] => {
+            if (Array.isArray(contents)) {
+                return contents.map((value) => Number(value) & 0xff);
+            }
+            if (contents instanceof Uint8Array) {
+                return Array.from(contents);
+            }
+            if (contents instanceof ArrayBuffer) {
+                return Array.from(new Uint8Array(contents));
+            }
+
+            throw new Error("Mock binary file contents must be provided as number[], Uint8Array, or ArrayBuffer.");
+        };
+
+        const coerceWritableContents = async (contents: unknown): Promise<string> => {
+            if (typeof contents === "string") {
+                return contents;
+            }
+            if (contents instanceof Uint8Array) {
+                return new TextDecoder().decode(contents);
+            }
+            if (contents instanceof ArrayBuffer) {
+                return new TextDecoder().decode(new Uint8Array(contents));
+            }
+            if (typeof Blob !== "undefined" && contents instanceof Blob) {
+                return contents.text();
+            }
+
+            return String(contents);
+        };
+
         const state: FilePickerState = {
             openMode: "resolve",
-            openContents: "",
+            openKind: "text",
+            openText: "",
+            openBytes: [],
             openName: "import.param",
+            openType: "text/plain",
             openMessage: "The user aborted a request.",
+            openCount: 0,
             saveMode: "resolve" as const,
             saveName: "ironwing-parameters.param",
             saveMessage: "The user aborted a request.",
-            savedFiles: [] as Array<{ name: string; contents: string }>,
-            setOpenFile(contents: string, name = "import.param") {
+            savedFiles: [] as MockSavedFileRecord[],
+            setOpenFile(contents: string, name = "import.param", type = "text/plain") {
                 state.openMode = "resolve";
-                state.openContents = contents;
+                state.openKind = "text";
+                state.openText = contents;
+                state.openBytes = [];
                 state.openName = name;
+                state.openType = type;
+            },
+            setOpenBinaryFile(contents: Uint8Array | ArrayBuffer | number[], name = "import.bin", type = "application/octet-stream") {
+                state.openMode = "resolve";
+                state.openKind = "binary";
+                state.openBytes = normalizeBinaryContents(contents);
+                state.openText = "";
+                state.openName = name;
+                state.openType = type;
+            },
+            getOpenFileState() {
+                return {
+                    mode: state.openMode,
+                    name: state.openName,
+                    type: state.openType,
+                    kind: state.openKind,
+                    size: state.openKind === "binary" ? state.openBytes.length : state.openText.length,
+                    openCount: state.openCount,
+                };
             },
             cancelOpenFile(message = "The user aborted a request.") {
                 state.openMode = "cancel";
@@ -422,6 +549,8 @@ function installMockFilePicker(page: Page) {
 
         mockWindow.__IRONWING_FILE_PICKER__ = state;
         mockWindow.showOpenFilePicker = async () => {
+            state.openCount += 1;
+
             if (state.openMode === "cancel") {
                 throw new DOMException(state.openMessage, "AbortError");
             }
@@ -429,7 +558,11 @@ function installMockFilePicker(page: Page) {
                 throw new Error(state.openMessage);
             }
 
-            const file = new File([state.openContents], state.openName, { type: "text/plain" });
+            const file = new File(
+                [state.openKind === "binary" ? new Uint8Array(state.openBytes) : state.openText],
+                state.openName,
+                { type: state.openType },
+            );
             return [{ getFile: async () => file }];
         };
         mockWindow.showSaveFilePicker = async (options) => {
@@ -443,12 +576,24 @@ function installMockFilePicker(page: Page) {
             const name = state.saveName || options?.suggestedName || "ironwing-parameters.param";
             return {
                 name,
-                createWritable: async () => ({
-                    write: async (contents: unknown) => {
-                        state.savedFiles.push({ name, contents: typeof contents === "string" ? contents : String(contents) });
-                    },
-                    close: async () => undefined,
-                }),
+                createWritable: async () => {
+                    let buffer = "";
+                    let closed = false;
+
+                    return {
+                        write: async (contents: unknown) => {
+                            buffer += await coerceWritableContents(contents);
+                        },
+                        close: async () => {
+                            if (closed) {
+                                return;
+                            }
+
+                            closed = true;
+                            state.savedFiles.push({ name, contents: buffer, size: buffer.length });
+                        },
+                    };
+                },
             };
         };
     });
@@ -580,13 +725,26 @@ function isMissionMapDebugSnapshot(value: unknown): value is MissionMapDebugSnap
     }
 
     const snapshot = value as Partial<MissionMapDebugSnapshot>;
-    return typeof snapshot.state === "string"
+    const counts = snapshot.counts as Record<string, unknown> | undefined;
+
+    return typeof snapshot.mode === "string"
+        && typeof snapshot.state === "string"
         && Boolean(snapshot.selection && typeof snapshot.selection === "object")
-        && Boolean(snapshot.counts && typeof snapshot.counts === "object")
+        && Boolean(snapshot.fenceSelection && typeof snapshot.fenceSelection === "object")
+        && counts !== undefined
+        && typeof counts.markers === "number"
+        && typeof counts.fenceFeatures === "number"
+        && typeof counts.rallyMarkers === "number"
         && Array.isArray(snapshot.warnings)
+        && snapshot.warnings.every((warning) => typeof warning === "string")
         && typeof snapshot.drawMode === "string"
         && typeof snapshot.drawPointCount === "number"
+        && (snapshot.readOnlyReason === null || typeof snapshot.readOnlyReason === "string")
+        && (snapshot.selectedRallyPointUiId === null || typeof snapshot.selectedRallyPointUiId === "number")
         && typeof snapshot.selectedSurveyGenerationBlocked === "boolean"
+        && typeof snapshot.activeFenceVertexCount === "number"
+        && typeof snapshot.activeFenceRadiusCount === "number"
+        && typeof snapshot.rallyMarkerCount === "number"
         && typeof snapshot.updateCount === "number";
 }
 
@@ -798,7 +956,9 @@ export const test = base.extend<Fixtures>({
             resolveDeferredConnectLink: (params) => withMockController(page, "resolveDeferredConnectLink", params),
             getInvocations: () => withMockController(page, "getInvocations"),
             getLiveEnvelope: () => withMockController(page, "getLiveEnvelope"),
-            setOpenFile: (contents, name) => withMockFilePicker(page, "setOpenFile", contents, name),
+            setOpenFile: (contents, name, type) => withMockFilePicker(page, "setOpenFile", contents, name, type),
+            setOpenBinaryFile: (contents, name, type) => withMockFilePicker(page, "setOpenBinaryFile", contents, name, type),
+            getOpenFileState: () => withMockFilePicker(page, "getOpenFileState"),
             cancelOpenFile: (message) => withMockFilePicker(page, "cancelOpenFile", message),
             failOpenFile: (message) => withMockFilePicker(page, "failOpenFile", message),
             setSaveFileName: (name) => withMockFilePicker(page, "setSaveFileName", name),

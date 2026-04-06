@@ -15,6 +15,7 @@ import type { FenceRegion, MissionCommand, GeoPoint2d, MissionItem } from "../ma
 import {
   addFenceRegionAt,
   addTypedWaypoint,
+  addTypedWaypointAt,
   createTypedDraftState,
   deleteTypedAt,
   insertTypedItemsAfter,
@@ -31,6 +32,7 @@ import {
   typedDraftSelectedIndex,
   typedDraftSelectedItem,
   updateFenceRegion as updateTypedFenceRegion,
+  updateRallyAltitudeFrame,
   updateTypedAltitude,
   updateTypedCommand,
   updateTypedLatitude,
@@ -129,7 +131,7 @@ export type MissionPlannerMapMoveRejectReason =
 export type MissionPlannerMapMoveResult =
   | {
     status: "applied";
-    target: "home" | "mission-item";
+    target: "home" | "mission-item" | "rally-point";
     uiId: number | null;
     latitude_deg: number;
     longitude_deg: number;
@@ -145,9 +147,14 @@ export type MissionPlannerFenceSelection =
   | { kind: "region"; regionUiId: number | null }
   | { kind: "return-point" };
 
+export type MissionPlannerRallySelection =
+  | { kind: "none" }
+  | { kind: "point"; pointUiId: number | null };
+
 export type MissionPlannerWarningActionTarget =
   | { kind: "fence-region"; regionUiId: number | null }
-  | { kind: "fence-return-point" };
+  | { kind: "fence-return-point" }
+  | { kind: "rally-point"; pointUiId: number | null };
 
 export type MissionPlannerFenceMutationRejectReason =
   | "invalid-coordinate"
@@ -166,6 +173,25 @@ export type MissionPlannerFenceMutationResult =
   | {
     status: "rejected";
     reason: MissionPlannerFenceMutationRejectReason;
+    message: string;
+  };
+
+export type MissionPlannerRallyMutationRejectReason =
+  | "invalid-altitude"
+  | "invalid-altitude-frame"
+  | "invalid-coordinate"
+  | "point-not-found"
+  | "read-only";
+
+export type MissionPlannerRallyMutationResult =
+  | {
+    status: "applied";
+    target: "point" | "none";
+    pointUiId: number | null;
+  }
+  | {
+    status: "rejected";
+    reason: MissionPlannerRallyMutationRejectReason;
     message: string;
   };
 
@@ -246,6 +272,7 @@ export type MissionPlannerStoreState = {
   mode: MissionPlannerMode;
   selection: MissionPlannerSelection;
   fenceSelection: MissionPlannerFenceSelection;
+  rallySelection: MissionPlannerRallySelection;
   phase: MissionPlannerDomainPhase;
   streamReady: boolean;
   streamError: string | null;
@@ -310,6 +337,7 @@ function createInitialState(): MissionPlannerStoreState {
     mode: "mission",
     selection: { kind: "home" },
     fenceSelection: { kind: "none" },
+    rallySelection: { kind: "none" },
     phase: "bootstrapping",
     streamReady: false,
     streamError: null,
@@ -483,12 +511,16 @@ export function createMissionPlannerStore(
     }));
   }
 
-  function withBlockedReason(state: MissionPlannerStoreState, message: string): MissionPlannerStoreState {
+  function withBlockedReason(
+    state: MissionPlannerStoreState,
+    message: string,
+    target: MissionPlannerWarningActionTarget | null = warningTargetFromMode(state.mode, state),
+  ): MissionPlannerStoreState {
     return withResolvedPhase({
       ...state,
       blockedReason: message,
       blockedMode: state.mode,
-      blockedWarningTarget: state.mode === "fence" ? warningTargetFromFenceSelection(state.fenceSelection) : null,
+      blockedWarningTarget: target,
       dismissedWarningIds: clearDismissedWarningIds(state.dismissedWarningIds, ["blocked:"]),
     });
   }
@@ -1282,6 +1314,273 @@ export function createMissionPlannerStore(
     return rejectedFenceMutation("invalid-geometry", "Ignored the fence radius edit because only circle regions expose a radius handle on the planner map.");
   }
 
+  function selectRallyPointByUiId(uiId: number): MissionPlannerRallyMutationResult {
+    const state = get(store);
+    const point = state.draftState.active.rally.draftItems.find((item) => item.uiId === uiId);
+    if (!point) {
+      store.update((current) => withBlockedReason(
+        current,
+        "Ignored a stale rally selection because that point is no longer present in the active draft.",
+        { kind: "rally-point", pointUiId: uiId },
+      ));
+      return rejectedRallyMutation("point-not-found", "Ignored a stale rally selection because that point is no longer present in the active draft.");
+    }
+
+    store.update((current) => withResolvedPhase({
+      ...current,
+      draftState: selectTypedDraftIndex(current.draftState, "rally", point.index),
+      rallySelection: { kind: "point", pointUiId: uiId },
+      blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
+      dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
+    }));
+
+    return {
+      status: "applied",
+      target: "point",
+      pointUiId: uiId,
+    };
+  }
+
+  function addRallyPoint(
+    latitudeDeg?: number,
+    longitudeDeg?: number,
+  ): MissionPlannerRallyMutationResult {
+    const state = get(store);
+    if (!canEditWorkspace(state)) {
+      store.update((current) => withBlockedReason(current, readOnlyMutationMessage(current, "Rally edits")));
+      return rejectedRallyMutation("read-only", readOnlyMutationMessage(state, "Rally edits"));
+    }
+
+    const anchor = resolveRallyAnchorPoint(state);
+    const nextLatitude = typeof latitudeDeg === "number" ? latitudeDeg : anchor.latitude_deg;
+    const nextLongitude = typeof longitudeDeg === "number" ? longitudeDeg : anchor.longitude_deg;
+    if (!isCoordinatePairValid(nextLatitude, nextLongitude)) {
+      store.update((current) => withBlockedReason(current, "Ignored the rally add because the requested map position was invalid."));
+      return rejectedRallyMutation("invalid-coordinate", "Ignored the rally add because the requested map position was invalid.");
+    }
+
+    const draftState = addTypedWaypointAt(state.draftState, "rally", nextLatitude, nextLongitude);
+    const pointUiId = draftState.active.rally.primarySelectedUiId;
+
+    store.update((current) => withResolvedPhase({
+      ...current,
+      draftState,
+      rallySelection: pointUiId === null ? { kind: "none" } : { kind: "point", pointUiId },
+      blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
+      dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
+    }));
+
+    return {
+      status: "applied",
+      target: pointUiId === null ? "none" : "point",
+      pointUiId,
+    };
+  }
+
+  function deleteRallyPointByUiId(uiId: number): MissionPlannerRallyMutationResult {
+    const state = get(store);
+    if (!canEditWorkspace(state)) {
+      store.update((current) => withBlockedReason(current, readOnlyMutationMessage(current, "Rally deletes")));
+      return rejectedRallyMutation("read-only", readOnlyMutationMessage(state, "Rally deletes"));
+    }
+
+    const point = state.draftState.active.rally.draftItems.find((item) => item.uiId === uiId);
+    if (!point) {
+      store.update((current) => withBlockedReason(
+        current,
+        "Ignored a stale rally delete because that point is no longer present in the active draft.",
+        { kind: "rally-point", pointUiId: uiId },
+      ));
+      return rejectedRallyMutation("point-not-found", "Ignored a stale rally delete because that point is no longer present in the active draft.");
+    }
+
+    const draftState = deleteTypedAt(state.draftState, "rally", point.index);
+    const nextPoint = typedDraftSelectedItem(draftState, "rally");
+    const rallySelection = nextPoint
+      ? ({ kind: "point", pointUiId: nextPoint.uiId } satisfies MissionPlannerRallySelection)
+      : ({ kind: "none" } satisfies MissionPlannerRallySelection);
+
+    store.update((current) => withResolvedPhase({
+      ...current,
+      draftState,
+      rallySelection,
+      blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
+      dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
+    }));
+
+    return {
+      status: "applied",
+      target: rallySelection.kind === "point" ? "point" : "none",
+      pointUiId: rallySelection.kind === "point" ? rallySelection.pointUiId : null,
+    };
+  }
+
+  function applyRallyPointEditByUiId(
+    uiId: number,
+    blockedLabel: string,
+    updater: (draftState: TypedDraftState, pointIndex: number) => TypedDraftState,
+  ): MissionPlannerRallyMutationResult {
+    const state = get(store);
+    if (!canEditWorkspace(state)) {
+      store.update((current) => withBlockedReason(current, readOnlyMutationMessage(current, blockedLabel)));
+      return rejectedRallyMutation("read-only", readOnlyMutationMessage(state, blockedLabel));
+    }
+
+    const point = state.draftState.active.rally.draftItems.find((item) => item.uiId === uiId);
+    if (!point) {
+      store.update((current) => withBlockedReason(
+        current,
+        `Ignored a stale rally edit because point ${uiId} is no longer present in the active draft.`,
+        { kind: "rally-point", pointUiId: uiId },
+      ));
+      return rejectedRallyMutation("point-not-found", `Ignored a stale rally edit because point ${uiId} is no longer present in the active draft.`);
+    }
+
+    const nextDraftState = updater(state.draftState, point.index);
+    const nextPoint = nextDraftState.active.rally.draftItems.find((item) => item.uiId === uiId) ?? null;
+    const draftState = nextPoint ? selectTypedDraftIndex(nextDraftState, "rally", nextPoint.index) : nextDraftState;
+    const rallySelection = nextPoint
+      ? ({ kind: "point", pointUiId: uiId } satisfies MissionPlannerRallySelection)
+      : ({ kind: "none" } satisfies MissionPlannerRallySelection);
+
+    store.update((current) => withResolvedPhase({
+      ...current,
+      draftState,
+      rallySelection,
+      blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
+      dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
+      validationIssues: [],
+    }));
+
+    return {
+      status: "applied",
+      target: rallySelection.kind === "point" ? "point" : "none",
+      pointUiId: rallySelection.kind === "point" ? rallySelection.pointUiId : null,
+    };
+  }
+
+  function moveRallyPointUpByUiId(uiId: number): MissionPlannerRallyMutationResult {
+    return applyRallyPointEditByUiId(uiId, "Rally reordering", (draftState, pointIndex) => moveTypedUp(draftState, "rally", pointIndex));
+  }
+
+  function moveRallyPointDownByUiId(uiId: number): MissionPlannerRallyMutationResult {
+    return applyRallyPointEditByUiId(uiId, "Rally reordering", (draftState, pointIndex) => moveTypedDown(draftState, "rally", pointIndex));
+  }
+
+  function updateRallyPointLatitudeByUiId(uiId: number, latitudeDeg: number): MissionPlannerRallyMutationResult {
+    if (!parseLatitude(latitudeDeg).ok) {
+      store.update((current) => withBlockedReason(current, "Ignored the rally latitude edit because the coordinate was invalid.", {
+        kind: "rally-point",
+        pointUiId: uiId,
+      }));
+      return rejectedRallyMutation("invalid-coordinate", "Ignored the rally latitude edit because the coordinate was invalid.");
+    }
+
+    return applyRallyPointEditByUiId(uiId, "Rally edits", (draftState, pointIndex) => updateTypedLatitude(draftState, "rally", pointIndex, latitudeDeg));
+  }
+
+  function updateRallyPointLongitudeByUiId(uiId: number, longitudeDeg: number): MissionPlannerRallyMutationResult {
+    if (!parseLongitude(longitudeDeg).ok) {
+      store.update((current) => withBlockedReason(current, "Ignored the rally longitude edit because the coordinate was invalid.", {
+        kind: "rally-point",
+        pointUiId: uiId,
+      }));
+      return rejectedRallyMutation("invalid-coordinate", "Ignored the rally longitude edit because the coordinate was invalid.");
+    }
+
+    return applyRallyPointEditByUiId(uiId, "Rally edits", (draftState, pointIndex) => updateTypedLongitude(draftState, "rally", pointIndex, longitudeDeg));
+  }
+
+  function updateRallyPointAltitudeByUiId(uiId: number, altitudeM: number): MissionPlannerRallyMutationResult {
+    if (!Number.isFinite(altitudeM)) {
+      store.update((current) => withBlockedReason(current, "Ignored the rally altitude edit because the value was not finite.", {
+        kind: "rally-point",
+        pointUiId: uiId,
+      }));
+      return rejectedRallyMutation("invalid-altitude", "Ignored the rally altitude edit because the value was not finite.");
+    }
+
+    return applyRallyPointEditByUiId(uiId, "Rally edits", (draftState, pointIndex) => updateTypedAltitude(draftState, "rally", pointIndex, altitudeM));
+  }
+
+  function updateRallyPointAltitudeFrameByUiId(
+    uiId: number,
+    frame: "msl" | "rel_home" | "terrain" | string,
+  ): MissionPlannerRallyMutationResult {
+    if (frame !== "msl" && frame !== "rel_home" && frame !== "terrain") {
+      store.update((current) => withBlockedReason(current, "Ignored the rally altitude-frame edit because the requested frame is unsupported.", {
+        kind: "rally-point",
+        pointUiId: uiId,
+      }));
+      return rejectedRallyMutation("invalid-altitude-frame", "Ignored the rally altitude-frame edit because the requested frame is unsupported.");
+    }
+
+    return applyRallyPointEditByUiId(uiId, "Rally edits", (draftState, pointIndex) => updateRallyAltitudeFrame(draftState, pointIndex, frame));
+  }
+
+  function moveRallyPointOnMapByUiId(
+    uiId: number,
+    latitudeDeg: number,
+    longitudeDeg: number,
+  ): MissionPlannerMapMoveResult {
+    if (!isCoordinatePairValid(latitudeDeg, longitudeDeg)) {
+      store.update((current) => withBlockedReason(current, "Ignored the rally drag because the map emitted invalid coordinates.", {
+        kind: "rally-point",
+        pointUiId: uiId,
+      }));
+      return rejectedMapMove("invalid-coordinate", "Ignored the rally drag because the map emitted invalid coordinates.");
+    }
+
+    const state = get(store);
+    if (!canEditWorkspace(state)) {
+      store.update((current) => withBlockedReason(current, readOnlyMutationMessage(current, "Rally drags"), {
+        kind: "rally-point",
+        pointUiId: uiId,
+      }));
+      return rejectedMapMove("item-read-only", readOnlyMutationMessage(state, "Rally drags"));
+    }
+
+    const point = state.draftState.active.rally.draftItems.find((item) => item.uiId === uiId);
+    if (!point) {
+      store.update((current) => withBlockedReason(current, "Ignored a stale rally drag because that point is no longer present in the active draft.", {
+        kind: "rally-point",
+        pointUiId: uiId,
+      }));
+      return rejectedMapMove("item-not-found", "Ignored a stale rally drag because that point is no longer present in the active draft.");
+    }
+
+    store.update((current) => withResolvedPhase({
+      ...current,
+      draftState: selectTypedDraftIndex(
+        moveTypedWaypointOnMap(current.draftState, "rally", point.index, latitudeDeg, longitudeDeg),
+        "rally",
+        point.index,
+      ),
+      rallySelection: { kind: "point", pointUiId: uiId },
+      validationIssues: [],
+      blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
+      dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
+    }));
+
+    return {
+      status: "applied",
+      target: "rally-point",
+      uiId,
+      latitude_deg: latitudeDeg,
+      longitude_deg: longitudeDeg,
+    };
+  }
+
   function beginImportReview(
     source: MissionPlannerImportSource,
     fileName: string | null,
@@ -1968,19 +2267,29 @@ export function createMissionPlannerStore(
     selectSurveyRegion,
     selectFenceRegionByUiId,
     selectFenceReturnPoint,
+    selectRallyPointByUiId,
     addMissionItem,
     addFenceRegion,
+    addRallyPoint,
     deleteMissionItem,
     deleteFenceRegionByUiId,
+    deleteRallyPointByUiId,
     moveMissionItemUpByIndex,
     moveMissionItemDownByIndex,
+    moveRallyPointUpByUiId,
+    moveRallyPointDownByUiId,
     updateMissionItemCommand,
     updateMissionItemLatitude,
     updateMissionItemLongitude,
     updateMissionItemAltitude,
     updateFenceRegionByUiId,
+    updateRallyPointLatitudeByUiId,
+    updateRallyPointLongitudeByUiId,
+    updateRallyPointAltitudeByUiId,
+    updateRallyPointAltitudeFrameByUiId,
     moveHomeOnMap,
     moveMissionItemOnMapByUiId,
+    moveRallyPointOnMapByUiId,
     moveFenceVertexByUiId,
     moveFenceCircleCenterByUiId,
     updateFenceCircleRadiusByUiId,
@@ -2372,6 +2681,7 @@ function applyWorkspacePair(
     workspaceMounted: true,
     selection: { kind: "home" },
     fenceSelection: { kind: "none" },
+    rallySelection: { kind: "none" },
     draftState,
     home: cloneValue(pair.active.home),
     homeSnapshot: cloneValue(pair.snapshot.home),
@@ -2555,7 +2865,7 @@ function clearDismissedWarningIds(ids: string[], prefixes: string[]): string[] {
 }
 
 function withResolvedPhase(state: MissionPlannerStoreState): MissionPlannerStoreState {
-  const normalized = normalizeFenceSelectionState(normalizeSelection(state));
+  const normalized = normalizeRallySelectionState(normalizeFenceSelectionState(normalizeSelection(state)));
   return {
     ...normalized,
     phase: resolvePhase(normalized),
@@ -2638,6 +2948,55 @@ function warningTargetFromFenceSelection(
 
   if (selection.kind === "return-point") {
     return { kind: "fence-return-point" };
+  }
+
+  return null;
+}
+
+function normalizeRallySelectionState(state: MissionPlannerStoreState): MissionPlannerStoreState {
+  if (state.rallySelection.kind === "none") {
+    return state;
+  }
+
+  const selectedRallyPoint = typedDraftSelectedItem(state.draftState, "rally");
+  const selectedPointUiId = state.rallySelection.kind === "point" ? state.rallySelection.pointUiId : null;
+  const hasSelectedPoint = selectedPointUiId !== null
+    && state.draftState.active.rally.draftItems.some((item) => item.uiId === selectedPointUiId);
+  if (hasSelectedPoint) {
+    return state;
+  }
+
+  return selectedRallyPoint
+    ? {
+      ...state,
+      rallySelection: { kind: "point", pointUiId: selectedRallyPoint.uiId },
+    }
+    : {
+      ...state,
+      rallySelection: { kind: "none" },
+    };
+}
+
+function warningTargetFromRallySelection(
+  selection: MissionPlannerRallySelection,
+): MissionPlannerWarningActionTarget | null {
+  if (selection.kind === "point") {
+    return { kind: "rally-point", pointUiId: selection.pointUiId };
+  }
+
+  return null;
+}
+
+function warningTargetFromMode(
+  mode: MissionPlannerMode,
+  state: Pick<MissionPlannerStoreState, "fenceSelection" | "rallySelection">,
+): MissionPlannerWarningActionTarget | null {
+  if (mode === "fence") {
+    return warningTargetFromFenceSelection(state.fenceSelection);
+  }
+
+  if (mode === "rally") {
+    return warningTargetFromRallySelection(state.rallySelection);
   }
 
   return null;
@@ -2761,6 +3120,94 @@ function resolveFenceAnchorPoint(state: MissionPlannerStoreState): GeoPoint2d {
   };
 }
 
+function resolveRallyAnchorPoint(state: MissionPlannerStoreState): GeoPoint2d {
+  const selectedRallyPointUiId = state.rallySelection.kind === "point" ? state.rallySelection.pointUiId : null;
+  if (selectedRallyPointUiId !== null) {
+    const selectedRallyPoint = state.draftState.active.rally.draftItems.find((item) => item.uiId === selectedRallyPointUiId);
+    if (
+      selectedRallyPoint
+      && selectedRallyPoint.preview.latitude_deg !== null
+      && selectedRallyPoint.preview.longitude_deg !== null
+    ) {
+      return {
+        latitude_deg: selectedRallyPoint.preview.latitude_deg,
+        longitude_deg: selectedRallyPoint.preview.longitude_deg,
+      };
+    }
+  }
+
+  if (state.home) {
+    return {
+      latitude_deg: state.home.latitude_deg,
+      longitude_deg: state.home.longitude_deg,
+    };
+  }
+
+  const selectedMissionItem = typedDraftSelectedItem(state.draftState, "mission");
+  if (
+    selectedMissionItem
+    && selectedMissionItem.preview.latitude_deg !== null
+    && selectedMissionItem.preview.longitude_deg !== null
+  ) {
+    return {
+      latitude_deg: selectedMissionItem.preview.latitude_deg,
+      longitude_deg: selectedMissionItem.preview.longitude_deg,
+    };
+  }
+
+  const firstMissionItem = state.draftState.active.mission.draftItems.find(
+    (item) => item.preview.latitude_deg !== null && item.preview.longitude_deg !== null,
+  );
+  if (
+    firstMissionItem
+    && firstMissionItem.preview.latitude_deg !== null
+    && firstMissionItem.preview.longitude_deg !== null
+  ) {
+    return {
+      latitude_deg: firstMissionItem.preview.latitude_deg,
+      longitude_deg: firstMissionItem.preview.longitude_deg,
+    };
+  }
+
+  const firstRallyPoint = state.draftState.active.rally.draftItems.find(
+    (item) => item.preview.latitude_deg !== null && item.preview.longitude_deg !== null,
+  );
+  if (
+    firstRallyPoint
+    && firstRallyPoint.preview.latitude_deg !== null
+    && firstRallyPoint.preview.longitude_deg !== null
+  ) {
+    return {
+      latitude_deg: firstRallyPoint.preview.latitude_deg,
+      longitude_deg: firstRallyPoint.preview.longitude_deg,
+    };
+  }
+
+  const firstFenceReturnPoint = state.draftState.active.fence.document.return_point;
+  if (firstFenceReturnPoint) {
+    return cloneValue(firstFenceReturnPoint);
+  }
+
+  const firstFenceItem = state.draftState.active.fence.draftItems.find(
+    (item) => item.preview.latitude_deg !== null && item.preview.longitude_deg !== null,
+  );
+  if (
+    firstFenceItem
+    && firstFenceItem.preview.latitude_deg !== null
+    && firstFenceItem.preview.longitude_deg !== null
+  ) {
+    return {
+      latitude_deg: firstFenceItem.preview.latitude_deg,
+      longitude_deg: firstFenceItem.preview.longitude_deg,
+    };
+  }
+
+  return {
+    latitude_deg: 47.397742,
+    longitude_deg: 8.545594,
+  };
+}
+
 function validateFenceRegion(region: FenceRegion): { ok: true } | { ok: false; message: string } {
   if ("inclusion_polygon" in region) {
     return validateFencePolygon(region.inclusion_polygon.vertices, "Fence inclusion polygons");
@@ -2825,6 +3272,17 @@ function rejectedFenceMutation(
   reason: MissionPlannerFenceMutationRejectReason,
   message: string,
 ): MissionPlannerFenceMutationResult {
+  return {
+    status: "rejected",
+    reason,
+    message,
+  };
+}
+
+function rejectedRallyMutation(
+  reason: MissionPlannerRallyMutationRejectReason,
+  message: string,
+): MissionPlannerRallyMutationResult {
   return {
     status: "rejected",
     reason,
