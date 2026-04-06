@@ -144,6 +144,7 @@ import {
   createMissionPlannerStore,
   createMissionPlannerViewStore,
 } from "../../lib/stores/mission-planner";
+import { SETTINGS_STORAGE_KEY, settings } from "../../lib/stores/settings";
 import { createSessionStore } from "../../lib/stores/session";
 import { createShellChromeState } from "../../app/shell/chrome-state";
 import { createStaticShellChromeStore } from "../../test/context-harnesses";
@@ -632,6 +633,7 @@ async function renderWorkspace(options: {
     sessionStore: ReturnType<typeof createSessionStore>;
   }) => Promise<void> | void;
 } = {}) {
+  settings.reload();
   const sessionHarness = createSessionHarness(options.snapshots ?? [createSnapshot()]);
   const plannerHarness = createPlannerServiceHarness(options.plannerServiceOverrides);
   const fileHarness = createFileIoHarness(options.fileIoOverrides);
@@ -836,6 +838,7 @@ describe("MissionWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.terrainPanel)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.terrainWarningCount).textContent).toContain("1 warning");
       expect(screen.getByTestId(missionWorkspaceTestIds.terrainRetry)).toBeTruthy();
     });
@@ -844,6 +847,7 @@ describe("MissionWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("compact-wide");
       expect(screen.getByTestId(missionWorkspaceTestIds.terrainPanel)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
     });
 
     chromeStore.set(createResponsiveChromeState(390, 844, "phone"));
@@ -851,18 +855,91 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("phone-segmented");
       expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("true");
       expect(screen.getByTestId(missionWorkspaceTestIds.terrainPanel)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
     });
 
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentMap));
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("false");
-      expect(screen.getByTestId(missionWorkspaceTestIds.terrainPanel)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
     });
 
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentPlan));
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("true");
       expect(screen.getByTestId(missionWorkspaceTestIds.terrainPanel)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
+    });
+  });
+
+  it("hydrates new-draft planning speeds from persisted mpng_settings defaults", async () => {
+    const chromeStore = createResponsiveChromeStore(390, 844, "phone");
+
+    const { plannerStore } = await renderWorkspace({ chromeStore });
+    settings.updateSettings({
+      cruiseSpeedMps: 17,
+      hoverSpeedMps: 6,
+    });
+    await flush();
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
+    });
+
+    expect((screen.getByTestId(missionWorkspaceTestIds.planningStatsCruiseInput) as HTMLInputElement).value).toBe("17");
+    expect((screen.getByTestId(missionWorkspaceTestIds.planningStatsHoverInput) as HTMLInputElement).value).toBe("6");
+    expect(get(plannerStore).cruiseSpeed).toBe(17);
+    expect(get(plannerStore).hoverSpeed).toBe(6);
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentMap));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("false");
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentPlan));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("true");
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
+    });
+  });
+
+  it("keeps mission, fence, and rally support stats visible across planner mode switches", async () => {
+    const continuityWorkspace = {
+      ...makeWorkspace({
+        home: { latitude_deg: 47.4, longitude_deg: 8.55, altitude_m: 500 },
+      }),
+      fence: makeFenceWorkspace().fence,
+      rally: makeRallyWorkspace().rally,
+    };
+
+    await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(continuityWorkspace);
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsFenceRegions).textContent).toContain("2");
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsRallyCount).textContent).toContain("2");
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsFenceCard)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsRallyCard)).toBeTruthy();
     });
   });
 

@@ -1,20 +1,22 @@
 <script lang="ts">
-import uPlot from "uplot";
 import type { Attachment } from "svelte/attachments";
+import type { AlignedData, Options } from "uplot";
 import "uplot/dist/uPlot.min.css";
 
 type Props = {
-  options: Omit<uPlot.Options, "width" | "height">;
-  data: uPlot.AlignedData;
+  options: Omit<Options, "width" | "height">;
+  data: AlignedData;
   height?: number;
   testId?: string;
 };
 
 type PlotConfig = {
-  options: Omit<uPlot.Options, "width" | "height">;
-  data: uPlot.AlignedData;
+  options: Omit<Options, "width" | "height">;
+  data: AlignedData;
   height: number;
 };
+
+type UPlotConstructor = typeof import("uplot").default;
 
 let {
   options,
@@ -30,11 +32,22 @@ let plotConfig = $derived<PlotConfig>({
 });
 
 const plotAttachment = createPlotAttachment(() => plotConfig);
+let uPlotModulePromise: Promise<UPlotConstructor> | null = null;
+
+function loadUPlot(): Promise<UPlotConstructor> {
+  if (!uPlotModulePromise) {
+    uPlotModulePromise = import("uplot").then((module) => module.default);
+  }
+
+  return uPlotModulePromise;
+}
 
 function createPlotAttachment(getConfig: () => PlotConfig): Attachment<HTMLDivElement> {
   return (element) => {
-    let plot: uPlot | null = null;
+    let plot: InstanceType<UPlotConstructor> | null = null;
     let resizeObserver: ResizeObserver | null = null;
+    let mountRequestId = 0;
+    let disposed = false;
 
     const destroyPlot = () => {
       resizeObserver?.disconnect();
@@ -49,13 +62,19 @@ function createPlotAttachment(getConfig: () => PlotConfig): Attachment<HTMLDivEl
       return Math.max(280, Math.round(rectWidth || element.clientWidth || 280));
     };
 
-    const mountPlot = (config: PlotConfig) => {
+    const mountPlot = async (config: PlotConfig) => {
+      const requestId = ++mountRequestId;
       destroyPlot();
       if ((config.data[0]?.length ?? 0) === 0) {
         return;
       }
 
-      plot = new uPlot(
+      const UPlot = await loadUPlot();
+      if (disposed || requestId !== mountRequestId) {
+        return;
+      }
+
+      plot = new UPlot(
         {
           ...config.options,
           width: resolveWidth(),
@@ -77,10 +96,14 @@ function createPlotAttachment(getConfig: () => PlotConfig): Attachment<HTMLDivEl
     };
 
     $effect(() => {
-      mountPlot(getConfig());
+      void mountPlot(getConfig());
     });
 
-    return destroyPlot;
+    return () => {
+      disposed = true;
+      mountRequestId += 1;
+      destroyPlot();
+    };
   };
 }
 </script>

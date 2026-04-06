@@ -24,7 +24,7 @@ import { createMissionTerrainState } from "../../lib/mission-terrain-state";
 import { localXYToLatLon } from "../../lib/mission-coordinates";
 import type { GeoPoint2d } from "../../lib/mavkit-types";
 import type { FenceRegionType } from "../../lib/mission-draft-typed";
-import { settings } from "../../lib/stores/settings";
+import { settings, type Settings } from "../../lib/stores/settings";
 import type { SurveyPatternType } from "../../lib/survey-region";
 import MissionDraftList from "./MissionDraftList.svelte";
 import MissionFenceDraftList from "./MissionFenceDraftList.svelte";
@@ -32,6 +32,7 @@ import MissionFenceInspector from "./MissionFenceInspector.svelte";
 import MissionHomeCard from "./MissionHomeCard.svelte";
 import MissionInspector from "./MissionInspector.svelte";
 import MissionMap from "./MissionMap.svelte";
+import MissionPlanningStatsPanel from "./MissionPlanningStatsPanel.svelte";
 import MissionRallyDraftList from "./MissionRallyDraftList.svelte";
 import MissionRallyInspector from "./MissionRallyInspector.svelte";
 import MissionTerrainProfilePanel from "./MissionTerrainProfilePanel.svelte";
@@ -98,6 +99,9 @@ let missionSupportLayoutClass = $derived(
     ? "grid items-start gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(20rem,0.9fr)]"
     : "space-y-4",
 );
+let missionSupportPanelsClass = $derived(
+  missionSupportSidebar ? "space-y-4" : "grid gap-4 lg:grid-cols-2",
+);
 let scopeKey = $derived(scopeToKey(view.activeEnvelope));
 let visibleLocalNote = $derived(localNote?.scopeKey === scopeKey ? localNote : null);
 let hasContent = $derived(plannerHasContent(planner));
@@ -109,6 +113,8 @@ let appSettings = $derived(settingsStore.current);
 let terrainPathPoints = $derived(missionPathPoints(planner.home, missionItems));
 let fenceItems = $derived(planner.draftState.active.fence.draftItems);
 let rallyItems = $derived(planner.draftState.active.rally.draftItems);
+let fenceRegions = $derived.by(() => fenceItems.map((item) => item.document as FenceRegion));
+let rallyPoints = $derived.by(() => rallyItems.map((item) => item.document as GeoPoint3d));
 let fenceReturnPoint = $derived(planner.draftState.active.fence.document.return_point);
 let selectedMissionUiId = $derived(planner.draftState.active.mission.primarySelectedUiId);
 let selectedRallyUiId = $derived(planner.rallySelection.kind === "point" ? planner.rallySelection.pointUiId : null);
@@ -584,13 +590,33 @@ async function handleImportKml() {
 
 function handleNewMission() {
   clearLocalNote();
-  missionPlannerStore.replaceWorkspace(createEmptyMissionPlannerWorkspace());
+  missionPlannerStore.replaceWorkspace({
+    ...createEmptyMissionPlannerWorkspace(),
+    cruiseSpeed: appSettings.cruiseSpeedMps,
+    hoverSpeed: appSettings.hoverSpeedMps,
+  });
   setLocalNote(
     canUseVehicleActions
       ? "Blank mission draft ready. Mission, fence, rally, Home, and later domain editors stay inside this mounted workspace shell."
       : "Blank mission draft ready. Keep editing locally now, then reconnect later for live validation and transfer flows.",
     "success",
   );
+}
+
+function handlePersistPlanningSpeeds(args: { cruiseSpeed?: number; hoverSpeed?: number }) {
+  const patch: Partial<Settings> = {};
+
+  if (typeof args.cruiseSpeed === "number" && Number.isFinite(args.cruiseSpeed)) {
+    patch.cruiseSpeedMps = args.cruiseSpeed;
+  }
+
+  if (typeof args.hoverSpeed === "number" && Number.isFinite(args.hoverSpeed)) {
+    patch.hoverSpeedMps = args.hoverSpeed;
+  }
+
+  if (Object.keys(patch).length > 0) {
+    settings.updateSettings(patch);
+  }
 }
 
 function handleCreateSurveyBlock(patternType: SurveyPatternType) {
@@ -1452,20 +1478,52 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                   </div>
 
                   {#if !missionSupportSidebar}
+                    <div class={missionSupportPanelsClass}>
+                      <MissionPlanningStatsPanel
+                        confirmedCruiseSpeed={appSettings.cruiseSpeedMps}
+                        confirmedHoverSpeed={appSettings.hoverSpeedMps}
+                        cruiseSpeed={planner.cruiseSpeed}
+                        fenceRegions={fenceRegions}
+                        home={planner.home}
+                        hoverSpeed={planner.hoverSpeed}
+                        missionItems={missionItems}
+                        onPersistPlanningSpeeds={handlePersistPlanningSpeeds}
+                        onSetPlanningSpeeds={missionPlannerStore.setPlanningSpeeds}
+                        rallyPoints={rallyPoints}
+                        readOnly={!view.canEdit}
+                      />
+
+                      <MissionTerrainProfilePanel
+                        onRetry={handleRetryTerrain}
+                        onSelectWarning={handleSelectTerrainWarning}
+                        state={terrain}
+                      />
+                    </div>
+                  {/if}
+                </div>
+
+                {#if missionSupportSidebar}
+                  <div class={missionSupportPanelsClass}>
+                    <MissionPlanningStatsPanel
+                      confirmedCruiseSpeed={appSettings.cruiseSpeedMps}
+                      confirmedHoverSpeed={appSettings.hoverSpeedMps}
+                      cruiseSpeed={planner.cruiseSpeed}
+                      fenceRegions={fenceRegions}
+                      home={planner.home}
+                      hoverSpeed={planner.hoverSpeed}
+                      missionItems={missionItems}
+                      onPersistPlanningSpeeds={handlePersistPlanningSpeeds}
+                      onSetPlanningSpeeds={missionPlannerStore.setPlanningSpeeds}
+                      rallyPoints={rallyPoints}
+                      readOnly={!view.canEdit}
+                    />
+
                     <MissionTerrainProfilePanel
                       onRetry={handleRetryTerrain}
                       onSelectWarning={handleSelectTerrainWarning}
                       state={terrain}
                     />
-                  {/if}
-                </div>
-
-                {#if missionSupportSidebar}
-                  <MissionTerrainProfilePanel
-                    onRetry={handleRetryTerrain}
-                    onSelectWarning={handleSelectTerrainWarning}
-                    state={terrain}
-                  />
+                  </div>
                 {/if}
               </div>
             </div>
@@ -1519,6 +1577,20 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                 selection={planner.fenceSelection}
               />
             </div>
+
+            <MissionPlanningStatsPanel
+              confirmedCruiseSpeed={appSettings.cruiseSpeedMps}
+              confirmedHoverSpeed={appSettings.hoverSpeedMps}
+              cruiseSpeed={planner.cruiseSpeed}
+              fenceRegions={fenceRegions}
+              home={planner.home}
+              hoverSpeed={planner.hoverSpeed}
+              missionItems={missionItems}
+              onPersistPlanningSpeeds={handlePersistPlanningSpeeds}
+              onSetPlanningSpeeds={missionPlannerStore.setPlanningSpeeds}
+              rallyPoints={rallyPoints}
+              readOnly={!view.canEdit}
+            />
           </div>
         {:else if showRallyEditor}
           <div class="space-y-4">
@@ -1563,6 +1635,20 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                 selection={planner.rallySelection}
               />
             </div>
+
+            <MissionPlanningStatsPanel
+              confirmedCruiseSpeed={appSettings.cruiseSpeedMps}
+              confirmedHoverSpeed={appSettings.hoverSpeedMps}
+              cruiseSpeed={planner.cruiseSpeed}
+              fenceRegions={fenceRegions}
+              home={planner.home}
+              hoverSpeed={planner.hoverSpeed}
+              missionItems={missionItems}
+              onPersistPlanningSpeeds={handlePersistPlanningSpeeds}
+              onSetPlanningSpeeds={missionPlannerStore.setPlanningSpeeds}
+              rallyPoints={rallyPoints}
+              readOnly={!view.canEdit}
+            />
           </div>
         {:else}
           <section
