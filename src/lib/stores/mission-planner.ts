@@ -2920,7 +2920,7 @@ export function resolveMissionPlannerAttachment(state: MissionPlannerStoreState)
   return {
     kind: "detached-local",
     label: "Detached local",
-    detail: `The planner kept the previous draft mounted instead of pretending it matches ${plannerScopeLabel({ activeEnvelope: state.activeEnvelope })}. Keep planning locally in this detached draft, or start a new scope-local draft if you want to work directly against the current live session.`,
+    detail: `The planner kept the previous draft mounted instead of pretending it matches ${plannerScopeLabel({ activeEnvelope: state.activeEnvelope })}. Keep planning locally and use undo/redo as normal here, but validation, upload, and clear stay blocked until you return to a matching live scope or start a new scope-local draft.`,
     readOnly: false,
     canEdit: true,
     canUseVehicleActions: false,

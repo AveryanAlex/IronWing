@@ -517,6 +517,65 @@ function handleSelectMissionPhoneSegment(segment: MissionWorkspacePhoneSegment) 
   missionPhoneSegment = segment;
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  const tagName = target.tagName;
+  return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
+}
+
+function historySubject(mode: MissionPlannerMode): string {
+  return mode === "mission" ? "planner" : mode;
+}
+
+function handleUndo() {
+  if (!view.canEdit || !view.canUndo || view.undoCount <= 0) {
+    return false;
+  }
+
+  clearLocalNote();
+  missionPlannerStore.undo(view.historyDomain);
+  setLocalNote(`Restored the previous ${historySubject(view.historyDomain)} change.`, "info");
+  return true;
+}
+
+function handleRedo() {
+  if (!view.canEdit || !view.canRedo || view.redoCount <= 0) {
+    return false;
+  }
+
+  clearLocalNote();
+  missionPlannerStore.redo(view.historyDomain);
+  setLocalNote(`Reapplied the last ${historySubject(view.historyDomain)} change.`, "info");
+  return true;
+}
+
+function handleWorkspaceKeydown(event: KeyboardEvent) {
+  if (event.defaultPrevented) {
+    return;
+  }
+
+  if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== "z") {
+    return;
+  }
+
+  const editable = isEditableTarget(event.target) || isEditableTarget(document.activeElement);
+  if (editable) {
+    return;
+  }
+
+  const handled = event.shiftKey ? handleRedo() : handleUndo();
+  if (handled) {
+    event.preventDefault();
+  }
+}
+
 $effect(() => {
   terrainStateStore.load({
     enabled: view.mode === "mission" && view.workspaceMounted,
@@ -973,6 +1032,8 @@ function buildEntryActionCards(status: MissionPlannerView["status"], vehicleRead
 let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleActions, view.inlineStatus.busy));
 </script>
 
+<svelte:window onkeydown={handleWorkspaceKeydown} />
+
 <section
   class="rounded-lg border border-border bg-bg-primary p-3"
   data-readiness={view.readiness}
@@ -983,6 +1044,8 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     attachment={view.attachment}
     busy={view.inlineStatus.busy}
     canCancel={view.inlineStatus.canCancel}
+    canRedo={view.canRedo}
+    canUndo={view.canUndo}
     canUseVehicleActions={canUseVehicleActions}
     dirty={view.dirty}
     fenceRegionCount={view.fenceRegionCount}
@@ -996,15 +1059,19 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     onImportPlan={handleImportPlan}
     onNewMission={handleNewMission}
     onReadFromVehicle={handleReadFromVehicle}
+    onRedo={handleRedo}
     onSelectMode={handleSelectMode}
+    onUndo={handleUndo}
     onUploadToVehicle={handleUploadToVehicle}
     onValidateMission={handleValidateMission}
     rallyPointCount={view.rallyPointCount}
     readiness={view.readiness}
+    redoCount={view.redoCount}
     scopeText={view.activeEnvelopeText}
     status={view.status}
     surveyRegionCount={view.surveyRegionCount}
     timedOut={view.inlineStatus.timedOut}
+    undoCount={view.undoCount}
     validationIssueCount={view.validationIssueCount}
     warningCount={view.warningCount}
   />

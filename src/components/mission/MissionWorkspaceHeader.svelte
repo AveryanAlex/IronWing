@@ -25,7 +25,13 @@ type Props = {
   busy: boolean;
   timedOut: boolean;
   canCancel: boolean;
+  canUndo: boolean;
+  undoCount: number;
+  canRedo: boolean;
+  redoCount: number;
   onSelectMode: (mode: MissionPlannerMode) => void;
+  onUndo: () => void;
+  onRedo: () => void;
   onReadFromVehicle: () => void;
   onImportPlan: () => void;
   onImportKml: () => void;
@@ -55,7 +61,13 @@ let {
   busy,
   timedOut,
   canCancel,
+  canUndo,
+  undoCount,
+  canRedo,
+  redoCount,
   onSelectMode,
+  onUndo,
+  onRedo,
   onReadFromVehicle,
   onImportPlan,
   onImportKml,
@@ -72,6 +84,17 @@ const modeButtons = [
   { mode: "fence", label: "Fence", testId: missionWorkspaceTestIds.modeFence },
   { mode: "rally", label: "Rally", testId: missionWorkspaceTestIds.modeRally },
 ] as const;
+
+function normalizeHistoryCount(count: number): number {
+  return Number.isFinite(count) && count > 0 ? Math.trunc(count) : 0;
+}
+
+let normalizedUndoCount = $derived(normalizeHistoryCount(undoCount));
+let normalizedRedoCount = $derived(normalizeHistoryCount(redoCount));
+let undoAvailable = $derived(attachment.canEdit && canUndo && normalizedUndoCount > 0);
+let redoAvailable = $derived(attachment.canEdit && canRedo && normalizedRedoCount > 0);
+let undoLabel = $derived(`Undo (${normalizedUndoCount} available)`);
+let redoLabel = $derived(`Redo (${normalizedRedoCount} available)`);
 
 function statusText(value: MissionPlannerWorkspaceStatus): string {
   switch (value) {
@@ -120,9 +143,9 @@ function attachmentClass(current: MissionPlannerAttachmentState): string {
     case "live-attached":
       return "border-success/30 bg-success/10 text-success";
     case "local-draft":
+    case "detached-local":
       return "border-accent/30 bg-accent/10 text-accent";
     case "playback-readonly":
-    case "detached-local":
     default:
       return "border-warning/40 bg-warning/10 text-warning";
   }
@@ -265,6 +288,34 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
   </div>
 
   <div class="mt-4 flex flex-wrap items-center gap-2">
+    <button
+      aria-label={undoLabel}
+      class="inline-flex min-w-[7.25rem] items-center justify-between gap-2 rounded-full border border-border bg-bg-secondary px-3 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      data-testid={missionWorkspaceTestIds.toolbarUndo}
+      disabled={!undoAvailable}
+      onclick={onUndo}
+      title={undoLabel}
+      type="button"
+    >
+      <span>Undo</span>
+      <span class="rounded-full border border-border bg-bg-primary px-2 py-0.5 text-xs font-semibold text-text-secondary">
+        {normalizedUndoCount}
+      </span>
+    </button>
+    <button
+      aria-label={redoLabel}
+      class="inline-flex min-w-[7.25rem] items-center justify-between gap-2 rounded-full border border-border bg-bg-secondary px-3 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      data-testid={missionWorkspaceTestIds.toolbarRedo}
+      disabled={!redoAvailable}
+      onclick={onRedo}
+      title={redoLabel}
+      type="button"
+    >
+      <span>Redo</span>
+      <span class="rounded-full border border-border bg-bg-primary px-2 py-0.5 text-xs font-semibold text-text-secondary">
+        {normalizedRedoCount}
+      </span>
+    </button>
     <button
       class="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.toolbarRead}

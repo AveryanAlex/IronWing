@@ -235,7 +235,7 @@ function buildWarningEntries(
     }
   };
 
-  if (attachment.kind === "playback-readonly" || attachment.kind === "detached-local") {
+  if (attachment.kind === "playback-readonly") {
     pushIfVisible({
       id: `attachment:${attachment.kind}`,
       tone: "warning",

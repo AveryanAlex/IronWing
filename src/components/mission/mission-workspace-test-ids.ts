@@ -80,6 +80,8 @@ export const missionWorkspaceTestIds = {
   toolbarImport: "mission-toolbar-import",
   toolbarImportKml: "mission-toolbar-import-kml",
   toolbarNew: "mission-toolbar-new",
+  toolbarUndo: "mission-undo",
+  toolbarRedo: "mission-redo",
   toolbarExport: "mission-toolbar-export",
   toolbarValidate: "mission-toolbar-validate",
   toolbarUpload: "mission-toolbar-upload",

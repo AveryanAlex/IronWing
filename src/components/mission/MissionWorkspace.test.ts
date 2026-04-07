@@ -622,6 +622,31 @@ function readMissionMapDebug() {
   return JSON.parse(screen.getByTestId(missionWorkspaceTestIds.mapDebug).textContent ?? "{}");
 }
 
+function getHistoryButton(kind: "undo" | "redo") {
+  return screen.getByTestId(
+    kind === "undo" ? missionWorkspaceTestIds.toolbarUndo : missionWorkspaceTestIds.toolbarRedo,
+  ) as HTMLButtonElement;
+}
+
+function getHistoryCount(kind: "undo" | "redo") {
+  const label = getHistoryButton(kind).getAttribute("aria-label") ?? "";
+  const match = label.match(/\((\d+) available\)/);
+  return match ? Number(match[1]) : -1;
+}
+
+function expectHistoryButtonState(
+  kind: "undo" | "redo",
+  { count, disabled }: { count: number; disabled: boolean },
+) {
+  const button = getHistoryButton(kind);
+  const label = `${kind === "undo" ? "Undo" : "Redo"} (${count} available)`;
+  expect(button.getAttribute("aria-label")).toBe(label);
+  expect(button.getAttribute("title")).toBe(label);
+  expect(button.disabled).toBe(disabled);
+  expect(button.textContent).toContain(String(count));
+  return button;
+}
+
 async function renderWorkspace(options: {
   snapshots?: OpenSessionSnapshot[];
   plannerServiceOverrides?: Partial<MissionPlannerService>;
@@ -2119,5 +2144,444 @@ describe("MissionWorkspace", () => {
       expect(screen.queryByTestId(missionWorkspaceTestIds.prompt)).toBeNull();
     });
     expect(get(plannerStore).home).toEqual({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
+  });
+
+  it("keeps undo and redo visible across wide, Radiomaster, and phone shells with stable count labels", async () => {
+    const chromeStore = createResponsiveChromeStore(1440, 900, "wide");
+
+    await renderWorkspace({
+      chromeStore,
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace());
+        plannerStore.addMissionItem();
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+      expect(getHistoryButton("undo").getAttribute("aria-label")).toMatch(/^Undo \([0-9]+ available\)$/);
+      expect(getHistoryButton("redo").getAttribute("aria-label")).toMatch(/^Redo \([0-9]+ available\)$/);
+      expect(getHistoryCount("undo")).toBeGreaterThan(0);
+      expect(getHistoryButton("undo").disabled).toBe(false);
+      expect(screen.queryByTestId(missionWorkspaceTestIds.phoneSegmentBar)).toBeNull();
+    });
+
+    chromeStore.set(createResponsiveChromeState(1280, 720, "wide"));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("compact-wide");
+      expect(screen.getByTestId(missionWorkspaceTestIds.toolbarUndo)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.toolbarRedo)).toBeTruthy();
+      expect(getHistoryButton("undo").getAttribute("aria-label")).toMatch(/^Undo \([0-9]+ available\)$/);
+      expect(getHistoryButton("redo").getAttribute("aria-label")).toMatch(/^Redo \([0-9]+ available\)$/);
+    });
+
+    chromeStore.set(createResponsiveChromeState(390, 844, "phone"));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("phone-segmented");
+      expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentBar)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.toolbarUndo)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.toolbarRedo)).toBeTruthy();
+      expect(getHistoryButton("undo").getAttribute("aria-label")).toMatch(/^Undo \([0-9]+ available\)$/);
+      expect(getHistoryButton("redo").getAttribute("aria-label")).toMatch(/^Redo \([0-9]+ available\)$/);
+    });
+  });
+
+  it("routes mission undo and redo through workspace shortcuts but leaves focused editors alone", async () => {
+    const { plannerStore } = await renderWorkspace();
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+    });
+
+    const baseUndoCount = getHistoryCount("undo");
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAdd));
+
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(1);
+      expect(getHistoryCount("undo")).toBe(baseUndoCount + 1);
+    });
+
+    await fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(0);
+      expect(screen.getByTestId(missionWorkspaceTestIds.localNote).textContent).toContain("Restored the previous planner change.");
+    });
+
+    const redoCount = getHistoryCount("redo");
+    expect(redoCount).toBeGreaterThan(0);
+
+    await fireEvent.keyDown(window, { key: "Z", metaKey: true, shiftKey: true });
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(1);
+      expect(screen.getByTestId(missionWorkspaceTestIds.localNote).textContent).toContain("Reapplied the last planner change.");
+    });
+
+    const altitudeInput = screen.getByTestId(missionWorkspaceTestIds.inspectorAltitude) as HTMLInputElement;
+    altitudeInput.focus();
+    const undoBeforeGuard = getHistoryCount("undo");
+
+    await fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    await flush();
+
+    expect(document.activeElement).toBe(altitudeInput);
+    expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(1);
+    expect(getHistoryCount("undo")).toBe(undoBeforeGuard);
+
+    altitudeInput.blur();
+    await fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(0);
+    });
+  });
+
+  it("keeps MissionMap Escape cancellation working while workspace shortcuts are mounted", async () => {
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({
+          home: { latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 },
+          mission: { items: [] },
+        }));
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+    });
+
+    setMissionMapSurfaceRect();
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawStartGrid));
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(1);
+      expect(readMissionMapDebug().drawMode).toBe("draw");
+    });
+
+    const regionId = get(plannerStore).survey.surveyRegionOrder[0]?.regionId ?? "";
+    expect(regionId).not.toBe("");
+
+    const drawSurface = screen.getByRole("button", { name: /add survey point on planner map/i });
+    await fireEvent.click(drawSurface, { clientX: 160, clientY: 440 });
+
+    await waitFor(() => {
+      expect(readMissionMapDebug().drawPointCount).toBe(1);
+    });
+
+    await fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => {
+      expect(readMissionMapDebug().drawMode).toBe("idle");
+      expect(get(plannerStore).survey.surveyRegions.has(regionId)).toBe(false);
+    });
+  });
+
+  it("keeps detached-local history editable without surfacing a sticky warning card", async () => {
+    const { plannerStore, sessionStore } = await renderWorkspace({
+      snapshots: [
+        createSnapshot({ envelope: createEnvelope("session-1") }),
+        createSnapshot({ envelope: createEnvelope("session-2", { reset_revision: 1 }) }),
+      ],
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace());
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAdd));
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(2);
+      expect(getHistoryCount("undo")).toBeGreaterThan(0);
+    });
+
+    await sessionStore.bootstrapSource("live");
+    await flush();
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.attachment).textContent).toContain("Detached local");
+      expect(screen.getByTestId(missionWorkspaceTestIds.attachmentDetail).textContent).toContain("use undo/redo as normal here");
+      expect((screen.getByTestId(missionWorkspaceTestIds.toolbarValidate) as HTMLButtonElement).disabled).toBe(true);
+      expect(getHistoryButton("undo").disabled).toBe(false);
+    });
+
+    expect(screen.queryByTestId(missionWorkspaceTestIds.warningRegister)).toBeNull();
+
+    await fireEvent.click(getHistoryButton("undo"));
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(1);
+      expect(screen.getByTestId(missionWorkspaceTestIds.localNote).textContent).toContain("Restored the previous planner change.");
+    });
+  });
+
+  it("disables undo and redo during playback even when history is preserved", async () => {
+    const { plannerStore, sessionStore } = await renderWorkspace({
+      snapshots: [
+        createSnapshot({ envelope: createEnvelope("session-1") }),
+        createSnapshot({ envelope: createEnvelope("session-1", { source_kind: "playback", seek_epoch: 1, reset_revision: 1 }) }),
+      ],
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace());
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAdd));
+    await waitFor(() => {
+      expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(2);
+      expect(getHistoryCount("undo")).toBeGreaterThan(0);
+      expect(getHistoryButton("undo").disabled).toBe(false);
+    });
+
+    const preservedUndoCount = getHistoryCount("undo");
+
+    await sessionStore.bootstrapSource("playback");
+    await flush();
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.attachment).textContent).toContain("Playback read-only");
+      expectHistoryButtonState("undo", { count: preservedUndoCount, disabled: true });
+    });
+
+    expect(screen.getByTestId(missionWorkspaceTestIds.warningRegister).textContent).toContain("Playback read-only");
+
+    await fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    await flush();
+
+    expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(2);
+    expect(getHistoryCount("undo")).toBe(preservedUndoCount);
+  });
+
+  it("undoes survey prompt-side edits and dissolve actions through the mounted workspace history path", async () => {
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({
+          home: { latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 },
+        }));
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyGrid));
+
+    const regionId = get(plannerStore).survey.surveyRegionOrder[0]?.regionId ?? "";
+    expect(regionId).not.toBe("");
+
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.cameraSearch), {
+      target: { value: BUILTIN_CAMERA.canonicalName },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: new RegExp(`Use ${BUILTIN_CAMERA.canonicalName}`) }));
+    await fireEvent.change(screen.getByTestId(`${missionWorkspaceTestIds.surveyParamPrefix}-altitude_m`), {
+      target: { value: "60" },
+    });
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.surveyGenerate));
+
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegions.get(regionId)?.generatedItems.length ?? 0).toBeGreaterThan(0);
+    });
+
+    const editableGeneratedIndex = get(plannerStore).survey.surveyRegions.get(regionId)?.generatedItems.findIndex((item) => commandPosition(item.command)) ?? -1;
+    expect(editableGeneratedIndex).toBeGreaterThanOrEqual(0);
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.surveyGeneratedItemPrefix}-${editableGeneratedIndex}`));
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.surveyGeneratedAltitude), {
+      target: { value: "80" },
+    });
+
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegions.get(regionId)?.manualEdits.size).toBe(1);
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.surveyGenerate));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.surveyPromptKind).textContent).toContain("confirm-regenerate");
+    });
+
+    await fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    await waitFor(() => {
+      expect(screen.queryByTestId(missionWorkspaceTestIds.surveyPrompt)).toBeNull();
+      expect(get(plannerStore).survey.surveyRegions.get(regionId)?.manualEdits.size).toBe(0);
+    });
+
+    await fireEvent.keyDown(window, { key: "Z", metaKey: true, shiftKey: true });
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegions.get(regionId)?.manualEdits.size).toBe(1);
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.surveyDissolve));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.surveyPromptKind).textContent).toContain("confirm-dissolve");
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.surveyPromptConfirm));
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegions.has(regionId)).toBe(false);
+    });
+
+    await fireEvent.click(getHistoryButton("undo"));
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegions.has(regionId)).toBe(true);
+    });
+
+    await fireEvent.click(getHistoryButton("redo"));
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegions.has(regionId)).toBe(false);
+    });
+  });
+
+  it("routes header undo to the active fence or rally domain without cross-domain drift", async () => {
+    const continuityWorkspace = {
+      ...makeWorkspace({
+        home: { latitude_deg: 47.4, longitude_deg: 8.55, altitude_m: 500 },
+      }),
+      fence: makeFenceWorkspace().fence,
+      rally: makeRallyWorkspace().rally,
+    };
+
+    const { plannerStore } = await renderWorkspace({
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(continuityWorkspace);
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
+    });
+
+    const circleUiId = get(plannerStore).draftState.active.fence.draftItems[1]?.uiId;
+    expect(circleUiId).toBeTypeOf("number");
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.fenceRegionPrefix}-${circleUiId}`));
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.fenceCircleRadius), {
+      target: { value: "120" },
+    });
+
+    await waitFor(() => {
+      const region = get(plannerStore).draftState.active.fence.draftItems.find((item) => item.uiId === circleUiId)?.document;
+      expect(region && "exclusion_circle" in region ? region.exclusion_circle.radius_m : 0).toBe(120);
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
+    });
+
+    const rallyUiId = get(plannerStore).draftState.active.rally.draftItems[0]?.uiId;
+    expect(rallyUiId).toBeTypeOf("number");
+
+    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.rallyPointPrefix}-${rallyUiId}`));
+    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.rallyAltitude), {
+      target: { value: "42" },
+    });
+
+    await waitFor(() => {
+      const point = get(plannerStore).draftState.active.rally.draftItems.find((item) => item.uiId === rallyUiId)?.document;
+      expect(point && "RelHome" in point ? point.RelHome.relative_alt_m : -1).toBe(42);
+    });
+
+    const rallyUndoCount = getHistoryCount("undo");
+    expect(rallyUndoCount).toBeGreaterThan(0);
+
+    await fireEvent.click(getHistoryButton("undo"));
+    await waitFor(() => {
+      const point = get(plannerStore).draftState.active.rally.draftItems.find((item) => item.uiId === rallyUiId)?.document;
+      expect(point && "RelHome" in point ? point.RelHome.relative_alt_m : -1).toBe(25);
+    });
+
+    const fenceAfterRallyUndo = get(plannerStore).draftState.active.fence.draftItems.find((item) => item.uiId === circleUiId)?.document;
+    expect(fenceAfterRallyUndo && "exclusion_circle" in fenceAfterRallyUndo ? fenceAfterRallyUndo.exclusion_circle.radius_m : 0).toBe(120);
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
+      expect(getHistoryCount("undo")).toBeGreaterThan(0);
+    });
+
+    await fireEvent.click(getHistoryButton("undo"));
+    await waitFor(() => {
+      const region = get(plannerStore).draftState.active.fence.draftItems.find((item) => item.uiId === circleUiId)?.document;
+      expect(region && "exclusion_circle" in region ? region.exclusion_circle.radius_m : 0).toBe(90);
+    });
+  });
+
+  it("undoes and redoes imported whole-workspace replacement from the mounted header in one step", async () => {
+    const importedSurvey = makeImportedSurveyExtension();
+    const initialHome = { latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 };
+    const importedHome = { latitude_deg: 47.39, longitude_deg: 8.53, altitude_m: 488 };
+
+    const { plannerStore } = await renderWorkspace({
+      fileIoOverrides: {
+        importFromPicker: vi.fn(async (): Promise<MissionPlanFileImportResult> => ({
+          status: "success",
+          fileName: "survey.plan",
+          missionItemCount: 0,
+          surveyRegionCount: 1,
+          fenceRegionCount: 0,
+          rallyPointCount: 0,
+          warningCount: 1,
+          warnings: ["Imported survey region preserved."],
+          data: {
+            mission: { items: [] },
+            fence: { return_point: null, regions: [] },
+            rally: { points: [] },
+            home: importedHome,
+            surveyRegions: Array.from(importedSurvey.surveyRegions.values()).map((region) => ({
+              patternType: region.patternType,
+              position: 0,
+              polygon: region.polygon,
+              polyline: region.polyline,
+              camera: region.camera,
+              params: region.params,
+              embeddedItems: region.generatedItems,
+              qgcPassthrough: region.qgcPassthrough ?? {},
+              warnings: region.importWarnings ?? ["Imported survey region preserved."],
+            })),
+            cruiseSpeed: 19,
+            hoverSpeed: 6,
+          },
+        })),
+      },
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({ home: initialHome }));
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.toolbarImport));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.importReview)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.importReviewConfirm));
+    await waitFor(() => {
+      expect(get(plannerStore).home).toEqual(importedHome);
+      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(1);
+    });
+
+    await fireEvent.click(getHistoryButton("undo"));
+    await waitFor(() => {
+      expect(get(plannerStore).home).toEqual(initialHome);
+      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(0);
+    });
+
+    await fireEvent.click(getHistoryButton("redo"));
+    await waitFor(() => {
+      expect(get(plannerStore).home).toEqual(importedHome);
+      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(1);
+    });
   });
 });
