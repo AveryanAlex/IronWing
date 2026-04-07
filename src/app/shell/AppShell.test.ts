@@ -20,12 +20,15 @@ import {
 import { parameterWorkspaceTestIds } from "../../components/params/parameter-workspace-test-ids";
 import { setupWorkspaceTestIds } from "../../components/setup/setup-workspace-test-ids";
 import { missionWorkspaceTestIds } from "../../components/mission/mission-workspace-test-ids";
+import { firmwareWorkspaceTestIds } from "../../components/firmware/firmware-workspace-test-ids";
 import { createParamsStore } from "../../lib/stores/params";
 import { markRuntimeReady, resetRuntimeState } from "../../lib/stores/runtime";
 import {
     createSessionStore,
     type SessionStore,
 } from "../../lib/stores/session";
+import { createFirmwareWorkspaceStore } from "../../lib/stores/firmware-workspace";
+import { computeSerialReadinessToken, type FirmwareService } from "../../lib/platform/firmware";
 import type { ParamsService, ParamsServiceEventHandlers } from "../../lib/platform/params";
 import type {
     SessionConnectionFormState,
@@ -34,7 +37,10 @@ import type {
 } from "../../lib/platform/session";
 import type { OpenSessionSnapshot } from "../../session";
 import type { ParamMetadataMap } from "../../param-metadata";
-import { withShellContexts } from "../../test/context-harnesses";
+import {
+    createHarnessFirmwareWorkspaceContext,
+    withShellContexts,
+} from "../../test/context-harnesses";
 import type { TransportDescriptor } from "../../transport";
 
 function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessionSnapshot {
@@ -237,6 +243,115 @@ function createMockParamsService(
     };
 }
 
+function createMockFirmwareService(overrides: Partial<FirmwareService> = {}) {
+    const service = {
+        sessionStatus: vi.fn(async () => ({ kind: "idle" })),
+        sessionCancel: vi.fn(async () => undefined),
+        sessionClearCompleted: vi.fn(async () => undefined),
+        serialPreflight: vi.fn(async () => ({
+            vehicle_connected: false,
+            param_count: 0,
+            has_params_to_backup: false,
+            available_ports: [
+                {
+                    port_name: "/dev/ttyACM0",
+                    vid: null,
+                    pid: null,
+                    serial_number: null,
+                    manufacturer: "Hex",
+                    product: "CubeOrange Bootloader",
+                    location: null,
+                },
+            ],
+            detected_board_id: null,
+            session_ready: true,
+            session_status: { kind: "idle" },
+        })),
+        listPorts: vi.fn(async () => ({
+            kind: "available",
+            ports: [
+                {
+                    port_name: "/dev/ttyACM0",
+                    vid: null,
+                    pid: null,
+                    serial_number: null,
+                    manufacturer: "Hex",
+                    product: "CubeOrange Bootloader",
+                    location: null,
+                },
+            ],
+        })),
+        listDfuDevices: vi.fn(async () => ({
+            kind: "available",
+            devices: [
+                {
+                    vid: 0x0483,
+                    pid: 0xdf11,
+                    unique_id: "dfu-1",
+                    serial_number: "DFU1",
+                    manufacturer: "ST",
+                    product: "STM32 DFU",
+                },
+            ],
+        })),
+        catalogTargets: vi.fn(async () => [
+            {
+                board_id: 140,
+                platform: "CubeOrange",
+                brand_name: "Cube Orange",
+                manufacturer: "Hex",
+                vehicle_types: ["Copter", "Plane"],
+                latest_version: "4.5.0",
+            },
+        ]),
+        recoveryCatalogTargets: vi.fn(async () => [
+            {
+                board_id: 140,
+                platform: "CubeOrange",
+                brand_name: "Cube Orange",
+                manufacturer: "Hex",
+                vehicle_types: ["Copter", "Plane"],
+                latest_version: "4.5.0",
+            },
+        ]),
+        catalogEntries: vi.fn(async () => [
+            {
+                board_id: 140,
+                platform: "CubeOrange",
+                vehicle_type: "Copter",
+                version: "4.5.0",
+                version_type: "stable",
+                format: "apj",
+                url: "https://example.com/cubeorange.apj",
+                image_size: 123456,
+                latest: true,
+                git_sha: "abc123",
+                brand_name: "Cube Orange",
+                manufacturer: "Hex",
+            },
+        ]),
+        serialReadiness: vi.fn(async (request) => ({
+            request_token: computeSerialReadinessToken(request),
+            session_status: { kind: "idle" },
+            readiness: request.source.kind === "catalog_url" && request.source.url.trim().length === 0
+                ? { kind: "blocked", reason: "source_missing" }
+                : request.port.trim().length === 0
+                    ? { kind: "blocked", reason: "port_unselected" }
+                    : { kind: "advisory" },
+            target_hint: { detected_board_id: null },
+            validation_pending: false,
+            bootloader_transition: { kind: "manual_bootloader_entry_required" },
+        })),
+        flashSerial: vi.fn(async () => ({ result: "verified", board_id: 140, bootloader_rev: 5, port: "/dev/ttyACM0" })),
+        flashDfuRecovery: vi.fn(async () => ({ result: "verified" })),
+        subscribeProgress: vi.fn(async () => () => undefined),
+        formatError: vi.fn((error: unknown) => (error instanceof Error ? error.message : String(error))),
+        ...overrides,
+    } satisfies FirmwareService;
+
+    return service;
+}
+
 function installViewportController(initialWidth: number, initialHeight = 720) {
     let width = initialWidth;
     let height = initialHeight;
@@ -315,6 +430,7 @@ async function renderShellAt(
     options: {
         snapshot?: OpenSessionSnapshot;
         metadata?: ParamMetadataMap | null;
+        firmwareWorkspaceContext?: ReturnType<typeof createHarnessFirmwareWorkspaceContext>;
     } = {},
 ) {
     const viewport = installViewportController(width);
@@ -328,7 +444,9 @@ async function renderShellAt(
     await parameterStore.initialize();
     markRuntimeReady("2026-04-03T12:34:56.000Z");
 
-    render(withShellContexts(store, parameterStore, AppShellContent));
+    render(withShellContexts(store, parameterStore, AppShellContent, {
+        firmwareWorkspaceContext: options.firmwareWorkspaceContext,
+    }));
 
     await waitFor(() => {
         expect(screen.getByTestId(appShellTestIds.tier)).toBeTruthy();
@@ -429,6 +547,51 @@ describe("AppShell", () => {
         expect(screen.getByTestId(missionWorkspaceTestIds.entryRead)).toBeTruthy();
         expect(screen.getByTestId(missionWorkspaceTestIds.entryImport)).toBeTruthy();
         expect(screen.getByTestId(missionWorkspaceTestIds.entryNew)).toBeTruthy();
+    });
+
+    it("mounts the real firmware workspace and preserves shell-scoped firmware state across tab switches", async () => {
+        const firmwareService = createMockFirmwareService();
+        const firmwareWorkspaceContext = createHarnessFirmwareWorkspaceContext({
+            service: firmwareService,
+            store: createFirmwareWorkspaceStore(firmwareService, { sessionPollMs: 0 }),
+        });
+
+        await renderShellAt(1440, { firmwareWorkspaceContext });
+
+        await fireEvent.click(screen.getByRole("button", { name: "Firmware" }));
+        await waitFor(() => {
+            expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("firmware");
+            expect(screen.getByTestId(firmwareWorkspaceTestIds.root)).toBeTruthy();
+        });
+
+        expect(screen.queryByTestId("app-shell-placeholder-firmware")).toBeNull();
+
+        await fireEvent.input(screen.getByTestId(firmwareWorkspaceTestIds.manualTargetSearch), {
+            target: { value: "cube" },
+        });
+        await waitFor(() => {
+            expect(screen.getByTestId(firmwareWorkspaceTestIds.manualTargetResults)).toBeTruthy();
+        });
+        await fireEvent.click(screen.getByRole("button", { name: /Cube Orange/i }));
+
+        await waitFor(() => {
+            expect(screen.getByTestId(firmwareWorkspaceTestIds.manualTargetSelected).textContent).toContain("Cube Orange");
+            expect(screen.getByTestId(firmwareWorkspaceTestIds.catalogEntrySelect)).toBeTruthy();
+        });
+
+        await fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+        await waitFor(() => {
+            expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("overview");
+            expect(screen.getByTestId(appShellTestIds.operatorWorkspace)).toBeTruthy();
+        });
+
+        await fireEvent.click(screen.getByRole("button", { name: "Firmware" }));
+        await waitFor(() => {
+            expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("firmware");
+            expect(screen.getByTestId(firmwareWorkspaceTestIds.root)).toBeTruthy();
+            expect(screen.getByTestId(firmwareWorkspaceTestIds.manualTargetSelected).textContent).toContain("Cube Orange");
+            expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedSourceState).textContent).toContain("catalog_url");
+        });
     });
 
     it("mounts the dedicated setup workspace root and keeps partial facts explicit", async () => {

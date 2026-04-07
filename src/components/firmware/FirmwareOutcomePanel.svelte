@@ -1,5 +1,6 @@
 <script lang="ts">
 import type {
+  DfuRecoveryOutcome,
   FirmwareOutcome,
   SerialFlashOutcome,
 } from "../../firmware";
@@ -16,13 +17,66 @@ let {
   store,
 }: Props = $props();
 
+function recoveryDeviceLabel() {
+  if (!state.recovery.device) {
+    return null;
+  }
+
+  return [
+    state.recovery.device.product,
+    state.recovery.device.serial_number,
+    state.recovery.device.unique_id,
+  ].filter((value): value is string => Boolean(value)).join(" · ");
+}
+
+function recoveryTargetLabel() {
+  if (!state.recovery.target) {
+    return null;
+  }
+
+  return [
+    state.recovery.target.brand_name ?? state.recovery.target.platform,
+    state.recovery.target.brand_name && state.recovery.target.brand_name !== state.recovery.target.platform
+      ? state.recovery.target.platform
+      : null,
+    `Board ID ${state.recovery.target.board_id}`,
+  ].filter((value): value is string => Boolean(value)).join(" · ");
+}
+
 function summaryForOutcome(outcome: FirmwareOutcome) {
-  if (outcome.path !== "serial_primary") {
-    return {
-      tone: "warning",
-      label: "DFU outcome retained",
-      summary: "A DFU recovery outcome is currently retained. This serial workspace keeps it visible until you dismiss it.",
-    } as const;
+  if (outcome.path === "dfu_recovery") {
+    switch (outcome.outcome.result) {
+      case "verified":
+        return {
+          tone: "success",
+          label: "Recovery verified",
+          summary: "Bootloader recovery completed. Return to Install / Update and flash normal ArduPilot firmware over serial.",
+        } as const;
+      case "cancelled":
+        return {
+          tone: "warning",
+          label: "Recovery cancelled",
+          summary: "DFU recovery was cancelled before completion.",
+        } as const;
+      case "reset_unconfirmed":
+        return {
+          tone: "warning",
+          label: "Reset unconfirmed",
+          summary: "DFU recovery completed, but device reset could not be confirmed. Reconnect or power-cycle the board before continuing.",
+        } as const;
+      case "failed":
+        return {
+          tone: "danger",
+          label: "Recovery failed",
+          summary: outcome.outcome.reason,
+        } as const;
+      case "unsupported_recovery_path":
+        return {
+          tone: "warning",
+          label: "Recovery guidance",
+          summary: outcome.outcome.guidance,
+        } as const;
+    }
   }
 
   switch (outcome.outcome.result) {
@@ -79,7 +133,7 @@ function summaryForOutcome(outcome: FirmwareOutcome) {
   }
 }
 
-function detailRows(outcome: FirmwareOutcome, sourceLabel: string | null) {
+function detailRows(outcome: FirmwareOutcome) {
   const rows: Array<{ label: string; value: string }> = [
     {
       label: "Path",
@@ -87,18 +141,49 @@ function detailRows(outcome: FirmwareOutcome, sourceLabel: string | null) {
     },
   ];
 
-  if (sourceLabel) {
-    rows.push({
-      label: "Source",
-      value: sourceLabel,
-    });
+  if (outcome.path === "dfu_recovery") {
+    const sourceLabel = state.recovery.sourceMetadata?.label ?? null;
+    const targetLabel = recoveryTargetLabel();
+    const deviceLabel = recoveryDeviceLabel();
+
+    if (sourceLabel) {
+      rows.push({ label: "Source", value: sourceLabel });
+    }
+
+    if (targetLabel) {
+      rows.push({ label: "Target", value: targetLabel });
+    }
+
+    if (deviceLabel) {
+      rows.push({ label: "Device", value: deviceLabel });
+    }
+
+    switch ((outcome.outcome as DfuRecoveryOutcome).result) {
+      case "verified":
+        rows.push({ label: "Next step", value: "Switch back to Install / Update and flash normal ArduPilot firmware over serial." });
+        break;
+      case "reset_unconfirmed":
+        rows.push({ label: "Next step", value: "Reconnect or power-cycle the board, then continue with Install / Update." });
+        break;
+      case "failed":
+        rows.push({ label: "Reason", value: outcome.outcome.reason });
+        break;
+      case "unsupported_recovery_path":
+        rows.push({ label: "Guidance", value: outcome.outcome.guidance });
+        break;
+      case "cancelled":
+        rows.push({ label: "Result", value: "operator cancelled before completion" });
+        break;
+    }
+
+    return rows;
   }
 
-  if (outcome.path !== "serial_primary") {
-    if (outcome.outcome.result === "unsupported_recovery_path") {
-      rows.push({ label: "Guidance", value: outcome.outcome.guidance });
-    }
-    return rows;
+  if (state.serial.sourceMetadata?.label) {
+    rows.push({
+      label: "Source",
+      value: state.serial.sourceMetadata.label,
+    });
   }
 
   const serialOutcome = outcome.outcome as SerialFlashOutcome;
@@ -153,9 +238,8 @@ function toneClass(tone: ReturnType<typeof summaryForOutcome>["tone"]) {
 }
 
 let activeOutcome = $derived(state.lastCompletedOutcome);
-let sourceLabel = $derived(state.serial.sourceMetadata?.label ?? null);
 let outcomeCopy = $derived(activeOutcome ? summaryForOutcome(activeOutcome) : null);
-let rows = $derived(activeOutcome ? detailRows(activeOutcome, sourceLabel) : []);
+let rows = $derived(activeOutcome ? detailRows(activeOutcome) : []);
 let sessionStateLabel = $derived(state.isActive
   ? `active:${state.sessionPhase ?? "running"}`
   : activeOutcome
@@ -231,7 +315,7 @@ let sessionStateLabel = $derived(state.isActive
       class="mt-4 rounded-2xl border border-border bg-bg-primary px-4 py-4 text-sm text-text-secondary"
       data-testid={firmwareWorkspaceTestIds.outcomeEmpty}
     >
-      No retained firmware outcome yet. Once install runs, the exact result facts stay visible here until you dismiss them.
+      No retained firmware outcome yet. Once install or recovery runs, the exact result facts stay visible here until you dismiss them.
     </div>
   {/if}
 </section>

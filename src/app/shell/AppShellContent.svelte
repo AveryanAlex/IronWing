@@ -3,6 +3,7 @@ import { onDestroy, onMount } from "svelte";
 import { fromStore } from "svelte/store";
 import { Toaster } from "svelte-sonner";
 
+import FirmwareWorkspace from "../../components/firmware/FirmwareWorkspace.svelte";
 import MissionWorkspace from "../../components/mission/MissionWorkspace.svelte";
 import SetupWorkspace from "../../components/setup/SetupWorkspace.svelte";
 import { runtimeTestIds } from "../../lib/stores/runtime";
@@ -14,6 +15,7 @@ import OperatorWorkspace from "./OperatorWorkspace.svelte";
 import ParameterReviewTray from "./ParameterReviewTray.svelte";
 import TelemetrySettingsDialog from "./TelemetrySettingsDialog.svelte";
 import {
+  getFirmwareWorkspaceContext,
   getLiveSettingsStoreContext,
   getMissionPlannerStoreContext,
   getParameterWorkspaceViewStoreContext,
@@ -35,6 +37,7 @@ const runtimeStore = getRuntimeStoreContext();
 const chromeStore = getShellChromeStoreContext();
 const sessionViewStore = getSessionViewStoreContext();
 const parameterViewStore = getParameterWorkspaceViewStoreContext();
+const firmwareWorkspace = getFirmwareWorkspaceContext();
 
 const controller = createAppShellController({
   sessionStore,
@@ -171,9 +174,11 @@ onDestroy(() => {
                 title="Logs"
               />
             {:else if activeWorkspace === "firmware"}
-              <AppShellPlaceholderWorkspace
-                description="Firmware update and recovery tools will be mounted in this panel."
-                title="Firmware"
+              <FirmwareWorkspace
+                chromeStore={chromeStore}
+                fileIo={firmwareWorkspace.fileIo}
+                service={firmwareWorkspace.service}
+                store={firmwareWorkspace.store}
               />
             {:else if activeWorkspace === "settings"}
               <AppShellPlaceholderWorkspace

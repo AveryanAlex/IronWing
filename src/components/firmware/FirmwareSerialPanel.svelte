@@ -71,7 +71,8 @@ let targetVehicleType = $state(ALL_TARGET_VEHICLE_TYPES);
 let targetLoadRequest = 0;
 let entryLoadRequest = 0;
 let currentEntryTargetKey = "";
-let lastObservedPort = "";
+let lastObservedPort = $state("");
+let portObservationInitialized = $state(false);
 let lastAutoTargetKey = "";
 
 function isNonEmptyString(value: unknown): value is string {
@@ -313,12 +314,12 @@ async function loadCatalogEntriesForTarget(target: CatalogTargetSummary, sourceK
 }
 
 async function retryCatalogEntries() {
-  const target = manualSelectionCommitted ? state.serial.target : autoTarget;
+  const target = manualSelectionActive ? state.serial.target : autoTarget;
   if (!target) {
     return;
   }
 
-  await loadCatalogEntriesForTarget(target, manualSelectionCommitted ? "manual" : "detected");
+  await loadCatalogEntriesForTarget(target, manualSelectionActive ? "manual" : "detected");
 }
 
 async function handleSelectManualTarget(target: CatalogTargetSummary) {
@@ -405,7 +406,15 @@ let targetProofState = $derived.by<TargetProofState>(() => {
   return "detected";
 });
 let manualTargetRequired = $derived(targetProofState !== "detected");
-let manualSectionOpen = $derived(manualTargetRequired || manualOverrideExpanded);
+let manualSelectionActive = $derived(
+  state.serial.target !== null
+  && (
+    manualSelectionCommitted
+    || autoTarget === null
+    || catalogTargetKey(state.serial.target) !== catalogTargetKey(autoTarget)
+  ),
+);
+let manualSectionOpen = $derived(manualTargetRequired || manualOverrideExpanded || manualSelectionActive);
 let filteredTargets = $derived(filterCatalogTargets(catalogTargets, {
   searchText: targetSearch,
   vehicleType: targetVehicleType,
@@ -413,7 +422,7 @@ let filteredTargets = $derived(filterCatalogTargets(catalogTargets, {
 let targetVehicleTypes = $derived(listCatalogTargetVehicleTypes(catalogTargets));
 let selectedTargetKey = $derived(state.serial.target ? catalogTargetKey(state.serial.target) : null);
 let selectedTargetVisible = $derived(
-  !manualSelectionCommitted
+  !manualSelectionActive
   || !selectedTargetKey
   || filteredTargets.some((match) => match.key === selectedTargetKey)
 );
@@ -421,7 +430,7 @@ let selectedCatalogEntry = $derived(catalogEntries[selectedEntryIndex] ?? null);
 let usingCatalogSource = $derived(state.serial.source.kind === "catalog_url");
 let usingLocalSource = $derived(state.serial.source.kind === "local_apj_bytes");
 let manualTargetChosen = $derived(
-  !manualTargetRequired || (manualSelectionCommitted && state.serial.target !== null),
+  !manualTargetRequired || (manualSelectionActive && state.serial.target !== null),
 );
 let sourceReady = $derived.by(() => {
   if (state.serial.source.kind === "catalog_url") {
@@ -439,7 +448,7 @@ let canStartSerial = $derived(
   && selectedTargetVisible,
 );
 let selectedTargetState = $derived.by(() => {
-  if (manualSelectionCommitted && state.serial.target) {
+  if (manualSelectionActive && state.serial.target) {
     return `manual · ${targetLabel(state.serial.target)} · ${targetMeta(state.serial.target)}`;
   }
 
@@ -524,6 +533,12 @@ let readinessDetail = $derived.by(() => {
 
 $effect(() => {
   const port = state.serial.port;
+  if (!portObservationInitialized) {
+    portObservationInitialized = true;
+    lastObservedPort = port;
+    return;
+  }
+
   if (port === lastObservedPort) {
     return;
   }
@@ -546,7 +561,20 @@ $effect(() => {
 });
 
 $effect(() => {
-  if (manualSelectionCommitted) {
+  if (!manualSelectionActive || !state.serial.target) {
+    return;
+  }
+
+  const key = catalogTargetKey(state.serial.target);
+  if (currentEntryTargetKey === key && (catalogEntries.length > 0 || catalogEntryPhase === "loading" || catalogEntryPhase === "ready")) {
+    return;
+  }
+
+  void loadCatalogEntriesForTarget(state.serial.target, "manual");
+});
+
+$effect(() => {
+  if (manualSelectionActive) {
     return;
   }
 
@@ -801,7 +829,7 @@ $effect(() => {
                 </p>
               {/if}
 
-              {#if manualSelectionCommitted && state.serial.target}
+              {#if manualSelectionActive && state.serial.target}
                 <p
                   class="mt-3 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-text-primary"
                   data-testid={firmwareWorkspaceTestIds.manualTargetSelected}
@@ -810,7 +838,7 @@ $effect(() => {
                 </p>
               {/if}
 
-              {#if manualSelectionCommitted && !selectedTargetVisible}
+              {#if manualSelectionActive && !selectedTargetVisible}
                 <p
                   class="mt-3 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning"
                   data-testid={firmwareWorkspaceTestIds.manualTargetHidden}

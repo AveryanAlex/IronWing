@@ -930,8 +930,8 @@ function resolvePreferredPort(currentPort: string, ports: PortInfo[]): string {
 
 function resolvePreferredDfuDevice(currentDevice: DfuDeviceInfo | null, devices: DfuDeviceInfo[]): DfuDeviceInfo | null {
   if (!currentDevice) {
-    return devices[0] ?? null;
+    return devices.length === 1 ? devices[0] ?? null : null;
   }
 
-  return devices.find((device) => device.unique_id === currentDevice.unique_id) ?? devices[0] ?? null;
+  return devices.find((device) => device.unique_id === currentDevice.unique_id) ?? (devices.length === 1 ? devices[0] ?? null : null);
 }

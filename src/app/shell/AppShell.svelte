@@ -1,14 +1,20 @@
 <script lang="ts">
+import { onDestroy } from "svelte";
+
+import { createFirmwareFileIo } from "../../lib/firmware-file-io";
+import { createFirmwareService } from "../../lib/platform/firmware";
 import { createLiveSettingsStore } from "../../lib/stores/live-settings";
 import { createMissionPlannerStore, createMissionPlannerViewStore } from "../../lib/stores/mission-planner";
 import { createOperatorWorkspaceViewStore } from "../../lib/stores/operator-workspace-view";
 import { createParameterWorkspaceViewStore, params } from "../../lib/stores/params";
 import { runtime } from "../../lib/stores/runtime";
-import { createSetupWorkspaceStore, createSetupWorkspaceViewStore } from "../../lib/stores/setup-workspace";
 import { createSessionViewStore, session } from "../../lib/stores/session";
+import { createFirmwareWorkspaceStore } from "../../lib/stores/firmware-workspace";
+import { createSetupWorkspaceStore, createSetupWorkspaceViewStore } from "../../lib/stores/setup-workspace";
 import AppShellContent from "./AppShellContent.svelte";
 import { createShellChromeStore } from "./chrome-state";
 import {
+  setFirmwareWorkspaceContext,
   setLiveSettingsStoreContext,
   setMissionPlannerStoreContext,
   setMissionPlannerViewStoreContext,
@@ -32,6 +38,9 @@ const operatorWorkspaceView = createOperatorWorkspaceViewStore(session);
 const parameterWorkspaceView = createParameterWorkspaceViewStore(params);
 const setupWorkspace = createSetupWorkspaceStore(session, params);
 const setupWorkspaceView = createSetupWorkspaceViewStore(setupWorkspace);
+const firmwareService = createFirmwareService();
+const firmwareFileIo = createFirmwareFileIo();
+const firmwareWorkspace = createFirmwareWorkspaceStore(firmwareService);
 
 setSessionStoreContext(session);
 setSessionViewStoreContext(sessionView);
@@ -45,6 +54,15 @@ setMissionPlannerViewStoreContext(missionPlannerView);
 setRuntimeStoreContext(runtime);
 setShellChromeStoreContext(chrome);
 setLiveSettingsStoreContext(liveSettings);
+setFirmwareWorkspaceContext({
+  store: firmwareWorkspace,
+  service: firmwareService,
+  fileIo: firmwareFileIo,
+});
+
+onDestroy(() => {
+  firmwareWorkspace.reset();
+});
 </script>
 
 <AppShellContent />

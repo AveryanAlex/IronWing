@@ -7,6 +7,7 @@ import { writable, type Writable } from "svelte/store";
 import type {
   CatalogEntry,
   CatalogTargetSummary,
+  DfuDeviceInfo,
   FirmwareSessionStatus,
   PortInfo,
   SerialFlashSource,
@@ -55,6 +56,8 @@ const DEFAULT_TARGETS: CatalogTargetSummary[] = [
   },
 ];
 
+const DEFAULT_RECOVERY_TARGETS: CatalogTargetSummary[] = [DEFAULT_TARGETS[0]];
+
 const DEFAULT_ENTRIES: Record<string, CatalogEntry[]> = {
   CubeOrange: [
     {
@@ -89,6 +92,17 @@ const DEFAULT_ENTRIES: Record<string, CatalogEntry[]> = {
     },
   ],
 };
+
+const DEFAULT_DFU_DEVICES: DfuDeviceInfo[] = [
+  {
+    vid: 0x0483,
+    pid: 0xdf11,
+    unique_id: "dfu-1",
+    serial_number: "DFU1",
+    manufacturer: "ST",
+    product: "STM32 DFU",
+  },
+];
 
 function resolveBlockedReason(request: SerialReadinessRequest): SerialReadinessBlockedReason | null {
   if (request.port.trim().length === 0) {
@@ -161,11 +175,15 @@ function createService(
     paramCount?: number;
     entries?: Record<string, CatalogEntry[]>;
     targets?: CatalogTargetSummary[];
+    recoveryTargets?: CatalogTargetSummary[];
+    dfuDevices?: DfuDeviceInfo[];
   } = {},
 ): FirmwareService {
   const detectedBoardId = config.detectedBoardId ?? null;
   const entries = config.entries ?? DEFAULT_ENTRIES;
   const targets = config.targets ?? DEFAULT_TARGETS;
+  const recoveryTargets = config.recoveryTargets ?? DEFAULT_RECOVERY_TARGETS;
+  const dfuDevices = config.dfuDevices ?? DEFAULT_DFU_DEVICES;
 
   return {
     sessionStatus: vi.fn(async () => ({ kind: "idle" } satisfies FirmwareSessionStatus)),
@@ -181,9 +199,9 @@ function createService(
       session_status: { kind: "idle" },
     })),
     listPorts: vi.fn(async () => ({ kind: "available", ports: DEFAULT_PORTS })),
-    listDfuDevices: vi.fn(async () => ({ kind: "available", devices: [] })),
+    listDfuDevices: vi.fn(async () => ({ kind: "available", devices: dfuDevices })),
     catalogTargets: vi.fn(async () => targets),
-    recoveryCatalogTargets: vi.fn(async () => []),
+    recoveryCatalogTargets: vi.fn(async () => recoveryTargets),
     catalogEntries: vi.fn(async (_boardId: number, platform?: string) => entries[platform ?? ""] ?? []),
     serialReadiness: vi.fn(async (request: SerialReadinessRequest) => defaultReadiness(request, detectedBoardId)),
     flashSerial: vi.fn(async (_port: string, _baud: number, _source: SerialFlashSource) => ({
@@ -233,6 +251,14 @@ async function chooseManualTarget(name: string | RegExp) {
   await fireEvent.click(screen.getByRole("button", { name }));
 }
 
+async function openRecoveryMode() {
+  await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.modeRecovery));
+
+  await waitFor(() => {
+    expect(screen.getByTestId(firmwareWorkspaceTestIds.recoveryPanel)).toBeTruthy();
+  });
+}
+
 describe("FirmwareWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -245,9 +271,9 @@ describe("FirmwareWorkspace", () => {
   it("keeps install catalog-first, requires an explicit manual target when proof is missing, and lets a local APJ replace the catalog source", async () => {
     const fileIo = createFileIo({
       pickApjFile: vi.fn(async () => ({
-        status: "success",
+        status: "success" as const,
         selection: {
-          kind: "local_apj_bytes",
+          kind: "local_apj_bytes" as const,
           data: [1, 2, 3, 4],
           fileName: "cube-custom.apj",
           byteLength: 4,
@@ -325,7 +351,7 @@ describe("FirmwareWorkspace", () => {
     });
   });
 
-  it("keeps the workspace browseable on radiomaster and phone layouts while blocking actual install actions", async () => {
+  it("keeps the workspace browseable on radiomaster and phone layouts while blocking actual install and recovery starts", async () => {
     const chromeStore = createResponsiveChromeStore(1440, 900, "wide");
     await renderWorkspace({ chromeStore });
 
@@ -345,13 +371,20 @@ describe("FirmwareWorkspace", () => {
       expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel)).toBeTruthy();
     });
 
+    await openRecoveryMode();
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoveryPanel)).toBeTruthy();
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.startRecovery) as HTMLButtonElement).disabled).toBe(true);
+    });
+
     chromeStore.set(createResponsiveChromeState(390, 844, "phone"));
 
     await waitFor(() => {
       expect(screen.getByTestId(firmwareWorkspaceTestIds.layoutMode).textContent).toContain("browse-phone");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.blockedReason).textContent).toContain("phone widths");
-      expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(true);
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.manualTargetSearch)).toBeTruthy();
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.startRecovery) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoveryGuidance)).toBeTruthy();
     });
   });
 
@@ -386,6 +419,7 @@ describe("FirmwareWorkspace", () => {
 
     await renderWorkspace({ service });
     await chooseManualTarget(/Cube Orange/i);
+
     await waitFor(() => {
       expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(false);
     });
@@ -413,6 +447,7 @@ describe("FirmwareWorkspace", () => {
 
     await renderWorkspace({ service });
     await chooseManualTarget(/Cube Orange/i);
+
     await waitFor(() => {
       expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(false);
     });
@@ -425,6 +460,258 @@ describe("FirmwareWorkspace", () => {
       expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel).textContent).toContain("6");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel).textContent).toContain("Reconnect error");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel).textContent).toContain("timeout waiting for heartbeat");
+    });
+  });
+
+  it("keeps DFU recovery separate from install/update and gates dangerous manual recovery behind explicit confirmation", async () => {
+    const fileIo = createFileIo({
+      pickBinFile: vi.fn(async () => ({
+        status: "success" as const,
+        selection: {
+          kind: "local_bin_bytes" as const,
+          data: [9, 8, 7, 6],
+          fileName: "rescue.bin",
+          byteLength: 4,
+          digest: "cafe0000cafe0000",
+        },
+      })),
+    });
+
+    await renderWorkspace({ fileIo });
+
+    expect(screen.getByTestId(firmwareWorkspaceTestIds.serialPanel)).toBeTruthy();
+    expect(screen.queryByTestId(firmwareWorkspaceTestIds.recoveryPanel)).toBeNull();
+
+    await openRecoveryMode();
+
+    expect(screen.queryByTestId(firmwareWorkspaceTestIds.serialPanel)).toBeNull();
+    expect(screen.getByTestId(firmwareWorkspaceTestIds.recoveryPanel)).toBeTruthy();
+    expect(screen.queryByTestId(firmwareWorkspaceTestIds.recoveryManualPanel)).toBeNull();
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryAdvancedToggle));
+    expect(screen.getByTestId(firmwareWorkspaceTestIds.recoveryManualPanel)).toBeTruthy();
+    expect(screen.getByTestId(firmwareWorkspaceTestIds.recoveryManualWarning).textContent).toContain("non-bootable");
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryManualBin));
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryBrowse));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoverySourceState).textContent).toContain("local_bin_bytes");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoverySourceState).textContent).toContain("rescue.bin");
+    });
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoverySafetyConfirm));
+
+    await waitFor(() => {
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.startRecovery) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoveryManualConfirm)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryManualConfirm));
+
+    await waitFor(() => {
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.startRecovery) as HTMLButtonElement).disabled).toBe(false);
+    });
+  });
+
+  it("requires an explicit official recovery target choice when multiple bootloader targets exist", async () => {
+    await renderWorkspace({
+      service: createService({}, {
+        recoveryTargets: DEFAULT_TARGETS,
+      }),
+    });
+
+    await openRecoveryMode();
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoverySafetyConfirm));
+
+    await waitFor(() => {
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.recoveryTargetSelect) as HTMLSelectElement).value).toBe("");
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.startRecovery) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    await fireEvent.change(screen.getByTestId(firmwareWorkspaceTestIds.recoveryTargetSelect), {
+      target: { value: `${DEFAULT_TARGETS[0].board_id}:${DEFAULT_TARGETS[0].platform}` },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoverySourceState).textContent).toContain("official_bootloader");
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.startRecovery) as HTMLButtonElement).disabled).toBe(false);
+    });
+  });
+
+  it("surfaces invalid manual recovery files loudly and resets stale confirmation when the manual source changes", async () => {
+    const fileIo = createFileIo({
+      pickApjFile: vi.fn()
+        .mockRejectedValueOnce(new Error("The selected .apj firmware file was empty."))
+        .mockResolvedValueOnce({
+          status: "success",
+          selection: {
+            kind: "local_apj_bytes",
+            data: [1, 2, 3, 4],
+            fileName: "bootloader-a.apj",
+            byteLength: 4,
+            digest: "aaaa",
+          },
+        })
+        .mockResolvedValueOnce({
+          status: "success",
+          selection: {
+            kind: "local_apj_bytes",
+            data: [5, 6, 7, 8],
+            fileName: "bootloader-b.apj",
+            byteLength: 4,
+            digest: "bbbb",
+          },
+        }),
+    });
+
+    await renderWorkspace({ fileIo });
+    await openRecoveryMode();
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryAdvancedToggle));
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryManualApj));
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryBrowse));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoverySourceError).textContent).toContain("empty");
+    });
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryBrowse));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoverySourceState).textContent).toContain("bootloader-a.apj");
+    });
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoverySafetyConfirm));
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryManualConfirm));
+    expect((screen.getByTestId(firmwareWorkspaceTestIds.recoveryManualConfirm) as HTMLInputElement).checked).toBe(true);
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryBrowse));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoverySourceState).textContent).toContain("bootloader-b.apj");
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.recoveryManualConfirm) as HTMLInputElement).checked).toBe(false);
+    });
+  });
+
+  it("keeps the selected DFU device stable by unique_id across rescan reorder", async () => {
+    const listDfuDevices = vi.fn()
+      .mockResolvedValueOnce({
+        kind: "available",
+        devices: [
+          {
+            vid: 0x0483,
+            pid: 0xdf11,
+            unique_id: "dfu-a",
+            serial_number: "A",
+            manufacturer: "ST",
+            product: "STM32 DFU A",
+          },
+          {
+            vid: 0x0483,
+            pid: 0xdf11,
+            unique_id: "dfu-b",
+            serial_number: "B",
+            manufacturer: "ST",
+            product: "STM32 DFU B",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        kind: "available",
+        devices: [
+          {
+            vid: 0x0483,
+            pid: 0xdf11,
+            unique_id: "dfu-b",
+            serial_number: "B",
+            manufacturer: "ST",
+            product: "STM32 DFU B",
+          },
+          {
+            vid: 0x0483,
+            pid: 0xdf11,
+            unique_id: "dfu-a",
+            serial_number: "A",
+            manufacturer: "ST",
+            product: "STM32 DFU A",
+          },
+        ],
+      });
+
+    await renderWorkspace({
+      service: createService({ listDfuDevices }, {
+        recoveryTargets: DEFAULT_RECOVERY_TARGETS,
+        dfuDevices: [],
+      }),
+    });
+
+    await openRecoveryMode();
+
+    await waitFor(() => {
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.recoveryDeviceSelect) as HTMLSelectElement).value).toBe("");
+    });
+
+    await fireEvent.change(screen.getByTestId(firmwareWorkspaceTestIds.recoveryDeviceSelect), {
+      target: { value: "dfu-b" },
+    });
+
+    await waitFor(() => {
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.recoveryDeviceSelect) as HTMLSelectElement).value).toBe("dfu-b");
+    });
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryDeviceRefresh));
+
+    await waitFor(() => {
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.recoveryDeviceSelect) as HTMLSelectElement).value).toBe("dfu-b");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoveryDeviceState).textContent).toContain("STM32 DFU B");
+    });
+  });
+
+  it("keeps retryable recovery guidance outcomes in the recovery mode instead of auto-returning", async () => {
+    const service = createService({
+      flashDfuRecovery: vi.fn(async () => ({
+        result: "driver_guidance",
+        guidance: "Install the STM32 DFU driver, reconnect the board in DFU mode, and retry recovery.",
+      })),
+    });
+
+    await renderWorkspace({ service });
+    await openRecoveryMode();
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoverySafetyConfirm));
+
+    await waitFor(() => {
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.startRecovery) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.startRecovery));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.mode).textContent).toContain("dfu-recovery");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoveryPanel)).toBeTruthy();
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeResult).textContent).toContain("Recovery guidance");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeSummary).textContent).toContain("STM32 DFU driver");
+    });
+  });
+
+  it("auto-returns a verified recovery outcome to install/update with follow-up guidance while retaining the DFU facts", async () => {
+    await renderWorkspace();
+    await openRecoveryMode();
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoverySafetyConfirm));
+
+    await waitFor(() => {
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.startRecovery) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.startRecovery));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.mode).textContent).toContain("install-update");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.serialPanel)).toBeTruthy();
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.returnGuidance).textContent).toContain("Return to Install / Update now");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeResult).textContent).toContain("Recovery verified");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeSummary).textContent).toContain("Return to Install / Update");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel).textContent).toContain("STM32 DFU");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel).textContent).toContain("Next step");
     });
   });
 });

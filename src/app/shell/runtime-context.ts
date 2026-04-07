@@ -1,28 +1,36 @@
 import { createContext } from "svelte";
 import type { Readable } from "svelte/store";
 
+import type { FirmwareFileIo } from "../../lib/firmware-file-io";
+import type { FirmwareService } from "../../lib/platform/firmware";
+import type { LiveSettingsStore } from "../../lib/stores/live-settings";
+import type {
+  MissionPlannerStore,
+  MissionPlannerViewStore,
+} from "../../lib/stores/mission-planner";
+import type { OperatorWorkspaceViewStore } from "../../lib/stores/operator-workspace-view";
 import type {
   ParamsStore,
   ParameterWorkspaceViewStore,
 } from "../../lib/stores/params";
 import type { RuntimeState } from "../../lib/stores/runtime";
 import type { SessionStore, SessionViewStore } from "../../lib/stores/session";
-import type { OperatorWorkspaceViewStore } from "../../lib/stores/operator-workspace-view";
-import type { LiveSettingsStore } from "../../lib/stores/live-settings";
-import type {
-  MissionPlannerStore,
-  MissionPlannerViewStore,
-} from "../../lib/stores/mission-planner";
 import type {
   SetupWorkspaceStore,
   SetupWorkspaceViewStore,
 } from "../../lib/stores/setup-workspace";
+import type { FirmwareWorkspaceStore } from "../../lib/stores/firmware-workspace";
 import type { ShellChromeState } from "./chrome-state";
 
 export type RuntimeStore = Readable<RuntimeState>;
 export type ShellChromeStore = Readable<ShellChromeState>;
 export type TelemetrySettingsDialogLauncher = {
   open(): void;
+};
+export type FirmwareWorkspaceContext = {
+  store: FirmwareWorkspaceStore;
+  service: FirmwareService;
+  fileIo: FirmwareFileIo;
 };
 
 export const [getSessionStoreContext, setSessionStoreContext] = createContext<SessionStore>();
@@ -38,3 +46,4 @@ export const [getRuntimeStoreContext, setRuntimeStoreContext] = createContext<Ru
 export const [getShellChromeStoreContext, setShellChromeStoreContext] = createContext<ShellChromeStore>();
 export const [getLiveSettingsStoreContext, setLiveSettingsStoreContext] = createContext<LiveSettingsStore>();
 export const [getTelemetrySettingsDialogLauncherContext, setTelemetrySettingsDialogLauncherContext] = createContext<TelemetrySettingsDialogLauncher>();
+export const [getFirmwareWorkspaceContext, setFirmwareWorkspaceContext] = createContext<FirmwareWorkspaceContext>();
