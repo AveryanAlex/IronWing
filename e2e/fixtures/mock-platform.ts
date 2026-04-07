@@ -244,6 +244,34 @@ export const missionWorkspaceSelectors = {
     surveyHandle: `[data-testid^="${missionWorkspaceTestIds.mapSurveyPrefix}-"]`,
 } as const;
 
+export const missionWorkspaceLayoutSelectors = {
+    layoutDiagnostics: `[data-testid="${missionWorkspaceTestIds.layoutDiagnostics}"]`,
+    layoutMode: `[data-testid="${missionWorkspaceTestIds.layoutMode}"]`,
+    layoutTier: `[data-testid="${missionWorkspaceTestIds.layoutTier}"]`,
+    layoutTierMismatch: `[data-testid="${missionWorkspaceTestIds.layoutTierMismatch}"]`,
+    detailColumns: `[data-testid="${missionWorkspaceTestIds.detailColumns}"]`,
+    supportPlacement: `[data-testid="${missionWorkspaceTestIds.supportPlacement}"]`,
+    phoneSegmentBar: `[data-testid="${missionWorkspaceTestIds.phoneSegmentBar}"]`,
+    phoneSegmentState: `[data-testid="${missionWorkspaceTestIds.phoneSegmentState}"]`,
+    phoneSegmentMap: `[data-testid="${missionWorkspaceTestIds.phoneSegmentMap}"]`,
+    phoneSegmentPlan: `[data-testid="${missionWorkspaceTestIds.phoneSegmentPlan}"]`,
+    mapPane: `[data-testid="${missionWorkspaceTestIds.mapPane}"]`,
+    planPane: `[data-testid="${missionWorkspaceTestIds.planPane}"]`,
+} as const;
+
+export const missionSupportPanelSelectors = {
+    planningStatsPanel: `[data-testid="${missionWorkspaceTestIds.planningStatsPanel}"]`,
+    planningStatsMissionState: `[data-testid="${missionWorkspaceTestIds.planningStatsMissionState}"]`,
+    planningStatsMissionDistance: `[data-testid="${missionWorkspaceTestIds.planningStatsMissionDistance}"]`,
+    planningStatsSpeedStatus: `[data-testid="${missionWorkspaceTestIds.planningStatsSpeedStatus}"]`,
+    planningStatsCruiseInput: `[data-testid="${missionWorkspaceTestIds.planningStatsCruiseInput}"]`,
+    terrainPanel: `[data-testid="${missionWorkspaceTestIds.terrainPanel}"]`,
+    terrainStatus: `[data-testid="${missionWorkspaceTestIds.terrainStatus}"]`,
+    terrainStatusDetail: `[data-testid="${missionWorkspaceTestIds.terrainStatusDetail}"]`,
+    terrainWarningCount: `[data-testid="${missionWorkspaceTestIds.terrainWarningCount}"]`,
+    terrainRetry: `[data-testid="${missionWorkspaceTestIds.terrainRetry}"]`,
+} as const;
+
 export const shellViewportPresets = {
     desktop: {
         width: 1440,
@@ -931,6 +959,175 @@ export async function closeVehiclePanelDrawer(page: Page): Promise<void> {
         connectButton,
         "Closing the Vehicle panel should make the connection surface unreachable again on phone layouts.",
     ).toHaveCount(0);
+}
+
+type MissionLayoutExpectations = {
+    mode: "wide" | "compact-wide" | "desktop" | "phone-segmented" | "phone-stack";
+    tier: "wide" | "desktop" | "tablet" | "phone";
+    detailColumns: "split" | "stacked";
+    supportPlacement: "sidebar" | "below";
+    showPhoneSegments: boolean;
+    phoneSegmentState: "map" | "plan" | "all-visible";
+    mapVisible: boolean;
+    planVisible: boolean;
+    tierMismatch?: boolean;
+};
+
+type MissionSupportPanelExpectations = {
+    planningStatsVisible: boolean;
+    terrainVisible: boolean;
+};
+
+const NO_DATA_TERRAIN_TILE_PNG = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAABFUlEQVR42u3BMQEAAADCoPVP7WsIoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAeAMBPAAB2ClDBAAAAABJRU5ErkJggg==",
+    "base64",
+);
+
+export async function mockTerrainNoData(page: Page): Promise<void> {
+    await page.route("**/elevation-tiles-prod/terrarium/**/*.png", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "image/png",
+            body: NO_DATA_TERRAIN_TILE_PNG,
+        });
+    });
+}
+
+export async function expectMissionLayoutState(page: Page, expected: MissionLayoutExpectations): Promise<void> {
+    await expect(
+        page.locator(missionWorkspaceLayoutSelectors.layoutDiagnostics),
+        "Mission layout diagnostics are missing; keep the responsive proof aligned with the shipped Mission workspace diagnostics instead of scraping layout classes.",
+    ).toBeVisible();
+    await expect(
+        page.locator(missionWorkspaceLayoutSelectors.layoutMode),
+        `Mission layout mode drifted; expected ${expected.mode}.`,
+    ).toContainText(expected.mode);
+    await expect(
+        page.locator(missionWorkspaceLayoutSelectors.layoutTier),
+        `Mission layout tier drifted; expected ${expected.tier}.`,
+    ).toContainText(expected.tier);
+    await expect(
+        page.locator(missionWorkspaceLayoutSelectors.detailColumns),
+        `Mission detail panel columns drifted; expected ${expected.detailColumns}.`,
+    ).toContainText(expected.detailColumns);
+    await expect(
+        page.locator(missionWorkspaceLayoutSelectors.supportPlacement),
+        `Mission support panel placement drifted; expected ${expected.supportPlacement}.`,
+    ).toContainText(expected.supportPlacement);
+    await expect(
+        page.locator(missionWorkspaceLayoutSelectors.phoneSegmentState),
+        `Mission phone segment diagnostics drifted; expected ${expected.phoneSegmentState}.`,
+    ).toContainText(expected.phoneSegmentState);
+    await expect(
+        page.locator(missionWorkspaceLayoutSelectors.layoutTierMismatch),
+        "Mission layout tier-sync diagnostics are missing.",
+    ).toContainText((expected.tierMismatch ?? false) ? "mismatch" : "match");
+    await expect(
+        page.locator(missionWorkspaceLayoutSelectors.mapPane),
+        `Mission map pane visibility drifted; expected data-visible=${expected.mapVisible}.`,
+    ).toHaveAttribute("data-visible", expected.mapVisible ? "true" : "false");
+    await expect(
+        page.locator(missionWorkspaceLayoutSelectors.planPane),
+        `Mission plan pane visibility drifted; expected data-visible=${expected.planVisible}.`,
+    ).toHaveAttribute("data-visible", expected.planVisible ? "true" : "false");
+
+    if (expected.showPhoneSegments) {
+        await expect(
+            page.locator(missionWorkspaceLayoutSelectors.phoneSegmentBar),
+            "Phone-segmented Mission layout should keep the segment bar visible.",
+        ).toBeVisible();
+    } else {
+        await expect(
+            page.locator(missionWorkspaceLayoutSelectors.phoneSegmentBar),
+            "Non-phone Mission layouts should not render the phone-only segment bar.",
+        ).toHaveCount(0);
+    }
+}
+
+export async function selectMissionPhoneSegment(page: Page, segment: "map" | "plan"): Promise<void> {
+    const segmentBar = page.locator(missionWorkspaceLayoutSelectors.phoneSegmentBar);
+    const targetButton = page.locator(
+        segment === "map"
+            ? missionWorkspaceLayoutSelectors.phoneSegmentMap
+            : missionWorkspaceLayoutSelectors.phoneSegmentPlan,
+    );
+
+    await expect(
+        segmentBar,
+        "Mission phone segment bar is missing; keep the responsive proof aligned with the mounted segmented shell instead of clicking hidden controls.",
+    ).toBeVisible();
+    await expect(
+        targetButton,
+        `Mission ${segment} segment button is missing; the segmented shell must expose explicit Map/Plan controls on phone.`,
+    ).toBeVisible();
+    await targetButton.click();
+    await expect(
+        targetButton,
+        `Mission ${segment} segment button never reported itself active after the segment switch.`,
+    ).toHaveAttribute("data-active", "true");
+    await expectMissionLayoutState(page, {
+        mode: "phone-segmented",
+        tier: "phone",
+        detailColumns: "stacked",
+        supportPlacement: "below",
+        showPhoneSegments: true,
+        phoneSegmentState: segment,
+        mapVisible: segment === "map",
+        planVisible: segment === "plan",
+    });
+}
+
+export async function expectMissionSupportPanels(
+    page: Page,
+    expected: MissionSupportPanelExpectations,
+): Promise<void> {
+    const planningStats = page.locator(missionSupportPanelSelectors.planningStatsPanel);
+    const terrainPanel = page.locator(missionSupportPanelSelectors.terrainPanel);
+
+    await expect(
+        planningStats,
+        "Mission planning stats panel is missing; keep the shared responsive proof selectors aligned with the shipped support panel test ids.",
+    ).toHaveCount(1);
+    await expect(
+        terrainPanel,
+        "Mission terrain panel is missing; keep the shared responsive proof selectors aligned with the shipped support panel test ids.",
+    ).toHaveCount(1);
+
+    if (expected.planningStatsVisible) {
+        await expect(
+            planningStats,
+            "Mission planning stats should be visible in the current layout segment.",
+        ).toBeVisible();
+        await expect(
+            page.locator(missionSupportPanelSelectors.planningStatsSpeedStatus),
+            "Mission planning stats status badge is missing; selector drift should fail loudly instead of hiding the panel behind generic markup.",
+        ).toBeVisible();
+    } else {
+        await expect(
+            planningStats,
+            "Mission planning stats should stay mounted but hidden in the inactive phone segment.",
+        ).toBeHidden();
+    }
+
+    if (expected.terrainVisible) {
+        await expect(
+            terrainPanel,
+            "Mission terrain panel should be visible in the current layout segment.",
+        ).toBeVisible();
+        await expect(
+            page.locator(missionSupportPanelSelectors.terrainStatus),
+            "Mission terrain status badge is missing; selector drift should fail loudly instead of masking support-panel regressions.",
+        ).toBeVisible();
+    } else {
+        await expect(
+            terrainPanel,
+            "Mission terrain panel should stay mounted but hidden in the inactive phone segment.",
+        ).toBeHidden();
+    }
+}
+
+export function missionTerrainWarningActionLocator(page: Page, index: number): Locator {
+    return page.locator(`[data-testid="${missionWorkspaceTestIds.terrainWarningActionPrefix}-${index}"]`);
 }
 
 export const test = base.extend<Fixtures>({

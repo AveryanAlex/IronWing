@@ -47,6 +47,33 @@ async function readStoredJson(key) {
   }, key);
 }
 
+async function readElementCount(selector) {
+  return browser.execute((value) => document.querySelectorAll(value).length, selector);
+}
+
+async function readAllTextContents(selector) {
+  return browser.execute(
+    (value) => Array.from(document.querySelectorAll(value)).map((element) => element.textContent?.trim() ?? ""),
+    selector,
+  );
+}
+
+async function setCommittedFieldValue(selector, nextValue) {
+  return browser.execute((valueSelector, value) => {
+    const element = document.querySelector(valueSelector);
+    if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement)) {
+      return null;
+    }
+
+    element.focus();
+    element.value = value;
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+    element.blur();
+    return element.value;
+  }, selector, nextValue);
+}
+
 async function setFieldValue(element, nextValue) {
   const tagName = (await element.getTagName()).toLowerCase();
   if (tagName === "select") {
@@ -58,8 +85,50 @@ async function setFieldValue(element, nextValue) {
   await element.setValue(nextValue);
 }
 
+async function readNumericValue(selector) {
+  const rawValue = await readElementValue(selector);
+  const parsed = Number.parseFloat(rawValue ?? "");
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function readMissionCounts(selector) {
+  const text = await readTextContent(selector);
+  const match = text?.match(/·\s*(\d+)\s*\/\s*(\d+)/);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    mission: Number.parseInt(match[1], 10),
+    survey: Number.parseInt(match[2], 10),
+  };
+}
+
+async function readConnectionDiagnostics(selectors) {
+  return {
+    lastPhase: await readTextContent(selectors.connectionDiagnosticsLastPhase),
+    activeSource: await readTextContent(selectors.connectionDiagnosticsActiveSource),
+    envelope: await readTextContent(selectors.connectionDiagnosticsEnvelope),
+  };
+}
+
+async function waitForMissionActionCycle(selectors, titleSubstring, label) {
+  await waitForCheckpoint(`${label} surfaced inline mission status`, async () => {
+    const message = await readTextContent(selectors.missionInlineStatusMessage);
+    return typeof message === "string" && message.includes(titleSubstring);
+  }, {
+    timeout: 30_000,
+    timeoutMsg: `${label} never surfaced the expected inline Mission status copy (${titleSubstring}).`,
+  });
+
+  await waitForCheckpoint(`${label} settled`, async () => (await readElementCount(selectors.missionInlineStatus)) === 0, {
+    timeout: 120_000,
+    timeoutMsg: `${label} never cleared the inline Mission status surface.`,
+  });
+}
+
 describe("native smoke", () => {
-  it("boots the active shell, stages one parameter edit through the shared tray, applies one telemetry setting, persists mpng_settings, and disconnects cleanly", async () => {
+  it("boots the active shell, stages one parameter edit through the shared tray, applies one telemetry setting, uploads a real mission waypoint, reads it back, persists mpng_settings, and disconnects cleanly", async () => {
     const expectedTcpAddress = process.env.IRONWING_WDIO_TCP_ADDRESS;
     assert.ok(expectedTcpAddress, "IRONWING_WDIO_TCP_ADDRESS is required for the native smoke test.");
 
@@ -69,12 +138,17 @@ describe("native smoke", () => {
       tcpAddressInput: '[data-testid="connection-tcp-address"]',
       connectButton: '[data-testid="connection-connect-btn"]',
       disconnectButton: '[data-testid="connection-disconnect-btn"]',
+      connectionDiagnosticsLastPhase: '[data-testid="connection-diagnostics-last-phase"]',
+      connectionDiagnosticsActiveSource: '[data-testid="connection-diagnostics-active-source"]',
+      connectionDiagnosticsEnvelope: '[data-testid="connection-diagnostics-envelope"]',
       telemetryAltValue: '[data-testid="telemetry-alt-value"]',
       telemetryModeValue: '[data-testid="telemetry-mode-value"]',
       runtimeMarker: '[data-testid="app-runtime-marker"]',
       runtimeFramework: '[data-testid="app-runtime-framework"]',
       runtimeEntrypoint: '[data-testid="app-runtime-entrypoint"]',
       runtimeBoundary: '[data-testid="app-runtime-quarantine-boundary"]',
+      activeWorkspace: '[data-testid="app-shell-active-workspace"]',
+      missionWorkspaceButton: '//nav[@aria-label="Primary"]//button[normalize-space()="Mission"]',
       parameterWorkspaceButton: '[data-testid="app-shell-parameter-workspace-btn"]',
       parameterWorkspaceRoot: '[data-testid="parameter-workspace"]',
       parameterWorkspaceState: '[data-testid="parameter-workspace-state"]',
@@ -90,6 +164,23 @@ describe("native smoke", () => {
       telemetryInput: '[data-testid="app-shell-telemetry-settings-telemetry-input"]',
       telemetryApply: '[data-testid="app-shell-telemetry-settings-apply"]',
       telemetryClose: '[data-testid="app-shell-telemetry-settings-close"]',
+      missionRoot: '[data-testid="mission-workspace"]',
+      missionEntryNew: '[data-testid="mission-entry-new"]',
+      missionReady: '[data-testid="mission-workspace-ready"]',
+      missionAttachment: '[data-testid="mission-workspace-attachment"]',
+      missionCountsMission: '[data-testid="mission-count-mission-items"]',
+      missionInlineStatus: '[data-testid="mission-inline-status"]',
+      missionInlineStatusMessage: '[data-testid="mission-inline-status-message"]',
+      missionInlineStatusDetail: '[data-testid="mission-inline-status-detail"]',
+      missionListAdd: '[data-testid="mission-draft-list-add"]',
+      missionInspectorSelectionKind: '[data-testid="mission-inspector-selection-kind"]',
+      missionInspectorLatitude: '[data-testid="mission-inspector-latitude"]',
+      missionInspectorLongitude: '[data-testid="mission-inspector-longitude"]',
+      missionInspectorAltitude: '[data-testid="mission-inspector-altitude"]',
+      missionToolbarUpload: '[data-testid="mission-toolbar-upload"]',
+      missionToolbarNew: '[data-testid="mission-toolbar-new"]',
+      missionToolbarRead: '[data-testid="mission-toolbar-read"]',
+      missionDraftItem: 'div[role="button"][data-testid^="mission-draft-item-"]',
     };
 
     const statusText = await $(selectors.statusText);
@@ -114,6 +205,14 @@ describe("native smoke", () => {
     const telemetryInput = await $(selectors.telemetryInput);
     const telemetryApply = await $(selectors.telemetryApply);
     const telemetryClose = await $(selectors.telemetryClose);
+    const missionWorkspaceButton = await $(selectors.missionWorkspaceButton);
+    const missionRoot = await $(selectors.missionRoot);
+    const missionEntryNew = await $(selectors.missionEntryNew);
+    const missionReady = await $(selectors.missionReady);
+    const missionListAdd = await $(selectors.missionListAdd);
+    const missionToolbarUpload = await $(selectors.missionToolbarUpload);
+    const missionToolbarNew = await $(selectors.missionToolbarNew);
+    const missionToolbarRead = await $(selectors.missionToolbarRead);
 
     await statusText.waitForDisplayed({ timeout: 60_000 });
     await browser.waitUntil(async () => (await browser.getTitle()).includes("IronWing"), {
@@ -161,16 +260,24 @@ describe("native smoke", () => {
     await connectButton.waitForClickable({ timeout: 30_000 });
     await connectButton.click();
 
-    await waitForCheckpoint("connected status reached", async () => /Connected/i.test(await statusText.getText()), {
-      timeout: 60_000,
-      timeoutMsg: "Timed out waiting for the native app to connect to SITL.",
-    });
+    try {
+      await waitForCheckpoint("connected status reached", async () => /Connected/i.test(await statusText.getText()), {
+        timeout: 120_000,
+        timeoutMsg: "Timed out waiting for the native app to connect to SITL.",
+      });
+    } catch (error) {
+      const diagnostics = await readConnectionDiagnostics(selectors);
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)} Last connection diagnostics: phase=${diagnostics.lastPhase ?? "missing"}, source=${diagnostics.activeSource ?? "missing"}, envelope=${diagnostics.envelope ?? "missing"}.`,
+      );
+    }
+
     await waitForCheckpoint("live telemetry altitude rendered", async () => !(await telemetryAltValue.getText()).includes("-- m"), {
-      timeout: 60_000,
+      timeout: 120_000,
       timeoutMsg: "Timed out waiting for live telemetry altitude after connect.",
     });
     await waitForCheckpoint("live telemetry mode rendered", async () => !(await telemetryModeValue.getText()).includes("--"), {
-      timeout: 60_000,
+      timeout: 120_000,
       timeoutMsg: "Timed out waiting for live telemetry mode after connect.",
     });
 
@@ -225,14 +332,187 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for the telemetry settings dialog to confirm the applied cadence.",
     });
 
+    await telemetryClose.waitForClickable({ timeout: 30_000 });
+    await telemetryClose.click();
+
+    await missionWorkspaceButton.waitForClickable({ timeout: 30_000 });
+    await missionWorkspaceButton.click();
+    await missionRoot.waitForDisplayed({ timeout: 30_000 });
+    await waitForCheckpoint("mission workspace tab active", async () => (await readTextContent(selectors.activeWorkspace)) === "mission", {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the shell to activate the Mission workspace.",
+    });
+    await missionEntryNew.waitForClickable({ timeout: 30_000 });
+    await missionEntryNew.click();
+    await missionReady.waitForDisplayed({ timeout: 30_000 });
+
+    await waitForCheckpoint("mission workspace attached to the live session", async () => {
+      const attachment = await readTextContent(selectors.missionAttachment);
+      return typeof attachment === "string" && attachment.includes("Live attached");
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the Mission workspace to report a live-attached draft.",
+    });
+
+    await missionListAdd.waitForClickable({ timeout: 30_000 });
+    await missionListAdd.click();
+    await waitForCheckpoint("manual mission item selected", async () => {
+      const selectionKind = await readTextContent(selectors.missionInspectorSelectionKind);
+      return typeof selectionKind === "string" && selectionKind.includes("mission-item");
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the Mission inspector to focus the new waypoint.",
+    });
+    await waitForCheckpoint("one mission item visible in the planner counts", async () => {
+      const counts = await readMissionCounts(selectors.missionCountsMission);
+      return counts?.mission === 1 && counts?.survey === 0;
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the Mission workspace to report one staged manual item.",
+    });
+
+    const primaryWaypoint = {
+      latitude: 47.5301,
+      longitude: 8.6301,
+      altitude: 123,
+    };
+    const secondaryWaypoint = {
+      latitude: 47.5312,
+      longitude: 8.6312,
+      altitude: 126,
+    };
+
+    await setCommittedFieldValue(selectors.missionInspectorLatitude, String(primaryWaypoint.latitude));
+    await setCommittedFieldValue(selectors.missionInspectorLongitude, String(primaryWaypoint.longitude));
+    await setCommittedFieldValue(selectors.missionInspectorAltitude, String(primaryWaypoint.altitude));
+
+    await waitForCheckpoint("primary waypoint latitude committed through the Mission inspector", async () => {
+      const value = await readNumericValue(selectors.missionInspectorLatitude);
+      return value !== null && Math.abs(value - primaryWaypoint.latitude) < 0.00001;
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the primary Mission inspector latitude edit to commit.",
+    });
+    await waitForCheckpoint("primary waypoint longitude committed through the Mission inspector", async () => {
+      const value = await readNumericValue(selectors.missionInspectorLongitude);
+      return value !== null && Math.abs(value - primaryWaypoint.longitude) < 0.00001;
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the primary Mission inspector longitude edit to commit.",
+    });
+    await waitForCheckpoint("primary waypoint altitude committed through the Mission inspector", async () => {
+      const value = await readNumericValue(selectors.missionInspectorAltitude);
+      return value !== null && Math.abs(value - primaryWaypoint.altitude) < 0.01;
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the primary Mission inspector altitude edit to commit.",
+    });
+    await waitForCheckpoint("primary waypoint summary rendered in the mission list", async () => {
+      const itemTexts = await readAllTextContents(selectors.missionDraftItem);
+      return itemTexts[0]?.includes("47.53010") && itemTexts[0]?.includes("8.63010");
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the mission list to reflect the primary waypoint coordinates.",
+    });
+
+    await missionListAdd.waitForClickable({ timeout: 30_000 });
+    await missionListAdd.click();
+    await waitForCheckpoint("two mission items visible in the planner counts", async () => {
+      const counts = await readMissionCounts(selectors.missionCountsMission);
+      return counts?.mission === 2 && counts?.survey === 0;
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the Mission workspace to report two staged manual items.",
+    });
+
+    await setCommittedFieldValue(selectors.missionInspectorLatitude, String(secondaryWaypoint.latitude));
+    await setCommittedFieldValue(selectors.missionInspectorLongitude, String(secondaryWaypoint.longitude));
+    await setCommittedFieldValue(selectors.missionInspectorAltitude, String(secondaryWaypoint.altitude));
+
+    await waitForCheckpoint("secondary waypoint latitude committed through the Mission inspector", async () => {
+      const value = await readNumericValue(selectors.missionInspectorLatitude);
+      return value !== null && Math.abs(value - secondaryWaypoint.latitude) < 0.00001;
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the secondary Mission inspector latitude edit to commit.",
+    });
+    await waitForCheckpoint("secondary waypoint longitude committed through the Mission inspector", async () => {
+      const value = await readNumericValue(selectors.missionInspectorLongitude);
+      return value !== null && Math.abs(value - secondaryWaypoint.longitude) < 0.00001;
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the secondary Mission inspector longitude edit to commit.",
+    });
+    await waitForCheckpoint("secondary waypoint altitude committed through the Mission inspector", async () => {
+      const value = await readNumericValue(selectors.missionInspectorAltitude);
+      return value !== null && Math.abs(value - secondaryWaypoint.altitude) < 0.01;
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the secondary Mission inspector altitude edit to commit.",
+    });
+    await waitForCheckpoint("secondary waypoint summary rendered in the mission list", async () => {
+      const itemTexts = await readAllTextContents(selectors.missionDraftItem);
+      return itemTexts[1]?.includes("47.53120") && itemTexts[1]?.includes("8.63120");
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the mission list to reflect the secondary waypoint coordinates.",
+    });
+
+    await missionToolbarUpload.waitForClickable({ timeout: 30_000 });
+    await missionToolbarUpload.click();
+    await waitForMissionActionCycle(selectors, "Uploading planning state", "mission upload");
+
+    await missionToolbarNew.waitForClickable({ timeout: 30_000 });
+    await missionToolbarNew.click();
+    await waitForCheckpoint("local mission draft reset to blank", async () => {
+      const counts = await readMissionCounts(selectors.missionCountsMission);
+      return counts?.mission === 0 && counts?.survey === 0;
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the local Mission draft to reset after upload.",
+    });
+
+    await missionToolbarRead.waitForClickable({ timeout: 30_000 });
+    await missionToolbarRead.click();
+    await waitForMissionActionCycle(selectors, "Reading planning state", "mission readback");
+    await waitForCheckpoint("vehicle readback restored two mission items", async () => {
+      const counts = await readMissionCounts(selectors.missionCountsMission);
+      return counts?.mission === 2 && counts?.survey === 0;
+    }, {
+      timeout: 120_000,
+      timeoutMsg: "Timed out waiting for the Mission workspace to read back the uploaded waypoints.",
+    });
+    await waitForCheckpoint("readback rendered exactly two manual mission cards", async () => (await readElementCount(selectors.missionDraftItem)) === 2, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the Mission list to render exactly two readback waypoint cards.",
+    });
+
+    const [readbackWaypoint] = await $$(selectors.missionDraftItem);
+    assert.ok(readbackWaypoint, "Expected a readback waypoint card after reading the vehicle mission.");
+    await readbackWaypoint.click();
+    await waitForCheckpoint("readback waypoint selection returned to the Mission inspector", async () => {
+      const selectionKind = await readTextContent(selectors.missionInspectorSelectionKind);
+      return typeof selectionKind === "string" && selectionKind.includes("mission-item");
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the Mission inspector to focus the readback waypoint.",
+    });
+
+    const readbackLatitude = await readNumericValue(selectors.missionInspectorLatitude);
+    const readbackLongitude = await readNumericValue(selectors.missionInspectorLongitude);
+    const readbackAltitude = await readNumericValue(selectors.missionInspectorAltitude);
+    assert.ok(readbackLatitude !== null, "Mission readback latitude should remain numeric.");
+    assert.ok(readbackLongitude !== null, "Mission readback longitude should remain numeric.");
+    assert.ok(readbackAltitude !== null, "Mission readback altitude should remain numeric.");
+    assert.ok(Math.abs(readbackLatitude - primaryWaypoint.latitude) < 0.00001, `Mission readback latitude drifted: ${readbackLatitude}`);
+    assert.ok(Math.abs(readbackLongitude - primaryWaypoint.longitude) < 0.00001, `Mission readback longitude drifted: ${readbackLongitude}`);
+    assert.ok(Math.abs(readbackAltitude - primaryWaypoint.altitude) < 0.01, `Mission readback altitude drifted: ${readbackAltitude}`);
+
     const persistedSettings = await readStoredJson("mpng_settings");
     console.log(`[native smoke] persisted mpng_settings ${JSON.stringify(persistedSettings)}`);
     assert.ok(persistedSettings && typeof persistedSettings === "object", "Expected mpng_settings to persist as a JSON object.");
     assert.ok(!("__parse_error" in persistedSettings), `mpng_settings should remain valid JSON: ${JSON.stringify(persistedSettings)}`);
     assert.equal(persistedSettings.telemetryRateHz, nextTelemetryRate, "mpng_settings should persist the last applied telemetry cadence.");
-
-    await telemetryClose.waitForClickable({ timeout: 30_000 });
-    await telemetryClose.click();
 
     await disconnectButton.waitForClickable({ timeout: 30_000 });
     await disconnectButton.click();

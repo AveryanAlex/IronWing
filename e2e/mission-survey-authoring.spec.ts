@@ -15,6 +15,7 @@ import {
     openMissionWorkspace,
     openVehiclePanelDrawer,
     requireMissionMapDebugSnapshot,
+    selectMissionPhoneSegment,
     test,
     type ShellViewportPresetName,
 } from "./fixtures/mock-platform";
@@ -125,7 +126,6 @@ const drawPoints: Record<AuthoringPattern, Array<{ x: number; y: number }>> = {
         { x: 0.14, y: 0.86 },
         { x: 0.86, y: 0.8 },
         { x: 0.72, y: 0.16 },
-        { x: 0.22, y: 0.2 },
     ],
 };
 
@@ -311,6 +311,12 @@ async function drawSurveyRegion(
     history: string[],
     pattern: AuthoringPattern,
 ): Promise<string> {
+    const hasPhoneSegments = (await page.locator(`[data-testid="${missionWorkspaceTestIds.phoneSegmentBar}"]`).count()) > 0;
+    if (hasPhoneSegments) {
+        note(history, `Switch the phone Mission shell to the map segment before starting ${pattern} drawing.`);
+        await selectMissionPhoneSegment(page, "map");
+    }
+
     note(history, `Start ${pattern} drawing on the shared map surface.`);
     const drawStart = missionWorkspaceLocator(page, patternButtons[pattern]);
     await drawStart.scrollIntoViewIfNeeded();
@@ -327,11 +333,17 @@ async function drawSurveyRegion(
         throw new Error(historyMessage(history, `The ${pattern} draw surface had no measurable bounding box.`));
     }
 
-    for (const point of drawPoints[pattern]) {
+    for (const [index, point] of drawPoints[pattern].entries()) {
         const absoluteX = drawSurfaceBox.x + drawSurfaceBox.width * point.x;
         const absoluteY = drawSurfaceBox.y + drawSurfaceBox.height * point.y;
         note(history, `Place ${pattern} geometry point at ${(point.x * 100).toFixed(0)}% × ${(point.y * 100).toFixed(0)}% of the map surface.`);
         await page.mouse.click(absoluteX, absoluteY);
+        await expect.poll(
+            async () => (await requireMissionMapDebugSnapshot(page, `${pattern} authoring click ${index + 1}`)).drawPointCount,
+            {
+                message: historyMessage(history, `The ${pattern} draw session never acknowledged point ${index + 1}.`),
+            },
+        ).toBe(index + 1);
     }
 
     await expect.poll(
@@ -352,6 +364,11 @@ async function drawSurveyRegion(
     const regionId = snapshot.selectedSurveyRegionId ?? (snapshot.selection.kind === "survey-block" ? snapshot.selection.regionId : null);
     if (!regionId) {
         throw new Error(historyMessage(history, `Finishing ${pattern} drawing did not leave a selected survey region.`));
+    }
+
+    if (hasPhoneSegments) {
+        note(history, `Return the phone Mission shell to the plan segment so ${pattern} survey inspector controls stay reachable.`);
+        await selectMissionPhoneSegment(page, "plan");
     }
 
     await expect(missionWorkspaceLocator(page, "inspectorSelectionKind")).toContainText("survey-block");
@@ -462,11 +479,27 @@ async function importFixturePlan(
     note(history, `Import ${fileName} through the Mission workspace picker.`);
     await mockPlatform.setOpenFile(contents, fileName);
     await missionWorkspaceLocator(page, "entryImport").click();
+
+    const importReview = missionWorkspaceLocator(page, "importReview");
+    const readyState = missionWorkspaceLocator(page, "ready");
+    await Promise.race([
+        importReview.waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined),
+        readyState.waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined),
+    ]);
+
+    if (await importReview.isVisible().catch(() => false)) {
+        note(history, `Apply the explicit import review for ${fileName} before expecting mounted planner content.`);
+        await missionWorkspaceLocator(page, "importReviewConfirm").click();
+    }
+
     await expect(
         missionWorkspaceLocator(page, "ready"),
         historyMessage(history, `${fileName} never mounted into the Mission workspace after import.`),
     ).toBeVisible();
-    await expect(missionWorkspaceLocator(page, "localNote")).toContainText(`Imported ${fileName}`);
+    await expect(
+        missionWorkspaceLocator(page, "localNote"),
+        historyMessage(history, `${fileName} never surfaced the import/apply note after mounting.`),
+    ).toContainText(fileName);
 }
 
 function complexItemTypes(plan: SavedPlanJson): string[] {

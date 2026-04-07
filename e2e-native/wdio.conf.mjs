@@ -49,7 +49,7 @@ export const config = {
   waitforTimeout: 30_000,
   mochaOpts: {
     ui: "bdd",
-    timeout: 120_000,
+    timeout: 300_000,
   },
   capabilities: [
     {
