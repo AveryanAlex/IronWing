@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ParamMetadataMap } from "../../param-metadata";
@@ -138,6 +139,79 @@ function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessi
   };
 }
 
+function createFrameParamStore() {
+  return {
+    expected_count: 5,
+    params: {
+      FRAME_CLASS: { name: "FRAME_CLASS", value: 1, param_type: "uint8" as const, index: 0 },
+      FRAME_TYPE: { name: "FRAME_TYPE", value: 1, param_type: "uint8" as const, index: 1 },
+      AHRS_ORIENTATION: { name: "AHRS_ORIENTATION", value: 0, param_type: "uint8" as const, index: 2 },
+      ARMING_CHECK: { name: "ARMING_CHECK", value: 1, param_type: "uint8" as const, index: 3 },
+      FS_THR_ENABLE: { name: "FS_THR_ENABLE", value: 1, param_type: "uint8" as const, index: 4 },
+    },
+  };
+}
+
+function createFrameMetadata(options: {
+  omitFrameType?: boolean;
+  omitOrientation?: boolean;
+} = {}): ParamMetadataMap {
+  const metadata = new Map<string, ParamMetadataMap extends Map<string, infer T> ? T : never>([
+    [
+      "FRAME_CLASS",
+      {
+        humanName: "Frame class",
+        description: "Vehicle frame family.",
+        values: [
+          { code: 1, label: "Quad" },
+          { code: 2, label: "Hexa" },
+        ],
+        rebootRequired: true,
+      },
+    ],
+    [
+      "ARMING_CHECK",
+      {
+        humanName: "Arming checks",
+        description: "Controls pre-arm validation.",
+      },
+    ],
+    [
+      "FS_THR_ENABLE",
+      {
+        humanName: "Throttle failsafe",
+        description: "Select the throttle failsafe behavior.",
+      },
+    ],
+  ]);
+
+  if (!options.omitFrameType) {
+    metadata.set("FRAME_TYPE", {
+      humanName: "Frame type",
+      description: "Vehicle frame layout.",
+      values: [
+        { code: 0, label: "Plus" },
+        { code: 1, label: "X" },
+      ],
+      rebootRequired: true,
+    });
+  }
+
+  if (!options.omitOrientation) {
+    metadata.set("AHRS_ORIENTATION", {
+      humanName: "Board orientation",
+      description: "Autopilot board orientation.",
+      values: [
+        { code: 0, label: "None" },
+        { code: 1, label: "Yaw 45" },
+      ],
+      rebootRequired: true,
+    });
+  }
+
+  return metadata;
+}
+
 function createTransportDescriptors(): TransportDescriptor[] {
   return [
     {
@@ -222,12 +296,12 @@ function createMockParamsService(
     ...overrides,
   } satisfies ParamsService;
 
-    return {
-      service,
-      hasHandlers() {
-        return handlers !== null;
-      },
-    };
+  return {
+    service,
+    hasHandlers() {
+      return handlers !== null;
+    },
+  };
 }
 
 async function renderSetupWorkspace(options: {
@@ -248,6 +322,10 @@ async function renderSetupWorkspace(options: {
   await waitFor(() => {
     expect(screen.getByTestId(setupWorkspaceTestIds.root)).toBeTruthy();
   });
+
+  return {
+    parameterStore,
+  };
 }
 
 describe("SetupWorkspace", () => {
@@ -261,7 +339,7 @@ describe("SetupWorkspace", () => {
     cleanup();
   });
 
-  it("shows unknown and unconfirmed guided-section truth when facts are partial", async () => {
+  it("opens on the dashboard-first overview and keeps partial facts explicit", async () => {
     await renderSetupWorkspace({
       metadata: new Map([
         [
@@ -274,9 +352,12 @@ describe("SetupWorkspace", () => {
       ]),
     });
 
-    expect(screen.getByTestId(setupWorkspaceTestIds.state).textContent?.trim()).toBe("Setup ready");
+    expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("overview");
+    expect(screen.getByTestId(setupWorkspaceTestIds.overviewSection)).toBeTruthy();
+    expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain("Partial live facts stay explicit");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`).textContent?.trim()).toBe("Unknown");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionConfidencePrefix}-frame_orientation`).textContent?.trim()).toBe("Unconfirmed");
+    expect(screen.getByTestId(setupWorkspaceTestIds.detailRecovery).textContent).toContain("Full Parameters stays separate");
     expect(screen.getByTestId(setupWorkspaceTestIds.notices).textContent).toContain("Compass not calibrated");
   });
 
@@ -286,9 +367,70 @@ describe("SetupWorkspace", () => {
     expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain(
       "Full Parameters is the recovery path",
     );
+    expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain(
+      "Metadata missing — recovery mode is active",
+    );
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).getAttribute("disabled")).not.toBeNull();
 
     await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("full_parameters");
+      expect(screen.getByTestId(setupWorkspaceTestIds.fullParameters)).toBeTruthy();
+      expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
+    });
+  });
+
+  it("stages frame and orientation edits through the shared params store", async () => {
+    const { parameterStore } = await renderSetupWorkspace({
+      snapshot: createSnapshot({
+        param_store: createFrameParamStore(),
+        param_progress: "completed",
+      }),
+      metadata: createFrameMetadata(),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("frame_orientation");
+      expect(screen.getByTestId(setupWorkspaceTestIds.frameSection)).toBeTruthy();
+    });
+
+    await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-FRAME_CLASS`), {
+      target: { value: "2" },
+    });
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.frameStageButtonPrefix}-FRAME_CLASS`));
+
+    await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-AHRS_ORIENTATION`), {
+      target: { value: "1" },
+    });
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.frameStageButtonPrefix}-AHRS_ORIENTATION`));
+
+    const state = get(parameterStore);
+    expect(state.stagedEdits.FRAME_CLASS?.nextValue).toBe(2);
+    expect(state.stagedEdits.AHRS_ORIENTATION?.nextValue).toBe(1);
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.frameStagedPrefix}-FRAME_CLASS`).textContent).toContain("Queued");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.frameStagedPrefix}-AHRS_ORIENTATION`).textContent).toContain("Queued");
+  });
+
+  it("fails closed to the recovery path when frame editor metadata is incomplete", async () => {
+    await renderSetupWorkspace({
+      snapshot: createSnapshot({
+        param_store: createFrameParamStore(),
+        param_progress: "completed",
+      }),
+      metadata: createFrameMetadata({ omitFrameType: true }),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.overviewQuickActionPrefix}-frame_orientation`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("frame_orientation");
+      expect(screen.getByTestId(setupWorkspaceTestIds.frameRecovery).textContent).toContain("Frame type metadata is missing");
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.frameRecovery).querySelector("button") as HTMLButtonElement);
 
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("full_parameters");

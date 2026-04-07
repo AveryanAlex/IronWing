@@ -77,6 +77,11 @@ export const operatorWorkspaceSelectors = {
     noticesEmpty: '[data-testid="operator-workspace-notices-empty"]',
 } as const;
 
+export const setupWorkspaceSelectors = {
+    root: '[data-testid="setup-workspace"]',
+    fullParametersNav: '[data-testid="setup-workspace-nav-full_parameters"]',
+} as const;
+
 export const parameterWorkspaceSelectors = {
     workspaceButton: '[data-testid="app-shell-parameter-workspace-btn"]',
     root: '[data-testid="parameter-workspace"]',
@@ -957,8 +962,20 @@ export async function openParameterWorkspace(page: Page): Promise<void> {
     ).toBeVisible();
     await workspaceButton.click();
     await expect(
+        page.locator(setupWorkspaceSelectors.root),
+        "Setup workspace did not mount after selecting Setup.",
+    ).toBeVisible();
+
+    const fullParametersButton = page.locator(setupWorkspaceSelectors.fullParametersNav);
+    await expect(
+        fullParametersButton,
+        "Full Parameters recovery entry is missing from Setup; keep the shared selectors in e2e/fixtures/mock-platform.ts aligned with the setup workspace navigation.",
+    ).toBeVisible();
+    await fullParametersButton.click();
+
+    await expect(
         page.locator(parameterWorkspaceSelectors.root),
-        "Parameter workspace did not mount after selecting Setup.",
+        "Parameter workspace did not mount after selecting the Full Parameters recovery section.",
     ).toBeVisible();
 }
 

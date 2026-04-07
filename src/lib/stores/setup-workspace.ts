@@ -404,7 +404,7 @@ function buildNavigableSections(input: {
       confidenceText: status === "unknown" ? "Unconfirmed" : null,
       gateText: guidedGateText,
       detailText: guidedGateText ?? describeGuidedSectionStatus(status),
-      implemented: false,
+      implemented: id === "frame_orientation",
     } satisfies SetupWorkspaceSection;
   });
 }

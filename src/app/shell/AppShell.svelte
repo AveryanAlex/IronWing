@@ -4,10 +4,7 @@ import { createMissionPlannerStore, createMissionPlannerViewStore } from "../../
 import { createOperatorWorkspaceViewStore } from "../../lib/stores/operator-workspace-view";
 import { createParameterWorkspaceViewStore, params } from "../../lib/stores/params";
 import { runtime } from "../../lib/stores/runtime";
-import {
-  createSetupWorkspaceStore,
-  createSetupWorkspaceViewStore,
-} from "../../lib/stores/setup-workspace";
+import { createSetupWorkspaceStore, createSetupWorkspaceViewStore } from "../../lib/stores/setup-workspace";
 import { createSessionViewStore, session } from "../../lib/stores/session";
 import AppShellContent from "./AppShellContent.svelte";
 import { createShellChromeStore } from "./chrome-state";
