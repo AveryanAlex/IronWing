@@ -9,12 +9,15 @@ import {
     connectionSelectors,
     expect,
     expectDockedVehiclePanel,
+    expectMissionHistoryState,
     expectMissionWorkspace,
     expectRuntimeDiagnostics,
+    missionHistoryButtonLocator,
     missionWorkspaceLocator,
     missionWorkspaceSelectors,
     openMissionWorkspace,
     openVehiclePanelDrawer,
+    readMissionHistoryState,
     requireMissionMapDebugSnapshot,
     test,
     type ShellViewportPresetName,
@@ -88,6 +91,8 @@ const blockedGuidedState = {
 } as const;
 
 const continuityViewportScenarios = ["desktop", "radiomaster", "phone"] as const satisfies readonly ShellViewportPresetName[];
+const undoShortcut = process.platform === "darwin" ? "Meta+Z" : "Control+Z";
+const redoShortcut = process.platform === "darwin" ? "Meta+Shift+Z" : "Control+Shift+Z";
 const continuityKmlContents = readFileSync("tests/contracts/mission-continuity.kml", "utf8");
 const continuityKmzBytes = readFileSync("tests/contracts/mission-continuity.kmz");
 
@@ -127,6 +132,10 @@ async function clickMissionControl(page: Page, selector: keyof typeof missionWor
     const locator = missionWorkspaceLocator(page, selector);
     await locator.scrollIntoViewIfNeeded();
     await locator.click();
+}
+
+async function pressMissionHistoryShortcut(page: Page, kind: "undo" | "redo") {
+    await page.keyboard.press(kind === "undo" ? undoShortcut : redoShortcut);
 }
 
 async function connectAndOpenMissionWorkspace(
@@ -216,16 +225,26 @@ async function addAndEditRallyPoint(page: Page, history: string[]) {
     await firstRallyPoint.click();
     await expect(missionWorkspaceLocator(page, "rallyInspectorSelectionKind")).toContainText("rally-point");
 
-    note(history, "Change the rally altitude frame so the proof exercises real rally editing instead of list-only discovery.");
-    await missionWorkspaceLocator(page, "rallyAltitudeFrame").selectOption("terrain");
+    const baselineAltitude = Number.parseFloat(await missionWorkspaceLocator(page, "rallyAltitude").inputValue());
+    note(history, "Change the rally altitude so recovery proves a real rally edit instead of list-only discovery.");
     await missionWorkspaceLocator(page, "rallyAltitude").fill("42");
     await missionWorkspaceLocator(page, "rallyAltitude").press("Tab");
+    await expect
+        .poll(async () => Number.parseFloat(await missionWorkspaceLocator(page, "rallyAltitude").inputValue()), {
+            message: historyMessage(history, "The rally altitude field never committed the edited value."),
+        })
+        .toBeCloseTo(42, 2);
 
     const rallySnapshot = await requireMissionMapDebugSnapshot(page, "confirming the active rally editor state");
     expect(rallySnapshot.mode, historyMessage(history, "Mission-map diagnostics drifted away from Rally mode while editing a rally point.")).toBe("rally");
     expect(rallySnapshot.selectedRallyPointUiId, historyMessage(history, "Mission-map diagnostics lost the selected rally point id.")).not.toBeNull();
     expect(rallySnapshot.rallyMarkerCount, historyMessage(history, "Mission-map diagnostics lost the rally marker count.")).toBe(1);
     await expect(missionWorkspaceLocator(page, "homeSync")).toContainText("Live mission reads can refresh Home");
+
+    return {
+        baselineAltitude,
+        editedAltitude: 42,
+    };
 }
 
 async function importContinuityKmlAndDismiss(page: Page, mockPlatform: MockPlatformHarness, history: string[]) {
@@ -297,7 +316,7 @@ async function applyContinuityKmlImport(page: Page, mockPlatform: MockPlatformHa
 }
 
 async function proveFenceContinuity(page: Page, history: string[]) {
-    note(history, "Enter Fence mode, recast the imported polygon into a circle, and force one blocked edit so warning-action routing is proven through the live shell.");
+    note(history, "Enter Fence mode, recast the imported polygon into a circle, force one blocked radius edit, then settle on a valid radius so recovery can stay on one undo step.");
     await clickMissionControl(page, "modeFence");
     await expect(missionWorkspaceLocator(page, "fenceList")).toBeVisible();
     await expect(missionWorkspaceLocator(page, "mapFenceCount")).toContainText("1");
@@ -307,6 +326,8 @@ async function proveFenceContinuity(page: Page, history: string[]) {
     await firstFenceRegion.click();
     await expect(missionWorkspaceLocator(page, "fenceInspectorSelectionKind")).toContainText("fence-region");
     await missionWorkspaceLocator(page, "fenceInspectorType").selectOption("inclusion_circle");
+
+    const baselineRadius = Number.parseFloat(await missionWorkspaceLocator(page, "fenceCircleRadius").inputValue());
     await missionWorkspaceLocator(page, "fenceCircleRadius").fill("-10");
     await missionWorkspaceLocator(page, "fenceCircleRadius").press("Tab");
 
@@ -326,6 +347,19 @@ async function proveFenceContinuity(page: Page, history: string[]) {
     await page.getByRole("button", { name: /open fence mode/i }).click();
     await expect(missionWorkspaceLocator(page, "fenceList")).toBeVisible();
     await expect(missionWorkspaceLocator(page, "fenceInspectorSelectionKind")).toContainText("fence-region");
+
+    await missionWorkspaceLocator(page, "fenceCircleRadius").fill("120");
+    await missionWorkspaceLocator(page, "fenceCircleRadius").press("Tab");
+    await expect
+        .poll(async () => Number.parseFloat(await missionWorkspaceLocator(page, "fenceCircleRadius").inputValue()), {
+            message: historyMessage(history, "Fence mode never committed the valid circle radius edit needed for undo/redo proof."),
+        })
+        .toBeCloseTo(120, 2);
+
+    return {
+        baselineRadius,
+        editedRadius: 120,
+    };
 }
 
 async function proveMixedExportChooser(page: Page, mockPlatform: MockPlatformHarness, history: string[], fileName: string) {
@@ -375,6 +409,101 @@ async function proveMixedExportChooser(page: Page, mockPlatform: MockPlatformHar
     expect(parsed.rallyPoints, historyMessage(history, "The mixed-domain export lost rally content.")).toBeTruthy();
 }
 
+async function proveFenceAndRallyHistoryRecovery(
+    page: Page,
+    history: string[],
+    rallyEdit: { baselineAltitude: number; editedAltitude: number },
+    fenceEdit: { baselineRadius: number; editedRadius: number },
+) {
+    note(history, "Use the mounted header history controls to undo and redo rally plus fence edits without cross-domain drift.");
+
+    await clickMissionControl(page, "modeRally");
+    const firstRallyPoint = firstRallyPointLocator(page);
+    await expect(firstRallyPoint).toBeVisible();
+    await firstRallyPoint.click();
+    await expect(missionWorkspaceLocator(page, "rallyInspectorSelectionKind")).toContainText("rally-point");
+    await expect
+        .poll(async () => Number.parseFloat(await missionWorkspaceLocator(page, "rallyAltitude").inputValue()), {
+            message: historyMessage(history, "Rally mode lost the edited altitude before history recovery started."),
+        })
+        .toBeCloseTo(rallyEdit.editedAltitude, 2);
+
+    const rallyHistoryBeforeUndo = await readMissionHistoryState(page);
+    await missionHistoryButtonLocator(page, "undo").click();
+    await expect
+        .poll(async () => Number.parseFloat(await missionWorkspaceLocator(page, "rallyAltitude").inputValue()), {
+            message: historyMessage(history, "Undoing in Rally mode did not restore the previous rally altitude in one step."),
+        })
+        .toBeCloseTo(rallyEdit.baselineAltitude, 2);
+    await expectMissionHistoryState(
+        page,
+        {
+            undo: {
+                count: rallyHistoryBeforeUndo.undo.count - 1,
+                disabled: rallyHistoryBeforeUndo.undo.count - 1 <= 0,
+            },
+            redo: { count: 1, disabled: false },
+        },
+        historyMessage(history, "Rally undo should consume exactly one history step and expose a single redo."),
+    );
+
+    await clickMissionControl(page, "modeFence");
+    const firstFenceRegion = firstFenceRegionLocator(page);
+    await expect(firstFenceRegion).toBeVisible();
+    await firstFenceRegion.click();
+    await expect(missionWorkspaceLocator(page, "fenceInspectorSelectionKind")).toContainText("fence-region");
+    await expect
+        .poll(async () => Number.parseFloat(await missionWorkspaceLocator(page, "fenceCircleRadius").inputValue()), {
+            message: historyMessage(history, "Undoing the rally edit should not disturb the edited fence radius."),
+        })
+        .toBeCloseTo(fenceEdit.editedRadius, 2);
+
+    await clickMissionControl(page, "modeRally");
+    await expect(firstRallyPoint).toBeVisible();
+    await firstRallyPoint.click();
+    await missionHistoryButtonLocator(page, "redo").click();
+    await expect
+        .poll(async () => Number.parseFloat(await missionWorkspaceLocator(page, "rallyAltitude").inputValue()), {
+            message: historyMessage(history, "Redoing in Rally mode did not restore the edited rally altitude."),
+        })
+        .toBeCloseTo(rallyEdit.editedAltitude, 2);
+
+    await clickMissionControl(page, "modeFence");
+    await expect(firstFenceRegion).toBeVisible();
+    await firstFenceRegion.click();
+    await expect
+        .poll(async () => Number.parseFloat(await missionWorkspaceLocator(page, "fenceCircleRadius").inputValue()), {
+            message: historyMessage(history, "Fence mode lost the edited radius before the fence undo proof started."),
+        })
+        .toBeCloseTo(fenceEdit.editedRadius, 2);
+
+    const fenceHistoryBeforeUndo = await readMissionHistoryState(page);
+    await missionHistoryButtonLocator(page, "undo").click();
+    await expect
+        .poll(async () => Number.parseFloat(await missionWorkspaceLocator(page, "fenceCircleRadius").inputValue()), {
+            message: historyMessage(history, "Undoing in Fence mode did not restore the previous fence radius in one step."),
+        })
+        .toBeCloseTo(fenceEdit.baselineRadius, 2);
+    await expectMissionHistoryState(
+        page,
+        {
+            undo: {
+                count: fenceHistoryBeforeUndo.undo.count - 1,
+                disabled: fenceHistoryBeforeUndo.undo.count - 1 <= 0,
+            },
+            redo: { count: 1, disabled: false },
+        },
+        historyMessage(history, "Fence undo should consume exactly one history step and expose a single redo."),
+    );
+
+    await missionHistoryButtonLocator(page, "redo").click();
+    await expect
+        .poll(async () => Number.parseFloat(await missionWorkspaceLocator(page, "fenceCircleRadius").inputValue()), {
+            message: historyMessage(history, "Redoing in Fence mode did not restore the edited fence radius."),
+        })
+        .toBeCloseTo(fenceEdit.editedRadius, 2);
+}
+
 async function emitSessionEnvelope(
     mockPlatform: MockPlatformHarness,
     envelope: SessionEnvelope,
@@ -404,6 +533,7 @@ async function provePlaybackAndDetachedLocalStates(
     history: string[],
 ) {
     note(history, "Switch the active scope into playback without replacing the mounted draft, then verify read-only truth across attachment, Home, and mode-specific controls.");
+    const historyBeforePlayback = await readMissionHistoryState(page);
     const playbackEnvelope: SessionEnvelope = {
         ...liveEnvelope,
         source_kind: "playback",
@@ -412,6 +542,14 @@ async function provePlaybackAndDetachedLocalStates(
     await expect(missionWorkspaceLocator(page, "attachment")).toContainText("Playback read-only");
     await expect(missionWorkspaceLocator(page, "attachmentDetail")).toContainText("Playback keeps the planner mounted");
     await expect(missionWorkspaceLocator(page, "warningRegister")).toContainText("Playback read-only");
+    await expectMissionHistoryState(
+        page,
+        {
+            undo: { count: historyBeforePlayback.undo.count, disabled: true },
+            redo: { count: historyBeforePlayback.redo.count, disabled: true },
+        },
+        historyMessage(history, "Playback should preserve the current history counts while disabling undo/redo on the mounted draft."),
+    );
 
     await clickMissionControl(page, "modeFence");
     await expect(missionWorkspaceLocator(page, "fenceAddInclusionPolygon")).toBeDisabled();
@@ -428,9 +566,65 @@ async function provePlaybackAndDetachedLocalStates(
     };
     await emitSessionEnvelope(mockPlatform, detachedEnvelope, "connected", connectedVehicleState);
     await expect(missionWorkspaceLocator(page, "attachment")).toContainText("Detached local");
-    await expect(missionWorkspaceLocator(page, "attachmentDetail")).toContainText("previous draft mounted");
-    await expect(missionWorkspaceLocator(page, "warningRegister")).toContainText("Detached local");
+    await expect(missionWorkspaceLocator(page, "attachmentDetail")).toContainText("use undo/redo as normal here");
+    await expect(missionWorkspaceLocator(page, "toolbarValidate")).toBeDisabled();
     await expect(missionWorkspaceLocator(page, "toolbarUpload")).toBeDisabled();
+    await expect(missionWorkspaceLocator(page, "toolbarClear")).toBeDisabled();
+    await expect(missionWorkspaceLocator(page, "warningRegister")).toHaveCount(0);
+
+    note(history, "Edit Home while detached-local, then use the workspace shortcut path to prove history carryover stays editable while live actions remain blocked.");
+    await clickMissionControl(page, "modeMission");
+    const detachedHistoryBeforeEdit = await readMissionHistoryState(page);
+    expect(detachedHistoryBeforeEdit.undo.count, historyMessage(history, "Detached-local should preserve prior history instead of resetting to zero.")).toBeGreaterThan(0);
+    expect(detachedHistoryBeforeEdit.undo.disabled).toBe(false);
+
+    await missionWorkspaceLocator(page, "homeAltitude").fill("491");
+    await missionWorkspaceLocator(page, "homeAltitude").press("Tab");
+    await expect
+        .poll(async () => await missionWorkspaceLocator(page, "homeAltitude").inputValue(), {
+            message: historyMessage(history, "Detached-local Home altitude edit never committed into the mounted workspace."),
+        })
+        .toBe("491");
+
+    const detachedHistoryAfterEdit = await readMissionHistoryState(page);
+    expect(detachedHistoryAfterEdit.undo.count).toBe(detachedHistoryBeforeEdit.undo.count + 1);
+    expect(detachedHistoryAfterEdit.undo.disabled).toBe(false);
+    expect(detachedHistoryAfterEdit.redo.count).toBe(0);
+    expect(detachedHistoryAfterEdit.redo.disabled).toBe(true);
+
+    await pressMissionHistoryShortcut(page, "undo");
+    await expect
+        .poll(async () => await missionWorkspaceLocator(page, "homeAltitude").inputValue(), {
+            message: historyMessage(history, "Detached-local undo did not restore the previous Home altitude."),
+        })
+        .toBe("490");
+    await expectMissionHistoryState(
+        page,
+        {
+            undo: { count: detachedHistoryBeforeEdit.undo.count, disabled: false },
+            redo: { count: 1, disabled: false },
+        },
+        historyMessage(history, "Detached-local undo should restore the previous Home edit in one step while keeping vehicle actions blocked."),
+    );
+    await expect(missionWorkspaceLocator(page, "attachment")).toContainText("Detached local");
+    await expect(missionWorkspaceLocator(page, "toolbarValidate")).toBeDisabled();
+    await expect(missionWorkspaceLocator(page, "toolbarUpload")).toBeDisabled();
+    await expect(missionWorkspaceLocator(page, "toolbarClear")).toBeDisabled();
+
+    await pressMissionHistoryShortcut(page, "redo");
+    await expect
+        .poll(async () => await missionWorkspaceLocator(page, "homeAltitude").inputValue(), {
+            message: historyMessage(history, "Detached-local redo did not reapply the edited Home altitude."),
+        })
+        .toBe("491");
+    await expectMissionHistoryState(
+        page,
+        {
+            undo: { count: detachedHistoryAfterEdit.undo.count, disabled: false },
+            redo: { count: 0, disabled: true },
+        },
+        historyMessage(history, "Detached-local redo should reapply the local Home edit without re-enabling blocked vehicle actions."),
+    );
 }
 
 async function importContinuityKmzWhileDetached(
@@ -492,12 +686,13 @@ test.describe("mocked mission planning continuity", () => {
             }
 
             await startBlankMission(page, history);
-            await addAndEditRallyPoint(page, history);
+            const rallyEdit = await addAndEditRallyPoint(page, history);
             await importContinuityKmlAndDismiss(page, harness, history);
             await applyContinuityKmlImport(page, harness, history);
             await setSharedHome(page, history);
-            await proveFenceContinuity(page, history);
+            const fenceEdit = await proveFenceContinuity(page, history);
             await proveMixedExportChooser(page, harness, history, `${preset}-continuity.plan`);
+            await proveFenceAndRallyHistoryRecovery(page, history, rallyEdit, fenceEdit);
             await provePlaybackAndDetachedLocalStates(page, harness, liveEnvelope, history);
             await importContinuityKmzWhileDetached(page, harness, history);
 

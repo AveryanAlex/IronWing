@@ -153,6 +153,8 @@ export const missionWorkspaceSelectors = {
     toolbarImport: `[data-testid="${missionWorkspaceTestIds.toolbarImport}"]`,
     toolbarImportKml: `[data-testid="${missionWorkspaceTestIds.toolbarImportKml}"]`,
     toolbarNew: `[data-testid="${missionWorkspaceTestIds.toolbarNew}"]`,
+    toolbarUndo: `[data-testid="${missionWorkspaceTestIds.toolbarUndo}"]`,
+    toolbarRedo: `[data-testid="${missionWorkspaceTestIds.toolbarRedo}"]`,
     toolbarExport: `[data-testid="${missionWorkspaceTestIds.toolbarExport}"]`,
     toolbarValidate: `[data-testid="${missionWorkspaceTestIds.toolbarValidate}"]`,
     toolbarUpload: `[data-testid="${missionWorkspaceTestIds.toolbarUpload}"]`,
@@ -728,6 +730,112 @@ export async function expectMissionWorkspace(page: Page): Promise<void> {
 
 export function missionWorkspaceLocator(page: Page, selector: keyof typeof missionWorkspaceSelectors): Locator {
     return page.locator(missionWorkspaceSelectors[selector]);
+}
+
+type MissionHistoryKind = "undo" | "redo";
+
+type MissionHistoryButtonState = {
+    count: number;
+    disabled: boolean;
+    label: string;
+    title: string;
+};
+
+type MissionHistoryState = {
+    undo: MissionHistoryButtonState;
+    redo: MissionHistoryButtonState;
+};
+
+function missionHistoryKindLabel(kind: MissionHistoryKind): string {
+    return kind === "undo" ? "Undo" : "Redo";
+}
+
+async function readMissionHistoryButtonState(locator: Locator, kind: MissionHistoryKind): Promise<MissionHistoryButtonState> {
+    const labelPrefix = missionHistoryKindLabel(kind);
+    const count = await locator.count();
+    if (count !== 1) {
+        throw new Error(
+            `Mission ${kind} control count drifted to ${count}. Keep e2e/fixtures/mock-platform.ts aligned with the shipped Mission workspace controls instead of scraping fallback DOM.`,
+        );
+    }
+
+    const [label, title, disabled] = await Promise.all([
+        locator.getAttribute("aria-label"),
+        locator.getAttribute("title"),
+        locator.isDisabled(),
+    ]);
+
+    if (!label) {
+        throw new Error(
+            `Mission ${kind} control is missing its aria-label. The shipped header must expose the count-bearing ${labelPrefix} label for stable browser proof.`,
+        );
+    }
+    if (!title) {
+        throw new Error(
+            `Mission ${kind} control is missing its title attribute. The shipped header should mirror the ${labelPrefix} count label there as well.`,
+        );
+    }
+
+    const match = label.match(new RegExp(`^${labelPrefix} \\((\\d+) available\\)$`));
+    if (!match) {
+        throw new Error(
+            `Mission ${kind} control reported malformed label \"${label}\". Expected \"${labelPrefix} (N available)\" so browser proof can reject selector drift instead of guessing state.`,
+        );
+    }
+    if (title !== label) {
+        throw new Error(
+            `Mission ${kind} control title \"${title}\" drifted from aria-label \"${label}\". Keep the shipped Mission header history copy aligned for stable proof.`,
+        );
+    }
+
+    return {
+        count: Number(match[1]),
+        disabled,
+        label,
+        title,
+    };
+}
+
+export function missionHistoryButtonLocator(page: Page, kind: MissionHistoryKind): Locator {
+    return missionWorkspaceLocator(page, kind === "undo" ? "toolbarUndo" : "toolbarRedo");
+}
+
+export async function readMissionHistoryState(page: Page): Promise<MissionHistoryState> {
+    const undo = missionHistoryButtonLocator(page, "undo");
+    const redo = missionHistoryButtonLocator(page, "redo");
+
+    return {
+        undo: await readMissionHistoryButtonState(undo, "undo"),
+        redo: await readMissionHistoryButtonState(redo, "redo"),
+    };
+}
+
+export async function expectMissionHistoryState(
+    page: Page,
+    expected: {
+        undo: Pick<MissionHistoryButtonState, "count" | "disabled">;
+        redo: Pick<MissionHistoryButtonState, "count" | "disabled">;
+    },
+    context: string,
+): Promise<void> {
+    await expect.poll(
+        async () => {
+            try {
+                const state = await readMissionHistoryState(page);
+                return {
+                    undo: { count: state.undo.count, disabled: state.undo.disabled },
+                    redo: { count: state.redo.count, disabled: state.redo.disabled },
+                };
+            } catch (error) {
+                return {
+                    error: error instanceof Error ? error.message : String(error),
+                };
+            }
+        },
+        {
+            message: context,
+        },
+    ).toEqual(expected);
 }
 
 export async function readMissionMapDebugSnapshot(page: Page): Promise<unknown> {

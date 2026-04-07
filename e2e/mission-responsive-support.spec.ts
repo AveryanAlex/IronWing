@@ -5,15 +5,18 @@ import {
     closeVehiclePanelDrawer,
     connectionSelectors,
     expect,
+    expectMissionHistoryState,
     expectMissionLayoutState,
     expectMissionSupportPanels,
     expectRuntimeDiagnostics,
+    missionHistoryButtonLocator,
     missionSupportPanelSelectors,
     missionTerrainWarningActionLocator,
     missionWorkspaceLocator,
     mockTerrainNoData,
     openMissionWorkspace,
     openVehiclePanelDrawer,
+    readMissionHistoryState,
     selectMissionPhoneSegment,
     test,
     type ShellViewportPresetName,
@@ -270,6 +273,49 @@ test.describe("mocked mission responsive support panels", () => {
                 });
                 await expect(page.locator(missionSupportPanelSelectors.planningStatsCruiseInput)).toHaveValue("18.5");
             }
+
+            const historyBeforeResponsiveEdit = await readMissionHistoryState(page);
+            expect(
+                historyBeforeResponsiveEdit.undo.count,
+                `${scenario.preset} should keep at least one undo step reachable before the responsive history proof starts.`,
+            ).toBeGreaterThan(0);
+            await expect(missionHistoryButtonLocator(page, "undo")).toBeVisible();
+            await expect(missionHistoryButtonLocator(page, "redo")).toBeVisible();
+
+            const homeAltitude = missionWorkspaceLocator(page, "homeAltitude");
+            await homeAltitude.fill("489");
+            await homeAltitude.press("Tab");
+            await expect(homeAltitude).toHaveValue("489");
+            const historyAfterResponsiveEdit = await readMissionHistoryState(page);
+            expect(historyAfterResponsiveEdit.undo.count).toBe(historyBeforeResponsiveEdit.undo.count + 1);
+            expect(historyAfterResponsiveEdit.undo.disabled).toBe(false);
+            expect(historyAfterResponsiveEdit.redo.count).toBe(0);
+            expect(historyAfterResponsiveEdit.redo.disabled).toBe(true);
+
+            await missionHistoryButtonLocator(page, "undo").click();
+            await expect(homeAltitude).toHaveValue("488");
+            await expectMissionHistoryState(
+                page,
+                {
+                    undo: {
+                        count: historyBeforeResponsiveEdit.undo.count,
+                        disabled: historyBeforeResponsiveEdit.undo.disabled,
+                    },
+                    redo: { count: 1, disabled: false },
+                },
+                `${scenario.preset} should keep the Mission header undo reachable enough to revert a Home edit in one step.`,
+            );
+
+            await missionHistoryButtonLocator(page, "redo").click();
+            await expect(homeAltitude).toHaveValue("489");
+            await expectMissionHistoryState(
+                page,
+                {
+                    undo: { count: historyAfterResponsiveEdit.undo.count, disabled: false },
+                    redo: { count: 0, disabled: true },
+                },
+                `${scenario.preset} should keep the Mission header redo reachable after layout-specific shell transitions.`,
+            );
 
             await missionTerrainWarningActionLocator(page, 1).click();
             await expectSelectedWaypoint(page, {

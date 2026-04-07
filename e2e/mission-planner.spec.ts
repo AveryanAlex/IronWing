@@ -6,11 +6,14 @@ import {
     applyShellViewport,
     connectionSelectors,
     expect,
+    expectMissionHistoryState,
     expectMissionWorkspace,
     expectRuntimeDiagnostics,
+    missionHistoryButtonLocator,
     missionWorkspaceLocator,
     missionWorkspaceSelectors,
     openMissionWorkspace,
+    readMissionHistoryState,
     readMissionMapDebugSnapshot,
     test,
 } from "./fixtures/mock-platform";
@@ -42,6 +45,8 @@ const blockedGuidedState = {
 } as const;
 
 const surveyPlanContents = readFileSync("tests/contracts/survey-complex.plan.json", "utf8");
+const undoShortcut = process.platform === "darwin" ? "Meta+Z" : "Control+Z";
+const redoShortcut = process.platform === "darwin" ? "Meta+Shift+Z" : "Control+Shift+Z";
 
 async function confirmExportReviewIfVisible(page: Page) {
     const exportReview = missionWorkspaceLocator(page, "exportReview");
@@ -54,6 +59,10 @@ async function confirmExportReviewIfVisible(page: Page) {
     if (await exportReview.isVisible().catch(() => false)) {
         await missionWorkspaceLocator(page, "exportReviewConfirm").click();
     }
+}
+
+async function pressMissionHistoryShortcut(page: Page, kind: "undo" | "redo") {
+    await page.keyboard.press(kind === "undo" ? undoShortcut : redoShortcut);
 }
 
 test.describe("mocked mission planner workflow", () => {
@@ -87,11 +96,27 @@ test.describe("mocked mission planner workflow", () => {
         await openMissionWorkspace(page);
         await expectMissionWorkspace(page);
         await expect(missionWorkspaceLocator(page, "empty")).toBeVisible();
+        await expectMissionHistoryState(
+            page,
+            {
+                undo: { count: 0, disabled: true },
+                redo: { count: 0, disabled: true },
+            },
+            "A fresh empty Mission workspace should expose disabled history controls with explicit zero-count labels.",
+        );
 
         await mockPlatform.cancelOpenFile();
         await missionWorkspaceLocator(page, "entryImport").click();
         await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Import cancelled");
         await expect(missionWorkspaceLocator(page, "empty")).toBeVisible();
+        await expectMissionHistoryState(
+            page,
+            {
+                undo: { count: 0, disabled: true },
+                redo: { count: 0, disabled: true },
+            },
+            "Cancelling import should leave history unchanged instead of inventing a recoverable step.",
+        );
 
         await missionWorkspaceLocator(page, "entryRead").click();
         await expect(missionWorkspaceLocator(page, "inlineStatusMessage")).toContainText("Reading planning state");
@@ -101,6 +126,41 @@ test.describe("mocked mission planner workflow", () => {
         await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
         await expect(missionWorkspaceLocator(page, "homeSummary")).toContainText("47.39774");
         await expect(missionWorkspaceLocator(page, "mapMarkerCount")).toContainText("3");
+        await expectMissionHistoryState(
+            page,
+            {
+                undo: { count: 1, disabled: false },
+                redo: { count: 0, disabled: true },
+            },
+            "Reading from the vehicle should register as a single undoable workspace replacement on the mounted Mission header.",
+        );
+
+        await missionHistoryButtonLocator(page, "undo").click();
+        await expect(missionWorkspaceLocator(page, "empty")).toBeVisible();
+        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("0 / 0");
+        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Restored the previous planner change.");
+        await expectMissionHistoryState(
+            page,
+            {
+                undo: { count: 0, disabled: true },
+                redo: { count: 1, disabled: false },
+            },
+            "Undoing the vehicle read should restore the empty workspace in one step and expose one redo action.",
+        );
+
+        await missionHistoryButtonLocator(page, "redo").click();
+        await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
+        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("2");
+        await expect(missionWorkspaceLocator(page, "homeSummary")).toContainText("47.39774");
+        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Reapplied the last planner change.");
+        await expectMissionHistoryState(
+            page,
+            {
+                undo: { count: 1, disabled: false },
+                redo: { count: 0, disabled: true },
+            },
+            "Redoing the vehicle read should restore the mounted planner content without adding extra recovery steps.",
+        );
 
         await mockPlatform.cancelSaveFile();
         await missionWorkspaceLocator(page, "toolbarExport").click();
@@ -124,12 +184,22 @@ test.describe("mocked mission planner workflow", () => {
         await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Blank mission draft ready");
         await missionWorkspaceLocator(page, "listAdd").click();
         await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("1");
+
+        const historyBeforeImport = await readMissionHistoryState(page);
         await mockPlatform.setOpenFile(surveyPlanContents, "survey-complex.plan");
         await missionWorkspaceLocator(page, "toolbarImport").click();
         await expect(missionWorkspaceLocator(page, "importReviewTitle")).toContainText("survey-complex.plan");
         await missionWorkspaceLocator(page, "importReviewDismiss").click();
         await expect(missionWorkspaceLocator(page, "importReview")).toHaveCount(0);
         await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("1");
+        await expectMissionHistoryState(
+            page,
+            {
+                undo: { count: historyBeforeImport.undo.count, disabled: historyBeforeImport.undo.disabled },
+                redo: { count: historyBeforeImport.redo.count, disabled: historyBeforeImport.redo.disabled },
+            },
+            "Dismissing the import review should keep the draft and history stack untouched.",
+        );
 
         await mockPlatform.setOpenFile(surveyPlanContents, "survey-complex.plan");
         await missionWorkspaceLocator(page, "toolbarImport").click();
@@ -139,6 +209,36 @@ test.describe("mocked mission planner workflow", () => {
         await expect(missionWorkspaceLocator(page, "localNote")).toContainText("survey-complex.plan");
         expect(await page.locator(missionWorkspaceSelectors.warningFile).filter({ hasText: "survey" }).count()).toBeGreaterThan(0);
 
+        const historyAfterImport = await readMissionHistoryState(page);
+        expect(historyAfterImport.undo.count).toBe(historyBeforeImport.undo.count + 1);
+        expect(historyAfterImport.undo.disabled).toBe(false);
+        expect(historyAfterImport.redo.count).toBe(0);
+        expect(historyAfterImport.redo.disabled).toBe(true);
+
+        await missionHistoryButtonLocator(page, "undo").click();
+        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("1 / 0");
+        await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
+        await expect(page.locator('[data-testid^="mission-survey-block-"]')).toHaveCount(0);
+        await expectMissionHistoryState(
+            page,
+            {
+                undo: { count: historyBeforeImport.undo.count, disabled: historyBeforeImport.undo.disabled },
+                redo: { count: 1, disabled: false },
+            },
+            "Undoing the import review should restore the pre-import draft in one step.",
+        );
+
+        await missionHistoryButtonLocator(page, "redo").click();
+        await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("2");
+        await expectMissionHistoryState(
+            page,
+            {
+                undo: { count: historyAfterImport.undo.count, disabled: false },
+                redo: { count: 0, disabled: true },
+            },
+            "Redoing the import review should recover the imported survey workspace in one step.",
+        );
+
         const firstSurveyBlock = page.locator('[data-testid^="mission-survey-block-"]').first();
         await expect(firstSurveyBlock).toBeVisible();
         await firstSurveyBlock.click();
@@ -147,9 +247,40 @@ test.describe("mocked mission planner workflow", () => {
         await expect(missionWorkspaceLocator(page, "surveyGenerate")).toBeVisible();
         await expect(missionWorkspaceLocator(page, "cameraCurrent")).not.toContainText("Choose a camera");
 
+        const historyBeforeNewDraft = await readMissionHistoryState(page);
         await missionWorkspaceLocator(page, "toolbarNew").click();
         await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
         expect(await page.locator(missionWorkspaceSelectors.warningFile).count()).toBeGreaterThan(0);
+
+        const historyAfterNewDraft = await readMissionHistoryState(page);
+        expect(historyAfterNewDraft.undo.count).toBe(historyBeforeNewDraft.undo.count + 1);
+        expect(historyAfterNewDraft.undo.disabled).toBe(false);
+        expect(historyAfterNewDraft.redo.count).toBe(0);
+        expect(historyAfterNewDraft.redo.disabled).toBe(true);
+
+        await pressMissionHistoryShortcut(page, "undo");
+        await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("2");
+        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Restored the previous planner change.");
+        await expectMissionHistoryState(
+            page,
+            {
+                undo: { count: historyBeforeNewDraft.undo.count, disabled: historyBeforeNewDraft.undo.disabled },
+                redo: { count: 1, disabled: false },
+            },
+            "The workspace keyboard undo path should restore the imported survey workspace after a new-draft replacement.",
+        );
+
+        await pressMissionHistoryShortcut(page, "redo");
+        await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
+        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Reapplied the last planner change.");
+        await expectMissionHistoryState(
+            page,
+            {
+                undo: { count: historyAfterNewDraft.undo.count, disabled: false },
+                redo: { count: 0, disabled: true },
+            },
+            "The workspace keyboard redo path should reapply the blank replacement without inventing extra history.",
+        );
 
         await missionWorkspaceLocator(page, "listAdd").click();
 
@@ -226,6 +357,7 @@ test.describe("mocked mission planner workflow", () => {
         }).toEqual({ missionUploads: 2, fenceUploads: 1, rallyUploads: 1 });
         await expect(missionWorkspaceLocator(page, "inlineStatus")).toHaveCount(0);
 
+        const historyBeforeClear = await readMissionHistoryState(page);
         await missionWorkspaceLocator(page, "toolbarClear").click();
         await expect(missionWorkspaceLocator(page, "promptKind")).toContainText("clear-replace");
         await missionWorkspaceLocator(page, "promptConfirm").click();
@@ -235,6 +367,12 @@ test.describe("mocked mission planner workflow", () => {
         await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
         await expect(missionWorkspaceLocator(page, "mapStatus")).toContainText("empty");
 
+        const historyAfterClear = await readMissionHistoryState(page);
+        expect(historyAfterClear.undo.count).toBe(historyBeforeClear.undo.count + 1);
+        expect(historyAfterClear.undo.disabled).toBe(false);
+        expect(historyAfterClear.redo.count).toBe(0);
+        expect(historyAfterClear.redo.disabled).toBe(true);
+
         await expect.poll(async () => {
             const commands = (await mockPlatform.getInvocations()).map((entry) => entry.cmd);
             return {
@@ -243,5 +381,41 @@ test.describe("mocked mission planner workflow", () => {
                 rallyClears: commands.filter((cmd) => cmd === "rally_clear").length,
             };
         }).toEqual({ missionClears: 1, fenceClears: 1, rallyClears: 1 });
+
+        await missionHistoryButtonLocator(page, "undo").click();
+        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("1 / 0");
+        await expect(missionWorkspaceLocator(page, "mapStatus")).not.toContainText("empty");
+        await expectMissionHistoryState(
+            page,
+            {
+                undo: { count: historyBeforeClear.undo.count, disabled: historyBeforeClear.undo.disabled },
+                redo: { count: 1, disabled: false },
+            },
+            "Undoing the vehicle clear should restore the pre-clear draft in one step.",
+        );
+
+        await missionHistoryButtonLocator(page, "redo").click();
+        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("0 / 0");
+        await expect(missionWorkspaceLocator(page, "mapStatus")).toContainText("empty");
+        await expectMissionHistoryState(
+            page,
+            {
+                undo: { count: historyAfterClear.undo.count, disabled: false },
+                redo: { count: 0, disabled: true },
+            },
+            "Redoing the vehicle clear should return to the empty workspace in one step.",
+        );
+
+        await missionHistoryButtonLocator(page, "undo").click();
+        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("1 / 0");
+        const historyAfterClearUndo = await readMissionHistoryState(page);
+
+        await missionWorkspaceLocator(page, "listAdd").click();
+        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("2 / 0");
+        const historyAfterNewEdit = await readMissionHistoryState(page);
+        expect(historyAfterNewEdit.undo.count).toBe(historyAfterClearUndo.undo.count + 1);
+        expect(historyAfterNewEdit.undo.disabled).toBe(false);
+        expect(historyAfterNewEdit.redo.count).toBe(0);
+        expect(historyAfterNewEdit.redo.disabled).toBe(true);
     });
 });

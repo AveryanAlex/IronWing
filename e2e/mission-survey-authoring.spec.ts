@@ -8,12 +8,15 @@ import {
     connectionSelectors,
     expect,
     expectDockedVehiclePanel,
+    expectMissionHistoryState,
     expectMissionWorkspace,
     expectRuntimeDiagnostics,
+    missionHistoryButtonLocator,
     missionWorkspaceLocator,
     missionWorkspaceSelectors,
     openMissionWorkspace,
     openVehiclePanelDrawer,
+    readMissionHistoryState,
     requireMissionMapDebugSnapshot,
     selectMissionPhoneSegment,
     test,
@@ -65,6 +68,8 @@ type FixtureScenario = {
 };
 
 const BUILTIN_CAMERA = "Sony ILCE-QX1";
+const undoShortcut = process.platform === "darwin" ? "Meta+Z" : "Control+Z";
+const redoShortcut = process.platform === "darwin" ? "Meta+Shift+Z" : "Control+Shift+Z";
 const surveyPlanContents = readFileSync("tests/contracts/survey-complex.plan.json", "utf8");
 const corridorPlanContents = readFileSync("tests/contracts/corridor-complex.plan.json", "utf8");
 const structurePlanContents = readFileSync("tests/contracts/structure-complex.plan.json", "utf8");
@@ -204,6 +209,10 @@ function surveyBlockLocator(page: Page, regionId: string) {
     return page.locator(`[data-testid="${missionWorkspaceTestIds.surveyPrefix}-${regionId}"]`);
 }
 
+async function pressMissionHistoryShortcut(page: Page, kind: "undo" | "redo") {
+    await page.keyboard.press(kind === "undo" ? undoShortcut : redoShortcut);
+}
+
 function parseLatestSavedPlan(
     savedFiles: Array<{ name: string; contents: string }>,
     history: string[],
@@ -297,7 +306,7 @@ async function startBlankMission(page: Page, history: string[]) {
 }
 
 async function addManualWaypoint(page: Page, history: string[]) {
-    note(history, "Add one manual waypoint so export proves mixed manual + survey content." );
+    note(history, "Add one manual waypoint so export proves mixed manual + survey content.");
     await missionWorkspaceLocator(page, "listAdd").click();
     await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("1");
     await missionWorkspaceLocator(page, "inspectorLatitude").fill("47.5301");
@@ -440,14 +449,14 @@ async function verifyCancelledRegenerateAndDissolve(
         historyMessage(history, "The manual generated-item edit badge never appeared after editing subordinate survey output."),
     ).toBeVisible();
 
-    note(history, "Dismiss the explicit regenerate confirmation instead of overwriting manual edits." );
+    note(history, "Dismiss the explicit regenerate confirmation instead of overwriting manual edits.");
     await missionWorkspaceLocator(page, "surveyGenerate").click();
     await expect(missionWorkspaceLocator(page, "surveyPromptKind")).toContainText("confirm-regenerate");
     await missionWorkspaceLocator(page, "surveyPromptDismiss").click();
     await expect(missionWorkspaceLocator(page, "surveyPrompt")).toHaveCount(0);
     await expect(editedBadge).toBeVisible();
 
-    note(history, "Dismiss the explicit dissolve confirmation and keep the authored region intact." );
+    note(history, "Dismiss the explicit dissolve confirmation and keep the authored region intact.");
     await missionWorkspaceLocator(page, "surveyDissolve").click();
     await expect(missionWorkspaceLocator(page, "surveyPromptKind")).toContainText("confirm-dissolve");
     await missionWorkspaceLocator(page, "surveyPromptDismiss").click();
@@ -456,6 +465,86 @@ async function verifyCancelledRegenerateAndDissolve(
         surveyBlockLocator(page, regionId),
         historyMessage(history, "Dismissing dissolve unexpectedly removed the selected survey region card."),
     ).toBeVisible();
+}
+
+async function proveRegenerateAndDissolveHistoryRecovery(page: Page, history: string[], regionId: string) {
+    note(history, "Open the regenerate prompt, undo the last manual generated-item edit through the workspace shortcut, then redo it before proving dissolve recovery from the header.");
+
+    const editedBadge = page
+        .locator(missionWorkspaceSelectors.inspectorSurvey)
+        .locator(`[data-testid^="${missionWorkspaceTestIds.surveyGeneratedEditedPrefix}-"]`)
+        .first();
+    await expect(
+        editedBadge,
+        historyMessage(history, "The survey inspector lost the generated-item edited badge before history recovery started."),
+    ).toBeVisible();
+
+    const historyBeforeRegenerateUndo = await readMissionHistoryState(page);
+    await missionWorkspaceLocator(page, "surveyGenerate").click();
+    await expect(missionWorkspaceLocator(page, "surveyPromptKind")).toContainText("confirm-regenerate");
+
+    await pressMissionHistoryShortcut(page, "undo");
+    await expect(missionWorkspaceLocator(page, "surveyPrompt")).toHaveCount(0);
+    await expect(editedBadge).toHaveCount(0);
+    await expectMissionHistoryState(
+        page,
+        {
+            undo: {
+                count: historyBeforeRegenerateUndo.undo.count - 1,
+                disabled: historyBeforeRegenerateUndo.undo.count - 1 <= 0,
+            },
+            redo: { count: 1, disabled: false },
+        },
+        historyMessage(history, "Undoing while the regenerate prompt is open should roll back the last manual survey edit in one step."),
+    );
+
+    await pressMissionHistoryShortcut(page, "redo");
+    await expect(editedBadge).toBeVisible();
+    await expectMissionHistoryState(
+        page,
+        {
+            undo: { count: historyBeforeRegenerateUndo.undo.count, disabled: false },
+            redo: { count: 0, disabled: true },
+        },
+        historyMessage(history, "Redoing after survey regenerate undo should restore the manual generated-item edit in one step."),
+    );
+
+    const historyBeforeDissolve = await readMissionHistoryState(page);
+    await missionWorkspaceLocator(page, "surveyDissolve").click();
+    await expect(missionWorkspaceLocator(page, "surveyPromptKind")).toContainText("confirm-dissolve");
+    await missionWorkspaceLocator(page, "surveyPromptConfirm").click();
+    await expect(surveyBlockLocator(page, regionId)).toHaveCount(0);
+
+    const historyAfterDissolve = await readMissionHistoryState(page);
+    expect(historyAfterDissolve.undo.count).toBe(historyBeforeDissolve.undo.count + 1);
+    expect(historyAfterDissolve.undo.disabled).toBe(false);
+    expect(historyAfterDissolve.redo.count).toBe(0);
+    expect(historyAfterDissolve.redo.disabled).toBe(true);
+
+    await missionHistoryButtonLocator(page, "undo").click();
+    await expect(surveyBlockLocator(page, regionId)).toBeVisible();
+    await expectMissionHistoryState(
+        page,
+        {
+            undo: { count: historyBeforeDissolve.undo.count, disabled: false },
+            redo: { count: 1, disabled: false },
+        },
+        historyMessage(history, "Undoing a confirmed survey dissolve should restore the authored region in one step."),
+    );
+
+    await missionHistoryButtonLocator(page, "redo").click();
+    await expect(surveyBlockLocator(page, regionId)).toHaveCount(0);
+    await expectMissionHistoryState(
+        page,
+        {
+            undo: { count: historyAfterDissolve.undo.count, disabled: false },
+            redo: { count: 0, disabled: true },
+        },
+        historyMessage(history, "Redoing a confirmed survey dissolve should remove the authored region again in one step."),
+    );
+
+    await missionHistoryButtonLocator(page, "undo").click();
+    await expect(surveyBlockLocator(page, regionId)).toBeVisible();
 }
 
 async function exportPlan(page: Page, mockPlatform: MockPlatformHarness, fileName: string, history: string[]) {
@@ -521,6 +610,7 @@ test.describe("mocked survey authoring workflow", () => {
             await selectBuiltinCamera(page, history);
             await generateSelectedSurvey(page, history, "grid");
             await verifyCancelledRegenerateAndDissolve(page, history, gridRegionId);
+            await proveRegenerateAndDissolveHistoryRecovery(page, history, gridRegionId);
 
             await drawSurveyRegion(page, history, "corridor");
             await selectBuiltinCamera(page, history);
