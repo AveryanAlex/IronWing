@@ -5,6 +5,12 @@ import {
   createParameterWorkspaceViewStore,
   type ParamsStore,
 } from "../lib/stores/params";
+import {
+  createSetupWorkspaceStore,
+  createSetupWorkspaceViewStore,
+  type SetupWorkspaceStore,
+  type SetupWorkspaceViewStore,
+} from "../lib/stores/setup-workspace";
 import { runtime } from "../lib/stores/runtime";
 import {
   createSessionViewStore,
@@ -38,6 +44,8 @@ import {
   setRuntimeStoreContext,
   setSessionStoreContext,
   setSessionViewStoreContext,
+  setSetupWorkspaceStoreContext,
+  setSetupWorkspaceViewStoreContext,
   setShellChromeStoreContext,
   type ShellChromeStore,
 } from "../app/shell/runtime-context";
@@ -147,6 +155,28 @@ export function withParameterWorkspaceContext(store: ParamsStore, component: unk
   };
 }
 
+export function withSetupWorkspaceContext(
+  sessionStore: SessionStore,
+  parameterStore: ParamsStore,
+  component: unknown,
+) {
+  const renderable = asRenderable(component);
+
+  return function SetupWorkspaceHarness(...args: any[]) {
+    const parameterWorkspaceView = createParameterWorkspaceViewStore(parameterStore);
+    const setupWorkspaceStore = createSetupWorkspaceStore(sessionStore, parameterStore);
+    const setupWorkspaceViewStore = createSetupWorkspaceViewStore(setupWorkspaceStore);
+
+    setSessionStoreContext(sessionStore);
+    setParamsStoreContext(parameterStore);
+    setParameterWorkspaceViewStoreContext(parameterWorkspaceView);
+    setSetupWorkspaceStoreContext(setupWorkspaceStore);
+    setSetupWorkspaceViewStoreContext(setupWorkspaceViewStore);
+
+    return renderable(...args);
+  };
+}
+
 export function withShellContexts(
   store: SessionStore,
   parameterStore: ParamsStore,
@@ -155,6 +185,8 @@ export function withShellContexts(
     liveSettingsStore?: LiveSettingsStore;
     missionPlannerStore?: MissionPlannerStore;
     missionPlannerViewStore?: MissionPlannerViewStore;
+    setupWorkspaceStore?: SetupWorkspaceStore;
+    setupWorkspaceViewStore?: SetupWorkspaceViewStore;
   } = {},
 ) {
   const renderable = asRenderable(component);
@@ -164,6 +196,8 @@ export function withShellContexts(
     const sessionView = createSessionViewStore(store);
     const operatorWorkspaceView = createOperatorWorkspaceViewStore(store);
     const parameterWorkspaceView = createParameterWorkspaceViewStore(parameterStore);
+    const setupWorkspaceStore = options.setupWorkspaceStore ?? createSetupWorkspaceStore(store, parameterStore);
+    const setupWorkspaceViewStore = options.setupWorkspaceViewStore ?? createSetupWorkspaceViewStore(setupWorkspaceStore);
     const liveSettingsStore = options.liveSettingsStore ?? createHarnessLiveSettingsStore(store);
     const missionPlannerStore = options.missionPlannerStore ?? createHarnessMissionPlannerStore(store);
     const missionPlannerViewStore = options.missionPlannerViewStore ?? createMissionPlannerViewStore(missionPlannerStore);
@@ -173,6 +207,8 @@ export function withShellContexts(
     setOperatorWorkspaceViewStoreContext(operatorWorkspaceView);
     setParamsStoreContext(parameterStore);
     setParameterWorkspaceViewStoreContext(parameterWorkspaceView);
+    setSetupWorkspaceStoreContext(setupWorkspaceStore);
+    setSetupWorkspaceViewStoreContext(setupWorkspaceViewStore);
     setMissionPlannerStoreContext(missionPlannerStore);
     setMissionPlannerViewStoreContext(missionPlannerViewStore);
     setRuntimeStoreContext(runtime);

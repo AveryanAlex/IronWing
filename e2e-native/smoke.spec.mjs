@@ -150,6 +150,8 @@ describe("native smoke", () => {
       activeWorkspace: '[data-testid="app-shell-active-workspace"]',
       missionWorkspaceButton: '//nav[@aria-label="Primary"]//button[normalize-space()="Mission"]',
       parameterWorkspaceButton: '[data-testid="app-shell-parameter-workspace-btn"]',
+      setupWorkspaceRoot: '[data-testid="setup-workspace"]',
+      setupFullParametersButton: '[data-testid="setup-workspace-nav-full_parameters"]',
       parameterWorkspaceRoot: '[data-testid="parameter-workspace"]',
       parameterWorkspaceState: '[data-testid="parameter-workspace-state"]',
       parameterMetadata: '[data-testid="parameter-domain-metadata"]',
@@ -191,6 +193,8 @@ describe("native smoke", () => {
     const telemetryAltValue = await $(selectors.telemetryAltValue);
     const telemetryModeValue = await $(selectors.telemetryModeValue);
     const parameterWorkspaceButton = await $(selectors.parameterWorkspaceButton);
+    const setupWorkspaceRoot = await $(selectors.setupWorkspaceRoot);
+    const setupFullParametersButton = await $(selectors.setupFullParametersButton);
     const parameterWorkspaceRoot = await $(selectors.parameterWorkspaceRoot);
     const parameterWorkspaceState = await $(selectors.parameterWorkspaceState);
     const parameterMetadata = await $(selectors.parameterMetadata);
@@ -283,10 +287,18 @@ describe("native smoke", () => {
 
     await parameterWorkspaceButton.waitForClickable({ timeout: 30_000 });
     await parameterWorkspaceButton.click();
+    await setupWorkspaceRoot.waitForDisplayed({ timeout: 30_000 });
+    await waitForCheckpoint("setup workspace mounted", async () => await setupWorkspaceRoot.isDisplayed(), {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the dedicated setup workspace root to mount.",
+    });
+
+    await setupFullParametersButton.waitForClickable({ timeout: 30_000 });
+    await setupFullParametersButton.click();
     await parameterWorkspaceRoot.waitForDisplayed({ timeout: 30_000 });
-    await waitForCheckpoint("parameter workspace ready", async () => /Settings ready/i.test(await parameterWorkspaceState.getText()), {
+    await waitForCheckpoint("full-parameters recovery surface ready", async () => /Settings ready/i.test(await parameterWorkspaceState.getText()), {
       timeout: 60_000,
-      timeoutMsg: "Timed out waiting for the setup workspace to load parameter data from SITL.",
+      timeoutMsg: "Timed out waiting for the Full Parameters recovery surface to load parameter data from SITL.",
     });
 
     await waitForCheckpoint("parameter metadata ready for workflow staging", async () => /Info ready/i.test(await parameterMetadata.getText()), {

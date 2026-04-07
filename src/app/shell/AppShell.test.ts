@@ -18,6 +18,7 @@ import {
     resolveShellTier,
 } from "./chrome-state";
 import { parameterWorkspaceTestIds } from "../../components/params/parameter-workspace-test-ids";
+import { setupWorkspaceTestIds } from "../../components/setup/setup-workspace-test-ids";
 import { missionWorkspaceTestIds } from "../../components/mission/mission-workspace-test-ids";
 import { createParamsStore } from "../../lib/stores/params";
 import { markRuntimeReady, resetRuntimeState } from "../../lib/stores/runtime";
@@ -215,6 +216,7 @@ function createMockParamsService(
             };
         }),
         fetchMetadata: vi.fn(async () => metadata),
+        downloadAll: vi.fn(async () => undefined),
         writeBatch: vi.fn(async (params: [string, number][]) => params.map(([name, value]) => ({
             name,
             requested_value: value,
@@ -343,6 +345,25 @@ async function renderShellAt(
     };
 }
 
+async function openSetupWorkspace() {
+    await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
+
+    await waitFor(() => {
+        expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("setup");
+        expect(screen.getByTestId(setupWorkspaceTestIds.root)).toBeTruthy();
+    });
+}
+
+async function openSetupFullParameters() {
+    await openSetupWorkspace();
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`));
+
+    await waitFor(() => {
+        expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("full_parameters");
+        expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
+    });
+}
+
 describe("AppShell", () => {
     beforeEach(() => {
         resetRuntimeState();
@@ -410,9 +431,30 @@ describe("AppShell", () => {
         expect(screen.getByTestId(missionWorkspaceTestIds.entryNew)).toBeTruthy();
     });
 
-    it("switches to the setup workspace from the active shell", async () => {
+    it("mounts the dedicated setup workspace root and keeps partial facts explicit", async () => {
         await renderShellAt(1440, {
             snapshot: createSnapshot({
+                configuration_facts: {
+                    available: true,
+                    complete: false,
+                    provenance: "bootstrap",
+                    value: {
+                        frame: null,
+                        gps: { configured: true },
+                        battery_monitor: null,
+                        motors_esc: null,
+                    },
+                },
+                calibration: {
+                    available: true,
+                    complete: false,
+                    provenance: "bootstrap",
+                    value: {
+                        accel: { lifecycle: "not_started", progress: null, report: null },
+                        compass: null,
+                        radio: null,
+                    },
+                },
                 param_store: {
                     expected_count: 2,
                     params: {
@@ -422,21 +464,25 @@ describe("AppShell", () => {
                 },
                 param_progress: "completed",
             }),
+            metadata: new Map([
+                [
+                    "ARMING_CHECK",
+                    {
+                        humanName: "Arming checks",
+                        description: "Controls pre-arm validation.",
+                    },
+                ],
+            ]),
         });
 
-        await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
-
-        await waitFor(() => {
-            expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("setup");
-        });
+        await openSetupWorkspace();
 
         expect(screen.queryByTestId("telemetry-state-value")).toBeNull();
-        expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
-        expect(screen.getByTestId(parameterWorkspaceTestIds.state).textContent?.trim()).toBe("Settings ready");
-        expect(screen.getByTestId(`${parameterWorkspaceTestIds.workflowDisabledPrefix}-battery`).textContent).toContain(
-            "Parameter info is unavailable",
-        );
-        expect(screen.getByTestId(parameterWorkspaceTestIds.advancedEntry)).toBeTruthy();
+        expect(screen.queryByTestId(parameterWorkspaceTestIds.root)).toBeNull();
+        expect(screen.getByTestId(setupWorkspaceTestIds.state).textContent?.trim()).toBe("Setup ready");
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`).textContent?.trim()).toBe("Unknown");
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionConfidencePrefix}-frame_orientation`).textContent?.trim()).toBe("Unconfirmed");
+        expect(screen.getByTestId(setupWorkspaceTestIds.detailRecovery).textContent).toContain("Full Parameters stays separate");
     });
 
     it("opens the expert browser from a workflow handoff inside the shell and stages raw edits into the shared tray", async () => {
@@ -517,10 +563,7 @@ describe("AppShell", () => {
             ]),
         });
 
-        await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
-        await waitFor(() => {
-            expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("setup");
-        });
+        await openSetupFullParameters();
 
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.workflowOpenAdvancedPrefix}-safety`));
 
@@ -540,19 +583,36 @@ describe("AppShell", () => {
         expect(screen.getByTestId(appShellTestIds.parameterWorkspacePendingCount).textContent?.trim()).toBe("1");
     });
 
-    it("shows an explicit unavailable setup workspace state when the active scope has no bootstrap data", async () => {
-        await renderShellAt(1440);
-
-        await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
-
-        await waitFor(() => {
-            expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("setup");
+    it("keeps overview mounted and gates guided setup sections when metadata is unavailable", async () => {
+        await renderShellAt(1440, {
+            snapshot: createSnapshot({
+                param_store: {
+                    expected_count: 2,
+                    params: {
+                        ARMING_CHECK: { name: "ARMING_CHECK", value: 0, param_type: "uint8", index: 0 },
+                        FS_THR_ENABLE: { name: "FS_THR_ENABLE", value: 0, param_type: "uint8", index: 1 },
+                    },
+                },
+                param_progress: "completed",
+            }),
         });
 
-        expect(screen.getByTestId(parameterWorkspaceTestIds.state).textContent?.trim()).toBe("Connect to load");
-        expect(screen.getByTestId(parameterWorkspaceTestIds.empty).textContent).toContain(
-            "No parameter data available",
+        await openSetupWorkspace();
+
+        expect(screen.getByTestId(setupWorkspaceTestIds.metadata).textContent).toContain("Metadata unavailable");
+        expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain(
+            "Overview stays truthful and Full Parameters is the recovery path",
         );
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-overview`)).toBeTruthy();
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`)).toBeTruthy();
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).getAttribute("disabled")).not.toBeNull();
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-rc_receiver`).getAttribute("disabled")).not.toBeNull();
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-calibration`).getAttribute("disabled")).not.toBeNull();
+
+        await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`));
+        await waitFor(() => {
+            expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
+        });
     });
 
     it("mounts one shared review tray, keeps staged edits across workspace toggles, and preserves the queue across shell tiers", async () => {
@@ -588,10 +648,7 @@ describe("AppShell", () => {
 
         expect(screen.queryByTestId(appShellTestIds.parameterReviewTray)).toBeNull();
 
-        await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
-        await waitFor(() => {
-            expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("setup");
-        });
+        await openSetupFullParameters();
 
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.workflowStageButtonPrefix}-safety`));
 
@@ -623,10 +680,7 @@ describe("AppShell", () => {
                 ?.getAttribute("data-has-staged-edits"),
         ).toBe("true");
 
-        await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
-        await waitFor(() => {
-            expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("setup");
-        });
+        await openSetupFullParameters();
 
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.workflowRowStatePrefix}-safety-ARMING_CHECK`).textContent).toContain(
             "Queued",
@@ -669,10 +723,7 @@ describe("AppShell", () => {
             ]),
         });
 
-        await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
-        await waitFor(() => {
-            expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("setup");
-        });
+        await openSetupFullParameters();
 
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.workflowStageButtonPrefix}-safety`));
         await fireEvent.click(screen.getByTestId(appShellTestIds.parameterReviewToggle));

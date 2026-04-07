@@ -4,6 +4,10 @@ import { createMissionPlannerStore, createMissionPlannerViewStore } from "../../
 import { createOperatorWorkspaceViewStore } from "../../lib/stores/operator-workspace-view";
 import { createParameterWorkspaceViewStore, params } from "../../lib/stores/params";
 import { runtime } from "../../lib/stores/runtime";
+import {
+  createSetupWorkspaceStore,
+  createSetupWorkspaceViewStore,
+} from "../../lib/stores/setup-workspace";
 import { createSessionViewStore, session } from "../../lib/stores/session";
 import AppShellContent from "./AppShellContent.svelte";
 import { createShellChromeStore } from "./chrome-state";
@@ -17,6 +21,8 @@ import {
   setRuntimeStoreContext,
   setSessionStoreContext,
   setSessionViewStoreContext,
+  setSetupWorkspaceStoreContext,
+  setSetupWorkspaceViewStoreContext,
   setShellChromeStoreContext,
 } from "./runtime-context";
 
@@ -27,12 +33,16 @@ const missionPlannerView = createMissionPlannerViewStore(missionPlanner);
 const sessionView = createSessionViewStore(session);
 const operatorWorkspaceView = createOperatorWorkspaceViewStore(session);
 const parameterWorkspaceView = createParameterWorkspaceViewStore(params);
+const setupWorkspace = createSetupWorkspaceStore(session, params);
+const setupWorkspaceView = createSetupWorkspaceViewStore(setupWorkspace);
 
 setSessionStoreContext(session);
 setSessionViewStoreContext(sessionView);
 setOperatorWorkspaceViewStoreContext(operatorWorkspaceView);
 setParamsStoreContext(params);
 setParameterWorkspaceViewStoreContext(parameterWorkspaceView);
+setSetupWorkspaceStoreContext(setupWorkspace);
+setSetupWorkspaceViewStoreContext(setupWorkspaceView);
 setMissionPlannerStoreContext(missionPlanner);
 setMissionPlannerViewStoreContext(missionPlannerView);
 setRuntimeStoreContext(runtime);

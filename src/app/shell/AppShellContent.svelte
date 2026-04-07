@@ -4,7 +4,7 @@ import { fromStore } from "svelte/store";
 import { Toaster } from "svelte-sonner";
 
 import MissionWorkspace from "../../components/mission/MissionWorkspace.svelte";
-import ParameterWorkspace from "../../components/params/ParameterWorkspace.svelte";
+import SetupWorkspace from "../../components/setup/SetupWorkspace.svelte";
 import { runtimeTestIds } from "../../lib/stores/runtime";
 import AppShellPlaceholderWorkspace from "./AppShellPlaceholderWorkspace.svelte";
 import AppShellHeader from "./AppShellHeader.svelte";
@@ -150,7 +150,7 @@ onDestroy(() => {
         {#if activeWorkspace === "overview"}
           <OperatorWorkspace />
         {:else if activeWorkspace === "setup"}
-          <ParameterWorkspace />
+          <SetupWorkspace />
         {:else}
           <div class="app-shell-main-panel">
             {#if activeWorkspace === "telemetry"}
