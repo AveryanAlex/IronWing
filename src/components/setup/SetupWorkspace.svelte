@@ -5,9 +5,12 @@ import {
   getSetupWorkspaceStoreContext,
   getSetupWorkspaceViewStoreContext,
 } from "../../app/shell/runtime-context";
+import SetupCalibrationSection from "./SetupCalibrationSection.svelte";
+import SetupCheckpointBanner from "./SetupCheckpointBanner.svelte";
 import SetupFrameOrientationSection from "./SetupFrameOrientationSection.svelte";
 import SetupFullParametersSection from "./SetupFullParametersSection.svelte";
 import SetupOverviewSection from "./SetupOverviewSection.svelte";
+import SetupRcReceiverSection from "./SetupRcReceiverSection.svelte";
 import SetupWorkspaceSectionNav from "./SetupWorkspaceSectionNav.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
@@ -21,6 +24,10 @@ let selectedSection = $derived(
 
 function selectSection(sectionId: string) {
   store.selectSection(sectionId);
+}
+
+function clearCheckpoint() {
+  store.clearCheckpointPlaceholder();
 }
 </script>
 
@@ -77,14 +84,7 @@ function selectSection(sectionId: string) {
     </div>
   {/if}
 
-  {#if view.checkpoint.phase !== "idle"}
-    <div
-      class="mt-4 rounded-lg border border-accent/40 bg-accent/10 px-3 py-3 text-sm text-accent"
-      data-testid={setupWorkspaceTestIds.checkpoint}
-    >
-      {view.checkpoint.reason ?? "Setup checkpoint pending."}
-    </div>
-  {/if}
+  <SetupCheckpointBanner checkpoint={view.checkpoint} onClear={clearCheckpoint} />
 
   {#if view.statusNotices.length > 0}
     <div
@@ -124,6 +124,10 @@ function selectSection(sectionId: string) {
           onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
         />
+      {:else if view.selectedSectionId === "rc_receiver"}
+        <SetupRcReceiverSection {view} />
+      {:else if view.selectedSectionId === "calibration"}
+        <SetupCalibrationSection {view} />
       {:else if view.selectedSectionId === "full_parameters"}
         <SetupFullParametersSection canOpen={view.canOpenFullParameters} />
       {:else if selectedSection}

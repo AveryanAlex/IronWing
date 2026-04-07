@@ -1,5 +1,6 @@
 import { missionWorkspaceTestIds } from "../../src/components/mission/mission-workspace-test-ids";
 import type { MissionMapDebugSnapshot } from "../../src/components/mission/mission-map-debug";
+import { setupWorkspaceTestIds } from "../../src/components/setup/setup-workspace-test-ids";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import type { OpenSessionSnapshot } from "../../src/session";
 import type {
@@ -78,8 +79,31 @@ export const operatorWorkspaceSelectors = {
 } as const;
 
 export const setupWorkspaceSelectors = {
-    root: '[data-testid="setup-workspace"]',
-    fullParametersNav: '[data-testid="setup-workspace-nav-full_parameters"]',
+    root: `[data-testid="${setupWorkspaceTestIds.root}"]`,
+    state: `[data-testid="${setupWorkspaceTestIds.state}"]`,
+    scope: `[data-testid="${setupWorkspaceTestIds.scope}"]`,
+    metadata: `[data-testid="${setupWorkspaceTestIds.metadata}"]`,
+    progress: `[data-testid="${setupWorkspaceTestIds.progress}"]`,
+    notice: `[data-testid="${setupWorkspaceTestIds.notice}"]`,
+    selectedSection: `[data-testid="${setupWorkspaceTestIds.selectedSection}"]`,
+    checkpoint: `[data-testid="${setupWorkspaceTestIds.checkpoint}"]`,
+    checkpointTitle: `[data-testid="${setupWorkspaceTestIds.checkpointTitle}"]`,
+    checkpointDetail: `[data-testid="${setupWorkspaceTestIds.checkpointDetail}"]`,
+    checkpointDismiss: `[data-testid="${setupWorkspaceTestIds.checkpointDismiss}"]`,
+    notices: `[data-testid="${setupWorkspaceTestIds.notices}"]`,
+    nav: `[data-testid="${setupWorkspaceTestIds.nav}"]`,
+    overviewSection: `[data-testid="${setupWorkspaceTestIds.overviewSection}"]`,
+    overviewBanner: `[data-testid="${setupWorkspaceTestIds.overviewBanner}"]`,
+    detailRecovery: `[data-testid="${setupWorkspaceTestIds.detailRecovery}"]`,
+    rcSection: `[data-testid="${setupWorkspaceTestIds.rcSection}"]`,
+    rcSignal: `[data-testid="${setupWorkspaceTestIds.rcSignal}"]`,
+    rcRssi: `[data-testid="${setupWorkspaceTestIds.rcRssi}"]`,
+    rcDetail: `[data-testid="${setupWorkspaceTestIds.rcDetail}"]`,
+    rcFailure: `[data-testid="${setupWorkspaceTestIds.rcFailure}"]`,
+    calibrationSection: `[data-testid="${setupWorkspaceTestIds.calibrationSection}"]`,
+    calibrationNotices: `[data-testid="${setupWorkspaceTestIds.calibrationNotices}"]`,
+    fullParameters: `[data-testid="${setupWorkspaceTestIds.fullParameters}"]`,
+    fullParametersNav: `[data-testid="${setupWorkspaceTestIds.navPrefix}-full_parameters"]`,
 } as const;
 
 export const parameterWorkspaceSelectors = {
@@ -331,6 +355,8 @@ type MockPlatformFixture = {
     emitLiveSessionState: (vehicleState: MockLiveVehicleState) => Promise<void>;
     emitLiveTelemetryDomain: (telemetry: OpenSessionSnapshot["telemetry"]) => Promise<void>;
     emitLiveSupportDomain: (support: OpenSessionSnapshot["support"]) => Promise<void>;
+    emitLiveConfigurationFactsDomain: (facts: OpenSessionSnapshot["configuration_facts"]) => Promise<void>;
+    emitLiveCalibrationDomain: (calibration: OpenSessionSnapshot["calibration"]) => Promise<void>;
     emitLiveStatusTextDomain: (statusText: OpenSessionSnapshot["status_text"]) => Promise<void>;
     emitMissionState: (missionState: MockMissionState) => Promise<void>;
     emitMissionProgress: (missionProgress: MockMissionProgressState) => Promise<void>;
@@ -636,7 +662,12 @@ function installMockFilePicker(page: Page) {
 
 async function emitLiveScopedDomain<T>(
     page: Page,
-    event: "telemetry://state" | "support://state" | "status_text://state",
+    event:
+        | "telemetry://state"
+        | "support://state"
+        | "configuration_facts://state"
+        | "calibration://state"
+        | "status_text://state",
     value: T,
 ): Promise<void> {
     const envelope = await withMockController<{
@@ -713,6 +744,23 @@ export async function expectOperatorWorkspace(page: Page): Promise<void> {
     await expect(
         page.locator(operatorWorkspaceSelectors.root),
         "The operator workspace root is missing; keep the shared operator selectors in e2e/fixtures/mock-platform.ts aligned with the shell markup.",
+    ).toBeVisible();
+}
+
+export async function openSetupWorkspace(page: Page): Promise<void> {
+    const setupButton = page.getByRole("button", { name: "Setup" });
+    await expect(
+        setupButton,
+        "Setup workspace entry point is missing; keep the shared shell workspace labels aligned with the shipped header tabs.",
+    ).toBeVisible();
+    await setupButton.click();
+    await expectSetupWorkspace(page);
+}
+
+export async function expectSetupWorkspace(page: Page): Promise<void> {
+    await expect(
+        page.locator(setupWorkspaceSelectors.root),
+        "The setup workspace root is missing; keep the shared setup selectors in e2e/fixtures/mock-platform.ts aligned with the shipped setup markup.",
     ).toBeVisible();
 }
 
@@ -893,6 +941,46 @@ export function operatorWorkspaceLocator(page: Page, selector: keyof typeof oper
     return page.locator(operatorWorkspaceSelectors[selector]);
 }
 
+export function setupWorkspaceLocator(page: Page, selector: keyof typeof setupWorkspaceSelectors): Locator {
+    return page.locator(setupWorkspaceSelectors[selector]);
+}
+
+export function setupNavLocator(page: Page, sectionId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.navPrefix}-${sectionId}"]`);
+}
+
+export function setupStatusNoticeLocator(page: Page, noticeId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.statusNoticePrefix}-${noticeId}"]`);
+}
+
+export function setupOverviewCardLocator(page: Page, sectionId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.overviewCardPrefix}-${sectionId}"]`);
+}
+
+export function setupRcBarLocator(page: Page, channel: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.rcBarPrefix}-${channel}"]`);
+}
+
+export function setupRcPresetLocator(page: Page, presetId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.rcPresetPrefix}-${presetId}"]`);
+}
+
+export function setupRcInputLocator(page: Page, name: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.rcInputPrefix}-${name}"]`);
+}
+
+export function setupRcStageButtonLocator(page: Page, name: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.rcStageButtonPrefix}-${name}"]`);
+}
+
+export function setupCalibrationCardLocator(page: Page, cardId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.calibrationCardPrefix}-${cardId}"]`);
+}
+
+export function setupCalibrationActionLocator(page: Page, cardId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.calibrationActionPrefix}-${cardId}"]`);
+}
+
 export function liveSurfaceLocator(page: Page, selector: keyof typeof liveSurfaceSelectors): Locator {
     return page.locator(liveSurfaceSelectors[selector]);
 }
@@ -955,16 +1043,7 @@ export function parameterReviewRetryLocator(page: Page, name: string): Locator {
 }
 
 export async function openParameterWorkspace(page: Page): Promise<void> {
-    const workspaceButton = page.locator(parameterWorkspaceSelectors.workspaceButton);
-    await expect(
-        workspaceButton,
-        "Parameter workspace entry point is missing; keep the shared selectors in e2e/fixtures/mock-platform.ts aligned with the shell header.",
-    ).toBeVisible();
-    await workspaceButton.click();
-    await expect(
-        page.locator(setupWorkspaceSelectors.root),
-        "Setup workspace did not mount after selecting Setup.",
-    ).toBeVisible();
+    await openSetupWorkspace(page);
 
     const fullParametersButton = page.locator(setupWorkspaceSelectors.fullParametersNav);
     await expect(
@@ -1269,6 +1348,8 @@ export const test = base.extend<Fixtures>({
             emitLiveSessionState: (vehicleState) => withMockController(page, "emitLiveSessionState", vehicleState),
             emitLiveTelemetryDomain: (telemetry) => emitLiveScopedDomain(page, "telemetry://state", telemetry),
             emitLiveSupportDomain: (support) => emitLiveScopedDomain(page, "support://state", support),
+            emitLiveConfigurationFactsDomain: (facts) => emitLiveScopedDomain(page, "configuration_facts://state", facts),
+            emitLiveCalibrationDomain: (calibration) => emitLiveScopedDomain(page, "calibration://state", calibration),
             emitLiveStatusTextDomain: (statusText) => emitLiveScopedDomain(page, "status_text://state", statusText),
             emitMissionState: (missionState) => withMockController(page, "emitMissionState", missionState),
             emitMissionProgress: (missionProgress) => withMockController(page, "emitMissionProgress", missionProgress),

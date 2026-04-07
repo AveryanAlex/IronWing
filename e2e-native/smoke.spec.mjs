@@ -128,7 +128,7 @@ async function waitForMissionActionCycle(selectors, titleSubstring, label) {
 }
 
 describe("native smoke", () => {
-  it("boots the active shell, stages one parameter edit through the shared tray, applies one telemetry setting, uploads a real mission waypoint, reads it back, persists mpng_settings, and disconnects cleanly", async () => {
+  it("boots the active shell, applies one setup channel-order change through the shared tray, proves compass lifecycle/status on Setup, applies one telemetry setting, uploads a real mission waypoint, reads it back, persists mpng_settings, and disconnects cleanly", async () => {
     const expectedTcpAddress = process.env.IRONWING_WDIO_TCP_ADDRESS;
     assert.ok(expectedTcpAddress, "IRONWING_WDIO_TCP_ADDRESS is required for the native smoke test.");
 
@@ -149,14 +149,28 @@ describe("native smoke", () => {
       runtimeBoundary: '[data-testid="app-runtime-quarantine-boundary"]',
       activeWorkspace: '[data-testid="app-shell-active-workspace"]',
       missionWorkspaceButton: '//nav[@aria-label="Primary"]//button[normalize-space()="Mission"]',
-      parameterWorkspaceButton: '[data-testid="app-shell-parameter-workspace-btn"]',
+      setupWorkspaceButton: '[data-testid="app-shell-parameter-workspace-btn"]',
       setupWorkspaceRoot: '[data-testid="setup-workspace"]',
-      setupFullParametersButton: '[data-testid="setup-workspace-nav-full_parameters"]',
-      parameterWorkspaceRoot: '[data-testid="parameter-workspace"]',
-      parameterWorkspaceState: '[data-testid="parameter-workspace-state"]',
-      parameterMetadata: '[data-testid="parameter-domain-metadata"]',
-      parameterWorkflowSafetyStage: '[data-testid="parameter-workflow-stage-btn-safety"]',
+      setupState: '[data-testid="setup-workspace-state"]',
+      setupMetadata: '[data-testid="setup-workspace-metadata"]',
+      setupSelectedSection: '[data-testid="setup-workspace-selected-section"]',
+      setupNavRcReceiver: '[data-testid="setup-workspace-nav-rc_receiver"]',
+      setupNavCalibration: '[data-testid="setup-workspace-nav-calibration"]',
+      setupRcSection: '[data-testid="setup-workspace-rc-section"]',
+      setupRcSignal: '[data-testid="setup-workspace-rc-signal"]',
+      setupRcCurrentRoll: '[data-testid="setup-workspace-rc-current-RCMAP_ROLL"]',
+      setupRcPresetTaer: '[data-testid="setup-workspace-rc-preset-taer"]',
+      setupCheckpoint: '[data-testid="setup-workspace-checkpoint"]',
+      setupCheckpointTitle: '[data-testid="setup-workspace-checkpoint-title"]',
+      setupCheckpointDetail: '[data-testid="setup-workspace-checkpoint-detail"]',
+      setupCheckpointDismiss: '[data-testid="setup-workspace-checkpoint-dismiss"]',
+      setupCalibrationSection: '[data-testid="setup-workspace-calibration-section"]',
+      setupCalibrationNotices: '[data-testid="setup-workspace-calibration-notices"]',
+      setupCalibrationCardRadio: '[data-testid="setup-workspace-calibration-card-radio"]',
+      setupCalibrationStatusCompass: '[data-testid="setup-workspace-calibration-status-compass"]',
+      setupCalibrationActionCompass: '[data-testid="setup-workspace-calibration-action-compass"]',
       reviewTray: '[data-testid="app-shell-parameter-review-tray"]',
+      reviewCount: '[data-testid="app-shell-parameter-review-count"]',
       reviewToggle: '[data-testid="app-shell-parameter-review-toggle"]',
       reviewSurface: '[data-testid="app-shell-parameter-review-surface"]',
       reviewApply: '[data-testid="app-shell-parameter-review-apply"]',
@@ -192,13 +206,17 @@ describe("native smoke", () => {
     const disconnectButton = await $(selectors.disconnectButton);
     const telemetryAltValue = await $(selectors.telemetryAltValue);
     const telemetryModeValue = await $(selectors.telemetryModeValue);
-    const parameterWorkspaceButton = await $(selectors.parameterWorkspaceButton);
+    const setupWorkspaceButton = await $(selectors.setupWorkspaceButton);
     const setupWorkspaceRoot = await $(selectors.setupWorkspaceRoot);
-    const setupFullParametersButton = await $(selectors.setupFullParametersButton);
-    const parameterWorkspaceRoot = await $(selectors.parameterWorkspaceRoot);
-    const parameterWorkspaceState = await $(selectors.parameterWorkspaceState);
-    const parameterMetadata = await $(selectors.parameterMetadata);
-    const parameterWorkflowSafetyStage = await $(selectors.parameterWorkflowSafetyStage);
+    const setupMetadata = await $(selectors.setupMetadata);
+    const setupNavRcReceiver = await $(selectors.setupNavRcReceiver);
+    const setupNavCalibration = await $(selectors.setupNavCalibration);
+    const setupRcSection = await $(selectors.setupRcSection);
+    const setupRcPresetTaer = await $(selectors.setupRcPresetTaer);
+    const setupCheckpoint = await $(selectors.setupCheckpoint);
+    const setupCheckpointDismiss = await $(selectors.setupCheckpointDismiss);
+    const setupCalibrationSection = await $(selectors.setupCalibrationSection);
+    const setupCalibrationActionCompass = await $(selectors.setupCalibrationActionCompass);
     const reviewTray = await $(selectors.reviewTray);
     const reviewToggle = await $(selectors.reviewToggle);
     const reviewSurface = await $(selectors.reviewSurface);
@@ -285,42 +303,95 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for live telemetry mode after connect.",
     });
 
-    await parameterWorkspaceButton.waitForClickable({ timeout: 30_000 });
-    await parameterWorkspaceButton.click();
+    await setupWorkspaceButton.waitForClickable({ timeout: 30_000 });
+    await setupWorkspaceButton.click();
     await setupWorkspaceRoot.waitForDisplayed({ timeout: 30_000 });
     await waitForCheckpoint("setup workspace mounted", async () => await setupWorkspaceRoot.isDisplayed(), {
       timeout: 30_000,
       timeoutMsg: "Timed out waiting for the dedicated setup workspace root to mount.",
     });
-
-    await setupFullParametersButton.waitForClickable({ timeout: 30_000 });
-    await setupFullParametersButton.click();
-    await parameterWorkspaceRoot.waitForDisplayed({ timeout: 30_000 });
-    await waitForCheckpoint("full-parameters recovery surface ready", async () => /Settings ready/i.test(await parameterWorkspaceState.getText()), {
+    await waitForCheckpoint("setup metadata ready for guided sections", async () => /Metadata ready/i.test(await setupMetadata.getText()), {
       timeout: 60_000,
-      timeoutMsg: "Timed out waiting for the Full Parameters recovery surface to load parameter data from SITL.",
+      timeoutMsg: "Timed out waiting for setup metadata before staging the setup channel-order change.",
     });
 
-    await waitForCheckpoint("parameter metadata ready for workflow staging", async () => /Info ready/i.test(await parameterMetadata.getText()), {
-      timeout: 60_000,
-      timeoutMsg: "Timed out waiting for parameter metadata before staging the shared-tray workflow change.",
-    });
-    await parameterWorkflowSafetyStage.waitForClickable({ timeout: 30_000 });
-    await parameterWorkflowSafetyStage.click();
-
-    await waitForCheckpoint("workflow parameter change staged into shared review tray", async () => await reviewTray.isExisting(), {
+    await setupNavRcReceiver.waitForClickable({ timeout: 30_000 });
+    await setupNavRcReceiver.click();
+    await setupRcSection.waitForDisplayed({ timeout: 30_000 });
+    await waitForCheckpoint("RC receiver section active", async () => {
+      const selected = await readTextContent(selectors.setupSelectedSection);
+      return selected === "rc_receiver" && await setupRcSection.isDisplayed();
+    }, {
       timeout: 30_000,
-      timeoutMsg: "Timed out waiting for the shared review tray after staging the setup workflow change.",
+      timeoutMsg: "Timed out waiting for the Setup workspace to activate the RC receiver section.",
+    });
+    await waitForCheckpoint("RC receiver parameter rows hydrated", async () => {
+      const setupState = await readTextContent(selectors.setupState);
+      const currentRoll = await readTextContent(selectors.setupRcCurrentRoll);
+      return typeof currentRoll === "string"
+        && !currentRoll.includes("Unavailable")
+        && typeof setupState === "string"
+        && !setupState.includes("Bootstrapping");
+    }, {
+      timeout: 120_000,
+      timeoutMsg: "Timed out waiting for the Setup RC receiver mapping rows to hydrate from the live parameter store.",
+    });
+    await waitForCheckpoint("RC receiver controls report live or waiting state", async () => {
+      const rcSignal = await readTextContent(selectors.setupRcSignal);
+      return typeof rcSignal === "string" && rcSignal.length > 0;
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the Setup RC receiver section to surface its current signal state.",
+    });
+
+    await setupRcPresetTaer.waitForClickable({ timeout: 30_000 });
+    await setupRcPresetTaer.click();
+
+    await waitForCheckpoint("setup RC preset staged into shared review tray", async () => await reviewTray.isExisting(), {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the shared review tray after staging the setup RC preset.",
     });
     await reviewToggle.waitForClickable({ timeout: 30_000 });
     await reviewToggle.click();
     await reviewSurface.waitForDisplayed({ timeout: 30_000 });
+    await waitForCheckpoint("setup review tray shows queued RC rows", async () => {
+      const countText = await readTextContent(selectors.reviewCount);
+      const reviewText = await readTextContent(selectors.reviewSurface);
+      return typeof countText === "string"
+        && countText.includes("3 queued")
+        && typeof reviewText === "string"
+        && reviewText.includes("RCMAP_ROLL")
+        && reviewText.includes("RCMAP_PITCH")
+        && reviewText.includes("RCMAP_THROTTLE");
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the shared review tray to show the three queued setup RC mapping rows.",
+    });
 
     await reviewApply.waitForClickable({ timeout: 30_000 });
     await reviewApply.click();
-    await waitForCheckpoint("shared review tray cleared after parameter apply", async () => !(await reviewTray.isExisting()), {
+    await waitForCheckpoint("shared review tray cleared after setup apply", async () => !(await reviewTray.isExisting()), {
       timeout: 60_000,
-      timeoutMsg: "Timed out waiting for the shared review tray to clear after applying the staged raw parameter edit.",
+      timeoutMsg: "Timed out waiting for the shared review tray to clear after applying the staged setup RC mapping change.",
+    });
+    await waitForCheckpoint("setup reboot checkpoint surfaced", async () => {
+      const title = await readTextContent(selectors.setupCheckpointTitle);
+      const detail = await readTextContent(selectors.setupCheckpointDetail);
+      return await setupCheckpoint.isDisplayed()
+        && typeof title === "string"
+        && title.includes("Reconnect required")
+        && typeof detail === "string"
+        && detail.includes("Reboot-required setup changes were confirmed through the shared review tray");
+    }, {
+      timeout: 60_000,
+      timeoutMsg: "Timed out waiting for the setup reboot checkpoint banner after applying the staged channel-order change.",
+    });
+
+    await setupCheckpointDismiss.waitForClickable({ timeout: 30_000 });
+    await setupCheckpointDismiss.click();
+    await waitForCheckpoint("setup checkpoint dismissed", async () => (await readElementCount(selectors.setupCheckpoint)) === 0, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the setup reboot checkpoint banner to dismiss.",
     });
 
     await telemetryLauncher.waitForClickable({ timeout: 30_000 });
@@ -531,6 +602,65 @@ describe("native smoke", () => {
     assert.ok(persistedSettings && typeof persistedSettings === "object", "Expected mpng_settings to persist as a JSON object.");
     assert.ok(!("__parse_error" in persistedSettings), `mpng_settings should remain valid JSON: ${JSON.stringify(persistedSettings)}`);
     assert.equal(persistedSettings.telemetryRateHz, nextTelemetryRate, "mpng_settings should persist the last applied telemetry cadence.");
+
+    await setupWorkspaceButton.waitForClickable({ timeout: 30_000 });
+    await setupWorkspaceButton.click();
+    await setupWorkspaceRoot.waitForDisplayed({ timeout: 30_000 });
+    await waitForCheckpoint("setup workspace returned for calibration proof", async () => (await readTextContent(selectors.activeWorkspace)) === "setup", {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting to return to the Setup workspace for the native calibration proof.",
+    });
+
+    await setupNavCalibration.waitForClickable({ timeout: 30_000 });
+    await setupNavCalibration.click();
+    await setupCalibrationSection.waitForDisplayed({ timeout: 30_000 });
+    await waitForCheckpoint("calibration section active", async () => {
+      const selected = await readTextContent(selectors.setupSelectedSection);
+      return selected === "calibration" && await setupCalibrationSection.isDisplayed();
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the Setup workspace to activate the calibration section.",
+    });
+    await waitForCheckpoint("radio calibration remains explicitly unavailable", async () => {
+      const radioCard = await readTextContent(selectors.setupCalibrationCardRadio);
+      return typeof radioCard === "string" && radioCard.includes("Unavailable");
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out waiting for the Setup calibration section to surface the radio-calibration unavailable state.",
+    });
+
+    const calibrationNoticesBeforeStart = await readTextContent(selectors.setupCalibrationNotices);
+    await setupCalibrationActionCompass.waitForClickable({ timeout: 30_000 });
+    await setupCalibrationActionCompass.click();
+
+    await waitForCheckpoint("compass lifecycle or native setup notice surfaced", async () => {
+      const status = await readTextContent(selectors.setupCalibrationStatusCompass);
+      const actionLabel = await readTextContent(selectors.setupCalibrationActionCompass);
+      const notices = await readTextContent(selectors.setupCalibrationNotices);
+      return (typeof status === "string" && !status.includes("Not started"))
+        || (typeof actionLabel === "string" && actionLabel.includes("Cancel compass calibration"))
+        || (
+          typeof notices === "string"
+          && /compass|calibrat/i.test(notices)
+          && notices !== calibrationNoticesBeforeStart
+        );
+    }, {
+      timeout: 120_000,
+      timeoutMsg: "Timed out waiting for the native Setup workspace to surface either a compass lifecycle change or fresh compass-related setup status text after starting calibration.",
+    });
+    await waitForCheckpoint("compass status text surfaced on setup calibration notices", async () => {
+      const notices = await readTextContent(selectors.setupCalibrationNotices);
+      if (typeof notices !== "string" || notices.length === 0 || !/compass|calibrat/i.test(notices)) {
+        return false;
+      }
+
+      return typeof calibrationNoticesBeforeStart !== "string"
+        || !/compass|calibrat/i.test(calibrationNoticesBeforeStart)
+        || notices !== calibrationNoticesBeforeStart;
+    }, {
+      timeout: 120_000,
+      timeoutMsg: "Timed out waiting for the Setup calibration section to surface fresh compass-related status text.",
+    });
 
     await disconnectButton.waitForClickable({ timeout: 30_000 });
     await disconnectButton.click();
