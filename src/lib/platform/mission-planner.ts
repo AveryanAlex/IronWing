@@ -69,11 +69,9 @@ export async function subscribeAll(handlers: MissionPlannerServiceEventHandlers)
 }
 
 export async function downloadWorkspace(): Promise<MissionPlannerWorkspaceTransfer> {
-  const [missionDownloadResult, fence, rally] = await Promise.all([
-    downloadMission(),
-    downloadFence(),
-    downloadRally(),
-  ]);
+  const missionDownloadResult = await downloadMission();
+  const fence = await downloadFence();
+  const rally = await downloadRally();
 
   const missionDownload = normalizeMissionDownload(missionDownloadResult);
 

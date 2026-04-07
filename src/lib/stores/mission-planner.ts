@@ -205,10 +205,47 @@ export type MissionPlannerWorkspace = {
   hoverSpeed: number;
 };
 
+type MissionPlannerHistoryDomain = MissionPlannerMode;
+
+type MissionPlannerHistorySnapshot = {
+  workspaceMounted: boolean;
+  draftState: TypedDraftState;
+  home: HomePosition | null;
+  homeSnapshot: HomePosition | null;
+  survey: SurveyDraftExtension;
+  surveySnapshot: SurveyDraftExtension;
+  cruiseSpeed: number;
+  hoverSpeed: number;
+  cruiseSpeedSnapshot: number;
+  hoverSpeedSnapshot: number;
+  selection: MissionPlannerSelection;
+  fenceSelection: MissionPlannerFenceSelection;
+  rallySelection: MissionPlannerRallySelection;
+  fileWarnings: string[];
+};
+
+type MissionPlannerHistoryEntry = {
+  transactionId: number;
+  domains: MissionPlannerHistoryDomain[];
+  snapshot: MissionPlannerHistorySnapshot;
+};
+
+type MissionPlannerHistoryStack = {
+  past: MissionPlannerHistoryEntry[];
+  future: MissionPlannerHistoryEntry[];
+};
+
+type MissionPlannerHistoryState = Record<MissionPlannerHistoryDomain, MissionPlannerHistoryStack>;
+
 export type RecoverableMissionPlannerWorkspace = {
   scope: SessionScope;
   active: MissionPlannerWorkspace;
   snapshot: MissionPlannerWorkspace;
+  history: MissionPlannerHistoryState;
+  selection: MissionPlannerSelection;
+  fenceSelection: MissionPlannerFenceSelection;
+  rallySelection: MissionPlannerRallySelection;
+  fileWarnings: string[];
 };
 
 export type MissionPlannerSelection =
@@ -273,6 +310,7 @@ export type MissionPlannerStoreState = {
   selection: MissionPlannerSelection;
   fenceSelection: MissionPlannerFenceSelection;
   rallySelection: MissionPlannerRallySelection;
+  history: MissionPlannerHistoryState;
   phase: MissionPlannerDomainPhase;
   streamReady: boolean;
   streamError: string | null;
@@ -328,7 +366,17 @@ const EMPTY_SCOPE: SessionScope = {
 };
 
 const ACTION_TIMEOUT_MS = 15_000;
+const HISTORY_LIMIT = 50;
 const ALL_IMPORT_DOMAINS = ["mission", "fence", "rally"] as const satisfies readonly MissionPlannerImportDomain[];
+const ALL_HISTORY_DOMAINS = ["mission", "fence", "rally"] as const satisfies readonly MissionPlannerHistoryDomain[];
+
+function createEmptyHistoryState(): MissionPlannerHistoryState {
+  return {
+    mission: { past: [], future: [] },
+    fence: { past: [], future: [] },
+    rally: { past: [], future: [] },
+  };
+}
 
 function createInitialState(): MissionPlannerStoreState {
   return {
@@ -338,6 +386,7 @@ function createInitialState(): MissionPlannerStoreState {
     selection: { kind: "home" },
     fenceSelection: { kind: "none" },
     rallySelection: { kind: "none" },
+    history: createEmptyHistoryState(),
     phase: "bootstrapping",
     streamReady: false,
     streamError: null,
@@ -387,6 +436,7 @@ export function createMissionPlannerStore(
   let stopSession: (() => void) | null = null;
   let stopStreams: (() => void) | null = null;
   let actionRequestId = 0;
+  let historyTransactionId = 0;
 
   async function initialize() {
     if (initializePromise) {
@@ -422,6 +472,373 @@ export function createMissionPlannerStore(
     return initializePromise;
   }
 
+  function normalizeHistoryDomains(domains: readonly MissionPlannerHistoryDomain[]): MissionPlannerHistoryDomain[] {
+    const requested = new Set(domains);
+    return ALL_HISTORY_DOMAINS.filter((domain) => requested.has(domain));
+  }
+
+  function appendHistoryEntry(entries: MissionPlannerHistoryEntry[], entry: MissionPlannerHistoryEntry): MissionPlannerHistoryEntry[] {
+    const next = [...entries, entry];
+    return next.length > HISTORY_LIMIT ? next.slice(next.length - HISTORY_LIMIT) : next;
+  }
+
+  function findHistoryEntryIndex(entries: MissionPlannerHistoryEntry[], transactionId: number): number {
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      if (entries[index]?.transactionId === transactionId) {
+        return index;
+      }
+    }
+
+    return -1;
+  }
+
+  function historyDomainsIntersect(
+    domains: readonly MissionPlannerHistoryDomain[],
+    changedDomains: readonly MissionPlannerHistoryDomain[],
+  ): boolean {
+    const changed = new Set(changedDomains);
+    return domains.some((domain) => changed.has(domain));
+  }
+
+  function invalidateHistoryFuture(
+    history: MissionPlannerHistoryState,
+    changedDomains: readonly MissionPlannerHistoryDomain[],
+  ): MissionPlannerHistoryState {
+    if (changedDomains.length === 0) {
+      return history;
+    }
+
+    return {
+      mission: {
+        past: history.mission.past,
+        future: history.mission.future.filter((entry) => !historyDomainsIntersect(entry.domains, changedDomains)),
+      },
+      fence: {
+        past: history.fence.past,
+        future: history.fence.future.filter((entry) => !historyDomainsIntersect(entry.domains, changedDomains)),
+      },
+      rally: {
+        past: history.rally.past,
+        future: history.rally.future.filter((entry) => !historyDomainsIntersect(entry.domains, changedDomains)),
+      },
+    };
+  }
+
+  function captureHistorySnapshot(state: MissionPlannerStoreState): MissionPlannerHistorySnapshot {
+    return {
+      workspaceMounted: state.workspaceMounted,
+      draftState: cloneValue(state.draftState),
+      home: cloneValue(state.home),
+      homeSnapshot: cloneValue(state.homeSnapshot),
+      survey: cloneValue(state.survey),
+      surveySnapshot: cloneValue(state.surveySnapshot),
+      cruiseSpeed: state.cruiseSpeed,
+      hoverSpeed: state.hoverSpeed,
+      cruiseSpeedSnapshot: state.cruiseSpeedSnapshot,
+      hoverSpeedSnapshot: state.hoverSpeedSnapshot,
+      selection: cloneValue(state.selection),
+      fenceSelection: cloneValue(state.fenceSelection),
+      rallySelection: cloneValue(state.rallySelection),
+      fileWarnings: [...state.fileWarnings],
+    };
+  }
+
+  function captureRecoverableWorkspace(state: MissionPlannerStoreState): RecoverableMissionPlannerWorkspace {
+    return {
+      scope: attachedDraftScope(state),
+      active: captureActiveWorkspace(state),
+      snapshot: captureSnapshotWorkspace(state),
+      history: cloneValue(state.history),
+      selection: cloneValue(state.selection),
+      fenceSelection: cloneValue(state.fenceSelection),
+      rallySelection: cloneValue(state.rallySelection),
+      fileWarnings: [...state.fileWarnings],
+    };
+  }
+
+  function sameSelectionState<T>(left: T, right: T): boolean {
+    return JSON.stringify(left) === JSON.stringify(right);
+  }
+
+  function historyDomainChanged(
+    before: MissionPlannerHistorySnapshot,
+    after: MissionPlannerHistorySnapshot,
+    domain: MissionPlannerHistoryDomain,
+  ): boolean {
+    if (before.workspaceMounted !== after.workspaceMounted) {
+      return true;
+    }
+
+    switch (domain) {
+      case "mission":
+        return !samePlan(before.draftState.active.mission.document, after.draftState.active.mission.document)
+          || !samePlan(before.draftState.active.mission.snapshot, after.draftState.active.mission.snapshot)
+          || !scopeMatchesExact(before.draftState.active.mission.scope, after.draftState.active.mission.scope)
+          || !sameHome(before.home, after.home)
+          || !sameHome(before.homeSnapshot, after.homeSnapshot)
+          || !sameSurvey(before.survey, after.survey)
+          || !sameSurvey(before.surveySnapshot, after.surveySnapshot)
+          || before.cruiseSpeed !== after.cruiseSpeed
+          || before.hoverSpeed !== after.hoverSpeed
+          || before.cruiseSpeedSnapshot !== after.cruiseSpeedSnapshot
+          || before.hoverSpeedSnapshot !== after.hoverSpeedSnapshot
+          || !sameSelectionState(before.selection, after.selection);
+      case "fence":
+        return !sameFence(before.draftState.active.fence.document, after.draftState.active.fence.document)
+          || !sameFence(before.draftState.active.fence.snapshot, after.draftState.active.fence.snapshot)
+          || !scopeMatchesExact(before.draftState.active.fence.scope, after.draftState.active.fence.scope)
+          || !sameSelectionState(before.fenceSelection, after.fenceSelection);
+      case "rally":
+        return !sameRally(before.draftState.active.rally.document, after.draftState.active.rally.document)
+          || !sameRally(before.draftState.active.rally.snapshot, after.draftState.active.rally.snapshot)
+          || !scopeMatchesExact(before.draftState.active.rally.scope, after.draftState.active.rally.scope)
+          || !sameSelectionState(before.rallySelection, after.rallySelection);
+      default:
+        return false;
+    }
+  }
+
+  function commitHistoryChange(
+    state: MissionPlannerStoreState,
+    nextState: MissionPlannerStoreState,
+    domains: readonly MissionPlannerHistoryDomain[],
+    options: { historyBase?: MissionPlannerHistoryState } = {},
+  ): MissionPlannerStoreState {
+    const beforeSnapshot = captureHistorySnapshot(state);
+    const afterSnapshot = captureHistorySnapshot(nextState);
+    const changedDomains = normalizeHistoryDomains(domains).filter((domain) => historyDomainChanged(beforeSnapshot, afterSnapshot, domain));
+    if (changedDomains.length === 0) {
+      return nextState;
+    }
+
+    const entry: MissionPlannerHistoryEntry = {
+      transactionId: historyTransactionId += 1,
+      domains: changedDomains,
+      snapshot: beforeSnapshot,
+    };
+
+    const baseHistory = options.historyBase ?? state.history;
+    const invalidatedHistory = invalidateHistoryFuture(baseHistory, changedDomains);
+    const history = {
+      mission: {
+        past: changedDomains.includes("mission") ? appendHistoryEntry(invalidatedHistory.mission.past, entry) : invalidatedHistory.mission.past,
+        future: invalidatedHistory.mission.future,
+      },
+      fence: {
+        past: changedDomains.includes("fence") ? appendHistoryEntry(invalidatedHistory.fence.past, entry) : invalidatedHistory.fence.past,
+        future: invalidatedHistory.fence.future,
+      },
+      rally: {
+        past: changedDomains.includes("rally") ? appendHistoryEntry(invalidatedHistory.rally.past, entry) : invalidatedHistory.rally.past,
+        future: invalidatedHistory.rally.future,
+      },
+    };
+
+    return {
+      ...nextState,
+      history,
+    };
+  }
+
+  function rebaseDraftStateScopes(
+    draftState: TypedDraftState,
+    fromScope: SessionScope,
+    toScope: SessionScope,
+  ): TypedDraftState {
+    return {
+      ...draftState,
+      active: {
+        mission: scopeMatchesIdentity(draftState.active.mission.scope, fromScope)
+          ? { ...draftState.active.mission, scope: toScope }
+          : draftState.active.mission,
+        fence: scopeMatchesIdentity(draftState.active.fence.scope, fromScope)
+          ? { ...draftState.active.fence, scope: toScope }
+          : draftState.active.fence,
+        rally: scopeMatchesIdentity(draftState.active.rally.scope, fromScope)
+          ? { ...draftState.active.rally, scope: toScope }
+          : draftState.active.rally,
+      },
+    };
+  }
+
+  function rebaseHistorySnapshot(
+    snapshot: MissionPlannerHistorySnapshot,
+    fromScope: SessionScope,
+    toScope: SessionScope,
+  ): MissionPlannerHistorySnapshot {
+    return {
+      ...snapshot,
+      draftState: rebaseDraftStateScopes(snapshot.draftState, fromScope, toScope),
+    };
+  }
+
+  function rebaseHistoryState(
+    history: MissionPlannerHistoryState,
+    fromScope: SessionScope,
+    toScope: SessionScope,
+  ): MissionPlannerHistoryState {
+    const rebasedEntries = new Map<number, MissionPlannerHistoryEntry>();
+
+    const rebaseEntry = (entry: MissionPlannerHistoryEntry): MissionPlannerHistoryEntry => {
+      const existing = rebasedEntries.get(entry.transactionId);
+      if (existing) {
+        return existing;
+      }
+
+      const nextEntry: MissionPlannerHistoryEntry = {
+        ...entry,
+        snapshot: rebaseHistorySnapshot(entry.snapshot, fromScope, toScope),
+      };
+      rebasedEntries.set(entry.transactionId, nextEntry);
+      return nextEntry;
+    };
+
+    return {
+      mission: {
+        past: history.mission.past.map(rebaseEntry),
+        future: history.mission.future.map(rebaseEntry),
+      },
+      fence: {
+        past: history.fence.past.map(rebaseEntry),
+        future: history.fence.future.map(rebaseEntry),
+      },
+      rally: {
+        past: history.rally.past.map(rebaseEntry),
+        future: history.rally.future.map(rebaseEntry),
+      },
+    };
+  }
+
+  function applyHistorySnapshot(
+    state: MissionPlannerStoreState,
+    snapshot: MissionPlannerHistorySnapshot,
+    domains: readonly MissionPlannerHistoryDomain[],
+  ): MissionPlannerStoreState {
+    let draftState = state.draftState;
+    if (domains.includes("mission")) {
+      draftState = {
+        ...draftState,
+        active: {
+          ...draftState.active,
+          mission: cloneValue(snapshot.draftState.active.mission),
+        },
+      };
+    }
+    if (domains.includes("fence")) {
+      draftState = {
+        ...draftState,
+        active: {
+          ...draftState.active,
+          fence: cloneValue(snapshot.draftState.active.fence),
+        },
+      };
+    }
+    if (domains.includes("rally")) {
+      draftState = {
+        ...draftState,
+        active: {
+          ...draftState.active,
+          rally: cloneValue(snapshot.draftState.active.rally),
+        },
+      };
+    }
+
+    return {
+      ...state,
+      workspaceMounted: snapshot.workspaceMounted,
+      draftState,
+      home: domains.includes("mission") ? cloneValue(snapshot.home) : state.home,
+      homeSnapshot: domains.includes("mission") ? cloneValue(snapshot.homeSnapshot) : state.homeSnapshot,
+      survey: domains.includes("mission") ? cloneValue(snapshot.survey) : state.survey,
+      surveySnapshot: domains.includes("mission") ? cloneValue(snapshot.surveySnapshot) : state.surveySnapshot,
+      cruiseSpeed: domains.includes("mission") ? snapshot.cruiseSpeed : state.cruiseSpeed,
+      hoverSpeed: domains.includes("mission") ? snapshot.hoverSpeed : state.hoverSpeed,
+      cruiseSpeedSnapshot: domains.includes("mission") ? snapshot.cruiseSpeedSnapshot : state.cruiseSpeedSnapshot,
+      hoverSpeedSnapshot: domains.includes("mission") ? snapshot.hoverSpeedSnapshot : state.hoverSpeedSnapshot,
+      selection: domains.includes("mission") ? cloneValue(snapshot.selection) : state.selection,
+      fenceSelection: domains.includes("fence") ? cloneValue(snapshot.fenceSelection) : state.fenceSelection,
+      rallySelection: domains.includes("rally") ? cloneValue(snapshot.rallySelection) : state.rallySelection,
+      validationIssues: [],
+      fileWarnings: [...snapshot.fileWarnings],
+      activeAction: null,
+      replacePrompt: null,
+      pendingImportReview: null,
+      pendingExportReview: null,
+      surveyPrompt: null,
+      blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
+      lastError: null,
+      dismissedWarningIds: clearDismissedWarningIds(state.dismissedWarningIds, [
+        "attachment:",
+        "file-warning:",
+        "validation-issue:",
+        "blocked:",
+        "last-error:",
+      ]),
+    };
+  }
+
+  function applyHistoryNavigation(
+    direction: "undo" | "redo",
+    requestedDomain: MissionPlannerHistoryDomain = get(store).mode,
+  ) {
+    store.update((state) => {
+      if (!canEditWorkspace(state)) {
+        return withBlockedReason(state, readOnlyMutationMessage(state, "Undo and redo"));
+      }
+
+      const domain = requestedDomain;
+      const stack = state.history[domain];
+      const sourceEntries = direction === "undo" ? stack.past : stack.future;
+      const sourceEntry = sourceEntries[sourceEntries.length - 1];
+      if (!sourceEntry) {
+        return state;
+      }
+
+      const currentSnapshot = captureHistorySnapshot(state);
+      const reciprocalEntry: MissionPlannerHistoryEntry = {
+        transactionId: sourceEntry.transactionId,
+        domains: sourceEntry.domains,
+        snapshot: currentSnapshot,
+      };
+
+      let history = state.history;
+      for (const affectedDomain of sourceEntry.domains) {
+        const domainStack = history[affectedDomain];
+        const sourceStack = direction === "undo" ? domainStack.past : domainStack.future;
+        const targetStack = direction === "undo" ? domainStack.future : domainStack.past;
+        const matchIndex = findHistoryEntryIndex(sourceStack, sourceEntry.transactionId);
+        if (matchIndex === -1) {
+          continue;
+        }
+
+        history = {
+          ...history,
+          [affectedDomain]: direction === "undo"
+            ? {
+              past: sourceStack.slice(0, matchIndex),
+              future: appendHistoryEntry(targetStack, reciprocalEntry),
+            }
+            : {
+              past: appendHistoryEntry(targetStack, reciprocalEntry),
+              future: sourceStack.slice(0, matchIndex),
+            },
+        };
+      }
+
+      return withResolvedPhase(applyHistorySnapshot({ ...state, history }, sourceEntry.snapshot, sourceEntry.domains));
+    });
+  }
+
+  function undo(requestedDomain?: MissionPlannerHistoryDomain) {
+    applyHistoryNavigation("undo", requestedDomain ?? get(store).mode);
+  }
+
+  function redo(requestedDomain?: MissionPlannerHistoryDomain) {
+    applyHistoryNavigation("redo", requestedDomain ?? get(store).mode);
+  }
+
   function handleSessionState(sessionState: SessionStoreState) {
     const nextEnvelope = sessionState.activeEnvelope;
     const current = get(store);
@@ -449,11 +866,7 @@ export function createMissionPlannerStore(
       const nextScope = scopeFromEnvelope(nextEnvelope);
       const currentDraftScope = attachedDraftScope(state);
       const nextRecoverable = state.workspaceMounted && plannerHasContent(state)
-        ? {
-          scope: currentDraftScope,
-          active: captureActiveWorkspace(state),
-          snapshot: captureSnapshotWorkspace(state),
-        }
+        ? captureRecoverableWorkspace(state)
         : state.recoverableWorkspace;
       const recoverablePrompt = nextRecoverable
         && scopeMatchesIdentity(nextRecoverable.scope, nextScope)
@@ -526,7 +939,7 @@ export function createMissionPlannerStore(
   }
 
   function replaceWorkspace(workspace: MissionPlannerWorkspace) {
-    store.update((state) => withResolvedPhase({
+    store.update((state) => withResolvedPhase(commitHistoryChange(state, {
       ...applyWorkspacePair(state, {
         active: workspace,
         snapshot: workspace,
@@ -537,7 +950,7 @@ export function createMissionPlannerStore(
       blockedReason: null,
       blockedMode: null,
       blockedWarningTarget: null,
-    }));
+    }, ALL_HISTORY_DOMAINS)));
   }
 
   function setHome(home: HomePosition | null) {
@@ -546,12 +959,12 @@ export function createMissionPlannerStore(
         return withBlockedReason(state, readOnlyMutationMessage(state, "Home updates"));
       }
 
-      return withResolvedPhase({
+      return withResolvedPhase(commitHistoryChange(state, {
         ...state,
         home: cloneValue(home),
         selection: { kind: "home" },
         validationIssues: [],
-      });
+      }, ["mission"]));
     });
   }
 
@@ -594,13 +1007,13 @@ export function createMissionPlannerStore(
         return withBlockedReason(state, readOnlyMutationMessage(state, "Survey changes"));
       }
 
-      return withResolvedPhase({
+      return withResolvedPhase(commitHistoryChange(state, {
         ...state,
         survey: nextSurvey,
         selection: nextSurveySelection(state.selection, nextSurvey),
         surveyPrompt: null,
         validationIssues: [],
-      });
+      }, ["mission"]));
     });
   }
 
@@ -612,6 +1025,7 @@ export function createMissionPlannerStore(
       lastError?: string | null;
       normalizeSurvey?: boolean;
       allowWhenReadOnly?: boolean;
+      history?: boolean;
     } = {},
   ) {
     store.update((state) => {
@@ -624,15 +1038,16 @@ export function createMissionPlannerStore(
         ? cloneValue(nextSurvey)
         : normalizeSurveyAuthoringExtension(nextSurvey);
       const selection = nextSurveySelection(options.selection ?? state.selection, survey);
-
-      return withResolvedPhase({
+      const nextState = {
         ...state,
         survey,
         selection,
         surveyPrompt: options.surveyPrompt ?? null,
         validationIssues: [],
         lastError: options.lastError ?? state.lastError,
-      });
+      } satisfies MissionPlannerStoreState;
+
+      return withResolvedPhase(options.history ? commitHistoryChange(state, nextState, ["mission"]) : nextState);
     });
   }
 
@@ -644,6 +1059,7 @@ export function createMissionPlannerStore(
       surveyPrompt?: MissionPlannerSurveyPrompt | null;
       lastError?: string | null;
       normalizeSurvey?: boolean;
+      history?: boolean;
     } = {},
   ) {
     updateSurveyState(
@@ -673,6 +1089,7 @@ export function createMissionPlannerStore(
       (survey) => insertSurveyRegion(survey, region, site.position, site.orderIndex),
       {
         selection: { kind: "survey-block", regionId: region.id },
+        history: true,
       },
     );
 
@@ -686,24 +1103,27 @@ export function createMissionPlannerStore(
     updateSurveyRegionState(regionId, (region) => {
       const next = updater(region);
       return reconcileRegionAfterAuthoringEdit(next);
-    });
+    }, { history: true });
   }
 
   function setSurveyRegionCollapsed(regionId: string, collapsed: boolean) {
     updateSurveyRegionState(regionId, (region) => ({
       ...region,
       collapsed,
-    }));
+    }), { history: false });
   }
 
   function deleteSurveyRegionById(regionId: string) {
     updateSurveyState((survey) => removeSurveyRegion(survey, regionId), {
       selection: { kind: "home" },
+      history: true,
     });
   }
 
   function markSurveyRegionItemAsEdited(regionId: string, localIndex: number, editedItem: MissionItem) {
-    updateSurveyRegionState(regionId, (region) => reconcileRegionAfterAuthoringEdit(markItemEdited(region, localIndex, editedItem)));
+    updateSurveyRegionState(regionId, (region) => reconcileRegionAfterAuthoringEdit(markItemEdited(region, localIndex, editedItem)), {
+      history: true,
+    });
   }
 
   function promptDissolveSurveyRegion(regionId: string) {
@@ -726,7 +1146,7 @@ export function createMissionPlannerStore(
 
     const regeneratePrompt = !force ? createSurveyRegeneratePrompt(current) : null;
     if (regeneratePrompt) {
-      updateSurveyRegionState(regionId, (region) => region, { surveyPrompt: regeneratePrompt });
+      updateSurveyRegionState(regionId, (region) => region, { surveyPrompt: regeneratePrompt, history: false });
       return { status: "prompted" as const };
     }
 
@@ -735,11 +1155,12 @@ export function createMissionPlannerStore(
       updateSurveyRegionState(
         regionId,
         (region) => setSurveyRegionGenerationState(region, "blocked", request.blockedReason.message),
+        { history: false },
       );
       return { status: "blocked" as const, message: request.blockedReason.message };
     }
 
-    updateSurveyRegionState(regionId, (region) => setSurveyRegionGenerationState(region, "generating", null));
+    updateSurveyRegionState(regionId, (region) => setSurveyRegionGenerationState(region, "generating", null), { history: false });
 
     try {
       const result = await withTimeout(
@@ -748,14 +1169,14 @@ export function createMissionPlannerStore(
         new Error("Survey generation timed out. The region was left unchanged; retry when the planner is ready."),
       );
 
-      updateSurveyRegionState(regionId, (region) => applyGenerationResult(region, result));
+      updateSurveyRegionState(regionId, (region) => applyGenerationResult(region, result), { history: true });
       return { status: "generated" as const, ok: result.ok };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       updateSurveyRegionState(
         regionId,
         (region) => setSurveyRegionGenerationState(region, "blocked", message),
-        { lastError: message, normalizeSurvey: false },
+        { lastError: message, normalizeSurvey: false, history: false },
       );
       return { status: "error" as const, message };
     }
@@ -802,14 +1223,14 @@ export function createMissionPlannerStore(
       surveyRegionOrder: reindexedSurvey.surveyRegionOrder,
     });
 
-    store.update((current) => withResolvedPhase({
+    store.update((current) => withResolvedPhase(commitHistoryChange(current, {
       ...current,
       draftState,
       survey,
       selection: dissolved.dissolvedItems.length > 0 ? { kind: "mission-item" } : { kind: "home" },
       surveyPrompt: null,
       validationIssues: [],
-    }));
+    }, ["mission"])));
 
     return {
       status: "dissolved" as const,
@@ -826,12 +1247,12 @@ export function createMissionPlannerStore(
         return withBlockedReason(state, readOnlyMutationMessage(state, "Mission draft edits"));
       }
 
-      return withResolvedPhase({
+      return withResolvedPhase(commitHistoryChange(state, {
         ...state,
         draftState: updater(state.draftState),
         selection,
         validationIssues: [],
-      });
+      }, ["mission"]));
     });
   }
 
@@ -915,7 +1336,7 @@ export function createMissionPlannerStore(
       return rejectedMapMove("home-missing", "Ignored the Home drag because this draft does not have a Home marker yet.");
     }
 
-    store.update((current) => withResolvedPhase({
+    store.update((current) => withResolvedPhase(commitHistoryChange(current, {
       ...current,
       home: {
         latitude_deg: latitudeDeg,
@@ -924,7 +1345,7 @@ export function createMissionPlannerStore(
       },
       selection: { kind: "home" },
       validationIssues: [],
-    }));
+    }, ["mission"])));
 
     return {
       status: "applied",
@@ -963,7 +1384,7 @@ export function createMissionPlannerStore(
       return rejectedMapMove("item-without-position", "Ignored the waypoint drag because this mission item does not expose a draggable position.");
     }
 
-    store.update((current) => withResolvedPhase({
+    store.update((current) => withResolvedPhase(commitHistoryChange(current, {
       ...current,
       draftState: selectTypedDraftIndex(
         moveTypedWaypointOnMap(current.draftState, "mission", missionItem.index, latitudeDeg, longitudeDeg),
@@ -972,7 +1393,7 @@ export function createMissionPlannerStore(
       ),
       selection: { kind: "mission-item" },
       validationIssues: [],
-    }));
+    }, ["mission"])));
 
     return {
       status: "applied",
@@ -1053,7 +1474,7 @@ export function createMissionPlannerStore(
     const draftState = addFenceRegionAt(state.draftState, nextLatitude, nextLongitude, type);
     const regionUiId = draftState.active.fence.primarySelectedUiId;
 
-    store.update((current) => withResolvedPhase({
+    store.update((current) => withResolvedPhase(commitHistoryChange(current, {
       ...current,
       draftState,
       fenceSelection: regionUiId === null ? { kind: "none" } : { kind: "region", regionUiId },
@@ -1061,7 +1482,7 @@ export function createMissionPlannerStore(
       blockedMode: null,
       blockedWarningTarget: null,
       dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
-    }));
+    }, ["fence"])));
 
     return {
       status: "applied",
@@ -1092,7 +1513,7 @@ export function createMissionPlannerStore(
         ? ({ kind: "return-point" } satisfies MissionPlannerFenceSelection)
         : ({ kind: "none" } satisfies MissionPlannerFenceSelection);
 
-    store.update((current) => withResolvedPhase({
+    store.update((current) => withResolvedPhase(commitHistoryChange(current, {
       ...current,
       draftState,
       fenceSelection,
@@ -1100,7 +1521,7 @@ export function createMissionPlannerStore(
       blockedMode: null,
       blockedWarningTarget: null,
       dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
-    }));
+    }, ["fence"])));
 
     return {
       status: "applied",
@@ -1134,7 +1555,7 @@ export function createMissionPlannerStore(
       activeRegion.index,
     );
 
-    store.update((current) => withResolvedPhase({
+    store.update((current) => withResolvedPhase(commitHistoryChange(current, {
       ...current,
       draftState,
       fenceSelection: { kind: "region", regionUiId: uiId },
@@ -1142,7 +1563,7 @@ export function createMissionPlannerStore(
       blockedMode: null,
       blockedWarningTarget: null,
       dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
-    }));
+    }, ["fence"])));
 
     return {
       status: "applied",
@@ -1172,7 +1593,7 @@ export function createMissionPlannerStore(
         fenceSelection: state.fenceSelection.kind === "return-point" ? { kind: "none" } : state.fenceSelection,
       }).fenceSelection;
 
-    store.update((current) => withResolvedPhase({
+    store.update((current) => withResolvedPhase(commitHistoryChange(current, {
       ...current,
       draftState,
       fenceSelection: nextSelection,
@@ -1180,7 +1601,7 @@ export function createMissionPlannerStore(
       blockedMode: null,
       blockedWarningTarget: null,
       dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
-    }));
+    }, ["fence"])));
 
     return {
       status: "applied",
@@ -1365,7 +1786,7 @@ export function createMissionPlannerStore(
     const draftState = addTypedWaypointAt(state.draftState, "rally", nextLatitude, nextLongitude);
     const pointUiId = draftState.active.rally.primarySelectedUiId;
 
-    store.update((current) => withResolvedPhase({
+    store.update((current) => withResolvedPhase(commitHistoryChange(current, {
       ...current,
       draftState,
       rallySelection: pointUiId === null ? { kind: "none" } : { kind: "point", pointUiId },
@@ -1373,7 +1794,7 @@ export function createMissionPlannerStore(
       blockedMode: null,
       blockedWarningTarget: null,
       dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
-    }));
+    }, ["rally"])));
 
     return {
       status: "applied",
@@ -1405,7 +1826,7 @@ export function createMissionPlannerStore(
       ? ({ kind: "point", pointUiId: nextPoint.uiId } satisfies MissionPlannerRallySelection)
       : ({ kind: "none" } satisfies MissionPlannerRallySelection);
 
-    store.update((current) => withResolvedPhase({
+    store.update((current) => withResolvedPhase(commitHistoryChange(current, {
       ...current,
       draftState,
       rallySelection,
@@ -1413,7 +1834,7 @@ export function createMissionPlannerStore(
       blockedMode: null,
       blockedWarningTarget: null,
       dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
-    }));
+    }, ["rally"])));
 
     return {
       status: "applied",
@@ -1450,7 +1871,7 @@ export function createMissionPlannerStore(
       ? ({ kind: "point", pointUiId: uiId } satisfies MissionPlannerRallySelection)
       : ({ kind: "none" } satisfies MissionPlannerRallySelection);
 
-    store.update((current) => withResolvedPhase({
+    store.update((current) => withResolvedPhase(commitHistoryChange(current, {
       ...current,
       draftState,
       rallySelection,
@@ -1459,7 +1880,7 @@ export function createMissionPlannerStore(
       blockedWarningTarget: null,
       dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
       validationIssues: [],
-    }));
+    }, ["rally"])));
 
     return {
       status: "applied",
@@ -1558,7 +1979,7 @@ export function createMissionPlannerStore(
       return rejectedMapMove("item-not-found", "Ignored a stale rally drag because that point is no longer present in the active draft.");
     }
 
-    store.update((current) => withResolvedPhase({
+    store.update((current) => withResolvedPhase(commitHistoryChange(current, {
       ...current,
       draftState: selectTypedDraftIndex(
         moveTypedWaypointOnMap(current.draftState, "rally", point.index, latitudeDeg, longitudeDeg),
@@ -1571,7 +1992,7 @@ export function createMissionPlannerStore(
       blockedMode: null,
       blockedWarningTarget: null,
       dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["blocked:"]),
-    }));
+    }, ["rally"])));
 
     return {
       status: "applied",
@@ -1620,8 +2041,8 @@ export function createMissionPlannerStore(
             : choice),
         },
         blockedReason: null,
-      blockedMode: null,
-      blockedWarningTarget: null,
+        blockedMode: null,
+        blockedWarningTarget: null,
       });
     });
   }
@@ -1638,8 +2059,11 @@ export function createMissionPlannerStore(
       captureSnapshotWorkspace(state),
       review,
     );
+    const replaceDomains = normalizeHistoryDomains(
+      review.choices.filter((choice) => choice.replace).map((choice) => choice.domain),
+    );
 
-    store.update((current) => withResolvedPhase({
+    store.update((current) => withResolvedPhase(commitHistoryChange(current, {
       ...applyWorkspacePair(current, mergedPair, currentScope(current)),
       pendingImportReview: null,
       fileWarnings: [...review.warnings],
@@ -1647,7 +2071,7 @@ export function createMissionPlannerStore(
       blockedReason: null,
       blockedMode: null,
       blockedWarningTarget: null,
-    }));
+    }, replaceDomains)));
 
     return {
       status: "applied" as const,
@@ -1682,8 +2106,8 @@ export function createMissionPlannerStore(
             : choice),
         },
         blockedReason: null,
-      blockedMode: null,
-      blockedWarningTarget: null,
+        blockedMode: null,
+        blockedWarningTarget: null,
       });
     });
   }
@@ -1730,8 +2154,8 @@ export function createMissionPlannerStore(
         fileWarnings: [...result.warnings],
         dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["file-warning:", "blocked:"]),
         blockedReason: null,
-      blockedMode: null,
-      blockedWarningTarget: null,
+        blockedMode: null,
+        blockedWarningTarget: null,
       }));
 
       return {
@@ -1797,7 +2221,7 @@ export function createMissionPlannerStore(
         return { status: "prompted" as const, action: "download" as const };
       }
 
-      store.update((current) => withResolvedPhase({
+      store.update((current) => withResolvedPhase(commitHistoryChange(current, {
         ...applyWorkspacePair(current, {
           active: incomingWorkspace,
           snapshot: incomingWorkspace,
@@ -1806,9 +2230,9 @@ export function createMissionPlannerStore(
         pendingImportReview: null,
         pendingExportReview: null,
         blockedReason: null,
-      blockedMode: null,
-      blockedWarningTarget: null,
-      }));
+        blockedMode: null,
+        blockedWarningTarget: null,
+      }, ALL_HISTORY_DOMAINS)));
       return { status: "success" as const };
     } catch (error) {
       handleActionFailure("download", pending, error, true);
@@ -1846,7 +2270,11 @@ export function createMissionPlannerStore(
         };
       }
 
-      store.update((current) => withResolvedPhase({
+      const importDomains = normalizeHistoryDomains(
+        buildImportReviewChoices(createEmptyMissionPlannerWorkspace(), incomingWorkspace).map((choice) => choice.domain),
+      );
+
+      store.update((current) => withResolvedPhase(commitHistoryChange(current, {
         ...applyWorkspacePair(current, {
           active: incomingWorkspace,
           snapshot: incomingWorkspace,
@@ -1854,9 +2282,9 @@ export function createMissionPlannerStore(
         fileWarnings: [...imported.warnings],
         dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["file-warning:", "blocked:"]),
         blockedReason: null,
-      blockedMode: null,
-      blockedWarningTarget: null,
-      }));
+        blockedMode: null,
+        blockedWarningTarget: null,
+      }, importDomains)));
 
       return {
         status: "success" as const,
@@ -1912,8 +2340,8 @@ export function createMissionPlannerStore(
           choices,
         },
         blockedReason: null,
-      blockedMode: null,
-      blockedWarningTarget: null,
+        blockedMode: null,
+        blockedWarningTarget: null,
       }));
       return { status: "prompted" as const, action: "export" as const };
     }
@@ -1948,8 +2376,8 @@ export function createMissionPlannerStore(
         validationIssues: issues,
         dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["validation-issue:", "blocked:"]),
         blockedReason: null,
-      blockedMode: null,
-      blockedWarningTarget: null,
+        blockedMode: null,
+        blockedWarningTarget: null,
       }));
       return { status: "success" as const, issueCount: issues.length };
     } catch (error) {
@@ -1987,8 +2415,8 @@ export function createMissionPlannerStore(
         ...current,
         activeAction: null,
         blockedReason: null,
-      blockedMode: null,
-      blockedWarningTarget: null,
+        blockedMode: null,
+        blockedWarningTarget: null,
       }));
       return { status: "success" as const };
     } catch (error) {
@@ -2030,7 +2458,7 @@ export function createMissionPlannerStore(
         return { status: "stale" as const };
       }
 
-      store.update((current) => withResolvedPhase({
+      store.update((current) => withResolvedPhase(commitHistoryChange(current, {
         ...applyWorkspacePair(current, {
           active: createEmptyMissionPlannerWorkspace(),
           snapshot: createEmptyMissionPlannerWorkspace(),
@@ -2039,9 +2467,9 @@ export function createMissionPlannerStore(
         pendingImportReview: null,
         pendingExportReview: null,
         blockedReason: null,
-      blockedMode: null,
-      blockedWarningTarget: null,
-      }));
+        blockedMode: null,
+        blockedWarningTarget: null,
+      }, ALL_HISTORY_DOMAINS)));
       return { status: "cleared" as const };
     } catch (error) {
       handleActionFailure("clear", pending, error, true);
@@ -2068,6 +2496,24 @@ export function createMissionPlannerStore(
     }
   }
 
+  function applyRecoverableWorkspace(
+    state: MissionPlannerStoreState,
+    recoverable: RecoverableMissionPlannerWorkspace,
+    scope: SessionScope,
+  ): MissionPlannerStoreState {
+    return {
+      ...applyWorkspacePair(state, {
+        active: recoverable.active,
+        snapshot: recoverable.snapshot,
+      }, scope),
+      history: rebaseHistoryState(recoverable.history, recoverable.scope, scope),
+      selection: cloneValue(recoverable.selection),
+      fenceSelection: cloneValue(recoverable.fenceSelection),
+      rallySelection: cloneValue(recoverable.rallySelection),
+      fileWarnings: [...recoverable.fileWarnings],
+    };
+  }
+
   async function confirmReplacePrompt() {
     const prompt = get(store).replacePrompt;
     if (!prompt) {
@@ -2077,21 +2523,29 @@ export function createMissionPlannerStore(
     if (prompt.kind === "recoverable") {
       store.update((state) => {
         const recoverable = state.recoverableWorkspace;
-        if (!recoverable || !scopeMatchesIdentity(recoverable.scope, currentScope(state))) {
+        const restoreScope = currentScope(state);
+        if (!recoverable || !scopeMatchesIdentity(recoverable.scope, restoreScope)) {
           return withResolvedPhase({
             ...state,
             replacePrompt: null,
           });
         }
 
-        return withResolvedPhase({
-          ...applyWorkspacePair(state, recoverable, currentScope(state)),
+        const currentDraftScope = attachedDraftScope(state);
+        const restoreSource = scopeMatchesIdentity(currentDraftScope, recoverable.scope)
+          ? captureRecoverableWorkspace(state)
+          : recoverable;
+        const restoredHistory = rebaseHistoryState(restoreSource.history, restoreSource.scope, restoreScope);
+
+        return withResolvedPhase(commitHistoryChange(state, {
+          ...applyRecoverableWorkspace(state, restoreSource, restoreScope),
+          history: restoredHistory,
           recoverableWorkspace: null,
           replacePrompt: null,
           blockedReason: null,
-      blockedMode: null,
-      blockedWarningTarget: null,
-        });
+          blockedMode: null,
+          blockedWarningTarget: null,
+        }, ALL_HISTORY_DOMAINS, { historyBase: restoredHistory }));
       });
       return { status: "restored" as const };
     }
@@ -2109,7 +2563,7 @@ export function createMissionPlannerStore(
       return { status: "noop" as const };
     }
 
-    store.update((state) => withResolvedPhase({
+    store.update((state) => withResolvedPhase(commitHistoryChange(state, {
       ...applyWorkspacePair(state, {
         active: incomingWorkspace,
         snapshot: incomingWorkspace,
@@ -2120,7 +2574,7 @@ export function createMissionPlannerStore(
       blockedReason: null,
       blockedMode: null,
       blockedWarningTarget: null,
-    }));
+    }, ALL_HISTORY_DOMAINS)));
 
     return {
       status: "replaced" as const,
@@ -2242,8 +2696,8 @@ export function createMissionPlannerStore(
         return withResolvedPhase({
           ...state,
           blockedReason: null,
-      blockedMode: null,
-      blockedWarningTarget: null,
+          blockedMode: null,
+          blockedWarningTarget: null,
         });
       }
 
@@ -2260,6 +2714,8 @@ export function createMissionPlannerStore(
     subscribe: store.subscribe,
     initialize,
     setMode,
+    undo,
+    redo,
     dismissWarning,
     replaceWorkspace,
     selectHome,
@@ -2454,9 +2910,9 @@ export function resolveMissionPlannerAttachment(state: MissionPlannerStoreState)
     return {
       kind: "detached-local",
       label: "Detached local",
-      detail: "This preserved draft came from another scope. Keep it mounted for reference, but start a new/imported draft or return to the original live scope before editing again.",
-      readOnly: true,
-      canEdit: false,
+      detail: "This preserved draft came from another scope. Keep planning locally and use undo/redo as normal here, but validation, upload, and clear stay blocked until you reattach to a matching live scope.",
+      readOnly: false,
+      canEdit: true,
       canUseVehicleActions: false,
     };
   }
@@ -2464,9 +2920,9 @@ export function resolveMissionPlannerAttachment(state: MissionPlannerStoreState)
   return {
     kind: "detached-local",
     label: "Detached local",
-    detail: `The planner kept the previous draft mounted instead of pretending it matches ${plannerScopeLabel({ activeEnvelope: state.activeEnvelope })}. Read from the vehicle, import a file, or start a new draft to work in this scope.`,
-    readOnly: true,
-    canEdit: false,
+    detail: `The planner kept the previous draft mounted instead of pretending it matches ${plannerScopeLabel({ activeEnvelope: state.activeEnvelope })}. Keep planning locally in this detached draft, or start a new scope-local draft if you want to work directly against the current live session.`,
+    readOnly: false,
+    canEdit: true,
     canUseVehicleActions: false,
   };
 }

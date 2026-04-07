@@ -28,7 +28,7 @@ import { getBuiltinCameras } from "../survey-camera-catalog";
 import type { CorridorResult } from "../corridor-scan";
 import type { StructureScanResult } from "../structure-scan";
 import type { SurveyResult } from "../survey-grid";
-import { createMissionPlannerViewStore, createMissionPlannerStore } from "./mission-planner";
+import { createEmptyMissionPlannerWorkspace, createMissionPlannerViewStore, createMissionPlannerStore } from "./mission-planner";
 import { createSessionStore } from "./session";
 
 function deferred<T>() {
@@ -305,6 +305,30 @@ function makeWorkspace(
   };
 }
 
+function makeCompositeWorkspace() {
+  return {
+    ...makeWorkspace({
+      home: { latitude_deg: 47.52, longitude_deg: 8.61, altitude_m: 505 },
+    }),
+    fence: {
+      return_point: { latitude_deg: 47.521, longitude_deg: 8.611 },
+      regions: [{
+        inclusion_polygon: {
+          vertices: [
+            { latitude_deg: 47.5205, longitude_deg: 8.6105 },
+            { latitude_deg: 47.5215, longitude_deg: 8.6105 },
+            { latitude_deg: 47.5215, longitude_deg: 8.6115 },
+          ],
+          inclusion_group: 0,
+        },
+      }],
+    },
+    rally: {
+      points: [defaultGeoPoint3d(47.523, 8.612, 45)],
+    },
+  };
+}
+
 function makeImportedSurveyExtension(): SurveyDraftExtension {
   const extension = createSurveyDraftExtension();
   const parsed = {
@@ -442,7 +466,14 @@ describe("createMissionPlannerStore", () => {
     });
     expect(state.recoverableWorkspace?.active.survey.surveyRegionOrder).toHaveLength(1);
     expect(view.attachment.kind).toBe("detached-local");
+    expect(view.canEdit).toBe(true);
     expect(view.canUseVehicleActions).toBe(false);
+
+    plannerStore.addMissionItem();
+    state = get(plannerStore);
+    view = get(createMissionPlannerViewStore(plannerStore));
+    expect(state.draftState.active.mission.document.items).toHaveLength(2);
+    expect(view.undoCount).toBeGreaterThan(0);
 
     await sessionStore.bootstrapSource("live");
     await flush();
@@ -453,13 +484,125 @@ describe("createMissionPlannerStore", () => {
     expect(state.replacePrompt?.kind).toBe("recoverable");
     expect(state.home).toEqual({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
     expect(state.survey.surveyRegionOrder).toHaveLength(1);
-    plannerStore.confirmReplacePrompt();
+    await plannerStore.confirmReplacePrompt();
     state = get(plannerStore);
     view = get(createMissionPlannerViewStore(plannerStore));
     expect(view.replacePrompt).toBeNull();
     expect(view.attachment.kind).toBe("live-attached");
     expect(view.dirty).toBe(true);
     expect(view.surveyRegionCount).toBe(1);
+
+    plannerStore.undo("mission");
+    state = get(plannerStore);
+    view = get(createMissionPlannerViewStore(plannerStore));
+    expect(view.attachment.kind).toBe("detached-local");
+    expect(view.canEdit).toBe(true);
+    expect(view.canUseVehicleActions).toBe(false);
+    expect(state.draftState.active.mission.document.items).toHaveLength(2);
+
+    plannerStore.redo("mission");
+    view = get(createMissionPlannerViewStore(plannerStore));
+    expect(view.attachment.kind).toBe("live-attached");
+  });
+
+  it("keeps per-domain history independent and undoes workspace replacement atomically", async () => {
+    const sessionHarness = createSessionHarness([createSnapshot({ envelope: createEnvelope("session-1") })]);
+    const plannerHarness = createPlannerServiceHarness();
+    const fileHarness = createFileIoHarness();
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo);
+    const viewStore = createMissionPlannerViewStore(plannerStore);
+
+    await sessionStore.initialize();
+    await plannerStore.initialize();
+
+    plannerStore.replaceWorkspace(makeCompositeWorkspace());
+
+    let state = get(plannerStore);
+    const rallyUiId = state.draftState.active.rally.draftItems[0]?.uiId;
+    expect(rallyUiId).toBeTypeOf("number");
+
+    plannerStore.setHome({ latitude_deg: 47.6, longitude_deg: 8.7, altitude_m: 510 });
+    plannerStore.setFenceReturnPoint({ latitude_deg: 47.61, longitude_deg: 8.71 });
+    plannerStore.updateRallyPointAltitudeByUiId(rallyUiId!, 80);
+
+    let view = get(viewStore);
+    expect(view.mode).toBe("mission");
+    expect(view.undoCount).toBe(2);
+    expect(view.canRedo).toBe(false);
+
+    plannerStore.setMode("fence");
+    view = get(viewStore);
+    expect(view.undoCount).toBe(2);
+    expect(view.canRedo).toBe(false);
+
+    plannerStore.setMode("rally");
+    view = get(viewStore);
+    expect(view.undoCount).toBe(2);
+    expect(view.canRedo).toBe(false);
+
+    plannerStore.replaceWorkspace(createEmptyMissionPlannerWorkspace());
+
+    state = get(plannerStore);
+    expect(state.home).toBeNull();
+    expect(state.draftState.active.mission.document.items).toHaveLength(0);
+    expect(state.draftState.active.fence.document.regions).toHaveLength(0);
+    expect(state.draftState.active.rally.document.points).toHaveLength(0);
+
+    plannerStore.undo("fence");
+
+    state = get(plannerStore);
+    expect(state.home).toEqual({ latitude_deg: 47.6, longitude_deg: 8.7, altitude_m: 510 });
+    expect(state.draftState.active.mission.document.items).toHaveLength(1);
+    expect(state.draftState.active.fence.document.regions).toHaveLength(1);
+    expect(state.draftState.active.fence.document.return_point).toEqual({ latitude_deg: 47.61, longitude_deg: 8.71 });
+    expect(state.draftState.active.rally.document.points).toHaveLength(1);
+
+    plannerStore.setMode("mission");
+    view = get(viewStore);
+    expect(view.canRedo).toBe(true);
+    expect(view.redoCount).toBe(1);
+
+    plannerStore.redo("rally");
+
+    state = get(plannerStore);
+    expect(state.home).toBeNull();
+    expect(state.draftState.active.mission.document.items).toHaveLength(0);
+    expect(state.draftState.active.fence.document.regions).toHaveLength(0);
+    expect(state.draftState.active.rally.document.points).toHaveLength(0);
+  });
+
+  it("invalidates redo after a new edit and caps mission history at 50 entries", async () => {
+    const sessionHarness = createSessionHarness([createSnapshot({ envelope: createEnvelope("session-1") })]);
+    const plannerHarness = createPlannerServiceHarness();
+    const fileHarness = createFileIoHarness();
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo);
+    const viewStore = createMissionPlannerViewStore(plannerStore);
+
+    await sessionStore.initialize();
+    await plannerStore.initialize();
+
+    plannerStore.replaceWorkspace(createEmptyMissionPlannerWorkspace());
+    plannerStore.addMissionItem();
+    plannerStore.addMissionItem();
+    plannerStore.undo("mission");
+
+    let view = get(viewStore);
+    expect(view.canRedo).toBe(true);
+    expect(view.redoCount).toBe(1);
+
+    plannerStore.addMissionItem();
+    view = get(viewStore);
+    expect(view.canRedo).toBe(false);
+    expect(view.redoCount).toBe(0);
+
+    for (let index = 0; index < 55; index += 1) {
+      plannerStore.addMissionItem();
+    }
+
+    view = get(viewStore);
+    expect(view.undoCount).toBe(50);
   });
 
   it("drops stale async downloads when the session scope changes mid-flight", async () => {
@@ -561,10 +704,10 @@ describe("createMissionPlannerStore", () => {
     expect(state.home).toEqual({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
     expect(state.survey.surveyRegionOrder).toHaveLength(0);
 
-    plannerStore.confirmImportReview();
+    await plannerStore.confirmImportReview();
 
     state = get(plannerStore);
-    const view = get(createMissionPlannerViewStore(plannerStore));
+    let view = get(createMissionPlannerViewStore(plannerStore));
 
     expect(state.pendingImportReview).toBeNull();
     expect(state.home).toEqual({ latitude_deg: 47.39, longitude_deg: 8.53, altitude_m: 488 });
@@ -573,6 +716,19 @@ describe("createMissionPlannerStore", () => {
     expect(view.fileWarningCount).toBe(1);
     expect(view.surveyRegionCount).toBe(1);
     expect(view.dirty).toBe(false);
+    expect(view.canUndo).toBe(true);
+
+    plannerStore.undo("mission");
+
+    state = get(plannerStore);
+    view = get(createMissionPlannerViewStore(plannerStore));
+    expect(state.home).toEqual({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
+    expect(state.survey.surveyRegionOrder).toHaveLength(0);
+    expect(state.draftState.active.mission.document.items).toHaveLength(1);
+    expect(view.canRedo).toBe(true);
+
+    plannerStore.redo("mission");
+    expect(get(createMissionPlannerViewStore(plannerStore)).surveyRegionCount).toBe(1);
   });
 
   it("keeps the current draft untouched when a download fails", async () => {
@@ -592,13 +748,17 @@ describe("createMissionPlannerStore", () => {
     plannerStore.replaceWorkspace(makeWorkspace({
       home: { latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 },
     }));
+    const beforeView = get(createMissionPlannerViewStore(plannerStore));
 
     await plannerStore.downloadFromVehicle();
 
     const state = get(plannerStore);
+    const view = get(createMissionPlannerViewStore(plannerStore));
     expect(state.lastError).toContain("malformed mission download");
     expect(state.home).toEqual({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
     expect(state.draftState.active.mission.document.items).toHaveLength(1);
+    expect(view.undoCount).toBe(beforeView.undoCount);
+    expect(view.canRedo).toBe(beforeView.canRedo);
   });
 
   it("marks playback scopes read-only and blocks mounted draft edits while preserving the current workspace", async () => {
@@ -624,6 +784,7 @@ describe("createMissionPlannerStore", () => {
     const view = get(createMissionPlannerViewStore(plannerStore));
 
     expect(view.attachment.kind).toBe("playback-readonly");
+    expect(view.canEdit).toBe(false);
     expect(view.canUseVehicleActions).toBe(false);
     expect(state.home).toEqual(before);
     expect(state.blockedReason).toContain("playback");
@@ -828,7 +989,7 @@ describe("createMissionPlannerStore", () => {
     const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo, {
       surveyGenerationTimeoutMs: 1,
       surveyEngines: {
-        grid: vi.fn((): Promise<SurveyResult> => new Promise(() => {})),
+        grid: vi.fn((): Promise<SurveyResult> => new Promise(() => { })),
         corridor: vi.fn(async (): Promise<CorridorResult> => ({ ok: false, errors: [] })),
         structure: vi.fn(async (): Promise<StructureScanResult> => ({ ok: false, errors: [] })),
       },

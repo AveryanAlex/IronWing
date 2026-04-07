@@ -78,6 +78,11 @@ export type MissionPlannerView = {
   readiness: "ready" | "bootstrapping" | "unavailable" | "degraded";
   workspaceMounted: boolean;
   mode: MissionPlannerMode;
+  historyDomain: MissionPlannerMode;
+  canUndo: boolean;
+  undoCount: number;
+  canRedo: boolean;
+  redoCount: number;
   attachment: MissionPlannerAttachmentState;
   canUseVehicleActions: boolean;
   canEdit: boolean;
@@ -110,6 +115,7 @@ export function createMissionPlannerViewStore(store: Readable<MissionPlannerStor
     const attachment = resolveMissionPlannerAttachment($planner);
     const status = resolveWorkspaceStatus($planner);
     const readiness = resolveWorkspaceReadiness($planner, status);
+    const history = $planner.history[$planner.mode];
     const effectiveMission = activeTransferMissionPlan($planner);
     const surveyOrder = $planner.survey.surveyRegionOrder
       .map((block, index) => ({ block, index }))
@@ -128,6 +134,11 @@ export function createMissionPlannerViewStore(store: Readable<MissionPlannerStor
       readiness,
       workspaceMounted: $planner.workspaceMounted,
       mode: $planner.mode,
+      historyDomain: $planner.mode,
+      canUndo: history.past.length > 0,
+      undoCount: history.past.length,
+      canRedo: history.future.length > 0,
+      redoCount: history.future.length,
       attachment,
       canUseVehicleActions: attachment.canUseVehicleActions,
       canEdit: attachment.canEdit,

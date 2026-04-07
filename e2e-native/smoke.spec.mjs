@@ -334,6 +334,12 @@ describe("native smoke", () => {
 
     await telemetryClose.waitForClickable({ timeout: 30_000 });
     await telemetryClose.click();
+    await waitForCheckpoint("telemetry toast cleared", async () => await browser.execute(
+      () => document.querySelector('[data-sonner-toaster]') === null,
+    ), {
+      timeout: 10_000,
+      timeoutMsg: "Timed out waiting for the telemetry confirmation toast to clear before continuing the native mission flow.",
+    });
 
     await missionWorkspaceButton.waitForClickable({ timeout: 30_000 });
     await missionWorkspaceButton.click();
