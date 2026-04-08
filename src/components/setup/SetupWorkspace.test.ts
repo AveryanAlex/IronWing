@@ -757,14 +757,17 @@ describe("SetupWorkspace", () => {
 
     expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("overview");
     expect(screen.getByTestId(setupWorkspaceTestIds.overviewSection)).toBeTruthy();
-    expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain("Partial live facts stay explicit");
+    expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain("Grouped progress stays conservative");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`).textContent?.trim()).toBe("Unknown");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionConfidencePrefix}-frame_orientation`).textContent?.trim()).toBe("Unconfirmed");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navGroupPrefix}-hardware`)).toBeTruthy();
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navGroupProgressPrefix}-hardware`).textContent).toContain("1/6 confirmed");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewGroupPrefix}-safety`)).toBeTruthy();
     expect(screen.getByTestId(setupWorkspaceTestIds.detailRecovery).textContent).toContain("Full Parameters stays separate");
     expect(screen.getByTestId(setupWorkspaceTestIds.notices).textContent).toContain("Compass not calibrated");
   });
 
-  it("keeps full parameters as the explicit recovery surface when metadata is unavailable", async () => {
+  it("keeps blocked sections inspectable while metadata recovery is active", async () => {
     await renderSetupWorkspace({ metadata: null });
 
     await waitFor(() => {
@@ -775,9 +778,18 @@ describe("SetupWorkspace", () => {
     expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain(
       "Metadata missing — recovery mode is active",
     );
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).getAttribute("disabled")).not.toBeNull();
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).getAttribute("data-availability")).toBe("blocked");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`)).toBeTruthy();
 
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`));
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("gps");
+      expect(screen.getByTestId(setupWorkspaceTestIds.plannedSection)).toBeTruthy();
+      expect(screen.getByTestId(setupWorkspaceTestIds.detailStatus).textContent).toContain("GPS");
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.plannedSectionRecovery));
 
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("full_parameters");

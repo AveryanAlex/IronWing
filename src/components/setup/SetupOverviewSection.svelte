@@ -10,15 +10,18 @@ let {
   onSelect: (sectionId: string) => void;
 } = $props();
 
-let guidedSections = $derived(view.sections.filter((section) => section.kind === "guided"));
+let guidedGroups = $derived(
+  view.sectionGroups.filter((group) => group.sections.some((section) => section.kind === "guided")),
+);
+let guidedSections = $derived(guidedGroups.flatMap((group) => group.sections));
 let unknownCount = $derived(guidedSections.filter((section) => section.status === "unknown").length);
-let gatedCount = $derived(guidedSections.filter((section) => section.availability === "gated").length);
+let blockedCount = $derived(guidedSections.filter((section) => section.availability === "blocked").length);
 let bannerTone = $derived.by(() => {
   if (view.metadataState === "unavailable" || view.readiness === "degraded") {
     return "border-warning/40 bg-warning/10 text-warning";
   }
 
-  if (unknownCount > 0) {
+  if (unknownCount > 0 || blockedCount > 0) {
     return "border-border bg-bg-primary/80 text-text-secondary";
   }
 
@@ -34,11 +37,11 @@ let bannerTitle = $derived.by(() => {
   }
 
   if (view.readiness === "degraded") {
-    return "Overview is live, but guided controls are limited";
+    return "Overview is live, but expert sections are limited";
   }
 
-  if (unknownCount > 0) {
-    return "Partial live facts stay explicit";
+  if (unknownCount > 0 || blockedCount > 0) {
+    return "Grouped progress stays conservative";
   }
 
   return "Overview is fully live";
@@ -53,14 +56,14 @@ let bannerBody = $derived.by(() => {
   }
 
   if (view.readiness === "degraded") {
-    return "The shell is carrying degraded setup truth. Keep using the dashboard for status, and switch to Full Parameters when a guided card cannot prove its current state.";
+    return "The shell is carrying degraded setup truth. Keep using the grouped dashboard for status, and switch to Full Parameters when a guided card cannot prove its current state.";
   }
 
-  if (unknownCount > 0) {
-    return `Unknown sections remain unconfirmed instead of bluffing completion. ${gatedCount > 0 ? "Blocked cards route you back through Full Parameters until metadata recovers." : "Open the next card only when the live facts look trustworthy."}`;
+  if (unknownCount > 0 || blockedCount > 0) {
+    return `${blockedCount} blocked and ${unknownCount} unconfirmed sections remain visible instead of disappearing from the expert path.`;
   }
 
-  return "Use the quick actions to move into purpose-built setup editors while the shared review tray keeps ownership of staged changes.";
+  return "Use the grouped expert path to move into purpose-built setup editors while the shared review tray keeps ownership of staged changes.";
 });
 </script>
 
@@ -90,37 +93,68 @@ let bannerBody = $derived.by(() => {
     </button>
   </div>
 
-  <div class="grid gap-3 md:grid-cols-3">
-    {#each guidedSections as section (section.id)}
+  <div class="space-y-4">
+    {#each guidedGroups as group (group.id)}
       <article
         class="rounded-2xl border border-border bg-bg-primary/80 p-4"
-        data-testid={`${setupWorkspaceTestIds.overviewCardPrefix}-${section.id}`}
+        data-testid={`${setupWorkspaceTestIds.overviewGroupPrefix}-${group.id}`}
       >
-        <div class="flex items-start justify-between gap-3">
+        <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p class="text-sm font-semibold text-text-primary">{section.title}</p>
-            <p class="mt-1 text-xs text-text-secondary">{section.description}</p>
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{group.title}</p>
+            <p class="mt-1 text-sm leading-6 text-text-secondary">{group.description}</p>
           </div>
-          <span class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
-            {section.statusText}
-          </span>
+          <div class="text-right">
+            <p
+              class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary"
+              data-testid={`${setupWorkspaceTestIds.overviewGroupProgressPrefix}-${group.id}`}
+            >
+              {group.progressText}
+            </p>
+            <p class="mt-2 text-[11px] text-text-muted">
+              {group.blockedCount} blocked · {group.unconfirmedCount} unconfirmed
+            </p>
+          </div>
         </div>
 
-        {#if section.confidenceText}
-          <p class="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
-            {section.confidenceText}
-          </p>
-        {/if}
+        <div class="mt-4 grid gap-3 xl:grid-cols-2">
+          {#each group.sections as section (section.id)}
+            <div
+              class="rounded-2xl border border-border bg-bg-secondary/60 p-4"
+              data-testid={`${setupWorkspaceTestIds.overviewCardPrefix}-${section.id}`}
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-sm font-semibold text-text-primary">{section.title}</p>
+                  <p class="mt-1 text-xs text-text-secondary">{section.description}</p>
+                </div>
+                <span class="rounded-full border border-border bg-bg-primary/80 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                  {section.statusText}
+                </span>
+              </div>
 
-        <p class="mt-3 text-sm leading-6 text-text-secondary">{section.detailText}</p>
+              {#if section.confidenceText}
+                <p class="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+                  {section.confidenceText}
+                </p>
+              {/if}
 
-        <button
-          class="mt-4 rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-          onclick={() => onSelect(section.availability === "available" ? section.id : "full_parameters")}
-          type="button"
-        >
-          {section.availability === "available" ? `Open ${section.title}` : "Use Full Parameters"}
-        </button>
+              <p class="mt-3 text-sm leading-6 text-text-secondary">{section.detailText}</p>
+
+              {#if section.gateText}
+                <p class="mt-3 text-sm leading-6 text-warning">{section.gateText}</p>
+              {/if}
+
+              <button
+                class="mt-4 rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+                onclick={() => onSelect(section.id)}
+                type="button"
+              >
+                {section.availability === "available" ? `Open ${section.title}` : `Inspect ${section.title}`}
+              </button>
+            </div>
+          {/each}
+        </div>
       </article>
     {/each}
   </div>

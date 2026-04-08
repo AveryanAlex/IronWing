@@ -8,7 +8,11 @@ import { deriveSetupSectionStatuses } from "../configuration-facts";
 import { selectTelemetryView } from "../telemetry-selectors";
 import {
   SECTION_IDS,
+  SETUP_SECTION_CATALOG,
   computeOverallProgress,
+  getSetupSectionDefinition,
+  getSetupSectionGroupDefinition,
+  groupSetupSections,
   type OverallProgress,
   type SectionStatus,
   type SetupSectionId,
@@ -16,20 +20,8 @@ import {
 import type { ParamsMetadataState, ParamsStoreState } from "./params";
 import type { SessionStorePhase, SessionStoreState } from "./session";
 
-const NAVIGABLE_SECTION_IDS = [
-  "overview",
-  "frame_orientation",
-  "motors_esc",
-  "servo_outputs",
-  "rc_receiver",
-  "calibration",
-  "full_parameters",
-] as const satisfies readonly SetupSectionId[];
-
-type NavigableSetupSectionId = (typeof NAVIGABLE_SECTION_IDS)[number];
-
 type SetupCheckpointSeed = {
-  resumeSectionId: NavigableSetupSectionId;
+  resumeSectionId: SetupSectionId;
   scopeKey: string | null;
   scopeFamilyKey: string | null;
   resumeRevision: number | null;
@@ -41,52 +33,25 @@ type RcSignalState = "disconnected" | "waiting" | "live" | "stale" | "degraded";
 
 type CalibrationActionAvailability = "available" | "blocked" | "unsupported";
 
-const NAVIGABLE_SECTION_ID_SET = new Set<SetupSectionId>(NAVIGABLE_SECTION_IDS);
+type ScopedSectionConfirmations = Partial<Record<SetupSectionId, boolean>>;
 
-const SECTION_META: Record<NavigableSetupSectionId, {
-  title: string;
-  description: string;
-  kind: "overview" | "guided" | "recovery";
-}> = {
-  overview: {
-    title: "Overview",
-    description: "Truthful setup landing with live section status and recovery guidance.",
-    kind: "overview",
-  },
-  frame_orientation: {
-    title: "Frame & orientation",
-    description: "Vehicle layout, frame class, and orientation confirmation.",
-    kind: "guided",
-  },
-  motors_esc: {
-    title: "Motors & ESC",
-    description: "VTOL motor ownership, direction proof, and fail-closed test readiness.",
-    kind: "guided",
-  },
-  servo_outputs: {
-    title: "Servo outputs",
-    description: "Function-aware output inspection, reversal staging, and live readback truth.",
-    kind: "guided",
-  },
-  rc_receiver: {
-    title: "RC receiver",
-    description: "Live channel mapping, preset order, and receiver truth.",
-    kind: "guided",
-  },
-  calibration: {
-    title: "Calibration",
-    description: "Sensor and compass lifecycle status with explicit action gating.",
-    kind: "guided",
-  },
-  full_parameters: {
-    title: "Full Parameters",
-    description: "Shared raw-parameter recovery surface with the shell-owned review tray.",
-    kind: "recovery",
-  },
+type SetupWorkspaceConfirmationPayload = {
+  scopeKey?: unknown;
+  confirmedSections?: unknown;
 };
 
+const IMPLEMENTED_SECTION_ID_SET = new Set<SetupSectionId>([
+  "overview",
+  "frame_orientation",
+  "motors_esc",
+  "servo_outputs",
+  "rc_receiver",
+  "calibration",
+  "full_parameters",
+]);
+
 export type SetupWorkspaceReadiness = "bootstrapping" | "unavailable" | "ready" | "degraded";
-export type SetupWorkspaceSectionAvailability = "available" | "gated";
+export type SetupWorkspaceSectionAvailability = "available" | "blocked";
 export type SetupWorkspaceCheckpointPhase = "idle" | "resume_pending" | "resume_complete" | "scope_changed";
 
 export type SetupWorkspaceCheckpointState = {
@@ -102,17 +67,32 @@ export type SetupWorkspaceCheckpointState = {
 };
 
 export type SetupWorkspaceSection = {
-  id: NavigableSetupSectionId;
+  id: SetupSectionId;
   title: string;
   description: string;
   kind: "overview" | "guided" | "recovery";
+  groupId: string;
+  groupTitle: string;
   availability: SetupWorkspaceSectionAvailability;
   status: SectionStatus | null;
   statusText: string;
   confidenceText: string | null;
   gateText: string | null;
   detailText: string;
+  trackable: boolean;
   implemented: boolean;
+};
+
+export type SetupWorkspaceSectionGroup = {
+  id: string;
+  title: string;
+  description: string;
+  sections: SetupWorkspaceSection[];
+  progress: OverallProgress;
+  progressText: string;
+  blockedCount: number;
+  unconfirmedCount: number;
+  implementedCount: number;
 };
 
 export type SetupWorkspaceRcChannel = {
@@ -165,9 +145,12 @@ export type SetupWorkspaceStoreState = {
   noticeText: string | null;
   progress: OverallProgress;
   progressText: string;
-  selectedSectionId: NavigableSetupSectionId;
+  selectedSectionId: SetupSectionId;
   sections: SetupWorkspaceSection[];
+  sectionGroups: SetupWorkspaceSectionGroup[];
   sectionStatuses: Record<SetupSectionId, SectionStatus>;
+  sectionConfirmations: Record<SetupSectionId, boolean>;
+  confirmationScopeKey: string | null;
   checkpoint: SetupWorkspaceCheckpointState;
   statusNotices: CompactStatusNotice[];
   rcReceiver: SetupWorkspaceRcReceiverState;
@@ -262,12 +245,62 @@ function createUnknownSectionStatusRecord(): Record<SetupSectionId, SectionStatu
   return Object.fromEntries(SECTION_IDS.map((id) => [id, "unknown"])) as Record<SetupSectionId, SectionStatus>;
 }
 
+function createEmptySectionConfirmationRecord(): Record<SetupSectionId, boolean> {
+  return Object.fromEntries(SECTION_IDS.map((id) => [id, false])) as Record<SetupSectionId, boolean>;
+}
+
 function isSetupSectionId(value: string): value is SetupSectionId {
   return SECTION_IDS.includes(value as SetupSectionId);
 }
 
-function isNavigableSectionId(value: string): value is NavigableSetupSectionId {
-  return NAVIGABLE_SECTION_ID_SET.has(value as SetupSectionId);
+function normalizeScopedSectionConfirmations(input: unknown): ScopedSectionConfirmations {
+  if (Array.isArray(input)) {
+    return Object.fromEntries(
+      input.filter((value): value is SetupSectionId => typeof value === "string" && isSetupSectionId(value)).map((id) => [id, true]),
+    ) as ScopedSectionConfirmations;
+  }
+
+  if (!input || typeof input !== "object") {
+    return {};
+  }
+
+  const confirmations: ScopedSectionConfirmations = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (isSetupSectionId(key) && value === true) {
+      confirmations[key] = true;
+    }
+  }
+
+  return confirmations;
+}
+
+function normalizeSectionConfirmationPayload(input: unknown): {
+  scopeKey: string | null;
+  confirmedSections: ScopedSectionConfirmations;
+} {
+  const payload = (input ?? {}) as SetupWorkspaceConfirmationPayload;
+  const scopeKey = typeof payload.scopeKey === "string" && payload.scopeKey.trim().length > 0
+    ? payload.scopeKey
+    : null;
+
+  return {
+    scopeKey,
+    confirmedSections: normalizeScopedSectionConfirmations(payload.confirmedSections),
+  };
+}
+
+function toSectionConfirmationRecord(input: ScopedSectionConfirmations | null | undefined): Record<SetupSectionId, boolean> {
+  const record = createEmptySectionConfirmationRecord();
+
+  if (!input) {
+    return record;
+  }
+
+  for (const id of SECTION_IDS) {
+    record[id] = input[id] === true;
+  }
+
+  return record;
 }
 
 function scopeKey(envelope: SessionEnvelope | null): string | null {
@@ -439,7 +472,7 @@ function formatSectionStatusText(status: SectionStatus): string {
   }
 }
 
-function describeGuidedSectionStatus(status: SectionStatus, sectionId: NavigableSetupSectionId): string {
+function describeGuidedSectionStatus(status: SectionStatus, sectionId: SetupSectionId): string {
   if (sectionId === "motors_esc") {
     switch (status) {
       case "complete":
@@ -525,11 +558,11 @@ function resolveGuidedSectionGateText(input: {
   liveSessionConnected: boolean;
 }): string | null {
   if (!input.sessionState.activeEnvelope) {
-    return "Connect to a live session to open this section.";
+    return "Connect to a live session to inspect this section.";
   }
 
   if (input.sessionState.activeSource === "playback") {
-    return "Purpose-built setup sections stay disabled during playback.";
+    return "Purpose-built setup sections stay blocked during playback, but the section remains inspectable.";
   }
 
   if (input.metadataGateText) {
@@ -537,7 +570,7 @@ function resolveGuidedSectionGateText(input: {
   }
 
   if (!input.liveSessionConnected) {
-    return "This section stays limited until the live vehicle connection is active.";
+    return "This section stays blocked until the live vehicle connection is active.";
   }
 
   return null;
@@ -549,8 +582,8 @@ function resolveFullParametersAvailability(sessionState: SessionStoreState): {
 } {
   if (sessionState.activeSource === "playback") {
     return {
-      availability: "gated",
-      gateText: "Full Parameters recovery stays disabled during playback.",
+      availability: "blocked",
+      gateText: "Full Parameters recovery stays disabled during playback, but the recovery section remains visible.",
     };
   }
 
@@ -560,7 +593,25 @@ function resolveFullParametersAvailability(sessionState: SessionStoreState): {
   };
 }
 
-function buildNavigableSections(input: {
+function describePlannedSectionStatus(status: SectionStatus, sectionId: SetupSectionId): string {
+  const definition = getSetupSectionDefinition(sectionId);
+
+  switch (status) {
+    case "complete":
+      return `${definition.title} is confirmed for this scope. The purpose-built editor lands later in this slice, so the workspace keeps the section visible without inventing controls.`;
+    case "in_progress":
+      return `${definition.title} is partially confirmed for this scope. Keep progress conservative until the dedicated editor lands and can prove the next step.`;
+    case "failed":
+      return `${definition.title} reported a failed or blocked state. Review the current vehicle values or recover through Full Parameters before retrying.`;
+    case "not_started":
+      return `${definition.title} is visible in the expert catalog, but the current scope has not confirmed it yet.`;
+    case "unknown":
+    default:
+      return `${definition.title} truth is still partial for this scope, so the workspace keeps it visible and unconfirmed instead of bluffing completion.`;
+  }
+}
+
+function buildCatalogSections(input: {
   sessionState: SessionStoreState;
   sectionStatuses: Record<SetupSectionId, SectionStatus>;
   metadataGateText: string | null;
@@ -573,26 +624,37 @@ function buildNavigableSections(input: {
   });
   const fullParametersState = resolveFullParametersAvailability(input.sessionState);
 
-  return NAVIGABLE_SECTION_IDS.map((id) => {
-    const meta = SECTION_META[id];
-    if (id === "overview") {
+  return SETUP_SECTION_CATALOG.map((definition) => {
+    const group = getSetupSectionGroupDefinition(definition.groupId);
+    const implemented = IMPLEMENTED_SECTION_ID_SET.has(definition.id);
+
+    if (definition.id === "overview") {
       return {
-        id,
-        ...meta,
+        id: definition.id,
+        title: definition.title,
+        description: definition.description,
+        kind: definition.kind,
+        groupId: group.id,
+        groupTitle: group.title,
         availability: "available",
         status: null,
         statusText: "Dashboard",
         confidenceText: null,
         gateText: null,
-        detailText: "Use the dashboard to inspect truthful setup status before opening a section.",
-        implemented: true,
+        detailText: "Use the grouped dashboard to inspect truthful setup status before opening a section.",
+        trackable: definition.trackable,
+        implemented,
       } satisfies SetupWorkspaceSection;
     }
 
-    if (id === "full_parameters") {
+    if (definition.id === "full_parameters") {
       return {
-        id,
-        ...meta,
+        id: definition.id,
+        title: definition.title,
+        description: definition.description,
+        kind: definition.kind,
+        groupId: group.id,
+        groupTitle: group.title,
         availability: fullParametersState.availability,
         status: null,
         statusText: "Recovery",
@@ -600,22 +662,65 @@ function buildNavigableSections(input: {
         gateText: fullParametersState.gateText,
         detailText: fullParametersState.gateText
           ?? "Open the shared parameter workspace when metadata is degraded or you need raw access.",
-        implemented: true,
+        trackable: definition.trackable,
+        implemented,
       } satisfies SetupWorkspaceSection;
     }
 
-    const status = input.sectionStatuses[id];
+    const status = input.sectionStatuses[definition.id];
+    const gateText = guidedGateText;
+
     return {
-      id,
-      ...meta,
-      availability: guidedGateText ? "gated" : "available",
+      id: definition.id,
+      title: definition.title,
+      description: definition.description,
+      kind: definition.kind,
+      groupId: group.id,
+      groupTitle: group.title,
+      availability: gateText ? "blocked" : "available",
       status,
       statusText: formatSectionStatusText(status),
       confidenceText: status === "unknown" ? "Unconfirmed" : null,
-      gateText: guidedGateText,
-      detailText: guidedGateText ?? describeGuidedSectionStatus(status, id),
-      implemented: true,
+      gateText,
+      detailText: gateText
+        ? `${gateText} ${implemented ? describeGuidedSectionStatus(status, definition.id) : describePlannedSectionStatus(status, definition.id)}`
+        : implemented
+          ? describeGuidedSectionStatus(status, definition.id)
+          : describePlannedSectionStatus(status, definition.id),
+      trackable: definition.trackable,
+      implemented,
     } satisfies SetupWorkspaceSection;
+  });
+}
+
+function buildSectionGroups(sections: SetupWorkspaceSection[]): SetupWorkspaceSectionGroup[] {
+  return groupSetupSections(sections).map(({ group, sections: groupedSections }) => {
+    const progress = computeOverallProgress(new Map(
+      groupedSections
+        .filter((section) => section.status !== null)
+        .map((section) => [section.id, section.status ?? "unknown"]),
+    ));
+
+    let progressText = `${progress.completed}/${progress.total} confirmed`;
+    if (progress.total === 0) {
+      progressText = group.id === "workspace"
+        ? "Dashboard"
+        : group.id === "recovery"
+          ? "Recovery"
+          : "Status only";
+    }
+
+    return {
+      id: group.id,
+      title: group.title,
+      description: group.description,
+      sections: groupedSections,
+      progress,
+      progressText,
+      blockedCount: groupedSections.filter((section) => section.availability === "blocked").length,
+      unconfirmedCount: groupedSections.filter((section) => section.status === "unknown" || section.status === "not_started").length,
+      implementedCount: groupedSections.filter((section) => section.implemented).length,
+    } satisfies SetupWorkspaceSectionGroup;
   });
 }
 
@@ -623,6 +728,7 @@ function deriveSectionStatuses(
   sessionState: SessionStoreState,
   previousStatuses: Record<SetupSectionId, SectionStatus> | null,
   sameScope: boolean,
+  currentScopeConfirmations: ScopedSectionConfirmations,
 ): Record<SetupSectionId, SectionStatus> {
   if (!sessionState.activeEnvelope) {
     return createUnknownSectionStatusRecord();
@@ -630,7 +736,7 @@ function deriveSectionStatuses(
 
   const next = deriveSetupSectionStatuses({
     vehicle_type: sessionState.sessionDomain.value?.vehicle_state?.vehicle_type ?? null,
-    confirmed_sections: {},
+    confirmed_sections: currentScopeConfirmations,
     support: sessionState.support,
     sensor_health: sessionState.sensorHealth,
     configuration_facts: sessionState.configurationFacts,
@@ -1087,18 +1193,75 @@ function normalizeCheckpointInput(input: SetupWorkspaceCheckpointInput): SetupWo
 function resolveSelectedSectionId(
   requested: SetupSectionId,
   sections: SetupWorkspaceSection[],
-  allowGatedSelection = false,
-): NavigableSetupSectionId {
-  const requestedSection = sections.find((section) => section.id === requested);
-  if (requestedSection && (requestedSection.availability === "available" || allowGatedSelection)) {
-    return requestedSection.id;
-  }
-
-  return "overview";
+): SetupSectionId {
+  return sections.some((section) => section.id === requested) ? requested : "overview";
 }
 
 function createInitialWorkspaceState(): SetupWorkspaceStoreState {
   const sectionStatuses = createUnknownSectionStatusRecord();
+  const sections = SETUP_SECTION_CATALOG.map((definition) => {
+    const group = getSetupSectionGroupDefinition(definition.groupId);
+    const implemented = IMPLEMENTED_SECTION_ID_SET.has(definition.id);
+
+    if (definition.id === "overview") {
+      return {
+        id: definition.id,
+        title: definition.title,
+        description: definition.description,
+        kind: definition.kind,
+        groupId: group.id,
+        groupTitle: group.title,
+        availability: "available",
+        status: null,
+        statusText: "Dashboard",
+        confidenceText: null,
+        gateText: null,
+        detailText: "Use the grouped dashboard to inspect truthful setup status before opening a section.",
+        trackable: definition.trackable,
+        implemented,
+      } satisfies SetupWorkspaceSection;
+    }
+
+    if (definition.id === "full_parameters") {
+      return {
+        id: definition.id,
+        title: definition.title,
+        description: definition.description,
+        kind: definition.kind,
+        groupId: group.id,
+        groupTitle: group.title,
+        availability: "available",
+        status: null,
+        statusText: "Recovery",
+        confidenceText: null,
+        gateText: null,
+        detailText: "Open the shared parameter workspace when metadata is degraded or you need raw access.",
+        trackable: definition.trackable,
+        implemented,
+      } satisfies SetupWorkspaceSection;
+    }
+
+    return {
+      id: definition.id,
+      title: definition.title,
+      description: definition.description,
+      kind: definition.kind,
+      groupId: group.id,
+      groupTitle: group.title,
+      availability: "blocked",
+      status: sectionStatuses[definition.id],
+      statusText: "Unknown",
+      confidenceText: "Unconfirmed",
+      gateText: "Connect to a live session to inspect this section.",
+      detailText: implemented
+        ? describeGuidedSectionStatus(sectionStatuses[definition.id], definition.id)
+        : describePlannedSectionStatus(sectionStatuses[definition.id], definition.id),
+      trackable: definition.trackable,
+      implemented,
+    } satisfies SetupWorkspaceSection;
+  });
+  const progress = computeOverallProgress(new Map(SECTION_IDS.map((id) => [id, sectionStatuses[id]])));
+
   return {
     readiness: "bootstrapping",
     stateText: "Bootstrapping setup",
@@ -1114,89 +1277,14 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
     metadataGateActive: true,
     metadataGateText: "Setup is still waiting for parameter metadata before enabling purpose-built sections.",
     noticeText: "Waiting for session and parameter domains to finish bootstrapping.",
-    progress: computeOverallProgress(new Map(SECTION_IDS.map((id) => [id, sectionStatuses[id]]))),
-    progressText: "0/13 confirmed",
+    progress,
+    progressText: formatProgressText(progress),
     selectedSectionId: "overview",
-    sections: [
-      {
-        id: "overview",
-        ...SECTION_META.overview,
-        availability: "available",
-        status: null,
-        statusText: "Dashboard",
-        confidenceText: null,
-        gateText: null,
-        detailText: "Use the dashboard to inspect truthful setup status before opening a section.",
-        implemented: true,
-      },
-      {
-        id: "frame_orientation",
-        ...SECTION_META.frame_orientation,
-        availability: "gated",
-        status: "unknown",
-        statusText: "Unknown",
-        confidenceText: "Unconfirmed",
-        gateText: "Connect to a live session to open this section.",
-        detailText: "Live facts are partial, so this section stays unconfirmed instead of bluffing completion.",
-        implemented: true,
-      },
-      {
-        id: "motors_esc",
-        ...SECTION_META.motors_esc,
-        availability: "gated",
-        status: "unknown",
-        statusText: "Unknown",
-        confidenceText: "Unconfirmed",
-        gateText: "Connect to a live session to open this section.",
-        detailText: "Motor and ESC truth is still partial, so the section stays explicit instead of guessing output ownership.",
-        implemented: true,
-      },
-      {
-        id: "servo_outputs",
-        ...SECTION_META.servo_outputs,
-        availability: "gated",
-        status: "unknown",
-        statusText: "Unknown",
-        confidenceText: "Unconfirmed",
-        gateText: "Connect to a live session to open this section.",
-        detailText: "Servo output truth is still partial, so the section stays explicit instead of bluffing configured state.",
-        implemented: true,
-      },
-      {
-        id: "rc_receiver",
-        ...SECTION_META.rc_receiver,
-        availability: "gated",
-        status: "unknown",
-        statusText: "Unknown",
-        confidenceText: "Unconfirmed",
-        gateText: "Connect to a live session to open this section.",
-        detailText: "Receiver truth is still partial, so the section stays explicit instead of guessing live RC state.",
-        implemented: true,
-      },
-      {
-        id: "calibration",
-        ...SECTION_META.calibration,
-        availability: "gated",
-        status: "unknown",
-        statusText: "Unknown",
-        confidenceText: "Unconfirmed",
-        gateText: "Connect to a live session to open this section.",
-        detailText: "Calibration truth is partial, so the lifecycle stays unconfirmed instead of bluffing readiness.",
-        implemented: true,
-      },
-      {
-        id: "full_parameters",
-        ...SECTION_META.full_parameters,
-        availability: "available",
-        status: null,
-        statusText: "Recovery",
-        confidenceText: null,
-        gateText: null,
-        detailText: "Open the shared parameter workspace when metadata is degraded or you need raw access.",
-        implemented: true,
-      },
-    ],
+    sections,
+    sectionGroups: buildSectionGroups(sections),
     sectionStatuses,
+    sectionConfirmations: createEmptySectionConfirmationRecord(),
+    confirmationScopeKey: null,
     checkpoint: createIdleCheckpoint(),
     statusNotices: [],
     rcReceiver: createInitialRcReceiverState(),
@@ -1218,6 +1306,8 @@ export function createSetupWorkspaceStore(
   let previous: SetupWorkspaceStoreState | null = null;
   let previousScopeKey: string | null = null;
   let previousApplyPhase: ParamsStoreState["applyPhase"] = "idle";
+  let currentActiveScopeKey: string | null = null;
+  const sectionConfirmationsByScope = new Map<string, ScopedSectionConfirmations>();
 
   function recompute() {
     if (!sessionState || !paramsState) {
@@ -1228,16 +1318,22 @@ export function createSetupWorkspaceStore(
     const activeFamily = scopeFamilyKey(sessionState.activeEnvelope);
     const activeRevision = sessionState.activeEnvelope?.reset_revision ?? null;
     const sameScope = activeScopeKey !== null && activeScopeKey === previousScopeKey;
+    currentActiveScopeKey = activeScopeKey;
+    const currentScopeConfirmations = activeScopeKey ? sectionConfirmationsByScope.get(activeScopeKey) ?? {} : {};
     const readiness = resolveSetupReadiness(sessionState, paramsState);
     const metadataGateText = resolveMetadataGateText(paramsState);
     const liveSessionConnected = sessionState.sessionDomain.value?.connection.kind === "connected";
-    const sectionStatuses = deriveSectionStatuses(sessionState, previous?.sectionStatuses ?? null, sameScope);
+    const sectionStatuses = deriveSectionStatuses(
+      sessionState,
+      previous?.sectionStatuses ?? null,
+      sameScope,
+      currentScopeConfirmations,
+    );
 
     const hasRebootRequiredEdits = Object.values(paramsState.stagedEdits).some((edit) => edit.rebootRequired);
     if (paramsState.applyPhase === "applying" && hasRebootRequiredEdits && pendingCheckpointSeed === null) {
-      const resumeSection = isNavigableSectionId(selectedSectionId) ? selectedSectionId : "overview";
       pendingCheckpointSeed = {
-        resumeSectionId: resumeSection,
+        resumeSectionId: selectedSectionId,
         scopeKey: activeScopeKey,
         scopeFamilyKey: activeFamily,
         resumeRevision: activeRevision,
@@ -1246,7 +1342,7 @@ export function createSetupWorkspaceStore(
 
     if (previousApplyPhase === "applying" && paramsState.applyPhase !== "applying") {
       if (pendingCheckpointSeed && paramsState.applyPhase === "idle") {
-        const resumeLabel = SECTION_META[pendingCheckpointSeed.resumeSectionId].title;
+        const resumeLabel = getSetupSectionDefinition(pendingCheckpointSeed.resumeSectionId).title;
         checkpointState = {
           phase: "resume_pending",
           resumeSectionId: pendingCheckpointSeed.resumeSectionId,
@@ -1286,7 +1382,7 @@ export function createSetupWorkspaceStore(
         && checkpointState.resumeRevision !== activeRevision
         && liveSessionConnected
       ) {
-        const resumeSection = checkpointState.resumeSectionId && isNavigableSectionId(checkpointState.resumeSectionId)
+        const resumeSection = checkpointState.resumeSectionId && isSetupSectionId(checkpointState.resumeSectionId)
           ? checkpointState.resumeSectionId
           : "overview";
         selectedSectionId = resumeSection;
@@ -1296,23 +1392,21 @@ export function createSetupWorkspaceStore(
           scopeKey: activeScopeKey,
           scopeFamilyKey: activeFamily,
           resumeRevision: activeRevision,
-          reason: `Resumed ${SECTION_META[resumeSection].title}.`,
+          reason: `Resumed ${getSetupSectionDefinition(resumeSection).title}.`,
           title: "Setup resumed",
-          detailText: `Reconnected to the same setup scope. Resumed ${SECTION_META[resumeSection].title} so you can continue from the last guided section.`,
+          detailText: `Reconnected to the same setup scope. Resumed ${getSetupSectionDefinition(resumeSection).title} so you can continue from the last guided section.`,
           blocksActions: false,
         };
       }
     }
 
-    const sections = buildNavigableSections({
+    const sections = buildCatalogSections({
       sessionState,
       sectionStatuses,
       metadataGateText,
       liveSessionConnected,
     });
-    const allowGatedResumeSelection = checkpointState.phase === "resume_complete"
-      && checkpointState.resumeSectionId === selectedSectionId;
-    selectedSectionId = resolveSelectedSectionId(selectedSectionId, sections, allowGatedResumeSelection);
+    selectedSectionId = resolveSelectedSectionId(selectedSectionId, sections);
 
     const progress = computeOverallProgress(new Map(SECTION_IDS.map((id) => [id, sectionStatuses[id]])));
     const statusNotices = resolveStatusNotices(
@@ -1332,6 +1426,7 @@ export function createSetupWorkspaceStore(
       checkpoint: checkpointState,
       liveSessionConnected,
     });
+    const sectionConfirmations = toSectionConfirmationRecord(currentScopeConfirmations);
 
     const next: SetupWorkspaceStoreState = {
       readiness,
@@ -1357,7 +1452,10 @@ export function createSetupWorkspaceStore(
       progressText: formatProgressText(progress),
       selectedSectionId,
       sections,
+      sectionGroups: buildSectionGroups(sections),
       sectionStatuses,
+      sectionConfirmations,
+      confirmationScopeKey: activeScopeKey,
       checkpoint: checkpointState,
       statusNotices,
       rcReceiver,
@@ -1386,11 +1484,54 @@ export function createSetupWorkspaceStore(
   return {
     subscribe: state.subscribe,
     selectSection(nextSectionId: string) {
-      if (!isNavigableSectionId(nextSectionId)) {
+      if (!isSetupSectionId(nextSectionId)) {
         return;
       }
 
       selectedSectionId = nextSectionId;
+      recompute();
+    },
+    confirmSection(sectionId: string) {
+      if (!isSetupSectionId(sectionId) || !currentActiveScopeKey) {
+        return;
+      }
+
+      const definition = getSetupSectionDefinition(sectionId);
+      if (definition.kind !== "guided") {
+        return;
+      }
+
+      const next = {
+        ...(sectionConfirmationsByScope.get(currentActiveScopeKey) ?? {}),
+        [sectionId]: true,
+      } satisfies ScopedSectionConfirmations;
+      sectionConfirmationsByScope.set(currentActiveScopeKey, next);
+      recompute();
+    },
+    clearSectionConfirmation(sectionId: string) {
+      if (!isSetupSectionId(sectionId) || !currentActiveScopeKey) {
+        return;
+      }
+
+      const next = {
+        ...(sectionConfirmationsByScope.get(currentActiveScopeKey) ?? {}),
+      } satisfies ScopedSectionConfirmations;
+      delete next[sectionId];
+      sectionConfirmationsByScope.set(currentActiveScopeKey, next);
+      recompute();
+    },
+    replaceSectionConfirmations(input: unknown) {
+      const normalized = normalizeSectionConfirmationPayload(input);
+
+      if (!normalized.scopeKey) {
+        if (currentActiveScopeKey) {
+          sectionConfirmationsByScope.set(currentActiveScopeKey, {});
+          recompute();
+        }
+        return;
+      }
+
+      sectionConfirmationsByScope.set(normalized.scopeKey, normalized.confirmedSections);
       recompute();
     },
     setCheckpointPlaceholder(input: SetupWorkspaceCheckpointInput) {

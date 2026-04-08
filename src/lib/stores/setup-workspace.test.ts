@@ -6,6 +6,7 @@ import { missingDomainValue, type DomainValue } from "../domain-status";
 import {
   createSetupWorkspaceStore,
   type SetupWorkspaceSection,
+  type SetupWorkspaceSectionGroup,
   type SetupWorkspaceStoreState,
 } from "./setup-workspace";
 import type { ParamsStoreState } from "./params";
@@ -255,23 +256,56 @@ function readSection(state: SetupWorkspaceStoreState, id: SetupWorkspaceSection[
   return state.sections.find((section) => section.id === id) ?? null;
 }
 
+function readGroup(state: SetupWorkspaceStoreState, id: SetupWorkspaceSectionGroup["id"]) {
+  return state.sectionGroups.find((group) => group.id === id) ?? null;
+}
+
 describe("setup workspace store", () => {
-  it("keeps partial live facts explicit instead of fabricating completion", () => {
+  it("exposes the full grouped expert catalog with conservative initial progress", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState());
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
     const state = get(store);
     const frameSection = readSection(state, "frame_orientation");
+    const gpsSection = readSection(state, "gps");
+    const hardwareGroup = readGroup(state, "hardware");
+    const safetyGroup = readGroup(state, "safety");
+    const tuningGroup = readGroup(state, "tuning");
 
     expect(state.stateText).toBe("Setup ready");
     expect(state.selectedSectionId).toBe("overview");
+    expect(state.sections.map((section) => section.id)).toEqual([
+      "overview",
+      "frame_orientation",
+      "calibration",
+      "gps",
+      "battery_monitor",
+      "motors_esc",
+      "servo_outputs",
+      "serial_ports",
+      "rc_receiver",
+      "flight_modes",
+      "failsafe",
+      "rtl_return",
+      "geofence",
+      "arming",
+      "initial_params",
+      "pid_tuning",
+      "peripherals",
+      "full_parameters",
+    ]);
+    expect(state.progressText).toBe("1/13 confirmed");
     expect(state.sectionStatuses.frame_orientation).toBe("unknown");
     expect(frameSection?.statusText).toBe("Unknown");
     expect(frameSection?.confidenceText).toBe("Unconfirmed");
+    expect(gpsSection?.implemented).toBe(false);
+    expect(hardwareGroup?.progressText).toBe("0/6 confirmed");
+    expect(safetyGroup?.progressText).toBe("1/6 confirmed");
+    expect(tuningGroup?.progressText).toBe("0/1 confirmed");
   });
 
-  it("keeps overview and full-parameters reachable when metadata is unavailable", () => {
+  it("keeps blocked sections visible and selectable when metadata is unavailable", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState({
       metadata: null,
@@ -280,20 +314,79 @@ describe("setup workspace store", () => {
     }));
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
-    store.selectSection("full_parameters");
+    store.selectSection("gps");
     store.selectSection("not-a-section");
 
     const state = get(store);
     const overviewSection = readSection(state, "overview");
-    const frameSection = readSection(state, "frame_orientation");
+    const gpsSection = readSection(state, "gps");
     const fullParametersSection = readSection(state, "full_parameters");
 
-    expect(state.selectedSectionId).toBe("full_parameters");
+    expect(state.selectedSectionId).toBe("gps");
     expect(state.noticeText).toContain("Full Parameters is the recovery path");
     expect(overviewSection?.availability).toBe("available");
     expect(fullParametersSection?.availability).toBe("available");
-    expect(frameSection?.availability).toBe("gated");
-    expect(frameSection?.gateText).toContain("Full Parameters is the recovery path");
+    expect(gpsSection?.availability).toBe("blocked");
+    expect(gpsSection?.gateText).toContain("Full Parameters is the recovery path");
+  });
+
+  it("keeps frontend confirmations scoped to the active setup scope and drops malformed payloads", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState());
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    store.confirmSection("flight_modes");
+
+    let state = get(store);
+    expect(state.sectionStatuses.flight_modes).toBe("complete");
+    expect(state.sectionConfirmations.flight_modes).toBe(true);
+    expect(state.confirmationScopeKey).toBe("session-1:live:0:0");
+
+    sessionStore.set(createSessionState({
+      activeEnvelope: {
+        session_id: "session-1",
+        source_kind: "live",
+        seek_epoch: 0,
+        reset_revision: 1,
+      },
+    }));
+
+    state = get(store);
+    expect(state.sectionStatuses.flight_modes).toBe("not_started");
+    expect(state.sectionConfirmations.flight_modes).toBe(false);
+    expect(state.confirmationScopeKey).toBe("session-1:live:0:1");
+
+    store.replaceSectionConfirmations({
+      scopeKey: "session-1:live:0:1",
+      confirmedSections: {
+        flight_modes: true,
+        unknown_section: true,
+      },
+    });
+
+    state = get(store);
+    expect(state.sectionStatuses.flight_modes).toBe("complete");
+    expect(state.sectionStatuses.geofence).toBe("not_started");
+
+    store.replaceSectionConfirmations({
+      scopeKey: "session-1:live:0:1",
+      confirmedSections: "malformed",
+    });
+
+    state = get(store);
+    expect(state.sectionStatuses.flight_modes).toBe("not_started");
+    expect(state.sectionConfirmations.flight_modes).toBe(false);
+
+    store.replaceSectionConfirmations({
+      scopeKey: "session-stale:live:0:0",
+      confirmedSections: {
+        flight_modes: true,
+      },
+    });
+
+    state = get(store);
+    expect(state.sectionStatuses.flight_modes).toBe("not_started");
+    expect(state.sectionConfirmations.flight_modes).toBe(false);
   });
 
   it("keeps last good RC samples stale on same-scope gaps and drops malformed values", () => {
