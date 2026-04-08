@@ -768,9 +768,9 @@ describe("AppShell", () => {
         );
         expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-overview`)).toBeTruthy();
         expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`)).toBeTruthy();
-        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).getAttribute("disabled")).not.toBeNull();
-        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-rc_receiver`).getAttribute("disabled")).not.toBeNull();
-        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-calibration`).getAttribute("disabled")).not.toBeNull();
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).getAttribute("data-availability")).toBe("blocked");
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-rc_receiver`).getAttribute("data-availability")).toBe("blocked");
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-calibration`).getAttribute("data-availability")).toBe("blocked");
 
         await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`));
         await waitFor(() => {

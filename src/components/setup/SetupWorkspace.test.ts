@@ -64,6 +64,30 @@ function createTelemetryDomain(
   } as DomainValue<TelemetryState>;
 }
 
+function createTelemetryDomainState(
+  value: Partial<TelemetryState> | null,
+  options: Partial<DomainValue<TelemetryState>> = {},
+): DomainValue<TelemetryState> {
+  return {
+    available: true,
+    complete: true,
+    provenance: "stream",
+    value: value
+      ? {
+          flight: null,
+          navigation: null,
+          attitude: null,
+          power: null,
+          gps: null,
+          terrain: null,
+          radio: null,
+          ...value,
+        }
+      : null,
+    ...options,
+  } as DomainValue<TelemetryState>;
+}
+
 function createParamStoreFromEntries(entries: Record<string, number>): ParamStore {
   const params: ParamStore["params"] = {};
   let index = 0;
@@ -88,6 +112,27 @@ function createSetupParamStore(): ParamStore {
     FRAME_CLASS: 1,
     FRAME_TYPE: 1,
     AHRS_ORIENTATION: 0,
+    GPS1_TYPE: 1,
+    GPS_AUTO_CONFIG: 1,
+    GPS_GNSS_MODE: 5,
+    GPS2_TYPE: 0,
+    GPS_AUTO_SWITCH: 1,
+    BATT_MONITOR: 4,
+    BATT_VOLT_PIN: 2,
+    BATT_CURR_PIN: 3,
+    BATT_VOLT_MULT: 10.101,
+    BATT_AMP_PERVLT: 18.002,
+    BATT_CAPACITY: 5200,
+    BATT_ARM_VOLT: 13.3,
+    BATT_LOW_VOLT: 14.4,
+    BATT_CRT_VOLT: 14.0,
+    BATT2_MONITOR: 0,
+    SERIAL1_PROTOCOL: 23,
+    SERIAL1_BAUD: 57,
+    SERIAL2_PROTOCOL: 2,
+    SERIAL2_BAUD: 57,
+    SERIAL3_PROTOCOL: 5,
+    SERIAL3_BAUD: 115,
     ARMING_CHECK: 1,
     FS_THR_ENABLE: 1,
     RCMAP_ROLL: 1,
@@ -201,6 +246,164 @@ function createSetupMetadata(options: {
       },
     ],
     [
+      "GPS1_TYPE",
+      {
+        humanName: "GPS 1 type",
+        description: "Primary GPS receiver type.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "Auto" },
+          { code: 5, label: "u-blox" },
+        ],
+      },
+    ],
+    [
+      "GPS_TYPE",
+      {
+        humanName: "GPS type",
+        description: "Legacy primary GPS receiver type.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "Auto" },
+          { code: 5, label: "u-blox" },
+        ],
+      },
+    ],
+    [
+      "GPS2_TYPE",
+      {
+        humanName: "GPS 2 type",
+        description: "Secondary GPS receiver type.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "Auto" },
+          { code: 5, label: "u-blox" },
+        ],
+      },
+    ],
+    [
+      "GPS_AUTO_SWITCH",
+      {
+        humanName: "GPS auto switch",
+        description: "How the autopilot switches between GPS receivers.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "Use best" },
+          { code: 2, label: "Blend" },
+        ],
+      },
+    ],
+    [
+      "GPS_AUTO_CONFIG",
+      {
+        humanName: "GPS auto config",
+        description: "Automatically configure the attached GPS receiver on boot.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "Enabled" },
+        ],
+      },
+    ],
+    [
+      "GPS_GNSS_MODE",
+      {
+        humanName: "GNSS constellation mask",
+        description: "Select which GNSS constellations remain enabled.",
+        bitmask: [
+          { bit: 0, label: "GPS" },
+          { bit: 1, label: "SBAS" },
+          { bit: 2, label: "Galileo" },
+          { bit: 3, label: "BeiDou" },
+        ],
+      },
+    ],
+    [
+      "BATT_MONITOR",
+      {
+        humanName: "Battery monitor",
+        description: "Primary battery monitor backend.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 3, label: "Analog voltage only" },
+          { code: 4, label: "Analog voltage and current" },
+          { code: 7, label: "SMBus" },
+        ],
+      },
+    ],
+    [
+      "BATT2_MONITOR",
+      {
+        humanName: "Battery 2 monitor",
+        description: "Secondary battery monitor backend.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 3, label: "Analog voltage only" },
+          { code: 4, label: "Analog voltage and current" },
+          { code: 7, label: "SMBus" },
+        ],
+      },
+    ],
+    [
+      "BATT_VOLT_PIN",
+      {
+        humanName: "Voltage pin",
+        description: "Analog voltage sense pin.",
+      },
+    ],
+    [
+      "BATT_CURR_PIN",
+      {
+        humanName: "Current pin",
+        description: "Analog current sense pin.",
+      },
+    ],
+    [
+      "BATT_VOLT_MULT",
+      {
+        humanName: "Voltage multiplier",
+        description: "Voltage scaling multiplier.",
+      },
+    ],
+    [
+      "BATT_AMP_PERVLT",
+      {
+        humanName: "Amps per volt",
+        description: "Current scaling in amps per volt.",
+      },
+    ],
+    [
+      "BATT_CAPACITY",
+      {
+        humanName: "Battery capacity",
+        description: "Configured pack capacity.",
+        units: "mAh",
+      },
+    ],
+    [
+      "BATT_ARM_VOLT",
+      {
+        humanName: "Arm voltage",
+        description: "Minimum arm voltage threshold.",
+        units: "V",
+      },
+    ],
+    [
+      "BATT_LOW_VOLT",
+      {
+        humanName: "Low voltage",
+        description: "Low-voltage failsafe threshold.",
+        units: "V",
+      },
+    ],
+    [
+      "BATT_CRT_VOLT",
+      {
+        humanName: "Critical voltage",
+        description: "Critical-voltage failsafe threshold.",
+        units: "V",
+      },
+    ],
+    [
       "RCMAP_ROLL",
       {
         humanName: "Roll",
@@ -302,6 +505,32 @@ function createSetupMetadata(options: {
         { code: 1, label: "Yaw 45" },
       ],
       rebootRequired: true,
+    });
+  }
+
+  for (let index = 0; index <= 9; index += 1) {
+    metadata.set(`SERIAL${index}_PROTOCOL`, {
+      humanName: `SERIAL${index} protocol`,
+      description: `Protocol selection for SERIAL${index}.`,
+      rebootRequired: true,
+      values: [
+        { code: 0, label: "None" },
+        { code: 2, label: "MAVLink2" },
+        { code: 5, label: "GPS" },
+        { code: 23, label: "RCInput" },
+        { code: 28, label: "Scripting" },
+      ],
+    });
+    metadata.set(`SERIAL${index}_BAUD`, {
+      humanName: `SERIAL${index} baud`,
+      description: `Baud selection for SERIAL${index}.`,
+      rebootRequired: true,
+      values: [
+        { code: 38, label: "38400" },
+        { code: 57, label: "57600" },
+        { code: 115, label: "115200" },
+        { code: 921, label: "921600" },
+      ],
     });
   }
 
@@ -785,16 +1014,219 @@ describe("SetupWorkspace", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("gps");
-      expect(screen.getByTestId(setupWorkspaceTestIds.plannedSection)).toBeTruthy();
-      expect(screen.getByTestId(setupWorkspaceTestIds.detailStatus).textContent).toContain("GPS");
+      expect(screen.getByTestId(setupWorkspaceTestIds.gpsSection)).toBeTruthy();
+      expect(screen.getByTestId(setupWorkspaceTestIds.gpsRecovery).textContent).toContain("Metadata recovery is active");
     });
 
-    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.plannedSectionRecovery));
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.gpsRecovery).querySelector("button") as HTMLButtonElement);
 
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("full_parameters");
       expect(screen.getByTestId(setupWorkspaceTestIds.fullParameters)).toBeTruthy();
       expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
+    });
+  });
+
+  it("mounts GPS with GPS_TYPE fallback, optional GPS2 truth, GNSS staging, and same-scope stale live facts", async () => {
+    const gpsParamStore = createParamStoreFromEntries({
+      GPS_TYPE: 1,
+      GPS_AUTO_CONFIG: 1,
+      GPS_GNSS_MODE: 1,
+      GPS2_TYPE: 0,
+      GPS_AUTO_SWITCH: 1,
+      SERIAL3_PROTOCOL: 5,
+      SERIAL3_BAUD: 115,
+    });
+    const { parameterStore, sessionStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      includeReviewTray: true,
+      sessionOverrides: {
+        telemetryDomain: createTelemetryDomainState({
+          gps: {
+            fix_type: "fix_3d",
+            satellites: 16,
+            hdop: 0.7,
+          },
+          navigation: {
+            latitude_deg: 47.1234567,
+            longitude_deg: 8.7654321,
+          },
+        }),
+        bootstrap: {
+          missionState: null,
+          paramStore: gpsParamStore,
+          paramProgress: "completed",
+          playbackCursorUsec: null,
+        },
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.gpsSection)).toBeTruthy();
+      expect(screen.getByTestId(setupWorkspaceTestIds.gpsLiveState).textContent).toContain("Live");
+      expect(screen.getByTestId(setupWorkspaceTestIds.gpsPortState).textContent).toContain("SERIAL3");
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.gpsInputPrefix}-GPS_TYPE`)).toBeTruthy();
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.gpsInputPrefix}-GPS2_TYPE`)).toBeTruthy();
+    });
+
+    await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.gpsInputPrefix}-GPS_TYPE`), {
+      target: { value: "5" },
+    });
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.gpsStageButtonPrefix}-GPS_TYPE`));
+    await fireEvent.click(screen.getByText("SBAS"));
+
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.GPS_TYPE?.nextValue).toBe(5);
+      expect(get(parameterStore).stagedEdits.GPS_GNSS_MODE?.nextValue).toBe(3);
+    });
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-GPS_TYPE`)).toBeTruthy();
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-GPS_GNSS_MODE`)).toBeTruthy();
+
+    sessionStore.set(createSessionState({
+      telemetryDomain: createTelemetryDomainState(null, {
+        available: true,
+        complete: false,
+      }),
+      bootstrap: {
+        missionState: null,
+        paramStore: gpsParamStore,
+        paramProgress: "completed",
+        playbackCursorUsec: null,
+      },
+    }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.gpsLiveState).textContent).toContain("Stale");
+      expect(screen.getByTestId(setupWorkspaceTestIds.gpsLiveDetail).textContent).toContain("same-scope");
+    });
+  });
+
+  it("stages battery board presets and manual numeric edits through the shared review tray", async () => {
+    const batteryParamStore = createParamStoreFromEntries({
+      BATT_MONITOR: 4,
+      BATT_VOLT_PIN: 13,
+      BATT_CURR_PIN: 12,
+      BATT_VOLT_MULT: 10.1,
+      BATT_AMP_PERVLT: 17,
+      BATT_CAPACITY: 4500,
+      BATT_ARM_VOLT: 13.2,
+      BATT_LOW_VOLT: 14.0,
+      BATT_CRT_VOLT: 13.6,
+      BATT2_MONITOR: 0,
+    });
+    const { parameterStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      includeReviewTray: true,
+      sessionOverrides: {
+        telemetryDomain: createTelemetryDomainState({
+          power: {
+            battery_voltage_v: 15.2,
+            battery_current_a: 18.4,
+            battery_pct: 63,
+            battery_voltage_cells: [3.8, 3.8, 3.8, 3.8],
+          },
+        }),
+        bootstrap: {
+          missionState: null,
+          paramStore: batteryParamStore,
+          paramProgress: "completed",
+          playbackCursorUsec: null,
+        },
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-battery_monitor`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.batterySection)).toBeTruthy();
+      expect(screen.getByTestId(setupWorkspaceTestIds.batteryLiveState).textContent).toContain("Live");
+      expect(screen.getByTestId(setupWorkspaceTestIds.batteryPresetState).textContent).toContain("APM 2.5");
+    });
+
+    await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.batteryPresetSelectPrefix}-board`), {
+      target: { value: "4" },
+    });
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.batteryPreviewPrefix}-board`).querySelectorAll("button")[2] as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.BATT_VOLT_PIN?.nextValue).toBe(2);
+      expect(get(parameterStore).stagedEdits.BATT_CURR_PIN?.nextValue).toBe(3);
+    });
+
+    await fireEvent.input(screen.getByTestId(`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_LOW_VOLT`), {
+      target: { value: "14.8" },
+    });
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT_LOW_VOLT`));
+
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.BATT_LOW_VOLT?.nextValue).toBe(14.8);
+    });
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-BATT_VOLT_PIN`)).toBeTruthy();
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-BATT_LOW_VOLT`)).toBeTruthy();
+  });
+
+  it("surfaces serial conflicts, stages reboot-required rows, and only confirms clean current-scope truth", async () => {
+    const serialParamStore = createParamStoreFromEntries({
+      SERIAL1_PROTOCOL: 23,
+      SERIAL1_BAUD: 57,
+      SERIAL2_PROTOCOL: 2,
+      SERIAL2_BAUD: 57,
+      SERIAL3_PROTOCOL: 5,
+      SERIAL3_BAUD: 115,
+    });
+    const { parameterStore, setupWorkspaceStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      includeReviewTray: true,
+      sessionOverrides: {
+        bootstrap: {
+          missionState: null,
+          paramStore: serialParamStore,
+          paramProgress: "completed",
+          playbackCursorUsec: null,
+        },
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-serial_ports`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.serialPortsSection)).toBeTruthy();
+      expect(get(setupWorkspaceStore).sectionConfirmations.serial_ports).toBe(true);
+      expect(screen.getByTestId(setupWorkspaceTestIds.serialPortsConflictState).textContent).toContain("No conflicts");
+    });
+
+    await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.serialPortsInputPrefix}-SERIAL2_PROTOCOL`), {
+      target: { value: "5" },
+    });
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.serialPortsStageButtonPrefix}-SERIAL2_PROTOCOL`));
+
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.SERIAL2_PROTOCOL?.nextValue).toBe(5);
+      expect(get(setupWorkspaceStore).sectionConfirmations.serial_ports).toBe(false);
+    });
+    expect(screen.getByTestId(setupWorkspaceTestIds.serialPortsRebootState).textContent).toContain("Queued");
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-SERIAL2_PROTOCOL`)).toBeTruthy();
+
+    const partialMetadata = createSetupMetadata();
+    partialMetadata.delete("SERIAL1_PROTOCOL");
+    partialMetadata.delete("SERIAL1_BAUD");
+
+    cleanup();
+    const rerendered = await renderSetupWorkspace({
+      metadata: partialMetadata,
+      sessionOverrides: {
+        bootstrap: {
+          missionState: null,
+          paramStore: serialParamStore,
+          paramProgress: "completed",
+          playbackCursorUsec: null,
+        },
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-serial_ports`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.serialPortsRecovery).textContent).toContain("SERIAL1_PROTOCOL metadata is missing or malformed");
+      expect(get(rerendered.setupWorkspaceStore).sectionConfirmations.serial_ports).toBe(false);
     });
   });
 

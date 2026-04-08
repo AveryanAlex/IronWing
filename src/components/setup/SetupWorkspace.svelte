@@ -7,11 +7,14 @@ import {
 } from "../../app/shell/runtime-context";
 import SetupCalibrationSection from "./SetupCalibrationSection.svelte";
 import SetupCheckpointBanner from "./SetupCheckpointBanner.svelte";
+import SetupBatteryMonitorSection from "./SetupBatteryMonitorSection.svelte";
 import SetupFrameOrientationSection from "./SetupFrameOrientationSection.svelte";
 import SetupFullParametersSection from "./SetupFullParametersSection.svelte";
+import SetupGpsSection from "./SetupGpsSection.svelte";
 import SetupMotorsEscSection from "./SetupMotorsEscSection.svelte";
 import SetupOverviewSection from "./SetupOverviewSection.svelte";
 import SetupRcReceiverSection from "./SetupRcReceiverSection.svelte";
+import SetupSerialPortsSection from "./SetupSerialPortsSection.svelte";
 import SetupServoOutputsSection from "./SetupServoOutputsSection.svelte";
 import SetupWorkspaceSectionNav from "./SetupWorkspaceSectionNav.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
@@ -127,6 +130,18 @@ function clearCheckpoint() {
           onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
         />
+      {:else if view.selectedSectionId === "gps" && selectedSection}
+        <SetupGpsSection
+          onSelectRecovery={() => selectSection("full_parameters")}
+          section={selectedSection}
+          {view}
+        />
+      {:else if view.selectedSectionId === "battery_monitor" && selectedSection}
+        <SetupBatteryMonitorSection
+          onSelectRecovery={() => selectSection("full_parameters")}
+          section={selectedSection}
+          {view}
+        />
       {:else if view.selectedSectionId === "motors_esc" && selectedSection}
         <SetupMotorsEscSection
           onSelectRecovery={() => selectSection("full_parameters")}
@@ -135,6 +150,12 @@ function clearCheckpoint() {
         />
       {:else if view.selectedSectionId === "servo_outputs" && selectedSection}
         <SetupServoOutputsSection
+          onSelectRecovery={() => selectSection("full_parameters")}
+          section={selectedSection}
+          {view}
+        />
+      {:else if view.selectedSectionId === "serial_ports" && selectedSection}
+        <SetupSerialPortsSection
           onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}

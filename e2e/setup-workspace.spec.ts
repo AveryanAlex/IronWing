@@ -83,9 +83,9 @@ test.describe("setup workspace proof", () => {
     await expect(page.locator(setupWorkspaceSelectors.overviewBanner)).toContainText(
       "Metadata missing — recovery mode is active",
     );
-    await expect(setupNavLocator(page, "frame_orientation")).toBeDisabled();
-    await expect(setupNavLocator(page, "rc_receiver")).toBeDisabled();
-    await expect(setupNavLocator(page, "calibration")).toBeDisabled();
+    await expect(setupNavLocator(page, "frame_orientation")).toHaveAttribute("data-availability", "blocked");
+    await expect(setupNavLocator(page, "rc_receiver")).toHaveAttribute("data-availability", "blocked");
+    await expect(setupNavLocator(page, "calibration")).toHaveAttribute("data-availability", "blocked");
     await expect(page.locator(setupWorkspaceSelectors.detailRecovery)).toContainText(
       "Full Parameters stays separate",
     );

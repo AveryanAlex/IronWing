@@ -43,10 +43,13 @@ type SetupWorkspaceConfirmationPayload = {
 const IMPLEMENTED_SECTION_ID_SET = new Set<SetupSectionId>([
   "overview",
   "frame_orientation",
+  "calibration",
+  "gps",
+  "battery_monitor",
   "motors_esc",
   "servo_outputs",
+  "serial_ports",
   "rc_receiver",
-  "calibration",
   "full_parameters",
 ]);
 

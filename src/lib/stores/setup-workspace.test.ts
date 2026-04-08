@@ -299,7 +299,7 @@ describe("setup workspace store", () => {
     expect(state.sectionStatuses.frame_orientation).toBe("unknown");
     expect(frameSection?.statusText).toBe("Unknown");
     expect(frameSection?.confidenceText).toBe("Unconfirmed");
-    expect(gpsSection?.implemented).toBe(false);
+    expect(gpsSection?.implemented).toBe(true);
     expect(hardwareGroup?.progressText).toBe("0/6 confirmed");
     expect(safetyGroup?.progressText).toBe("1/6 confirmed");
     expect(tuningGroup?.progressText).toBe("0/1 confirmed");
