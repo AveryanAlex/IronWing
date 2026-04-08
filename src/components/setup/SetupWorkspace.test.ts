@@ -63,27 +63,51 @@ function createTelemetryDomain(
   } as DomainValue<TelemetryState>;
 }
 
-function createSetupParamStore(): ParamStore {
+function createParamStoreFromEntries(entries: Record<string, number>): ParamStore {
+  const params: ParamStore["params"] = {};
+  let index = 0;
+
+  for (const [name, value] of Object.entries(entries)) {
+    params[name] = {
+      name,
+      value,
+      param_type: Number.isInteger(value) ? "uint8" : "real32",
+      index: index++,
+    };
+  }
+
   return {
-    expected_count: 15,
-    params: {
-      FRAME_CLASS: { name: "FRAME_CLASS", value: 1, param_type: "uint8", index: 0 },
-      FRAME_TYPE: { name: "FRAME_TYPE", value: 1, param_type: "uint8", index: 1 },
-      AHRS_ORIENTATION: { name: "AHRS_ORIENTATION", value: 0, param_type: "uint8", index: 2 },
-      ARMING_CHECK: { name: "ARMING_CHECK", value: 1, param_type: "uint8", index: 3 },
-      FS_THR_ENABLE: { name: "FS_THR_ENABLE", value: 1, param_type: "uint8", index: 4 },
-      RCMAP_ROLL: { name: "RCMAP_ROLL", value: 1, param_type: "uint8", index: 5 },
-      RCMAP_PITCH: { name: "RCMAP_PITCH", value: 2, param_type: "uint8", index: 6 },
-      RCMAP_THROTTLE: { name: "RCMAP_THROTTLE", value: 3, param_type: "uint8", index: 7 },
-      RCMAP_YAW: { name: "RCMAP_YAW", value: 4, param_type: "uint8", index: 8 },
-      INS_ACCOFFS_X: { name: "INS_ACCOFFS_X", value: 0, param_type: "real32", index: 9 },
-      INS_ACCOFFS_Y: { name: "INS_ACCOFFS_Y", value: 0, param_type: "real32", index: 10 },
-      INS_ACCOFFS_Z: { name: "INS_ACCOFFS_Z", value: 0, param_type: "real32", index: 11 },
-      COMPASS_DEV_ID: { name: "COMPASS_DEV_ID", value: 12345, param_type: "uint32", index: 12 },
-      RC1_MIN: { name: "RC1_MIN", value: 1000, param_type: "uint16", index: 13 },
-      RC1_MAX: { name: "RC1_MAX", value: 2000, param_type: "uint16", index: 14 },
-    },
+    expected_count: index,
+    params,
   };
+}
+
+function createSetupParamStore(): ParamStore {
+  return createParamStoreFromEntries({
+    FRAME_CLASS: 1,
+    FRAME_TYPE: 1,
+    AHRS_ORIENTATION: 0,
+    ARMING_CHECK: 1,
+    FS_THR_ENABLE: 1,
+    RCMAP_ROLL: 1,
+    RCMAP_PITCH: 2,
+    RCMAP_THROTTLE: 3,
+    RCMAP_YAW: 4,
+    INS_ACCOFFS_X: 0,
+    INS_ACCOFFS_Y: 0,
+    INS_ACCOFFS_Z: 0,
+    COMPASS_DEV_ID: 12345,
+    RC1_MIN: 1000,
+    RC1_MAX: 2000,
+  });
+}
+
+function createPlaneSetupParamStore(entries: Record<string, number>): ParamStore {
+  return createParamStoreFromEntries({
+    Q_ENABLE: 0,
+    AHRS_ORIENTATION: 0,
+    ...entries,
+  });
 }
 
 function createSetupMetadata(options: {
@@ -101,6 +125,64 @@ function createSetupMetadata(options: {
           { code: 2, label: "Hexa" },
         ],
         rebootRequired: true,
+      },
+    ],
+    [
+      "Q_ENABLE",
+      {
+        humanName: "QuadPlane enable",
+        description: "Enable QuadPlane-specific VTOL parameters on Plane firmware.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "Enabled (QuadPlane)" },
+        ],
+        rebootRequired: true,
+      },
+    ],
+    [
+      "Q_FRAME_CLASS",
+      {
+        humanName: "QuadPlane frame class",
+        description: "QuadPlane lift-motor frame family.",
+        values: [
+          { code: 1, label: "Quad" },
+          { code: 10, label: "Custom" },
+        ],
+        rebootRequired: true,
+      },
+    ],
+    [
+      "Q_FRAME_TYPE",
+      {
+        humanName: "QuadPlane frame type",
+        description: "QuadPlane lift-motor layout.",
+        values: [
+          { code: 0, label: "Plus" },
+          { code: 1, label: "X" },
+        ],
+        rebootRequired: true,
+      },
+    ],
+    [
+      "Q_TILT_ENABLE",
+      {
+        humanName: "Tilt-rotor enable",
+        description: "Enable tilt-rotor behavior for QuadPlane layouts.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "Enabled" },
+        ],
+      },
+    ],
+    [
+      "Q_TAILSIT_ENABLE",
+      {
+        humanName: "Tailsitter enable",
+        description: "Enable tailsitter behavior for QuadPlane layouts.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "Enabled" },
+        ],
       },
     ],
     [
@@ -349,6 +431,34 @@ function createSessionState(overrides: Partial<SessionStoreState> = {}): Session
   };
 }
 
+function createPlaneSessionOverrides(
+  paramStore: ParamStore,
+  overrides: Partial<SessionStoreState> = {},
+): Partial<SessionStoreState> {
+  const base = createSessionState();
+  return {
+    sessionDomain: {
+      ...base.sessionDomain,
+      value: base.sessionDomain.value
+        ? {
+            ...base.sessionDomain.value,
+            vehicle_state: {
+              ...base.sessionDomain.value.vehicle_state,
+              vehicle_type: "fixed_wing",
+            },
+          }
+        : null,
+    },
+    bootstrap: {
+      missionState: null,
+      paramStore,
+      paramProgress: "completed",
+      playbackCursorUsec: null,
+    },
+    ...overrides,
+  };
+}
+
 function createMockParamsService(
   metadata: ParamMetadataMap | null = null,
   overrides: Partial<ParamsService> = {},
@@ -521,6 +631,120 @@ describe("SetupWorkspace", () => {
     expect(state.stagedEdits.AHRS_ORIENTATION?.nextValue).toBe(1);
     expect(screen.getByTestId(`${setupWorkspaceTestIds.frameStagedPrefix}-FRAME_CLASS`).textContent).toContain("Queued");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.frameStagedPrefix}-AHRS_ORIENTATION`).textContent).toContain("Queued");
+  });
+
+  it("shows a Plane-to-QuadPlane enable path and stages Q_ENABLE through the shared review tray", async () => {
+    const { parameterStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      includeReviewTray: true,
+      sessionOverrides: createPlaneSessionOverrides(createPlaneSetupParamStore({})),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.frameVehicleState).textContent).toContain("Plain Plane");
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-Q_ENABLE`)).toBeTruthy();
+    });
+
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.frameBannerPrefix}-plain-plane`).textContent).toContain(
+      "Enable Q_ENABLE",
+    );
+    expect(screen.getByTestId(setupWorkspaceTestIds.frameDocsLink).getAttribute("href")).toBe(
+      "https://ardupilot.org/plane/docs/quadplane-frame-setup.html",
+    );
+    expect(screen.queryByText(/fixed-wing aircraft do not use frame class or type configuration/i)).toBeNull();
+
+    await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-Q_ENABLE`), {
+      target: { value: "1" },
+    });
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.frameStageButtonPrefix}-Q_ENABLE`));
+
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.Q_ENABLE?.nextValue).toBe(1);
+    });
+
+    expect(screen.getByTestId(appShellTestIds.parameterReviewTray)).toBeTruthy();
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-Q_ENABLE`).textContent).toContain(
+      "reboot required",
+    );
+  });
+
+  it("keeps VTOL frame truth blocked until refreshed Q-frame params arrive", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      sessionOverrides: createPlaneSessionOverrides(createPlaneSetupParamStore({ Q_ENABLE: 1 })),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.frameVehicleState).textContent).toContain("Awaiting VTOL refresh");
+    });
+
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.frameBannerPrefix}-awaiting-refresh`).textContent).toContain(
+      "Q_FRAME_CLASS and Q_FRAME_TYPE",
+    );
+    expect(screen.queryByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-Q_FRAME_CLASS`)).toBeNull();
+    expect(screen.queryByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-Q_FRAME_TYPE`)).toBeNull();
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-Q_ENABLE`)).toBeTruthy();
+  });
+
+  it("switches Plane frame ownership to Q_FRAME_* after the QuadPlane params refresh", async () => {
+    const { parameterStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      includeReviewTray: true,
+      sessionOverrides: createPlaneSessionOverrides(
+        createPlaneSetupParamStore({
+          Q_ENABLE: 1,
+          Q_FRAME_CLASS: 1,
+          Q_FRAME_TYPE: 1,
+        }),
+      ),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.frameVehicleState).textContent).toContain("QuadPlane ready");
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-Q_FRAME_CLASS`)).toBeTruthy();
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-Q_FRAME_TYPE`)).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-Q_ENABLE`)).toBeNull();
+    expect(screen.getByTestId(setupWorkspaceTestIds.frameDocsLink).getAttribute("href")).toBe(
+      "https://ardupilot.org/plane/docs/quadplane-frame-setup.html",
+    );
+
+    await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-Q_FRAME_TYPE`), {
+      target: { value: "0" },
+    });
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.frameStageButtonPrefix}-Q_FRAME_TYPE`));
+
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.Q_FRAME_TYPE?.nextValue).toBe(0);
+    });
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-Q_FRAME_TYPE`)).toBeTruthy();
+  });
+
+  it("makes motors and servo outputs navigable expert sections while keeping motors progress partial", async () => {
+    await renderSetupWorkspace({ metadata: createSetupMetadata() });
+
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-motors_esc`).textContent?.trim()).toBe("Unknown");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionConfidencePrefix}-motors_esc`).textContent?.trim()).toBe("Unconfirmed");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-servo_outputs`)).toBeTruthy();
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-motors_esc`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("motors_esc");
+      expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscSection)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-servo_outputs`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("servo_outputs");
+      expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsSection)).toBeTruthy();
+    });
   });
 
   it("fails closed to the recovery path when frame editor metadata is incomplete", async () => {

@@ -22,6 +22,17 @@ let selectedSection = $derived(
   view.sections.find((section) => section.id === view.selectedSectionId) ?? view.sections[0] ?? null,
 );
 
+function detailTestId(sectionId: string): string | undefined {
+  switch (sectionId) {
+    case "motors_esc":
+      return setupWorkspaceTestIds.motorsEscSection;
+    case "servo_outputs":
+      return setupWorkspaceTestIds.servoOutputsSection;
+    default:
+      return undefined;
+  }
+}
+
 function selectSection(sectionId: string) {
   store.selectSection(sectionId);
 }
@@ -121,6 +132,7 @@ function clearCheckpoint() {
         <SetupOverviewSection {view} onSelect={selectSection} />
       {:else if view.selectedSectionId === "frame_orientation" && selectedSection}
         <SetupFrameOrientationSection
+          checkpoint={view.checkpoint}
           onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
         />
@@ -131,7 +143,7 @@ function clearCheckpoint() {
       {:else if view.selectedSectionId === "full_parameters"}
         <SetupFullParametersSection canOpen={view.canOpenFullParameters} />
       {:else if selectedSection}
-        <div class="space-y-4">
+        <div class="space-y-4" data-testid={detailTestId(selectedSection.id)}>
           <div>
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{selectedSection.title}</p>
             <h3 class="mt-2 text-lg font-semibold text-text-primary">{selectedSection.statusText}</h3>

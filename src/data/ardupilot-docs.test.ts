@@ -161,8 +161,16 @@ describe("resolveDocsUrl", () => {
       expect(resolveDocsUrl("failsafe_crash_check", "plane")).toBeNull();
     });
 
-    it("returns null for frame_type on plane", () => {
-      expect(resolveDocsUrl("frame_type", "plane")).toBeNull();
+    it("resolves frame_type on plane to the QuadPlane frame setup page", () => {
+      expect(resolveDocsUrl("frame_type", "plane")).toBe(
+        "https://ardupilot.org/plane/docs/quadplane-frame-setup.html",
+      );
+    });
+
+    it("resolves motors_esc on plane to the QuadPlane ESC calibration page", () => {
+      expect(resolveDocsUrl("motors_esc", "plane")).toBe(
+        "https://ardupilot.org/plane/docs/quadplane-esc-calibration.html",
+      );
     });
 
     it("returns null for motors_esc on rover", () => {

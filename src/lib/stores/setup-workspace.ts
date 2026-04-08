@@ -19,6 +19,8 @@ import type { SessionStorePhase, SessionStoreState } from "./session";
 const NAVIGABLE_SECTION_IDS = [
   "overview",
   "frame_orientation",
+  "motors_esc",
+  "servo_outputs",
   "rc_receiver",
   "calibration",
   "full_parameters",
@@ -54,6 +56,16 @@ const SECTION_META: Record<NavigableSetupSectionId, {
   frame_orientation: {
     title: "Frame & orientation",
     description: "Vehicle layout, frame class, and orientation confirmation.",
+    kind: "guided",
+  },
+  motors_esc: {
+    title: "Motors & ESC",
+    description: "VTOL motor ownership, direction proof, and fail-closed test readiness.",
+    kind: "guided",
+  },
+  servo_outputs: {
+    title: "Servo outputs",
+    description: "Function-aware output inspection, reversal staging, and live readback truth.",
     kind: "guided",
   },
   rc_receiver: {
@@ -428,6 +440,38 @@ function formatSectionStatusText(status: SectionStatus): string {
 }
 
 function describeGuidedSectionStatus(status: SectionStatus, sectionId: NavigableSetupSectionId): string {
+  if (sectionId === "motors_esc") {
+    switch (status) {
+      case "complete":
+        return "Motor and ESC facts are confirmed for this scope.";
+      case "in_progress":
+        return "Motor and ESC setup is in progress. Keep ownership, direction, and reboot truth explicit before testing again.";
+      case "failed":
+        return "Motor or ESC setup reported a failed state that still needs attention.";
+      case "not_started":
+        return "Motor and ESC setup has not been confirmed yet.";
+      case "unknown":
+      default:
+        return "Motor and ESC truth is still partial because the active configuration-facts contract does not yet prove output ownership globally.";
+    }
+  }
+
+  if (sectionId === "servo_outputs") {
+    switch (status) {
+      case "complete":
+        return "Servo output configuration is confirmed for this scope.";
+      case "in_progress":
+        return "Servo output setup is in progress. Keep staged reversal changes in the shared review tray until the scope refreshes.";
+      case "failed":
+        return "Servo output setup reported a failed state that still needs attention.";
+      case "not_started":
+        return "Servo outputs are visible as an expert section, but this workspace does not claim global completion for them yet.";
+      case "unknown":
+      default:
+        return "Servo output truth is still partial, so the section stays explicit instead of bluffing configured state.";
+    }
+  }
+
   if (sectionId === "rc_receiver") {
     switch (status) {
       case "complete":
@@ -1094,6 +1138,28 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
         confidenceText: "Unconfirmed",
         gateText: "Connect to a live session to open this section.",
         detailText: "Live facts are partial, so this section stays unconfirmed instead of bluffing completion.",
+        implemented: true,
+      },
+      {
+        id: "motors_esc",
+        ...SECTION_META.motors_esc,
+        availability: "gated",
+        status: "unknown",
+        statusText: "Unknown",
+        confidenceText: "Unconfirmed",
+        gateText: "Connect to a live session to open this section.",
+        detailText: "Motor and ESC truth is still partial, so the section stays explicit instead of guessing output ownership.",
+        implemented: true,
+      },
+      {
+        id: "servo_outputs",
+        ...SECTION_META.servo_outputs,
+        availability: "gated",
+        status: "unknown",
+        statusText: "Unknown",
+        confidenceText: "Unconfirmed",
+        gateText: "Connect to a live session to open this section.",
+        detailText: "Servo output truth is still partial, so the section stays explicit instead of bluffing configured state.",
         implemented: true,
       },
       {

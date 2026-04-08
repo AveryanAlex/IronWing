@@ -91,12 +91,12 @@ const VEHICLE_TOPICS: Record<
   },
   frame_type: {
     copter: "https://ardupilot.org/copter/docs/frame-type-configuration.html",
-    plane: null,
+    plane: "https://ardupilot.org/plane/docs/quadplane-frame-setup.html",
     rover: null,
   },
   motors_esc: {
     copter: "https://ardupilot.org/copter/docs/connect-escs-and-motors.html",
-    plane: null,
+    plane: "https://ardupilot.org/plane/docs/quadplane-esc-calibration.html",
     rover: null,
   },
   esc_calibration: {
