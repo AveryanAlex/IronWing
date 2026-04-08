@@ -96,11 +96,37 @@ export const setupWorkspaceSelectors = {
     overviewSection: `[data-testid="${setupWorkspaceTestIds.overviewSection}"]`,
     overviewBanner: `[data-testid="${setupWorkspaceTestIds.overviewBanner}"]`,
     detailRecovery: `[data-testid="${setupWorkspaceTestIds.detailRecovery}"]`,
+    frameSection: `[data-testid="${setupWorkspaceTestIds.frameSection}"]`,
+    frameSummary: `[data-testid="${setupWorkspaceTestIds.frameSummary}"]`,
+    frameVehicleState: `[data-testid="${setupWorkspaceTestIds.frameVehicleState}"]`,
+    frameLayoutState: `[data-testid="${setupWorkspaceTestIds.frameLayoutState}"]`,
+    frameOrientationState: `[data-testid="${setupWorkspaceTestIds.frameOrientationState}"]`,
+    frameRecovery: `[data-testid="${setupWorkspaceTestIds.frameRecovery}"]`,
+    frameFailure: `[data-testid="${setupWorkspaceTestIds.frameFailure}"]`,
+    frameDocsLink: `[data-testid="${setupWorkspaceTestIds.frameDocsLink}"]`,
     rcSection: `[data-testid="${setupWorkspaceTestIds.rcSection}"]`,
     rcSignal: `[data-testid="${setupWorkspaceTestIds.rcSignal}"]`,
     rcRssi: `[data-testid="${setupWorkspaceTestIds.rcRssi}"]`,
     rcDetail: `[data-testid="${setupWorkspaceTestIds.rcDetail}"]`,
     rcFailure: `[data-testid="${setupWorkspaceTestIds.rcFailure}"]`,
+    motorsEscSection: `[data-testid="${setupWorkspaceTestIds.motorsEscSection}"]`,
+    motorsEscSummary: `[data-testid="${setupWorkspaceTestIds.motorsEscSummary}"]`,
+    motorsEscLayoutState: `[data-testid="${setupWorkspaceTestIds.motorsEscLayoutState}"]`,
+    motorsEscSafetyState: `[data-testid="${setupWorkspaceTestIds.motorsEscSafetyState}"]`,
+    motorsEscReversalState: `[data-testid="${setupWorkspaceTestIds.motorsEscReversalState}"]`,
+    motorsEscDocsLink: `[data-testid="${setupWorkspaceTestIds.motorsEscDocsLink}"]`,
+    motorsEscFailure: `[data-testid="${setupWorkspaceTestIds.motorsEscFailure}"]`,
+    motorsEscUnlock: `[data-testid="${setupWorkspaceTestIds.motorsEscUnlock}"]`,
+    servoOutputsSection: `[data-testid="${setupWorkspaceTestIds.servoOutputsSection}"]`,
+    servoOutputsSummary: `[data-testid="${setupWorkspaceTestIds.servoOutputsSummary}"]`,
+    servoOutputsTesterState: `[data-testid="${setupWorkspaceTestIds.servoOutputsTesterState}"]`,
+    servoOutputsSafetyState: `[data-testid="${setupWorkspaceTestIds.servoOutputsSafetyState}"]`,
+    servoOutputsReadbackState: `[data-testid="${setupWorkspaceTestIds.servoOutputsReadbackState}"]`,
+    servoOutputsReversalState: `[data-testid="${setupWorkspaceTestIds.servoOutputsReversalState}"]`,
+    servoOutputsDocsLink: `[data-testid="${setupWorkspaceTestIds.servoOutputsDocsLink}"]`,
+    servoOutputsFailure: `[data-testid="${setupWorkspaceTestIds.servoOutputsFailure}"]`,
+    servoOutputsUnlock: `[data-testid="${setupWorkspaceTestIds.servoOutputsUnlock}"]`,
+    servoOutputsSelectedTarget: `[data-testid="${setupWorkspaceTestIds.servoOutputsSelectedTarget}"]`,
     calibrationSection: `[data-testid="${setupWorkspaceTestIds.calibrationSection}"]`,
     calibrationNotices: `[data-testid="${setupWorkspaceTestIds.calibrationNotices}"]`,
     fullParameters: `[data-testid="${setupWorkspaceTestIds.fullParameters}"]`,
@@ -1054,6 +1080,98 @@ export function setupRcInputLocator(page: Page, name: string): Locator {
 
 export function setupRcStageButtonLocator(page: Page, name: string): Locator {
     return page.locator(`[data-testid="${setupWorkspaceTestIds.rcStageButtonPrefix}-${name}"]`);
+}
+
+export function setupFrameBannerLocator(page: Page, bannerId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.frameBannerPrefix}-${bannerId}"]`);
+}
+
+export function setupFrameInputLocator(page: Page, name: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.frameInputPrefix}-${name}"]`);
+}
+
+export function setupFrameStageButtonLocator(page: Page, name: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.frameStageButtonPrefix}-${name}"]`);
+}
+
+export function setupMotorsEscBannerLocator(page: Page, bannerId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.motorsEscBannerPrefix}-${bannerId}"]`);
+}
+
+export function setupMotorsEscRowLocator(page: Page, motorNumber: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.motorsEscRowPrefix}-${motorNumber}"]`);
+}
+
+export function setupMotorsEscRowAvailabilityLocator(page: Page, motorNumber: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.motorsEscRowAvailabilityPrefix}-${motorNumber}"]`);
+}
+
+export function setupMotorsEscRowTestLocator(page: Page, motorNumber: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.motorsEscRowTestPrefix}-${motorNumber}"]`);
+}
+
+export function setupMotorsEscRowReversedLocator(page: Page, motorNumber: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.motorsEscRowReversedPrefix}-${motorNumber}"]`);
+}
+
+export function setupMotorsEscRowReverseLocator(page: Page, motorNumber: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.motorsEscRowReversePrefix}-${motorNumber}"]`);
+}
+
+export function setupMotorsEscRowResultLocator(page: Page, motorNumber: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.motorsEscRowResultPrefix}-${motorNumber}"]`);
+}
+
+export function setupServoOutputsBannerLocator(page: Page, bannerId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.servoOutputsBannerPrefix}-${bannerId}"]`);
+}
+
+export function setupServoOutputsFunctionGroupLocator(page: Page, functionValue: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.servoOutputsFunctionGroupPrefix}-${functionValue}"]`);
+}
+
+export function setupServoOutputsRowLocator(page: Page, outputIndex: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.servoOutputsRowPrefix}-${outputIndex}"]`);
+}
+
+export function setupServoOutputsRowMinLocator(page: Page, outputIndex: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.servoOutputsRowMinPrefix}-${outputIndex}"]`);
+}
+
+export function setupServoOutputsRowReversedLocator(page: Page, outputIndex: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.servoOutputsRowReversedPrefix}-${outputIndex}"]`);
+}
+
+export function setupServoOutputsRowReverseLocator(page: Page, outputIndex: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.servoOutputsRowReversePrefix}-${outputIndex}"]`);
+}
+
+export function setupServoOutputsRowResultLocator(page: Page, outputIndex: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.servoOutputsRowResultPrefix}-${outputIndex}"]`);
+}
+
+export function setupServoOutputsRawGroupLocator(page: Page, groupId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.servoOutputsRawGroupPrefix}-${groupId}"]`);
+}
+
+export function setupServoOutputsRawRowLocator(page: Page, outputIndex: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.servoOutputsRawRowPrefix}-${outputIndex}"]`);
+}
+
+export function setupServoOutputsRawAvailabilityLocator(page: Page, outputIndex: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.servoOutputsRawAvailabilityPrefix}-${outputIndex}"]`);
+}
+
+export function setupServoOutputsRawReadbackLocator(page: Page, outputIndex: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.servoOutputsRawReadbackPrefix}-${outputIndex}"]`);
+}
+
+export function setupServoOutputsRawInputLocator(page: Page, outputIndex: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.servoOutputsRawInputPrefix}-${outputIndex}"]`);
+}
+
+export function setupServoOutputsRawSendLocator(page: Page, outputIndex: number): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.servoOutputsRawSendPrefix}-${outputIndex}"]`);
 }
 
 export function setupCalibrationCardLocator(page: Page, cardId: string): Locator {

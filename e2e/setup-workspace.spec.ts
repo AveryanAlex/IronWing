@@ -6,25 +6,55 @@ import {
 } from "./fixtures/mock-platform";
 import {
   connectSetupSession,
+  createDodecahexaMotorSetupParamStore,
+  createPlainPlaneSetupParamStore,
+  createQuadPlaneSetupParamStore,
   createSetupCalibrationDomain,
   createSetupConfigurationFactsDomain,
   createSetupStatusTextDomain,
   createSetupSupportDomain,
   createSetupTelemetryDomain,
-  expectQueuedRcReviewRows,
+  createTailsitterServoSetupParamStore,
   openConnectedSetupWorkspace,
   parameterReviewRowLocator,
   primeSetupMetadata,
-  setupCalibrationActionLocator,
-  setupCalibrationCardLocator,
-  setupConnectedVehicleState,
+  setupFrameBannerLocator,
+  setupFrameInputLocator,
+  setupFrameStageButtonLocator,
   setupMetadataUnavailableVehicleState,
+  setupMotorsEscBannerLocator,
+  setupMotorsEscRowAvailabilityLocator,
+  setupMotorsEscRowLocator,
+  setupMotorsEscRowResultLocator,
+  setupMotorsEscRowReverseLocator,
+  setupMotorsEscRowReversedLocator,
+  setupMotorsEscRowTestLocator,
   setupNavLocator,
-  setupRcBarLocator,
-  setupRcPresetLocator,
+  setupPlaneVehicleState,
+  setupServoOutputsBannerLocator,
+  setupServoOutputsFunctionGroupLocator,
+  setupServoOutputsRawAvailabilityLocator,
+  setupServoOutputsRawInputLocator,
+  setupServoOutputsRawReadbackLocator,
+  setupServoOutputsRawSendLocator,
+  setupServoOutputsRowMinLocator,
+  setupServoOutputsRowResultLocator,
+  setupServoOutputsRowReverseLocator,
+  setupServoOutputsRowReversedLocator,
   setupWorkspaceSelectors,
   simulateSetupReconnectSameScope,
 } from "./helpers/setup-workspace";
+
+async function expectLatestInvocation(
+  mockPlatform: { getInvocations: () => Promise<Array<{ cmd: string; args: Record<string, unknown> | undefined }>> },
+  cmd: string,
+  args: Record<string, unknown>,
+): Promise<void> {
+  await expect.poll(async () => {
+    const invocations = (await mockPlatform.getInvocations()).filter((invocation) => invocation.cmd === cmd);
+    return invocations.at(-1)?.args ?? null;
+  }).toEqual(args);
+}
 
 test.describe("setup workspace proof", () => {
   test("keeps metadata-degraded recovery truthful and reachable on Radiomaster width", async ({
@@ -67,7 +97,7 @@ test.describe("setup workspace proof", () => {
     await expect(page.locator(parameterWorkspaceSelectors.root)).toBeVisible();
   });
 
-  test("surfaces retained RC mapping failures instead of bluffing a successful setup apply", async ({
+  test("seeds ArduPlane metadata, stages QuadPlane enable through the shared tray, and resumes on refreshed VTOL truth", async ({
     page,
     mockPlatform,
   }) => {
@@ -77,7 +107,14 @@ test.describe("setup workspace proof", () => {
     await mockPlatform.reset();
     await mockPlatform.waitForRuntimeSurface();
 
+    await expect.poll(() => page.evaluate(() => ({
+      arducopter: Boolean(window.localStorage.getItem("param_meta_ArduCopter")),
+      arduplane: Boolean(window.localStorage.getItem("param_meta_ArduPlane")),
+    }))).toEqual({ arducopter: true, arduplane: true });
+
     await connectSetupSession(page, mockPlatform, {
+      vehicleState: setupPlaneVehicleState,
+      paramStore: createPlainPlaneSetupParamStore(),
       telemetry: createSetupTelemetryDomain(null),
       support: createSetupSupportDomain(),
       configurationFacts: createSetupConfigurationFactsDomain(),
@@ -85,78 +122,26 @@ test.describe("setup workspace proof", () => {
     });
 
     await openConnectedSetupWorkspace(page);
-    await setupNavLocator(page, "rc_receiver").click();
-
-    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("rc_receiver");
-    await expect(page.locator(setupWorkspaceSelectors.rcSignal)).toContainText("Waiting for RC signal");
-
-    await setupRcPresetLocator(page, "taer").click();
-    await expect(page.locator(parameterWorkspaceSelectors.reviewTray)).toBeVisible();
-    await page.locator(parameterWorkspaceSelectors.reviewToggle).click();
-    await expect(page.locator(parameterWorkspaceSelectors.reviewSurface)).toBeVisible();
-    await expect(page.locator(parameterWorkspaceSelectors.reviewCount)).toContainText("3 queued");
-    await expectQueuedRcReviewRows(page, ["RCMAP_ROLL", "RCMAP_PITCH", "RCMAP_THROTTLE"]);
-
-    await mockPlatform.setCommandBehavior("param_write_batch", {
-      type: "resolve",
-      result: [
-        { name: "RCMAP_ROLL", requested_value: 2, confirmed_value: 1, success: false },
-        { name: "RCMAP_PITCH", requested_value: 3, confirmed_value: 3, success: true },
-        { name: "RCMAP_THROTTLE", requested_value: 1, confirmed_value: 1, success: true },
-      ],
-    });
-
-    await page.locator(parameterWorkspaceSelectors.reviewApply).click();
-
-    await expect(page.locator(setupWorkspaceSelectors.rcFailure)).toContainText(
-      "The shared review tray is still retaining RC mapping failures.",
-    );
-    await expect(page.locator(setupWorkspaceSelectors.rcFailure)).toContainText("RCMAP_ROLL");
-    await expect(parameterReviewRowLocator(page, "RCMAP_ROLL")).toContainText("RCMAP_ROLL");
-    await expect(parameterReviewRowLocator(page, "RCMAP_PITCH")).toHaveCount(0);
-    await expect(parameterReviewRowLocator(page, "RCMAP_THROTTLE")).toHaveCount(0);
-  });
-
-  test("covers RC live bars, shared-tray reboot checkpoint resume, and compass lifecycle truth on desktop", async ({
-    page,
-    mockPlatform,
-  }) => {
-    await primeSetupMetadata(page);
-    await applyShellViewport(page, "desktop");
-    await page.goto("/");
-    await mockPlatform.reset();
-    await mockPlatform.waitForRuntimeSurface();
-
-    await connectSetupSession(page, mockPlatform, {
-      telemetry: createSetupTelemetryDomain({
-        rc_channels: [1100, 1200, 1300, 1400],
-        rc_rssi: 72,
-      }),
-      support: createSetupSupportDomain({ can_calibrate_radio: false }),
-      configurationFacts: createSetupConfigurationFactsDomain(),
-      calibration: createSetupCalibrationDomain(),
-      statusText: createSetupStatusTextDomain([
-        { sequence: 1, text: "Rotate vehicle to calibrate compass", severity: "notice", timestamp_usec: 100 },
-      ]),
-    });
-
-    await openConnectedSetupWorkspace(page);
     await expect(page.locator(setupWorkspaceSelectors.metadata)).toContainText("Metadata ready");
-    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("overview");
 
-    await setupNavLocator(page, "rc_receiver").click();
-    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("rc_receiver");
-    await expect(page.locator(setupWorkspaceSelectors.rcSignal)).toContainText("4 live");
-    await expect(page.locator(setupWorkspaceSelectors.rcRssi)).toContainText("72");
-    await expect(setupRcBarLocator(page, 1)).toContainText("1100");
-    await expect(setupRcBarLocator(page, 4)).toContainText("1400");
+    await setupNavLocator(page, "frame_orientation").click();
+    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("frame_orientation");
+    await expect(page.locator(setupWorkspaceSelectors.frameVehicleState)).toContainText("Plain Plane");
+    await expect(page.locator(setupWorkspaceSelectors.frameLayoutState)).toContainText("Preview blocked");
+    await expect(setupFrameBannerLocator(page, "plain-plane")).toContainText("Enable Q_ENABLE");
+    await expect(page.locator(setupWorkspaceSelectors.frameDocsLink)).toHaveAttribute(
+      "href",
+      "https://ardupilot.org/plane/docs/quadplane-frame-setup.html",
+    );
+    await expect(setupFrameInputLocator(page, "Q_ENABLE")).toBeVisible();
 
-    await setupRcPresetLocator(page, "taer").click();
+    await setupFrameInputLocator(page, "Q_ENABLE").selectOption("1");
+    await setupFrameStageButtonLocator(page, "Q_ENABLE").click();
+
     await expect(page.locator(parameterWorkspaceSelectors.reviewTray)).toBeVisible();
     await page.locator(parameterWorkspaceSelectors.reviewToggle).click();
     await expect(page.locator(parameterWorkspaceSelectors.reviewSurface)).toBeVisible();
-    await expect(page.locator(parameterWorkspaceSelectors.reviewCount)).toContainText("3 queued");
-    await expectQueuedRcReviewRows(page, ["RCMAP_ROLL", "RCMAP_PITCH", "RCMAP_THROTTLE"]);
+    await expect(parameterReviewRowLocator(page, "Q_ENABLE")).toContainText("Q_ENABLE");
 
     await page.locator(parameterWorkspaceSelectors.reviewApply).click();
 
@@ -165,66 +150,172 @@ test.describe("setup workspace proof", () => {
     await expect(page.locator(setupWorkspaceSelectors.checkpointDetail)).toContainText(
       "Reboot-required setup changes were confirmed through the shared review tray",
     );
-    await expect(page.locator(parameterWorkspaceSelectors.reviewTray)).toHaveCount(0);
-    await expect(setupRcPresetLocator(page, "aetr")).toBeDisabled();
 
-    const resumedEnvelope = await simulateSetupReconnectSameScope(mockPlatform, {
-      vehicleState: setupConnectedVehicleState,
-      telemetry: createSetupTelemetryDomain({
-        rc_channels: [1110, 1210, 1310, 1410],
-        rc_rssi: 74,
-      }),
-      support: createSetupSupportDomain({ can_calibrate_radio: false }),
+    await setupNavLocator(page, "motors_esc").click();
+    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("motors_esc");
+    await expect(page.locator(setupWorkspaceSelectors.motorsEscSafetyState)).toContainText("Blocked by checkpoint");
+    await expect(page.locator(setupWorkspaceSelectors.motorsEscUnlock)).toBeDisabled();
+
+    await simulateSetupReconnectSameScope(mockPlatform, {
+      vehicleState: setupPlaneVehicleState,
+      paramStore: createQuadPlaneSetupParamStore(),
+      paramProgress: "completed",
+      telemetry: createSetupTelemetryDomain(null),
+      support: createSetupSupportDomain(),
       configurationFacts: createSetupConfigurationFactsDomain(),
       calibration: createSetupCalibrationDomain(),
       statusText: createSetupStatusTextDomain([
-        { sequence: 2, text: "Compass calibration ready", severity: "notice", timestamp_usec: 200 },
+        { sequence: 2, text: "QuadPlane VTOL parameters refreshed", severity: "notice", timestamp_usec: 200 },
       ]),
     });
 
     await expect(page.locator(setupWorkspaceSelectors.checkpointTitle)).toContainText("Setup resumed");
-    await expect(page.locator(setupWorkspaceSelectors.checkpointDetail)).toContainText("Resumed RC receiver");
-    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("rc_receiver");
+
+    await setupNavLocator(page, "frame_orientation").click();
+    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("frame_orientation");
+    await expect(page.locator(setupWorkspaceSelectors.frameVehicleState)).toContainText("QuadPlane ready");
+    await expect(page.locator(setupWorkspaceSelectors.frameLayoutState)).toContainText("Supported");
+    await expect(setupFrameInputLocator(page, "Q_FRAME_CLASS")).toBeVisible();
+    await expect(setupFrameInputLocator(page, "Q_FRAME_TYPE")).toBeVisible();
+    await expect(setupFrameInputLocator(page, "Q_ENABLE")).toHaveCount(0);
 
     await page.locator(setupWorkspaceSelectors.checkpointDismiss).click();
     await expect(page.locator(setupWorkspaceSelectors.checkpoint)).toHaveCount(0);
+  });
 
-    await setupNavLocator(page, "calibration").click();
-    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("calibration");
-    await expect(page.locator(setupWorkspaceSelectors.calibrationNotices)).toContainText(
-      "Compass calibration ready",
-    );
-    await expect(setupCalibrationCardLocator(page, "radio")).toContainText("Unavailable");
+  test("proves one motor unlock, inline motor_test rejection, shared-tray reversal staging, and 1..=8 bridge-limit messaging", async ({
+    page,
+    mockPlatform,
+  }) => {
+    await primeSetupMetadata(page);
+    await applyShellViewport(page, "desktop");
+    await page.goto("/");
+    await mockPlatform.reset();
+    await mockPlatform.waitForRuntimeSurface();
 
-    await mockPlatform.setCommandBehavior("calibrate_compass_start", {
-      type: "resolve",
-      emit: [
-        {
-          event: "calibration://state",
-          payload: {
-            envelope: resumedEnvelope,
-            value: createSetupCalibrationDomain({
-              compass: { lifecycle: "running", progress: null, report: null },
-            }),
-          },
-        },
-        {
-          event: "status_text://state",
-          payload: {
-            envelope: resumedEnvelope,
-            value: createSetupStatusTextDomain([
-              { sequence: 3, text: "Compass calibration running", severity: "notice", timestamp_usec: 300 },
-            ]),
-          },
-        },
-      ],
+    await connectSetupSession(page, mockPlatform, {
+      paramStore: createDodecahexaMotorSetupParamStore(),
+      telemetry: createSetupTelemetryDomain(null),
+      support: createSetupSupportDomain(),
+      configurationFacts: createSetupConfigurationFactsDomain(),
+      calibration: createSetupCalibrationDomain(),
     });
 
-    await setupCalibrationActionLocator(page, "compass").click();
-    await expect(setupCalibrationCardLocator(page, "compass")).toContainText("Running");
-    await expect(setupCalibrationActionLocator(page, "compass")).toContainText("Cancel compass calibration");
-    await expect(page.locator(setupWorkspaceSelectors.calibrationNotices)).toContainText(
-      "Compass calibration running",
+    await openConnectedSetupWorkspace(page);
+    await setupNavLocator(page, "motors_esc").click();
+
+    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("motors_esc");
+    await expect(page.locator(setupWorkspaceSelectors.motorsEscSummary)).toBeVisible();
+    await expect(page.locator(setupWorkspaceSelectors.motorsEscSafetyState)).toContainText("Locked");
+    await expect(setupMotorsEscBannerLocator(page, "bridge-limit")).toContainText("bridge window");
+    await expect(setupMotorsEscRowAvailabilityLocator(page, 9)).toContainText("1..=8");
+    await expect(setupMotorsEscRowTestLocator(page, 9)).toContainText("1..=8");
+    await expect(setupMotorsEscRowTestLocator(page, 9)).toBeDisabled();
+
+    await page.locator(setupWorkspaceSelectors.motorsEscUnlock).click();
+    await expect(page.locator(setupWorkspaceSelectors.motorsEscSafetyState)).toContainText("Unlocked");
+
+    await mockPlatform.setCommandBehavior("motor_test", {
+      type: "reject",
+      error: "bridge offline",
+    });
+
+    await setupMotorsEscRowTestLocator(page, 1).click();
+    await expect(setupMotorsEscRowLocator(page, 1)).toContainText("bridge offline");
+    await expect(page.locator(setupWorkspaceSelectors.motorsEscSafetyState)).toContainText("Unlocked");
+
+    await mockPlatform.clearCommandBehavior("motor_test");
+    await setupMotorsEscRowTestLocator(page, 1).click();
+
+    await expect(setupMotorsEscRowResultLocator(page, 1)).toContainText("Awaiting confirmation");
+    await expectLatestInvocation(mockPlatform, "motor_test", {
+      motorInstance: 1,
+      throttlePct: 5,
+      durationS: 2,
+    });
+
+    await setupMotorsEscRowReversedLocator(page, 1).click();
+    await setupMotorsEscRowReverseLocator(page, 1).click();
+
+    await expect(page.locator(parameterWorkspaceSelectors.reviewTray)).toBeVisible();
+    await page.locator(parameterWorkspaceSelectors.reviewToggle).click();
+    await expect(parameterReviewRowLocator(page, "SERVO1_REVERSED")).toContainText("SERVO1_REVERSED");
+    await expect(page.locator(setupWorkspaceSelectors.motorsEscReversalState)).toContainText("queued");
+  });
+
+  test("proves ArduPlane servo grouping, grouped and raw actuation, shared-tray reversal staging, and unsupported-output messaging", async ({
+    page,
+    mockPlatform,
+  }) => {
+    await primeSetupMetadata(page);
+    await applyShellViewport(page, "desktop");
+    await page.goto("/");
+    await mockPlatform.reset();
+    await mockPlatform.waitForRuntimeSurface();
+
+    await connectSetupSession(page, mockPlatform, {
+      vehicleState: setupPlaneVehicleState,
+      paramStore: createTailsitterServoSetupParamStore(),
+      telemetry: createSetupTelemetryDomain(null, {
+        value: {
+          radio: {
+            servo_outputs: [1502, 1608],
+          },
+        },
+      }),
+      support: createSetupSupportDomain(),
+      configurationFacts: createSetupConfigurationFactsDomain(),
+      calibration: createSetupCalibrationDomain(),
+    });
+
+    await openConnectedSetupWorkspace(page);
+    await setupNavLocator(page, "servo_outputs").click();
+
+    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("servo_outputs");
+    await expect(page.locator(setupWorkspaceSelectors.servoOutputsSummary)).toBeVisible();
+    await expect(setupServoOutputsFunctionGroupLocator(page, 4)).toBeVisible();
+    await expect(setupServoOutputsBannerLocator(page, "generic-fallback")).toContainText(
+      "generic configured-output groups",
     );
+    await expect(setupServoOutputsRawReadbackLocator(page, 2)).toContainText("live");
+    await expect(setupServoOutputsRawAvailabilityLocator(page, 17)).toContainText("SERVO1–16");
+
+    await page.locator(setupWorkspaceSelectors.servoOutputsUnlock).click();
+    await expect(page.locator(setupWorkspaceSelectors.servoOutputsSafetyState)).toContainText("Unlocked");
+
+    await mockPlatform.setCommandBehavior("set_servo", {
+      type: "reject",
+      error: "link dropped",
+    });
+
+    await setupServoOutputsRawSendLocator(page, 2).click();
+    await expect(page.locator(setupWorkspaceSelectors.servoOutputsSection)).toContainText("link dropped");
+    await expect(page.locator(setupWorkspaceSelectors.servoOutputsSafetyState)).toContainText("Unlocked");
+
+    await mockPlatform.clearCommandBehavior("set_servo");
+    await setupServoOutputsRowMinLocator(page, 2).click();
+
+    await expect(setupServoOutputsRowResultLocator(page, 2)).toContainText("Awaiting confirmation");
+    await expectLatestInvocation(mockPlatform, "set_servo", {
+      instance: 2,
+      pwmUs: 1000,
+    });
+
+    await setupServoOutputsRawInputLocator(page, 2).fill("1200");
+    await setupServoOutputsRawSendLocator(page, 2).click();
+
+    await expectLatestInvocation(mockPlatform, "set_servo", {
+      instance: 2,
+      pwmUs: 1200,
+    });
+    await expect(page.locator(setupWorkspaceSelectors.servoOutputsSelectedTarget)).toContainText("SERVO2");
+
+    await setupServoOutputsRowReversedLocator(page, 2).click();
+    await setupServoOutputsRowReverseLocator(page, 2).click();
+
+    await expect(page.locator(parameterWorkspaceSelectors.reviewTray)).toBeVisible();
+    await page.locator(parameterWorkspaceSelectors.reviewToggle).click();
+    await expect(parameterReviewRowLocator(page, "SERVO2_REVERSED")).toContainText("SERVO2_REVERSED");
+    await expect(page.locator(setupWorkspaceSelectors.servoOutputsReversalState)).toContainText("queued");
   });
 });
