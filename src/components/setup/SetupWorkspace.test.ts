@@ -8,6 +8,7 @@ const calibrationMocks = vi.hoisted(() => ({
   calibrateCompassStart: vi.fn(async () => undefined),
   calibrateCompassAccept: vi.fn(async () => undefined),
   calibrateCompassCancel: vi.fn(async () => undefined),
+  motorTest: vi.fn(async () => undefined),
 }));
 
 vi.mock("../../calibration", async (importOriginal) => {
@@ -23,7 +24,6 @@ import { missingDomainValue } from "../../lib/domain-status";
 import type { ParamsService, ParamsServiceEventHandlers } from "../../lib/platform/params";
 import {
   createParamsStore,
-  type ParamsStore,
 } from "../../lib/stores/params";
 import type { SessionStore, SessionStoreState } from "../../lib/stores/session";
 import {
@@ -33,7 +33,7 @@ import {
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
 import { withShellContexts } from "../../test/context-harnesses";
-import type { TelemetryState } from "../../telemetry";
+import type { TelemetryState, VehicleState } from "../../telemetry";
 import { appShellTestIds } from "../../app/shell/chrome-state";
 import ParameterReviewTray from "../../app/shell/ParameterReviewTray.svelte";
 import { parameterWorkspaceTestIds } from "../params/parameter-workspace-test-ids";
@@ -304,6 +304,21 @@ function createSetupMetadata(options: {
     });
   }
 
+  for (let index = 1; index <= 16; index += 1) {
+    metadata.set(`SERVO${index}_FUNCTION`, {
+      humanName: `Servo ${index} function`,
+      description: `Assigned output function for SERVO${index}.`,
+    });
+    metadata.set(`SERVO${index}_REVERSED`, {
+      humanName: `Servo ${index} reversed`,
+      description: `Reverse the direction of SERVO${index}.`,
+      values: [
+        { code: 0, label: "Normal" },
+        { code: 1, label: "Reversed" },
+      ],
+    });
+  }
+
   return metadata;
 }
 
@@ -436,16 +451,28 @@ function createPlaneSessionOverrides(
   overrides: Partial<SessionStoreState> = {},
 ): Partial<SessionStoreState> {
   const base = createSessionState();
+  const baseSessionValue = base.sessionDomain.value;
+  const baseVehicleState = baseSessionValue?.vehicle_state ?? null;
+
   return {
     sessionDomain: {
       ...base.sessionDomain,
-      value: base.sessionDomain.value
+      value: baseSessionValue && baseVehicleState
         ? {
-            ...base.sessionDomain.value,
+            status: baseSessionValue.status,
+            connection: baseSessionValue.connection,
             vehicle_state: {
-              ...base.sessionDomain.value.vehicle_state,
+              armed: baseVehicleState.armed,
+              custom_mode: baseVehicleState.custom_mode,
+              mode_name: baseVehicleState.mode_name,
+              system_status: baseVehicleState.system_status,
               vehicle_type: "fixed_wing",
-            },
+              autopilot: baseVehicleState.autopilot,
+              system_id: baseVehicleState.system_id,
+              component_id: baseVehicleState.component_id,
+              heartbeat_received: baseVehicleState.heartbeat_received,
+            } satisfies VehicleState,
+            home_position: baseSessionValue.home_position,
           }
         : null,
     },
@@ -457,6 +484,91 @@ function createPlaneSessionOverrides(
     },
     ...overrides,
   };
+}
+
+function createCopterSessionOverrides(
+  paramStore: ParamStore,
+  overrides: Partial<SessionStoreState> = {},
+): Partial<SessionStoreState> {
+  const base = createSessionState();
+  const baseSessionValue = base.sessionDomain.value;
+  const baseVehicleState = baseSessionValue?.vehicle_state ?? null;
+
+  return {
+    sessionDomain: {
+      ...base.sessionDomain,
+      value: baseSessionValue && baseVehicleState
+        ? {
+            status: baseSessionValue.status,
+            connection: baseSessionValue.connection,
+            vehicle_state: {
+              armed: baseVehicleState.armed,
+              custom_mode: baseVehicleState.custom_mode,
+              mode_name: baseVehicleState.mode_name,
+              system_status: baseVehicleState.system_status,
+              vehicle_type: "quadrotor",
+              autopilot: baseVehicleState.autopilot,
+              system_id: baseVehicleState.system_id,
+              component_id: baseVehicleState.component_id,
+              heartbeat_received: baseVehicleState.heartbeat_received,
+            } satisfies VehicleState,
+            home_position: baseSessionValue.home_position,
+          }
+        : null,
+    },
+    bootstrap: {
+      missionState: null,
+      paramStore,
+      paramProgress: "completed",
+      playbackCursorUsec: null,
+    },
+    ...overrides,
+  };
+}
+
+function createMotorSetupParamStore(options: {
+  frameClass?: number;
+  frameType?: number;
+  outputCount?: number;
+  includeReverseRowFor?: number[];
+} = {}): ParamStore {
+  const {
+    frameClass = 1,
+    frameType = 1,
+    outputCount = 4,
+    includeReverseRowFor = Array.from({ length: outputCount }, (_, index) => index + 1),
+  } = options;
+  const entries: Record<string, number> = {
+    FRAME_CLASS: frameClass,
+    FRAME_TYPE: frameType,
+    AHRS_ORIENTATION: 0,
+  };
+  const reverseSet = new Set(includeReverseRowFor);
+
+  for (let index = 1; index <= outputCount; index += 1) {
+    entries[`SERVO${index}_FUNCTION`] = 32 + index;
+    if (reverseSet.has(index)) {
+      entries[`SERVO${index}_REVERSED`] = 0;
+    }
+  }
+
+  return createParamStoreFromEntries(entries);
+}
+
+function createMotorCheckpointParamStore(): ParamStore {
+  return createMotorSetupParamStore({
+    outputCount: 4,
+    includeReverseRowFor: [1, 2, 3, 4],
+  });
+}
+
+function createDodecahexaMotorSetupParamStore(): ParamStore {
+  return createMotorSetupParamStore({
+    frameClass: 12,
+    frameType: 0,
+    outputCount: 12,
+    includeReverseRowFor: Array.from({ length: 12 }, (_, index) => index + 1),
+  });
 }
 
 function createMockParamsService(
@@ -550,6 +662,8 @@ describe("SetupWorkspace", () => {
     calibrationMocks.calibrateCompassStart.mockClear();
     calibrationMocks.calibrateCompassAccept.mockClear();
     calibrationMocks.calibrateCompassCancel.mockClear();
+    calibrationMocks.motorTest.mockClear();
+    calibrationMocks.motorTest.mockResolvedValue(undefined);
 
     if (typeof localStorage.clear === "function") {
       localStorage.clear();
@@ -727,8 +841,11 @@ describe("SetupWorkspace", () => {
     expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-Q_FRAME_TYPE`)).toBeTruthy();
   });
 
-  it("makes motors and servo outputs navigable expert sections while keeping motors progress partial", async () => {
-    await renderSetupWorkspace({ metadata: createSetupMetadata() });
+  it("mounts the real motors section and keeps servo outputs on the expert placeholder", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      sessionOverrides: createCopterSessionOverrides(createMotorSetupParamStore()),
+    });
 
     expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-motors_esc`).textContent?.trim()).toBe("Unknown");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionConfidencePrefix}-motors_esc`).textContent?.trim()).toBe("Unconfirmed");
@@ -737,7 +854,8 @@ describe("SetupWorkspace", () => {
     await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-motors_esc`));
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("motors_esc");
-      expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscSection)).toBeTruthy();
+      expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscSummary)).toBeTruthy();
+      expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscLayoutState).textContent).toContain("QUAD X");
     });
 
     await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-servo_outputs`));
@@ -745,6 +863,122 @@ describe("SetupWorkspace", () => {
       expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("servo_outputs");
       expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsSection)).toBeTruthy();
     });
+  });
+
+  it("uses one section-level unlock, preserves ArduPilot row order, and stages reversal through the shared review tray", async () => {
+    const { parameterStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      includeReviewTray: true,
+      sessionOverrides: createCopterSessionOverrides(createMotorSetupParamStore()),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-motors_esc`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscSummary)).toBeTruthy();
+    });
+
+    const rowIds = Array.from(
+      screen
+        .getByTestId(setupWorkspaceTestIds.motorsEscSection)
+        .querySelectorAll("article[data-testid^='setup-workspace-motors-esc-row-']"),
+    ).map((element) => element.getAttribute("data-testid"));
+    expect(rowIds).toEqual([
+      `${setupWorkspaceTestIds.motorsEscRowPrefix}-1`,
+      `${setupWorkspaceTestIds.motorsEscRowPrefix}-4`,
+      `${setupWorkspaceTestIds.motorsEscRowPrefix}-2`,
+      `${setupWorkspaceTestIds.motorsEscRowPrefix}-3`,
+    ]);
+
+    expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscSafetyState).textContent).toContain("Locked");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.motorsEscRowTestPrefix}-1`).getAttribute("disabled")).not.toBeNull();
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.motorsEscUnlock));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscSafetyState).textContent).toContain("Unlocked");
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.motorsEscRowTestPrefix}-1`));
+    await waitFor(() => {
+      expect(calibrationMocks.motorTest).toHaveBeenCalledWith(1, 5, 2);
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.motorsEscRowReversedPrefix}-1`));
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.motorsEscRowReversePrefix}-1`));
+
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.SERVO1_REVERSED?.nextValue).toBe(1);
+    });
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-SERVO1_REVERSED`)).toBeTruthy();
+    expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscReversalState).textContent).toContain("queued");
+  });
+
+  it("keeps the section unlocked and surfaces inline motor-test rejection without implying success", async () => {
+    calibrationMocks.motorTest.mockRejectedValueOnce(new Error("bridge offline"));
+
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      sessionOverrides: createCopterSessionOverrides(createMotorSetupParamStore()),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-motors_esc`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscSummary)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.motorsEscUnlock));
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.motorsEscRowTestPrefix}-1`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.motorsEscRowErrorPrefix}-1`).textContent).toContain("bridge offline");
+    });
+    expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscSafetyState).textContent).toContain("Unlocked");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.motorsEscRowPrefix}-1`).getAttribute("data-selected")).toBe("true");
+    expect(screen.queryByTestId(`${setupWorkspaceTestIds.motorsEscRowResultPrefix}-1`)).toBeNull();
+  });
+
+  it("blocks the motors section while a reboot checkpoint is unresolved", async () => {
+    const { setupWorkspaceStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      sessionOverrides: createCopterSessionOverrides(createMotorCheckpointParamStore()),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-motors_esc`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscSummary)).toBeTruthy();
+    });
+
+    setupWorkspaceStore.setCheckpointPlaceholder({
+      phase: "resume_pending",
+      resumeSectionId: "motors_esc",
+      reason: "Reconnect before continuing motor work.",
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscSafetyState).textContent).toContain("Blocked by checkpoint");
+    });
+    expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscUnlock).getAttribute("disabled")).not.toBeNull();
+  });
+
+  it("shows rows above the current motor_test bridge window as visible but non-testable", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      sessionOverrides: createCopterSessionOverrides(createDodecahexaMotorSetupParamStore()),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-motors_esc`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscSummary)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.motorsEscUnlock));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.motorsEscRowPrefix}-9`)).toBeTruthy();
+    });
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.motorsEscRowAvailabilityPrefix}-9`).textContent).toContain("1..=8");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.motorsEscRowTestPrefix}-9`).textContent).toContain("1..=8");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.motorsEscRowTestPrefix}-9`).getAttribute("disabled")).not.toBeNull();
   });
 
   it("fails closed to the recovery path when frame editor metadata is incomplete", async () => {
@@ -775,7 +1009,7 @@ describe("SetupWorkspace", () => {
         telemetryDomain: createTelemetryDomain({
           rc_channels: [1100, 1500, 1900, 1300],
           rc_rssi: 72,
-          servo_outputs: null,
+          servo_outputs: undefined,
         }),
       },
     });
@@ -954,7 +1188,7 @@ describe("SetupWorkspace", () => {
         telemetryDomain: createTelemetryDomain({
           rc_channels: [1100, 1500, 1900, 1300],
           rc_rssi: 84,
-          servo_outputs: null,
+          servo_outputs: undefined,
         }),
       },
     });
@@ -989,7 +1223,7 @@ describe("SetupWorkspace", () => {
       telemetryDomain: createTelemetryDomain({
         rc_channels: [1200, 1600, 1800, 1400],
         rc_rssi: 88,
-        servo_outputs: null,
+        servo_outputs: undefined,
       }),
     }));
 

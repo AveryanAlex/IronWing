@@ -9,6 +9,7 @@ import SetupCalibrationSection from "./SetupCalibrationSection.svelte";
 import SetupCheckpointBanner from "./SetupCheckpointBanner.svelte";
 import SetupFrameOrientationSection from "./SetupFrameOrientationSection.svelte";
 import SetupFullParametersSection from "./SetupFullParametersSection.svelte";
+import SetupMotorsEscSection from "./SetupMotorsEscSection.svelte";
 import SetupOverviewSection from "./SetupOverviewSection.svelte";
 import SetupRcReceiverSection from "./SetupRcReceiverSection.svelte";
 import SetupWorkspaceSectionNav from "./SetupWorkspaceSectionNav.svelte";
@@ -135,6 +136,12 @@ function clearCheckpoint() {
           checkpoint={view.checkpoint}
           onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
+        />
+      {:else if view.selectedSectionId === "motors_esc" && selectedSection}
+        <SetupMotorsEscSection
+          onSelectRecovery={() => selectSection("full_parameters")}
+          section={selectedSection}
+          {view}
         />
       {:else if view.selectedSectionId === "rc_receiver"}
         <SetupRcReceiverSection {view} />
