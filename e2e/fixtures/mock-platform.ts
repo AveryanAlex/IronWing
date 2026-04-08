@@ -1,3 +1,4 @@
+import { firmwareWorkspaceTestIds } from "../../src/components/firmware/firmware-workspace-test-ids";
 import { missionWorkspaceTestIds } from "../../src/components/mission/mission-workspace-test-ids";
 import type { MissionMapDebugSnapshot } from "../../src/components/mission/mission-map-debug";
 import { setupWorkspaceTestIds } from "../../src/components/setup/setup-workspace-test-ids";
@@ -303,6 +304,88 @@ export const missionSupportPanelSelectors = {
     terrainRetry: `[data-testid="${missionWorkspaceTestIds.terrainRetry}"]`,
 } as const;
 
+export const firmwareWorkspaceSelectors = {
+    root: `[data-testid="${firmwareWorkspaceTestIds.root}"]`,
+    mode: `[data-testid="${firmwareWorkspaceTestIds.mode}"]`,
+    modeInstall: `[data-testid="${firmwareWorkspaceTestIds.modeInstall}"]`,
+    modeRecovery: `[data-testid="${firmwareWorkspaceTestIds.modeRecovery}"]`,
+    returnGuidance: `[data-testid="${firmwareWorkspaceTestIds.returnGuidance}"]`,
+    layoutMode: `[data-testid="${firmwareWorkspaceTestIds.layoutMode}"]`,
+    layoutTier: `[data-testid="${firmwareWorkspaceTestIds.layoutTier}"]`,
+    layoutTierMismatch: `[data-testid="${firmwareWorkspaceTestIds.layoutTierMismatch}"]`,
+    blockedReason: `[data-testid="${firmwareWorkspaceTestIds.blockedReason}"]`,
+    blockedCopy: `[data-testid="${firmwareWorkspaceTestIds.blockedCopy}"]`,
+    serialPanel: `[data-testid="${firmwareWorkspaceTestIds.serialPanel}"]`,
+    serialState: `[data-testid="${firmwareWorkspaceTestIds.serialState}"]`,
+    serialPort: `[data-testid="${firmwareWorkspaceTestIds.serialPort}"]`,
+    serialPortRefresh: `[data-testid="${firmwareWorkspaceTestIds.serialPortRefresh}"]`,
+    serialBaud: `[data-testid="${firmwareWorkspaceTestIds.serialBaud}"]`,
+    selectedTargetState: `[data-testid="${firmwareWorkspaceTestIds.selectedTargetState}"]`,
+    selectedSourceState: `[data-testid="${firmwareWorkspaceTestIds.selectedSourceState}"]`,
+    manualTargetToggle: `[data-testid="${firmwareWorkspaceTestIds.manualTargetToggle}"]`,
+    manualTargetRequired: `[data-testid="${firmwareWorkspaceTestIds.manualTargetRequired}"]`,
+    manualTargetSearch: `[data-testid="${firmwareWorkspaceTestIds.manualTargetSearch}"]`,
+    manualTargetVehicleFilter: `[data-testid="${firmwareWorkspaceTestIds.manualTargetVehicleFilter}"]`,
+    manualTargetResults: `[data-testid="${firmwareWorkspaceTestIds.manualTargetResults}"]`,
+    manualTargetEmpty: `[data-testid="${firmwareWorkspaceTestIds.manualTargetEmpty}"]`,
+    manualTargetNoMatches: `[data-testid="${firmwareWorkspaceTestIds.manualTargetNoMatches}"]`,
+    manualTargetSelected: `[data-testid="${firmwareWorkspaceTestIds.manualTargetSelected}"]`,
+    manualTargetHidden: `[data-testid="${firmwareWorkspaceTestIds.manualTargetHidden}"]`,
+    targetListError: `[data-testid="${firmwareWorkspaceTestIds.targetListError}"]`,
+    targetListRetry: `[data-testid="${firmwareWorkspaceTestIds.targetListRetry}"]`,
+    catalogEntryState: `[data-testid="${firmwareWorkspaceTestIds.catalogEntryState}"]`,
+    catalogEntryError: `[data-testid="${firmwareWorkspaceTestIds.catalogEntryError}"]`,
+    catalogEntryRetry: `[data-testid="${firmwareWorkspaceTestIds.catalogEntryRetry}"]`,
+    catalogEntrySelect: `[data-testid="${firmwareWorkspaceTestIds.catalogEntrySelect}"]`,
+    sourceCatalog: `[data-testid="${firmwareWorkspaceTestIds.sourceCatalog}"]`,
+    sourceLocal: `[data-testid="${firmwareWorkspaceTestIds.sourceLocal}"]`,
+    sourceBrowse: `[data-testid="${firmwareWorkspaceTestIds.sourceBrowse}"]`,
+    sourceError: `[data-testid="${firmwareWorkspaceTestIds.sourceError}"]`,
+    fullChipErase: `[data-testid="${firmwareWorkspaceTestIds.fullChipErase}"]`,
+    paramBackup: `[data-testid="${firmwareWorkspaceTestIds.paramBackup}"]`,
+    paramBackupState: `[data-testid="${firmwareWorkspaceTestIds.paramBackupState}"]`,
+    serialReadiness: `[data-testid="${firmwareWorkspaceTestIds.serialReadiness}"]`,
+    serialReadinessState: `[data-testid="${firmwareWorkspaceTestIds.serialReadinessState}"]`,
+    serialBlockedReason: `[data-testid="${firmwareWorkspaceTestIds.serialBlockedReason}"]`,
+    serialBootloaderTransition: `[data-testid="${firmwareWorkspaceTestIds.serialBootloaderTransition}"]`,
+    serialValidationPending: `[data-testid="${firmwareWorkspaceTestIds.serialValidationPending}"]`,
+    startSerial: `[data-testid="${firmwareWorkspaceTestIds.startSerial}"]`,
+    cancelSerial: `[data-testid="${firmwareWorkspaceTestIds.cancelSerial}"]`,
+    serialProgress: `[data-testid="${firmwareWorkspaceTestIds.serialProgress}"]`,
+    recoveryPanel: `[data-testid="${firmwareWorkspaceTestIds.recoveryPanel}"]`,
+    recoveryState: `[data-testid="${firmwareWorkspaceTestIds.recoveryState}"]`,
+    recoveryDeviceSelect: `[data-testid="${firmwareWorkspaceTestIds.recoveryDeviceSelect}"]`,
+    recoveryDeviceRefresh: `[data-testid="${firmwareWorkspaceTestIds.recoveryDeviceRefresh}"]`,
+    recoveryDeviceState: `[data-testid="${firmwareWorkspaceTestIds.recoveryDeviceState}"]`,
+    recoveryTargetSelect: `[data-testid="${firmwareWorkspaceTestIds.recoveryTargetSelect}"]`,
+    recoveryTargetState: `[data-testid="${firmwareWorkspaceTestIds.recoveryTargetState}"]`,
+    recoveryTargetError: `[data-testid="${firmwareWorkspaceTestIds.recoveryTargetError}"]`,
+    recoveryTargetRetry: `[data-testid="${firmwareWorkspaceTestIds.recoveryTargetRetry}"]`,
+    recoveryTargetEmpty: `[data-testid="${firmwareWorkspaceTestIds.recoveryTargetEmpty}"]`,
+    recoveryOfficialAction: `[data-testid="${firmwareWorkspaceTestIds.recoveryOfficialAction}"]`,
+    recoverySourceState: `[data-testid="${firmwareWorkspaceTestIds.recoverySourceState}"]`,
+    recoveryAdvancedToggle: `[data-testid="${firmwareWorkspaceTestIds.recoveryAdvancedToggle}"]`,
+    recoveryManualPanel: `[data-testid="${firmwareWorkspaceTestIds.recoveryManualPanel}"]`,
+    recoveryManualWarning: `[data-testid="${firmwareWorkspaceTestIds.recoveryManualWarning}"]`,
+    recoveryManualApj: `[data-testid="${firmwareWorkspaceTestIds.recoveryManualApj}"]`,
+    recoveryManualBin: `[data-testid="${firmwareWorkspaceTestIds.recoveryManualBin}"]`,
+    recoveryBrowse: `[data-testid="${firmwareWorkspaceTestIds.recoveryBrowse}"]`,
+    recoverySourceError: `[data-testid="${firmwareWorkspaceTestIds.recoverySourceError}"]`,
+    recoverySafetyConfirm: `[data-testid="${firmwareWorkspaceTestIds.recoverySafetyConfirm}"]`,
+    recoveryManualConfirm: `[data-testid="${firmwareWorkspaceTestIds.recoveryManualConfirm}"]`,
+    recoveryBlockedReason: `[data-testid="${firmwareWorkspaceTestIds.recoveryBlockedReason}"]`,
+    recoveryGuidance: `[data-testid="${firmwareWorkspaceTestIds.recoveryGuidance}"]`,
+    startRecovery: `[data-testid="${firmwareWorkspaceTestIds.startRecovery}"]`,
+    cancelRecovery: `[data-testid="${firmwareWorkspaceTestIds.cancelRecovery}"]`,
+    recoveryProgress: `[data-testid="${firmwareWorkspaceTestIds.recoveryProgress}"]`,
+    outcomePanel: `[data-testid="${firmwareWorkspaceTestIds.outcomePanel}"]`,
+    outcomeState: `[data-testid="${firmwareWorkspaceTestIds.outcomeState}"]`,
+    outcomeResult: `[data-testid="${firmwareWorkspaceTestIds.outcomeResult}"]`,
+    outcomeSummary: `[data-testid="${firmwareWorkspaceTestIds.outcomeSummary}"]`,
+    outcomeEmpty: `[data-testid="${firmwareWorkspaceTestIds.outcomeEmpty}"]`,
+    outcomeDismiss: `[data-testid="${firmwareWorkspaceTestIds.outcomeDismiss}"]`,
+} as const;
+
 export const shellViewportPresets = {
     desktop: {
         width: 1440,
@@ -330,7 +413,7 @@ export const shellViewportPresets = {
 export type ShellViewportPresetName = keyof typeof shellViewportPresets;
 export type ShellViewportPreset = (typeof shellViewportPresets)[ShellViewportPresetName];
 
-type MockOpenFileState = {
+export type MockOpenFileState = {
     mode: "resolve" | "cancel" | "reject";
     name: string;
     type: string;
@@ -339,13 +422,13 @@ type MockOpenFileState = {
     openCount: number;
 };
 
-type MockSavedFile = {
+export type MockSavedFile = {
     name: string;
     contents: string;
     size: number;
 };
 
-type MockPlatformFixture = {
+export type MockPlatformFixture = {
     reset: () => Promise<void>;
     setCommandBehavior: (cmd: string, behavior: MockCommandBehavior) => Promise<void>;
     clearCommandBehavior: (cmd: string) => Promise<void>;

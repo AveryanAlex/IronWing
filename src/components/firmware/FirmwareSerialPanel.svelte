@@ -566,7 +566,7 @@ $effect(() => {
   }
 
   const key = catalogTargetKey(state.serial.target);
-  if (currentEntryTargetKey === key && (catalogEntries.length > 0 || catalogEntryPhase === "loading" || catalogEntryPhase === "ready")) {
+  if (currentEntryTargetKey === key && catalogEntryPhase !== "idle") {
     return;
   }
 
