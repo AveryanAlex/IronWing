@@ -9,6 +9,7 @@ const calibrationMocks = vi.hoisted(() => ({
   calibrateCompassAccept: vi.fn(async () => undefined),
   calibrateCompassCancel: vi.fn(async () => undefined),
   motorTest: vi.fn(async () => undefined),
+  setServo: vi.fn(async () => undefined),
 }));
 
 vi.mock("../../calibration", async (importOriginal) => {
@@ -304,10 +305,22 @@ function createSetupMetadata(options: {
     });
   }
 
-  for (let index = 1; index <= 16; index += 1) {
+  const servoFunctionValues = [
+    { code: 4, label: "Aileron" },
+    { code: 19, label: "Elevator" },
+    { code: 21, label: "Rudder" },
+    { code: 33, label: "Motor 1" },
+    { code: 34, label: "Motor 2" },
+    { code: 35, label: "Motor 3" },
+    { code: 36, label: "Motor 4" },
+    { code: 75, label: "Tilt Front Left" },
+  ];
+
+  for (let index = 1; index <= 32; index += 1) {
     metadata.set(`SERVO${index}_FUNCTION`, {
       humanName: `Servo ${index} function`,
       description: `Assigned output function for SERVO${index}.`,
+      values: servoFunctionValues,
     });
     metadata.set(`SERVO${index}_REVERSED`, {
       humanName: `Servo ${index} reversed`,
@@ -568,6 +581,61 @@ function createDodecahexaMotorSetupParamStore(): ParamStore {
     frameType: 0,
     outputCount: 12,
     includeReverseRowFor: Array.from({ length: 12 }, (_, index) => index + 1),
+  });
+}
+
+function createServoSetupParamStore(entries: Record<string, number> = {}): ParamStore {
+  return createParamStoreFromEntries({
+    FRAME_CLASS: 1,
+    FRAME_TYPE: 1,
+    AHRS_ORIENTATION: 0,
+    SERVO1_FUNCTION: 4,
+    SERVO1_MIN: 900,
+    SERVO1_MAX: 2100,
+    SERVO1_TRIM: 1520,
+    SERVO1_REVERSED: 0,
+    SERVO2_FUNCTION: 19,
+    SERVO2_MIN: 1200,
+    SERVO2_MAX: 1800,
+    SERVO2_TRIM: 1600,
+    SERVO2_REVERSED: 0,
+    SERVO3_FUNCTION: 33,
+    SERVO3_MIN: 1000,
+    SERVO3_MAX: 2000,
+    SERVO3_TRIM: 1500,
+    SERVO3_REVERSED: 0,
+    SERVO17_FUNCTION: 21,
+    SERVO17_MIN: 1000,
+    SERVO17_MAX: 2000,
+    SERVO17_TRIM: 1500,
+    SERVO17_REVERSED: 0,
+    ...entries,
+  });
+}
+
+function createTailsitterServoSetupParamStore(entries: Record<string, number> = {}): ParamStore {
+  return createParamStoreFromEntries({
+    Q_ENABLE: 1,
+    Q_FRAME_CLASS: 10,
+    Q_FRAME_TYPE: 0,
+    Q_TAILSIT_ENABLE: 1,
+    AHRS_ORIENTATION: 0,
+    SERVO1_FUNCTION: 88,
+    SERVO1_MIN: 1000,
+    SERVO1_MAX: 2000,
+    SERVO1_TRIM: 1500,
+    SERVO1_REVERSED: 0,
+    SERVO2_FUNCTION: 4,
+    SERVO2_MIN: 1000,
+    SERVO2_MAX: 2000,
+    SERVO2_TRIM: 1500,
+    SERVO2_REVERSED: 0,
+    SERVO17_FUNCTION: 21,
+    SERVO17_MIN: 1000,
+    SERVO17_MAX: 2000,
+    SERVO17_TRIM: 1500,
+    SERVO17_REVERSED: 0,
+    ...entries,
   });
 }
 
@@ -841,27 +909,218 @@ describe("SetupWorkspace", () => {
     expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-Q_FRAME_TYPE`)).toBeTruthy();
   });
 
-  it("mounts the real motors section and keeps servo outputs on the expert placeholder", async () => {
+  it("mounts the real servo outputs section with grouped testers and raw inventory", async () => {
     await renderSetupWorkspace({
       metadata: createSetupMetadata(),
-      sessionOverrides: createCopterSessionOverrides(createMotorSetupParamStore()),
+      sessionOverrides: createCopterSessionOverrides(createServoSetupParamStore()),
     });
 
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-motors_esc`).textContent?.trim()).toBe("Unknown");
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionConfidencePrefix}-motors_esc`).textContent?.trim()).toBe("Unconfirmed");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-servo_outputs`)).toBeTruthy();
-
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-motors_esc`));
-    await waitFor(() => {
-      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("motors_esc");
-      expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscSummary)).toBeTruthy();
-      expect(screen.getByTestId(setupWorkspaceTestIds.motorsEscLayoutState).textContent).toContain("QUAD X");
-    });
 
     await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-servo_outputs`));
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("servo_outputs");
-      expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsSection)).toBeTruthy();
+      expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsSummary)).toBeTruthy();
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsFunctionGroupPrefix}-4`)).toBeTruthy();
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawGroupPrefix}-general`)).toBeTruthy();
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawRowPrefix}-17`)).toBeTruthy();
+    });
+  });
+
+  it("supports grouped servo testing, raw PWM sends, and shared-tray reversal staging", async () => {
+    const { parameterStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      includeReviewTray: true,
+      sessionOverrides: createCopterSessionOverrides(createServoSetupParamStore(), {
+        telemetryDomain: createTelemetryDomain({
+          rc_channels: undefined,
+          rc_rssi: undefined,
+          servo_outputs: [1502, 1608],
+        }),
+      }),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-servo_outputs`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsSummary)).toBeTruthy();
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawReadbackPrefix}-1`).textContent).toContain("1502");
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.servoOutputsUnlock));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsSafetyState).textContent).toContain("Unlocked");
+    });
+
+    await fireEvent.input(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawInputPrefix}-1`), {
+      target: { value: "1200" },
+    });
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawSendPrefix}-1`));
+
+    await waitFor(() => {
+      expect(calibrationMocks.setServo).toHaveBeenNthCalledWith(1, 1, 1200);
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRowMinPrefix}-1`));
+    await waitFor(() => {
+      expect(calibrationMocks.setServo).toHaveBeenNthCalledWith(2, 1, 1000);
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRowReversedPrefix}-1`));
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRowReversePrefix}-1`));
+
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.SERVO1_REVERSED?.nextValue).toBe(1);
+    });
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-SERVO1_REVERSED`)).toBeTruthy();
+    expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsReversalState).textContent).toContain("queued");
+  });
+
+  it("shows live, stale, and unavailable servo readback truth without fabricating PWM", async () => {
+    const { sessionStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      sessionOverrides: createCopterSessionOverrides(createServoSetupParamStore(), {
+        telemetryDomain: createTelemetryDomain({
+          rc_channels: undefined,
+          rc_rssi: undefined,
+          servo_outputs: [1502, 1608],
+        }),
+      }),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-servo_outputs`));
+    await waitFor(() => {
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawReadbackPrefix}-1`).textContent).toContain("live");
+    });
+
+    sessionStore.set(createSessionState({
+      ...createCopterSessionOverrides(createServoSetupParamStore(), {
+        telemetryDomain: createTelemetryDomain(
+          {
+            rc_channels: undefined,
+            rc_rssi: undefined,
+            servo_outputs: undefined,
+          },
+          {
+            complete: false,
+            provenance: "stream",
+          },
+        ),
+      }),
+    }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawReadbackPrefix}-1`).textContent).toContain("stale");
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawReadbackPrefix}-1`).textContent).toContain("1502");
+    });
+
+    sessionStore.set(createSessionState({
+      ...createCopterSessionOverrides(createServoSetupParamStore(), {
+        telemetryDomain: createTelemetryDomain({
+          rc_channels: undefined,
+          rc_rssi: undefined,
+          servo_outputs: [1502, Number.NaN] as any,
+        }),
+      }),
+    }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawReadbackPrefix}-2`).textContent).toContain("unavailable");
+    });
+  });
+
+  it("keeps unsupported outputs visible and falls back to generic configured groups when VTOL labels are partial", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      sessionOverrides: createPlaneSessionOverrides(createTailsitterServoSetupParamStore()),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-servo_outputs`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsSummary)).toBeTruthy();
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsBannerPrefix}-generic-fallback`).textContent).toContain("generic configured-output groups");
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawGroupPrefix}-general`).textContent).toContain("Configured outputs");
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawRowPrefix}-17`)).toBeTruthy();
+    });
+
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawAvailabilityPrefix}-17`).textContent).toContain("SERVO1–16");
+  });
+
+  it("keeps servo actuation blocked while a reboot checkpoint is unresolved", async () => {
+    const { setupWorkspaceStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      sessionOverrides: createCopterSessionOverrides(createServoSetupParamStore()),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-servo_outputs`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsSummary)).toBeTruthy();
+    });
+
+    setupWorkspaceStore.setCheckpointPlaceholder({
+      phase: "resume_pending",
+      resumeSectionId: "servo_outputs",
+      reason: "Reconnect before continuing servo work.",
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsSafetyState).textContent).toContain("Blocked by checkpoint");
+    });
+    expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsUnlock).getAttribute("disabled")).not.toBeNull();
+  });
+
+  it("keeps the section unlocked and surfaces inline servo-command rejection without implying success", async () => {
+    calibrationMocks.setServo.mockRejectedValueOnce(new Error("link dropped"));
+
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      sessionOverrides: createCopterSessionOverrides(createServoSetupParamStore()),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-servo_outputs`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsSummary)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.servoOutputsUnlock));
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawSendPrefix}-1`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawErrorPrefix}-1`).textContent).toContain("link dropped");
+    });
+    expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsSafetyState).textContent).toContain("Unlocked");
+    expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsSelectedTarget).textContent).toContain("SERVO1");
+    expect(screen.queryByTestId(`${setupWorkspaceTestIds.servoOutputsRowResultPrefix}-1`)).toBeNull();
+  });
+
+  it("surfaces retained reversal failures next to the affected servo rows", async () => {
+    const { parameterStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      paramsService: {
+        writeBatch: vi.fn(async (entries: [string, number][]) => entries.map(([name, value]) => ({
+          name,
+          requested_value: value,
+          confirmed_value: name === "SERVO1_REVERSED" ? 0 : value,
+          success: name !== "SERVO1_REVERSED",
+        }))),
+      },
+      sessionOverrides: createCopterSessionOverrides(createServoSetupParamStore()),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-servo_outputs`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsSummary)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawReversePrefix}-1`));
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.SERVO1_REVERSED?.nextValue).toBe(1);
+    });
+
+    await parameterStore.applyStagedEdits();
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.servoOutputsFailure).textContent).toContain("SERVO1_REVERSED");
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.servoOutputsRawRowPrefix}-1`).textContent).toContain("Vehicle kept 0 instead of 1");
     });
   });
 

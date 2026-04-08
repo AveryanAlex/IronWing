@@ -12,6 +12,7 @@ import SetupFullParametersSection from "./SetupFullParametersSection.svelte";
 import SetupMotorsEscSection from "./SetupMotorsEscSection.svelte";
 import SetupOverviewSection from "./SetupOverviewSection.svelte";
 import SetupRcReceiverSection from "./SetupRcReceiverSection.svelte";
+import SetupServoOutputsSection from "./SetupServoOutputsSection.svelte";
 import SetupWorkspaceSectionNav from "./SetupWorkspaceSectionNav.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
@@ -139,6 +140,12 @@ function clearCheckpoint() {
         />
       {:else if view.selectedSectionId === "motors_esc" && selectedSection}
         <SetupMotorsEscSection
+          onSelectRecovery={() => selectSection("full_parameters")}
+          section={selectedSection}
+          {view}
+        />
+      {:else if view.selectedSectionId === "servo_outputs" && selectedSection}
+        <SetupServoOutputsSection
           onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
