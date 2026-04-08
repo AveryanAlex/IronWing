@@ -8,12 +8,17 @@ import {
 import SetupCalibrationSection from "./SetupCalibrationSection.svelte";
 import SetupCheckpointBanner from "./SetupCheckpointBanner.svelte";
 import SetupBatteryMonitorSection from "./SetupBatteryMonitorSection.svelte";
+import SetupFailsafeSection from "./SetupFailsafeSection.svelte";
+import SetupFlightModesSection from "./SetupFlightModesSection.svelte";
 import SetupFrameOrientationSection from "./SetupFrameOrientationSection.svelte";
 import SetupFullParametersSection from "./SetupFullParametersSection.svelte";
+import SetupGeofenceSection from "./SetupGeofenceSection.svelte";
 import SetupGpsSection from "./SetupGpsSection.svelte";
+import SetupArmingSection from "./SetupArmingSection.svelte";
 import SetupMotorsEscSection from "./SetupMotorsEscSection.svelte";
 import SetupOverviewSection from "./SetupOverviewSection.svelte";
 import SetupRcReceiverSection from "./SetupRcReceiverSection.svelte";
+import SetupRtlReturnSection from "./SetupRtlReturnSection.svelte";
 import SetupSerialPortsSection from "./SetupSerialPortsSection.svelte";
 import SetupServoOutputsSection from "./SetupServoOutputsSection.svelte";
 import SetupWorkspaceSectionNav from "./SetupWorkspaceSectionNav.svelte";
@@ -156,6 +161,36 @@ function clearCheckpoint() {
         />
       {:else if view.selectedSectionId === "serial_ports" && selectedSection}
         <SetupSerialPortsSection
+          onSelectRecovery={() => selectSection("full_parameters")}
+          section={selectedSection}
+          {view}
+        />
+      {:else if view.selectedSectionId === "flight_modes" && selectedSection}
+        <SetupFlightModesSection
+          onSelectRecovery={() => selectSection("full_parameters")}
+          section={selectedSection}
+          {view}
+        />
+      {:else if view.selectedSectionId === "failsafe" && selectedSection}
+        <SetupFailsafeSection
+          onSelectRecovery={() => selectSection("full_parameters")}
+          section={selectedSection}
+          {view}
+        />
+      {:else if view.selectedSectionId === "rtl_return" && selectedSection}
+        <SetupRtlReturnSection
+          onSelectRecovery={() => selectSection("full_parameters")}
+          section={selectedSection}
+          {view}
+        />
+      {:else if view.selectedSectionId === "geofence" && selectedSection}
+        <SetupGeofenceSection
+          onSelectRecovery={() => selectSection("full_parameters")}
+          section={selectedSection}
+          {view}
+        />
+      {:else if view.selectedSectionId === "arming" && selectedSection}
+        <SetupArmingSection
           onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}

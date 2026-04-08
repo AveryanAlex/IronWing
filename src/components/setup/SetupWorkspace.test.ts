@@ -10,6 +10,12 @@ const calibrationMocks = vi.hoisted(() => ({
   calibrateCompassCancel: vi.fn(async () => undefined),
   motorTest: vi.fn(async () => undefined),
   setServo: vi.fn(async () => undefined),
+  requestPrearmChecks: vi.fn(async () => undefined),
+}));
+
+const telemetryMocks = vi.hoisted(() => ({
+  armVehicle: vi.fn(async () => undefined),
+  disarmVehicle: vi.fn(async () => undefined),
 }));
 
 vi.mock("../../calibration", async (importOriginal) => {
@@ -17,6 +23,14 @@ vi.mock("../../calibration", async (importOriginal) => {
   return {
     ...actual,
     ...calibrationMocks,
+  };
+});
+
+vi.mock("../../telemetry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../telemetry")>();
+  return {
+    ...actual,
+    ...telemetryMocks,
   };
 });
 
@@ -134,7 +148,47 @@ function createSetupParamStore(): ParamStore {
     SERIAL3_PROTOCOL: 5,
     SERIAL3_BAUD: 115,
     ARMING_CHECK: 1,
+    ARMING_REQUIRE: 1,
+    FLTMODE_CH: 5,
+    FLTMODE1: 0,
+    FLTMODE2: 2,
+    FLTMODE3: 5,
+    FLTMODE4: 6,
+    FLTMODE5: 9,
+    FLTMODE6: 3,
+    SIMPLE: 0,
+    SUPER_SIMPLE: 0,
     FS_THR_ENABLE: 1,
+    FS_THR_VALUE: 975,
+    FS_GCS_ENABLE: 1,
+    FS_EKF_ACTION: 1,
+    FS_EKF_THRESH: 0.8,
+    FS_CRASH_CHECK: 1,
+    BATT_FS_LOW_ACT: 2,
+    BATT_LOW_MAH: 1200,
+    BATT_FS_CRT_ACT: 1,
+    BATT_CRT_MAH: 500,
+    THR_FAILSAFE: 1,
+    THR_FS_VALUE: 950,
+    FS_LONG_ACTN: 1,
+    FS_SHORT_ACTN: 1,
+    FS_ACTION: 1,
+    FS_TIMEOUT: 5,
+    RTL_ALT: 1500,
+    RTL_ALT_FINAL: 0,
+    RTL_CLIMB_MIN: 0,
+    RTL_SPEED: 500,
+    RTL_LOIT_TIME: 5000,
+    ALT_HOLD_RTL: -1,
+    RTL_AUTOLAND: 0,
+    WP_RADIUS: 2,
+    FENCE_ENABLE: 1,
+    FENCE_TYPE: 0b0111,
+    FENCE_ACTION: 1,
+    FENCE_ALT_MAX: 120,
+    FENCE_ALT_MIN: 20,
+    FENCE_RADIUS: 300,
+    FENCE_MARGIN: 5,
     RCMAP_ROLL: 1,
     RCMAP_PITCH: 2,
     RCMAP_THROTTLE: 3,
@@ -146,6 +200,10 @@ function createSetupParamStore(): ParamStore {
     RC1_MIN: 1000,
     RC1_MAX: 2000,
   });
+}
+
+function paramEntries(paramStore: ParamStore): Record<string, number> {
+  return Object.fromEntries(Object.values(paramStore.params).map((param) => [param.name, param.value]));
 }
 
 function createPlaneSetupParamStore(entries: Record<string, number>): ParamStore {
@@ -235,14 +293,249 @@ function createSetupMetadata(options: {
       "ARMING_CHECK",
       {
         humanName: "Arming checks",
-        description: "Controls pre-arm validation.",
+        description: "Controls which pre-arm checks remain enabled.",
+        bitmask: [
+          { bit: 1, label: "Barometer" },
+          { bit: 2, label: "Compass" },
+          { bit: 3, label: "GPS" },
+          { bit: 4, label: "INS" },
+          { bit: 5, label: "RC" },
+        ],
+      },
+    ],
+    [
+      "ARMING_REQUIRE",
+      {
+        humanName: "Arming method",
+        description: "How the vehicle can be armed before flight.",
+        values: [
+          { code: 0, label: "Disabled (no arming required)" },
+          { code: 1, label: "Throttle-Yaw-Right (rudder arm)" },
+          { code: 2, label: "Arm Switch (RC switch)" },
+        ],
+      },
+    ],
+    [
+      "FLTMODE_CH",
+      {
+        humanName: "Flight-mode channel",
+        description: "RC channel used to select the six flight-mode slots.",
+      },
+    ],
+    [
+      "SIMPLE",
+      {
+        humanName: "Simple mode mask",
+        description: "Mode slots that use Simple mode heading behavior.",
+        bitmask: [
+          { bit: 0, label: "Slot 1" },
+          { bit: 1, label: "Slot 2" },
+          { bit: 2, label: "Slot 3" },
+          { bit: 3, label: "Slot 4" },
+          { bit: 4, label: "Slot 5" },
+          { bit: 5, label: "Slot 6" },
+        ],
+      },
+    ],
+    [
+      "SUPER_SIMPLE",
+      {
+        humanName: "Super Simple mode mask",
+        description: "Mode slots that use Super Simple home-relative behavior.",
+        bitmask: [
+          { bit: 0, label: "Slot 1" },
+          { bit: 1, label: "Slot 2" },
+          { bit: 2, label: "Slot 3" },
+          { bit: 3, label: "Slot 4" },
+          { bit: 4, label: "Slot 5" },
+          { bit: 5, label: "Slot 6" },
+        ],
       },
     ],
     [
       "FS_THR_ENABLE",
       {
         humanName: "Throttle failsafe",
-        description: "Select the throttle failsafe behavior.",
+        description: "Select the copter radio failsafe behavior.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "RTL" },
+          { code: 2, label: "Continue Mission (Auto)" },
+          { code: 3, label: "Land" },
+          { code: 4, label: "SmartRTL → RTL" },
+          { code: 5, label: "SmartRTL → Land" },
+          { code: 6, label: "Auto DO_LAND_START → RTL" },
+          { code: 7, label: "Brake → Land" },
+        ],
+      },
+    ],
+    [
+      "FS_GCS_ENABLE",
+      {
+        humanName: "GCS failsafe",
+        description: "Select the copter ground-control-station failsafe behavior.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "RTL" },
+          { code: 2, label: "Continue Mission (Auto)" },
+          { code: 3, label: "SmartRTL → RTL" },
+          { code: 4, label: "SmartRTL → Land" },
+          { code: 5, label: "Land" },
+          { code: 6, label: "Auto DO_LAND_START → RTL" },
+          { code: 7, label: "Brake → Land" },
+        ],
+      },
+    ],
+    [
+      "FS_EKF_ACTION",
+      {
+        humanName: "EKF failsafe",
+        description: "Action taken when EKF health falls below the configured threshold.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "Land" },
+          { code: 2, label: "AltHold" },
+          { code: 3, label: "Land even in Stabilize" },
+        ],
+      },
+    ],
+    [
+      "FS_CRASH_CHECK",
+      {
+        humanName: "Crash detection",
+        description: "Automatically disarm after a detected crash event.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "Enabled" },
+        ],
+      },
+    ],
+    [
+      "BATT_FS_LOW_ACT",
+      {
+        humanName: "Low-battery action",
+        description: "Action taken when the battery reaches the low threshold.",
+        values: [
+          { code: 0, label: "Warn Only" },
+          { code: 1, label: "Land" },
+          { code: 2, label: "RTL" },
+          { code: 3, label: "SmartRTL → RTL" },
+          { code: 4, label: "SmartRTL → Land" },
+          { code: 5, label: "Terminate (dangerous)" },
+          { code: 6, label: "Auto DO_LAND_START → RTL" },
+          { code: 7, label: "Brake → Land" },
+        ],
+      },
+    ],
+    [
+      "BATT_FS_CRT_ACT",
+      {
+        humanName: "Critical-battery action",
+        description: "Action taken when the battery reaches the critical threshold.",
+        values: [
+          { code: 0, label: "Warn Only" },
+          { code: 1, label: "Land" },
+          { code: 2, label: "RTL" },
+          { code: 3, label: "SmartRTL → RTL" },
+          { code: 4, label: "SmartRTL → Land" },
+          { code: 5, label: "Terminate (dangerous)" },
+          { code: 6, label: "Auto DO_LAND_START → RTL" },
+          { code: 7, label: "Brake → Land" },
+        ],
+      },
+    ],
+    [
+      "THR_FAILSAFE",
+      {
+        humanName: "Plane throttle failsafe",
+        description: "Enable or disable the plane radio failsafe.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "Enabled" },
+        ],
+      },
+    ],
+    [
+      "FS_LONG_ACTN",
+      {
+        humanName: "Plane long failsafe",
+        description: "Action taken when the plane long GCS failsafe triggers.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "RTL" },
+        ],
+      },
+    ],
+    [
+      "FS_SHORT_ACTN",
+      {
+        humanName: "Plane short failsafe",
+        description: "Action taken when the plane short GCS failsafe triggers.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "Circle" },
+        ],
+      },
+    ],
+    [
+      "FS_ACTION",
+      {
+        humanName: "Rover failsafe action",
+        description: "Combined radio/GCS failsafe action for rover families.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "RTL" },
+          { code: 2, label: "Hold" },
+          { code: 3, label: "SmartRTL → RTL" },
+          { code: 4, label: "SmartRTL → Hold" },
+        ],
+      },
+    ],
+    [
+      "RTL_AUTOLAND",
+      {
+        humanName: "RTL auto-land",
+        description: "How Plane RTL finishes after reaching home.",
+        values: [
+          { code: 0, label: "Loiter at home" },
+          { code: 1, label: "Land if DO_LAND_START defined" },
+          { code: 2, label: "Always land at home" },
+        ],
+      },
+    ],
+    [
+      "FENCE_ENABLE",
+      {
+        humanName: "Fence enable",
+        description: "Turn geofence enforcement on or off.",
+        values: [
+          { code: 0, label: "Disabled" },
+          { code: 1, label: "Enabled" },
+        ],
+      },
+    ],
+    [
+      "FENCE_TYPE",
+      {
+        humanName: "Fence type",
+        description: "Boundary types enforced by the current geofence.",
+        bitmask: [
+          { bit: 0, label: "Alt max" },
+          { bit: 1, label: "Circle" },
+          { bit: 2, label: "Polygon" },
+          { bit: 3, label: "Alt min" },
+        ],
+      },
+    ],
+    [
+      "FENCE_ACTION",
+      {
+        humanName: "Fence breach action",
+        description: "Action taken when the vehicle breaches the configured geofence.",
+        values: [
+          { code: 0, label: "Report only" },
+          { code: 1, label: "RTL / Hold" },
+        ],
       },
     ],
     [
@@ -960,7 +1253,12 @@ describe("SetupWorkspace", () => {
     calibrationMocks.calibrateCompassAccept.mockClear();
     calibrationMocks.calibrateCompassCancel.mockClear();
     calibrationMocks.motorTest.mockClear();
+    calibrationMocks.requestPrearmChecks.mockClear();
     calibrationMocks.motorTest.mockResolvedValue(undefined);
+    telemetryMocks.armVehicle.mockClear();
+    telemetryMocks.disarmVehicle.mockClear();
+    telemetryMocks.armVehicle.mockResolvedValue(undefined);
+    telemetryMocks.disarmVehicle.mockResolvedValue(undefined);
 
     if (typeof localStorage.clear === "function") {
       localStorage.clear();
@@ -1881,6 +2179,250 @@ describe("SetupWorkspace", () => {
 
     await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.calibrationActionPrefix}-compass`));
     expect(calibrationMocks.calibrateCompassAccept).toHaveBeenCalledTimes(1);
+  });
+
+  it("mounts flight modes with live availability, stages slot edits, and retains stale same-scope mode truth", async () => {
+    const availableModes = [
+      { custom_mode: 0, name: "Stabilize" },
+      { custom_mode: 2, name: "AltHold" },
+      { custom_mode: 3, name: "Auto" },
+      { custom_mode: 5, name: "Loiter" },
+      { custom_mode: 6, name: "RTL" },
+      { custom_mode: 9, name: "Land" },
+    ];
+    const { parameterStore, setupWorkspaceStore, sessionStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      includeReviewTray: true,
+      sessionOverrides: {
+        availableModes,
+        telemetryDomain: createTelemetryDomain({
+          rc_channels: [0, 0, 0, 0, 1450],
+          rc_rssi: 72,
+          servo_outputs: undefined,
+        }),
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-flight_modes`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.flightModesSection)).toBeTruthy();
+      expect(get(setupWorkspaceStore).sectionConfirmations.flight_modes).toBe(true);
+    });
+
+    expect(screen.getByTestId(setupWorkspaceTestIds.flightModesAvailabilityState).textContent).toContain("Live");
+    expect(screen.getByTestId(setupWorkspaceTestIds.flightModesActiveSlot).textContent).toContain("3");
+
+    await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.flightModesInputPrefix}-FLTMODE1`), {
+      target: { value: "6" },
+    });
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.flightModesStageButtonPrefix}-FLTMODE1`));
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.flightModesSimpleChecklist).querySelectorAll("button")[0] as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.FLTMODE1?.nextValue).toBe(6);
+      expect(get(parameterStore).stagedEdits.SIMPLE?.nextValue).toBe(1);
+      expect(get(setupWorkspaceStore).sectionConfirmations.flight_modes).toBe(false);
+    });
+
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-FLTMODE1`)).toBeTruthy();
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-SIMPLE`)).toBeTruthy();
+
+    sessionStore.set(createSessionState({
+      availableModes: [],
+      telemetryDomain: createTelemetryDomain({
+        rc_channels: [0, 0, 0, 0, 1450],
+        rc_rssi: 72,
+        servo_outputs: undefined,
+      }, {
+        available: true,
+        complete: false,
+      }),
+    }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.flightModesAvailabilityState).textContent).toContain("Stale");
+    });
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.flightModesStageButtonPrefix}-FLTMODE2`).getAttribute("disabled")).not.toBeNull();
+  });
+
+  it("stages failsafe defaults, RTL changes, and geofence bitmask edits through the shared review tray", async () => {
+    const safetyParamStore = createParamStoreFromEntries({
+      ...paramEntries(createSetupParamStore()),
+      FS_THR_ENABLE: 0,
+      FS_EKF_ACTION: 0,
+      FS_GCS_ENABLE: 0,
+      RTL_ALT: 0,
+      FENCE_TYPE: 0,
+    });
+    const { parameterStore, setupWorkspaceStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      includeReviewTray: true,
+      sessionOverrides: {
+        bootstrap: {
+          missionState: null,
+          paramStore: safetyParamStore,
+          paramProgress: "completed",
+          playbackCursorUsec: null,
+        },
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-failsafe`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.failsafeSection)).toBeTruthy();
+      expect(get(setupWorkspaceStore).sectionConfirmations.failsafe).toBe(true);
+    });
+
+    await fireEvent.click(screen.getByText("Preview defaults"));
+    await fireEvent.click(screen.getByText("Stage recommended defaults"));
+
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.FS_THR_ENABLE?.nextValue).toBe(1);
+      expect(get(parameterStore).stagedEdits.FS_EKF_ACTION?.nextValue).toBe(1);
+      expect(get(setupWorkspaceStore).sectionConfirmations.failsafe).toBe(false);
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-rtl_return`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.rtlReturnSection)).toBeTruthy();
+    });
+
+    await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.rtlReturnInputPrefix}-RTL_ALT`), {
+      target: { value: "15" },
+    });
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.rtlReturnStageButtonPrefix}-RTL_ALT`));
+
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.RTL_ALT?.nextValue).toBe(1500);
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-geofence`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.geofenceSection)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.geofenceTypeChecklist).querySelectorAll("button")[0] as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.FENCE_TYPE?.nextValue).toBe(1);
+    });
+
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-FS_THR_ENABLE`)).toBeTruthy();
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-RTL_ALT`)).toBeTruthy();
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-FENCE_TYPE`)).toBeTruthy();
+  });
+
+  it("shows truthful pre-arm blockers, requests checks, and runs arm/disarm controls against live scope truth", async () => {
+    const { sessionStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      sessionOverrides: {
+        statusText: {
+          available: true,
+          complete: true,
+          provenance: "stream",
+          value: {
+            entries: [
+              {
+                sequence: 1,
+                text: "PreArm: GPS not healthy",
+                severity: "warning",
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-arming`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.armingSection)).toBeTruthy();
+      expect(screen.getByTestId(setupWorkspaceTestIds.armingReadiness).textContent).toContain("1 blocker");
+    });
+
+    expect(screen.getByTestId(setupWorkspaceTestIds.armingBlockers).textContent).toContain("GPS not healthy");
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.armingRefresh));
+    expect(calibrationMocks.requestPrearmChecks).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId(setupWorkspaceTestIds.armingArm).getAttribute("disabled")).not.toBeNull();
+
+    sessionStore.set(createSessionState({
+      statusText: {
+        available: true,
+        complete: true,
+        provenance: "stream",
+        value: { entries: [] },
+      },
+    }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.armingReadiness).textContent).toContain("Ready");
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.armingArm));
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.armingArm));
+    expect(telemetryMocks.armVehicle).toHaveBeenCalledTimes(1);
+
+    const armedState = createSessionState();
+    armedState.statusText = {
+      available: true,
+      complete: true,
+      provenance: "stream",
+      value: { entries: [] },
+    };
+    if (armedState.sessionDomain.value) {
+      armedState.sessionDomain = {
+        ...armedState.sessionDomain,
+        value: {
+          ...armedState.sessionDomain.value,
+          vehicle_state: {
+            ...armedState.sessionDomain.value.vehicle_state,
+            armed: true,
+          },
+        },
+      };
+    }
+    sessionStore.set(armedState);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.armingDisarm)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.armingDisarm));
+    expect(telemetryMocks.disarmVehicle).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces rejected pre-arm refresh and arm failures inline without implying success", async () => {
+    calibrationMocks.requestPrearmChecks.mockRejectedValueOnce(new Error("pre-arm link dropped"));
+    telemetryMocks.armVehicle.mockRejectedValueOnce(new Error("arm denied"));
+
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      sessionOverrides: {
+        statusText: {
+          available: true,
+          complete: true,
+          provenance: "stream",
+          value: { entries: [] },
+        },
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-arming`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.armingSection)).toBeTruthy();
+      expect(screen.getByTestId(setupWorkspaceTestIds.armingReadiness).textContent).toContain("Ready");
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.armingRefresh));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.armingFailure).textContent).toContain("pre-arm link dropped");
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.armingArm));
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.armingArm));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.armingFailure).textContent).toContain("arm denied");
+    });
+    expect(telemetryMocks.armVehicle).toHaveBeenCalledTimes(1);
   });
 
   it("shows an inline reboot checkpoint, resumes after reconnect, and lets the operator clear the banner", async () => {
