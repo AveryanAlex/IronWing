@@ -857,6 +857,253 @@ function createSetupMetadata(options: {
   return metadata;
 }
 
+function createSetupTuningMetadata(options: {
+  malformedPidEnum?: boolean;
+} = {}): ParamMetadataMap {
+  const metadata = createSetupMetadata();
+
+  const setNumericMeta = (name: string, humanName: string, description: string, units?: string) => {
+    metadata.set(name, {
+      humanName,
+      description,
+      units,
+    });
+  };
+
+  const setEnumMeta = (
+    name: string,
+    humanName: string,
+    description: string,
+    values: Array<{ code: number; label: string }>,
+  ) => {
+    metadata.set(name, {
+      humanName,
+      description,
+      values,
+    });
+  };
+
+  const setPidAxisMeta = (prefix: string, axisLabel: string) => {
+    setNumericMeta(`${prefix}_P`, `${axisLabel} P`, `${axisLabel} proportional gain.`);
+    setNumericMeta(`${prefix}_I`, `${axisLabel} I`, `${axisLabel} integral gain.`);
+    setNumericMeta(`${prefix}_D`, `${axisLabel} D`, `${axisLabel} derivative gain.`);
+    setNumericMeta(`${prefix}_FF`, `${axisLabel} feed-forward`, `${axisLabel} feed-forward gain.`);
+    setNumericMeta(`${prefix}_FLTD`, `${axisLabel} D filter`, `${axisLabel} derivative filter bandwidth.`, "Hz");
+    setNumericMeta(`${prefix}_FLTE`, `${axisLabel} error filter`, `${axisLabel} error filter bandwidth.`, "Hz");
+    setNumericMeta(`${prefix}_FLTT`, `${axisLabel} target filter`, `${axisLabel} target filter bandwidth.`, "Hz");
+    setNumericMeta(`${prefix}_IMAX`, `${axisLabel} I max`, `${axisLabel} integrator clamp.`);
+  };
+
+  setNumericMeta("MOT_THST_EXPO", "Thrust expo", "Multirotor thrust curve compensation.");
+  setNumericMeta("MOT_THST_HOVER", "Hover thrust", "Estimated hover throttle.");
+  setNumericMeta("MOT_BAT_VOLT_MAX", "Motor battery max", "Maximum battery voltage used for compensation.", "V");
+  setNumericMeta("MOT_BAT_VOLT_MIN", "Motor battery min", "Minimum battery voltage used for compensation.", "V");
+  setNumericMeta("INS_GYRO_FILTER", "Gyro low-pass", "Primary gyro filter bandwidth.", "Hz");
+  setNumericMeta("INS_ACCEL_FILTER", "Accelerometer low-pass", "Primary accelerometer filter bandwidth.", "Hz");
+  setNumericMeta("ATC_ACCEL_P_MAX", "Pitch accel max", "Pitch acceleration limit.");
+  setNumericMeta("ATC_ACCEL_R_MAX", "Roll accel max", "Roll acceleration limit.");
+  setNumericMeta("ATC_ACCEL_Y_MAX", "Yaw accel max", "Yaw acceleration limit.");
+  setNumericMeta("ATC_THR_MIX_MAN", "Throttle mix manual", "Manual throttle mixing." );
+  setNumericMeta("ACRO_YAW_P", "Acro yaw P", "Acro yaw response gain.");
+  setNumericMeta("ATC_ANG_RLL_P", "Angle roll P", "Outer-loop roll angle gain.");
+  setNumericMeta("ATC_ANG_PIT_P", "Angle pitch P", "Outer-loop pitch angle gain.");
+  setNumericMeta("ATC_ANG_YAW_P", "Angle yaw P", "Outer-loop yaw angle gain.");
+  setNumericMeta("PSC_ACCZ_P", "Accel Z P", "Vertical acceleration proportional gain.");
+  setNumericMeta("PSC_ACCZ_I", "Accel Z I", "Vertical acceleration integral gain.");
+  setNumericMeta("PSC_ACCZ_D", "Accel Z D", "Vertical acceleration derivative gain.");
+  setNumericMeta("PSC_VELZ_P", "Velocity Z P", "Vertical velocity proportional gain.");
+  setNumericMeta("PSC_POSZ_P", "Position Z P", "Vertical position proportional gain.");
+  setNumericMeta("PSC_VELXY_P", "Velocity XY P", "Horizontal velocity proportional gain.");
+  setNumericMeta("PSC_VELXY_I", "Velocity XY I", "Horizontal velocity integral gain.");
+  setNumericMeta("PSC_VELXY_D", "Velocity XY D", "Horizontal velocity derivative gain.");
+  setNumericMeta("PSC_POSXY_P", "Position XY P", "Horizontal position proportional gain.");
+
+  setPidAxisMeta("ATC_RAT_RLL", "Roll rate");
+  setPidAxisMeta("ATC_RAT_PIT", "Pitch rate");
+  setPidAxisMeta("ATC_RAT_YAW", "Yaw rate");
+  setPidAxisMeta("Q_A_RAT_RLL", "VTOL roll rate");
+  setPidAxisMeta("Q_A_RAT_PIT", "VTOL pitch rate");
+  setPidAxisMeta("Q_A_RAT_YAW", "VTOL yaw rate");
+
+  setNumericMeta("Q_A_ACCEL_P_MAX", "VTOL pitch accel max", "VTOL pitch acceleration limit.");
+  setNumericMeta("Q_A_ACCEL_R_MAX", "VTOL roll accel max", "VTOL roll acceleration limit.");
+  setNumericMeta("Q_A_ACCEL_Y_MAX", "VTOL yaw accel max", "VTOL yaw acceleration limit.");
+  setNumericMeta("Q_A_THR_MIX_MAN", "VTOL throttle mix manual", "VTOL manual throttle mixing.");
+  setNumericMeta("Q_M_THST_EXPO", "VTOL thrust expo", "QuadPlane lift-motor thrust curve compensation.");
+  setNumericMeta("Q_M_THST_HOVER", "VTOL hover thrust", "QuadPlane lift-motor hover throttle.");
+  setNumericMeta("Q_M_BAT_VOLT_MAX", "VTOL battery max", "Maximum QuadPlane lift-motor compensation voltage.", "V");
+  setNumericMeta("Q_M_BAT_VOLT_MIN", "VTOL battery min", "Minimum QuadPlane lift-motor compensation voltage.", "V");
+
+  setNumericMeta("RLL2SRV_P", "Roll-to-servo P", "Fixed-wing roll proportional gain.");
+  setNumericMeta("RLL2SRV_I", "Roll-to-servo I", "Fixed-wing roll integral gain.");
+  setNumericMeta("RLL2SRV_D", "Roll-to-servo D", "Fixed-wing roll derivative gain.");
+  setNumericMeta("RLL2SRV_FF", "Roll-to-servo FF", "Fixed-wing roll feed-forward gain.");
+  setNumericMeta("RLL2SRV_IMAX", "Roll-to-servo I max", "Fixed-wing roll integrator clamp.");
+  setNumericMeta("RLL2SRV_TCONST", "Roll time constant", "Fixed-wing roll time constant.");
+  setNumericMeta("PTCH2SRV_P", "Pitch-to-servo P", "Fixed-wing pitch proportional gain.");
+  setNumericMeta("PTCH2SRV_I", "Pitch-to-servo I", "Fixed-wing pitch integral gain.");
+  setNumericMeta("PTCH2SRV_D", "Pitch-to-servo D", "Fixed-wing pitch derivative gain.");
+  setNumericMeta("PTCH2SRV_FF", "Pitch-to-servo FF", "Fixed-wing pitch feed-forward gain.");
+  setNumericMeta("PTCH2SRV_IMAX", "Pitch-to-servo I max", "Fixed-wing pitch integrator clamp.");
+  setNumericMeta("PTCH2SRV_TCONST", "Pitch time constant", "Fixed-wing pitch time constant.");
+  setNumericMeta("YAW2SRV_DAMP", "Yaw damper damping", "Fixed-wing yaw damper gain.");
+  setNumericMeta("YAW2SRV_INT", "Yaw damper integrator", "Fixed-wing yaw integrator.");
+  setNumericMeta("YAW2SRV_RLL", "Yaw roll compensation", "Yaw compensation from roll input.");
+  setNumericMeta("ARSPD_FBW_MIN", "FBW min airspeed", "Minimum fixed-wing airspeed.", "m/s");
+  setNumericMeta("ARSPD_FBW_MAX", "FBW max airspeed", "Maximum fixed-wing airspeed.", "m/s");
+  setNumericMeta("TRIM_THROTTLE", "Cruise throttle", "Fixed-wing cruise throttle trim.", "%");
+  setNumericMeta("TRIM_ARSPD_CM", "Cruise airspeed", "Fixed-wing cruise airspeed.", "cm/s");
+
+  if (options.malformedPidEnum) {
+    metadata.set("INS_HNTCH_ENABLE", {
+      humanName: "Harmonic notch enable",
+      description: "Enable the harmonic notch filter.",
+      values: [
+        { code: Number.NaN, label: "Broken" },
+        { code: 1, label: "   " },
+      ],
+    });
+  } else {
+    setEnumMeta("INS_HNTCH_ENABLE", "Harmonic notch enable", "Enable the harmonic notch filter.", [
+      { code: 0, label: "Disabled" },
+      { code: 1, label: "Enabled" },
+    ]);
+  }
+  setEnumMeta("INS_HNTCH_MODE", "Harmonic notch mode", "Select the notch-frequency source.", [
+    { code: 0, label: "Fixed" },
+    { code: 3, label: "ESC telemetry" },
+    { code: 4, label: "Dynamic FFT" },
+  ]);
+  setNumericMeta("INS_HNTCH_FREQ", "Harmonic notch frequency", "Primary harmonic notch center frequency.", "Hz");
+  setNumericMeta("INS_HNTCH_BW", "Harmonic notch bandwidth", "Primary harmonic notch bandwidth.", "Hz");
+  setNumericMeta("INS_HNTCH_REF", "Harmonic notch reference", "Primary harmonic notch reference.");
+
+  setEnumMeta("RNGFND1_TYPE", "Rangefinder 1 type", "Primary rangefinder backend.", [
+    { code: 0, label: "Disabled" },
+    { code: 1, label: "Analog" },
+  ]);
+  setNumericMeta("RNGFND1_MIN_CM", "Rangefinder 1 minimum", "Minimum measurable range.", "cm");
+  setNumericMeta("RNGFND1_MAX_CM", "Rangefinder 1 maximum", "Maximum measurable range.", "cm");
+  setEnumMeta("FLOW_TYPE", "Optical-flow type", "Primary optical-flow backend.", [
+    { code: 0, label: "Disabled" },
+    { code: 1, label: "PX4Flow" },
+  ]);
+  setNumericMeta("FLOW_ORIENT_YAW", "Optical-flow yaw", "Optical-flow yaw orientation.", "deg");
+  setEnumMeta("MNT1_TYPE", "Mount 1 type", "Primary gimbal backend.", [
+    { code: 0, label: "Disabled" },
+    { code: 1, label: "Servo" },
+  ]);
+  setNumericMeta("MNT1_RC_RATE", "Mount 1 RC rate", "Primary gimbal RC rate.");
+  setEnumMeta("COMPASS_ENABLE", "Compass enable", "Enable the primary compass family.", [
+    { code: 0, label: "Disabled" },
+    { code: 1, label: "Enabled" },
+  ]);
+  setEnumMeta("COMPASS_USE", "Compass use", "Use the primary compass for navigation.", [
+    { code: 0, label: "Disabled" },
+    { code: 1, label: "Enabled" },
+  ]);
+  setEnumMeta("CAN_D1_PROTOCOL", "CAN D1 protocol", "Protocol on DroneCAN port 1.", [
+    { code: 0, label: "Disabled" },
+    { code: 1, label: "DroneCAN" },
+  ]);
+  setEnumMeta("CAN_P1_DRIVER", "CAN P1 driver", "Driver selection for CAN peripheral port 1.", [
+    { code: 0, label: "Disabled" },
+    { code: 1, label: "Enabled" },
+  ]);
+  setEnumMeta("EFI_TYPE", "EFI type", "Electronic fuel injection backend.", [
+    { code: 0, label: "Disabled" },
+    { code: 1, label: "Generic EFI" },
+  ]);
+  setNumericMeta("EFI_COEF1", "EFI coefficient 1", "Primary EFI coefficient.");
+  setNumericMeta("EFI_COEF2", "EFI coefficient 2", "Secondary EFI coefficient.");
+
+  return metadata;
+}
+
+function createInitialParamsSetupParamStore(entries: Record<string, number> = {}): ParamStore {
+  return createParamStoreFromEntries({
+    ...paramEntries(createSetupParamStore()),
+    MOT_THST_EXPO: 0.42,
+    MOT_THST_HOVER: 0.25,
+    MOT_BAT_VOLT_MAX: 16.2,
+    MOT_BAT_VOLT_MIN: 13.2,
+    INS_GYRO_FILTER: 20,
+    INS_ACCEL_FILTER: 20,
+    ATC_RAT_PIT_FLTD: 15,
+    ATC_RAT_PIT_FLTE: 5,
+    ATC_RAT_PIT_FLTT: 15,
+    ATC_RAT_RLL_FLTD: 15,
+    ATC_RAT_RLL_FLTE: 5,
+    ATC_RAT_RLL_FLTT: 15,
+    ATC_RAT_YAW_FLTD: 0,
+    ATC_RAT_YAW_FLTE: 2,
+    ATC_RAT_YAW_FLTT: 10,
+    ATC_ACCEL_P_MAX: 8000,
+    ATC_ACCEL_R_MAX: 8000,
+    ATC_ACCEL_Y_MAX: 8000,
+    ATC_THR_MIX_MAN: 0.2,
+    ACRO_YAW_P: 0.8,
+    ...entries,
+  });
+}
+
+function createPidCopterSetupParamStore(entries: Record<string, number> = {}): ParamStore {
+  return createParamStoreFromEntries({
+    ...paramEntries(createInitialParamsSetupParamStore()),
+    ATC_RAT_RLL_P: 0.11,
+    ATC_RAT_RLL_I: 0.12,
+    ATC_RAT_RLL_D: 0.004,
+    ATC_RAT_RLL_FF: 0.15,
+    ATC_RAT_PIT_P: 0.11,
+    ATC_RAT_PIT_I: 0.12,
+    ATC_RAT_PIT_D: 0.004,
+    ATC_RAT_PIT_FF: 0.15,
+    ATC_RAT_YAW_P: 0.18,
+    ATC_RAT_YAW_I: 0.12,
+    ATC_RAT_YAW_D: 0.001,
+    ATC_RAT_YAW_FF: 0.05,
+    ATC_ANG_RLL_P: 4.5,
+    ATC_ANG_PIT_P: 4.5,
+    ATC_ANG_YAW_P: 4.0,
+    PSC_ACCZ_P: 0.3,
+    PSC_ACCZ_I: 0.4,
+    PSC_ACCZ_D: 0.01,
+    PSC_VELZ_P: 5.0,
+    PSC_POSZ_P: 1.0,
+    PSC_VELXY_P: 1.5,
+    PSC_VELXY_I: 0.5,
+    PSC_VELXY_D: 0.2,
+    PSC_POSXY_P: 1.0,
+    INS_HNTCH_ENABLE: 1,
+    INS_HNTCH_MODE: 3,
+    INS_HNTCH_FREQ: 90,
+    INS_HNTCH_BW: 45,
+    INS_HNTCH_REF: 1.0,
+    ...entries,
+  });
+}
+
+function createPeripheralsSetupParamStore(entries: Record<string, number> = {}): ParamStore {
+  return createParamStoreFromEntries({
+    ...paramEntries(createSetupParamStore()),
+    RNGFND1_TYPE: 1,
+    RNGFND1_MIN_CM: 20,
+    RNGFND1_MAX_CM: 400,
+    FLOW_TYPE: 0,
+    FLOW_ORIENT_YAW: 0,
+    MNT1_TYPE: 0,
+    MNT1_RC_RATE: 10,
+    COMPASS_ENABLE: 1,
+    COMPASS_USE: 1,
+    CAN_D1_PROTOCOL: 0,
+    CAN_P1_DRIVER: 0,
+    EFI_TYPE: 1,
+    EFI_COEF1: 1.2,
+    EFI_COEF2: 0.8,
+    ...entries,
+  });
+}
+
 function createSessionState(overrides: Partial<SessionStoreState> = {}): SessionStoreState {
   return {
     hydrated: true,
@@ -2423,6 +2670,111 @@ describe("SetupWorkspace", () => {
       expect(screen.getByTestId(setupWorkspaceTestIds.armingFailure).textContent).toContain("arm denied");
     });
     expect(telemetryMocks.armVehicle).toHaveBeenCalledTimes(1);
+  });
+
+  it("stages initial-parameter control previews through the shared review tray", async () => {
+    const { parameterStore } = await renderSetupWorkspace({
+      metadata: createSetupTuningMetadata(),
+      includeReviewTray: true,
+      sessionOverrides: createCopterSessionOverrides(createInitialParamsSetupParamStore()),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-initial_params`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.initialParamsSection)).toBeTruthy();
+      expect(screen.getByTestId(setupWorkspaceTestIds.initialParamsFamilyState).textContent).toContain("Multirotor");
+    });
+
+    const controlPreview = screen.getByTestId(`${setupWorkspaceTestIds.initialParamsPreviewPrefix}-control_baseline`);
+    const stageButton = Array.from(controlPreview.querySelectorAll("button")).find(
+      (button) => !button.hasAttribute("disabled") && button.textContent?.includes("Stage"),
+    );
+    expect(stageButton).toBeTruthy();
+
+    await fireEvent.click(stageButton as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.MOT_THST_EXPO?.nextValue).toBeCloseTo(0.58, 2);
+      expect(get(parameterStore).stagedEdits.ATC_RAT_PIT_FLTD?.nextValue).toBe(23);
+    });
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-MOT_THST_EXPO`)).toBeTruthy();
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-ATC_RAT_PIT_FLTD`)).toBeTruthy();
+  });
+
+  it("keeps malformed PID enum metadata visible as raw-name read-only rows instead of inventing labels", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupTuningMetadata({ malformedPidEnum: true }),
+      sessionOverrides: createCopterSessionOverrides(createPidCopterSetupParamStore()),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-pid_tuning`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.pidTuningSection)).toBeTruthy();
+      expect(screen.getByTestId(setupWorkspaceTestIds.pidTuningFamilyState).textContent).toContain("Multirotor");
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.pidTuningGroupPrefix}-filters`)).toBeTruthy();
+    });
+
+    expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-INS_HNTCH_ENABLE`).textContent).toContain("INS_HNTCH_ENABLE");
+    expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-INS_HNTCH_ENABLE`).textContent?.toLowerCase()).toContain("read only");
+  });
+
+  it("shows an explicit QuadPlane PID gap banner when VTOL tuning truth is still partial", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupTuningMetadata(),
+      sessionOverrides: createPlaneSessionOverrides(createPlaneSetupParamStore({ Q_ENABLE: 1 })),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-pid_tuning`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.pidTuningSection)).toBeTruthy();
+      expect(screen.getByTestId(setupWorkspaceTestIds.pidTuningFamilyState).textContent).toContain("QuadPlane refresh required");
+    });
+
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.pidTuningBannerPrefix}-quadplane-refresh`).textContent).toContain("Q_A_*");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.pidTuningBannerPrefix}-quadplane-refresh`).textContent).toContain("Q_M_*");
+    expect(screen.queryByTestId(`${setupWorkspaceTestIds.pidTuningGroupPrefix}-servo`)).toBeNull();
+  });
+
+  it("filters peripherals down to configured groups while preserving discovered extra inventories", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupTuningMetadata(),
+      sessionOverrides: createCopterSessionOverrides(createPeripheralsSetupParamStore()),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-peripherals`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.peripheralsSection)).toBeTruthy();
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.peripheralsGroupPrefix}-rangefinder`)).toBeTruthy();
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.peripheralsGroupPrefix}-optical-flow`)).toBeTruthy();
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.peripheralsGroupPrefix}-EFI`)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.peripheralsFilter));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.peripheralsGroupPrefix}-rangefinder`)).toBeTruthy();
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.peripheralsGroupPrefix}-EFI`)).toBeTruthy();
+    });
+    expect(screen.queryByTestId(`${setupWorkspaceTestIds.peripheralsGroupPrefix}-optical-flow`)).toBeNull();
+  });
+
+  it("routes unsupported initial-parameter families to the Full Parameters recovery handoff", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupTuningMetadata(),
+      sessionOverrides: createPlaneSessionOverrides(createPlaneSetupParamStore({ Q_ENABLE: 0 })),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-initial_params`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.initialParamsRecovery).textContent).toContain("Fixed-wing");
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.initialParamsRecovery).querySelector("button") as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("full_parameters");
+      expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
+    });
   });
 
   it("shows an inline reboot checkpoint, resumes after reconnect, and lets the operator clear the banner", async () => {

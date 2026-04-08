@@ -17,6 +17,7 @@ let {
   onCancel,
   onRowClick,
   footer,
+  stageDisabled = false,
 }: {
   rows: SetupPreviewStageRow[];
   headerLabel?: string;
@@ -25,11 +26,13 @@ let {
   onCancel: () => void;
   onRowClick?: (row: SetupPreviewStageRow) => void;
   footer?: Snippet;
+  stageDisabled?: boolean;
 } = $props();
 
 let changeCount = $derived(rows.filter((row) => row.willChange).length);
 let resolvedHeader = $derived(headerLabel ?? `Preview: ${changeCount} of ${rows.length} will change`);
 let resolvedStageLabel = $derived(stageLabel ?? `Stage ${changeCount} Change${changeCount === 1 ? "" : "s"}`);
+let resolvedStageDisabled = $derived(stageDisabled || changeCount === 0);
 </script>
 
 <div class="rounded-2xl border border-accent/20 bg-accent/5 p-4">
@@ -71,7 +74,7 @@ let resolvedStageLabel = $derived(stageLabel ?? `Stage ${changeCount} Change${ch
   <div class="mt-4 flex items-center gap-2">
     <button
       class="rounded-full bg-accent/15 px-4 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-40"
-      disabled={changeCount === 0}
+      disabled={resolvedStageDisabled}
       onclick={onStage}
       type="button"
     >

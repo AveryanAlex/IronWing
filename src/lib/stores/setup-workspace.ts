@@ -54,6 +54,9 @@ const IMPLEMENTED_SECTION_ID_SET = new Set<SetupSectionId>([
   "rtl_return",
   "geofence",
   "arming",
+  "initial_params",
+  "pid_tuning",
+  "peripherals",
   "rc_receiver",
   "full_parameters",
 ]);

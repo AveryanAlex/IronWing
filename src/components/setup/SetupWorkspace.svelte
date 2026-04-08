@@ -15,8 +15,11 @@ import SetupFullParametersSection from "./SetupFullParametersSection.svelte";
 import SetupGeofenceSection from "./SetupGeofenceSection.svelte";
 import SetupGpsSection from "./SetupGpsSection.svelte";
 import SetupArmingSection from "./SetupArmingSection.svelte";
+import SetupInitialParamsSection from "./SetupInitialParamsSection.svelte";
 import SetupMotorsEscSection from "./SetupMotorsEscSection.svelte";
 import SetupOverviewSection from "./SetupOverviewSection.svelte";
+import SetupPeripheralsSection from "./SetupPeripheralsSection.svelte";
+import SetupPidTuningSection from "./SetupPidTuningSection.svelte";
 import SetupRcReceiverSection from "./SetupRcReceiverSection.svelte";
 import SetupRtlReturnSection from "./SetupRtlReturnSection.svelte";
 import SetupSerialPortsSection from "./SetupSerialPortsSection.svelte";
@@ -191,6 +194,24 @@ function clearCheckpoint() {
         />
       {:else if view.selectedSectionId === "arming" && selectedSection}
         <SetupArmingSection
+          onSelectRecovery={() => selectSection("full_parameters")}
+          section={selectedSection}
+          {view}
+        />
+      {:else if view.selectedSectionId === "initial_params" && selectedSection}
+        <SetupInitialParamsSection
+          onSelectRecovery={() => selectSection("full_parameters")}
+          section={selectedSection}
+          {view}
+        />
+      {:else if view.selectedSectionId === "pid_tuning" && selectedSection}
+        <SetupPidTuningSection
+          onSelectRecovery={() => selectSection("full_parameters")}
+          section={selectedSection}
+          {view}
+        />
+      {:else if view.selectedSectionId === "peripherals" && selectedSection}
+        <SetupPeripheralsSection
           onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
