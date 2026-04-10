@@ -27,6 +27,10 @@ import SetupSerialPortsSection from "./SetupSerialPortsSection.svelte";
 import SetupServoOutputsSection from "./SetupServoOutputsSection.svelte";
 import SetupWorkspaceSectionNav from "./SetupWorkspaceSectionNav.svelte";
 import SetupWizardShell from "./wizard/SetupWizardShell.svelte";
+import SetupWizardArmingStep from "./wizard/SetupWizardArmingStep.svelte";
+import SetupWizardCalibrationStep from "./wizard/SetupWizardCalibrationStep.svelte";
+import SetupWizardFrameStep from "./wizard/SetupWizardFrameStep.svelte";
+import SetupWizardRcStep from "./wizard/SetupWizardRcStep.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 const store = getSetupWorkspaceStoreContext();
@@ -185,13 +189,25 @@ function clearCheckpoint() {
           onSelectSection={selectSection}
           onClose={hideWizard}
         >
-          {#snippet children({ step })}
-            <p
-              class="rounded-2xl border border-dashed border-border bg-bg-primary/60 px-4 py-3 text-sm text-text-secondary"
-              data-testid="wizard-step-placeholder"
-            >
-              Step "{step.title}" — real surface lands in S05-T03/T04.
-            </p>
+          {#snippet children({ step, advance })}
+            <div data-testid={`${setupWorkspaceTestIds.wizardStepBodyPrefix}-${step.id}`}>
+              {#if step.id === "frame_orientation"}
+                <SetupWizardFrameStep {view} onAdvance={advance} />
+              {:else if step.id === "calibration"}
+                <SetupWizardCalibrationStep {view} onAdvance={advance} />
+              {:else if step.id === "rc_receiver"}
+                <SetupWizardRcStep {view} onAdvance={advance} />
+              {:else if step.id === "arming"}
+                <SetupWizardArmingStep {view} onAdvance={advance} />
+              {:else}
+                <p
+                  class="rounded-2xl border border-dashed border-border bg-bg-primary/60 px-4 py-3 text-sm text-text-secondary"
+                  data-testid="wizard-step-placeholder"
+                >
+                  Step "{step.title}" — recommended step surface lands in S05-T04.
+                </p>
+              {/if}
+            </div>
           {/snippet}
         </SetupWizardShell>
       {:else if view.selectedSectionId === "overview"}

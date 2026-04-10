@@ -2906,4 +2906,22 @@ describe("SetupWorkspace", () => {
     });
     expect(screen.queryByTestId(setupWorkspaceTestIds.wizardRoot)).toBeNull();
   });
+
+  it("renders the frame step surface when the wizard launches from overview", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.overviewWizardLaunch));
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId(
+          `${setupWorkspaceTestIds.wizardStepBodyPrefix}-frame_orientation`,
+        ),
+      ).toBeTruthy();
+    });
+    expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepFrameSummary)).toBeTruthy();
+    expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepFrameApply)).toBeTruthy();
+  });
 });
