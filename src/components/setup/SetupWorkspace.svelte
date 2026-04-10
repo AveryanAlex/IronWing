@@ -4,6 +4,7 @@ import { fromStore, get } from "svelte/store";
 import {
   getSetupWorkspaceStoreContext,
   getSetupWorkspaceViewStoreContext,
+  getShellChromeStoreContext,
 } from "../../app/shell/runtime-context";
 import { createSetupWizardStore } from "../../lib/stores/setup-wizard";
 import SetupCalibrationSection from "./SetupCalibrationSection.svelte";
@@ -40,6 +41,26 @@ import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 const store = getSetupWorkspaceStoreContext();
 const viewStore = fromStore(getSetupWorkspaceViewStoreContext());
+const chromeStore = fromStore(getShellChromeStoreContext());
+const isPhoneTier = $derived(chromeStore.current.tier === "phone");
+
+let sectionDrawerOpen = $state(false);
+
+function openSectionDrawer() {
+  sectionDrawerOpen = true;
+}
+function closeSectionDrawer() {
+  sectionDrawerOpen = false;
+}
+
+// Auto-close the drawer when the viewport grows out of the phone tier
+// (e.g. device rotation, window resize) so the inline rail is never
+// hidden behind a stale drawer on wider screens.
+$effect(() => {
+  if (!isPhoneTier && sectionDrawerOpen) {
+    sectionDrawerOpen = false;
+  }
+});
 
 // Node 20+ exposes a stub `localStorage` with no methods when `--localstorage-file`
 // is not set, so `typeof` alone is not enough — we also need a real getter/setter
@@ -85,6 +106,11 @@ function selectSection(sectionId: string) {
     wizardVisible = false;
   }
   store.selectSection(sectionId);
+}
+
+function selectSectionFromDrawer(sectionId: string) {
+  selectSection(sectionId);
+  closeSectionDrawer();
 }
 
 function showWizard() {
@@ -175,17 +201,38 @@ function clearCheckpoint() {
     </div>
   {/if}
 
-  <div class="mt-4 grid gap-4 xl:grid-cols-[22rem_minmax(0,1fr)]">
-    <SetupWorkspaceSectionNav
-      onSelect={selectSection}
-      sectionGroups={view.sectionGroups}
-      selectedSectionId={view.selectedSectionId}
-    />
+  <div
+    class={`mt-4 grid gap-4 ${isPhoneTier ? "" : "xl:grid-cols-[22rem_minmax(0,1fr)]"}`}
+    data-shell-tier={chromeStore.current.tier}
+  >
+    {#if !isPhoneTier}
+      <SetupWorkspaceSectionNav
+        onSelect={selectSection}
+        sectionGroups={view.sectionGroups}
+        selectedSectionId={view.selectedSectionId}
+      />
+    {/if}
 
     <div class="rounded-[24px] border border-border bg-bg-secondary/60 p-4" data-testid={setupWorkspaceTestIds.detail}>
       <span aria-hidden="true" class="sr-only" data-testid={setupWorkspaceTestIds.selectedSection}>
         {view.selectedSectionId}
       </span>
+
+      {#if isPhoneTier}
+        <div class="mb-3 flex items-center justify-between">
+          <button
+            class="rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary hover:border-accent hover:text-accent"
+            data-testid={setupWorkspaceTestIds.sectionDrawerToggle}
+            onclick={openSectionDrawer}
+            type="button"
+          >
+            Sections
+          </button>
+          <span class="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+            {selectedSection?.title ?? "Overview"}
+          </span>
+        </div>
+      {/if}
 
       {#if wizardVisible}
         <SetupWizardShell
@@ -364,4 +411,40 @@ function clearCheckpoint() {
       {/if}
     </div>
   </div>
+
+  {#if isPhoneTier && sectionDrawerOpen}
+    <div
+      class="fixed inset-0 z-50 bg-black/60"
+      data-testid={setupWorkspaceTestIds.sectionDrawerBackdrop}
+      onclick={closeSectionDrawer}
+      onkeydown={(event) => {
+        if (event.key === "Escape") {
+          closeSectionDrawer();
+        }
+      }}
+      role="button"
+      tabindex="-1"
+    ></div>
+    <aside
+      class="fixed inset-y-0 left-0 z-50 w-[88vw] max-w-[22rem] overflow-y-auto bg-bg-primary p-4 shadow-2xl"
+      data-testid={setupWorkspaceTestIds.sectionDrawer}
+    >
+      <div class="mb-3 flex items-center justify-between">
+        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Setup sections</p>
+        <button
+          class="rounded-full border border-border bg-bg-primary px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary hover:border-accent hover:text-accent"
+          data-testid={setupWorkspaceTestIds.sectionDrawerClose}
+          onclick={closeSectionDrawer}
+          type="button"
+        >
+          Close
+        </button>
+      </div>
+      <SetupWorkspaceSectionNav
+        onSelect={selectSectionFromDrawer}
+        sectionGroups={view.sectionGroups}
+        selectedSectionId={view.selectedSectionId}
+      />
+    </aside>
+  {/if}
 </section>

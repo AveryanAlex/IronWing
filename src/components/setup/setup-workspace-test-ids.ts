@@ -295,4 +295,8 @@ export const setupWorkspaceTestIds = {
   wizardStepInitialParamsConfirm: "setup-workspace-wizard-step-initial-params-confirm",
   wizardStepInitialParamsSummary: "setup-workspace-wizard-step-initial-params-summary",
   overviewWizardLaunch: "setup-workspace-overview-wizard-launch",
+  sectionDrawerToggle: "setup-workspace-section-drawer-toggle",
+  sectionDrawer: "setup-workspace-section-drawer",
+  sectionDrawerClose: "setup-workspace-section-drawer-close",
+  sectionDrawerBackdrop: "setup-workspace-section-drawer-backdrop",
 } as const;

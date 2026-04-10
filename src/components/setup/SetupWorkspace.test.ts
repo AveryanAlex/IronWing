@@ -47,7 +47,8 @@ import {
 } from "../../lib/stores/setup-workspace";
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
-import { withShellContexts } from "../../test/context-harnesses";
+import { createStaticShellChromeStore, withShellContexts } from "../../test/context-harnesses";
+import type { ShellChromeStore } from "../../app/shell/runtime-context";
 import type { TelemetryState, VehicleState } from "../../telemetry";
 import { appShellTestIds } from "../../app/shell/chrome-state";
 import ParameterReviewTray from "../../app/shell/ParameterReviewTray.svelte";
@@ -1449,6 +1450,7 @@ async function renderSetupWorkspace(options: {
   includeReviewTray?: boolean;
   paramsService?: Partial<ParamsService>;
   reviewTrayOpen?: boolean;
+  chromeStore?: ShellChromeStore;
 } = {}) {
   const sessionStore = writable(createSessionState(options.sessionOverrides));
   const metadata = Object.prototype.hasOwnProperty.call(options, "metadata")
@@ -1466,6 +1468,7 @@ async function renderSetupWorkspace(options: {
     withShellContexts(sessionReadable, parameterStore, SetupWorkspace, {
       setupWorkspaceStore,
       setupWorkspaceViewStore,
+      chromeStore: options.chromeStore,
     }),
   );
 
@@ -2950,5 +2953,99 @@ describe("SetupWorkspace", () => {
       expect(screen.getByTestId(setupWorkspaceTestIds.wizardPausedScope)).toBeTruthy();
     });
     expect(screen.queryByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeNull();
+  });
+
+  it("keeps the inline section nav rail visible on wide tier without the drawer toggle", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      chromeStore: createStaticShellChromeStore("wide"),
+    });
+
+    expect(screen.getByTestId(setupWorkspaceTestIds.nav)).toBeTruthy();
+    expect(screen.queryByTestId(setupWorkspaceTestIds.sectionDrawerToggle)).toBeNull();
+    expect(screen.queryByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeNull();
+  });
+
+  it("hides the inline section nav rail on phone tier and exposes a drawer toggle", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      chromeStore: createStaticShellChromeStore("phone"),
+    });
+
+    expect(screen.queryByTestId(setupWorkspaceTestIds.nav)).toBeNull();
+    expect(screen.getByTestId(setupWorkspaceTestIds.sectionDrawerToggle)).toBeTruthy();
+    expect(screen.queryByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeNull();
+  });
+
+  it("opens the section drawer and mounts the nav rail inside it on phone tier", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      chromeStore: createStaticShellChromeStore("phone"),
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.sectionDrawerToggle));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeTruthy();
+    });
+    const navs = screen.queryAllByTestId(setupWorkspaceTestIds.nav);
+    expect(navs).toHaveLength(1);
+    expect(screen.getByTestId(setupWorkspaceTestIds.sectionDrawer).contains(navs[0])).toBe(true);
+  });
+
+  it("closes the drawer and applies the selection when a section is picked from the drawer", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      chromeStore: createStaticShellChromeStore("phone"),
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.sectionDrawerToggle));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeNull();
+    });
+    expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("gps");
+  });
+
+  it("closes the drawer when the close button is clicked on phone tier", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      chromeStore: createStaticShellChromeStore("phone"),
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.sectionDrawerToggle));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.sectionDrawerClose));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeNull();
+    });
+  });
+
+  it("closes the drawer when the backdrop is clicked on phone tier", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      chromeStore: createStaticShellChromeStore("phone"),
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.sectionDrawerToggle));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.sectionDrawerBackdrop));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeNull();
+    });
   });
 });

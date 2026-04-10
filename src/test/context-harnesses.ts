@@ -328,12 +328,13 @@ export function withShellContexts(
     setupWorkspaceStore?: SetupWorkspaceStore;
     setupWorkspaceViewStore?: SetupWorkspaceViewStore;
     firmwareWorkspaceContext?: FirmwareWorkspaceContext;
+    chromeStore?: ShellChromeStore;
   } = {},
 ) {
   const renderable = asRenderable(component);
 
   return function AppShellHarness(...args: any[]) {
-    const chrome = createShellChromeStore();
+    const chrome = options.chromeStore ?? createShellChromeStore();
     const sessionView = createSessionViewStore(store);
     const operatorWorkspaceView = createOperatorWorkspaceViewStore(store);
     const parameterWorkspaceView = createParameterWorkspaceViewStore(parameterStore);
