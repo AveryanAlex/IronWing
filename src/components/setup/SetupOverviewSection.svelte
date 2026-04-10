@@ -6,9 +6,11 @@ import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 let {
   view,
   onSelect,
+  onSelectWizard,
 }: {
   view: SetupWorkspaceStoreState;
   onSelect: (sectionId: string) => void;
+  onSelectWizard: () => void;
 } = $props();
 
 const overviewDocs = [
@@ -272,14 +274,24 @@ function groupTone(blocked: number, progressText: string): string {
           Full Parameters stays separate as the raw recovery path, so staged edits continue to flow through the shared shell-owned review tray instead of a setup-local apply queue.
         </p>
       </div>
-      <button
-        class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.overviewRecoveryAction}
-        onclick={() => onSelect("full_parameters")}
-        type="button"
-      >
-        Open Full Parameters
-      </button>
+      <div class="flex flex-wrap gap-2">
+        <button
+          class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          data-testid={setupWorkspaceTestIds.overviewWizardLaunch}
+          onclick={onSelectWizard}
+          type="button"
+        >
+          Start beginner wizard
+        </button>
+        <button
+          class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          data-testid={setupWorkspaceTestIds.overviewRecoveryAction}
+          onclick={() => onSelect("full_parameters")}
+          type="button"
+        >
+          Open Full Parameters
+        </button>
+      </div>
     </div>
   </div>
 </section>

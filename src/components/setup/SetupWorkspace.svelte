@@ -1,10 +1,11 @@
 <script lang="ts">
-import { fromStore } from "svelte/store";
+import { fromStore, get } from "svelte/store";
 
 import {
   getSetupWorkspaceStoreContext,
   getSetupWorkspaceViewStoreContext,
 } from "../../app/shell/runtime-context";
+import { createSetupWizardStore } from "../../lib/stores/setup-wizard";
 import SetupCalibrationSection from "./SetupCalibrationSection.svelte";
 import SetupCheckpointBanner from "./SetupCheckpointBanner.svelte";
 import SetupBatteryMonitorSection from "./SetupBatteryMonitorSection.svelte";
@@ -25,18 +26,65 @@ import SetupRtlReturnSection from "./SetupRtlReturnSection.svelte";
 import SetupSerialPortsSection from "./SetupSerialPortsSection.svelte";
 import SetupServoOutputsSection from "./SetupServoOutputsSection.svelte";
 import SetupWorkspaceSectionNav from "./SetupWorkspaceSectionNav.svelte";
+import SetupWizardShell from "./wizard/SetupWizardShell.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 const store = getSetupWorkspaceStoreContext();
 const viewStore = fromStore(getSetupWorkspaceViewStoreContext());
+
+// Node 20+ exposes a stub `localStorage` with no methods when `--localstorage-file`
+// is not set, so `typeof` alone is not enough — we also need a real getter/setter
+// signature before handing the object to the wizard store's persistence layer.
+const hasRealLocalStorage =
+  typeof localStorage !== "undefined" &&
+  typeof localStorage.getItem === "function" &&
+  typeof localStorage.setItem === "function" &&
+  typeof localStorage.removeItem === "function";
+const wizardStore = createSetupWizardStore({
+  storage: hasRealLocalStorage ? localStorage : undefined,
+});
 
 let view = $derived(viewStore.current);
 let selectedSection = $derived(
   view.sections.find((section) => section.id === view.selectedSectionId) ?? view.sections[0] ?? null,
 );
 
+let wizardVisible = $state(false);
+
+$effect(() => {
+  const gpsStatus = view.sectionStatuses.gps;
+  const batteryStatus = view.sectionStatuses.battery_monitor;
+  const gpsConfigured =
+    gpsStatus === "complete" ? true : gpsStatus === "not_started" ? false : null;
+  const batteryConfigured =
+    batteryStatus === "complete" ? true : batteryStatus === "not_started" ? false : null;
+  wizardStore.updateFromWorkspace({
+    sectionStatuses: view.sectionStatuses,
+    activeEnvelope: view.activeEnvelope,
+    gpsConfigured,
+    batteryConfigured,
+    checkpointPhase: view.checkpoint.phase,
+  });
+});
+
 function selectSection(sectionId: string) {
+  if (wizardVisible) {
+    const wizardPhase = get(wizardStore).phase;
+    if (wizardPhase === "active") {
+      wizardStore.pause("detour");
+    }
+    wizardVisible = false;
+  }
   store.selectSection(sectionId);
+}
+
+function showWizard() {
+  wizardVisible = true;
+  wizardStore.start();
+}
+
+function hideWizard() {
+  wizardVisible = false;
 }
 
 function clearCheckpoint() {
@@ -130,8 +178,24 @@ function clearCheckpoint() {
         {view.selectedSectionId}
       </span>
 
-      {#if view.selectedSectionId === "overview"}
-        <SetupOverviewSection {view} onSelect={selectSection} />
+      {#if wizardVisible}
+        <SetupWizardShell
+          store={wizardStore}
+          {view}
+          onSelectSection={selectSection}
+          onClose={hideWizard}
+        >
+          {#snippet children({ step })}
+            <p
+              class="rounded-2xl border border-dashed border-border bg-bg-primary/60 px-4 py-3 text-sm text-text-secondary"
+              data-testid="wizard-step-placeholder"
+            >
+              Step "{step.title}" — real surface lands in S05-T03/T04.
+            </p>
+          {/snippet}
+        </SetupWizardShell>
+      {:else if view.selectedSectionId === "overview"}
+        <SetupOverviewSection {view} onSelect={selectSection} onSelectWizard={showWizard} />
       {:else if view.selectedSectionId === "frame_orientation" && selectedSection}
         <SetupFrameOrientationSection
           checkpoint={view.checkpoint}

@@ -2865,4 +2865,45 @@ describe("SetupWorkspace", () => {
       expect(screen.queryByTestId(setupWorkspaceTestIds.checkpoint)).toBeNull();
     });
   });
+
+  it("keeps the wizard hidden until the operator opens it from overview", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+    });
+
+    expect(screen.queryByTestId(setupWorkspaceTestIds.wizardRoot)).toBeNull();
+    expect(screen.getByTestId(setupWorkspaceTestIds.overviewWizardLaunch)).toBeTruthy();
+  });
+
+  it("mounts the wizard shell when the overview launch button is clicked", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.overviewWizardLaunch));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeTruthy();
+    });
+    expect(screen.getByTestId(setupWorkspaceTestIds.wizardRoot)).toBeTruthy();
+    expect(screen.queryByTestId(setupWorkspaceTestIds.overviewSection)).toBeNull();
+  });
+
+  it("closes the wizard and returns to the overview when the close button is clicked", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.overviewWizardLaunch));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardClose));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.overviewSection)).toBeTruthy();
+    });
+    expect(screen.queryByTestId(setupWorkspaceTestIds.wizardRoot)).toBeNull();
+  });
 });
