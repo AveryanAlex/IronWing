@@ -58,6 +58,22 @@ async function readAllTextContents(selector) {
   );
 }
 
+// Click helper that works around a tauri-driver + Svelte 5 interaction. tauri-driver
+// (0.1.3) dispatches synthetic WebDriver clicks at screen coordinates derived from the
+// element's bounding rect at waitForClickable time. Once the audited setup nav grew
+// past the 1280x840 window height, lower-group buttons like RC receiver / calibration
+// sit below the fold, and tauri-driver's click lands offscreen; even scrollIntoView
+// beforehand doesn't help because the click coordinate is already resolved. On top of
+// that, some shell-sticky buttons (review toggle, apply, dismiss) are inside nested
+// overlay containers where the same coordinate drift produces silent misses. Firing
+// the click via JS sidesteps all of it: same trusted-click-from-user-perspective
+// behavior Svelte 5 registers through its onclick delegation, zero viewport math.
+async function clickIntoView(element) {
+  await element.waitForClickable({ timeout: 30_000 });
+  await element.scrollIntoView({ block: "center", inline: "nearest" });
+  await browser.execute((el) => (el instanceof HTMLElement ? el.click() : null), element);
+}
+
 async function setCommittedFieldValue(selector, nextValue) {
   return browser.execute((valueSelector, value) => {
     const element = document.querySelector(valueSelector);
@@ -279,8 +295,7 @@ describe("native smoke", () => {
       timeoutMsg: `Timed out waiting for the active shell to use TCP address ${expectedTcpAddress}.`,
     });
 
-    await connectButton.waitForClickable({ timeout: 30_000 });
-    await connectButton.click();
+    await clickIntoView(connectButton);
 
     try {
       await waitForCheckpoint("connected status reached", async () => /Connected/i.test(await statusText.getText()), {
@@ -303,8 +318,7 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for live telemetry mode after connect.",
     });
 
-    await setupWorkspaceButton.waitForClickable({ timeout: 30_000 });
-    await setupWorkspaceButton.click();
+    await clickIntoView(setupWorkspaceButton);
     await setupWorkspaceRoot.waitForDisplayed({ timeout: 30_000 });
     await waitForCheckpoint("setup workspace mounted", async () => await setupWorkspaceRoot.isDisplayed(), {
       timeout: 30_000,
@@ -315,8 +329,7 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for setup metadata before staging the setup channel-order change.",
     });
 
-    await setupNavRcReceiver.waitForClickable({ timeout: 30_000 });
-    await setupNavRcReceiver.click();
+    await clickIntoView(setupNavRcReceiver);
     await setupRcSection.waitForDisplayed({ timeout: 30_000 });
     await waitForCheckpoint("RC receiver section active", async () => {
       const selected = await readTextContent(selectors.setupSelectedSection);
@@ -344,15 +357,13 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for the Setup RC receiver section to surface its current signal state.",
     });
 
-    await setupRcPresetTaer.waitForClickable({ timeout: 30_000 });
-    await setupRcPresetTaer.click();
+    await clickIntoView(setupRcPresetTaer);
 
     await waitForCheckpoint("setup RC preset staged into shared review tray", async () => await reviewTray.isExisting(), {
       timeout: 30_000,
       timeoutMsg: "Timed out waiting for the shared review tray after staging the setup RC preset.",
     });
-    await reviewToggle.waitForClickable({ timeout: 30_000 });
-    await reviewToggle.click();
+    await clickIntoView(reviewToggle);
     await reviewSurface.waitForDisplayed({ timeout: 30_000 });
     await waitForCheckpoint("setup review tray shows queued RC rows", async () => {
       const countText = await readTextContent(selectors.reviewCount);
@@ -368,8 +379,7 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for the shared review tray to show the three queued setup RC mapping rows.",
     });
 
-    await reviewApply.waitForClickable({ timeout: 30_000 });
-    await reviewApply.click();
+    await clickIntoView(reviewApply);
     await waitForCheckpoint("shared review tray cleared after setup apply", async () => !(await reviewTray.isExisting()), {
       timeout: 60_000,
       timeoutMsg: "Timed out waiting for the shared review tray to clear after applying the staged setup RC mapping change.",
@@ -387,15 +397,13 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for the setup reboot checkpoint banner after applying the staged channel-order change.",
     });
 
-    await setupCheckpointDismiss.waitForClickable({ timeout: 30_000 });
-    await setupCheckpointDismiss.click();
+    await clickIntoView(setupCheckpointDismiss);
     await waitForCheckpoint("setup checkpoint dismissed", async () => (await readElementCount(selectors.setupCheckpoint)) === 0, {
       timeout: 30_000,
       timeoutMsg: "Timed out waiting for the setup reboot checkpoint banner to dismiss.",
     });
 
-    await telemetryLauncher.waitForClickable({ timeout: 30_000 });
-    await telemetryLauncher.click();
+    await clickIntoView(telemetryLauncher);
     await telemetryDialog.waitForDisplayed({ timeout: 30_000 });
 
     const currentTelemetryRate = Number.parseInt(await telemetryInput.getValue(), 10);
@@ -403,8 +411,7 @@ describe("native smoke", () => {
     const nextTelemetryRate = currentTelemetryRate === 6 ? 5 : 6;
     await setFieldValue(telemetryInput, String(nextTelemetryRate));
 
-    await telemetryApply.waitForClickable({ timeout: 30_000 });
-    await telemetryApply.click();
+    await clickIntoView(telemetryApply);
 
     await waitForCheckpoint("telemetry settings apply settled successfully", async () => {
       const statusKind = await telemetryStatus.getAttribute("data-status-kind");
@@ -415,8 +422,7 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for the telemetry settings dialog to confirm the applied cadence.",
     });
 
-    await telemetryClose.waitForClickable({ timeout: 30_000 });
-    await telemetryClose.click();
+    await clickIntoView(telemetryClose);
     await waitForCheckpoint("telemetry toast cleared", async () => await browser.execute(
       () => document.querySelector('[data-sonner-toaster]') === null,
     ), {
@@ -424,15 +430,13 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for the telemetry confirmation toast to clear before continuing the native mission flow.",
     });
 
-    await missionWorkspaceButton.waitForClickable({ timeout: 30_000 });
-    await missionWorkspaceButton.click();
+    await clickIntoView(missionWorkspaceButton);
     await missionRoot.waitForDisplayed({ timeout: 30_000 });
     await waitForCheckpoint("mission workspace tab active", async () => (await readTextContent(selectors.activeWorkspace)) === "mission", {
       timeout: 30_000,
       timeoutMsg: "Timed out waiting for the shell to activate the Mission workspace.",
     });
-    await missionEntryNew.waitForClickable({ timeout: 30_000 });
-    await missionEntryNew.click();
+    await clickIntoView(missionEntryNew);
     await missionReady.waitForDisplayed({ timeout: 30_000 });
 
     await waitForCheckpoint("mission workspace attached to the live session", async () => {
@@ -443,8 +447,7 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for the Mission workspace to report a live-attached draft.",
     });
 
-    await missionListAdd.waitForClickable({ timeout: 30_000 });
-    await missionListAdd.click();
+    await clickIntoView(missionListAdd);
     await waitForCheckpoint("manual mission item selected", async () => {
       const selectionKind = await readTextContent(selectors.missionInspectorSelectionKind);
       return typeof selectionKind === "string" && selectionKind.includes("mission-item");
@@ -504,8 +507,7 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for the mission list to reflect the primary waypoint coordinates.",
     });
 
-    await missionListAdd.waitForClickable({ timeout: 30_000 });
-    await missionListAdd.click();
+    await clickIntoView(missionListAdd);
     await waitForCheckpoint("two mission items visible in the planner counts", async () => {
       const counts = await readMissionCounts(selectors.missionCountsMission);
       return counts?.mission === 2 && counts?.survey === 0;
@@ -547,12 +549,10 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for the mission list to reflect the secondary waypoint coordinates.",
     });
 
-    await missionToolbarUpload.waitForClickable({ timeout: 30_000 });
-    await missionToolbarUpload.click();
+    await clickIntoView(missionToolbarUpload);
     await waitForMissionActionCycle(selectors, "Uploading planning state", "mission upload");
 
-    await missionToolbarNew.waitForClickable({ timeout: 30_000 });
-    await missionToolbarNew.click();
+    await clickIntoView(missionToolbarNew);
     await waitForCheckpoint("local mission draft reset to blank", async () => {
       const counts = await readMissionCounts(selectors.missionCountsMission);
       return counts?.mission === 0 && counts?.survey === 0;
@@ -561,8 +561,7 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for the local Mission draft to reset after upload.",
     });
 
-    await missionToolbarRead.waitForClickable({ timeout: 30_000 });
-    await missionToolbarRead.click();
+    await clickIntoView(missionToolbarRead);
     await waitForMissionActionCycle(selectors, "Reading planning state", "mission readback");
     await waitForCheckpoint("vehicle readback restored two mission items", async () => {
       const counts = await readMissionCounts(selectors.missionCountsMission);
@@ -578,7 +577,7 @@ describe("native smoke", () => {
 
     const [readbackWaypoint] = await $$(selectors.missionDraftItem);
     assert.ok(readbackWaypoint, "Expected a readback waypoint card after reading the vehicle mission.");
-    await readbackWaypoint.click();
+    await clickIntoView(readbackWaypoint);
     await waitForCheckpoint("readback waypoint selection returned to the Mission inspector", async () => {
       const selectionKind = await readTextContent(selectors.missionInspectorSelectionKind);
       return typeof selectionKind === "string" && selectionKind.includes("mission-item");
@@ -603,16 +602,14 @@ describe("native smoke", () => {
     assert.ok(!("__parse_error" in persistedSettings), `mpng_settings should remain valid JSON: ${JSON.stringify(persistedSettings)}`);
     assert.equal(persistedSettings.telemetryRateHz, nextTelemetryRate, "mpng_settings should persist the last applied telemetry cadence.");
 
-    await setupWorkspaceButton.waitForClickable({ timeout: 30_000 });
-    await setupWorkspaceButton.click();
+    await clickIntoView(setupWorkspaceButton);
     await setupWorkspaceRoot.waitForDisplayed({ timeout: 30_000 });
     await waitForCheckpoint("setup workspace returned for calibration proof", async () => (await readTextContent(selectors.activeWorkspace)) === "setup", {
       timeout: 30_000,
       timeoutMsg: "Timed out waiting to return to the Setup workspace for the native calibration proof.",
     });
 
-    await setupNavCalibration.waitForClickable({ timeout: 30_000 });
-    await setupNavCalibration.click();
+    await clickIntoView(setupNavCalibration);
     await setupCalibrationSection.waitForDisplayed({ timeout: 30_000 });
     await waitForCheckpoint("calibration section active", async () => {
       const selected = await readTextContent(selectors.setupSelectedSection);
@@ -630,8 +627,7 @@ describe("native smoke", () => {
     });
 
     const calibrationNoticesBeforeStart = await readTextContent(selectors.setupCalibrationNotices);
-    await setupCalibrationActionCompass.waitForClickable({ timeout: 30_000 });
-    await setupCalibrationActionCompass.click();
+    await clickIntoView(setupCalibrationActionCompass);
 
     await waitForCheckpoint("compass lifecycle or native setup notice surfaced", async () => {
       const status = await readTextContent(selectors.setupCalibrationStatusCompass);
@@ -662,8 +658,7 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for the Setup calibration section to surface fresh compass-related status text.",
     });
 
-    await disconnectButton.waitForClickable({ timeout: 30_000 });
-    await disconnectButton.click();
+    await clickIntoView(disconnectButton);
 
     await waitForCheckpoint("idle status restored after disconnect", async () => /Idle/i.test(await statusText.getText()), {
       timeout: 30_000,
