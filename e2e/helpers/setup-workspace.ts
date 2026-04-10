@@ -14,6 +14,7 @@ import type { SessionEnvelope } from "../../src/session";
 import type { StatusTextDomain } from "../../src/statustext";
 import type { SupportDomain } from "../../src/support";
 import type { TelemetryDomain, TelemetryState } from "../../src/telemetry";
+import { setupWorkspaceTestIds } from "../../src/components/setup/setup-workspace-test-ids";
 import {
   connectionSelectors,
   expect,
@@ -1242,6 +1243,21 @@ export async function expectQueuedRcReviewRows(page: Page, names: string[]): Pro
   for (const name of names) {
     await expect(parameterReviewRowLocator(page, name)).toContainText(name);
   }
+}
+
+/**
+ * Opens the phone-tier section drawer from the setup workspace detail pane
+ * header. Callers must apply a phone viewport before invoking this helper;
+ * the drawer toggle only renders on the phone tier, so the locator wait will
+ * throw if the test forgot to switch to a phone preset.
+ */
+export async function openSetupSectionDrawer(page: Page): Promise<void> {
+  await page
+    .locator(`[data-testid="${setupWorkspaceTestIds.sectionDrawerToggle}"]`)
+    .click();
+  await page
+    .locator(`[data-testid="${setupWorkspaceTestIds.sectionDrawer}"]`)
+    .waitFor();
 }
 
 export {
