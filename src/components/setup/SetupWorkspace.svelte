@@ -28,8 +28,13 @@ import SetupServoOutputsSection from "./SetupServoOutputsSection.svelte";
 import SetupWorkspaceSectionNav from "./SetupWorkspaceSectionNav.svelte";
 import SetupWizardShell from "./wizard/SetupWizardShell.svelte";
 import SetupWizardArmingStep from "./wizard/SetupWizardArmingStep.svelte";
+import SetupWizardBatteryStep from "./wizard/SetupWizardBatteryStep.svelte";
 import SetupWizardCalibrationStep from "./wizard/SetupWizardCalibrationStep.svelte";
+import SetupWizardFailsafeStep from "./wizard/SetupWizardFailsafeStep.svelte";
+import SetupWizardFlightModesStep from "./wizard/SetupWizardFlightModesStep.svelte";
 import SetupWizardFrameStep from "./wizard/SetupWizardFrameStep.svelte";
+import SetupWizardGpsStep from "./wizard/SetupWizardGpsStep.svelte";
+import SetupWizardInitialParamsStep from "./wizard/SetupWizardInitialParamsStep.svelte";
 import SetupWizardRcStep from "./wizard/SetupWizardRcStep.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
@@ -199,13 +204,16 @@ function clearCheckpoint() {
                 <SetupWizardRcStep {view} onAdvance={advance} />
               {:else if step.id === "arming"}
                 <SetupWizardArmingStep {view} onAdvance={advance} />
-              {:else}
-                <p
-                  class="rounded-2xl border border-dashed border-border bg-bg-primary/60 px-4 py-3 text-sm text-text-secondary"
-                  data-testid="wizard-step-placeholder"
-                >
-                  Step "{step.title}" — recommended step surface lands in S05-T04.
-                </p>
+              {:else if step.id === "gps"}
+                <SetupWizardGpsStep {view} onAdvance={advance} />
+              {:else if step.id === "battery_monitor"}
+                <SetupWizardBatteryStep {view} onAdvance={advance} />
+              {:else if step.id === "failsafe"}
+                <SetupWizardFailsafeStep {view} onAdvance={advance} />
+              {:else if step.id === "flight_modes"}
+                <SetupWizardFlightModesStep {view} onAdvance={advance} />
+              {:else if step.id === "initial_params"}
+                <SetupWizardInitialParamsStep {view} onAdvance={advance} />
               {/if}
             </div>
           {/snippet}
