@@ -23,6 +23,8 @@ playwright-report/
 
 # ── GSD baseline (auto-generated) ──
 .gsd
+.gsd-id
+.bg-shell/
 Thumbs.db
 *.swp
 *.swo
@@ -43,8 +45,3 @@ vendor/
 coverage/
 .cache/
 tmp/
-
-.bg-shell/
-
-# ── GSD baseline (auto-generated) ──
-.gsd-id

@@ -95,8 +95,45 @@ export const setupWorkspaceSelectors = {
     nav: `[data-testid="${setupWorkspaceTestIds.nav}"]`,
     overviewSection: `[data-testid="${setupWorkspaceTestIds.overviewSection}"]`,
     overviewBanner: `[data-testid="${setupWorkspaceTestIds.overviewBanner}"]`,
+    overviewRecoveryAction: `[data-testid="${setupWorkspaceTestIds.overviewRecoveryAction}"]`,
     detailRecovery: `[data-testid="${setupWorkspaceTestIds.detailRecovery}"]`,
     frameSection: `[data-testid="${setupWorkspaceTestIds.frameSection}"]`,
+    gpsSection: `[data-testid="${setupWorkspaceTestIds.gpsSection}"]`,
+    gpsSummary: `[data-testid="${setupWorkspaceTestIds.gpsSummary}"]`,
+    gpsLiveState: `[data-testid="${setupWorkspaceTestIds.gpsLiveState}"]`,
+    gpsLiveDetail: `[data-testid="${setupWorkspaceTestIds.gpsLiveDetail}"]`,
+    gpsPortState: `[data-testid="${setupWorkspaceTestIds.gpsPortState}"]`,
+    gpsDocsLink: `[data-testid="${setupWorkspaceTestIds.gpsDocsLink}"]`,
+    flightModesSection: `[data-testid="${setupWorkspaceTestIds.flightModesSection}"]`,
+    flightModesSummary: `[data-testid="${setupWorkspaceTestIds.flightModesSummary}"]`,
+    flightModesAvailabilityState: `[data-testid="${setupWorkspaceTestIds.flightModesAvailabilityState}"]`,
+    flightModesAvailabilityDetail: `[data-testid="${setupWorkspaceTestIds.flightModesAvailabilityDetail}"]`,
+    flightModesCurrentMode: `[data-testid="${setupWorkspaceTestIds.flightModesCurrentMode}"]`,
+    flightModesActiveSlot: `[data-testid="${setupWorkspaceTestIds.flightModesActiveSlot}"]`,
+    flightModesDocsLink: `[data-testid="${setupWorkspaceTestIds.flightModesDocsLink}"]`,
+    failsafeSection: `[data-testid="${setupWorkspaceTestIds.failsafeSection}"]`,
+    failsafeSummary: `[data-testid="${setupWorkspaceTestIds.failsafeSummary}"]`,
+    failsafeDefaultsState: `[data-testid="${setupWorkspaceTestIds.failsafeDefaultsState}"]`,
+    failsafeDocsLink: `[data-testid="${setupWorkspaceTestIds.failsafeDocsLink}"]`,
+    failsafeRecovery: `[data-testid="${setupWorkspaceTestIds.failsafeRecovery}"]`,
+    failsafePreview: `[data-testid="${setupWorkspaceTestIds.failsafePreview}"]`,
+    armingSection: `[data-testid="${setupWorkspaceTestIds.armingSection}"]`,
+    armingReadiness: `[data-testid="${setupWorkspaceTestIds.armingReadiness}"]`,
+    armingBlockers: `[data-testid="${setupWorkspaceTestIds.armingBlockers}"]`,
+    armingDocsLink: `[data-testid="${setupWorkspaceTestIds.armingDocsLink}"]`,
+    prearmDocsLink: `[data-testid="${setupWorkspaceTestIds.prearmDocsLink}"]`,
+    initialParamsSection: `[data-testid="${setupWorkspaceTestIds.initialParamsSection}"]`,
+    initialParamsSummary: `[data-testid="${setupWorkspaceTestIds.initialParamsSummary}"]`,
+    initialParamsFamilyState: `[data-testid="${setupWorkspaceTestIds.initialParamsFamilyState}"]`,
+    initialParamsPreviewState: `[data-testid="${setupWorkspaceTestIds.initialParamsPreviewState}"]`,
+    initialParamsDocsLink: `[data-testid="${setupWorkspaceTestIds.initialParamsDocsLink}"]`,
+    initialParamsRecovery: `[data-testid="${setupWorkspaceTestIds.initialParamsRecovery}"]`,
+    peripheralsSection: `[data-testid="${setupWorkspaceTestIds.peripheralsSection}"]`,
+    peripheralsSummary: `[data-testid="${setupWorkspaceTestIds.peripheralsSummary}"]`,
+    peripheralsFilter: `[data-testid="${setupWorkspaceTestIds.peripheralsFilter}"]`,
+    peripheralsDocsLink: `[data-testid="${setupWorkspaceTestIds.peripheralsDocsLink}"]`,
+    peripheralsEmpty: `[data-testid="${setupWorkspaceTestIds.peripheralsEmpty}"]`,
+    peripheralsRecovery: `[data-testid="${setupWorkspaceTestIds.peripheralsRecovery}"]`,
     frameSummary: `[data-testid="${setupWorkspaceTestIds.frameSummary}"]`,
     frameVehicleState: `[data-testid="${setupWorkspaceTestIds.frameVehicleState}"]`,
     frameLayoutState: `[data-testid="${setupWorkspaceTestIds.frameLayoutState}"]`,
@@ -1058,12 +1095,36 @@ export function setupNavLocator(page: Page, sectionId: string): Locator {
     return page.locator(`[data-testid="${setupWorkspaceTestIds.navPrefix}-${sectionId}"]`);
 }
 
+export function setupNavGroupProgressLocator(page: Page, groupId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.navGroupProgressPrefix}-${groupId}"]`);
+}
+
 export function setupStatusNoticeLocator(page: Page, noticeId: string): Locator {
     return page.locator(`[data-testid="${setupWorkspaceTestIds.statusNoticePrefix}-${noticeId}"]`);
 }
 
 export function setupOverviewCardLocator(page: Page, sectionId: string): Locator {
     return page.locator(`[data-testid="${setupWorkspaceTestIds.overviewCardPrefix}-${sectionId}"]`);
+}
+
+export function setupOverviewMetricLocator(page: Page, metricId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.overviewMetricPrefix}-${metricId}"]`);
+}
+
+export function setupOverviewDocLinkLocator(page: Page, docId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.overviewDocLinkPrefix}-${docId}"]`);
+}
+
+export function setupOverviewGroupCountLocator(page: Page, groupId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.overviewGroupCountPrefix}-${groupId}"]`);
+}
+
+export function setupOverviewGroupProgressLocator(page: Page, groupId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.overviewGroupProgressPrefix}-${groupId}"]`);
+}
+
+export function setupOverviewQuickActionLocator(page: Page, actionId: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.overviewQuickActionPrefix}-${actionId}"]`);
 }
 
 export function setupRcBarLocator(page: Page, channel: number): Locator {

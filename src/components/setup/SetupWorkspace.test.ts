@@ -1532,13 +1532,43 @@ describe("SetupWorkspace", () => {
     expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("overview");
     expect(screen.getByTestId(setupWorkspaceTestIds.overviewSection)).toBeTruthy();
     expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain("Grouped progress stays conservative");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewMetricPrefix}-inventory`).textContent).toContain("16 sections");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewMetricPrefix}-progress`).textContent).toContain("2/13 confirmed");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewMetricPrefix}-status`).textContent).toContain("unconfirmed");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`).textContent?.trim()).toBe("Unknown");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionConfidencePrefix}-frame_orientation`).textContent?.trim()).toBe("Unconfirmed");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navGroupPrefix}-hardware`)).toBeTruthy();
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navGroupProgressPrefix}-hardware`).textContent).toContain("1/6 confirmed");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewGroupPrefix}-safety`)).toBeTruthy();
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewGroupCountPrefix}-hardware`).textContent).toContain("7 sections · 7 purpose-built editors");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewDocLinkPrefix}-hardware`).getAttribute("href")).toContain(
+      "common-positioning-landing-page",
+    );
     expect(screen.getByTestId(setupWorkspaceTestIds.detailRecovery).textContent).toContain("Full Parameters stays separate");
     expect(screen.getByTestId(setupWorkspaceTestIds.notices).textContent).toContain("Compass not calibrated");
+  });
+
+  it("routes overview quick actions and recovery affordances through the grouped workspace shell", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.overviewQuickActionPrefix}-flight_modes`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("flight_modes");
+      expect(screen.getByTestId(setupWorkspaceTestIds.flightModesSection)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-overview`));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("overview");
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.overviewRecoveryAction));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("full_parameters");
+      expect(screen.getByTestId(setupWorkspaceTestIds.fullParameters)).toBeTruthy();
+    });
   });
 
   it("keeps blocked sections inspectable while metadata recovery is active", async () => {

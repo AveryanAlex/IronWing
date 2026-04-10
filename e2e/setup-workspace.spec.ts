@@ -1,3 +1,4 @@
+import { setupWorkspaceTestIds } from "../src/components/setup/setup-workspace-test-ids";
 import {
   applyShellViewport,
   expect,
@@ -7,6 +8,7 @@ import {
 import {
   connectSetupSession,
   createDodecahexaMotorSetupParamStore,
+  createFullExpertSetupParamStore,
   createPlainPlaneSetupParamStore,
   createQuadPlaneSetupParamStore,
   createSetupCalibrationDomain,
@@ -18,6 +20,7 @@ import {
   openConnectedSetupWorkspace,
   parameterReviewRowLocator,
   primeSetupMetadata,
+  setupConnectedVehicleState,
   setupFrameBannerLocator,
   setupFrameInputLocator,
   setupFrameStageButtonLocator,
@@ -29,7 +32,13 @@ import {
   setupMotorsEscRowReverseLocator,
   setupMotorsEscRowReversedLocator,
   setupMotorsEscRowTestLocator,
+  setupNavGroupProgressLocator,
   setupNavLocator,
+  setupOverviewCardLocator,
+  setupOverviewDocLinkLocator,
+  setupOverviewGroupCountLocator,
+  setupOverviewMetricLocator,
+  setupOverviewQuickActionLocator,
   setupPlaneVehicleState,
   setupServoOutputsBannerLocator,
   setupServoOutputsFunctionGroupLocator,
@@ -52,7 +61,7 @@ async function expectLatestInvocation(
 ): Promise<void> {
   await expect.poll(async () => {
     const invocations = (await mockPlatform.getInvocations()).filter((invocation) => invocation.cmd === cmd);
-    return invocations.at(-1)?.args ?? null;
+    return invocations[invocations.length - 1]?.args ?? null;
   }).toEqual(args);
 }
 
@@ -95,6 +104,170 @@ test.describe("setup workspace proof", () => {
     await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("full_parameters");
     await expect(page.locator(setupWorkspaceSelectors.fullParameters)).toBeVisible();
     await expect(page.locator(parameterWorkspaceSelectors.root)).toBeVisible();
+  });
+
+  test("keeps grouped overview/status readable and proves representative hardware, safety, and tuning flows", async ({
+    page,
+    mockPlatform,
+  }) => {
+    await primeSetupMetadata(page);
+    await applyShellViewport(page, "desktop");
+    await page.goto("/");
+    await mockPlatform.reset();
+    await mockPlatform.waitForRuntimeSurface();
+
+    await connectSetupSession(page, mockPlatform, {
+      vehicleState: setupConnectedVehicleState,
+      paramStore: createFullExpertSetupParamStore({
+        SIMPLE: 0b000001,
+        SUPER_SIMPLE: 0b001000,
+      }),
+      telemetry: createSetupTelemetryDomain({
+        rc_channels: [1100, 1500, 1900, 1300, 1450],
+        rc_rssi: 84,
+        servo_outputs: [1500, 1600, 1700, 1800],
+      }, {
+        value: {
+          gps: {
+            fix_type: "fix_3d",
+            satellites: 16,
+            hdop: 0.7,
+          },
+          navigation: {
+            latitude_deg: 47.1234567,
+            longitude_deg: 8.7654321,
+          },
+          power: {
+            battery_voltage_v: 15.2,
+            battery_current_a: 18.4,
+            battery_pct: 63,
+            battery_voltage_cells: [3.8, 3.8, 3.8, 3.8],
+          },
+        },
+      }),
+      support: createSetupSupportDomain(),
+      configurationFacts: createSetupConfigurationFactsDomain(),
+      calibration: createSetupCalibrationDomain(),
+      statusText: createSetupStatusTextDomain([
+        { sequence: 1, text: "Compass not calibrated", severity: "warning", timestamp_usec: 100 },
+        { sequence: 2, text: "PreArm: GPS 3D fix required", severity: "warning", timestamp_usec: 200 },
+      ]),
+    });
+
+    await openConnectedSetupWorkspace(page);
+
+    await expect(setupOverviewMetricLocator(page, "inventory")).toContainText("16 sections");
+    await expect(setupOverviewMetricLocator(page, "progress")).toContainText(/\/13 confirmed/);
+    await expect(setupOverviewDocLinkLocator(page, "hardware")).toHaveAttribute(
+      "href",
+      /common-positioning-landing-page/,
+    );
+    await expect(setupOverviewGroupCountLocator(page, "hardware")).toContainText("7 sections · 7 purpose-built editors");
+
+    await setupOverviewQuickActionLocator(page, "flight_modes").click();
+    await expect(page.locator(setupWorkspaceSelectors.flightModesSection)).toBeVisible();
+    await expect.poll(async () => await setupNavGroupProgressLocator(page, "safety").textContent()).toBe("1/6 confirmed");
+    await expect(page.locator(setupWorkspaceSelectors.flightModesAvailabilityState)).toContainText("Live");
+    await expect(page.locator(setupWorkspaceSelectors.flightModesCurrentMode)).toContainText("LOITER");
+    await expect(page.locator(setupWorkspaceSelectors.flightModesDocsLink)).toHaveAttribute(
+      "href",
+      /flight-mode-configuration/,
+    );
+
+    await page.locator(`[data-testid="${setupWorkspaceTestIds.flightModesInputPrefix}-FLTMODE1"]`).selectOption("6");
+    await page.locator(`[data-testid="${setupWorkspaceTestIds.flightModesStageButtonPrefix}-FLTMODE1"]`).click();
+    if (!await page.locator(parameterWorkspaceSelectors.reviewSurface).isVisible()) {
+      await page.locator(parameterWorkspaceSelectors.reviewToggle).click();
+    }
+    await expect(page.locator(parameterWorkspaceSelectors.reviewSurface)).toBeVisible();
+    await expect(parameterReviewRowLocator(page, "FLTMODE1")).toContainText("FLTMODE1");
+    await expect.poll(async () => await setupNavGroupProgressLocator(page, "safety").textContent()).toBe("0/6 confirmed");
+
+    await setupNavLocator(page, "gps").click();
+    await expect(page.locator(setupWorkspaceSelectors.gpsSection)).toBeVisible();
+    await expect(page.locator(setupWorkspaceSelectors.gpsLiveState)).toContainText("Live");
+    await expect(page.locator(setupWorkspaceSelectors.gpsPortState)).toContainText("SERIAL3");
+    await expect(page.locator(setupWorkspaceSelectors.gpsDocsLink)).toHaveAttribute(
+      "href",
+      /common-positioning-landing-page/,
+    );
+
+    await setupNavLocator(page, "arming").click();
+    await expect(page.locator(setupWorkspaceSelectors.armingSection)).toBeVisible();
+    await expect(page.locator(setupWorkspaceSelectors.armingReadiness)).toContainText(/blocker|Needs explicit re-check/i);
+    await expect(page.locator(setupWorkspaceSelectors.armingBlockers)).toContainText("GPS 3D fix required");
+    await expect(page.locator(setupWorkspaceSelectors.prearmDocsLink)).toHaveAttribute(
+      "href",
+      /common-prearm-safety-checks/,
+    );
+
+    await setupNavLocator(page, "initial_params").click();
+    await expect(page.locator(setupWorkspaceSelectors.initialParamsSection)).toBeVisible();
+    await expect(page.locator(setupWorkspaceSelectors.initialParamsFamilyState)).toContainText("Multirotor starter baseline");
+    await expect(page.locator(setupWorkspaceSelectors.initialParamsDocsLink)).toHaveAttribute("href", /common-tuning/);
+    await page
+      .locator(`[data-testid="${setupWorkspaceTestIds.initialParamsPreviewPrefix}-control_baseline"]`)
+      .getByRole("button", { name: "Stage in review tray" })
+      .click();
+    await expect(parameterReviewRowLocator(page, "MOT_THST_EXPO")).toContainText("MOT_THST_EXPO");
+
+    await setupNavLocator(page, "peripherals").click();
+    await expect(page.locator(setupWorkspaceSelectors.peripheralsSection)).toBeVisible();
+    await expect(page.locator(setupWorkspaceSelectors.peripheralsDocsLink)).toHaveAttribute("href", /optional-hardware/);
+    await page.locator(setupWorkspaceSelectors.peripheralsFilter).click();
+    await expect(page.locator(`[data-testid="${setupWorkspaceTestIds.peripheralsGroupPrefix}-rangefinder"]`)).toBeVisible();
+
+    await applyShellViewport(page, "radiomaster");
+    await setupNavLocator(page, "overview").click();
+    await expect(setupOverviewMetricLocator(page, "inventory")).toContainText("16 sections");
+    await expect(setupOverviewGroupCountLocator(page, "hardware")).toContainText("7 sections");
+    await expect(setupOverviewDocLinkLocator(page, "hardware")).toBeVisible();
+  });
+
+  test("keeps flight-mode proof fail-closed when get_available_modes returns only malformed rows", async ({
+    page,
+    mockPlatform,
+  }) => {
+    await primeSetupMetadata(page);
+    await applyShellViewport(page, "desktop");
+    await page.goto("/");
+    await mockPlatform.reset();
+    await mockPlatform.waitForRuntimeSurface();
+
+    await connectSetupSession(page, mockPlatform, {
+      paramStore: createFullExpertSetupParamStore({
+        FLTMODE1: 99,
+      }),
+      availableModes: [
+        { custom_mode: "oops", name: "Broken" },
+        { custom_mode: 6, name: "   " },
+      ] as unknown,
+      telemetry: createSetupTelemetryDomain({
+        rc_channels: [1100, 1500, 1900, 1300, 1450],
+        rc_rssi: 84,
+        servo_outputs: undefined,
+      }),
+      support: createSetupSupportDomain(),
+      configurationFacts: createSetupConfigurationFactsDomain(),
+      calibration: createSetupCalibrationDomain(),
+    });
+
+    await openConnectedSetupWorkspace(page);
+    await setupNavLocator(page, "flight_modes").click();
+
+    await expect(page.locator(setupWorkspaceSelectors.flightModesSection)).toBeVisible();
+    await expect(page.locator(setupWorkspaceSelectors.flightModesAvailabilityState)).toContainText("Mode list unavailable");
+    await expect(page.locator(setupWorkspaceSelectors.flightModesAvailabilityDetail)).toContainText(
+      "Available flight modes have not been confirmed",
+    );
+    await expect(page.locator(`[data-testid="${setupWorkspaceTestIds.flightModesBannerPrefix}-recovery"]`)).toContainText(
+      "fail-closed",
+    );
+    await expect(page.locator(`[data-testid="${setupWorkspaceTestIds.flightModesStageButtonPrefix}-FLTMODE1"]`)).toBeDisabled();
+
+    await setupNavLocator(page, "overview").click();
+    await expect(setupOverviewCardLocator(page, "flight_modes")).toContainText("Flight modes");
+    await expect(setupOverviewMetricLocator(page, "status")).toContainText("unconfirmed");
   });
 
   test("seeds ArduPlane metadata, stages QuadPlane enable through the shared tray, and resumes on refreshed VTOL truth", async ({

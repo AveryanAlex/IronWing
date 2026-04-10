@@ -300,8 +300,14 @@ describe("setup workspace store", () => {
     expect(frameSection?.statusText).toBe("Unknown");
     expect(frameSection?.confidenceText).toBe("Unconfirmed");
     expect(gpsSection?.implemented).toBe(true);
+    expect(hardwareGroup?.sections).toHaveLength(7);
+    expect(hardwareGroup?.implementedCount).toBe(7);
     expect(hardwareGroup?.progressText).toBe("0/6 confirmed");
+    expect(safetyGroup?.sections).toHaveLength(6);
+    expect(safetyGroup?.implementedCount).toBe(6);
     expect(safetyGroup?.progressText).toBe("1/6 confirmed");
+    expect(tuningGroup?.sections).toHaveLength(3);
+    expect(tuningGroup?.implementedCount).toBe(3);
     expect(tuningGroup?.progressText).toBe("0/1 confirmed");
   });
 
@@ -394,7 +400,7 @@ describe("setup workspace store", () => {
       telemetryDomain: createTelemetryDomain({
         rc_channels: [1100, 1500, 1900, 1300],
         rc_rssi: 84,
-        servo_outputs: null,
+        servo_outputs: undefined,
       }),
     }));
     const paramsStore = writable(createParamsState());
@@ -409,7 +415,7 @@ describe("setup workspace store", () => {
       telemetryDomain: createTelemetryDomain({
         rc_channels: [1100, Number.NaN, 65535, 1400] as unknown as number[],
         rc_rssi: 84,
-        servo_outputs: null,
+        servo_outputs: undefined,
       }),
     }));
 
