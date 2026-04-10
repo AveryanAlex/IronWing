@@ -5,6 +5,7 @@ import type { SessionEnvelope, SourceKind } from "../../session";
 import type { CompactStatusNotice } from "../../statustext";
 import { selectCompactStatusNotices } from "../../statustext";
 import { deriveSetupSectionStatuses } from "../configuration-facts";
+import { wizardSectionStatusFromPhase } from "../setup/wizard-catalog";
 import { selectTelemetryView } from "../telemetry-selectors";
 import {
   SECTION_IDS,
@@ -19,6 +20,7 @@ import {
 } from "../setup-sections";
 import type { ParamsMetadataState, ParamsStoreState } from "./params";
 import type { SessionStorePhase, SessionStoreState } from "./session";
+import type { WizardPhase } from "./setup-wizard";
 
 type SetupCheckpointSeed = {
   resumeSectionId: SetupSectionId;
@@ -42,6 +44,7 @@ type SetupWorkspaceConfirmationPayload = {
 
 const IMPLEMENTED_SECTION_ID_SET = new Set<SetupSectionId>([
   "overview",
+  "beginner_wizard",
   "frame_orientation",
   "calibration",
   "gps",
@@ -1318,6 +1321,12 @@ export function createSetupWorkspaceStore(
   let previousScopeKey: string | null = null;
   let previousApplyPhase: ParamsStoreState["applyPhase"] = "idle";
   let currentActiveScopeKey: string | null = null;
+  // The beginner wizard section's truth comes from the wizard store phase, not
+  // from configuration facts. SetupWorkspace.svelte pushes this via
+  // `setWizardPhase(...)` whenever the wizard store state changes, and the
+  // overlay below keeps the grouped dashboard in sync with live wizard
+  // progress without bypassing the shared recompute path.
+  let currentWizardPhase: WizardPhase | null = null;
   const sectionConfirmationsByScope = new Map<string, ScopedSectionConfirmations>();
 
   function recompute() {
@@ -1340,6 +1349,9 @@ export function createSetupWorkspaceStore(
       sameScope,
       currentScopeConfirmations,
     );
+    // Overlay the beginner wizard section truth so the grouped dashboard
+    // reflects the live wizard store phase.
+    sectionStatuses.beginner_wizard = wizardSectionStatusFromPhase(currentWizardPhase);
 
     const hasRebootRequiredEdits = Object.values(paramsState.stagedEdits).some((edit) => edit.rebootRequired);
     if (paramsState.applyPhase === "applying" && hasRebootRequiredEdits && pendingCheckpointSeed === null) {
@@ -1552,6 +1564,13 @@ export function createSetupWorkspaceStore(
     clearCheckpointPlaceholder() {
       checkpointState = createIdleCheckpoint();
       pendingCheckpointSeed = null;
+      recompute();
+    },
+    setWizardPhase(phase: WizardPhase | null) {
+      if (currentWizardPhase === phase) {
+        return;
+      }
+      currentWizardPhase = phase;
       recompute();
     },
   };

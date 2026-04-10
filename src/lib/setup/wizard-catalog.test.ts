@@ -6,6 +6,7 @@ import {
   WIZARD_STEP_CATALOG,
   resolveStepTier,
   scopeFamilyKey,
+  wizardSectionStatusFromPhase,
   type WizardStepDefinition,
   type WizardStepId,
 } from "./wizard-catalog";
@@ -106,6 +107,40 @@ describe("resolveStepTier", () => {
     expect(
       resolveStepTier(stepById("failsafe"), { gpsConfigured: null, batteryConfigured: null }),
     ).toBe("recommended");
+  });
+});
+
+describe("wizardSectionStatusFromPhase", () => {
+  it("returns not_started when the phase is null", () => {
+    expect(wizardSectionStatusFromPhase(null)).toBe("not_started");
+  });
+
+  it("returns not_started when the phase is undefined", () => {
+    expect(wizardSectionStatusFromPhase(undefined)).toBe("not_started");
+  });
+
+  it("returns not_started when the wizard phase is idle", () => {
+    expect(wizardSectionStatusFromPhase("idle")).toBe("not_started");
+  });
+
+  it("returns in_progress when the wizard phase is active", () => {
+    expect(wizardSectionStatusFromPhase("active")).toBe("in_progress");
+  });
+
+  it("returns in_progress when the wizard phase is paused_detour", () => {
+    expect(wizardSectionStatusFromPhase("paused_detour")).toBe("in_progress");
+  });
+
+  it("returns in_progress when the wizard phase is paused_checkpoint", () => {
+    expect(wizardSectionStatusFromPhase("paused_checkpoint")).toBe("in_progress");
+  });
+
+  it("returns in_progress when the wizard phase is paused_scope_change", () => {
+    expect(wizardSectionStatusFromPhase("paused_scope_change")).toBe("in_progress");
+  });
+
+  it("returns complete when the wizard phase is complete", () => {
+    expect(wizardSectionStatusFromPhase("complete")).toBe("complete");
   });
 });
 

@@ -1,5 +1,6 @@
 export type SetupSectionId =
   | "overview"
+  | "beginner_wizard"
   | "frame_orientation"
   | "calibration"
   | "rc_receiver"
@@ -93,6 +94,14 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     kind: "overview",
     groupId: "workspace",
     trackable: false,
+  },
+  {
+    id: "beginner_wizard",
+    title: "Beginner wizard",
+    description: "Guided setup for frame, calibration, RC, arming, plus recommended safety basics.",
+    kind: "guided",
+    groupId: "workspace",
+    trackable: true,
   },
   {
     id: "frame_orientation",

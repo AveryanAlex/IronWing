@@ -5,8 +5,9 @@ import { setupWorkspaceTestIds } from "../../src/components/setup/setup-workspac
 /**
  * Opens the beginner setup wizard from the connected overview section.
  *
- * The overview launch button calls `wizardStore.start()` immediately, so the
- * wizard enters the `active` phase on the frame step without a separate
+ * The overview launch button selects the `beginner_wizard` section and the
+ * workspace shell's auto-start effect immediately calls `wizardStore.start()`
+ * on first entry, so the wizard lands on the frame step without a separate
  * "Start wizard" click.
  */
 export async function openSetupWizard(page: Page): Promise<void> {

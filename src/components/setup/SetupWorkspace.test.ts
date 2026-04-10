@@ -1535,8 +1535,8 @@ describe("SetupWorkspace", () => {
     expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("overview");
     expect(screen.getByTestId(setupWorkspaceTestIds.overviewSection)).toBeTruthy();
     expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain("Grouped progress stays conservative");
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewMetricPrefix}-inventory`).textContent).toContain("16 sections");
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewMetricPrefix}-progress`).textContent).toContain("2/13 confirmed");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewMetricPrefix}-inventory`).textContent).toContain("18 sections");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewMetricPrefix}-progress`).textContent).toContain("2/14 confirmed");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewMetricPrefix}-status`).textContent).toContain("unconfirmed");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`).textContent?.trim()).toBe("Unknown");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionConfidencePrefix}-frame_orientation`).textContent?.trim()).toBe("Unconfirmed");
@@ -2869,16 +2869,18 @@ describe("SetupWorkspace", () => {
     });
   });
 
-  it("keeps the wizard hidden until the operator opens it from overview", async () => {
+  it("keeps the wizard section unmounted until the operator opens it from overview", async () => {
     await renderSetupWorkspace({
       metadata: createSetupMetadata(),
     });
 
+    expect(screen.queryByTestId(setupWorkspaceTestIds.beginnerWizardSection)).toBeNull();
     expect(screen.queryByTestId(setupWorkspaceTestIds.wizardRoot)).toBeNull();
+    expect(screen.getByTestId(setupWorkspaceTestIds.overviewSection)).toBeTruthy();
     expect(screen.getByTestId(setupWorkspaceTestIds.overviewWizardLaunch)).toBeTruthy();
   });
 
-  it("mounts the wizard shell when the overview launch button is clicked", async () => {
+  it("selects the beginner_wizard section and auto-starts the wizard when the launch button is clicked", async () => {
     await renderSetupWorkspace({
       metadata: createSetupMetadata(),
     });
@@ -2886,13 +2888,18 @@ describe("SetupWorkspace", () => {
     await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.overviewWizardLaunch));
 
     await waitFor(() => {
-      expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeTruthy();
+      expect(screen.getByTestId(setupWorkspaceTestIds.beginnerWizardSection)).toBeTruthy();
     });
     expect(screen.getByTestId(setupWorkspaceTestIds.wizardRoot)).toBeTruthy();
+    expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe(
+      "beginner_wizard",
+    );
+    // Auto-start skips the idle start screen and lands on the first step.
+    expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeTruthy();
     expect(screen.queryByTestId(setupWorkspaceTestIds.overviewSection)).toBeNull();
   });
 
-  it("closes the wizard and returns to the overview when the close button is clicked", async () => {
+  it("returns to the overview section when the wizard close button is clicked", async () => {
     await renderSetupWorkspace({
       metadata: createSetupMetadata(),
     });
@@ -2907,10 +2914,11 @@ describe("SetupWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.overviewSection)).toBeTruthy();
     });
+    expect(screen.queryByTestId(setupWorkspaceTestIds.beginnerWizardSection)).toBeNull();
     expect(screen.queryByTestId(setupWorkspaceTestIds.wizardRoot)).toBeNull();
   });
 
-  it("renders the frame step surface when the wizard launches from overview", async () => {
+  it("renders the frame step surface when the wizard section is entered", async () => {
     await renderSetupWorkspace({
       metadata: createSetupMetadata(),
     });
@@ -2926,6 +2934,58 @@ describe("SetupWorkspace", () => {
     });
     expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepFrameSummary)).toBeTruthy();
     expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepFrameApply)).toBeTruthy();
+  });
+
+  it("flips the beginner_wizard section status to in_progress after entering the wizard", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.overviewWizardLaunch));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeTruthy();
+    });
+
+    // Returning to the overview section should keep the wizard's
+    // in_progress status visible in the grouped dashboard because the
+    // wizard remains mid-run (paused into detour) rather than resetting.
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardClose));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.overviewSection)).toBeTruthy();
+    });
+    const statusEl = screen.getByTestId(
+      `${setupWorkspaceTestIds.sectionStatusPrefix}-beginner_wizard`,
+    );
+    expect(statusEl.textContent).toContain("In progress");
+  });
+
+  it("pauses the wizard into the detour banner when navigating away from the wizard section", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.overviewWizardLaunch));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeTruthy();
+    });
+
+    // Navigate away via the inline nav rail, then re-enter the wizard
+    // section. Re-entry does NOT auto-start again because the phase is
+    // `paused_detour`, so the paused banner must be the visible state.
+    await fireEvent.click(
+      screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`),
+    );
+    await waitFor(() => {
+      expect(screen.queryByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeNull();
+    });
+    await fireEvent.click(
+      screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-beginner_wizard`),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.wizardPausedDetour)).toBeTruthy();
+    });
+    expect(screen.queryByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeNull();
   });
 
   it("pauses the wizard into the scope banner when the session envelope changes family", async () => {

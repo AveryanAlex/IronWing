@@ -156,8 +156,8 @@ test.describe("setup workspace proof", () => {
 
     await openConnectedSetupWorkspace(page);
 
-    await expect(setupOverviewMetricLocator(page, "inventory")).toContainText("16 sections");
-    await expect(setupOverviewMetricLocator(page, "progress")).toContainText(/\/13 confirmed/);
+    await expect(setupOverviewMetricLocator(page, "inventory")).toContainText("18 sections");
+    await expect(setupOverviewMetricLocator(page, "progress")).toContainText(/\/14 confirmed/);
     await expect(setupOverviewDocLinkLocator(page, "hardware")).toHaveAttribute(
       "href",
       /common-positioning-landing-page/,
@@ -219,7 +219,7 @@ test.describe("setup workspace proof", () => {
 
     await applyShellViewport(page, "radiomaster");
     await setupNavLocator(page, "overview").click();
-    await expect(setupOverviewMetricLocator(page, "inventory")).toContainText("16 sections");
+    await expect(setupOverviewMetricLocator(page, "inventory")).toContainText("18 sections");
     await expect(setupOverviewGroupCountLocator(page, "hardware")).toContainText("7 sections");
     await expect(setupOverviewDocLinkLocator(page, "hardware")).toBeVisible();
   });

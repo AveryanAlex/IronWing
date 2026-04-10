@@ -277,6 +277,7 @@ describe("setup workspace store", () => {
     expect(state.selectedSectionId).toBe("overview");
     expect(state.sections.map((section) => section.id)).toEqual([
       "overview",
+      "beginner_wizard",
       "frame_orientation",
       "calibration",
       "gps",
@@ -295,7 +296,7 @@ describe("setup workspace store", () => {
       "peripherals",
       "full_parameters",
     ]);
-    expect(state.progressText).toBe("1/13 confirmed");
+    expect(state.progressText).toBe("1/14 confirmed");
     expect(state.sectionStatuses.frame_orientation).toBe("unknown");
     expect(frameSection?.statusText).toBe("Unknown");
     expect(frameSection?.confidenceText).toBe("Unconfirmed");
@@ -552,5 +553,78 @@ describe("setup workspace store", () => {
     expect(nextScopeState.checkpoint.resumeSectionId).toBeNull();
     expect(nextScopeState.selectedSectionId).toBe("overview");
     expect(nextScopeState.checkpoint.detailText).toContain("review current values");
+  });
+
+  it("exposes the beginner_wizard section in the workspace group with trackable progress", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState());
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    const state = get(store);
+    const wizardSection = readSection(state, "beginner_wizard");
+    const workspaceGroup = readGroup(state, "workspace");
+
+    expect(wizardSection).not.toBeNull();
+    expect(wizardSection?.trackable).toBe(true);
+    expect(workspaceGroup?.sections.map((section) => section.id)).toContain("beginner_wizard");
+    expect(state.sectionStatuses.beginner_wizard).toBe("not_started");
+  });
+
+  it("setWizardPhase('active') flips the beginner_wizard status to in_progress", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState());
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    store.setWizardPhase("active");
+
+    const state = get(store);
+    expect(state.sectionStatuses.beginner_wizard).toBe("in_progress");
+  });
+
+  it("setWizardPhase('complete') flips the beginner_wizard status to complete", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState());
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    store.setWizardPhase("complete");
+
+    const state = get(store);
+    expect(state.sectionStatuses.beginner_wizard).toBe("complete");
+  });
+
+  it("setWizardPhase('idle') flips the beginner_wizard status back to not_started", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState());
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    store.setWizardPhase("active");
+    expect(get(store).sectionStatuses.beginner_wizard).toBe("in_progress");
+
+    store.setWizardPhase("idle");
+    expect(get(store).sectionStatuses.beginner_wizard).toBe("not_started");
+  });
+
+  it("setWizardPhase(null) flips the beginner_wizard status back to not_started", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState());
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    store.setWizardPhase("active");
+    store.setWizardPhase(null);
+
+    expect(get(store).sectionStatuses.beginner_wizard).toBe("not_started");
+  });
+
+  it("beginner_wizard contributes to overall progress when the wizard completes", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState());
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    const baselineProgress = get(store).progress.completed;
+
+    store.setWizardPhase("complete");
+
+    const completedProgress = get(store).progress.completed;
+    expect(completedProgress).toBe(baselineProgress + 1);
   });
 });

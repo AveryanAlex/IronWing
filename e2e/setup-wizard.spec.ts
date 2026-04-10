@@ -271,10 +271,12 @@ test.describe("setup wizard proof", () => {
 
     await page.getByTestId(setupWorkspaceTestIds.wizardRestart).click();
 
-    // Restart clears the wizard store back to idle. The shell still renders
-    // the wizard root (wizardVisible stays true) and the idle branch surfaces
-    // the start button again.
-    await expect(page.getByTestId(setupWorkspaceTestIds.wizardStart)).toBeVisible();
+    // Restart clears the wizard store back to idle. The beginner wizard
+    // section stays selected, so the workspace shell's auto-start effect
+    // immediately kicks the wizard back into the active phase for the new
+    // vehicle scope and lands the operator on the frame step body without
+    // re-surfacing the idle start button.
+    await expect(wizardStepBodyLocator(page, "frame_orientation")).toBeVisible();
   });
 
   test("detour round-trip pauses, navigates away, and resumes from overview", async ({

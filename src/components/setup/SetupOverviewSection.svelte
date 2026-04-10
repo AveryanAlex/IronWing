@@ -6,11 +6,9 @@ import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 let {
   view,
   onSelect,
-  onSelectWizard,
 }: {
   view: SetupWorkspaceStoreState;
   onSelect: (sectionId: string) => void;
-  onSelectWizard: () => void;
 } = $props();
 
 const overviewDocs = [
@@ -278,7 +276,7 @@ function groupTone(blocked: number, progressText: string): string {
         <button
           class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
           data-testid={setupWorkspaceTestIds.overviewWizardLaunch}
-          onclick={onSelectWizard}
+          onclick={() => onSelect("beginner_wizard")}
           type="button"
         >
           Start beginner wizard

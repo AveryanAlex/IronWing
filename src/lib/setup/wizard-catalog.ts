@@ -1,4 +1,5 @@
-import type { SetupSectionId } from "../setup-sections";
+import type { SectionStatus, SetupSectionId } from "../setup-sections";
+import type { WizardPhase } from "../stores/setup-wizard";
 
 export type WizardStepId =
   | "frame_orientation"
@@ -144,4 +145,27 @@ export function scopeFamilyKey(envelope: WizardScopeEnvelope | null): string | n
     return null;
   }
   return `${envelope.session_id}:${envelope.source_kind}:${envelope.seek_epoch}`;
+}
+
+/**
+ * Maps the wizard store's phase to the matching beginner_wizard section
+ * status.
+ *
+ * The workspace store overlays this on top of the derived section status map
+ * so the grouped progress dashboard can reflect wizard progress the same way
+ * it reflects any other tracked section. `idle` (and the absence of a phase)
+ * count as "not_started" because the wizard has not been launched for the
+ * current scope; any paused variant is still "in_progress" because the user
+ * remains mid-wizard; only the terminal `complete` phase flips to "complete".
+ */
+export function wizardSectionStatusFromPhase(
+  phase: WizardPhase | null | undefined,
+): SectionStatus {
+  if (phase == null || phase === "idle") {
+    return "not_started";
+  }
+  if (phase === "complete") {
+    return "complete";
+  }
+  return "in_progress";
 }

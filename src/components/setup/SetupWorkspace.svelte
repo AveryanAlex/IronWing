@@ -1,5 +1,5 @@
 <script lang="ts">
-import { fromStore, get } from "svelte/store";
+import { fromStore } from "svelte/store";
 
 import {
   getSetupWorkspaceStoreContext,
@@ -7,6 +7,7 @@ import {
   getShellChromeStoreContext,
 } from "../../app/shell/runtime-context";
 import { createSetupWizardStore } from "../../lib/stores/setup-wizard";
+import SetupBeginnerWizardSection from "./SetupBeginnerWizardSection.svelte";
 import SetupCalibrationSection from "./SetupCalibrationSection.svelte";
 import SetupCheckpointBanner from "./SetupCheckpointBanner.svelte";
 import SetupBatteryMonitorSection from "./SetupBatteryMonitorSection.svelte";
@@ -27,16 +28,6 @@ import SetupRtlReturnSection from "./SetupRtlReturnSection.svelte";
 import SetupSerialPortsSection from "./SetupSerialPortsSection.svelte";
 import SetupServoOutputsSection from "./SetupServoOutputsSection.svelte";
 import SetupWorkspaceSectionNav from "./SetupWorkspaceSectionNav.svelte";
-import SetupWizardShell from "./wizard/SetupWizardShell.svelte";
-import SetupWizardArmingStep from "./wizard/SetupWizardArmingStep.svelte";
-import SetupWizardBatteryStep from "./wizard/SetupWizardBatteryStep.svelte";
-import SetupWizardCalibrationStep from "./wizard/SetupWizardCalibrationStep.svelte";
-import SetupWizardFailsafeStep from "./wizard/SetupWizardFailsafeStep.svelte";
-import SetupWizardFlightModesStep from "./wizard/SetupWizardFlightModesStep.svelte";
-import SetupWizardFrameStep from "./wizard/SetupWizardFrameStep.svelte";
-import SetupWizardGpsStep from "./wizard/SetupWizardGpsStep.svelte";
-import SetupWizardInitialParamsStep from "./wizard/SetupWizardInitialParamsStep.svelte";
-import SetupWizardRcStep from "./wizard/SetupWizardRcStep.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 const store = getSetupWorkspaceStoreContext();
@@ -73,13 +64,12 @@ const hasRealLocalStorage =
 const wizardStore = createSetupWizardStore({
   storage: hasRealLocalStorage ? localStorage : undefined,
 });
+const wizardView = fromStore(wizardStore);
 
 let view = $derived(viewStore.current);
 let selectedSection = $derived(
   view.sections.find((section) => section.id === view.selectedSectionId) ?? view.sections[0] ?? null,
 );
-
-let wizardVisible = $state(false);
 
 $effect(() => {
   const gpsStatus = view.sectionStatuses.gps;
@@ -97,13 +87,33 @@ $effect(() => {
   });
 });
 
+// Feed the live wizard phase back into the workspace store so the grouped
+// progress dashboard reflects wizard state the same way it reflects any
+// other tracked section.
+$effect(() => {
+  store.setWizardPhase(wizardView.current.phase);
+});
+
+// Auto-start the wizard the first time the operator enters the section.
+// The store's `start()` is a no-op unless the phase is currently idle, so
+// returning to the section mid-run (resume from detour, re-enter from a
+// different section) preserves the existing progress.
+$effect(() => {
+  if (
+    view.selectedSectionId === "beginner_wizard" &&
+    wizardView.current.phase === "idle"
+  ) {
+    wizardStore.start();
+  }
+});
+
 function selectSection(sectionId: string) {
-  if (wizardVisible) {
-    const wizardPhase = get(wizardStore).phase;
-    if (wizardPhase === "active") {
-      wizardStore.pause("detour");
-    }
-    wizardVisible = false;
+  if (
+    view.selectedSectionId === "beginner_wizard" &&
+    sectionId !== "beginner_wizard" &&
+    wizardView.current.phase === "active"
+  ) {
+    wizardStore.pause("detour");
   }
   store.selectSection(sectionId);
 }
@@ -111,15 +121,6 @@ function selectSection(sectionId: string) {
 function selectSectionFromDrawer(sectionId: string) {
   selectSection(sectionId);
   closeSectionDrawer();
-}
-
-function showWizard() {
-  wizardVisible = true;
-  wizardStore.start();
-}
-
-function hideWizard() {
-  wizardVisible = false;
 }
 
 function clearCheckpoint() {
@@ -234,39 +235,10 @@ function clearCheckpoint() {
         </div>
       {/if}
 
-      {#if wizardVisible}
-        <SetupWizardShell
-          store={wizardStore}
-          {view}
-          onSelectSection={selectSection}
-          onClose={hideWizard}
-        >
-          {#snippet children({ step, advance })}
-            <div data-testid={`${setupWorkspaceTestIds.wizardStepBodyPrefix}-${step.id}`}>
-              {#if step.id === "frame_orientation"}
-                <SetupWizardFrameStep {view} onAdvance={advance} />
-              {:else if step.id === "calibration"}
-                <SetupWizardCalibrationStep {view} onAdvance={advance} />
-              {:else if step.id === "rc_receiver"}
-                <SetupWizardRcStep {view} onAdvance={advance} />
-              {:else if step.id === "arming"}
-                <SetupWizardArmingStep {view} onAdvance={advance} />
-              {:else if step.id === "gps"}
-                <SetupWizardGpsStep {view} onAdvance={advance} />
-              {:else if step.id === "battery_monitor"}
-                <SetupWizardBatteryStep {view} onAdvance={advance} />
-              {:else if step.id === "failsafe"}
-                <SetupWizardFailsafeStep {view} onAdvance={advance} />
-              {:else if step.id === "flight_modes"}
-                <SetupWizardFlightModesStep {view} onAdvance={advance} />
-              {:else if step.id === "initial_params"}
-                <SetupWizardInitialParamsStep {view} onAdvance={advance} />
-              {/if}
-            </div>
-          {/snippet}
-        </SetupWizardShell>
-      {:else if view.selectedSectionId === "overview"}
-        <SetupOverviewSection {view} onSelect={selectSection} onSelectWizard={showWizard} />
+      {#if view.selectedSectionId === "overview"}
+        <SetupOverviewSection {view} onSelect={selectSection} />
+      {:else if view.selectedSectionId === "beginner_wizard"}
+        <SetupBeginnerWizardSection {view} {wizardStore} onSelectSection={selectSection} />
       {:else if view.selectedSectionId === "frame_orientation" && selectedSection}
         <SetupFrameOrientationSection
           checkpoint={view.checkpoint}
