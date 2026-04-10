@@ -17,6 +17,8 @@ result
 
 .sisyphus/
 docs/plans/
+.agents/plans/
+.agents/specs/
 
 test-results/
 playwright-report/
