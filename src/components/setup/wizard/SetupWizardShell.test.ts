@@ -332,4 +332,183 @@ describe("SetupWizardShell", () => {
     await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardClose));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("scope-change restart wipes the persisted blob for the previous family", async () => {
+    const storage = createMemoryStorage();
+    const store = createSetupWizardStore({ storage });
+    store.updateFromWorkspace(createSnapshot());
+    render(SetupWizardShellTestHost, { store, view: makeView() });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardStart));
+    const oldFamilyKey = get(store).scopeFamilyKey;
+    expect(oldFamilyKey).toBe("session-1:live:0");
+    expect(storage.data.get("mpng_setup_wizard_session-1:live:0")).toBeTruthy();
+
+    store.updateFromWorkspace(
+      createSnapshot({
+        activeEnvelope: {
+          session_id: "session-2",
+          source_kind: "live",
+          seek_epoch: 0,
+          reset_revision: 0,
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.wizardPausedScope)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardRestart));
+
+    expect(get(store).phase).toBe("idle");
+    expect(storage.data.has("mpng_setup_wizard_session-1:live:0")).toBe(false);
+  });
+
+  it("checkpoint pause transitions back to active when the workspace reports resume_complete", async () => {
+    const store = primeActiveStore();
+    render(SetupWizardShellTestHost, { store, view: makeView() });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardStart));
+
+    store.updateFromWorkspace(createSnapshot({ checkpointPhase: "resume_pending" }));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.wizardPausedCheckpoint)).toBeTruthy();
+    });
+    expect(screen.queryByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeNull();
+
+    store.updateFromWorkspace(createSnapshot({ checkpointPhase: "resume_complete" }));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeTruthy();
+    });
+    expect(get(store).phase).toBe("active");
+    expect(screen.queryByTestId(setupWorkspaceTestIds.wizardPausedCheckpoint)).toBeNull();
+  });
+
+  it("paused_detour banner names the current step in the resume hint", async () => {
+    const store = primeActiveStore();
+    render(SetupWizardShellTestHost, { store, view: makeView() });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardStart));
+    store.pause("detour");
+
+    const banner = await waitFor(() =>
+      screen.getByTestId(setupWorkspaceTestIds.wizardPausedDetour),
+    );
+    expect(banner.textContent).toContain("Frame & orientation");
+    expect(banner.textContent).toContain("Resume");
+  });
+
+  it("handoff summary lists configured, skipped, and still-required steps with titles", async () => {
+    const store = primeActiveStore();
+    render(SetupWizardShellTestHost, { store, view: makeView() });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardStart));
+
+    // Mix of statuses:
+    // - frame_orientation advances via wizard (done_by_wizard)
+    // - calibration completes out-of-band (done_by_detour)
+    // - rc_receiver advances via wizard (done_by_wizard)
+    // - arming advances via wizard (done_by_wizard)
+    // - gps (recommended) skipped
+    // - battery_monitor advances (done_by_wizard)
+    // - failsafe skipped
+    // - flight_modes skipped
+    // - initial_params skipped
+    store.markStepComplete("calibration");
+    store.advance(); // frame_orientation -> done_by_wizard, advances past calibration (already done_by_detour)
+    // After advance, the next pending step is rc_receiver (calibration was not pending).
+    store.advance(); // rc_receiver -> done_by_wizard
+    store.advance(); // arming -> done_by_wizard
+    store.skip(); // gps -> skipped
+    store.advance(); // battery_monitor -> done_by_wizard
+    store.skip(); // failsafe -> skipped
+    store.skip(); // flight_modes -> skipped
+    store.skip(); // initial_params -> skipped
+
+    expect(get(store).phase).toBe("complete");
+    const handoff = await waitFor(() => screen.getByTestId(setupWorkspaceTestIds.wizardHandoff));
+
+    // Text from all three sub-lists; assertions below target individual rows.
+    const handoffText = handoff.textContent ?? "";
+    expect(handoffText).toContain("Frame & orientation");
+    expect(handoffText).toContain("Sensor calibration");
+    expect(handoffText).toContain("RC receiver");
+    expect(handoffText).toContain("Arming checks");
+    expect(handoffText).toContain("Battery monitor");
+    expect(handoffText).toContain("GPS");
+    expect(handoffText).toContain("Failsafe");
+    expect(handoffText).toContain("Flight modes");
+    expect(handoffText).toContain("Initial parameters");
+
+    // Each row has a matching title span with a known test id.
+    const frameTitle = screen.getByTestId(
+      `${setupWorkspaceTestIds.wizardStepTitlePrefix}-frame_orientation`,
+    );
+    expect(frameTitle.textContent?.trim()).toBe("Frame & orientation");
+    const calTitle = screen.getByTestId(
+      `${setupWorkspaceTestIds.wizardStepTitlePrefix}-calibration`,
+    );
+    expect(calTitle.textContent?.trim()).toBe("Sensor calibration");
+    const gpsTitle = screen.getByTestId(
+      `${setupWorkspaceTestIds.wizardStepTitlePrefix}-gps`,
+    );
+    expect(gpsTitle.textContent?.trim()).toBe("GPS");
+  });
+
+  it("handoff jump button calls onSelectSection and onClose for the clicked step", async () => {
+    const store = primeActiveStore();
+    const onSelectSection = vi.fn();
+    const onClose = vi.fn();
+    render(SetupWizardShellTestHost, { store, view: makeView(), onSelectSection, onClose });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardStart));
+    store.advance();
+    store.advance();
+    store.advance();
+    store.advance();
+    store.skip();
+    store.skip();
+    store.skip();
+    store.skip();
+    store.skip();
+
+    expect(get(store).phase).toBe("complete");
+    await waitFor(() =>
+      screen.getByTestId(setupWorkspaceTestIds.wizardHandoff),
+    );
+
+    await fireEvent.click(
+      screen.getByTestId(
+        `${setupWorkspaceTestIds.wizardHandoffJumpPrefix}-frame_orientation`,
+      ),
+    );
+
+    expect(onSelectSection).toHaveBeenCalledWith("frame_orientation");
+    expect(onClose).toHaveBeenCalled();
+    const selectOrder = onSelectSection.mock.invocationCallOrder[0] ?? 0;
+    const closeOrder = onClose.mock.invocationCallOrder[0] ?? 0;
+    expect(selectOrder).toBeLessThan(closeOrder);
+  });
 });
+
+function createMemoryStorage(): {
+  getItem: (key: string) => string | null;
+  setItem: (key: string, value: string) => void;
+  removeItem: (key: string) => void;
+  data: Map<string, string>;
+} {
+  const data = new Map<string, string>();
+  return {
+    data,
+    getItem(key) {
+      return data.has(key) ? data.get(key)! : null;
+    },
+    setItem(key, value) {
+      data.set(key, value);
+    },
+    removeItem(key) {
+      data.delete(key);
+    },
+  };
+}

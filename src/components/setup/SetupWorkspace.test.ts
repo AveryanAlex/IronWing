@@ -2924,4 +2924,31 @@ describe("SetupWorkspace", () => {
     expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepFrameSummary)).toBeTruthy();
     expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepFrameApply)).toBeTruthy();
   });
+
+  it("pauses the wizard into the scope banner when the session envelope changes family", async () => {
+    const { sessionStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.overviewWizardLaunch));
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeTruthy();
+    });
+
+    sessionStore.set(
+      createSessionState({
+        activeEnvelope: {
+          session_id: "session-2",
+          source_kind: "live",
+          seek_epoch: 0,
+          reset_revision: 0,
+        },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.wizardPausedScope)).toBeTruthy();
+    });
+    expect(screen.queryByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeNull();
+  });
 });

@@ -70,7 +70,41 @@ function handleAcknowledge() {
   store.acknowledgeHandoff();
   onClose();
 }
+function handleHandoffJump(sectionId: string) {
+  onSelectSection(sectionId);
+  onClose();
+}
+
+// Resolves a wizard step id to its catalog title + sectionId so the handoff
+// summary lists can deep-link to the expert section without the consumer
+// needing to build its own lookup map. The snapshot already carries all nine
+// definitions regardless of current status so no fallback is needed.
+function stepById(id: string): WizardStepSnapshot | null {
+  return wizardState.steps.find((step) => step.id === id) ?? null;
+}
 </script>
+
+{#snippet handoffRow(step: WizardStepSnapshot)}
+  <li
+    class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-bg-primary/50 px-2 py-1"
+    data-testid={`${setupWorkspaceTestIds.wizardHandoffRowPrefix}-${step.id}`}
+  >
+    <span
+      class="text-xs font-semibold text-text-primary"
+      data-testid={`${setupWorkspaceTestIds.wizardStepTitlePrefix}-${step.id}`}
+    >
+      {step.title}
+    </span>
+    <button
+      class="rounded-full border border-border bg-bg-primary px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.14em] text-text-secondary hover:border-accent hover:text-accent"
+      data-testid={`${setupWorkspaceTestIds.wizardHandoffJumpPrefix}-${step.id}`}
+      onclick={() => handleHandoffJump(step.sectionId)}
+      type="button"
+    >
+      Jump to expert
+    </button>
+  </li>
+{/snippet}
 
 <section
   class="rounded-2xl border border-border bg-bg-secondary/60 p-4"
@@ -204,8 +238,14 @@ function handleAcknowledge() {
       data-testid={setupWorkspaceTestIds.wizardPausedDetour}
     >
       <p>
-        Wizard paused while you explore the expert section. Click resume when you're ready to
-        continue.
+        {#if currentStep}
+          Your next step is <strong class="text-text-primary">{currentStep.title}</strong>. Open the
+          expert section to make changes, then come back and click Resume. If the status flips to
+          complete while you're away, we'll auto-advance.
+        {:else}
+          Wizard paused while you explore the expert section. Click Resume when you're ready to
+          continue.
+        {/if}
       </p>
       <div class="mt-3 flex flex-wrap gap-2">
         <button
@@ -264,9 +304,10 @@ function handleAcknowledge() {
             </p>
             <ul class="mt-1 space-y-1">
               {#each wizardState.handoffSummary.configuredSteps as stepId (stepId)}
-                <li data-testid={`${setupWorkspaceTestIds.wizardHandoffRowPrefix}-${stepId}`}>
-                  {stepId}
-                </li>
+                {@const step = stepById(stepId)}
+                {#if step}
+                  {@render handoffRow(step)}
+                {/if}
               {/each}
             </ul>
           </div>
@@ -277,9 +318,10 @@ function handleAcknowledge() {
               </p>
               <ul class="mt-1 space-y-1">
                 {#each wizardState.handoffSummary.skippedSteps as stepId (stepId)}
-                  <li data-testid={`${setupWorkspaceTestIds.wizardHandoffRowPrefix}-${stepId}`}>
-                    {stepId}
-                  </li>
+                  {@const step = stepById(stepId)}
+                  {#if step}
+                    {@render handoffRow(step)}
+                  {/if}
                 {/each}
               </ul>
             </div>
@@ -291,9 +333,10 @@ function handleAcknowledge() {
               </p>
               <ul class="mt-1 space-y-1">
                 {#each wizardState.handoffSummary.remainingRequired as stepId (stepId)}
-                  <li data-testid={`${setupWorkspaceTestIds.wizardHandoffRowPrefix}-${stepId}`}>
-                    {stepId}
-                  </li>
+                  {@const step = stepById(stepId)}
+                  {#if step}
+                    {@render handoffRow(step)}
+                  {/if}
                 {/each}
               </ul>
             </div>

@@ -263,6 +263,8 @@ export const setupWorkspaceTestIds = {
   wizardRestart: "setup-workspace-wizard-restart",
   wizardHandoff: "setup-workspace-wizard-handoff",
   wizardHandoffRowPrefix: "setup-workspace-wizard-handoff-row",
+  wizardHandoffJumpPrefix: "setup-workspace-wizard-handoff-jump",
+  wizardStepTitlePrefix: "setup-workspace-wizard-handoff-title",
   wizardHandoffAcknowledge: "setup-workspace-wizard-handoff-acknowledge",
   wizardStepBodyPrefix: "setup-workspace-wizard-step-body",
   wizardStepFrameApply: "setup-workspace-wizard-step-frame-apply",
