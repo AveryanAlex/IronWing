@@ -122,6 +122,7 @@
               rustToolchain
             ]
             ++ lib.optionals pkgs.stdenv.isLinux linuxDeps
+            ++ lib.optional pkgs.stdenv.isLinux pkgs.xvfb-run
             ++ lib.optionals pkgs.stdenv.isDarwin darwinDeps;
 
           ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
