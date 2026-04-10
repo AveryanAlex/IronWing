@@ -198,6 +198,7 @@ Current status:
 - M4: complete (TLOG/BIN recording, import, indexing, timeline playback, charts, map replay, CSV export)
 - M5: complete (guided setup wizard, compass calibration, motor test, pre-arm assistant, sensor health)
 - M6: complete (firmware install/update and DFU recovery with catalog browsing, extf serial support)
+- M007: complete (section-first Setup completeness, beginner wizard as orchestration over real actions, responsive closeout; see `.agents/plans/M007/SUMMARY.md`)
 
 ## Completed Milestones
 
@@ -237,6 +238,15 @@ Current status:
 - Firmware session exclusivity guard (mutually exclusive with live vehicle connection)
 - 100+ Rust fixture tests and 60+ Vitest tests covering both paths end-to-end without hardware
 - Deferred: automatic parameter restore/migration, Android flashing, `.px4`/`.hex`/`.dfu` formats, DFU as normal install path, real hardware validation matrix
+
+### M007 - Section-First Setup Completeness + Beginner Wizard + Responsive Closeout [COMPLETE]
+- Section-first Setup workspace with grouped expert catalog and scope-keyed configuration persistence across frame/orientation, calibration, motors & ESC, servo outputs, RC receiver, GPS, battery monitor, serial ports, peripherals, flight modes, failsafe, RTL/return, geofence, arming, initial params, PID tuning, and full parameters.
+- Dashboard-first SetupOverview with truthful vehicle profile, configuration facts, and section statuses feeding both expert navigation and wizard tiering.
+- Firmware workspace ported onto the new shell-scoped service/store seam with serial install, recovery via DFU, mock file-picker flows, and cross-tier responsive guardrails.
+- Beginner setup wizard layered over the section catalog as orchestration only — wizard routes every edit through `paramsStore.stageParameterEdit` + `applyStagedEdits` and real `src/calibration.ts` commands. Required tier: frame, calibration, RC, arming. Recommended tier: GPS, battery, failsafe, flight modes, initial params (GPS and battery upgrade to required when `configuration_facts` says they are unconfigured).
+- Scope-family persistence keyed by `session_id:source_kind:seek_epoch` so wizard progress survives restart only when the next session matches the same family. Reboot checkpoints, detour inference, and "Jump to expert" handoff summary are built on the existing workspace store machinery.
+- Phone section drawer + wizard-as-section integration close out the responsive Setup + Firmware IA across desktop, Radiomaster, and phone presets. Native desktop smoke lane stays anchored on the expert section path; wizard coverage is mocked-browser only.
+- Milestone summary and verification ladder evidence: see `.agents/plans/M007/SUMMARY.md`.
 
 ## M7 - Release Hardening
 - Reliability hardening, crash recovery, diagnostics bundle
