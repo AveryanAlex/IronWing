@@ -7,6 +7,7 @@ import FirmwareWorkspace from "../../components/firmware/FirmwareWorkspace.svelt
 import HudWorkspace from "../../components/hud/HudWorkspace.svelte";
 import MissionWorkspace from "../../components/mission/MissionWorkspace.svelte";
 import SetupWorkspace from "../../components/setup/SetupWorkspace.svelte";
+import TelemetryWorkspace from "../../components/telemetry/TelemetryWorkspace.svelte";
 import { runtimeTestIds } from "../../lib/stores/runtime";
 import AppShellPlaceholderWorkspace from "./AppShellPlaceholderWorkspace.svelte";
 import AppShellHeader from "./AppShellHeader.svelte";
@@ -158,10 +159,7 @@ onDestroy(() => {
         {:else}
           <div class="app-shell-main-panel">
             {#if activeWorkspace === "telemetry"}
-              <AppShellPlaceholderWorkspace
-                description="Telemetry charts and channels will land here in the active Svelte shell."
-                title="Telemetry"
-              />
+              <TelemetryWorkspace />
             {:else if activeWorkspace === "hud"}
               <HudWorkspace />
             {:else if activeWorkspace === "mission"}
