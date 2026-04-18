@@ -33,7 +33,7 @@ function itemTone(item: SetupBitmaskChecklistItem): string {
 }
 </script>
 
-<div class="space-y-3 rounded-2xl border border-border bg-bg-primary/80 p-4">
+<div class="space-y-3 rounded-lg border border-border bg-bg-primary/80 p-3">
   {#if title}
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{title}</p>
@@ -44,7 +44,7 @@ function itemTone(item: SetupBitmaskChecklistItem): string {
   <div class="grid gap-2 md:grid-cols-2">
     {#each items as item (item.key)}
       <button
-        class={`rounded-2xl border px-3 py-3 text-left transition ${itemTone(item)} ${onToggle && !disabled && item.supported !== false ? "hover:border-accent hover:text-text-primary" : "cursor-default"}`}
+        class={`rounded-lg border px-3 py-3 text-left transition ${itemTone(item)} ${onToggle && !disabled && item.supported !== false ? "hover:border-accent hover:text-text-primary" : "cursor-default"}`}
         disabled={!onToggle || disabled || item.supported === false}
         onclick={() => onToggle?.(item)}
         type="button"

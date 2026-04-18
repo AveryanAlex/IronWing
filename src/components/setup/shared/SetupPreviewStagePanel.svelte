@@ -35,7 +35,7 @@ let resolvedStageLabel = $derived(stageLabel ?? `Stage ${changeCount} Change${ch
 let resolvedStageDisabled = $derived(stageDisabled || changeCount === 0);
 </script>
 
-<div class="rounded-2xl border border-accent/20 bg-accent/5 p-4">
+<div class="rounded-lg border border-accent/20 bg-accent/5 p-3">
   <div class="mb-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
     {resolvedHeader}
   </div>
@@ -73,7 +73,7 @@ let resolvedStageDisabled = $derived(stageDisabled || changeCount === 0);
 
   <div class="mt-4 flex items-center gap-2">
     <button
-      class="rounded-full bg-accent/15 px-4 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-40"
+      class="rounded-md bg-accent/15 px-4 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-40"
       disabled={resolvedStageDisabled}
       onclick={onStage}
       type="button"
@@ -81,7 +81,7 @@ let resolvedStageDisabled = $derived(stageDisabled || changeCount === 0);
       {resolvedStageLabel}
     </button>
     <button
-      class="rounded-full px-4 py-2 text-xs font-medium text-text-muted transition-colors hover:text-text-secondary"
+      class="rounded-md px-4 py-2 text-xs font-medium text-text-muted transition-colors hover:text-text-secondary"
       onclick={onCancel}
       type="button"
     >

@@ -79,7 +79,7 @@ function handleKeydown(event: KeyboardEvent) {
         </div>
 
         <button
-          class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent/40 hover:text-accent"
+          class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent/40 hover:text-accent"
           data-testid={closeTestId}
           onclick={onClose}
           type="button"

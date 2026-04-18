@@ -101,7 +101,7 @@ function resolvePrimaryGpsTypeItem(
   </p>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-2"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-2"
     data-testid={setupWorkspaceTestIds.wizardStepGpsSummary}
   >
     {#if failureMessage}
@@ -121,7 +121,7 @@ function resolvePrimaryGpsTypeItem(
     </div>
   </div>
 
-  <p class="rounded-2xl border border-border bg-bg-primary/60 px-4 py-3 text-xs text-text-secondary">
+  <p class="rounded-lg border border-border bg-bg-primary/60 px-4 py-3 text-xs text-text-secondary">
     Need a specific driver or GNSS constellation mask? Open the GPS section
     from the wizard footer for the expert layout.
   </p>

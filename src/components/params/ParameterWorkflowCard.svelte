@@ -107,7 +107,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
 </script>
 
 <article
-  class="rounded-[24px] border border-border bg-bg-primary/70 p-4"
+  class="rounded-lg border border-border bg-bg-primary/70 p-3"
   data-testid={`${parameterWorkspaceTestIds.workflowCardPrefix}-${card.id}`}
 >
   <div class="flex flex-wrap items-start justify-between gap-3">
@@ -147,7 +147,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
       <label class="block">
         <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Battery cells</span>
         <input
-          class="mt-2 w-full rounded-2xl border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
+          class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
           data-testid={`${parameterWorkspaceTestIds.workflowInputPrefix}-${card.id}-cells`}
           min="1"
           oninput={(event) => batteryControls.onCellCountInput((event.currentTarget as HTMLInputElement).value)}
@@ -161,7 +161,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
       <label class="block">
         <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Chemistry</span>
         <select
-          class="mt-2 w-full rounded-2xl border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition focus:border-accent"
+          class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition focus:border-accent"
           data-testid={`${parameterWorkspaceTestIds.workflowInputPrefix}-${card.id}-chemistry`}
           onchange={(event) => batteryControls.onChemistryChange(Number((event.currentTarget as HTMLSelectElement).value))}
           value={String(batteryControls.chemistryIndex)}
@@ -179,7 +179,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
       <label class="block">
         <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Prop size (in)</span>
         <input
-          class="mt-2 w-full rounded-2xl border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
+          class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
           data-testid={`${parameterWorkspaceTestIds.workflowInputPrefix}-${card.id}-prop`}
           min="1"
           oninput={(event) => flightControls.onPropInchesInput((event.currentTarget as HTMLInputElement).value)}
@@ -193,7 +193,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
   {/if}
 
   {#if validationMessage}
-    <div class="mt-4 rounded-2xl border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-warning">
+    <div class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-warning">
       <p class="font-medium">{validationMessage}</p>
       <p class="mt-1 text-xs uppercase tracking-[0.16em] text-warning/80">
         Showing the last valid recommendation set until the inputs are corrected.
@@ -203,12 +203,12 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
 
   {#if card.status !== "ready"}
     <div
-      class="mt-4 rounded-2xl border border-warning/30 bg-warning/10 px-3 py-3 text-sm text-warning"
+      class="mt-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-3 text-sm text-warning"
       data-testid={`${parameterWorkspaceTestIds.workflowDisabledPrefix}-${card.id}`}
     >
       <p>{card.disabledMessage}</p>
       <button
-        class="mt-3 rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="mt-3 rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={`${parameterWorkspaceTestIds.workflowOpenAdvancedPrefix}-${card.id}`}
         onclick={() => onOpenAdvanced(card.id)}
         type="button"
@@ -220,7 +220,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
     <div class="mt-4 space-y-3">
       {#each card.recommendations as recommendation (recommendation.name)}
         <div
-          class="rounded-2xl border border-border bg-bg-secondary/70 p-3"
+          class="rounded-lg border border-border bg-bg-secondary/70 p-3"
           data-testid={`${parameterWorkspaceTestIds.workflowRecommendationPrefix}-${card.id}-${recommendation.name}`}
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
@@ -250,7 +250,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
             <div>
               <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Current</p>
               <p
-                class="mt-2 rounded-2xl border border-border bg-bg-primary/80 px-3 py-2 text-sm font-mono text-text-secondary"
+                class="mt-2 rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm font-mono text-text-secondary"
                 data-testid={`${parameterWorkspaceTestIds.workflowCurrentPrefix}-${card.id}-${recommendation.name}`}
               >
                 {valueText(recommendation.currentValueText, recommendation.currentValueLabel, recommendation.units)}
@@ -259,7 +259,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
             <div>
               <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Proposed</p>
               <p
-                class={`mt-2 rounded-2xl border px-3 py-2 text-sm font-mono ${recommendation.changed ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-primary/80 text-text-secondary"}`}
+                class={`mt-2 rounded-lg border px-3 py-2 text-sm font-mono ${recommendation.changed ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-primary/80 text-text-secondary"}`}
                 data-testid={`${parameterWorkspaceTestIds.workflowProposedPrefix}-${card.id}-${recommendation.name}`}
               >
                 {valueText(recommendation.proposedValueText, recommendation.proposedValueLabel, recommendation.units)}
@@ -285,7 +285,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
       </p>
       <div class="flex flex-wrap items-center gap-2">
         <button
-          class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
           data-testid={`${parameterWorkspaceTestIds.workflowOpenAdvancedPrefix}-${card.id}`}
           onclick={() => onOpenAdvanced(card.id)}
           type="button"
@@ -293,7 +293,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
           Inspect raw parameters
         </button>
         <button
-          class="rounded-full border border-accent/30 bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded-md border border-accent/30 bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${parameterWorkspaceTestIds.workflowStageButtonPrefix}-${card.id}`}
           disabled={stageButtonDisabled()}
           onclick={() => onStage(card.id)}

@@ -249,7 +249,7 @@ function pickerMessageClass(tone: PickerMessageTone): string {
 </script>
 
 <section class="space-y-3" data-testid={missionWorkspaceTestIds.cameraPicker}>
-  <div class="rounded-2xl border border-border bg-bg-secondary/60 p-3">
+  <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Camera</p>
@@ -299,7 +299,7 @@ function pickerMessageClass(tone: PickerMessageTone): string {
 
   {#if combinedWarnings.length > 0}
     <div
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning"
       data-testid={missionWorkspaceTestIds.cameraWarning}
     >
       <ul class="list-inside list-disc space-y-1 text-xs">
@@ -311,7 +311,7 @@ function pickerMessageClass(tone: PickerMessageTone): string {
   {/if}
 
   {#if pickerMessage && pickerMessage.tone !== "warning"}
-    <div class={`rounded-2xl border px-4 py-3 text-sm ${pickerMessageClass(pickerMessage.tone)}`}>
+    <div class={`rounded-lg border px-4 py-3 text-sm ${pickerMessageClass(pickerMessage.tone)}`}>
       {pickerMessage.text}
     </div>
   {/if}
@@ -328,12 +328,12 @@ function pickerMessageClass(tone: PickerMessageTone): string {
   </label>
 
   {#if catalogState.recent.length > 0}
-    <div class="rounded-2xl border border-border bg-bg-secondary/60 p-3">
+    <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Recent</p>
       <div class="mt-3 flex flex-wrap gap-2">
         {#each catalogState.recent as camera (camera.canonicalName)}
           <button
-            class="rounded-full border border-border bg-bg-primary px-3 py-2 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+            class="rounded-md border border-border bg-bg-primary px-3 py-2 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
             data-testid={missionWorkspaceTestIds.cameraRecentPrefix}
             onclick={() => selectCamera(camera)}
             type="button"
@@ -345,7 +345,7 @@ function pickerMessageClass(tone: PickerMessageTone): string {
     </div>
   {/if}
 
-  <div class="rounded-2xl border border-border bg-bg-secondary/60 p-3">
+  <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Catalog</p>
@@ -355,7 +355,7 @@ function pickerMessageClass(tone: PickerMessageTone): string {
       </div>
 
       <button
-        class="rounded-full border border-border bg-bg-primary px-3 py-2 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary px-3 py-2 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={missionWorkspaceTestIds.cameraCustomToggle}
         onclick={() => {
           showCustomForm = !showCustomForm;
@@ -392,7 +392,7 @@ function pickerMessageClass(tone: PickerMessageTone): string {
 
               <div class="flex flex-wrap gap-2">
                 <button
-                  class="rounded-full border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent transition hover:brightness-105"
+                  class="rounded-md border border-accent/40 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent transition hover:brightness-105"
                   onclick={() => selectCamera(camera)}
                   type="button"
                 >
@@ -400,7 +400,7 @@ function pickerMessageClass(tone: PickerMessageTone): string {
                 </button>
                 {#if customCameraNames.has(camera.canonicalName)}
                   <button
-                    class="rounded-full border border-danger/40 bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger transition hover:brightness-105"
+                    class="rounded-md border border-danger/40 bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger transition hover:brightness-105"
                     onclick={() => deleteCustomCamera(camera.canonicalName)}
                     type="button"
                   >
@@ -415,7 +415,7 @@ function pickerMessageClass(tone: PickerMessageTone): string {
     </div>
 
     {#if showCustomForm}
-      <div class="mt-4 rounded-2xl border border-border/70 bg-bg-primary p-4">
+      <div class="mt-4 rounded-lg border border-border/70 bg-bg-primary p-3">
         <div class="grid gap-3 md:grid-cols-2">
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Canonical name</span>
@@ -465,7 +465,7 @@ function pickerMessageClass(tone: PickerMessageTone): string {
 
         <div class="mt-4 flex flex-wrap gap-2">
           <button
-            class="rounded-full border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105"
+            class="rounded-md border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105"
             data-testid={missionWorkspaceTestIds.cameraCustomSave}
             onclick={saveCustomCamera}
             type="button"
@@ -473,7 +473,7 @@ function pickerMessageClass(tone: PickerMessageTone): string {
             Save custom camera
           </button>
           <button
-            class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+            class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
             onclick={() => {
               customForm = { ...EMPTY_FORM };
               pickerMessage = null;

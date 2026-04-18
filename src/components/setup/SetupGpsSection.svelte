@@ -376,7 +376,7 @@ function formatHdop(value: number | null): string {
 
     {#if docsUrl}
       <a
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.gpsDocsLink}
         href={docsUrl}
         rel="noreferrer"
@@ -388,7 +388,7 @@ function formatHdop(value: number | null): string {
   </div>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-3"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
     data-testid={setupWorkspaceTestIds.gpsSummary}
   >
     <div>
@@ -424,7 +424,7 @@ function formatHdop(value: number | null): string {
 
   {#if recoveryReasons.length > 0 || (primaryGpsEnabled && serialModel.gpsPorts.length === 0)}
     <div
-      class={`rounded-2xl border px-4 py-4 text-sm leading-6 ${bannerTone}`}
+      class={`rounded-lg border px-4 py-4 text-sm leading-6 ${bannerTone}`}
       data-testid={`${setupWorkspaceTestIds.gpsBannerPrefix}-${recoveryReasons.length > 0 ? "recovery" : "serial"}`}
     >
       {#if recoveryReasons.length > 0}
@@ -442,7 +442,7 @@ function formatHdop(value: number | null): string {
 
   <div class="grid gap-3 xl:grid-cols-2">
     {#if primaryTypeItem}
-      <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+      <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{primaryTypeItem.name}</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{primaryTypeItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">
@@ -467,7 +467,7 @@ function formatHdop(value: number | null): string {
           {/each}
         </select>
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.gpsStageButtonPrefix}-${primaryTypeItem.name}`}
           disabled={!canStage(primaryTypeItem, primaryTypeDraft, primaryTypeOptions.length > 0)}
           onclick={() => stage(primaryTypeItem, primaryTypeDraft, primaryTypeOptions.length > 0)}
@@ -479,7 +479,7 @@ function formatHdop(value: number | null): string {
     {/if}
 
     {#if autoConfigItem}
-      <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+      <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">GPS_AUTO_CONFIG</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{autoConfigItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">
@@ -504,7 +504,7 @@ function formatHdop(value: number | null): string {
           {/each}
         </select>
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.gpsStageButtonPrefix}-GPS_AUTO_CONFIG`}
           disabled={!canStage(autoConfigItem, autoConfigDraft, autoConfigOptions.length > 0)}
           onclick={() => stage(autoConfigItem, autoConfigDraft, autoConfigOptions.length > 0)}
@@ -519,7 +519,7 @@ function formatHdop(value: number | null): string {
   {#if secondaryGpsVisible || autoSwitchItem}
     <div class="grid gap-3 xl:grid-cols-2">
       {#if secondaryTypeItem}
-        <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+        <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">GPS2_TYPE</p>
           <h4 class="mt-2 text-base font-semibold text-text-primary">{secondaryTypeItem.label}</h4>
           <p class="mt-2 text-sm text-text-secondary">
@@ -544,7 +544,7 @@ function formatHdop(value: number | null): string {
             {/each}
           </select>
           <button
-            class="mt-3 w-full rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+            class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
             data-testid={`${setupWorkspaceTestIds.gpsStageButtonPrefix}-GPS2_TYPE`}
             disabled={!canStage(secondaryTypeItem, secondaryTypeDraft, secondaryTypeOptions.length > 0)}
             onclick={() => stage(secondaryTypeItem, secondaryTypeDraft, secondaryTypeOptions.length > 0)}
@@ -556,7 +556,7 @@ function formatHdop(value: number | null): string {
       {/if}
 
       {#if autoSwitchItem}
-        <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+        <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">GPS_AUTO_SWITCH</p>
           <h4 class="mt-2 text-base font-semibold text-text-primary">{autoSwitchItem.label}</h4>
           <p class="mt-2 text-sm text-text-secondary">
@@ -581,7 +581,7 @@ function formatHdop(value: number | null): string {
             {/each}
           </select>
           <button
-            class="mt-3 w-full rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+            class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
             data-testid={`${setupWorkspaceTestIds.gpsStageButtonPrefix}-GPS_AUTO_SWITCH`}
             disabled={!canStage(autoSwitchItem, autoSwitchDraft, autoSwitchOptions.length > 0)}
             onclick={() => stage(autoSwitchItem, autoSwitchDraft, autoSwitchOptions.length > 0)}
@@ -594,7 +594,7 @@ function formatHdop(value: number | null): string {
     </div>
   {/if}
 
-  <div class="rounded-2xl border border-border bg-bg-primary/80 p-4" data-testid={setupWorkspaceTestIds.gpsGnssChecklist}>
+  <div class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.gpsGnssChecklist}>
     <div class="mb-3">
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">GNSS constellation mask</p>
       <p class="mt-2 text-sm text-text-secondary">
@@ -628,7 +628,7 @@ function formatHdop(value: number | null): string {
         title="Available constellations"
       />
     {:else}
-      <div class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning">
+      <div class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning">
         GNSS metadata is incomplete for this scope, so the checklist stays read-only and Setup routes recovery through Full Parameters instead of inventing a bitmask editor.
       </div>
     {/if}
@@ -636,13 +636,13 @@ function formatHdop(value: number | null): string {
 
   {#if recoveryReasons.length > 0}
     <div
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
       data-testid={setupWorkspaceTestIds.gpsRecovery}
     >
       <p class="font-semibold text-text-primary">Metadata recovery is active for GPS.</p>
       <p class="mt-2">Purpose-built editors stay visible but read-only until the missing parameter metadata is restored for this scope.</p>
       <button
-        class="mt-4 rounded-full border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         onclick={onSelectRecovery}
         type="button"
       >

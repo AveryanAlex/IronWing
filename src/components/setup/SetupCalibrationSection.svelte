@@ -61,14 +61,14 @@ function cardTone(card: SetupWorkspaceCalibrationCard): string {
   </div>
 
   {#if actionError}
-    <div class="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-4 text-sm text-danger">
+    <div class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-4 text-sm text-danger">
       {actionError}
     </div>
   {/if}
 
   {#if view.statusNotices.length > 0}
     <div
-      class="rounded-2xl border border-border bg-bg-primary/80 p-4"
+      class="rounded-lg border border-border bg-bg-primary/80 p-3"
       data-testid={setupWorkspaceTestIds.calibrationNotices}
     >
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Lifecycle status text</p>
@@ -85,7 +85,7 @@ function cardTone(card: SetupWorkspaceCalibrationCard): string {
   <div class="grid gap-3 xl:grid-cols-2">
     {#each view.calibrationSummary.cards as card (card.id)}
       <article
-        class={`rounded-2xl border p-4 ${cardTone(card)}`}
+        class={`rounded-lg border p-3 ${cardTone(card)}`}
         data-testid={`${setupWorkspaceTestIds.calibrationCardPrefix}-${card.id}`}
       >
         <div class="flex flex-wrap items-start justify-between gap-3">
@@ -105,7 +105,7 @@ function cardTone(card: SetupWorkspaceCalibrationCard): string {
 
         {#if card.actionLabel}
           <button
-            class="mt-4 rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+            class="mt-4 rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
             data-testid={`${setupWorkspaceTestIds.calibrationActionPrefix}-${card.id}`}
             disabled={card.actionAvailability !== "available" || pendingCardId === card.id}
             onclick={() => runCompassAction(card)}

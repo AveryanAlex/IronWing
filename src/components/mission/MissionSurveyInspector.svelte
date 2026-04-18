@@ -398,7 +398,7 @@ function localMessageClass(tone: LocalMessageTone): string {
 </script>
 
 <section class="mt-4 space-y-4" data-testid={missionWorkspaceTestIds.inspectorSurvey}>
-  <div class="rounded-2xl border border-border bg-bg-secondary/60 p-4">
+  <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Survey region</p>
@@ -436,7 +436,7 @@ function localMessageClass(tone: LocalMessageTone): string {
 
   {#if promptForRegion}
     <section
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm text-warning"
       data-testid={missionWorkspaceTestIds.surveyPrompt}
     >
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-warning/80" data-testid={missionWorkspaceTestIds.surveyPromptKind}>
@@ -445,7 +445,7 @@ function localMessageClass(tone: LocalMessageTone): string {
       <p class="mt-2 text-text-primary">{promptForRegion.message}</p>
       <div class="mt-3 flex flex-wrap gap-2">
         <button
-          class="rounded-full border border-warning/40 bg-bg-primary px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105"
+          class="rounded-md border border-warning/40 bg-bg-primary px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105"
           data-testid={missionWorkspaceTestIds.surveyPromptConfirm}
           onclick={handleConfirmPrompt}
           type="button"
@@ -453,7 +453,7 @@ function localMessageClass(tone: LocalMessageTone): string {
           Confirm
         </button>
         <button
-          class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
           data-testid={missionWorkspaceTestIds.surveyPromptDismiss}
           onclick={onDismissSurveyPrompt}
           type="button"
@@ -465,7 +465,7 @@ function localMessageClass(tone: LocalMessageTone): string {
   {/if}
 
   {#if localMessage}
-    <div class={`rounded-2xl border px-4 py-3 text-sm ${localMessageClass(localMessage.tone)}`}>
+    <div class={`rounded-lg border px-4 py-3 text-sm ${localMessageClass(localMessage.tone)}`}>
       {localMessage.text}
     </div>
   {/if}
@@ -474,7 +474,7 @@ function localMessageClass(tone: LocalMessageTone): string {
     <div class="space-y-4">
       <MissionSurveyCameraPicker {region} onSelectCamera={handleSelectCamera} />
 
-      <section class="rounded-2xl border border-border bg-bg-primary p-4">
+      <section class="rounded-lg border border-border bg-bg-primary p-3">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Geometry</p>
@@ -482,7 +482,7 @@ function localMessageClass(tone: LocalMessageTone): string {
           </div>
 
           <button
-            class="rounded-full border border-border bg-bg-secondary px-3 py-2 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+            class="rounded-md border border-border bg-bg-secondary px-3 py-2 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
             data-testid={missionWorkspaceTestIds.surveyPointAddInitial}
             onclick={addInitialGeometryPoint}
             type="button"
@@ -524,7 +524,7 @@ function localMessageClass(tone: LocalMessageTone): string {
                   </label>
                   <div class="flex flex-wrap items-end gap-2">
                     <button
-                      class="rounded-full border border-border bg-bg-primary px-3 py-2 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+                      class="rounded-md border border-border bg-bg-primary px-3 py-2 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
                       data-testid={`${missionWorkspaceTestIds.surveyPointAddPrefix}-${index}`}
                       onclick={() => addGeometryPoint(index)}
                       type="button"
@@ -532,7 +532,7 @@ function localMessageClass(tone: LocalMessageTone): string {
                       Add after
                     </button>
                     <button
-                      class="rounded-full border border-danger/40 bg-danger/10 px-3 py-2 text-xs font-semibold text-danger transition hover:brightness-105"
+                      class="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs font-semibold text-danger transition hover:brightness-105"
                       data-testid={`${missionWorkspaceTestIds.surveyPointDeletePrefix}-${index}`}
                       onclick={() => removeGeometryPoint(index)}
                       type="button"
@@ -549,7 +549,7 @@ function localMessageClass(tone: LocalMessageTone): string {
     </div>
 
     <div class="space-y-4">
-      <section class="rounded-2xl border border-border bg-bg-primary p-4">
+      <section class="rounded-lg border border-border bg-bg-primary p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Parameters</p>
         <div class="mt-4 grid gap-3 md:grid-cols-2">
           <label class="space-y-1">
@@ -649,7 +649,7 @@ function localMessageClass(tone: LocalMessageTone): string {
         </div>
       </section>
 
-      <section class="rounded-2xl border border-border bg-bg-primary p-4">
+      <section class="rounded-lg border border-border bg-bg-primary p-3">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Generated review</p>
@@ -658,7 +658,7 @@ function localMessageClass(tone: LocalMessageTone): string {
 
           <div class="flex flex-wrap gap-2">
             <button
-              class="rounded-full border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              class="rounded-md border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
               data-testid={missionWorkspaceTestIds.surveyGenerate}
               disabled={generateDisabled}
               onclick={handleGenerate}
@@ -667,7 +667,7 @@ function localMessageClass(tone: LocalMessageTone): string {
               {region.generationState === "generating" ? "Generating…" : generateButtonLabel}
             </button>
             <button
-              class="rounded-full border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              class="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
               data-testid={missionWorkspaceTestIds.surveyDissolve}
               disabled={region.generationState === "generating"}
               onclick={handlePromptDissolve}
@@ -676,7 +676,7 @@ function localMessageClass(tone: LocalMessageTone): string {
               Dissolve to manual items
             </button>
             <button
-              class="rounded-full border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              class="rounded-md border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
               data-testid={missionWorkspaceTestIds.surveyDelete}
               disabled={region.generationState === "generating"}
               onclick={handleDelete}
@@ -746,7 +746,7 @@ function localMessageClass(tone: LocalMessageTone): string {
 
                   {#if activeGeneratedEntry.edited}
                     <button
-                      class="rounded-full border border-border bg-bg-primary px-3 py-2 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+                      class="rounded-md border border-border bg-bg-primary px-3 py-2 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
                       data-testid={missionWorkspaceTestIds.surveyGeneratedReset}
                       onclick={() => resetGeneratedItemEdit(activeGeneratedEntry.index)}
                       type="button"

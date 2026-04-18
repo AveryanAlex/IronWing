@@ -357,7 +357,7 @@ function handleEnter(event: KeyboardEvent) {
 }
 </script>
 
-<section class="rounded-2xl border border-border bg-bg-primary p-4" data-testid={missionWorkspaceTestIds.fenceInspector}>
+<section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.fenceInspector}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Fence inspector</p>
@@ -373,18 +373,18 @@ function handleEnter(event: KeyboardEvent) {
   </div>
 
   {#if selection.kind === "none"}
-    <div class="mt-4 rounded-2xl border border-dashed border-border bg-bg-secondary/60 px-4 py-5 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.fenceInspectorEmpty}>
+    <div class="mt-4 rounded-lg border border-dashed border-border bg-bg-secondary/60 px-4 py-5 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.fenceInspectorEmpty}>
       Select a fence region or the return point from the list or the map to edit it here with precise coordinates, radius, and inclusion-group controls.
     </div>
   {:else if selection.kind === "return-point"}
     <div class="mt-4 space-y-4" data-testid={missionWorkspaceTestIds.fenceInspectorReturnPoint}>
-      <div class="rounded-2xl border border-border bg-bg-secondary/60 p-4">
+      <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Fence return point</p>
         <p class="mt-1 text-sm text-text-secondary">This point stays separate from Home so fence recovery can target a dedicated location without implying Home sync or mission upload parity.</p>
       </div>
 
       <div class="grid gap-3 md:grid-cols-2">
-        <label class="space-y-1 rounded-2xl border border-border bg-bg-secondary/60 p-3">
+        <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
           <span class="text-xs font-medium text-text-muted">Latitude</span>
           <input
             class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
@@ -403,7 +403,7 @@ function handleEnter(event: KeyboardEvent) {
           />
         </label>
 
-        <label class="space-y-1 rounded-2xl border border-border bg-bg-secondary/60 p-3">
+        <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
           <span class="text-xs font-medium text-text-muted">Longitude</span>
           <input
             class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
@@ -425,7 +425,7 @@ function handleEnter(event: KeyboardEvent) {
 
       <div class="flex flex-wrap gap-2">
         <button
-          class="rounded-full border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded-md border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={readOnly || returnPoint === null}
           onclick={() => {
             resetReturnDraft();
@@ -438,13 +438,13 @@ function handleEnter(event: KeyboardEvent) {
       </div>
     </div>
   {:else if !item || !region}
-    <div class="mt-4 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-5 text-sm text-warning">
+    <div class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-5 text-sm text-warning">
       <p class="font-semibold">Fence selection unavailable</p>
       <p class="mt-2 text-xs text-warning/90">The selected fence region could not be resolved from the active planner state, so the inspector stayed fail-closed instead of rendering broken controls.</p>
     </div>
   {:else}
     <div class="mt-4 space-y-4">
-      <div class="rounded-2xl border border-border bg-bg-secondary/60 p-4">
+      <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Fence region {item.index + 1}</p>
         <h4 class="mt-1 text-base font-semibold text-text-primary">{regionLabel(regionKind(region))}</h4>
         <p class="mt-1 text-xs text-text-secondary">Switch between inclusion / exclusion and polygon / circle without leaving the active fence selection.</p>
@@ -470,14 +470,14 @@ function handleEnter(event: KeyboardEvent) {
       </label>
 
       {#if isPolygon(regionKind(region))}
-        <div class="space-y-3 rounded-2xl border border-border bg-bg-secondary/60 p-4">
+        <div class="space-y-3 rounded-lg border border-border bg-bg-secondary/60 p-3">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Vertices</p>
               <p class="mt-1 text-xs text-text-secondary">Edit polygon vertices numerically when map dragging needs tighter control.</p>
             </div>
             <button
-              class="rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              class="rounded-md border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
               data-testid={missionWorkspaceTestIds.fenceVertexAdd}
               disabled={readOnly}
               onclick={() => {
@@ -531,7 +531,7 @@ function handleEnter(event: KeyboardEvent) {
                   />
                 </label>
                 <button
-                  class="rounded-full border border-danger/40 bg-danger/10 px-3 py-2 text-xs font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+                  class="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
                   data-testid={`${missionWorkspaceTestIds.fenceVertexRemovePrefix}-${index}`}
                   disabled={readOnly || polygonVertices(region).length <= 3}
                   onclick={() => {
@@ -549,7 +549,7 @@ function handleEnter(event: KeyboardEvent) {
       {:else}
         <div class="grid gap-3 md:grid-cols-3">
           {#if circleCenter(region)}
-            <label class="space-y-1 rounded-2xl border border-border bg-bg-secondary/60 p-3">
+            <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
               <span class="text-xs font-medium text-text-muted">Center latitude</span>
               <input
                 class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
@@ -568,7 +568,7 @@ function handleEnter(event: KeyboardEvent) {
               />
             </label>
 
-            <label class="space-y-1 rounded-2xl border border-border bg-bg-secondary/60 p-3">
+            <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
               <span class="text-xs font-medium text-text-muted">Center longitude</span>
               <input
                 class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
@@ -588,7 +588,7 @@ function handleEnter(event: KeyboardEvent) {
             </label>
           {/if}
 
-          <label class="space-y-1 rounded-2xl border border-border bg-bg-secondary/60 p-3">
+          <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
             <span class="text-xs font-medium text-text-muted">Radius (m)</span>
             <input
               class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
@@ -612,7 +612,7 @@ function handleEnter(event: KeyboardEvent) {
       {/if}
 
       {#if isInclusion(regionKind(region))}
-        <label class="space-y-1 rounded-2xl border border-border bg-bg-secondary/60 p-3">
+        <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
           <span class="text-xs font-medium text-text-muted">Inclusion group</span>
           <input
             class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"

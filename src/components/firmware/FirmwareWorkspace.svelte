@@ -139,7 +139,7 @@ $effect(() => {
   <div class="mt-4 grid gap-3 md:grid-cols-2">
     <button
       aria-pressed={effectiveMode === "install"}
-      class={`rounded-2xl border px-4 py-3 text-left transition ${effectiveMode === "install"
+      class={`rounded-lg border px-4 py-3 text-left transition ${effectiveMode === "install"
         ? "border-accent/40 bg-accent/10"
         : "border-border bg-bg-secondary hover:border-accent/30 hover:bg-bg-primary"}`}
       data-testid={firmwareWorkspaceTestIds.modeInstall}
@@ -154,7 +154,7 @@ $effect(() => {
 
     <button
       aria-pressed={effectiveMode === "recovery"}
-      class={`rounded-2xl border px-4 py-3 text-left transition ${effectiveMode === "recovery"
+      class={`rounded-lg border px-4 py-3 text-left transition ${effectiveMode === "recovery"
         ? "border-warning/40 bg-warning/10"
         : "border-border bg-bg-secondary hover:border-warning/30 hover:bg-bg-primary"}`}
       data-testid={firmwareWorkspaceTestIds.modeRecovery}
@@ -170,7 +170,7 @@ $effect(() => {
 
   {#if !layout.actionsEnabled}
     <div
-      class="mt-4 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm text-warning"
+      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm text-warning"
       data-testid={firmwareWorkspaceTestIds.blockedCopy}
     >
       <p class="font-semibold" data-testid={firmwareWorkspaceTestIds.blockedReason}>{layout.blockedTitle}</p>
@@ -180,7 +180,7 @@ $effect(() => {
 
   {#if showReturnGuidance}
     <div
-      class="mt-4 rounded-2xl border border-success/30 bg-success/10 px-4 py-4 text-sm text-success"
+      class="mt-4 rounded-lg border border-success/30 bg-success/10 px-4 py-4 text-sm text-success"
       data-testid={firmwareWorkspaceTestIds.returnGuidance}
     >
       <p class="font-semibold">Bootloader recovery verified</p>

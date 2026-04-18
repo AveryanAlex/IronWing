@@ -346,7 +346,7 @@ function numbersEqual(left: number, right: number): boolean {
 }
 </script>
 
-<section class="rounded-2xl border border-border bg-bg-primary p-4" data-testid={missionWorkspaceTestIds.planningStatsPanel}>
+<section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.planningStatsPanel}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planning support</p>
@@ -365,7 +365,7 @@ function numbersEqual(left: number, right: number): boolean {
   </div>
 
   <div class="mt-4 grid gap-4 xl:grid-cols-3">
-    <article class="rounded-2xl border border-border bg-bg-secondary/50 p-4" data-testid={missionWorkspaceTestIds.planningStatsMissionCard}>
+    <article class="rounded-lg border border-border bg-bg-secondary/50 p-3" data-testid={missionWorkspaceTestIds.planningStatsMissionCard}>
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mission envelope</p>
@@ -384,7 +384,7 @@ function numbersEqual(left: number, right: number): boolean {
 
       <div class="mt-4 grid gap-3 sm:grid-cols-2">
         {#each missionStatsEntries as stat (stat.testId)}
-          <div class={`rounded-2xl border px-3 py-3 ${toneClass(stat.tone ?? "default")}`} data-testid={stat.testId}>
+          <div class={`rounded-lg border px-3 py-3 ${toneClass(stat.tone ?? "default")}`} data-testid={stat.testId}>
             <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{stat.label}</p>
             <p class="mt-2 text-base font-semibold tabular-nums text-current">{stat.value}</p>
             <p class="mt-1 text-xs leading-relaxed text-text-secondary">{stat.hint}</p>
@@ -394,7 +394,7 @@ function numbersEqual(left: number, right: number): boolean {
 
       {#if missionStats.isTimeIndeterminate}
         <div
-          class="mt-4 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning"
+          class="mt-4 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning"
           data-testid={missionWorkspaceTestIds.planningStatsIndeterminate}
         >
           <p class="font-semibold">Estimated time stays indeterminate.</p>
@@ -408,7 +408,7 @@ function numbersEqual(left: number, right: number): boolean {
       {/if}
 
       <div class="mt-4 grid gap-3 sm:grid-cols-2">
-        <label class="space-y-1 rounded-2xl border border-border bg-bg-primary px-3 py-3">
+        <label class="space-y-1 rounded-lg border border-border bg-bg-primary px-3 py-3">
           <span class="text-xs font-medium text-text-muted">Cruise speed (m/s)</span>
           <input
             class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
@@ -429,7 +429,7 @@ function numbersEqual(left: number, right: number): boolean {
           {/if}
         </label>
 
-        <label class="space-y-1 rounded-2xl border border-border bg-bg-primary px-3 py-3">
+        <label class="space-y-1 rounded-lg border border-border bg-bg-primary px-3 py-3">
           <span class="text-xs font-medium text-text-muted">Hover speed (m/s)</span>
           <input
             class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
@@ -453,7 +453,7 @@ function numbersEqual(left: number, right: number): boolean {
       <p class="mt-3 text-xs text-text-secondary">{speedStatusMessage}</p>
     </article>
 
-    <article class="rounded-2xl border border-border bg-bg-secondary/50 p-4" data-testid={missionWorkspaceTestIds.planningStatsFenceCard}>
+    <article class="rounded-lg border border-border bg-bg-secondary/50 p-3" data-testid={missionWorkspaceTestIds.planningStatsFenceCard}>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Fence continuity</p>
       <h4 class="mt-1 text-sm font-semibold text-text-primary">Fence support stats</h4>
       <p class="mt-1 text-xs text-text-secondary">
@@ -462,7 +462,7 @@ function numbersEqual(left: number, right: number): boolean {
 
       <div class="mt-4 grid gap-3">
         {#each fenceStatsEntries as stat (stat.testId)}
-          <div class={`rounded-2xl border px-3 py-3 ${toneClass(stat.tone ?? "default")}`} data-testid={stat.testId}>
+          <div class={`rounded-lg border px-3 py-3 ${toneClass(stat.tone ?? "default")}`} data-testid={stat.testId}>
             <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{stat.label}</p>
             <p class="mt-2 text-base font-semibold tabular-nums text-current">{stat.value}</p>
             <p class="mt-1 text-xs leading-relaxed text-text-secondary">{stat.hint}</p>
@@ -471,7 +471,7 @@ function numbersEqual(left: number, right: number): boolean {
       </div>
     </article>
 
-    <article class="rounded-2xl border border-border bg-bg-secondary/50 p-4" data-testid={missionWorkspaceTestIds.planningStatsRallyCard}>
+    <article class="rounded-lg border border-border bg-bg-secondary/50 p-3" data-testid={missionWorkspaceTestIds.planningStatsRallyCard}>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Rally continuity</p>
       <h4 class="mt-1 text-sm font-semibold text-text-primary">Rally support stats</h4>
       <p class="mt-1 text-xs text-text-secondary">
@@ -480,7 +480,7 @@ function numbersEqual(left: number, right: number): boolean {
 
       <div class="mt-4 grid gap-3">
         {#each rallyStatsEntries as stat (stat.testId)}
-          <div class={`rounded-2xl border px-3 py-3 ${toneClass(stat.tone ?? "default")}`} data-testid={stat.testId}>
+          <div class={`rounded-lg border px-3 py-3 ${toneClass(stat.tone ?? "default")}`} data-testid={stat.testId}>
             <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{stat.label}</p>
             <p class="mt-2 text-base font-semibold tabular-nums text-current">{stat.value}</p>
             <p class="mt-1 text-xs leading-relaxed text-text-secondary">{stat.hint}</p>

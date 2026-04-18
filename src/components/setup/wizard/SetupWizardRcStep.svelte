@@ -101,7 +101,7 @@ function handleContinue() {
   </p>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-2"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-2"
     data-testid={setupWorkspaceTestIds.wizardStepRcSummary}
   >
     <div>
@@ -121,7 +121,7 @@ function handleContinue() {
   </div>
 
   {#if firstFourChannels.length > 0}
-    <div class="grid gap-2 rounded-2xl border border-border bg-bg-primary/60 p-3 md:grid-cols-4">
+    <div class="grid gap-2 rounded-lg border border-border bg-bg-primary/60 p-3 md:grid-cols-4">
       {#each firstFourChannels as channel (channel.channel)}
         <div class="rounded-xl border border-border bg-bg-secondary/70 px-3 py-2 text-xs text-text-secondary">
           <p class="font-mono font-semibold uppercase tracking-[0.18em] text-text-muted">
@@ -135,7 +135,7 @@ function handleContinue() {
 
   {#if !signalLive || signalMalformed}
     <div
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning"
       data-testid={setupWorkspaceTestIds.wizardStepRcWarning}
     >
       {signalMalformed
@@ -145,14 +145,14 @@ function handleContinue() {
   {/if}
 
   {#if failureMessage}
-    <div class="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+    <div class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
       Preset apply failed. {failureMessage}
     </div>
   {/if}
 
   <div class="flex flex-wrap gap-2">
     <button
-      class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={setupWorkspaceTestIds.wizardStepRcPreset}
       disabled={view.checkpoint.blocksActions || applyPending}
       onclick={handlePreset}

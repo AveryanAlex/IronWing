@@ -125,7 +125,7 @@ function groupTone(blocked: number, progressText: string): string {
 </script>
 
 <section class="space-y-4" data-testid={setupWorkspaceTestIds.overviewSection}>
-  <div class={`rounded-2xl border px-4 py-4 ${bannerTone}`} data-testid={setupWorkspaceTestIds.overviewBanner}>
+  <div class={`rounded-lg border px-4 py-4 ${bannerTone}`} data-testid={setupWorkspaceTestIds.overviewBanner}>
     <p class="text-xs font-semibold uppercase tracking-[0.18em]">Overview</p>
     <h3 class="mt-2 text-lg font-semibold text-text-primary">{bannerTitle}</h3>
     <p class="mt-2 text-sm leading-6">{bannerBody}</p>
@@ -134,7 +134,7 @@ function groupTone(blocked: number, progressText: string): string {
   <div class="grid gap-3 xl:grid-cols-3">
     {#each overviewMetrics as metric (metric.id)}
       <article
-        class="rounded-2xl border border-border bg-bg-primary/80 p-4"
+        class="rounded-lg border border-border bg-bg-primary/80 p-3"
         data-testid={`${setupWorkspaceTestIds.overviewMetricPrefix}-${metric.id}`}
       >
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{metric.label}</p>
@@ -148,7 +148,7 @@ function groupTone(blocked: number, progressText: string): string {
     {#each overviewDocs as doc (doc.id)}
       {#if doc.url}
         <a
-          class="rounded-2xl border border-border bg-bg-primary/80 p-4 transition hover:border-accent hover:text-accent"
+          class="rounded-lg border border-border bg-bg-primary/80 p-3 transition hover:border-accent hover:text-accent"
           data-testid={`${setupWorkspaceTestIds.overviewDocLinkPrefix}-${doc.id}`}
           href={doc.url}
           rel="noreferrer"
@@ -164,7 +164,7 @@ function groupTone(blocked: number, progressText: string): string {
 
   <div class="flex flex-wrap gap-2">
     <button
-      class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+      class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
       data-testid={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-frame_orientation`}
       onclick={() => onSelect("frame_orientation")}
       type="button"
@@ -172,7 +172,7 @@ function groupTone(blocked: number, progressText: string): string {
       Open Frame &amp; orientation
     </button>
     <button
-      class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+      class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
       data-testid={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-flight_modes`}
       onclick={() => onSelect("flight_modes")}
       type="button"
@@ -180,7 +180,7 @@ function groupTone(blocked: number, progressText: string): string {
       Open Flight modes
     </button>
     <button
-      class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+      class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
       data-testid={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-full_parameters`}
       onclick={() => onSelect("full_parameters")}
       type="button"
@@ -192,7 +192,7 @@ function groupTone(blocked: number, progressText: string): string {
   <div class="space-y-4">
     {#each guidedGroups as group (group.id)}
       <article
-        class={`rounded-2xl border p-4 ${groupTone(group.blockedCount, group.progressText)}`}
+        class={`rounded-lg border p-3 ${groupTone(group.blockedCount, group.progressText)}`}
         data-testid={`${setupWorkspaceTestIds.overviewGroupPrefix}-${group.id}`}
       >
         <div class="flex flex-wrap items-start justify-between gap-3">
@@ -222,7 +222,7 @@ function groupTone(blocked: number, progressText: string): string {
         <div class="mt-4 grid gap-3 xl:grid-cols-2">
           {#each group.sections as section (section.id)}
             <div
-              class="rounded-2xl border border-border bg-bg-secondary/60 p-4"
+              class="rounded-lg border border-border bg-bg-secondary/60 p-3"
               data-testid={`${setupWorkspaceTestIds.overviewCardPrefix}-${section.id}`}
             >
               <div class="flex items-start justify-between gap-3">
@@ -248,7 +248,7 @@ function groupTone(blocked: number, progressText: string): string {
               {/if}
 
               <button
-                class="mt-4 rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+                class="mt-4 rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
                 onclick={() => onSelect(section.id)}
                 type="button"
               >
@@ -262,7 +262,7 @@ function groupTone(blocked: number, progressText: string): string {
   </div>
 
   <div
-    class="rounded-2xl border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary"
+    class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary"
     data-testid={setupWorkspaceTestIds.detailRecovery}
   >
     <div class="flex flex-wrap items-start justify-between gap-3">
@@ -274,7 +274,7 @@ function groupTone(blocked: number, progressText: string): string {
       </div>
       <div class="flex flex-wrap gap-2">
         <button
-          class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
           data-testid={setupWorkspaceTestIds.overviewWizardLaunch}
           onclick={() => onSelect("beginner_wizard")}
           type="button"
@@ -282,7 +282,7 @@ function groupTone(blocked: number, progressText: string): string {
           Start beginner wizard
         </button>
         <button
-          class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
           data-testid={setupWorkspaceTestIds.overviewRecoveryAction}
           onclick={() => onSelect("full_parameters")}
           type="button"

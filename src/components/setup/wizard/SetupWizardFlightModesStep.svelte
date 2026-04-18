@@ -134,7 +134,7 @@ function handleMarkReviewed() {
   </p>
 
   <div
-    class="rounded-2xl border border-border bg-bg-primary/80 p-4"
+    class="rounded-lg border border-border bg-bg-primary/80 p-3"
     data-testid={setupWorkspaceTestIds.wizardStepFlightModesSummary}
   >
     {#if failureMessage}
@@ -160,7 +160,7 @@ function handleMarkReviewed() {
     </ul>
   </div>
 
-  <p class="rounded-2xl border border-border bg-bg-primary/60 px-4 py-3 text-xs text-text-secondary">
+  <p class="rounded-lg border border-border bg-bg-primary/60 px-4 py-3 text-xs text-text-secondary">
     Need to wire up a non-standard channel or choose custom modes per slot?
     Open the Flight Modes section from the wizard footer for the expert
     layout.

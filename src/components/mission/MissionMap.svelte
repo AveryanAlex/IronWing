@@ -1328,7 +1328,7 @@ function handleKeydown(event: KeyboardEvent) {
 
 <svelte:window onkeydown={handleKeydown} onpointercancel={handlePointerCancel} onpointermove={handlePointerMove} onpointerup={handlePointerUp} />
 
-<section class="rounded-2xl border border-border bg-bg-primary p-4" data-testid={missionWorkspaceTestIds.map}>
+<section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.map}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planner map</p>
@@ -1374,7 +1374,7 @@ function handleKeydown(event: KeyboardEvent) {
   {#if view.mode === "mission"}
     <div class="mt-4 flex flex-wrap gap-2">
       <button
-        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.mapDrawStartGrid}
         disabled={surveySession !== null}
         onclick={() => startSurveyDraw("grid")}
@@ -1383,7 +1383,7 @@ function handleKeydown(event: KeyboardEvent) {
         Draw grid
       </button>
       <button
-        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.mapDrawStartCorridor}
         disabled={surveySession !== null}
         onclick={() => startSurveyDraw("corridor")}
@@ -1392,7 +1392,7 @@ function handleKeydown(event: KeyboardEvent) {
         Draw corridor
       </button>
       <button
-        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.mapDrawStartStructure}
         disabled={surveySession !== null}
         onclick={() => startSurveyDraw("structure")}
@@ -1401,7 +1401,7 @@ function handleKeydown(event: KeyboardEvent) {
         Draw structure
       </button>
       <button
-        class="rounded-full border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.mapDrawEdit}
         disabled={surveySession !== null || !selectedSurveyRegion}
         onclick={startSurveyEdit}
@@ -1410,7 +1410,7 @@ function handleKeydown(event: KeyboardEvent) {
         Edit selected region
       </button>
       <button
-        class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.mapDrawFinish}
         disabled={surveySession === null}
         onclick={finishSurveySession}
@@ -1419,7 +1419,7 @@ function handleKeydown(event: KeyboardEvent) {
         Finish
       </button>
       <button
-        class="rounded-full border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.mapDrawCancel}
         disabled={surveySession === null}
         onclick={cancelSurveySession}
@@ -1431,7 +1431,7 @@ function handleKeydown(event: KeyboardEvent) {
   {:else if view.mode === "fence"}
     <div class="mt-4 flex flex-wrap gap-2">
       <button
-        class="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.mapFencePlaceInclusionPolygon}
         disabled={readOnly}
         onclick={() => startFencePlacement("inclusion_polygon")}
@@ -1440,7 +1440,7 @@ function handleKeydown(event: KeyboardEvent) {
         Place inclusion polygon
       </button>
       <button
-        class="rounded-full border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.mapFencePlaceExclusionPolygon}
         disabled={readOnly}
         onclick={() => startFencePlacement("exclusion_polygon")}
@@ -1449,7 +1449,7 @@ function handleKeydown(event: KeyboardEvent) {
         Place exclusion polygon
       </button>
       <button
-        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.mapFencePlaceInclusionCircle}
         disabled={readOnly}
         onclick={() => startFencePlacement("inclusion_circle")}
@@ -1458,7 +1458,7 @@ function handleKeydown(event: KeyboardEvent) {
         Place inclusion circle
       </button>
       <button
-        class="rounded-full border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.mapFencePlaceExclusionCircle}
         disabled={readOnly}
         onclick={() => startFencePlacement("exclusion_circle")}
@@ -1467,7 +1467,7 @@ function handleKeydown(event: KeyboardEvent) {
         Place exclusion circle
       </button>
       <button
-        class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.mapFencePlaceReturnPoint}
         disabled={readOnly}
         onclick={() => startFencePlacement("return-point")}
@@ -1476,7 +1476,7 @@ function handleKeydown(event: KeyboardEvent) {
         Place return point
       </button>
       <button
-        class="rounded-full border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.mapFenceClearReturnPoint}
         disabled={readOnly || view.fenceReturnPoint === null}
         onclick={() => applyFenceMutationResult(onClearFenceReturnPoint?.())}
@@ -1485,7 +1485,7 @@ function handleKeydown(event: KeyboardEvent) {
         Clear return point
       </button>
       <button
-        class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.mapFencePlacementCancel}
         disabled={fencePlacementMode === null}
         onclick={cancelFencePlacement}
@@ -1497,7 +1497,7 @@ function handleKeydown(event: KeyboardEvent) {
   {/if}
 
   {#if localMessage && localMessage.tone === "info"}
-    <div class="mt-3 rounded-2xl border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-text-primary">
+    <div class="mt-3 rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-text-primary">
       {localMessage.text}
     </div>
   {/if}
@@ -1558,7 +1558,7 @@ function handleKeydown(event: KeyboardEvent) {
   </div>
 
   {#if interactiveViewport}
-    <div class="mt-4 rounded-2xl border border-border bg-bg-secondary/40 p-3">
+    <div class="mt-4 rounded-lg border border-border bg-bg-secondary/40 p-3">
       <div
         bind:this={surfaceElement}
         class="mission-map-surface relative aspect-[5/4] overflow-hidden rounded-[20px] border border-border/70 bg-[radial-gradient(circle_at_top,_rgba(120,214,255,0.12),_transparent_55%),linear-gradient(180deg,_rgba(6,14,23,0.96),_rgba(8,20,32,0.88))]"
@@ -1661,7 +1661,7 @@ function handleKeydown(event: KeyboardEvent) {
 
         {#if view.state === "empty"}
           <div
-            class="pointer-events-none absolute inset-x-6 bottom-6 rounded-2xl border border-border/80 bg-bg-primary/88 px-4 py-3 text-sm text-text-secondary"
+            class="pointer-events-none absolute inset-x-6 bottom-6 rounded-lg border border-border/80 bg-bg-primary/88 px-4 py-3 text-sm text-text-secondary"
             data-testid={missionWorkspaceTestIds.mapEmpty}
           >
             {view.mode === "fence"
@@ -1672,7 +1672,7 @@ function handleKeydown(event: KeyboardEvent) {
           </div>
         {:else if view.state === "degraded"}
           <div
-            class="pointer-events-none absolute inset-x-6 bottom-6 rounded-2xl border border-warning/40 bg-bg-primary/88 px-4 py-3 text-sm text-warning"
+            class="pointer-events-none absolute inset-x-6 bottom-6 rounded-lg border border-warning/40 bg-bg-primary/88 px-4 py-3 text-sm text-warning"
             data-testid={missionWorkspaceTestIds.mapUnavailable}
           >
             {view.mode === "fence"
@@ -1800,7 +1800,7 @@ function handleKeydown(event: KeyboardEvent) {
   {/if}
 
   {#if diagnostics.length > 0}
-    <div class="mt-4 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
+    <div class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
       <p class="font-semibold">Map diagnostics</p>
       <ul class="mt-2 list-inside list-disc space-y-1 text-xs">
         {#each diagnostics as warning (`${warning}`)}

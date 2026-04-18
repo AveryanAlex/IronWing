@@ -47,7 +47,7 @@ function pointSummary(item: TypedDraftItem): string {
 }
 </script>
 
-<section class="rounded-2xl border border-border bg-bg-primary p-4" data-testid={missionWorkspaceTestIds.rallyList}>
+<section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.rallyList}>
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Rally list</p>
@@ -55,7 +55,7 @@ function pointSummary(item: TypedDraftItem): string {
     </div>
 
     <button
-      class="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+      class="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.rallyAdd}
       disabled={readOnly}
       onclick={onAddPoint}
@@ -67,7 +67,7 @@ function pointSummary(item: TypedDraftItem): string {
 
   {#if items.length === 0}
     <div
-      class="mt-4 rounded-2xl border border-dashed border-border bg-bg-secondary/60 px-4 py-6 text-sm text-text-secondary"
+      class="mt-4 rounded-lg border border-dashed border-border bg-bg-secondary/60 px-4 py-6 text-sm text-text-secondary"
       data-testid={missionWorkspaceTestIds.rallyListEmpty}
     >
       No rally points yet. Add one here or place it from the rally map surface without leaving the Mission workspace.
@@ -76,7 +76,7 @@ function pointSummary(item: TypedDraftItem): string {
     <div class="mt-4 space-y-3">
       {#each items as item (`rally-${item.uiId}`)}
         <div
-          class={`rounded-2xl border p-4 transition ${rallySelection.kind === "point" && rallySelection.pointUiId === item.uiId
+          class={`rounded-lg border p-3 transition ${rallySelection.kind === "point" && rallySelection.pointUiId === item.uiId
             ? "border-accent/40 bg-accent/10 text-text-primary"
             : "border-border bg-bg-primary text-text-primary hover:border-accent/40"}`}
           data-selected={rallySelection.kind === "point" && rallySelection.pointUiId === item.uiId ? "true" : "false"}
@@ -105,7 +105,7 @@ function pointSummary(item: TypedDraftItem): string {
 
           <div class="mt-3 flex flex-wrap gap-2">
             <button
-              class="rounded-full border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+              class="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
               data-testid={`${missionWorkspaceTestIds.rallyPointMoveUpPrefix}-${item.uiId}`}
               disabled={readOnly || item.index === 0}
               onclick={(event) => {
@@ -117,7 +117,7 @@ function pointSummary(item: TypedDraftItem): string {
               Move up
             </button>
             <button
-              class="rounded-full border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+              class="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
               data-testid={`${missionWorkspaceTestIds.rallyPointMoveDownPrefix}-${item.uiId}`}
               disabled={readOnly || item.index === items.length - 1}
               onclick={(event) => {
@@ -129,7 +129,7 @@ function pointSummary(item: TypedDraftItem): string {
               Move down
             </button>
             <button
-              class="rounded-full border border-danger/40 bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              class="rounded-md border border-danger/40 bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
               data-testid={`${missionWorkspaceTestIds.rallyPointDeletePrefix}-${item.uiId}`}
               disabled={readOnly}
               onclick={(event) => {

@@ -505,7 +505,7 @@ $effect(() => {
 {#snippet body()}
   <div class="space-y-5">
     <div
-      class={`rounded-[24px] border px-4 py-3 ${statusClass(dialogStatus.kind)}`}
+      class={`rounded-lg border px-4 py-3 ${statusClass(dialogStatus.kind)}`}
       data-status-kind={dialogStatus.kind}
       data-testid={appShellTestIds.telemetrySettingsStatus}
     >
@@ -513,7 +513,7 @@ $effect(() => {
       <p class="mt-1 text-sm leading-6">{dialogStatus.description}</p>
     </div>
 
-    <section class="rounded-[26px] border border-border bg-bg-primary/70 p-4 sm:p-5">
+    <section class="rounded-lg border border-border bg-bg-primary/70 p-3 sm:p-5">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p class="runtime-eyebrow">Shell cadence</p>
@@ -531,7 +531,7 @@ $effect(() => {
       <div class="mt-4 grid gap-2 sm:max-w-xs">
         <label class="text-sm font-semibold text-text-primary" for="telemetry-rate-hz">Cadence (Hz)</label>
         <input
-          class="rounded-2xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition focus:border-accent/50"
+          class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition focus:border-accent/50"
           data-testid={appShellTestIds.telemetrySettingsTelemetryInput}
           id="telemetry-rate-hz"
           inputmode="numeric"
@@ -547,7 +547,7 @@ $effect(() => {
         </p>
         {#if telemetryFieldError}
           <p
-            class="rounded-2xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"
+            class="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"
             data-testid={appShellTestIds.telemetrySettingsTelemetryError}
           >
             {telemetryFieldError}
@@ -556,7 +556,7 @@ $effect(() => {
       </div>
     </section>
 
-    <section class="rounded-[26px] border border-border bg-bg-primary/70 p-4 sm:p-5">
+    <section class="rounded-lg border border-border bg-bg-primary/70 p-3 sm:p-5">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p class="runtime-eyebrow">Live vehicle overrides</p>
@@ -592,7 +592,7 @@ $effect(() => {
       <div class="mt-4 space-y-3">
         {#each messageRateRows as row (row.id)}
           <article
-            class="rounded-[24px] border border-border bg-bg-secondary/90 p-4"
+            class="rounded-lg border border-border bg-bg-secondary/90 p-3"
             data-row-state={row.stateKind}
             data-testid={`${appShellTestIds.telemetrySettingsRowPrefix}-${row.id}`}
           >
@@ -614,7 +614,7 @@ $effect(() => {
                 Rate (Hz)
               </label>
               <input
-                class="rounded-2xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none transition focus:border-accent/50 disabled:cursor-not-allowed disabled:opacity-60"
+                class="rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none transition focus:border-accent/50 disabled:cursor-not-allowed disabled:opacity-60"
                 data-testid={`${appShellTestIds.telemetrySettingsRowInputPrefix}-${row.id}`}
                 disabled={row.disabled || isApplying}
                 id={`message-rate-${row.id}`}
@@ -642,7 +642,7 @@ $effect(() => {
 
             {#if row.error}
               <p
-                class="mt-3 rounded-2xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"
+                class="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"
                 data-testid={`${appShellTestIds.telemetrySettingsRowErrorPrefix}-${row.id}`}
               >
                 {row.error}
@@ -657,7 +657,7 @@ $effect(() => {
 
 {#snippet footer()}
   <button
-    class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-danger/40 hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
+    class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-danger/40 hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
     data-testid={appShellTestIds.telemetrySettingsDiscard}
     disabled={!canDiscard}
     onclick={discardChanges}
@@ -667,7 +667,7 @@ $effect(() => {
   </button>
 
   <button
-    class="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+    class="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
     data-testid={appShellTestIds.telemetrySettingsApply}
     disabled={!canApply}
     onclick={() => void applyChanges()}

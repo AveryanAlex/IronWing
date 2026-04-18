@@ -235,7 +235,7 @@ function stagePreset() {
 
     {#if docsUrl}
       <a
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.flightModesDocsLink}
         href={docsUrl}
         rel="noreferrer"
@@ -247,7 +247,7 @@ function stagePreset() {
   </div>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-3"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
     data-testid={setupWorkspaceTestIds.flightModesSummary}
   >
     <div>
@@ -289,7 +289,7 @@ function stagePreset() {
 
   {#if model.recoveryReasons.length > 0}
     <div
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
       data-testid={`${setupWorkspaceTestIds.flightModesBannerPrefix}-recovery`}
     >
       <p class="font-semibold text-text-primary">Flight-mode staging is staying fail-closed while live truth is partial.</p>
@@ -299,7 +299,7 @@ function stagePreset() {
         {/each}
       </ul>
       <button
-        class="mt-4 rounded-full border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         onclick={onSelectRecovery}
         type="button"
       >
@@ -309,7 +309,7 @@ function stagePreset() {
   {/if}
 
   {#if model.preset}
-    <article class="rounded-2xl border border-border bg-bg-primary/80 p-4" data-testid={setupWorkspaceTestIds.flightModesPresetPreview}>
+    <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.flightModesPresetPreview}>
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Recommended preset</p>
@@ -319,7 +319,7 @@ function stagePreset() {
           </p>
         </div>
         <button
-          class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           disabled={presetRows.length === 0}
           onclick={() => (presetPreviewOpen = !presetPreviewOpen)}
           type="button"
@@ -347,7 +347,7 @@ function stagePreset() {
     </article>
   {/if}
 
-  <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+  <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{FLIGHT_MODE_CHANNEL_PARAM}</p>
@@ -381,7 +381,7 @@ function stagePreset() {
         {/each}
       </select>
       <button
-        class="self-end rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+        class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={`${setupWorkspaceTestIds.flightModesStageButtonPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`}
         disabled={!canStage(FLIGHT_MODE_CHANNEL_PARAM, flightModeChannelItem?.value ?? null, true)}
         onclick={() => stage(FLIGHT_MODE_CHANNEL_PARAM, flightModeChannelItem?.value ?? null, true)}
@@ -394,7 +394,7 @@ function stagePreset() {
 
   <div class="grid gap-3 xl:grid-cols-2">
     {#each model.slots as slot (slot.paramName)}
-      <article class="rounded-2xl border border-border bg-bg-primary/80 p-4" data-testid={`${setupWorkspaceTestIds.flightModesSlotPrefix}-${slot.slot}`}>
+      <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={`${setupWorkspaceTestIds.flightModesSlotPrefix}-${slot.slot}`}>
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div class="flex items-center gap-2">
@@ -432,7 +432,7 @@ function stagePreset() {
             {/each}
           </select>
           <button
-            class="self-end rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+            class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
             data-testid={`${setupWorkspaceTestIds.flightModesStageButtonPrefix}-${slot.paramName}`}
             disabled={!canStage(slot.paramName, slot.effectiveValue)}
             onclick={() => stage(slot.paramName, slot.effectiveValue)}

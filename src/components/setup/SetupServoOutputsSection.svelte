@@ -581,7 +581,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 
     {#if docsUrl}
       <a
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.servoOutputsDocsLink}
         href={docsUrl}
         rel="noreferrer"
@@ -593,7 +593,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
   </div>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 xl:grid-cols-4"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 xl:grid-cols-4"
     data-testid={setupWorkspaceTestIds.servoOutputsSummary}
   >
     <div>
@@ -628,7 +628,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 
   {#if retainedReversalFailures.length > 0}
     <div
-      class="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
+      class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
       data-testid={setupWorkspaceTestIds.servoOutputsFailure}
     >
       <p class="font-semibold text-text-primary">The shared review tray is still retaining servo reversal failures.</p>
@@ -642,14 +642,14 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 
   {#each banners as banner (banner.id)}
     <div
-      class={`rounded-2xl border px-4 py-4 text-sm leading-6 ${bannerClass(banner.tone)}`}
+      class={`rounded-lg border px-4 py-4 text-sm leading-6 ${bannerClass(banner.tone)}`}
       data-testid={`${setupWorkspaceTestIds.servoOutputsBannerPrefix}-${banner.id}`}
     >
       {banner.text}
     </div>
   {/each}
 
-  <div class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+  <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Servo actuation gate</p>
@@ -659,7 +659,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
       </div>
 
       <button
-        class={`rounded-full border px-4 py-2 text-sm font-semibold transition ${testUnlocked ? "border-danger/40 bg-danger/10 text-danger" : "border-border bg-bg-secondary text-text-primary hover:border-accent hover:text-accent"}`}
+        class={`rounded-md border px-4 py-2 text-sm font-semibold transition ${testUnlocked ? "border-danger/40 bg-danger/10 text-danger" : "border-border bg-bg-secondary text-text-primary hover:border-accent hover:text-accent"}`}
         data-testid={setupWorkspaceTestIds.servoOutputsUnlock}
         disabled={unlockDisabledReason !== null}
         onclick={toggleUnlock}
@@ -679,10 +679,10 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
   </div>
 
   {#if configuredOutputs.length === 0}
-    <div class="rounded-2xl border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary">
+    <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary">
       No configured SERVOx_FUNCTION rows are available for this scope yet. Download parameters first or open Full Parameters recovery to inspect raw output state.
       <button
-        class="ml-3 rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="ml-3 rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         onclick={onSelectRecovery}
         type="button"
       >
@@ -691,7 +691,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
     </div>
   {:else}
     <div class="space-y-4">
-      <div class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+      <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Function-oriented tester</p>
@@ -703,14 +703,14 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
         </div>
 
         {#if functionGroups.length === 0}
-          <div class="mt-4 rounded-2xl border border-border bg-bg-secondary/70 px-4 py-4 text-sm leading-6 text-text-secondary">
+          <div class="mt-4 rounded-lg border border-border bg-bg-secondary/70 px-4 py-4 text-sm leading-6 text-text-secondary">
             No non-motor SERVO1–{SERVO_LIVE_TEST_LIMIT} targets are currently available for grouped live testing. Use the raw inventory below to inspect every configured output and the explicit unsupported-output copy.
           </div>
         {:else}
           <div class="mt-4 space-y-4">
             {#each functionGroups as group (group.id)}
               {@const guidance = getDirectionGuidance(group.functionValue)}
-              <div class="rounded-2xl border border-border bg-bg-secondary/70 p-4" data-testid={`${setupWorkspaceTestIds.servoOutputsFunctionGroupPrefix}-${group.functionValue}`}>
+              <div class="rounded-lg border border-border bg-bg-secondary/70 p-3" data-testid={`${setupWorkspaceTestIds.servoOutputsFunctionGroupPrefix}-${group.functionValue}`}>
                 <div class="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p class="text-sm font-semibold text-text-primary">{group.functionLabel}</p>
@@ -727,7 +727,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                     {@const directionResult = directionResultByOutput[target.index]}
                     {@const reversalFailure = target.reverseParamName ? params.retainedFailures[target.reverseParamName] : null}
                     <article
-                      class={`rounded-2xl border px-4 py-4 ${selectedOutputIndex === target.index ? "border-accent/40 bg-accent/5" : "border-border bg-bg-primary/80"}`}
+                      class={`rounded-lg border px-4 py-4 ${selectedOutputIndex === target.index ? "border-accent/40 bg-accent/5" : "border-border bg-bg-primary/80"}`}
                       data-selected={selectedOutputIndex === target.index}
                       data-testid={`${setupWorkspaceTestIds.servoOutputsRowPrefix}-${target.index}`}
                     >
@@ -735,7 +735,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                         <div>
                           <div class="flex flex-wrap items-center gap-2">
                             <button
-                              class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary transition hover:border-accent hover:text-accent"
+                              class="rounded-md border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary transition hover:border-accent hover:text-accent"
                               onclick={() => selectOutput(target.index)}
                               type="button"
                             >
@@ -753,7 +753,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 
                         <div class="flex flex-wrap gap-2">
                           <button
-                            class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                            class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
                             data-testid={`${setupWorkspaceTestIds.servoOutputsRowMinPrefix}-${target.index}`}
                             disabled={servoCommandDisabled(target)}
                             onclick={() => sendServoCommand(target, target.minPwm)}
@@ -762,7 +762,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                             {activeOutputIndex === target.index ? "Sending…" : `Send Min ${target.minPwm}`}
                           </button>
                           <button
-                            class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                            class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
                             data-testid={`${setupWorkspaceTestIds.servoOutputsRowMaxPrefix}-${target.index}`}
                             disabled={servoCommandDisabled(target)}
                             onclick={() => sendServoCommand(target, target.maxPwm)}
@@ -775,7 +775,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 
                       {#if commandErrorByOutput[target.index]}
                         <div
-                          class="mt-3 rounded-2xl border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger"
+                          class="mt-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger"
                           data-testid={`${setupWorkspaceTestIds.servoOutputsRowErrorPrefix}-${target.index}`}
                         >
                           Servo command rejected · {commandErrorByOutput[target.index]}
@@ -783,7 +783,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                       {/if}
 
                       {#if directionControlsVisible(target)}
-                        <div class="mt-4 rounded-2xl border border-border bg-bg-secondary/70 px-4 py-4">
+                        <div class="mt-4 rounded-lg border border-border bg-bg-secondary/70 px-4 py-4">
                           <div class="flex flex-wrap items-center gap-2">
                             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Observed direction</p>
                             <span class={`rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${resultTone(directionResult)}`} data-testid={`${setupWorkspaceTestIds.servoOutputsRowResultPrefix}-${target.index}`}>
@@ -793,7 +793,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                           <p class="mt-2 text-sm leading-6 text-text-secondary">Compare the observed motion with the group guidance above, then record whether the surface moved in the expected direction.</p>
                           <div class="mt-3 flex flex-wrap gap-2">
                             <button
-                              class={`rounded-full border px-4 py-2 text-sm font-semibold transition ${directionResult === "correct" ? "border-success/40 bg-success/10 text-success" : "border-border bg-bg-primary text-text-primary hover:border-accent hover:text-accent"}`}
+                              class={`rounded-md border px-4 py-2 text-sm font-semibold transition ${directionResult === "correct" ? "border-success/40 bg-success/10 text-success" : "border-border bg-bg-primary text-text-primary hover:border-accent hover:text-accent"}`}
                               data-testid={`${setupWorkspaceTestIds.servoOutputsRowCorrectPrefix}-${target.index}`}
                               onclick={() => markDirection(target, "correct")}
                               type="button"
@@ -801,7 +801,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                               Correct
                             </button>
                             <button
-                              class={`rounded-full border px-4 py-2 text-sm font-semibold transition ${directionResult === "reversed" ? "border-danger/40 bg-danger/10 text-danger" : "border-border bg-bg-primary text-text-primary hover:border-accent hover:text-accent"}`}
+                              class={`rounded-md border px-4 py-2 text-sm font-semibold transition ${directionResult === "reversed" ? "border-danger/40 bg-danger/10 text-danger" : "border-border bg-bg-primary text-text-primary hover:border-accent hover:text-accent"}`}
                               data-testid={`${setupWorkspaceTestIds.servoOutputsRowReversedPrefix}-${target.index}`}
                               onclick={() => markDirection(target, "reversed")}
                               type="button"
@@ -811,11 +811,11 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                           </div>
 
                           {#if directionResult === "reversed"}
-                            <div class="mt-4 rounded-2xl border border-border bg-bg-primary/80 px-4 py-4">
+                            <div class="mt-4 rounded-lg border border-border bg-bg-primary/80 px-4 py-4">
                               <p class="text-sm leading-6 text-text-secondary">Queue the corresponding SERVOx_REVERSED change through the shared review tray only; this section never writes it directly.</p>
                               <div class="mt-3 flex flex-wrap items-center gap-2">
                                 <button
-                                  class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                                  class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
                                   data-testid={`${setupWorkspaceTestIds.servoOutputsRowReversePrefix}-${target.index}`}
                                   disabled={!canStageReverse(target)}
                                   onclick={() => stageReverse(target)}
@@ -829,7 +829,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                               </div>
 
                               {#if reversalFailure}
-                                <div class="mt-3 rounded-2xl border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger">
+                                <div class="mt-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger">
                                   {reversalFailure.message}
                                 </div>
                               {/if}
@@ -846,7 +846,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
         {/if}
       </div>
 
-      <div class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+      <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
         <div>
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Raw PWM escape hatch</p>
           <p class="mt-2 text-sm text-text-secondary">Every configured output stays visible here. Use the raw send only when the grouped tester is not enough, and keep unsupported or motor-owned rows visible for diagnosis instead of pretending they do not exist.</p>
@@ -854,7 +854,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 
         <div class="mt-4 space-y-4">
           {#each rawGroups as group (group.id)}
-            <div class="rounded-2xl border border-border bg-bg-secondary/70 p-4" data-testid={`${setupWorkspaceTestIds.servoOutputsRawGroupPrefix}-${group.id}`}>
+            <div class="rounded-lg border border-border bg-bg-secondary/70 p-3" data-testid={`${setupWorkspaceTestIds.servoOutputsRawGroupPrefix}-${group.id}`}>
               <div>
                 <p class="text-sm font-semibold text-text-primary">{group.title}</p>
                 <p class="mt-1 text-sm leading-6 text-text-secondary">{group.description}</p>
@@ -865,7 +865,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                   {@const readback = resolveReadback(output)}
                   {@const reversalFailure = output.reverseParamName ? params.retainedFailures[output.reverseParamName] : null}
                   <article
-                    class={`rounded-2xl border px-4 py-4 ${selectedOutputIndex === output.index ? "border-accent/40 bg-accent/5" : "border-border bg-bg-primary/80"}`}
+                    class={`rounded-lg border px-4 py-4 ${selectedOutputIndex === output.index ? "border-accent/40 bg-accent/5" : "border-border bg-bg-primary/80"}`}
                     data-selected={selectedOutputIndex === output.index}
                     data-testid={`${setupWorkspaceTestIds.servoOutputsRawRowPrefix}-${output.index}`}
                   >
@@ -873,7 +873,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                       <div>
                         <div class="flex flex-wrap items-center gap-2">
                           <button
-                            class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary transition hover:border-accent hover:text-accent"
+                            class="rounded-md border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary transition hover:border-accent hover:text-accent"
                             onclick={() => selectOutput(output.index)}
                             type="button"
                           >
@@ -902,7 +902,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                           value={String(rawDraftValue(output))}
                         />
                         <button
-                          class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                          class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
                           data-testid={`${setupWorkspaceTestIds.servoOutputsRawSendPrefix}-${output.index}`}
                           disabled={servoCommandDisabled(output)}
                           onclick={() => sendServoCommand(output, rawDraftValue(output))}
@@ -911,7 +911,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                           {rawSendButtonLabel(output)}
                         </button>
                         <button
-                          class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                          class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
                           data-testid={`${setupWorkspaceTestIds.servoOutputsRawReversePrefix}-${output.index}`}
                           disabled={!canStageReverse(output)}
                           onclick={() => stageReverse(output)}
@@ -926,7 +926,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 
                     {#if commandErrorByOutput[output.index]}
                       <div
-                        class="mt-3 rounded-2xl border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger"
+                        class="mt-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger"
                         data-testid={`${setupWorkspaceTestIds.servoOutputsRawErrorPrefix}-${output.index}`}
                       >
                         Servo command rejected · {commandErrorByOutput[output.index]}
@@ -934,7 +934,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                     {/if}
 
                     {#if reversalFailure}
-                      <div class="mt-3 rounded-2xl border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger">
+                      <div class="mt-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger">
                         {reversalFailure.message}
                       </div>
                     {/if}

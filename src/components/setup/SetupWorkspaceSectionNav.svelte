@@ -52,7 +52,7 @@ function sectionTone(section: SetupWorkspaceSection): string {
 >
   {#each sectionGroups as group (group.id)}
     <section
-      class={`rounded-3xl border p-3 ${groupTone(group)}`}
+      class={`rounded-lg border p-3 ${groupTone(group)}`}
       data-testid={`${setupWorkspaceTestIds.navGroupPrefix}-${group.id}`}
     >
       <div class="flex flex-wrap items-start justify-between gap-3">
@@ -77,7 +77,7 @@ function sectionTone(section: SetupWorkspaceSection): string {
         {#each group.sections as section (section.id)}
           <button
             aria-current={selectedSectionId === section.id ? "page" : undefined}
-            class={`rounded-2xl border px-3 py-3 text-left transition ${sectionTone(section)} ${selectedSectionId === section.id ? "ring-1 ring-accent" : "hover:border-accent hover:text-text-primary"}`}
+            class={`rounded-lg border px-3 py-3 text-left transition ${sectionTone(section)} ${selectedSectionId === section.id ? "ring-1 ring-accent" : "hover:border-accent hover:text-text-primary"}`}
             data-availability={section.availability}
             data-implemented={section.implemented ? "true" : "false"}
             data-testid={`${setupWorkspaceTestIds.navPrefix}-${section.id}`}

@@ -86,7 +86,7 @@ function returnPointSummary(point: GeoPoint2d | null): string {
 }
 </script>
 
-<section class="rounded-2xl border border-border bg-bg-primary p-4" data-testid={missionWorkspaceTestIds.fenceList}>
+<section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.fenceList}>
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Fence list</p>
@@ -95,7 +95,7 @@ function returnPointSummary(point: GeoPoint2d | null): string {
 
     <div class="flex flex-wrap gap-2">
       <button
-        class="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.fenceAddInclusionPolygon}
         disabled={readOnly}
         onclick={() => onAddRegion("inclusion_polygon")}
@@ -104,7 +104,7 @@ function returnPointSummary(point: GeoPoint2d | null): string {
         Inclusion polygon
       </button>
       <button
-        class="rounded-full border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.fenceAddExclusionPolygon}
         disabled={readOnly}
         onclick={() => onAddRegion("exclusion_polygon")}
@@ -113,7 +113,7 @@ function returnPointSummary(point: GeoPoint2d | null): string {
         Exclusion polygon
       </button>
       <button
-        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.fenceAddInclusionCircle}
         disabled={readOnly}
         onclick={() => onAddRegion("inclusion_circle")}
@@ -122,7 +122,7 @@ function returnPointSummary(point: GeoPoint2d | null): string {
         Inclusion circle
       </button>
       <button
-        class="rounded-full border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.fenceAddExclusionCircle}
         disabled={readOnly}
         onclick={() => onAddRegion("exclusion_circle")}
@@ -134,7 +134,7 @@ function returnPointSummary(point: GeoPoint2d | null): string {
   </div>
 
   <div
-    class={`mt-4 rounded-2xl border p-4 text-left transition ${fenceSelection.kind === "return-point"
+    class={`mt-4 rounded-lg border p-3 text-left transition ${fenceSelection.kind === "return-point"
       ? "border-accent/40 bg-accent/10 text-text-primary"
       : "border-border bg-bg-secondary/60 text-text-primary hover:border-accent/40"}`}
     data-selected={fenceSelection.kind === "return-point" ? "true" : "false"}
@@ -157,7 +157,7 @@ function returnPointSummary(point: GeoPoint2d | null): string {
       </div>
 
       <button
-        class="rounded-full border border-danger/40 bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-danger/40 bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={missionWorkspaceTestIds.fenceReturnPointClear}
         disabled={readOnly || returnPoint === null}
         onclick={(event) => {
@@ -173,7 +173,7 @@ function returnPointSummary(point: GeoPoint2d | null): string {
 
   {#if items.length === 0}
     <div
-      class="mt-4 rounded-2xl border border-dashed border-border bg-bg-secondary/60 px-4 py-6 text-sm text-text-secondary"
+      class="mt-4 rounded-lg border border-dashed border-border bg-bg-secondary/60 px-4 py-6 text-sm text-text-secondary"
       data-testid={missionWorkspaceTestIds.fenceListEmpty}
     >
       No fence regions yet. Add an inclusion or exclusion shape, then refine it on the map or in the inspector without leaving the Mission workspace.
@@ -182,7 +182,7 @@ function returnPointSummary(point: GeoPoint2d | null): string {
     <div class="mt-4 space-y-3">
       {#each items as item (`fence-${item.uiId}`)}
         <div
-          class={`rounded-2xl border p-4 transition ${fenceSelection.kind === "region" && fenceSelection.regionUiId === item.uiId
+          class={`rounded-lg border p-3 transition ${fenceSelection.kind === "region" && fenceSelection.regionUiId === item.uiId
             ? "border-accent/40 bg-accent/10 text-text-primary"
             : "border-border bg-bg-primary text-text-primary hover:border-accent/40"}`}
           data-selected={fenceSelection.kind === "region" && fenceSelection.regionUiId === item.uiId ? "true" : "false"}
@@ -212,7 +212,7 @@ function returnPointSummary(point: GeoPoint2d | null): string {
                 {regionBadge(item.document as FenceRegion)}
               </span>
               <button
-                class="rounded-full border border-danger/40 bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+                class="rounded-md border border-danger/40 bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
                 data-testid={`${missionWorkspaceTestIds.fenceRegionDeletePrefix}-${item.uiId}`}
                 disabled={readOnly}
                 onclick={(event) => {

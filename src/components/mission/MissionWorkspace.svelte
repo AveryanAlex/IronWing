@@ -1100,7 +1100,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       <div class="mt-4 grid gap-3 lg:grid-cols-3">
         {#each view.importReview.choices as choice (choice.domain)}
           <article
-            class="rounded-2xl border border-warning/30 bg-bg-primary/90 p-4 text-text-primary"
+            class="rounded-lg border border-warning/30 bg-bg-primary/90 p-3 text-text-primary"
             data-testid={importReviewChoiceTestId(choice.domain)}
           >
             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{choice.label}</p>
@@ -1108,7 +1108,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
             <p class="mt-1 text-xs text-text-secondary">Incoming · {choice.incomingSummary}</p>
             <div class="mt-3 flex flex-wrap gap-2">
               <button
-                class={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${!choice.replace
+                class={`rounded-md border px-3 py-1.5 text-xs font-semibold transition ${!choice.replace
                   ? "border-success/30 bg-success/10 text-success"
                   : "border-border bg-bg-secondary text-text-primary hover:border-success hover:text-success"}`}
                 data-testid={`${missionWorkspaceTestIds.importReviewKeepPrefix}-${choice.domain}`}
@@ -1118,7 +1118,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                 Keep current
               </button>
               <button
-                class={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${choice.replace
+                class={`rounded-md border px-3 py-1.5 text-xs font-semibold transition ${choice.replace
                   ? "border-warning/40 bg-warning/10 text-warning"
                   : "border-border bg-bg-secondary text-text-primary hover:border-warning hover:text-warning"}`}
                 data-testid={`${missionWorkspaceTestIds.importReviewReplacePrefix}-${choice.domain}`}
@@ -1134,7 +1134,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
 
       <div class="mt-4 flex flex-wrap gap-2">
         <button
-          class="rounded-full border border-warning/40 bg-bg-primary px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105"
+          class="rounded-md border border-warning/40 bg-bg-primary px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105"
           data-testid={missionWorkspaceTestIds.importReviewConfirm}
           onclick={handleConfirmImportReview}
           type="button"
@@ -1142,7 +1142,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
           Apply review
         </button>
         <button
-          class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
           data-testid={missionWorkspaceTestIds.importReviewDismiss}
           onclick={() => missionPlannerStore.dismissImportReview()}
           type="button"
@@ -1169,7 +1169,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       <div class="mt-4 grid gap-3 lg:grid-cols-3">
         {#each view.exportReview.choices as choice (choice.domain)}
           <label
-            class="flex items-start gap-3 rounded-2xl border border-border bg-bg-primary/90 p-4"
+            class="flex items-start gap-3 rounded-lg border border-border bg-bg-primary/90 p-3"
             data-testid={exportReviewChoiceTestId(choice.domain)}
           >
             <input
@@ -1187,7 +1187,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
 
       <div class="mt-4 flex flex-wrap gap-2">
         <button
-          class="rounded-full border border-accent/40 bg-bg-primary px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105"
+          class="rounded-md border border-accent/40 bg-bg-primary px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105"
           data-testid={missionWorkspaceTestIds.exportReviewConfirm}
           onclick={handleConfirmExportReview}
           type="button"
@@ -1195,7 +1195,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
           Save .plan
         </button>
         <button
-          class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
           data-testid={missionWorkspaceTestIds.exportReviewDismiss}
           onclick={() => missionPlannerStore.dismissExportReview()}
           type="button"
@@ -1218,7 +1218,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       <p class="mt-2">{replacePromptBody(planner)}</p>
       <div class="mt-3 flex flex-wrap gap-2">
         <button
-          class="rounded-full border border-warning/40 bg-bg-primary px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105"
+          class="rounded-md border border-warning/40 bg-bg-primary px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105"
           data-testid={missionWorkspaceTestIds.promptConfirm}
           onclick={confirmPrompt}
           type="button"
@@ -1226,7 +1226,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
           {replacePromptConfirmLabel(planner)}
         </button>
         <button
-          class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
           data-testid={missionWorkspaceTestIds.promptDismiss}
           onclick={dismissPrompt}
           type="button"
@@ -1282,7 +1282,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       <div class="mt-4 space-y-3">
         {#each view.warnings as warning, index (warning.id)}
           <article
-            class="rounded-2xl border border-warning/30 bg-bg-primary/90 px-4 py-3 text-text-primary"
+            class="rounded-lg border border-warning/30 bg-bg-primary/90 px-4 py-3 text-text-primary"
             data-testid={warningTestId(warning, index)}
           >
             <div class="flex flex-wrap items-start justify-between gap-3">
@@ -1302,7 +1302,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               <div class="flex flex-wrap gap-2">
                 {#if warning.action}
                   <button
-                    class="rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent transition hover:brightness-105"
+                    class="rounded-md border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent transition hover:brightness-105"
                     data-testid={`${missionWorkspaceTestIds.warningActionPrefix}-${index}`}
                     onclick={() => handleWarningAction(warning.action!)}
                     type="button"
@@ -1311,7 +1311,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                   </button>
                 {/if}
                 <button
-                  class="rounded-full border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+                  class="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
                   data-testid={`${missionWorkspaceTestIds.warningDismissPrefix}-${index}`}
                   onclick={() => handleDismissWarning(warning.id)}
                   type="button"
@@ -1370,7 +1370,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
 
   {#if view.status === "bootstrapping" && !view.workspaceMounted}
     <section
-      class="mt-4 rounded-[24px] border border-border bg-bg-secondary/60 p-5"
+      class="mt-4 rounded-lg border border-border bg-bg-secondary/60 p-5"
       data-testid={missionWorkspaceTestIds.bootstrapping}
     >
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planner scope</p>
@@ -1381,7 +1381,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     </section>
   {:else if !view.workspaceMounted}
     <section
-      class="mt-4 rounded-[24px] border border-border bg-bg-secondary/60 p-5"
+      class="mt-4 rounded-lg border border-border bg-bg-secondary/60 p-5"
       data-testid={view.status === "unavailable" ? missionWorkspaceTestIds.unavailable : missionWorkspaceTestIds.empty}
     >
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planner entry</p>
@@ -1414,7 +1414,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     </section>
   {:else}
     <section
-      class="mt-4 rounded-[24px] border border-border bg-bg-secondary/60 p-5"
+      class="mt-4 rounded-lg border border-border bg-bg-secondary/60 p-5"
       data-testid={missionWorkspaceTestIds.ready}
     >
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planner workspace</p>
@@ -1436,11 +1436,11 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
           <div class="space-y-4">
             {#if workspaceLayout.showPhoneSegments}
               <div
-                class="flex items-center gap-2 rounded-2xl border border-border bg-bg-primary p-2"
+                class="flex items-center gap-2 rounded-lg border border-border bg-bg-primary p-2"
                 data-testid={missionWorkspaceTestIds.phoneSegmentBar}
               >
                 <button
-                  class={`flex-1 rounded-[16px] border px-4 py-3 text-sm font-semibold transition ${missionPhoneSegment === "map"
+                  class={`flex-1 rounded-lg border px-4 py-3 text-sm font-semibold transition ${missionPhoneSegment === "map"
                     ? "border-accent/40 bg-accent/10 text-accent"
                     : "border-border bg-bg-secondary text-text-primary hover:border-accent hover:text-accent"}`}
                   data-active={missionPhoneSegment === "map" ? "true" : "false"}
@@ -1451,7 +1451,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                   Map
                 </button>
                 <button
-                  class={`flex-1 rounded-[16px] border px-4 py-3 text-sm font-semibold transition ${missionPhoneSegment === "plan"
+                  class={`flex-1 rounded-lg border px-4 py-3 text-sm font-semibold transition ${missionPhoneSegment === "plan"
                     ? "border-accent/40 bg-accent/10 text-accent"
                     : "border-border bg-bg-secondary text-text-primary hover:border-accent hover:text-accent"}`}
                   data-active={missionPhoneSegment === "plan" ? "true" : "false"}
@@ -1719,7 +1719,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
           </div>
         {:else}
           <section
-            class="rounded-2xl border border-border bg-bg-primary p-5"
+            class="rounded-lg border border-border bg-bg-primary p-5"
             data-testid={missionWorkspaceTestIds.modeShell}
           >
             <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{view.mode} mode</p>

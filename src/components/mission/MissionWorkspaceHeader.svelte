@@ -175,7 +175,7 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
 </script>
 
 <header
-  class="rounded-lg border border-border bg-bg-primary p-4"
+  class="rounded-lg border border-border bg-bg-primary p-3"
   data-readiness={readiness}
   data-workspace-state={status}
   data-testid={missionWorkspaceTestIds.header}
@@ -224,11 +224,11 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
     {attachment.detail}
   </p>
 
-  <div class="mt-4 rounded-2xl border border-border bg-bg-secondary/60 p-2" data-testid={missionWorkspaceTestIds.modeShell}>
+  <div class="mt-4 rounded-lg border border-border bg-bg-secondary/60 p-2" data-testid={missionWorkspaceTestIds.modeShell}>
     <div class="grid gap-2 sm:grid-cols-3">
       {#each modeButtons as item (item.mode)}
         <button
-          class={`rounded-[16px] border px-4 py-3 text-left text-sm font-semibold transition ${item.mode === mode
+          class={`rounded-lg border px-4 py-3 text-left text-sm font-semibold transition ${item.mode === mode
             ? "border-accent/40 bg-accent/10 text-accent"
             : "border-border bg-bg-primary text-text-primary hover:border-accent hover:text-accent"}`}
           data-testid={item.testId}
@@ -290,7 +290,7 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
   <div class="mt-4 flex flex-wrap items-center gap-2">
     <button
       aria-label={undoLabel}
-      class="inline-flex min-w-[7.25rem] items-center justify-between gap-2 rounded-full border border-border bg-bg-secondary px-3 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      class="inline-flex min-w-[7.25rem] items-center justify-between gap-2 rounded-md border border-border bg-bg-secondary px-3 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.toolbarUndo}
       disabled={!undoAvailable}
       onclick={onUndo}
@@ -304,7 +304,7 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
     </button>
     <button
       aria-label={redoLabel}
-      class="inline-flex min-w-[7.25rem] items-center justify-between gap-2 rounded-full border border-border bg-bg-secondary px-3 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      class="inline-flex min-w-[7.25rem] items-center justify-between gap-2 rounded-md border border-border bg-bg-secondary px-3 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.toolbarRedo}
       disabled={!redoAvailable}
       onclick={onRedo}
@@ -317,7 +317,7 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
       </span>
     </button>
     <button
-      class="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+      class="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.toolbarRead}
       disabled={busy || !canUseVehicleActions}
       onclick={onReadFromVehicle}
@@ -326,7 +326,7 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
       Read from Vehicle
     </button>
     <button
-      class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.toolbarImport}
       disabled={busy}
       onclick={onImportPlan}
@@ -335,7 +335,7 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
       Import .plan
     </button>
     <button
-      class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.toolbarImportKml}
       disabled={busy}
       onclick={onImportKml}
@@ -344,7 +344,7 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
       Import .kml / .kmz
     </button>
     <button
-      class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.toolbarNew}
       disabled={busy}
       onclick={onNewMission}
@@ -353,7 +353,7 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
       New draft
     </button>
     <button
-      class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.toolbarExport}
       disabled={busy || !hasContent}
       onclick={onExportPlan}
@@ -362,7 +362,7 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
       Export .plan
     </button>
     <button
-      class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.toolbarValidate}
       disabled={busy || !canUseVehicleActions || !hasContent}
       onclick={onValidateMission}
@@ -371,7 +371,7 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
       Validate mission
     </button>
     <button
-      class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.toolbarUpload}
       disabled={busy || !canUseVehicleActions || !hasContent}
       onclick={onUploadToVehicle}
@@ -380,7 +380,7 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
       Upload workspace
     </button>
     <button
-      class="rounded-full border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+      class="rounded-md border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.toolbarClear}
       disabled={busy || !canUseVehicleActions}
       onclick={onClearVehicle}
@@ -391,7 +391,7 @@ function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlanner
 
     {#if canCancel}
       <button
-        class="rounded-full border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105"
+        class="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105"
         data-testid={missionWorkspaceTestIds.toolbarCancel}
         onclick={onCancelTransfer}
         type="button"

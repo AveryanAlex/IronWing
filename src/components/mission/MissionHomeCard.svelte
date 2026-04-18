@@ -123,7 +123,7 @@ function handleEnter(event: KeyboardEvent) {
 </script>
 
 <section
-  class={`rounded-2xl border p-4 transition ${selected
+  class={`rounded-lg border p-3 transition ${selected
     ? "border-accent/40 bg-accent/10"
     : "border-border bg-bg-primary"}`}
   data-selected={selected ? "true" : "false"}
@@ -147,7 +147,7 @@ function handleEnter(event: KeyboardEvent) {
     </div>
 
     <button
-      class="rounded-full border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      class="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.homeClear}
       disabled={readOnly}
       onclick={() => {

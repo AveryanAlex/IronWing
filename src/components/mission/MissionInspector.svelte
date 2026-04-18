@@ -250,7 +250,7 @@ function updateField(fieldKey: string, value: unknown) {
 }
 </script>
 
-<section class="rounded-2xl border border-border bg-bg-primary p-4" data-testid={missionWorkspaceTestIds.inspector}>
+<section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.inspector}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Inspector</p>
@@ -266,7 +266,7 @@ function updateField(fieldKey: string, value: unknown) {
   </div>
 
   {#if selection.kind === "home"}
-    <div class="mt-4 rounded-2xl border border-dashed border-border bg-bg-secondary/60 px-4 py-5 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.inspectorEmpty}>
+    <div class="mt-4 rounded-lg border border-dashed border-border bg-bg-secondary/60 px-4 py-5 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.inspectorEmpty}>
       Home is selected. Edit the Home card to set or clear mission origin data, or select a manual mission item or survey region to edit it inside the shared workspace.
       {#if home}
         <p class="mt-2 text-xs text-text-muted">Current Home · {home.latitude_deg.toFixed(5)}, {home.longitude_deg.toFixed(5)} · {home.altitude_m.toFixed(1)} m</p>
@@ -287,7 +287,7 @@ function updateField(fieldKey: string, value: unknown) {
         {surveyPrompt}
       />
     {:else}
-      <div class="mt-4 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-5 text-sm text-warning" data-testid={missionWorkspaceTestIds.inspectorReadonly}>
+      <div class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-5 text-sm text-warning" data-testid={missionWorkspaceTestIds.inspectorReadonly}>
         <p class="font-semibold">Survey selection unavailable</p>
         <p class="mt-2 text-xs text-warning/90">
           The selected survey region could not be resolved from the active planner state, so the inspector stayed fail-closed instead of rendering broken controls.
@@ -295,12 +295,12 @@ function updateField(fieldKey: string, value: unknown) {
       </div>
     {/if}
   {:else if !item || !missionItem}
-    <div class="mt-4 rounded-2xl border border-dashed border-border bg-bg-secondary/60 px-4 py-5 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.inspectorEmpty}>
+    <div class="mt-4 rounded-lg border border-dashed border-border bg-bg-secondary/60 px-4 py-5 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.inspectorEmpty}>
       Select a manual mission item from the list to edit coordinates and typed command fields.
     </div>
   {:else}
     <div class="mt-4 space-y-4">
-      <div class="rounded-2xl border border-border bg-bg-secondary/60 p-4">
+      <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Manual item {item.index + 1}</p>
         <h4 class="mt-1 text-base font-semibold text-text-primary">{commandDisplayName(missionItem.command)}</h4>
         {#if previousCoordinates}
@@ -309,7 +309,7 @@ function updateField(fieldKey: string, value: unknown) {
       </div>
 
       {#if item.readOnly}
-        <div class="rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm text-warning" data-testid={missionWorkspaceTestIds.inspectorReadonly}>
+        <div class="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning" data-testid={missionWorkspaceTestIds.inspectorReadonly}>
           <p class="font-semibold">Unsupported/raw mission item</p>
           <p class="mt-1 text-xs text-warning/90">This preserved command stays read-only. Its raw parameters remain visible so imported content is not flattened away.</p>
           <dl class="mt-3 grid gap-2 sm:grid-cols-2">
@@ -340,7 +340,7 @@ function updateField(fieldKey: string, value: unknown) {
         {#if fields.length > 0}
           <div class="grid gap-3 md:grid-cols-2">
             {#each fields as field (field.key)}
-              <label class="space-y-1 rounded-2xl border border-border bg-bg-secondary/60 p-3">
+              <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
                 <span class="text-xs font-medium text-text-muted">{field.label}</span>
 
                 {#if field.type === "number"}
@@ -368,7 +368,7 @@ function updateField(fieldKey: string, value: unknown) {
                   </div>
                 {:else if field.type === "boolean"}
                   <button
-                    class={`rounded-full px-3 py-2 text-xs font-semibold transition ${field.value
+                    class={`rounded-md px-3 py-2 text-xs font-semibold transition ${field.value
                       ? "border border-accent/40 bg-accent/10 text-accent"
                       : "border border-border bg-bg-primary text-text-primary"}`}
                     data-testid={`${missionWorkspaceTestIds.inspectorFieldPrefix}-${field.key}`}
@@ -400,7 +400,7 @@ function updateField(fieldKey: string, value: unknown) {
 
         {#if position}
           <div class="grid gap-3 md:grid-cols-3">
-            <label class="space-y-1 rounded-2xl border border-border bg-bg-secondary/60 p-3">
+            <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
               <span class="text-xs font-medium text-text-muted">Latitude</span>
               <input
                 class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
@@ -421,7 +421,7 @@ function updateField(fieldKey: string, value: unknown) {
               />
             </label>
 
-            <label class="space-y-1 rounded-2xl border border-border bg-bg-secondary/60 p-3">
+            <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
               <span class="text-xs font-medium text-text-muted">Longitude</span>
               <input
                 class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
@@ -442,7 +442,7 @@ function updateField(fieldKey: string, value: unknown) {
               />
             </label>
 
-            <label class="space-y-1 rounded-2xl border border-border bg-bg-secondary/60 p-3">
+            <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
               <span class="text-xs font-medium text-text-muted">Altitude</span>
               <input
                 class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
@@ -464,7 +464,7 @@ function updateField(fieldKey: string, value: unknown) {
             </label>
           </div>
         {:else}
-          <div class="rounded-2xl border border-border bg-bg-secondary/60 px-4 py-4 text-sm text-text-secondary">
+          <div class="rounded-lg border border-border bg-bg-secondary/60 px-4 py-4 text-sm text-text-secondary">
             This command does not expose coordinate fields. Switching between commands updates the inspector fields truthfully instead of leaving stale coordinate inputs mounted.
           </div>
         {/if}

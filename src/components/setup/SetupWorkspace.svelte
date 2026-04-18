@@ -129,7 +129,7 @@ function clearCheckpoint() {
 </script>
 
 <section
-  class="rounded-lg border border-border bg-bg-primary p-4"
+  class="rounded-lg border border-border bg-bg-primary p-3"
   data-selected-section={view.selectedSectionId}
   data-setup-readiness={view.readiness}
   data-testid={setupWorkspaceTestIds.root}
@@ -214,7 +214,7 @@ function clearCheckpoint() {
       />
     {/if}
 
-    <div class="rounded-[24px] border border-border bg-bg-secondary/60 p-4" data-testid={setupWorkspaceTestIds.detail}>
+    <div class="rounded-lg border border-border bg-bg-secondary/60 p-3" data-testid={setupWorkspaceTestIds.detail}>
       <span aria-hidden="true" class="sr-only" data-testid={setupWorkspaceTestIds.selectedSection}>
         {view.selectedSectionId}
       </span>
@@ -358,12 +358,12 @@ function clearCheckpoint() {
           </p>
 
           {#if selectedSection.gateText}
-            <div class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning">
+            <div class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning">
               {selectedSection.gateText}
             </div>
           {/if}
 
-          <div class="rounded-2xl border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary">
+          <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary">
             {#if selectedSection.implemented}
               This expert section already has a dedicated surface elsewhere in the workspace; this fallback panel only appears when the selection contract gets ahead of the mounted detail components.
             {:else}
@@ -372,7 +372,7 @@ function clearCheckpoint() {
           </div>
 
           <button
-            class="rounded-full border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+            class="rounded-md border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
             data-testid={setupWorkspaceTestIds.plannedSectionRecovery}
             onclick={() => selectSection("full_parameters")}
             type="button"

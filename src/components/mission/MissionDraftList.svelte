@@ -98,7 +98,7 @@ function itemSummary(item: TypedDraftItem) {
 }
 </script>
 
-<section class="rounded-2xl border border-border bg-bg-primary p-4" data-testid={missionWorkspaceTestIds.draftList}>
+<section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.draftList}>
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mission list</p>
@@ -107,7 +107,7 @@ function itemSummary(item: TypedDraftItem) {
 
     <div class="flex flex-wrap gap-2">
       <button
-        class="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105"
+        class="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105"
         data-testid={missionWorkspaceTestIds.listAdd}
         onclick={onAddMissionItem}
         type="button"
@@ -115,7 +115,7 @@ function itemSummary(item: TypedDraftItem) {
         Add waypoint
       </button>
       <button
-        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105"
+        class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105"
         data-testid={missionWorkspaceTestIds.listAddSurveyGrid}
         onclick={() => onAddSurveyBlock("grid")}
         type="button"
@@ -123,7 +123,7 @@ function itemSummary(item: TypedDraftItem) {
         Grid survey
       </button>
       <button
-        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105"
+        class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105"
         data-testid={missionWorkspaceTestIds.listAddSurveyCorridor}
         onclick={() => onAddSurveyBlock("corridor")}
         type="button"
@@ -131,7 +131,7 @@ function itemSummary(item: TypedDraftItem) {
         Corridor survey
       </button>
       <button
-        class="rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105"
+        class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105"
         data-testid={missionWorkspaceTestIds.listAddSurveyStructure}
         onclick={() => onAddSurveyBlock("structure")}
         type="button"
@@ -143,7 +143,7 @@ function itemSummary(item: TypedDraftItem) {
 
   {#if orderedEntries.length === 0}
     <div
-      class="mt-4 rounded-2xl border border-dashed border-border bg-bg-secondary/60 px-4 py-6 text-sm text-text-secondary"
+      class="mt-4 rounded-lg border border-dashed border-border bg-bg-secondary/60 px-4 py-6 text-sm text-text-secondary"
       data-testid={missionWorkspaceTestIds.listEmpty}
     >
       No mission items or survey regions yet. Add a waypoint, or create a grid, corridor, or structure survey directly inside this shared workspace.
@@ -155,7 +155,7 @@ function itemSummary(item: TypedDraftItem) {
       )}
         {#if entry.kind === "mission-item"}
           <div
-            class={`w-full rounded-2xl border p-4 text-left transition ${selectedSurface.kind === "mission-item" && selectedMissionUiId === entry.item.uiId
+            class={`w-full rounded-lg border p-3 text-left transition ${selectedSurface.kind === "mission-item" && selectedMissionUiId === entry.item.uiId
               ? "border-accent/40 bg-accent/10 text-text-primary"
               : "border-border bg-bg-primary text-text-primary hover:border-accent/40"}`}
             data-selected={selectedSurface.kind === "mission-item" && selectedMissionUiId === entry.item.uiId ? "true" : "false"}
@@ -197,7 +197,7 @@ function itemSummary(item: TypedDraftItem) {
 
             <div class="mt-3 flex flex-wrap gap-2">
               <button
-                class="rounded-full border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+                class="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
                 data-testid={`${missionWorkspaceTestIds.itemMoveUpPrefix}-${entry.item.uiId}`}
                 disabled={entry.item.index === 0}
                 onclick={(event) => {
@@ -209,7 +209,7 @@ function itemSummary(item: TypedDraftItem) {
                 Move up
               </button>
               <button
-                class="rounded-full border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+                class="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
                 data-testid={`${missionWorkspaceTestIds.itemMoveDownPrefix}-${entry.item.uiId}`}
                 disabled={entry.item.index === items.length - 1}
                 onclick={(event) => {
@@ -221,7 +221,7 @@ function itemSummary(item: TypedDraftItem) {
                 Move down
               </button>
               <button
-                class="rounded-full border border-danger/40 bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger transition hover:brightness-105"
+                class="rounded-md border border-danger/40 bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger transition hover:brightness-105"
                 data-testid={`${missionWorkspaceTestIds.itemDeletePrefix}-${entry.item.uiId}`}
                 onclick={(event) => {
                   event.stopPropagation();

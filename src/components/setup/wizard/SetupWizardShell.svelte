@@ -107,7 +107,7 @@ function stepById(id: string): WizardStepSnapshot | null {
 {/snippet}
 
 <section
-  class="rounded-2xl border border-border bg-bg-secondary/60 p-4"
+  class="rounded-lg border border-border bg-bg-secondary/60 p-3"
   data-testid={setupWorkspaceTestIds.wizardRoot}
   data-phase={wizardState.phase}
 >
@@ -166,7 +166,7 @@ function stepById(id: string): WizardStepSnapshot | null {
 
   {#if wizardState.phase === "idle"}
     <div
-      class="mt-4 rounded-2xl border border-dashed border-border bg-bg-primary/60 px-4 py-4 text-sm text-text-secondary"
+      class="mt-4 rounded-lg border border-dashed border-border bg-bg-primary/60 px-4 py-4 text-sm text-text-secondary"
     >
       <p>
         Run the beginner path when you want a guided setup for a new vehicle. Expert sections stay
@@ -183,7 +183,7 @@ function stepById(id: string): WizardStepSnapshot | null {
     </div>
   {:else if wizardState.phase === "active" && currentStep}
     <section
-      class="mt-4 rounded-2xl border border-border bg-bg-primary/60 p-4"
+      class="mt-4 rounded-lg border border-border bg-bg-primary/60 p-3"
       data-testid={setupWorkspaceTestIds.wizardStepFrame}
       data-step={currentStep.id}
     >
@@ -234,7 +234,7 @@ function stepById(id: string): WizardStepSnapshot | null {
     </section>
   {:else if wizardState.phase === "paused_detour"}
     <div
-      class="mt-4 rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm text-text-secondary"
+      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-text-secondary"
       data-testid={setupWorkspaceTestIds.wizardPausedDetour}
     >
       <p>
@@ -260,7 +260,7 @@ function stepById(id: string): WizardStepSnapshot | null {
     </div>
   {:else if wizardState.phase === "paused_checkpoint"}
     <div
-      class="mt-4 rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm text-text-secondary"
+      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-text-secondary"
       data-testid={setupWorkspaceTestIds.wizardPausedCheckpoint}
     >
       <p>
@@ -270,7 +270,7 @@ function stepById(id: string): WizardStepSnapshot | null {
     </div>
   {:else if wizardState.phase === "paused_scope_change"}
     <div
-      class="mt-4 rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm text-text-secondary"
+      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-text-secondary"
       data-testid={setupWorkspaceTestIds.wizardPausedScope}
     >
       <p>
@@ -289,7 +289,7 @@ function stepById(id: string): WizardStepSnapshot | null {
     </div>
   {:else if wizardState.phase === "complete"}
     <section
-      class="mt-4 space-y-3 rounded-2xl border border-success/40 bg-success/5 p-4"
+      class="mt-4 space-y-3 rounded-lg border border-success/40 bg-success/5 p-3"
       data-testid={setupWorkspaceTestIds.wizardHandoff}
     >
       <header>

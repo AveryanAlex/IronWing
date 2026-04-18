@@ -360,7 +360,7 @@ function parsePositiveNumber(value: string): number | null {
 
   {#if showAdvanced && advancedAvailable}
     <div
-      class="mt-4 rounded-[24px] border border-border bg-bg-secondary/60 p-4"
+      class="mt-4 rounded-lg border border-border bg-bg-secondary/60 p-3"
       data-testid={parameterWorkspaceTestIds.advancedPanel}
     >
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -372,7 +372,7 @@ function parsePositiveNumber(value: string): number | null {
           </p>
         </div>
         <button
-          class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
           data-testid={parameterWorkspaceTestIds.advancedBackButton}
           onclick={closeAdvanced}
           type="button"
@@ -414,7 +414,7 @@ function parsePositiveNumber(value: string): number | null {
       <div class="space-y-4">
         {#if emptyState}
           <div
-            class="rounded-lg border border-border bg-bg-secondary p-4"
+            class="rounded-lg border border-border bg-bg-secondary p-3"
             data-testid={parameterWorkspaceTestIds.empty}
           >
             <p class="text-sm font-semibold text-text-primary">{emptyState.title}</p>
@@ -444,7 +444,7 @@ function parsePositiveNumber(value: string): number | null {
       </div>
 
       <aside
-        class="rounded-[24px] border border-border bg-bg-secondary/60 p-4"
+        class="rounded-lg border border-border bg-bg-secondary/60 p-3"
         data-testid={parameterWorkspaceTestIds.advancedEntry}
       >
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Advanced parameters</p>
@@ -453,7 +453,7 @@ function parsePositiveNumber(value: string): number | null {
           Open grouped raw browsing when you need searchable direct control, metadata-failure recovery, or edits outside the guided starters.
         </p>
         <button
-          class="mt-4 w-full rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-4 w-full rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={parameterWorkspaceTestIds.advancedButton}
           disabled={!advancedAvailable}
           onclick={() => openAdvanced()}

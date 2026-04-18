@@ -119,7 +119,7 @@ function resolveDraftNumber(value: string): number | null {
   </p>
 
   <div
-    class="rounded-2xl border border-border bg-bg-primary/80 p-4"
+    class="rounded-lg border border-border bg-bg-primary/80 p-3"
     data-testid={setupWorkspaceTestIds.wizardStepBatterySummary}
   >
     {#if failureMessage}
@@ -150,7 +150,7 @@ function resolveDraftNumber(value: string): number | null {
     </label>
   {/if}
 
-  <p class="rounded-2xl border border-border bg-bg-primary/60 px-4 py-3 text-xs text-text-secondary">
+  <p class="rounded-lg border border-border bg-bg-primary/60 px-4 py-3 text-xs text-text-secondary">
     Need to tweak board pins, sensor scaling, or chemistry thresholds? Open
     the Battery Monitor section from the wizard footer for the expert layout.
   </p>

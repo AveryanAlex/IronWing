@@ -90,7 +90,7 @@ function commitAltitude(rawValue: string) {
 }
 </script>
 
-<section class="rounded-2xl border border-border bg-bg-primary p-4" data-testid={missionWorkspaceTestIds.rallyInspector}>
+<section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.rallyInspector}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Rally inspector</p>
@@ -106,17 +106,17 @@ function commitAltitude(rawValue: string) {
   </div>
 
   {#if selection.kind === "none"}
-    <div class="mt-4 rounded-2xl border border-dashed border-border bg-bg-secondary/60 px-4 py-5 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.rallyInspectorEmpty}>
+    <div class="mt-4 rounded-lg border border-dashed border-border bg-bg-secondary/60 px-4 py-5 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.rallyInspectorEmpty}>
       Select a rally point from the list or map to edit coordinates and altitude-frame truth here without leaking those controls into mission or fence mode.
     </div>
   {:else if !item || !point || !coords || !altitude}
-    <div class="mt-4 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-5 text-sm text-warning">
+    <div class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-5 text-sm text-warning">
       <p class="font-semibold">Rally selection unavailable</p>
       <p class="mt-2 text-xs text-warning/90">The selected rally point could not be resolved from the active planner state, so the inspector stayed fail-closed instead of rendering broken controls.</p>
     </div>
   {:else}
     <div class="mt-4 space-y-4">
-      <div class="rounded-2xl border border-border bg-bg-secondary/60 p-4">
+      <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Rally point {item.index + 1}</p>
         <h4 class="mt-1 text-base font-semibold text-text-primary">Emergency / diversion target</h4>
         <p class="mt-1 text-xs text-text-secondary">
@@ -125,13 +125,13 @@ function commitAltitude(rawValue: string) {
       </div>
 
       {#if readOnly}
-        <div class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
+        <div class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
           Rally editing is read-only in the current planner attachment state. The point stays visible for truthful inspection, but edits stay blocked until you return to an editable scope.
         </div>
       {/if}
 
       <div class="grid gap-3 md:grid-cols-3">
-        <label class="space-y-1 rounded-2xl border border-border bg-bg-secondary/60 p-3">
+        <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
           <span class="text-xs font-medium text-text-muted">Latitude</span>
           <input
             class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
@@ -144,7 +144,7 @@ function commitAltitude(rawValue: string) {
           />
         </label>
 
-        <label class="space-y-1 rounded-2xl border border-border bg-bg-secondary/60 p-3">
+        <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
           <span class="text-xs font-medium text-text-muted">Longitude</span>
           <input
             class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
@@ -157,7 +157,7 @@ function commitAltitude(rawValue: string) {
           />
         </label>
 
-        <label class="space-y-1 rounded-2xl border border-border bg-bg-secondary/60 p-3">
+        <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
           <span class="text-xs font-medium text-text-muted">Altitude (m)</span>
           <input
             class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
@@ -189,7 +189,7 @@ function commitAltitude(rawValue: string) {
         </select>
       </label>
 
-      <div class="rounded-2xl border border-border bg-bg-secondary/60 px-4 py-3 text-xs text-text-secondary">
+      <div class="rounded-lg border border-border bg-bg-secondary/60 px-4 py-3 text-xs text-text-secondary">
         The active frame is <span class="font-semibold text-text-primary">{altitudeFrameLabel(altitude.frame)}</span>. Switching frames keeps latitude and longitude intact and resets altitude to a safe zero baseline so terrain/home conversions never silently lie.
       </div>
     </div>

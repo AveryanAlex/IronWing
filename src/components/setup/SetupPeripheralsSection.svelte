@@ -368,7 +368,7 @@ function discardItem(name: string) {
 
     <div class="flex flex-wrap gap-2">
       <button
-        class={`rounded-full border px-4 py-2 text-sm font-semibold transition ${showConfiguredOnly ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-primary/80 text-text-primary hover:border-accent hover:text-accent"}`}
+        class={`rounded-md border px-4 py-2 text-sm font-semibold transition ${showConfiguredOnly ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-primary/80 text-text-primary hover:border-accent hover:text-accent"}`}
         data-testid={setupWorkspaceTestIds.peripheralsFilter}
         onclick={() => (showConfiguredOnly = !showConfiguredOnly)}
         type="button"
@@ -377,7 +377,7 @@ function discardItem(name: string) {
       </button>
       {#if docsUrl}
         <a
-          class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
           data-testid={setupWorkspaceTestIds.peripheralsDocsLink}
           href={docsUrl}
           rel="noreferrer"
@@ -390,7 +390,7 @@ function discardItem(name: string) {
   </div>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-3"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
     data-testid={setupWorkspaceTestIds.peripheralsSummary}
   >
     <div>
@@ -416,7 +416,7 @@ function discardItem(name: string) {
 
   {#if visibleGroups.length === 0}
     <div
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
       data-testid={setupWorkspaceTestIds.peripheralsEmpty}
     >
       <p class="font-semibold text-text-primary">
@@ -428,7 +428,7 @@ function discardItem(name: string) {
           : "This snapshot did not expose enough peripheral rows for a curated inventory. Recover through Full Parameters if you need direct access."}
       </p>
       <button
-        class="mt-4 rounded-full border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.peripheralsRecovery}
         onclick={onSelectRecovery}
         type="button"
@@ -440,7 +440,7 @@ function discardItem(name: string) {
     <div class="space-y-4">
       {#each visibleGroups as group (group.id)}
         <section
-          class="rounded-[24px] border border-border bg-bg-primary/70 p-4"
+          class="rounded-lg border border-border bg-bg-primary/70 p-3"
           data-testid={`${setupWorkspaceTestIds.peripheralsGroupPrefix}-${group.id}`}
         >
           <div class="flex flex-wrap items-center justify-between gap-3">
@@ -461,7 +461,7 @@ function discardItem(name: string) {
 
           <div class="mt-4 space-y-4">
             {#each group.subgroups as subgroup (subgroup.id)}
-              <div class="rounded-2xl border border-border bg-bg-primary/70 p-4">
+              <div class="rounded-lg border border-border bg-bg-primary/70 p-3">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Subgroup</p>

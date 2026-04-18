@@ -133,7 +133,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
 
     {#if docsUrl}
       <a
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.rcDocsLink}
         href={docsUrl}
         rel="noreferrer"
@@ -144,7 +144,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
     {/if}
   </div>
 
-  <div class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-[minmax(0,1fr)_auto]">
+  <div class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-[minmax(0,1fr)_auto]">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Live receiver state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.rcSignal}>
@@ -155,14 +155,14 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
       </p>
     </div>
 
-    <div class="rounded-2xl border border-border bg-bg-secondary/70 px-4 py-3 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.rcRssi}>
+    <div class="rounded-lg border border-border bg-bg-secondary/70 px-4 py-3 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.rcRssi}>
       {view.rcReceiver.rssiText}
     </div>
   </div>
 
   {#if retainedFailures.length > 0}
     <div
-      class="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
+      class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
       data-testid={setupWorkspaceTestIds.rcFailure}
     >
       <p class="font-semibold text-text-primary">The shared review tray is still retaining RC mapping failures.</p>
@@ -174,7 +174,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
     </div>
   {/if}
 
-  <div class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+  <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
     <div class="flex flex-wrap items-center gap-2">
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Live channel bars</p>
       <span class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
@@ -188,14 +188,14 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
     </div>
 
     {#if view.rcReceiver.channels.length === 0}
-      <div class="mt-4 rounded-2xl border border-border bg-bg-secondary/70 px-4 py-4 text-sm leading-6 text-text-secondary">
+      <div class="mt-4 rounded-lg border border-border bg-bg-secondary/70 px-4 py-4 text-sm leading-6 text-text-secondary">
         {view.rcReceiver.detailText}
       </div>
     {:else}
       <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {#each view.rcReceiver.channels as channel (channel.channel)}
           <article
-            class={`rounded-2xl border px-3 py-3 ${channel.stale ? "border-warning/40 bg-warning/10" : "border-border bg-bg-secondary/70"}`}
+            class={`rounded-lg border px-3 py-3 ${channel.stale ? "border-warning/40 bg-warning/10" : "border-border bg-bg-secondary/70"}`}
             data-testid={`${setupWorkspaceTestIds.rcBarPrefix}-${channel.channel}`}
           >
             <div class="flex items-center justify-between gap-2">
@@ -215,7 +215,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
     {/if}
   </div>
 
-  <div class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+  <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
     <div class="flex flex-wrap items-center gap-2">
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Channel-order presets</p>
       <span class="text-sm text-text-secondary">Start with a known transmitter order, then fine-tune individual axes if needed.</span>
@@ -224,7 +224,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
     <div class="mt-4 flex flex-wrap gap-2">
       {#each PRESETS as preset (preset.id)}
         <button
-          class={`rounded-full border px-4 py-2 text-sm font-semibold transition ${currentPreset?.id === preset.id ? "border-accent/40 bg-accent/10 text-accent" : "border-border bg-bg-secondary text-text-primary hover:border-accent hover:text-accent"}`}
+          class={`rounded-md border px-4 py-2 text-sm font-semibold transition ${currentPreset?.id === preset.id ? "border-accent/40 bg-accent/10 text-accent" : "border-border bg-bg-secondary text-text-primary hover:border-accent hover:text-accent"}`}
           data-testid={`${setupWorkspaceTestIds.rcPresetPrefix}-${preset.id}`}
           disabled={view.checkpoint.blocksActions}
           onclick={() => stagePreset(preset)}
@@ -236,7 +236,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
     </div>
 
     <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <article class="rounded-2xl border border-border bg-bg-secondary/70 p-4">
+      <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">RCMAP_ROLL</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">Roll</h4>
         <p class="mt-2 text-sm text-text-secondary">Map the primary roll axis to the truthful receiver channel.</p>
@@ -259,7 +259,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
           {/each}
         </select>
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.rcStageButtonPrefix}-RCMAP_ROLL`}
           disabled={!canStage(rollItem, rollDraft)}
           onclick={() => stage(rollItem, rollDraft)}
@@ -269,7 +269,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
         </button>
       </article>
 
-      <article class="rounded-2xl border border-border bg-bg-secondary/70 p-4">
+      <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">RCMAP_PITCH</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">Pitch</h4>
         <p class="mt-2 text-sm text-text-secondary">Map the primary pitch axis to the truthful receiver channel.</p>
@@ -292,7 +292,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
           {/each}
         </select>
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.rcStageButtonPrefix}-RCMAP_PITCH`}
           disabled={!canStage(pitchItem, pitchDraft)}
           onclick={() => stage(pitchItem, pitchDraft)}
@@ -302,7 +302,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
         </button>
       </article>
 
-      <article class="rounded-2xl border border-border bg-bg-secondary/70 p-4">
+      <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">RCMAP_THROTTLE</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">Throttle</h4>
         <p class="mt-2 text-sm text-text-secondary">Map the primary throttle axis to the truthful receiver channel.</p>
@@ -325,7 +325,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
           {/each}
         </select>
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.rcStageButtonPrefix}-RCMAP_THROTTLE`}
           disabled={!canStage(throttleItem, throttleDraft)}
           onclick={() => stage(throttleItem, throttleDraft)}
@@ -335,7 +335,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
         </button>
       </article>
 
-      <article class="rounded-2xl border border-border bg-bg-secondary/70 p-4">
+      <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">RCMAP_YAW</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">Yaw</h4>
         <p class="mt-2 text-sm text-text-secondary">Map the primary yaw axis to the truthful receiver channel.</p>
@@ -358,7 +358,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
           {/each}
         </select>
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.rcStageButtonPrefix}-RCMAP_YAW`}
           disabled={!canStage(yawItem, yawDraft)}
           onclick={() => stage(yawItem, yawDraft)}

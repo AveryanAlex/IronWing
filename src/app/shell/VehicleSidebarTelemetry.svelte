@@ -49,7 +49,7 @@ let launcherStatusText = $derived.by(() => {
     </div>
 
     <button
-      class="rounded-full border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-text-primary transition hover:border-accent/40 hover:text-accent"
+      class="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-text-primary transition hover:border-accent/40 hover:text-accent"
       data-testid={appShellTestIds.telemetrySettingsLauncher}
       onclick={() => telemetrySettingsDialog.open()}
       type="button"

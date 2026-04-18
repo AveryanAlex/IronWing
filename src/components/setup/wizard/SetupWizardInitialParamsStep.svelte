@@ -137,7 +137,7 @@ function handleMarkReviewed() {
   </p>
 
   <div
-    class="rounded-2xl border border-border bg-bg-primary/80 p-4"
+    class="rounded-lg border border-border bg-bg-primary/80 p-3"
     data-testid={setupWorkspaceTestIds.wizardStepInitialParamsSummary}
   >
     {#if failureMessage}
@@ -167,7 +167,7 @@ function handleMarkReviewed() {
     {/if}
   </div>
 
-  <p class="rounded-2xl border border-border bg-bg-primary/60 px-4 py-3 text-xs text-text-secondary">
+  <p class="rounded-lg border border-border bg-bg-primary/60 px-4 py-3 text-xs text-text-secondary">
     Tuning continues after the wizard — this step only primes a beginner
     baseline. Full PID tuning lives in its own setup section.
   </p>

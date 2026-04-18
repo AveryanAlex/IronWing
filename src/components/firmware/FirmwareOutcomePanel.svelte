@@ -248,7 +248,7 @@ let sessionStateLabel = $derived(state.isActive
 </script>
 
 <section
-  class="rounded-[24px] border border-border bg-bg-secondary/30 p-4"
+  class="rounded-lg border border-border bg-bg-secondary/30 p-3"
   data-testid={firmwareWorkspaceTestIds.outcomePanel}
 >
   <div class="flex flex-wrap items-start justify-between gap-3">
@@ -269,7 +269,7 @@ let sessionStateLabel = $derived(state.isActive
   </div>
 
   {#if state.isActive}
-    <div class="mt-4 rounded-2xl border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-text-primary">
+    <div class="mt-4 rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-text-primary">
       <p class="font-semibold">Live firmware session</p>
       <p class="mt-1">
         {state.progress?.phase_label ?? state.sessionPhase ?? "Working"}
@@ -281,7 +281,7 @@ let sessionStateLabel = $derived(state.isActive
   {/if}
 
   {#if activeOutcome && outcomeCopy}
-    <article class={`mt-4 rounded-2xl border px-4 py-4 ${toneClass(outcomeCopy.tone)}`}>
+    <article class={`mt-4 rounded-lg border px-4 py-4 ${toneClass(outcomeCopy.tone)}`}>
       <p class="text-xs font-semibold uppercase tracking-[0.16em]" data-testid={firmwareWorkspaceTestIds.outcomeResult}>
         {outcomeCopy.label}
       </p>
@@ -312,7 +312,7 @@ let sessionStateLabel = $derived(state.isActive
     </article>
   {:else}
     <div
-      class="mt-4 rounded-2xl border border-border bg-bg-primary px-4 py-4 text-sm text-text-secondary"
+      class="mt-4 rounded-lg border border-border bg-bg-primary px-4 py-4 text-sm text-text-secondary"
       data-testid={firmwareWorkspaceTestIds.outcomeEmpty}
     >
       No retained firmware outcome yet. Once install or recovery runs, the exact result facts stay visible here until you dismiss them.

@@ -166,7 +166,7 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
 
     {#if docsUrl}
       <a
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.serialPortsDocsLink}
         href={docsUrl}
         rel="noreferrer"
@@ -178,7 +178,7 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
   </div>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-3"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
     data-testid={setupWorkspaceTestIds.serialPortsSummary}
   >
     <div>
@@ -208,13 +208,13 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
 
   {#if model.recoveryText}
     <div
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
       data-testid={setupWorkspaceTestIds.serialPortsRecovery}
     >
       <p class="font-semibold text-text-primary">Metadata recovery is active for Serial Ports.</p>
       <p class="mt-2">{model.recoveryText}</p>
       <button
-        class="mt-4 rounded-full border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         onclick={onSelectRecovery}
         type="button"
       >
@@ -225,7 +225,7 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
 
   {#each model.conflicts as conflict (conflict.protocol)}
     <div
-      class="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
+      class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
       data-testid={`${setupWorkspaceTestIds.serialPortsBannerPrefix}-conflict-${conflict.protocol}`}
     >
       {conflict.message}
@@ -233,13 +233,13 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
   {/each}
 
   {#if model.ports.length === 0}
-    <div class="rounded-2xl border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary">
+    <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary">
       No serial rows are available for this scope yet. Connect a vehicle with SERIALn_* parameters or recover through Full Parameters.
     </div>
   {:else}
     <div class="space-y-3">
       {#each model.ports as row (row.prefix)}
-        <article class="rounded-2xl border border-border bg-bg-primary/80 p-4" data-testid={`${setupWorkspaceTestIds.serialPortsRowPrefix}-${row.index}`}>
+        <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={`${setupWorkspaceTestIds.serialPortsRowPrefix}-${row.index}`}>
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div class="flex flex-wrap items-center gap-2">
@@ -288,7 +288,7 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
             </div>
 
             <button
-              class="self-end rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+              class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
               data-testid={`${setupWorkspaceTestIds.serialPortsStageButtonPrefix}-${row.protocolParamName}`}
               disabled={!canStage(row.protocolParamName, row.protocolValue, row.protocolMetadataReady)}
               onclick={() => stage(row.protocolParamName, row.protocolValue, row.protocolMetadataReady)}
@@ -321,7 +321,7 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
             </div>
 
             <button
-              class="self-end rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+              class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
               data-testid={`${setupWorkspaceTestIds.serialPortsStageButtonPrefix}-${row.baudParamName}`}
               disabled={!canStage(row.baudParamName, row.baudValue, row.baudMetadataReady)}
               onclick={() => stage(row.baudParamName, row.baudValue, row.baudMetadataReady)}
@@ -333,7 +333,7 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
 
           {#if rowRecoveryVisible(row)}
             <div
-              class="mt-4 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+              class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
               data-testid={`${setupWorkspaceTestIds.serialPortsBannerPrefix}-recovery-${row.index}`}
             >
               {row.recoveryText}

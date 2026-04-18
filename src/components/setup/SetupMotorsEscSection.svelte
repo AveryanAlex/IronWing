@@ -561,7 +561,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
 
     {#if docsUrl}
       <a
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.motorsEscDocsLink}
         href={docsUrl}
         rel="noreferrer"
@@ -573,7 +573,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
   </div>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-3"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
     data-testid={setupWorkspaceTestIds.motorsEscSummary}
   >
     <div>
@@ -601,7 +601,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
 
   {#if retainedReversalFailures.length > 0}
     <div
-      class="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
+      class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
       data-testid={setupWorkspaceTestIds.motorsEscFailure}
     >
       <p class="font-semibold text-text-primary">The shared review tray is still retaining reversal failures.</p>
@@ -615,14 +615,14 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
 
   {#each banners as banner (banner.id)}
     <div
-      class={`rounded-2xl border px-4 py-4 text-sm leading-6 ${bannerClass(banner.tone)}`}
+      class={`rounded-lg border px-4 py-4 text-sm leading-6 ${bannerClass(banner.tone)}`}
       data-testid={`${setupWorkspaceTestIds.motorsEscBannerPrefix}-${banner.id}`}
     >
       {banner.text}
     </div>
   {/each}
 
-  <div class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+  <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Motor test gate</p>
@@ -632,7 +632,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
       </div>
 
       <button
-        class={`rounded-full border px-4 py-2 text-sm font-semibold transition ${testUnlocked ? "border-danger/40 bg-danger/10 text-danger" : "border-border bg-bg-secondary text-text-primary hover:border-accent hover:text-accent"}`}
+        class={`rounded-md border px-4 py-2 text-sm font-semibold transition ${testUnlocked ? "border-danger/40 bg-danger/10 text-danger" : "border-border bg-bg-secondary text-text-primary hover:border-accent hover:text-accent"}`}
         data-testid={setupWorkspaceTestIds.motorsEscUnlock}
         disabled={unlockDisabledReason !== null}
         onclick={toggleUnlock}
@@ -652,10 +652,10 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
   </div>
 
   {#if rows.length === 0}
-    <div class="rounded-2xl border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary">
+    <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary">
       Motor rows are hidden until the section can prove a real layout. Use Frame & Orientation or Full Parameters to recover missing truth before testing.
       <button
-        class="ml-3 rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="ml-3 rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         onclick={onSelectRecovery}
         type="button"
       >
@@ -671,7 +671,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
         {@const reversalFailure = row.reversalParamName ? params.retainedFailures[row.reversalParamName] : null}
         {@const reverseParamItem = reverseItem(row)}
         <article
-          class={`rounded-2xl border px-4 py-4 ${selectedMotorNumber === row.motorNumber ? "border-accent/40 bg-accent/5" : "border-border bg-bg-primary/80"}`}
+          class={`rounded-lg border px-4 py-4 ${selectedMotorNumber === row.motorNumber ? "border-accent/40 bg-accent/5" : "border-border bg-bg-primary/80"}`}
           data-selected={selectedMotorNumber === row.motorNumber}
           data-testid={`${setupWorkspaceTestIds.motorsEscRowPrefix}-${row.motorNumber}`}
         >
@@ -679,7 +679,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
             <div>
               <div class="flex flex-wrap items-center gap-2">
                 <button
-                  class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary transition hover:border-accent hover:text-accent"
+                  class="rounded-md border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary transition hover:border-accent hover:text-accent"
                   onclick={() => selectRow(row.motorNumber)}
                   type="button"
                 >
@@ -702,7 +702,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
             </div>
 
             <button
-              class="shrink-0 rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+              class="shrink-0 rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
               data-testid={`${setupWorkspaceTestIds.motorsEscRowTestPrefix}-${row.motorNumber}`}
               disabled={testButtonDisabled(row)}
               onclick={() => runMotorTest(row)}
@@ -714,7 +714,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
 
           {#if commandErrorByMotor[row.motorNumber]}
             <div
-              class="mt-3 rounded-2xl border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger"
+              class="mt-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger"
               data-testid={`${setupWorkspaceTestIds.motorsEscRowErrorPrefix}-${row.motorNumber}`}
             >
               Motor test rejected · {commandErrorByMotor[row.motorNumber]}
@@ -722,7 +722,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
           {/if}
 
           {#if directionControlsVisible(row)}
-            <div class="mt-4 rounded-2xl border border-border bg-bg-secondary/70 px-4 py-4">
+            <div class="mt-4 rounded-lg border border-border bg-bg-secondary/70 px-4 py-4">
               <div class="flex flex-wrap items-center gap-2">
                 <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Observed direction</p>
                 <span class={`rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${resultTone(directionResult)}`} data-testid={`${setupWorkspaceTestIds.motorsEscRowResultPrefix}-${row.motorNumber}`}>
@@ -736,7 +736,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
               </p>
               <div class="mt-3 flex flex-wrap gap-2">
                 <button
-                  class={`rounded-full border px-4 py-2 text-sm font-semibold transition ${directionResult === "correct" ? "border-success/40 bg-success/10 text-success" : "border-border bg-bg-primary text-text-primary hover:border-accent hover:text-accent"}`}
+                  class={`rounded-md border px-4 py-2 text-sm font-semibold transition ${directionResult === "correct" ? "border-success/40 bg-success/10 text-success" : "border-border bg-bg-primary text-text-primary hover:border-accent hover:text-accent"}`}
                   data-testid={`${setupWorkspaceTestIds.motorsEscRowCorrectPrefix}-${row.motorNumber}`}
                   onclick={() => markDirection(row, "correct")}
                   type="button"
@@ -744,7 +744,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
                   Correct
                 </button>
                 <button
-                  class={`rounded-full border px-4 py-2 text-sm font-semibold transition ${directionResult === "reversed" ? "border-danger/40 bg-danger/10 text-danger" : "border-border bg-bg-primary text-text-primary hover:border-accent hover:text-accent"}`}
+                  class={`rounded-md border px-4 py-2 text-sm font-semibold transition ${directionResult === "reversed" ? "border-danger/40 bg-danger/10 text-danger" : "border-border bg-bg-primary text-text-primary hover:border-accent hover:text-accent"}`}
                   data-testid={`${setupWorkspaceTestIds.motorsEscRowReversedPrefix}-${row.motorNumber}`}
                   onclick={() => markDirection(row, "reversed")}
                   type="button"
@@ -754,13 +754,13 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
               </div>
 
               {#if directionResult === "reversed"}
-                <div class="mt-4 rounded-2xl border border-border bg-bg-primary/80 px-4 py-4">
+                <div class="mt-4 rounded-lg border border-border bg-bg-primary/80 px-4 py-4">
                   {#if row.ownerStatus === "resolved" && row.reversalParamName && reverseParamItem}
                     <p class="text-sm leading-6 text-text-secondary">
                       Queue a shared-tray reversal fix for {row.reversalParamName}. The section never writes this directly.
                     </p>
                     <button
-                      class="mt-3 rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                      class="mt-3 rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
                       data-testid={`${setupWorkspaceTestIds.motorsEscRowReversePrefix}-${row.motorNumber}`}
                       disabled={!canStageReversal(row)}
                       onclick={() => stageReversal(row)}
@@ -775,7 +775,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
                   {/if}
 
                   {#if reversalFailure}
-                    <div class="mt-3 rounded-2xl border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger">
+                    <div class="mt-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger">
                       {reversalFailure.message}
                     </div>
                   {/if}

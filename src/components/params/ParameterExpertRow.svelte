@@ -71,7 +71,7 @@ function submitStage(event: SubmitEvent) {
 </script>
 
 <form
-  class={`rounded-2xl border p-4 ${props.row.isHighlighted ? "border-accent/40 bg-accent/5" : "border-border bg-bg-primary/70"}`}
+  class={`rounded-lg border p-3 ${props.row.isHighlighted ? "border-accent/40 bg-accent/5" : "border-border bg-bg-primary/70"}`}
   data-highlighted={props.row.isHighlighted}
   data-param-name={props.row.name}
   data-testid={`${parameterWorkspaceTestIds.itemPrefix}-${props.row.name}`}
@@ -124,7 +124,7 @@ function submitStage(event: SubmitEvent) {
 
   {#if props.row.failureMessage}
     <div
-      class="mt-3 rounded-2xl border border-danger/30 bg-danger/10 px-3 py-3 text-sm text-danger"
+      class="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-3 text-sm text-danger"
       data-testid={`${parameterWorkspaceTestIds.failurePrefix}-${props.row.name}`}
     >
       {props.row.failureMessage}
@@ -133,7 +133,7 @@ function submitStage(event: SubmitEvent) {
 
   {#if props.row.isStaged}
     <div
-      class="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-accent/20 bg-accent/5 px-3 py-2 text-sm text-text-secondary"
+      class="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-sm text-text-secondary"
       data-testid={`${parameterWorkspaceTestIds.diffPrefix}-${props.row.name}`}
     >
       <span>Current</span>
@@ -165,7 +165,7 @@ function submitStage(event: SubmitEvent) {
 
       {#if props.row.editorKind === "enum"}
         <select
-          class="mt-2 w-full rounded-2xl border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${parameterWorkspaceTestIds.inputPrefix}-${props.row.name}`}
           disabled={isEditingDisabled()}
           onchange={(event) => {
@@ -180,7 +180,7 @@ function submitStage(event: SubmitEvent) {
         </select>
       {:else}
         <input
-          class="mt-2 w-full rounded-2xl border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${parameterWorkspaceTestIds.inputPrefix}-${props.row.name}`}
           disabled={isEditingDisabled()}
           max={props.row.range?.max}
@@ -199,7 +199,7 @@ function submitStage(event: SubmitEvent) {
     </label>
 
     <button
-      class="rounded-full border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+      class="rounded-md border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
       data-testid={`${parameterWorkspaceTestIds.stageButtonPrefix}-${props.row.name}`}
       disabled={isEditingDisabled()}
       type="submit"
@@ -209,7 +209,7 @@ function submitStage(event: SubmitEvent) {
 
     {#if props.row.isStaged}
       <button
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-danger/40 hover:text-danger"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-danger/40 hover:text-danger"
         data-testid={`${parameterWorkspaceTestIds.discardButtonPrefix}-${props.row.name}`}
         onclick={() => props.onDiscard(props.row.name)}
         type="button"

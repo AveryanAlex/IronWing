@@ -43,7 +43,7 @@ function retryEdit(name: string) {
     data-surface-kind={surface}
     data-testid={appShellTestIds.parameterReviewTray}
   >
-    <div class="mx-auto max-w-5xl rounded-[26px] border border-border bg-bg-secondary/95 shadow-[0_-24px_80px_rgba(0,0,0,0.28)] backdrop-blur">
+    <div class="mx-auto max-w-5xl rounded-lg border border-border bg-bg-secondary/95 shadow-[0_-24px_80px_rgba(0,0,0,0.28)] backdrop-blur">
       <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
         <div class="min-w-0">
           <p class="runtime-eyebrow">Parameter changes</p>
@@ -88,7 +88,7 @@ function retryEdit(name: string) {
             {open ? "open" : "closed"}
           </span>
           <button
-            class="rounded-full border border-accent/30 bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            class="rounded-md border border-accent/30 bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             data-testid={appShellTestIds.parameterReviewApply}
             disabled={isApplying}
             onclick={applyQueuedEdits}
@@ -97,7 +97,7 @@ function retryEdit(name: string) {
             {view.applyButtonText}
           </button>
           <button
-            class="rounded-full border border-border bg-bg-primary/70 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-border-light"
+            class="rounded-md border border-border bg-bg-primary/70 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-border-light"
             data-testid={appShellTestIds.parameterReviewToggle}
             onclick={onToggle}
             type="button"
@@ -105,7 +105,7 @@ function retryEdit(name: string) {
             {open ? "Hide changes" : "Review changes"}
           </button>
           <button
-            class="rounded-full border border-border bg-bg-primary/70 px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-danger/40 hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
+            class="rounded-md border border-border bg-bg-primary/70 px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-danger/40 hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
             data-testid={appShellTestIds.parameterReviewClear}
             disabled={isApplying}
             onclick={() => store.clearStagedEdits()}
@@ -150,7 +150,7 @@ function retryEdit(name: string) {
                     {/if}
                     {#if edit.failureMessage}
                       <button
-                        class="rounded-full border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-accent transition hover:border-accent hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        class="rounded-md border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-accent transition hover:border-accent hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
                         data-testid={`${appShellTestIds.parameterReviewRetryPrefix}-${edit.name}`}
                         disabled={isApplying}
                         onclick={() => retryEdit(edit.name)}
@@ -160,7 +160,7 @@ function retryEdit(name: string) {
                       </button>
                     {/if}
                     <button
-                      class="rounded-full border border-border bg-bg-secondary/80 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary transition hover:border-danger/40 hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
+                      class="rounded-md border border-border bg-bg-secondary/80 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary transition hover:border-danger/40 hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
                       data-testid={`${appShellTestIds.parameterReviewDiscardPrefix}-${edit.name}`}
                       disabled={isApplying}
                       onclick={() => store.discardStagedEdit(edit.name)}
@@ -183,7 +183,7 @@ function retryEdit(name: string) {
 
                 {#if edit.failureMessage}
                   <div
-                    class="mt-4 rounded-2xl border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger"
+                    class="mt-4 rounded-lg border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger"
                     data-testid={`${appShellTestIds.parameterReviewFailurePrefix}-${edit.name}`}
                   >
                     <p class="font-semibold">{edit.failureMessage}</p>

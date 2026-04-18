@@ -162,7 +162,7 @@ function resolvedInputText(): string {
 
     {#if docsUrl}
       <a
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.initialParamsDocsLink}
         href={docsUrl}
         rel="noreferrer"
@@ -174,7 +174,7 @@ function resolvedInputText(): string {
   </div>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-3"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
     data-testid={setupWorkspaceTestIds.initialParamsSummary}
   >
     <div>
@@ -204,7 +204,7 @@ function resolvedInputText(): string {
     </div>
   </div>
 
-  <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+  <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Vehicle inputs</p>
     <h4 class="mt-2 text-base font-semibold text-text-primary">Starter assumptions</h4>
     <p class="mt-2 text-sm text-text-secondary">
@@ -258,7 +258,7 @@ function resolvedInputText(): string {
 
   {#if model.validationMessage}
     <div
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
       data-testid={`${setupWorkspaceTestIds.initialParamsBannerPrefix}-inputs`}
     >
       {model.validationMessage}
@@ -269,7 +269,7 @@ function resolvedInputText(): string {
     <div class="grid gap-3 xl:grid-cols-3">
       {#each model.batches as batch (batch.id)}
         <article
-          class="rounded-2xl border border-border bg-bg-primary/80 p-4"
+          class="rounded-lg border border-border bg-bg-primary/80 p-3"
           data-testid={`${setupWorkspaceTestIds.initialParamsPreviewPrefix}-${batch.id}`}
         >
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Preview batch</p>
@@ -295,7 +295,7 @@ function resolvedInputText(): string {
 
   {#if model.recoveryReasons.length > 0}
     <div
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
       data-testid={setupWorkspaceTestIds.initialParamsRecovery}
     >
       <p class="font-semibold text-text-primary">Initial-parameter recovery is active.</p>
@@ -305,7 +305,7 @@ function resolvedInputText(): string {
         {/each}
       </ul>
       <button
-        class="mt-4 rounded-full border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         onclick={onSelectRecovery}
         type="button"
       >

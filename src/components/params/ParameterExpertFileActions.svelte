@@ -167,7 +167,7 @@ function formatError(error: unknown) {
 </script>
 
 <section
-  class="rounded-2xl border border-border bg-bg-primary/55 p-4"
+  class="rounded-lg border border-border bg-bg-primary/55 p-3"
   data-testid={parameterWorkspaceTestIds.expertFileActions}
 >
   <div class="flex flex-wrap items-start justify-between gap-3">
@@ -181,7 +181,7 @@ function formatError(error: unknown) {
 
     <div class="flex flex-wrap items-center gap-2">
       <button
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={parameterWorkspaceTestIds.expertFileImportButton}
         disabled={actionsDisabled}
         onclick={importFile}
@@ -190,7 +190,7 @@ function formatError(error: unknown) {
         {actionState === "importing" ? "Importing…" : "Import .param file"}
       </button>
       <button
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={parameterWorkspaceTestIds.expertFileExportButton}
         disabled={actionsDisabled}
         onclick={exportFile}
@@ -202,7 +202,7 @@ function formatError(error: unknown) {
   </div>
 
   <div
-    class={`mt-4 rounded-2xl border px-3 py-3 text-sm ${statusClass()}`}
+    class={`mt-4 rounded-lg border px-3 py-3 text-sm ${statusClass()}`}
     data-action={actionKind ?? "none"}
     data-skipped-count={String(skippedCount)}
     data-staged-count={String(stagedCount)}

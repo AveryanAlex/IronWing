@@ -597,7 +597,7 @@ $effect(() => {
 </script>
 
 <section
-  class="rounded-[24px] border border-border bg-bg-secondary/40 p-4"
+  class="rounded-lg border border-border bg-bg-secondary/40 p-3"
   data-testid={firmwareWorkspaceTestIds.serialPanel}
 >
   <div class="flex flex-wrap items-start justify-between gap-3">
@@ -618,7 +618,7 @@ $effect(() => {
   </div>
 
   <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
-    <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+    <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
       <div class="flex flex-wrap items-center gap-3">
         <label class="min-w-[13rem] flex-1">
           <span class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Serial port</span>
@@ -674,7 +674,7 @@ $effect(() => {
 
       <div class="mt-4 grid gap-3 xl:grid-cols-2">
         <article
-          class={`rounded-2xl border p-4 ${usingCatalogSource
+          class={`rounded-lg border p-3 ${usingCatalogSource
             ? "border-accent/40 bg-accent/10"
             : "border-border bg-bg-secondary/40"}`}
           data-testid={firmwareWorkspaceTestIds.sourceCatalog}
@@ -686,7 +686,7 @@ $effect(() => {
             </div>
             {#if !usingCatalogSource}
               <button
-                class="rounded-full border border-border bg-bg-primary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+                class="rounded-md border border-border bg-bg-primary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
                 onclick={handleUseCatalogSource}
                 type="button"
               >
@@ -722,7 +722,7 @@ $effect(() => {
                 <p class="mt-1 text-sm text-text-secondary">Search targets when board proof is missing or uncertain.</p>
               </div>
               <button
-                class="rounded-full border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:opacity-60"
+                class="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:opacity-60"
                 data-testid={firmwareWorkspaceTestIds.manualTargetToggle}
                 disabled={manualTargetRequired}
                 onclick={() => (manualOverrideExpanded = !manualOverrideExpanded)}
@@ -778,7 +778,7 @@ $effect(() => {
                 >
                   <span>{targetListError}</span>
                   <button
-                    class="rounded-full border border-danger/40 bg-bg-primary px-3 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/5"
+                    class="rounded-md border border-danger/40 bg-bg-primary px-3 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/5"
                     data-testid={firmwareWorkspaceTestIds.targetListRetry}
                     onclick={() => void loadCatalogTargets()}
                     type="button"
@@ -798,7 +798,7 @@ $effect(() => {
                   {#each filteredTargets as match (match.key)}
                     <button
                       aria-pressed={selectedTargetKey === match.key}
-                      class={`rounded-2xl border px-3 py-3 text-left transition ${selectedTargetKey === match.key
+                      class={`rounded-lg border px-3 py-3 text-left transition ${selectedTargetKey === match.key
                         ? "border-accent/40 bg-accent/10"
                         : "border-border bg-bg-secondary hover:border-border-light hover:bg-bg-primary"}`}
                       onclick={() => void handleSelectManualTarget(match.target)}
@@ -849,7 +849,7 @@ $effect(() => {
             {/if}
           </div>
 
-          <div class="mt-3 rounded-2xl border border-border/70 bg-bg-primary/80 p-3">
+          <div class="mt-3 rounded-lg border border-border/70 bg-bg-primary/80 p-3">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Official APJ entry</p>
@@ -867,7 +867,7 @@ $effect(() => {
               >
                 <span>{catalogEntryError}</span>
                 <button
-                  class="rounded-full border border-danger/40 bg-bg-primary px-3 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/5"
+                  class="rounded-md border border-danger/40 bg-bg-primary px-3 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/5"
                   data-testid={firmwareWorkspaceTestIds.catalogEntryRetry}
                   onclick={() => void retryCatalogEntries()}
                   type="button"
@@ -906,7 +906,7 @@ $effect(() => {
         </article>
 
         <article
-          class={`rounded-2xl border p-4 ${usingLocalSource
+          class={`rounded-lg border p-3 ${usingLocalSource
             ? "border-warning/40 bg-warning/10"
             : "border-border bg-bg-secondary/40"}`}
           data-testid={firmwareWorkspaceTestIds.sourceLocal}
@@ -918,7 +918,7 @@ $effect(() => {
             </div>
             {#if usingLocalSource}
               <button
-                class="rounded-full border border-border bg-bg-primary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+                class="rounded-md border border-border bg-bg-primary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
                 onclick={handleUseCatalogSource}
                 type="button"
               >
@@ -991,7 +991,7 @@ $effect(() => {
         </article>
       </div>
 
-      <div class="mt-4 rounded-2xl border border-border/70 bg-bg-primary/80 p-4" data-testid={firmwareWorkspaceTestIds.serialReadiness}>
+      <div class="mt-4 rounded-lg border border-border/70 bg-bg-primary/80 p-3" data-testid={firmwareWorkspaceTestIds.serialReadiness}>
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Readiness</p>

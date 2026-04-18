@@ -74,14 +74,14 @@ function handleContinue() {
     advance once the arming section reports complete.
   </p>
 
-  <div class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+  <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Arming readiness</p>
     <p class="mt-2 text-sm font-semibold text-text-primary">{armingStatusText}</p>
     <p class="mt-1 text-[11px] uppercase tracking-[0.16em] text-text-muted">status · {armingStatus}</p>
   </div>
 
   <div
-    class="rounded-2xl border border-border bg-bg-primary/60 p-4"
+    class="rounded-lg border border-border bg-bg-primary/60 p-3"
     data-testid={setupWorkspaceTestIds.wizardStepArmingBlockers}
   >
     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Recent status text</p>
@@ -101,14 +101,14 @@ function handleContinue() {
   </div>
 
   {#if commandError}
-    <div class="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+    <div class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
       {commandError}
     </div>
   {/if}
 
   <div class="flex flex-wrap gap-2">
     <button
-      class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={setupWorkspaceTestIds.wizardStepArmingRefresh}
       disabled={view.checkpoint.blocksActions || requestPending}
       onclick={handleRefresh}

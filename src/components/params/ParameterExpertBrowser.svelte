@@ -64,7 +64,7 @@ function highlightSummaryText() {
     <label class="block">
       <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Search raw parameters</span>
       <input
-        class="mt-2 w-full rounded-2xl border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
+        class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
         data-testid={parameterWorkspaceTestIds.expertSearch}
         oninput={(event) => onSearchText((event.currentTarget as HTMLInputElement).value)}
         placeholder="Search by raw name, label, or description"
@@ -76,7 +76,7 @@ function highlightSummaryText() {
     <div class="flex flex-wrap items-center gap-2">
       {#each filterOptions as option (option.value)}
         <button
-          class={`rounded-full border px-3 py-2 text-sm font-semibold transition ${filter === option.value ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-primary/80 text-text-secondary hover:border-accent hover:text-accent"}`}
+          class={`rounded-md border px-3 py-2 text-sm font-semibold transition ${filter === option.value ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-primary/80 text-text-secondary hover:border-accent hover:text-accent"}`}
           data-testid={`${parameterWorkspaceTestIds.expertFilterPrefix}-${option.value}`}
           onclick={() => onFilterChange(option.value)}
           type="button"
@@ -88,7 +88,7 @@ function highlightSummaryText() {
   </div>
 
   <div
-    class="rounded-2xl border border-border bg-bg-primary/70 px-3 py-3 text-sm text-text-secondary"
+    class="rounded-lg border border-border bg-bg-primary/70 px-3 py-3 text-sm text-text-secondary"
     data-testid={parameterWorkspaceTestIds.expertSummary}
   >
     {summaryText()}
@@ -96,7 +96,7 @@ function highlightSummaryText() {
 
   {#if !view.metadataAvailable}
     <div
-      class="rounded-2xl border border-warning/30 bg-warning/10 px-3 py-3 text-sm text-warning"
+      class="rounded-lg border border-warning/30 bg-warning/10 px-3 py-3 text-sm text-warning"
       data-testid={parameterWorkspaceTestIds.expertMetadataFallback}
     >
       Metadata is unavailable, so this browser is falling back to raw parameter names and numeric editors.
@@ -105,7 +105,7 @@ function highlightSummaryText() {
 
   {#if highlightSummaryText()}
     <div
-      class="rounded-2xl border border-accent/30 bg-accent/10 px-3 py-3 text-sm text-accent"
+      class="rounded-lg border border-accent/30 bg-accent/10 px-3 py-3 text-sm text-accent"
       data-testid={parameterWorkspaceTestIds.expertHighlightSummary}
     >
       {highlightSummaryText()}
@@ -114,7 +114,7 @@ function highlightSummaryText() {
 
   {#if view.missingHighlightTargets.length > 0}
     <div
-      class="rounded-2xl border border-warning/30 bg-warning/10 px-3 py-3 text-sm text-warning"
+      class="rounded-lg border border-warning/30 bg-warning/10 px-3 py-3 text-sm text-warning"
       data-testid={parameterWorkspaceTestIds.expertHighlightMissing}
     >
       {view.missingHighlightTargets.length} highlight target{view.missingHighlightTargets.length === 1 ? " was" : "s were"} not present in the current parameter snapshot: {view.missingHighlightTargets.join(", ")}.
@@ -123,7 +123,7 @@ function highlightSummaryText() {
 
   {#if view.hiddenStagedRows.length > 0}
     <div
-      class="rounded-2xl border border-warning/30 bg-warning/10 px-3 py-3 text-sm text-warning"
+      class="rounded-lg border border-warning/30 bg-warning/10 px-3 py-3 text-sm text-warning"
       data-testid={parameterWorkspaceTestIds.expertHiddenStaged}
     >
       {view.hiddenStagedRows.length} staged row{view.hiddenStagedRows.length === 1 ? " is" : "s are"} outside the current search or filter: {view.hiddenStagedRows.map((row) => row.name).join(", ")}.
@@ -132,7 +132,7 @@ function highlightSummaryText() {
 
   {#if view.groups.length === 0}
     <div
-      class="rounded-2xl border border-border bg-bg-primary/70 px-3 py-4 text-sm text-text-secondary"
+      class="rounded-lg border border-border bg-bg-primary/70 px-3 py-4 text-sm text-text-secondary"
       data-testid={parameterWorkspaceTestIds.expertNoMatches}
     >
       No parameters match the current expert search and filter state.
@@ -141,7 +141,7 @@ function highlightSummaryText() {
     <div class="space-y-4">
       {#each view.groups as group (group.key)}
         <section
-          class="rounded-[24px] border border-border bg-bg-primary/55 p-4"
+          class="rounded-lg border border-border bg-bg-primary/55 p-3"
           data-testid={`${parameterWorkspaceTestIds.expertGroupPrefix}-${group.key}`}
         >
           <div class="flex flex-wrap items-center justify-between gap-3">

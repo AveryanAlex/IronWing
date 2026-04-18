@@ -182,7 +182,7 @@ function resolveDraftNumber(value: string): number | null {
   </p>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-2"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-2"
     data-testid={setupWorkspaceTestIds.wizardStepFrameSummary}
   >
     {#if failureMessage}
@@ -243,7 +243,7 @@ function resolveDraftNumber(value: string): number | null {
   </div>
 
   {#if profile.isPlane && qEnableItem}
-    <p class="rounded-2xl border border-border bg-bg-primary/60 px-4 py-3 text-xs text-text-secondary">
+    <p class="rounded-lg border border-border bg-bg-primary/60 px-4 py-3 text-xs text-text-secondary">
       Plane firmware: QuadPlane toggles live in the full Frame section. Open it from the wizard footer if you need to adjust Q_ENABLE or Q_FRAME_*.
     </p>
   {/if}

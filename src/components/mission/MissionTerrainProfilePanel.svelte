@@ -169,7 +169,7 @@ function statusBadgeClass(status: MissionTerrainStatus): string {
 }
 </script>
 
-<section class="rounded-2xl border border-border bg-bg-primary p-4" data-testid={missionWorkspaceTestIds.terrainPanel}>
+<section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.terrainPanel}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Terrain support</p>
@@ -194,7 +194,7 @@ function statusBadgeClass(status: MissionTerrainStatus): string {
       </span>
       {#if state.canRetry}
         <button
-          class="rounded-full border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          class="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
           data-testid={missionWorkspaceTestIds.terrainRetry}
           onclick={onRetry}
           type="button"
@@ -225,7 +225,7 @@ function statusBadgeClass(status: MissionTerrainStatus): string {
       />
     {:else}
       <div
-        class="rounded-2xl border border-dashed border-border bg-bg-secondary/60 px-4 py-6 text-sm text-text-secondary"
+        class="rounded-lg border border-dashed border-border bg-bg-secondary/60 px-4 py-6 text-sm text-text-secondary"
         data-testid={missionWorkspaceTestIds.terrainEmpty}
       >
         No sampled terrain profile yet. Add positional mission items or set Home to turn this into a real clearance view.
@@ -237,7 +237,7 @@ function statusBadgeClass(status: MissionTerrainStatus): string {
     <div class="mt-4 space-y-3">
       {#each warningEntries as warning (`${warning.index}-${warning.warning}`)}
         <article
-          class={`rounded-2xl border px-4 py-3 ${warningToneClass(warning.warning)}`}
+          class={`rounded-lg border px-4 py-3 ${warningToneClass(warning.warning)}`}
           data-testid={`${missionWorkspaceTestIds.terrainWarningPrefix}-${warning.index}`}
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
@@ -246,7 +246,7 @@ function statusBadgeClass(status: MissionTerrainStatus): string {
               <p class="mt-1 text-xs opacity-90">{warning.detail}</p>
             </div>
             <button
-              class="rounded-full border border-current/30 bg-bg-primary/70 px-3 py-1.5 text-xs font-semibold transition hover:brightness-105"
+              class="rounded-md border border-current/30 bg-bg-primary/70 px-3 py-1.5 text-xs font-semibold transition hover:brightness-105"
               data-testid={`${missionWorkspaceTestIds.terrainWarningActionPrefix}-${warning.index}`}
               onclick={() => onSelectWarning(warning.index)}
               type="button"

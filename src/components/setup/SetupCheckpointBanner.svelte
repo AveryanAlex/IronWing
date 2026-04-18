@@ -26,7 +26,7 @@ let tone = $derived.by(() => {
 </script>
 
 {#if checkpoint.phase !== "idle"}
-  <div class={`mt-4 rounded-2xl border px-4 py-4 ${tone}`} data-testid={setupWorkspaceTestIds.checkpoint}>
+  <div class={`mt-4 rounded-lg border px-4 py-4 ${tone}`} data-testid={setupWorkspaceTestIds.checkpoint}>
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.18em]" data-testid={setupWorkspaceTestIds.checkpointTitle}>
@@ -40,7 +40,7 @@ let tone = $derived.by(() => {
       </div>
 
       <button
-        class="rounded-full border border-current/30 bg-bg-primary/70 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-current/30 bg-bg-primary/70 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.checkpointDismiss}
         onclick={onClear}
         type="button"

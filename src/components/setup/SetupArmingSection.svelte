@@ -276,17 +276,17 @@ async function handleDisarm() {
 
     <div class="flex flex-wrap gap-2">
       {#if prearmDocsUrl}
-        <a class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent" data-testid={setupWorkspaceTestIds.prearmDocsLink} href={prearmDocsUrl} rel="noreferrer" target="_blank">Pre-arm docs</a>
+        <a class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent" data-testid={setupWorkspaceTestIds.prearmDocsLink} href={prearmDocsUrl} rel="noreferrer" target="_blank">Pre-arm docs</a>
       {/if}
       {#if armingDocsUrl}
-        <a class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent" data-testid={setupWorkspaceTestIds.armingDocsLink} href={armingDocsUrl} rel="noreferrer" target="_blank">Arming docs</a>
+        <a class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent" data-testid={setupWorkspaceTestIds.armingDocsLink} href={armingDocsUrl} rel="noreferrer" target="_blank">Arming docs</a>
       {/if}
     </div>
   </div>
 
   <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
     <div
-      class="rounded-2xl border border-border bg-bg-primary/80 p-4"
+      class="rounded-lg border border-border bg-bg-primary/80 p-3"
       data-testid={setupWorkspaceTestIds.armingSummary}
       data-arming-state={prearmModel.state}
     >
@@ -299,7 +299,7 @@ async function handleDisarm() {
           <p class="mt-2 text-sm leading-6 text-text-secondary">{prearmModel.detailText}</p>
         </div>
         <button
-          class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={setupWorkspaceTestIds.armingRefresh}
           disabled={actionsBlocked || !prearmModel.canRequestChecks || requestPhase === "running"}
           onclick={handleRequestChecks}
@@ -314,7 +314,7 @@ async function handleDisarm() {
       {/if}
     </div>
 
-    <div class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+    <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Live control</p>
       <p class={`mt-2 text-base font-semibold ${armed ? "text-danger" : "text-text-primary"}`}>
         {armed ? "Armed" : "Disarmed"}
@@ -330,7 +330,7 @@ async function handleDisarm() {
       <div class="mt-4 flex flex-wrap gap-2">
         {#if armed}
           <button
-            class="rounded-full border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:bg-danger/20 disabled:cursor-not-allowed disabled:opacity-60"
+            class="rounded-md border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:bg-danger/20 disabled:cursor-not-allowed disabled:opacity-60"
             data-testid={setupWorkspaceTestIds.armingDisarm}
             disabled={actionsBlocked || !prearmModel.canAttemptDisarm || actionPhase !== "idle"}
             onclick={handleDisarm}
@@ -340,7 +340,7 @@ async function handleDisarm() {
           </button>
         {:else}
           <button
-            class="rounded-full border border-success/40 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:bg-success/20 disabled:cursor-not-allowed disabled:opacity-60"
+            class="rounded-md border border-success/40 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:bg-success/20 disabled:cursor-not-allowed disabled:opacity-60"
             data-testid={setupWorkspaceTestIds.armingArm}
             disabled={actionsBlocked || (!confirmArm && !prearmModel.canAttemptArm) || actionPhase !== "idle"}
             onclick={handleArm}
@@ -355,7 +355,7 @@ async function handleDisarm() {
             {/if}
           </button>
           {#if confirmArm}
-            <button class="rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent" onclick={() => (confirmArm = false)} type="button">Cancel</button>
+            <button class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent" onclick={() => (confirmArm = false)} type="button">Cancel</button>
           {/if}
         {/if}
       </div>
@@ -364,7 +364,7 @@ async function handleDisarm() {
 
   {#if commandError}
     <div
-      class="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
+      class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
       data-testid={setupWorkspaceTestIds.armingFailure}
     >
       {commandError}
@@ -372,24 +372,24 @@ async function handleDisarm() {
   {/if}
 
   {#if checksDisabled}
-    <div class="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger" data-testid={`${setupWorkspaceTestIds.armingBannerPrefix}-checks-disabled`}>
+    <div class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger" data-testid={`${setupWorkspaceTestIds.armingBannerPrefix}-checks-disabled`}>
       ARMING_CHECK is disabled, so the vehicle can arm without the normal pre-flight safety validation.
     </div>
   {:else if checksPartial}
-    <div class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning" data-testid={`${setupWorkspaceTestIds.armingBannerPrefix}-checks-partial`}>
+    <div class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning" data-testid={`${setupWorkspaceTestIds.armingBannerPrefix}-checks-partial`}>
       ARMING_CHECK is using a partial bitmask. Keep the missing checks explicit and request fresh blocker scans before flight.
     </div>
   {/if}
 
   {#if armingMethodDisabled}
-    <div class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning" data-testid={`${setupWorkspaceTestIds.armingBannerPrefix}-method-disabled`}>
+    <div class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning" data-testid={`${setupWorkspaceTestIds.armingBannerPrefix}-method-disabled`}>
       ARMING_REQUIRE is disabled, so GCS arming can bypass the physical arming gesture safeguards.
     </div>
   {/if}
 
   {#if armingRecoveryReasons.length > 0}
     <div
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
       data-testid={setupWorkspaceTestIds.armingRecovery}
     >
       <p class="font-semibold text-text-primary">Arming parameter editors are staying fail-closed while metadata is partial.</p>
@@ -399,7 +399,7 @@ async function handleDisarm() {
         {/each}
       </ul>
       <button
-        class="mt-4 rounded-full border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         onclick={onSelectRecovery}
         type="button"
       >
@@ -409,11 +409,11 @@ async function handleDisarm() {
   {/if}
 
   {#if prearmModel.blockers.length > 0}
-    <div class="rounded-2xl border border-border bg-bg-primary/80 p-4" data-testid={setupWorkspaceTestIds.armingBlockers}>
+    <div class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.armingBlockers}>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Current blockers</p>
       <div class="mt-4 space-y-3">
         {#each prearmModel.blockers as blocker (blocker.id)}
-          <div class="rounded-2xl border border-border bg-bg-secondary/60 p-3">
+          <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <p class="text-sm font-semibold text-text-primary">{blocker.category}</p>
@@ -431,7 +431,7 @@ async function handleDisarm() {
   {/if}
 
   <div class="grid gap-3 xl:grid-cols-2">
-    <article class="rounded-2xl border border-border bg-bg-primary/80 p-4" data-testid={setupWorkspaceTestIds.armingCheckChecklist}>
+    <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.armingCheckChecklist}>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">ARMING_CHECK</p>
       <p class="mt-2 text-sm text-text-secondary">
         Review the active pre-arm check mask here. Toggling a bit stages the updated mask in the shared review tray instead of applying it directly.
@@ -459,7 +459,7 @@ async function handleDisarm() {
       {/if}
     </article>
 
-    <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+    <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">ARMING_REQUIRE</p>
       <p class="mt-2 text-sm text-text-secondary">
         Choose how the vehicle can be armed. The selector stays read-only if the current scope is missing truthful enum metadata.
@@ -487,7 +487,7 @@ async function handleDisarm() {
         </select>
 
         <button
-          class="self-end rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.armingStageButtonPrefix}-ARMING_REQUIRE`}
           disabled={!canStageRequire()}
           onclick={stageRequire}

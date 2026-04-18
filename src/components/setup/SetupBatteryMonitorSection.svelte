@@ -422,7 +422,7 @@ function round3(value: number): number {
 
     {#if docsUrl}
       <a
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.batteryDocsLink}
         href={docsUrl}
         rel="noreferrer"
@@ -434,7 +434,7 @@ function round3(value: number): number {
   </div>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-3"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
     data-testid={setupWorkspaceTestIds.batterySummary}
   >
     <div>
@@ -471,7 +471,7 @@ function round3(value: number): number {
   </div>
 
   <div class="grid gap-3 xl:grid-cols-3">
-    <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+    <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Board preset</p>
       <h4 class="mt-2 text-base font-semibold text-text-primary">Voltage and current sense pins</h4>
       <p class="mt-2 text-sm text-text-secondary">Choose a known flight-controller preset to preview BATT_VOLT_PIN and BATT_CURR_PIN before staging.</p>
@@ -502,7 +502,7 @@ function round3(value: number): number {
       {/if}
     </article>
 
-    <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+    <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Sensor preset</p>
       <h4 class="mt-2 text-base font-semibold text-text-primary">Voltage multiplier and amps-per-volt</h4>
       <p class="mt-2 text-sm text-text-secondary">Choose a known power-module scaling preset to preview BATT_VOLT_MULT and BATT_AMP_PERVLT.</p>
@@ -533,7 +533,7 @@ function round3(value: number): number {
       {/if}
     </article>
 
-    <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+    <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Chemistry preset</p>
       <h4 class="mt-2 text-base font-semibold text-text-primary">Voltage-threshold preview</h4>
       <p class="mt-2 text-sm text-text-secondary">Choose a chemistry and cell count to preview BATT_ARM_VOLT, BATT_LOW_VOLT, and BATT_CRT_VOLT.</p>
@@ -585,7 +585,7 @@ function round3(value: number): number {
 
   <div class="grid gap-3 xl:grid-cols-3">
     {#if monitorItem}
-      <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+      <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">BATT_MONITOR</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{monitorItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">{monitorItem.description ?? "Choose the primary battery-monitor backend without bypassing the shared review tray."}</p>
@@ -608,7 +608,7 @@ function round3(value: number): number {
           {/each}
         </select>
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT_MONITOR`}
           disabled={!canStage(monitorItem, monitorDraft, true, monitorOptions.length)}
           onclick={() => stage(monitorItem, monitorDraft, true, monitorOptions.length)}
@@ -620,7 +620,7 @@ function round3(value: number): number {
     {/if}
 
     {#if voltPinItem}
-      <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+      <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">BATT_VOLT_PIN</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{voltPinItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Manual voltage-pin staging remains available when board presets do not fit the current wiring.</p>
@@ -641,7 +641,7 @@ function round3(value: number): number {
           type="number"
         />
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT_VOLT_PIN`}
           disabled={!canStage(voltPinItem, voltPinDraft)}
           onclick={() => stage(voltPinItem, voltPinDraft)}
@@ -653,7 +653,7 @@ function round3(value: number): number {
     {/if}
 
     {#if voltMultItem}
-      <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+      <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">BATT_VOLT_MULT</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{voltMultItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Manual scaling remains available if the current sensor is not covered by the validated preset list.</p>
@@ -674,7 +674,7 @@ function round3(value: number): number {
           type="number"
         />
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT_VOLT_MULT`}
           disabled={!canStage(voltMultItem, voltMultDraft)}
           onclick={() => stage(voltMultItem, voltMultDraft)}
@@ -688,7 +688,7 @@ function round3(value: number): number {
 
   <div class="grid gap-3 xl:grid-cols-3">
     {#if ampPerVoltItem}
-      <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+      <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">BATT_AMP_PERVLT</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{ampPerVoltItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Manual current scaling remains staged through the shared review tray.</p>
@@ -709,7 +709,7 @@ function round3(value: number): number {
           type="number"
         />
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT_AMP_PERVLT`}
           disabled={!canStage(ampPerVoltItem, ampPerVoltDraft)}
           onclick={() => stage(ampPerVoltItem, ampPerVoltDraft)}
@@ -721,7 +721,7 @@ function round3(value: number): number {
     {/if}
 
     {#if capacityItem}
-      <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+      <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">BATT_CAPACITY</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{capacityItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Set the truthful pack capacity when the current installation differs from defaults.</p>
@@ -742,7 +742,7 @@ function round3(value: number): number {
           type="number"
         />
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT_CAPACITY`}
           disabled={!canStage(capacityItem, capacityDraft)}
           onclick={() => stage(capacityItem, capacityDraft)}
@@ -754,7 +754,7 @@ function round3(value: number): number {
     {/if}
 
     {#if lowVoltItem}
-      <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+      <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">BATT_LOW_VOLT</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{lowVoltItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Manual low-voltage staging remains available alongside chemistry presets.</p>
@@ -775,7 +775,7 @@ function round3(value: number): number {
           type="number"
         />
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT_LOW_VOLT`}
           disabled={!canStage(lowVoltItem, lowVoltDraft)}
           onclick={() => stage(lowVoltItem, lowVoltDraft)}
@@ -788,7 +788,7 @@ function round3(value: number): number {
   </div>
 
   {#if secondBatteryVisible}
-    <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+    <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Battery 2</p>
       <h4 class="mt-2 text-base font-semibold text-text-primary">Optional secondary monitor visibility</h4>
       <p class="mt-2 text-sm text-text-secondary">
@@ -809,7 +809,7 @@ function round3(value: number): number {
           {/each}
         </select>
         <button
-          class="mt-3 rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT2_MONITOR`}
           disabled={!canStage(secondMonitorItem, secondMonitorDraft, true, secondMonitorOptions.length)}
           onclick={() => stage(secondMonitorItem, secondMonitorDraft, true, secondMonitorOptions.length)}
@@ -825,7 +825,7 @@ function round3(value: number): number {
 
   {#if recoveryReasons.length > 0}
     <div
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
       data-testid={setupWorkspaceTestIds.batteryRecovery}
     >
       <p class="font-semibold text-text-primary">Battery monitor recovery is active.</p>
@@ -835,7 +835,7 @@ function round3(value: number): number {
         {/each}
       </ul>
       <button
-        class="mt-4 rounded-full border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         onclick={onSelectRecovery}
         type="button"
       >

@@ -332,7 +332,7 @@ $effect(() => {
 </script>
 
 <section
-  class="rounded-[24px] border border-border bg-bg-secondary/40 p-4"
+  class="rounded-lg border border-border bg-bg-secondary/40 p-3"
   data-testid={firmwareWorkspaceTestIds.recoveryPanel}
 >
   <div class="flex flex-wrap items-start justify-between gap-3">
@@ -353,7 +353,7 @@ $effect(() => {
   </div>
 
   <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
-    <article class="rounded-2xl border border-border bg-bg-primary/80 p-4">
+    <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
       <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
         <label>
           <span class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">DFU device</span>
@@ -398,7 +398,7 @@ $effect(() => {
         </div>
       {/if}
 
-      <div class="mt-4 rounded-2xl border border-success/30 bg-success/10 p-4">
+      <div class="mt-4 rounded-lg border border-success/30 bg-success/10 p-3">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Official bootloader</p>
@@ -406,7 +406,7 @@ $effect(() => {
           </div>
           {#if !usingOfficialSource && state.recovery.target}
             <button
-              class="rounded-full border border-success/30 bg-bg-primary px-3 py-1.5 text-xs font-semibold text-success transition hover:bg-success/5"
+              class="rounded-md border border-success/30 bg-bg-primary px-3 py-1.5 text-xs font-semibold text-success transition hover:bg-success/5"
               data-testid={firmwareWorkspaceTestIds.recoveryOfficialAction}
               onclick={() => void selectOfficialTarget(state.recovery.target)}
               type="button"
@@ -447,7 +447,7 @@ $effect(() => {
           >
             <span>{targetError}</span>
             <button
-              class="rounded-full border border-danger/40 bg-bg-primary px-3 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/5"
+              class="rounded-md border border-danger/40 bg-bg-primary px-3 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/5"
               data-testid={firmwareWorkspaceTestIds.recoveryTargetRetry}
               onclick={() => void loadRecoveryTargets()}
               type="button"
@@ -476,14 +476,14 @@ $effect(() => {
       </div>
     </article>
 
-    <article class="rounded-2xl border border-warning/40 bg-warning/10 p-4">
+    <article class="rounded-lg border border-warning/40 bg-warning/10 p-3">
       <div class="flex items-center justify-between gap-3">
         <div>
           <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Advanced recovery</p>
           <h4 class="mt-1 text-sm font-semibold text-text-primary">Manual APJ / BIN source</h4>
         </div>
         <button
-          class="rounded-full border border-warning/30 bg-bg-primary px-3 py-1.5 text-xs font-semibold text-warning transition hover:bg-warning/5"
+          class="rounded-md border border-warning/30 bg-bg-primary px-3 py-1.5 text-xs font-semibold text-warning transition hover:bg-warning/5"
           data-testid={firmwareWorkspaceTestIds.recoveryAdvancedToggle}
           onclick={() => (advancedRequestedOpen = !advancedRequestedOpen)}
           type="button"
@@ -575,7 +575,7 @@ $effect(() => {
     </article>
   </div>
 
-  <div class="mt-4 rounded-2xl border border-border/70 bg-bg-primary/80 p-4">
+  <div class="mt-4 rounded-lg border border-border/70 bg-bg-primary/80 p-3">
     <label class="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-3 text-sm text-text-secondary">
       <input
         checked={dfuConfirmed}

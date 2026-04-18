@@ -80,11 +80,11 @@ function handleContinue() {
   </p>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-2"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-2"
     data-testid={setupWorkspaceTestIds.wizardStepCalibSummary}
   >
     {#if accelCard}
-      <article class="rounded-2xl border border-border bg-bg-secondary/60 p-3">
+      <article class="rounded-lg border border-border bg-bg-secondary/60 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
           {accelCard.title}
         </p>
@@ -93,7 +93,7 @@ function handleContinue() {
           {accelCard.lifecycle}
         </p>
         <button
-          class="mt-3 rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 rounded-md border border-border bg-bg-primary px-3 py-1 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={setupWorkspaceTestIds.wizardStepCalibAccel}
           disabled={view.checkpoint.blocksActions || pending !== null}
           onclick={runAccel}
@@ -105,7 +105,7 @@ function handleContinue() {
     {/if}
 
     {#if compassCard}
-      <article class="rounded-2xl border border-border bg-bg-secondary/60 p-3">
+      <article class="rounded-lg border border-border bg-bg-secondary/60 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
           {compassCard.title}
         </p>
@@ -114,7 +114,7 @@ function handleContinue() {
           {compassCard.lifecycle}
         </p>
         <button
-          class="mt-3 rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 rounded-md border border-border bg-bg-primary px-3 py-1 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={setupWorkspaceTestIds.wizardStepCalibCompass}
           disabled={view.checkpoint.blocksActions || pending !== null}
           onclick={runCompass}
@@ -127,7 +127,7 @@ function handleContinue() {
   </div>
 
   {#if commandError}
-    <div class="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
+    <div class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
       {commandError}
     </div>
   {/if}

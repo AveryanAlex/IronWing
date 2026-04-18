@@ -50,7 +50,7 @@ function resolveVehicleSlug(vehicleType: string | null): VehicleSlug | null {
 
     {#if docsUrl}
       <a
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.fullParametersDocsLink}
         href={docsUrl}
         rel="noreferrer"
@@ -62,7 +62,7 @@ function resolveVehicleSlug(vehicleType: string | null): VehicleSlug | null {
   </div>
 
   <div
-    class="rounded-2xl border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary"
+    class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary"
     data-testid={setupWorkspaceTestIds.fullParametersRecovery}
   >
     Guided setup never forks raw parameter logic. If metadata is degraded or a purpose-built card cannot prove its controls, recover here and keep staging through the same shell-owned review tray.
@@ -71,7 +71,7 @@ function resolveVehicleSlug(vehicleType: string | null): VehicleSlug | null {
   {#if canOpen}
     <ParameterWorkspace />
   {:else}
-    <div class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning">
+    <div class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning">
       Full Parameters recovery is disabled for the current scope.
     </div>
   {/if}

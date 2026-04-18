@@ -469,7 +469,7 @@ function buildFrameBanners(input: {
 
     {#if docsUrl}
       <a
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.frameDocsLink}
         href={docsUrl}
         rel="noreferrer"
@@ -481,7 +481,7 @@ function buildFrameBanners(input: {
   </div>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-3"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
     data-testid={setupWorkspaceTestIds.frameSummary}
   >
     <div>
@@ -509,7 +509,7 @@ function buildFrameBanners(input: {
 
   {#if retainedFailures.length > 0}
     <div
-      class="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
+      class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
       data-testid={setupWorkspaceTestIds.frameFailure}
     >
       <p class="font-semibold text-text-primary">The shared review tray is still retaining frame or orientation failures.</p>
@@ -523,7 +523,7 @@ function buildFrameBanners(input: {
 
   {#each frameBanners as banner (banner.id)}
     <div
-      class={`rounded-2xl border px-4 py-4 text-sm leading-6 ${bannerClass(banner.tone)}`}
+      class={`rounded-lg border px-4 py-4 text-sm leading-6 ${bannerClass(banner.tone)}`}
       data-testid={`${setupWorkspaceTestIds.frameBannerPrefix}-${banner.id}`}
     >
       {banner.text}
@@ -533,7 +533,7 @@ function buildFrameBanners(input: {
   <div class="grid gap-3 xl:grid-cols-3">
     {#if showQEnableCard}
       <article
-        class="rounded-2xl border border-border bg-bg-primary/80 p-4"
+        class="rounded-lg border border-border bg-bg-primary/80 p-3"
         data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-Q_ENABLE`}
       >
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Q_ENABLE</p>
@@ -560,7 +560,7 @@ function buildFrameBanners(input: {
           {/each}
         </select>
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.frameStageButtonPrefix}-Q_ENABLE`}
           disabled={!canStage(qEnableItem, qEnableDraft)}
           onclick={() => stage(qEnableItem, qEnableDraft)}
@@ -573,7 +573,7 @@ function buildFrameBanners(input: {
 
     {#if showFrameCards && frameClassItem && frameTypeItem}
       <article
-        class="rounded-2xl border border-border bg-bg-primary/80 p-4"
+        class="rounded-lg border border-border bg-bg-primary/80 p-3"
         data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-${frameClassItem.name}`}
       >
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{frameClassItem.name}</p>
@@ -602,7 +602,7 @@ function buildFrameBanners(input: {
           {/each}
         </select>
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.frameStageButtonPrefix}-${frameClassItem.name}`}
           disabled={!canStage(frameClassItem, frameClassDraft)}
           onclick={() => stage(frameClassItem, frameClassDraft)}
@@ -613,7 +613,7 @@ function buildFrameBanners(input: {
       </article>
 
       <article
-        class="rounded-2xl border border-border bg-bg-primary/80 p-4"
+        class="rounded-lg border border-border bg-bg-primary/80 p-3"
         data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-${frameTypeItem.name}`}
       >
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{frameTypeItem.name}</p>
@@ -642,7 +642,7 @@ function buildFrameBanners(input: {
           {/each}
         </select>
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.frameStageButtonPrefix}-${frameTypeItem.name}`}
           disabled={!canStage(frameTypeItem, frameTypeDraft)}
           onclick={() => stage(frameTypeItem, frameTypeDraft)}
@@ -655,7 +655,7 @@ function buildFrameBanners(input: {
 
     {#if showOrientationCard && orientationItem}
       <article
-        class="rounded-2xl border border-border bg-bg-primary/80 p-4"
+        class="rounded-lg border border-border bg-bg-primary/80 p-3"
         data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-AHRS_ORIENTATION`}
       >
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">AHRS_ORIENTATION</p>
@@ -682,7 +682,7 @@ function buildFrameBanners(input: {
           {/each}
         </select>
         <button
-          class="mt-3 w-full rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${setupWorkspaceTestIds.frameStageButtonPrefix}-AHRS_ORIENTATION`}
           disabled={!canStage(orientationItem, orientationDraft)}
           onclick={() => stage(orientationItem, orientationDraft)}
@@ -696,7 +696,7 @@ function buildFrameBanners(input: {
 
   {#if frameRecoveryReasons.length > 0 || orientationRecoveryReason}
     <div
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
       data-testid={setupWorkspaceTestIds.frameRecovery}
     >
       <p class="font-semibold text-text-primary">This section is staying in recovery mode instead of guessing hidden frame or orientation truth.</p>
@@ -709,7 +709,7 @@ function buildFrameBanners(input: {
         {/if}
       </ul>
       <button
-        class="mt-4 rounded-full border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         onclick={onSelectRecovery}
         type="button"
       >

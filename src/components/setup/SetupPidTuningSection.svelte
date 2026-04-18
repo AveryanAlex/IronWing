@@ -418,7 +418,7 @@ function discardItem(name: string) {
 
     {#if docsUrl}
       <a
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.pidTuningDocsLink}
         href={docsUrl}
         rel="noreferrer"
@@ -430,7 +430,7 @@ function discardItem(name: string) {
   </div>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-3"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
     data-testid={setupWorkspaceTestIds.pidTuningSummary}
   >
     <div>
@@ -458,7 +458,7 @@ function discardItem(name: string) {
 
   {#each curated.banners as banner (banner.id)}
     <div
-      class={`rounded-2xl border px-4 py-4 text-sm leading-6 ${banner.tone === "warning" ? "border-warning/40 bg-warning/10 text-warning" : "border-border bg-bg-primary/80 text-text-secondary"}`}
+      class={`rounded-lg border px-4 py-4 text-sm leading-6 ${banner.tone === "warning" ? "border-warning/40 bg-warning/10 text-warning" : "border-border bg-bg-primary/80 text-text-secondary"}`}
       data-testid={`${setupWorkspaceTestIds.pidTuningBannerPrefix}-${banner.id}`}
     >
       {banner.text}
@@ -469,7 +469,7 @@ function discardItem(name: string) {
     <div class="space-y-4">
       {#each curated.groups as group (group.id)}
         <section
-          class="rounded-[24px] border border-border bg-bg-primary/70 p-4"
+          class="rounded-lg border border-border bg-bg-primary/70 p-3"
           data-testid={`${setupWorkspaceTestIds.pidTuningGroupPrefix}-${group.id}`}
         >
           <div class="flex flex-wrap items-center justify-between gap-3">
@@ -501,7 +501,7 @@ function discardItem(name: string) {
 
   {#if curated.recoveryReasons.length > 0}
     <div
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
       data-testid={setupWorkspaceTestIds.pidTuningRecovery}
     >
       <p class="font-semibold text-text-primary">PID recovery is active.</p>
@@ -511,7 +511,7 @@ function discardItem(name: string) {
         {/each}
       </ul>
       <button
-        class="mt-4 rounded-full border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         onclick={onSelectRecovery}
         type="button"
       >

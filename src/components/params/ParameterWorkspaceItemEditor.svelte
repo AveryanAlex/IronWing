@@ -65,7 +65,7 @@ function submitStage(event: SubmitEvent) {
 </script>
 
 <form
-  class="rounded-2xl border border-border bg-bg-secondary/70 p-4"
+  class="rounded-lg border border-border bg-bg-secondary/70 p-3"
   data-param-name={props.item.name}
   data-testid={`${parameterWorkspaceTestIds.itemPrefix}-${props.item.name}`}
   onsubmit={submitStage}
@@ -94,7 +94,7 @@ function submitStage(event: SubmitEvent) {
 
   {#if props.item.isStaged}
     <div
-      class="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-accent/20 bg-accent/5 px-3 py-2 text-sm text-text-secondary"
+      class="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-sm text-text-secondary"
       data-testid={`${parameterWorkspaceTestIds.diffPrefix}-${props.item.name}`}
     >
       <span>Current</span>
@@ -112,7 +112,7 @@ function submitStage(event: SubmitEvent) {
     <label class="block">
       <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Stage a local edit</span>
       <input
-        class="mt-2 w-full rounded-2xl border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
+        class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={`${parameterWorkspaceTestIds.inputPrefix}-${props.item.name}`}
         disabled={isEditingDisabled()}
         max={props.item.range?.max}
@@ -130,7 +130,7 @@ function submitStage(event: SubmitEvent) {
     </label>
 
     <button
-      class="rounded-full border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+      class="rounded-md border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
       data-testid={`${parameterWorkspaceTestIds.stageButtonPrefix}-${props.item.name}`}
       disabled={!canStage()}
       type="submit"
@@ -140,7 +140,7 @@ function submitStage(event: SubmitEvent) {
 
     {#if props.item.isStaged}
       <button
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-danger/40 hover:text-danger"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-danger/40 hover:text-danger"
         data-testid={`${parameterWorkspaceTestIds.discardButtonPrefix}-${props.item.name}`}
         onclick={() => props.onDiscard(props.item.name)}
         type="button"

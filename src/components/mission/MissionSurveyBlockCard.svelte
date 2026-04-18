@@ -94,7 +94,7 @@ function titleCase(value: string): string {
 </script>
 
 <article
-  class={`rounded-2xl border p-4 transition ${selected
+  class={`rounded-lg border p-3 transition ${selected
     ? "border-accent/40 bg-accent/10 text-text-primary"
     : "border-border bg-bg-primary text-text-primary hover:border-accent/40"}`}
 >
@@ -136,7 +136,7 @@ function titleCase(value: string): string {
         {region.generationState === "generating" ? "Generating" : warningList.length > 0 ? "Attention" : "Ready"}
       </span>
       <button
-        class="rounded-full border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={`${missionWorkspaceTestIds.surveyCollapsePrefix}-${region.id}`}
         onclick={() => onToggleCollapsed(!region.collapsed)}
         type="button"
@@ -201,7 +201,7 @@ function titleCase(value: string): string {
 
       <div class="flex flex-wrap gap-2">
         <button
-          class="rounded-full border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded-md border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${missionWorkspaceTestIds.surveyGeneratePrefix}-${region.id}`}
           disabled={generateDisabled}
           onclick={onGenerate}
@@ -210,7 +210,7 @@ function titleCase(value: string): string {
           {generationStatusLabel}
         </button>
         <button
-          class="rounded-full border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${missionWorkspaceTestIds.surveyDissolvePrefix}-${region.id}`}
           disabled={region.generationState === "generating"}
           onclick={onPromptDissolve}
@@ -219,7 +219,7 @@ function titleCase(value: string): string {
           Dissolve
         </button>
         <button
-          class="rounded-full border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded-md border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={`${missionWorkspaceTestIds.surveyDeletePrefix}-${region.id}`}
           disabled={region.generationState === "generating"}
           onclick={onDelete}

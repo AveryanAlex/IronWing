@@ -140,7 +140,7 @@ function selectDefaults(familyValue: ReturnType<typeof resolveSafetyVehicleFamil
   </p>
 
   <div
-    class="rounded-2xl border border-border bg-bg-primary/80 p-4"
+    class="rounded-lg border border-border bg-bg-primary/80 p-3"
     data-testid={setupWorkspaceTestIds.wizardStepFailsafeSummary}
   >
     {#if failureMessage}
@@ -166,7 +166,7 @@ function selectDefaults(familyValue: ReturnType<typeof resolveSafetyVehicleFamil
     </ul>
   </div>
 
-  <p class="rounded-2xl border border-border bg-bg-primary/60 px-4 py-3 text-xs text-text-secondary">
+  <p class="rounded-lg border border-border bg-bg-primary/60 px-4 py-3 text-xs text-text-secondary">
     Need per-action tuning? Open the Failsafe section from the wizard footer
     for the expert layout.
   </p>

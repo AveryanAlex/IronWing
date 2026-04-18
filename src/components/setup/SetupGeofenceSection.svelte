@@ -265,7 +265,7 @@ function toggleFenceType(bit: number) {
 
     {#if docsUrl}
       <a
-        class="rounded-full border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.geofenceDocsLink}
         href={docsUrl}
         rel="noreferrer"
@@ -277,7 +277,7 @@ function toggleFenceType(bit: number) {
   </div>
 
   <div
-    class="grid gap-3 rounded-2xl border border-border bg-bg-primary/80 p-4 md:grid-cols-3"
+    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
     data-testid={setupWorkspaceTestIds.geofenceSummary}
   >
     <div>
@@ -299,7 +299,7 @@ function toggleFenceType(bit: number) {
 
   {#if model.recoveryReasons.length > 0}
     <div
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
       data-testid={setupWorkspaceTestIds.geofenceRecovery}
     >
       <p class="font-semibold text-text-primary">Geofence is staying fail-closed while the required rows or fence bitmask metadata are partial.</p>
@@ -309,7 +309,7 @@ function toggleFenceType(bit: number) {
         {/each}
       </ul>
       <button
-        class="mt-4 rounded-full border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
         onclick={onSelectRecovery}
         type="button"
       >
@@ -320,14 +320,14 @@ function toggleFenceType(bit: number) {
 
   {#each model.warningTexts as text, index (text)}
     <div
-      class="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
       data-testid={`${setupWorkspaceTestIds.geofenceBannerPrefix}-${index}`}
     >
       {text}
     </div>
   {/each}
 
-  <article class="rounded-2xl border border-border bg-bg-primary/80 p-4" data-testid={setupWorkspaceTestIds.geofenceTypeChecklist}>
+  <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.geofenceTypeChecklist}>
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Fence boundary types</p>
       <p class="mt-2 text-sm text-text-secondary">
@@ -359,7 +359,7 @@ function toggleFenceType(bit: number) {
 
   <div class="space-y-3">
     {#each cards as card (card.id)}
-      <article class="rounded-2xl border border-border bg-bg-primary/80 p-4" data-testid={`${setupWorkspaceTestIds.geofenceCardPrefix}-${card.id}`}>
+      <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={`${setupWorkspaceTestIds.geofenceCardPrefix}-${card.id}`}>
         <div>
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{card.title}</p>
           <h4 class="mt-2 text-base font-semibold text-text-primary">{card.summary}</h4>
@@ -367,7 +367,7 @@ function toggleFenceType(bit: number) {
 
         <div class="mt-4 grid gap-3 xl:grid-cols-2">
           {#each card.fields as field (field.name)}
-            <div class="rounded-2xl border border-border bg-bg-secondary/60 p-3">
+            <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
               <label class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted" for={`${card.id}-${field.name}`}>
                 {field.label}
               </label>
@@ -415,7 +415,7 @@ function toggleFenceType(bit: number) {
                 {/if}
 
                 <button
-                  class="self-end rounded-full border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                  class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
                   data-testid={`${setupWorkspaceTestIds.geofenceStageButtonPrefix}-${field.name}`}
                   disabled={!canStage(field)}
                   onclick={() => stage(field)}
