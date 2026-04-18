@@ -203,7 +203,8 @@ function clearCheckpoint() {
   {/if}
 
   <div
-    class={`mt-4 grid gap-4 ${isPhoneTier ? "" : "xl:grid-cols-[22rem_minmax(0,1fr)]"}`}
+    class="setup-workspace-layout mt-4"
+    class:setup-workspace-layout--phone={isPhoneTier}
     data-shell-tier={chromeStore.current.tier}
   >
     {#if !isPhoneTier}
@@ -214,7 +215,7 @@ function clearCheckpoint() {
       />
     {/if}
 
-    <div class="rounded-lg border border-border bg-bg-secondary/60 p-3" data-testid={setupWorkspaceTestIds.detail}>
+    <div class="setup-workspace-detail" data-testid={setupWorkspaceTestIds.detail}>
       <span aria-hidden="true" class="sr-only" data-testid={setupWorkspaceTestIds.selectedSection}>
         {view.selectedSectionId}
       </span>
@@ -420,3 +421,28 @@ function clearCheckpoint() {
     </aside>
   {/if}
 </section>
+
+<style>
+  .setup-workspace-layout {
+    display: flex;
+    gap: 8px;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .setup-workspace-layout > :global(nav) {
+    width: 200px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    border-right: 1px solid var(--color-border);
+  }
+  .setup-workspace-detail {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  .setup-workspace-layout--phone {
+    flex-direction: column;
+  }
+</style>
