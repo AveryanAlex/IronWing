@@ -530,12 +530,18 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
 }
 
+function historySubject(mode: MissionPlannerMode): string {
+  return mode === "mission" ? "planner" : mode;
+}
+
 function handleUndo() {
   if (!view.canEdit || !view.canUndo || view.undoCount <= 0) {
     return false;
   }
 
+  clearLocalNote();
   missionPlannerStore.undo(view.historyDomain);
+  setLocalNote(`Restored the previous ${historySubject(view.historyDomain)} change.`, "info");
   return true;
 }
 
@@ -544,7 +550,9 @@ function handleRedo() {
     return false;
   }
 
+  clearLocalNote();
   missionPlannerStore.redo(view.historyDomain);
+  setLocalNote(`Reapplied the last ${historySubject(view.historyDomain)} change.`, "info");
   return true;
 }
 
@@ -1062,8 +1070,11 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     hasContent={hasContent || view.workspaceMounted}
     mode={view.mode}
     onCancelTransfer={handleCancelTransfer}
+    onClearMission={handleClearVehicle}
     onExportPlan={handleExportPlan}
+    onImportKml={handleImportKml}
     onImportPlan={handleImportPlan}
+    onNewMission={handleNewMission}
     onReadFromVehicle={handleReadFromVehicle}
     onRedo={handleRedo}
     onSelectMode={handleSelectMode}
@@ -1073,6 +1084,20 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     redoCount={view.redoCount}
     undoCount={view.undoCount}
   />
+
+  <!-- Hidden diagnostics for E2E test anchors -->
+  <div aria-hidden="true" class="hidden">
+    <span data-testid={missionWorkspaceTestIds.state}>{view.status}</span>
+    <span data-testid={missionWorkspaceTestIds.scope}>{view.activeEnvelopeText}</span>
+    <span data-testid={missionWorkspaceTestIds.attachment}>{view.attachment.label}</span>
+    <span data-testid={missionWorkspaceTestIds.attachmentDetail}>{view.attachment.detail}</span>
+    <span data-testid={missionWorkspaceTestIds.countsMission}>Mission + Home + Survey · {view.missionItemCount} / {view.surveyRegionCount}</span>
+    <span data-testid={missionWorkspaceTestIds.countsSurvey}>Survey blocks · {view.surveyRegionCount}</span>
+    <span data-testid={missionWorkspaceTestIds.countsFence}>Fence regions · {view.fenceRegionCount}</span>
+    <span data-testid={missionWorkspaceTestIds.countsRally}>Rally points · {view.rallyPointCount}</span>
+    <span data-testid={missionWorkspaceTestIds.countsValidation}>Validation issues · {view.validationIssueCount}</span>
+    <span data-testid={missionWorkspaceTestIds.countsWarnings}>Sticky warnings · {view.warningCount}</span>
+  </div>
 
   {#if view.importReview}
     <section

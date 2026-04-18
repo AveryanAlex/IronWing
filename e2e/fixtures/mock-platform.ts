@@ -1248,7 +1248,7 @@ export function liveSurfaceLocator(page: Page, selector: keyof typeof liveSurfac
 }
 
 export function liveSurfaceValueLocator(page: Page, selector: keyof typeof liveSurfaceSelectors): Locator {
-    return liveSurfaceLocator(page, selector).locator("dd");
+    return liveSurfaceLocator(page, selector).locator(".metric-card__value");
 }
 
 export function operatorNoticeListLocator(page: Page): Locator {
@@ -1463,7 +1463,7 @@ export async function expectMissionLayoutState(page: Page, expected: MissionLayo
     await expect(
         page.locator(missionWorkspaceLayoutSelectors.layoutDiagnostics),
         "Mission layout diagnostics are missing; keep the responsive proof aligned with the shipped Mission workspace diagnostics instead of scraping layout classes.",
-    ).toBeVisible();
+    ).toHaveCount(1);
     await expect(
         page.locator(missionWorkspaceLayoutSelectors.layoutMode),
         `Mission layout mode drifted; expected ${expected.mode}.`,

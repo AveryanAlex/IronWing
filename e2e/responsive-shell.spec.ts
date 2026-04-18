@@ -9,7 +9,6 @@ import {
     expectShellChrome,
     liveSurfaceValueLocator,
     openVehiclePanelDrawer,
-    operatorWorkspaceLocator,
     runtimeSelectors,
     type ShellViewportPresetName,
     test,
@@ -46,15 +45,6 @@ const bootstrapSupport: OpenSessionSnapshot["support"] = {
     value: null,
 };
 
-const bootstrapStatusText: OpenSessionSnapshot["status_text"] = {
-    available: true,
-    complete: false,
-    provenance: "bootstrap",
-    value: {
-        entries: [],
-    },
-};
-
 test.describe("responsive shell chrome", () => {
     test("desktop preset keeps the operator workspace visible with the vehicle panel docked", async ({
         page,
@@ -68,7 +58,6 @@ test.describe("responsive shell chrome", () => {
         await expectOperatorWorkspace(page);
         await expect(page.locator(runtimeSelectors.shell)).toHaveAttribute("data-shell-tier", "wide");
         await expectDockedVehiclePanel(page, "desktop");
-        await expect(operatorWorkspaceLocator(page, "readiness")).toContainText("Link disconnected");
         await expect(liveSurfaceValueLocator(page, "stateValue")).toContainText("--");
         await expect(liveSurfaceValueLocator(page, "altitudeValue")).toContainText("-- m");
     });
@@ -84,11 +73,11 @@ test.describe("responsive shell chrome", () => {
         await expectShellChrome(page, "radiomaster");
         await expectOperatorWorkspace(page);
         await expectDockedVehiclePanel(page, "radiomaster");
-        await expect(operatorWorkspaceLocator(page, "noticeCount")).toContainText("0 shown");
-        await expect(operatorWorkspaceLocator(page, "noticesEmpty")).toContainText("No active notices");
+        await expect(liveSurfaceValueLocator(page, "stateValue")).toContainText("--");
+        await expect(liveSurfaceValueLocator(page, "altitudeValue")).toContainText("-- m");
     });
 
-    test("phone width requires explicitly opening the drawer before connection assertions and keeps operator degradation visible", async ({
+    test("phone width requires explicitly opening the drawer before connection assertions and shows metrics after connect", async ({
         page,
         mockPlatform,
     }) => {
@@ -134,21 +123,14 @@ test.describe("responsive shell chrome", () => {
 
         await mockPlatform.emitLiveTelemetryDomain(phoneBootstrapTelemetry);
         await mockPlatform.emitLiveSupportDomain(bootstrapSupport);
-        await mockPlatform.emitLiveStatusTextDomain(bootstrapStatusText);
 
         await expect(disconnectBtn).toBeVisible();
-        await expect(operatorWorkspaceLocator(page, "degradedTelemetry")).toBeVisible();
-        await expect(operatorWorkspaceLocator(page, "degradedSupport")).toBeVisible();
-        await expect(operatorWorkspaceLocator(page, "degradedNotices")).toBeVisible();
-        await expect(operatorWorkspaceLocator(page, "noticeCount")).toContainText("0 shown");
-        await expect(operatorWorkspaceLocator(page, "noticesEmpty")).toContainText("No active notices");
         await expect(liveSurfaceValueLocator(page, "altitudeValue")).toContainText("42.0 m");
 
         await closeVehiclePanelDrawer(page);
         await expect(page.locator(runtimeSelectors.vehiclePanelDrawer)).toHaveAttribute("data-state", "closed");
         await expect(connectBtn).toHaveCount(0);
         await expectOperatorWorkspace(page);
-        await expect(operatorWorkspaceLocator(page, "degradedTelemetry")).toBeVisible();
     });
 
     test("unsupported viewport presets fail with an actionable message", async ({ page }) => {

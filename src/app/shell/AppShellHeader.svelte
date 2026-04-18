@@ -109,6 +109,7 @@ function connectionIndicatorClass(tone: ConnectionTone): string {
   <nav aria-label="Primary" class="app-shell-tabs">
     {#each workspaces as workspace (workspace.key)}
       <button
+        aria-label={workspace.label}
         aria-pressed={activeWorkspace === workspace.key}
         class={`app-shell-tab ${activeWorkspace === workspace.key ? "is-active" : ""}`}
         data-testid={

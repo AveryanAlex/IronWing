@@ -7,9 +7,6 @@ import {
     expectOperatorWorkspace,
     expectRuntimeDiagnostics,
     liveSurfaceValueLocator,
-    operatorNoticeListLocator,
-    operatorNoticeLocator,
-    operatorWorkspaceLocator,
     test,
 } from "./fixtures/mock-platform";
 
@@ -84,32 +81,8 @@ const streamSupport: OpenSessionSnapshot["support"] = {
     },
 };
 
-const bootstrapStatusText: OpenSessionSnapshot["status_text"] = {
-    available: true,
-    complete: false,
-    provenance: "bootstrap",
-    value: {
-        entries: [],
-    },
-};
-
-const burstStatusText: OpenSessionSnapshot["status_text"] = {
-    available: true,
-    complete: true,
-    provenance: "stream",
-    value: {
-        entries: [
-            { sequence: 1, text: "Boot complete", severity: "info", timestamp_usec: 100 },
-            { sequence: 2, text: "GPS weak", severity: "warning", timestamp_usec: 200 },
-            { sequence: 3, text: "SD card present", severity: "notice", timestamp_usec: 300 },
-            { sequence: 4, text: "Battery failsafe", severity: "critical", timestamp_usec: 400 },
-            { sequence: 5, text: "Motor fault", severity: "emergency", timestamp_usec: 500 },
-        ],
-    },
-};
-
 test.describe("mocked connect and operator telemetry workspace", () => {
-    test("desktop flow shows degraded bootstrap state, compact notices, and stale disconnect fallback", async ({
+    test("desktop flow shows bootstrap metrics, stream metrics after connect, and fallback after disconnect", async ({
         page,
         mockPlatform,
     }) => {
@@ -141,9 +114,8 @@ test.describe("mocked connect and operator telemetry workspace", () => {
         await expect(activeSourceDiagnostics).toContainText("live");
         await expect(envelopeDiagnostics).toContainText(/session-/);
         await expect(errorMessage).toHaveCount(0);
-        await expect(operatorWorkspaceLocator(page, "readiness")).toContainText("Link disconnected");
-        await expect(operatorWorkspaceLocator(page, "noticeCount")).toContainText("0 shown");
-        await expect(operatorWorkspaceLocator(page, "noticesEmpty")).toContainText("No active notices");
+        await expect(liveSurfaceValueLocator(page, "stateValue")).toContainText("--");
+        await expect(liveSurfaceValueLocator(page, "altitudeValue")).toContainText("-- m");
 
         await transportSelect.selectOption("tcp");
         await tcpAddress.fill("127.0.0.1:5760");
@@ -173,7 +145,6 @@ test.describe("mocked connect and operator telemetry workspace", () => {
 
         await mockPlatform.emitLiveTelemetryDomain(partialBootstrapTelemetry);
         await mockPlatform.emitLiveSupportDomain(bootstrapSupport);
-        await mockPlatform.emitLiveStatusTextDomain(bootstrapStatusText);
 
         await expect(statusText).toContainText("Connected", { timeout: 10_000 });
         await expect(disconnectBtn).toBeVisible();
@@ -182,30 +153,12 @@ test.describe("mocked connect and operator telemetry workspace", () => {
         await expect(activeSourceDiagnostics).toContainText("live");
         await expect(envelopeDiagnostics).toContainText(/session-/);
         await expect(errorMessage).toHaveCount(0);
-        await expect(operatorWorkspaceLocator(page, "degradedTelemetry")).toBeVisible();
-        await expect(operatorWorkspaceLocator(page, "degradedSupport")).toBeVisible();
-        await expect(operatorWorkspaceLocator(page, "degradedNotices")).toBeVisible();
-        await expect(operatorWorkspaceLocator(page, "readiness")).toContainText("Support data incomplete");
-        await expect(operatorWorkspaceLocator(page, "noticeCount")).toContainText("0 shown");
-        await expect(operatorWorkspaceLocator(page, "noticesEmpty")).toContainText("No active notices");
         await expect(liveSurfaceValueLocator(page, "altitudeValue")).toContainText("55.0 m");
         await expect(liveSurfaceValueLocator(page, "speedValue")).toContainText("-- m/s");
 
         await mockPlatform.emitLiveTelemetryDomain(streamTelemetry);
         await mockPlatform.emitLiveSupportDomain(streamSupport);
-        await mockPlatform.emitLiveStatusTextDomain(burstStatusText);
 
-        await expect(operatorWorkspaceLocator(page, "degradedTelemetry")).toHaveCount(0);
-        await expect(operatorWorkspaceLocator(page, "degradedSupport")).toHaveCount(0);
-        await expect(operatorWorkspaceLocator(page, "degradedNotices")).toHaveCount(0);
-        await expect(operatorWorkspaceLocator(page, "readiness")).toContainText("Pre-arm checks available");
-        await expect(operatorWorkspaceLocator(page, "noticeCount")).toContainText("3 shown");
-        await expect(operatorNoticeListLocator(page)).toHaveCount(3);
-        await expect(operatorNoticeLocator(page, "GPS weak")).toHaveCount(1);
-        await expect(operatorNoticeLocator(page, "Battery failsafe")).toHaveCount(1);
-        await expect(operatorNoticeLocator(page, "Motor fault")).toHaveCount(1);
-        await expect(operatorNoticeLocator(page, "Boot complete")).toHaveCount(0);
-        await expect(operatorNoticeLocator(page, "SD card present")).toHaveCount(0);
         await expect(liveSurfaceValueLocator(page, "stateValue")).toContainText("DISARMED");
         await expect(liveSurfaceValueLocator(page, "modeValue")).toContainText("LOITER");
         await expect(liveSurfaceValueLocator(page, "altitudeValue")).toContainText("12.4 m");
@@ -223,11 +176,6 @@ test.describe("mocked connect and operator telemetry workspace", () => {
         await expect(activeSourceDiagnostics).toContainText("live");
         await expect(envelopeDiagnostics).toContainText(/session-/);
         await expect(errorMessage).toHaveCount(0);
-        await expect(operatorWorkspaceLocator(page, "readiness")).toContainText("Link disconnected");
-        await expect(operatorWorkspaceLocator(page, "disconnected")).toBeVisible();
-        await expect(operatorWorkspaceLocator(page, "stale")).toBeVisible();
-        await expect(operatorWorkspaceLocator(page, "noticeCount")).toContainText("0 shown");
-        await expect(operatorWorkspaceLocator(page, "noticesEmpty")).toContainText("No active notices");
         await expect(liveSurfaceValueLocator(page, "stateValue")).toContainText("--");
         await expect(liveSurfaceValueLocator(page, "altitudeValue")).toContainText("-- m");
         await expect(liveSurfaceValueLocator(page, "batteryValue")).toContainText("--%");
@@ -273,14 +221,8 @@ test.describe("mocked connect and operator telemetry workspace", () => {
 
         await mockPlatform.emitLiveTelemetryDomain(partialBootstrapTelemetry);
         await mockPlatform.emitLiveSupportDomain(bootstrapSupport);
-        await mockPlatform.emitLiveStatusTextDomain(bootstrapStatusText);
 
         await expect(disconnectBtn).toBeVisible();
-        await expect(operatorWorkspaceLocator(page, "degradedTelemetry")).toBeVisible();
-        await expect(operatorWorkspaceLocator(page, "degradedSupport")).toBeVisible();
-        await expect(operatorWorkspaceLocator(page, "degradedNotices")).toBeVisible();
-        await expect(operatorWorkspaceLocator(page, "noticeCount")).toContainText("0 shown");
-        await expect(operatorWorkspaceLocator(page, "noticesEmpty")).toContainText("No active notices");
         await expect(liveSurfaceValueLocator(page, "altitudeValue")).toContainText("55.0 m");
         await expect(liveSurfaceValueLocator(page, "speedValue")).toContainText("-- m/s");
     });

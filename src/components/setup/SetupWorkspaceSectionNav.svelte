@@ -22,6 +22,9 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
   if (section.status === "complete") {
     return { text: "Done", className: "setup-nav__status--done" };
   }
+  if (section.status === "in_progress") {
+    return { text: "In Progress", className: "setup-nav__status--active" };
+  }
   if (section.status === "failed") {
     return { text: "Check", className: "setup-nav__status--warn" };
   }
@@ -168,6 +171,9 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
   }
   .setup-nav__status--done {
     color: var(--color-success);
+  }
+  .setup-nav__status--active {
+    color: var(--color-accent);
   }
   .setup-nav__status--warn {
     color: var(--color-warning);

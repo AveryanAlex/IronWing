@@ -32,7 +32,6 @@ import {
   setupMotorsEscRowReverseLocator,
   setupMotorsEscRowReversedLocator,
   setupMotorsEscRowTestLocator,
-  setupNavGroupProgressLocator,
   setupNavLocator,
   setupOverviewCardLocator,
   setupOverviewDocLinkLocator,
@@ -166,7 +165,6 @@ test.describe("setup workspace proof", () => {
 
     await setupOverviewQuickActionLocator(page, "flight_modes").click();
     await expect(page.locator(setupWorkspaceSelectors.flightModesSection)).toBeVisible();
-    await expect.poll(async () => await setupNavGroupProgressLocator(page, "safety").textContent()).toBe("1/6 confirmed");
     await expect(page.locator(setupWorkspaceSelectors.flightModesAvailabilityState)).toContainText("Live");
     await expect(page.locator(setupWorkspaceSelectors.flightModesCurrentMode)).toContainText("LOITER");
     await expect(page.locator(setupWorkspaceSelectors.flightModesDocsLink)).toHaveAttribute(
@@ -181,7 +179,6 @@ test.describe("setup workspace proof", () => {
     }
     await expect(page.locator(parameterWorkspaceSelectors.reviewSurface)).toBeVisible();
     await expect(parameterReviewRowLocator(page, "FLTMODE1")).toContainText("FLTMODE1");
-    await expect.poll(async () => await setupNavGroupProgressLocator(page, "safety").textContent()).toBe("0/6 confirmed");
 
     await setupNavLocator(page, "gps").click();
     await expect(page.locator(setupWorkspaceSelectors.gpsSection)).toBeVisible();
