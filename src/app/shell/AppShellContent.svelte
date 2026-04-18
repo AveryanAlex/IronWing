@@ -4,6 +4,7 @@ import { fromStore } from "svelte/store";
 import { Toaster } from "svelte-sonner";
 
 import FirmwareWorkspace from "../../components/firmware/FirmwareWorkspace.svelte";
+import HudWorkspace from "../../components/hud/HudWorkspace.svelte";
 import MissionWorkspace from "../../components/mission/MissionWorkspace.svelte";
 import SetupWorkspace from "../../components/setup/SetupWorkspace.svelte";
 import { runtimeTestIds } from "../../lib/stores/runtime";
@@ -162,10 +163,7 @@ onDestroy(() => {
                 title="Telemetry"
               />
             {:else if activeWorkspace === "hud"}
-              <AppShellPlaceholderWorkspace
-                description="The HUD workspace is reserved for attitude, heading, and quick-flight overlays."
-                title="HUD"
-              />
+              <HudWorkspace />
             {:else if activeWorkspace === "mission"}
               <MissionWorkspace />
             {:else if activeWorkspace === "logs"}
