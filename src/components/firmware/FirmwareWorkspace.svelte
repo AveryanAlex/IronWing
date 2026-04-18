@@ -188,26 +188,11 @@ $effect(() => {
     </div>
   {/if}
 
-  <section class="mt-4 grid gap-2 lg:grid-cols-3">
-    <p
-      class="rounded-xl border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={firmwareWorkspaceTestIds.layoutMode}
-    >
-      Layout · {layout.mode}
-    </p>
-    <p
-      class="rounded-xl border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={firmwareWorkspaceTestIds.layoutTier}
-    >
-      Shell tier · {layout.tier} · {layout.width}×{layout.height}
-    </p>
-    <p
-      class="rounded-xl border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={firmwareWorkspaceTestIds.layoutTierMismatch}
-    >
-      Tier sync · {layout.tierMismatch ? "mismatch" : "match"}
-    </p>
-  </section>
+  <div aria-hidden="true" class="hidden">
+    <span data-testid={firmwareWorkspaceTestIds.layoutMode}>{layout.mode}</span>
+    <span data-testid={firmwareWorkspaceTestIds.layoutTier}>{layout.tier}</span>
+    <span data-testid={firmwareWorkspaceTestIds.layoutTierMismatch}>{layout.tierMismatch ? "mismatch" : "match"}</span>
+  </div>
 
   <div class="mt-4 grid gap-4">
     {#if effectiveMode === "install"}

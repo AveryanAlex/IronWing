@@ -530,18 +530,12 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
 }
 
-function historySubject(mode: MissionPlannerMode): string {
-  return mode === "mission" ? "planner" : mode;
-}
-
 function handleUndo() {
   if (!view.canEdit || !view.canUndo || view.undoCount <= 0) {
     return false;
   }
 
-  clearLocalNote();
   missionPlannerStore.undo(view.historyDomain);
-  setLocalNote(`Restored the previous ${historySubject(view.historyDomain)} change.`, "info");
   return true;
 }
 
@@ -550,9 +544,7 @@ function handleRedo() {
     return false;
   }
 
-  clearLocalNote();
   missionPlannerStore.redo(view.historyDomain);
-  setLocalNote(`Reapplied the last ${historySubject(view.historyDomain)} change.`, "info");
   return true;
 }
 
@@ -1326,47 +1318,14 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     </section>
   {/if}
 
-  <section
-    class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-6"
-    data-testid={missionWorkspaceTestIds.layoutDiagnostics}
-  >
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={missionWorkspaceTestIds.layoutMode}
-    >
-      Layout · {workspaceLayout.mode}
-    </p>
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={missionWorkspaceTestIds.layoutTier}
-    >
-      Shell tier · {workspaceLayout.tier} · {workspaceLayout.width}×{workspaceLayout.height}
-    </p>
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={missionWorkspaceTestIds.layoutTierMismatch}
-    >
-      Tier sync · {workspaceLayout.tierMismatch ? "mismatch" : "match"}
-    </p>
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={missionWorkspaceTestIds.detailColumns}
-    >
-      Detail panels · {workspaceLayout.detailColumns}
-    </p>
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={missionWorkspaceTestIds.supportPlacement}
-    >
-      Support panels · {workspaceLayout.supportPlacement}
-    </p>
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={missionWorkspaceTestIds.phoneSegmentState}
-    >
-      Mission segment · {missionSegmentState}
-    </p>
-  </section>
+  <div aria-hidden="true" class="hidden" data-testid={missionWorkspaceTestIds.layoutDiagnostics}>
+    <span data-testid={missionWorkspaceTestIds.layoutMode}>{workspaceLayout.mode}</span>
+    <span data-testid={missionWorkspaceTestIds.layoutTier}>{workspaceLayout.tier}</span>
+    <span data-testid={missionWorkspaceTestIds.layoutTierMismatch}>{workspaceLayout.tierMismatch ? "mismatch" : "match"}</span>
+    <span data-testid={missionWorkspaceTestIds.detailColumns}>{workspaceLayout.detailColumns}</span>
+    <span data-testid={missionWorkspaceTestIds.supportPlacement}>{workspaceLayout.supportPlacement}</span>
+    <span data-testid={missionWorkspaceTestIds.phoneSegmentState}>{missionSegmentState}</span>
+  </div>
 
   {#if view.status === "bootstrapping" && !view.workspaceMounted}
     <section
