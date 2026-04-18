@@ -215,6 +215,7 @@ function createMockParamsService(
       };
     }),
     fetchMetadata: vi.fn(async () => metadata),
+    downloadAll: vi.fn(async () => {}),
     writeBatch: vi.fn(async (params: [string, number][]) => params.map(([name, value]) => ({
       name,
       requested_value: value,
@@ -369,7 +370,7 @@ describe("OperatorWorkspace", () => {
         seek_epoch: 0,
         reset_revision: 0,
       },
-      value: missingDomainValue("stream"),
+      value: missingDomainValue("stream") as never,
     });
     sessionHarness.emit("onSupport", {
       envelope: {
@@ -378,7 +379,7 @@ describe("OperatorWorkspace", () => {
         seek_epoch: 0,
         reset_revision: 0,
       },
-      value: missingDomainValue("stream"),
+      value: missingDomainValue("stream") as never,
     });
 
     await waitFor(() => {

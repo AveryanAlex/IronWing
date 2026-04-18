@@ -144,7 +144,7 @@ import {
   createMissionPlannerStore,
   createMissionPlannerViewStore,
 } from "../../lib/stores/mission-planner";
-import { SETTINGS_STORAGE_KEY, settings } from "../../lib/stores/settings";
+import { settings } from "../../lib/stores/settings";
 import { createSessionStore } from "../../lib/stores/session";
 import { createShellChromeState } from "../../app/shell/chrome-state";
 import { createStaticShellChromeStore } from "../../test/context-harnesses";
