@@ -105,7 +105,7 @@
 
   .arm-slider__pill--armed {
     left: 50%;
-    background: rgba(255, 68, 68, 0.2);
+    background: rgba(255, 68, 68, 0.45);
   }
 
   .arm-slider__btn {
