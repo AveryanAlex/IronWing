@@ -71,15 +71,12 @@ function connectionIndicatorClass(tone: ConnectionTone): string {
 <header class="app-shell-header">
   <div class="app-shell-header__top">
     <div class="app-shell-header__brand">
-      <div class="app-shell-header__brand-meta">
-        <p class="text-xs font-semibold text-text-secondary">IronWing</p>
-        <span
-          aria-hidden="true"
-          class={`app-shell-header__connection-indicator ${connectionIndicatorClass(connectionTone)}`}
-          data-testid={appShellTestIds.connectionIndicator}
-        ></span>
-      </div>
-      <h1 class="app-shell-header__title" data-testid={runtimeTestIds.heading}>Ground Control</h1>
+      <h1 class="app-shell-header__title" data-testid={runtimeTestIds.heading}>IronWing</h1>
+      <span
+        aria-hidden="true"
+        class={`app-shell-header__connection-indicator ${connectionIndicatorClass(connectionTone)}`}
+        data-testid={appShellTestIds.connectionIndicator}
+      ></span>
     </div>
 
     {#if showVehiclePanelButton}

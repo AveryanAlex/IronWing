@@ -126,15 +126,9 @@ body {
 }
 
 .app-shell-header__brand {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.app-shell-header__brand-meta {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .app-shell-header__connection-indicator {
