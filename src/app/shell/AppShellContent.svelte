@@ -5,6 +5,7 @@ import { Toaster } from "svelte-sonner";
 
 import FirmwareWorkspace from "../../components/firmware/FirmwareWorkspace.svelte";
 import HudWorkspace from "../../components/hud/HudWorkspace.svelte";
+import LogsWorkspace from "../../components/logs/LogsWorkspace.svelte";
 import MissionWorkspace from "../../components/mission/MissionWorkspace.svelte";
 import SetupWorkspace from "../../components/setup/SetupWorkspace.svelte";
 import SettingsWorkspace from "../../components/settings/SettingsWorkspace.svelte";
@@ -166,10 +167,7 @@ onDestroy(() => {
             {:else if activeWorkspace === "mission"}
               <MissionWorkspace />
             {:else if activeWorkspace === "logs"}
-              <AppShellPlaceholderWorkspace
-                description="Log browsing and playback surfaces are planned for this tab."
-                title="Logs"
-              />
+              <LogsWorkspace />
             {:else if activeWorkspace === "firmware"}
               <FirmwareWorkspace
                 chromeStore={chromeStore}
