@@ -3,7 +3,7 @@ import { fromStore } from "svelte/store";
 
 import type { CompactStatusNotice } from "../../statustext";
 import type { ViewTone } from "../../lib/session-selectors";
-import type { OperatorMetricState, OperatorMetricView } from "../../lib/telemetry-selectors";
+import type { OperatorMetricView } from "../../lib/telemetry-selectors";
 import { appShellTestIds } from "./chrome-state";
 import { getOperatorWorkspaceViewStoreContext, getShellChromeStoreContext } from "./runtime-context";
 
@@ -48,32 +48,6 @@ function toneBadgeClass(tone: ViewTone): string {
     case "caution":
       return "operator-workspace__badge--caution";
     case "critical":
-      return "operator-workspace__badge--critical";
-    default:
-      return "operator-workspace__badge--neutral";
-  }
-}
-
-function metricStateLabel(state: OperatorMetricState): string {
-  switch (state) {
-    case "live":
-      return "live";
-    case "degraded":
-      return "degraded";
-    case "stale":
-      return "stale";
-    default:
-      return "unavailable";
-  }
-}
-
-function metricStateClass(state: OperatorMetricState): string {
-  switch (state) {
-    case "live":
-      return "operator-workspace__badge--positive";
-    case "degraded":
-      return "operator-workspace__badge--caution";
-    case "stale":
       return "operator-workspace__badge--critical";
     default:
       return "operator-workspace__badge--neutral";
@@ -302,9 +276,6 @@ let secondaryMetricCards = $derived.by<MetricCard[]>(() => [
           <div class="operator-workspace__metric-card" data-testid={card.testId}>
             <div class="operator-workspace__metric-header">
               <dt class="operator-workspace__card-label">{card.label}</dt>
-              <span class={`operator-workspace__badge ${metricStateClass(card.metric.state)}`}>
-                {metricStateLabel(card.metric.state)}
-              </span>
             </div>
             <dd class={`operator-workspace__metric-value ${metricValueClass(card.metric)}`}>{card.metric.text}</dd>
           </div>
@@ -329,9 +300,6 @@ let secondaryMetricCards = $derived.by<MetricCard[]>(() => [
         <div class="operator-workspace__metric-card" data-testid={card.testId}>
           <div class="operator-workspace__metric-header">
             <dt class="operator-workspace__card-label">{card.label}</dt>
-            <span class={`operator-workspace__badge ${metricStateClass(card.metric.state)}`}>
-              {metricStateLabel(card.metric.state)}
-            </span>
           </div>
           <dd class={`operator-workspace__metric-value ${metricValueClass(card.metric)}`}>{card.metric.text}</dd>
         </div>
