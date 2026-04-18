@@ -3,27 +3,14 @@ import type {
   MissionPlannerAttachmentState,
   MissionPlannerMode,
 } from "../../lib/stores/mission-planner";
-import type { MissionPlannerWorkspaceStatus } from "../../lib/stores/mission-planner-view";
-import type { MissionPlannerView } from "../../lib/stores/mission-planner-view";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
 type Props = {
   mode: MissionPlannerMode;
-  status: MissionPlannerWorkspaceStatus;
-  readiness: MissionPlannerView["readiness"];
   attachment: MissionPlannerAttachmentState;
-  scopeText: string;
-  dirty: boolean;
-  missionItemCount: number;
-  surveyRegionCount: number;
-  fenceRegionCount: number;
-  rallyPointCount: number;
-  validationIssueCount: number;
-  warningCount: number;
   hasContent: boolean;
   canUseVehicleActions: boolean;
   busy: boolean;
-  timedOut: boolean;
   canCancel: boolean;
   canUndo: boolean;
   undoCount: number;
@@ -34,32 +21,18 @@ type Props = {
   onRedo: () => void;
   onReadFromVehicle: () => void;
   onImportPlan: () => void;
-  onImportKml: () => void;
-  onNewMission: () => void;
   onExportPlan: () => void;
   onValidateMission: () => void;
   onUploadToVehicle: () => void;
-  onClearVehicle: () => void;
   onCancelTransfer: () => void;
 };
 
 let {
   mode,
-  status,
-  readiness,
   attachment,
-  scopeText,
-  dirty,
-  missionItemCount,
-  surveyRegionCount,
-  fenceRegionCount,
-  rallyPointCount,
-  validationIssueCount,
-  warningCount,
   hasContent,
   canUseVehicleActions,
   busy,
-  timedOut,
   canCancel,
   canUndo,
   undoCount,
@@ -70,12 +43,9 @@ let {
   onRedo,
   onReadFromVehicle,
   onImportPlan,
-  onImportKml,
-  onNewMission,
   onExportPlan,
   onValidateMission,
   onUploadToVehicle,
-  onClearVehicle,
   onCancelTransfer,
 }: Props = $props();
 
@@ -95,309 +65,89 @@ let undoAvailable = $derived(attachment.canEdit && canUndo && normalizedUndoCoun
 let redoAvailable = $derived(attachment.canEdit && canRedo && normalizedRedoCount > 0);
 let undoLabel = $derived(`Undo (${normalizedUndoCount} available)`);
 let redoLabel = $derived(`Redo (${normalizedRedoCount} available)`);
-
-function statusText(value: MissionPlannerWorkspaceStatus): string {
-  switch (value) {
-    case "bootstrapping":
-      return "Loading planner";
-    case "unavailable":
-      return "No live session";
-    case "empty":
-      return "Planner ready to start";
-    case "ready":
-    default:
-      return "Planner workspace active";
-  }
-}
-
-function readinessBadge(value: MissionPlannerView["readiness"]): string {
-  switch (value) {
-    case "bootstrapping":
-      return "Bootstrapping";
-    case "unavailable":
-      return "Unavailable";
-    case "degraded":
-      return "Degraded";
-    case "ready":
-    default:
-      return "Ready";
-  }
-}
-
-function readinessClass(value: MissionPlannerView["readiness"]): string {
-  switch (value) {
-    case "degraded":
-      return "border-warning/40 bg-warning/10 text-warning";
-    case "unavailable":
-      return "border-border bg-bg-secondary text-text-secondary";
-    case "bootstrapping":
-      return "border-accent/30 bg-accent/10 text-accent";
-    case "ready":
-    default:
-      return "border-success/30 bg-success/10 text-success";
-  }
-}
-
-function attachmentClass(current: MissionPlannerAttachmentState): string {
-  switch (current.kind) {
-    case "live-attached":
-      return "border-success/30 bg-success/10 text-success";
-    case "local-draft":
-    case "detached-local":
-      return "border-accent/30 bg-accent/10 text-accent";
-    case "playback-readonly":
-    default:
-      return "border-warning/40 bg-warning/10 text-warning";
-  }
-}
-
-function workspaceSummary(currentMode: MissionPlannerMode, value: MissionPlannerWorkspaceStatus): string {
-  if (currentMode === "fence") {
-    return "Fence mode now exposes map-first region editing, explicit return-point handling, and sticky warning navigation inside the mounted planner shell.";
-  }
-
-  if (currentMode === "rally") {
-    return "Rally mode now mounts real list, inspector, and map editing inside the same planner shell while Home, attachment truth, sticky warnings, and mixed-domain export review stay visible.";
-  }
-
-  switch (value) {
-    case "bootstrapping":
-      return "The planner domain is wiring itself to the active session scope before live actions unlock.";
-    case "unavailable":
-      return "Import a file or start a local draft now, then reconnect later for live validation and transfer flows.";
-    case "empty":
-      return "Start from live data, a truthful file import, or a blank draft before deeper mission, fence, and rally continuity takes over.";
-    case "ready":
-    default:
-      return "Mission, fence, rally, Home, review state, and warning truth now share one mounted planning shell instead of one-shot replace prompts.";
-  }
-}
 </script>
 
-<header
-  class="rounded-lg border border-border bg-bg-primary p-3"
-  data-readiness={readiness}
-  data-workspace-state={status}
-  data-testid={missionWorkspaceTestIds.header}
->
-  <div class="flex flex-wrap items-start justify-between gap-4">
-    <div class="max-w-3xl">
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mission workspace</p>
-      <h2 class="mt-1 text-base font-semibold text-text-primary">Planning continuity shell</h2>
-      <p class="mt-1 text-sm text-text-secondary">{workspaceSummary(mode, status)}</p>
-    </div>
-
-    <div class="flex flex-wrap items-center gap-2">
-      <span
-        class={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${readinessClass(readiness)}`}
-        data-testid={missionWorkspaceTestIds.state}
-      >
-        {statusText(status)}
-      </span>
-
-      <span
-        class={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${attachmentClass(attachment)}`}
-        data-testid={missionWorkspaceTestIds.attachment}
-      >
-        {attachment.label}
-      </span>
-
-      <span class="inline-flex items-center rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">
-        {readinessBadge(readiness)}
-      </span>
-
-      {#if dirty}
-        <span class="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-warning">
-          Modified
-        </span>
-      {/if}
-
-      {#if timedOut}
-        <span class="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-warning">
-          Timed out
-        </span>
-      {/if}
-    </div>
-  </div>
-
-  <p class="mt-3 text-xs text-text-secondary" data-testid={missionWorkspaceTestIds.attachmentDetail}>
-    {attachment.detail}
-  </p>
-
-  <div class="mt-4 rounded-lg border border-border bg-bg-secondary/60 p-2" data-testid={missionWorkspaceTestIds.modeShell}>
-    <div class="grid gap-2 sm:grid-cols-3">
-      {#each modeButtons as item (item.mode)}
-        <button
-          class={`rounded-lg border px-4 py-3 text-left text-sm font-semibold transition ${item.mode === mode
-            ? "border-accent/40 bg-accent/10 text-accent"
-            : "border-border bg-bg-primary text-text-primary hover:border-accent hover:text-accent"}`}
-          data-testid={item.testId}
-          onclick={() => onSelectMode(item.mode)}
-          type="button"
-        >
-          <span class="block text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mode</span>
-          <span class="mt-1 block">{item.label}</span>
-        </button>
-      {/each}
-    </div>
-  </div>
-
-  <div class="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-7">
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={missionWorkspaceTestIds.scope}
-    >
-      Scope · {scopeText}
-    </p>
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={missionWorkspaceTestIds.countsMission}
-    >
-      Mission + Home + Survey · {missionItemCount} / {surveyRegionCount}
-    </p>
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={missionWorkspaceTestIds.countsFence}
-    >
-      Fence regions · {fenceRegionCount}
-    </p>
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={missionWorkspaceTestIds.countsRally}
-    >
-      Rally points · {rallyPointCount}
-    </p>
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={missionWorkspaceTestIds.countsValidation}
-    >
-      Validation issues · {validationIssueCount}
-    </p>
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={missionWorkspaceTestIds.countsWarnings}
-    >
-      Sticky warnings · {warningCount}
-    </p>
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={missionWorkspaceTestIds.countsSurvey}
-    >
-      Survey blocks · {surveyRegionCount}
-    </p>
-  </div>
-
-  <div class="mt-4 flex flex-wrap items-center gap-2">
-    <button
-      aria-label={undoLabel}
-      class="inline-flex min-w-[7.25rem] items-center justify-between gap-2 rounded-md border border-border bg-bg-secondary px-3 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.toolbarUndo}
-      disabled={!undoAvailable}
-      onclick={onUndo}
-      title={undoLabel}
-      type="button"
-    >
-      <span>Undo</span>
-      <span class="rounded-full border border-border bg-bg-primary px-2 py-0.5 text-xs font-semibold text-text-secondary">
-        {normalizedUndoCount}
-      </span>
-    </button>
-    <button
-      aria-label={redoLabel}
-      class="inline-flex min-w-[7.25rem] items-center justify-between gap-2 rounded-md border border-border bg-bg-secondary px-3 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.toolbarRedo}
-      disabled={!redoAvailable}
-      onclick={onRedo}
-      title={redoLabel}
-      type="button"
-    >
-      <span>Redo</span>
-      <span class="rounded-full border border-border bg-bg-primary px-2 py-0.5 text-xs font-semibold text-text-secondary">
-        {normalizedRedoCount}
-      </span>
-    </button>
-    <button
-      class="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.toolbarRead}
-      disabled={busy || !canUseVehicleActions}
-      onclick={onReadFromVehicle}
-      type="button"
-    >
-      Read from Vehicle
-    </button>
-    <button
-      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.toolbarImport}
-      disabled={busy}
-      onclick={onImportPlan}
-      type="button"
-    >
-      Import .plan
-    </button>
-    <button
-      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.toolbarImportKml}
-      disabled={busy}
-      onclick={onImportKml}
-      type="button"
-    >
-      Import .kml / .kmz
-    </button>
-    <button
-      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.toolbarNew}
-      disabled={busy}
-      onclick={onNewMission}
-      type="button"
-    >
-      New draft
-    </button>
-    <button
-      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.toolbarExport}
-      disabled={busy || !hasContent}
-      onclick={onExportPlan}
-      type="button"
-    >
-      Export .plan
-    </button>
-    <button
-      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.toolbarValidate}
-      disabled={busy || !canUseVehicleActions || !hasContent}
-      onclick={onValidateMission}
-      type="button"
-    >
-      Validate mission
-    </button>
-    <button
-      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.toolbarUpload}
-      disabled={busy || !canUseVehicleActions || !hasContent}
-      onclick={onUploadToVehicle}
-      type="button"
-    >
-      Upload workspace
-    </button>
-    <button
-      class="rounded-md border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.toolbarClear}
-      disabled={busy || !canUseVehicleActions}
-      onclick={onClearVehicle}
-      type="button"
-    >
-      Clear vehicle
-    </button>
-
-    {#if canCancel}
+<header class="mission-toolbar" data-testid={missionWorkspaceTestIds.header}>
+  <!-- Mode tabs -->
+  <div class="mission-toolbar__modes">
+    {#each modeButtons as item (item.mode)}
       <button
-        class="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105"
-        data-testid={missionWorkspaceTestIds.toolbarCancel}
-        onclick={onCancelTransfer}
+        class="mission-toolbar__mode-btn"
+        class:is-active={item.mode === mode}
+        data-testid={item.testId}
+        onclick={() => onSelectMode(item.mode)}
         type="button"
-      >
-        Cancel pending transfer
-      </button>
-    {/if}
+      >{item.label}</button>
+    {/each}
   </div>
+
+  <span class="mission-toolbar__sep" aria-hidden="true"></span>
+
+  <!-- Undo/Redo -->
+  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarUndo} disabled={!undoAvailable} onclick={onUndo} title={undoLabel} type="button">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+  </button>
+  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarRedo} disabled={!redoAvailable} onclick={onRedo} title={redoLabel} type="button">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
+  </button>
+
+  <span class="mission-toolbar__sep" aria-hidden="true"></span>
+
+  <!-- Import/Export -->
+  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarImport} disabled={busy} onclick={onImportPlan} title="Import mission file" type="button">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M3 15h6"/><path d="M6 12v6"/></svg>
+  </button>
+  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarExport} disabled={busy || !hasContent} onclick={onExportPlan} title="Export mission file" type="button">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg>
+  </button>
+
+  <span class="mission-toolbar__sep" aria-hidden="true"></span>
+
+  <!-- Validate -->
+  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarValidate} disabled={busy || !canUseVehicleActions || !hasContent} onclick={onValidateMission} title="Validate mission" type="button">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+  </button>
+
+  <span class="mission-toolbar__sep" aria-hidden="true"></span>
+
+  <!-- Vehicle actions (text) -->
+  <button class="mission-toolbar__text-btn mission-toolbar__text-btn--primary" data-testid={missionWorkspaceTestIds.toolbarRead} disabled={busy || !canUseVehicleActions} onclick={onReadFromVehicle} type="button">Read from vehicle</button>
+  <button class="mission-toolbar__text-btn" data-testid={missionWorkspaceTestIds.toolbarUpload} disabled={busy || !canUseVehicleActions || !hasContent} onclick={onUploadToVehicle} type="button">Write to vehicle</button>
+
+  {#if canCancel}
+    <button class="mission-toolbar__text-btn mission-toolbar__text-btn--warning" data-testid={missionWorkspaceTestIds.toolbarCancel} onclick={onCancelTransfer} type="button">Cancel</button>
+  {/if}
 </header>
+
+<style>
+  .mission-toolbar {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 8px; border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg-secondary); flex-shrink: 0;
+  }
+  .mission-toolbar__sep { width: 1px; height: 20px; background: var(--color-border); margin: 0 4px; }
+  .mission-toolbar__modes { display: flex; gap: 2px; }
+  .mission-toolbar__mode-btn {
+    padding: 4px 10px; font-size: 0.75rem; font-weight: 600;
+    border: 1px solid var(--color-border); border-radius: 6px;
+    background: var(--color-bg-primary); color: var(--color-text-secondary); cursor: pointer; transition: all 0.1s;
+  }
+  .mission-toolbar__mode-btn.is-active { border-color: var(--color-accent); color: var(--color-accent); background: rgba(18,185,255,0.08); }
+  .mission-toolbar__icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border: none; border-radius: 6px;
+    background: transparent; color: var(--color-text-primary); cursor: pointer; transition: all 0.1s;
+  }
+  .mission-toolbar__icon-btn:hover:not(:disabled) { background: var(--color-bg-tertiary); }
+  .mission-toolbar__icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .mission-toolbar__text-btn {
+    padding: 4px 12px; font-size: 0.75rem; font-weight: 600;
+    border: 1px solid var(--color-border); border-radius: 6px;
+    background: var(--color-bg-secondary); color: var(--color-text-primary); cursor: pointer; transition: all 0.1s;
+  }
+  .mission-toolbar__text-btn:hover:not(:disabled) { border-color: var(--color-accent); color: var(--color-accent); }
+  .mission-toolbar__text-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .mission-toolbar__text-btn--primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg-primary); }
+  .mission-toolbar__text-btn--primary:hover:not(:disabled) { filter: brightness(1.1); color: var(--color-bg-primary); }
+  .mission-toolbar__text-btn--warning { border-color: var(--color-warning); color: var(--color-warning); }
+</style>

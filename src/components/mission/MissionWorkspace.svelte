@@ -1039,33 +1039,19 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     canRedo={view.canRedo}
     canUndo={view.canUndo}
     canUseVehicleActions={canUseVehicleActions}
-    dirty={view.dirty}
-    fenceRegionCount={view.fenceRegionCount}
     hasContent={hasContent || view.workspaceMounted}
-    missionItemCount={view.missionItemCount}
     mode={view.mode}
     onCancelTransfer={handleCancelTransfer}
-    onClearVehicle={handleClearVehicle}
     onExportPlan={handleExportPlan}
-    onImportKml={handleImportKml}
     onImportPlan={handleImportPlan}
-    onNewMission={handleNewMission}
     onReadFromVehicle={handleReadFromVehicle}
     onRedo={handleRedo}
     onSelectMode={handleSelectMode}
     onUndo={handleUndo}
     onUploadToVehicle={handleUploadToVehicle}
     onValidateMission={handleValidateMission}
-    rallyPointCount={view.rallyPointCount}
-    readiness={view.readiness}
     redoCount={view.redoCount}
-    scopeText={view.activeEnvelopeText}
-    status={view.status}
-    surveyRegionCount={view.surveyRegionCount}
-    timedOut={view.inlineStatus.timedOut}
     undoCount={view.undoCount}
-    validationIssueCount={view.validationIssueCount}
-    warningCount={view.warningCount}
   />
 
   {#if view.importReview}
