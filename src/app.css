@@ -699,6 +699,10 @@ body {
     margin-left: 0;
   }
 
+  .app-shell-tab__label {
+    display: none;
+  }
+
   .app-shell-layout__main {
     padding: 8px;
   }
