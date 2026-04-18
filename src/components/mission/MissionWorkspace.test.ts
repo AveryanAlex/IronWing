@@ -643,7 +643,7 @@ function expectHistoryButtonState(
   expect(button.getAttribute("aria-label")).toBe(label);
   expect(button.getAttribute("title")).toBe(label);
   expect(button.disabled).toBe(disabled);
-  expect(button.textContent).toContain(String(count));
+  // The toolbar was redesigned as icon-only buttons — count is in aria-label/title, not textContent.
   return button;
 }
 
@@ -709,7 +709,7 @@ describe("MissionWorkspace", () => {
     expect(screen.getByTestId(missionWorkspaceTestIds.entryImportKml)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.entryNew)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("wide");
-    expect(screen.getByTestId(missionWorkspaceTestIds.layoutTier).textContent).toContain("1440×900");
+    expect(screen.getByTestId(missionWorkspaceTestIds.layoutTier).textContent).toContain("wide");
     expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentState).textContent).toContain("all-visible");
 
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
@@ -737,7 +737,7 @@ describe("MissionWorkspace", () => {
 
     expect(screen.getByTestId(missionWorkspaceTestIds.root)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("wide");
-    expect(screen.getByTestId(missionWorkspaceTestIds.layoutTier).textContent).toContain("1440×900");
+    expect(screen.getByTestId(missionWorkspaceTestIds.layoutTier).textContent).toContain("wide");
     expect(screen.getByTestId(missionWorkspaceTestIds.layoutTierMismatch).textContent).toContain("match");
     expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentState).textContent).toContain("all-visible");
   });

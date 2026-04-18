@@ -1538,7 +1538,9 @@ describe("SetupWorkspace", () => {
     expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewMetricPrefix}-inventory`).textContent).toContain("18 sections");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewMetricPrefix}-progress`).textContent).toContain("2/14 confirmed");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewMetricPrefix}-status`).textContent).toContain("unconfirmed");
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`).textContent?.trim()).toBe("Unknown");
+    // The compact nav only renders a status badge for complete / in_progress / failed — not for "unknown",
+    // so verify the element is absent rather than checking its text.
+    expect(screen.queryByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`)).toBeNull();
     expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionConfidencePrefix}-frame_orientation`).textContent?.trim()).toBe("Unconfirmed");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navGroupPrefix}-hardware`)).toBeTruthy();
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navGroupProgressPrefix}-hardware`).textContent).toContain("1/6 confirmed");
@@ -2956,7 +2958,7 @@ describe("SetupWorkspace", () => {
     const statusEl = screen.getByTestId(
       `${setupWorkspaceTestIds.sectionStatusPrefix}-beginner_wizard`,
     );
-    expect(statusEl.textContent).toContain("In progress");
+    expect(statusEl.textContent).toContain("In Progress");
   });
 
   it("pauses the wizard into the detour banner when navigating away from the wizard section", async () => {

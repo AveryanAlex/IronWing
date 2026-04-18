@@ -11,6 +11,39 @@ vi.mock("svelte-sonner", () => ({
     },
 }));
 
+// maplibre-gl requires WebGL which is unavailable in jsdom. Stub the entire
+// module so OverviewMap (mounted inside OperatorWorkspace) does not crash.
+vi.mock("maplibre-gl", () => {
+    const mockMap = {
+        addControl: vi.fn(),
+        addSource: vi.fn(),
+        addLayer: vi.fn(),
+        getSource: vi.fn(() => null),
+        removeLayer: vi.fn(),
+        removeSource: vi.fn(),
+        setCenter: vi.fn(),
+        on: vi.fn(),
+        remove: vi.fn(),
+    };
+    const mockMarker = {
+        setLngLat: vi.fn().mockReturnThis(),
+        addTo: vi.fn().mockReturnThis(),
+        setRotation: vi.fn().mockReturnThis(),
+        remove: vi.fn(),
+    };
+    // Regular functions (not arrow functions) are required for `new` to work.
+    function MockMap() { return mockMap; }
+    function MockMarker() { return mockMarker; }
+    function MockNavigationControl() { return {}; }
+    return {
+        default: {
+            Map: MockMap,
+            NavigationControl: MockNavigationControl,
+            Marker: MockMarker,
+        },
+    };
+});
+
 import AppShellContent from "./AppShellContent.svelte";
 import {
     appShellTestIds,
@@ -533,7 +566,9 @@ describe("AppShell", () => {
             expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("telemetry");
         });
 
-        expect(screen.getByTestId("app-shell-placeholder-telemetry")).toBeTruthy();
+        // Telemetry now has a real workspace (TelemetryWorkspace) rather than a placeholder.
+        expect(screen.queryByTestId("app-shell-placeholder-telemetry")).toBeNull();
+        // The sidebar telemetry panel is not visible in the main workspace area.
         expect(screen.queryByTestId("telemetry-state-value")).toBeNull();
 
         await fireEvent.click(screen.getByRole("button", { name: "Mission" }));
@@ -643,7 +678,8 @@ describe("AppShell", () => {
         expect(screen.queryByTestId("telemetry-state-value")).toBeNull();
         expect(screen.queryByTestId(parameterWorkspaceTestIds.root)).toBeNull();
         expect(screen.getByTestId(setupWorkspaceTestIds.state).textContent?.trim()).toBe("Setup ready");
-        expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`).textContent?.trim()).toBe("Unknown");
+        // The compact nav only renders a status badge for complete / in_progress / failed — not for "unknown".
+        expect(screen.queryByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`)).toBeNull();
         expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionConfidencePrefix}-frame_orientation`).textContent?.trim()).toBe("Unconfirmed");
         expect(screen.getByTestId(setupWorkspaceTestIds.detailRecovery).textContent).toContain("Full Parameters stays separate");
     });

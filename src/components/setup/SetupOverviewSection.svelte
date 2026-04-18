@@ -236,7 +236,10 @@ function groupTone(blocked: number, progressText: string): string {
               </div>
 
               {#if section.confidenceText}
-                <p class="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+                <p
+                  class="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted"
+                  data-testid={`${setupWorkspaceTestIds.sectionConfidencePrefix}-${section.id}`}
+                >
                   {section.confidenceText}
                 </p>
               {/if}

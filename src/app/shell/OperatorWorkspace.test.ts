@@ -3,6 +3,39 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// maplibre-gl requires WebGL which is unavailable in jsdom. Stub the entire
+// module so OverviewMap (mounted inside OperatorWorkspace) does not crash.
+vi.mock("maplibre-gl", () => {
+  const mockMap = {
+    addControl: vi.fn(),
+    addSource: vi.fn(),
+    addLayer: vi.fn(),
+    getSource: vi.fn(() => null),
+    removeLayer: vi.fn(),
+    removeSource: vi.fn(),
+    setCenter: vi.fn(),
+    on: vi.fn(),
+    remove: vi.fn(),
+  };
+  const mockMarker = {
+    setLngLat: vi.fn().mockReturnThis(),
+    addTo: vi.fn().mockReturnThis(),
+    setRotation: vi.fn().mockReturnThis(),
+    remove: vi.fn(),
+  };
+  // Regular functions (not arrow functions) are required for `new` to work.
+  function MockMap() { return mockMap; }
+  function MockMarker() { return mockMarker; }
+  function MockNavigationControl() { return {}; }
+  return {
+    default: {
+      Map: MockMap,
+      NavigationControl: MockNavigationControl,
+      Marker: MockMarker,
+    },
+  };
+});
+
 import OperatorWorkspace from "./OperatorWorkspace.svelte";
 import { appShellTestIds } from "./chrome-state";
 import { createParamsStore } from "../../lib/stores/params";

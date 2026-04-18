@@ -55,6 +55,14 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
           <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
         {group.title}
+        {#if group.progressText}
+          <span
+            class="setup-nav__group-progress"
+            data-testid={`${setupWorkspaceTestIds.navGroupProgressPrefix}-${group.id}`}
+          >
+            {group.progressText}
+          </span>
+        {/if}
       </button>
 
       {#if !collapsedGroups[group.id]}
@@ -177,5 +185,14 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
   }
   .setup-nav__status--warn {
     color: var(--color-warning);
+  }
+
+  .setup-nav__group-progress {
+    margin-left: auto;
+    font-size: 0.6rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    text-transform: none;
+    letter-spacing: 0;
   }
 </style>

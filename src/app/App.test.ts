@@ -3,6 +3,39 @@
 import { cleanup, render } from "@testing-library/svelte";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
+// maplibre-gl requires WebGL which is unavailable in jsdom. Stub the entire
+// module so OverviewMap (mounted inside the full App) does not crash.
+vi.mock("maplibre-gl", () => {
+  const mockMap = {
+    addControl: vi.fn(),
+    addSource: vi.fn(),
+    addLayer: vi.fn(),
+    getSource: vi.fn(() => null),
+    removeLayer: vi.fn(),
+    removeSource: vi.fn(),
+    setCenter: vi.fn(),
+    on: vi.fn(),
+    remove: vi.fn(),
+  };
+  const mockMarker = {
+    setLngLat: vi.fn().mockReturnThis(),
+    addTo: vi.fn().mockReturnThis(),
+    setRotation: vi.fn().mockReturnThis(),
+    remove: vi.fn(),
+  };
+  // Regular functions (not arrow functions) are required for `new` to work.
+  function MockMap() { return mockMap; }
+  function MockMarker() { return mockMarker; }
+  function MockNavigationControl() { return {}; }
+  return {
+    default: {
+      Map: MockMap,
+      NavigationControl: MockNavigationControl,
+      Marker: MockMarker,
+    },
+  };
+});
+
 import App from "./App.svelte";
 import {
   markRuntimeReady,
@@ -41,7 +74,7 @@ test("renders the product shell with stable runtime hooks", () => {
 
   expect(document.title).toBe("IronWing");
   expect(getByTestId(runtimeTestIds.shell).dataset.runtimePhase).toBe("ready");
-  expect(getByRole("heading", { name: "Ground Control" })).toBeTruthy();
+  expect(getByRole("heading", { name: "IronWing" })).toBeTruthy();
   expect(getByTestId(runtimeTestIds.framework).textContent).toBe("Svelte 5");
   expect(getByTestId(runtimeTestIds.bootstrapState).textContent?.trim()).toBe("ready");
   expect(getByTestId(appShellTestIds.tier).textContent?.trim()).toBe("phone");

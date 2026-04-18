@@ -811,7 +811,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                           </div>
 
                           {#if directionResult === "reversed"}
-                            <div class="mt-4 rounded-lg border border-border bg-bg-primary/80 px-4 py-4">
+                            <div class="mt-4">
                               <p class="text-sm leading-6 text-text-secondary">Queue the corresponding SERVOx_REVERSED change through the shared review tray only; this section never writes it directly.</p>
                               <div class="mt-3 flex flex-wrap items-center gap-2">
                                 <button

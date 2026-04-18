@@ -169,6 +169,35 @@ function metricColorVar(metric: OperatorMetricView): string {
     {/snippet}
     {#snippet second()}
       <div class="operator-workspace__metrics">
+        <!-- Quality state indicators -->
+        {#if view.quality.stale}
+          <div class="quality-banner quality-banner--stale" data-testid="operator-workspace-stale">
+            <span>Telemetry stale</span>
+          </div>
+        {/if}
+        {#if view.quality.disconnected}
+          <div class="quality-banner quality-banner--disconnected" data-testid="operator-workspace-disconnected">
+            <span>Disconnected</span>
+          </div>
+        {/if}
+
+        <!-- Degraded data source badges -->
+        {#if view.quality.telemetry.degraded}
+          <span class="degraded-badge" data-testid="operator-workspace-degraded-telemetry">degraded</span>
+        {/if}
+        {#if view.quality.support.degraded}
+          <span class="degraded-badge" data-testid="operator-workspace-degraded-support">degraded</span>
+        {/if}
+        {#if view.quality.notices.degraded}
+          <span class="degraded-badge" data-testid="operator-workspace-degraded-notices">degraded</span>
+        {/if}
+
+        <!-- Readiness strip -->
+        <div class="readiness-strip" data-testid="operator-workspace-readiness">
+          {view.readiness.label}
+        </div>
+
+        <!-- Metric groups -->
         {#each metricGroups as group (group.title)}
           <div class="metric-group">
             <h3 class="metric-group__title">{group.title}</h3>
@@ -187,6 +216,29 @@ function metricColorVar(metric: OperatorMetricView): string {
             </div>
           </div>
         {/each}
+
+        <!-- Status notice strip -->
+        <div class="notice-strip">
+          <div class="notice-strip__header">
+            <span class="notice-strip__title">Notices</span>
+            {#if view.notices.length > 0}
+              <span class="notice-strip__count" data-testid="operator-workspace-notice-count">{view.notices.length} shown</span>
+            {/if}
+          </div>
+          {#if view.notices.length === 0}
+            <div class="notice-strip__empty" data-testid="operator-workspace-notices-empty">
+              No active notices
+            </div>
+          {:else}
+            <ul class="notice-strip__list">
+              {#each view.notices as notice (notice.id)}
+                <li class="notice-entry notice-entry--{notice.tone}">
+                  {notice.text}
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
       </div>
     {/snippet}
   </SplitPane>
@@ -210,7 +262,41 @@ function metricColorVar(metric: OperatorMetricView): string {
     height: 100%;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
+  }
+
+  .quality-banner {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .quality-banner--stale {
+    background: var(--color-warning);
+    color: var(--color-bg-primary);
+  }
+
+  .quality-banner--disconnected {
+    background: var(--color-border);
+    color: var(--color-text-muted);
+  }
+
+  .degraded-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--color-warning);
+    color: var(--color-bg-primary);
+  }
+
+  .readiness-strip {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    padding: 4px 2px;
   }
 
   .metric-group__title {
@@ -251,5 +337,62 @@ function metricColorVar(metric: OperatorMetricView): string {
     font-size: 0.875rem;
     font-weight: 500;
     line-height: 1.2;
+  }
+
+  .notice-strip {
+    margin-top: 4px;
+  }
+
+  .notice-strip__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+
+  .notice-strip__title {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+  }
+
+  .notice-strip__count {
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+  }
+
+  .notice-strip__empty {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    padding: 4px 2px;
+  }
+
+  .notice-strip__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .notice-entry {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+  }
+
+  .notice-entry--critical {
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+  }
+
+  .notice-entry--caution {
+    border-color: var(--color-warning);
+    color: var(--color-warning);
   }
 </style>
