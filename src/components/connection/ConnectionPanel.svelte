@@ -116,19 +116,19 @@ async function onSubmit(event: SubmitEvent) {
 }
 </script>
 
-<section class="vehicle-panel-section">
+<section class="rounded-lg border border-border bg-bg-primary p-3">
   <div class="flex items-center justify-between gap-2">
     <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Connection</p>
     <div
       class={`inline-flex items-center gap-1.5 text-xs font-semibold ${toneTextClass(panelView.statusTone)}`}
       data-testid="connection-status-text"
     >
-      <span class={`h-1.5 w-1.5 rounded-full ${toneDotClass(panelView.statusTone)}`}></span>
+      <span class={`h-2 w-2 rounded-full ${toneDotClass(panelView.statusTone)}`}></span>
       {panelView.statusLabel}
     </div>
   </div>
 
-  <form class="mt-2 space-y-3" onsubmit={onSubmit}>
+  <form class="mt-3 space-y-3" onsubmit={onSubmit}>
     <ConnectionTransportFields
       btDevices={$store.btDevices}
       btScanning={$store.btScanning}
@@ -188,9 +188,3 @@ async function onSubmit(event: SubmitEvent) {
   </form>
 </section>
 
-<style>
-  .vehicle-panel-section {
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--color-border);
-  }
-</style>

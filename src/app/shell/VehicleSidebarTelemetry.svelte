@@ -41,11 +41,11 @@ let launcherStatusText = $derived.by(() => {
 });
 </script>
 
-<section class="vehicle-panel-section" data-testid="sidebar-telemetry-panel">
+<section class="rounded-lg border border-border bg-bg-primary p-3" data-testid="sidebar-telemetry-panel">
   <div class="flex items-center justify-between gap-2">
-    <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Telemetry</p>
+    <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Vehicle</p>
     <button
-      class="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-text-secondary transition hover:text-accent"
+      class="rounded-md border border-border bg-bg-secondary px-2 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-text-primary transition hover:border-accent/40 hover:text-accent"
       data-testid={appShellTestIds.telemetrySettingsLauncher}
       onclick={() => telemetrySettingsDialog.open()}
       type="button"
@@ -56,41 +56,35 @@ let launcherStatusText = $derived.by(() => {
 
   <p class="mt-1 text-[0.65rem] text-text-muted">{launcherStatusText}</p>
 
-  <dl class="mt-2 grid grid-cols-2 gap-x-8 gap-y-1 text-sm">
-    <div data-testid="sidebar-telemetry-state">
-      <dt class="text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-text-muted">State</dt>
-      <dd class="font-semibold text-text-primary">{statusCard.armStateText}</dd>
+  <dl class="mt-3 grid grid-cols-2 gap-2 text-sm">
+    <div class="rounded-md border border-border bg-bg-secondary px-2 py-1.5" data-testid="sidebar-telemetry-state">
+      <dt class="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-text-muted">State</dt>
+      <dd class="mt-0.5 font-semibold text-text-primary">{statusCard.armStateText}</dd>
     </div>
 
-    <div data-testid="sidebar-telemetry-mode">
-      <dt class="text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-text-muted">Mode</dt>
-      <dd class="font-semibold text-text-primary">{statusCard.modeText}</dd>
+    <div class="rounded-md border border-border bg-bg-secondary px-2 py-1.5" data-testid="sidebar-telemetry-mode">
+      <dt class="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-text-muted">Mode</dt>
+      <dd class="mt-0.5 font-semibold text-text-primary">{statusCard.modeText}</dd>
     </div>
 
-    <div data-testid="sidebar-telemetry-altitude">
-      <dt class="text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-text-muted">Alt</dt>
-      <dd class="font-semibold text-text-primary">{summary.altitudeText}</dd>
+    <div class="rounded-md border border-border bg-bg-secondary px-2 py-1.5" data-testid="sidebar-telemetry-altitude">
+      <dt class="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-text-muted">Alt</dt>
+      <dd class="mt-0.5 font-semibold text-text-primary">{summary.altitudeText}</dd>
     </div>
 
-    <div data-testid="sidebar-telemetry-speed">
-      <dt class="text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-text-muted">Speed</dt>
-      <dd class="font-semibold text-text-primary">{summary.speedText}</dd>
+    <div class="rounded-md border border-border bg-bg-secondary px-2 py-1.5" data-testid="sidebar-telemetry-speed">
+      <dt class="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-text-muted">Speed</dt>
+      <dd class="mt-0.5 font-semibold text-text-primary">{summary.speedText}</dd>
     </div>
 
-    <div data-testid="sidebar-telemetry-battery">
-      <dt class="text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-text-muted">Battery</dt>
-      <dd class="font-semibold text-text-primary">{summary.batteryText}</dd>
+    <div class="rounded-md border border-border bg-bg-secondary px-2 py-1.5" data-testid="sidebar-telemetry-battery">
+      <dt class="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-text-muted">Battery</dt>
+      <dd class="mt-0.5 font-semibold text-text-primary">{summary.batteryText}</dd>
     </div>
 
-    <div data-testid="sidebar-telemetry-gps">
-      <dt class="text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-text-muted">GPS</dt>
-      <dd class="font-semibold text-text-primary">{gpsText}</dd>
+    <div class="rounded-md border border-border bg-bg-secondary px-2 py-1.5" data-testid="sidebar-telemetry-gps">
+      <dt class="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-text-muted">GPS</dt>
+      <dd class="mt-0.5 font-semibold text-text-primary">{gpsText}</dd>
     </div>
   </dl>
 </section>
-
-<style>
-  .vehicle-panel-section {
-    padding-top: 8px;
-  }
-</style>
