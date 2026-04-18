@@ -41,6 +41,7 @@ import {
   clearMissionMapDebugSnapshot,
   publishMissionMapDebugSnapshot,
 } from "./mission-map-debug";
+import MapContextMenu from "./MapContextMenu.svelte";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
 type Props = {
@@ -68,6 +69,8 @@ type Props = {
   onMoveFenceVertex?: (uiId: number, index: number, latitudeDeg: number, longitudeDeg: number) => MissionPlannerFenceMutationResult | unknown;
   onMoveFenceCircleCenter?: (uiId: number, latitudeDeg: number, longitudeDeg: number) => MissionPlannerFenceMutationResult | unknown;
   onUpdateFenceCircleRadius?: (uiId: number, radiusM: number) => MissionPlannerFenceMutationResult | unknown;
+  onAddWaypointAt?: (latitudeDeg: number, longitudeDeg: number) => void;
+  onSetHomeAt?: (latitudeDeg: number, longitudeDeg: number) => void;
 };
 
 type ActiveMarkerDrag = {
@@ -160,6 +163,8 @@ let {
   onMoveFenceVertex,
   onMoveFenceCircleCenter,
   onUpdateFenceCircleRadius,
+  onAddWaypointAt,
+  onSetHomeAt,
 }: Props = $props();
 
 let surfaceElement = $state<HTMLDivElement | null>(null);
@@ -170,6 +175,7 @@ let surveySession = $state<SurveySession | null>(null);
 let fencePlacementMode = $state<FenceRegionType | "return-point" | null>(null);
 let localMessage = $state<LocalMapMessage | null>(null);
 let lastUsableViewport = $state<MissionMapViewport | null>(null);
+let contextMenu = $state<{ x: number; y: number; lngLat: { lng: number; lat: number } } | null>(null);
 
 let fallbackViewport = $derived(buildMissionMapViewport(fallbackReference, [fallbackReference]));
 let interactiveViewport = $derived(view.viewport ?? lastUsableViewport ?? fallbackViewport);
@@ -487,6 +493,7 @@ function fenceLineColor(feature: MissionMapLineFeature): string {
 
 function handleMarkerSelection(marker: MissionMapMarker) {
   localMessage = null;
+  contextMenu = null;
 
   if (marker.kind === "home") {
     onSelectHome();
@@ -670,6 +677,7 @@ function cancelFencePlacement() {
 }
 
 function startMarkerDrag(event: PointerEvent, marker: MissionMapMarker) {
+  contextMenu = null;
   handleMarkerSelection(marker);
 
   if (surveySession) {
@@ -1324,6 +1332,54 @@ function handleKeydown(event: KeyboardEvent) {
     cancelSurveySession();
   }
 }
+
+function handleContextMenu(event: MouseEvent) {
+  event.preventDefault();
+  contextMenu = null;
+
+  const viewport = interactiveViewport;
+  if (!viewport || !surfaceElement || readOnly) {
+    return;
+  }
+
+  const rect = surfaceElement.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) {
+    return;
+  }
+
+  const offsetX = event.clientX - rect.left;
+  const offsetY = event.clientY - rect.top;
+  const mapPoint: MissionMapPoint = {
+    x: (offsetX / rect.width) * viewport.viewBoxSize,
+    y: (offsetY / rect.height) * viewport.viewBoxSize,
+  };
+  const geo = unprojectMissionMapPoint(viewport, mapPoint);
+
+  contextMenu = {
+    x: offsetX,
+    y: offsetY,
+    lngLat: { lng: geo.longitude_deg, lat: geo.latitude_deg },
+  };
+}
+
+function buildContextMenuItems(): { label: string; action: () => void; destructive?: boolean }[] {
+  if (!contextMenu) {
+    return [];
+  }
+
+  const { lat, lng } = contextMenu.lngLat;
+  const items: { label: string; action: () => void; destructive?: boolean }[] = [];
+
+  if (view.mode === "mission" && onAddWaypointAt) {
+    items.push({ label: "Add waypoint here", action: () => onAddWaypointAt!(lat, lng) });
+  }
+
+  if (onSetHomeAt) {
+    items.push({ label: "Set Home here", action: () => onSetHomeAt!(lat, lng) });
+  }
+
+  return items;
+}
 </script>
 
 <svelte:window onkeydown={handleKeydown} onpointercancel={handlePointerCancel} onpointermove={handlePointerMove} onpointerup={handlePointerUp} />
@@ -1559,10 +1615,12 @@ function handleKeydown(event: KeyboardEvent) {
 
   {#if interactiveViewport}
     <div class="mt-4 rounded-lg border border-border bg-bg-secondary/40 p-3">
+      <!-- svelte-ignore a11y_no_static_element_interactions -- map surface handles pointer/context events natively -->
       <div
         bind:this={surfaceElement}
         class="mission-map-surface relative aspect-[5/4] overflow-hidden rounded-[20px] border border-border/70 bg-[radial-gradient(circle_at_top,_rgba(120,214,255,0.12),_transparent_55%),linear-gradient(180deg,_rgba(6,14,23,0.96),_rgba(8,20,32,0.88))]"
         data-testid={missionWorkspaceTestIds.mapSurface}
+        oncontextmenu={handleContextMenu}
       >
         <svg aria-hidden="true" class="absolute inset-0 h-full w-full" preserveAspectRatio="none" viewBox={`0 0 ${interactiveViewport.viewBoxSize} ${interactiveViewport.viewBoxSize}`}>
           {#each GRID_TICKS as tick (tick)}
@@ -1795,6 +1853,18 @@ function handleKeydown(event: KeyboardEvent) {
             {marker.label}
           </button>
         {/each}
+
+        {#if contextMenu}
+          {@const menuItems = buildContextMenuItems()}
+          {#if menuItems.length > 0}
+            <MapContextMenu
+              x={contextMenu.x}
+              y={contextMenu.y}
+              items={menuItems}
+              onClose={() => contextMenu = null}
+            />
+          {/if}
+        {/if}
       </div>
     </div>
   {/if}

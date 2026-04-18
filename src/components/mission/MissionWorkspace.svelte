@@ -745,6 +745,26 @@ function handleMoveMissionItemFromMap(uiId: number, latitudeDeg: number, longitu
   return missionPlannerStore.moveMissionItemOnMapByUiId(uiId, latitudeDeg, longitudeDeg);
 }
 
+function handleAddWaypointAt(latitudeDeg: number, longitudeDeg: number) {
+  clearLocalNote();
+  missionPlannerStore.addMissionItem();
+  const items = planner.draftState.active.mission.draftItems;
+  const lastItem = items[items.length - 1];
+  if (lastItem) {
+    missionPlannerStore.updateMissionItemLatitude(lastItem.index, latitudeDeg);
+    missionPlannerStore.updateMissionItemLongitude(lastItem.index, longitudeDeg);
+  }
+}
+
+function handleSetHomeAt(latitudeDeg: number, longitudeDeg: number) {
+  clearLocalNote();
+  missionPlannerStore.setHome({
+    latitude_deg: latitudeDeg,
+    longitude_deg: longitudeDeg,
+    altitude_m: planner.home?.altitude_m ?? 0,
+  });
+}
+
 function handleSelectRallyPoint(uiId: number) {
   clearLocalNote();
   return missionPlannerStore.selectRallyPointByUiId(uiId);
@@ -1420,6 +1440,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               <MissionMap
                 blockedReason={planner.blockedReason}
                 fallbackReference={resolveSurveyCreationAnchor(planner)}
+                onAddWaypointAt={handleAddWaypointAt}
                 onCreateSurveyRegion={handleStartSurveyDraw}
                 onDeleteSurveyRegion={handleDeleteSurveyRegion}
                 onMoveHome={handleMoveHomeFromMap}
@@ -1427,6 +1448,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                 onSelectHome={missionPlannerStore.selectHome}
                 onSelectMissionItem={handleSelectMissionItemFromMap}
                 onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
+                onSetHomeAt={handleSetHomeAt}
                 onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
                 readOnly={!view.canEdit}
                 readOnlyReason={view.attachment.detail}
@@ -1559,6 +1581,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               onSelectMissionItem={handleSelectMissionItemFromMap}
               onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
               onSetFenceReturnPoint={(latitudeDeg, longitudeDeg) => handleSetFenceReturnPoint({ latitude_deg: latitudeDeg, longitude_deg: longitudeDeg })}
+              onSetHomeAt={handleSetHomeAt}
               onUpdateFenceCircleRadius={handleUpdateFenceCircleRadiusFromMap}
               onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
               readOnly={!view.canEdit}
@@ -1618,6 +1641,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               onSelectMissionItem={handleSelectMissionItemFromMap}
               onSelectRallyPoint={handleSelectRallyPoint}
               onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
+              onSetHomeAt={handleSetHomeAt}
               onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
               readOnly={!view.canEdit}
               readOnlyReason={view.attachment.detail}
