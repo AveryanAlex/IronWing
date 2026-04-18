@@ -7,6 +7,7 @@ import FirmwareWorkspace from "../../components/firmware/FirmwareWorkspace.svelt
 import HudWorkspace from "../../components/hud/HudWorkspace.svelte";
 import MissionWorkspace from "../../components/mission/MissionWorkspace.svelte";
 import SetupWorkspace from "../../components/setup/SetupWorkspace.svelte";
+import SettingsWorkspace from "../../components/settings/SettingsWorkspace.svelte";
 import TelemetryWorkspace from "../../components/telemetry/TelemetryWorkspace.svelte";
 import { runtimeTestIds } from "../../lib/stores/runtime";
 import AppShellPlaceholderWorkspace from "./AppShellPlaceholderWorkspace.svelte";
@@ -177,10 +178,7 @@ onDestroy(() => {
                 store={firmwareWorkspace.store}
               />
             {:else if activeWorkspace === "settings"}
-              <AppShellPlaceholderWorkspace
-                description="Application-level preferences and shell behavior controls will live in this workspace."
-                title="App settings"
-              />
+              <SettingsWorkspace />
             {:else}
               <AppShellPlaceholderWorkspace
                 description="Setup workflows and calibration entry points will live here."
