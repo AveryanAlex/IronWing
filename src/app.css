@@ -343,8 +343,9 @@ body {
 }
 
 .app-shell-vehicle-stack {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
 .app-shell-layout__main {

@@ -23,16 +23,16 @@ onMount(() => {
   }
 });
 
-function toneBadgeClass(tone: ViewTone): string {
+function toneTextClass(tone: ViewTone): string {
   switch (tone) {
     case "positive":
-      return "border-success/30 bg-success/10 text-success";
+      return "text-success";
     case "caution":
-      return "border-warning/30 bg-warning/10 text-warning";
+      return "text-warning";
     case "critical":
-      return "border-danger/30 bg-danger/10 text-danger";
+      return "text-danger";
     default:
-      return "border-border-light bg-bg-primary/70 text-text-secondary";
+      return "text-text-secondary";
   }
 }
 
@@ -116,26 +116,19 @@ async function onSubmit(event: SubmitEvent) {
 }
 </script>
 
-<section class="rounded-lg border border-border bg-bg-primary p-3">
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Session link</p>
-      <h2 class="mt-1 text-base font-semibold text-text-primary">Connection</h2>
-      <p class="mt-1 text-sm text-text-secondary">
-        Choose a transport and connect to your vehicle.
-      </p>
-    </div>
-
+<section class="vehicle-panel-section">
+  <div class="flex items-center justify-between gap-2">
+    <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Connection</p>
     <div
-      class={`inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs font-semibold ${toneBadgeClass(panelView.statusTone)}`}
+      class={`inline-flex items-center gap-1.5 text-xs font-semibold ${toneTextClass(panelView.statusTone)}`}
       data-testid="connection-status-text"
     >
-      <span class={`h-2 w-2 rounded-full ${toneDotClass(panelView.statusTone)}`}></span>
+      <span class={`h-1.5 w-1.5 rounded-full ${toneDotClass(panelView.statusTone)}`}></span>
       {panelView.statusLabel}
     </div>
   </div>
 
-  <form class="mt-4 space-y-4" onsubmit={onSubmit}>
+  <form class="mt-2 space-y-3" onsubmit={onSubmit}>
     <ConnectionTransportFields
       btDevices={$store.btDevices}
       btScanning={$store.btScanning}
@@ -194,3 +187,10 @@ async function onSubmit(event: SubmitEvent) {
     <ConnectionDiagnostics state={$store} />
   </form>
 </section>
+
+<style>
+  .vehicle-panel-section {
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-border);
+  }
+</style>
