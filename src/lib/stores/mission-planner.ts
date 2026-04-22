@@ -8,9 +8,13 @@ import { shouldDropEvent } from "../../session";
 import { parseLatitude, parseLongitude } from "../mission-coordinates";
 import {
   createMissionKmlFileIo,
+  detectKmlSource,
+  parseMissionKmlImportSelection,
   type MissionKmlFileImportData,
+  type MissionKmlFileImportResult,
   type MissionKmlFileIo,
 } from "../mission-kml-file-io";
+import { formatUnknownError } from "../error-format";
 import type { FenceRegion, MissionCommand, GeoPoint2d, MissionItem } from "../mavkit-types";
 import {
   addFenceRegionAt,
@@ -43,7 +47,9 @@ import {
 } from "../mission-draft-typed";
 import {
   createMissionPlanFileIo,
+  parseMissionPlanImportSelection,
   type MissionPlanFileImportData,
+  type MissionPlanFileImportResult,
   type MissionPlanFileIo,
 } from "../mission-plan-file-io";
 import { DEFAULT_CRUISE_SPEED_MPS, DEFAULT_HOVER_SPEED_MPS } from "../mission-plan-io/qgc-types";
@@ -369,6 +375,189 @@ const ACTION_TIMEOUT_MS = 15_000;
 const HISTORY_LIMIT = 50;
 const ALL_IMPORT_DOMAINS = ["mission", "fence", "rally"] as const satisfies readonly MissionPlannerImportDomain[];
 const ALL_HISTORY_DOMAINS = ["mission", "fence", "rally"] as const satisfies readonly MissionPlannerHistoryDomain[];
+const SUPPORTED_TOOLBAR_IMPORT_ACCEPT = {
+  "application/json": [".plan", ".json"],
+  "text/plain": [".plan", ".json", ".kml"],
+  "application/vnd.google-earth.kml+xml": [".kml"],
+  "application/vnd.google-earth.kmz": [".kmz"],
+  "application/xml": [".kml"],
+  "text/xml": [".kml"],
+  "application/octet-stream": [".kmz"],
+} satisfies Record<string, string[]>;
+const TOOLBAR_IMPORT_INPUT_ACCEPT = ".plan,.json,.kml,.kmz,application/json,text/plain,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,text/xml,application/xml,application/octet-stream";
+
+type BrowserOpenFileHandle = {
+  getFile(): Promise<File>;
+};
+
+type BrowserMissionImportPickerWindow = Window & {
+  showOpenFilePicker?: (options?: {
+    multiple?: boolean;
+    excludeAcceptAllOption?: boolean;
+    types?: Array<{ description?: string; accept: Record<string, string[]> }>;
+  }) => Promise<BrowserOpenFileHandle[]>;
+};
+
+type ToolbarImportSelection =
+  | {
+    source: "plan";
+    name: string | null;
+    contents: string;
+  }
+  | {
+    source: "kml" | "kmz";
+    name: string | null;
+    text?: string;
+    bytes?: Uint8Array | ArrayBuffer;
+  };
+
+function detectToolbarImportSource(name: string | null | undefined, mimeType: string | null | undefined): ToolbarImportSelection["source"] {
+  const loweredName = name?.toLowerCase() ?? "";
+  if (loweredName.endsWith(".plan") || loweredName.endsWith(".json") || mimeType === "application/json") {
+    return "plan";
+  }
+
+  return detectKmlSource(name, mimeType);
+}
+
+async function readToolbarImportSelection(file: File): Promise<ToolbarImportSelection> {
+  const source = detectToolbarImportSource(file.name, file.type);
+  if (source === "plan") {
+    return {
+      source,
+      name: file.name,
+      contents: await file.text(),
+    };
+  }
+
+  if (source === "kmz") {
+    return {
+      source,
+      name: file.name,
+      bytes: await file.arrayBuffer(),
+    };
+  }
+
+  return {
+    source,
+    name: file.name,
+    text: await file.text(),
+  };
+}
+
+async function openToolbarImportPicker(
+  formatError: (error: unknown) => string = formatUnknownError,
+): Promise<ToolbarImportSelection | null> {
+  const browserWindow = window as BrowserMissionImportPickerWindow;
+
+  if (typeof browserWindow.showOpenFilePicker === "function") {
+    return openToolbarImportPickerWithHandle(browserWindow.showOpenFilePicker, formatError);
+  }
+
+  return openToolbarImportPickerWithInput(formatError);
+}
+
+async function openToolbarImportPickerWithHandle(
+  showOpenFilePicker: NonNullable<BrowserMissionImportPickerWindow["showOpenFilePicker"]>,
+  formatError: (error: unknown) => string,
+): Promise<ToolbarImportSelection | null> {
+  try {
+    const handles = await showOpenFilePicker({
+      multiple: false,
+      types: [
+        {
+          description: "Mission plan, KML, and KMZ files",
+          accept: SUPPORTED_TOOLBAR_IMPORT_ACCEPT,
+        },
+      ],
+    });
+    const handle = handles[0];
+    if (!handle) {
+      return null;
+    }
+
+    return readToolbarImportSelection(await handle.getFile());
+  } catch (error) {
+    if (isAbortError(error)) {
+      return null;
+    }
+
+    throw new Error(formatError(error));
+  }
+}
+
+function openToolbarImportPickerWithInput(
+  formatError: (error: unknown) => string,
+): Promise<ToolbarImportSelection | null> {
+  if (typeof document === "undefined") {
+    return Promise.reject(new Error("This browser cannot open mission import files right now."));
+  }
+
+  return new Promise((resolve, reject) => {
+    const input = document.createElement("input");
+    let settled = false;
+
+    const cleanup = () => {
+      input.removeEventListener("change", onChange);
+      window.removeEventListener("focus", onWindowFocus);
+      input.remove();
+    };
+
+    const settle = (value: ToolbarImportSelection | null) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      cleanup();
+      resolve(value);
+    };
+
+    const onWindowFocus = () => {
+      window.setTimeout(() => {
+        if (!settled && (!input.files || input.files.length === 0)) {
+          settle(null);
+        }
+      }, 0);
+    };
+
+    const onChange = async () => {
+      const file = input.files?.[0];
+      if (!file) {
+        settle(null);
+        return;
+      }
+
+      try {
+        settle(await readToolbarImportSelection(file));
+      } catch (error) {
+        cleanup();
+        reject(new Error(formatError(error)));
+      }
+    };
+
+    input.type = "file";
+    input.accept = TOOLBAR_IMPORT_INPUT_ACCEPT;
+    input.style.display = "none";
+    input.addEventListener("change", onChange, { once: true });
+    window.addEventListener("focus", onWindowFocus, { once: true });
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+function isAbortError(error: unknown): boolean {
+  if (typeof DOMException !== "undefined" && error instanceof DOMException) {
+    return error.name === "AbortError";
+  }
+
+  return Boolean(
+    error
+      && typeof error === "object"
+      && "name" in error
+      && (error as { name?: string }).name === "AbortError",
+  );
+}
 
 function createEmptyHistoryState(): MissionPlannerHistoryState {
   return {
@@ -2240,57 +2429,86 @@ export function createMissionPlannerStore(
     }
   }
 
+  function finishPlanImport(
+    pending: PendingActionScope,
+    imported: Extract<MissionPlanFileImportResult, { status: "success" }>,
+  ) {
+    if (!isCurrentAction(pending)) {
+      return { status: "stale" as const };
+    }
+
+    const incomingWorkspace = workspaceFromImport(imported.data);
+    const state = get(store);
+    const requiresReview = imported.warningCount > 0
+      || plannerIsDirty(state)
+      || buildImportReviewChoices(captureActiveWorkspace(state), incomingWorkspace).length > 1;
+
+    if (requiresReview) {
+      beginImportReview("plan", imported.fileName, imported.warnings, incomingWorkspace);
+      return {
+        status: "prompted" as const,
+        action: "import" as const,
+        fileName: imported.fileName,
+        warningCount: imported.warningCount,
+        source: "plan" as const,
+      };
+    }
+
+    const importDomains = normalizeHistoryDomains(
+      buildImportReviewChoices(createEmptyMissionPlannerWorkspace(), incomingWorkspace).map((choice) => choice.domain),
+    );
+
+    store.update((current) => withResolvedPhase(commitHistoryChange(current, {
+      ...applyWorkspacePair(current, {
+        active: incomingWorkspace,
+        snapshot: incomingWorkspace,
+      }, currentScope(current)),
+      fileWarnings: [...imported.warnings],
+      dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["file-warning:", "blocked:"]),
+      blockedReason: null,
+      blockedMode: null,
+      blockedWarningTarget: null,
+    }, importDomains)));
+
+    return {
+      status: "success" as const,
+      fileName: imported.fileName,
+      warningCount: imported.warningCount,
+      source: "plan" as const,
+    };
+  }
+
+  function finishKmlImport(
+    pending: PendingActionScope,
+    imported: Extract<MissionKmlFileImportResult, { status: "success" }>,
+  ) {
+    if (!isCurrentAction(pending)) {
+      return { status: "stale" as const };
+    }
+
+    const incomingWorkspace = workspaceFromKmlImport(imported.data);
+    beginImportReview(imported.source, imported.fileName, imported.warnings, incomingWorkspace);
+
+    return {
+      status: "prompted" as const,
+      action: "import" as const,
+      fileName: imported.fileName,
+      warningCount: imported.warningCount,
+      source: imported.source,
+    };
+  }
+
   async function importFromPicker() {
     const pending = beginAction("import", false);
 
     try {
       const imported = await fileIo.importFromPicker();
-      if (!isCurrentAction(pending)) {
-        return { status: "stale" as const };
-      }
-
       if (imported.status === "cancelled") {
         clearAction(pending);
         return { status: "cancelled" as const };
       }
 
-      const incomingWorkspace = workspaceFromImport(imported.data);
-      const state = get(store);
-      const requiresReview = imported.warningCount > 0
-        || plannerIsDirty(state)
-        || buildImportReviewChoices(captureActiveWorkspace(state), incomingWorkspace).length > 1;
-
-      if (requiresReview) {
-        beginImportReview("plan", imported.fileName, imported.warnings, incomingWorkspace);
-        return {
-          status: "prompted" as const,
-          action: "import" as const,
-          fileName: imported.fileName,
-          warningCount: imported.warningCount,
-        };
-      }
-
-      const importDomains = normalizeHistoryDomains(
-        buildImportReviewChoices(createEmptyMissionPlannerWorkspace(), incomingWorkspace).map((choice) => choice.domain),
-      );
-
-      store.update((current) => withResolvedPhase(commitHistoryChange(current, {
-        ...applyWorkspacePair(current, {
-          active: incomingWorkspace,
-          snapshot: incomingWorkspace,
-        }, currentScope(current)),
-        fileWarnings: [...imported.warnings],
-        dismissedWarningIds: clearDismissedWarningIds(current.dismissedWarningIds, ["file-warning:", "blocked:"]),
-        blockedReason: null,
-        blockedMode: null,
-        blockedWarningTarget: null,
-      }, importDomains)));
-
-      return {
-        status: "success" as const,
-        fileName: imported.fileName,
-        warningCount: imported.warningCount,
-      };
+      return finishPlanImport(pending, imported);
     } catch (error) {
       handleActionFailure("import", pending, error, false);
       return { status: "error" as const };
@@ -2302,25 +2520,37 @@ export function createMissionPlannerStore(
 
     try {
       const imported = await kmlFileIo.importFromPicker();
-      if (!isCurrentAction(pending)) {
-        return { status: "stale" as const };
-      }
-
       if (imported.status === "cancelled") {
         clearAction(pending);
         return { status: "cancelled" as const };
       }
 
-      const incomingWorkspace = workspaceFromKmlImport(imported.data);
-      beginImportReview(imported.source, imported.fileName, imported.warnings, incomingWorkspace);
+      return finishKmlImport(pending, imported);
+    } catch (error) {
+      handleActionFailure("import", pending, error, false);
+      return { status: "error" as const };
+    }
+  }
 
-      return {
-        status: "prompted" as const,
-        action: "import" as const,
-        fileName: imported.fileName,
-        warningCount: imported.warningCount,
-        source: imported.source,
-      };
+  async function importAnyFromPicker() {
+    const pending = beginAction("import", false);
+
+    try {
+      const selected = await openToolbarImportPicker(service.formatError ?? formatUnknownError);
+      if (!isCurrentAction(pending)) {
+        return { status: "stale" as const };
+      }
+
+      if (!selected) {
+        clearAction(pending);
+        return { status: "cancelled" as const };
+      }
+
+      if (selected.source === "plan") {
+        return finishPlanImport(pending, parseMissionPlanImportSelection(selected));
+      }
+
+      return finishKmlImport(pending, parseMissionKmlImportSelection(selected));
     } catch (error) {
       handleActionFailure("import", pending, error, false);
       return { status: "error" as const };
@@ -2762,6 +2992,7 @@ export function createMissionPlannerStore(
     promptDissolveSurveyRegion,
     markSurveyRegionItemAsEdited,
     downloadFromVehicle,
+    importAnyFromPicker,
     importFromPicker,
     importKmlFromPicker,
     setImportReviewChoice,

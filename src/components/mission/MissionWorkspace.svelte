@@ -11,6 +11,7 @@ import {
   createEmptyMissionPlannerWorkspace,
   plannerHasContent,
   type MissionPlannerMode,
+  type MissionPlannerStore,
   type MissionPlannerStoreState,
 } from "../../lib/stores/mission-planner";
 import type {
@@ -22,7 +23,7 @@ import { buildMissionMapView, type MissionMapSelection } from "../../lib/mission
 import { missionPathPoints } from "../../lib/mission-path";
 import { createMissionTerrainState } from "../../lib/mission-terrain-state";
 import { localXYToLatLon } from "../../lib/mission-coordinates";
-import type { GeoPoint2d } from "../../lib/mavkit-types";
+import type { FenceRegion, GeoPoint2d, GeoPoint3d } from "../../lib/mavkit-types";
 import type { FenceRegionType } from "../../lib/mission-draft-typed";
 import { settings, type Settings } from "../../lib/stores/settings";
 import type { SurveyPatternType } from "../../lib/survey-region";
@@ -37,6 +38,7 @@ import MissionRallyDraftList from "./MissionRallyDraftList.svelte";
 import MissionRallyInspector from "./MissionRallyInspector.svelte";
 import MissionTerrainProfilePanel from "./MissionTerrainProfilePanel.svelte";
 import MissionWorkspaceHeader from "./MissionWorkspaceHeader.svelte";
+import SplitPane from "../shared/SplitPane.svelte";
 import {
   missionWorkspaceFallbackChromeState,
   resolveMissionWorkspaceLayout,
@@ -44,20 +46,13 @@ import {
 } from "./mission-workspace-layout";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
-const missionPlannerStore = getMissionPlannerStoreContext();
+const missionPlannerStore: MissionPlannerStore = getMissionPlannerStoreContext();
 const missionPlannerState = fromStore(missionPlannerStore);
 const missionPlannerView = fromStore(getMissionPlannerViewStoreContext());
 const shellChromeStore = fromStore(resolveMissionWorkspaceChromeStore());
 const terrainStateStore = createMissionTerrainState();
 const terrainState = fromStore(terrainStateStore);
 const settingsStore = fromStore(settings);
-
-type LocalNoteTone = "success" | "info" | "warning";
-type LocalNote = {
-  scopeKey: string;
-  message: string;
-  tone: LocalNoteTone;
-};
 
 function resolveMissionWorkspaceChromeStore() {
   try {
@@ -71,7 +66,6 @@ onDestroy(() => {
   terrainStateStore.reset();
 });
 
-let localNote = $state<LocalNote | null>(null);
 let missionPhoneSegment = $state<MissionWorkspacePhoneSegment>(
   resolveMissionWorkspaceLayout(missionWorkspaceFallbackChromeState, "mission").phoneSegmentDefault ?? "plan",
 );
@@ -102,8 +96,9 @@ let missionSupportLayoutClass = $derived(
 let missionSupportPanelsClass = $derived(
   missionSupportSidebar ? "space-y-4" : "grid gap-4 lg:grid-cols-2",
 );
-let scopeKey = $derived(scopeToKey(view.activeEnvelope));
-let visibleLocalNote = $derived(localNote?.scopeKey === scopeKey ? localNote : null);
+let useHorizontalSplit = $derived(
+  workspaceLayout.mode !== "phone-segmented" && workspaceLayout.mode !== "phone-stack",
+);
 let hasContent = $derived(plannerHasContent(planner));
 let canUseVehicleActions = $derived(view.canUseVehicleActions);
 let inlineCopy = $derived(resolveInlineStatusCopy(view, planner));
@@ -134,18 +129,20 @@ let selectedMissionItem = $derived.by(() => {
   return missionItems.find((item) => item.uiId === selectedMissionUiId) ?? null;
 });
 let selectedFenceItem = $derived.by(() => {
-  if (planner.fenceSelection.kind !== "region") {
+  const { fenceSelection } = planner;
+  if (fenceSelection.kind !== "region") {
     return null;
   }
 
-  return fenceItems.find((item) => item.uiId === planner.fenceSelection.regionUiId) ?? null;
+  return fenceItems.find((item) => item.uiId === fenceSelection.regionUiId) ?? null;
 });
 let selectedRallyItem = $derived.by(() => {
-  if (planner.rallySelection.kind !== "point") {
+  const { rallySelection } = planner;
+  if (rallySelection.kind !== "point") {
     return null;
   }
 
-  return rallyItems.find((item) => item.uiId === planner.rallySelection.pointUiId) ?? null;
+  return rallyItems.find((item) => item.uiId === rallySelection.pointUiId) ?? null;
 });
 let previousMissionItem = $derived.by(() => {
   if (!selectedMissionItem || selectedMissionItem.index <= 0) {
@@ -220,10 +217,6 @@ const DEFAULT_SURVEY_ANCHOR: GeoPoint2d = {
   latitude_deg: 47.397742,
   longitude_deg: 8.545594,
 };
-
-function sentenceCase(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, " ");
-}
 
 function surveyRegionAnchor(region: NonNullable<typeof selectedSurveyRegion>): GeoPoint2d | null {
   const geometry = region.patternType === "corridor" ? region.polyline : region.polygon;
@@ -321,26 +314,6 @@ function buildSurveySeedGeometry(patternType: SurveyPatternType, state: MissionP
     projectSurveySeed(anchor, halfSpan, halfSpan),
     projectSurveySeed(anchor, -halfSpan, halfSpan),
   ];
-}
-
-function scopeToKey(activeEnvelope: MissionPlannerView["activeEnvelope"]): string {
-  if (!activeEnvelope) {
-    return "no-scope";
-  }
-
-  return `${activeEnvelope.session_id}:${activeEnvelope.source_kind}:${activeEnvelope.seek_epoch}:${activeEnvelope.reset_revision}`;
-}
-
-function clearLocalNote() {
-  localNote = null;
-}
-
-function setLocalNote(message: string, tone: LocalNoteTone = "success") {
-  localNote = {
-    scopeKey,
-    message,
-    tone,
-  };
 }
 
 function replacePromptTitle(state: MissionPlannerStoreState): string {
@@ -467,18 +440,6 @@ function statusClass(tone: "info" | "warning"): string {
     : "border-accent/30 bg-accent/10 text-text-primary";
 }
 
-function localNoteClass(tone: LocalNoteTone): string {
-  switch (tone) {
-    case "warning":
-      return "border-warning/40 bg-warning/10 text-warning";
-    case "info":
-      return "border-accent/30 bg-accent/10 text-text-primary";
-    case "success":
-    default:
-      return "border-success/30 bg-success/10 text-success";
-  }
-}
-
 function warningTestId(warning: MissionPlannerWarningView, index: number): string {
   if (warning.id.startsWith("file-warning:")) {
     return missionWorkspaceTestIds.warningFile;
@@ -530,18 +491,12 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
 }
 
-function historySubject(mode: MissionPlannerMode): string {
-  return mode === "mission" ? "planner" : mode;
-}
-
 function handleUndo() {
   if (!view.canEdit || !view.canUndo || view.undoCount <= 0) {
     return false;
   }
 
-  clearLocalNote();
   missionPlannerStore.undo(view.historyDomain);
-  setLocalNote(`Restored the previous ${historySubject(view.historyDomain)} change.`, "info");
   return true;
 }
 
@@ -550,9 +505,7 @@ function handleRedo() {
     return false;
   }
 
-  clearLocalNote();
   missionPlannerStore.redo(view.historyDomain);
-  setLocalNote(`Reapplied the last ${historySubject(view.historyDomain)} change.`, "info");
   return true;
 }
 
@@ -586,15 +539,12 @@ $effect(() => {
 });
 
 async function handleRetryTerrain() {
-  clearLocalNote();
   await terrainStateStore.retry();
 }
 
 function handleSelectTerrainWarning(index: number) {
-  clearLocalNote();
   const target = missionItems.find((item) => item.index === index) ?? null;
   if (!target) {
-    setLocalNote(`Terrain warning target for mission item ${index + 1} is no longer active.`, "warning");
     return;
   }
 
@@ -603,63 +553,29 @@ function handleSelectTerrainWarning(index: number) {
 }
 
 async function handleReadFromVehicle() {
-  clearLocalNote();
   await missionPlannerStore.downloadFromVehicle();
 }
 
 async function handleImportPlan() {
-  clearLocalNote();
-  const result = await missionPlannerStore.importFromPicker();
+  await missionPlannerStore.importFromPicker();
+}
 
-  if (result.status === "cancelled") {
-    setLocalNote("Import cancelled. The current planner draft stayed mounted and unchanged.", "info");
-    return;
-  }
-
-  if (result.status === "success") {
-    const fileLabel = result.fileName ?? "the selected .plan";
-    setLocalNote(
-      result.warningCount > 0
-        ? `Imported ${fileLabel}. ${result.warningCount} warning${result.warningCount === 1 ? " stays" : "s stay"} visible in the sticky register.`
-        : `Imported ${fileLabel} into the active workspace.`,
-      result.warningCount > 0 ? "warning" : "success",
-    );
-  }
+async function handleToolbarImport() {
+  await (missionPlannerStore as MissionPlannerStore & {
+    importAnyFromPicker: () => Promise<unknown>;
+  }).importAnyFromPicker();
 }
 
 async function handleImportKml() {
-  clearLocalNote();
-  const result = await missionPlannerStore.importKmlFromPicker();
-
-  if (result.status === "cancelled") {
-    setLocalNote("KML/KMZ import cancelled. The current planner draft stayed mounted and unchanged.", "info");
-    return;
-  }
-
-  if (result.status === "success") {
-    const fileLabel = result.fileName ?? `the selected .${result.source}`;
-    setLocalNote(
-      result.warningCount > 0
-        ? `Imported ${fileLabel}. ${result.warningCount} parser warning${result.warningCount === 1 ? " stays" : "s stay"} visible in the sticky register.`
-        : `Imported ${fileLabel} into the planner workspace.`,
-      result.warningCount > 0 ? "warning" : "success",
-    );
-  }
+  await missionPlannerStore.importKmlFromPicker();
 }
 
 function handleNewMission() {
-  clearLocalNote();
   missionPlannerStore.replaceWorkspace({
     ...createEmptyMissionPlannerWorkspace(),
     cruiseSpeed: appSettings.cruiseSpeedMps,
     hoverSpeed: appSettings.hoverSpeedMps,
   });
-  setLocalNote(
-    canUseVehicleActions
-      ? "Blank mission draft ready. Mission, fence, rally, Home, and later domain editors stay inside this mounted workspace shell."
-      : "Blank mission draft ready. Keep editing locally now, then reconnect later for live validation and transfer flows.",
-    "success",
-  );
 }
 
 function handlePersistPlanningSpeeds(args: { cruiseSpeed?: number; hoverSpeed?: number }) {
@@ -679,82 +595,54 @@ function handlePersistPlanningSpeeds(args: { cruiseSpeed?: number; hoverSpeed?: 
 }
 
 function handleCreateSurveyBlock(patternType: SurveyPatternType) {
-  clearLocalNote();
-  const regionId = missionPlannerStore.createSurveyBlock(patternType, buildSurveySeedGeometry(patternType, planner));
-  setLocalNote(
-    `Created a ${sentenceCase(patternType)} survey region after the current selection. Adjust geometry, camera, parameters, and generated items from this shared workspace.`,
-    "success",
-  );
-  return regionId;
+  return missionPlannerStore.createSurveyBlock(patternType, buildSurveySeedGeometry(patternType, planner));
 }
 
 function handleStartSurveyDraw(patternType: SurveyPatternType) {
-  clearLocalNote();
-  const regionId = missionPlannerStore.createSurveyBlock(patternType, []);
-  setLocalNote(
-    `Started ${sentenceCase(patternType)} survey drawing on the planner map. Finish or cancel the region directly from the shared workspace surface.`,
-    "info",
-  );
-  return regionId;
+  return missionPlannerStore.createSurveyBlock(patternType, []);
 }
 
 function handleDeleteSurveyRegion(regionId: string) {
-  clearLocalNote();
   missionPlannerStore.deleteSurveyRegionById(regionId);
-  setLocalNote("Deleted the selected survey region. The shared planner workspace stayed mounted.", "warning");
 }
 
 function handleSelectMissionItemFromMap(uiId: number) {
-  clearLocalNote();
   missionPlannerStore.selectMissionItemByUiId(uiId);
 }
 
 function handleSelectFenceRegion(uiId: number) {
-  clearLocalNote();
   return missionPlannerStore.selectFenceRegionByUiId(uiId);
 }
 
 function handleSelectFenceReturnPoint() {
-  clearLocalNote();
   return missionPlannerStore.selectFenceReturnPoint();
 }
 
 function handleAddFenceRegion(type: FenceRegionType, latitudeDeg?: number, longitudeDeg?: number) {
-  clearLocalNote();
   return missionPlannerStore.addFenceRegion(type, latitudeDeg, longitudeDeg);
 }
 
 function handleDeleteFenceRegion(uiId: number) {
-  clearLocalNote();
-  const result = missionPlannerStore.deleteFenceRegionByUiId(uiId);
-  if (result.status === "applied") {
-    setLocalNote("Deleted the selected fence region. Fence mode stayed mounted so you can keep editing the remaining geometry.", "warning");
-  }
-  return result;
+  return missionPlannerStore.deleteFenceRegionByUiId(uiId);
 }
 
 function handleUpdateFenceRegion(uiId: number, region: Parameters<typeof missionPlannerStore.updateFenceRegionByUiId>[1]) {
-  clearLocalNote();
   return missionPlannerStore.updateFenceRegionByUiId(uiId, region);
 }
 
 function handleSetFenceReturnPoint(point: GeoPoint2d | null) {
-  clearLocalNote();
   return missionPlannerStore.setFenceReturnPoint(point);
 }
 
 function handleMoveHomeFromMap(latitudeDeg: number, longitudeDeg: number) {
-  clearLocalNote();
   return missionPlannerStore.moveHomeOnMap(latitudeDeg, longitudeDeg);
 }
 
 function handleMoveMissionItemFromMap(uiId: number, latitudeDeg: number, longitudeDeg: number) {
-  clearLocalNote();
   return missionPlannerStore.moveMissionItemOnMapByUiId(uiId, latitudeDeg, longitudeDeg);
 }
 
 function handleAddWaypointAt(latitudeDeg: number, longitudeDeg: number) {
-  clearLocalNote();
   missionPlannerStore.addMissionItem();
   const items = planner.draftState.active.mission.draftItems;
   const lastItem = items[items.length - 1];
@@ -765,7 +653,6 @@ function handleAddWaypointAt(latitudeDeg: number, longitudeDeg: number) {
 }
 
 function handleSetHomeAt(latitudeDeg: number, longitudeDeg: number) {
-  clearLocalNote();
   missionPlannerStore.setHome({
     latitude_deg: latitudeDeg,
     longitude_deg: longitudeDeg,
@@ -774,158 +661,75 @@ function handleSetHomeAt(latitudeDeg: number, longitudeDeg: number) {
 }
 
 function handleSelectRallyPoint(uiId: number) {
-  clearLocalNote();
   return missionPlannerStore.selectRallyPointByUiId(uiId);
 }
 
 function handleAddRallyPoint() {
-  clearLocalNote();
   return missionPlannerStore.addRallyPoint();
 }
 
 function handleDeleteRallyPoint(uiId: number) {
-  clearLocalNote();
-  const result = missionPlannerStore.deleteRallyPointByUiId(uiId);
-  if (result.status === "applied") {
-    setLocalNote("Deleted the selected rally point. Rally mode stayed mounted so you can keep refining the remaining diversion targets.", "warning");
-  }
-  return result;
+  return missionPlannerStore.deleteRallyPointByUiId(uiId);
 }
 
 function handleMoveRallyPointUp(uiId: number) {
-  clearLocalNote();
   return missionPlannerStore.moveRallyPointUpByUiId(uiId);
 }
 
 function handleMoveRallyPointDown(uiId: number) {
-  clearLocalNote();
   return missionPlannerStore.moveRallyPointDownByUiId(uiId);
 }
 
 function handleUpdateRallyLatitude(uiId: number, latitudeDeg: number) {
-  clearLocalNote();
   return missionPlannerStore.updateRallyPointLatitudeByUiId(uiId, latitudeDeg);
 }
 
 function handleUpdateRallyLongitude(uiId: number, longitudeDeg: number) {
-  clearLocalNote();
   return missionPlannerStore.updateRallyPointLongitudeByUiId(uiId, longitudeDeg);
 }
 
 function handleUpdateRallyAltitude(uiId: number, altitudeM: number) {
-  clearLocalNote();
   return missionPlannerStore.updateRallyPointAltitudeByUiId(uiId, altitudeM);
 }
 
 function handleUpdateRallyAltitudeFrame(uiId: number, frame: "msl" | "rel_home" | "terrain" | string) {
-  clearLocalNote();
-  const result = missionPlannerStore.updateRallyPointAltitudeFrameByUiId(uiId, frame);
-  if (result.status === "applied") {
-    setLocalNote("Rally altitude frame updated. Latitude and longitude stayed fixed while the frame reset altitude to a safe zero baseline.", "info");
-  }
-  return result;
+  return missionPlannerStore.updateRallyPointAltitudeFrameByUiId(uiId, frame);
 }
 
 function handleMoveRallyPointFromMap(uiId: number, latitudeDeg: number, longitudeDeg: number) {
-  clearLocalNote();
   return missionPlannerStore.moveRallyPointOnMapByUiId(uiId, latitudeDeg, longitudeDeg);
 }
 
 function handleMoveFenceVertexFromMap(uiId: number, index: number, latitudeDeg: number, longitudeDeg: number) {
-  clearLocalNote();
   return missionPlannerStore.moveFenceVertexByUiId(uiId, index, latitudeDeg, longitudeDeg);
 }
 
 function handleMoveFenceCircleCenterFromMap(uiId: number, latitudeDeg: number, longitudeDeg: number) {
-  clearLocalNote();
   return missionPlannerStore.moveFenceCircleCenterByUiId(uiId, latitudeDeg, longitudeDeg);
 }
 
 function handleUpdateFenceCircleRadiusFromMap(uiId: number, radiusM: number) {
-  clearLocalNote();
   return missionPlannerStore.updateFenceCircleRadiusByUiId(uiId, radiusM);
 }
 
 async function handleExportPlan() {
-  clearLocalNote();
-  const result = await missionPlannerStore.exportToPicker();
-
-  if (result.status === "cancelled") {
-    setLocalNote("Export cancelled. The current planner draft stayed mounted and unchanged.", "info");
-    return;
-  }
-
-  if (result.status === "success") {
-    const fileLabel = result.fileName ?? "the active .plan file";
-    setLocalNote(
-      result.warningCount > 0
-        ? `Saved ${fileLabel}. ${result.warningCount} export warning${result.warningCount === 1 ? " stays" : "s stay"} visible in the sticky register.`
-        : `Saved ${fileLabel} from the active planner workspace.`,
-      result.warningCount > 0 ? "warning" : "success",
-    );
-  }
+  await missionPlannerStore.exportToPicker();
 }
 
 async function handleConfirmImportReview() {
-  clearLocalNote();
-  const result = await missionPlannerStore.confirmImportReview();
-  if (result.status === "applied") {
-    const fileLabel = result.fileName ?? `the selected ${result.source === "plan" ? ".plan" : `.${result.source}`}`;
-    setLocalNote(
-      result.warningCount > 0
-        ? `Applied ${fileLabel}. ${result.warningCount} warning${result.warningCount === 1 ? " stays" : "s stay"} visible in the sticky register.`
-        : `Applied ${fileLabel} to the active workspace.`,
-      result.warningCount > 0 ? "warning" : "success",
-    );
-  }
+  await missionPlannerStore.confirmImportReview();
 }
 
 async function handleConfirmExportReview() {
-  clearLocalNote();
-  const result = await missionPlannerStore.confirmExportReview();
-
-  if (result.status === "cancelled") {
-    setLocalNote("Export cancelled. The domain chooser stayed open with the current selections intact.", "info");
-    return;
-  }
-
-  if (result.status === "success") {
-    const fileLabel = result.fileName ?? "the active .plan file";
-    setLocalNote(
-      result.warningCount > 0
-        ? `Saved ${fileLabel}. ${result.warningCount} export warning${result.warningCount === 1 ? " stays" : "s stay"} visible in the sticky register.`
-        : `Saved ${fileLabel} from the active planner workspace.`,
-      result.warningCount > 0 ? "warning" : "success",
-    );
-  }
-}
-
-async function handleValidateMission() {
-  clearLocalNote();
-  await missionPlannerStore.validateCurrentMission();
+  await missionPlannerStore.confirmExportReview();
 }
 
 async function handleUploadToVehicle() {
-  clearLocalNote();
   await missionPlannerStore.uploadToVehicle();
 }
 
-async function handleClearVehicle() {
-  clearLocalNote();
-  const result = await missionPlannerStore.clearVehicle();
-
-  if (result.status === "cleared") {
-    setLocalNote("Vehicle workspace cleared. The active planner reset to an empty local draft.", "success");
-  }
-}
-
 async function handleCancelTransfer() {
-  clearLocalNote();
-  const result = await missionPlannerStore.cancelTransfer();
-
-  if (result.status === "cancelled") {
-    setLocalNote("Cancelled the pending transfer. The current draft stayed mounted and retryable.", "warning");
-  }
+  await missionPlannerStore.cancelTransfer();
 }
 
 function handleDismissWarning(id: string) {
@@ -933,7 +737,6 @@ function handleDismissWarning(id: string) {
 }
 
 function handleWarningAction(action: NonNullable<MissionPlannerWarningView["action"]>) {
-  clearLocalNote();
   missionPlannerStore.setMode(action.mode);
 
   if (!action.target) {
@@ -941,63 +744,28 @@ function handleWarningAction(action: NonNullable<MissionPlannerWarningView["acti
   }
 
   if (action.target.kind === "fence-return-point") {
-    const result = missionPlannerStore.selectFenceReturnPoint();
-    if (result.status === "rejected") {
-      setLocalNote(result.message, "warning");
-    }
+    missionPlannerStore.selectFenceReturnPoint();
     return;
   }
 
   if (action.target.kind === "rally-point") {
     if (action.target.pointUiId === null) {
-      setLocalNote("Rally warning target no longer points at an active rally point.", "warning");
       return;
     }
 
-    const result = missionPlannerStore.selectRallyPointByUiId(action.target.pointUiId);
-    if (result.status === "rejected") {
-      setLocalNote(result.message, "warning");
-    }
+    missionPlannerStore.selectRallyPointByUiId(action.target.pointUiId);
     return;
   }
 
   if (action.target.regionUiId === null) {
-    setLocalNote("Fence warning target no longer points at an active region.", "warning");
     return;
   }
 
-  const result = missionPlannerStore.selectFenceRegionByUiId(action.target.regionUiId);
-  if (result.status === "rejected") {
-    setLocalNote(result.message, "warning");
-  }
+  missionPlannerStore.selectFenceRegionByUiId(action.target.regionUiId);
 }
 
 async function confirmPrompt() {
-  clearLocalNote();
-  const prompt = planner.replacePrompt;
-  const result = await missionPlannerStore.confirmReplacePrompt();
-
-  if (!prompt) {
-    return;
-  }
-
-  if (prompt.kind === "recoverable" && result.status === "restored") {
-    setLocalNote("Recovered the saved planner draft for this session family.", "success");
-    return;
-  }
-
-  if (prompt.kind !== "replace-active") {
-    return;
-  }
-
-  if (prompt.action === "clear" && result.status === "cleared") {
-    setLocalNote("Vehicle workspace cleared. The active planner reset to an empty local draft.", "success");
-    return;
-  }
-
-  if (prompt.action === "download" && result.status === "replaced") {
-    setLocalNote("Replaced the local draft with the current vehicle workspace.", "success");
-  }
+  await missionPlannerStore.confirmReplacePrompt();
 }
 
 function dismissPrompt() {
@@ -1055,7 +823,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
 <svelte:window onkeydown={handleWorkspaceKeydown} />
 
 <section
-  class="rounded-lg border border-border bg-bg-primary p-3"
+  class="mission-workspace"
   data-readiness={view.readiness}
   data-workspace-state={view.status}
   data-testid={missionWorkspaceTestIds.root}
@@ -1070,17 +838,14 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     hasContent={hasContent || view.workspaceMounted}
     mode={view.mode}
     onCancelTransfer={handleCancelTransfer}
-    onClearMission={handleClearVehicle}
     onExportPlan={handleExportPlan}
-    onImportKml={handleImportKml}
-    onImportPlan={handleImportPlan}
+    onImport={handleToolbarImport}
     onNewMission={handleNewMission}
     onReadFromVehicle={handleReadFromVehicle}
     onRedo={handleRedo}
     onSelectMode={handleSelectMode}
     onUndo={handleUndo}
     onUploadToVehicle={handleUploadToVehicle}
-    onValidateMission={handleValidateMission}
     redoCount={view.redoCount}
     undoCount={view.undoCount}
   />
@@ -1270,15 +1035,6 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     </div>
   {/if}
 
-  {#if visibleLocalNote}
-    <div
-      class={`mt-4 rounded-lg border px-4 py-3 text-sm ${localNoteClass(visibleLocalNote.tone)}`}
-      data-testid={missionWorkspaceTestIds.localNote}
-    >
-      {visibleLocalNote.message}
-    </div>
-  {/if}
-
   {#if view.lastError}
     <div
       class="mt-4 rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger"
@@ -1403,27 +1159,257 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       </div>
     </section>
   {:else}
-    <section
-      class="mt-4 rounded-lg border border-border bg-bg-secondary/60 p-5"
+    <div
+      class="mission-workspace__ready"
       data-testid={missionWorkspaceTestIds.ready}
     >
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planner workspace</p>
-      <p class="mt-2 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.summary}>
-        Mission, fence, rally, Home, sticky warnings, and mixed-domain review now share one mounted planning workspace instead of one-shot replace prompts and placeholder status copy.
-      </p>
+      {#if useHorizontalSplit}
+        <SplitPane direction="horizontal" initialRatio={0.6} minRatio={0.35} maxRatio={0.75}>
+          {#snippet first()}
+            <div class="mission-workspace__map-column">
+              {#if showMissionEditor}
+                <div class="mission-workspace__map-fill">
+                  <MissionMap
+                    blockedReason={planner.blockedReason}
+                    fallbackReference={resolveSurveyCreationAnchor(planner)}
+                    fillContainer
+                    onAddWaypointAt={handleAddWaypointAt}
+                    onCreateSurveyRegion={handleStartSurveyDraw}
+                    onDeleteSurveyRegion={handleDeleteSurveyRegion}
+                    onMoveHome={handleMoveHomeFromMap}
+                    onMoveMissionItem={handleMoveMissionItemFromMap}
+                    onSelectHome={missionPlannerStore.selectHome}
+                    onSelectMissionItem={handleSelectMissionItemFromMap}
+                    onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
+                    onSetHomeAt={handleSetHomeAt}
+                    onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+                    readOnly={!view.canEdit}
+                    readOnlyReason={view.attachment.detail}
+                    selectedSurveyRegion={selectedSurveyRegion}
+                    view={mapView}
+                  />
+                </div>
+                <MissionTerrainProfilePanel
+                  onRetry={handleRetryTerrain}
+                  onSelectWarning={handleSelectTerrainWarning}
+                  state={terrain}
+                />
+              {:else if showFenceEditor}
+                <div class="mission-workspace__map-fill">
+                  <MissionMap
+                    blockedReason={planner.blockedReason}
+                    fallbackReference={resolveSurveyCreationAnchor(planner)}
+                    fillContainer
+                    onAddFenceRegion={handleAddFenceRegion}
+                    onClearFenceReturnPoint={() => handleSetFenceReturnPoint(null)}
+                    onCreateSurveyRegion={handleStartSurveyDraw}
+                    onDeleteSurveyRegion={handleDeleteSurveyRegion}
+                    onMoveFenceCircleCenter={handleMoveFenceCircleCenterFromMap}
+                    onMoveFenceVertex={handleMoveFenceVertexFromMap}
+                    onMoveHome={handleMoveHomeFromMap}
+                    onMoveMissionItem={handleMoveMissionItemFromMap}
+                    onSelectFenceRegion={handleSelectFenceRegion}
+                    onSelectFenceReturnPoint={handleSelectFenceReturnPoint}
+                    onSelectHome={missionPlannerStore.selectHome}
+                    onSelectMissionItem={handleSelectMissionItemFromMap}
+                    onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
+                    onSetFenceReturnPoint={(latitudeDeg, longitudeDeg) => handleSetFenceReturnPoint({ latitude_deg: latitudeDeg, longitude_deg: longitudeDeg })}
+                    onSetHomeAt={handleSetHomeAt}
+                    onUpdateFenceCircleRadius={handleUpdateFenceCircleRadiusFromMap}
+                    onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+                    readOnly={!view.canEdit}
+                    readOnlyReason={view.attachment.detail}
+                    selectedSurveyRegion={selectedSurveyRegion}
+                    view={mapView}
+                  />
+                </div>
+              {:else if showRallyEditor}
+                <div class="mission-workspace__map-fill">
+                  <MissionMap
+                    blockedReason={planner.blockedReason}
+                    fallbackReference={resolveSurveyCreationAnchor(planner)}
+                    fillContainer
+                    onCreateSurveyRegion={handleStartSurveyDraw}
+                    onDeleteSurveyRegion={handleDeleteSurveyRegion}
+                    onMoveHome={handleMoveHomeFromMap}
+                    onMoveMissionItem={handleMoveMissionItemFromMap}
+                    onMoveRallyPoint={handleMoveRallyPointFromMap}
+                    onSelectHome={missionPlannerStore.selectHome}
+                    onSelectMissionItem={handleSelectMissionItemFromMap}
+                    onSelectRallyPoint={handleSelectRallyPoint}
+                    onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
+                    onSetHomeAt={handleSetHomeAt}
+                    onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+                    readOnly={!view.canEdit}
+                    readOnlyReason={view.attachment.detail}
+                    selectedSurveyRegion={selectedSurveyRegion}
+                    view={mapView}
+                  />
+                </div>
+              {/if}
+            </div>
+          {/snippet}
+          {#snippet second()}
+            <div class="mission-workspace__editor-column">
+              <MissionHomeCard
+                attachment={view.attachment}
+                home={planner.home}
+                mode={view.mode}
+                onChange={missionPlannerStore.setHome}
+                onSelect={missionPlannerStore.selectHome}
+                selected={homeSelected}
+              />
 
-      <div class="mt-5 space-y-4">
-        <MissionHomeCard
-          attachment={view.attachment}
-          home={planner.home}
-          mode={view.mode}
-          onChange={missionPlannerStore.setHome}
-          onSelect={missionPlannerStore.selectHome}
-          selected={homeSelected}
-        />
+              {#if showMissionEditor}
+                <MissionDraftList
+                  cruiseSpeed={planner.cruiseSpeed}
+                  items={missionItems}
+                  onAddMissionItem={missionPlannerStore.addMissionItem}
+                  onAddSurveyBlock={handleCreateSurveyBlock}
+                  onDeleteMissionItem={missionPlannerStore.deleteMissionItem}
+                  onDeleteSurveyRegion={handleDeleteSurveyRegion}
+                  onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
+                  onMoveMissionItemDown={missionPlannerStore.moveMissionItemDownByIndex}
+                  onMoveMissionItemUp={missionPlannerStore.moveMissionItemUpByIndex}
+                  onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
+                  onSelectMissionItem={missionPlannerStore.selectMissionItem}
+                  onSelectSurveyBlock={missionPlannerStore.selectSurveyRegion}
+                  onSetSurveyRegionCollapsed={missionPlannerStore.setSurveyRegionCollapsed}
+                  selectedMissionUiId={selectedMissionUiId}
+                  selectedSurface={planner.selection}
+                  surveyBlocks={surveyBlocks}
+                />
 
-        {#if showMissionEditor}
-          <div class="space-y-4">
+                <MissionInspector
+                  cruiseSpeed={planner.cruiseSpeed}
+                  home={planner.home}
+                  item={selectedMissionItem}
+                  onConfirmSurveyPrompt={missionPlannerStore.confirmSurveyPrompt}
+                  onDeleteSurveyRegion={handleDeleteSurveyRegion}
+                  onDismissSurveyPrompt={missionPlannerStore.dismissSurveyPrompt}
+                  onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
+                  onMarkSurveyRegionItemAsEdited={missionPlannerStore.markSurveyRegionItemAsEdited}
+                  onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
+                  onUpdateAltitude={missionPlannerStore.updateMissionItemAltitude}
+                  onUpdateCommand={missionPlannerStore.updateMissionItemCommand}
+                  onUpdateLatitude={missionPlannerStore.updateMissionItemLatitude}
+                  onUpdateLongitude={missionPlannerStore.updateMissionItemLongitude}
+                  onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+                  previousItem={previousMissionItem}
+                  selectedSurveyRegion={selectedSurveyRegion}
+                  selection={planner.selection}
+                  surveyPrompt={view.surveyPrompt}
+                />
+
+                <MissionPlanningStatsPanel
+                  confirmedCruiseSpeed={appSettings.cruiseSpeedMps}
+                  confirmedHoverSpeed={appSettings.hoverSpeedMps}
+                  cruiseSpeed={planner.cruiseSpeed}
+                  fenceRegions={fenceRegions}
+                  home={planner.home}
+                  hoverSpeed={planner.hoverSpeed}
+                  missionItems={missionItems}
+                  onPersistPlanningSpeeds={handlePersistPlanningSpeeds}
+                  onSetPlanningSpeeds={missionPlannerStore.setPlanningSpeeds}
+                  rallyPoints={rallyPoints}
+                  readOnly={!view.canEdit}
+                />
+              {:else if showFenceEditor}
+                <MissionFenceDraftList
+                  fenceSelection={planner.fenceSelection}
+                  items={fenceItems}
+                  onAddRegion={handleAddFenceRegion}
+                  onClearReturnPoint={() => handleSetFenceReturnPoint(null)}
+                  onDeleteRegion={handleDeleteFenceRegion}
+                  onSelectRegion={handleSelectFenceRegion}
+                  onSelectReturnPoint={handleSelectFenceReturnPoint}
+                  readOnly={!view.canEdit}
+                  returnPoint={fenceReturnPoint}
+                />
+
+                <MissionFenceInspector
+                  item={selectedFenceItem}
+                  onSetReturnPoint={handleSetFenceReturnPoint}
+                  onUpdateRegion={handleUpdateFenceRegion}
+                  readOnly={!view.canEdit}
+                  returnPoint={fenceReturnPoint}
+                  selection={planner.fenceSelection}
+                />
+
+                <MissionPlanningStatsPanel
+                  confirmedCruiseSpeed={appSettings.cruiseSpeedMps}
+                  confirmedHoverSpeed={appSettings.hoverSpeedMps}
+                  cruiseSpeed={planner.cruiseSpeed}
+                  fenceRegions={fenceRegions}
+                  home={planner.home}
+                  hoverSpeed={planner.hoverSpeed}
+                  missionItems={missionItems}
+                  onPersistPlanningSpeeds={handlePersistPlanningSpeeds}
+                  onSetPlanningSpeeds={missionPlannerStore.setPlanningSpeeds}
+                  rallyPoints={rallyPoints}
+                  readOnly={!view.canEdit}
+                />
+              {:else if showRallyEditor}
+                <MissionRallyDraftList
+                  items={rallyItems}
+                  onAddPoint={handleAddRallyPoint}
+                  onDeletePoint={handleDeleteRallyPoint}
+                  onMovePointDown={handleMoveRallyPointDown}
+                  onMovePointUp={handleMoveRallyPointUp}
+                  onSelectPoint={handleSelectRallyPoint}
+                  rallySelection={planner.rallySelection}
+                  readOnly={!view.canEdit}
+                />
+
+                <MissionRallyInspector
+                  item={selectedRallyItem}
+                  onUpdateAltitude={handleUpdateRallyAltitude}
+                  onUpdateAltitudeFrame={handleUpdateRallyAltitudeFrame}
+                  onUpdateLatitude={handleUpdateRallyLatitude}
+                  onUpdateLongitude={handleUpdateRallyLongitude}
+                  readOnly={!view.canEdit}
+                  selection={planner.rallySelection}
+                />
+
+                <MissionPlanningStatsPanel
+                  confirmedCruiseSpeed={appSettings.cruiseSpeedMps}
+                  confirmedHoverSpeed={appSettings.hoverSpeedMps}
+                  cruiseSpeed={planner.cruiseSpeed}
+                  fenceRegions={fenceRegions}
+                  home={planner.home}
+                  hoverSpeed={planner.hoverSpeed}
+                  missionItems={missionItems}
+                  onPersistPlanningSpeeds={handlePersistPlanningSpeeds}
+                  onSetPlanningSpeeds={missionPlannerStore.setPlanningSpeeds}
+                  rallyPoints={rallyPoints}
+                  readOnly={!view.canEdit}
+                />
+              {:else}
+                <section
+                  class="rounded-lg border border-border bg-bg-primary p-5"
+                  data-testid={missionWorkspaceTestIds.modeShell}
+                >
+                  <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{view.mode} mode</p>
+                  <h3 class="mt-2 text-lg font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.modeShellTitle}>{modeShellTitle(view.mode)}</h3>
+                  <p class="mt-2 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.modeShellBody}>{modeShellBody(view.mode, view)}</p>
+                </section>
+              {/if}
+            </div>
+          {/snippet}
+        </SplitPane>
+      {:else}
+        <!-- Phone layout: segment tabs or vertical stack -->
+        <div class="space-y-4 overflow-y-auto p-1">
+          <MissionHomeCard
+            attachment={view.attachment}
+            home={planner.home}
+            mode={view.mode}
+            onChange={missionPlannerStore.setHome}
+            onSelect={missionPlannerStore.selectHome}
+            selected={homeSelected}
+          />
+
+          {#if showMissionEditor}
             {#if workspaceLayout.showPhoneSegments}
               <div
                 class="flex items-center gap-2 rounded-lg border border-border bg-bg-primary p-2"
@@ -1490,105 +1476,67 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               data-testid={missionWorkspaceTestIds.planPane}
               data-visible={missionPlanVisible ? "true" : "false"}
             >
-              <div class={missionSupportLayoutClass}>
-                <div class="space-y-4">
-                  <div class={missionDetailGridClass}>
-                    <div class="space-y-4">
-                      <MissionDraftList
-                        cruiseSpeed={planner.cruiseSpeed}
-                        items={missionItems}
-                        onAddMissionItem={missionPlannerStore.addMissionItem}
-                        onAddSurveyBlock={handleCreateSurveyBlock}
-                        onDeleteMissionItem={missionPlannerStore.deleteMissionItem}
-                        onDeleteSurveyRegion={handleDeleteSurveyRegion}
-                        onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
-                        onMoveMissionItemDown={missionPlannerStore.moveMissionItemDownByIndex}
-                        onMoveMissionItemUp={missionPlannerStore.moveMissionItemUpByIndex}
-                        onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
-                        onSelectMissionItem={missionPlannerStore.selectMissionItem}
-                        onSelectSurveyBlock={missionPlannerStore.selectSurveyRegion}
-                        onSetSurveyRegionCollapsed={missionPlannerStore.setSurveyRegionCollapsed}
-                        selectedMissionUiId={selectedMissionUiId}
-                        selectedSurface={planner.selection}
-                        surveyBlocks={surveyBlocks}
-                      />
-                    </div>
+              <MissionDraftList
+                cruiseSpeed={planner.cruiseSpeed}
+                items={missionItems}
+                onAddMissionItem={missionPlannerStore.addMissionItem}
+                onAddSurveyBlock={handleCreateSurveyBlock}
+                onDeleteMissionItem={missionPlannerStore.deleteMissionItem}
+                onDeleteSurveyRegion={handleDeleteSurveyRegion}
+                onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
+                onMoveMissionItemDown={missionPlannerStore.moveMissionItemDownByIndex}
+                onMoveMissionItemUp={missionPlannerStore.moveMissionItemUpByIndex}
+                onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
+                onSelectMissionItem={missionPlannerStore.selectMissionItem}
+                onSelectSurveyBlock={missionPlannerStore.selectSurveyRegion}
+                onSetSurveyRegionCollapsed={missionPlannerStore.setSurveyRegionCollapsed}
+                selectedMissionUiId={selectedMissionUiId}
+                selectedSurface={planner.selection}
+                surveyBlocks={surveyBlocks}
+              />
 
-                    <MissionInspector
-                      cruiseSpeed={planner.cruiseSpeed}
-                      home={planner.home}
-                      item={selectedMissionItem}
-                      onConfirmSurveyPrompt={missionPlannerStore.confirmSurveyPrompt}
-                      onDeleteSurveyRegion={handleDeleteSurveyRegion}
-                      onDismissSurveyPrompt={missionPlannerStore.dismissSurveyPrompt}
-                      onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
-                      onMarkSurveyRegionItemAsEdited={missionPlannerStore.markSurveyRegionItemAsEdited}
-                      onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
-                      onUpdateAltitude={missionPlannerStore.updateMissionItemAltitude}
-                      onUpdateCommand={missionPlannerStore.updateMissionItemCommand}
-                      onUpdateLatitude={missionPlannerStore.updateMissionItemLatitude}
-                      onUpdateLongitude={missionPlannerStore.updateMissionItemLongitude}
-                      onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
-                      previousItem={previousMissionItem}
-                      selectedSurveyRegion={selectedSurveyRegion}
-                      selection={planner.selection}
-                      surveyPrompt={view.surveyPrompt}
-                    />
-                  </div>
+              <MissionInspector
+                cruiseSpeed={planner.cruiseSpeed}
+                home={planner.home}
+                item={selectedMissionItem}
+                onConfirmSurveyPrompt={missionPlannerStore.confirmSurveyPrompt}
+                onDeleteSurveyRegion={handleDeleteSurveyRegion}
+                onDismissSurveyPrompt={missionPlannerStore.dismissSurveyPrompt}
+                onGenerateSurveyRegion={missionPlannerStore.generateSurveyRegion}
+                onMarkSurveyRegionItemAsEdited={missionPlannerStore.markSurveyRegionItemAsEdited}
+                onPromptDissolveSurveyRegion={missionPlannerStore.promptDissolveSurveyRegion}
+                onUpdateAltitude={missionPlannerStore.updateMissionItemAltitude}
+                onUpdateCommand={missionPlannerStore.updateMissionItemCommand}
+                onUpdateLatitude={missionPlannerStore.updateMissionItemLatitude}
+                onUpdateLongitude={missionPlannerStore.updateMissionItemLongitude}
+                onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+                previousItem={previousMissionItem}
+                selectedSurveyRegion={selectedSurveyRegion}
+                selection={planner.selection}
+                surveyPrompt={view.surveyPrompt}
+              />
 
-                  {#if !missionSupportSidebar}
-                    <div class={missionSupportPanelsClass}>
-                      <MissionPlanningStatsPanel
-                        confirmedCruiseSpeed={appSettings.cruiseSpeedMps}
-                        confirmedHoverSpeed={appSettings.hoverSpeedMps}
-                        cruiseSpeed={planner.cruiseSpeed}
-                        fenceRegions={fenceRegions}
-                        home={planner.home}
-                        hoverSpeed={planner.hoverSpeed}
-                        missionItems={missionItems}
-                        onPersistPlanningSpeeds={handlePersistPlanningSpeeds}
-                        onSetPlanningSpeeds={missionPlannerStore.setPlanningSpeeds}
-                        rallyPoints={rallyPoints}
-                        readOnly={!view.canEdit}
-                      />
+              <MissionPlanningStatsPanel
+                confirmedCruiseSpeed={appSettings.cruiseSpeedMps}
+                confirmedHoverSpeed={appSettings.hoverSpeedMps}
+                cruiseSpeed={planner.cruiseSpeed}
+                fenceRegions={fenceRegions}
+                home={planner.home}
+                hoverSpeed={planner.hoverSpeed}
+                missionItems={missionItems}
+                onPersistPlanningSpeeds={handlePersistPlanningSpeeds}
+                onSetPlanningSpeeds={missionPlannerStore.setPlanningSpeeds}
+                rallyPoints={rallyPoints}
+                readOnly={!view.canEdit}
+              />
 
-                      <MissionTerrainProfilePanel
-                        onRetry={handleRetryTerrain}
-                        onSelectWarning={handleSelectTerrainWarning}
-                        state={terrain}
-                      />
-                    </div>
-                  {/if}
-                </div>
-
-                {#if missionSupportSidebar}
-                  <div class={missionSupportPanelsClass}>
-                    <MissionPlanningStatsPanel
-                      confirmedCruiseSpeed={appSettings.cruiseSpeedMps}
-                      confirmedHoverSpeed={appSettings.hoverSpeedMps}
-                      cruiseSpeed={planner.cruiseSpeed}
-                      fenceRegions={fenceRegions}
-                      home={planner.home}
-                      hoverSpeed={planner.hoverSpeed}
-                      missionItems={missionItems}
-                      onPersistPlanningSpeeds={handlePersistPlanningSpeeds}
-                      onSetPlanningSpeeds={missionPlannerStore.setPlanningSpeeds}
-                      rallyPoints={rallyPoints}
-                      readOnly={!view.canEdit}
-                    />
-
-                    <MissionTerrainProfilePanel
-                      onRetry={handleRetryTerrain}
-                      onSelectWarning={handleSelectTerrainWarning}
-                      state={terrain}
-                    />
-                  </div>
-                {/if}
-              </div>
+              <MissionTerrainProfilePanel
+                onRetry={handleRetryTerrain}
+                onSelectWarning={handleSelectTerrainWarning}
+                state={terrain}
+              />
             </div>
-          </div>
-        {:else if showFenceEditor}
-          <div class="space-y-4">
+          {:else if showFenceEditor}
             <MissionMap
               blockedReason={planner.blockedReason}
               fallbackReference={resolveSurveyCreationAnchor(planner)}
@@ -1615,28 +1563,26 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               view={mapView}
             />
 
-            <div class={continuityDetailGridClass}>
-              <MissionFenceDraftList
-                fenceSelection={planner.fenceSelection}
-                items={fenceItems}
-                onAddRegion={handleAddFenceRegion}
-                onClearReturnPoint={() => handleSetFenceReturnPoint(null)}
-                onDeleteRegion={handleDeleteFenceRegion}
-                onSelectRegion={handleSelectFenceRegion}
-                onSelectReturnPoint={handleSelectFenceReturnPoint}
-                readOnly={!view.canEdit}
-                returnPoint={fenceReturnPoint}
-              />
+            <MissionFenceDraftList
+              fenceSelection={planner.fenceSelection}
+              items={fenceItems}
+              onAddRegion={handleAddFenceRegion}
+              onClearReturnPoint={() => handleSetFenceReturnPoint(null)}
+              onDeleteRegion={handleDeleteFenceRegion}
+              onSelectRegion={handleSelectFenceRegion}
+              onSelectReturnPoint={handleSelectFenceReturnPoint}
+              readOnly={!view.canEdit}
+              returnPoint={fenceReturnPoint}
+            />
 
-              <MissionFenceInspector
-                item={selectedFenceItem}
-                onSetReturnPoint={handleSetFenceReturnPoint}
-                onUpdateRegion={handleUpdateFenceRegion}
-                readOnly={!view.canEdit}
-                returnPoint={fenceReturnPoint}
-                selection={planner.fenceSelection}
-              />
-            </div>
+            <MissionFenceInspector
+              item={selectedFenceItem}
+              onSetReturnPoint={handleSetFenceReturnPoint}
+              onUpdateRegion={handleUpdateFenceRegion}
+              readOnly={!view.canEdit}
+              returnPoint={fenceReturnPoint}
+              selection={planner.fenceSelection}
+            />
 
             <MissionPlanningStatsPanel
               confirmedCruiseSpeed={appSettings.cruiseSpeedMps}
@@ -1651,9 +1597,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               rallyPoints={rallyPoints}
               readOnly={!view.canEdit}
             />
-          </div>
-        {:else if showRallyEditor}
-          <div class="space-y-4">
+          {:else if showRallyEditor}
             <MissionMap
               blockedReason={planner.blockedReason}
               fallbackReference={resolveSurveyCreationAnchor(planner)}
@@ -1674,28 +1618,26 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               view={mapView}
             />
 
-            <div class={continuityDetailGridClass}>
-              <MissionRallyDraftList
-                items={rallyItems}
-                onAddPoint={handleAddRallyPoint}
-                onDeletePoint={handleDeleteRallyPoint}
-                onMovePointDown={handleMoveRallyPointDown}
-                onMovePointUp={handleMoveRallyPointUp}
-                onSelectPoint={handleSelectRallyPoint}
-                rallySelection={planner.rallySelection}
-                readOnly={!view.canEdit}
-              />
+            <MissionRallyDraftList
+              items={rallyItems}
+              onAddPoint={handleAddRallyPoint}
+              onDeletePoint={handleDeleteRallyPoint}
+              onMovePointDown={handleMoveRallyPointDown}
+              onMovePointUp={handleMoveRallyPointUp}
+              onSelectPoint={handleSelectRallyPoint}
+              rallySelection={planner.rallySelection}
+              readOnly={!view.canEdit}
+            />
 
-              <MissionRallyInspector
-                item={selectedRallyItem}
-                onUpdateAltitude={handleUpdateRallyAltitude}
-                onUpdateAltitudeFrame={handleUpdateRallyAltitudeFrame}
-                onUpdateLatitude={handleUpdateRallyLatitude}
-                onUpdateLongitude={handleUpdateRallyLongitude}
-                readOnly={!view.canEdit}
-                selection={planner.rallySelection}
-              />
-            </div>
+            <MissionRallyInspector
+              item={selectedRallyItem}
+              onUpdateAltitude={handleUpdateRallyAltitude}
+              onUpdateAltitudeFrame={handleUpdateRallyAltitudeFrame}
+              onUpdateLatitude={handleUpdateRallyLatitude}
+              onUpdateLongitude={handleUpdateRallyLongitude}
+              readOnly={!view.canEdit}
+              selection={planner.rallySelection}
+            />
 
             <MissionPlanningStatsPanel
               confirmedCruiseSpeed={appSettings.cruiseSpeedMps}
@@ -1710,18 +1652,58 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               rallyPoints={rallyPoints}
               readOnly={!view.canEdit}
             />
-          </div>
-        {:else}
-          <section
-            class="rounded-lg border border-border bg-bg-primary p-5"
-            data-testid={missionWorkspaceTestIds.modeShell}
-          >
-            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{view.mode} mode</p>
-            <h3 class="mt-2 text-lg font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.modeShellTitle}>{modeShellTitle(view.mode)}</h3>
-            <p class="mt-2 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.modeShellBody}>{modeShellBody(view.mode, view)}</p>
-          </section>
-        {/if}
-      </div>
-    </section>
+          {:else}
+            <section
+              class="rounded-lg border border-border bg-bg-primary p-5"
+              data-testid={missionWorkspaceTestIds.modeShell}
+            >
+              <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{view.mode} mode</p>
+              <h3 class="mt-2 text-lg font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.modeShellTitle}>{modeShellTitle(view.mode)}</h3>
+              <p class="mt-2 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.modeShellBody}>{modeShellBody(view.mode, view)}</p>
+            </section>
+          {/if}
+        </div>
+      {/if}
+    </div>
   {/if}
 </section>
+
+<style>
+  .mission-workspace {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .mission-workspace__ready {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    margin-top: 1rem;
+  }
+
+  .mission-workspace__map-column {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 1rem;
+    overflow: hidden;
+    padding: 4px;
+  }
+
+  .mission-workspace__map-fill {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .mission-workspace__editor-column {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 1rem;
+    overflow-y: auto;
+    padding: 4px;
+  }
+</style>

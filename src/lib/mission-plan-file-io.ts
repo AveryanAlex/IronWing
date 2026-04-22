@@ -135,36 +135,7 @@ export function createMissionPlanFileIo(
         return { status: "cancelled" };
       }
 
-      const rawPlan = parsePlanJson(selected.contents);
-      const parsed = parsePlan(rawPlan);
-      const fatalWarning = parsed.warnings.find((warning) => FATAL_IMPORT_WARNING_PATTERNS.some((pattern) => pattern.test(warning)));
-      if (fatalWarning) {
-        throw new Error(toImportFailureMessage(fatalWarning));
-      }
-
-      if (isEmptyImportedPlan(parsed)) {
-        throw new Error(EMPTY_PLAN_MESSAGE);
-      }
-
-      return {
-        status: "success",
-        fileName: selected.name,
-        missionItemCount: parsed.mission.items.length,
-        surveyRegionCount: parsed.surveyRegions.length,
-        fenceRegionCount: parsed.fence.regions.length,
-        rallyPointCount: parsed.rally.points.length,
-        warningCount: parsed.warnings.length,
-        warnings: [...parsed.warnings],
-        data: {
-          mission: parsed.mission,
-          surveyRegions: parsed.surveyRegions,
-          home: parsed.home,
-          fence: parsed.fence,
-          rally: parsed.rally,
-          cruiseSpeed: parsed.cruiseSpeed,
-          hoverSpeed: parsed.hoverSpeed,
-        },
-      };
+      return parseMissionPlanImportSelection(selected, { parsePlan });
     },
 
     async exportToPicker(input: MissionPlanFileExportInput) {
@@ -236,6 +207,43 @@ export function createMissionPlanFileIo(
 
     return { name: suggestedName };
   }
+}
+
+export function parseMissionPlanImportSelection(
+  selected: { name: string | null; contents: string },
+  dependencies: Pick<MissionPlanFileIoDependencies, "parsePlan"> = {},
+): Extract<MissionPlanFileImportResult, { status: "success" }> {
+  const parsePlan = dependencies.parsePlan ?? parsePlanFile;
+  const rawPlan = parsePlanJson(selected.contents);
+  const parsed = parsePlan(rawPlan);
+  const fatalWarning = parsed.warnings.find((warning) => FATAL_IMPORT_WARNING_PATTERNS.some((pattern) => pattern.test(warning)));
+  if (fatalWarning) {
+    throw new Error(toImportFailureMessage(fatalWarning));
+  }
+
+  if (isEmptyImportedPlan(parsed)) {
+    throw new Error(EMPTY_PLAN_MESSAGE);
+  }
+
+  return {
+    status: "success",
+    fileName: selected.name,
+    missionItemCount: parsed.mission.items.length,
+    surveyRegionCount: parsed.surveyRegions.length,
+    fenceRegionCount: parsed.fence.regions.length,
+    rallyPointCount: parsed.rally.points.length,
+    warningCount: parsed.warnings.length,
+    warnings: [...parsed.warnings],
+    data: {
+      mission: parsed.mission,
+      surveyRegions: parsed.surveyRegions,
+      home: parsed.home,
+      fence: parsed.fence,
+      rally: parsed.rally,
+      cruiseSpeed: parsed.cruiseSpeed,
+      hoverSpeed: parsed.hoverSpeed,
+    },
+  };
 }
 
 function parsePlanJson(contents: string): object {

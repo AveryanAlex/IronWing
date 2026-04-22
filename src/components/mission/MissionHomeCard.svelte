@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { HomePosition } from "../../mission";
 import type { MissionPlannerAttachmentState, MissionPlannerMode } from "../../lib/stores/mission-planner";
+import InfoWidget from "../shared/InfoWidget.svelte";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
 type Props = {
@@ -37,6 +38,9 @@ let homeSyncCopy = $derived.by(() => {
       return "This preserved Home came from another scope. IronWing keeps it visible as truthful planning context, but it is detached from the active scope and will not sync through mission / fence / rally upload or clear actions.";
   }
 });
+let homeInfoDescription = $derived(
+  `Home stays shared planning context across mission, fence, and rally. ${homeSyncCopy}`,
+);
 let baseLatitude = $derived(home ? String(home.latitude_deg) : "");
 let baseLongitude = $derived(home ? String(home.longitude_deg) : "");
 let baseAltitude = $derived(home ? String(home.altitude_m) : "");
@@ -123,31 +127,37 @@ function handleEnter(event: KeyboardEvent) {
 </script>
 
 <section
-  class={`rounded-lg border p-3 transition ${selected
+  class={`rounded-lg border p-2.5 transition ${selected
     ? "border-accent/40 bg-accent/10"
     : "border-border bg-bg-primary"}`}
   data-selected={selected ? "true" : "false"}
   data-testid={missionWorkspaceTestIds.homeCard}
 >
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div class="max-w-2xl">
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Shared Home</p>
-      <h3 class="mt-1 text-sm font-semibold text-text-primary">Home marker across mission, fence, and rally</h3>
+  <div class="flex flex-wrap items-start justify-between gap-2.5">
+    <div class="min-w-0 flex-1">
+      <div class="flex flex-wrap items-center gap-2">
+        <h3 class="text-sm font-semibold text-text-primary">Home</h3>
+        <InfoWidget
+          align="right"
+          contentTestId={missionWorkspaceTestIds.homeSync}
+          description={homeInfoDescription}
+          panelTestId={missionWorkspaceTestIds.homeInfoPopup}
+          testId={missionWorkspaceTestIds.homeInfoButton}
+          title="Shared planning context"
+        />
+      </div>
       <p class="mt-1 text-xs text-text-secondary" data-testid={missionWorkspaceTestIds.homeSummary}>
         {home
           ? `${home.latitude_deg.toFixed(5)}, ${home.longitude_deg.toFixed(5)} · ${home.altitude_m.toFixed(1)} m`
           : `Set a Home position explicitly for this ${modeLabel} draft; incomplete values stay local until all three fields are valid.`}
       </p>
-      <p class="mt-2 text-xs text-text-secondary" data-testid={missionWorkspaceTestIds.homeSync}>
-        {homeSyncCopy}
-      </p>
       {#if readOnlyMessage}
-        <p class="mt-2 text-xs text-warning" data-testid={missionWorkspaceTestIds.homeReadOnly}>{readOnlyMessage}</p>
+        <p class="mt-1.5 text-xs text-warning" data-testid={missionWorkspaceTestIds.homeReadOnly}>{readOnlyMessage}</p>
       {/if}
     </div>
 
     <button
-      class="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+      class="rounded-md border border-border bg-bg-secondary px-2.5 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
       data-testid={missionWorkspaceTestIds.homeClear}
       disabled={readOnly}
       onclick={() => {
@@ -156,15 +166,15 @@ function handleEnter(event: KeyboardEvent) {
       }}
       type="button"
     >
-      Clear Home
+      Clear
     </button>
   </div>
 
-  <div class="mt-4 grid gap-3 md:grid-cols-3">
+  <div class="mt-3 grid gap-2 sm:grid-cols-3">
     <label class="space-y-1">
       <span class="text-xs font-medium text-text-muted">Latitude</span>
       <input
-        class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+        class="w-full rounded-lg border border-border bg-bg-secondary px-2.5 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
         data-testid={missionWorkspaceTestIds.homeLatitude}
         disabled={readOnly}
         inputmode="decimal"
@@ -186,7 +196,7 @@ function handleEnter(event: KeyboardEvent) {
     <label class="space-y-1">
       <span class="text-xs font-medium text-text-muted">Longitude</span>
       <input
-        class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+        class="w-full rounded-lg border border-border bg-bg-secondary px-2.5 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
         data-testid={missionWorkspaceTestIds.homeLongitude}
         disabled={readOnly}
         inputmode="decimal"
@@ -208,7 +218,7 @@ function handleEnter(event: KeyboardEvent) {
     <label class="space-y-1">
       <span class="text-xs font-medium text-text-muted">Altitude (m)</span>
       <input
-        class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+        class="w-full rounded-lg border border-border bg-bg-secondary px-2.5 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
         data-testid={missionWorkspaceTestIds.homeAltitude}
         disabled={readOnly}
         inputmode="decimal"
@@ -229,6 +239,6 @@ function handleEnter(event: KeyboardEvent) {
   </div>
 
   {#if visibleValidationMessage}
-    <p class="mt-3 text-xs text-warning" data-testid={missionWorkspaceTestIds.homeValidation}>{visibleValidationMessage}</p>
+    <p class="mt-2 text-xs text-warning" data-testid={missionWorkspaceTestIds.homeValidation}>{visibleValidationMessage}</p>
   {/if}
 </section>

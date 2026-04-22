@@ -50,11 +50,7 @@ const redoShortcut = process.platform === "darwin" ? "Meta+Shift+Z" : "Control+S
 
 async function confirmExportReviewIfVisible(page: Page) {
     const exportReview = missionWorkspaceLocator(page, "exportReview");
-    const localNote = missionWorkspaceLocator(page, "localNote");
-    await Promise.race([
-        exportReview.waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined),
-        localNote.waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined),
-    ]);
+    await exportReview.waitFor({ state: "visible", timeout: 5_000 }).catch(() => undefined);
 
     if (await exportReview.isVisible().catch(() => false)) {
         await missionWorkspaceLocator(page, "exportReviewConfirm").click();
@@ -66,7 +62,7 @@ async function pressMissionHistoryShortcut(page: Page, kind: "undo" | "redo") {
 }
 
 test.describe("mocked mission planner workflow", () => {
-    test("proves read/import/new/edit/map/validate/upload/cancel/clear/export flows on the active Svelte shell", async ({
+    test("proves read/import/new/edit/map/upload/cancel/export flows on the active Svelte shell", async ({
         page,
         mockPlatform,
     }) => {
@@ -107,7 +103,6 @@ test.describe("mocked mission planner workflow", () => {
 
         await mockPlatform.cancelOpenFile();
         await missionWorkspaceLocator(page, "entryImport").click();
-        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Import cancelled");
         await expect(missionWorkspaceLocator(page, "empty")).toBeVisible();
         await expectMissionHistoryState(
             page,
@@ -138,7 +133,6 @@ test.describe("mocked mission planner workflow", () => {
         await missionHistoryButtonLocator(page, "undo").click();
         await expect(missionWorkspaceLocator(page, "empty")).toBeVisible();
         await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("0 / 0");
-        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Restored the previous planner change.");
         await expectMissionHistoryState(
             page,
             {
@@ -152,7 +146,6 @@ test.describe("mocked mission planner workflow", () => {
         await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
         await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("2");
         await expect(missionWorkspaceLocator(page, "homeSummary")).toContainText("47.39774");
-        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Reapplied the last planner change.");
         await expectMissionHistoryState(
             page,
             {
@@ -165,13 +158,12 @@ test.describe("mocked mission planner workflow", () => {
         await mockPlatform.cancelSaveFile();
         await missionWorkspaceLocator(page, "toolbarExport").click();
         await confirmExportReviewIfVisible(page);
-        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Export cancelled");
+        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("2");
         await expect.poll(() => mockPlatform.getSavedFiles()).toEqual([]);
 
         await mockPlatform.setSaveFileName("vehicle-read.plan");
         await missionWorkspaceLocator(page, "toolbarExport").click();
         await confirmExportReviewIfVisible(page);
-        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Saved vehicle-read.plan");
         await expect(missionWorkspaceLocator(page, "warningFile")).toContainText("omitted");
         await expect(missionWorkspaceLocator(page, "countsWarnings")).not.toContainText("0");
 
@@ -181,7 +173,8 @@ test.describe("mocked mission planner workflow", () => {
         expect(savedFiles[0]?.contents).toContain('"fileType": "Plan"');
 
         await missionWorkspaceLocator(page, "toolbarNew").click();
-        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Blank mission draft ready");
+        await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
+        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("0 / 0");
         await missionWorkspaceLocator(page, "listAdd").click();
         await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("1");
 
@@ -206,7 +199,6 @@ test.describe("mocked mission planner workflow", () => {
         await expect(missionWorkspaceLocator(page, "importReview")).toBeVisible();
         await missionWorkspaceLocator(page, "importReviewConfirm").click();
         await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("2");
-        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("survey-complex.plan");
         expect(await page.locator(missionWorkspaceSelectors.warningFile).filter({ hasText: "survey" }).count()).toBeGreaterThan(0);
 
         const historyAfterImport = await readMissionHistoryState(page);
@@ -260,7 +252,6 @@ test.describe("mocked mission planner workflow", () => {
 
         await pressMissionHistoryShortcut(page, "undo");
         await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("2");
-        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Restored the previous planner change.");
         await expectMissionHistoryState(
             page,
             {
@@ -272,7 +263,6 @@ test.describe("mocked mission planner workflow", () => {
 
         await pressMissionHistoryShortcut(page, "redo");
         await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
-        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Reapplied the last planner change.");
         await expectMissionHistoryState(
             page,
             {
@@ -291,32 +281,7 @@ test.describe("mocked mission planner workflow", () => {
         await missionWorkspaceLocator(page, "inspectorAltitude").fill("120");
         await missionWorkspaceLocator(page, "inspectorAltitude").press("Tab");
 
-        await mockPlatform.setCommandBehavior("mission_validate", {
-            type: "resolve",
-            delayMs: 120,
-            result: [
-                {
-                    code: "MISSION_WARNING",
-                    message: "Survey hand-off warning from mocked validation.",
-                    severity: "warning",
-                },
-                {
-                    code: "WAYPOINT_ALT_LOW",
-                    message: "Waypoint altitude is below the preferred mock threshold.",
-                    severity: "error",
-                    seq: 0,
-                },
-            ],
-        });
-        await missionWorkspaceLocator(page, "toolbarValidate").click();
-        await expect(missionWorkspaceLocator(page, "inlineStatusMessage")).toContainText("Validating the mission bucket");
-        await expect
-            .poll(() => page.locator(missionWorkspaceSelectors.warningValidation).filter({ hasText: "WAYPOINT_ALT_LOW" }).count())
-            .toBe(1);
-        await expect
-            .poll(() => page.locator(missionWorkspaceSelectors.warningValidation).filter({ hasText: "MISSION_WARNING" }).count())
-            .toBe(1);
-        await mockPlatform.clearCommandBehavior("mission_validate");
+        await expect(missionWorkspaceLocator(page, "header").getByRole("button", { name: /validate mission/i })).toHaveCount(0);
 
         const missionMarker = page.locator(
             `${missionWorkspaceSelectors.missionMarker}:not([data-testid="mission-map-marker-home"])`,
@@ -338,7 +303,6 @@ test.describe("mocked mission planner workflow", () => {
         await expect(missionWorkspaceLocator(page, "inlineStatusMessage")).toContainText("Uploading planning state");
         await expect(missionWorkspaceLocator(page, "toolbarCancel")).toBeVisible();
         await missionWorkspaceLocator(page, "toolbarCancel").click();
-        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Cancelled the pending transfer");
         await expect(missionWorkspaceLocator(page, "toolbarCancel")).toHaveCount(0);
 
         await expect.poll(async () => {
@@ -356,66 +320,10 @@ test.describe("mocked mission planner workflow", () => {
             };
         }).toEqual({ missionUploads: 2, fenceUploads: 1, rallyUploads: 1 });
         await expect(missionWorkspaceLocator(page, "inlineStatus")).toHaveCount(0);
-
-        const historyBeforeClear = await readMissionHistoryState(page);
-        await missionWorkspaceLocator(page, "toolbarClear").click();
-        await expect(missionWorkspaceLocator(page, "promptKind")).toContainText("clear-replace");
-        await missionWorkspaceLocator(page, "promptConfirm").click();
-        await expect(missionWorkspaceLocator(page, "inlineStatusMessage")).toContainText("Clearing the vehicle workspace");
-        await expect(missionWorkspaceLocator(page, "localNote")).toContainText("Vehicle workspace cleared");
-        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("0");
-        await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
-        await expect(missionWorkspaceLocator(page, "mapStatus")).toContainText("empty");
-
-        const historyAfterClear = await readMissionHistoryState(page);
-        expect(historyAfterClear.undo.count).toBe(historyBeforeClear.undo.count + 1);
-        expect(historyAfterClear.undo.disabled).toBe(false);
-        expect(historyAfterClear.redo.count).toBe(0);
-        expect(historyAfterClear.redo.disabled).toBe(true);
-
-        await expect.poll(async () => {
-            const commands = (await mockPlatform.getInvocations()).map((entry) => entry.cmd);
-            return {
-                missionClears: commands.filter((cmd) => cmd === "mission_clear").length,
-                fenceClears: commands.filter((cmd) => cmd === "fence_clear").length,
-                rallyClears: commands.filter((cmd) => cmd === "rally_clear").length,
-            };
-        }).toEqual({ missionClears: 1, fenceClears: 1, rallyClears: 1 });
-
-        await missionHistoryButtonLocator(page, "undo").click();
-        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("1 / 0");
-        await expect(missionWorkspaceLocator(page, "mapStatus")).not.toContainText("empty");
-        await expectMissionHistoryState(
-            page,
-            {
-                undo: { count: historyBeforeClear.undo.count, disabled: historyBeforeClear.undo.disabled },
-                redo: { count: 1, disabled: false },
-            },
-            "Undoing the vehicle clear should restore the pre-clear draft in one step.",
-        );
-
-        await missionHistoryButtonLocator(page, "redo").click();
-        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("0 / 0");
-        await expect(missionWorkspaceLocator(page, "mapStatus")).toContainText("empty");
-        await expectMissionHistoryState(
-            page,
-            {
-                undo: { count: historyAfterClear.undo.count, disabled: false },
-                redo: { count: 0, disabled: true },
-            },
-            "Redoing the vehicle clear should return to the empty workspace in one step.",
-        );
-
-        await missionHistoryButtonLocator(page, "undo").click();
-        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("1 / 0");
-        const historyAfterClearUndo = await readMissionHistoryState(page);
-
-        await missionWorkspaceLocator(page, "listAdd").click();
-        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("2 / 0");
-        const historyAfterNewEdit = await readMissionHistoryState(page);
-        expect(historyAfterNewEdit.undo.count).toBe(historyAfterClearUndo.undo.count + 1);
-        expect(historyAfterNewEdit.undo.disabled).toBe(false);
-        expect(historyAfterNewEdit.redo.count).toBe(0);
-        expect(historyAfterNewEdit.redo.disabled).toBe(true);
+        await expect(missionWorkspaceLocator(page, "toolbarRead")).toHaveAttribute("aria-label", "Read from vehicle");
+        await expect(missionWorkspaceLocator(page, "toolbarRead")).toHaveAttribute("title", "Read from vehicle");
+        await expect(missionWorkspaceLocator(page, "toolbarUpload")).toHaveAttribute("aria-label", "Write to vehicle");
+        await expect(missionWorkspaceLocator(page, "toolbarUpload")).toHaveAttribute("title", "Write to vehicle");
+        await expect(missionWorkspaceLocator(page, "header").getByRole("button", { name: /^clear$/i })).toHaveCount(0);
     });
 });

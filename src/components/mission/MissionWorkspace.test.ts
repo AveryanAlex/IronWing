@@ -111,6 +111,67 @@ vi.mock("uplot", () => ({
   },
 }));
 
+const {
+  emitMaplibreEvent,
+  maplibreMock,
+  maplibreMapCtor,
+  resetMaplibreMock,
+  setMaplibreCtorFailure,
+} = vi.hoisted(() => {
+  const eventHandlers = new Map<string, Array<(payload?: unknown) => void>>();
+  const maplibreMock = {
+    fitBounds: vi.fn(),
+    on: vi.fn((event: string, handler: (payload?: unknown) => void) => {
+      const handlers = eventHandlers.get(event) ?? [];
+      handlers.push(handler);
+      eventHandlers.set(event, handlers);
+      if (event === "load") {
+        handler();
+      }
+    }),
+    remove: vi.fn(),
+    resize: vi.fn(),
+  };
+
+  let throwOnConstruct = false;
+  const maplibreMapCtor = vi.fn(() => {
+    if (throwOnConstruct) {
+      throw new Error("map init failed");
+    }
+    return maplibreMock;
+  });
+
+  return {
+    maplibreMock,
+    maplibreMapCtor,
+    emitMaplibreEvent(event: string, payload?: unknown) {
+      for (const handler of eventHandlers.get(event) ?? []) {
+        handler(payload);
+      }
+    },
+    resetMaplibreMock() {
+      throwOnConstruct = false;
+      eventHandlers.clear();
+      maplibreMapCtor.mockClear();
+    },
+    setMaplibreCtorFailure(next: boolean) {
+      throwOnConstruct = next;
+    },
+  };
+});
+
+vi.mock("maplibre-gl", () => {
+  function MockMap() {
+    return maplibreMapCtor();
+  }
+
+  return {
+    default: {
+      Map: MockMap,
+    },
+  };
+});
+
 import MissionWorkspace from "./MissionWorkspace.svelte";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 import {
@@ -622,6 +683,13 @@ function readMissionMapDebug() {
   return JSON.parse(screen.getByTestId(missionWorkspaceTestIds.mapDebug).textContent ?? "{}");
 }
 
+async function openHomeInfo() {
+  await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.homeInfoButton));
+  await waitFor(() => {
+    expect(screen.getByTestId(missionWorkspaceTestIds.homeInfoPopup)).toBeTruthy();
+  });
+}
+
 function getHistoryButton(kind: "undo" | "redo") {
   return screen.getByTestId(
     kind === "undo" ? missionWorkspaceTestIds.toolbarUndo : missionWorkspaceTestIds.toolbarRedo,
@@ -690,6 +758,11 @@ async function renderWorkspace(options: {
 describe("MissionWorkspace", () => {
   beforeEach(() => {
     resetTerrainStateMock();
+    resetMaplibreMock();
+    maplibreMock.fitBounds.mockReset();
+    maplibreMock.on.mockClear();
+    maplibreMock.remove.mockReset();
+    maplibreMock.resize.mockReset();
     if (typeof localStorage?.clear === "function") {
       localStorage.clear();
     }
@@ -716,13 +789,13 @@ describe("MissionWorkspace", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
-      expect(screen.getByTestId(missionWorkspaceTestIds.localNote).textContent).toContain("Blank mission draft ready");
     });
 
     expect(screen.getByTestId(missionWorkspaceTestIds.homeCard)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.map)).toBeTruthy();
-    expect(screen.getByTestId(missionWorkspaceTestIds.mapPane).getAttribute("data-visible")).toBe("true");
-    expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("true");
+    // Wide mode uses SplitPane — no map/plan pane wrappers, both panels always visible
+    expect(screen.queryByTestId(missionWorkspaceTestIds.mapPane)).toBeNull();
+    expect(screen.queryByTestId(missionWorkspaceTestIds.planPane)).toBeNull();
     expect(screen.queryByTestId(missionWorkspaceTestIds.phoneSegmentBar)).toBeNull();
     expect(screen.getByTestId(missionWorkspaceTestIds.mapStatus).textContent).toContain("empty");
     expect(screen.getByTestId(missionWorkspaceTestIds.mapEmpty)).toBeTruthy();
@@ -730,6 +803,59 @@ describe("MissionWorkspace", () => {
     expect(screen.getByTestId(missionWorkspaceTestIds.listEmpty)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("home");
     expect(get(plannerStore).workspaceMounted).toBe(true);
+  });
+
+  it("renders a real basemap under the planner surface", async () => {
+    await renderWorkspace();
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.mapBasemap)).toBeTruthy();
+      expect(maplibreMock.fitBounds).toHaveBeenCalled();
+    });
+  });
+
+  it("keeps the basemap instance stable while planner state updates", async () => {
+    const { plannerStore } = await renderWorkspace();
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.mapBasemap)).toBeTruthy();
+      expect(maplibreMapCtor).toHaveBeenCalledTimes(1);
+    });
+
+    plannerStore.setHome({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
+    await flush();
+
+    expect(maplibreMapCtor).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the planner surface mounted when basemap initialization fails", async () => {
+    setMaplibreCtorFailure(true);
+
+    await renderWorkspace();
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.mapDebug)).toBeTruthy();
+      expect(screen.getAllByText(/Basemap initialization failed/i).length).toBeGreaterThan(0);
+    });
+  });
+
+  it("surfaces async basemap load failures without unmounting the planner", async () => {
+    await renderWorkspace();
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
+    emitMaplibreEvent("error", { error: new Error("style load failed") });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
+      expect(screen.getAllByText(/Basemap failed to load completely/i).length).toBeGreaterThan(0);
+    });
   });
 
   it("falls back to a desktop-style mission layout when shell chrome context is missing", async () => {
@@ -745,7 +871,7 @@ describe("MissionWorkspace", () => {
   it("derives wide, compact-wide, and phone-segmented mission shells from shell chrome context", async () => {
     const chromeStore = createResponsiveChromeStore(1440, 900, "wide");
 
-    await renderWorkspace({
+    const { plannerStore } = await renderWorkspace({
       chromeStore,
       plannerServiceOverrides: {
         validateMission: vi.fn(async () => [{
@@ -765,8 +891,9 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.detailColumns).textContent).toContain("split");
     });
     expect(screen.queryByTestId(missionWorkspaceTestIds.phoneSegmentBar)).toBeNull();
-    expect(screen.getByTestId(missionWorkspaceTestIds.mapPane).getAttribute("data-visible")).toBe("true");
-    expect(screen.getByTestId(missionWorkspaceTestIds.planPane).getAttribute("data-visible")).toBe("true");
+    // Wide mode uses SplitPane — no map/plan pane wrappers
+    expect(screen.queryByTestId(missionWorkspaceTestIds.mapPane)).toBeNull();
+    expect(screen.queryByTestId(missionWorkspaceTestIds.planPane)).toBeNull();
 
     chromeStore.set(createResponsiveChromeState(1280, 720, "wide"));
 
@@ -805,7 +932,7 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentState).textContent).toContain("map");
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.toolbarValidate));
+    await plannerStore.validateCurrentMission();
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.warningValidation).textContent).toContain("Waypoint altitude is below the safety margin.");
     });
@@ -1061,7 +1188,7 @@ describe("MissionWorkspace", () => {
 
     await waitFor(() => {
       expect(get(plannerStore).selection.kind).toBe("home");
-      expect(screen.getByTestId(missionWorkspaceTestIds.localNote).textContent).toContain("no longer active");
+      expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("home");
     });
   });
 
@@ -1570,7 +1697,8 @@ describe("MissionWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.attachment).textContent).toContain("Playback read-only");
     });
-    expect((screen.getByTestId(missionWorkspaceTestIds.toolbarValidate) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByTestId(missionWorkspaceTestIds.toolbarImport)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /validate mission/i })).toBeNull();
     expect((screen.getByTestId(missionWorkspaceTestIds.homeLatitude) as HTMLInputElement).disabled).toBe(true);
 
     const playbackWarning = screen.getByTestId(`${missionWorkspaceTestIds.warningItemPrefix}-0`);
@@ -1582,7 +1710,7 @@ describe("MissionWorkspace", () => {
     await flush();
 
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeMission));
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.toolbarValidate));
+    await plannerStore.validateCurrentMission();
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.warningValidation).textContent).toContain("Survey path drifts outside the lane.");
@@ -1745,8 +1873,9 @@ describe("MissionWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.mapRallyCount).textContent).toContain("2");
-      expect(screen.getByTestId(missionWorkspaceTestIds.homeSync).textContent).toContain("Live mission reads can refresh Home");
     });
+    await openHomeInfo();
+    expect(screen.getByTestId(missionWorkspaceTestIds.homeSync).textContent).toContain("Live mission reads can refresh Home");
 
     const firstRallyUiId = get(plannerStore).draftState.active.rally.draftItems[0]?.uiId;
     expect(firstRallyUiId).toBeTypeOf("number");
@@ -1860,8 +1989,9 @@ describe("MissionWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
       expect((screen.getByTestId(missionWorkspaceTestIds.rallyAdd) as HTMLButtonElement).disabled).toBe(true);
-      expect(screen.getByTestId(missionWorkspaceTestIds.homeSync).textContent).toContain("Playback keeps the last known Home visible");
     });
+    await openHomeInfo();
+    expect(screen.getByTestId(missionWorkspaceTestIds.homeSync).textContent).toContain("Playback keeps the last known Home visible");
 
     const playbackRallyUiId = get(plannerStore).draftState.active.rally.draftItems[0]?.uiId;
     await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.rallyPointPrefix}-${playbackRallyUiId}`));
@@ -1919,7 +2049,7 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.toolbarImport));
+    await plannerStore.importFromPicker();
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.importReviewTitle).textContent).toContain("survey.plan");
@@ -1931,7 +2061,7 @@ describe("MissionWorkspace", () => {
     });
     expect(get(plannerStore).home).toEqual({ latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.toolbarImport));
+    await plannerStore.importFromPicker();
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.importReview)).toBeTruthy();
     });
@@ -2023,7 +2153,7 @@ describe("MissionWorkspace", () => {
     });
     expect(screen.getByTestId(`${missionWorkspaceTestIds.exportReviewChoicePrefix}-mission`).textContent).toContain("Mission + Home + Survey");
     expect(screen.getByTestId(`${missionWorkspaceTestIds.exportReviewChoicePrefix}-mission`).textContent).toContain("Home");
-    expect(screen.queryByText(/^Home$/)).toBeNull();
+    expect(screen.queryByTestId(`${missionWorkspaceTestIds.exportReviewChoicePrefix}-home`)).toBeNull();
     expect(fileHarness.fileIo.exportToPicker).not.toHaveBeenCalled();
 
     for (const domain of ["mission", "fence", "rally"] as const) {
@@ -2205,7 +2335,6 @@ describe("MissionWorkspace", () => {
     await fireEvent.keyDown(window, { key: "z", ctrlKey: true });
     await waitFor(() => {
       expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(0);
-      expect(screen.getByTestId(missionWorkspaceTestIds.localNote).textContent).toContain("Restored the previous planner change.");
     });
 
     const redoCount = getHistoryCount("redo");
@@ -2214,7 +2343,6 @@ describe("MissionWorkspace", () => {
     await fireEvent.keyDown(window, { key: "Z", metaKey: true, shiftKey: true });
     await waitFor(() => {
       expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(1);
-      expect(screen.getByTestId(missionWorkspaceTestIds.localNote).textContent).toContain("Reapplied the last planner change.");
     });
 
     const altitudeInput = screen.getByTestId(missionWorkspaceTestIds.inspectorAltitude) as HTMLInputElement;
@@ -2301,7 +2429,7 @@ describe("MissionWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.attachment).textContent).toContain("Detached local");
       expect(screen.getByTestId(missionWorkspaceTestIds.attachmentDetail).textContent).toContain("use undo/redo as normal here");
-      expect((screen.getByTestId(missionWorkspaceTestIds.toolbarValidate) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.queryByRole("button", { name: /validate mission/i })).toBeNull();
       expect(getHistoryButton("undo").disabled).toBe(false);
     });
 
@@ -2310,7 +2438,6 @@ describe("MissionWorkspace", () => {
     await fireEvent.click(getHistoryButton("undo"));
     await waitFor(() => {
       expect(get(plannerStore).draftState.active.mission.draftItems).toHaveLength(1);
-      expect(screen.getByTestId(missionWorkspaceTestIds.localNote).textContent).toContain("Restored the previous planner change.");
     });
   });
 
@@ -2561,7 +2688,7 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.toolbarImport));
+    await plannerStore.importFromPicker();
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.importReview)).toBeTruthy();
     });

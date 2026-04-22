@@ -20,12 +20,9 @@ type Props = {
   onUndo: () => void;
   onRedo: () => void;
   onReadFromVehicle: () => void;
-  onImportPlan: () => void;
-  onImportKml: () => void;
+  onImport: () => void;
   onExportPlan: () => void;
   onNewMission: () => void;
-  onClearMission: () => void;
-  onValidateMission: () => void;
   onUploadToVehicle: () => void;
   onCancelTransfer: () => void;
 };
@@ -45,12 +42,9 @@ let {
   onUndo,
   onRedo,
   onReadFromVehicle,
-  onImportPlan,
-  onImportKml,
+  onImport,
   onExportPlan,
   onNewMission,
-  onClearMission,
-  onValidateMission,
   onUploadToVehicle,
   onCancelTransfer,
 }: Props = $props();
@@ -99,35 +93,29 @@ let redoLabel = $derived(`Redo (${normalizedRedoCount} available)`);
 
   <span class="mission-toolbar__sep" aria-hidden="true"></span>
 
-  <!-- New / Import / Import KML / Export -->
+  <!-- New / Import / Export -->
   <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarNew} disabled={busy} onclick={onNewMission} aria-label="New mission" title="New mission" type="button">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
   </button>
-  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarImport} disabled={busy} onclick={onImportPlan} aria-label="Import mission file" title="Import mission file" type="button">
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M3 15h6"/><path d="M6 12v6"/></svg>
-  </button>
-  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarImportKml} disabled={busy} onclick={onImportKml} aria-label="Import KML/KMZ" title="Import KML/KMZ" type="button">
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 12l2 2 2-2"/><path d="M12 18v-6"/></svg>
+  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarImport} disabled={busy} onclick={onImport} aria-label="Import mission or KML/KMZ file" title="Import mission or KML/KMZ file" type="button">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="M3 10h18l-2 8a2 2 0 0 1-2 1H5a2 2 0 0 1-2-1z"/></svg>
   </button>
   <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarExport} disabled={busy || !hasContent} onclick={onExportPlan} aria-label="Export mission file" title="Export mission file" type="button">
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg>
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
   </button>
 
   <span class="mission-toolbar__sep" aria-hidden="true"></span>
 
-  <!-- Validate -->
-  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarValidate} disabled={busy || !canUseVehicleActions || !hasContent} onclick={onValidateMission} aria-label="Validate mission" title="Validate mission" type="button">
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+  <!-- Vehicle actions -->
+  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarRead} disabled={busy || !canUseVehicleActions} onclick={onReadFromVehicle} aria-label="Read from vehicle" title="Read from vehicle" type="button">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg>
   </button>
-
-  <span class="mission-toolbar__sep" aria-hidden="true"></span>
-
-  <!-- Vehicle actions (text) -->
-  <button class="mission-toolbar__text-btn mission-toolbar__text-btn--primary" data-testid={missionWorkspaceTestIds.toolbarRead} disabled={busy || !canUseVehicleActions} onclick={onReadFromVehicle} type="button">Read from vehicle</button>
-  <button class="mission-toolbar__text-btn" data-testid={missionWorkspaceTestIds.toolbarUpload} disabled={busy || !canUseVehicleActions || !hasContent} onclick={onUploadToVehicle} type="button">Write to vehicle</button>
-  <button class="mission-toolbar__text-btn mission-toolbar__text-btn--danger" data-testid={missionWorkspaceTestIds.toolbarClear} disabled={busy || !canUseVehicleActions} onclick={onClearMission} type="button">Clear</button>
+  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarUpload} disabled={busy || !canUseVehicleActions || !hasContent} onclick={onUploadToVehicle} aria-label="Write to vehicle" title="Write to vehicle" type="button">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V10"/><path d="m7 13 5-5 5 5"/><path d="M5 3h14"/></svg>
+  </button>
 
   {#if canCancel}
+    <span class="mission-toolbar__sep" aria-hidden="true"></span>
     <button class="mission-toolbar__text-btn mission-toolbar__text-btn--warning" data-testid={missionWorkspaceTestIds.toolbarCancel} onclick={onCancelTransfer} type="button">Cancel</button>
   {/if}
 </header>
@@ -160,8 +148,5 @@ let redoLabel = $derived(`Redo (${normalizedRedoCount} available)`);
   }
   .mission-toolbar__text-btn:hover:not(:disabled) { border-color: var(--color-accent); color: var(--color-accent); }
   .mission-toolbar__text-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .mission-toolbar__text-btn--primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg-primary); }
-  .mission-toolbar__text-btn--primary:hover:not(:disabled) { filter: brightness(1.1); color: var(--color-bg-primary); }
-  .mission-toolbar__text-btn--danger { border-color: var(--color-danger); color: var(--color-danger); }
   .mission-toolbar__text-btn--warning { border-color: var(--color-warning); color: var(--color-warning); }
 </style>

@@ -507,10 +507,80 @@ export function unprojectMissionMapPoint(
   };
 }
 
+export function reprojectMissionMapPoint(
+  point: MissionMapPoint,
+  fromViewport: MissionMapViewport,
+  toViewport: MissionMapViewport,
+): MissionMapPoint {
+  const clampedPoint = clampMissionMapPoint(fromViewport, point);
+  const xRatio = fromViewport.viewBoxSize === 0 ? 0 : clampedPoint.x / fromViewport.viewBoxSize;
+  const yRatio = fromViewport.viewBoxSize === 0 ? 0 : 1 - clampedPoint.y / fromViewport.viewBoxSize;
+  const x_m = fromViewport.minX_m + (fromViewport.maxX_m - fromViewport.minX_m) * xRatio;
+  const y_m = fromViewport.minY_m + (fromViewport.maxY_m - fromViewport.minY_m) * yRatio;
+  const nextXRatio = toViewport.maxX_m === toViewport.minX_m
+    ? 0
+    : (x_m - toViewport.minX_m) / (toViewport.maxX_m - toViewport.minX_m);
+  const nextYRatio = toViewport.maxY_m === toViewport.minY_m
+    ? 0
+    : (y_m - toViewport.minY_m) / (toViewport.maxY_m - toViewport.minY_m);
+
+  return clampMissionMapPoint(toViewport, {
+    x: nextXRatio * toViewport.viewBoxSize,
+    y: (1 - nextYRatio) * toViewport.viewBoxSize,
+  });
+}
+
+export function adaptMissionMapViewportToAspectRatio(
+  viewport: MissionMapViewport,
+  aspectRatio: number,
+): MissionMapViewport {
+  if (!Number.isFinite(aspectRatio) || aspectRatio <= 0) {
+    return viewport;
+  }
+
+  const currentWidth_m = viewport.maxX_m - viewport.minX_m;
+  const currentHeight_m = viewport.maxY_m - viewport.minY_m;
+  if (currentWidth_m <= 0 || currentHeight_m <= 0) {
+    return viewport;
+  }
+
+  const currentAspectRatio = currentWidth_m / currentHeight_m;
+  if (Math.abs(currentAspectRatio - aspectRatio) < Number.EPSILON) {
+    return viewport;
+  }
+
+  const centerX_m = (viewport.minX_m + viewport.maxX_m) / 2;
+  const centerY_m = (viewport.minY_m + viewport.maxY_m) / 2;
+
+  if (aspectRatio > currentAspectRatio) {
+    const nextWidth_m = currentHeight_m * aspectRatio;
+    return {
+      ...viewport,
+      minX_m: centerX_m - nextWidth_m / 2,
+      maxX_m: centerX_m + nextWidth_m / 2,
+    };
+  }
+
+  const nextHeight_m = currentWidth_m / aspectRatio;
+  return {
+    ...viewport,
+    minY_m: centerY_m - nextHeight_m / 2,
+    maxY_m: centerY_m + nextHeight_m / 2,
+  };
+}
+
+function resolveDragViewport(
+  view: MissionMapView,
+  viewportOverride?: MissionMapViewport | null,
+): MissionMapViewport | null {
+  return viewportOverride ?? view.viewport;
+}
+
 export function resolveMissionMapDrag(
   view: MissionMapView,
   markerId: string,
   point: MissionMapPoint,
+  viewportOverride?: MissionMapViewport | null,
 ): MissionMapDragResolution {
   const marker = view.markers.find((candidate) => candidate.id === markerId);
   if (!marker) {
@@ -521,7 +591,8 @@ export function resolveMissionMapDrag(
     };
   }
 
-  if (!view.viewport) {
+  const viewport = resolveDragViewport(view, viewportOverride);
+  if (!viewport) {
     return {
       status: "rejected",
       reason: "viewport-unavailable",
@@ -537,8 +608,8 @@ export function resolveMissionMapDrag(
     };
   }
 
-  const clampedPoint = clampMissionMapPoint(view.viewport, point);
-  const coordinate = unprojectMissionMapPoint(view.viewport, clampedPoint);
+  const clampedPoint = clampMissionMapPoint(viewport, point);
+  const coordinate = unprojectMissionMapPoint(viewport, clampedPoint);
 
   return {
     status: "applied",
@@ -552,6 +623,7 @@ export function resolveMissionMapSurveyHandleDrag(
   view: MissionMapView,
   handleId: string,
   point: MissionMapPoint,
+  viewportOverride?: MissionMapViewport | null,
 ): MissionMapSurveyHandleDragResolution {
   const handle = view.surveyVertexHandles.find((candidate) => candidate.id === handleId);
   if (!handle) {
@@ -562,7 +634,8 @@ export function resolveMissionMapSurveyHandleDrag(
     };
   }
 
-  if (!view.viewport) {
+  const viewport = resolveDragViewport(view, viewportOverride);
+  if (!viewport) {
     return {
       status: "rejected",
       reason: "viewport-unavailable",
@@ -570,8 +643,8 @@ export function resolveMissionMapSurveyHandleDrag(
     };
   }
 
-  const clampedPoint = clampMissionMapPoint(view.viewport, point);
-  const coordinate = unprojectMissionMapPoint(view.viewport, clampedPoint);
+  const clampedPoint = clampMissionMapPoint(viewport, point);
+  const coordinate = unprojectMissionMapPoint(viewport, clampedPoint);
 
   return {
     status: "applied",
@@ -585,6 +658,7 @@ export function resolveMissionMapFenceVertexHandleDrag(
   view: MissionMapView,
   handleId: string,
   point: MissionMapPoint,
+  viewportOverride?: MissionMapViewport | null,
 ): MissionMapFenceHandleDragResolution {
   const handle = view.fenceVertexHandles.find((candidate) => candidate.id === handleId);
   if (!handle) {
@@ -595,7 +669,8 @@ export function resolveMissionMapFenceVertexHandleDrag(
     };
   }
 
-  if (!view.viewport) {
+  const viewport = resolveDragViewport(view, viewportOverride);
+  if (!viewport) {
     return {
       status: "rejected",
       reason: "viewport-unavailable",
@@ -603,8 +678,8 @@ export function resolveMissionMapFenceVertexHandleDrag(
     };
   }
 
-  const clampedPoint = clampMissionMapPoint(view.viewport, point);
-  const coordinate = unprojectMissionMapPoint(view.viewport, clampedPoint);
+  const clampedPoint = clampMissionMapPoint(viewport, point);
+  const coordinate = unprojectMissionMapPoint(viewport, clampedPoint);
 
   return {
     status: "applied",
@@ -617,6 +692,7 @@ export function resolveMissionMapFenceRegionHandleDrag(
   view: MissionMapView,
   handleId: string,
   point: MissionMapPoint,
+  viewportOverride?: MissionMapViewport | null,
 ): MissionMapFenceHandleDragResolution {
   const handle = view.fenceRegionHandles.find((candidate) => candidate.id === handleId);
   if (!handle) {
@@ -635,7 +711,8 @@ export function resolveMissionMapFenceRegionHandleDrag(
     };
   }
 
-  if (!view.viewport) {
+  const viewport = resolveDragViewport(view, viewportOverride);
+  if (!viewport) {
     return {
       status: "rejected",
       reason: "viewport-unavailable",
@@ -643,8 +720,8 @@ export function resolveMissionMapFenceRegionHandleDrag(
     };
   }
 
-  const clampedPoint = clampMissionMapPoint(view.viewport, point);
-  const coordinate = unprojectMissionMapPoint(view.viewport, clampedPoint);
+  const clampedPoint = clampMissionMapPoint(viewport, point);
+  const coordinate = unprojectMissionMapPoint(viewport, clampedPoint);
 
   return {
     status: "applied",
@@ -657,6 +734,7 @@ export function resolveMissionMapFenceRadiusHandleDrag(
   view: MissionMapView,
   handleId: string,
   point: MissionMapPoint,
+  viewportOverride?: MissionMapViewport | null,
 ): MissionMapFenceRadiusDragResolution {
   const handle = view.fenceRadiusHandles.find((candidate) => candidate.id === handleId);
   if (!handle) {
@@ -667,7 +745,8 @@ export function resolveMissionMapFenceRadiusHandleDrag(
     };
   }
 
-  if (!view.viewport) {
+  const viewport = resolveDragViewport(view, viewportOverride);
+  if (!viewport) {
     return {
       status: "rejected",
       reason: "viewport-unavailable",
@@ -675,8 +754,8 @@ export function resolveMissionMapFenceRadiusHandleDrag(
     };
   }
 
-  const clampedPoint = clampMissionMapPoint(view.viewport, point);
-  const coordinate = unprojectMissionMapPoint(view.viewport, clampedPoint);
+  const clampedPoint = clampMissionMapPoint(viewport, point);
+  const coordinate = unprojectMissionMapPoint(viewport, clampedPoint);
   const radius_m = haversineM(
     handle.centerLatitude_deg,
     handle.centerLongitude_deg,
@@ -703,6 +782,7 @@ export function resolveMissionMapFenceRadiusHandleDrag(
 export function resolveMissionMapFenceReturnPointDrag(
   view: MissionMapView,
   point: MissionMapPoint,
+  viewportOverride?: MissionMapViewport | null,
 ): MissionMapFenceHandleDragResolution {
   if (!view.fenceReturnPoint) {
     return {
@@ -712,7 +792,8 @@ export function resolveMissionMapFenceReturnPointDrag(
     };
   }
 
-  if (!view.viewport) {
+  const viewport = resolveDragViewport(view, viewportOverride);
+  if (!viewport) {
     return {
       status: "rejected",
       reason: "viewport-unavailable",
@@ -720,8 +801,8 @@ export function resolveMissionMapFenceReturnPointDrag(
     };
   }
 
-  const clampedPoint = clampMissionMapPoint(view.viewport, point);
-  const coordinate = unprojectMissionMapPoint(view.viewport, clampedPoint);
+  const clampedPoint = clampMissionMapPoint(viewport, point);
+  const coordinate = unprojectMissionMapPoint(viewport, clampedPoint);
 
   return {
     status: "applied",

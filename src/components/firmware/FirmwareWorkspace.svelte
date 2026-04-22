@@ -112,7 +112,7 @@ $effect(() => {
 </script>
 
 <section
-  class="rounded-[28px] border border-border bg-bg-primary p-4 shadow-[0_18px_50px_rgba(0,0,0,0.18)]"
+  class="firmware-workspace"
   data-actions-enabled={layout.actionsEnabled ? "true" : "false"}
   data-layout-mode={layout.mode}
   data-testid={firmwareWorkspaceTestIds.root}
@@ -204,3 +204,13 @@ $effect(() => {
     <FirmwareOutcomePanel state={state} {store} />
   </div>
 </section>
+
+<style>
+  .firmware-workspace {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+  }
+</style>

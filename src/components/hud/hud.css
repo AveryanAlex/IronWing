@@ -1,59 +1,263 @@
-.hud-workspace {
-  display: grid;
-  grid-template-columns: minmax(60px, 1fr) 3fr minmax(60px, 1fr);
-  grid-template-rows: auto 1fr auto;
+/* HUD Panel — military/game-style wireframe flight instruments */
+
+.hud-panel {
+  position: relative;
   width: 100%;
   height: 100%;
-  background: #0a0e14;
-  font-family: "JetBrains Mono", monospace;
-  font-variant-numeric: tabular-nums;
-  color: #57e38b;
-  position: relative;
+  background: #0a0f14;
   overflow: hidden;
+  font-family: "JetBrains Mono", "Consolas", "Monaco", monospace;
+  font-variant-numeric: tabular-nums;
+  color: #12b9ff;
+}
+
+/* Faint cyan grid background */
+.hud-grid-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(18, 185, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(18, 185, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
 /* CRT scanline overlay */
-.hud-workspace::after {
-  content: "";
+.hud-scanlines {
   position: absolute;
   inset: 0;
   pointer-events: none;
   background: repeating-linear-gradient(
-    to bottom,
+    0deg,
     transparent,
     transparent 2px,
-    rgba(0, 0, 0, 0.06) 2px,
-    rgba(0, 0, 0, 0.06) 4px
+    rgba(0, 0, 0, 0.02) 2px,
+    rgba(0, 0, 0, 0.02) 3px
   );
+  z-index: 50;
 }
 
-.hud-readout {
-  padding: 6px 8px;
-  font-size: 0.75rem;
-  filter: drop-shadow(0 0 4px currentColor);
+/* Glow filters */
+.hud-glow {
+  filter: drop-shadow(0 0 3px rgba(18, 185, 255, 0.4));
 }
 
-.hud-readout--cyan {
-  color: #12b9ff;
+.hud-glow-soft {
+  filter: drop-shadow(0 0 1.5px rgba(18, 185, 255, 0.3));
 }
 
-.hud-readout__label {
-  font-size: 0.6rem;
+.hud-glow-green {
+  filter: drop-shadow(0 0 3px rgba(87, 227, 139, 0.4));
+}
+
+.hud-glow-danger {
+  filter: drop-shadow(0 0 3px rgba(255, 68, 68, 0.4));
+}
+
+.hud-glow-warning {
+  filter: drop-shadow(0 0 3px rgba(255, 176, 32, 0.4));
+}
+
+/* Font utility */
+.hud-font {
+  font-family: "JetBrains Mono", "Consolas", "Monaco", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Info cell (corner data boxes: WPT, GPS, armed, battery) ---- */
+.hud-info-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.8), 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.hud-info-label {
+  font-size: 0.625rem;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  opacity: 0.7;
+  letter-spacing: 0.08em;
+  opacity: 0.65;
 }
 
-.hud-readout__value {
-  font-size: 1.1rem;
+.hud-info-value {
+  font-size: 0.8125rem;
   font-weight: 700;
 }
 
-@media (max-width: 767px) {
-  .hud-workspace {
-    grid-template-columns: 0 1fr 0;
+.hud-info-secondary {
+  font-size: 0.6875rem;
+  opacity: 0.6;
+  margin-top: 1px;
+}
+
+/* ---- Armed status label ---- */
+.hud-armed-label {
+  font-size: 0.875rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+/* ---- Bottom status strip (MODE / THR / V/S / HDG / AGL) ---- */
+.hud-status-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.8), 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.hud-strip-label {
+  font-size: 0.625rem;
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.hud-strip-value {
+  font-size: 0.8125rem;
+}
+
+/* Vertical tape fade-out mask */
+.tape-mask-vertical {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 15%,
+    black 85%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 15%,
+    black 85%,
+    transparent 100%
+  );
+}
+
+/* Horizontal tape fade-out mask */
+.tape-mask-horizontal {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 10%,
+    black 90%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 10%,
+    black 90%,
+    transparent 100%
+  );
+}
+
+/* HUD layout grid */
+.hud-grid {
+  display: grid;
+  grid-template-columns: 80px 1fr 80px;
+  grid-template-rows: 48px 1fr 44px;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 5;
+}
+
+@media (min-width: 640px) {
+  .hud-grid {
+    grid-template-columns: 90px 1fr 90px;
+    grid-template-rows: 56px 1fr 48px;
   }
-  .hud-readout {
-    display: none;
+}
+
+@media (min-width: 1024px) {
+  .hud-grid {
+    grid-template-columns: 110px 1fr 110px;
+    grid-template-rows: 64px 1fr 52px;
   }
+}
+
+/* SVG text defaults */
+.hud-svg-text {
+  fill: #12b9ff;
+  font-family: "JetBrains Mono", "Consolas", "Monaco", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-svg-line {
+  stroke: #12b9ff;
+  stroke-width: 1.5;
+}
+
+/* Force geometric-precision anti-aliasing on all HUD SVGs */
+.hud-panel svg {
+  shape-rendering: geometricPrecision;
+}
+
+/* Mini-map container */
+.hud-minimap {
+  position: absolute;
+  bottom: 44px;
+  left: 64px;
+  width: 120px;
+  height: 120px;
+  border: 1px solid rgba(18, 185, 255, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+  z-index: 10;
+  opacity: 0.85;
+}
+
+@media (min-width: 640px) {
+  .hud-minimap {
+    bottom: 48px;
+    left: 84px;
+    width: 160px;
+    height: 160px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .hud-minimap {
+    bottom: 52px;
+    left: 104px;
+    width: 192px;
+    height: 192px;
+  }
+}
+
+.hud-minimap :global(.maplibregl-ctrl-group),
+.hud-minimap :global(.maplibregl-ctrl) {
+  display: none !important;
+}
+
+/* Synthetic Vision System (SVS) background */
+.hud-svs-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.hud-svs-active {
+  background: transparent;
+}
+
+.hud-svs-info-bg {
+  background: rgba(10, 15, 20, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.hud-svs-status-bg {
+  background: rgba(10, 15, 20, 0.50);
+  backdrop-filter: blur(4px);
+}
+
+.hud-svs-bg :global(.maplibregl-ctrl-group),
+.hud-svs-bg :global(.maplibregl-ctrl),
+.hud-svs-bg :global(.maplibregl-ctrl-attrib) {
+  display: none !important;
 }

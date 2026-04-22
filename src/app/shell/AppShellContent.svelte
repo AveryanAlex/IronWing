@@ -158,32 +158,28 @@ onDestroy(() => {
           <OperatorWorkspace />
         {:else if activeWorkspace === "setup"}
           <SetupWorkspace />
+        {:else if activeWorkspace === "hud"}
+          <HudWorkspace />
+        {:else if activeWorkspace === "telemetry"}
+          <TelemetryWorkspace />
+        {:else if activeWorkspace === "mission"}
+          <MissionWorkspace />
+        {:else if activeWorkspace === "logs"}
+          <LogsWorkspace />
+        {:else if activeWorkspace === "firmware"}
+          <FirmwareWorkspace
+            chromeStore={chromeStore}
+            fileIo={firmwareWorkspace.fileIo}
+            service={firmwareWorkspace.service}
+            store={firmwareWorkspace.store}
+          />
+        {:else if activeWorkspace === "settings"}
+          <SettingsWorkspace />
         {:else}
-          <div class="app-shell-main-panel">
-            {#if activeWorkspace === "telemetry"}
-              <TelemetryWorkspace />
-            {:else if activeWorkspace === "hud"}
-              <HudWorkspace />
-            {:else if activeWorkspace === "mission"}
-              <MissionWorkspace />
-            {:else if activeWorkspace === "logs"}
-              <LogsWorkspace />
-            {:else if activeWorkspace === "firmware"}
-              <FirmwareWorkspace
-                chromeStore={chromeStore}
-                fileIo={firmwareWorkspace.fileIo}
-                service={firmwareWorkspace.service}
-                store={firmwareWorkspace.store}
-              />
-            {:else if activeWorkspace === "settings"}
-              <SettingsWorkspace />
-            {:else}
-              <AppShellPlaceholderWorkspace
-                description="Setup workflows and calibration entry points will live here."
-                title="Setup"
-              />
-            {/if}
-          </div>
+          <AppShellPlaceholderWorkspace
+            description="Setup workflows and calibration entry points will live here."
+            title="Setup"
+          />
         {/if}
       </section>
     </div>

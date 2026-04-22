@@ -129,7 +129,7 @@ function clearCheckpoint() {
 </script>
 
 <section
-  class="rounded-lg border border-border bg-bg-primary p-3"
+  class="setup-workspace"
   data-selected-section={view.selectedSectionId}
   data-setup-readiness={view.readiness}
   data-testid={setupWorkspaceTestIds.root}
@@ -423,6 +423,14 @@ function clearCheckpoint() {
 </section>
 
 <style>
+  .setup-workspace {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
   .setup-workspace-layout {
     display: flex;
     gap: 8px;

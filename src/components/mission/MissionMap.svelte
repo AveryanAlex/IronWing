@@ -1,8 +1,11 @@
 <script lang="ts">
-import { onDestroy } from "svelte";
+import { onDestroy, onMount } from "svelte";
+import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
 
 import {
+  adaptMissionMapViewportToAspectRatio,
   buildMissionMapViewport,
+  reprojectMissionMapPoint,
   resolveMissionMapDrag,
   resolveMissionMapFenceRadiusHandleDrag,
   resolveMissionMapFenceRegionHandleDrag,
@@ -22,6 +25,7 @@ import {
   type MissionMapView,
   type MissionMapViewport,
 } from "../../lib/mission-map-view";
+import { localXYToLatLon } from "../../lib/mission-coordinates";
 import {
   minimumSurveyPointCount,
   setSurveyGeometryPoints,
@@ -71,6 +75,7 @@ type Props = {
   onUpdateFenceCircleRadius?: (uiId: number, radiusM: number) => MissionPlannerFenceMutationResult | unknown;
   onAddWaypointAt?: (latitudeDeg: number, longitudeDeg: number) => void;
   onSetHomeAt?: (latitudeDeg: number, longitudeDeg: number) => void;
+  fillContainer?: boolean;
 };
 
 type ActiveMarkerDrag = {
@@ -136,7 +141,7 @@ type LocalMapMessage = {
   text: string;
 };
 
-const GRID_TICKS = [125, 250, 375, 500, 625, 750, 875];
+const MISSION_MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/bright";
 
 let {
   view,
@@ -165,9 +170,11 @@ let {
   onUpdateFenceCircleRadius,
   onAddWaypointAt,
   onSetHomeAt,
+  fillContainer = false,
 }: Props = $props();
 
 let surfaceElement = $state<HTMLDivElement | null>(null);
+let basemapElement = $state<HTMLDivElement | null>(null);
 let activeMarkerDrag = $state<ActiveMarkerDrag | null>(null);
 let activeSurveyHandleDrag = $state<ActiveSurveyHandleDrag | null>(null);
 let activeFenceDrag = $state<ActiveFenceDrag | null>(null);
@@ -176,9 +183,40 @@ let fencePlacementMode = $state<FenceRegionType | "return-point" | null>(null);
 let localMessage = $state<LocalMapMessage | null>(null);
 let lastUsableViewport = $state<MissionMapViewport | null>(null);
 let contextMenu = $state<{ x: number; y: number; lngLat: { lng: number; lat: number } } | null>(null);
+let surfaceSize = $state({ width: 0, height: 0 });
+let basemapWarning = $state<string | null>(null);
+
+let basemap: MapLibreMap | null = null;
+let basemapLoaded = $state(false);
+let basemapInitAttempted = false;
 
 let fallbackViewport = $derived(buildMissionMapViewport(fallbackReference, [fallbackReference]));
 let interactiveViewport = $derived(view.viewport ?? lastUsableViewport ?? fallbackViewport);
+let renderViewport = $derived.by(() => {
+  if (!interactiveViewport) {
+    return null;
+  }
+
+  if (surfaceSize.width <= 0 || surfaceSize.height <= 0) {
+    return interactiveViewport;
+  }
+
+  return adaptMissionMapViewportToAspectRatio(interactiveViewport, surfaceSize.width / surfaceSize.height);
+});
+let renderMissionLines = $derived(remapLineFeatures(view.missionLines));
+let renderMissionPolygons = $derived(remapPolygonFeatures(view.missionPolygons));
+let renderMissionLabels = $derived(remapLabelFeatures(view.missionLabels));
+let renderSurveyLines = $derived(remapLineFeatures(view.surveyLines));
+let renderSurveyPolygons = $derived(remapPolygonFeatures(view.surveyPolygons));
+let renderFenceLines = $derived(remapLineFeatures(view.fenceLines));
+let renderFencePolygons = $derived(remapPolygonFeatures(view.fencePolygons));
+let renderMarkers = $derived(remapMarkers(view.markers));
+let renderSurveyHandles = $derived(remapSurveyHandles(view.surveyHandles));
+let renderSurveyVertexHandles = $derived(remapSurveyVertexHandles(view.surveyVertexHandles));
+let renderFenceRegionHandles = $derived(remapFenceRegionHandles(view.fenceRegionHandles));
+let renderFenceVertexHandles = $derived(remapFenceVertexHandles(view.fenceVertexHandles));
+let renderFenceRadiusHandles = $derived(remapFenceRadiusHandles(view.fenceRadiusHandles));
+let renderFenceReturnPoint = $derived(remapFenceReturnPoint(view.fenceReturnPoint));
 let selectedSurveyRegionId = $derived(view.selection.kind === "survey-block" ? view.selection.regionId : null);
 let selectedSurveyGenerationBlockedReason = $derived.by(() => {
   if (!selectedSurveyRegion || selectedSurveyRegionId !== selectedSurveyRegion.id) {
@@ -198,6 +236,9 @@ let diagnostics = $derived.by(() => {
   const warnings = [...view.warnings];
   if (blockedReason && (view.mode === "fence" || view.mode === "rally")) {
     warnings.push(blockedReason);
+  }
+  if (basemapWarning) {
+    warnings.push(basemapWarning);
   }
   if (localMessage?.tone === "warning") {
     warnings.push(localMessage.text);
@@ -236,13 +277,15 @@ let dragStateText = $derived.by(() => {
 });
 let selectionText = $derived.by(() => {
   if (view.mode === "fence") {
-    if (view.fenceSelection.kind === "return-point") {
+    const fenceSelection = view.fenceSelection;
+
+    if (fenceSelection.kind === "return-point") {
       return "fence return point";
     }
 
-    if (view.fenceSelection.kind === "region") {
-      const handle = view.fenceRegionHandles.find((candidate) => candidate.regionUiId === view.fenceSelection.regionUiId);
-      return handle ? `fence ${handle.label}` : `fence ${view.fenceSelection.regionUiId}`;
+    if (fenceSelection.kind === "region") {
+      const handle = view.fenceRegionHandles.find((candidate) => candidate.regionUiId === fenceSelection.regionUiId);
+      return handle ? `fence ${handle.label}` : `fence ${fenceSelection.regionUiId}`;
     }
 
     return "fence none";
@@ -328,6 +371,214 @@ onDestroy(() => {
   clearMissionMapDebugSnapshot();
 });
 
+function readSurfaceDrawableBox() {
+  if (!surfaceElement) {
+    return null;
+  }
+
+  const rect = surfaceElement.getBoundingClientRect();
+  const width = surfaceElement.clientWidth > 0 ? surfaceElement.clientWidth : rect.width;
+  const height = surfaceElement.clientHeight > 0 ? surfaceElement.clientHeight : rect.height;
+
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+
+  return {
+    left: rect.left + surfaceElement.clientLeft,
+    top: rect.top + surfaceElement.clientTop,
+    width,
+    height,
+  };
+}
+
+$effect(() => {
+  if (!surfaceElement) {
+    surfaceSize = { width: 0, height: 0 };
+    return;
+  }
+
+  const syncSurfaceSize = () => {
+    const rect = readSurfaceDrawableBox();
+    surfaceSize = {
+      width: rect?.width ?? 0,
+      height: rect?.height ?? 0,
+    };
+  };
+
+  syncSurfaceSize();
+
+  if (typeof ResizeObserver === "undefined") {
+    window.addEventListener("resize", syncSurfaceSize);
+    return () => {
+      window.removeEventListener("resize", syncSurfaceSize);
+    };
+  }
+
+  const observer = new ResizeObserver(() => {
+    syncSurfaceSize();
+  });
+  observer.observe(surfaceElement);
+
+  return () => {
+    observer.disconnect();
+  };
+});
+
+onMount(() => {
+  if (!basemapElement || basemapInitAttempted) {
+    return;
+  }
+
+  basemapInitAttempted = true;
+  basemapLoaded = false;
+  basemapWarning = null;
+
+  try {
+    basemap = new maplibregl.Map({
+      container: basemapElement,
+      style: MISSION_MAP_STYLE_URL,
+      center: [8.545594, 47.397742],
+      zoom: 14,
+      interactive: false,
+      attributionControl: false,
+    });
+  } catch {
+    basemap = null;
+    basemapWarning = "Basemap initialization failed. Planner overlays remain available without the map background.";
+    return;
+  }
+
+  basemap.on("load", () => {
+    basemapLoaded = true;
+    syncBasemapToViewport();
+  });
+
+  basemap.on("error", () => {
+    if (!basemapWarning) {
+      basemapWarning = "Basemap failed to load completely. Planner overlays remain available without the map background.";
+    }
+  });
+
+  return () => {
+    basemap?.remove();
+    basemap = null;
+    basemapLoaded = false;
+    basemapInitAttempted = false;
+  };
+});
+
+$effect(() => {
+  if (!basemapLoaded) {
+    return;
+  }
+
+  syncBasemapToViewport();
+});
+
+function syncBasemapToViewport() {
+  if (!basemap || !renderViewport) {
+    return;
+  }
+
+  basemap.resize();
+
+  const southWest = localXYToLatLon(renderViewport.reference, renderViewport.minX_m, renderViewport.minY_m);
+  const northEast = localXYToLatLon(renderViewport.reference, renderViewport.maxX_m, renderViewport.maxY_m);
+
+  basemap.fitBounds(
+    [
+      [southWest.lon, southWest.lat],
+      [northEast.lon, northEast.lat],
+    ],
+    { duration: 0, padding: 0 },
+  );
+}
+
+function remapPoint(point: MissionMapPoint): MissionMapPoint {
+  if (!interactiveViewport || !renderViewport) {
+    return point;
+  }
+
+  return reprojectMissionMapPoint(point, interactiveViewport, renderViewport);
+}
+
+function remapLineFeatures(features: MissionMapLineFeature[]): MissionMapLineFeature[] {
+  return features.map((feature) => ({
+    ...feature,
+    points: feature.points.map((point) => remapPoint(point)),
+  }));
+}
+
+function remapPolygonFeatures(features: MissionMapPolygonFeature[]): MissionMapPolygonFeature[] {
+  return features.map((feature) => ({
+    ...feature,
+    rings: feature.rings.map((ring) => ring.map((point) => remapPoint(point))),
+  }));
+}
+
+function remapLabelFeatures(features: typeof view.missionLabels): typeof view.missionLabels {
+  return features.map((feature) => ({
+    ...feature,
+    point: remapPoint(feature.point),
+  }));
+}
+
+function remapMarkers(markers: MissionMapMarker[]): MissionMapMarker[] {
+  return markers.map((marker) => ({
+    ...marker,
+    point: remapPoint(marker.point),
+  }));
+}
+
+function remapSurveyHandles(handles: MissionMapSurveyHandle[]): MissionMapSurveyHandle[] {
+  return handles.map((handle) => ({
+    ...handle,
+    point: remapPoint(handle.point),
+  }));
+}
+
+function remapSurveyVertexHandles(handles: MissionMapSurveyVertexHandle[]): MissionMapSurveyVertexHandle[] {
+  return handles.map((handle) => ({
+    ...handle,
+    point: remapPoint(handle.point),
+  }));
+}
+
+function remapFenceRegionHandles(handles: MissionMapFenceRegionHandle[]): MissionMapFenceRegionHandle[] {
+  return handles.map((handle) => ({
+    ...handle,
+    point: remapPoint(handle.point),
+  }));
+}
+
+function remapFenceVertexHandles(handles: MissionMapFenceVertexHandle[]): MissionMapFenceVertexHandle[] {
+  return handles.map((handle) => ({
+    ...handle,
+    point: remapPoint(handle.point),
+  }));
+}
+
+function remapFenceRadiusHandles(handles: MissionMapFenceRadiusHandle[]): MissionMapFenceRadiusHandle[] {
+  return handles.map((handle) => ({
+    ...handle,
+    point: remapPoint(handle.point),
+  }));
+}
+
+function remapFenceReturnPoint(
+  fenceReturnPoint: typeof view.fenceReturnPoint,
+): typeof view.fenceReturnPoint {
+  if (!fenceReturnPoint) {
+    return null;
+  }
+
+  return {
+    ...fenceReturnPoint,
+    point: remapPoint(fenceReturnPoint.point),
+  };
+}
+
 function cloneSurveyRegionSnapshot(region: SurveyRegion): SurveyRegion {
   if (typeof structuredClone === "function") {
     return structuredClone(region);
@@ -388,7 +639,7 @@ function toPolygonPoints(polygon: MissionMapPolygonFeature): string {
 }
 
 function positionStyle(point: MissionMapPoint): string {
-  const viewBoxSize = interactiveViewport?.viewBoxSize ?? 1000;
+  const viewBoxSize = renderViewport?.viewBoxSize ?? interactiveViewport?.viewBoxSize ?? 1000;
   return `left:${(point.x / viewBoxSize) * 100}%;top:${(point.y / viewBoxSize) * 100}%;`;
 }
 
@@ -959,13 +1210,13 @@ function applyFenceMutationResult(result: unknown): boolean {
 }
 
 function projectedPointFromPointer(event: Pick<MouseEvent, "clientX" | "clientY">): MissionMapPoint | null {
-  const viewport = interactiveViewport;
+  const viewport = renderViewport;
   if (!surfaceElement || !viewport) {
     return null;
   }
 
-  const rect = surfaceElement.getBoundingClientRect();
-  if (rect.width === 0 || rect.height === 0) {
+  const rect = readSurfaceDrawableBox();
+  if (!rect) {
     return null;
   }
 
@@ -977,7 +1228,7 @@ function projectedPointFromPointer(event: Pick<MouseEvent, "clientX" | "clientY"
 
 function appendSurveyPoint(point: MissionMapPoint) {
   const currentSession = surveySession;
-  const viewport = interactiveViewport;
+  const viewport = renderViewport;
   if (!currentSession || !viewport || activeMarkerDrag || activeSurveyHandleDrag || activeFenceDrag) {
     return;
   }
@@ -1017,7 +1268,7 @@ function appendSurveyPointFromSurface(event: MouseEvent) {
 }
 
 function placeFenceFeature(point: MissionMapPoint) {
-  const viewport = interactiveViewport;
+  const viewport = renderViewport;
   const placementMode = fencePlacementMode;
   if (!viewport || !placementMode || activeMarkerDrag || activeSurveyHandleDrag || activeFenceDrag) {
     return;
@@ -1053,8 +1304,10 @@ function placeFenceFeatureFromSurface(event: MouseEvent) {
 }
 
 function handleSurfaceKeydown(event: KeyboardEvent) {
+  const viewport = renderViewport;
+
   if (view.mode === "fence") {
-    if (!fencePlacementMode || !interactiveViewport) {
+    if (!fencePlacementMode || !viewport) {
       return;
     }
 
@@ -1064,13 +1317,13 @@ function handleSurfaceKeydown(event: KeyboardEvent) {
 
     event.preventDefault();
     placeFenceFeature({
-      x: interactiveViewport.viewBoxSize / 2,
-      y: interactiveViewport.viewBoxSize / 2,
+      x: viewport.viewBoxSize / 2,
+      y: viewport.viewBoxSize / 2,
     });
     return;
   }
 
-  if (!surveySession || !interactiveViewport) {
+  if (!surveySession || !viewport) {
     return;
   }
 
@@ -1080,8 +1333,8 @@ function handleSurfaceKeydown(event: KeyboardEvent) {
 
   event.preventDefault();
   appendSurveyPoint({
-    x: interactiveViewport.viewBoxSize / 2,
-    y: interactiveViewport.viewBoxSize / 2,
+    x: viewport.viewBoxSize / 2,
+    y: viewport.viewBoxSize / 2,
   });
 }
 
@@ -1092,7 +1345,7 @@ function handlePointerMove(event: PointerEvent) {
       return;
     }
 
-    const resolution = resolveMissionMapDrag(view, activeMarkerDrag.markerId, nextPoint);
+    const resolution = resolveMissionMapDrag(view, activeMarkerDrag.markerId, nextPoint, renderViewport);
     if (resolution.status === "rejected") {
       cancelActiveMarkerDrag(resolution.message, true);
       return;
@@ -1132,31 +1385,32 @@ function handlePointerMove(event: PointerEvent) {
   }
 
   if (activeSurveyHandleDrag) {
+    const currentSurveyHandleDrag = activeSurveyHandleDrag;
     const nextPoint = projectedPointFromPointer(event);
     if (!nextPoint) {
       return;
     }
 
-    const resolution = resolveMissionMapSurveyHandleDrag(view, activeSurveyHandleDrag.handleId, nextPoint);
+    const resolution = resolveMissionMapSurveyHandleDrag(view, currentSurveyHandleDrag.handleId, nextPoint, renderViewport);
     if (resolution.status === "rejected") {
       cancelActiveSurveyHandleDrag(resolution.message);
       return;
     }
 
     let applied = false;
-    onUpdateSurveyRegion(activeSurveyHandleDrag.regionId, (current) => {
+    onUpdateSurveyRegion(currentSurveyHandleDrag.regionId, (current) => {
       const currentGeometryKind = surveyGeometryKind(current);
-      if (currentGeometryKind !== activeSurveyHandleDrag.geometryKind) {
+      if (currentGeometryKind !== currentSurveyHandleDrag.geometryKind) {
         return current;
       }
 
       const points = [...surveyGeometryPoints(current)];
-      const point = points[activeSurveyHandleDrag.index];
+      const point = points[currentSurveyHandleDrag.index];
       if (!point) {
         return current;
       }
 
-      points[activeSurveyHandleDrag.index] = {
+      points[currentSurveyHandleDrag.index] = {
         latitude_deg: resolution.latitude_deg,
         longitude_deg: resolution.longitude_deg,
       };
@@ -1169,10 +1423,10 @@ function handlePointerMove(event: PointerEvent) {
       return;
     }
 
-    onSelectSurveyRegion(activeSurveyHandleDrag.regionId);
+    onSelectSurveyRegion(currentSurveyHandleDrag.regionId);
     activeSurveyHandleDrag = {
-      ...activeSurveyHandleDrag,
-      updateCount: activeSurveyHandleDrag.updateCount + 1,
+      ...currentSurveyHandleDrag,
+      updateCount: currentSurveyHandleDrag.updateCount + 1,
     };
     localMessage = null;
     return;
@@ -1188,7 +1442,7 @@ function handlePointerMove(event: PointerEvent) {
   }
 
   if (activeFenceDrag.kind === "vertex") {
-    const resolution = resolveMissionMapFenceVertexHandleDrag(view, activeFenceDrag.handleId, nextPoint);
+    const resolution = resolveMissionMapFenceVertexHandleDrag(view, activeFenceDrag.handleId, nextPoint, renderViewport);
     if (resolution.status === "rejected") {
       cancelActiveFenceDrag(resolution.message, true);
       return;
@@ -1213,7 +1467,7 @@ function handlePointerMove(event: PointerEvent) {
   }
 
   if (activeFenceDrag.kind === "region") {
-    const resolution = resolveMissionMapFenceRegionHandleDrag(view, activeFenceDrag.handleId, nextPoint);
+    const resolution = resolveMissionMapFenceRegionHandleDrag(view, activeFenceDrag.handleId, nextPoint, renderViewport);
     if (resolution.status === "rejected") {
       cancelActiveFenceDrag(resolution.message, true);
       return;
@@ -1237,7 +1491,7 @@ function handlePointerMove(event: PointerEvent) {
   }
 
   if (activeFenceDrag.kind === "radius") {
-    const resolution = resolveMissionMapFenceRadiusHandleDrag(view, activeFenceDrag.handleId, nextPoint);
+    const resolution = resolveMissionMapFenceRadiusHandleDrag(view, activeFenceDrag.handleId, nextPoint, renderViewport);
     if (resolution.status === "rejected") {
       cancelActiveFenceDrag(resolution.message, true);
       return;
@@ -1256,7 +1510,7 @@ function handlePointerMove(event: PointerEvent) {
     return;
   }
 
-  const resolution = resolveMissionMapFenceReturnPointDrag(view, nextPoint);
+  const resolution = resolveMissionMapFenceReturnPointDrag(view, nextPoint, renderViewport);
   if (resolution.status === "rejected") {
     cancelActiveFenceDrag(resolution.message, true);
     return;
@@ -1337,13 +1591,13 @@ function handleContextMenu(event: MouseEvent) {
   event.preventDefault();
   contextMenu = null;
 
-  const viewport = interactiveViewport;
+  const viewport = renderViewport;
   if (!viewport || !surfaceElement || readOnly) {
     return;
   }
 
-  const rect = surfaceElement.getBoundingClientRect();
-  if (rect.width === 0 || rect.height === 0) {
+  const rect = readSurfaceDrawableBox();
+  if (!rect) {
     return;
   }
 
@@ -1384,7 +1638,7 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
 
 <svelte:window onkeydown={handleKeydown} onpointercancel={handlePointerCancel} onpointermove={handlePointerMove} onpointerup={handlePointerUp} />
 
-<section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.map}>
+<section class={["rounded-lg border border-border bg-bg-primary p-3", fillContainer && "mission-map--fill"]} data-testid={missionWorkspaceTestIds.map}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planner map</p>
@@ -1613,22 +1867,21 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
     {/if}
   </div>
 
-  {#if interactiveViewport}
-    <div class="mt-4 rounded-lg border border-border bg-bg-secondary/40 p-3">
-      <!-- svelte-ignore a11y_no_static_element_interactions -- map surface handles pointer/context events natively -->
+  {#if renderViewport}
+    <div class={["rounded-lg border border-border bg-bg-secondary/40 p-3", fillContainer ? "mission-map__surface-wrap--fill" : "mt-4"]}>
       <div
         bind:this={surfaceElement}
-        class="mission-map-surface relative aspect-[5/4] overflow-hidden rounded-[20px] border border-border/70 bg-[radial-gradient(circle_at_top,_rgba(120,214,255,0.12),_transparent_55%),linear-gradient(180deg,_rgba(6,14,23,0.96),_rgba(8,20,32,0.88))]"
+        aria-label="Mission planner map"
+        class={["mission-map-surface relative overflow-hidden rounded-[20px] border border-border/70 bg-bg-primary", fillContainer ? "h-full" : "aspect-[5/4]"]}
         data-testid={missionWorkspaceTestIds.mapSurface}
         oncontextmenu={handleContextMenu}
+        role="application"
       >
-        <svg aria-hidden="true" class="absolute inset-0 h-full w-full" preserveAspectRatio="none" viewBox={`0 0 ${interactiveViewport.viewBoxSize} ${interactiveViewport.viewBoxSize}`}>
-          {#each GRID_TICKS as tick (tick)}
-            <line stroke="rgba(120, 214, 255, 0.08)" stroke-width="1" x1={tick} x2={tick} y1="0" y2={interactiveViewport.viewBoxSize} />
-            <line stroke="rgba(120, 214, 255, 0.08)" stroke-width="1" x1="0" x2={interactiveViewport.viewBoxSize} y1={tick} y2={tick} />
-          {/each}
+        <div bind:this={basemapElement} class="mission-map-basemap" data-testid={missionWorkspaceTestIds.mapBasemap}></div>
+        <div class="mission-map-basemap-scrim"></div>
+        <svg aria-hidden="true" class="mission-map-overlay absolute inset-0 h-full w-full" preserveAspectRatio="none" viewBox={`0 0 ${renderViewport.viewBoxSize} ${renderViewport.viewBoxSize}`}>
 
-          {#each view.surveyPolygons as polygon (polygon.id)}
+          {#each renderSurveyPolygons as polygon (polygon.id)}
             <polygon
               fill={surveyPolygonFill(polygon)}
               points={toPolygonPoints(polygon)}
@@ -1637,7 +1890,7 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
             />
           {/each}
 
-          {#each view.surveyLines as line (line.id)}
+          {#each renderSurveyLines as line (line.id)}
             <polyline
               fill="none"
               points={toPolylinePoints(line.points)}
@@ -1649,7 +1902,7 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
             />
           {/each}
 
-          {#each view.fencePolygons as polygon (polygon.id)}
+          {#each renderFencePolygons as polygon (polygon.id)}
             <polygon
               fill={fencePolygonFill(polygon)}
               points={toPolygonPoints(polygon)}
@@ -1659,7 +1912,7 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
             />
           {/each}
 
-          {#each view.fenceLines as line (line.id)}
+          {#each renderFenceLines as line (line.id)}
             <polyline
               fill="none"
               points={toPolylinePoints(line.points)}
@@ -1671,7 +1924,7 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
             />
           {/each}
 
-          {#each view.missionPolygons as polygon (polygon.id)}
+          {#each renderMissionPolygons as polygon (polygon.id)}
             <polygon
               fill="rgba(120, 214, 255, 0.1)"
               points={toPolygonPoints(polygon)}
@@ -1681,7 +1934,7 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
             />
           {/each}
 
-          {#each view.missionLines as line (line.id)}
+          {#each renderMissionLines as line (line.id)}
             <polyline
               fill="none"
               points={toPolylinePoints(line.points)}
@@ -1692,7 +1945,7 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
             />
           {/each}
 
-          {#each view.missionLabels as label (label.id)}
+          {#each renderMissionLabels as label (label.id)}
             <text
               fill="rgba(241, 245, 249, 0.88)"
               font-size="22"
@@ -1741,7 +1994,7 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
           </div>
         {/if}
 
-        {#each view.surveyHandles as handle (handle.regionId)}
+        {#each renderSurveyHandles as handle (handle.regionId)}
           <button
             class={`mission-map-survey-handle ${handle.selected ? "is-selected" : ""}`}
             data-testid={surveyHandleTestId(handle)}
@@ -1756,7 +2009,7 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
           </button>
         {/each}
 
-        {#each view.surveyVertexHandles as handle (handle.id)}
+        {#each renderSurveyVertexHandles as handle (handle.id)}
           <button
             class={`mission-map-vertex-handle ${handle.selected ? "is-selected" : ""} ${surveySession?.regionId === handle.regionId ? "is-draggable" : ""}`}
             data-testid={surveyVertexHandleTestId(handle)}
@@ -1772,7 +2025,7 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
           </button>
         {/each}
 
-        {#each view.fenceRegionHandles as handle (handle.id)}
+        {#each renderFenceRegionHandles as handle (handle.id)}
           <button
             class={`mission-map-fence-handle ${handle.selected ? "is-selected" : ""} ${handle.draggable ? "is-draggable" : ""} ${handle.inclusion ? "is-inclusion" : "is-exclusion"}`}
             data-testid={fenceRegionHandleTestId(handle)}
@@ -1788,7 +2041,7 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
           </button>
         {/each}
 
-        {#each view.fenceVertexHandles as handle (handle.id)}
+        {#each renderFenceVertexHandles as handle (handle.id)}
           <button
             class={`mission-map-fence-vertex ${handle.selected ? "is-selected" : ""}`}
             data-testid={fenceVertexHandleTestId(handle)}
@@ -1804,7 +2057,7 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
           </button>
         {/each}
 
-        {#each view.fenceRadiusHandles as handle (handle.id)}
+        {#each renderFenceRadiusHandles as handle (handle.id)}
           <button
             class={`mission-map-fence-radius ${handle.selected ? "is-selected" : ""}`}
             data-testid={fenceRadiusHandleTestId(handle)}
@@ -1820,23 +2073,23 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
           </button>
         {/each}
 
-        {#if view.fenceReturnPoint}
+        {#if renderFenceReturnPoint}
           <button
-            class={`mission-map-fence-return ${view.fenceReturnPoint.selected ? "is-selected" : ""}`}
+            class={`mission-map-fence-return ${renderFenceReturnPoint.selected ? "is-selected" : ""}`}
             data-testid={missionWorkspaceTestIds.mapFenceReturnPointHandle}
             onclick={(event) => {
               event.stopPropagation();
               handleFenceReturnPointSelection();
             }}
             onpointerdown={startFenceReturnPointDrag}
-            style={positionStyle(view.fenceReturnPoint.point)}
+            style={positionStyle(renderFenceReturnPoint.point)}
             type="button"
           >
             R
           </button>
         {/if}
 
-        {#each view.markers as marker (marker.id)}
+        {#each renderMarkers as marker (marker.id)}
           <button
             class={`mission-map-marker ${marker.kind === "home" ? "is-home" : ""} ${marker.kind === "rally-point" ? "is-rally" : ""} ${marker.selected ? "is-selected" : ""} ${marker.current ? "is-current" : ""} ${marker.readOnly ? "is-readonly" : ""}`}
             data-dragging={activeMarkerDrag?.markerId === marker.id ? "true" : "false"}
@@ -1884,8 +2137,61 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
 </section>
 
 <style>
+  .mission-map--fill {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .mission-map__surface-wrap--fill {
+    flex: 1;
+    min-height: 0;
+    margin-top: 1rem;
+  }
+
   .mission-map-surface {
     touch-action: none;
+  }
+
+  .mission-map-basemap,
+  .mission-map-basemap-scrim,
+  .mission-map-overlay {
+    position: absolute;
+    inset: 0;
+  }
+
+  .mission-map-basemap {
+    z-index: 0;
+  }
+
+  .mission-map-basemap :global(.maplibregl-canvas-container),
+  .mission-map-basemap :global(.maplibregl-canvas),
+  .mission-map-basemap :global(.maplibregl-map) {
+    width: 100%;
+    height: 100%;
+  }
+
+  .mission-map-basemap :global(.maplibregl-control-container),
+  .mission-map-basemap :global(.maplibregl-ctrl-bottom-right),
+  .mission-map-basemap :global(.maplibregl-ctrl-bottom-left),
+  .mission-map-basemap :global(.maplibregl-ctrl-top-right),
+  .mission-map-basemap :global(.maplibregl-ctrl-top-left) {
+    display: none;
+  }
+
+  .mission-map-basemap-scrim {
+    z-index: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(180deg, rgba(8, 20, 32, 0.08), rgba(8, 20, 32, 0.16)),
+      radial-gradient(circle at top, rgba(120, 214, 255, 0.06), transparent 55%);
+  }
+
+  .mission-map-overlay {
+    z-index: 0;
+    pointer-events: none;
   }
 
   .mission-map-draw-surface {

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import type { TypedDraftItem } from "./mission-draft-typed";
 import {
+  adaptMissionMapViewportToAspectRatio,
   buildMissionMapView,
   missionMapMarkerIdForUiId,
+  reprojectMissionMapPoint,
   resolveMissionMapDrag,
   resolveMissionMapFenceRadiusHandleDrag,
   resolveMissionMapFenceVertexHandleDrag,
@@ -647,5 +649,40 @@ describe("buildMissionMapView", () => {
     expect(view.fenceReturnPoint).toBeNull();
     expect(view.warnings.some((warning) => warning.includes("invalid circle center or radius"))).toBe(true);
     expect(view.warnings.some((warning) => warning.includes("Fence return point was malformed"))).toBe(true);
+  });
+});
+
+describe("mission map viewport helpers", () => {
+  it("adapts planner viewport span to match a wide surface", () => {
+    const viewport = {
+      reference: { latitude_deg: 47.397742, longitude_deg: 8.545594 },
+      minX_m: -100,
+      maxX_m: 100,
+      minY_m: -100,
+      maxY_m: 100,
+      viewBoxSize: 1000,
+    };
+
+    const adapted = adaptMissionMapViewportToAspectRatio(viewport, 1.5);
+
+    expect(adapted.minY_m).toBe(-100);
+    expect(adapted.maxY_m).toBe(100);
+    expect(adapted.minX_m).toBe(-150);
+    expect(adapted.maxX_m).toBe(150);
+  });
+
+  it("reprojects mission points into the adapted viewport", () => {
+    const viewport = {
+      reference: { latitude_deg: 47.397742, longitude_deg: 8.545594 },
+      minX_m: -100,
+      maxX_m: 100,
+      minY_m: -100,
+      maxY_m: 100,
+      viewBoxSize: 1000,
+    };
+    const adapted = adaptMissionMapViewportToAspectRatio(viewport, 1.5);
+
+    expect(reprojectMissionMapPoint({ x: 0, y: 500 }, viewport, adapted)).toEqual({ x: 166.66666666666666, y: 500 });
+    expect(reprojectMissionMapPoint({ x: 1000, y: 500 }, viewport, adapted)).toEqual({ x: 833.3333333333334, y: 500 });
   });
 });

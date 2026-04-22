@@ -79,27 +79,10 @@ export function createMissionKmlFileIo(
         return { status: "cancelled" };
       }
 
-      const parsed = selected.source === "kmz"
-        ? parseKmzImport(selected, parseKmzFile)
-        : parseKmlImport(selected, parseKmlFile);
-
-      if (parsed.fenceRegions.length === 0 && parsed.missionItems.length === 0) {
-        throw new Error(formatEmptyImportMessage(parsed.warnings));
-      }
-
-      return {
-        status: "success",
-        source: selected.source,
-        fileName: selected.name,
-        missionItemCount: parsed.missionItems.length,
-        fenceRegionCount: parsed.fenceRegions.length,
-        warningCount: parsed.warnings.length,
-        warnings: [...parsed.warnings],
-        data: {
-          mission: { items: parsed.missionItems },
-          fence: { return_point: null, regions: parsed.fenceRegions },
-        },
-      };
+      return parseMissionKmlImportSelection(selected, {
+        parseKmlFile,
+        parseKmzFile,
+      });
     },
   };
 
@@ -112,6 +95,40 @@ export function createMissionKmlFileIo(
 
     return openKmlFileWithInput(formatError);
   }
+}
+
+export function parseMissionKmlImportSelection(
+  selected: {
+    name: string | null;
+    source: "kml" | "kmz";
+    text?: string;
+    bytes?: Uint8Array | ArrayBuffer;
+  },
+  dependencies: Pick<MissionKmlFileIoDependencies, "parseKmlFile" | "parseKmzFile"> = {},
+): Extract<MissionKmlFileImportResult, { status: "success" }> {
+  const parseKmlFile = dependencies.parseKmlFile ?? parseKml;
+  const parseKmzFile = dependencies.parseKmzFile ?? parseKmz;
+  const parsed = selected.source === "kmz"
+    ? parseKmzImport(selected, parseKmzFile)
+    : parseKmlImport(selected, parseKmlFile);
+
+  if (parsed.fenceRegions.length === 0 && parsed.missionItems.length === 0) {
+    throw new Error(formatEmptyImportMessage(parsed.warnings));
+  }
+
+  return {
+    status: "success",
+    source: selected.source,
+    fileName: selected.name,
+    missionItemCount: parsed.missionItems.length,
+    fenceRegionCount: parsed.fenceRegions.length,
+    warningCount: parsed.warnings.length,
+    warnings: [...parsed.warnings],
+    data: {
+      mission: { items: parsed.missionItems },
+      fence: { return_point: null, regions: parsed.fenceRegions },
+    },
+  };
 }
 
 function parseKmlImport(
@@ -266,7 +283,7 @@ async function readSelectedFile(file: File): Promise<{
   };
 }
 
-function detectKmlSource(name: string | null | undefined, mimeType: string | null | undefined): "kml" | "kmz" {
+export function detectKmlSource(name: string | null | undefined, mimeType: string | null | undefined): "kml" | "kmz" {
   const loweredName = name?.toLowerCase() ?? "";
   if (loweredName.endsWith(".kmz") || mimeType === "application/vnd.google-earth.kmz") {
     return "kmz";

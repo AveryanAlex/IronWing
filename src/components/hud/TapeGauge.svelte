@@ -1,98 +1,329 @@
 <script lang="ts">
   type Props = {
-    value: number;
-    step?: number;
-    labelStep?: number;
-    side: "left" | "right";
+    value: number | undefined;
+    orientation: "vertical" | "horizontal";
+    visibleRange: number;
+    majorTickInterval: number;
+    minorTicksPerMajor: number;
+    size: { width: number; height: number };
+    unit?: string;
+    label?: string;
+    bugValue?: number;
+    trendValue?: number;
+    circular?: boolean;
+    circularRange?: number;
+    growsUp?: boolean;
+    terrainValue?: number;
   };
 
-  let { value, step = 10, labelStep = 50, side }: Props = $props();
+  let {
+    value,
+    orientation,
+    visibleRange,
+    majorTickInterval,
+    minorTicksPerMajor,
+    size,
+    unit,
+    label,
+    bugValue,
+    trendValue,
+    circular = false,
+    circularRange = 360,
+    growsUp = true,
+    terrainValue,
+  }: Props = $props();
 
-  const PX_PER_UNIT = 2;
-  const VISIBLE_RANGE = 75;
-  const LABEL_TICK_WIDTH = 15;
-  const MINOR_TICK_WIDTH = 8;
+  const ACCENT = "#12b9ff";
+  const BG = "#0a0f14";
+
+  const HEADING_LABELS: Record<number, string> = {
+    0: "N", 90: "E", 180: "S", 270: "W",
+  };
+
+  let isVertical = $derived(orientation === "vertical");
+  let { width, height } = $derived(size);
+  let displayValue = $derived(value ?? 0);
+  let hasValue = $derived(value != null && !Number.isNaN(value));
+
+  // Quantize to nearest integer for tick stability
+  let quantized = $derived(Math.round(displayValue));
 
   let ticks = $derived.by(() => {
-    const minVal = Math.floor((value - VISIBLE_RANGE) / step) * step;
-    const maxVal = Math.ceil((value + VISIBLE_RANGE) / step) * step;
-    const result: Array<{ tickValue: number; isLabel: boolean; y: number }> = [];
-    for (let v = minVal; v <= maxVal; v += step) {
-      result.push({
-        tickValue: v,
-        isLabel: v % labelStep === 0,
-        y: -(v - value) * PX_PER_UNIT,
-      });
+    const result: Array<{
+      pos: number;
+      isMajor: boolean;
+      labelText: string | null;
+      isCardinal: boolean;
+    }> = [];
+
+    const minorInterval = majorTickInterval / minorTicksPerMajor;
+    const halfRange = visibleRange / 2;
+    const start = quantized - halfRange - majorTickInterval;
+    const end = quantized + halfRange + majorTickInterval;
+    const firstTick = Math.floor(start / minorInterval) * minorInterval;
+    const span = isVertical ? height : width;
+
+    for (let val = firstTick; val <= end; val += minorInterval) {
+      let displayVal = val;
+      if (circular) {
+        displayVal = ((val % circularRange) + circularRange) % circularRange;
+      }
+
+      const offset = val - quantized;
+      const pxPerUnit = span / visibleRange;
+      const pos = span / 2 + (growsUp && isVertical ? -1 : 1) * offset * pxPerUnit;
+
+      if (pos < -20 || pos > span + 20) continue;
+
+      const isMajor = Math.abs(val - Math.round(val / majorTickInterval) * majorTickInterval) < minorInterval * 0.1;
+
+      let labelText: string | null = null;
+      let isCardinal = false;
+      if (isMajor) {
+        const rounded = Math.round(displayVal);
+        if (circular && HEADING_LABELS[rounded] !== undefined) {
+          labelText = HEADING_LABELS[rounded];
+          isCardinal = true;
+        } else {
+          labelText = String(rounded);
+        }
+      }
+
+      result.push({ pos, isMajor, labelText, isCardinal });
     }
+
     return result;
   });
 
-  let isLeft = $derived(side === "left");
+  // Sub-pixel fractional offset for smooth scrolling
+  let span = $derived(isVertical ? height : width);
+  let pxPerUnit = $derived(span / visibleRange);
+  let fracPx = $derived((growsUp && isVertical ? 1 : -1) * (displayValue - quantized) * pxPerUnit);
+
+  // Bug position
+  let bugPos = $derived.by(() => {
+    if (bugValue == null || !hasValue) return null;
+    let offset = bugValue - displayValue;
+    if (circular) {
+      offset = ((offset % circularRange) + circularRange + circularRange / 2) % circularRange - circularRange / 2;
+    }
+    const pos = span / 2 + (growsUp && isVertical ? -1 : 1) * offset * pxPerUnit;
+    if (pos < 0 || pos > span) return null;
+    return pos;
+  });
+
+  // Terrain band position (vertical tapes only)
+  let terrainPos = $derived.by(() => {
+    if (terrainValue == null || !hasValue || !isVertical) return null;
+    const offset = terrainValue - displayValue;
+    return span / 2 + (growsUp ? -1 : 1) * offset * pxPerUnit;
+  });
+
+  // Trend arrow length
+  let trendLen = $derived.by(() => {
+    if (trendValue == null || !hasValue) return null;
+    const maxLen = span * 0.3;
+    const len = Math.max(-maxLen, Math.min(maxLen, trendValue * pxPerUnit * 6));
+    if (Math.abs(len) < 3) return null;
+    return len;
+  });
+
+  // Readout box dimensions
+  let readoutW = $derived(isVertical ? width * 0.75 : 56);
+  let readoutH = $derived(isVertical ? 28 : 24);
+  let cx = $derived(width / 2);
+  let cy = $derived(height / 2);
+
+  function formatValue(v: number): string {
+    if (circular) return String(Math.round(((v % circularRange) + circularRange) % circularRange));
+    return Math.abs(v) >= 100 ? String(Math.round(v)) : v.toFixed(Math.abs(v) < 10 ? 1 : 0);
+  }
 </script>
 
-<svg
-  viewBox="0 -150 70 300"
-  xmlns="http://www.w3.org/2000/svg"
-  style="width: 100%; height: 100%;"
+<div
+  class={isVertical ? "tape-mask-vertical" : "tape-mask-horizontal"}
+  style:width="{width}px"
+  style:height="{height}px"
 >
-  <!-- Background -->
-  <rect x="0" y="-150" width="70" height="300" fill="rgba(0, 0, 0, 0.5)" rx="4" />
+  <svg
+    {width}
+    {height}
+    class="hud-glow-soft"
+    style="overflow: hidden;"
+  >
+    <!-- Label at top -->
+    {#if label}
+      <text
+        x={cx}
+        y="10"
+        text-anchor="middle"
+        font-size="10"
+        font-weight="700"
+        class="hud-svg-text"
+        opacity="0.7"
+        style="paint-order: stroke; stroke: rgba(0,0,0,0.5); stroke-width: 2px;"
+      >{label}</text>
+    {/if}
 
-  <!-- Ticks and labels -->
-  {#each ticks as { tickValue, isLabel, y } (tickValue)}
-    {#if isLeft}
-      <line
-        x1={isLabel ? 70 - LABEL_TICK_WIDTH : 70 - MINOR_TICK_WIDTH}
-        y1={y}
-        x2="70"
-        y2={y}
-        stroke="#57e38b"
-        stroke-width={isLabel ? 1.5 : 0.75}
+    <!-- Tick group with fractional scroll -->
+    <g transform={isVertical ? `translate(0, ${fracPx})` : `translate(${fracPx}, 0)`}>
+      {#each ticks as tick, i (i)}
+        {#if isVertical}
+          {@const tickLen = tick.isMajor ? 14 : 7}
+          {@const x1 = width - tickLen}
+          <line
+            {x1} y1={tick.pos} x2={width} y2={tick.pos}
+            class="hud-svg-line"
+            stroke-width={tick.isMajor ? 2.5 : 1}
+            opacity={tick.isMajor ? 0.9 : 0.4}
+          />
+          {#if tick.labelText}
+            <text
+              x={x1 - 6}
+              y={tick.pos}
+              text-anchor="end"
+              dominant-baseline="central"
+              font-size="12"
+              font-weight={tick.isCardinal ? 700 : 600}
+              class="hud-svg-text"
+              opacity={tick.isCardinal ? 1 : 0.85}
+              style="paint-order: stroke; stroke: rgba(0,0,0,0.5); stroke-width: 2px;"
+            >{tick.labelText}</text>
+          {/if}
+        {:else}
+          {@const tickLen = tick.isMajor ? 14 : 7}
+          <line
+            x1={tick.pos} y1="0" x2={tick.pos} y2={tickLen}
+            class="hud-svg-line"
+            stroke-width={tick.isMajor ? 2.5 : 1}
+            opacity={tick.isMajor ? 0.9 : 0.4}
+          />
+          {#if tick.labelText}
+            <text
+              x={tick.pos}
+              y={tickLen + 14}
+              text-anchor="middle"
+              font-size={tick.isCardinal ? 14 : 12}
+              font-weight={tick.isCardinal ? 700 : 600}
+              class="hud-svg-text"
+              opacity={tick.isCardinal ? 1 : 0.85}
+              style="paint-order: stroke; stroke: rgba(0,0,0,0.5); stroke-width: 2px;"
+            >{tick.labelText}</text>
+          {/if}
+        {/if}
+      {/each}
+    </g>
+
+    <!-- Terrain band — green shaded region below terrain level -->
+    {#if terrainPos !== null}
+      <rect
+        x="0"
+        y={terrainPos}
+        {width}
+        height={Math.max(0, span - terrainPos + span)}
+        fill="rgba(34, 139, 34, 0.12)"
       />
-      {#if isLabel}
-        <text
-          x="48"
-          y={y}
-          fill="#57e38b"
-          font-size="10"
-          font-family="'JetBrains Mono', monospace"
-          text-anchor="end"
-          dominant-baseline="central"
-        >{tickValue}</text>
-      {/if}
-    {:else}
       <line
         x1="0"
-        y1={y}
-        x2={isLabel ? LABEL_TICK_WIDTH : MINOR_TICK_WIDTH}
-        y2={y}
+        y1={terrainPos}
+        x2={width}
+        y2={terrainPos}
         stroke="#57e38b"
-        stroke-width={isLabel ? 1.5 : 0.75}
+        stroke-width="1.5"
+        opacity="0.6"
+        stroke-dasharray="4 3"
       />
-      {#if isLabel}
-        <text
-          x="22"
-          y={y}
-          fill="#57e38b"
-          font-size="10"
-          font-family="'JetBrains Mono', monospace"
-          text-anchor="start"
-          dominant-baseline="central"
-        >{tickValue}</text>
-      {/if}
     {/if}
-  {/each}
 
-  <!-- Current value box -->
-  <rect x="8" y="-12" width="54" height="24" rx="3" fill="#0a0e14" stroke="#12b9ff" stroke-width="1.5" />
-  <text
-    x="35"
-    y="0"
-    fill="#12b9ff"
-    font-size="12"
-    font-weight="bold"
-    font-family="'JetBrains Mono', monospace"
-    text-anchor="middle"
-    dominant-baseline="central"
-  >{Math.round(value)}</text>
-</svg>
+    <!-- Bug indicator — vertical tape -->
+    {#if bugPos !== null && isVertical}
+      <polygon
+        points={`${width},${bugPos - 4} ${width - 6},${bugPos} ${width},${bugPos + 4}`}
+        fill="#57e38b"
+        opacity="0.8"
+      />
+    {/if}
+
+    <!-- Bug indicator — horizontal tape -->
+    {#if bugPos !== null && !isVertical}
+      <polygon
+        points={`${bugPos},0 ${bugPos - 4},6 ${bugPos + 4},6`}
+        fill="#57e38b"
+        opacity="0.8"
+      />
+    {/if}
+
+    <!-- Trend arrow -->
+    {#if trendLen !== null && isVertical}
+      <line
+        x1={cx + readoutW / 2 + 4}
+        y1={cy}
+        x2={cx + readoutW / 2 + 4}
+        y2={cy - trendLen}
+        stroke={trendLen > 0 ? "#57e38b" : "#ff4444"}
+        stroke-width="2.5"
+        opacity="0.8"
+      />
+    {/if}
+
+    <!-- Center readout box -->
+    {#if isVertical}
+      <!-- Pointer triangle -->
+      <polygon
+        points={`${width},${cy} ${width - 10},${cy - 6} ${width - 10},${cy + 6}`}
+        fill={ACCENT}
+      />
+      <rect
+        x={cx - readoutW / 2}
+        y={cy - readoutH / 2}
+        width={readoutW}
+        height={readoutH}
+        rx="1"
+        fill={BG}
+        stroke={ACCENT}
+        stroke-width="2"
+      />
+    {:else}
+      <!-- Down pointer triangle -->
+      <polygon
+        points={`${cx},0 ${cx - 6},10 ${cx + 6},10`}
+        fill={ACCENT}
+      />
+      <rect
+        x={cx - readoutW / 2}
+        y={cy - readoutH / 2 + 4}
+        width={readoutW}
+        height={readoutH}
+        rx="1"
+        fill={BG}
+        stroke={ACCENT}
+        stroke-width="2"
+      />
+    {/if}
+
+    <!-- Value text -->
+    <text
+      x={cx}
+      y={isVertical ? cy : cy + 4}
+      text-anchor="middle"
+      dominant-baseline="central"
+      font-size="16"
+      font-weight="800"
+      class="hud-svg-text"
+    >{hasValue ? formatValue(displayValue) : "--"}</text>
+
+    <!-- Unit label -->
+    {#if unit && isVertical}
+      <text
+        x={cx}
+        y={cy + readoutH / 2 + 12}
+        text-anchor="middle"
+        font-size="9"
+        font-weight="600"
+        class="hud-svg-text"
+        opacity="0.6"
+        style="paint-order: stroke; stroke: rgba(0,0,0,0.5); stroke-width: 2px;"
+      >{unit}</text>
+    {/if}
+  </svg>
+</div>
