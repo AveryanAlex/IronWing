@@ -17,6 +17,7 @@ Thin Tauri IPC shell between the React frontend and `mavkit`. This layer owns tr
 | IPC wire contracts | `ipc/AGENTS.md` | Typed event/command payloads, serde conventions |
 | Logs / playback source | `logs.rs` | Dual TLOG/BIN parsing and queries |
 | Recording | `recording.rs` | TLOG recorder lifecycle |
+| Agent remote UI bridge | `remote_ui.rs` | Dev-only HTTP invoke + SSE event bridge for browser-capable agents |
 | Helpers | `helpers.rs` | `with_vehicle()`, `with_log_store()`, `downsample()` |
 | Firmware subsystem | `firmware/AGENTS.md` | Serial flash, DFU recovery, catalog, session state |
 
@@ -34,6 +35,7 @@ Thin Tauri IPC shell between the React frontend and `mavkit`. This layer owns tr
 | `guided.rs` | Guided flight helpers and snapshot emission |
 | `logs.rs` | Log parsing, summary, track/path export, CSV export |
 | `recording.rs` | TLOG recording lifecycle |
+| `remote_ui.rs` | Agent remote UI bridge used by `pnpm run remote-ui`; not an automated test lane |
 | `helpers.rs` | Shared guards and utilities |
 | `ipc/` | Wire-type contract layer for all IPC-facing payloads |
 | `firmware/` | Firmware flashing, DFU recovery, catalog, typed session model |
@@ -60,6 +62,7 @@ pub(crate) struct AppState {
     pub(crate) session_context: tokio::sync::Mutex<bridges::SessionContext>,
     pub(crate) status_text_history: tokio::sync::Mutex<Vec<StatusTextEntry>>,
     pub(crate) next_status_text_sequence: AtomicU64,
+    pub(crate) remote_ui_events: tokio::sync::broadcast::Sender<remote_ui::RemoteUiEvent>,
 }
 ```
 
