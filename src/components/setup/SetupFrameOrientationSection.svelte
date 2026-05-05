@@ -25,6 +25,7 @@ import type {
   SetupWorkspaceSection,
 } from "../../lib/stores/setup-workspace";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+import MotorDiagram from "./shared/MotorDiagram.svelte";
 
 type EnumOption = { code: number; label: string };
 type Tone = "info" | "warning" | "danger";
@@ -497,6 +498,15 @@ function buildFrameBanners(input: {
         {layoutStateLabel(profile, previewVtolLayout)}
       </p>
       <p class="mt-1 text-sm text-text-secondary">{layoutStateDetail(profile, previewVtolLayout)}</p>
+
+      <div class="mt-4 flex justify-center">
+        <MotorDiagram
+          model={profile.frameParamFamily === "quadplane" ? previewVtolLayout : null}
+          frameClass={profile.frameParamFamily !== "quadplane" ? previewFrameClass : null}
+          frameType={profile.frameParamFamily !== "quadplane" ? previewFrameType : null}
+          size={160}
+        />
+      </div>
     </div>
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Orientation</p>

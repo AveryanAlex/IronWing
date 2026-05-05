@@ -32,6 +32,7 @@ import type {
   SetupWorkspaceStoreState,
 } from "../../lib/stores/setup-workspace";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+import MotorDiagram from "./shared/MotorDiagram.svelte";
 
 type DirectionResult = "correct" | "reversed";
 type Tone = "info" | "warning" | "danger";
@@ -582,6 +583,12 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
         {layoutStateLabel}
       </p>
       <p class="mt-1 text-sm text-text-secondary">{layoutStateDetail}</p>
+
+      {#if layoutModel}
+        <div class="mt-4 flex justify-center">
+          <MotorDiagram model={layoutModel} activeMotor={activeMotorNumber ?? selectedMotorNumber} size={160} />
+        </div>
+      {/if}
     </div>
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Safety unlock</p>
