@@ -22,6 +22,7 @@ docs/plans/
 
 test-results/
 playwright-report/
+.playwright-mcp/
 
 # ── GSD baseline (auto-generated) ──
 .gsd
