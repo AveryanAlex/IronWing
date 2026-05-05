@@ -2650,13 +2650,14 @@ describe("SetupWorkspace", () => {
       provenance: "stream",
       value: { entries: [] },
     };
-    if (armedState.sessionDomain.value) {
+    const vehicleState = armedState.sessionDomain.value?.vehicle_state;
+    if (armedState.sessionDomain.value && vehicleState) {
       armedState.sessionDomain = {
         ...armedState.sessionDomain,
         value: {
           ...armedState.sessionDomain.value,
           vehicle_state: {
-            ...armedState.sessionDomain.value.vehicle_state,
+            ...vehicleState,
             armed: true,
           },
         },
@@ -2721,12 +2722,11 @@ describe("SetupWorkspace", () => {
     });
 
     const controlPreview = screen.getByTestId(`${setupWorkspaceTestIds.initialParamsPreviewPrefix}-control_baseline`);
-    const stageButton = Array.from(controlPreview.querySelectorAll("button")).find(
-      (button) => !button.hasAttribute("disabled") && button.textContent?.includes("Stage"),
-    );
-    expect(stageButton).toBeTruthy();
+    const batchCheckbox = controlPreview.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+    expect(batchCheckbox).toBeTruthy();
 
-    await fireEvent.click(stageButton as HTMLButtonElement);
+    await fireEvent.click(batchCheckbox as HTMLInputElement);
+    await fireEvent.click(screen.getByRole("button", { name: "Stage 1 selected batch" }));
 
     await waitFor(() => {
       expect(get(parameterStore).stagedEdits.MOT_THST_EXPO?.nextValue).toBeCloseTo(0.58, 2);

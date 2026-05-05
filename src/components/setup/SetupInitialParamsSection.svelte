@@ -39,6 +39,7 @@ const sessionState = fromStore(sessionStore);
 let propSizeInput = $state("9");
 let cellCountInput = $state("4");
 let chemistryIndex = $state(0);
+let selectedBatchIds = $state<string[]>([]);
 let lastValidInputs = $state(createResolvedInitialParamsInputs({
   propInches: 9,
   cellCount: 4,
@@ -138,6 +139,26 @@ function stageBatch(batch: InitialParamsPreviewBatch) {
     }
 
     paramsStore.stageParameterEdit(entry.item, entry.nextValue);
+  }
+}
+
+function toggleBatchSelection(batchId: string) {
+  if (selectedBatchIds.includes(batchId)) {
+    selectedBatchIds = selectedBatchIds.filter((id) => id !== batchId);
+  } else {
+    selectedBatchIds = [...selectedBatchIds, batchId];
+  }
+}
+
+function stageSelectedBatches() {
+  if (actionsBlocked) {
+    return;
+  }
+
+  for (const batch of model.batches) {
+    if (selectedBatchIds.includes(batch.id) && batch.stageAllowed) {
+      stageBatch(batch);
+    }
   }
 }
 
@@ -272,7 +293,20 @@ function resolvedInputText(): string {
           class="rounded-lg border border-border bg-bg-primary/80 p-3"
           data-testid={`${setupWorkspaceTestIds.initialParamsPreviewPrefix}-${batch.id}`}
         >
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Preview batch</p>
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Preview batch</p>
+            {#if batch.stageAllowed}
+              <label class="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedBatchIds.includes(batch.id)}
+                  onchange={() => toggleBatchSelection(batch.id)}
+                  class="rounded border-border bg-bg-secondary text-accent focus:ring-accent"
+                />
+                Select
+              </label>
+            {/if}
+          </div>
           <h4 class="mt-2 text-base font-semibold text-text-primary">{batch.title}</h4>
           <p class="mt-2 text-sm text-text-secondary">{batch.description}</p>
           <div class="mt-4">
@@ -290,6 +324,17 @@ function resolvedInputText(): string {
           {/if}
         </article>
       {/each}
+    </div>
+
+    <div class="mt-4 flex justify-end">
+      <button
+        class="rounded-md border border-border bg-bg-primary/80 px-6 py-3 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+        onclick={stageSelectedBatches}
+        disabled={actionsBlocked || selectedBatchIds.length === 0}
+        type="button"
+      >
+        Stage {selectedBatchIds.length} selected batch{selectedBatchIds.length === 1 ? "" : "es"}
+      </button>
     </div>
   {/if}
 
