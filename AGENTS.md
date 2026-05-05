@@ -37,6 +37,7 @@ cargo test --workspace
 
 # Dev / E2E
 pnpm run dev
+pnpm run remote-ui
 pnpm run tauri:dev
 pnpm run android:dev
 pnpm run android:build
@@ -46,6 +47,26 @@ pnpm run e2e:native
 ```
 
 Run commands from the repo root. Nix (`flake.nix` + `.envrc`) is the canonical reproducible environment.
+
+## Agent Remote UI
+
+Use `pnpm run remote-ui` when an agent needs to see and manipulate the real app with a real Rust + SITL backend from browser-capable agent tools. This is an agent quality-of-life workflow, not an automated test lane; do not add Playwright specs for it unless explicitly requested.
+
+```bash
+pnpm run remote-ui
+```
+
+The script starts Docker SITL, launches `tauri dev`, switches the frontend aliases to `src/platform/remote/*`, and starts a dev-only Rust bridge at `http://127.0.0.1:14242` for command invokes and event streaming. Open the printed Vite URL, normally `http://127.0.0.1:5173`, with the agent browser tool. The connection form preselects TCP and the matching SITL address, so the agent can click Connect and observe live telemetry.
+
+For screenshots, navigate the agent browser to the printed Vite URL, wait for the IronWing shell, connect to SITL if needed, then use the browser tool's screenshot action. Keep the native Tauri window open while using the browser page; closing it stops the Rust bridge and SITL cleanup follows.
+
+Useful knobs:
+
+```bash
+IRONWING_REMOTE_UI_HOST=0.0.0.0 pnpm run remote-ui
+IRONWING_REMOTE_UI_PORT=14250 pnpm run remote-ui
+IRONWING_REMOTE_UI_VITE_HOST=0.0.0.0 pnpm run remote-ui
+```
 
 ## mavkit Boundary
 

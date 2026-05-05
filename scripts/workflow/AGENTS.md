@@ -2,12 +2,13 @@
 
 ## Overview
 
-`scripts/workflow/` is the Node-side orchestration library behind `pnpm run dev`. It owns SITL runtime port math, container lifecycle, child-process cleanup, and readiness polling for the local Tauri dev workflow.
+`scripts/workflow/` is the Node-side orchestration library behind `pnpm run dev` and `pnpm run remote-ui`. It owns SITL runtime port math, container lifecycle, child-process cleanup, and readiness polling for the local Tauri dev workflows.
 
 ## Where To Look
 
 | Task | Location | Notes |
 |------|----------|-------|
+| Agent remote UI entrypoint | `../remote-ui.mjs` | SITL + Tauri dev + browser bridge workflow |
 | Port / instance math | `runtime.mjs` | Canonical Node-side runtime model |
 | Runtime tests | `runtime.test.mjs` | Runs under `pnpm test` |
 | Docker SITL lifecycle | `sitl.mjs` | Start/stop helpers |
@@ -25,6 +26,7 @@
 
 ## Notes
 
-- `scripts/dev.mjs` is the entrypoint that composes this folder.
+- `scripts/dev.mjs` is the normal native dev entrypoint that composes this folder.
+- `scripts/remote-ui.mjs` is the agent remote UI entrypoint; keep it focused on local agent visibility, not automated Playwright coverage.
 - `runtime.test.mjs` is included by the main Vitest suite through `scripts/**/*.test.mjs`.
 - SITL ports and container naming conventions belong here if they change.

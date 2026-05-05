@@ -9,6 +9,7 @@
 | Task | Location | Notes |
 |------|----------|-------|
 | Native IPC surface | `tauri/core.ts`, `tauri/event.ts`, `tauri/http.ts` | Thin re-exports of Tauri APIs |
+| Agent remote UI IPC surface | `remote/core.ts`, `remote/event.ts`, `remote/http.ts` | Browser-facing bridge to a running Tauri app |
 | Mocked browser IPC surface | `mock/core.ts`, `mock/event.ts`, `mock/http.ts` | Browser-only invoke/event/fetch stubs |
 | Mock backend controller | `mock/backend.ts` | Idle startup defaults, command overrides, emitted events |
 | Boundary enforcement | `import-boundary.test.ts` | Architectural guardrail |
@@ -18,7 +19,7 @@
 - All frontend IPC imports outside this directory must use `@platform/core`, `@platform/event`, or `@platform/http`.
 - Do not import `@tauri-apps/api/core` or `@tauri-apps/api/event` directly anywhere else.
 - Keep the `tauri/` and `mock/` surfaces compatible: same function names, same argument shapes, same return expectations.
-- `vite.config.ts` selects `tauri/` vs `mock/` at build time via `IRONWING_PLATFORM=mock`.
+- `vite.config.ts` selects `tauri/`, `mock/`, or `remote/` at build time via `IRONWING_PLATFORM`.
 - `vitest.config.ts` resolves the aliases to `tauri/` for unit tests.
 
 ## Mock Platform Notes
@@ -26,3 +27,10 @@
 - `mock/backend.ts` owns startup defaults plus the browser-global controller exposed as `window.__IRONWING_MOCK_PLATFORM__`.
 - Playwright tests should configure mocked behavior at the `@platform/*` boundary, not by patching DOM internals.
 - The mock platform is for browser-only Playwright tests. It does not prove real Tauri or Rust integration.
+
+## Remote Platform Notes
+
+- `remote/` is for agent-operated browser sessions against a live Tauri shell, not for automated browser E2E.
+- `pnpm run remote-ui` sets `IRONWING_PLATFORM=remote`, starts the Rust bridge, and prints the browser URL.
+- Keep `remote/` compatible with the `tauri/` and `mock/` surfaces: `invoke`, `listen`, `openUrl`, and `fetch` must keep the same call shapes.
+- The bridge is dev-only and unauthenticated. Do not expose it outside trusted local agent workflows.
