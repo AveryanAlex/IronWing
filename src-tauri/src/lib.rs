@@ -25,6 +25,7 @@ use ipc::{GuidedRuntime, StatusTextEntry};
 use logs::LogStore;
 use mavkit::Vehicle;
 use recording::{TlogRecorderHandle, recording_start, recording_status, recording_stop};
+use remote_ui::RemoteUiEvent;
 use session_runtime::SessionRuntime;
 mod bluetooth;
 mod bridges;
@@ -39,6 +40,7 @@ mod helpers;
 mod ipc;
 mod logs;
 mod recording;
+mod remote_ui;
 mod session_runtime;
 
 pub(crate) type MissionCancelToken = tokio_util::sync::CancellationToken;
@@ -67,6 +69,7 @@ pub(crate) struct AppState {
     pub(crate) session_context: tokio::sync::Mutex<bridges::SessionContext>,
     pub(crate) status_text_history: tokio::sync::Mutex<Vec<StatusTextEntry>>,
     pub(crate) next_status_text_sequence: AtomicU64,
+    pub(crate) remote_ui_events: tokio::sync::broadcast::Sender<RemoteUiEvent>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -89,6 +92,7 @@ pub fn run() {
         session_context: tokio::sync::Mutex::new(bridges::SessionContext::new()),
         status_text_history: tokio::sync::Mutex::new(Vec::new()),
         next_status_text_sequence: AtomicU64::new(1),
+        remote_ui_events: remote_ui::event_channel(),
     };
     let mut builder = tauri::Builder::default()
         .manage(state)
@@ -188,6 +192,9 @@ pub fn run() {
                 if let Some(w) = _app.get_webview_window("main") {
                     let _ = w.set_background_color(Some(bg));
                 }
+            }
+            if remote_ui::remote_ui_enabled() {
+                remote_ui::spawn_remote_ui_server(_app.handle().clone());
             }
             Ok(())
         })
