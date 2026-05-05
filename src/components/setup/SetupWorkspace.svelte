@@ -183,25 +183,6 @@ function clearCheckpoint() {
 
   <SetupCheckpointBanner checkpoint={view.checkpoint} onClear={clearCheckpoint} />
 
-  {#if view.statusNotices.length > 0}
-    <div
-      class="mt-4 rounded-lg border border-border bg-bg-secondary/60 p-3"
-      data-testid={setupWorkspaceTestIds.notices}
-    >
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Status text</p>
-      <ul class="mt-3 space-y-2">
-        {#each view.statusNotices as notice (notice.id)}
-          <li
-            class="rounded-md border border-border bg-bg-primary px-3 py-2 text-sm text-text-secondary"
-            data-testid={`${setupWorkspaceTestIds.statusNoticePrefix}-${notice.id}`}
-          >
-            {notice.text}
-          </li>
-        {/each}
-      </ul>
-    </div>
-  {/if}
-
   <div
     class="setup-workspace-layout mt-4"
     class:setup-workspace-layout--phone={isPhoneTier}

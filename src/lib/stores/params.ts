@@ -674,6 +674,10 @@ export function createParamsStore(
       && isSameEnvelope(current.activeEnvelope, requestEnvelope);
   }
 
+  async function downloadAll() {
+    await service.downloadAll();
+  }
+
   return {
     subscribe: store.subscribe,
     initialize,
@@ -681,6 +685,7 @@ export function createParamsStore(
     discardStagedEdit,
     clearStagedEdits,
     applyStagedEdits,
+    downloadAll,
     reset,
   };
 }

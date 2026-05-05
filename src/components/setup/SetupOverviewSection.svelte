@@ -1,5 +1,9 @@
 <script lang="ts">
+import { fromStore } from "svelte/store";
+
+import { getParamsStoreContext } from "../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../data/ardupilot-docs";
+import { createParameterFileIo } from "../../lib/params/parameter-file-io";
 import type { SetupWorkspaceStoreState } from "../../lib/stores/setup-workspace";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
@@ -10,6 +14,91 @@ let {
   view: SetupWorkspaceStoreState;
   onSelect: (sectionId: string) => void;
 } = $props();
+
+const fileIo = createParameterFileIo();
+const paramsStore = getParamsStoreContext();
+const paramsState = fromStore(paramsStore);
+
+let fileActionMessage = $state("Imports stage changed values in the shared review tray.");
+let fileActionBusy = $state<"refresh" | "save" | "load" | null>(null);
+let paramsReady = $derived(paramsState.current.paramStore !== null);
+let refreshDisabled = $derived(fileActionBusy !== null || !paramsState.current.liveSessionConnected);
+let fileDisabled = $derived(fileActionBusy !== null || !paramsReady);
+
+async function handleRefresh() {
+  if (refreshDisabled) {
+    return;
+  }
+
+  fileActionBusy = "refresh";
+  fileActionMessage = "Requesting a fresh parameter download from the vehicle.";
+  try {
+    await paramsStore.downloadAll();
+    fileActionMessage = "Parameter refresh requested.";
+  } catch (error) {
+    fileActionMessage = `Refresh failed: ${formatActionError(error)}`;
+  } finally {
+    fileActionBusy = null;
+  }
+}
+
+async function handleSave() {
+  if (fileDisabled) {
+    return;
+  }
+
+  fileActionBusy = "save";
+  fileActionMessage = "Saving the current parameter snapshot.";
+  try {
+    const result = await fileIo.exportToPicker({ paramStore: paramsState.current.paramStore });
+    fileActionMessage = result.status === "cancelled"
+      ? "Save cancelled."
+      : `Saved ${result.paramCount} parameter${result.paramCount === 1 ? "" : "s"}.`;
+  } catch (error) {
+    fileActionMessage = `Save failed: ${formatActionError(error)}`;
+  } finally {
+    fileActionBusy = null;
+  }
+}
+
+async function handleLoad() {
+  if (fileDisabled) {
+    return;
+  }
+
+  fileActionBusy = "load";
+  fileActionMessage = "Loading a parameter file for review.";
+  try {
+    const result = await fileIo.importFromPicker({
+      paramStore: paramsState.current.paramStore,
+      metadata: paramsState.current.metadata,
+    });
+    if (result.status === "success") {
+      for (const row of result.stagedRows) {
+        paramsStore.stageParameterEdit(row.item, row.nextValue);
+      }
+      fileActionMessage = `Loaded ${result.totalRows} row${result.totalRows === 1 ? "" : "s"}; staged ${result.stagedCount} changed value${result.stagedCount === 1 ? "" : "s"}.`;
+    } else {
+      fileActionMessage = "Load cancelled.";
+    }
+  } catch (error) {
+    fileActionMessage = `Load failed: ${formatActionError(error)}`;
+  } finally {
+    fileActionBusy = null;
+  }
+}
+
+function formatActionError(error: unknown) {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error;
+  }
+
+  return "Unknown parameter action error.";
+}
 
 const overviewDocs = [
   {
@@ -161,6 +250,57 @@ function groupTone(blocked: number, progressText: string): string {
       {/if}
     {/each}
   </div>
+
+  <div class="rounded-lg border border-border bg-bg-primary/80 p-4">
+    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Parameter actions</p>
+    <p class="mt-2 text-sm text-text-secondary">Refresh all values from the vehicle, or save/load a parameter file snapshot. File imports stage changes in the review tray.</p>
+    <div class="mt-4 flex flex-wrap gap-2">
+      <button
+        class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={refreshDisabled}
+        onclick={handleRefresh}
+        type="button"
+      >
+        {fileActionBusy === "refresh" ? "Refreshing..." : "Refresh all"}
+      </button>
+      <button
+        class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={fileDisabled}
+        onclick={handleSave}
+        type="button"
+      >
+        {fileActionBusy === "save" ? "Saving..." : "Save to file"}
+      </button>
+      <button
+        class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={fileDisabled}
+        onclick={handleLoad}
+        type="button"
+      >
+        {fileActionBusy === "load" ? "Loading..." : "Load from file"}
+      </button>
+    </div>
+    <p class="mt-3 text-xs text-text-muted">{fileActionMessage}</p>
+  </div>
+
+  {#if view.statusNotices.length > 0}
+    <div
+      class="rounded-lg border border-border bg-bg-secondary/60 p-4"
+      data-testid={setupWorkspaceTestIds.notices}
+    >
+      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Status text</p>
+      <ul class="mt-3 space-y-2">
+        {#each view.statusNotices as notice (notice.id)}
+          <li
+            class="rounded-md border border-border bg-bg-primary px-3 py-2 text-sm text-text-secondary"
+            data-testid={`${setupWorkspaceTestIds.statusNoticePrefix}-${notice.id}`}
+          >
+            {notice.text}
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
 
   <div class="flex flex-wrap gap-2">
     <button
