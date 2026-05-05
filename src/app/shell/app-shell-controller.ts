@@ -1,8 +1,9 @@
-import { derived, writable, type Readable } from "svelte/store";
+import { derived, get, writable, type Readable } from "svelte/store";
 
 import type { ParameterWorkspaceViewStore, ParamsStore } from "../../lib/stores/params";
 import type { SessionStore } from "../../lib/stores/session";
 import type { ShellChromeStore } from "./runtime-context";
+import { isAutoConnectSitlEnabled } from "../../lib/platform/session";
 
 export type AppShellWorkspace =
   | "overview"
@@ -70,6 +71,20 @@ export function createAppShellController(stores: {
 
   async function initialize() {
     await Promise.all([sessionStore.initialize(), parameterStore.initialize()]);
+
+    const sessionState = get(sessionStore);
+    const selectedTransportDescriptor = sessionState.transportDescriptors.find(
+      (descriptor) => descriptor.kind === sessionState.connectionForm.mode,
+    );
+    const canAutoConnect =
+      isAutoConnectSitlEnabled() &&
+      !sessionState.optimisticConnection &&
+      sessionState.sessionDomain.value?.connection.kind === "disconnected" &&
+      selectedTransportDescriptor?.available === true;
+
+    if (canAutoConnect) {
+      void sessionStore.connect();
+    }
   }
 
   function showWorkspace(workspace: AppShellWorkspace) {

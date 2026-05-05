@@ -76,7 +76,7 @@ await waitForTcp("127.0.0.1", runtime.sitlTcpPort, 90_000);
 
 console.log(`[remote-ui] SITL ready. Starting Tauri remote UI bridge on ${remoteUiBridgeUrl}.`);
 console.log(`[remote-ui] Open the agent/browser UI at ${browserUrl}.`);
-console.log("[remote-ui] The app will preselect TCP mode with the matching SITL address.");
+console.log("[remote-ui] The app will auto-connect to the matching SITL TCP address.");
 
 tauriChild = spawnCommand(PNPM_COMMAND, ["run", "tauri:dev"], {
   cwd: projectRoot,
@@ -89,6 +89,7 @@ tauriChild = spawnCommand(PNPM_COMMAND, ["run", "tauri:dev"], {
     VITE_IRONWING_REMOTE_UI_URL: remoteUiBridgeUrl,
     VITE_IRONWING_SITL_TCP_PORT: String(runtime.sitlTcpPort),
     VITE_IRONWING_SITL_MODE: "tcp",
+    VITE_IRONWING_AUTO_CONNECT_SITL: "1",
   },
 });
 

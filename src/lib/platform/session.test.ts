@@ -3,11 +3,26 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_TCP_ADDRESS,
   defaultTcpAddress,
+  isAutoConnectSitlEnabled,
   loadConnectionForm,
   resolveSessionConnectionDefaults,
   resolveSitlMode,
   type SessionConnectionFormState,
 } from "./session";
+
+describe("isAutoConnectSitlEnabled", () => {
+  it("returns true when VITE_IRONWING_AUTO_CONNECT_SITL is '1' or 'true'", () => {
+    expect(isAutoConnectSitlEnabled({ VITE_IRONWING_AUTO_CONNECT_SITL: "1" })).toBe(true);
+    expect(isAutoConnectSitlEnabled({ VITE_IRONWING_AUTO_CONNECT_SITL: "true" })).toBe(true);
+  });
+
+  it("returns false for other values or missing env", () => {
+    expect(isAutoConnectSitlEnabled({ VITE_IRONWING_AUTO_CONNECT_SITL: "0" })).toBe(false);
+    expect(isAutoConnectSitlEnabled({ VITE_IRONWING_AUTO_CONNECT_SITL: "false" })).toBe(false);
+    expect(isAutoConnectSitlEnabled({ VITE_IRONWING_AUTO_CONNECT_SITL: "" })).toBe(false);
+    expect(isAutoConnectSitlEnabled({})).toBe(false);
+  });
+});
 
 describe("resolveSitlMode", () => {
   it("preselects tcp only for the supported SITL mode", () => {

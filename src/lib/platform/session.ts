@@ -65,6 +65,7 @@ export type SessionConnectionFormState = {
 export type SessionConnectionEnv = {
   VITE_IRONWING_SITL_MODE?: string;
   VITE_IRONWING_SITL_TCP_PORT?: string;
+  VITE_IRONWING_AUTO_CONNECT_SITL?: string;
 };
 
 export const DEFAULT_TCP_ADDRESS = "127.0.0.1:5760";
@@ -206,6 +207,10 @@ export function resolveSessionConnectionDefaults(
     takeoffAlt: "10",
     followVehicle: true,
   };
+}
+
+export function isAutoConnectSitlEnabled(env: SessionConnectionEnv = import.meta.env as SessionConnectionEnv): boolean {
+  return env.VITE_IRONWING_AUTO_CONNECT_SITL === "1" || env.VITE_IRONWING_AUTO_CONNECT_SITL === "true";
 }
 
 export function resolveSitlMode(mode: string | undefined): TransportType {
