@@ -656,10 +656,38 @@ fn emit_playback_frame(
     frame: &PlaybackFrame,
     seek_result: &PlaybackSeekResult,
 ) {
-    emit_event(app, "session://state", &ScopedEvent { envelope: envelope.clone(), value: frame.session.clone() });
-    emit_event(app, "telemetry://state", &ScopedEvent { envelope: envelope.clone(), value: frame.telemetry.clone() });
-    emit_event(app, "support://state", &ScopedEvent { envelope: envelope.clone(), value: frame.support.clone() });
-    emit_event(app, "status_text://state", &ScopedEvent { envelope: envelope.clone(), value: frame.status_text.clone() });
+    emit_event(
+        app,
+        "session://state",
+        &ScopedEvent {
+            envelope: envelope.clone(),
+            value: frame.session.clone(),
+        },
+    );
+    emit_event(
+        app,
+        "telemetry://state",
+        &ScopedEvent {
+            envelope: envelope.clone(),
+            value: frame.telemetry.clone(),
+        },
+    );
+    emit_event(
+        app,
+        "support://state",
+        &ScopedEvent {
+            envelope: envelope.clone(),
+            value: frame.support.clone(),
+        },
+    );
+    emit_event(
+        app,
+        "status_text://state",
+        &ScopedEvent {
+            envelope: envelope.clone(),
+            value: frame.status_text.clone(),
+        },
+    );
     emit_event(
         app,
         "playback://state",

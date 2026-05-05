@@ -47,7 +47,6 @@ impl SessionContext {
 
 pub(crate) static TELEMETRY_INTERVAL_MS: AtomicU64 = AtomicU64::new(200);
 
-
 async fn snapshot_from_context(handle: &tauri::AppHandle) -> DomainValue<SessionSnapshot> {
     let state: tauri::State<'_, AppState> = handle.state();
     let ctx = state.session_context.lock().await;
@@ -157,7 +156,9 @@ pub(crate) async fn spawn_event_bridges(
         let nav_guidance = telemetry.navigation().guidance();
         let terrain_clearance = telemetry.terrain().clearance();
         let rc = telemetry.rc();
-        let rc_channels: Vec<_> = (0..18).filter_map(|index| rc.channel_pwm_us(index)).collect();
+        let rc_channels: Vec<_> = (0..18)
+            .filter_map(|index| rc.channel_pwm_us(index))
+            .collect();
         let rc_rssi = rc.rssi_pct();
         let actuators = telemetry.actuators();
         let servo_outputs: Vec<_> = (0..16)

@@ -3050,7 +3050,10 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             FirmwareError::CatalogUnavailable { reason } => {
-                assert!(reason.contains("no cached manifest was available"), "got: {reason}");
+                assert!(
+                    reason.contains("no cached manifest was available"),
+                    "got: {reason}"
+                );
                 assert!(reason.contains("network unreachable"), "got: {reason}");
             }
             other => panic!("expected CatalogUnavailable, got: {other:?}"),
@@ -3081,7 +3084,10 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             FirmwareError::CatalogUnavailable { reason } => {
-                assert!(reason.contains("stale cached manifest was unusable"), "got: {reason}");
+                assert!(
+                    reason.contains("stale cached manifest was unusable"),
+                    "got: {reason}"
+                );
                 assert!(reason.contains("timed out"), "got: {reason}");
                 assert!(
                     reason.contains("gzip") || reason.contains("decompression"),

@@ -55,10 +55,14 @@ let metricGroups = $derived.by<MetricGroup[]>(() => [
         label: "ARM STATE",
         metric: {
           text: view.lifecycle.armStateText,
-          tone: view.lifecycle.armStateTone === "positive" ? "positive"
-            : view.lifecycle.armStateTone === "caution" ? "caution"
-            : view.lifecycle.armStateTone === "critical" ? "critical"
-            : "neutral",
+          tone:
+            view.lifecycle.armStateTone === "positive"
+              ? "positive"
+              : view.lifecycle.armStateTone === "caution"
+                ? "caution"
+                : view.lifecycle.armStateTone === "critical"
+                  ? "critical"
+                  : "neutral",
           state: view.connected ? "live" : "unavailable",
           value: view.lifecycle.armStateText,
         },
