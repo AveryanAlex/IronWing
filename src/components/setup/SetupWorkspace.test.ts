@@ -1579,11 +1579,7 @@ describe("SetupWorkspace", () => {
   it("keeps blocked sections inspectable while metadata recovery is active", async () => {
     await renderSetupWorkspace({ metadata: null });
 
-    await waitFor(() => {
-      expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain(
-        "Full Parameters is the recovery path",
-      );
-    });
+    expect(screen.queryByTestId(setupWorkspaceTestIds.notice)).toBeNull();
     expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain(
       "Metadata missing — recovery mode is active",
     );

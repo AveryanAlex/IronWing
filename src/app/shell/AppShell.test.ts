@@ -677,7 +677,7 @@ describe("AppShell", () => {
 
         expect(screen.queryByTestId("telemetry-state-value")).toBeNull();
         expect(screen.queryByTestId(parameterWorkspaceTestIds.root)).toBeNull();
-        expect(screen.getByTestId(setupWorkspaceTestIds.state).textContent?.trim()).toBe("Setup ready");
+        expect(screen.queryByTestId(setupWorkspaceTestIds.state)).toBeNull();
         // The compact nav only renders a status badge for complete / in_progress / failed — not for "unknown".
         expect(screen.queryByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`)).toBeNull();
         expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionConfidencePrefix}-frame_orientation`).textContent?.trim()).toBe("Unconfirmed");
@@ -798,9 +798,10 @@ describe("AppShell", () => {
 
         await openSetupWorkspace();
 
-        expect(screen.getByTestId(setupWorkspaceTestIds.metadata).textContent).toContain("Metadata unavailable");
-        expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain(
-            "Overview stays truthful and Full Parameters is the recovery path",
+        expect(screen.queryByTestId(setupWorkspaceTestIds.metadata)).toBeNull();
+        expect(screen.queryByTestId(setupWorkspaceTestIds.notice)).toBeNull();
+        expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain(
+            "Metadata missing — recovery mode is active",
         );
         expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-overview`)).toBeTruthy();
         expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`)).toBeTruthy();

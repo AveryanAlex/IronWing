@@ -134,57 +134,10 @@ function clearCheckpoint() {
   data-setup-readiness={view.readiness}
   data-testid={setupWorkspaceTestIds.root}
 >
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Setup workspace</p>
-      <h2 class="mt-1 text-base font-semibold text-text-primary">Section-first expert setup</h2>
-      <p class="mt-1 max-w-3xl text-sm text-text-secondary">
-        The full expert path stays grouped and explicit here. Hardware, safety, tuning, and recovery sections stay visible even when they are blocked, unconfirmed, or still waiting on purpose-built controls.
-      </p>
-    </div>
-
-    <p
-      class="inline-flex items-center rounded-md border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold text-text-secondary"
-      data-testid={setupWorkspaceTestIds.state}
-    >
-      {view.stateText}
-    </p>
-  </div>
-
-  <div class="mt-4 grid gap-2 md:grid-cols-3">
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={setupWorkspaceTestIds.scope}
-    >
-      Scope · {view.scopeText}
-    </p>
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={setupWorkspaceTestIds.metadata}
-    >
-      Metadata · {view.metadataText}
-    </p>
-    <p
-      class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
-      data-testid={setupWorkspaceTestIds.progress}
-    >
-      Progress · {view.progressText}
-    </p>
-  </div>
-
-  {#if view.noticeText}
-    <div
-      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-warning"
-      data-testid={setupWorkspaceTestIds.notice}
-    >
-      {view.noticeText}
-    </div>
-  {/if}
-
   <SetupCheckpointBanner checkpoint={view.checkpoint} onClear={clearCheckpoint} />
 
   <div
-    class="setup-workspace-layout mt-4"
+    class="setup-workspace-layout"
     class:setup-workspace-layout--phone={isPhoneTier}
     data-shell-tier={chromeStore.current.tier}
   >
@@ -415,7 +368,7 @@ function clearCheckpoint() {
   .setup-workspace-layout {
     display: flex;
     gap: 8px;
-    height: 100%;
+    flex: 1;
     min-height: 0;
     overflow: hidden;
   }
