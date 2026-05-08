@@ -309,6 +309,27 @@ describe("ConnectionPanel", () => {
     );
   });
 
+  it("keeps transport helper copy out of the compact form and tucks serial baud under advanced", async () => {
+    const { service } = createMockService();
+    const store = createSessionStore(service);
+
+    await store.initialize();
+    render(withSessionContext(store, ConnectionPanel));
+
+    const transportSelect = screen.getByTestId("connection-transport-select") as HTMLSelectElement;
+    await fireEvent.change(transportSelect, { target: { value: "tcp" } });
+
+    expect(screen.queryByText("TCP available")).toBeNull();
+
+    await fireEvent.change(transportSelect, { target: { value: "serial" } });
+
+    expect(screen.queryByText("Serial available")).toBeNull();
+    const advancedSummary = screen.getByText("Advanced");
+    const advancedDetails = advancedSummary.closest("details") as HTMLDetailsElement | null;
+    expect(advancedDetails?.open).toBe(false);
+    expect(screen.getByTestId("connection-serial-baud")).toBeTruthy();
+  });
+
   it("shows local validation failures inline without raising connection failure toasts", async () => {
     const { service } = createMockService();
     const store = createSessionStore(service);

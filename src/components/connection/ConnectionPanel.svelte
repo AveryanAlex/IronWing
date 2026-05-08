@@ -135,45 +135,18 @@ async function onSubmit(event: SubmitEvent) {
       errors={fieldErrors}
       form={$store.connectionForm}
       formLocked={panelView.formLocked}
+      connectDisabled={panelView.connectDisabled}
+      connected={$view.connected}
+      isConnecting={$view.isConnecting}
       onFieldChange={updateField}
+      onCancelConnect={() => void store.cancelConnect()}
+      onDisconnect={() => void store.disconnect()}
       onRefreshBondedDevices={() => void store.refreshBondedDevices()}
       onRefreshSerialPorts={() => void store.refreshSerialPorts()}
       onScanBleDevices={() => void store.scanBleDevices()}
-      selectedTransportDescriptor={$view.selectedTransportDescriptor}
       serialPorts={$store.serialPorts}
       transportDescriptors={$store.transportDescriptors}
     />
-
-    <div class="flex flex-wrap gap-3">
-      {#if $view.isConnecting}
-        <button
-          class="rounded-md bg-warning px-3 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105"
-          data-testid="connection-cancel-btn"
-          onclick={() => void store.cancelConnect()}
-          type="button"
-        >
-          Cancel
-        </button>
-      {:else if $view.connected}
-        <button
-          class="rounded-md border border-border bg-bg-primary px-3 py-2 text-sm font-semibold text-text-primary transition hover:border-border-light hover:bg-bg-input"
-          data-testid="connection-disconnect-btn"
-          onclick={() => void store.disconnect()}
-          type="button"
-        >
-          Disconnect
-        </button>
-      {:else}
-        <button
-          class="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-bg-primary transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-          data-testid="connection-connect-btn"
-          disabled={panelView.connectDisabled}
-          type="submit"
-        >
-          Connect
-        </button>
-      {/if}
-    </div>
 
     {#if visibleError}
       <p
@@ -187,4 +160,3 @@ async function onSubmit(event: SubmitEvent) {
     <ConnectionDiagnostics state={$store} />
   </form>
 </section>
-
