@@ -33,15 +33,15 @@ let {
   layout,
 }: Props = $props();
 
-let state = $derived($store);
-let isRecoveryActive = $derived(state.activePath === "dfu_recovery");
+let workspaceState = $derived($store);
+let isRecoveryActive = $derived(workspaceState.activePath === "dfu_recovery");
 let isRecoveryCancelling = $derived(
-  state.sessionStatus.kind === "cancelling" && state.sessionStatus.path === "dfu_recovery",
+  workspaceState.sessionStatus.kind === "cancelling" && workspaceState.sessionStatus.path === "dfu_recovery",
 );
 let usingManualSource = $derived(
-  state.recovery.source?.kind === "local_apj_bytes" || state.recovery.source?.kind === "local_bin_bytes",
+  workspaceState.recovery.source?.kind === "local_apj_bytes" || workspaceState.recovery.source?.kind === "local_bin_bytes",
 );
-let usingOfficialSource = $derived(state.recovery.source?.kind === "official_bootloader");
+let usingOfficialSource = $derived(workspaceState.recovery.source?.kind === "official_bootloader");
 
 let recoveryTargets = $state<CatalogTargetSummary[]>([]);
 let targetPhase = $state<CatalogLoadPhase>("idle");
@@ -148,14 +148,14 @@ async function loadRecoveryTargets() {
     targetPhase = "ready";
     targetError = null;
 
-    const matchedTarget = state.recovery.target
-      ? recoveryTargets.find((target) => targetKey(target) === targetKey(state.recovery.target)) ?? null
+    const matchedTarget = workspaceState.recovery.target
+      ? recoveryTargets.find((target) => targetKey(target) === targetKey(workspaceState.recovery.target)) ?? null
       : null;
 
     if (matchedTarget) {
-      if (state.recovery.source?.kind === "official_bootloader" && state.recovery.source.board_target !== matchedTarget.platform) {
+      if (workspaceState.recovery.source?.kind === "official_bootloader" && workspaceState.recovery.source.board_target !== matchedTarget.platform) {
         await selectOfficialTarget(matchedTarget);
-      } else if (!state.recovery.target || targetKey(state.recovery.target) !== targetKey(matchedTarget)) {
+      } else if (!workspaceState.recovery.target || targetKey(workspaceState.recovery.target) !== targetKey(matchedTarget)) {
         store.setRecoveryTarget(matchedTarget);
       }
       return;
@@ -166,11 +166,11 @@ async function loadRecoveryTargets() {
       return;
     }
 
-    if (state.recovery.target !== null) {
+    if (workspaceState.recovery.target !== null) {
       store.setRecoveryTarget(null);
     }
 
-    if (state.recovery.source?.kind === "official_bootloader") {
+    if (workspaceState.recovery.source?.kind === "official_bootloader") {
       store.setRecoverySource(null, null);
     }
   } catch (error) {
@@ -213,8 +213,8 @@ function setManualKind(nextKind: ManualRecoveryKind) {
   manualConfirmed = false;
   store.setRecoverySourceError(null);
 
-  if (state.recovery.source?.kind === "local_apj_bytes" || state.recovery.source?.kind === "local_bin_bytes") {
-    if (state.recovery.source.kind !== nextKind) {
+  if (workspaceState.recovery.source?.kind === "local_apj_bytes" || workspaceState.recovery.source?.kind === "local_bin_bytes") {
+    if (workspaceState.recovery.source.kind !== nextKind) {
       store.setRecoverySource(null, null);
     }
   }
@@ -226,7 +226,7 @@ function recoveryStateLabel() {
   }
 
   if (isRecoveryActive) {
-    return `active:${state.sessionPhase ?? "running"}`;
+    return `active:${workspaceState.sessionPhase ?? "running"}`;
   }
 
   if (usingOfficialSource) {
@@ -237,13 +237,13 @@ function recoveryStateLabel() {
     return "manual-armed";
   }
 
-  return state.recovery.scanPhase;
+  return workspaceState.recovery.scanPhase;
 }
 
-let selectedTargetKey = $derived(state.recovery.target ? targetKey(state.recovery.target) : "");
-let manualPanelOpen = $derived(advancedRequestedOpen || usingManualSource || Boolean(state.recovery.sourceError));
+let selectedTargetKey = $derived(workspaceState.recovery.target ? targetKey(workspaceState.recovery.target) : "");
+let manualPanelOpen = $derived(advancedRequestedOpen || usingManualSource || Boolean(workspaceState.recovery.sourceError));
 let recoverySourceState = $derived.by(() => {
-  const metadata = state.recovery.sourceMetadata;
+  const metadata = workspaceState.recovery.sourceMetadata;
   if (!metadata) {
     return "No DFU recovery source armed";
   }
@@ -256,34 +256,34 @@ let recoveryBlockedReason = $derived.by(() => {
     return layout.blockedDetail ?? "Firmware start is blocked on constrained layouts.";
   }
 
-  if (state.recovery.scanPhase === "loading" && state.recovery.devices.length === 0) {
+  if (workspaceState.recovery.scanPhase === "loading" && workspaceState.recovery.devices.length === 0) {
     return "Scanning for DFU devices. Keep the controller in DFU mode until it appears here.";
   }
 
-  if (state.recovery.scanError) {
-    return state.recovery.scanError;
+  if (workspaceState.recovery.scanError) {
+    return workspaceState.recovery.scanError;
   }
 
-  if (state.recovery.devices.length === 0) {
+  if (workspaceState.recovery.devices.length === 0) {
     return "No DFU device is currently visible. Connect the controller in DFU mode and rescan.";
   }
 
-  if (state.recovery.device === null) {
+  if (workspaceState.recovery.device === null) {
     return "More than one DFU device is visible. Choose the exact device explicitly before starting recovery.";
   }
 
-  if (usingOfficialSource && state.recovery.target === null) {
+  if (usingOfficialSource && workspaceState.recovery.target === null) {
     return recoveryTargets.length === 0
       ? "No official bootloader target is available right now. Retry the target list or use a validated manual recovery image."
       : "Choose the exact official bootloader target before starting recovery.";
   }
 
-  if (state.recovery.source === null) {
+  if (workspaceState.recovery.source === null) {
     return "Choose an official bootloader target or supply a validated manual APJ/BIN image before starting recovery.";
   }
 
-  if (state.recovery.sourceError) {
-    return state.recovery.sourceError;
+  if (workspaceState.recovery.sourceError) {
+    return workspaceState.recovery.sourceError;
   }
 
   if (usingManualSource && !manualConfirmed) {
@@ -300,9 +300,9 @@ let canStartRecovery = $derived(
   layout.actionsEnabled
   && !isRecoveryActive
   && !isRecoveryCancelling
-  && state.recovery.device !== null
-  && state.recovery.source !== null
-  && (!usingOfficialSource || state.recovery.target !== null)
+  && workspaceState.recovery.device !== null
+  && workspaceState.recovery.source !== null
+  && (!usingOfficialSource || workspaceState.recovery.target !== null)
   && (!usingManualSource || manualConfirmed)
   && dfuConfirmed,
 );
@@ -312,11 +312,11 @@ onMount(() => {
 });
 
 $effect(() => {
-  const currentSourceKey = state.recovery.source?.kind === "local_apj_bytes"
-    ? `local_apj_bytes:${state.recovery.source.data.length}:${state.recovery.sourceMetadata?.digest ?? ""}`
-    : state.recovery.source?.kind === "local_bin_bytes"
-      ? `local_bin_bytes:${state.recovery.source.data.length}:${state.recovery.sourceMetadata?.digest ?? ""}`
-      : state.recovery.source?.kind ?? "none";
+  const currentSourceKey = workspaceState.recovery.source?.kind === "local_apj_bytes"
+    ? `local_apj_bytes:${workspaceState.recovery.source.data.length}:${workspaceState.recovery.sourceMetadata?.digest ?? ""}`
+    : workspaceState.recovery.source?.kind === "local_bin_bytes"
+      ? `local_bin_bytes:${workspaceState.recovery.source.data.length}:${workspaceState.recovery.sourceMetadata?.digest ?? ""}`
+      : workspaceState.recovery.source?.kind ?? "none";
 
   if (currentSourceKey === lastManualSourceKey) {
     return;
@@ -325,8 +325,8 @@ $effect(() => {
   lastManualSourceKey = currentSourceKey;
   manualConfirmed = false;
 
-  if (state.recovery.source?.kind === "local_apj_bytes" || state.recovery.source?.kind === "local_bin_bytes") {
-    manualKind = state.recovery.source.kind;
+  if (workspaceState.recovery.source?.kind === "local_apj_bytes" || workspaceState.recovery.source?.kind === "local_bin_bytes") {
+    manualKind = workspaceState.recovery.source.kind;
   }
 });
 </script>
@@ -362,12 +362,12 @@ $effect(() => {
             data-testid={firmwareWorkspaceTestIds.recoveryDeviceSelect}
             disabled={isRecoveryActive}
             onchange={(event) => store.setRecoveryDevice(
-              state.recovery.devices.find((device) => device.unique_id === (event.currentTarget as HTMLSelectElement).value) ?? null,
+              workspaceState.recovery.devices.find((device) => device.unique_id === (event.currentTarget as HTMLSelectElement).value) ?? null,
             )}
-            value={state.recovery.device?.unique_id ?? ""}
+            value={workspaceState.recovery.device?.unique_id ?? ""}
           >
             <option value="">Choose DFU device…</option>
-            {#each state.recovery.devices as device (device.unique_id)}
+            {#each workspaceState.recovery.devices as device (device.unique_id)}
               <option value={device.unique_id}>{deviceLabel(device)}</option>
             {/each}
           </select>
@@ -389,12 +389,12 @@ $effect(() => {
         data-testid={firmwareWorkspaceTestIds.recoveryDeviceState}
       >
         <span class="font-semibold text-text-primary">Selected device</span>
-        <p class="mt-1">{deviceLabel(state.recovery.device)} · {deviceDetail(state.recovery.device)}</p>
+        <p class="mt-1">{deviceLabel(workspaceState.recovery.device)} · {deviceDetail(workspaceState.recovery.device)}</p>
       </div>
 
-      {#if state.recovery.scanError}
+      {#if workspaceState.recovery.scanError}
         <div class="mt-3 rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
-          {state.recovery.scanError}
+          {workspaceState.recovery.scanError}
         </div>
       {/if}
 
@@ -404,11 +404,11 @@ $effect(() => {
             <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Official bootloader</p>
             <h4 class="mt-1 text-sm font-semibold text-text-primary">Primary recovery source</h4>
           </div>
-          {#if !usingOfficialSource && state.recovery.target}
+          {#if !usingOfficialSource && workspaceState.recovery.target}
             <button
               class="rounded-md border border-success/30 bg-bg-primary px-3 py-1.5 text-xs font-semibold text-success transition hover:bg-success/5"
               data-testid={firmwareWorkspaceTestIds.recoveryOfficialAction}
-              onclick={() => void selectOfficialTarget(state.recovery.target)}
+              onclick={() => void selectOfficialTarget(workspaceState.recovery.target)}
               type="button"
             >
               Use official bootloader
@@ -471,7 +471,7 @@ $effect(() => {
           data-testid={firmwareWorkspaceTestIds.recoveryTargetState}
         >
           <span class="font-semibold text-text-primary">Active official target</span>
-          <p class="mt-1">{targetLabel(state.recovery.target)} · {targetDetail(state.recovery.target)}</p>
+          <p class="mt-1">{targetLabel(workspaceState.recovery.target)} · {targetDetail(workspaceState.recovery.target)}</p>
         </div>
       </div>
     </article>
@@ -546,12 +546,12 @@ $effect(() => {
             {manualKind === "local_apj_bytes" ? "Choose manual APJ" : "Choose manual BIN"}
           </button>
 
-          {#if state.recovery.sourceError}
+          {#if workspaceState.recovery.sourceError}
             <div
               class="rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger"
               data-testid={firmwareWorkspaceTestIds.recoverySourceError}
             >
-              {state.recovery.sourceError}
+              {workspaceState.recovery.sourceError}
             </div>
           {/if}
 
@@ -597,13 +597,13 @@ $effect(() => {
     {#if isRecoveryActive}
       <div class="mt-3 rounded-xl border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-text-primary">
         <p class="font-semibold">DFU recovery in progress</p>
-        <p class="mt-1">{state.progress?.phase_label ?? state.sessionPhase ?? "working"}</p>
-        {#if state.progress}
+        <p class="mt-1">{workspaceState.progress?.phase_label ?? workspaceState.sessionPhase ?? "working"}</p>
+        {#if workspaceState.progress}
           <div class="mt-3 h-2 overflow-hidden rounded-full bg-bg-primary/70" data-testid={firmwareWorkspaceTestIds.recoveryProgress}>
-            <div class="h-full rounded-full bg-warning transition-[width]" style={`width: ${Math.max(0, Math.min(100, state.progress.pct))}%`}></div>
+            <div class="h-full rounded-full bg-warning transition-[width]" style={`width: ${Math.max(0, Math.min(100, workspaceState.progress.pct))}%`}></div>
           </div>
           <p class="mt-2 text-xs text-text-secondary">
-            {state.progress.bytes_written} / {state.progress.bytes_total} bytes · {Math.round(state.progress.pct)}%
+            {workspaceState.progress.bytes_written} / {workspaceState.progress.bytes_total} bytes · {Math.round(workspaceState.progress.pct)}%
           </p>
         {/if}
       </div>

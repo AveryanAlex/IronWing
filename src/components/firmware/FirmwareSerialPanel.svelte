@@ -50,10 +50,10 @@ let {
   layout,
 }: Props = $props();
 
-let state = $derived($store);
-let isSerialActive = $derived(state.activePath === "serial_primary");
+let workspaceState = $derived($store);
+let isSerialActive = $derived(workspaceState.activePath === "serial_primary");
 let isSerialCancelling = $derived(
-  state.sessionStatus.kind === "cancelling" && state.sessionStatus.path === "serial_primary",
+  workspaceState.sessionStatus.kind === "cancelling" && workspaceState.sessionStatus.path === "serial_primary",
 );
 
 let catalogTargets = $state<CatalogTargetSummary[]>([]);
@@ -182,12 +182,12 @@ function blockedReasonCopy(reason: SerialReadinessBlockedReason | null): string 
     case "source_missing":
       return "Choose an official catalog entry or load a local APJ before flashing.";
     default:
-      return "Serial install is still blocked by the current readiness state.";
+		return "Serial install is still blocked by the current readiness state.";
   }
 }
 
 function bootloaderTransitionCopy() {
-  const transition = state.serial.readiness.response?.bootloader_transition?.kind;
+  const transition = workspaceState.serial.readiness.response?.bootloader_transition?.kind;
   switch (transition) {
     case "auto_reboot_supported":
       return "The active MAVLink link safely matches this port, so IronWing can request bootloader entry automatically when flashing starts.";
@@ -208,10 +208,10 @@ function serialStateLabel() {
   }
 
   if (isSerialActive) {
-    return `active:${state.sessionPhase ?? "running"}`;
+    return `active:${workspaceState.sessionPhase ?? "running"}`;
   }
 
-  return state.serial.readiness.phase;
+  return workspaceState.serial.readiness.phase;
 }
 
 async function loadCatalogTargets() {
@@ -266,7 +266,7 @@ async function loadCatalogEntriesForTarget(target: CatalogTargetSummary, sourceK
     selectedEntryIndex = 0;
     currentEntryTargetKey = targetKey;
 
-    if (state.serial.source.kind === "catalog_url") {
+    if (workspaceState.serial.source.kind === "catalog_url") {
       await store.setSerialSource({ kind: "catalog_url", url: "" }, null);
     }
   }
@@ -285,14 +285,14 @@ async function loadCatalogEntriesForTarget(target: CatalogTargetSummary, sourceK
     catalogEntryPhase = "ready";
     catalogEntryError = null;
 
-    const currentCatalogUrl = state.serial.source.kind === "catalog_url" ? state.serial.source.url : null;
+    const currentCatalogUrl = workspaceState.serial.source.kind === "catalog_url" ? workspaceState.serial.source.url : null;
     const preservedIndex = currentCatalogUrl
       ? nextEntries.findIndex((entry) => entry.url === currentCatalogUrl)
       : -1;
     const nextIndex = preservedIndex >= 0 ? preservedIndex : 0;
     selectedEntryIndex = nextEntries[nextIndex] ? nextIndex : 0;
 
-    if (state.serial.source.kind !== "local_apj_bytes") {
+    if (workspaceState.serial.source.kind !== "local_apj_bytes") {
       await setCatalogSourceFromEntry(nextEntries[nextIndex] ?? null);
     }
 
@@ -307,14 +307,14 @@ async function loadCatalogEntriesForTarget(target: CatalogTargetSummary, sourceK
     catalogEntryPhase = "failed";
     catalogEntryError = service.formatError(error);
 
-    if (state.serial.source.kind === "catalog_url") {
+    if (workspaceState.serial.source.kind === "catalog_url") {
       await store.setSerialSource({ kind: "catalog_url", url: "" }, null);
     }
   }
 }
 
 async function retryCatalogEntries() {
-  const target = manualSelectionActive ? state.serial.target : autoTarget;
+  const target = manualSelectionActive ? workspaceState.serial.target : autoTarget;
   if (!target) {
     return;
   }
@@ -336,7 +336,7 @@ async function handleUseCatalogSource() {
 async function handleCatalogEntryChange(index: number) {
   selectedEntryIndex = index;
 
-  if (state.serial.source.kind === "catalog_url") {
+  if (workspaceState.serial.source.kind === "catalog_url") {
     await setCatalogSourceFromEntry(catalogEntries[index] ?? null);
   }
 }
@@ -367,7 +367,7 @@ onMount(() => {
   void loadCatalogTargets();
 });
 
-let detectedBoardId = $derived(state.serial.readiness.response?.target_hint?.detected_board_id ?? null);
+let detectedBoardId = $derived(workspaceState.serial.readiness.response?.target_hint?.detected_board_id ?? null);
 let detectedTargets = $derived.by(() => (
   detectedBoardId === null
     ? []
@@ -407,11 +407,11 @@ let targetProofState = $derived.by<TargetProofState>(() => {
 });
 let manualTargetRequired = $derived(targetProofState !== "detected");
 let manualSelectionActive = $derived(
-  state.serial.target !== null
+  workspaceState.serial.target !== null
   && (
     manualSelectionCommitted
     || autoTarget === null
-    || catalogTargetKey(state.serial.target) !== catalogTargetKey(autoTarget)
+    || catalogTargetKey(workspaceState.serial.target) !== catalogTargetKey(autoTarget)
   ),
 );
 let manualSectionOpen = $derived(manualTargetRequired || manualOverrideExpanded || manualSelectionActive);
@@ -420,36 +420,36 @@ let filteredTargets = $derived(filterCatalogTargets(catalogTargets, {
   vehicleType: targetVehicleType,
 }));
 let targetVehicleTypes = $derived(listCatalogTargetVehicleTypes(catalogTargets));
-let selectedTargetKey = $derived(state.serial.target ? catalogTargetKey(state.serial.target) : null);
+let selectedTargetKey = $derived(workspaceState.serial.target ? catalogTargetKey(workspaceState.serial.target) : null);
 let selectedTargetVisible = $derived(
   !manualSelectionActive
   || !selectedTargetKey
   || filteredTargets.some((match) => match.key === selectedTargetKey)
 );
 let selectedCatalogEntry = $derived(catalogEntries[selectedEntryIndex] ?? null);
-let usingCatalogSource = $derived(state.serial.source.kind === "catalog_url");
-let usingLocalSource = $derived(state.serial.source.kind === "local_apj_bytes");
+let usingCatalogSource = $derived(workspaceState.serial.source.kind === "catalog_url");
+let usingLocalSource = $derived(workspaceState.serial.source.kind === "local_apj_bytes");
 let manualTargetChosen = $derived(
-  !manualTargetRequired || (manualSelectionActive && state.serial.target !== null),
+  !manualTargetRequired || (manualSelectionActive && workspaceState.serial.target !== null),
 );
 let sourceReady = $derived.by(() => {
-  if (state.serial.source.kind === "catalog_url") {
-    return state.serial.source.url.trim().length > 0;
+  if (workspaceState.serial.source.kind === "catalog_url") {
+    return workspaceState.serial.source.url.trim().length > 0;
   }
 
-  return state.serial.source.data.length > 0;
+  return workspaceState.serial.source.data.length > 0;
 });
 let canStartSerial = $derived(
   layout.actionsEnabled
   && !isSerialActive
-  && state.serial.readiness.phase === "ready"
+  && workspaceState.serial.readiness.phase === "ready"
   && sourceReady
   && manualTargetChosen
   && selectedTargetVisible,
 );
 let selectedTargetState = $derived.by(() => {
-  if (manualSelectionActive && state.serial.target) {
-    return `manual · ${targetLabel(state.serial.target)} · ${targetMeta(state.serial.target)}`;
+  if (manualSelectionActive && workspaceState.serial.target) {
+    return `manual · ${targetLabel(workspaceState.serial.target)} · ${targetMeta(workspaceState.serial.target)}`;
   }
 
   if (autoTarget) {
@@ -465,7 +465,7 @@ let selectedTargetState = $derived.by(() => {
   return "unproven · manual choice required";
 });
 let selectedSourceState = $derived.by(() => {
-  const metadata = state.serial.sourceMetadata;
+  const metadata = workspaceState.serial.sourceMetadata;
   if (!metadata) {
     return usingLocalSource ? "local-apj · no file loaded" : "catalog · no official entry selected";
   }
@@ -506,12 +506,12 @@ let readinessDetail = $derived.by(() => {
     return layout.blockedDetail ?? blockedReasonCopy(null);
   }
 
-  if (state.serial.readiness.phase === "checking") {
+  if (workspaceState.serial.readiness.phase === "checking") {
     return "Serial readiness is refreshing for the current port, source, and erase settings.";
   }
 
-  if (state.serial.readiness.phase === "failed") {
-    return state.serial.readiness.error ?? "Serial readiness failed. Retry the current source selection.";
+  if (workspaceState.serial.readiness.phase === "failed") {
+    return workspaceState.serial.readiness.error ?? "Serial readiness failed. Retry the current source selection.";
   }
 
   if (manualTargetRequired && !manualTargetChosen) {
@@ -522,9 +522,9 @@ let readinessDetail = $derived.by(() => {
     return "The selected manual target is hidden by the current search or vehicle filter. Clear the filter or reselect a visible target before flashing.";
   }
 
-  if (state.serial.readiness.phase === "blocked") {
-    return blockedReasonCopy(state.serial.readiness.response?.readiness.kind === "blocked"
-      ? state.serial.readiness.response.readiness.reason
+  if (workspaceState.serial.readiness.phase === "blocked") {
+    return blockedReasonCopy(workspaceState.serial.readiness.response?.readiness.kind === "blocked"
+      ? workspaceState.serial.readiness.response.readiness.reason
       : null);
   }
 
@@ -532,7 +532,7 @@ let readinessDetail = $derived.by(() => {
 });
 
 $effect(() => {
-  const port = state.serial.port;
+  const port = workspaceState.serial.port;
   if (!portObservationInitialized) {
     portObservationInitialized = true;
     lastObservedPort = port;
@@ -551,26 +551,26 @@ $effect(() => {
   catalogEntryError = null;
   selectedEntryIndex = 0;
 
-  if (state.serial.target !== null) {
+  if (workspaceState.serial.target !== null) {
     void store.setSerialTarget(null);
   }
 
-  if (state.serial.source.kind === "catalog_url" && state.serial.source.url.trim().length > 0) {
+  if (workspaceState.serial.source.kind === "catalog_url" && workspaceState.serial.source.url.trim().length > 0) {
     void store.setSerialSource({ kind: "catalog_url", url: "" }, null);
   }
 });
 
 $effect(() => {
-  if (!manualSelectionActive || !state.serial.target) {
+  if (!manualSelectionActive || !workspaceState.serial.target) {
     return;
   }
 
-  const key = catalogTargetKey(state.serial.target);
+  const key = catalogTargetKey(workspaceState.serial.target);
   if (currentEntryTargetKey === key && catalogEntryPhase !== "idle") {
     return;
   }
 
-  void loadCatalogEntriesForTarget(state.serial.target, "manual");
+  void loadCatalogEntriesForTarget(workspaceState.serial.target, "manual");
 });
 
 $effect(() => {
@@ -586,7 +586,7 @@ $effect(() => {
   lastAutoTargetKey = key;
 
   if (!autoTarget) {
-    if (state.serial.target !== null) {
+    if (workspaceState.serial.target !== null) {
       void store.setSerialTarget(null);
     }
     return;
@@ -627,12 +627,12 @@ $effect(() => {
             data-testid={firmwareWorkspaceTestIds.serialPort}
             disabled={isSerialActive}
             onchange={(event) => void store.setSerialPort((event.currentTarget as HTMLSelectElement).value)}
-            value={state.serial.port}
+            value={workspaceState.serial.port}
           >
-            {#if state.serial.availablePorts.length === 0}
+            {#if workspaceState.serial.availablePorts.length === 0}
               <option value="">No serial ports available</option>
             {/if}
-            {#each state.serial.availablePorts as port (port.port_name)}
+            {#each workspaceState.serial.availablePorts as port (port.port_name)}
               <option value={port.port_name}>
                 {port.port_name}{port.product ? ` · ${port.product}` : ""}
               </option>
@@ -647,7 +647,7 @@ $effect(() => {
             data-testid={firmwareWorkspaceTestIds.serialBaud}
             disabled={isSerialActive}
             onchange={(event) => store.setSerialBaud(Number((event.currentTarget as HTMLSelectElement).value))}
-            value={String(state.serial.baud)}
+            value={String(workspaceState.serial.baud)}
           >
             {#each BAUD_RATES as baud (baud)}
               <option value={String(baud)}>{baud}</option>
@@ -666,9 +666,9 @@ $effect(() => {
         </button>
       </div>
 
-      {#if state.serial.preflightError}
+      {#if workspaceState.serial.preflightError}
         <div class="mt-3 rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
-          {state.serial.preflightError}
+          {workspaceState.serial.preflightError}
         </div>
       {/if}
 
@@ -829,12 +829,12 @@ $effect(() => {
                 </p>
               {/if}
 
-              {#if manualSelectionActive && state.serial.target}
+              {#if manualSelectionActive && workspaceState.serial.target}
                 <p
                   class="mt-3 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-text-primary"
                   data-testid={firmwareWorkspaceTestIds.manualTargetSelected}
                 >
-                  Manual target selected · {targetLabel(state.serial.target)} · {targetMeta(state.serial.target)}
+                  Manual target selected · {targetLabel(workspaceState.serial.target)} · {targetMeta(workspaceState.serial.target)}
                 </p>
               {/if}
 
@@ -946,18 +946,18 @@ $effect(() => {
             <p class="mt-1">{selectedSourceState}</p>
           </div>
 
-          {#if state.serial.sourceError}
+          {#if workspaceState.serial.sourceError}
             <div
               class="mt-3 rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger"
               data-testid={firmwareWorkspaceTestIds.sourceError}
             >
-              {state.serial.sourceError}
+              {workspaceState.serial.sourceError}
             </div>
           {/if}
 
           <label class="mt-3 flex items-start gap-3 rounded-xl border border-border bg-bg-primary px-3 py-3">
             <input
-              checked={state.serial.fullChipErase}
+              checked={workspaceState.serial.fullChipErase}
               class="mt-1"
               data-testid={firmwareWorkspaceTestIds.fullChipErase}
               disabled={isSerialActive}
@@ -970,17 +970,17 @@ $effect(() => {
             </span>
           </label>
 
-          {#if state.serial.preflight?.has_params_to_backup}
+          {#if workspaceState.serial.preflight?.has_params_to_backup}
             <div
               class="mt-3 rounded-xl border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-warning"
               data-testid={firmwareWorkspaceTestIds.paramBackup}
             >
               <p class="font-semibold">Parameter backup recommended</p>
               <p class="mt-1" data-testid={firmwareWorkspaceTestIds.paramBackupState}>
-                Flashing will break the current vehicle session. {state.serial.preflight.param_count} parameter{state.serial.preflight.param_count === 1 ? " is" : "s are"} currently available to back up before install.
+                Flashing will break the current vehicle session. {workspaceState.serial.preflight.param_count} parameter{workspaceState.serial.preflight.param_count === 1 ? " is" : "s are"} currently available to back up before install.
               </p>
             </div>
-          {:else if state.serial.preflightPhase === "ready"}
+          {:else if workspaceState.serial.preflightPhase === "ready"}
             <div
               class="mt-3 rounded-xl border border-border bg-bg-primary px-3 py-3 text-sm text-text-secondary"
               data-testid={firmwareWorkspaceTestIds.paramBackupState}
@@ -998,7 +998,7 @@ $effect(() => {
             <h4 class="mt-1 text-sm font-semibold text-text-primary">Bootloader and start gating</h4>
           </div>
           <span class="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted" data-testid={firmwareWorkspaceTestIds.serialReadinessState}>
-            {state.serial.readiness.phase}
+            {workspaceState.serial.readiness.phase}
           </span>
         </div>
 
@@ -1006,7 +1006,7 @@ $effect(() => {
           {bootloaderTransitionCopy()}
         </p>
 
-        {#if state.serial.readiness.response?.validation_pending}
+        {#if workspaceState.serial.readiness.response?.validation_pending}
           <p class="mt-2 text-sm text-text-secondary" data-testid={firmwareWorkspaceTestIds.serialValidationPending}>
             Firmware compatibility will be validated after bootloader sync before erase/program begins.
           </p>
@@ -1019,13 +1019,13 @@ $effect(() => {
         {#if isSerialActive}
           <div class="mt-3 rounded-xl border border-accent/30 bg-accent/10 px-3 py-3 text-sm text-text-primary">
             <p class="font-semibold">Serial install in progress</p>
-            <p class="mt-1">{state.progress?.phase_label ?? state.sessionPhase ?? "working"}</p>
-            {#if state.progress}
+            <p class="mt-1">{workspaceState.progress?.phase_label ?? workspaceState.sessionPhase ?? "working"}</p>
+            {#if workspaceState.progress}
               <div class="mt-3 h-2 overflow-hidden rounded-full bg-bg-primary/70" data-testid={firmwareWorkspaceTestIds.serialProgress}>
-                <div class="h-full rounded-full bg-accent transition-[width]" style={`width: ${Math.max(0, Math.min(100, state.progress.pct))}%`}></div>
+                <div class="h-full rounded-full bg-accent transition-[width]" style={`width: ${Math.max(0, Math.min(100, workspaceState.progress.pct))}%`}></div>
               </div>
               <p class="mt-2 text-xs text-text-secondary">
-                {state.progress.bytes_written} / {state.progress.bytes_total} bytes · {Math.round(state.progress.pct)}%
+                {workspaceState.progress.bytes_written} / {workspaceState.progress.bytes_total} bytes · {Math.round(workspaceState.progress.pct)}%
               </p>
             {/if}
           </div>

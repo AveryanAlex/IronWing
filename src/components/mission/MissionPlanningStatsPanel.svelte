@@ -179,7 +179,9 @@ let blockingItemsLabel = $derived(
 let draftOverridesDefaults = $derived(
   !numbersEqual(cruiseSpeed, confirmedCruiseSpeed) || !numbersEqual(hoverSpeed, confirmedHoverSpeed),
 );
-let speedStatusTone = $derived(readOnly ? "default" : draftOverridesDefaults ? "warning" : "success");
+let speedStatusTone: "default" | "success" | "warning" | "danger" = $derived(
+	readOnly ? "default" : draftOverridesDefaults ? "warning" : "success",
+);
 let speedStatusMessage = $derived.by(() => {
   if (readOnly) {
     return "Speed defaults stay visible here, but this attachment is read-only so edits are blocked.";

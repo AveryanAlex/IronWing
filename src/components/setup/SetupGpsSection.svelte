@@ -248,10 +248,10 @@ function stage(item: ParameterItemModel | null, draftValue: string, optionsReady
 }
 
 function buildGnssItems(meta: ParamMeta | undefined, currentMask: number | null) {
-  const bitmask = meta?.bitmask;
-  if (!Array.isArray(bitmask) || !Number.isInteger(currentMask) || currentMask < 0) {
-    return [];
-  }
+	const bitmask = meta?.bitmask;
+	if (!Array.isArray(bitmask) || currentMask === null || !Number.isInteger(currentMask) || currentMask < 0) {
+		return [];
+	}
 
   return bitmask
     .filter((entry) => Number.isInteger(entry.bit) && entry.bit >= 0 && entry.bit <= 31 && entry.label.trim().length > 0)
@@ -259,8 +259,8 @@ function buildGnssItems(meta: ParamMeta | undefined, currentMask: number | null)
       key: String(entry.bit),
       bit: entry.bit,
       label: entry.label,
-      checked: ((currentMask ?? 0) & (1 << entry.bit)) !== 0,
-    }));
+		checked: (currentMask & (1 << entry.bit)) !== 0,
+	}));
 }
 
 function resolveCurrentGnssMask(

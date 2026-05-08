@@ -111,26 +111,40 @@ function commandVariant(command: MissionCommand): { category: "Nav" | "Do" | "Co
 }
 
 function commandPayload(command: MissionCommand): Record<string, unknown> | null {
-  const variant = commandVariant(command);
-  if (!variant) {
-    return null;
-  }
+	if ("Nav" in command) {
+		const variant = commandVariant(command);
+		if (!variant) {
+			return null;
+		}
 
-  if (variant.category === "Nav") {
-    if (typeof command.Nav === "string") {
-      return null;
-    }
-    return (command.Nav as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
-  }
+		if (typeof command.Nav === "string") {
+			return null;
+		}
+		return (command.Nav as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
+	}
 
-  if (variant.category === "Do") {
-    if (typeof command.Do === "string") {
-      return null;
-    }
-    return (command.Do as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
-  }
+	if ("Do" in command) {
+		const variant = commandVariant(command);
+		if (!variant) {
+			return null;
+		}
 
-  return (command.Condition as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
+		if (typeof command.Do === "string") {
+			return null;
+		}
+		return (command.Do as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
+	}
+
+	if (!("Condition" in command)) {
+		return null;
+	}
+
+	const variant = commandVariant(command);
+	if (!variant) {
+		return null;
+	}
+
+	return (command.Condition as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
 }
 
 function commandSelectValue(command: MissionCommand): string {
@@ -185,7 +199,7 @@ function editableFields(command: MissionCommand): EditableField[] {
 
   return Object.entries(payload)
     .filter(([fieldKey]) => fieldKey !== "position")
-    .flatMap(([fieldKey, value]) => {
+		.flatMap<EditableField>(([fieldKey, value]) => {
       const descriptor = typedDescriptor(command, fieldKey);
       if (descriptor?.hidden) {
         return [];

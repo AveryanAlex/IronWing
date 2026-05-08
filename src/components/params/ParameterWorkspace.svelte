@@ -30,8 +30,17 @@ import ParameterWorkflowSection from "./ParameterWorkflowSection.svelte";
 import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
 
 type ExpertHighlightRequest = {
-  sourceLabel: string;
-  targetNames: string[];
+	sourceLabel: string;
+	targetNames: string[];
+};
+
+type ResolvedBatteryWorkflowInputs = {
+	cellCount: number;
+	chemistryIndex: number;
+};
+
+type ResolvedFlightWorkflowInputs = {
+	propInches: number;
 };
 
 let {
@@ -51,12 +60,12 @@ let flightPropSizeInput = $state("9");
 let expertSearchText = $state("");
 let expertFilter = $state<ParameterExpertFilter>("standard");
 let expertHighlightRequest = $state<ExpertHighlightRequest | null>(null);
-let lastValidBatteryInputs = $state<Required<BatteryWorkflowInputs>>({
-  cellCount: 4,
-  chemistryIndex: 0,
+let lastValidBatteryInputs = $state<ResolvedBatteryWorkflowInputs>({
+	cellCount: 4,
+	chemistryIndex: 0,
 });
-let lastValidFlightInputs = $state<Required<FlightWorkflowInputs>>({
-  propInches: 9,
+let lastValidFlightInputs = $state<ResolvedFlightWorkflowInputs>({
+	propInches: 9,
 });
 
 let params = $derived(paramsState.current);
@@ -70,10 +79,10 @@ let batteryValidation = $derived(
     chemistryIndex: batteryChemistryIndex,
   }),
 );
-let effectiveBatteryInputs = $derived(
-  batteryValidation.valid && batteryCellCount !== null
-    ? { cellCount: batteryCellCount, chemistryIndex: batteryChemistryIndex }
-    : lastValidBatteryInputs,
+let effectiveBatteryInputs: ResolvedBatteryWorkflowInputs = $derived(
+	batteryValidation.valid && batteryCellCount !== null
+		? { cellCount: batteryCellCount, chemistryIndex: batteryChemistryIndex }
+		: lastValidBatteryInputs,
 );
 let flightPropSize = $derived(parsePositiveNumber(flightPropSizeInput));
 let flightValidation = $derived(
@@ -81,10 +90,10 @@ let flightValidation = $derived(
     propInches: flightPropSize,
   }),
 );
-let effectiveFlightInputs = $derived(
-  flightValidation.valid && flightPropSize !== null
-    ? { propInches: flightPropSize }
-    : lastValidFlightInputs,
+let effectiveFlightInputs: ResolvedFlightWorkflowInputs = $derived(
+	flightValidation.valid && flightPropSize !== null
+		? { propInches: flightPropSize }
+		: lastValidFlightInputs,
 );
 let workflowSections = $derived.by(() =>
   buildParameterWorkflowSections({

@@ -323,7 +323,7 @@ function canStage(field: RtlFieldConfig): boolean {
       && params.stagedEdits[field.name]?.nextValue !== nextValue;
   }
 
-  const nextValue = resolveDraftRawValue(field.name, target.value, field.factor, field.sentinel);
+	const nextValue = resolveDraftRawValue(field.name, target.value, field.factor, field.decimals, field.sentinel);
   return nextValue !== null && target.value !== nextValue && params.stagedEdits[field.name]?.nextValue !== nextValue;
 }
 

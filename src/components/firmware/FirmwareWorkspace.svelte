@@ -53,16 +53,16 @@ let {
 let selectedMode = $state<WorkspaceMode>("install");
 let lastAutoReturnOutcomeKey = "";
 
-let state = $derived($store);
+let workspaceState = $derived($store);
 let shellChrome = $derived($chromeStore);
 let layout = $derived(resolveFirmwareWorkspaceLayout(shellChrome));
 let serialBusy = $derived(
-  state.activePath === "serial_primary"
-  || (state.sessionStatus.kind === "cancelling" && state.sessionStatus.path === "serial_primary"),
+  workspaceState.activePath === "serial_primary"
+  || (workspaceState.sessionStatus.kind === "cancelling" && workspaceState.sessionStatus.path === "serial_primary"),
 );
 let recoveryBusy = $derived(
-  state.activePath === "dfu_recovery"
-  || (state.sessionStatus.kind === "cancelling" && state.sessionStatus.path === "dfu_recovery"),
+  workspaceState.activePath === "dfu_recovery"
+  || (workspaceState.sessionStatus.kind === "cancelling" && workspaceState.sessionStatus.path === "dfu_recovery"),
 );
 let effectiveMode = $derived.by<WorkspaceMode>(() => {
   if (serialBusy) {
@@ -77,8 +77,8 @@ let effectiveMode = $derived.by<WorkspaceMode>(() => {
 });
 let showReturnGuidance = $derived(
   effectiveMode === "install"
-  && state.lastCompletedOutcome?.path === "dfu_recovery"
-  && state.lastCompletedOutcome.outcome.result === "verified",
+  && workspaceState.lastCompletedOutcome?.path === "dfu_recovery"
+  && workspaceState.lastCompletedOutcome.outcome.result === "verified",
 );
 
 onMount(() => {
@@ -92,8 +92,8 @@ onDestroy(() => {
 });
 
 $effect(() => {
-  const autoReturnOutcomeKey = state.lastCompletedOutcome?.path === "dfu_recovery"
-    && state.lastCompletedOutcome.outcome.result === "verified"
+  const autoReturnOutcomeKey = workspaceState.lastCompletedOutcome?.path === "dfu_recovery"
+    && workspaceState.lastCompletedOutcome.outcome.result === "verified"
     ? "dfu_recovery:verified"
     : "";
 
@@ -201,7 +201,7 @@ $effect(() => {
       <FirmwareRecoveryPanel {fileIo} layout={layout} {service} {store} />
     {/if}
 
-    <FirmwareOutcomePanel state={state} {store} />
+		<FirmwareOutcomePanel state={workspaceState} {store} />
   </div>
 </section>
 

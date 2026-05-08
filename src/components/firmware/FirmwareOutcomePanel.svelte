@@ -1,6 +1,5 @@
 <script lang="ts">
 import type {
-  DfuRecoveryOutcome,
   FirmwareOutcome,
   SerialFlashOutcome,
 } from "../../firmware";
@@ -141,10 +140,11 @@ function detailRows(outcome: FirmwareOutcome) {
     },
   ];
 
-  if (outcome.path === "dfu_recovery") {
-    const sourceLabel = state.recovery.sourceMetadata?.label ?? null;
-    const targetLabel = recoveryTargetLabel();
-    const deviceLabel = recoveryDeviceLabel();
+	if (outcome.path === "dfu_recovery") {
+		const recoveryOutcome = outcome.outcome;
+		const sourceLabel = state.recovery.sourceMetadata?.label ?? null;
+		const targetLabel = recoveryTargetLabel();
+		const deviceLabel = recoveryDeviceLabel();
 
     if (sourceLabel) {
       rows.push({ label: "Source", value: sourceLabel });
@@ -158,19 +158,19 @@ function detailRows(outcome: FirmwareOutcome) {
       rows.push({ label: "Device", value: deviceLabel });
     }
 
-    switch ((outcome.outcome as DfuRecoveryOutcome).result) {
+		switch (recoveryOutcome.result) {
       case "verified":
         rows.push({ label: "Next step", value: "Switch back to Install / Update and flash normal ArduPilot firmware over serial." });
         break;
       case "reset_unconfirmed":
         rows.push({ label: "Next step", value: "Reconnect or power-cycle the board, then continue with Install / Update." });
         break;
-      case "failed":
-        rows.push({ label: "Reason", value: outcome.outcome.reason });
-        break;
-      case "unsupported_recovery_path":
-        rows.push({ label: "Guidance", value: outcome.outcome.guidance });
-        break;
+			case "failed":
+				rows.push({ label: "Reason", value: recoveryOutcome.reason });
+				break;
+			case "unsupported_recovery_path":
+				rows.push({ label: "Guidance", value: recoveryOutcome.guidance });
+				break;
       case "cancelled":
         rows.push({ label: "Result", value: "operator cancelled before completion" });
         break;

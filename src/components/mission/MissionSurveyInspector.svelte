@@ -99,11 +99,12 @@ let formattedStats = $derived.by<FormattedSurveyStats | null>(() => {
     return null;
   }
 
-  const flightTime = "estimatedFlightTime_s" in region.generatedStats
-    ? region.generatedStats.estimatedFlightTime_s
-    : estimateSurveyFlightTime(region.generatedItems, cruiseSpeed);
+	const flightTime = "estimatedFlightTime_s" in region.generatedStats
+		? region.generatedStats.estimatedFlightTime_s
+		: estimateSurveyFlightTime(region.generatedItems, cruiseSpeed);
+	const normalizedFlightTime = typeof flightTime === "number" && Number.isFinite(flightTime) ? flightTime : null;
 
-  return formatSurveyStats(region.generatedStats, Number.isFinite(flightTime) ? flightTime : null);
+	return formatSurveyStats(region.generatedStats, normalizedFlightTime);
 });
 let regionWarnings = $derived.by(() => {
   const warnings = [...(region.importWarnings ?? [])];

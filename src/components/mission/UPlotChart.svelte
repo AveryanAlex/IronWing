@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { Attachment } from "svelte/attachments";
+import type UPlot from "uplot";
 import type { AlignedData, Options } from "uplot";
 import "uplot/dist/uPlot.min.css";
 
@@ -16,7 +17,7 @@ type PlotConfig = {
   height: number;
 };
 
-type UPlotConstructor = typeof import("uplot").default;
+type UPlotConstructor = typeof UPlot;
 
 let {
   options,
@@ -35,9 +36,9 @@ const plotAttachment = createPlotAttachment(() => plotConfig);
 let uPlotModulePromise: Promise<UPlotConstructor> | null = null;
 
 function loadUPlot(): Promise<UPlotConstructor> {
-  if (!uPlotModulePromise) {
-    uPlotModulePromise = import("uplot").then((module) => module.default);
-  }
+	if (!uPlotModulePromise) {
+		uPlotModulePromise = import("uplot").then((module) => (module as unknown as { default: UPlotConstructor }).default);
+	}
 
   return uPlotModulePromise;
 }

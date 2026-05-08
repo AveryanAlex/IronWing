@@ -1,5 +1,5 @@
 <script lang="ts">
-import { commandDisplayName } from "../../lib/mavkit-types";
+import { commandDisplayName, type MissionItem } from "../../lib/mavkit-types";
 import type { TypedDraftItem } from "../../lib/mission-draft-typed";
 import type { SurveyRegion, SurveyRegionBlock, SurveyPatternType } from "../../lib/survey-region";
 import type { MissionPlannerSelection } from "../../lib/stores/mission-planner";
@@ -96,6 +96,10 @@ function itemSummary(item: TypedDraftItem) {
   const altitude = item.preview.altitude_m === null ? "No altitude" : `${item.preview.altitude_m.toFixed(1)} m`;
   return `${item.preview.latitude_deg.toFixed(5)}, ${item.preview.longitude_deg.toFixed(5)} · ${altitude}`;
 }
+
+function missionDocument(item: TypedDraftItem): MissionItem {
+	return item.document as MissionItem;
+}
 </script>
 
 <section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.draftList}>
@@ -175,9 +179,9 @@ function itemSummary(item: TypedDraftItem) {
                 <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
                   Manual item {entry.item.index + 1}
                 </p>
-                <h4 class="mt-1 text-sm font-semibold text-text-primary">
-                  {commandDisplayName(entry.item.document.command)}
-                </h4>
+						<h4 class="mt-1 text-sm font-semibold text-text-primary">
+							{commandDisplayName(missionDocument(entry.item).command)}
+						</h4>
                 <p class="mt-1 text-xs text-text-secondary">{itemSummary(entry.item)}</p>
               </div>
 
@@ -187,7 +191,7 @@ function itemSummary(item: TypedDraftItem) {
                     Read-only
                   </span>
                 {/if}
-                {#if entry.item.document.current}
+						{#if missionDocument(entry.item).current}
                   <span class="rounded-full border border-success/30 bg-success/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-success">
                     Current
                   </span>

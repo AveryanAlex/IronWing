@@ -211,12 +211,16 @@ function withPolygonVertices(current: FenceRegion, vertices: GeoPoint2d[]): Fenc
     };
   }
 
-  return {
-    exclusion_polygon: {
-      ...current.exclusion_polygon,
-      vertices,
-    },
-  };
+	if ("exclusion_polygon" in current) {
+		return {
+		exclusion_polygon: {
+			...current.exclusion_polygon,
+			vertices,
+		},
+	};
+	}
+
+	return current;
 }
 
 function withCircleCenter(current: FenceRegion, center: GeoPoint2d): FenceRegion {
@@ -229,12 +233,16 @@ function withCircleCenter(current: FenceRegion, center: GeoPoint2d): FenceRegion
     };
   }
 
-  return {
-    exclusion_circle: {
-      ...current.exclusion_circle,
-      center,
-    },
-  };
+	if ("exclusion_circle" in current) {
+		return {
+		exclusion_circle: {
+			...current.exclusion_circle,
+			center,
+		},
+	};
+	}
+
+	return current;
 }
 
 function withCircleRadius(current: FenceRegion, radius_m: number): FenceRegion {
@@ -247,12 +255,16 @@ function withCircleRadius(current: FenceRegion, radius_m: number): FenceRegion {
     };
   }
 
-  return {
-    exclusion_circle: {
-      ...current.exclusion_circle,
-      radius_m,
-    },
-  };
+	if ("exclusion_circle" in current) {
+		return {
+		exclusion_circle: {
+			...current.exclusion_circle,
+			radius_m,
+		},
+	};
+	}
+
+	return current;
 }
 
 function withInclusionGroup(current: FenceRegion, group: number): FenceRegion {
@@ -265,12 +277,16 @@ function withInclusionGroup(current: FenceRegion, group: number): FenceRegion {
     };
   }
 
-  return {
-    inclusion_circle: {
-      ...current.inclusion_circle,
-      inclusion_group: group,
-    },
-  };
+	if ("inclusion_circle" in current) {
+		return {
+		inclusion_circle: {
+			...current.inclusion_circle,
+			inclusion_group: group,
+		},
+	};
+	}
+
+	return current;
 }
 
 function commitRegion(next: FenceRegion) {
