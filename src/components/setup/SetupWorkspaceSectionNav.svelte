@@ -18,6 +18,15 @@ function toggleGroup(groupId: string) {
   collapsedGroups[groupId] = !collapsedGroups[groupId];
 }
 
+function isComingLater(section: SetupWorkspaceSection): boolean {
+  return section.kind === "guided" && !section.implemented;
+}
+
+function isDisabled(section: SetupWorkspaceSection): boolean {
+  return isComingLater(section)
+    || (section.id === "full_parameters" && section.availability === "blocked");
+}
+
 function statusLabel(section: SetupWorkspaceSection): { text: string; className: string } | null {
   if (section.status === "complete") {
     return { text: "Done", className: "setup-nav__status--done" };
@@ -74,7 +83,7 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
             data-availability={section.availability}
             data-implemented={section.implemented ? "true" : "false"}
             data-testid={`${setupWorkspaceTestIds.navPrefix}-${section.id}`}
-            disabled={!section.implemented}
+            disabled={isDisabled(section)}
             onclick={() => onSelect(section.id)}
             type="button"
           >
@@ -84,7 +93,9 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
               <span class="setup-nav__badge">Guide</span>
             {/if}
 
-            {#if statusLabel(section)}
+            {#if isComingLater(section)}
+              <span class="setup-nav__status setup-nav__status--muted">Coming later</span>
+            {:else if statusLabel(section)}
               {@const label = statusLabel(section)!}
               <span
                 class="setup-nav__status {label.className}"
@@ -185,6 +196,9 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
   }
   .setup-nav__status--warn {
     color: var(--color-warning);
+  }
+  .setup-nav__status--muted {
+    color: var(--color-text-muted);
   }
 
   .setup-nav__group-progress {

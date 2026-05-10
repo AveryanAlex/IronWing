@@ -268,9 +268,9 @@ async function handleDisarm() {
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Truthful pre-arm blockers and guarded live controls</h3>
+      <h3 class="mt-2 text-lg font-semibold text-text-primary">Review pre-arm blockers and live arm controls</h3>
       <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Arming guidance stays driven by live support, sensor health, and status text instead of generic placeholders. Request-check, arm, and disarm actions stay visible with explicit failure surfaces while the arming parameter editors continue staging through the shared review tray.
+        Review live support, sensor health, and status text here before you arm. If a check is blocked, request fresh checks or open Full Parameters for deeper inspection; parameter edits still queue in the review tray.
       </p>
     </div>
 
@@ -323,7 +323,7 @@ async function handleDisarm() {
         {armed
           ? "The vehicle currently reports ARMED. Disarm immediately if conditions become unsafe."
           : prearmModel.canAttemptArm
-            ? "Current pre-arm state is healthy enough to allow an explicit arm request."
+            ? "Current pre-arm state allows an arm request."
             : "Arm stays blocked until the current scope reports a healthy pre-arm state."}
       </p>
 
@@ -377,7 +377,7 @@ async function handleDisarm() {
     </div>
   {:else if checksPartial}
     <div class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning" data-testid={`${setupWorkspaceTestIds.armingBannerPrefix}-checks-partial`}>
-      ARMING_CHECK is using a partial bitmask. Keep the missing checks explicit and request fresh blocker scans before flight.
+      ARMING_CHECK is using a partial bitmask. Review the missing checks and request fresh blocker scans before flight.
     </div>
   {/if}
 
@@ -462,7 +462,7 @@ async function handleDisarm() {
     <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">ARMING_REQUIRE</p>
       <p class="mt-2 text-sm text-text-secondary">
-        Choose how the vehicle can be armed. The selector stays read-only if the current scope is missing truthful enum metadata.
+        Choose how the vehicle can be armed. This selector stays read-only when the current scope is missing the required option list.
       </p>
       <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.armingCurrentPrefix}-ARMING_REQUIRE`}>
         Current · {currentValueText(armingRequireItem)}

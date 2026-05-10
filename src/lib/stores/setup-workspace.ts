@@ -197,7 +197,7 @@ function createInitialRcReceiverState(): SetupWorkspaceRcReceiverState {
   return {
     signalState: "waiting",
     statusText: "Waiting for RC signal",
-    detailText: "Connect to a live session to inspect truthful RC input.",
+    detailText: "Connect to a live session to inspect RC input.",
     rssi: null,
     rssiText: "RSSI --",
     channels: [],
@@ -378,6 +378,34 @@ function formatMetadataText(state: ParamsMetadataState, error: string | null): s
   }
 }
 
+function hasReadyParamStore(paramsState: Pick<ParamsStoreState, "paramStore">): boolean {
+  return paramsState.paramStore !== null;
+}
+
+function resolveSetupAccessGateText(input: {
+  liveSessionConnected: boolean;
+  paramStoreReady: boolean;
+  metadataState: ParamsMetadataState;
+}): string | null {
+  if (!input.liveSessionConnected) {
+    return "Connect to a vehicle to access setup.";
+  }
+
+  if (!input.paramStoreReady) {
+    return "Download parameters to continue.";
+  }
+
+  if (input.metadataState === "idle" || input.metadataState === "loading") {
+    return "Loading parameter descriptions.";
+  }
+
+  if (input.metadataState === "unavailable") {
+    return "Parameter descriptions are unavailable. Open Full Parameters to continue.";
+  }
+
+  return null;
+}
+
 function resolveSetupReadiness(
   sessionState: SessionStoreState,
   paramsState: ParamsStoreState,
@@ -400,29 +428,15 @@ function resolveSetupReadiness(
     return "degraded";
   }
 
+  if (!hasReadyParamStore(paramsState)) {
+    return "bootstrapping";
+  }
+
   if (paramsState.streamError || paramsState.metadataState === "unavailable") {
     return "degraded";
   }
 
-  if (!paramsState.paramStore && !paramsState.paramProgress) {
-    return "bootstrapping";
-  }
-
   return "ready";
-}
-
-function resolveMetadataGateText(paramsState: Pick<ParamsStoreState, "metadataState">): string | null {
-  switch (paramsState.metadataState) {
-    case "loading":
-      return "Purpose-built setup sections stay limited until parameter metadata finishes loading.";
-    case "unavailable":
-      return "Parameter metadata is unavailable. Overview stays truthful and Full Parameters is the recovery path.";
-    case "idle":
-      return "Setup is still waiting for parameter metadata before enabling purpose-built sections.";
-    case "ready":
-    default:
-      return null;
-  }
 }
 
 function resolveNoticeText(input: {
@@ -436,23 +450,32 @@ function resolveNoticeText(input: {
   }
 
   if (input.sessionState.activeSource === "playback") {
-    return "Setup remains read-only during playback. Live actions and raw recovery stay disabled.";
+    return "Setup is read-only during playback.";
   }
 
-  if (!input.sessionState.activeEnvelope) {
-    return "Connect to a live session to load truthful setup state.";
+  const accessGateText = resolveSetupAccessGateText({
+    liveSessionConnected: input.sessionState.sessionDomain.value?.connection.kind === "connected",
+    paramStoreReady: hasReadyParamStore(input.paramsState),
+    metadataState: input.paramsState.metadataState,
+  });
+
+  if (
+    accessGateText === "Connect to a vehicle to access setup."
+    || accessGateText === "Download parameters to continue."
+  ) {
+    return accessGateText;
   }
 
   if (input.paramsState.streamError) {
-    return "Live parameter updates are unavailable right now. Overview stays mounted with explicit degraded state.";
+    return "Live parameter updates are unavailable right now.";
   }
 
-  if (input.metadataGateText) {
-    return input.metadataGateText;
+  if (accessGateText) {
+    return accessGateText;
   }
 
   if (input.readiness === "bootstrapping") {
-    return "Waiting for session and parameter domains to finish bootstrapping.";
+    return "Preparing setup workspace.";
   }
 
   if (input.sessionState.lastError) {
@@ -492,14 +515,14 @@ function describeGuidedSectionStatus(status: SectionStatus, sectionId: SetupSect
       case "complete":
         return "Motor and ESC facts are confirmed for this scope.";
       case "in_progress":
-        return "Motor and ESC setup is in progress. Keep ownership, direction, and reboot truth explicit before testing again.";
+        return "Motor and ESC setup is in progress. Check output ownership, direction, and reboot-required changes before testing again.";
       case "failed":
         return "Motor or ESC setup reported a failed state that still needs attention.";
       case "not_started":
         return "Motor and ESC setup has not been confirmed yet.";
       case "unknown":
       default:
-        return "Motor and ESC truth is still partial because the active configuration-facts contract does not yet prove output ownership globally.";
+        return "Motor and ESC setup details are still loading for this vehicle.";
     }
   }
 
@@ -512,10 +535,10 @@ function describeGuidedSectionStatus(status: SectionStatus, sectionId: SetupSect
       case "failed":
         return "Servo output setup reported a failed state that still needs attention.";
       case "not_started":
-        return "Servo outputs are visible as an expert section, but this workspace does not claim global completion for them yet.";
+        return "Servo output setup has not been confirmed yet.";
       case "unknown":
       default:
-        return "Servo output truth is still partial, so the section stays explicit instead of bluffing configured state.";
+        return "Servo output details are still loading for this vehicle.";
     }
   }
 
@@ -531,23 +554,23 @@ function describeGuidedSectionStatus(status: SectionStatus, sectionId: SetupSect
         return "Receiver setup has not been confirmed yet.";
       case "unknown":
       default:
-        return "Receiver truth is still partial, so the section stays explicit instead of guessing live RC state.";
+        return "Receiver details are still loading for this vehicle.";
     }
   }
 
   if (sectionId === "calibration") {
     switch (status) {
       case "complete":
-        return "Current calibration facts report complete state for the visible setup steps.";
+        return "Current calibration facts report complete state for the available setup steps.";
       case "in_progress":
-        return "Calibration is in progress. Keep the lifecycle visible until the vehicle reports the next scoped update.";
+        return "Calibration is in progress. Keep this status open until the vehicle reports the next scoped update.";
       case "failed":
         return "Calibration reported a failed state. Review status text before retrying.";
       case "not_started":
         return "Calibration has not started yet for this scope.";
       case "unknown":
       default:
-        return "Calibration truth is partial, so the lifecycle stays unconfirmed instead of bluffing readiness.";
+        return "Calibration details are still loading for this vehicle.";
     }
   }
 
@@ -562,42 +585,78 @@ function describeGuidedSectionStatus(status: SectionStatus, sectionId: SetupSect
       return "Live facts do not confirm this section yet.";
     case "unknown":
     default:
-      return "Live facts are partial, so this section stays unconfirmed instead of bluffing completion.";
+      return "Section details are still loading for this vehicle.";
   }
 }
 
 function resolveGuidedSectionGateText(input: {
-  sessionState: SessionStoreState;
-  metadataGateText: string | null;
+  activeSource: SourceKind | null;
   liveSessionConnected: boolean;
+  paramStoreReady: boolean;
+  metadataState: ParamsMetadataState;
+  streamError: string | null;
 }): string | null {
-  if (!input.sessionState.activeEnvelope) {
-    return "Connect to a live session to inspect this section.";
+  if (input.activeSource === "playback") {
+    return "Setup is read-only during playback.";
   }
 
-  if (input.sessionState.activeSource === "playback") {
-    return "Purpose-built setup sections stay blocked during playback, but the section remains inspectable.";
+  const accessGateText = resolveSetupAccessGateText(input);
+  if (accessGateText === "Connect to a vehicle to access setup." || accessGateText === "Download parameters to continue.") {
+    return accessGateText;
   }
 
-  if (input.metadataGateText) {
-    return input.metadataGateText;
+  if (input.streamError) {
+    return "Live parameter updates are unavailable right now.";
   }
 
-  if (!input.liveSessionConnected) {
-    return "This section stays blocked until the live vehicle connection is active.";
-  }
-
-  return null;
+  return accessGateText;
 }
 
-function resolveFullParametersAvailability(sessionState: SessionStoreState): {
+function resolveFullParametersAvailability(input: {
+  activeSource: SourceKind | null;
+  liveSessionConnected: boolean;
+  paramStoreReady: boolean;
+  metadataState: ParamsMetadataState;
+  streamError: string | null;
+}): {
   availability: SetupWorkspaceSectionAvailability;
   gateText: string | null;
 } {
-  if (sessionState.activeSource === "playback") {
+  if (input.activeSource === "playback") {
     return {
       availability: "blocked",
-      gateText: "Full Parameters recovery stays disabled during playback, but the recovery section remains visible.",
+      gateText: "Setup is read-only during playback.",
+    };
+  }
+
+  const accessGateText = resolveSetupAccessGateText(input);
+  if (accessGateText === "Connect to a vehicle to access setup." || accessGateText === "Download parameters to continue.") {
+    return {
+      availability: "blocked",
+      gateText: accessGateText,
+    };
+  }
+
+  if (input.streamError) {
+    return {
+      availability: "blocked",
+      gateText: "Live parameter updates are unavailable right now.",
+    };
+  }
+
+  if (input.metadataState === "unavailable" && input.liveSessionConnected && input.paramStoreReady) {
+    return {
+      availability: "available",
+      gateText: null,
+    };
+  }
+
+  const gateText = accessGateText;
+
+  if (gateText) {
+    return {
+      availability: "blocked",
+      gateText,
     };
   }
 
@@ -612,31 +671,41 @@ function describePlannedSectionStatus(status: SectionStatus, sectionId: SetupSec
 
   switch (status) {
     case "complete":
-      return `${definition.title} is confirmed for this scope. The purpose-built editor lands later in this slice, so the workspace keeps the section visible without inventing controls.`;
+      return `${definition.title} is confirmed for this scope. Direct editing for this section is not available in this workspace yet.`;
     case "in_progress":
       return `${definition.title} is partially confirmed for this scope. Keep progress conservative until the dedicated editor lands and can prove the next step.`;
     case "failed":
       return `${definition.title} reported a failed or blocked state. Review the current vehicle values or recover through Full Parameters before retrying.`;
     case "not_started":
-      return `${definition.title} is visible in the expert catalog, but the current scope has not confirmed it yet.`;
+      return `${definition.title} has not been confirmed yet for this scope.`;
     case "unknown":
     default:
-      return `${definition.title} truth is still partial for this scope, so the workspace keeps it visible and unconfirmed instead of bluffing completion.`;
+      return `${definition.title} details are still loading for this vehicle.`;
   }
 }
 
 function buildCatalogSections(input: {
-  sessionState: SessionStoreState;
+  activeSource: SourceKind | null;
   sectionStatuses: Record<SetupSectionId, SectionStatus>;
-  metadataGateText: string | null;
   liveSessionConnected: boolean;
+  paramStoreReady: boolean;
+  metadataState: ParamsMetadataState;
+  streamError: string | null;
 }): SetupWorkspaceSection[] {
   const guidedGateText = resolveGuidedSectionGateText({
-    sessionState: input.sessionState,
-    metadataGateText: input.metadataGateText,
+    activeSource: input.activeSource,
     liveSessionConnected: input.liveSessionConnected,
+    paramStoreReady: input.paramStoreReady,
+    metadataState: input.metadataState,
+    streamError: input.streamError,
   });
-  const fullParametersState = resolveFullParametersAvailability(input.sessionState);
+  const fullParametersState = resolveFullParametersAvailability({
+    activeSource: input.activeSource,
+    liveSessionConnected: input.liveSessionConnected,
+    paramStoreReady: input.paramStoreReady,
+    metadataState: input.metadataState,
+    streamError: input.streamError,
+  });
 
   return SETUP_SECTION_CATALOG.map((definition) => {
     const group = getSetupSectionGroupDefinition(definition.groupId);
@@ -655,7 +724,7 @@ function buildCatalogSections(input: {
         statusText: "Dashboard",
         confidenceText: null,
         gateText: null,
-        detailText: "Use the grouped dashboard to inspect truthful setup status before opening a section.",
+        detailText: "Use the grouped dashboard to review setup status before opening a section.",
         trackable: definition.trackable,
         implemented,
       } satisfies SetupWorkspaceSection;
@@ -674,8 +743,7 @@ function buildCatalogSections(input: {
         statusText: "Recovery",
         confidenceText: null,
         gateText: fullParametersState.gateText,
-        detailText: fullParametersState.gateText
-          ?? "Open the shared parameter workspace when metadata is degraded or you need raw access.",
+        detailText: fullParametersState.gateText ?? "Open Full Parameters to review and edit raw parameter values.",
         trackable: definition.trackable,
         implemented,
       } satisfies SetupWorkspaceSection;
@@ -697,7 +765,7 @@ function buildCatalogSections(input: {
       confidenceText: status === "unknown" ? "Unconfirmed" : null,
       gateText,
       detailText: gateText
-        ? `${gateText} ${implemented ? describeGuidedSectionStatus(status, definition.id) : describePlannedSectionStatus(status, definition.id)}`
+        ? gateText
         : implemented
           ? describeGuidedSectionStatus(status, definition.id)
           : describePlannedSectionStatus(status, definition.id),
@@ -848,7 +916,7 @@ function deriveRcReceiverState(input: {
       return {
         signalState: "stale",
         statusText: "Last good sample",
-        detailText: "The vehicle link is not connected. Showing the last truthful RC sample from this scope.",
+        detailText: "The vehicle link is not connected. Showing the last RC sample from this scope.",
         rssi: currentRssi,
         rssiText: formatRssiText(currentRssi),
         channels: current.channels.map((channel) => ({ ...channel, stale: true })),
@@ -871,7 +939,7 @@ function deriveRcReceiverState(input: {
     return {
       signalState: "live",
       statusText: `${current.channels.length} live`,
-      detailText: "Live RC input is visible. Use presets or manual mapping to queue channel-order changes through the shared review tray.",
+      detailText: "Live RC input is available. Use presets or manual mapping to queue channel-order changes through the shared review tray.",
       rssi: currentRssi,
       rssiText: formatRssiText(currentRssi),
       channels: current.channels,
@@ -880,10 +948,10 @@ function deriveRcReceiverState(input: {
   }
 
   if (current.malformed) {
-    return {
-      signalState: "degraded",
-      statusText: "Malformed RC signal",
-      detailText: "The latest RC payload was malformed, so Setup dropped it instead of drawing fake bars.",
+      return {
+        signalState: "degraded",
+        statusText: "Malformed RC signal",
+        detailText: "The latest RC payload was malformed, so Setup dropped it instead of drawing the RC bars.",
       rssi: currentRssi,
       rssiText: formatRssiText(currentRssi),
       channels: [],
@@ -910,7 +978,7 @@ function deriveRcReceiverState(input: {
     return {
       signalState: "disconnected",
       statusText: "Disconnected",
-      detailText: "Connect to a live vehicle to inspect truthful RC input.",
+      detailText: "Connect to a live vehicle to inspect RC input.",
       rssi: null,
       rssiText: "RSSI --",
       channels: [],
@@ -921,7 +989,7 @@ function deriveRcReceiverState(input: {
   return {
     signalState: "waiting",
     statusText: "Waiting for RC signal",
-    detailText: "Move the transmitter sticks or switches once the receiver link is active. Manual channel mapping stays available without fake live bars.",
+    detailText: "Move the transmitter sticks or switches once the receiver link is active. Manual channel mapping stays available before live RC bars appear.",
     rssi: currentRssi,
     rssiText: formatRssiText(currentRssi),
     channels: [],
@@ -1011,14 +1079,14 @@ function buildAccelCard(input: {
     : input.supported === false
       ? "This vehicle does not expose accelerometer calibration support on the active shell contract."
       : normalized.malformed
-        ? "Accelerometer lifecycle payload was malformed, so Setup fell back to a truthful not-started state."
+        ? "Accelerometer lifecycle payload was malformed, so Setup fell back to a not-started state."
         : lifecycle === "complete"
           ? "The vehicle reports accelerometer calibration complete. Dedicated step-by-step controls land later in Setup."
           : lifecycle === "running"
-            ? "Accelerometer calibration is already running on the vehicle. Keep the lifecycle visible until the next scoped update arrives."
+            ? "Accelerometer calibration is already running on the vehicle. Keep this status open until the next scoped update arrives."
             : lifecycle === "failed"
               ? "Accelerometer calibration failed. Review status text before retrying it elsewhere."
-              : "Dedicated accelerometer workflow lands later in Setup, but the current lifecycle stays visible here.";
+              : "Dedicated accelerometer workflow lands later in Setup, and the current lifecycle remains available here.";
 
   return createCalibrationCard({
     id: "accel",
@@ -1077,7 +1145,7 @@ function buildCompassCard(input: {
     : input.supported === false
       ? "Compass calibration is unavailable for this vehicle on the active shell contract."
       : normalized.malformed
-        ? "Compass lifecycle payload was malformed, so Setup fell back to a truthful not-started state while keeping status text visible."
+        ? "Compass lifecycle payload was malformed, so Setup fell back to a not-started state while keeping the current status text available."
         : lifecycle === "running"
           ? "Compass calibration is running. Keep rotating the vehicle until the lifecycle advances."
           : lifecycle === "complete"
@@ -1123,8 +1191,8 @@ function buildRadioCard(input: {
     : input.supported === false
       ? "Radio calibration is unavailable because the active support contract reports can_calibrate_radio=false."
       : normalized.malformed
-        ? "Radio lifecycle payload was malformed, so Setup fell back to a truthful not-started state."
-        : "Radio calibration stays visible for inventory truth, but the dedicated workflow is not exposed in this workspace yet.";
+        ? "Radio lifecycle payload was malformed, so Setup fell back to a not-started state."
+        : "Radio calibration remains listed here, but the dedicated workflow is not exposed in this workspace yet.";
 
   return createCalibrationCard({
     id: "radio",
@@ -1230,7 +1298,7 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
         statusText: "Dashboard",
         confidenceText: null,
         gateText: null,
-        detailText: "Use the grouped dashboard to inspect truthful setup status before opening a section.",
+        detailText: "Use the grouped dashboard to review setup status before opening a section.",
         trackable: definition.trackable,
         implemented,
       } satisfies SetupWorkspaceSection;
@@ -1244,12 +1312,12 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
         kind: definition.kind,
         groupId: group.id,
         groupTitle: group.title,
-        availability: "available",
+        availability: "blocked",
         status: null,
         statusText: "Recovery",
         confidenceText: null,
-        gateText: null,
-        detailText: "Open the shared parameter workspace when metadata is degraded or you need raw access.",
+        gateText: "Connect to a vehicle to access setup.",
+        detailText: "Connect to a vehicle to access setup.",
         trackable: definition.trackable,
         implemented,
       } satisfies SetupWorkspaceSection;
@@ -1266,10 +1334,8 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
       status: sectionStatuses[definition.id],
       statusText: "Unknown",
       confidenceText: "Unconfirmed",
-      gateText: "Connect to a live session to inspect this section.",
-      detailText: implemented
-        ? describeGuidedSectionStatus(sectionStatuses[definition.id], definition.id)
-        : describePlannedSectionStatus(sectionStatuses[definition.id], definition.id),
+      gateText: "Connect to a vehicle to access setup.",
+      detailText: "Connect to a vehicle to access setup.",
       trackable: definition.trackable,
       implemented,
     } satisfies SetupWorkspaceSection;
@@ -1289,8 +1355,8 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
     metadataState: "idle",
     metadataText: "Metadata idle",
     metadataGateActive: true,
-    metadataGateText: "Setup is still waiting for parameter metadata before enabling purpose-built sections.",
-    noticeText: "Waiting for session and parameter domains to finish bootstrapping.",
+    metadataGateText: "Connect to a vehicle to access setup.",
+    noticeText: "Connect to a vehicle to access setup.",
     progress,
     progressText: formatProgressText(progress),
     selectedSectionId: "overview",
@@ -1303,7 +1369,7 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
     statusNotices: [],
     rcReceiver: createInitialRcReceiverState(),
     calibrationSummary: createInitialCalibrationSummary(),
-    canOpenFullParameters: true,
+    canOpenFullParameters: false,
   };
 }
 
@@ -1329,6 +1395,23 @@ export function createSetupWorkspaceStore(
   let currentWizardPhase: WizardPhase | null = null;
   const sectionConfirmationsByScope = new Map<string, ScopedSectionConfirmations>();
 
+  function canMutateSectionConfirmation(sectionId: SetupSectionId): boolean {
+    if (!currentActiveScopeKey || checkpointState.blocksActions) {
+      return false;
+    }
+
+    const section = previous?.sections.find((entry) => entry.id === sectionId) ?? null;
+    return section?.availability === "available";
+  }
+
+  function canMutateActiveScopeConfirmations(): boolean {
+    if (!currentActiveScopeKey || checkpointState.blocksActions) {
+      return false;
+    }
+
+    return previous?.sections.some((section) => section.kind === "guided" && section.availability === "available") === true;
+  }
+
   function recompute() {
     if (!sessionState || !paramsState) {
       return;
@@ -1341,8 +1424,13 @@ export function createSetupWorkspaceStore(
     currentActiveScopeKey = activeScopeKey;
     const currentScopeConfirmations = activeScopeKey ? sectionConfirmationsByScope.get(activeScopeKey) ?? {} : {};
     const readiness = resolveSetupReadiness(sessionState, paramsState);
-    const metadataGateText = resolveMetadataGateText(paramsState);
     const liveSessionConnected = sessionState.sessionDomain.value?.connection.kind === "connected";
+    const paramStoreReady = hasReadyParamStore(paramsState);
+    const metadataGateText = resolveSetupAccessGateText({
+      liveSessionConnected,
+      paramStoreReady,
+      metadataState: paramsState.metadataState,
+    });
     const sectionStatuses = deriveSectionStatuses(
       sessionState,
       previous?.sectionStatuses ?? null,
@@ -1424,10 +1512,12 @@ export function createSetupWorkspaceStore(
     }
 
     const sections = buildCatalogSections({
-      sessionState,
+      activeSource: sessionState.activeSource,
       sectionStatuses,
-      metadataGateText,
       liveSessionConnected,
+      paramStoreReady,
+      metadataState: paramsState.metadataState,
+      streamError: paramsState.streamError,
     });
     selectedSectionId = resolveSelectedSectionId(selectedSectionId, sections);
 
@@ -1463,7 +1553,7 @@ export function createSetupWorkspaceStore(
       scopeText: formatScopeText(sessionState.activeEnvelope),
       metadataState: paramsState.metadataState,
       metadataText: formatMetadataText(paramsState.metadataState, paramsState.metadataError),
-      metadataGateActive: paramsState.metadataState !== "ready",
+      metadataGateActive: metadataGateText !== null,
       metadataGateText,
       noticeText: resolveNoticeText({
         sessionState,
@@ -1520,7 +1610,7 @@ export function createSetupWorkspaceStore(
       }
 
       const definition = getSetupSectionDefinition(sectionId);
-      if (definition.kind !== "guided") {
+      if (definition.kind !== "guided" || !canMutateSectionConfirmation(sectionId)) {
         return;
       }
 
@@ -1536,6 +1626,11 @@ export function createSetupWorkspaceStore(
         return;
       }
 
+      const definition = getSetupSectionDefinition(sectionId);
+      if (definition.kind !== "guided" || !canMutateSectionConfirmation(sectionId)) {
+        return;
+      }
+
       const next = {
         ...(sectionConfirmationsByScope.get(currentActiveScopeKey) ?? {}),
       } satisfies ScopedSectionConfirmations;
@@ -1547,14 +1642,27 @@ export function createSetupWorkspaceStore(
       const normalized = normalizeSectionConfirmationPayload(input);
 
       if (!normalized.scopeKey) {
-        if (currentActiveScopeKey) {
+        if (currentActiveScopeKey && canMutateActiveScopeConfirmations()) {
           sectionConfirmationsByScope.set(currentActiveScopeKey, {});
           recompute();
         }
         return;
       }
 
-      sectionConfirmationsByScope.set(normalized.scopeKey, normalized.confirmedSections);
+      if (normalized.scopeKey === currentActiveScopeKey && !canMutateActiveScopeConfirmations()) {
+        recompute();
+        return;
+      }
+
+      const nextConfirmations = normalized.scopeKey === currentActiveScopeKey
+        ? Object.fromEntries(
+            Object.entries(normalized.confirmedSections).filter(([sectionId, confirmed]) => {
+              return confirmed === true && isSetupSectionId(sectionId) && canMutateSectionConfirmation(sectionId);
+            }),
+          ) as ScopedSectionConfirmations
+        : normalized.confirmedSections;
+
+      sectionConfirmationsByScope.set(normalized.scopeKey, nextConfirmations);
       recompute();
     },
     setCheckpointPlaceholder(input: SetupWorkspaceCheckpointInput) {

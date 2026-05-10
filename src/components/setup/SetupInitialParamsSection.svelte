@@ -175,9 +175,9 @@ function resolvedInputText(): string {
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Calculator-driven starter batches with truthful family mapping</h3>
+      <h3 class="mt-2 text-lg font-semibold text-text-primary">Preview starter settings from your vehicle inputs</h3>
       <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Initial parameters stay purpose-built here: prop size, battery chemistry, and cell count drive preview-only starter batches, and every change still routes through the shared review tray instead of applying locally from the section.
+        Enter prop size, battery chemistry, and cell count to preview starter settings for this vehicle family. Review the suggested batches here, then queue any changes through the review tray.
       </p>
     </div>
 

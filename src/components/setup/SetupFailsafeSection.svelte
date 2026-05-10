@@ -344,7 +344,7 @@ function stageDefaults() {
           {currentValueText(item("FS_THR_ENABLE"))} radio · {currentValueText(item("FS_GCS_ENABLE"))} GCS
         {/if}
       </p>
-      <p class="mt-1 text-sm text-text-secondary">Family-specific loss-of-link actions stay explicit instead of hidden behind generic labels.</p>
+      <p class="mt-1 text-sm text-text-secondary">Review the loss-of-link actions for this vehicle family here instead of guessing from generic labels.</p>
     </div>
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Battery thresholds</p>

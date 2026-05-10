@@ -51,11 +51,11 @@ function highlightSummaryText() {
     return null;
   }
 
-  const source = highlightSourceLabel ? `${highlightSourceLabel} handoff` : "Workflow handoff";
+  const source = highlightSourceLabel ?? "Selected section";
   const forced = view.forcedHighlightCount > 0
     ? ` ${view.forcedHighlightCount} highlighted row${view.forcedHighlightCount === 1 ? " stays" : "s stay"} visible outside the current filter.`
     : "";
-  return `${source} is highlighting ${view.highlightedCount} parameter${view.highlightedCount === 1 ? "" : "s"}.${forced}`;
+  return `${source} highlighting ${view.highlightedCount} parameter${view.highlightedCount === 1 ? "" : "s"} for review.${forced}`;
 }
 </script>
 

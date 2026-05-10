@@ -67,9 +67,7 @@ const wizardStore = createSetupWizardStore({
 const wizardView = fromStore(wizardStore);
 
 let view = $derived(viewStore.current);
-let selectedSection = $derived(
-  view.sections.find((section) => section.id === view.selectedSectionId) ?? view.sections[0] ?? null,
-);
+let selectedSection = $derived(view.sections.find((section) => section.id === view.selectedSectionId) ?? null);
 
 $effect(() => {
   const gpsStatus = view.sectionStatuses.gps;
@@ -264,56 +262,9 @@ function clearCheckpoint() {
         <SetupCalibrationSection {view} />
       {:else if view.selectedSectionId === "full_parameters"}
         <SetupFullParametersSection canOpen={view.canOpenFullParameters} />
-      {:else if selectedSection}
-        <div class="space-y-4" data-testid={setupWorkspaceTestIds.plannedSection}>
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{selectedSection.groupTitle}</p>
-              <h3 class="mt-2 text-lg font-semibold text-text-primary">{selectedSection.title}</h3>
-              <p class="mt-2 text-sm leading-6 text-text-secondary">{selectedSection.description}</p>
-            </div>
-            <div class="text-right">
-              <p class="rounded-full border border-border bg-bg-primary/80 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
-                {selectedSection.statusText}
-              </p>
-              <p class="mt-2 text-[11px] text-text-muted">
-                {selectedSection.availability === "available" ? "Inspectable" : "Blocked but inspectable"}
-              </p>
-            </div>
-          </div>
-
-          {#if selectedSection.confidenceText}
-            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
-              {selectedSection.confidenceText}
-            </p>
-          {/if}
-
-          <p class="text-sm leading-6 text-text-secondary" data-testid={setupWorkspaceTestIds.detailStatus}>
-            {selectedSection.detailText}
-          </p>
-
-          {#if selectedSection.gateText}
-            <div class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning">
-              {selectedSection.gateText}
-            </div>
-          {/if}
-
-          <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary">
-            {#if selectedSection.implemented}
-              This expert section already has a dedicated surface elsewhere in the workspace; this fallback panel only appears when the selection contract gets ahead of the mounted detail components.
-            {:else}
-              This section scaffold keeps current-scope status, blocking reasons, and recovery guidance visible until its dedicated editor lands later in the slice.
-            {/if}
-          </div>
-
-          <button
-            class="rounded-md border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-            data-testid={setupWorkspaceTestIds.plannedSectionRecovery}
-            onclick={() => selectSection("full_parameters")}
-            type="button"
-          >
-            Open Full Parameters recovery
-          </button>
+      {:else}
+        <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary">
+          This section is not available right now.
         </div>
       {/if}
     </div>

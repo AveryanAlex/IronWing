@@ -125,9 +125,9 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">RC receiver</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Preset-first channel order with truthful live bars</h3>
+      <h3 class="mt-2 text-lg font-semibold text-text-primary">Check live channel bars and queue receiver mapping changes</h3>
       <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Live receiver truth stays separate from staging: inspect PWM motion here, then queue channel-order edits through the shared review tray instead of a setup-local apply path.
+        Watch live PWM movement here, then queue channel-order changes in the review tray. This section shows receiver motion and mapping without applying changes on its own.
       </p>
     </div>
 
@@ -239,7 +239,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">RCMAP_ROLL</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">Roll</h4>
-        <p class="mt-2 text-sm text-text-secondary">Map the primary roll axis to the truthful receiver channel.</p>
+        <p class="mt-2 text-sm text-text-secondary">Map the primary roll axis to the receiver channel that is moving for roll.</p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_ROLL`}>
           Current · {rollItem?.valueText ?? "Unavailable"}
         </p>
@@ -272,7 +272,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">RCMAP_PITCH</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">Pitch</h4>
-        <p class="mt-2 text-sm text-text-secondary">Map the primary pitch axis to the truthful receiver channel.</p>
+        <p class="mt-2 text-sm text-text-secondary">Map the primary pitch axis to the receiver channel that is moving for pitch.</p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_PITCH`}>
           Current · {pitchItem?.valueText ?? "Unavailable"}
         </p>
@@ -305,7 +305,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">RCMAP_THROTTLE</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">Throttle</h4>
-        <p class="mt-2 text-sm text-text-secondary">Map the primary throttle axis to the truthful receiver channel.</p>
+        <p class="mt-2 text-sm text-text-secondary">Map the primary throttle axis to the receiver channel that is moving for throttle.</p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_THROTTLE`}>
           Current · {throttleItem?.valueText ?? "Unavailable"}
         </p>
@@ -338,7 +338,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">RCMAP_YAW</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">Yaw</h4>
-        <p class="mt-2 text-sm text-text-secondary">Map the primary yaw axis to the truthful receiver channel.</p>
+        <p class="mt-2 text-sm text-text-secondary">Map the primary yaw axis to the receiver channel that is moving for yaw.</p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_YAW`}>
           Current · {yawItem?.valueText ?? "Unavailable"}
         </p>
