@@ -25,6 +25,7 @@ import type { SupportDomain } from "../../../support";
 import type { FlightModeEntry, TelemetryDomain } from "../../../telemetry";
 import type { ConfigurationFactsDomain } from "../../../configuration-facts";
 import type { MockLogSeedPreset } from "./logs";
+import type { DemoSimulatorRuntime } from "./vehicle-sim/types";
 
 export type CommandArgs = Record<string, unknown> | undefined;
 
@@ -143,6 +144,7 @@ export type MockBackendState = {
   liveSupportDomain: MockSupportDomain | null;
   liveSensorHealthDomain: MockSensorHealthDomain | null;
   liveConfigurationFactsDomain: MockConfigurationFactsDomain | null;
+  liveSimulator: DemoSimulatorRuntime | null;
   demoTelemetryIntervalId: number | null;
   demoStatusIntervalId: number | null;
   liveVehicleArmed: boolean;

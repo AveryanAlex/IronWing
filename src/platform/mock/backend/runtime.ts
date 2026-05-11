@@ -63,6 +63,7 @@ export const mockState: MockBackendState = {
   liveSupportDomain: null,
   liveSensorHealthDomain: null,
   liveConfigurationFactsDomain: null,
+  liveSimulator: null,
   demoTelemetryIntervalId: null,
   demoStatusIntervalId: null,
   liveVehicleArmed: false,
@@ -98,6 +99,7 @@ export function resetMockState() {
   mockState.liveSupportDomain = null;
   mockState.liveSensorHealthDomain = null;
   mockState.liveConfigurationFactsDomain = null;
+  mockState.liveSimulator = null;
   mockState.demoTelemetryIntervalId = null;
   mockState.demoStatusIntervalId = null;
   mockState.liveVehicleArmed = false;

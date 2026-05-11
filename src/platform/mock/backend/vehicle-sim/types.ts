@@ -81,3 +81,8 @@ export type SimStepResult = {
   state: SimVehicleState;
   appliedDtS: number;
 };
+
+export type DemoSimulatorRuntime = {
+  state: SimVehicleState;
+  last_tick_msec: number;
+};

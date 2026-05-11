@@ -4,6 +4,13 @@ import { isDemoProfile } from "./profile";
 import { clearDemoIntervals, mockState, requireLiveEnvelope, resetGuided } from "./runtime";
 import { applyMockMissionState } from "./mission";
 import { applyMockParamState } from "./params";
+import {
+  createDemoSimulator,
+  setDemoSimulatorArmedState,
+  setDemoSimulatorMode,
+  telemetryFromSimulator,
+  vehicleStateFromSimulator,
+} from "./vehicle-sim/simulator";
 import type { DemoVehiclePreset } from "../../../transport";
 import type {
   CommandArgs,
@@ -204,13 +211,15 @@ function seededDemoTransportDescriptor(): TransportDescriptor {
 
 function setDemoSeedState(preset: DemoVehiclePreset) {
   const fixture = demoFixtureForPreset(preset);
-  applyMockLiveVehicleState(fixture.vehicleState);
+  const simulator = createDemoSimulator(preset);
+  mockState.liveSimulator = simulator;
+  applyMockLiveVehicleState(vehicleStateFromSimulator(simulator, fixture.vehicleState));
   mockState.liveMissionHome = fixture.homePosition;
   applyMockMissionState(fixture.missionState);
   mockState.liveFencePlan = fixture.fencePlan;
   mockState.liveRallyPlan = fixture.rallyPlan;
   applyMockParamState(fixture.paramStore, null);
-  mockState.liveTelemetryDomain = fixture.telemetryDomain;
+  mockState.liveTelemetryDomain = telemetryFromSimulator(simulator, "bootstrap");
   mockState.liveAvailableModes = fixture.availableModes;
   mockState.liveStatusText = fixture.statusText;
   mockState.liveSupportDomain = fixture.supportDomain;
@@ -234,6 +243,7 @@ export function clearLiveVehicleState() {
   mockState.liveSupportDomain = null;
   mockState.liveSensorHealthDomain = null;
   mockState.liveConfigurationFactsDomain = null;
+  mockState.liveSimulator = null;
   mockState.liveVehicleArmed = false;
   mockState.liveVehicleModeName = "Stabilize";
 }
@@ -256,6 +266,7 @@ export function connectLink(args: CommandArgs) {
     mockState.liveSupportDomain = null;
     mockState.liveSensorHealthDomain = null;
     mockState.liveConfigurationFactsDomain = null;
+    mockState.liveSimulator = null;
     return;
   }
 
@@ -268,6 +279,7 @@ export function connectLink(args: CommandArgs) {
   mockState.liveSupportDomain = null;
   mockState.liveSensorHealthDomain = null;
   mockState.liveConfigurationFactsDomain = null;
+  mockState.liveSimulator = null;
 }
 
 export function disconnectLink(args: CommandArgs) {
@@ -297,9 +309,15 @@ export function emitLiveSessionState(vehicleState: MockLiveVehicleState, emitEve
 }
 
 export function syncLiveVehicleArmedState(armed: boolean, emitEvent: (event: string, payload: unknown) => void) {
+  if (mockState.liveSimulator) {
+    mockState.liveSimulator = setDemoSimulatorArmedState(mockState.liveSimulator, armed);
+  }
+
   mockState.liveVehicleArmed = armed;
   if (mockState.liveVehicleState) {
-    mockState.liveVehicleState = { ...mockState.liveVehicleState, armed };
+    mockState.liveVehicleState = mockState.liveSimulator
+      ? vehicleStateFromSimulator(mockState.liveSimulator, mockState.liveVehicleState)
+      : { ...mockState.liveVehicleState, armed };
   }
 
   if (!mockState.liveEnvelope || !mockState.liveVehicleState) {
@@ -389,11 +407,19 @@ export function setFlightMode(args: CommandArgs, emitEvent: (event: string, payl
   }
 
   if (mockState.liveVehicleState) {
-    mockState.liveVehicleState = {
-      ...mockState.liveVehicleState,
-      custom_mode: nextMode.custom_mode,
-      mode_name: nextMode.name,
-    };
+    if (mockState.liveSimulator) {
+      mockState.liveSimulator = setDemoSimulatorMode(mockState.liveSimulator, {
+        custom_mode: nextMode.custom_mode,
+        mode_name: nextMode.name,
+      });
+      mockState.liveVehicleState = vehicleStateFromSimulator(mockState.liveSimulator, mockState.liveVehicleState);
+    } else {
+      mockState.liveVehicleState = {
+        ...mockState.liveVehicleState,
+        custom_mode: nextMode.custom_mode,
+        mode_name: nextMode.name,
+      };
+    }
     mockState.liveVehicleModeName = nextMode.name;
   }
 

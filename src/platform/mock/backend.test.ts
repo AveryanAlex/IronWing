@@ -20,6 +20,7 @@ import type {
 } from "../../firmware";
 
 import { getMockPlatformController, invokeMockCommand, listenMockEvent, type MockLogSeedPreset } from "./backend";
+import { mockState } from "./backend/runtime";
 
 function setMockProfile(profile: "test" | "demo") {
     import.meta.env.VITE_IRONWING_MOCK_PROFILE = profile;
@@ -1236,6 +1237,47 @@ describe("mock profile backend parity", () => {
                 },
             },
         });
+    });
+
+    it("demo telemetry stays stationary while the vehicle is disarmed", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+        const telemetryEvents: SessionEvent<any>[] = [];
+        const unlisten = listenMockEvent("telemetry://state", (payload) => {
+            telemetryEvents.push(payload as SessionEvent<any>);
+        });
+
+        await vi.advanceTimersByTimeAsync(1_000);
+        unlisten();
+
+        expect(telemetryEvents.length).toBeGreaterThan(0);
+        expect(telemetryEvents.at(-1)?.value.value).toEqual(telemetryEvents[0]?.value.value);
+    });
+
+    it("disconnect clears simulator state and stops demo timers", async () => {
+        vi.useFakeTimers();
+        const envelope = await openDemoLiveEnvelope();
+        const telemetryEvents: SessionEvent<any>[] = [];
+        const unlisten = listenMockEvent("telemetry://state", (payload) => {
+            telemetryEvents.push(payload as SessionEvent<any>);
+        });
+
+        expect(mockState.liveSimulator).not.toBeNull();
+        expect(mockState.demoTelemetryIntervalId).not.toBeNull();
+        expect(mockState.demoStatusIntervalId).not.toBeNull();
+
+        await vi.advanceTimersByTimeAsync(1_000);
+        const telemetryBeforeDisconnect = telemetryEvents.length;
+
+        await invokeMockCommand("disconnect_link", { request: { session_id: envelope.session_id } });
+        await vi.advanceTimersByTimeAsync(1_000);
+        unlisten();
+
+        expect(mockState.liveSimulator).toBeNull();
+        expect(mockState.demoTelemetryIntervalId).toBeNull();
+        expect(mockState.demoStatusIntervalId).toBeNull();
+        expect(telemetryBeforeDisconnect).toBeGreaterThan(0);
+        expect(telemetryEvents).toHaveLength(telemetryBeforeDisconnect);
     });
 });
 

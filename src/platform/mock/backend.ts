@@ -125,6 +125,11 @@ import {
   validateSetServoArgs,
   validateSetTelemetryRateArgs,
 } from "./backend/vehicle";
+import {
+  advanceDemoSimulator,
+  telemetryFromSimulator,
+  vehicleStateFromSimulator,
+} from "./backend/vehicle-sim/simulator";
 import type {
   CommandArgs,
   MockCommandBehavior,
@@ -302,45 +307,16 @@ function isDemoConnectRequest(args: CommandArgs) {
     && (args.request as { transport?: { kind?: string } }).transport?.kind === "demo";
 }
 
-function nextDemoTelemetryValue() {
-  const telemetryDomain = mockState.liveTelemetryDomain;
-  if (
-    !telemetryDomain?.value?.flight
-    || !telemetryDomain.value.navigation
-    || !telemetryDomain.value.attitude
-    || !telemetryDomain.value.power
-  ) {
-    return null;
+function tickDemoSimulator(nowMsec = Date.now()) {
+  if (!mockState.liveSimulator || !mockState.liveEnvelope || !mockState.liveVehicleState) {
+    return;
   }
 
-  const nextDomain = structuredClone(telemetryDomain);
-  const nextValue = nextDomain.value;
-  if (!nextValue?.flight || !nextValue.navigation || !nextValue.attitude || !nextValue.power) {
-    return null;
-  }
-
-  const { flight, navigation, power, attitude } = nextValue;
-
-  if (typeof flight.altitude_m === "number") {
-    flight.altitude_m = Number((flight.altitude_m + 0.2).toFixed(1));
-  }
-  if (typeof flight.climb_rate_mps === "number") {
-    flight.climb_rate_mps = Number((flight.climb_rate_mps * -1).toFixed(1));
-  }
-  if (typeof navigation.heading_deg === "number") {
-    navigation.heading_deg = (navigation.heading_deg + 1) % 360;
-  }
-  if (typeof attitude.yaw_deg === "number") {
-    attitude.yaw_deg = (attitude.yaw_deg + 1) % 360;
-  }
-  if (typeof power.energy_consumed_wh === "number") {
-    power.energy_consumed_wh = Number((power.energy_consumed_wh + 0.5).toFixed(1));
-  }
-  if (typeof power.battery_time_remaining_s === "number") {
-    power.battery_time_remaining_s = Math.max(0, power.battery_time_remaining_s - 5);
-  }
-
-  return nextDomain;
+  const simulator = advanceDemoSimulator(mockState.liveSimulator, nowMsec);
+  mockState.liveSimulator = simulator;
+  mockState.liveTelemetryDomain = telemetryFromSimulator(simulator, "stream");
+  mockState.liveVehicleState = vehicleStateFromSimulator(simulator, mockState.liveVehicleState);
+  emitEvent("telemetry://state", liveTelemetryStreamPayload());
 }
 
 function startDemoTimers() {
@@ -348,17 +324,7 @@ function startDemoTimers() {
 
   const { demoTelemetryIntervalMs, demoSessionIntervalMs } = mockProfileTiming();
   mockState.demoTelemetryIntervalId = window.setInterval(() => {
-    if (!mockState.liveEnvelope || !mockState.liveTelemetryDomain) {
-      return;
-    }
-
-    const nextTelemetryDomain = nextDemoTelemetryValue();
-    if (!nextTelemetryDomain) {
-      return;
-    }
-
-    mockState.liveTelemetryDomain = nextTelemetryDomain;
-    emitEvent("telemetry://state", liveTelemetryStreamPayload());
+    tickDemoSimulator();
   }, demoTelemetryIntervalMs);
 
   mockState.demoStatusIntervalId = window.setInterval(() => {
