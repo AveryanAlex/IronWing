@@ -224,7 +224,6 @@ describe("native smoke", () => {
     const telemetryModeValue = await $(selectors.telemetryModeValue);
     const setupWorkspaceButton = await $(selectors.setupWorkspaceButton);
     const setupWorkspaceRoot = await $(selectors.setupWorkspaceRoot);
-    const setupMetadata = await $(selectors.setupMetadata);
     const setupNavRcReceiver = await $(selectors.setupNavRcReceiver);
     const setupNavCalibration = await $(selectors.setupNavCalibration);
     const setupRcSection = await $(selectors.setupRcSection);
@@ -324,7 +323,10 @@ describe("native smoke", () => {
       timeout: 30_000,
       timeoutMsg: "Timed out waiting for the dedicated setup workspace root to mount.",
     });
-    await waitForCheckpoint("setup metadata ready for guided sections", async () => /Metadata ready/i.test(await setupMetadata.getText()), {
+    await waitForCheckpoint("setup metadata ready for guided sections", async () => {
+      const metadataText = await readTextContent(selectors.setupMetadata);
+      return typeof metadataText === "string" && /Metadata ready/i.test(metadataText);
+    }, {
       timeout: 60_000,
       timeoutMsg: "Timed out waiting for setup metadata before staging the setup channel-order change.",
     });

@@ -87,7 +87,7 @@ test.describe("setup workspace proof", () => {
 
     await openConnectedSetupWorkspace(page);
 
-    await expect(page.locator(setupWorkspaceSelectors.notice)).toContainText("Parameter metadata is unavailable");
+    await expect(page.locator(setupWorkspaceSelectors.notice)).toContainText("Parameter descriptions are unavailable");
     await expect(page.locator(setupWorkspaceSelectors.overviewBanner)).toContainText(
       "Metadata missing — recovery mode is active",
     );
@@ -161,7 +161,7 @@ test.describe("setup workspace proof", () => {
       "href",
       /common-positioning-landing-page/,
     );
-    await expect(setupOverviewGroupCountLocator(page, "hardware")).toContainText("7 sections · 7 purpose-built editors");
+    await expect(setupOverviewGroupCountLocator(page, "hardware")).toContainText("7 sections · 7 ready here");
 
     await setupOverviewQuickActionLocator(page, "flight_modes").click();
     await expect(page.locator(setupWorkspaceSelectors.flightModesSection)).toBeVisible();
