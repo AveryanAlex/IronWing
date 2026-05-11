@@ -47,6 +47,76 @@ async function dragChartRange(plot: Locator) {
     await page.mouse.up();
 }
 
+async function readPanelLayout(panel: Locator) {
+    return panel.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+
+        return {
+            top: rect.top,
+            bottom: rect.bottom,
+            clientHeight: element.clientHeight,
+            scrollHeight: element.scrollHeight,
+        };
+    });
+}
+
+async function expectPanelStack(panels: Array<{ name: string; locator: Locator }>, context: string) {
+    const layouts = await Promise.all(panels.map(async (panel) => ({
+        name: panel.name,
+        ...(await readPanelLayout(panel.locator)),
+    })));
+
+    for (const layout of layouts) {
+        expect(
+            layout.scrollHeight,
+            `${layout.name} panel content should fit its own card in the ${context} column instead of spilling into the next Logs panel.`,
+        ).toBeLessThanOrEqual(layout.clientHeight + 1);
+    }
+
+    for (let index = 0; index < layouts.length - 1; index += 1) {
+        const current = layouts[index];
+        const next = layouts[index + 1];
+        expect(
+            current.bottom,
+            `${current.name} panel should end before the ${next.name} panel starts in the ${context} column.`,
+        ).toBeLessThanOrEqual(next.top + 1);
+    }
+}
+
+async function expectLogsAnalysisLayout(page: Page) {
+    await expectPanelStack([
+        { name: "library", locator: page.locator(logsWorkspaceSelectors.libraryPanel) },
+        { name: "details", locator: page.locator(logsWorkspaceSelectors.detailsPanel) },
+    ], "library/detail");
+
+    await expectPanelStack([
+        { name: "recording", locator: page.locator(logsWorkspaceSelectors.recordingPanel) },
+        { name: "replay", locator: page.locator(logsWorkspaceSelectors.replayPanel) },
+        { name: "raw browser", locator: page.locator(logsWorkspaceSelectors.rawPanel) },
+        { name: "charts", locator: page.locator(logsWorkspaceSelectors.chartsPanel) },
+    ], "analysis");
+
+    await expect(
+        page.locator(logsWorkspaceSelectors.rawPanel),
+        "Forensic browser should use the same card chrome as the other Logs panels instead of floating on the page.",
+    ).toHaveCSS("border-top-style", "solid");
+
+    await page.locator(logsWorkspaceSelectors.root).evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+    });
+
+    const bottomGap = await page.locator(logsWorkspaceSelectors.root).evaluate((root, chartsSelector) => {
+        const charts = document.querySelector(chartsSelector);
+        if (!charts) {
+            throw new Error("Logs charts panel was not mounted.");
+        }
+
+        return root.getBoundingClientRect().bottom - charts.getBoundingClientRect().bottom;
+    }, logsWorkspaceSelectors.chartsPanel);
+
+    expect(bottomGap, "The final Logs card should retain visible bottom padding when scrolled to the end.").toBeGreaterThanOrEqual(20);
+}
+
 test.describe("mocked logs workspace workflow", () => {
     test.beforeEach(async ({ page, mockPlatform }) => {
         await applyShellViewport(page, "desktop");
@@ -179,6 +249,54 @@ test.describe("mocked logs workspace workflow", () => {
         await expect(page.getByTestId(appShellTestIds.activeWorkspace)).toContainText("mission");
         await page.locator(missionWorkspaceSelectors.modeFence).click();
         await expect(page.locator(missionWorkspaceSelectors.fenceAddInclusionPolygon)).toBeEnabled();
+    });
+
+    test("keeps replay, raw browser, and chart panels from overlapping during replay analysis", async ({ page, mockPlatform }) => {
+        await applyShellViewport(page, "radiomaster");
+
+        await page.getByRole("button", { name: "Overview" }).click();
+        await mockPlatform.setCommandBehavior("connect_link", { type: "defer" });
+        await page.locator(connectionSelectors.connectButton).click();
+        await expect.poll(() => mockPlatform.getLiveEnvelope()).not.toBeNull();
+        await mockPlatform.resolveDeferredConnectLink({
+            vehicleState: connectedVehicleState,
+            guidedState: {
+                status: "blocked",
+                session: null,
+                entered_at_unix_msec: null,
+                blocking_reason: "vehicle_disarmed",
+                termination: null,
+                last_command: null,
+                actions: {
+                    start: { allowed: false, blocking_reason: "vehicle_disarmed" },
+                    update: { allowed: false, blocking_reason: "vehicle_disarmed" },
+                    stop: { allowed: false, blocking_reason: "live_session_required" },
+                },
+            },
+        });
+        await expect(page.locator(connectionSelectors.disconnectButton)).toBeVisible();
+
+        await openLogsWorkspace(page);
+        await logEntryLocator(page, seededReadyEntryId).click();
+        await page.locator(logsWorkspaceSelectors.preparePlayback).click();
+        await page.locator(logsWorkspaceSelectors.playButton).click();
+        await page.locator(logsWorkspaceSelectors.pauseButton).click();
+        await expect(page.locator(logsWorkspaceSelectors.playbackStatusPill)).toContainText("paused");
+        await expect(page.getByTestId(appShellTestIds.replayReadonlyBanner)).toBeVisible();
+
+        await page.locator(logsWorkspaceSelectors.rawTypeFilter).fill("GLOBAL_POSITION_INT");
+        await page.locator(logsWorkspaceSelectors.rawLimitFilter).fill("5");
+        await page.locator(logsWorkspaceSelectors.rawRunQuery).click();
+        await expect(page.locator('[data-testid="logs-raw-row-7"]')).toBeVisible();
+
+        await page.locator(logsWorkspaceSelectors.chartsPanel).scrollIntoViewIfNeeded();
+        await page.locator('[data-testid="logs-chart-group-altitude"]').click();
+        const chartPlot = page.getByTestId("logs-chart-plot-alt");
+        await expect(page.getByTestId("logs-chart-series-alt")).toBeVisible();
+        await dragChartRange(chartPlot);
+        await expect(page.locator('[data-testid="logs-chart-range-pill"]')).toBeVisible();
+
+        await expectLogsAnalysisLayout(page);
     });
 
     test("sends the replay marker through the shipped shell into the mission overlay", async ({ page, mockPlatform }) => {

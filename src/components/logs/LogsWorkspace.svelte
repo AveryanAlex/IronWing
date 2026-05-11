@@ -304,19 +304,32 @@ function emitMarkerHandoff() {
   {/if}
 
   <div class="logs-workspace__layout">
-    <LogsLibraryPanel
-      {entries}
-      importPath={importPath}
-      libraryError={workspace.library.error}
-      libraryPhase={workspace.library.phase}
-      loadedEntryId={workspace.library.loadedEntryId}
-      onImportPathChange={(path) => (importPath = path)}
-      onRefresh={() => void store.refreshLibrary()}
-      onRegisterFromPicker={() => void handleRegisterEntryFromPicker()}
-      onRegisterPath={() => void handleRegisterEntry()}
-      onSelectEntry={(entryId) => store.selectEntry(entryId)}
-      selectedEntryId={workspace.library.selectedEntryId}
-    />
+    <div class="logs-workspace__library-column">
+      <LogsLibraryPanel
+        {entries}
+        importPath={importPath}
+        libraryError={workspace.library.error}
+        libraryPhase={workspace.library.phase}
+        loadedEntryId={workspace.library.loadedEntryId}
+        onImportPathChange={(path) => (importPath = path)}
+        onRefresh={() => void store.refreshLibrary()}
+        onRegisterFromPicker={() => void handleRegisterEntryFromPicker()}
+        onRegisterPath={() => void handleRegisterEntry()}
+        onSelectEntry={(entryId) => store.selectEntry(entryId)}
+        selectedEntryId={workspace.library.selectedEntryId}
+      />
+
+      <LogsDetailsPanel
+        libraryPhase={workspace.library.phase}
+        loadedEntryId={loadedEntry?.entry_id ?? null}
+        onReindex={() => selectedEntry && void store.reindexEntry(selectedEntry.entry_id)}
+        onRelink={() => void handleRelinkEntry()}
+        onRelinkPathChange={(path) => (relinkPath = path)}
+        onRemove={() => selectedEntry && void store.removeEntry(selectedEntry.entry_id)}
+        relinkPath={relinkPath}
+        {selectedEntry}
+      />
+    </div>
 
     <div class="logs-workspace__detail-column">
       <LogsRecordingPanel
@@ -334,17 +347,6 @@ function emitMarkerHandoff() {
         recordingStatus={recordingStatus}
         settingsLoading={workspace.recording.settingsPhase === "loading"}
         supportsRecordingPicker={supportsRecordingPicker}
-      />
-
-      <LogsDetailsPanel
-        libraryPhase={workspace.library.phase}
-        loadedEntryId={loadedEntry?.entry_id ?? null}
-        onReindex={() => selectedEntry && void store.reindexEntry(selectedEntry.entry_id)}
-        onRelink={() => void handleRelinkEntry()}
-        onRelinkPathChange={(path) => (relinkPath = path)}
-        onRemove={() => selectedEntry && void store.removeEntry(selectedEntry.entry_id)}
-        relinkPath={relinkPath}
-        {selectedEntry}
       />
 
       <LogsReplayPanel
@@ -427,7 +429,9 @@ function emitMarkerHandoff() {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 12px;
+    box-sizing: border-box;
+    padding: 16px 16px 28px;
+    scroll-padding-bottom: 28px;
     overflow-y: auto;
   }
 
@@ -491,16 +495,20 @@ function emitMarkerHandoff() {
   .logs-workspace__layout {
     min-height: 0;
     display: grid;
+    align-items: start;
     gap: 12px;
-    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+    grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.65fr);
     flex: 1;
   }
 
+  .logs-workspace__library-column,
   .logs-workspace__detail-column {
     min-height: 0;
-    display: grid;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
     gap: 12px;
-    grid-template-rows: auto auto auto minmax(0, 1fr);
+    align-self: start;
   }
 
   .logs-card {
@@ -589,8 +597,9 @@ function emitMarkerHandoff() {
       grid-template-columns: 1fr;
     }
 
+    .logs-workspace__library-column,
     .logs-workspace__detail-column {
-      grid-template-rows: auto;
+      align-self: stretch;
     }
   }
 
