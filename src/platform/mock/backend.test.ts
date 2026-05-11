@@ -935,6 +935,13 @@ describe("mock profile backend parity", () => {
     });
 
     it("keeps discovery commands deterministic in the test profile", async () => {
+        await expect(invokeMockCommand("available_transports")).resolves.toEqual([
+            { kind: "udp", label: "UDP", available: true, validation: { bind_addr_required: true } },
+            { kind: "tcp", label: "TCP", available: true, validation: { address_required: true } },
+            { kind: "serial", label: "Serial", available: true, validation: { port_required: true, baud_required: true }, default_baud: 57600 },
+            { kind: "bluetooth_ble", label: "BLE", available: true, validation: { address_required: true } },
+            { kind: "bluetooth_spp", label: "SPP", available: true, validation: { address_required: true } },
+        ]);
         await expect(invokeMockCommand("list_serial_ports_cmd")).resolves.toEqual([
             "/dev/ttyUSB0",
             "/dev/ttyACM0",
@@ -960,8 +967,35 @@ describe("mock profile backend parity", () => {
         const modes = await invokeMockCommand<any>("get_available_modes");
 
         expect(snapshot.session.value.vehicle_state.vehicle_type).toBe("vtol");
+        expect(snapshot.session.value.home_position).toEqual({
+            latitude_deg: 47.397742,
+            longitude_deg: 8.545594,
+            altitude_m: 488,
+        });
         expect(snapshot.param_store?.params.Q_ENABLE?.value).toBe(1);
         expect(snapshot.mission_state?.plan?.items.length ?? 0).toBeGreaterThan(0);
+        await expect(invokeMockCommand("fence_download")).resolves.toEqual({
+            return_point: { latitude_deg: 47.3975, longitude_deg: 8.5458 },
+            regions: [
+                {
+                    inclusion_polygon: {
+                        vertices: [
+                            { latitude_deg: 47.393, longitude_deg: 8.538 },
+                            { latitude_deg: 47.408, longitude_deg: 8.538 },
+                            { latitude_deg: 47.408, longitude_deg: 8.559 },
+                            { latitude_deg: 47.393, longitude_deg: 8.559 },
+                        ],
+                        inclusion_group: 0,
+                    },
+                },
+            ],
+        });
+        await expect(invokeMockCommand("rally_download")).resolves.toEqual({
+            points: [
+                { RelHome: { latitude_deg: 47.3985, longitude_deg: 8.5448, relative_alt_m: 80 } },
+                { RelHome: { latitude_deg: 47.401, longitude_deg: 8.551, relative_alt_m: 95 } },
+            ],
+        });
         expect(snapshot.support.available).toBe(true);
         expect(snapshot.support.value).not.toBeNull();
         expect(snapshot.sensor_health.available).toBe(true);
@@ -988,6 +1022,37 @@ describe("mock profile backend parity", () => {
         const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
         expect(snapshot.session.value.vehicle_state.custom_mode).toBe(qrtlMode!.custom_mode);
         expect(snapshot.session.value.vehicle_state.mode_name).toBe("QRTL");
+    });
+
+    it("preserves seeded demo home position in live session stream updates", async () => {
+        const envelope = await openDemoLiveEnvelope();
+        const sessionEvents: OpenSessionSnapshot["session"][] = [];
+        const unlisten = listenMockEvent("session://state", (payload) => {
+            const event = payload as SessionEvent<OpenSessionSnapshot["session"]>;
+            if (event.envelope.session_id === envelope.session_id) {
+                sessionEvents.push(event.value);
+            }
+        });
+
+        await invokeMockCommand("set_flight_mode", { customMode: 3 });
+        unlisten();
+
+        expect(sessionEvents.at(-1)?.value.home_position).toEqual({
+            latitude_deg: 47.397742,
+            longitude_deg: 8.545594,
+            altitude_m: 472,
+        });
+    });
+
+    it("seeds quadcopter demo params with FLTMODE_CH", async () => {
+        setMockProfile("demo");
+
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "demo", vehicle_preset: "quadcopter" } },
+        });
+
+        const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+        expect(snapshot.param_store?.params.FLTMODE_CH?.value).toBe(5);
     });
 
     it("emits demo param download progress and completes with the shared vocabulary", async () => {
@@ -1499,6 +1564,53 @@ describe("mock setup/calibration/arming backend parity", () => {
         });
 
         await expect(invokeMockCommand("calibrate_compass_start", { compassMask: 0 })).resolves.toBeUndefined();
+    });
+
+    it("uses the shared compass calibration flow in the test profile with faster pacing", async () => {
+        vi.useFakeTimers();
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
+        });
+
+        const progress: Array<{ compass_id: number; completion_pct: number; status: string; attempt: number }> = [];
+        const reports: Array<{
+            compass_id: number;
+            status: string;
+            fitness: number;
+            ofs_x: number;
+            ofs_y: number;
+            ofs_z: number;
+            autosaved: boolean;
+        }> = [];
+        const unlisteners = [
+            listenMockEvent("compass://cal_progress", (payload) => {
+                progress.push(payload as { compass_id: number; completion_pct: number; status: string; attempt: number });
+            }),
+            listenMockEvent("compass://cal_report", (payload) => {
+                reports.push(payload as {
+                    compass_id: number;
+                    status: string;
+                    fitness: number;
+                    ofs_x: number;
+                    ofs_y: number;
+                    ofs_z: number;
+                    autosaved: boolean;
+                });
+            }),
+        ];
+
+        await expect(invokeMockCommand("calibrate_compass_start", { compassMask: 0 })).resolves.toBeUndefined();
+        await vi.advanceTimersByTimeAsync(80);
+        unlisteners.forEach((unlisten) => unlisten());
+
+        expect(progress).toEqual([
+            { compass_id: 1, completion_pct: 15, status: "waiting_to_start", attempt: 1 },
+            { compass_id: 1, completion_pct: 55, status: "running_step_one", attempt: 1 },
+            { compass_id: 1, completion_pct: 100, status: "success", attempt: 1 },
+        ]);
+        expect(reports).toEqual([
+            { compass_id: 1, status: "success", fitness: 12.5, ofs_x: 24, ofs_y: -11, ofs_z: 7, autosaved: true },
+        ]);
     });
 
     it("reboots the vehicle when connected", async () => {

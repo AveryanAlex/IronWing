@@ -205,7 +205,10 @@ function seededDemoTransportDescriptor(): TransportDescriptor {
 function setDemoSeedState(preset: DemoVehiclePreset) {
   const fixture = demoFixtureForPreset(preset);
   applyMockLiveVehicleState(fixture.vehicleState);
+  mockState.liveMissionHome = fixture.homePosition;
   applyMockMissionState(fixture.missionState);
+  mockState.liveFencePlan = fixture.fencePlan;
+  mockState.liveRallyPlan = fixture.rallyPlan;
   applyMockParamState(fixture.paramStore, null);
   mockState.liveTelemetryDomain = fixture.telemetryDomain;
   mockState.liveAvailableModes = fixture.availableModes;
@@ -326,7 +329,7 @@ export function liveSessionStreamEvent(vehicleState: MockLiveVehicleState): Mock
           status: "active",
           connection: { kind: "connected" },
           vehicle_state: vehicleState,
-          home_position: null,
+          home_position: structuredClone(mockState.liveMissionHome),
         },
       },
     },
@@ -361,6 +364,12 @@ export function availableTransportDescriptors(): TransportDescriptor[] {
     {
       kind: "bluetooth_ble",
       label: "BLE",
+      available: true,
+      validation: { address_required: true },
+    },
+    {
+      kind: "bluetooth_spp",
+      label: "SPP",
       available: true,
       validation: { address_required: true },
     },

@@ -86,7 +86,6 @@ import {
   writeParam,
   writeParamBatch,
 } from "./backend/params";
-import { isDemoProfile } from "./backend/profile";
 import {
   commandBehaviors,
   clearDemoIntervals,
@@ -202,7 +201,7 @@ function validateNativeSettingsCommand(cmd: string, args: CommandArgs) {
 
 class MissionTransferCancelledError extends Error {}
 
-class DemoCompassCalibrationCancelledError extends Error {}
+class CompassCalibrationCancelledError extends Error {}
 
 type PendingMissionOperation = {
   kind: "download" | "upload" | "clear";
@@ -215,13 +214,13 @@ type PendingMissionOperation = {
 
 let pendingMissionOperation: PendingMissionOperation | null = null;
 
-type PendingDemoCompassCalibration = {
+type PendingCompassCalibration = {
   cancel: () => void;
   cancelPromise: Promise<never>;
   task: Promise<void>;
 };
 
-let pendingDemoCompassCalibration: PendingDemoCompassCalibration | null = null;
+let pendingCompassCalibration: PendingCompassCalibration | null = null;
 
 function publishMissionState(missionState: MockMissionState) {
   applyMockMissionState(missionState);
@@ -371,26 +370,22 @@ function startDemoTimers() {
   }, demoSessionIntervalMs);
 }
 
-async function runDemoCompassCalibration() {
-  if (!isDemoProfile()) {
-    return;
-  }
-
-  if (pendingDemoCompassCalibration) {
-    pendingDemoCompassCalibration.cancel();
+async function runCompassCalibration() {
+  if (pendingCompassCalibration) {
+    pendingCompassCalibration.cancel();
   }
 
   let cancel!: () => void;
   const cancelPromise = new Promise<never>((_, reject) => {
-    cancel = () => reject(new DemoCompassCalibrationCancelledError("Demo compass calibration cancelled."));
+    cancel = () => reject(new CompassCalibrationCancelledError("Compass calibration cancelled."));
   });
 
-  const calibration: PendingDemoCompassCalibration = {
+  const calibration: PendingCompassCalibration = {
     cancel,
     cancelPromise,
     task: Promise.resolve(),
   };
-  pendingDemoCompassCalibration = calibration;
+  pendingCompassCalibration = calibration;
 
   const progressSteps = [
     { compass_id: 1, completion_pct: 15, status: "waiting_to_start", attempt: 1 },
@@ -402,13 +397,13 @@ async function runDemoCompassCalibration() {
     try {
       for (const progress of progressSteps) {
         await Promise.race([delay(mockProfileTiming().compassStepDelayMs), calibration.cancelPromise]);
-        if (pendingDemoCompassCalibration !== calibration || !mockState.liveVehicleAvailable) {
+        if (pendingCompassCalibration !== calibration || !mockState.liveVehicleAvailable) {
           return;
         }
         emitEvent("compass://cal_progress", progress);
       }
 
-      if (pendingDemoCompassCalibration !== calibration || !mockState.liveVehicleAvailable) {
+      if (pendingCompassCalibration !== calibration || !mockState.liveVehicleAvailable) {
         return;
       }
 
@@ -422,12 +417,12 @@ async function runDemoCompassCalibration() {
         autosaved: true,
       });
     } catch (error) {
-      if (!(error instanceof DemoCompassCalibrationCancelledError)) {
+      if (!(error instanceof CompassCalibrationCancelledError)) {
         throw error;
       }
     } finally {
-      if (pendingDemoCompassCalibration === calibration) {
-        pendingDemoCompassCalibration = null;
+      if (pendingCompassCalibration === calibration) {
+        pendingCompassCalibration = null;
       }
     }
   })();
@@ -435,13 +430,13 @@ async function runDemoCompassCalibration() {
   void calibration.task;
 }
 
-function cancelDemoCompassCalibration() {
-  if (!pendingDemoCompassCalibration) {
+function cancelCompassCalibration() {
+  if (!pendingCompassCalibration) {
     return false;
   }
 
-  const calibration = pendingDemoCompassCalibration;
-  pendingDemoCompassCalibration = null;
+  const calibration = pendingCompassCalibration;
+  pendingCompassCalibration = null;
   calibration.cancel();
   return true;
 }
@@ -750,7 +745,7 @@ async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unk
     case "disconnect_link":
       cancelPendingMissionOperation();
       cancelParamOperation();
-      cancelDemoCompassCalibration();
+      cancelCompassCalibration();
       {
         const liveEnvelope = mockState.liveEnvelope;
         disconnectLink(args);
@@ -809,12 +804,12 @@ async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unk
     case "calibrate_compass_start":
       ensureMockLiveWriteAllowed("calibrate_compass_start");
       requireConnectedVehicle();
-      await runDemoCompassCalibration();
+      await runCompassCalibration();
       return undefined;
     case "calibrate_compass_cancel":
       ensureMockLiveWriteAllowed("calibrate_compass_cancel");
       requireConnectedVehicle();
-      cancelDemoCompassCalibration();
+      cancelCompassCalibration();
       return undefined;
     case "param_download_all":
       requireConnectedVehicle();
@@ -996,7 +991,7 @@ function createController(): MockPlatformController {
       invocations.length = 0;
       cancelPendingMissionOperation();
       cancelParamOperation();
-      cancelDemoCompassCalibration();
+      cancelCompassCalibration();
       rejectAllDeferred("Mock platform reset");
       resetMockState();
       resetLogsMockState();

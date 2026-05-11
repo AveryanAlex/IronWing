@@ -1,16 +1,22 @@
 import type { ConfigurationFactsDomain } from "../../../configuration-facts";
+import type { FencePlan } from "../../../fence";
 import type { MissionState } from "../../../mission";
 import type { ParamStore } from "../../../params";
+import type { RallyPlan } from "../../../rally";
 import type { SensorHealthDomain } from "../../../sensor-health";
 import type { StatusMessage } from "../../../statustext";
 import type { SupportDomain } from "../../../support";
 import type { DemoVehiclePreset } from "../../../transport";
 import type { FlightModeEntry, TelemetryDomain } from "../../../telemetry";
 import type { MockLiveStatusTextState, MockLiveVehicleState } from "./types";
+import type { HomePosition } from "../../../mission";
 
 type DemoFixture = {
   vehicleState: MockLiveVehicleState;
+  homePosition: HomePosition;
   missionState: MissionState;
+  fencePlan: FencePlan;
+  rallyPlan: RallyPlan;
   paramStore: ParamStore;
   telemetryDomain: TelemetryDomain;
   availableModes: FlightModeEntry[];
@@ -135,6 +141,63 @@ function seededMissionState(vehicleKind: "quadcopter" | "plane"): MissionState {
   };
 }
 
+function seededHomePosition(vehicleKind: "quadcopter" | "plane"): HomePosition {
+  return vehicleKind === "plane"
+    ? { latitude_deg: 47.397742, longitude_deg: 8.545594, altitude_m: 488 }
+    : { latitude_deg: 47.397742, longitude_deg: 8.545594, altitude_m: 472 };
+}
+
+function seededFencePlan(vehicleKind: "quadcopter" | "plane"): FencePlan {
+  return vehicleKind === "plane"
+    ? {
+        return_point: { latitude_deg: 47.3975, longitude_deg: 8.5458 },
+        regions: [
+          {
+            inclusion_polygon: {
+              vertices: [
+                { latitude_deg: 47.393, longitude_deg: 8.538 },
+                { latitude_deg: 47.408, longitude_deg: 8.538 },
+                { latitude_deg: 47.408, longitude_deg: 8.559 },
+                { latitude_deg: 47.393, longitude_deg: 8.559 },
+              ],
+              inclusion_group: 0,
+            },
+          },
+        ],
+      }
+    : {
+        return_point: { latitude_deg: 47.3977, longitude_deg: 8.5456 },
+        regions: [
+          {
+            inclusion_polygon: {
+              vertices: [
+                { latitude_deg: 47.3964, longitude_deg: 8.5436 },
+                { latitude_deg: 47.3992, longitude_deg: 8.5436 },
+                { latitude_deg: 47.3992, longitude_deg: 8.5478 },
+                { latitude_deg: 47.3964, longitude_deg: 8.5478 },
+              ],
+              inclusion_group: 0,
+            },
+          },
+        ],
+      };
+}
+
+function seededRallyPlan(vehicleKind: "quadcopter" | "plane"): RallyPlan {
+  return vehicleKind === "plane"
+    ? {
+        points: [
+          { RelHome: { latitude_deg: 47.3985, longitude_deg: 8.5448, relative_alt_m: 80 } },
+          { RelHome: { latitude_deg: 47.401, longitude_deg: 8.551, relative_alt_m: 95 } },
+        ],
+      }
+    : {
+        points: [
+          { RelHome: { latitude_deg: 47.3979, longitude_deg: 8.5452, relative_alt_m: 25 } },
+        ],
+      };
+}
+
 const quadcopterModes: FlightModeEntry[] = [
   { custom_mode: 0, name: "Stabilize" },
   { custom_mode: 2, name: "Alt Hold" },
@@ -180,7 +243,10 @@ const quadcopterFixture: DemoFixture = {
     component_id: 1,
     heartbeat_received: true,
   },
+  homePosition: seededHomePosition("quadcopter"),
   missionState: seededMissionState("quadcopter"),
+  fencePlan: seededFencePlan("quadcopter"),
+  rallyPlan: seededRallyPlan("quadcopter"),
   paramStore: seededParams([
     ["FRAME_CLASS", 1, "uint8"],
     ["FRAME_TYPE", 0, "uint8"],
@@ -190,6 +256,7 @@ const quadcopterFixture: DemoFixture = {
     ["FLTMODE4", 3, "uint8"],
     ["FLTMODE5", 5, "uint8"],
     ["FLTMODE6", 0, "uint8"],
+    ["FLTMODE_CH", 5, "uint8"],
     ["BATT_MONITOR", 4, "uint8"],
     ["BATT_CAPACITY", 5000, "int32"],
     ["MOT_BAT_VOLT_MIN", 9.6, "real32"],
@@ -254,7 +321,10 @@ const planeBaseFixture: DemoFixture = {
     component_id: 1,
     heartbeat_received: true,
   },
+  homePosition: seededHomePosition("plane"),
   missionState: seededMissionState("plane"),
+  fencePlan: seededFencePlan("plane"),
+  rallyPlan: seededRallyPlan("plane"),
   paramStore: seededParams([
     ["BATT_MONITOR", 4, "uint8"],
     ["AIRSPEED_CRUISE", 22, "real32"],

@@ -95,7 +95,9 @@ export function openSessionSnapshotResult(sourceKind: "live" | "playback") {
                 vehicle_state: sourceKind === "playback" || !mockState.liveVehicleAvailable
                     ? null
                     : mockState.liveVehicleState,
-                home_position: null,
+                home_position: sourceKind === "playback" || !mockState.liveVehicleAvailable
+                    ? null
+                    : structuredClone(mockState.liveMissionHome),
             },
         },
         telemetry: sourceKind === "playback"
