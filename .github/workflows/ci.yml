@@ -25,6 +25,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check frontend formatting
+        run: pnpm run frontend:format:check
+
       - name: Typecheck frontend
         run: pnpm run frontend:typecheck
 
@@ -34,7 +37,7 @@ jobs:
       - name: Run frontend tests
         run: pnpm test
 
-  rust:
+  backend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -43,7 +46,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
 
       - name: Install Linux system dependencies
         run: |
@@ -68,6 +71,9 @@ jobs:
       - name: Create dist directory
         run: mkdir -p dist
 
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+
       - name: Cargo check
         run: cargo check --workspace
 
@@ -76,3 +82,82 @@ jobs:
 
       - name: Cargo test
         run: cargo test --workspace
+
+  e2e:
+    needs: [frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright e2e tests
+        run: pnpm e2e
+
+  native-e2e:
+    needs: [e2e, backend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libudev-dev \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            webkit2gtk-driver \
+            xvfb
+          if apt-cache show libwebkit2gtk-4.1-dev >/dev/null 2>&1; then
+            sudo apt-get install -y libwebkit2gtk-4.1-dev
+          else
+            sudo apt-get install -y libwebkit2gtk-4.0-dev
+          fi
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install tauri-driver
+        run: cargo install tauri-driver --locked
+
+      - name: Run native WebDriverIO e2e tests
+        run: xvfb-run -a pnpm run e2e:native
+        env:
+          NO_AT_BRIDGE: "1"
+          WEBKIT_DISABLE_COMPOSITING_MODE: "1"
