@@ -1,6 +1,10 @@
 <script lang="ts">
-import type { ParameterExpertRow } from "../../lib/params/parameter-expert-view";
+import type {
+  ParameterExpertBitmaskOption,
+  ParameterExpertRow,
+} from "../../lib/params/parameter-expert-view";
 import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
+import ParameterExpertBitmaskEditor from "./ParameterExpertBitmaskEditor.svelte";
 
 let props = $props<{
   row: ParameterExpertRow;
@@ -69,16 +73,32 @@ function submitStage(event: SubmitEvent) {
   validationMessage = null;
   props.onStage(props.row, nextValue);
 }
+
+let bitmaskDraftValue = $derived.by(() => {
+  const nextValue = Number(draft.trim());
+  if (Number.isFinite(nextValue) && Number.isInteger(nextValue)) {
+    return nextValue;
+  }
+
+  return props.row.stagedValue ?? props.row.value;
+});
+
+let bitmaskDraftOptions = $derived(
+  props.row.bitmaskOptions.map((option: ParameterExpertBitmaskOption) => ({
+    ...option,
+    enabled: Math.floor(bitmaskDraftValue / (2 ** option.bit)) % 2 === 1,
+  })),
+);
 </script>
 
 <form
-  class={`rounded-lg border p-3 ${props.row.isHighlighted ? "border-accent/40 bg-accent/5" : "border-border bg-bg-primary/70"}`}
+  class={`rounded-md border px-3 py-2.5 ${props.row.isHighlighted ? "border-accent/40 bg-accent/5" : "border-border bg-bg-primary/70"}`}
   data-highlighted={props.row.isHighlighted}
   data-param-name={props.row.name}
   data-testid={`${parameterWorkspaceTestIds.itemPrefix}-${props.row.name}`}
   onsubmit={submitStage}
 >
-  <div class="flex flex-wrap items-start justify-between gap-3">
+  <div class="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_auto] xl:items-start">
     <div class="min-w-0">
       <div class="flex flex-wrap items-center gap-2">
         <p class="text-sm font-semibold text-text-primary">{props.row.label}</p>
@@ -99,18 +119,18 @@ function submitStage(event: SubmitEvent) {
           </span>
         {/if}
       </div>
-      <p class="mt-1 font-mono text-xs text-text-muted">{props.row.rawName}</p>
+      <p class="mt-1 font-mono text-[11px] text-text-muted">{props.row.rawName}</p>
       {#if props.row.description}
-        <p class="mt-2 text-sm leading-6 text-text-secondary">{props.row.description}</p>
+        <p class="mt-1 text-xs leading-5 text-text-secondary">{props.row.description}</p>
       {/if}
     </div>
 
-    <div class="text-right">
-      <p class="text-lg font-semibold text-text-primary">
+    <div class="min-w-0 xl:text-right">
+      <p class="text-sm font-semibold text-text-primary">
         {props.row.valueText}{props.row.units ? ` ${props.row.units}` : ""}
       </p>
       {#if props.row.valueLabel}
-        <p class="mt-1 text-sm text-text-secondary">{props.row.valueLabel}</p>
+        <p class="mt-1 text-xs text-text-secondary">{props.row.valueLabel}</p>
       {/if}
       {#if props.row.rebootRequired}
         <p
@@ -121,103 +141,108 @@ function submitStage(event: SubmitEvent) {
         </p>
       {/if}
     </div>
-  </div>
-
-  {#if props.row.failureMessage}
-    <div
-      class="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-3 text-sm text-danger"
-      data-testid={`${parameterWorkspaceTestIds.failurePrefix}-${props.row.name}`}
-    >
-      {props.row.failureMessage}
-    </div>
-  {/if}
-
-  {#if props.row.isStaged}
-    <div
-      class="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-sm text-text-secondary"
-      data-testid={`${parameterWorkspaceTestIds.diffPrefix}-${props.row.name}`}
-    >
-      <span>Current</span>
-      <span class="rounded-full border border-border bg-bg-primary/80 px-2 py-0.5 font-mono text-xs text-text-muted">
-        {displayValue(props.row.valueText, props.row.valueLabel, props.row.units)}
-      </span>
-      <span class="text-text-muted">→</span>
-      <span class="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 font-mono text-xs font-semibold text-accent">
-        {displayValue(props.row.stagedValueText ?? props.row.valueText, props.row.stagedValueLabel, props.row.units)}
-      </span>
-    </div>
-  {/if}
-
-  {#if props.row.editorKind === "bitmask" && props.row.bitmaskOptions.length > 0}
-    <div class="mt-3 flex flex-wrap gap-2">
-      {#each props.row.bitmaskOptions as option (`${props.row.name}:${option.bit}`)}
-        <span class={`rounded-full border px-2 py-1 text-xs ${option.enabled ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-secondary text-text-secondary"}`}>
-          Bit {option.bit} · {option.label}
+    <div class="space-y-2">
+      <label class="block">
+        <span class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+          {props.row.editorKind === "enum" ? "Choose a value" : props.row.editorKind === "bitmask" ? "Bitmask editor" : "Stage a local edit"}
         </span>
-      {/each}
-    </div>
-  {/if}
 
-  <div class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end">
-    <label class="block">
-      <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
-        {props.row.editorKind === "enum" ? "Choose a value" : "Stage a local edit"}
-      </span>
+        {#if props.row.editorKind === "enum"}
+          <select
+            class="mt-1.5 w-full rounded-md border border-border bg-bg-primary/80 px-2.5 py-2 text-sm text-text-primary outline-none transition focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
+            data-testid={`${parameterWorkspaceTestIds.inputPrefix}-${props.row.name}`}
+            disabled={isEditingDisabled()}
+            onchange={(event) => {
+              draft = (event.currentTarget as HTMLSelectElement).value;
+              validationMessage = null;
+            }}
+            value={draft}
+          >
+            {#each props.row.enumOptions as option (`${props.row.name}:${option.code}`)}
+              <option value={String(option.code)}>{option.code} · {option.label}</option>
+            {/each}
+          </select>
+        {:else}
+          <input
+            class="mt-1.5 w-full rounded-md border border-border bg-bg-primary/80 px-2.5 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
+            data-testid={`${parameterWorkspaceTestIds.inputPrefix}-${props.row.name}`}
+            disabled={isEditingDisabled()}
+            max={props.row.range?.max}
+            min={props.row.range?.min}
+            name={`param-${props.row.name}`}
+            oninput={(event) => {
+              draft = (event.currentTarget as HTMLInputElement).value;
+              validationMessage = null;
+            }}
+            placeholder={props.row.valueText}
+            step={props.row.editorKind === "bitmask" ? 1 : props.row.increment ?? "any"}
+            type="number"
+            value={draft}
+          />
+        {/if}
+      </label>
 
-      {#if props.row.editorKind === "enum"}
-        <select
-          class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${parameterWorkspaceTestIds.inputPrefix}-${props.row.name}`}
+      {#if props.row.editorKind === "bitmask" && props.row.bitmaskOptions.length > 0}
+        <ParameterExpertBitmaskEditor
           disabled={isEditingDisabled()}
-          onchange={(event) => {
-            draft = (event.currentTarget as HTMLSelectElement).value;
+          onToggle={(nextValue) => {
+            draft = String(nextValue);
             validationMessage = null;
           }}
-          value={draft}
-        >
-          {#each props.row.enumOptions as option (`${props.row.name}:${option.code}`)}
-            <option value={String(option.code)}>{option.code} · {option.label}</option>
-          {/each}
-        </select>
-      {:else}
-        <input
-          class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${parameterWorkspaceTestIds.inputPrefix}-${props.row.name}`}
-          disabled={isEditingDisabled()}
-          max={props.row.range?.max}
-          min={props.row.range?.min}
-          name={`param-${props.row.name}`}
-          oninput={(event) => {
-            draft = (event.currentTarget as HTMLInputElement).value;
-            validationMessage = null;
-          }}
-          placeholder={props.row.valueText}
-          step={props.row.editorKind === "bitmask" ? 1 : props.row.increment ?? "any"}
-          type="number"
-          value={draft}
+          options={bitmaskDraftOptions}
+          value={bitmaskDraftValue}
         />
       {/if}
-    </label>
+    </div>
 
-    <button
-      class="rounded-md border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
-      data-testid={`${parameterWorkspaceTestIds.stageButtonPrefix}-${props.row.name}`}
-      disabled={isEditingDisabled()}
-      type="submit"
-    >
-      {stageLabel()}
-    </button>
+    <div class="space-y-2 xl:text-right">
+      {#if props.row.isStaged}
+        <div
+          class="rounded-md border border-accent/20 bg-accent/5 px-2.5 py-2 text-xs text-text-secondary"
+          data-testid={`${parameterWorkspaceTestIds.diffPrefix}-${props.row.name}`}
+        >
+          <span class="text-text-muted">Current </span>
+          <span class="font-mono text-text-muted">
+            {displayValue(props.row.valueText, props.row.valueLabel, props.row.units)}
+          </span>
+          <span class="px-1 text-text-muted">→</span>
+          <span class="font-mono font-semibold text-accent">
+            {displayValue(props.row.stagedValueText ?? props.row.valueText, props.row.stagedValueLabel, props.row.units)}
+          </span>
+        </div>
+      {/if}
 
-    {#if props.row.isStaged}
+      {#if props.row.failureMessage}
+        <div
+          class="rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger"
+          data-testid={`${parameterWorkspaceTestIds.failurePrefix}-${props.row.name}`}
+        >
+          {props.row.failureMessage}
+        </div>
+      {/if}
+    </div>
+
+    <div class="flex flex-wrap items-start gap-2 xl:justify-end">
       <button
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-danger/40 hover:text-danger"
-        data-testid={`${parameterWorkspaceTestIds.discardButtonPrefix}-${props.row.name}`}
-        onclick={() => props.onDiscard(props.row.name)}
-        type="button"
+        class="rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-sm font-semibold text-accent transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+        data-testid={`${parameterWorkspaceTestIds.stageButtonPrefix}-${props.row.name}`}
+        disabled={isEditingDisabled()}
+        type="submit"
       >
-        Unstage
+        {stageLabel()}
       </button>
-    {/if}
+
+      {#if props.row.isStaged}
+        <button
+          class="rounded-md border border-border bg-bg-primary/80 px-3 py-2 text-sm font-semibold text-text-secondary transition hover:border-danger/40 hover:text-danger"
+          data-testid={`${parameterWorkspaceTestIds.discardButtonPrefix}-${props.row.name}`}
+          onclick={() => props.onDiscard(props.row.name)}
+          type="button"
+        >
+          Unstage
+        </button>
+      {/if}
+    </div>
   </div>
 
   {#if validationMessage}

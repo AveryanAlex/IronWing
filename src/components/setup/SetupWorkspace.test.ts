@@ -53,7 +53,9 @@ import type { TelemetryState, VehicleState } from "../../telemetry";
 import { appShellTestIds } from "../../app/shell/chrome-state";
 import ParameterReviewTray from "../../app/shell/ParameterReviewTray.svelte";
 import { parameterWorkspaceTestIds } from "../params/parameter-workspace-test-ids";
+import SetupOverviewSection from "./SetupOverviewSection.svelte";
 import SetupWorkspace from "./SetupWorkspace.svelte";
+import SetupWorkspaceSectionNav from "./SetupWorkspaceSectionNav.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 function createTelemetryDomain(
@@ -1534,7 +1536,7 @@ describe("SetupWorkspace", () => {
 
     expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("overview");
     expect(screen.getByTestId(setupWorkspaceTestIds.overviewSection)).toBeTruthy();
-    expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain("Grouped progress stays conservative");
+    expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain("Review setup progress before opening a section");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewMetricPrefix}-inventory`).textContent).toContain("18 sections");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewMetricPrefix}-progress`).textContent).toContain("2/14 confirmed");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewMetricPrefix}-status`).textContent).toContain("unconfirmed");
@@ -1545,11 +1547,11 @@ describe("SetupWorkspace", () => {
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navGroupPrefix}-hardware`)).toBeTruthy();
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navGroupProgressPrefix}-hardware`).textContent).toContain("1/6 confirmed");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewGroupPrefix}-safety`)).toBeTruthy();
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewGroupCountPrefix}-hardware`).textContent).toContain("7 sections · 7 purpose-built editors");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewGroupCountPrefix}-hardware`).textContent).toContain("7 sections · 7 ready here");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewDocLinkPrefix}-hardware`).getAttribute("href")).toContain(
       "common-positioning-landing-page",
     );
-    expect(screen.getByTestId(setupWorkspaceTestIds.detailRecovery).textContent).toContain("Full Parameters stays separate");
+    expect(screen.getByTestId(setupWorkspaceTestIds.detailRecovery).textContent).toContain("Open Full Parameters to inspect settings not covered above");
     expect(screen.getByTestId(setupWorkspaceTestIds.notices).textContent).toContain("Compass not calibrated");
   });
 
@@ -1576,10 +1578,49 @@ describe("SetupWorkspace", () => {
     });
   });
 
+  it("opens Full Parameters directly into the raw parameter browser", async () => {
+    await renderSetupWorkspace({ metadata: createSetupMetadata() });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.overviewRecoveryAction));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("full_parameters");
+      expect(screen.getByTestId(parameterWorkspaceTestIds.expertRoot)).toBeTruthy();
+    });
+  });
+
+  it("uses direct operator language in Setup overview and Full Parameters", async () => {
+    await renderSetupWorkspace({ metadata: createSetupMetadata() });
+
+    const overviewSection = screen.getByTestId(setupWorkspaceTestIds.overviewSection);
+    expect(overviewSection.textContent).not.toContain("Conservative truth");
+    expect(overviewSection.textContent).not.toContain("Trackable progress");
+    expect(overviewSection.textContent).not.toContain("Grouped progress stays conservative");
+    expect(overviewSection.textContent).not.toContain("grouped expert path");
+    expect(overviewSection.textContent).not.toContain("shared review tray keeps ownership");
+    expect(overviewSection.textContent).not.toContain("Expert inventory");
+    expect(overviewSection.textContent).not.toContain("purpose-built editors");
+    expect(overviewSection.textContent).not.toContain("raw recovery path");
+    expect(overviewSection.textContent).not.toContain("shared shell-owned review tray");
+    expect(overviewSection.textContent).toContain("Review setup progress before opening a section");
+    expect(overviewSection.textContent).toContain("Sections available here");
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.overviewRecoveryAction));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.fullParameters).textContent).not.toContain("Recovery stays explicit");
+      expect(screen.getByTestId(setupWorkspaceTestIds.fullParameters).textContent).toContain("Use this page to inspect, search, and queue raw parameter changes");
+      expect(screen.getByTestId(setupWorkspaceTestIds.fullParameters).textContent).toContain("Open the raw list below to inspect settings or queue changes for review");
+      expect(screen.getByTestId(parameterWorkspaceTestIds.expertRoot).textContent).not.toContain("workflow handoff");
+      expect(screen.getByTestId(parameterWorkspaceTestIds.expertRoot).textContent).not.toContain("Workflow selection");
+      expect(screen.getByTestId(parameterWorkspaceTestIds.expertRoot).textContent).not.toContain("is highlighting");
+    });
+  });
+
   it("keeps blocked sections inspectable while metadata recovery is active", async () => {
     await renderSetupWorkspace({ metadata: null });
 
-    expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain("Parameter metadata is unavailable");
+    expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain("Parameter descriptions are unavailable");
     expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain(
       "Metadata missing — recovery mode is active",
     );
@@ -1601,6 +1642,136 @@ describe("SetupWorkspace", () => {
       expect(screen.getByTestId(setupWorkspaceTestIds.fullParameters)).toBeTruthy();
       expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
     });
+  });
+
+  it("keeps implemented sections like peripherals enabled in nav when available", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupTuningMetadata(),
+      sessionOverrides: createCopterSessionOverrides(createPeripheralsSetupParamStore()),
+    });
+
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-peripherals`).hasAttribute("disabled")).toBe(false);
+  });
+
+  it("keeps unimplemented sections like pid_tuning disabled with Coming later", async () => {
+    const { setupWorkspaceStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+    });
+    const baseView = get(setupWorkspaceStore);
+    const sections = baseView.sections.map((section) => section.id === "pid_tuning"
+      ? { ...section, implemented: false }
+      : section);
+    const sectionGroups = baseView.sectionGroups.map((group) => ({
+      ...group,
+      sections: group.sections.map((section) => section.id === "pid_tuning"
+        ? { ...section, implemented: false }
+        : section),
+    }));
+
+    cleanup();
+    render(SetupWorkspaceSectionNav, {
+      sectionGroups,
+      selectedSectionId: "overview",
+      onSelect: vi.fn(),
+    });
+
+    const pidTuningItem = screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-pid_tuning`);
+    expect(pidTuningItem.hasAttribute("disabled")).toBe(true);
+    expect(pidTuningItem.textContent).toContain("Coming later");
+    expect(sections.find((section) => section.id === "pid_tuning")?.implemented).toBe(false);
+  });
+
+  it("does not provide an actionable overview bypass for coming-later sections", async () => {
+    const { sessionStore, parameterStore, setupWorkspaceStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+    });
+    const baseView = get(setupWorkspaceStore);
+    const sectionGroups = baseView.sectionGroups.map((group) => ({
+      ...group,
+      sections: group.sections.map((section) => section.id === "pid_tuning"
+        ? { ...section, implemented: false }
+        : section),
+    }));
+    const view = {
+      ...baseView,
+      sectionGroups,
+    };
+
+    cleanup();
+    render(withShellContexts(sessionStore as unknown as SessionStore, parameterStore, SetupOverviewSection), {
+      view,
+      onSelect: vi.fn(),
+    });
+
+    expect(screen.queryByRole("button", { name: "Open PID tuning" })).toBeNull();
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewCardPrefix}-pid_tuning`).textContent).toContain("Coming later");
+  });
+
+  it("drives Full Parameters disabled behavior from availability state instead of gate copy", async () => {
+    const { setupWorkspaceStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+    });
+    const baseView = get(setupWorkspaceStore);
+    const sectionGroups = baseView.sectionGroups.map((group) => ({
+      ...group,
+      sections: group.sections.map((section) => section.id === "full_parameters"
+        ? { ...section, availability: "blocked", gateText: "Custom blocked reason." }
+        : section),
+    }));
+
+    cleanup();
+    render(SetupWorkspaceSectionNav, {
+      sectionGroups,
+      selectedSectionId: "overview",
+      onSelect: vi.fn(),
+    });
+
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("shows an explicit parameter download state before setup unlocks", async () => {
+    await renderSetupWorkspace({
+      metadata: null,
+      sessionOverrides: {
+        bootstrap: {
+          missionState: null,
+          paramStore: null,
+          paramProgress: null,
+          playbackCursorUsec: null,
+        },
+      },
+    });
+
+    expect(screen.getByTestId(setupWorkspaceTestIds.overviewSection).textContent).toContain(
+      "Download parameters to continue",
+    );
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`).getAttribute("data-availability")).toBe("blocked");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("keeps unimplemented sections visible but disabled with neutral copy", async () => {
+    const { setupWorkspaceStore } = await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+    });
+    const baseView = get(setupWorkspaceStore);
+    const sectionGroups = baseView.sectionGroups.map((group) => ({
+      ...group,
+      sections: group.sections.map((section) => section.id === "pid_tuning"
+        ? { ...section, implemented: false }
+        : section),
+    }));
+
+    cleanup();
+    render(SetupWorkspaceSectionNav, {
+      sectionGroups,
+      selectedSectionId: "overview",
+      onSelect: vi.fn(),
+    });
+
+    const pidTuningItem = screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-pid_tuning`);
+    expect(pidTuningItem.hasAttribute("disabled")).toBe(true);
+    expect(pidTuningItem.textContent).toContain("Coming later");
+    expect(screen.queryByTestId(setupWorkspaceTestIds.plannedSection)).toBeNull();
   });
 
   it("mounts GPS with GPS_TYPE fallback, optional GPS2 truth, GNSS staging, and same-scope stale live facts", async () => {
@@ -2778,12 +2949,12 @@ describe("SetupWorkspace", () => {
   });
 
   it("keeps malformed PID enum metadata visible as raw-name read-only rows instead of inventing labels", async () => {
-    await renderSetupWorkspace({
+    const { setupWorkspaceStore } = await renderSetupWorkspace({
       metadata: createSetupTuningMetadata({ malformedPidEnum: true }),
       sessionOverrides: createCopterSessionOverrides(createPidCopterSetupParamStore()),
     });
 
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-pid_tuning`));
+    setupWorkspaceStore.selectSection("pid_tuning");
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.pidTuningSection)).toBeTruthy();
       expect(screen.getByTestId(setupWorkspaceTestIds.pidTuningFamilyState).textContent).toContain("Multirotor");
@@ -2795,12 +2966,12 @@ describe("SetupWorkspace", () => {
   });
 
   it("shows an explicit QuadPlane PID gap banner when VTOL tuning truth is still partial", async () => {
-    await renderSetupWorkspace({
+    const { setupWorkspaceStore } = await renderSetupWorkspace({
       metadata: createSetupTuningMetadata(),
       sessionOverrides: createPlaneSessionOverrides(createPlaneSetupParamStore({ Q_ENABLE: 1 })),
     });
 
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-pid_tuning`));
+    setupWorkspaceStore.selectSection("pid_tuning");
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.pidTuningSection)).toBeTruthy();
       expect(screen.getByTestId(setupWorkspaceTestIds.pidTuningFamilyState).textContent).toContain("QuadPlane refresh required");
@@ -2812,12 +2983,12 @@ describe("SetupWorkspace", () => {
   });
 
   it("filters peripherals down to configured groups while preserving discovered extra inventories", async () => {
-    await renderSetupWorkspace({
+    const { setupWorkspaceStore } = await renderSetupWorkspace({
       metadata: createSetupTuningMetadata(),
       sessionOverrides: createCopterSessionOverrides(createPeripheralsSetupParamStore()),
     });
 
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-peripherals`));
+    setupWorkspaceStore.selectSection("peripherals");
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.peripheralsSection)).toBeTruthy();
       expect(screen.getByTestId(`${setupWorkspaceTestIds.peripheralsGroupPrefix}-rangefinder`)).toBeTruthy();

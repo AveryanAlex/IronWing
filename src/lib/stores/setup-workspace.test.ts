@@ -312,7 +312,45 @@ describe("setup workspace store", () => {
     expect(tuningGroup?.progressText).toBe("0/1 confirmed");
   });
 
-  it("keeps blocked sections visible and selectable when metadata is unavailable", () => {
+  it("blocks the entire workspace until parameter values load", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState({
+      paramStore: null,
+      metadata: null,
+      metadataState: "idle",
+      metadataError: null,
+    }));
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    const state = get(store);
+    const blockedSections = state.sections.filter((section) => section.id !== "overview");
+
+    expect(state.noticeText).toBe("Download parameters to continue.");
+    expect(state.metadataGateText).toBe("Download parameters to continue.");
+    expect(state.metadataGateActive).toBe(true);
+    expect(blockedSections).toHaveLength(state.sections.length - 1);
+    for (const section of blockedSections) {
+      expect(section.availability).toBe("blocked");
+      expect(section.gateText).toBe("Download parameters to continue.");
+    }
+  });
+
+  it("keeps the global gate active when parameter values are missing even if metadata is ready", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState({
+      paramStore: null,
+      metadataState: "ready",
+    }));
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    const state = get(store);
+
+    expect(state.noticeText).toBe("Download parameters to continue.");
+    expect(state.metadataGateText).toBe("Download parameters to continue.");
+    expect(state.metadataGateActive).toBe(true);
+  });
+
+  it("allows only Overview and Full Parameters when metadata is unavailable", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState({
       metadata: null,
@@ -321,20 +359,510 @@ describe("setup workspace store", () => {
     }));
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
-    store.selectSection("gps");
-    store.selectSection("not-a-section");
+    const state = get(store);
+    const availableSections = state.sections.filter((section) => section.availability === "available");
+    const blockedSections = state.sections.filter((section) => section.availability === "blocked");
+
+    expect(availableSections.map((section) => section.id)).toEqual(["overview", "full_parameters"]);
+    expect(state.noticeText).toBe("Parameter descriptions are unavailable. Open Full Parameters to continue.");
+    expect(state.metadataGateText).toBe("Parameter descriptions are unavailable. Open Full Parameters to continue.");
+    expect(blockedSections).toHaveLength(state.sections.length - 2);
+    for (const section of blockedSections) {
+      expect(section.gateText).toBe("Parameter descriptions are unavailable. Open Full Parameters to continue.");
+    }
+  });
+
+  it("keeps full parameters blocked until the vehicle is connected and parameter values are ready", () => {
+    const sessionStore = writable(createSessionState({
+      sessionDomain: {
+        available: true,
+        complete: true,
+        provenance: "bootstrap",
+        value: {
+          status: "active",
+          connection: { kind: "disconnected" },
+          vehicle_state: {
+            armed: false,
+            custom_mode: 0,
+            mode_name: "Loiter",
+            system_status: "standby",
+            vehicle_type: "quadrotor",
+            autopilot: "ardu_pilot_mega",
+            system_id: 1,
+            component_id: 1,
+            heartbeat_received: true,
+          },
+          home_position: null,
+        },
+      },
+    }));
+    const paramsStore = writable(createParamsState({
+      liveSessionConnected: false,
+      paramStore: null,
+      metadata: null,
+      metadataState: "unavailable",
+      metadataError: "Parameter metadata is unavailable for this vehicle type.",
+    }));
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
     const state = get(store);
-    const overviewSection = readSection(state, "overview");
+    const fullParametersSection = readSection(state, "full_parameters");
+    const gpsSection = readSection(state, "gps");
+
+    expect(state.readiness).toBe("bootstrapping");
+    expect(state.noticeText).toBe("Connect to a vehicle to access setup.");
+    expect(state.metadataGateText).toBe("Connect to a vehicle to access setup.");
+    expect(fullParametersSection?.availability).toBe("blocked");
+    expect(fullParametersSection?.gateText).toBe("Connect to a vehicle to access setup.");
+    expect(gpsSection?.detailText).toBe("Connect to a vehicle to access setup.");
+  });
+
+  it("blocks full parameters when parameter updates are degraded even if metadata is ready", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState({
+      streamError: "Live parameter updates are unavailable right now.",
+      metadataState: "ready",
+    }));
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    const state = get(store);
+    const fullParametersSection = readSection(state, "full_parameters");
+    const gpsSection = readSection(state, "gps");
+
+    expect(state.readiness).toBe("degraded");
+    expect(state.noticeText).toBe("Live parameter updates are unavailable right now.");
+    expect(fullParametersSection?.availability).toBe("blocked");
+    expect(fullParametersSection?.gateText).toBe("Live parameter updates are unavailable right now.");
+    expect(gpsSection?.availability).toBe("blocked");
+    expect(gpsSection?.gateText).toBe("Live parameter updates are unavailable right now.");
+    expect(gpsSection?.detailText).toBe("Live parameter updates are unavailable right now.");
+  });
+
+  it("prefers the connect notice over stream errors when the vehicle is disconnected", () => {
+    const sessionStore = writable(createSessionState({
+      sessionDomain: {
+        available: true,
+        complete: true,
+        provenance: "bootstrap",
+        value: {
+          status: "active",
+          connection: { kind: "disconnected" },
+          vehicle_state: {
+            armed: false,
+            custom_mode: 0,
+            mode_name: "Loiter",
+            system_status: "standby",
+            vehicle_type: "quadrotor",
+            autopilot: "ardu_pilot_mega",
+            system_id: 1,
+            component_id: 1,
+            heartbeat_received: true,
+          },
+          home_position: null,
+        },
+      },
+    }));
+    const paramsStore = writable(createParamsState({
+      liveSessionConnected: false,
+      streamError: "Live parameter updates are unavailable right now.",
+      metadataState: "ready",
+    }));
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    const state = get(store);
     const gpsSection = readSection(state, "gps");
     const fullParametersSection = readSection(state, "full_parameters");
 
-    expect(state.selectedSectionId).toBe("gps");
-    expect(state.noticeText).toContain("Full Parameters is the recovery path");
-    expect(overviewSection?.availability).toBe("available");
-    expect(fullParametersSection?.availability).toBe("available");
+    expect(state.noticeText).toBe("Connect to a vehicle to access setup.");
+    expect(gpsSection?.gateText).toBe("Connect to a vehicle to access setup.");
+    expect(fullParametersSection?.gateText).toBe("Connect to a vehicle to access setup.");
+  });
+
+  it("prefers the parameter-download notice over stream errors when parameter values are missing", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState({
+      paramStore: null,
+      streamError: "Live parameter updates are unavailable right now.",
+      metadata: null,
+      metadataState: "ready",
+    }));
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    const state = get(store);
+    const gpsSection = readSection(state, "gps");
+    const fullParametersSection = readSection(state, "full_parameters");
+
+    expect(state.noticeText).toBe("Download parameters to continue.");
+    expect(gpsSection?.gateText).toBe("Download parameters to continue.");
+    expect(fullParametersSection?.gateText).toBe("Download parameters to continue.");
+  });
+
+  it("keeps full parameters blocked during playback even when parameter data is otherwise ready", () => {
+    const sessionStore = writable(createSessionState({
+      activeEnvelope: {
+        session_id: "session-1",
+        source_kind: "playback",
+        seek_epoch: 0,
+        reset_revision: 0,
+      },
+      activeSource: "playback",
+      sessionDomain: {
+        available: true,
+        complete: true,
+        provenance: "bootstrap",
+        value: {
+          status: "active",
+          connection: { kind: "connected" },
+          vehicle_state: {
+            armed: false,
+            custom_mode: 0,
+            mode_name: "Loiter",
+            system_status: "standby",
+            vehicle_type: "quadrotor",
+            autopilot: "ardu_pilot_mega",
+            system_id: 1,
+            component_id: 1,
+            heartbeat_received: true,
+          },
+          home_position: null,
+        },
+      },
+    }));
+    const paramsStore = writable(createParamsState({
+      activeEnvelope: {
+        session_id: "session-1",
+        source_kind: "playback",
+        seek_epoch: 0,
+        reset_revision: 0,
+      },
+      activeSource: "playback",
+      liveSessionConnected: true,
+      metadataState: "ready",
+      streamError: null,
+    }));
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    const state = get(store);
+    const fullParametersSection = readSection(state, "full_parameters");
+    const gpsSection = readSection(state, "gps");
+
+    expect(state.readiness).toBe("degraded");
+    expect(state.noticeText).toBe("Setup is read-only during playback.");
+    expect(fullParametersSection?.availability).toBe("blocked");
+    expect(fullParametersSection?.gateText).toBe("Setup is read-only during playback.");
     expect(gpsSection?.availability).toBe("blocked");
-    expect(gpsSection?.gateText).toContain("Full Parameters is the recovery path");
+    expect(gpsSection?.gateText).toBe("Setup is read-only during playback.");
+    expect(gpsSection?.detailText).toBe("Setup is read-only during playback.");
+  });
+
+  it("prefers the stricter stream-error notice when metadata is unavailable but full parameters is blocked", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState({
+      streamError: "Live parameter updates are unavailable right now.",
+      metadata: null,
+      metadataState: "unavailable",
+      metadataError: "Parameter metadata is unavailable for this vehicle type.",
+    }));
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    const state = get(store);
+    const fullParametersSection = readSection(state, "full_parameters");
+    const gpsSection = readSection(state, "gps");
+
+    expect(state.readiness).toBe("degraded");
+    expect(state.noticeText).toBe("Live parameter updates are unavailable right now.");
+    expect(state.metadataGateText).toBe("Parameter descriptions are unavailable. Open Full Parameters to continue.");
+    expect(fullParametersSection?.availability).toBe("blocked");
+    expect(fullParametersSection?.gateText).toBe("Live parameter updates are unavailable right now.");
+    expect(gpsSection?.availability).toBe("blocked");
+    expect(gpsSection?.gateText).toBe("Live parameter updates are unavailable right now.");
+  });
+
+  it("uses plain operational section detail text", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState());
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    const state = get(store);
+
+    for (const section of state.sections) {
+      expect(section.detailText).not.toMatch(/truthful|truth is partial|bluffing|inventing controls|visible in the expert catalog|visible as an expert section|keeps the section visible|reboot truth explicit/i);
+    }
+
+    expect(state.rcReceiver.detailText).not.toMatch(/truthful|truth|visible/i);
+    for (const card of state.calibrationSummary.cards) {
+      expect(card.detailText).not.toMatch(/truthful|truth|visible/i);
+    }
+  });
+
+  it("uses plain operational rc and calibration section detail text across visible states", () => {
+    const initialStore = createSetupWorkspaceStore(writable(createSessionState()), writable(createParamsState()));
+    expect(get(initialStore).rcReceiver.detailText).not.toMatch(/truthful|fake bars|fake live bars|visible/i);
+
+    const liveCalibrationStore = createSetupWorkspaceStore(
+      writable(createSessionState({
+        calibration: {
+          available: true,
+          complete: true,
+          provenance: "bootstrap",
+          value: {
+            accel: { lifecycle: "complete", progress: null, report: null },
+            compass: null,
+            radio: null,
+          },
+        },
+      })),
+      writable(createParamsState()),
+    );
+    const liveCalibrationSection = readSection(get(liveCalibrationStore), "calibration");
+    expect(liveCalibrationSection?.detailText).not.toMatch(/truthful|fake bars|fake live bars|visible/i);
+
+    const activeCalibrationStore = createSetupWorkspaceStore(
+      writable(createSessionState({
+        calibration: {
+          available: true,
+          complete: true,
+          provenance: "bootstrap",
+          value: {
+            accel: { lifecycle: "running", progress: null, report: null },
+            compass: null,
+            radio: null,
+          },
+        },
+      })),
+      writable(createParamsState()),
+    );
+    const activeCalibrationSection = readSection(get(activeCalibrationStore), "calibration");
+    expect(activeCalibrationSection?.detailText).not.toMatch(/truthful|fake bars|fake live bars|visible/i);
+  });
+
+  it("uses plain operational rc receiver and calibration detail text in visible degraded states", () => {
+    const sessionStore = writable(createSessionState({
+      sessionDomain: {
+        available: true,
+        complete: true,
+        provenance: "bootstrap",
+        value: {
+          status: "active",
+          connection: { kind: "disconnected" },
+          vehicle_state: {
+            armed: false,
+            custom_mode: 0,
+            mode_name: "Loiter",
+            system_status: "standby",
+            vehicle_type: "quadrotor",
+            autopilot: "ardu_pilot_mega",
+            system_id: 1,
+            component_id: 1,
+            heartbeat_received: true,
+          },
+          home_position: null,
+        },
+      },
+      telemetryDomain: createTelemetryDomain({
+        rc_channels: [1100, Number.NaN, 65535, 1400] as unknown as number[],
+        rc_rssi: 84,
+        servo_outputs: undefined,
+      }),
+      calibration: {
+        available: true,
+        complete: true,
+        provenance: "bootstrap",
+        value: {
+          accel: { lifecycle: "bogus" } as unknown as NonNullable<SessionStoreState["calibration"]["value"]>["accel"],
+          compass: { lifecycle: "bogus" } as unknown as NonNullable<SessionStoreState["calibration"]["value"]>["compass"],
+          radio: { lifecycle: "bogus" } as unknown as NonNullable<SessionStoreState["calibration"]["value"]>["radio"],
+        },
+      },
+    }));
+    const paramsStore = writable(createParamsState());
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    const state = get(store);
+
+    expect(state.rcReceiver.detailText).not.toMatch(/truthful|truth|fake bars|fake live bars|visible/i);
+    for (const card of state.calibrationSummary.cards) {
+      expect(card.detailText).not.toMatch(/truthful|truth|visible/i);
+    }
+  });
+
+  it("only changes guided confirmations when the section is available", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState());
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    store.confirmSection("gps");
+    let state = get(store);
+    expect(state.sectionConfirmations.gps).toBe(true);
+
+    store.clearSectionConfirmation("gps");
+    state = get(store);
+    expect(state.sectionConfirmations.gps).toBe(false);
+
+    sessionStore.set(createSessionState({
+      sessionDomain: {
+        available: true,
+        complete: true,
+        provenance: "bootstrap",
+        value: {
+          status: "active",
+          connection: { kind: "disconnected" },
+          vehicle_state: {
+            armed: false,
+            custom_mode: 0,
+            mode_name: "Loiter",
+            system_status: "standby",
+            vehicle_type: "quadrotor",
+            autopilot: "ardu_pilot_mega",
+            system_id: 1,
+            component_id: 1,
+            heartbeat_received: true,
+          },
+          home_position: null,
+        },
+      },
+    }));
+
+    store.confirmSection("gps");
+    state = get(store);
+    expect(state.sectionConfirmations.gps).toBe(false);
+
+    sessionStore.set(createSessionState());
+    store.confirmSection("gps");
+    state = get(store);
+    expect(state.sectionConfirmations.gps).toBe(true);
+
+    sessionStore.set(createSessionState({
+      sessionDomain: {
+        available: true,
+        complete: true,
+        provenance: "bootstrap",
+        value: {
+          status: "active",
+          connection: { kind: "disconnected" },
+          vehicle_state: {
+            armed: false,
+            custom_mode: 0,
+            mode_name: "Loiter",
+            system_status: "standby",
+            vehicle_type: "quadrotor",
+            autopilot: "ardu_pilot_mega",
+            system_id: 1,
+            component_id: 1,
+            heartbeat_received: true,
+          },
+          home_position: null,
+        },
+      },
+    }));
+
+    store.clearSectionConfirmation("gps");
+    state = get(store);
+    expect(state.sectionConfirmations.gps).toBe(true);
+  });
+
+  it("does not apply replaced guided confirmations for a blocked active scope", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState());
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    store.confirmSection("gps");
+    let state = get(store);
+    expect(state.sectionConfirmations.gps).toBe(true);
+
+    sessionStore.set(createSessionState({
+      sessionDomain: {
+        available: true,
+        complete: true,
+        provenance: "bootstrap",
+        value: {
+          status: "active",
+          connection: { kind: "disconnected" },
+          vehicle_state: {
+            armed: false,
+            custom_mode: 0,
+            mode_name: "Loiter",
+            system_status: "standby",
+            vehicle_type: "quadrotor",
+            autopilot: "ardu_pilot_mega",
+            system_id: 1,
+            component_id: 1,
+            heartbeat_received: true,
+          },
+          home_position: null,
+        },
+      },
+    }));
+
+    store.replaceSectionConfirmations({
+      scopeKey: "session-1:live:0:0",
+      confirmedSections: {
+        gps: false,
+      },
+    });
+
+    state = get(store);
+    expect(state.sectionConfirmations.gps).toBe(true);
+  });
+
+  it("does not clear active-scope guided confirmations without scopeKey while blocked", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState());
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    store.confirmSection("gps");
+    let state = get(store);
+    expect(state.sectionConfirmations.gps).toBe(true);
+
+    sessionStore.set(createSessionState({
+      sessionDomain: {
+        available: true,
+        complete: true,
+        provenance: "bootstrap",
+        value: {
+          status: "active",
+          connection: { kind: "disconnected" },
+          vehicle_state: {
+            armed: false,
+            custom_mode: 0,
+            mode_name: "Loiter",
+            system_status: "standby",
+            vehicle_type: "quadrotor",
+            autopilot: "ardu_pilot_mega",
+            system_id: 1,
+            component_id: 1,
+            heartbeat_received: true,
+          },
+          home_position: null,
+        },
+      },
+    }));
+
+    store.replaceSectionConfirmations({
+      confirmedSections: {
+        gps: false,
+      },
+    });
+
+    state = get(store);
+    expect(state.sectionConfirmations.gps).toBe(true);
+  });
+
+  it("still replaces confirmations for the active scope when guided sections are available", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState());
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    store.replaceSectionConfirmations({
+      scopeKey: "session-1:live:0:0",
+      confirmedSections: {
+        flight_modes: true,
+      },
+    });
+
+    const state = get(store);
+    expect(state.sectionConfirmations.flight_modes).toBe(true);
+    expect(state.sectionStatuses.flight_modes).toBe("complete");
   });
 
   it("keeps frontend confirmations scoped to the active setup scope and drops malformed payloads", () => {

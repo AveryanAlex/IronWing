@@ -42,9 +42,9 @@ function resolveVehicleSlug(vehicleType: string | null): VehicleSlug | null {
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Full Parameters</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Recovery stays explicit</h3>
+      <h3 class="mt-2 text-lg font-semibold text-text-primary">Inspect and edit the raw parameter list</h3>
       <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        This is the raw recovery surface. It reuses the existing Parameter Workspace so metadata fallback, grouped browsing, and the shared shell review tray continue to behave exactly as the shell already proves.
+        Use this page to inspect, search, and queue raw parameter changes. Open the raw list below to inspect settings or queue changes for review.
       </p>
     </div>
 
@@ -61,18 +61,14 @@ function resolveVehicleSlug(vehicleType: string | null): VehicleSlug | null {
     {/if}
   </div>
 
-  <div
-    class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary"
-    data-testid={setupWorkspaceTestIds.fullParametersRecovery}
-  >
-    Guided setup never forks raw parameter logic. If metadata is degraded or a purpose-built card cannot prove its controls, recover here and keep staging through the same shell-owned review tray.
-  </div>
-
   {#if canOpen}
-    <ParameterWorkspace />
+    <ParameterWorkspace defaultMode="expert" />
   {:else}
-    <div class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning">
-      Full Parameters recovery is disabled for the current scope.
+    <div
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+      data-testid={setupWorkspaceTestIds.fullParametersRecovery}
+    >
+      Full Parameters is blocked for the current scope. Reconnect the vehicle or finish loading parameters, then return here to inspect the raw list.
     </div>
   {/if}
 </section>

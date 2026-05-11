@@ -155,6 +155,33 @@ function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessi
     };
 }
 
+function createConnectedLiveSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessionSnapshot {
+    return createSnapshot({
+        ...overrides,
+        session: {
+            available: true,
+            complete: true,
+            provenance: "bootstrap",
+            value: {
+                status: "active",
+                connection: { kind: "connected" },
+                vehicle_state: {
+                    armed: false,
+                    custom_mode: 0,
+                    mode_name: "Stabilize",
+                    system_status: "standby",
+                    vehicle_type: "quadrotor",
+                    autopilot: "ardu_pilot_mega",
+                    system_id: 1,
+                    component_id: 1,
+                    heartbeat_received: true,
+                },
+                home_position: null,
+            },
+        },
+    });
+}
+
 function createTransportDescriptors(): TransportDescriptor[] {
     return [
         {
@@ -701,7 +728,7 @@ describe("AppShell", () => {
 
     it("opens the expert browser from a workflow handoff inside the shell and stages raw edits into the shared tray", async () => {
         await renderShellAt(1440, {
-            snapshot: createSnapshot({
+            snapshot: createConnectedLiveSnapshot({
                 param_store: {
                     expected_count: 5,
                     params: {
@@ -799,7 +826,7 @@ describe("AppShell", () => {
 
     it("keeps overview mounted and gates guided setup sections when metadata is unavailable", async () => {
         await renderShellAt(1440, {
-            snapshot: createSnapshot({
+            snapshot: createConnectedLiveSnapshot({
                 param_store: {
                     expected_count: 2,
                     params: {
@@ -814,7 +841,7 @@ describe("AppShell", () => {
         await openSetupWorkspace();
 
         expect(screen.getByTestId(setupWorkspaceTestIds.metadata).textContent).toContain("Parameter metadata is unavailable");
-        expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain("Parameter metadata is unavailable");
+        expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain("Parameter descriptions are unavailable");
         expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain(
             "Metadata missing — recovery mode is active",
         );
@@ -832,7 +859,7 @@ describe("AppShell", () => {
 
     it("mounts one shared review tray, keeps staged edits across workspace toggles, and preserves the queue across shell tiers", async () => {
         const { viewport } = await renderShellAt(1440, {
-            snapshot: createSnapshot({
+            snapshot: createConnectedLiveSnapshot({
                 param_store: {
                     expected_count: 2,
                     params: {
@@ -918,7 +945,7 @@ describe("AppShell", () => {
 
     it("closes the review tray when staged edits drop to zero", async () => {
         await renderShellAt(1440, {
-            snapshot: createSnapshot({
+            snapshot: createConnectedLiveSnapshot({
                 param_store: {
                     expected_count: 1,
                     params: {

@@ -150,8 +150,9 @@ function createMetadata(): ParamMetadataMap {
                 humanName: "Log bitmask",
                 description: "Enabled log streams.",
                 bitmask: [
-                    { bit: 0, label: "Fast attitude" },
-                    { bit: 2, label: "PID" },
+                    { bit: 0, label: "PID" },
+                    { bit: 2, label: "Fast attitude" },
+                    { bit: 31, label: "High rate telemetry" },
                 ],
                 userLevel: "Advanced",
             },
@@ -202,6 +203,7 @@ function createState(overrides: Partial<ParamsStoreState> = {}): ParamsStoreStat
             seek_epoch: 0,
             reset_revision: 0,
         },
+        liveSessionConnected: true,
         activeSource: "live",
         vehicleType: "quadrotor",
         paramStore: {
@@ -344,6 +346,15 @@ describe("ParameterWorkspace", () => {
         ).toContain("14.4 V");
     });
 
+    it("can start in raw browser mode for Full Parameters", () => {
+        render(withParameterWorkspaceContext(createHarnessStore(createState()), ParameterWorkspace), {
+            defaultMode: "expert",
+        });
+
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertRoot)).toBeTruthy();
+        expect(screen.queryByTestId(parameterWorkspaceTestIds.advancedEntry)).toBeNull();
+    });
+
     it("queues a workflow card through the shared staged count and marks queued recommendations", async () => {
         render(withParameterWorkspaceContext(createHarnessStore(createState()), ParameterWorkspace));
 
@@ -358,7 +369,7 @@ describe("ParameterWorkspace", () => {
         ).toContain("Queued");
     });
 
-    it("opens expert mode from a workflow handoff, preserves expert filters, and highlights the targeted raw rows", async () => {
+    it("opens expert mode from a workflow card, preserves expert filters, and points out the targeted raw rows", async () => {
         render(withParameterWorkspaceContext(createHarnessStore(createState()), ParameterWorkspace));
 
         await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
@@ -376,6 +387,12 @@ describe("ParameterWorkspace", () => {
         );
         expect(screen.getByTestId(parameterWorkspaceTestIds.expertHighlightSummary).textContent).toContain(
             "outside the current filter",
+        );
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertHighlightSummary).textContent).not.toContain(
+            "Workflow selection",
+        );
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertHighlightSummary).textContent).not.toContain(
+            "is highlighting",
         );
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.highlightPrefix}-ARMING_CHECK`)).toBeTruthy();
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.highlightPrefix}-FS_THR_ENABLE`)).toBeTruthy();
@@ -423,6 +440,38 @@ describe("ParameterWorkspace", () => {
         expect(screen.getByTestId(parameterWorkspaceTestIds.expertNoMatches).textContent).toContain(
             "No parameters match",
         );
+    });
+
+    it("supports compact raw rows and checkbox bitmask editing", async () => {
+        render(withParameterWorkspaceContext(createHarnessStore(createState()), ParameterWorkspace), {
+            defaultMode: "expert",
+        });
+
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));
+
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`).textContent).toContain("LOG_BITMASK");
+
+        const fastAttitudeToggle = screen.getByLabelText("Bit 2 - Fast attitude");
+        expect(fastAttitudeToggle).toBeTruthy();
+
+        await fireEvent.click(fastAttitudeToggle);
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-LOG_BITMASK`));
+
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-LOG_BITMASK`).textContent).toContain("1");
+    });
+
+    it("keeps staged high-bit bitmask values non-negative", async () => {
+        render(withParameterWorkspaceContext(createHarnessStore(createState()), ParameterWorkspace), {
+            defaultMode: "expert",
+        });
+
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));
+        await fireEvent.click(screen.getByLabelText("Bit 31 - High rate telemetry"));
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-LOG_BITMASK`));
+
+        const diffText = screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-LOG_BITMASK`).textContent ?? "";
+        expect(diffText).toContain("2147483653");
+        expect(diffText).not.toContain("-2147483643");
     });
 
     it("keeps workflow cards visible but disabled when metadata is unavailable and routes recovery through Advanced parameters", async () => {

@@ -105,7 +105,7 @@ let liveSummary = $derived.by(() => {
     stateText: section.availability === "blocked" ? "Blocked / unknown" : "Waiting for GPS facts",
     detailText: section.availability === "blocked"
       ? "The section stays inspectable, but GPS editors are blocked until metadata and the live scope are trustworthy again."
-      : "Connect a live vehicle and wait for GPS telemetry to inspect truthful fix quality.",
+        : "Connect a live vehicle and wait for GPS telemetry to inspect fix quality.",
     observation: null,
   };
 });
@@ -162,7 +162,7 @@ let portStateText = $derived.by(() => {
 });
 let portDetailText = $derived.by(() => {
   if (!primaryGpsEnabled) {
-    return "Enable a GPS receiver type before expecting lock or port-assignment truth here.";
+    return "Enable a GPS receiver type before expecting lock data or port assignment here.";
   }
 
   if (serialModel.gpsPorts.length === 0) {
@@ -368,9 +368,9 @@ function formatHdop(value: number | null): string {
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Truthful receiver, GNSS, and lock-readiness state</h3>
+      <h3 class="mt-2 text-lg font-semibold text-text-primary">Review GPS receivers, GNSS options, and lock status</h3>
       <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        GPS type, optional second-receiver visibility, GNSS constellation staging, and live fix quality stay explicit here. Every change still queues through the shared review tray; this section never applies directly.
+        Check receiver type, optional second-receiver settings, GNSS selections, and live fix quality here. If metadata is missing or a port is unassigned, this section shows what is blocked and where to go next.
       </p>
     </div>
 
@@ -483,7 +483,7 @@ function formatHdop(value: number | null): string {
         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">GPS_AUTO_CONFIG</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{autoConfigItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">
-          {autoConfigItem.description ?? "Keep module auto-configuration explicit and staged through the shared review tray."}
+          {autoConfigItem.description ?? "Review module auto-configuration here and queue changes through the review tray."}
         </p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.gpsCurrentPrefix}-GPS_AUTO_CONFIG`}>
           Current · {currentValueText(autoConfigItem)}
@@ -523,7 +523,7 @@ function formatHdop(value: number | null): string {
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">GPS2_TYPE</p>
           <h4 class="mt-2 text-base font-semibold text-text-primary">{secondaryTypeItem.label}</h4>
           <p class="mt-2 text-sm text-text-secondary">
-            {secondaryTypeItem.description ?? "Optional second GPS receiver truth stays visible when the firmware exposes it."}
+            {secondaryTypeItem.description ?? "Inspect the optional second GPS receiver here when the firmware exposes it."}
           </p>
           <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.gpsCurrentPrefix}-GPS2_TYPE`}>
             Current · {currentValueText(secondaryTypeItem)}
@@ -560,7 +560,7 @@ function formatHdop(value: number | null): string {
           <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">GPS_AUTO_SWITCH</p>
           <h4 class="mt-2 text-base font-semibold text-text-primary">{autoSwitchItem.label}</h4>
           <p class="mt-2 text-sm text-text-secondary">
-            {autoSwitchItem.description ?? "Keep primary/secondary GPS switching explicit and staged through the shared review tray."}
+            {autoSwitchItem.description ?? "Review primary/secondary GPS switching here and queue changes through the review tray."}
           </p>
           <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.gpsCurrentPrefix}-GPS_AUTO_SWITCH`}>
             Current · {currentValueText(autoSwitchItem)}

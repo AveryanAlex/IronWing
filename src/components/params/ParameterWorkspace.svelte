@@ -46,15 +46,17 @@ type ResolvedFlightWorkflowInputs = {
 
 let {
   fileIo = createParameterFileIo(),
+  defaultMode = "workflow",
 }: {
   fileIo?: ParameterFileIo;
+  defaultMode?: "workflow" | "expert";
 } = $props();
 
 const store = getParamsStoreContext();
 const paramsState = fromStore(store);
 const parameterViewStore = fromStore(getParameterWorkspaceViewStoreContext());
 
-let showAdvanced = $state(false);
+let showAdvancedOverride = $state(false);
 let batteryCellCountInput = $state("4");
 let batteryChemistryIndex = $state(0);
 let flightPropSizeInput = $state("9");
@@ -120,6 +122,8 @@ let expertView = $derived.by(() =>
 let advancedAvailable = $derived(expertView.totalCount > 0);
 let expertHighlightSourceLabel = $derived(expertHighlightRequest?.sourceLabel ?? null);
 let replayReadonly = $derived(isReplayReadonly(view.activeEnvelope?.source_kind ?? null));
+let expertDefaultMode = $derived(defaultMode === "expert");
+let showAdvanced = $derived(expertDefaultMode || showAdvancedOverride);
 
 function stageItem(row: ParameterExpertRow, nextValue: number) {
   store.stageParameterEdit(row, nextValue);
@@ -151,7 +155,7 @@ function stageWorkflowCard(cardId: ParameterWorkflowCardId) {
 }
 
 function openAdvanced(options: ExpertHighlightRequest | null = null) {
-  showAdvanced = true;
+  showAdvancedOverride = true;
   if (!options || options.targetNames.length === 0) {
     expertHighlightRequest = null;
     return;
@@ -177,7 +181,11 @@ function openWorkflowAdvanced(cardId: ParameterWorkflowCardId) {
 }
 
 function closeAdvanced() {
-  showAdvanced = false;
+  if (expertDefaultMode) {
+    return;
+  }
+
+  showAdvancedOverride = false;
   expertHighlightRequest = null;
 }
 
@@ -302,9 +310,13 @@ function parsePositiveNumber(value: string): number | null {
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Parameter workspace</p>
-      <h2 class="mt-1 text-base font-semibold text-text-primary">Workflow-first setup</h2>
+      <h2 class="mt-1 text-base font-semibold text-text-primary">
+        {expertDefaultMode ? "Raw browser first" : "Workflow-first setup"}
+      </h2>
       <p class="mt-1 text-sm text-text-secondary">
-        Start with a few guided operational changes, then open Advanced parameters for searchable raw edits, grouped browsing, and the same shared review tray.
+        {expertDefaultMode
+          ? "Browse searchable raw parameters first, then use the guided helpers below when you want scoped recommendations."
+          : "Start with a few guided operational changes, then open Advanced parameters for searchable raw edits, grouped browsing, and the same shared review tray."}
       </p>
     </div>
 
@@ -379,60 +391,7 @@ function parsePositiveNumber(value: string): number | null {
     </div>
   </div>
 
-  {#if showAdvanced && advancedAvailable}
-    <div
-      class="mt-4 rounded-lg border border-border bg-bg-secondary/60 p-3"
-      data-testid={parameterWorkspaceTestIds.advancedPanel}
-    >
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Advanced parameters</p>
-          <h3 class="mt-2 text-lg font-semibold text-text-primary">Raw access stays explicit and separate</h3>
-          <p class="mt-2 text-sm text-text-secondary">
-            Search, filter, and stage grouped raw parameters here when the guided starters do not fit the current vehicle or metadata is unavailable.
-          </p>
-        </div>
-        <button
-          class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-          data-testid={parameterWorkspaceTestIds.advancedBackButton}
-          onclick={closeAdvanced}
-          type="button"
-        >
-          Back to workflows
-        </button>
-      </div>
-
-      <div class="mt-4">
-        <ParameterExpertFileActions
-          fileIo={fileIo}
-          metadata={params.metadata}
-          onStageImportedRows={stageImportedRows}
-          paramStore={params.paramStore}
-          {replayReadonly}
-        />
-      </div>
-
-      <div class="mt-4">
-        <ParameterExpertBrowser
-          envelopeKey={activeEnvelopeKey}
-          filter={expertFilter}
-          highlightSourceLabel={expertHighlightSourceLabel}
-          onDiscard={discardItem}
-          onFilterChange={(nextFilter) => {
-            expertFilter = nextFilter;
-          }}
-          onSearchText={(nextSearchText) => {
-            expertSearchText = nextSearchText;
-          }}
-          onStage={stageItem}
-          {replayReadonly}
-          readiness={view.readiness}
-          searchText={expertSearchText}
-          view={expertView}
-        />
-      </div>
-    </div>
-  {:else}
+  {#snippet workflowHelpers()}
     <div class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
       <div class="space-y-4">
         {#if emptyState}
@@ -467,25 +426,99 @@ function parsePositiveNumber(value: string): number | null {
         {/if}
       </div>
 
-      <aside
-        class="rounded-lg border border-border bg-bg-secondary/60 p-3"
-        data-testid={parameterWorkspaceTestIds.advancedEntry}
-      >
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Advanced parameters</p>
-        <h3 class="mt-2 text-lg font-semibold text-text-primary">Keep raw access explicit</h3>
-        <p class="mt-2 text-sm leading-6 text-text-secondary">
-          Open grouped raw browsing when you need searchable direct control, metadata-failure recovery, or edits outside the guided starters.
-        </p>
-        <button
-          class="mt-4 w-full rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={parameterWorkspaceTestIds.advancedButton}
-          disabled={!advancedAvailable || replayReadonly}
-          onclick={() => openAdvanced()}
-          type="button"
+      {#if !expertDefaultMode}
+        <aside
+          class="rounded-lg border border-border bg-bg-secondary/60 p-3"
+          data-testid={parameterWorkspaceTestIds.advancedEntry}
         >
-          {advancedAvailable ? "Open Advanced parameters" : "Advanced parameters unavailable"}
-        </button>
-      </aside>
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Advanced parameters</p>
+          <h3 class="mt-2 text-lg font-semibold text-text-primary">Open the full raw parameter browser</h3>
+          <p class="mt-2 text-sm leading-6 text-text-secondary">
+            Open the searchable raw list when you need direct control, need to inspect settings a guided card does not cover, or need to work around missing metadata.
+          </p>
+          <button
+            class="mt-4 w-full rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+            data-testid={parameterWorkspaceTestIds.advancedButton}
+            disabled={!advancedAvailable || replayReadonly}
+            onclick={() => openAdvanced()}
+            type="button"
+          >
+            {advancedAvailable ? "Open Advanced parameters" : "Advanced parameters unavailable"}
+          </button>
+        </aside>
+      {/if}
     </div>
+  {/snippet}
+
+  {#if showAdvanced}
+    <div
+      class="mt-4 rounded-lg border border-border bg-bg-secondary/60 p-3"
+      data-testid={parameterWorkspaceTestIds.advancedPanel}
+    >
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Advanced parameters</p>
+          <h3 class="mt-2 text-lg font-semibold text-text-primary">
+            {expertDefaultMode ? "Raw browser" : "Raw parameter browser"}
+          </h3>
+          <p class="mt-2 text-sm text-text-secondary">
+            {expertDefaultMode
+              ? "Search, filter, and stage raw parameters here. Guided helpers stay below when you want quicker starting points."
+              : "Search, filter, and stage raw parameters here when the guided sections do not fit this vehicle or cannot show the setting you need."}
+          </p>
+        </div>
+        {#if !expertDefaultMode}
+          <button
+            class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+            data-testid={parameterWorkspaceTestIds.advancedBackButton}
+            onclick={closeAdvanced}
+            type="button"
+          >
+            Back to workflows
+          </button>
+        {/if}
+      </div>
+
+      <div class="mt-4">
+        <ParameterExpertFileActions
+          fileIo={fileIo}
+          metadata={params.metadata}
+          onStageImportedRows={stageImportedRows}
+          paramStore={params.paramStore}
+          {replayReadonly}
+        />
+      </div>
+
+      <div class="mt-4">
+        <ParameterExpertBrowser
+          envelopeKey={activeEnvelopeKey}
+          filter={expertFilter}
+          highlightSourceLabel={expertHighlightSourceLabel}
+          onDiscard={discardItem}
+          onFilterChange={(nextFilter) => {
+            expertFilter = nextFilter;
+          }}
+          onSearchText={(nextSearchText) => {
+            expertSearchText = nextSearchText;
+          }}
+          onStage={stageItem}
+          {replayReadonly}
+          readiness={view.readiness}
+          searchText={expertSearchText}
+          view={expertView}
+        />
+      </div>
+    </div>
+
+    {#if expertDefaultMode}
+      <section class="mt-4 space-y-3">
+        <div class="rounded-lg border border-border bg-bg-secondary/40 px-3 py-3 text-sm text-text-secondary">
+          Guided helpers stay available below and stage through the same shared review tray.
+        </div>
+        {@render workflowHelpers()}
+      </section>
+    {/if}
+  {:else}
+    {@render workflowHelpers()}
   {/if}
 </section>
