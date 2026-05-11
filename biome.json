@@ -14,7 +14,7 @@
       "src/app.css",
       "src/lib/stores/runtime.ts",
       "src/main.ts",
-      "svelte.config.ts",
+      "svelte.config.js",
       "vite.config.ts",
       "vitest.config.ts"
     ]

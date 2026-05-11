@@ -1,6 +1,6 @@
 import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
-import type { Options } from "@sveltejs/vite-plugin-svelte";
 
+/** @type {import("@sveltejs/vite-plugin-svelte").Options} */
 const svelteConfig = {
   preprocess: vitePreprocess(),
   compilerOptions: {
@@ -8,6 +8,6 @@ const svelteConfig = {
       async: true,
     },
   },
-} satisfies Options;
+};
 
 export default svelteConfig;
