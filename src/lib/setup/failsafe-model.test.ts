@@ -16,6 +16,7 @@ import {
   buildRtlReturnModel,
   resolveSafetyVehicleFamily,
 } from "./failsafe-model";
+import { paramStoreForDemoPreset } from "../../platform/mock/backend/param-fixtures";
 
 function createParamStore(entries: Record<string, number>): ParamStore {
   const params: ParamStore["params"] = {};
@@ -200,6 +201,42 @@ describe("failsafe-model", () => {
     expect(copterModel.warningTexts.join(" ")).toContain("RTL_ALT is 0");
     expect(roverModel.summaryText).toContain("Approach radius 2.0 m");
     expect(roverModel.detailText).toContain("Rover return");
+  });
+
+  it("keeps the copter demo SITL fixture RTL model open instead of failing closed", () => {
+    const model = buildRtlReturnModel({
+      vehicleType: "quadrotor",
+      paramStore: paramStoreForDemoPreset("quadcopter"),
+      metadata: createMetadata(),
+      stagedEdits: {},
+    });
+
+    expect(model.recoveryReasons).toEqual([]);
+    expect(model.canConfirm).toBe(true);
+  });
+
+  it("keeps the plane demo SITL fixture RTL model open instead of failing closed", () => {
+    const model = buildRtlReturnModel({
+      vehicleType: "fixed_wing",
+      paramStore: paramStoreForDemoPreset("airplane"),
+      metadata: createMetadata(),
+      stagedEdits: {},
+    });
+
+    expect(model.recoveryReasons).toEqual([]);
+    expect(model.canConfirm).toBe(true);
+  });
+
+  it("keeps the copter demo SITL fixture failsafe model open instead of failing closed", () => {
+    const model = buildFailsafeSectionModel({
+      vehicleType: "quadrotor",
+      paramStore: paramStoreForDemoPreset("quadcopter"),
+      metadata: createMetadata(),
+      stagedEdits: {},
+    });
+
+    expect(model.recoveryReasons).toEqual([]);
+    expect(model.canConfirm).toBe(true);
   });
 
   it("keeps geofence fail-closed when the fence-type bitmask metadata is malformed", () => {

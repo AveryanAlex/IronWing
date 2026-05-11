@@ -10,6 +10,7 @@ import type { DemoVehiclePreset } from "../../../transport";
 import type { FlightModeEntry, TelemetryDomain } from "../../../telemetry";
 import type { MockLiveStatusTextState, MockLiveVehicleState } from "./types";
 import type { HomePosition } from "../../../mission";
+import { paramStoreForDemoPreset } from "./param-fixtures";
 
 type DemoFixture = {
   vehicleState: MockLiveVehicleState;
@@ -37,15 +38,6 @@ function seededDomain<T>(value: T) {
 
 function seededStatusText(entries: StatusMessage[]): MockLiveStatusTextState {
   return { entries };
-}
-
-function seededParams(
-  entries: ReadonlyArray<readonly [string, number, "uint8" | "int8" | "uint16" | "int16" | "uint32" | "int32" | "real32"]>,
-): ParamStore {
-  return {
-    expected_count: entries.length,
-    params: Object.fromEntries(entries.map(([name, value, param_type], index) => [name, { name, value, param_type, index }])),
-  };
 }
 
 function seededMissionState(vehicleKind: "quadcopter" | "plane"): MissionState {
@@ -247,28 +239,7 @@ const quadcopterFixture: DemoFixture = {
   missionState: seededMissionState("quadcopter"),
   fencePlan: seededFencePlan("quadcopter"),
   rallyPlan: seededRallyPlan("quadcopter"),
-  paramStore: seededParams([
-    ["FRAME_CLASS", 1, "uint8"],
-    ["FRAME_TYPE", 0, "uint8"],
-    ["FLTMODE1", 7, "uint8"],
-    ["FLTMODE2", 9, "uint8"],
-    ["FLTMODE3", 6, "uint8"],
-    ["FLTMODE4", 3, "uint8"],
-    ["FLTMODE5", 5, "uint8"],
-    ["FLTMODE6", 0, "uint8"],
-    ["FLTMODE_CH", 5, "uint8"],
-    ["BATT_MONITOR", 4, "uint8"],
-    ["BATT_CAPACITY", 5000, "int32"],
-    ["MOT_BAT_VOLT_MIN", 9.6, "real32"],
-    ["MOT_BAT_VOLT_MAX", 12.8, "real32"],
-    ["MOT_THST_EXPO", 0.65, "real32"],
-    ["MOT_THST_HOVER", 0.39, "real32"],
-    ["GPS_AUTO_CONFIG", 1, "uint8"],
-    ["SERIAL1_PROTOCOL", 2, "uint8"],
-    ["SERIAL1_BAUD", 57, "uint8"],
-    ["FS_THR_ENABLE", 1, "uint8"],
-    ["FS_GCS_ENABLE", 1, "uint8"],
-  ]),
+  paramStore: paramStoreForDemoPreset("quadcopter"),
   telemetryDomain: seededDomain({
     flight: { altitude_m: 18, speed_mps: 0.6, climb_rate_mps: 0.1, throttle_pct: 38, airspeed_mps: 0 },
     navigation: { latitude_deg: 47.397742, longitude_deg: 8.545594, heading_deg: 182, wp_dist_m: 12, nav_bearing_deg: 180, target_bearing_deg: 183, xtrack_error_m: 0.2 },
@@ -325,35 +296,7 @@ const planeBaseFixture: DemoFixture = {
   missionState: seededMissionState("plane"),
   fencePlan: seededFencePlan("plane"),
   rallyPlan: seededRallyPlan("plane"),
-  paramStore: seededParams([
-    ["BATT_MONITOR", 4, "uint8"],
-    ["AIRSPEED_CRUISE", 22, "real32"],
-    ["AIRSPEED_MAX", 30, "real32"],
-    ["AIRSPEED_MIN", 10, "real32"],
-    ["ARSPD_USE", 1, "uint8"],
-    ["NAVL1_PERIOD", 15, "real32"],
-    ["WP_LOITER_RAD", 80, "real32"],
-    ["WP_RADIUS", 50, "real32"],
-    ["FLTMODE1", 10, "uint8"],
-    ["FLTMODE2", 11, "uint8"],
-    ["FLTMODE3", 12, "uint8"],
-    ["FLTMODE4", 5, "uint8"],
-    ["FLTMODE5", 2, "uint8"],
-    ["FLTMODE6", 0, "uint8"],
-    ["FLTMODE_CH", 8, "uint8"],
-    ["PTCH_RATE_P", 0.15, "real32"],
-    ["PTCH_RATE_I", 0.11, "real32"],
-    ["RLL_RATE_P", 0.3, "real32"],
-    ["RLL_RATE_I", 0.25, "real32"],
-    ["TRIM_THROTTLE", 50, "real32"],
-    ["RC1_TRIM", 1500, "uint16"],
-    ["RC2_TRIM", 1500, "uint16"],
-    ["RC3_TRIM", 1000, "uint16"],
-    ["SERVO1_FUNCTION", 4, "uint8"],
-    ["SERVO2_FUNCTION", 19, "uint8"],
-    ["SERVO3_MIN", 1000, "uint16"],
-    ["SERVO3_MAX", 2000, "uint16"],
-  ]),
+  paramStore: paramStoreForDemoPreset("airplane"),
   telemetryDomain: seededDomain({
     flight: { altitude_m: 0, speed_mps: 0, climb_rate_mps: 0, throttle_pct: 0, airspeed_mps: 0 },
     navigation: { latitude_deg: 47.397742, longitude_deg: 8.545594, heading_deg: 0, wp_dist_m: 0, nav_bearing_deg: 0, target_bearing_deg: 0, xtrack_error_m: 0 },
@@ -402,23 +345,7 @@ const quadplaneFixture: DemoFixture = {
     mode_name: "QLOITER",
     vehicle_type: "vtol",
   },
-  paramStore: seededParams([
-    ...Object.values(planeBaseFixture.paramStore.params).map((param) => [param.name, param.value, param.param_type] as const),
-    ["Q_ENABLE", 1, "uint8"],
-    ["Q_FRAME_CLASS", 1, "uint8"],
-    ["Q_ASSIST_SPEED", 18, "real32"],
-    ["Q_M_THST_EXPO", 0.65, "real32"],
-    ["Q_M_PWM_MIN", 1000, "uint16"],
-    ["Q_M_PWM_MAX", 2000, "uint16"],
-    ["Q_M_BAT_VOLT_MAX", 12.8, "real32"],
-    ["Q_M_BAT_VOLT_MIN", 9.6, "real32"],
-    ["Q_A_RAT_RLL_P", 0.108, "real32"],
-    ["Q_A_RAT_RLL_I", 0.108, "real32"],
-    ["Q_A_RAT_PIT_P", 0.103, "real32"],
-    ["Q_A_RAT_PIT_I", 0.103, "real32"],
-    ["Q_A_RAT_YAW_P", 0.2, "real32"],
-    ["Q_A_RAT_YAW_I", 0.02, "real32"],
-  ]),
+  paramStore: paramStoreForDemoPreset("quadplane"),
   telemetryDomain: seededDomain({
     ...planeBaseFixture.telemetryDomain.value!,
     flight: { ...planeBaseFixture.telemetryDomain.value!.flight },

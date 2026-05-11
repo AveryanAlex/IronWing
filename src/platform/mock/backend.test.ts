@@ -20,7 +20,8 @@ import type {
 } from "../../firmware";
 
 import { getMockPlatformController, invokeMockCommand, listenMockEvent, type MockLogSeedPreset } from "./backend";
-import { mockState } from "./backend/runtime";
+import { paramStoreForDemoPreset } from "./backend/param-fixtures";
+import { mockProfileTiming, mockState } from "./backend/runtime";
 import { horizontalDistanceM } from "./backend/vehicle-sim/geo";
 
 function setMockProfile(profile: "test" | "demo") {
@@ -1075,7 +1076,7 @@ describe("mock profile backend parity", () => {
         });
     });
 
-    it("seeds quadcopter demo params with FLTMODE_CH", async () => {
+    it("seeds quadcopter demo SITL params with RTL and failsafe rows", async () => {
         setMockProfile("demo");
 
         await invokeMockCommand("connect_link", {
@@ -1084,6 +1085,40 @@ describe("mock profile backend parity", () => {
 
         const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
         expect(snapshot.param_store?.params.FLTMODE_CH?.value).toBe(5);
+        expect(snapshot.param_store?.params.RTL_ALT?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.RTL_ALT_FINAL?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.RTL_CLIMB_MIN?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.RTL_SPEED?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.RTL_LOIT_TIME?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.FS_THR_ENABLE?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.FS_GCS_ENABLE?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.FS_EKF_ACTION?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.FS_CRASH_CHECK?.value).toEqual(expect.any(Number));
+    });
+
+    it("seeds airplane demo SITL params with plane RTL rows", async () => {
+        setMockProfile("demo");
+
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "demo", vehicle_preset: "airplane" } },
+        });
+
+        const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+        expect(snapshot.param_store?.params.ALT_HOLD_RTL?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.RTL_AUTOLAND?.value).toEqual(expect.any(Number));
+    });
+
+    it("seeds quadplane demo SITL params with quadplane compatibility rows", async () => {
+        setMockProfile("demo");
+
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "demo", vehicle_preset: "quadplane" } },
+        });
+
+        const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+        expect(snapshot.param_store?.params.Q_ENABLE?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.ALT_HOLD_RTL?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.RTL_AUTOLAND?.value).toEqual(expect.any(Number));
     });
 
     it("emits demo param download progress and completes with the shared vocabulary", async () => {
@@ -1095,8 +1130,10 @@ describe("mock profile backend parity", () => {
         });
 
         const downloadPromise = invokeMockCommand("param_download_all");
+        const demoStore = paramStoreForDemoPreset("quadcopter");
+        const totalDurationMs = demoStore.expected_count * mockProfileTiming().paramStepDelayMs + 1_000;
 
-        await vi.advanceTimersByTimeAsync(5_000);
+        await vi.advanceTimersByTimeAsync(totalDurationMs);
         await downloadPromise;
         unlisten();
 

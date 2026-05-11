@@ -35,6 +35,7 @@ flate2 = "1"
 crc32fast = "1"
 ureq = "3"
 tokio-util = { version = "0.7.18", features = ["rt"] }
+humantime = "2"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
