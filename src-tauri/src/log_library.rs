@@ -71,7 +71,14 @@ impl LogLibrary {
         path: String,
         reporter: &LogOperationReporter,
     ) -> Result<LogLibraryEntry, String> {
-        reporter.progress(LogOperationPhase::ReadingMetadata, 0, None, None, None, None)?;
+        reporter.progress(
+            LogOperationPhase::ReadingMetadata,
+            0,
+            None,
+            None,
+            None,
+            None,
+        )?;
         let original_path = canonical_existing_path(&path)?;
         let fingerprint = fingerprint_path(&original_path)?;
         let imported_at_unix_msec = now_unix_msec();
@@ -1087,10 +1094,12 @@ mod tests {
             .find(|candidate| candidate.entry_id == entry.entry_id)
             .expect("missing entry present");
         assert_eq!(missing.status, LogLibraryEntryStatus::Missing);
-        assert!(missing
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "referenced_file_missing"));
+        assert!(
+            missing
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "referenced_file_missing")
+        );
 
         std::fs::rename(&backup, &source).expect("restore original source log");
         let recovered_catalog = library.list().expect("refresh recovered catalog");
@@ -1105,10 +1114,13 @@ mod tests {
             recovered.source.status,
             ReferencedFileStatus::Available { .. }
         ));
-        assert!(!recovered
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "referenced_file_missing" || diagnostic.code == "referenced_file_stale"));
+        assert!(
+            !recovered
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "referenced_file_missing"
+                    || diagnostic.code == "referenced_file_stale")
+        );
 
         let _ = std::fs::remove_dir_all(root);
     }
@@ -1172,10 +1184,12 @@ mod tests {
             entry.source.status,
             ReferencedFileStatus::Available { .. }
         ));
-        assert!(!entry
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "referenced_file_stale"));
+        assert!(
+            !entry
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "referenced_file_stale")
+        );
 
         let _ = std::fs::remove_dir_all(root);
     }
@@ -1236,7 +1250,10 @@ mod tests {
             .expect("stale entry present");
         assert_eq!(stale.status, LogLibraryEntryStatus::Stale);
         assert_eq!(stale.metadata.total_messages, 1);
-        assert!(matches!(stale.source.status, ReferencedFileStatus::Stale { .. }));
+        assert!(matches!(
+            stale.source.status,
+            ReferencedFileStatus::Stale { .. }
+        ));
 
         let relinked = runtime()
             .block_on(library.relink(
@@ -1247,9 +1264,20 @@ mod tests {
             .expect("relink entry");
         assert_eq!(relinked.status, LogLibraryEntryStatus::Stale);
         assert_eq!(relinked.metadata.total_messages, 1);
-        assert_eq!(relinked.source.original_path, std::fs::canonicalize(&source_b).unwrap().to_string_lossy());
-        assert!(matches!(relinked.source.status, ReferencedFileStatus::Available { .. }));
-        assert!(relinked.diagnostics.iter().any(|diagnostic| diagnostic.code == RELINK_REQUIRES_REINDEX_CODE));
+        assert_eq!(
+            relinked.source.original_path,
+            std::fs::canonicalize(&source_b).unwrap().to_string_lossy()
+        );
+        assert!(matches!(
+            relinked.source.status,
+            ReferencedFileStatus::Available { .. }
+        ));
+        assert!(
+            relinked
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == RELINK_REQUIRES_REINDEX_CODE)
+        );
 
         let reindexed = runtime()
             .block_on(library.reindex(
@@ -1259,7 +1287,12 @@ mod tests {
             .expect("reindex entry");
         assert_eq!(reindexed.status, LogLibraryEntryStatus::Ready);
         assert_eq!(reindexed.metadata.total_messages, 2);
-        assert!(!reindexed.diagnostics.iter().any(|diagnostic| diagnostic.code == RELINK_REQUIRES_REINDEX_CODE));
+        assert!(
+            !reindexed
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == RELINK_REQUIRES_REINDEX_CODE)
+        );
 
         let _ = std::fs::remove_dir_all(root);
     }
@@ -1279,12 +1312,19 @@ mod tests {
             ))
             .expect("register tlog");
 
-        let index_path = library.indexes_dir.join(&entry.index.as_ref().expect("index").relative_path);
+        let index_path = library
+            .indexes_dir
+            .join(&entry.index.as_ref().expect("index").relative_path);
         std::fs::remove_file(&index_path).expect("remove index file");
 
         let logs = capture_warnings(|| {
             let catalog = library.remove(&entry.entry_id).expect("remove entry");
-            assert!(catalog.entries.iter().all(|candidate| candidate.entry_id != entry.entry_id));
+            assert!(
+                catalog
+                    .entries
+                    .iter()
+                    .all(|candidate| candidate.entry_id != entry.entry_id)
+            );
         });
 
         assert!(logs.contains("failed to remove log library index file"));
@@ -1308,7 +1348,9 @@ mod tests {
             ))
             .expect("register tlog");
 
-        let index_path = library.indexes_dir.join(&entry.index.as_ref().expect("index").relative_path);
+        let index_path = library
+            .indexes_dir
+            .join(&entry.index.as_ref().expect("index").relative_path);
         std::fs::remove_file(&index_path).expect("remove index file");
 
         let logs = capture_warnings(|| {

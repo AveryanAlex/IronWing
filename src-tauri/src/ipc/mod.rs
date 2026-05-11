@@ -25,9 +25,8 @@ pub(crate) use guided::{
     UpdateGuidedSessionRequest,
 };
 pub(crate) use logs::{
-    LogDiagnostic, LogOperationPhase, LogOperationProgress, RecordingMode,
-    RecordingSettings, RecordingSettingsResult, RecordingStartRequest, RecordingStatus,
-    ReplayStatus,
+    LogDiagnostic, LogOperationPhase, LogOperationProgress, RecordingMode, RecordingSettings,
+    RecordingSettingsResult, RecordingStartRequest, RecordingStatus, ReplayStatus,
 };
 pub(crate) use playback::PlaybackSnapshot;
 pub(crate) use sensor_health::sensor_health_snapshot_from_summary;

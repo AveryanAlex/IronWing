@@ -13,7 +13,10 @@ use crate::ipc::{
     calibration_snapshot_from_sources, configuration_facts_snapshot_from_param_store,
     status_text_snapshot_from_entries, support_snapshot,
 };
-use crate::{AppState, helpers::{ensure_live_write_allowed, with_vehicle}};
+use crate::{
+    AppState,
+    helpers::{ensure_live_write_allowed, with_vehicle},
+};
 use mavkit::dialect::MavCmd;
 use mavkit::{
     FencePlan, FlightMode, HomePosition, MissionIssue, MissionPlan, ParamStore, ParamWriteResult,
@@ -248,8 +251,12 @@ fn session_snapshot_from_context(
         SessionSnapshot {
             status,
             connection,
-            vehicle_state: connected.then(|| session_context.vehicle_state.clone()).flatten(),
-            home_position: connected.then(|| session_context.home_position.clone()).flatten(),
+            vehicle_state: connected
+                .then(|| session_context.vehicle_state.clone())
+                .flatten(),
+            home_position: connected
+                .then(|| session_context.home_position.clone())
+                .flatten(),
         },
         provenance,
     )
@@ -310,10 +317,11 @@ async fn build_live_snapshot(
     drop(session_context);
 
     let Some(vehicle) = vehicle.as_ref() else {
-        snapshot.guided = state.guided_runtime.lock().await.snapshot_live(
-            provenance,
-            GuidedLiveContext::unavailable(),
-        );
+        snapshot.guided = state
+            .guided_runtime
+            .lock()
+            .await
+            .snapshot_live(provenance, GuidedLiveContext::unavailable());
         return snapshot;
     };
 
@@ -1257,7 +1265,9 @@ mod tests {
             recorder: crate::recording::TlogRecorderHandle::new(),
             firmware_session: crate::firmware::types::FirmwareSessionHandle::new(),
             firmware_abort: tokio::sync::Mutex::new(None),
-            firmware_cancel_requested: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            firmware_cancel_requested: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(
+                false,
+            )),
             param_download_abort: tokio::sync::Mutex::new(None),
             mission_op_cancel: tokio::sync::Mutex::new(None),
             session_runtime: tokio::sync::Mutex::new(crate::session_runtime::SessionRuntime::new()),
@@ -1343,7 +1353,10 @@ mod tests {
 
         assert_eq!(runtime.effective_source_kind(), SourceKind::Live);
         assert_eq!(snapshot.envelope, envelope);
-        assert_eq!(snapshot.session.value.expect("session").connection, SessionConnection::Connected);
+        assert_eq!(
+            snapshot.session.value.expect("session").connection,
+            SessionConnection::Connected
+        );
         assert_eq!(
             snapshot
                 .telemetry
@@ -1353,13 +1366,15 @@ mod tests {
                 .latitude_deg,
             Some(47.397742)
         );
-        assert!(snapshot.support.value.expect("support").can_request_prearm_checks);
-        assert_eq!(
+        assert!(
             snapshot
-                .status_text
+                .support
                 .value
-                .expect("status text")
-                .entries,
+                .expect("support")
+                .can_request_prearm_checks
+        );
+        assert_eq!(
+            snapshot.status_text.value.expect("status text").entries,
             status_entries
         );
     }
@@ -1413,7 +1428,10 @@ mod tests {
                 .expect_err("firmware flashing should be blocked"),
         )
         .expect("deserialize firmware failure");
-        assert_eq!(firmware_failure.operation_id, OperationId::FirmwareFlashSerial);
+        assert_eq!(
+            firmware_failure.operation_id,
+            OperationId::FirmwareFlashSerial
+        );
         assert_eq!(firmware_failure.reason.kind, ReasonKind::PermissionDenied);
 
         let source_kind = state.session_runtime.lock().await.guided_source_kind();

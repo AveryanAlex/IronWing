@@ -127,16 +127,20 @@ function formatReplayMapOverlayError(error: unknown): string {
       : "Unable to load the replay path for the mission map overlay.";
 }
 
-async function handleLogsMapHandoff(handoff: {
-  kind: "path";
-  entryId: string;
-  startUsec: number | null;
-  endUsec: number | null;
-} | {
-  kind: "replay_marker";
-  entryId: string;
-  cursorUsec: number | null;
-}) {
+async function handleLogsMapHandoff(
+  handoff:
+    | {
+        kind: "path";
+        entryId: string;
+        startUsec: number | null;
+        endUsec: number | null;
+      }
+    | {
+        kind: "replay_marker";
+        entryId: string;
+        cursorUsec: number | null;
+      },
+) {
   const requestId = ++replayMapOverlayRequest;
   const currentOverlay = replayMapOverlay?.entryId === handoff.entryId ? replayMapOverlay : null;
 

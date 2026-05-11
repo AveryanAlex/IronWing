@@ -18,7 +18,8 @@ use crate::{
 };
 
 const RECORDINGS_DIR_SEGMENTS: [&str; 2] = ["logs", "recordings"];
-const AUTO_RECORD_FILENAME_TEMPLATE: &str = "YYYY-MM-DD_HH-MM-SS_{vehicle-or-sysid-or-unknown}.tlog";
+const AUTO_RECORD_FILENAME_TEMPLATE: &str =
+    "YYYY-MM-DD_HH-MM-SS_{vehicle-or-sysid-or-unknown}.tlog";
 const ADD_COMPLETED_RECORDINGS_TO_LIBRARY: bool = true;
 
 enum CompletedRecordingRegistration {
@@ -366,15 +367,12 @@ async fn finalize_stopped_recording(
     stopped_recording: StoppedRecording,
     registration: FinalizeRecordingRegistration,
 ) -> Result<(), OperationFailure> {
-    stopped_recording
-        .handle
-        .await
-        .map_err(|error| {
-            operation_failure(
-                OperationId::RecordingStop,
-                &format!("recording task panicked: {error}"),
-            )
-        })?;
+    stopped_recording.handle.await.map_err(|error| {
+        operation_failure(
+            OperationId::RecordingStop,
+            &format!("recording task panicked: {error}"),
+        )
+    })?;
 
     if let Some(failure) = clone_runtime_failure(&stopped_recording.runtime_failure) {
         return Err(failure);
@@ -382,12 +380,11 @@ async fn finalize_stopped_recording(
 
     match registration {
         Ok(CompletedRecordingRegistration::Skip) => Ok(()),
-        Ok(CompletedRecordingRegistration::Library(library)) => register_completed_recording(
-            &library,
-            &stopped_recording.destination_path,
-        )
-        .await
-        .map_err(|error| operation_failure(OperationId::RecordingStop, &error)),
+        Ok(CompletedRecordingRegistration::Library(library)) => {
+            register_completed_recording(&library, &stopped_recording.destination_path)
+                .await
+                .map_err(|error| operation_failure(OperationId::RecordingStop, &error))
+        }
         Err(failure) => Err(failure),
     }
 }
@@ -500,9 +497,7 @@ fn format_unix_secs_utc(unix_secs: i64) -> String {
     let hour = seconds_of_day / 3_600;
     let minute = (seconds_of_day % 3_600) / 60;
     let second = seconds_of_day % 60;
-    format!(
-        "{year:04}-{month:02}-{day:02}_{hour:02}-{minute:02}-{second:02}"
-    )
+    format!("{year:04}-{month:02}-{day:02}_{hour:02}-{minute:02}-{second:02}")
 }
 
 fn civil_from_days(days_since_epoch: i64) -> (i64, i64, i64) {
@@ -513,9 +508,8 @@ fn civil_from_days(days_since_epoch: i64) -> (i64, i64, i64) {
         shifted_days - 146_096
     } / 146_097;
     let day_of_era = shifted_days - era * 146_097;
-    let year_of_era = (day_of_era - day_of_era / 1_460 + day_of_era / 36_524
-        - day_of_era / 146_096)
-        / 365;
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
     let mut year = year_of_era + era * 400;
     let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
     let month_prime = (5 * day_of_year + 2) / 153;
@@ -620,21 +614,23 @@ mod tests {
             });
             let runtime_failure = Arc::new(std::sync::Mutex::new(None));
 
-            *recorder.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) =
-                RecorderRuntime {
-                    generation: 1,
-                    state: RecorderState::Recording {
-                        cancel,
-                        handle,
-                        mode: RecordingMode::AutoOnConnect,
-                        file_name: "2026-05-08_10-11-12_sysid-42.tlog".to_string(),
-                        destination_path: "/tmp/recordings/2026-05-08_10-11-12_sysid-42.tlog"
-                            .to_string(),
-                        bytes_written: Arc::new(AtomicU64::new(4_096)),
-                        started_at_unix_msec: 1_778_246_400_000,
-                        runtime_failure,
-                    },
-                };
+            *recorder
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = RecorderRuntime {
+                generation: 1,
+                state: RecorderState::Recording {
+                    cancel,
+                    handle,
+                    mode: RecordingMode::AutoOnConnect,
+                    file_name: "2026-05-08_10-11-12_sysid-42.tlog".to_string(),
+                    destination_path: "/tmp/recordings/2026-05-08_10-11-12_sysid-42.tlog"
+                        .to_string(),
+                    bytes_written: Arc::new(AtomicU64::new(4_096)),
+                    started_at_unix_msec: 1_778_246_400_000,
+                    runtime_failure,
+                },
+            };
 
             let status = recorder.status();
             assert_eq!(
@@ -676,20 +672,22 @@ mod tests {
                 "tlog write error: disk full",
             ))));
 
-            *recorder.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) =
-                RecorderRuntime {
-                    generation: 1,
-                    state: RecorderState::Recording {
-                        cancel,
-                        handle,
-                        mode: RecordingMode::Manual,
-                        file_name: "flight.tlog".to_string(),
-                        destination_path: "/tmp/flight.tlog".to_string(),
-                        bytes_written: Arc::new(AtomicU64::new(128)),
-                        started_at_unix_msec: 0,
-                        runtime_failure,
-                    },
-                };
+            *recorder
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = RecorderRuntime {
+                generation: 1,
+                state: RecorderState::Recording {
+                    cancel,
+                    handle,
+                    mode: RecordingMode::Manual,
+                    file_name: "flight.tlog".to_string(),
+                    destination_path: "/tmp/flight.tlog".to_string(),
+                    bytes_written: Arc::new(AtomicU64::new(128)),
+                    started_at_unix_msec: 0,
+                    runtime_failure,
+                },
+            };
 
             let status = recorder.status();
             assert_eq!(
@@ -727,7 +725,9 @@ mod tests {
             );
             finalize.await.expect("finalization task completed");
 
-            let catalog = LogLibrary::new(app_data.clone()).list().expect("list catalog");
+            let catalog = LogLibrary::new(app_data.clone())
+                .list()
+                .expect("list catalog");
             assert_eq!(catalog.entries.len(), 1);
             let entry = &catalog.entries[0];
             assert_eq!(entry.metadata.format, crate::ipc::logs::LogFormat::Tlog);
@@ -756,22 +756,24 @@ mod tests {
             let (release_tx, release_rx) = tokio::sync::oneshot::channel();
             let runtime_failure = Arc::new(std::sync::Mutex::new(None));
 
-            *recorder.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) =
-                RecorderRuntime {
-                    generation: 1,
-                    state: RecorderState::Recording {
-                        cancel,
-                        handle: tokio::spawn(async {
-                            let _ = release_rx.await;
-                        }),
-                        mode: RecordingMode::AutoOnConnect,
-                        file_name: "disconnect-flight.tlog".to_string(),
-                        destination_path: recording.to_string_lossy().to_string(),
-                        bytes_written: Arc::new(AtomicU64::new(1_024)),
-                        started_at_unix_msec: 1_778_246_400_000,
-                        runtime_failure,
-                    },
-                };
+            *recorder
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = RecorderRuntime {
+                generation: 1,
+                state: RecorderState::Recording {
+                    cancel,
+                    handle: tokio::spawn(async {
+                        let _ = release_rx.await;
+                    }),
+                    mode: RecordingMode::AutoOnConnect,
+                    file_name: "disconnect-flight.tlog".to_string(),
+                    destination_path: recording.to_string_lossy().to_string(),
+                    bytes_written: Arc::new(AtomicU64::new(1_024)),
+                    started_at_unix_msec: 1_778_246_400_000,
+                    runtime_failure,
+                },
+            };
 
             let stopped_recording = recorder.stop().expect("stop recording during disconnect");
             let finalize = spawn_stopped_recording_finalization(
@@ -784,18 +786,25 @@ mod tests {
 
             tokio::task::yield_now().await;
             assert!(!finalize.is_finished());
-            assert_eq!(LogLibrary::new(app_data.clone()).list().unwrap().entries.len(), 0);
+            assert_eq!(
+                LogLibrary::new(app_data.clone())
+                    .list()
+                    .unwrap()
+                    .entries
+                    .len(),
+                0
+            );
 
             release_tx.send(()).expect("release finalization wait");
             finalize.await.expect("finalization task completed");
 
-            let catalog = LogLibrary::new(app_data.clone()).list().expect("list catalog");
+            let catalog = LogLibrary::new(app_data.clone())
+                .list()
+                .expect("list catalog");
             assert_eq!(catalog.entries.len(), 1);
             assert_eq!(
                 catalog.entries[0].source.original_path,
-                std::fs::canonicalize(&recording)
-                    .unwrap()
-                    .to_string_lossy()
+                std::fs::canonicalize(&recording).unwrap().to_string_lossy()
             );
             assert_eq!(recorder.status(), RecordingStatus::Idle);
         });

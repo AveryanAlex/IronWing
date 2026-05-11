@@ -428,16 +428,19 @@ async fn dispatch_invoke(
             ok(())
         }
         "bt_get_bonded_devices" => ok(bt_get_bonded_devices(app).await?),
-        "recording_start" => ok(recording::recording_start(state, app.clone(), arg(&args, "request")?).await?),
+        "recording_start" => {
+            ok(recording::recording_start(state, app.clone(), arg(&args, "request")?).await?)
+        }
         "recording_stop" => {
             recording::recording_stop(state, app.clone()).await?;
             ok(())
         }
         "recording_status" => ok(recording::recording_status(state)),
         "recording_settings_read" => ok(recording::recording_settings_read(app.clone())?),
-        "recording_settings_write" => {
-            ok(recording::recording_settings_write(app.clone(), arg(&args, "settings")?)?)
-        }
+        "recording_settings_write" => ok(recording::recording_settings_write(
+            app.clone(),
+            arg(&args, "settings")?,
+        )?),
         "log_library_list" => ok(crate::log_library::log_library_list(app.clone()).await?),
         "log_library_register" => {
             ok(crate::log_library::log_library_register(app.clone(), arg(&args, "path")?).await?)
@@ -482,17 +485,15 @@ async fn dispatch_invoke(
             ok(())
         }
         "log_get_flight_summary" => ok(logs::log_get_flight_summary(state).await?),
-        "log_get_flight_path" => {
-            ok(logs::log_get_flight_path(
-                state,
-                app.clone(),
-                optional_arg(&args, "entryId")?,
-                optional_arg(&args, "startUsec")?,
-                optional_arg(&args, "endUsec")?,
-                optional_arg(&args, "maxPoints")?,
-            )
-            .await?)
-        }
+        "log_get_flight_path" => ok(logs::log_get_flight_path(
+            state,
+            app.clone(),
+            optional_arg(&args, "entryId")?,
+            optional_arg(&args, "startUsec")?,
+            optional_arg(&args, "endUsec")?,
+            optional_arg(&args, "maxPoints")?,
+        )
+        .await?),
         "log_get_telemetry_track" => {
             ok(logs::log_get_telemetry_track(state, optional_arg(&args, "maxPoints")?).await?)
         }

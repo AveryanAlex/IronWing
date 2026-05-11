@@ -264,7 +264,8 @@ pub(crate) async fn connect_link(
         #[cfg(not(target_os = "android"))]
         LinkEndpoint::Serial { port, baud } => {
             let vehicle = connect_via_address(&state, format!("serial:{port}:{baud}")).await?;
-            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Serial { port }).await?;
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Serial { port })
+                .await?;
         }
         LinkEndpoint::BluetoothBle { address } => {
             let vehicle =
@@ -477,7 +478,11 @@ pub(crate) async fn force_disconnect(
     app: &tauri::AppHandle,
 ) -> Result<(), String> {
     if let Some(stopped_recording) = state.recorder.stop() {
-        crate::recording::queue_stopped_recording_finalization(&state.recorder, app, stopped_recording);
+        crate::recording::queue_stopped_recording_finalization(
+            &state.recorder,
+            app,
+            stopped_recording,
+        );
     }
     let _ = emit_guided_reset(
         state,
@@ -490,9 +495,8 @@ pub(crate) async fn force_disconnect(
     state.status_text_history.lock().await.clear();
     state.next_status_text_sequence.store(1, Ordering::Relaxed);
     state.session_context.lock().await.reset();
-    *state.live_telemetry.lock().await = crate::ipc::TelemetrySnapshot::missing(
-        DomainProvenance::Bootstrap,
-    );
+    *state.live_telemetry.lock().await =
+        crate::ipc::TelemetrySnapshot::missing(DomainProvenance::Bootstrap);
 
     if let Some(handle) = state.connect_abort.lock().await.take() {
         handle.abort();
@@ -553,7 +557,10 @@ mod tests {
             auto_record_on_connect: true,
         };
 
-        assert_eq!(auto_record_start_request(disabled.auto_record_on_connect), None);
+        assert_eq!(
+            auto_record_start_request(disabled.auto_record_on_connect),
+            None
+        );
         assert_eq!(
             auto_record_start_request(enabled.auto_record_on_connect),
             Some(crate::ipc::RecordingStartRequest {

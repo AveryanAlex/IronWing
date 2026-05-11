@@ -33,7 +33,8 @@ fn build_raw_message_record(
         component_id: entry.component_id,
         raw_len_bytes: entry.raw_len_bytes,
         fields: entry.field_values.clone(),
-        detail: include_detail.then(|| JsonValue::Object(JsonMap::from_iter(entry.field_values.clone()))),
+        detail: include_detail
+            .then(|| JsonValue::Object(JsonMap::from_iter(entry.field_values.clone()))),
         hex_payload: include_hex
             .then_some(entry.raw_payload.as_deref())
             .flatten()
@@ -47,7 +48,11 @@ pub(super) fn query_raw_message_page(
     request: &RawMessageQuery,
 ) -> Result<RawMessagePage, String> {
     let start_index = parse_raw_cursor(request.cursor.as_deref())?;
-    let limit = bounded_page_limit(request.limit, DEFAULT_RAW_MESSAGE_LIMIT, MAX_RAW_MESSAGE_LIMIT);
+    let limit = bounded_page_limit(
+        request.limit,
+        DEFAULT_RAW_MESSAGE_LIMIT,
+        MAX_RAW_MESSAGE_LIMIT,
+    );
     let mut items = Vec::with_capacity(limit);
     let mut matched_total = 0_u64;
     let mut next_cursor = None;
@@ -108,7 +113,11 @@ fn protect_formula_text(value: &str) -> Cow<'_, str> {
     }
 }
 
-fn write_csv_cell<W: std::io::Write>(writer: &mut W, value: &str, protect_formula: bool) -> Result<(), String> {
+fn write_csv_cell<W: std::io::Write>(
+    writer: &mut W,
+    value: &str,
+    protect_formula: bool,
+) -> Result<(), String> {
     let escaped_value = if protect_formula {
         protect_formula_text(value)
     } else {
@@ -126,7 +135,10 @@ fn write_csv_cell<W: std::io::Write>(writer: &mut W, value: &str, protect_formul
     }
 }
 
-pub(super) fn write_csv_export(path: &str, entries: Vec<&StoredEntry>) -> Result<(u64, u64), String> {
+pub(super) fn write_csv_export(
+    path: &str,
+    entries: Vec<&StoredEntry>,
+) -> Result<(u64, u64), String> {
     write_csv_export_inner(path, entries, &mut |_| false)
 }
 
@@ -240,42 +252,67 @@ fn write_csv_export_inner(
 
     use std::io::Write;
 
-    write_csv_cell(&mut writer, "timestamp_sec", false).inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
-    write!(writer, ",").map_err(|error| error.to_string()).inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
-    write_csv_cell(&mut writer, "msg_type", false).inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
+    write_csv_cell(&mut writer, "timestamp_sec", false)
+        .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
+    write!(writer, ",")
+        .map_err(|error| error.to_string())
+        .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
+    write_csv_cell(&mut writer, "msg_type", false)
+        .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
     for name in &field_names {
-        write!(writer, ",").map_err(|error| error.to_string()).inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
-        write_csv_cell(&mut writer, name, true).inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
+        write!(writer, ",")
+            .map_err(|error| error.to_string())
+            .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
+        write_csv_cell(&mut writer, name, true)
+            .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
     }
-    writeln!(writer).map_err(|error| error.to_string()).inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
+    writeln!(writer)
+        .map_err(|error| error.to_string())
+        .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
     ensure_not_cancelled(&pending_path_string, 0, should_cancel)?;
 
     let mut row_count = 0_u64;
     for entry in entries {
         ensure_not_cancelled(&pending_path_string, row_count, should_cancel)?;
-        write_csv_cell(&mut writer, &format!("{:.6}", entry.timestamp_usec as f64 / 1e6), false)
+        write_csv_cell(
+            &mut writer,
+            &format!("{:.6}", entry.timestamp_usec as f64 / 1e6),
+            false,
+        )
+        .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
+        write!(writer, ",")
+            .map_err(|error| error.to_string())
             .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
-        write!(writer, ",").map_err(|error| error.to_string()).inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
-        write_csv_cell(&mut writer, &entry.msg_name, true).inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
+        write_csv_cell(&mut writer, &entry.msg_name, true)
+            .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
         for name in &field_names {
-            write!(writer, ",").map_err(|error| error.to_string()).inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
+            write!(writer, ",")
+                .map_err(|error| error.to_string())
+                .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
             if let Some(value) = entry.fields.get(name) {
                 write_csv_cell(&mut writer, &value.to_string(), false)
                     .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
             } else {
-                write_csv_cell(&mut writer, "", false).inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
+                write_csv_cell(&mut writer, "", false)
+                    .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
             }
         }
-        writeln!(writer).map_err(|error| error.to_string()).inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
+        writeln!(writer)
+            .map_err(|error| error.to_string())
+            .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
         row_count += 1;
         ensure_not_cancelled(&pending_path_string, row_count, should_cancel)?;
     }
 
     ensure_not_cancelled(&pending_path_string, row_count, should_cancel)?;
-    writer.flush().map_err(|error| error.to_string()).inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
+    writer
+        .flush()
+        .map_err(|error| error.to_string())
+        .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
     ensure_not_cancelled(&pending_path_string, row_count, should_cancel)?;
 
-    finalize_export_file(&pending_path, Path::new(path)).inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
+    finalize_export_file(&pending_path, Path::new(path))
+        .inspect_err(|_| cleanup_partial_export(&pending_path_string))?;
 
     let bytes_written = std::fs::metadata(path)
         .map_err(|error| format!("failed to stat export file: {error}"))?
@@ -323,7 +360,10 @@ mod tests {
             timestamp_usec: 100,
             msg_name: "HEARTBEAT".into(),
             fields: std::collections::HashMap::from([("custom_mode".to_string(), 4.0)]),
-            field_values: std::collections::BTreeMap::from([("custom_mode".to_string(), JsonValue::from(4.0))]),
+            field_values: std::collections::BTreeMap::from([(
+                "custom_mode".to_string(),
+                JsonValue::from(4.0),
+            )]),
             raw_len_bytes: 0,
             raw_payload: None,
             system_id: None,
@@ -335,7 +375,10 @@ mod tests {
             timestamp_usec: 200,
             msg_name: "ATTITUDE".into(),
             fields: std::collections::HashMap::from([("roll".to_string(), 1.0)]),
-            field_values: std::collections::BTreeMap::from([("roll".to_string(), JsonValue::from(1.0))]),
+            field_values: std::collections::BTreeMap::from([(
+                "roll".to_string(),
+                JsonValue::from(1.0),
+            )]),
             raw_len_bytes: 0,
             raw_payload: None,
             system_id: None,
@@ -353,7 +396,8 @@ mod tests {
         ));
         let path_string = path.to_string_lossy().to_string();
 
-        let result = write_csv_export_inner(&path_string, entries, &mut |rows_written| rows_written >= 1);
+        let result =
+            write_csv_export_inner(&path_string, entries, &mut |rows_written| rows_written >= 1);
 
         assert!(result.is_err());
         assert!(!path.exists());
@@ -366,7 +410,10 @@ mod tests {
             timestamp_usec: 100,
             msg_name: "HEARTBEAT".into(),
             fields: std::collections::HashMap::from([("custom_mode".to_string(), 4.0)]),
-            field_values: std::collections::BTreeMap::from([("custom_mode".to_string(), JsonValue::from(4.0))]),
+            field_values: std::collections::BTreeMap::from([(
+                "custom_mode".to_string(),
+                JsonValue::from(4.0),
+            )]),
             raw_len_bytes: 0,
             raw_payload: None,
             system_id: None,
@@ -378,7 +425,10 @@ mod tests {
             timestamp_usec: 200,
             msg_name: "ATTITUDE".into(),
             fields: std::collections::HashMap::from([("roll".to_string(), 1.0)]),
-            field_values: std::collections::BTreeMap::from([("roll".to_string(), JsonValue::from(1.0))]),
+            field_values: std::collections::BTreeMap::from([(
+                "roll".to_string(),
+                JsonValue::from(1.0),
+            )]),
             raw_len_bytes: 0,
             raw_payload: None,
             system_id: None,
@@ -399,7 +449,8 @@ mod tests {
         std::fs::write(&path, "keep-this-file\n").expect("seed destination file");
         let path_string = path.to_string_lossy().to_string();
 
-        let result = write_csv_export_inner(&path_string, entries, &mut |rows_written| rows_written >= 1);
+        let result =
+            write_csv_export_inner(&path_string, entries, &mut |rows_written| rows_written >= 1);
 
         assert!(result.is_err());
         assert_eq!(
@@ -408,7 +459,13 @@ mod tests {
         );
         let entries_after = std::fs::read_dir(&temp_dir)
             .expect("read temp export dir")
-            .map(|entry| entry.expect("dir entry").file_name().to_string_lossy().to_string())
+            .map(|entry| {
+                entry
+                    .expect("dir entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .to_string()
+            })
             .collect::<Vec<_>>();
         assert_eq!(entries_after, vec!["export.csv".to_string()]);
     }

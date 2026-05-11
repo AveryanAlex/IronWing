@@ -3,7 +3,9 @@ use std::io::Cursor;
 use std::sync::{Arc, Mutex as StdMutex};
 
 use mavkit::dialect::MavMessage;
-use mavlink::{Message, ReadVersion, async_peek_reader::AsyncPeekReader, read_versioned_raw_message_async};
+use mavlink::{
+    Message, ReadVersion, async_peek_reader::AsyncPeekReader, read_versioned_raw_message_async,
+};
 use serde::Serialize;
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use tauri::Manager;
@@ -206,7 +208,11 @@ impl PlaybackRuntimeState {
         }
     }
 
-    pub(crate) async fn prepare_ready(&self, store: &LogStore, barrier_ready: bool) -> PlaybackState {
+    pub(crate) async fn prepare_ready(
+        &self,
+        store: &LogStore,
+        barrier_ready: bool,
+    ) -> PlaybackState {
         let mut runtime = self.inner.lock().await;
         runtime.cancel_task();
         runtime.state = runtime.state_for_store(
@@ -296,12 +302,8 @@ impl PlaybackRuntimeState {
             ReplayStatus::Ended => ReplayStatus::Ended,
             ReplayStatus::Error => ReplayStatus::Error,
         };
-        runtime.state = runtime.state_for_store(
-            status,
-            Some(OperationId::ReplaySetSpeed),
-            store,
-            true,
-        );
+        runtime.state =
+            runtime.state_for_store(status, Some(OperationId::ReplaySetSpeed), store, true);
         runtime.state.speed = speed;
         Ok(runtime.state.clone())
     }
@@ -535,7 +537,10 @@ where
     });
     let abort_handle = worker.abort_handle();
 
-    if let Err(error) = state.start(operation_id, cancel.clone(), abort_handle).await {
+    if let Err(error) = state
+        .start(operation_id, cancel.clone(), abort_handle)
+        .await
+    {
         worker.abort();
         return Err(error);
     }
@@ -744,7 +749,9 @@ fn json_value_matches_text(value: &JsonValue, needle: &str) -> bool {
         JsonValue::Number(number) => number.to_string().to_ascii_lowercase().contains(needle),
         JsonValue::Bool(boolean) => boolean.to_string().contains(needle),
         JsonValue::Null => "null".contains(needle),
-        JsonValue::Array(items) => items.iter().any(|item| json_value_matches_text(item, needle)),
+        JsonValue::Array(items) => items
+            .iter()
+            .any(|item| json_value_matches_text(item, needle)),
         JsonValue::Object(map) => map.iter().any(|(key, value)| {
             key.to_ascii_lowercase().contains(needle) || json_value_matches_text(value, needle)
         }),
@@ -754,10 +761,9 @@ fn json_value_matches_text(value: &JsonValue, needle: &str) -> bool {
 fn entry_matches_text_filter(entry: &StoredEntry, text: &str) -> bool {
     entry.msg_name.to_ascii_lowercase().contains(text)
         || entry.text.to_ascii_lowercase().contains(text)
-        || entry
-            .field_values
-            .iter()
-            .any(|(key, value)| key.to_ascii_lowercase().contains(text) || json_value_matches_text(value, text))
+        || entry.field_values.iter().any(|(key, value)| {
+            key.to_ascii_lowercase().contains(text) || json_value_matches_text(value, text)
+        })
 }
 
 fn entry_matches_field_filters(entry: &StoredEntry, filters: &[RawMessageFieldFilter]) -> bool {
@@ -790,7 +796,11 @@ fn entry_matches_common_filters(
     {
         return false;
     }
-    if !message_types.is_empty() && !message_types.iter().any(|candidate| candidate == &entry.msg_name) {
+    if !message_types.is_empty()
+        && !message_types
+            .iter()
+            .any(|candidate| candidate == &entry.msg_name)
+    {
         return false;
     }
     if let Some(text) = normalized_text_filter(text)
@@ -907,7 +917,11 @@ fn filtered_flight_path_points(
         });
     }
 
-    let max_points = bounded_max_points(max_points, DEFAULT_FLIGHT_PATH_POINTS, MAX_FLIGHT_PATH_POINTS);
+    let max_points = bounded_max_points(
+        max_points,
+        DEFAULT_FLIGHT_PATH_POINTS,
+        MAX_FLIGHT_PATH_POINTS,
+    );
     if points.len() > max_points {
         Ok(helpers::downsample(points, max_points))
     } else {
@@ -966,8 +980,8 @@ async fn blocking_export_csv(
             diagnostics: Vec::new(),
         })
     })
-        .await
-        .map_err(|error| format!("log export task failed: {error}"))?
+    .await
+    .map_err(|error| format!("log export task failed: {error}"))?
 }
 
 async fn blocking_compat_csv_export(
@@ -980,7 +994,9 @@ async fn blocking_compat_csv_export(
         let entries = store
             .entries
             .iter()
-            .filter(|entry| entry_matches_common_filters(entry, start_usec, end_usec, &[], None, &[]))
+            .filter(|entry| {
+                entry_matches_common_filters(entry, start_usec, end_usec, &[], None, &[])
+            })
             .collect();
         let (row_count, _) = raw_messages::write_csv_export(&path, entries)?;
         Ok(row_count)
@@ -989,23 +1005,26 @@ async fn blocking_compat_csv_export(
     .map_err(|error| format!("compat log export task failed: {error}"))?
 }
 
-fn ready_library_entry(entry_id: &str, entry: crate::ipc::logs::LogLibraryEntry) -> Result<crate::ipc::logs::LogLibraryEntry, String> {
+fn ready_library_entry(
+    entry_id: &str,
+    entry: crate::ipc::logs::LogLibraryEntry,
+) -> Result<crate::ipc::logs::LogLibraryEntry, String> {
     match entry.status {
         crate::ipc::logs::LogLibraryEntryStatus::Ready
         | crate::ipc::logs::LogLibraryEntryStatus::Partial
         | crate::ipc::logs::LogLibraryEntryStatus::Corrupt => Ok(entry),
-        crate::ipc::logs::LogLibraryEntryStatus::Missing => {
-            Err(format!("log library entry {entry_id} is missing and must be relinked"))
-        }
-        crate::ipc::logs::LogLibraryEntryStatus::Stale => {
-            Err(format!("log library entry {entry_id} is stale and must be reindexed"))
-        }
+        crate::ipc::logs::LogLibraryEntryStatus::Missing => Err(format!(
+            "log library entry {entry_id} is missing and must be relinked"
+        )),
+        crate::ipc::logs::LogLibraryEntryStatus::Stale => Err(format!(
+            "log library entry {entry_id} is stale and must be reindexed"
+        )),
         crate::ipc::logs::LogLibraryEntryStatus::Indexing => {
             Err(format!("log library entry {entry_id} is still indexing"))
         }
-        crate::ipc::logs::LogLibraryEntryStatus::Unsupported => {
-            Err(format!("log library entry {entry_id} uses an unsupported format"))
-        }
+        crate::ipc::logs::LogLibraryEntryStatus::Unsupported => Err(format!(
+            "log library entry {entry_id} uses an unsupported format"
+        )),
     }
 }
 
@@ -1029,7 +1048,10 @@ async fn store_for_entry(
     app: &tauri::AppHandle,
     entry_id: &str,
 ) -> Result<LogStore, String> {
-    let entry = ready_library_entry(entry_id, crate::log_library::log_library_get_entry(app, entry_id)?)?;
+    let entry = ready_library_entry(
+        entry_id,
+        crate::log_library::log_library_get_entry(app, entry_id)?,
+    )?;
     let source_path = entry.source.original_path.clone();
     if let Some(active_store) = reusable_library_store(
         state.log_store.lock().await.as_ref(),
@@ -1405,7 +1427,11 @@ async fn parse_tlog_log(path: String) -> Result<ParsedLog, String> {
             }
             Err(error) => return Err(format!("failed to parse TLOG timestamp: {error}")),
         };
-        let timestamp_usec = u64::from_le_bytes(ts_bytes.try_into().map_err(|_| "invalid TLOG timestamp width")?);
+        let timestamp_usec = u64::from_le_bytes(
+            ts_bytes
+                .try_into()
+                .map_err(|_| "invalid TLOG timestamp width")?,
+        );
 
         let raw = read_versioned_raw_message_async::<MavMessage, _>(&mut reader, ReadVersion::Any)
             .await
@@ -1663,8 +1689,22 @@ pub(crate) async fn log_open(
                 let parsed = parse_log_file(path).await?;
                 let total = parsed.store.summary.total_entries as u64;
                 let percent = (total > 0).then_some(100.0);
-                reporter.progress(LogOperationPhase::Parsing, total, Some(total), percent, None, None)?;
-                reporter.progress(LogOperationPhase::Indexing, total, Some(total), percent, None, None)?;
+                reporter.progress(
+                    LogOperationPhase::Parsing,
+                    total,
+                    Some(total),
+                    percent,
+                    None,
+                    None,
+                )?;
+                reporter.progress(
+                    LogOperationPhase::Indexing,
+                    total,
+                    Some(total),
+                    percent,
+                    None,
+                    None,
+                )?;
 
                 let summary = parsed.store.summary.clone();
                 let state: tauri::State<'_, AppState> = app.state();
@@ -1809,10 +1849,15 @@ async fn spawn_playback_task(
         .await;
 }
 
-async fn playback_stop_inner(state: &AppState, app: &tauri::AppHandle) -> Result<PlaybackState, String> {
+async fn playback_stop_inner(
+    state: &AppState,
+    app: &tauri::AppHandle,
+) -> Result<PlaybackState, String> {
     let playback_envelope = {
         let runtime = state.session_runtime.lock().await;
-        runtime.active_playback_envelope(OperationId::ReplayStop).ok()
+        runtime
+            .active_playback_envelope(OperationId::ReplayStop)
+            .ok()
     };
 
     let idle_state = state.playback_runtime.prepare_idle().await;
@@ -2278,7 +2323,10 @@ pub(crate) async fn log_export(
             operation_id: OperationId::LogExport,
             reason: Reason {
                 kind: ReasonKind::Unsupported,
-                message: format!("log export format {:?} is not implemented yet", request.format),
+                message: format!(
+                    "log export format {:?} is not implemented yet",
+                    request.format
+                ),
             },
         }));
     }
@@ -2302,7 +2350,8 @@ pub(crate) async fn log_export(
                 )?;
                 let state: tauri::State<'_, AppState> = app.state();
                 let store = store_for_entry(state.inner(), &app, &request.entry_id).await?;
-                let result = blocking_export_csv(store, request.clone(), reporter.cancel.clone()).await?;
+                let result =
+                    blocking_export_csv(store, request.clone(), reporter.cancel.clone()).await?;
                 reporter.progress(
                     LogOperationPhase::Exporting,
                     result.rows_written,
@@ -2346,7 +2395,9 @@ mod tests {
     const HEADER_MAGIC: [u8; 2] = [0xA3, 0x95];
     const FMT_TYPE: u8 = 0x80;
 
-    fn collect_progress_events(progress: Arc<StdMutex<Vec<LogOperationProgress>>>) -> LogProgressEmitter {
+    fn collect_progress_events(
+        progress: Arc<StdMutex<Vec<LogOperationProgress>>>,
+    ) -> LogProgressEmitter {
         Arc::new(move |event| {
             progress
                 .lock()
@@ -2510,8 +2561,9 @@ mod tests {
         cached.entry_id = Some("entry-a".into());
         cached.source_path = "/logs/a.tlog".into();
 
-        let reused = reusable_library_store(Some(&active), Some(&cached), "entry-a", "/logs/a.tlog")
-            .expect("matching store");
+        let reused =
+            reusable_library_store(Some(&active), Some(&cached), "entry-a", "/logs/a.tlog")
+                .expect("matching store");
 
         assert_eq!(reused.summary.file_name, active.summary.file_name);
         assert_eq!(reused.source_path, active.source_path);
@@ -2560,10 +2612,7 @@ mod tests {
                 1,
                 150,
                 "VFR_HUD".into(),
-                HashMap::from([
-                    ("alt".to_string(), 12.3),
-                    ("groundspeed".to_string(), 4.5),
-                ]),
+                HashMap::from([("alt".to_string(), 12.3), ("groundspeed".to_string(), 4.5)]),
                 BTreeMap::from([
                     ("alt".to_string(), JsonValue::from(12.3)),
                     ("groundspeed".to_string(), JsonValue::from(4.5)),
@@ -2574,10 +2623,7 @@ mod tests {
                 2,
                 200,
                 "VFR_HUD".into(),
-                HashMap::from([
-                    ("alt".to_string(), 18.6),
-                    ("groundspeed".to_string(), 5.5),
-                ]),
+                HashMap::from([("alt".to_string(), 18.6), ("groundspeed".to_string(), 5.5)]),
                 BTreeMap::from([
                     ("alt".to_string(), JsonValue::from(18.6)),
                     ("groundspeed".to_string(), JsonValue::from(5.5)),
@@ -2608,7 +2654,10 @@ mod tests {
         assert_eq!(paused.status, ReplayStatus::Paused);
         assert_eq!(paused.cursor_usec, Some(150));
 
-        let faster = runtime.prepare_speed(&store, 4.0).await.expect("valid speed");
+        let faster = runtime
+            .prepare_speed(&store, 4.0)
+            .await
+            .expect("valid speed");
         assert_eq!(faster.status, ReplayStatus::Paused);
         assert_eq!(faster.speed, 4.0);
 
@@ -2957,7 +3006,10 @@ mod tests {
         assert_eq!(collected[0].phase, LogOperationPhase::Queued);
         assert_eq!(collected[1].phase, LogOperationPhase::Parsing);
         assert_eq!(collected[2].phase, LogOperationPhase::Failed);
-        assert_eq!(collected[2].message.as_deref(), Some("synthetic parse failure"));
+        assert_eq!(
+            collected[2].message.as_deref(),
+            Some("synthetic parse failure")
+        );
     }
 
     #[test]
@@ -3580,10 +3632,7 @@ mod tests {
                     0,
                     5_000_000,
                     "GPS",
-                    HashMap::from([
-                        ("Status".to_string(), 3.0),
-                        ("Alt".to_string(), 22.0),
-                    ]),
+                    HashMap::from([("Status".to_string(), 3.0), ("Alt".to_string(), 22.0)]),
                     BTreeMap::from([
                         ("Status".to_string(), JsonValue::from(3.0)),
                         ("Alt".to_string(), JsonValue::from(22.0)),
@@ -3678,7 +3727,12 @@ mod tests {
         );
         assert_eq!(tlog_page.series.len(), 1);
         assert_eq!(tlog_page.series[0].points.len(), 2);
-        assert!(tlog_page.series[0].points.iter().all(|point| (150..=450).contains(&point.timestamp_usec)));
+        assert!(
+            tlog_page.series[0]
+                .points
+                .iter()
+                .all(|point| (150..=450).contains(&point.timestamp_usec))
+        );
 
         let bin_store = store_from_entries(
             "chart-query.bin",
@@ -4024,13 +4078,18 @@ mod tests {
         let handle = tokio::spawn({
             let state = state.clone();
             async move {
-                run_log_operation(&state, OperationId::LogExport, emit, move |reporter| async move {
-                    let _ = started_tx.send(());
-                    reporter.cancel.cancelled().await;
-                    tokio::time::sleep(Duration::from_millis(50)).await;
-                    let _ = cleanup_tx.send(());
-                    Err(cancelled_log_operation_error(OperationId::LogExport))
-                })
+                run_log_operation(
+                    &state,
+                    OperationId::LogExport,
+                    emit,
+                    move |reporter| async move {
+                        let _ = started_tx.send(());
+                        reporter.cancel.cancelled().await;
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                        let _ = cleanup_tx.send(());
+                        Err(cancelled_log_operation_error(OperationId::LogExport))
+                    },
+                )
                 .await
             }
         });
@@ -4042,7 +4101,10 @@ mod tests {
         cleanup_rx.recv().await.expect("cleanup finished");
 
         let result: Result<(), String> = handle.await.expect("operation join");
-        assert_eq!(result, Err(cancelled_log_operation_error(OperationId::LogExport)));
+        assert_eq!(
+            result,
+            Err(cancelled_log_operation_error(OperationId::LogExport))
+        );
     }
 
     #[test]
