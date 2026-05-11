@@ -7,6 +7,7 @@ import type { OpenSessionSnapshot } from "../../src/session";
 import type { LogLibraryCatalog, LogProgress } from "../../src/logs";
 import type { PlaybackStateSnapshot } from "../../src/playback";
 import type { RecordingSettings, RecordingStatus } from "../../src/recording";
+import type { DemoVehiclePreset } from "../../src/transport";
 import type {
     MockCommandBehavior,
     MockGuidedStateValue,
@@ -571,6 +572,7 @@ export type MockPlatformFixture = {
     seedLogLibrary: (presets?: MockLogSeedPreset[]) => Promise<LogLibraryCatalog>;
     getLogLibraryCatalog: () => Promise<LogLibraryCatalog>;
     getSeededLogEntry: (preset: MockLogSeedPreset) => Promise<LogLibraryCatalog["entries"][number]>;
+    getDemoParamStore: (preset: DemoVehiclePreset) => Promise<MockParamStoreState>;
     setRecordingStatus: (status: RecordingStatus) => Promise<RecordingStatus>;
     setRecordingSettings: (settings: RecordingSettings) => Promise<{ operation_id: "recording_settings_write"; settings: RecordingSettings }>;
     resolveDeferredConnectLink: (params: {
@@ -1704,9 +1706,10 @@ export const test = base.extend<Fixtures>({
     emitPlaybackState: (playbackState) => withMockController(page, "emitPlaybackState", playbackState),
     setLogLibraryCatalog: (catalog) => withMockController(page, "setLogLibraryCatalog", catalog),
     seedLogLibrary: (presets) => presets ? withMockController(page, "seedLogLibrary", presets) : withMockController(page, "seedLogLibrary"),
-    getLogLibraryCatalog: () => withMockController(page, "getLogLibraryCatalog"),
-    getSeededLogEntry: (preset) => withMockController(page, "getSeededLogEntry", preset),
-    setRecordingStatus: (status) => withMockController(page, "setRecordingStatus", status),
+            getLogLibraryCatalog: () => withMockController(page, "getLogLibraryCatalog"),
+            getSeededLogEntry: (preset) => withMockController(page, "getSeededLogEntry", preset),
+            getDemoParamStore: (preset) => withMockController(page, "getDemoParamStore", preset),
+            setRecordingStatus: (status) => withMockController(page, "setRecordingStatus", status),
     setRecordingSettings: (settings) => withMockController(page, "setRecordingSettings", settings),
     resolveDeferredConnectLink: (params) => withMockController(page, "resolveDeferredConnectLink", params),
     getInvocations: () => withMockController(page, "getInvocations"),

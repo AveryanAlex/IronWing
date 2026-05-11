@@ -14,6 +14,7 @@ type MetricEntry = {
   key: string;
   label: string;
   metric: OperatorMetricView;
+  testId?: string;
 };
 
 type MetricSection = {
@@ -69,11 +70,13 @@ let sections = $derived.by<MetricSection[]>(() => {
       key: "altitude",
       label: "ALTITUDE",
       metric: view.primaryMetrics.altitude,
+      testId: "telemetry-alt-value",
     },
     {
       key: "speed",
       label: "SPEED",
       metric: view.primaryMetrics.speed,
+      testId: "telemetry-speed-value",
     },
     {
       key: "ground-speed",
@@ -89,6 +92,7 @@ let sections = $derived.by<MetricSection[]>(() => {
       key: "heading",
       label: "HEADING",
       metric: view.secondaryMetrics.heading,
+      testId: "telemetry-heading-value",
     },
     {
       key: "climb-rate",
@@ -285,7 +289,7 @@ function metricColorVar(metric: OperatorMetricView): string {
       {#if !collapsed[section.key]}
         <div class="telemetry-section__grid">
           {#each section.entries as entry (entry.key)}
-            <div class="telemetry-card">
+            <div class="telemetry-card" data-testid={entry.testId}>
               <span class="telemetry-card__label">{entry.label}</span>
               <span
                 class="telemetry-card__value"
