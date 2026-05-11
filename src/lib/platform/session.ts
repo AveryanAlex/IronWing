@@ -33,6 +33,7 @@ import {
   describeTransportAvailability,
   validateTransportDescriptor,
   type ConnectRequest,
+  type DemoVehiclePreset,
   type DisconnectRequest,
   type TransportDescriptor,
   type TransportType,
@@ -59,6 +60,7 @@ export type SessionConnectionFormState = {
   serialPort: string;
   baud: number;
   selectedBtDevice: string;
+  demoVehiclePreset?: DemoVehiclePreset;
   takeoffAlt: string;
   followVehicle: boolean;
 };
@@ -67,9 +69,11 @@ export type SessionConnectionEnv = {
   VITE_IRONWING_SITL_MODE?: string;
   VITE_IRONWING_SITL_TCP_PORT?: string;
   VITE_IRONWING_AUTO_CONNECT_SITL?: string;
+  VITE_IRONWING_MOCK_PROFILE?: string;
 };
 
 export const DEFAULT_TCP_ADDRESS = "127.0.0.1:5760";
+export const DEFAULT_DEMO_VEHICLE_PRESET: DemoVehiclePreset = "quadcopter";
 
 export const sessionConnectionDefaults: SessionConnectionFormState = resolveSessionConnectionDefaults();
 
@@ -113,6 +117,7 @@ type ConnectionFormValue = {
   address?: string;
   port?: string;
   baud?: number | null;
+  demo_vehicle_preset?: DemoVehiclePreset;
 };
 
 export function createSessionService(): SessionService {
@@ -201,12 +206,13 @@ export function resolveSessionConnectionDefaults(
   const mode = resolveSitlMode(env.VITE_IRONWING_SITL_MODE);
 
   return {
-    mode,
+    mode: resolveMockProfileMode(env) ?? mode,
     udpBind: "0.0.0.0:14550",
     tcpAddress: defaultTcpAddress(env),
     serialPort: "",
     baud: 57600,
     selectedBtDevice: "",
+    demoVehiclePreset: DEFAULT_DEMO_VEHICLE_PRESET,
     takeoffAlt: "10",
     followVehicle: true,
   };
@@ -261,6 +267,10 @@ function normalizeConnectionForm(raw: unknown, defaults: SessionConnectionFormSt
     normalized.selectedBtDevice = parsed.selectedBtDevice;
   }
 
+  if (isDemoVehiclePreset(parsed.demoVehiclePreset)) {
+    normalized.demoVehiclePreset = parsed.demoVehiclePreset;
+  }
+
   if (typeof parsed.takeoffAlt === "string") {
     normalized.takeoffAlt = parsed.takeoffAlt;
   }
@@ -274,7 +284,18 @@ function normalizeConnectionForm(raw: unknown, defaults: SessionConnectionFormSt
     normalized.tcpAddress = defaults.tcpAddress;
   }
 
+  if (defaults.mode === "demo") {
+    normalized.mode = "demo";
+    normalized.demoVehiclePreset = isDemoVehiclePreset(normalized.demoVehiclePreset)
+      ? normalized.demoVehiclePreset
+      : defaults.demoVehiclePreset;
+  }
+
   return normalized;
+}
+
+function resolveMockProfileMode(env: SessionConnectionEnv): TransportType | null {
+  return env.VITE_IRONWING_MOCK_PROFILE === "demo" ? "demo" : null;
 }
 
 function isTransportType(value: unknown): value is TransportType {
@@ -282,7 +303,12 @@ function isTransportType(value: unknown): value is TransportType {
     || value === "tcp"
     || value === "serial"
     || value === "bluetooth_ble"
-    || value === "bluetooth_spp";
+    || value === "bluetooth_spp"
+    || value === "demo";
+}
+
+function isDemoVehiclePreset(value: unknown): value is DemoVehiclePreset {
+  return value === "quadcopter" || value === "airplane" || value === "quadplane";
 }
 
 export type SessionSnapshotState = Pick<

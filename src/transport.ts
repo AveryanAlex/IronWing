@@ -1,6 +1,8 @@
 import { invoke } from "@platform/core";
 
-export type TransportType = "udp" | "tcp" | "serial" | "bluetooth_ble" | "bluetooth_spp";
+export type DemoVehiclePreset = "quadcopter" | "airplane" | "quadplane";
+
+export type TransportType = "udp" | "tcp" | "serial" | "bluetooth_ble" | "bluetooth_spp" | "demo";
 
 type TransportDescriptorBase = {
   kind: TransportType;
@@ -30,17 +32,24 @@ export type BluetoothTransportDescriptor = TransportDescriptorBase & {
   validation: { address_required: true };
 };
 
+export type DemoTransportDescriptor = TransportDescriptorBase & {
+  kind: "demo";
+  validation: {};
+};
+
 export type TransportDescriptor =
   | UdpTransportDescriptor
   | TcpTransportDescriptor
   | SerialTransportDescriptor
-  | BluetoothTransportDescriptor;
+  | BluetoothTransportDescriptor
+  | DemoTransportDescriptor;
 
 export type ConnectFormValue = {
   bind_addr?: string;
   address?: string;
   port?: string;
   baud?: number | null;
+  demo_vehicle_preset?: DemoVehiclePreset;
 };
 
 export type ConnectTransport =
@@ -48,7 +57,8 @@ export type ConnectTransport =
   | { kind: "tcp"; address: string }
   | { kind: "serial"; port: string; baud: number }
   | { kind: "bluetooth_ble"; address: string }
-  | { kind: "bluetooth_spp"; address: string };
+  | { kind: "bluetooth_spp"; address: string }
+  | { kind: "demo"; vehicle_preset: DemoVehiclePreset };
 
 export type ConnectRequest = {
   transport: ConnectTransport;
@@ -90,6 +100,8 @@ export function validateTransportDescriptor(
     case "bluetooth_spp":
       if (!value.address) errors.push("address is required");
       break;
+    case "demo":
+      break;
   }
 
   return errors;
@@ -116,5 +128,12 @@ export function buildConnectRequest(
       return { transport: { kind: "bluetooth_ble", address: value.address ?? "" } };
     case "bluetooth_spp":
       return { transport: { kind: "bluetooth_spp", address: value.address ?? "" } };
+    case "demo":
+      return {
+        transport: {
+          kind: "demo",
+          vehicle_preset: value.demo_vehicle_preset ?? "quadcopter",
+        },
+      };
   }
 }

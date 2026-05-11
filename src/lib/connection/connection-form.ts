@@ -15,6 +15,7 @@ export function toConnectFormValue(form: SessionConnectionFormState): ConnectFor
     address: (form.mode === "tcp" ? form.tcpAddress : form.selectedBtDevice).trim(),
     port: form.serialPort.trim(),
     baud: form.baud,
+    demo_vehicle_preset: form.demoVehiclePreset,
   };
 }
 
