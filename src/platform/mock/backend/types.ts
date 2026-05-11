@@ -26,7 +26,6 @@ import type { FlightModeEntry, TelemetryDomain } from "../../../telemetry";
 import type { ConfigurationFactsDomain } from "../../../configuration-facts";
 import type { MockLogSeedPreset } from "./logs";
 import type { DemoSimulatorRuntime } from "./vehicle-sim/types";
-import type { DemoVehiclePreset } from "../../../transport";
 
 export type CommandArgs = Record<string, unknown> | undefined;
 
@@ -214,7 +213,6 @@ export type MockPlatformController = {
     type: string;
     bytes: number[];
   };
-  getDemoParamStore: (preset: DemoVehiclePreset) => MockParamStoreState;
   setRecordingStatus: (status: RecordingStatus) => RecordingStatus;
   setRecordingSettings: (settings: RecordingSettings) => { operation_id: "recording_settings_write"; settings: RecordingSettings };
   resolveDeferredConnectLink: (params: {

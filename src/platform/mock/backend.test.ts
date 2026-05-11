@@ -1391,6 +1391,26 @@ describe("mock profile backend parity", () => {
         expect(mockState.liveSimulator?.state.position).toEqual(beforeStabilize);
     });
 
+    it("AUTO to Guided mode switch alone clears stale AUTO targets", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+
+        await invokeMockCommand("arm_vehicle", { force: false });
+        await invokeMockCommand("set_flight_mode", { customMode: 3 });
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        expect(mockState.liveSimulator?.state.target).not.toBeNull();
+
+        await invokeMockCommand("set_flight_mode", { customMode: 4 });
+
+        const afterGuided = structuredClone(mockState.liveSimulator?.state.position);
+
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        expect(mockState.liveSimulator?.state.target).toBeNull();
+        expect(mockState.liveSimulator?.state.position).toEqual(afterGuided);
+    });
+
     it("disarming in flight parks the simulated copter immediately", async () => {
         vi.useFakeTimers();
         await openDemoLiveEnvelope();

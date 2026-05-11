@@ -75,7 +75,6 @@ import {
   validateMissionPlanArgs,
   validateMissionSetCurrentArgs,
 } from "./backend/mission";
-import { paramStoreForDemoPreset } from "./backend/param-fixtures";
 import {
   applyMockParamState,
   cancelParamOperation,
@@ -1121,9 +1120,6 @@ function createController(): MockPlatformController {
     },
     getSeededLogPickerFile(preset) {
       return getSeededLogPickerFile(preset);
-    },
-    getDemoParamStore(preset) {
-      return paramStoreForDemoPreset(preset);
     },
     setRecordingStatus(status) {
       return writeMockRecordingStatus(status);

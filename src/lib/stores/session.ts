@@ -431,6 +431,7 @@ export function createSessionStore(service: SessionService = createSessionServic
         await service.btRequestPermissions();
       }
       await service.connectSession(service.buildConnectRequest(descriptor, formValue));
+      await bootstrapSource("live");
     } catch (error) {
       completeActionError(error, { optimisticConnection: null });
     }

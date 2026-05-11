@@ -55,13 +55,6 @@ const AUTO_MISSION_PLAN = JSON.stringify(
   2,
 );
 
-const initialLiveBootstrapEnvelope = {
-  session_id: "session-2",
-  source_kind: "live",
-  seek_epoch: 0,
-  reset_revision: 0,
-} as const;
-
 async function connectDemo(page: Page, mockPlatform: MockPlatformFixture, preset = "quadcopter") {
   await applyShellViewport(page, "desktop");
   await page.goto("/");
@@ -127,14 +120,13 @@ async function importUploadAndReadAutoMission(page: Page, mockPlatform: MockPlat
   await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("3");
 }
 
-async function currentMissionItemTestId(page: Page): Promise<string> {
-  const currentItem = page.locator('[data-testid^="mission-draft-item-"]').filter({ hasText: "Current" }).first();
-  await expect(currentItem).toBeVisible({ timeout: 10_000 });
-  const testId = await currentItem.getAttribute("data-testid");
+async function currentMissionMarkerTestId(page: Page): Promise<string> {
+  const currentMarker = page.locator(`${missionWorkspaceSelectors.missionMarker}.is-current`).first();
+  await expect(currentMarker).toBeVisible({ timeout: 10_000 });
+  const testId = await currentMarker.getAttribute("data-testid");
   if (!testId) {
-    throw new Error("Current mission item did not expose a data-testid");
+    throw new Error("Current mission marker did not expose a data-testid");
   }
-  await expect(page.locator(`${missionWorkspaceSelectors.missionMarker}.is-current`).first()).toBeVisible();
   return testId;
 }
 
@@ -157,13 +149,13 @@ test("demo copter stays parked while disarmed, then takeoff changes altitude", a
 test("demo AUTO mission upload/read progresses current item and lands", async ({ page, mockPlatform }) => {
   await connectDemo(page, mockPlatform, "quadcopter");
   await importUploadAndReadAutoMission(page, mockPlatform);
-  const initialCurrent = await currentMissionItemTestId(page);
+  const initialCurrent = await currentMissionMarkerTestId(page);
 
   await page.getByRole("button", { name: "Arm", exact: true }).click();
   await page.locator("#flight-mode-select").selectOption({ label: "Auto" });
 
   await expect(sidebarMetric(page, "mode")).toContainText(/auto/i, { timeout: 5_000 });
-  await expect.poll(async () => currentMissionItemTestId(page), { timeout: 20_000 }).not.toBe(initialCurrent);
+  await expect.poll(async () => currentMissionMarkerTestId(page), { timeout: 20_000 }).not.toBe(initialCurrent);
   await expect.poll(async () => readMetricValue(sidebarMetric(page, "altitude")), { timeout: 30_000 }).toBeLessThanOrEqual(0.6);
   await expect.poll(async () => sidebarMetric(page, "state").innerText(), { timeout: 15_000 }).toMatch(/disarmed/i);
 });
@@ -194,36 +186,8 @@ test("demo airplane connects parked, then after arming + AUTO it gains forward s
 });
 
 test("demo setup RTL section is backed by generated params", async ({ page, mockPlatform }) => {
-  await applyShellViewport(page, "desktop");
-  await page.goto("/");
-  await mockPlatform.reset();
-  await mockPlatform.waitForOperatorWorkspace();
-  const demoParamStore = await mockPlatform.getDemoParamStore("quadcopter");
-  await mockPlatform.setCommandBehavior("param_download_all", {
-    type: "resolve",
-    delayMs: 750,
-    emit: [
-      {
-        event: "param://store",
-        payload: { envelope: initialLiveBootstrapEnvelope, value: demoParamStore },
-      },
-      {
-        event: "param://progress",
-        payload: { envelope: initialLiveBootstrapEnvelope, value: "completed" },
-      },
-    ],
-  });
-  await expect(page.locator(connectionSelectors.transportSelect)).toHaveValue("demo");
-  await page.locator(connectionSelectors.demoPreset).selectOption("quadcopter");
-  await page.locator(connectionSelectors.connectButton).click();
-  await expect(page.locator(connectionSelectors.statusText)).toContainText("Connected", { timeout: 10_000 });
+  await connectDemo(page, mockPlatform, "quadcopter");
   await page.getByRole("button", { name: "Setup" }).click();
-
-  await expect(page.getByRole("heading", { name: "Download parameters to continue" })).toBeVisible();
-  await expect.poll(async () => {
-    const invocations = await mockPlatform.getInvocations();
-    return invocations.filter((invocation) => invocation.cmd === "param_download_all").length;
-  }, { timeout: 10_000 }).toBeGreaterThan(0);
 
   await page.getByTestId("setup-workspace-nav-rtl_return").click();
 

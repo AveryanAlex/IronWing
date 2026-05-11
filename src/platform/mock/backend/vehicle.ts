@@ -424,6 +424,7 @@ export function setFlightMode(args: CommandArgs, emitEvent: (event: string, payl
 
   if (mockState.liveVehicleState) {
     if (mockState.liveSimulator) {
+      const enteringGuided = mockState.liveVehicleState.mode_name !== "Guided" && nextMode.name === "Guided";
       mockState.liveSimulator = setDemoSimulatorMode(mockState.liveSimulator, {
         custom_mode: nextMode.custom_mode,
         mode_name: nextMode.name,
@@ -432,6 +433,8 @@ export function setFlightMode(args: CommandArgs, emitEvent: (event: string, payl
         mockState.liveSimulator = setDemoSimulatorLandTarget(mockState.liveSimulator);
       } else if (nextMode.name === "RTL" || nextMode.name === "QRTL") {
         mockState.liveSimulator = setDemoSimulatorRtlTarget(mockState.liveSimulator);
+      } else if (enteringGuided) {
+        mockState.liveSimulator = setDemoSimulatorHoldTarget(mockState.liveSimulator);
       } else if (
         nextMode.name === "Loiter"
         || nextMode.name === "QLOITER"
