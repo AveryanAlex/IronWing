@@ -118,7 +118,7 @@ describe("vehicle simulator step", () => {
     expect(horizontalDistanceM(step.position, initial.target!)).toBeLessThan(horizontalDistanceM(initial.position, initial.target!));
   });
 
-  it("armed airplane maintains forward motion without a target", () => {
+  it("armed airplane without a target enters a forward loiter/orbit instead of straight flight", () => {
     const initial = {
       ...createInitialSimVehicle("airplane"),
       armed: true,
@@ -128,11 +128,13 @@ describe("vehicle simulator step", () => {
     const step = advanceSimVehicle(initial, 1).state;
 
     expect(step.position.latitude_deg).toBeGreaterThan(initial.position.latitude_deg);
-    expect(step.position.longitude_deg).toBe(initial.position.longitude_deg);
-    expect(step.heading_deg).toBe(initial.heading_deg);
+    expect(step.position.longitude_deg).toBeGreaterThan(initial.position.longitude_deg);
+    expect(step.heading_deg).toBeGreaterThan(initial.heading_deg);
     expect(step.groundspeed_mps).toBe(22);
     expect(step.airspeed_mps).toBe(22);
     expect(step.climb_rate_mps).toBe(0);
+    expect(step.position.relative_alt_m).toBe(initial.position.relative_alt_m);
+    expect(step.target).toBeNull();
   });
 
   it("armed quadplane in QLOITER stays in hold when no target is active", () => {
@@ -177,11 +179,12 @@ describe("vehicle simulator step", () => {
     expect(step.climb_rate_mps).toBe(0);
   });
 
-  it("airplane keeps flying forward after reaching a non-land target", () => {
+  it("airplane clears a completed non-land target and stays armed in the same mode", () => {
     const initial = {
       ...createInitialSimVehicle("airplane"),
       armed: true,
       system_status: "active",
+      mode_name: "Cruise",
       heading_deg: 45,
       position: {
         latitude_deg: 47.397742,
@@ -196,13 +199,23 @@ describe("vehicle simulator step", () => {
     };
 
     const step = advanceSimVehicle(initial, 1).state;
+    const loiterStep = advanceSimVehicle(step, 1).state;
 
     expect(step.armed).toBe(true);
-    expect(step.target).not.toBeNull();
+    expect(step.system_status).toBe("active");
+    expect(step.mode_name).toBe("Cruise");
+    expect(step.target).toBeNull();
     expect(step.groundspeed_mps).toBe(22);
     expect(step.airspeed_mps).toBe(22);
-    expect(step.position.latitude_deg).not.toBe(initial.position.latitude_deg);
-    expect(step.position.longitude_deg).not.toBe(initial.position.longitude_deg);
+    expect(step.position.latitude_deg).toBe(initial.target.latitude_deg);
+    expect(step.position.longitude_deg).toBe(initial.target.longitude_deg);
+    expect(step.position.relative_alt_m).toBe(initial.target.relative_alt_m);
+    expect(loiterStep.target).toBeNull();
+    expect(loiterStep.mode_name).toBe("Cruise");
+    expect(loiterStep.armed).toBe(true);
+    expect(loiterStep.heading_deg).not.toBe(step.heading_deg);
+    expect(loiterStep.position.latitude_deg).not.toBe(step.position.latitude_deg);
+    expect(loiterStep.position.longitude_deg).not.toBe(step.position.longitude_deg);
   });
 
   it("airplane land target outside auto stops and disarms when reached", () => {
@@ -397,6 +410,33 @@ describe("vehicle simulator step", () => {
 
     expect(armedStep.state.battery.remaining_pct).toBeLessThan(disarmedStep.state.battery.remaining_pct);
     expect(armedStep.state.battery.energy_consumed_wh).toBeGreaterThan(disarmedStep.state.battery.energy_consumed_wh);
+  });
+
+  it("increases armed battery drain and current under higher speed and climb load", () => {
+    const lowLoad = {
+      ...createInitialSimVehicle("quadcopter"),
+      armed: true,
+      system_status: "active",
+      throttle_pct: 15,
+      groundspeed_mps: 0,
+      climb_rate_mps: 0,
+    };
+    const highLoad = {
+      ...createInitialSimVehicle("airplane"),
+      armed: true,
+      system_status: "active",
+      throttle_pct: 65,
+      groundspeed_mps: 22,
+      airspeed_mps: 22,
+      climb_rate_mps: 3,
+    };
+
+    const lowLoadStep = advanceSimVehicle(lowLoad, 1).state;
+    const highLoadStep = advanceSimVehicle(highLoad, 1).state;
+
+    expect(highLoadStep.battery.current_a).toBeGreaterThan(lowLoadStep.battery.current_a);
+    expect(highLoadStep.battery.energy_consumed_wh).toBeGreaterThan(lowLoadStep.battery.energy_consumed_wh);
+    expect(highLoadStep.battery.remaining_pct).toBeLessThan(lowLoadStep.battery.remaining_pct);
   });
 
   it("seeds absolute home altitude alongside explicit relative flight altitude for airplane and quadplane presets", () => {

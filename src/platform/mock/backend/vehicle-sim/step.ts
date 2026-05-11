@@ -53,6 +53,10 @@ function planeThrottlePct(climbRateMps: number) {
   return 55;
 }
 
+function planeLoiterHeadingDeg(currentHeadingDeg: number, dtS: number) {
+  return (currentHeadingDeg + (PLANE_TURN_RATE_DEGPS * dtS)) % 360;
+}
+
 function inferredTargetKind(state: SimVehicleState) {
   if (state.target?.kind) {
     return state.target.kind;
@@ -262,10 +266,13 @@ export function advanceSimVehicle(state: SimVehicleState, dtS: number): SimStepR
           (altitudeDeltaM >= 0 ? PLANE_CLIMB_MPS : PLANE_DESCEND_MPS) * appliedDtS,
         ) / appliedDtS
       : 0;
-    const desiredHeadingDeg = targetPosition
-      ? headingToTargetDeg(activeState.position, targetPosition)
-      : activeState.heading_deg;
-    const nextHeadingDeg = turnToward(activeState.heading_deg, desiredHeadingDeg, PLANE_TURN_RATE_DEGPS * appliedDtS);
+    const nextHeadingDeg = targetPosition
+      ? turnToward(
+          activeState.heading_deg,
+          headingToTargetDeg(activeState.position, targetPosition),
+          PLANE_TURN_RATE_DEGPS * appliedDtS,
+        )
+      : planeLoiterHeadingDeg(activeState.heading_deg, appliedDtS);
     const headingRad = (nextHeadingDeg * Math.PI) / 180;
     const remainingDistanceM = targetPosition ? horizontalDistanceM(activeState.position, targetPosition) : 0;
     const horizontalStepM = targetPosition
@@ -289,11 +296,12 @@ export function advanceSimVehicle(state: SimVehicleState, dtS: number): SimStepR
       || activeState.target?.longitude_deg == null
       || remainingHorizontalM <= PLANE_TARGET_REACHED_EPSILON_M;
     const reachedTarget = Boolean(activeState.target) && reachedAltitude && reachedHorizontal;
-    const completedPosition = reachedTarget && targetPosition
+    const completedPosition = reachedTarget && activeState.target
       ? {
           ...nextPosition,
-          latitude_deg: targetPosition.latitude_deg,
-          longitude_deg: targetPosition.longitude_deg,
+          latitude_deg: targetPosition?.latitude_deg ?? nextPosition.latitude_deg,
+          longitude_deg: targetPosition?.longitude_deg ?? nextPosition.longitude_deg,
+          relative_alt_m: activeState.target.relative_alt_m,
         }
       : nextPosition;
     const missionItem = isAutoMode(activeState) ? currentMissionItem(activeState.mission) : null;
@@ -340,7 +348,7 @@ export function advanceSimVehicle(state: SimVehicleState, dtS: number): SimStepR
             system_status: "active",
             position: completedPosition,
             heading_deg: nextHeadingDeg,
-            target: activeState.target,
+            target: reachedTarget ? null : activeState.target,
             groundspeed_mps: planeSpeedMps,
             airspeed_mps: planeSpeedMps,
             climb_rate_mps: climbRateMps,
