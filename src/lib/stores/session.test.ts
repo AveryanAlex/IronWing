@@ -543,6 +543,85 @@ describe("session store", () => {
     expect(service.connectSession).not.toHaveBeenCalled();
   });
 
+  it("refreshes the live bootstrap snapshot after connect so seeded mission and params replace the stale pre-connect snapshot", async () => {
+    const snapshots = [
+      createSnapshot({
+        session: {
+          ...createSnapshot().session,
+          value: {
+            ...createSnapshot().session.value!,
+            connection: { kind: "disconnected" },
+          },
+        },
+        mission_state: null,
+        param_store: null,
+        param_progress: null,
+      }),
+      createSnapshot({
+        envelope: {
+          session_id: "session-2",
+          source_kind: "live",
+          seek_epoch: 1,
+          reset_revision: 0,
+        },
+        session: {
+          ...createSnapshot().session,
+          value: {
+            ...createSnapshot().session.value!,
+            connection: { kind: "disconnected" },
+          },
+        },
+        mission_state: null,
+        param_store: null,
+        param_progress: null,
+      }),
+      createSnapshot({
+        envelope: {
+          session_id: "session-3",
+          source_kind: "live",
+          seek_epoch: 2,
+          reset_revision: 0,
+        },
+        session: {
+          ...createSnapshot().session,
+          value: {
+            ...createSnapshot().session.value!,
+            connection: { kind: "connected" },
+          },
+        },
+        mission_state: { plan: null, current_index: 5, sync: "current", active_op: null },
+        param_store: {
+          params: {
+            RTL_ALT: {
+              name: "RTL_ALT",
+              value: 1500,
+              param_type: "uint32",
+              index: 0,
+            },
+          },
+          expected_count: 1,
+        },
+        param_progress: "completed",
+      }),
+    ];
+    const { service } = createMockService({
+      openSessionSnapshot: vi.fn(async () => snapshots.shift() ?? createSnapshot()),
+    });
+    const store = createSessionStore(service);
+
+    await store.initialize();
+    await store.connect();
+
+    const state = get(store);
+    expect(service.openSessionSnapshot).toHaveBeenCalledTimes(3);
+    expect(service.connectSession).toHaveBeenCalledTimes(1);
+    expect(state.activeEnvelope?.session_id).toBe("session-3");
+    expect(state.sessionDomain.value?.connection.kind).toBe("connected");
+    expect(state.bootstrap.missionState?.current_index).toBe(5);
+    expect(state.bootstrap.paramStore?.params.RTL_ALT?.value).toBe(1500);
+    expect(state.bootstrap.paramProgress).toBe("completed");
+  });
+
   it("ignores late available-modes responses after disconnect", async () => {
     const modesRequest = deferred<Array<{ custom_mode: number; name: string }>>();
     const { service, emit } = createMockService({

@@ -3,6 +3,7 @@ members = [
     "src-tauri",
     "crates/tauri-plugin-bluetooth-classic",
 ]
+default-members = ["src-tauri"]
 resolver = "2"
 
 # [patch."https://github.com/AveryanAlex/mavkit.git"]

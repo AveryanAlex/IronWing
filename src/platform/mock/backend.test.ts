@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChartSeriesPage, LogExportResult, LogLibraryCatalog, LogProgress, RawMessagePage } from "../../logs";
 import type { MissionState, TransferProgress } from "../../mission";
 import type { ParamProgress, ParamStore } from "../../params";
@@ -20,6 +20,13 @@ import type {
 } from "../../firmware";
 
 import { getMockPlatformController, invokeMockCommand, listenMockEvent, type MockLogSeedPreset } from "./backend";
+import { paramStoreForDemoPreset } from "./backend/param-fixtures";
+import { mockProfileTiming, mockState } from "./backend/runtime";
+import { horizontalDistanceM } from "./backend/vehicle-sim/geo";
+
+function setMockProfile(profile: "test" | "demo") {
+    import.meta.env.VITE_IRONWING_MOCK_PROFILE = profile;
+}
 
 function readRustCommandsSource() {
     return readFileSync("src-tauri/src/commands.rs", "utf8");
@@ -69,9 +76,15 @@ function readRustRateLimits() {
     };
 }
 
+afterEach(() => {
+    vi.useRealTimers();
+    setMockProfile("test");
+});
+
 describe("mock guided backend parity", () => {
     beforeEach(() => {
         vi.restoreAllMocks();
+        setMockProfile("test");
         getMockPlatformController().reset();
     });
 
@@ -892,6 +905,895 @@ describe("mock guided backend parity", () => {
     });
 });
 
+describe("mock profile backend parity", () => {
+    beforeEach(() => {
+        setMockProfile("test");
+        getMockPlatformController().reset();
+        vi.useRealTimers();
+    });
+
+    async function openDemoLiveEnvelope() {
+        setMockProfile("demo");
+
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "demo", vehicle_preset: "quadcopter" } },
+        });
+
+        const live = await invokeMockCommand<OpenSessionSnapshot>("open_session_snapshot", { sourceKind: "live" });
+        await invokeMockCommand("ack_session_snapshot", {
+            sessionId: live.envelope.session_id,
+            seekEpoch: live.envelope.seek_epoch,
+            resetRevision: live.envelope.reset_revision,
+        });
+
+        return live.envelope;
+    }
+
+    it("exposes only the demo transport in demo profile", async () => {
+        setMockProfile("demo");
+
+        await expect(invokeMockCommand("available_transports")).resolves.toEqual([
+            { kind: "demo", label: "Demo vehicle", available: true, validation: {} },
+        ]);
+    });
+
+    it("keeps discovery commands deterministic in the test profile", async () => {
+        await expect(invokeMockCommand("available_transports")).resolves.toEqual([
+            { kind: "udp", label: "UDP", available: true, validation: { bind_addr_required: true } },
+            { kind: "tcp", label: "TCP", available: true, validation: { address_required: true } },
+            { kind: "serial", label: "Serial", available: true, validation: { port_required: true, baud_required: true }, default_baud: 57600 },
+            { kind: "bluetooth_ble", label: "BLE", available: true, validation: { address_required: true } },
+            { kind: "bluetooth_spp", label: "SPP", available: true, validation: { address_required: true } },
+        ]);
+        await expect(invokeMockCommand("list_serial_ports_cmd")).resolves.toEqual([
+            "/dev/ttyUSB0",
+            "/dev/ttyACM0",
+        ]);
+        await expect(invokeMockCommand("bt_request_permissions")).resolves.toBeUndefined();
+        await expect(invokeMockCommand("bt_get_bonded_devices")).resolves.toEqual([
+            { name: "Demo SPP Radio", address: "11:22:33:44:55:66", device_type: "classic" },
+        ]);
+        await expect(invokeMockCommand("bt_scan_ble", { timeoutMs: 500 })).resolves.toEqual([
+            { name: "Demo BLE Radio", address: "AA:BB:CC:DD:EE:FF", device_type: "ble" },
+        ]);
+        await expect(invokeMockCommand("bt_stop_scan_ble")).resolves.toBeUndefined();
+    });
+
+    it("seeds quadplane demo connects with richer live state and available modes", async () => {
+        setMockProfile("demo");
+
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "demo", vehicle_preset: "quadplane" } },
+        });
+
+        const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+        const modes = await invokeMockCommand<any>("get_available_modes");
+
+        expect(snapshot.session.value.vehicle_state.vehicle_type).toBe("vtol");
+        expect(snapshot.session.value.home_position).toEqual({
+            latitude_deg: 47.397742,
+            longitude_deg: 8.545594,
+            altitude_m: 488,
+        });
+        expect(snapshot.param_store?.params.Q_ENABLE?.value).toBe(1);
+        expect(snapshot.mission_state?.plan?.items.length ?? 0).toBeGreaterThan(0);
+        await expect(invokeMockCommand("fence_download")).resolves.toEqual({
+            return_point: { latitude_deg: 47.3975, longitude_deg: 8.5458 },
+            regions: [
+                {
+                    inclusion_polygon: {
+                        vertices: [
+                            { latitude_deg: 47.393, longitude_deg: 8.538 },
+                            { latitude_deg: 47.408, longitude_deg: 8.538 },
+                            { latitude_deg: 47.408, longitude_deg: 8.559 },
+                            { latitude_deg: 47.393, longitude_deg: 8.559 },
+                        ],
+                        inclusion_group: 0,
+                    },
+                },
+            ],
+        });
+        await expect(invokeMockCommand("rally_download")).resolves.toEqual({
+            points: [
+                { RelHome: { latitude_deg: 47.3985, longitude_deg: 8.5448, relative_alt_m: 80 } },
+                { RelHome: { latitude_deg: 47.401, longitude_deg: 8.551, relative_alt_m: 95 } },
+            ],
+        });
+        expect(snapshot.support.available).toBe(true);
+        expect(snapshot.support.value).not.toBeNull();
+        expect(snapshot.sensor_health.available).toBe(true);
+        expect(snapshot.sensor_health.value).not.toBeNull();
+        expect(snapshot.configuration_facts.available).toBe(true);
+        expect(snapshot.configuration_facts.value).not.toBeNull();
+        expect(snapshot.status_text.value.entries.length).toBeGreaterThan(0);
+        expect(modes.map((entry: { name: string }) => entry.name)).toContain("QLOITER");
+    });
+
+    it("airplane demo connects disarmed and parked instead of disarmed AUTO flight", async () => {
+        setMockProfile("demo");
+
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "demo", vehicle_preset: "airplane" } },
+        });
+
+        const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+
+        expect(snapshot.session.value.vehicle_state).toEqual({
+            armed: false,
+            custom_mode: 0,
+            mode_name: "Manual",
+            system_status: "standby",
+            vehicle_type: "fixed_wing",
+            autopilot: "ardu_pilot_mega",
+            system_id: 1,
+            component_id: 1,
+            heartbeat_received: true,
+        });
+        expect(snapshot.telemetry.value.flight.altitude_m).toBe(0);
+        expect(snapshot.telemetry.value.flight.speed_mps).toBe(0);
+        expect(snapshot.telemetry.value.flight.climb_rate_mps).toBe(0);
+        expect(snapshot.telemetry.value.flight.airspeed_mps).toBe(0);
+        expect(snapshot.telemetry.value.navigation.latitude_deg).toBe(47.397742);
+        expect(snapshot.telemetry.value.navigation.longitude_deg).toBe(8.545594);
+        expect(snapshot.telemetry.value.terrain.height_above_terrain_m).toBe(0);
+    });
+
+    it("applies seeded demo flight modes through set_flight_mode", async () => {
+        setMockProfile("demo");
+
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "demo", vehicle_preset: "quadplane" } },
+        });
+
+        const modes = await invokeMockCommand<Array<{ custom_mode: number; name: string }>>("get_available_modes");
+        const qrtlMode = modes.find((entry) => entry.name === "QRTL");
+        expect(qrtlMode).toBeTruthy();
+
+        await invokeMockCommand("set_flight_mode", { customMode: qrtlMode!.custom_mode });
+
+        const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+        expect(snapshot.session.value.vehicle_state.custom_mode).toBe(qrtlMode!.custom_mode);
+        expect(snapshot.session.value.vehicle_state.mode_name).toBe("QRTL");
+    });
+
+    it("preserves seeded demo home position in live session stream updates", async () => {
+        const envelope = await openDemoLiveEnvelope();
+        const sessionEvents: OpenSessionSnapshot["session"][] = [];
+        const unlisten = listenMockEvent("session://state", (payload) => {
+            const event = payload as SessionEvent<OpenSessionSnapshot["session"]>;
+            if (event.envelope.session_id === envelope.session_id) {
+                sessionEvents.push(event.value);
+            }
+        });
+
+        await invokeMockCommand("set_flight_mode", { customMode: 3 });
+        unlisten();
+
+        expect(sessionEvents.at(-1)?.value.home_position).toEqual({
+            latitude_deg: 47.397742,
+            longitude_deg: 8.545594,
+            altitude_m: 472,
+        });
+    });
+
+    it("seeds quadcopter demo SITL params with RTL and failsafe rows", async () => {
+        setMockProfile("demo");
+
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "demo", vehicle_preset: "quadcopter" } },
+        });
+
+        const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+        expect(snapshot.param_store?.params.FLTMODE_CH?.value).toBe(5);
+        expect(snapshot.param_store?.params.RTL_ALT?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.RTL_ALT_FINAL?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.RTL_CLIMB_MIN?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.RTL_SPEED?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.RTL_LOIT_TIME?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.FS_THR_ENABLE?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.FS_GCS_ENABLE?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.FS_EKF_ACTION?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.FS_CRASH_CHECK?.value).toEqual(expect.any(Number));
+    });
+
+    it("seeds airplane demo SITL params with plane RTL rows", async () => {
+        setMockProfile("demo");
+
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "demo", vehicle_preset: "airplane" } },
+        });
+
+        const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+        expect(snapshot.param_store?.params.ALT_HOLD_RTL?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.RTL_AUTOLAND?.value).toEqual(expect.any(Number));
+    });
+
+    it("seeds quadplane demo SITL params with quadplane compatibility rows", async () => {
+        setMockProfile("demo");
+
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "demo", vehicle_preset: "quadplane" } },
+        });
+
+        const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+        expect(snapshot.param_store?.params.Q_ENABLE?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.ALT_HOLD_RTL?.value).toEqual(expect.any(Number));
+        expect(snapshot.param_store?.params.RTL_AUTOLAND?.value).toEqual(expect.any(Number));
+    });
+
+    it("emits demo param download progress and completes with the shared vocabulary", async () => {
+        vi.useFakeTimers();
+        const envelope = await openDemoLiveEnvelope();
+        const progress: SessionEvent<ParamProgress>[] = [];
+        const unlisten = listenMockEvent("param://progress", (payload) => {
+            progress.push(payload as SessionEvent<ParamProgress>);
+        });
+
+        const downloadPromise = invokeMockCommand("param_download_all");
+        const demoStore = paramStoreForDemoPreset("quadcopter");
+        const totalDurationMs = demoStore.expected_count * mockProfileTiming().paramStepDelayMs + 1_000;
+
+        await vi.advanceTimersByTimeAsync(totalDurationMs);
+        await downloadPromise;
+        unlisten();
+
+        expect(progress.length).toBeGreaterThan(1);
+        expect(progress.every((entry) => entry.envelope.session_id === envelope.session_id)).toBe(true);
+        expect(progress[0]?.value).toMatchObject({
+            downloading: {
+                received: expect.any(Number),
+                expected: expect.any(Number),
+            },
+        });
+        expect(progress.at(-1)?.value).toBe("completed");
+    });
+
+    it("uses demo mission upload pacing and completes after the shared transfer phases", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+        const missionProgress: SessionEvent<TransferProgress>[] = [];
+        const unlisten = listenMockEvent("mission://progress", (payload) => {
+            missionProgress.push(payload as SessionEvent<TransferProgress>);
+        });
+
+        const uploadPromise = invokeMockCommand("mission_upload", {
+            plan: {
+                items: [
+                    {
+                        command: {
+                            Nav: {
+                                Waypoint: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.4,
+                                            longitude_deg: 8.55,
+                                            relative_alt_m: 25,
+                                        },
+                                    },
+                                    hold_time_s: 0,
+                                    acceptance_radius_m: 1,
+                                    pass_radius_m: 0,
+                                    yaw_deg: 0,
+                                },
+                            },
+                        },
+                        current: true,
+                        autocontinue: true,
+                    },
+                ],
+            },
+        });
+
+        let settled = false;
+        void uploadPromise.then(() => {
+            settled = true;
+        });
+
+        await vi.advanceTimersByTimeAsync(359);
+        expect(settled).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(1);
+        await uploadPromise;
+        unlisten();
+
+        expect(missionProgress.map((entry) => entry.value.phase)).toEqual([
+            "request_count",
+            "transfer_items",
+            "await_ack",
+            "completed",
+        ]);
+    });
+
+    it("emits demo compass calibration progress and report events", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+        const progress: Array<{ compass_id: number; completion_pct: number; status: string; attempt: number }> = [];
+        const reports: Array<{
+            compass_id: number;
+            status: string;
+            fitness: number;
+            ofs_x: number;
+            ofs_y: number;
+            ofs_z: number;
+            autosaved: boolean;
+        }> = [];
+        const unlisteners = [
+            listenMockEvent("compass://cal_progress", (payload) => {
+                progress.push(payload as { compass_id: number; completion_pct: number; status: string; attempt: number });
+            }),
+            listenMockEvent("compass://cal_report", (payload) => {
+                reports.push(payload as {
+                    compass_id: number;
+                    status: string;
+                    fitness: number;
+                    ofs_x: number;
+                    ofs_y: number;
+                    ofs_z: number;
+                    autosaved: boolean;
+                });
+            }),
+        ];
+
+        await expect(invokeMockCommand("calibrate_compass_start", { compassMask: 0 })).resolves.toBeUndefined();
+
+        await vi.advanceTimersByTimeAsync(400);
+        unlisteners.forEach((unlisten) => unlisten());
+
+        expect(progress).toEqual([
+            { compass_id: 1, completion_pct: 15, status: "waiting_to_start", attempt: 1 },
+            { compass_id: 1, completion_pct: 55, status: "running_step_one", attempt: 1 },
+            { compass_id: 1, completion_pct: 100, status: "success", attempt: 1 },
+        ]);
+        expect(reports).toEqual([
+            { compass_id: 1, status: "success", fitness: 12.5, ofs_x: 24, ofs_y: -11, ofs_z: 7, autosaved: true },
+        ]);
+    });
+
+    it("stops demo compass calibration emission after disconnect", async () => {
+        vi.useFakeTimers();
+        const envelope = await openDemoLiveEnvelope();
+        const progress: Array<{ completion_pct: number; status: string }> = [];
+        const reports: Array<{ status: string }> = [];
+        const unlisteners = [
+            listenMockEvent("compass://cal_progress", (payload) => {
+                progress.push(payload as { completion_pct: number; status: string });
+            }),
+            listenMockEvent("compass://cal_report", (payload) => {
+                reports.push(payload as { status: string });
+            }),
+        ];
+
+        await expect(invokeMockCommand("calibrate_compass_start", { compassMask: 0 })).resolves.toBeUndefined();
+        await vi.advanceTimersByTimeAsync(120);
+        await invokeMockCommand("disconnect_link", { request: { session_id: envelope.session_id } });
+        await vi.advanceTimersByTimeAsync(1_000);
+        unlisteners.forEach((unlisten) => unlisten());
+
+        expect(progress).toEqual([{ compass_id: 1, completion_pct: 15, status: "waiting_to_start", attempt: 1 }]);
+        expect(reports).toEqual([]);
+    });
+
+    it("stops demo timers on disconnect and emits a final disconnected live session state", async () => {
+        vi.useFakeTimers();
+        const envelope = await openDemoLiveEnvelope();
+        const sessionEvents: SessionEvent<any>[] = [];
+        const telemetryEvents: SessionEvent<any>[] = [];
+        const unlisteners = [
+            listenMockEvent("session://state", (payload) => {
+                sessionEvents.push(payload as SessionEvent<any>);
+            }),
+            listenMockEvent("telemetry://state", (payload) => {
+                telemetryEvents.push(payload as SessionEvent<any>);
+            }),
+        ];
+
+        await vi.advanceTimersByTimeAsync(1_000);
+        const telemetryBeforeDisconnect = telemetryEvents.length;
+
+        await invokeMockCommand("disconnect_link", { request: { session_id: envelope.session_id } });
+        await vi.advanceTimersByTimeAsync(5_000);
+        unlisteners.forEach((unlisten) => unlisten());
+
+        expect(telemetryBeforeDisconnect).toBeGreaterThan(0);
+        expect(telemetryEvents).toHaveLength(telemetryBeforeDisconnect);
+        expect(sessionEvents.at(-1)).toMatchObject({
+            envelope,
+            value: {
+                value: {
+                    connection: { kind: "disconnected" },
+                },
+            },
+        });
+    });
+
+    it("demo telemetry stays stationary while the vehicle is disarmed", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+        const telemetryEvents: SessionEvent<any>[] = [];
+        const unlisten = listenMockEvent("telemetry://state", (payload) => {
+            telemetryEvents.push(payload as SessionEvent<any>);
+        });
+
+        await vi.advanceTimersByTimeAsync(1_000);
+        unlisten();
+
+        const firstTelemetry = telemetryEvents[0]?.value.value;
+        const lastTelemetry = telemetryEvents.at(-1)?.value.value;
+
+        expect(telemetryEvents.length).toBeGreaterThan(0);
+        expect(lastTelemetry?.flight).toEqual(firstTelemetry?.flight);
+        expect(lastTelemetry?.attitude).toEqual(firstTelemetry?.attitude);
+        expect(lastTelemetry?.power.battery_pct ?? 0).toBeLessThan(firstTelemetry?.power.battery_pct ?? 0);
+        expect(lastTelemetry?.power.energy_consumed_wh ?? 0).toBeGreaterThan(firstTelemetry?.power.energy_consumed_wh ?? 0);
+    });
+
+    it("vehicle_takeoff in guided copter mode drives simulator altitude upward", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+
+        await invokeMockCommand("set_flight_mode", { customMode: 4 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+        await invokeMockCommand("vehicle_takeoff", { altitudeM: 12 });
+
+        await vi.advanceTimersByTimeAsync(1_000);
+
+        expect(mockState.liveSimulator?.state.position.relative_alt_m ?? 0).toBeGreaterThan(0);
+        expect(mockState.liveSimulator?.state.target?.relative_alt_m).toBe(12);
+    });
+
+    it("selecting RTL drives a copter back toward home", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+
+        await invokeMockCommand("set_flight_mode", { customMode: 4 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+        await invokeMockCommand("vehicle_takeoff", { altitudeM: 12 });
+        await vi.advanceTimersByTimeAsync(5_000);
+
+        await invokeMockCommand("start_guided_session", {
+            request: { session: { kind: "goto", latitude_deg: 47.3982, longitude_deg: 8.5461, altitude_m: 12 } },
+        });
+        await vi.advanceTimersByTimeAsync(5_000);
+
+        const beforeRtl = mockState.liveSimulator?.state.position;
+        expect(beforeRtl).toBeTruthy();
+        const distanceBeforeRtl = horizontalDistanceM(beforeRtl!, mockState.liveSimulator!.state.home_position);
+        expect(distanceBeforeRtl).toBeGreaterThan(0);
+
+        await invokeMockCommand("set_flight_mode", { customMode: 6 });
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        const afterRtl = mockState.liveSimulator?.state.position;
+        expect(afterRtl).toBeTruthy();
+        const distanceAfterRtl = horizontalDistanceM(afterRtl!, mockState.liveSimulator!.state.home_position);
+
+        expect(distanceAfterRtl).toBeLessThan(distanceBeforeRtl);
+    });
+
+    it("switching to Stabilize clears stale autonomous targets", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+
+        await invokeMockCommand("set_flight_mode", { customMode: 4 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+        await invokeMockCommand("start_guided_session", {
+            request: { session: { kind: "goto", latitude_deg: 47.3982, longitude_deg: 8.5461, altitude_m: 12 } },
+        });
+        await vi.advanceTimersByTimeAsync(1_000);
+
+        const beforeStabilize = structuredClone(mockState.liveSimulator?.state.position);
+        expect(mockState.liveSimulator?.state.target).not.toBeNull();
+
+        await invokeMockCommand("set_flight_mode", { customMode: 0 });
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        expect(mockState.liveSimulator?.state.target).toBeNull();
+        expect(mockState.liveSimulator?.state.position).toEqual(beforeStabilize);
+    });
+
+    it("AUTO to Guided mode switch alone clears stale AUTO targets", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+
+        await invokeMockCommand("arm_vehicle", { force: false });
+        await invokeMockCommand("set_flight_mode", { customMode: 3 });
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        expect(mockState.liveSimulator?.state.target).not.toBeNull();
+
+        await invokeMockCommand("set_flight_mode", { customMode: 4 });
+
+        const afterGuided = structuredClone(mockState.liveSimulator?.state.position);
+
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        expect(mockState.liveSimulator?.state.target).toBeNull();
+        expect(mockState.liveSimulator?.state.position).toEqual(afterGuided);
+    });
+
+    it("disarming in flight parks the simulated copter immediately", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+
+        await invokeMockCommand("set_flight_mode", { customMode: 4 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+        await invokeMockCommand("vehicle_takeoff", { altitudeM: 12 });
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        expect(mockState.liveSimulator?.state.position.relative_alt_m ?? 0).toBeGreaterThan(0);
+
+        await invokeMockCommand("disarm_vehicle", { force: false });
+
+        expect(mockState.liveSimulator?.state.armed).toBe(false);
+        expect(mockState.liveSimulator?.state.position.relative_alt_m).toBe(0);
+        expect(mockState.liveSimulator?.state.groundspeed_mps).toBe(0);
+        expect(mockState.liveSimulator?.state.climb_rate_mps).toBe(0);
+    });
+
+    it("mission management preserves active non-AUTO simulator targets", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+
+        await invokeMockCommand("set_flight_mode", { customMode: 4 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+        await invokeMockCommand("start_guided_session", {
+            request: { session: { kind: "goto", latitude_deg: 47.3982, longitude_deg: 8.5461, altitude_m: 12 } },
+        });
+
+        const guidedTargetBeforeMissionUpdate = structuredClone(mockState.liveSimulator?.state.target);
+
+        const uploadPromise = invokeMockCommand("mission_upload", {
+            plan: {
+                items: [
+                    {
+                        command: {
+                            Nav: {
+                                Waypoint: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.399,
+                                            longitude_deg: 8.547,
+                                            relative_alt_m: 20,
+                                        },
+                                    },
+                                    hold_time_s: 0,
+                                    acceptance_radius_m: 1,
+                                    pass_radius_m: 0,
+                                    yaw_deg: 0,
+                                },
+                            },
+                        },
+                        current: true,
+                        autocontinue: true,
+                    },
+                ],
+            },
+        });
+        await vi.advanceTimersByTimeAsync(400);
+        await uploadPromise;
+
+        expect(mockState.liveVehicleState?.mode_name).toBe("Guided");
+        expect(mockState.liveSimulator?.state.target).toEqual(guidedTargetBeforeMissionUpdate);
+    });
+
+    it("a basic demo AUTO mission executes and disarms after landing", async () => {
+        vi.useFakeTimers();
+        const envelope = await openDemoLiveEnvelope();
+        const missionStates: SessionEvent<MissionState>[] = [];
+        const unlistenMission = listenMockEvent("mission://state", (payload) => {
+            missionStates.push(payload as SessionEvent<MissionState>);
+        });
+
+        const uploadPromise = invokeMockCommand("mission_upload", {
+            plan: {
+                items: [
+                    {
+                        command: {
+                            Nav: {
+                                Takeoff: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.397742,
+                                            longitude_deg: 8.545594,
+                                            relative_alt_m: 3,
+                                        },
+                                    },
+                                    pitch_deg: 15,
+                                },
+                            },
+                        },
+                        current: true,
+                        autocontinue: true,
+                    },
+                    {
+                        command: {
+                            Nav: {
+                                Waypoint: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.39776,
+                                            longitude_deg: 8.54561,
+                                            relative_alt_m: 3,
+                                        },
+                                    },
+                                    hold_time_s: 0,
+                                    acceptance_radius_m: 1,
+                                    pass_radius_m: 0,
+                                    yaw_deg: 0,
+                                },
+                            },
+                        },
+                        current: false,
+                        autocontinue: true,
+                    },
+                    {
+                        command: {
+                            Nav: {
+                                Land: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.39776,
+                                            longitude_deg: 8.54561,
+                                            relative_alt_m: 0,
+                                        },
+                                    },
+                                    abort_alt_m: 10,
+                                },
+                            },
+                        },
+                        current: false,
+                        autocontinue: true,
+                    },
+                ],
+            },
+        });
+        await vi.advanceTimersByTimeAsync(400);
+        await uploadPromise;
+
+        await invokeMockCommand("set_flight_mode", { customMode: 3 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+
+        await vi.advanceTimersByTimeAsync(10_000);
+        unlistenMission();
+
+        expect(mockState.liveVehicleState).toMatchObject({
+            armed: false,
+            mode_name: "Auto",
+            system_status: "standby",
+        });
+        expect(mockState.liveSimulator?.state.armed).toBe(false);
+        expect(mockState.liveSimulator?.state.position.relative_alt_m).toBe(0);
+        expect(missionStates.map((entry) => entry.envelope)).toEqual(expect.arrayContaining([envelope]));
+        expect(missionStates.map((entry) => entry.value.current_index)).toEqual(expect.arrayContaining([1, 2]));
+        expect(missionStates[missionStates.length - 1]?.value.current_index).toBeNull();
+    });
+
+    it("demo AUTO mission seeding keeps simulator mission runtime aligned with public mission state", async () => {
+        await openDemoLiveEnvelope();
+
+        const publicMission = mockState.liveMissionState;
+        const simulatorMission = mockState.liveSimulator?.state.mission;
+
+        expect(publicMission?.current_index).toBe(0);
+        expect(simulatorMission).toMatchObject({
+            current_index: publicMission?.current_index,
+            completed: false,
+            items: [
+                {
+                    kind: "takeoff",
+                    latitude_deg: 47.397742,
+                    longitude_deg: 8.545594,
+                    relative_alt_m: 20,
+                },
+                {
+                    kind: "waypoint",
+                    latitude_deg: 47.3989,
+                    longitude_deg: 8.5482,
+                    relative_alt_m: 30,
+                },
+            ],
+        });
+    });
+
+    it("AUTO mission change_speed updates simulator mission speed before the waypoint leg", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+
+        const uploadPromise = invokeMockCommand("mission_upload", {
+            plan: {
+                items: [
+                    {
+                        command: {
+                            Nav: {
+                                Takeoff: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.397742,
+                                            longitude_deg: 8.545594,
+                                            relative_alt_m: 3,
+                                        },
+                                    },
+                                    pitch_deg: 15,
+                                },
+                            },
+                        },
+                        current: true,
+                        autocontinue: true,
+                    },
+                    {
+                        command: {
+                            Do: {
+                                ChangeSpeed: {
+                                    speed_type: "Groundspeed",
+                                    speed_mps: 2,
+                                    throttle_pct: 50,
+                                },
+                            },
+                        },
+                        current: false,
+                        autocontinue: true,
+                    },
+                    {
+                        command: {
+                            Nav: {
+                                Waypoint: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.3982,
+                                            longitude_deg: 8.5461,
+                                            relative_alt_m: 3,
+                                        },
+                                    },
+                                    hold_time_s: 0,
+                                    acceptance_radius_m: 1,
+                                    pass_radius_m: 0,
+                                    yaw_deg: 0,
+                                },
+                            },
+                        },
+                        current: false,
+                        autocontinue: true,
+                    },
+                    {
+                        command: {
+                            Nav: {
+                                Land: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.3982,
+                                            longitude_deg: 8.5461,
+                                            relative_alt_m: 0,
+                                        },
+                                    },
+                                    abort_alt_m: 10,
+                                },
+                            },
+                        },
+                        current: false,
+                        autocontinue: true,
+                    },
+                ],
+            },
+        });
+        await vi.advanceTimersByTimeAsync(400);
+        await uploadPromise;
+
+        await invokeMockCommand("set_flight_mode", { customMode: 3 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        expect(mockState.liveSimulator?.state.mission.current_index).toBe(2);
+        expect(mockState.liveSimulator?.state.groundspeed_mps).toBeLessThanOrEqual(2);
+    });
+
+    it("unsupported AUTO mission commands emit status text", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+        const statusTextEvents: SessionEvent<{ available: boolean; complete: boolean; provenance: string; value: { entries: Array<{ text: string }> } }>[] = [];
+        const unlistenStatus = listenMockEvent("status_text://state", (payload) => {
+            statusTextEvents.push(payload as SessionEvent<{ available: boolean; complete: boolean; provenance: string; value: { entries: Array<{ text: string }> } }>);
+        });
+
+        const uploadPromise = invokeMockCommand("mission_upload", {
+            plan: {
+                items: [
+                    {
+                        command: {
+                            Nav: {
+                                Takeoff: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.397742,
+                                            longitude_deg: 8.545594,
+                                            relative_alt_m: 3,
+                                        },
+                                    },
+                                    pitch_deg: 15,
+                                },
+                            },
+                        },
+                        current: true,
+                        autocontinue: true,
+                    },
+                    {
+                        command: {
+                            Nav: {
+                                SplineWaypoint: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.3978,
+                                            longitude_deg: 8.54565,
+                                            relative_alt_m: 3,
+                                        },
+                                    },
+                                    hold_time_s: 0,
+                                },
+                            },
+                        },
+                        current: false,
+                        autocontinue: true,
+                    },
+                    {
+                        command: {
+                            Nav: {
+                                Land: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.3978,
+                                            longitude_deg: 8.54565,
+                                            relative_alt_m: 0,
+                                        },
+                                    },
+                                    abort_alt_m: 10,
+                                },
+                            },
+                        },
+                        current: false,
+                        autocontinue: true,
+                    },
+                ],
+            },
+        });
+        await vi.advanceTimersByTimeAsync(400);
+        await uploadPromise;
+
+        await invokeMockCommand("set_flight_mode", { customMode: 3 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+
+        await vi.advanceTimersByTimeAsync(10_000);
+        unlistenStatus();
+
+        const emittedTexts = statusTextEvents.flatMap((event) => event.value.value.entries.map((entry) => entry.text));
+        expect(emittedTexts.some((text) => text.includes("Spline Waypoint"))).toBe(true);
+    });
+
+    it("disconnect clears simulator state and stops demo timers", async () => {
+        vi.useFakeTimers();
+        const envelope = await openDemoLiveEnvelope();
+        const telemetryEvents: SessionEvent<any>[] = [];
+        const unlisten = listenMockEvent("telemetry://state", (payload) => {
+            telemetryEvents.push(payload as SessionEvent<any>);
+        });
+
+        expect(mockState.liveSimulator).not.toBeNull();
+        expect(mockState.demoTelemetryIntervalId).not.toBeNull();
+        expect(mockState.demoStatusIntervalId).not.toBeNull();
+
+        await vi.advanceTimersByTimeAsync(1_000);
+        const telemetryBeforeDisconnect = telemetryEvents.length;
+
+        await invokeMockCommand("disconnect_link", { request: { session_id: envelope.session_id } });
+        await vi.advanceTimersByTimeAsync(1_000);
+        unlisten();
+
+        expect(mockState.liveSimulator).toBeNull();
+        expect(mockState.demoTelemetryIntervalId).toBeNull();
+        expect(mockState.demoStatusIntervalId).toBeNull();
+        expect(telemetryBeforeDisconnect).toBeGreaterThan(0);
+        expect(telemetryEvents).toHaveLength(telemetryBeforeDisconnect);
+    });
+});
+
 describe("mock mission backend parity", () => {
     beforeEach(() => {
         getMockPlatformController().reset();
@@ -1219,6 +2121,53 @@ describe("mock setup/calibration/arming backend parity", () => {
         await expect(invokeMockCommand("calibrate_compass_start", { compassMask: 0 })).resolves.toBeUndefined();
     });
 
+    it("uses the shared compass calibration flow in the test profile with faster pacing", async () => {
+        vi.useFakeTimers();
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
+        });
+
+        const progress: Array<{ compass_id: number; completion_pct: number; status: string; attempt: number }> = [];
+        const reports: Array<{
+            compass_id: number;
+            status: string;
+            fitness: number;
+            ofs_x: number;
+            ofs_y: number;
+            ofs_z: number;
+            autosaved: boolean;
+        }> = [];
+        const unlisteners = [
+            listenMockEvent("compass://cal_progress", (payload) => {
+                progress.push(payload as { compass_id: number; completion_pct: number; status: string; attempt: number });
+            }),
+            listenMockEvent("compass://cal_report", (payload) => {
+                reports.push(payload as {
+                    compass_id: number;
+                    status: string;
+                    fitness: number;
+                    ofs_x: number;
+                    ofs_y: number;
+                    ofs_z: number;
+                    autosaved: boolean;
+                });
+            }),
+        ];
+
+        await expect(invokeMockCommand("calibrate_compass_start", { compassMask: 0 })).resolves.toBeUndefined();
+        await vi.advanceTimersByTimeAsync(80);
+        unlisteners.forEach((unlisten) => unlisten());
+
+        expect(progress).toEqual([
+            { compass_id: 1, completion_pct: 15, status: "waiting_to_start", attempt: 1 },
+            { compass_id: 1, completion_pct: 55, status: "running_step_one", attempt: 1 },
+            { compass_id: 1, completion_pct: 100, status: "success", attempt: 1 },
+        ]);
+        expect(reports).toEqual([
+            { compass_id: 1, status: "success", fitness: 12.5, ofs_x: 24, ofs_y: -11, ofs_z: 7, autosaved: true },
+        ]);
+    });
+
     it("reboots the vehicle when connected", async () => {
         await invokeMockCommand("connect_link", {
             request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
@@ -1259,6 +2208,75 @@ describe("mock setup/calibration/arming backend parity", () => {
         const live = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
         expect(live.param_store.params.ARMING_CHECK.value).toBe(0);
         expect(live.param_store.params.FS_THR_ENABLE.value).toBe(1);
+    });
+
+    it("emits cancelled progress when param_download_all is cancelled", async () => {
+        vi.useFakeTimers();
+        await invokeMockCommand("connect_link", {
+            request: {
+                transport: { kind: "udp", bind_addr: "0.0.0.0:14550" },
+                mockParamStore: {
+                    expected_count: 2,
+                    params: {
+                        ARMING_CHECK: { name: "ARMING_CHECK", value: 1, param_type: "uint8", index: 0 },
+                        FS_THR_ENABLE: { name: "FS_THR_ENABLE", value: 2, param_type: "uint8", index: 1 },
+                    },
+                },
+            },
+        });
+        const live = await invokeMockCommand<OpenSessionSnapshot>("open_session_snapshot", { sourceKind: "live" });
+        await invokeMockCommand("ack_session_snapshot", {
+            sessionId: live.envelope.session_id,
+            seekEpoch: live.envelope.seek_epoch,
+            resetRevision: live.envelope.reset_revision,
+        });
+        const progress: ParamProgress[] = [];
+        const unlisten = listenMockEvent("param://progress", (payload) => {
+            progress.push((payload as SessionEvent<ParamProgress>).value);
+        });
+
+        const downloadPromise = invokeMockCommand("param_download_all");
+        await vi.advanceTimersByTimeAsync(20);
+        await expect(invokeMockCommand("param_cancel")).resolves.toBeUndefined();
+        await expect(downloadPromise).rejects.toThrow("Param download cancelled.");
+        unlisten();
+
+        expect(progress).toEqual([
+            { downloading: { received: 1, expected: 2 } },
+            "cancelled",
+        ]);
+    });
+
+    it("returns single param_write results consistent with the stored value", async () => {
+        vi.useFakeTimers();
+        await invokeMockCommand("connect_link", {
+            request: {
+                transport: { kind: "udp", bind_addr: "0.0.0.0:14550" },
+                mockParamStore: {
+                    expected_count: 1,
+                    params: {
+                        ARMING_CHECK: { name: "ARMING_CHECK", value: 1, param_type: "uint8", index: 0 },
+                    },
+                },
+            },
+        });
+
+        const writePromise = invokeMockCommand<any>("param_write", { name: "ARMING_CHECK", value: 0 });
+        await vi.advanceTimersByTimeAsync(25);
+        await expect(writePromise).resolves.toEqual({
+            name: "ARMING_CHECK",
+            value: 0,
+            param_type: "uint8",
+            index: 0,
+        });
+
+        const live = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+        expect(live.param_store.params.ARMING_CHECK).toEqual({
+            name: "ARMING_CHECK",
+            value: 0,
+            param_type: "uint8",
+            index: 0,
+        });
     });
 
     it("parses .param files with the same frontend-shaped response contract as native", async () => {

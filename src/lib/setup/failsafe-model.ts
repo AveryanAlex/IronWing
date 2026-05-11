@@ -272,13 +272,13 @@ function buildRecoveryReasons(
 
   for (const name of requiredRows.numeric) {
     if (!hasParam(input.paramStore, name)) {
-      reasons.push(`${name} is unavailable for this vehicle scope.`);
+      reasons.push(`${name} is absent from the active parameter set.`);
     }
   }
 
   for (const name of requiredRows.enum) {
     if (!hasParam(input.paramStore, name)) {
-      reasons.push(`${name} is unavailable for this vehicle scope.`);
+      reasons.push(`${name} is absent from the active parameter set.`);
     } else if (!hasEnumMetadata(input.metadata, name)) {
       reasons.push(`${name} metadata is missing or malformed, so the purpose-built selector stays read-only.`);
     }
@@ -286,7 +286,7 @@ function buildRecoveryReasons(
 
   for (const name of requiredRows.bitmask ?? []) {
     if (!hasParam(input.paramStore, name)) {
-      reasons.push(`${name} is unavailable for this vehicle scope.`);
+      reasons.push(`${name} is absent from the active parameter set.`);
     } else if (!hasBitmaskMetadata(input.metadata, name)) {
       reasons.push(`${name} bitmask metadata is missing or malformed, so the purpose-built checklist stays read-only.`);
     }

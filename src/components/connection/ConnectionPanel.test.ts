@@ -130,6 +130,7 @@ function createMockService(overrides: Partial<SessionService> = {}) {
     serialPort: "",
     baud: 57600,
     selectedBtDevice: "",
+    demoVehiclePreset: "quadcopter",
     takeoffAlt: "10",
     followVehicle: true,
   };
@@ -171,6 +172,14 @@ function createMockService(overrides: Partial<SessionService> = {}) {
             kind: "serial" as const,
             port: value.port ?? "",
             baud: value.baud ?? descriptor.default_baud,
+          },
+        };
+      }
+      if (descriptor.kind === "demo") {
+        return {
+          transport: {
+            kind: "demo" as const,
+            vehicle_preset: value.demo_vehicle_preset ?? "quadcopter",
           },
         };
       }
@@ -328,6 +337,57 @@ describe("ConnectionPanel", () => {
     const advancedDetails = advancedSummary.closest("details") as HTMLDetailsElement | null;
     expect(advancedDetails?.open).toBe(false);
     expect(screen.getByTestId("connection-serial-baud")).toBeTruthy();
+  });
+
+  it("renders an actionable demo transport form and submits a demo connect request", async () => {
+    const { service } = createMockService({
+      loadConnectionForm: vi.fn(() => ({
+        mode: "demo",
+        udpBind: "0.0.0.0:14550",
+        tcpAddress: "127.0.0.1:5760",
+        serialPort: "",
+        baud: 57600,
+        selectedBtDevice: "",
+        demoVehiclePreset: "quadcopter",
+        takeoffAlt: "10",
+        followVehicle: true,
+      })),
+      availableTransportDescriptors: vi.fn(async () => [
+        {
+          kind: "demo",
+          label: "Demo vehicle",
+          available: true,
+          validation: {},
+        },
+      ]),
+    });
+    const store = createSessionStore(service);
+
+    await store.initialize();
+    render(withSessionContext(store, ConnectionPanel));
+
+    expect(screen.getByTestId("connection-transport-select")).toBeTruthy();
+    const demoPresetSelect = screen.getByTestId("connection-demo-preset") as HTMLSelectElement;
+    const connectButton = screen.getByTestId("connection-connect-btn");
+
+    expect(demoPresetSelect.value).toBe("quadcopter");
+    expect(connectButton).toBeTruthy();
+    expect(screen.queryByTestId("connection-udp-bind")).toBeNull();
+    expect(screen.queryByTestId("connection-tcp-address")).toBeNull();
+    expect(screen.queryByTestId("connection-serial-port")).toBeNull();
+
+    await fireEvent.change(demoPresetSelect, { target: { value: "airplane" } });
+    await fireEvent.click(connectButton);
+
+    expect(service.persistConnectionForm).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "demo", demoVehiclePreset: "airplane" }),
+    );
+
+    await waitFor(() => {
+      expect(service.connectSession).toHaveBeenCalledWith({
+        transport: { kind: "demo", vehicle_preset: "airplane" },
+      });
+    });
   });
 
   it("shows local validation failures inline without raising connection failure toasts", async () => {

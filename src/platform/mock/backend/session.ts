@@ -9,7 +9,7 @@ import {
     updateReplayStateForSpeed,
 } from "./logs";
 import { mockState, nextEnvelope, resetGuided, sweepExpiredPending } from "./runtime";
-import type { CommandArgs, SessionConnection, SessionEnvelope, MockPlatformEvent } from "./types";
+import type { CommandArgs, MockLiveStatusTextState, SessionConnection, SessionEnvelope, MockPlatformEvent } from "./types";
 
 function missingDomainValue() {
     return {
@@ -50,6 +50,19 @@ function liveBootstrapStatusTextDomain() {
     };
 }
 
+function liveStatusTextDomain(entries: MockLiveStatusTextState) {
+    return {
+        available: true,
+        complete: true,
+        provenance: "bootstrap" as const,
+        value: structuredClone(entries),
+    };
+}
+
+function cloneSeededLiveDomain<T>(value: T | null | undefined) {
+    return value ? structuredClone(value) : null;
+}
+
 export function openSessionSnapshotResult(sourceKind: "live" | "playback") {
     if (sourceKind === "playback" && !mockState.logOpen) {
         throw new Error("no log open");
@@ -82,10 +95,16 @@ export function openSessionSnapshotResult(sourceKind: "live" | "playback") {
                 vehicle_state: sourceKind === "playback" || !mockState.liveVehicleAvailable
                     ? null
                     : mockState.liveVehicleState,
-                home_position: null,
+                home_position: sourceKind === "playback" || !mockState.liveVehicleAvailable
+                    ? null
+                    : structuredClone(mockState.liveMissionHome),
             },
         },
-        telemetry: sourceKind === "playback" ? playbackTelemetryDomain() : mockState.liveVehicleAvailable ? liveBootstrapTelemetryDomain() : missingDomainValue(),
+        telemetry: sourceKind === "playback"
+            ? playbackTelemetryDomain()
+            : mockState.liveVehicleAvailable
+                ? cloneSeededLiveDomain(mockState.liveTelemetryDomain) ?? liveBootstrapTelemetryDomain()
+                : missingDomainValue(),
         mission_state: sourceKind === "playback"
             ? null
             : mockState.liveVehicleAvailable ? structuredClone(mockState.liveMissionState) : null,
@@ -97,13 +116,19 @@ export function openSessionSnapshotResult(sourceKind: "live" | "playback") {
             : mockState.liveVehicleAvailable ? structuredClone(mockState.liveParamProgress) : null,
         support: sourceKind === "playback"
             ? { available: false, complete: false, provenance: "playback", value: null }
-            : mockState.liveVehicleAvailable ? liveBootstrapNullDomain() : missingDomainValue(),
+            : mockState.liveVehicleAvailable
+                ? cloneSeededLiveDomain(mockState.liveSupportDomain) ?? liveBootstrapNullDomain()
+                : missingDomainValue(),
         sensor_health: sourceKind === "playback"
             ? { available: false, complete: false, provenance: "playback", value: null }
-            : mockState.liveVehicleAvailable ? liveBootstrapNullDomain() : missingDomainValue(),
+            : mockState.liveVehicleAvailable
+                ? cloneSeededLiveDomain(mockState.liveSensorHealthDomain) ?? liveBootstrapNullDomain()
+                : missingDomainValue(),
         configuration_facts: sourceKind === "playback"
             ? { available: false, complete: false, provenance: "playback", value: null }
-            : mockState.liveVehicleAvailable ? liveBootstrapNullDomain() : missingDomainValue(),
+            : mockState.liveVehicleAvailable
+                ? cloneSeededLiveDomain(mockState.liveConfigurationFactsDomain) ?? liveBootstrapNullDomain()
+                : missingDomainValue(),
         calibration: sourceKind === "playback"
             ? { available: false, complete: false, provenance: "playback", value: null }
             : mockState.liveVehicleAvailable ? liveBootstrapNullDomain() : missingDomainValue(),
@@ -117,7 +142,9 @@ export function openSessionSnapshotResult(sourceKind: "live" | "playback") {
                 provenance: "playback",
                 value: { entries: [] },
             }
-            : mockState.liveVehicleAvailable ? liveBootstrapStatusTextDomain() : missingDomainValue(),
+            : mockState.liveVehicleAvailable
+                ? (mockState.liveStatusText ? liveStatusTextDomain(mockState.liveStatusText) : liveBootstrapStatusTextDomain())
+                : missingDomainValue(),
         playback: { cursor_usec: sourceKind === "playback" ? mockState.playbackCursorUsec : null },
     };
 }

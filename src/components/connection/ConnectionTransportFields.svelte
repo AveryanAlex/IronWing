@@ -1,13 +1,19 @@
 <script lang="ts">
-import { type TransportDescriptor, type TransportType } from "../../transport";
+import { type DemoVehiclePreset, type TransportDescriptor, type TransportType } from "../../transport";
 import type { BluetoothDevice } from "../../telemetry";
 import type { SessionConnectionFormState } from "../../lib/platform/session";
 import type { ConnectionFieldErrors } from "../../lib/connection/connection-form";
 
 type Field = keyof Pick<
   SessionConnectionFormState,
-  "mode" | "udpBind" | "tcpAddress" | "serialPort" | "baud" | "selectedBtDevice"
+  "mode" | "udpBind" | "tcpAddress" | "serialPort" | "baud" | "selectedBtDevice" | "demoVehiclePreset"
 >;
+
+const demoVehiclePresetOptions: Array<{ value: DemoVehiclePreset; label: string }> = [
+  { value: "quadcopter", label: "Quadcopter" },
+  { value: "airplane", label: "Airplane" },
+  { value: "quadplane", label: "QuadPlane" },
+];
 
 let {
   form,
@@ -147,6 +153,33 @@ const iconButtonClass =
     {#if errors.udpBind}
       <p class="text-xs text-danger">{errors.udpBind}</p>
     {/if}
+  </div>
+{/if}
+
+{#if form.mode === "demo"}
+  <div class="space-y-1.5">
+    <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+      <label class="block min-w-0 space-y-1.5">
+        <span class="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">Demo vehicle</span>
+        <select
+          class={inputClass}
+          data-testid="connection-demo-preset"
+          disabled={formLocked}
+          name="demoVehiclePreset"
+          onchange={(event) =>
+            onFieldChange("demoVehiclePreset", (event.currentTarget as HTMLSelectElement).value as DemoVehiclePreset)}
+          value={form.demoVehiclePreset ?? "quadcopter"}
+        >
+          {#each demoVehiclePresetOptions as option (option.value)}
+            <option value={option.value}>{option.label}</option>
+          {/each}
+        </select>
+      </label>
+      {@render primaryActionButton()}
+    </div>
+    <p class="text-xs text-text-secondary">
+      Connect to an in-browser demo vehicle that mirrors ArduPilot SITL defaults for quick telemetry and mission walkthroughs.
+    </p>
   </div>
 {/if}
 

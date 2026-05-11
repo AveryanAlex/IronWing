@@ -9,6 +9,8 @@
     "remote-ui": "node scripts/remote-ui.mjs",
     "frontend:dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "demo:dev": "node scripts/demo-dev.mjs",
+    "demo:build": "node scripts/demo-build.mjs",
     "typecheck": "tsc --noEmit",
     "frontend:typecheck": "tsc --noEmit",
     "frontend:check": "svelte-check --tsconfig ./tsconfig.json",
@@ -25,6 +27,7 @@
     "test:watch": "vitest",
     "e2e": "node scripts/e2e-run.mjs e2e/smoke.spec.ts e2e/connect-telemetry.spec.ts e2e/logs-workspace.spec.ts e2e/parameter-workspace.spec.ts e2e/setup-workspace.spec.ts e2e/settings-actions.spec.ts e2e/responsive-shell.spec.ts e2e/invalid-udp-bind.spec.ts e2e/wrong-port-cancel.spec.ts",
     "e2e:headed": "node scripts/e2e-run.mjs --headed e2e/smoke.spec.ts e2e/connect-telemetry.spec.ts e2e/logs-workspace.spec.ts e2e/parameter-workspace.spec.ts e2e/setup-workspace.spec.ts e2e/settings-actions.spec.ts e2e/responsive-shell.spec.ts e2e/invalid-udp-bind.spec.ts e2e/wrong-port-cancel.spec.ts",
+    "e2e:demo": "VITE_IRONWING_MOCK_PROFILE=demo node scripts/e2e-run.mjs e2e/demo-simulator.spec.ts",
     "e2e:native": "node scripts/e2e-native.mjs"
   },
   "dependencies": {

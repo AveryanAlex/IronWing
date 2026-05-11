@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="IronWing favicon">
+  <rect width="64" height="64" rx="14" fill="#12171d" />
+  <path fill="#4cc2ff" d="M12 38 32 14l20 24-20 12z" />
+  <path fill="#f6fbff" d="M22 38h20L32 24z" opacity=".95" />
+</svg>
