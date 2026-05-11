@@ -163,6 +163,27 @@ describe("loadConnectionForm", () => {
     });
   });
 
+  it("normalizes persisted demo mode back to the current non-demo profile default", () => {
+    const nonDemoDefaults = resolveSessionConnectionDefaults({
+      VITE_IRONWING_SITL_MODE: "udp",
+    });
+    const storage = {
+      getItem: () =>
+        JSON.stringify({
+          mode: "demo",
+          demoVehiclePreset: "quadplane",
+          udpBind: "127.0.0.1:14551",
+          followVehicle: false,
+        }),
+    };
+
+    expect(loadConnectionForm(storage, nonDemoDefaults)).toMatchObject({
+      mode: nonDemoDefaults.mode,
+      udpBind: "127.0.0.1:14551",
+      followVehicle: false,
+    });
+  });
+
   it("normalizes persisted values and ignores invalid field types", () => {
     const storage = {
       getItem: () =>

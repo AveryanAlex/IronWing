@@ -289,6 +289,8 @@ function normalizeConnectionForm(raw: unknown, defaults: SessionConnectionFormSt
     normalized.demoVehiclePreset = isDemoVehiclePreset(normalized.demoVehiclePreset)
       ? normalized.demoVehiclePreset
       : defaults.demoVehiclePreset;
+  } else if (normalized.mode === "demo") {
+    normalized.mode = defaults.mode;
   }
 
   return normalized;
