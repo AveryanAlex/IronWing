@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath, URL } from "url";
-import svelteConfig from "./svelte.config";
 
 const platformDir =
   process.env.IRONWING_PLATFORM === "mock" ? "mock" : process.env.IRONWING_PLATFORM === "remote" ? "remote" : "tauri";
@@ -15,7 +14,7 @@ const serverHost =
       : "localhost";
 
 export default defineConfig({
-  plugins: [svelte(svelteConfig), tailwindcss()],
+  plugins: [svelte(), tailwindcss()],
   resolve: {
     alias: {
       "@platform/core": fileURLToPath(new URL(`src/platform/${platformDir}/core.ts`, import.meta.url)),
