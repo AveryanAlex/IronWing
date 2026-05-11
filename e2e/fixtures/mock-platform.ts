@@ -42,6 +42,7 @@ export const runtimeSelectors = {
 export const connectionSelectors = {
     statusText: '[data-testid="connection-status-text"]',
     transportSelect: '[data-testid="connection-transport-select"]',
+    demoPreset: '[data-testid="connection-demo-preset"]',
     tcpAddress: '[data-testid="connection-tcp-address"]',
     connectButton: '[data-testid="connection-connect-btn"]',
     cancelButton: '[data-testid="connection-cancel-btn"]',
