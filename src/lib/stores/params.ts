@@ -220,7 +220,7 @@ export function createParamsStore(
     store.update((state) => {
       const nextPhase = resolveDomainPhase(sessionState, nextEnvelope, nextStore, state.streamReady);
       const scopeChangedFromActive = envelopeChanged && state.activeEnvelope !== null;
-      const clearedScopeWarning = scopeChangedFromActive ? buildScopeClearWarning(nextEnvelope) : state.scopeClearWarning;
+      const clearedScopeWarning = resolveScopeClearWarning(state, nextEnvelope, scopeChangedFromActive);
 
       if (!nextEnvelope) {
         return {
@@ -907,6 +907,25 @@ function buildScopeClearWarning(nextEnvelope: SessionEnvelope | null): string {
   }
 
   return "Parameter scope changed. Staged edits were cleared; review current values and restage against the active session.";
+}
+
+function hasScopedWorkToClear(state: ParamsStoreState): boolean {
+  return Object.keys(state.stagedEdits).length > 0
+    || Object.keys(state.retainedFailures).length > 0
+    || state.applyPhase === "applying"
+    || state.applyProgress !== null;
+}
+
+function resolveScopeClearWarning(
+  state: ParamsStoreState,
+  nextEnvelope: SessionEnvelope | null,
+  scopeChangedFromActive: boolean,
+): string | null {
+  if (!scopeChangedFromActive) {
+    return state.scopeClearWarning;
+  }
+
+  return hasScopedWorkToClear(state) ? buildScopeClearWarning(nextEnvelope) : null;
 }
 
 function reconcileBatchWriteResults(

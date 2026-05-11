@@ -384,6 +384,37 @@ describe("createParamsStore", () => {
     expect(state.lastNotice).toBeNull();
   });
 
+  it("does not warn about cleared staged edits when a clean scope changes", async () => {
+    const firstSnapshot = createSnapshot({
+      envelope: createEnvelope("session-1"),
+    });
+    const secondSnapshot = createSnapshot({
+      envelope: createEnvelope("session-2", { reset_revision: 1 }),
+      param_store: createParamStore({
+        params: {
+          ARMING_CHECK: { name: "ARMING_CHECK", value: 6, param_type: "uint8", index: 0 },
+        },
+        expected_count: 1,
+      }),
+    });
+    const { service: sessionService } = createSessionService([firstSnapshot, secondSnapshot]);
+    const paramsHarness = createParamsService(null);
+    const sessionStore = createSessionStore(sessionService);
+    const paramStore = createParamsStore(sessionStore, paramsHarness.service);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+    await waitForMetadata(paramStore);
+    await sessionStore.bootstrapSource("live");
+    await flush();
+
+    const state = get(paramStore);
+    expect(state.activeEnvelope?.session_id).toBe("session-2");
+    expect(state.stagedEdits).toEqual({});
+    expect(state.retainedFailures).toEqual({});
+    expect(state.scopeClearWarning).toBeNull();
+  });
+
   it("keeps raw parameter visibility when metadata is unavailable", async () => {
     const { service: sessionService } = createSessionService([createSnapshot()]);
     const { service: paramsService } = createParamsService(null);
