@@ -2,12 +2,17 @@ import type { DomainProvenance } from "../../../../lib/domain-status";
 import type { TelemetryDomain } from "../../../../telemetry";
 import type { DemoVehiclePreset } from "../../../../transport";
 import { createInitialSimVehicle } from "./fixtures";
+import { setMissionCurrentIndex } from "./mission";
 import { advanceSimVehicle } from "./step";
 import { telemetryDomainFromSimVehicle } from "./telemetry";
-import type { DemoSimulatorRuntime } from "./types";
+import type { DemoSimulatorRuntime, SimMissionRuntime } from "./types";
 import type { MockLiveVehicleState } from "../types";
 
 const RTL_RETURN_ALT_M = 15;
+
+function missionControlsTarget(modeName: string) {
+  return modeName.trim().toUpperCase() === "AUTO";
+}
 
 export function createDemoSimulator(
   preset: DemoVehiclePreset,
@@ -47,22 +52,63 @@ export function telemetryFromSimulator(
 export function advanceDemoSimulator(
   simulator: DemoSimulatorRuntime,
   nowMsec = Date.now(),
-): DemoSimulatorRuntime {
+): { simulator: DemoSimulatorRuntime; mission_current_changed: boolean; status_notes: string[] } {
   if (!Number.isFinite(nowMsec) || nowMsec <= simulator.last_tick_msec) {
-    return simulator;
+    return { simulator, mission_current_changed: false, status_notes: [] };
   }
 
   if (!simulator.state.connected || !simulator.state.armed) {
     return {
-      ...simulator,
-      last_tick_msec: nowMsec,
+      simulator: {
+        ...simulator,
+        last_tick_msec: nowMsec,
+      },
+      mission_current_changed: false,
+      status_notes: [],
     };
   }
 
-  const { state } = advanceSimVehicle(simulator.state, (nowMsec - simulator.last_tick_msec) / 1_000);
+  const nextStep = advanceSimVehicle(simulator.state, (nowMsec - simulator.last_tick_msec) / 1_000);
   return {
-    state,
+    simulator: {
+      state: nextStep.state,
+      last_tick_msec: nowMsec,
+    },
+    mission_current_changed: nextStep.mission_current_changed,
+    status_notes: nextStep.status_notes,
+  };
+}
+
+export function setDemoSimulatorMission(
+  simulator: DemoSimulatorRuntime,
+  mission: SimMissionRuntime,
+  currentIndex = mission.current_index,
+  nowMsec = Date.now(),
+): DemoSimulatorRuntime {
+  return {
+    ...simulator,
     last_tick_msec: nowMsec,
+    state: {
+      ...simulator.state,
+      mission: setMissionCurrentIndex(mission, currentIndex),
+      target: missionControlsTarget(simulator.state.mode_name) ? null : simulator.state.target,
+    },
+  };
+}
+
+export function setDemoSimulatorMissionCurrentIndex(
+  simulator: DemoSimulatorRuntime,
+  currentIndex: number | null,
+  nowMsec = Date.now(),
+): DemoSimulatorRuntime {
+  return {
+    ...simulator,
+    last_tick_msec: nowMsec,
+    state: {
+      ...simulator.state,
+      mission: setMissionCurrentIndex(simulator.state.mission, currentIndex),
+      target: missionControlsTarget(simulator.state.mode_name) ? null : simulator.state.target,
+    },
   };
 }
 

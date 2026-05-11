@@ -1,4 +1,5 @@
 import type { DemoVehiclePreset } from "../../../../transport";
+import { normalizeMissionPlan } from "./mission";
 import type { SimBattery, SimMissionRuntime, SimVehicleState } from "./types";
 
 function createBattery(): SimBattery {
@@ -15,17 +16,28 @@ function createBattery(): SimBattery {
 }
 
 function createMission(position: SimVehicleState["position"]): SimMissionRuntime {
-  return {
-    current_index: 0,
+  return normalizeMissionPlan({
     items: [
       {
-        kind: "takeoff",
-        latitude_deg: position.latitude_deg,
-        longitude_deg: position.longitude_deg,
-        relative_alt_m: 20,
+        command: {
+          Nav: {
+            Takeoff: {
+              position: {
+                RelHome: {
+                  latitude_deg: position.latitude_deg,
+                  longitude_deg: position.longitude_deg,
+                  relative_alt_m: 20,
+                },
+              },
+              pitch_deg: 15,
+            },
+          },
+        },
+        current: true,
+        autocontinue: true,
       },
     ],
-  };
+  });
 }
 
 export function createInitialSimVehicle(preset: DemoVehiclePreset): SimVehicleState {

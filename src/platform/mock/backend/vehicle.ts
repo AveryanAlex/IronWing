@@ -4,11 +4,13 @@ import { isDemoProfile } from "./profile";
 import { clearDemoIntervals, mockState, requireLiveEnvelope, resetGuided } from "./runtime";
 import { applyMockMissionState } from "./mission";
 import { applyMockParamState } from "./params";
+import { normalizeMissionPlan } from "./vehicle-sim/mission";
 import {
   createDemoSimulator,
   setDemoSimulatorArmedState,
   setDemoSimulatorHoldTarget,
   setDemoSimulatorLandTarget,
+  setDemoSimulatorMission,
   setDemoSimulatorMode,
   setDemoSimulatorRtlTarget,
   telemetryFromSimulator,
@@ -214,7 +216,11 @@ function seededDemoTransportDescriptor(): TransportDescriptor {
 
 function setDemoSeedState(preset: DemoVehiclePreset) {
   const fixture = demoFixtureForPreset(preset);
-  const simulator = createDemoSimulator(preset);
+  const simulator = setDemoSimulatorMission(
+    createDemoSimulator(preset),
+    normalizeMissionPlan(fixture.missionState.plan),
+    fixture.missionState.current_index,
+  );
   mockState.liveSimulator = simulator;
   applyMockLiveVehicleState(vehicleStateFromSimulator(simulator, fixture.vehicleState));
   mockState.liveMissionHome = fixture.homePosition;

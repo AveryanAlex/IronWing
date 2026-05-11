@@ -34,15 +34,26 @@ export type SimTarget = {
 };
 
 export type SimMissionItem = {
-  kind: "takeoff" | "waypoint";
+  kind: "takeoff" | "waypoint" | "land";
   latitude_deg: number;
   longitude_deg: number;
   relative_alt_m: number;
+} | {
+  kind: "rtl";
+} | {
+  kind: "change_speed";
+  speed_mps: number;
+} | {
+  kind: "unsupported";
+  note: string;
 };
 
 export type SimMissionRuntime = {
   items: SimMissionItem[];
-  current_index: number;
+  current_index: number | null;
+  completed: boolean;
+  speed_mps: number;
+  unsupported_notes: string[];
 };
 
 export type SimVehicleState = {
@@ -81,6 +92,8 @@ export type SimVehicleState = {
 export type SimStepResult = {
   state: SimVehicleState;
   appliedDtS: number;
+  mission_current_changed: boolean;
+  status_notes: string[];
 };
 
 export type DemoSimulatorRuntime = {

@@ -1338,6 +1338,343 @@ describe("mock profile backend parity", () => {
         expect(mockState.liveSimulator?.state.climb_rate_mps).toBe(0);
     });
 
+    it("mission management preserves active non-AUTO simulator targets", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+
+        await invokeMockCommand("set_flight_mode", { customMode: 4 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+        await invokeMockCommand("start_guided_session", {
+            request: { session: { kind: "goto", latitude_deg: 47.3982, longitude_deg: 8.5461, altitude_m: 12 } },
+        });
+
+        const guidedTargetBeforeMissionUpdate = structuredClone(mockState.liveSimulator?.state.target);
+
+        const uploadPromise = invokeMockCommand("mission_upload", {
+            plan: {
+                items: [
+                    {
+                        command: {
+                            Nav: {
+                                Waypoint: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.399,
+                                            longitude_deg: 8.547,
+                                            relative_alt_m: 20,
+                                        },
+                                    },
+                                    hold_time_s: 0,
+                                    acceptance_radius_m: 1,
+                                    pass_radius_m: 0,
+                                    yaw_deg: 0,
+                                },
+                            },
+                        },
+                        current: true,
+                        autocontinue: true,
+                    },
+                ],
+            },
+        });
+        await vi.advanceTimersByTimeAsync(400);
+        await uploadPromise;
+
+        expect(mockState.liveVehicleState?.mode_name).toBe("Guided");
+        expect(mockState.liveSimulator?.state.target).toEqual(guidedTargetBeforeMissionUpdate);
+    });
+
+    it("a basic demo AUTO mission executes and disarms after landing", async () => {
+        vi.useFakeTimers();
+        const envelope = await openDemoLiveEnvelope();
+        const missionStates: SessionEvent<MissionState>[] = [];
+        const unlistenMission = listenMockEvent("mission://state", (payload) => {
+            missionStates.push(payload as SessionEvent<MissionState>);
+        });
+
+        const uploadPromise = invokeMockCommand("mission_upload", {
+            plan: {
+                items: [
+                    {
+                        command: {
+                            Nav: {
+                                Takeoff: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.397742,
+                                            longitude_deg: 8.545594,
+                                            relative_alt_m: 3,
+                                        },
+                                    },
+                                    pitch_deg: 15,
+                                },
+                            },
+                        },
+                        current: true,
+                        autocontinue: true,
+                    },
+                    {
+                        command: {
+                            Nav: {
+                                Waypoint: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.39776,
+                                            longitude_deg: 8.54561,
+                                            relative_alt_m: 3,
+                                        },
+                                    },
+                                    hold_time_s: 0,
+                                    acceptance_radius_m: 1,
+                                    pass_radius_m: 0,
+                                    yaw_deg: 0,
+                                },
+                            },
+                        },
+                        current: false,
+                        autocontinue: true,
+                    },
+                    {
+                        command: {
+                            Nav: {
+                                Land: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.39776,
+                                            longitude_deg: 8.54561,
+                                            relative_alt_m: 0,
+                                        },
+                                    },
+                                    abort_alt_m: 10,
+                                },
+                            },
+                        },
+                        current: false,
+                        autocontinue: true,
+                    },
+                ],
+            },
+        });
+        await vi.advanceTimersByTimeAsync(400);
+        await uploadPromise;
+
+        await invokeMockCommand("set_flight_mode", { customMode: 3 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+
+        await vi.advanceTimersByTimeAsync(10_000);
+        unlistenMission();
+
+        expect(mockState.liveVehicleState).toMatchObject({
+            armed: false,
+            mode_name: "Auto",
+            system_status: "standby",
+        });
+        expect(mockState.liveSimulator?.state.armed).toBe(false);
+        expect(mockState.liveSimulator?.state.position.relative_alt_m).toBe(0);
+        expect(missionStates.map((entry) => entry.envelope)).toEqual(expect.arrayContaining([envelope]));
+        expect(missionStates.map((entry) => entry.value.current_index)).toEqual(expect.arrayContaining([1, 2]));
+        expect(missionStates[missionStates.length - 1]?.value.current_index).toBeNull();
+    });
+
+    it("demo AUTO mission seeding keeps simulator mission runtime aligned with public mission state", async () => {
+        await openDemoLiveEnvelope();
+
+        const publicMission = mockState.liveMissionState;
+        const simulatorMission = mockState.liveSimulator?.state.mission;
+
+        expect(publicMission?.current_index).toBe(0);
+        expect(simulatorMission).toMatchObject({
+            current_index: publicMission?.current_index,
+            completed: false,
+            items: [
+                {
+                    kind: "takeoff",
+                    latitude_deg: 47.397742,
+                    longitude_deg: 8.545594,
+                    relative_alt_m: 20,
+                },
+                {
+                    kind: "waypoint",
+                    latitude_deg: 47.3989,
+                    longitude_deg: 8.5482,
+                    relative_alt_m: 30,
+                },
+            ],
+        });
+    });
+
+    it("AUTO mission change_speed updates simulator mission speed before the waypoint leg", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+
+        const uploadPromise = invokeMockCommand("mission_upload", {
+            plan: {
+                items: [
+                    {
+                        command: {
+                            Nav: {
+                                Takeoff: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.397742,
+                                            longitude_deg: 8.545594,
+                                            relative_alt_m: 3,
+                                        },
+                                    },
+                                    pitch_deg: 15,
+                                },
+                            },
+                        },
+                        current: true,
+                        autocontinue: true,
+                    },
+                    {
+                        command: {
+                            Do: {
+                                ChangeSpeed: {
+                                    speed_type: "Groundspeed",
+                                    speed_mps: 2,
+                                    throttle_pct: 50,
+                                },
+                            },
+                        },
+                        current: false,
+                        autocontinue: true,
+                    },
+                    {
+                        command: {
+                            Nav: {
+                                Waypoint: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.3982,
+                                            longitude_deg: 8.5461,
+                                            relative_alt_m: 3,
+                                        },
+                                    },
+                                    hold_time_s: 0,
+                                    acceptance_radius_m: 1,
+                                    pass_radius_m: 0,
+                                    yaw_deg: 0,
+                                },
+                            },
+                        },
+                        current: false,
+                        autocontinue: true,
+                    },
+                    {
+                        command: {
+                            Nav: {
+                                Land: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.3982,
+                                            longitude_deg: 8.5461,
+                                            relative_alt_m: 0,
+                                        },
+                                    },
+                                    abort_alt_m: 10,
+                                },
+                            },
+                        },
+                        current: false,
+                        autocontinue: true,
+                    },
+                ],
+            },
+        });
+        await vi.advanceTimersByTimeAsync(400);
+        await uploadPromise;
+
+        await invokeMockCommand("set_flight_mode", { customMode: 3 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        expect(mockState.liveSimulator?.state.mission.current_index).toBe(2);
+        expect(mockState.liveSimulator?.state.groundspeed_mps).toBeLessThanOrEqual(2);
+    });
+
+    it("unsupported AUTO mission commands emit status text", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+        const statusTextEvents: SessionEvent<{ available: boolean; complete: boolean; provenance: string; value: { entries: Array<{ text: string }> } }>[] = [];
+        const unlistenStatus = listenMockEvent("status_text://state", (payload) => {
+            statusTextEvents.push(payload as SessionEvent<{ available: boolean; complete: boolean; provenance: string; value: { entries: Array<{ text: string }> } }>);
+        });
+
+        const uploadPromise = invokeMockCommand("mission_upload", {
+            plan: {
+                items: [
+                    {
+                        command: {
+                            Nav: {
+                                Takeoff: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.397742,
+                                            longitude_deg: 8.545594,
+                                            relative_alt_m: 3,
+                                        },
+                                    },
+                                    pitch_deg: 15,
+                                },
+                            },
+                        },
+                        current: true,
+                        autocontinue: true,
+                    },
+                    {
+                        command: {
+                            Nav: {
+                                SplineWaypoint: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.3978,
+                                            longitude_deg: 8.54565,
+                                            relative_alt_m: 3,
+                                        },
+                                    },
+                                    hold_time_s: 0,
+                                },
+                            },
+                        },
+                        current: false,
+                        autocontinue: true,
+                    },
+                    {
+                        command: {
+                            Nav: {
+                                Land: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.3978,
+                                            longitude_deg: 8.54565,
+                                            relative_alt_m: 0,
+                                        },
+                                    },
+                                    abort_alt_m: 10,
+                                },
+                            },
+                        },
+                        current: false,
+                        autocontinue: true,
+                    },
+                ],
+            },
+        });
+        await vi.advanceTimersByTimeAsync(400);
+        await uploadPromise;
+
+        await invokeMockCommand("set_flight_mode", { customMode: 3 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+
+        await vi.advanceTimersByTimeAsync(10_000);
+        unlistenStatus();
+
+        const emittedTexts = statusTextEvents.flatMap((event) => event.value.value.entries.map((entry) => entry.text));
+        expect(emittedTexts.some((text) => text.includes("Spline Waypoint"))).toBe(true);
+    });
+
     it("disconnect clears simulator state and stops demo timers", async () => {
         vi.useFakeTimers();
         const envelope = await openDemoLiveEnvelope();
