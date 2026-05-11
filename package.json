@@ -9,6 +9,7 @@
     "remote-ui": "node scripts/remote-ui.mjs",
     "frontend:dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "demo:dev": "node scripts/demo-dev.mjs",
     "demo:build": "node scripts/demo-build.mjs",
     "typecheck": "tsc --noEmit",
     "frontend:typecheck": "tsc --noEmit",
