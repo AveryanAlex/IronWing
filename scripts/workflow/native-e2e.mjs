@@ -19,7 +19,7 @@ export function nativeE2eApplicationPath(
   { platform = process.platform, cargoTargetDir } = {},
 ) {
   const executableName = platform === "win32" ? `${mainBinaryName}.exe` : mainBinaryName;
-  const baseDir = cargoTargetDir ?? path.join(projectRoot, "src-tauri", "target");
+  const baseDir = cargoTargetDir ?? path.join(projectRoot, "target");
 
   return path.join(baseDir, "debug", executableName);
 }

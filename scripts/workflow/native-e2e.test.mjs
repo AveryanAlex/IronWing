@@ -26,13 +26,13 @@ describe("nativeE2eApplicationPath", () => {
   it("resolves the Linux debug binary path from the Tauri main binary name", () => {
     expect(
       nativeE2eApplicationPath("/tmp/ironwing", "ironwing-app", { platform: "linux" }),
-    ).toBe(path.join("/tmp/ironwing", "src-tauri", "target", "debug", "ironwing-app"));
+    ).toBe(path.join("/tmp/ironwing", "target", "debug", "ironwing-app"));
   });
 
   it("adds the Windows executable suffix when needed", () => {
     expect(
       nativeE2eApplicationPath("C:/IronWing", "ironwing-app", { platform: "win32" }),
-    ).toBe(path.join("C:/IronWing", "src-tauri", "target", "debug", "ironwing-app.exe"));
+    ).toBe(path.join("C:/IronWing", "target", "debug", "ironwing-app.exe"));
   });
 
   it("prefers an explicit cargo target directory when one is configured", () => {
