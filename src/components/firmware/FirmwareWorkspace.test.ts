@@ -17,11 +17,13 @@ import type {
 } from "../../firmware";
 import { createShellChromeState, type ShellChromeState } from "../../app/shell/chrome-state";
 import type { FirmwareFileIo } from "../../lib/firmware-file-io";
+import { missingDomainValue } from "../../lib/domain-status";
 import {
   computeSerialReadinessToken,
   type FirmwareService,
 } from "../../lib/platform/firmware";
 import { createFirmwareWorkspaceStore } from "../../lib/stores/firmware-workspace";
+import { withSessionContext } from "../../test/context-harnesses";
 import FirmwareWorkspace from "./FirmwareWorkspace.svelte";
 import { firmwareWorkspaceTestIds } from "./firmware-workspace-test-ids";
 
@@ -221,13 +223,58 @@ async function renderWorkspace(options: {
   service?: FirmwareService;
   fileIo?: FirmwareFileIo;
   chromeStore?: Writable<ShellChromeState>;
+  activeSource?: "live" | "playback";
 } = {}) {
   const service = options.service ?? createService();
   const fileIo = options.fileIo ?? createFileIo();
   const chromeStore = options.chromeStore ?? createResponsiveChromeStore(1440, 900, "wide");
   const store = createFirmwareWorkspaceStore(service, { sessionPollMs: 0 });
+  const sessionStore = {
+    subscribe: writable({
+      hydrated: true,
+      lastPhase: "ready",
+      lastError: null,
+      activeEnvelope: {
+        session_id: `${options.activeSource ?? "live"}-session`,
+        source_kind: options.activeSource ?? "live",
+        seek_epoch: 0,
+        reset_revision: 0,
+      },
+      activeSource: options.activeSource ?? "live",
+      sessionDomain: missingDomainValue("bootstrap"),
+      telemetryDomain: missingDomainValue("bootstrap"),
+      support: missingDomainValue("bootstrap"),
+      sensorHealth: missingDomainValue("bootstrap"),
+      configurationFacts: missingDomainValue("bootstrap"),
+      calibration: missingDomainValue("bootstrap"),
+      guided: missingDomainValue("bootstrap"),
+      statusText: missingDomainValue("bootstrap"),
+      bootstrap: {
+        missionState: null,
+        paramStore: null,
+        paramProgress: null,
+        playbackCursorUsec: null,
+      },
+      connectionForm: {
+        mode: "udp",
+        udpBind: "0.0.0.0:14550",
+        tcpAddress: "127.0.0.1:5760",
+        serialPort: "",
+        baud: 57600,
+        selectedBtDevice: "",
+        takeoffAlt: "10",
+        followVehicle: true,
+      },
+      transportDescriptors: [],
+      serialPorts: [],
+      availableModes: [],
+      btDevices: [],
+      btScanning: false,
+      optimisticConnection: null,
+    }).subscribe,
+  } as any;
 
-  render(FirmwareWorkspace, {
+  render(withSessionContext(sessionStore, FirmwareWorkspace), {
     props: {
       store,
       service,
@@ -308,6 +355,19 @@ describe("FirmwareWorkspace", () => {
       expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedSourceState).textContent).toContain("cube-custom.apj");
       expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(false);
     });
+  });
+
+  it("replay-readonly disables firmware start surfaces and shows the read-only banner", async () => {
+    await renderWorkspace({ activeSource: "playback" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("firmware-replay-readonly-banner").textContent).toContain("Replay is read-only");
+    });
+
+    expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(true);
+
+    await openRecoveryMode();
+    expect((screen.getByTestId(firmwareWorkspaceTestIds.startRecovery) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("disables start when the selected manual target is hidden by the current search filter", async () => {

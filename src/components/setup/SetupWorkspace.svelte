@@ -136,6 +136,14 @@ function clearCheckpoint() {
 >
   <SetupCheckpointBanner checkpoint={view.checkpoint} onClear={clearCheckpoint} />
 
+  <div aria-hidden="true" class="hidden">
+    <span data-testid={setupWorkspaceTestIds.state}>{view.stateText}</span>
+    <span data-testid={setupWorkspaceTestIds.scope}>{view.scopeText}</span>
+    <span data-testid={setupWorkspaceTestIds.metadata}>{view.metadataText}</span>
+    <span data-testid={setupWorkspaceTestIds.progress}>{view.progressText}</span>
+    <span data-testid={setupWorkspaceTestIds.notice}>{view.noticeText ?? ""}</span>
+  </div>
+
   <div
     class="setup-workspace-layout"
     class:setup-workspace-layout--phone={isPhoneTier}

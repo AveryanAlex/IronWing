@@ -7,6 +7,43 @@ import {
   vehicleTakeoff,
 } from "./backend/guided";
 import {
+  closeMockLog,
+  cancelLogLibraryOperation,
+  emitProgressEvent,
+  exportLog,
+  exportLogCsv,
+  getActiveLogSummary,
+  getFlightPath,
+  getFlightSummary,
+  getLogFormatAdapters,
+  getLogLibraryCatalog,
+  getRecordingSettings,
+  getRecordingStatus,
+  getSeededLogEntry,
+  getSeededLogPickerFile,
+  listLogLibrary,
+  openMockLogWithProgress,
+  playbackStateEvent,
+  queryChartSeries,
+  queryLogMessages,
+  queryRawMessages,
+  registerLogLibraryEntry,
+  registerLogLibraryEntryFromPicker,
+  relinkLogLibraryEntry,
+  reindexLogLibraryEntry,
+  removeLogLibraryEntry,
+  resetLogsMockState,
+  seedLogLibrary as seedMockLogLibrary,
+  setLogLibraryCatalog as setMockLogLibraryCatalog,
+  setRecordingSettings as writeMockRecordingSettings,
+  setRecordingStatus as writeMockRecordingStatus,
+  setReplayState as writeMockReplayState,
+  startRecording,
+  stopRecording,
+  getTelemetryTrack,
+} from "./backend/logs";
+import type { RecordingSettings } from "../../recording";
+import {
   defaultFirmwareCatalogTargets,
   defaultRecoveryCatalogTargets,
   mockDfuScanResult,
@@ -53,8 +90,16 @@ import {
   mockState,
   resetGuided,
   resetMockState,
+  ensureMockLiveWriteAllowed,
 } from "./backend/runtime";
-import { ackSessionSnapshotResult, openSessionSnapshotResult, playbackSeekResult } from "./backend/session";
+import {
+  ackSessionSnapshotResult,
+  openSessionSnapshotResult,
+  playbackPauseResult,
+  playbackPlayResult,
+  playbackSeekResult,
+  playbackSetSpeedResult,
+} from "./backend/session";
 import {
   applyMockLiveVehicleState,
   availableMessageRates,
@@ -98,6 +143,7 @@ export type {
   MockPlatformController,
   MockPlatformEvent,
 } from "./backend/types";
+export type { MockLogSeedPreset } from "./backend/logs";
 
 declare global {
   interface Window {
@@ -136,6 +182,7 @@ function validateNativeSettingsCommand(cmd: string, args: CommandArgs) {
       validateSetTelemetryRateArgs(args);
       return;
     case "set_message_rate":
+      ensureMockLiveWriteAllowed("set_message_rate");
       requireConnectedVehicle();
       validateSetMessageRateArgs(args);
       return;
@@ -315,8 +362,128 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
       emitMany(events);
       return result;
     }
+    case "playback_play": {
+      const { state, events } = playbackPlayResult();
+      emitMany(events);
+      return state;
+    }
+    case "playback_pause": {
+      const { state, events } = playbackPauseResult();
+      emitMany(events);
+      return state;
+    }
+    case "playback_set_speed": {
+      const { state, events } = playbackSetSpeedResult(args);
+      emitMany(events);
+      return state;
+    }
+    case "playback_stop": {
+      if (!mockState.logOpen) {
+        throw new Error("no log open");
+      }
+      if (!mockState.playbackEnvelope) {
+        throw new Error("playback session is not active");
+      }
+      const playbackEnvelope = mockState.playbackEnvelope;
+      mockState.logOpen = false;
+      mockState.playbackEnvelope = null;
+      mockState.pendingPlaybackEnvelope = null;
+      mockState.playbackCursorUsec = null;
+      const idleState = closeMockLog();
+      emitEvent("playback://state", { envelope: playbackEnvelope, value: idleState });
+      if (mockState.liveEnvelope && mockState.liveVehicleState) {
+        emitEvent("session://state", liveSessionStreamEvent(mockState.liveVehicleState).payload);
+      }
+      return idleState;
+    }
+    case "log_format_adapters":
+      return getLogFormatAdapters();
+    case "log_library_list":
+      return listLogLibrary();
+    case "log_library_register": {
+      const path = typeof args?.path === "string" ? args.path : null;
+      if (!path) {
+        throw new Error("missing or invalid log_library_register.path");
+      }
+      const { entry, events } = registerLogLibraryEntry(path);
+      emitMany(events);
+      return entry;
+    }
+    case "log_library_register_open_file": {
+      return registerLogLibraryEntryFromPicker().then((result: Awaited<ReturnType<typeof registerLogLibraryEntryFromPicker>>) => {
+        if (!result) {
+          return null;
+        }
+        emitMany(result.events);
+        return result.entry;
+      });
+    }
+    case "log_library_remove": {
+      const entryId = typeof args?.entryId === "string" ? args.entryId : null;
+      if (!entryId) {
+        throw new Error("missing or invalid log_library_remove.entryId");
+      }
+      return removeLogLibraryEntry(entryId);
+    }
+    case "log_library_relink": {
+      const entryId = typeof args?.entryId === "string" ? args.entryId : null;
+      const path = typeof args?.path === "string" ? args.path : null;
+      if (!entryId) {
+        throw new Error("missing or invalid log_library_relink.entryId");
+      }
+      if (!path) {
+        throw new Error("missing or invalid log_library_relink.path");
+      }
+      const { entry, events } = relinkLogLibraryEntry(entryId, path);
+      emitMany(events);
+      return entry;
+    }
+    case "log_library_reindex": {
+      const entryId = typeof args?.entryId === "string" ? args.entryId : null;
+      if (!entryId) {
+        throw new Error("missing or invalid log_library_reindex.entryId");
+      }
+      const { entry, events } = reindexLogLibraryEntry(entryId);
+      emitMany(events);
+      return entry;
+    }
+    case "log_library_cancel":
+      return cancelLogLibraryOperation();
+    case "log_raw_messages_query":
+      return queryRawMessages(args);
+    case "log_chart_series_query":
+      return queryChartSeries(args);
+    case "log_export": {
+      const { events, result } = exportLog(args);
+      emitMany(events);
+      return result;
+    }
+    case "log_get_summary":
+      return getActiveLogSummary();
+    case "log_query":
+      return queryLogMessages(args);
+    case "log_get_flight_path":
+      return getFlightPath(args);
+    case "log_get_telemetry_track":
+      return getTelemetryTrack(args);
+    case "log_get_flight_summary":
+      return getFlightSummary();
+    case "log_export_csv": {
+      const { events, rowsWritten } = exportLogCsv(args);
+      emitMany(events);
+      return rowsWritten;
+    }
     case "recording_status":
-      return "idle";
+      return getRecordingStatus();
+    case "recording_settings_read":
+      return getRecordingSettings();
+    case "recording_settings_write":
+      return writeMockRecordingSettings(args?.settings as RecordingSettings);
+    case "recording_start":
+      return startRecording(args);
+    case "recording_stop":
+      stopRecording();
+      return undefined;
     case "firmware_session_status":
       return { kind: "idle" };
     case "firmware_session_clear_completed":
@@ -340,10 +507,12 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
       return mockSerialReadinessResponse(request);
     }
     case "firmware_flash_serial": {
+      ensureMockLiveWriteAllowed("firmware_flash_serial");
       const request = validateFirmwareFlashSerialArgs(args);
       return mockFirmwareFlashSerialResult(request);
     }
     case "firmware_flash_dfu_recovery": {
+      ensureMockLiveWriteAllowed("firmware_flash_dfu_recovery");
       const request = validateFirmwareFlashDfuRecoveryArgs(args);
       return mockFirmwareFlashDfuRecoveryResult(request);
     }
@@ -351,19 +520,17 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
       connectLink(args);
       return undefined;
     case "log_open":
-      mockState.logOpen = true;
-      return {
-        file_name: "mock.tlog",
-        start_usec: 0,
-        end_usec: 0,
-        duration_secs: 0,
-        total_entries: 0,
-        message_types: [],
-        log_type: "tlog",
-      };
+      {
+        const { summary, events } = openMockLogWithProgress(args);
+        mockState.logOpen = true;
+        emitMany(events);
+        return summary;
+      }
     case "set_telemetry_rate":
+      case "firmware_session_cancel":
+      return undefined;
     case "set_message_rate":
-    case "firmware_session_cancel":
+      ensureMockLiveWriteAllowed("set_message_rate");
       return undefined;
     case "get_available_message_rates":
       return availableMessageRates();
@@ -373,23 +540,28 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
       disconnectLink(args);
       return undefined;
     case "set_servo":
+      ensureMockLiveWriteAllowed("set_servo");
       requireConnectedVehicle();
       validateSetServoArgs(args);
       return undefined;
     case "motor_test":
+      ensureMockLiveWriteAllowed("motor_test");
       requireConnectedVehicle();
       validateMotorTestArgs(args);
       return undefined;
     case "rc_override":
+      ensureMockLiveWriteAllowed("rc_override");
       requireConnectedVehicle();
       validateRcOverrideArgs(args);
       return undefined;
     case "arm_vehicle":
+      ensureMockLiveWriteAllowed("arm_vehicle");
       requireConnectedVehicle();
       validateArmDisarmArgs(args, "arm_vehicle");
       syncLiveVehicleArmedState(true, emitEvent);
       return undefined;
     case "disarm_vehicle":
+      ensureMockLiveWriteAllowed("disarm_vehicle");
       requireConnectedVehicle();
       validateArmDisarmArgs(args, "disarm_vehicle");
       syncLiveVehicleArmedState(false, emitEvent);
@@ -400,10 +572,20 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
     case "calibrate_compass_accept":
     case "calibrate_compass_cancel":
     case "reboot_vehicle":
-    case "request_prearm_checks":
+    case "request_prearm_checks": {
+      ensureMockLiveWriteAllowed(cmd as
+        | "calibrate_accel"
+        | "calibrate_gyro"
+        | "calibrate_compass_start"
+        | "calibrate_compass_accept"
+        | "calibrate_compass_cancel"
+        | "reboot_vehicle"
+        | "request_prearm_checks");
       requireConnectedVehicle();
       return undefined;
+    }
     case "param_write_batch":
+      ensureMockLiveWriteAllowed("param_write_batch");
       requireConnectedVehicle();
       return writeParamBatch(args, emitEvent);
     case "param_parse_file":
@@ -411,6 +593,7 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
     case "param_format_file":
       return formatParamFile(args);
     case "vehicle_takeoff":
+      ensureMockLiveWriteAllowed("vehicle_takeoff");
       vehicleTakeoff(args);
       return undefined;
     case "start_guided_session":
@@ -420,6 +603,7 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
     case "stop_guided_session":
       return stopGuidedSession();
     case "mission_upload": {
+      ensureMockLiveWriteAllowed("mission_upload");
       const plan = validateUploadPlanArg(args, "mission_upload.plan");
       return runMissionTransfer({
         kind: "upload",
@@ -432,6 +616,7 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
       });
     }
     case "mission_clear":
+      ensureMockLiveWriteAllowed("mission_clear");
       return runMissionTransfer({
         kind: "clear",
         direction: "upload",
@@ -442,6 +627,7 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
         },
       });
     case "mission_set_current": {
+      ensureMockLiveWriteAllowed("mission_set_current");
       requireConnectedVehicle();
       const seq = validateMissionSetCurrentArgs(args);
       const plan = currentMissionState().plan;
@@ -458,22 +644,27 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
       cancelPendingMissionOperation();
       return undefined;
     case "fence_upload":
+      ensureMockLiveWriteAllowed("fence_upload");
       requireConnectedVehicle();
       mockState.liveFencePlan = validateStructuredPlanArg(args, "fence_upload.plan");
       return undefined;
     case "fence_clear":
+      ensureMockLiveWriteAllowed("fence_clear");
       requireConnectedVehicle();
       mockState.liveFencePlan = { return_point: null, regions: [] };
       return undefined;
     case "rally_upload":
+      ensureMockLiveWriteAllowed("rally_upload");
       requireConnectedVehicle();
       mockState.liveRallyPlan = validateStructuredPlanArg(args, "rally_upload.plan");
       return undefined;
     case "rally_clear":
+      ensureMockLiveWriteAllowed("rally_clear");
       requireConnectedVehicle();
       mockState.liveRallyPlan = { points: [] };
       return undefined;
     case "mission_download": {
+      ensureMockLiveWriteAllowed("mission_download");
       const result = missionDownloadResult();
       return runMissionTransfer({
         kind: "download",
@@ -492,14 +683,17 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
       requireConnectedVehicle();
       return missionValidateResult(args);
     case "fence_download":
+      ensureMockLiveWriteAllowed("fence_download");
       return fenceDownloadResult();
     case "rally_download":
+      ensureMockLiveWriteAllowed("rally_download");
       return rallyDownloadResult();
     case "log_close":
       mockState.logOpen = false;
       mockState.playbackEnvelope = null;
       mockState.pendingPlaybackEnvelope = null;
       mockState.playbackCursorUsec = null;
+      closeMockLog();
       return undefined;
     default:
       throw new Error(`Unmocked command: ${cmd}`);
@@ -560,6 +754,7 @@ function createController(): MockPlatformController {
       cancelPendingMissionOperation();
       rejectAllDeferred("Mock platform reset");
       resetMockState();
+      resetLogsMockState();
     },
     setCommandBehavior(cmd, behavior) {
       commandBehaviors.set(cmd, behavior);
@@ -637,6 +832,38 @@ function createController(): MockPlatformController {
     emitLiveGuidedState(guidedState) {
       applyMockGuidedState(guidedState);
       emitEvent("guided://state", liveGuidedStreamEvent(guidedState).payload);
+    },
+    emitLogProgress(progress) {
+      emitEvent("log://progress", emitProgressEvent(progress).payload);
+    },
+    emitPlaybackState(playbackState) {
+      writeMockReplayState(playbackState);
+      if (!mockState.playbackEnvelope) {
+        return;
+      }
+
+      emitEvent("playback://state", playbackStateEvent(mockState.playbackEnvelope).payload);
+    },
+    setLogLibraryCatalog(catalog) {
+      return setMockLogLibraryCatalog(catalog);
+    },
+    seedLogLibrary(presets) {
+      return seedMockLogLibrary(presets);
+    },
+    getLogLibraryCatalog() {
+      return getLogLibraryCatalog();
+    },
+    getSeededLogEntry(preset) {
+      return getSeededLogEntry(preset);
+    },
+    getSeededLogPickerFile(preset) {
+      return getSeededLogPickerFile(preset);
+    },
+    setRecordingStatus(status) {
+      return writeMockRecordingStatus(status);
+    },
+    setRecordingSettings(settings) {
+      return writeMockRecordingSettings(settings);
     },
     resolveDeferredConnectLink({ vehicleState, missionState, paramStore, paramProgress, guidedState }) {
       const pending = deferredInvocations.get("connect_link");

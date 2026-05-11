@@ -15,6 +15,7 @@ import {
   type SessionState,
   type SourceKind,
 } from "../../session";
+import { subscribePlaybackState, type PlaybackStateSnapshot } from "../../playback";
 import {
   btGetBondedDevices,
   btRequestPermissions,
@@ -75,6 +76,7 @@ export const sessionConnectionDefaults: SessionConnectionFormState = resolveSess
 export type SessionServiceEventHandlers = {
   onSession: (event: SessionEvent<SessionDomain>) => void;
   onTelemetry: (event: SessionEvent<import("../../lib/domain-status").DomainValue<TelemetryState>>) => void;
+  onPlayback: (event: SessionEvent<PlaybackStateSnapshot>) => void;
   onSupport: (event: SessionEvent<SupportDomain>) => void;
   onSensorHealth: (event: SessionEvent<SensorHealthDomain>) => void;
   onConfigurationFacts: (event: SessionEvent<ConfigurationFactsDomain>) => void;
@@ -139,6 +141,7 @@ export async function subscribeAll(handlers: SessionServiceEventHandlers): Promi
   const disposers = await Promise.all([
     subscribeSessionState(handlers.onSession),
     subscribeTelemetryState(handlers.onTelemetry),
+    subscribePlaybackState(handlers.onPlayback),
     subscribeSupportState(handlers.onSupport),
     subscribeSensorHealthStateEvent(handlers.onSensorHealth),
     subscribeConfigurationFactsEvent(handlers.onConfigurationFacts),

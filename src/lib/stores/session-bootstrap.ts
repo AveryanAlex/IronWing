@@ -7,6 +7,7 @@ type BootstrapBuffer = {
   envelope: SessionEnvelope;
   session?: OpenSessionSnapshot["session"];
   telemetry?: OpenSessionSnapshot["telemetry"];
+  playbackCursorUsec?: number | null;
   support?: OpenSessionSnapshot["support"];
   sensorHealth?: OpenSessionSnapshot["sensor_health"];
   configurationFacts?: OpenSessionSnapshot["configuration_facts"];
@@ -127,6 +128,15 @@ export function mergeBootstrapSnapshot({
       nextState = {
         ...nextState,
         telemetryDomain: buffered.telemetry,
+      };
+    }
+    if (buffered.playbackCursorUsec !== undefined) {
+      nextState = {
+        ...nextState,
+        bootstrap: {
+          ...nextState.bootstrap,
+          playbackCursorUsec: buffered.playbackCursorUsec,
+        },
       };
     }
     if (buffered.support) {

@@ -1,0 +1,10 @@
+{
+  "operation_id": "log_library_reindex",
+  "phase": "indexing",
+  "completed_items": 1200,
+  "total_items": 2400,
+  "percent": 50.0,
+  "entry_id": "log-2026-05-08-001",
+  "instance_id": null,
+  "message": "building replay index"
+}

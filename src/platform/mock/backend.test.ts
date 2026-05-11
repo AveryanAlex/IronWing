@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ChartSeriesPage, LogExportResult, LogLibraryCatalog, LogProgress, RawMessagePage } from "../../logs";
 import type { MissionState, TransferProgress } from "../../mission";
 import type { ParamProgress, ParamStore } from "../../params";
+import type { PlaybackStateSnapshot } from "../../playback";
+import type { RecordingSettingsResult, RecordingStatus } from "../../recording";
 import type { OpenSessionSnapshot, SessionEvent } from "../../session";
 import type {
     CatalogEntry,
@@ -16,7 +19,7 @@ import type {
     SerialReadinessRequest,
 } from "../../firmware";
 
-import { getMockPlatformController, invokeMockCommand, listenMockEvent } from "./backend";
+import { getMockPlatformController, invokeMockCommand, listenMockEvent, type MockLogSeedPreset } from "./backend";
 
 function readRustCommandsSource() {
     return readFileSync("src-tauri/src/commands.rs", "utf8");
@@ -81,6 +84,7 @@ describe("mock guided backend parity", () => {
         expect(snapshot.configuration_facts).toEqual({ available: false, complete: false, provenance: "playback", value: null });
         expect(snapshot.calibration).toEqual({ available: false, complete: false, provenance: "playback", value: null });
         expect(snapshot.telemetry.value.flight.altitude_m).toBeNull();
+        expect(snapshot.playback.cursor_usec).toBeNull();
     });
 
     it("uses pending live snapshot handshake semantics and rejects mismatched acks", async () => {
@@ -305,6 +309,123 @@ describe("mock guided backend parity", () => {
         expect(result.failure.detail).toEqual({ kind: "source_kind", source_kind: "playback" });
     });
 
+    it("rejects broader replay read-only commands with native-parity permission failures", async () => {
+        await invokeMockCommand("log_open", { path: "/tmp/mock.tlog" });
+        const playback = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "playback" });
+        await invokeMockCommand("ack_session_snapshot", {
+            sessionId: playback.envelope.session_id,
+            seekEpoch: playback.envelope.seek_epoch,
+            resetRevision: playback.envelope.reset_revision,
+        });
+
+        const cases = [
+            { cmd: "arm_vehicle", args: { force: false }, operationId: "arm_vehicle" },
+            { cmd: "disarm_vehicle", args: { force: false }, operationId: "disarm_vehicle" },
+            { cmd: "set_message_rate", args: { messageId: 33, rateHz: 4 }, operationId: "set_message_rate" },
+            { cmd: "vehicle_takeoff", args: { altitudeM: 12 }, operationId: "vehicle_takeoff" },
+            {
+                cmd: "mission_upload",
+                args: {
+                    plan: {
+                        items: [
+                            {
+                                command: {
+                                    Nav: {
+                                        Waypoint: {
+                                            position: {
+                                                RelHome: {
+                                                    latitude_deg: 47.52,
+                                                    longitude_deg: 8.61,
+                                                    relative_alt_m: 120,
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                },
+                operationId: "mission_upload",
+            },
+            { cmd: "mission_download", args: undefined, operationId: "mission_download" },
+            { cmd: "mission_clear", args: undefined, operationId: "mission_clear" },
+            { cmd: "mission_set_current", args: { seq: 0 }, operationId: "mission_set_current" },
+            {
+                cmd: "fence_upload",
+                args: { plan: { return_point: null, regions: [] } },
+                operationId: "fence_upload",
+            },
+            { cmd: "fence_download", args: undefined, operationId: "fence_download" },
+            { cmd: "fence_clear", args: undefined, operationId: "fence_clear" },
+            {
+                cmd: "rally_upload",
+                args: { plan: { points: [] } },
+                operationId: "rally_upload",
+            },
+            { cmd: "rally_download", args: undefined, operationId: "rally_download" },
+            { cmd: "rally_clear", args: undefined, operationId: "rally_clear" },
+            { cmd: "calibrate_accel", args: undefined, operationId: "calibrate_accel" },
+            { cmd: "calibrate_gyro", args: undefined, operationId: "calibrate_gyro" },
+            { cmd: "calibrate_compass_start", args: undefined, operationId: "calibrate_compass_start" },
+            { cmd: "calibrate_compass_accept", args: undefined, operationId: "calibrate_compass_accept" },
+            { cmd: "calibrate_compass_cancel", args: undefined, operationId: "calibrate_compass_cancel" },
+            { cmd: "param_write_batch", args: { params: [["TEST", 1]] }, operationId: "param_write_batch" },
+            { cmd: "reboot_vehicle", args: undefined, operationId: "reboot_vehicle" },
+            { cmd: "request_prearm_checks", args: undefined, operationId: "request_prearm_checks" },
+            { cmd: "set_servo", args: { instance: 1, pwmUs: 1500 }, operationId: "set_servo" },
+            { cmd: "motor_test", args: { motorInstance: 1, throttlePct: 10, durationS: 1 }, operationId: "motor_test" },
+            { cmd: "rc_override", args: { channels: [{ channel: 1, value: 1500 }] }, operationId: "rc_override" },
+            {
+                cmd: "firmware_flash_serial",
+                args: {
+                    request: {
+                        port: "/dev/ttyACM0",
+                        baud: 115200,
+                        source: { kind: "catalog_url", url: "https://example.com/cubeorange-copter.apj" },
+                        options: { full_chip_erase: false },
+                    },
+                },
+                operationId: "firmware_flash_serial",
+            },
+            {
+                cmd: "firmware_flash_dfu_recovery",
+                args: {
+                    request: {
+                        device: {
+                            vid: 0x0483,
+                            pid: 0xdf11,
+                            unique_id: "mock-dfu-1",
+                            serial_number: "DFU0001",
+                            manufacturer: "STMicroelectronics",
+                            product: "STM32 BOOTLOADER",
+                        },
+                        source: { kind: "official_bootloader", board_target: "CubeOrange" },
+                    },
+                },
+                operationId: "firmware_flash_dfu_recovery",
+            },
+        ] as const;
+
+        for (const testCase of cases) {
+            let message = "";
+            try {
+                await invokeMockCommand(testCase.cmd, testCase.args);
+            } catch (error) {
+                message = error instanceof Error ? error.message : String(error);
+            }
+
+            expect(() => JSON.parse(message), `${testCase.cmd} should reject with structured replay-readonly failure, got: ${message}`).not.toThrow();
+            expect(JSON.parse(message)).toEqual({
+                operation_id: testCase.operationId,
+                reason: {
+                    kind: "permission_denied",
+                    message: "replay is read-only while playback is the effective source; switch back to the live source to send vehicle commands",
+                },
+            });
+        }
+    });
+
     it("emits grouped playback telemetry events from seek", async () => {
         await invokeMockCommand("log_open", { path: "/tmp/mock.tlog" });
         const playback = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "playback" });
@@ -325,8 +446,8 @@ describe("mock guided backend parity", () => {
         const telemetryValue = telemetry?.value;
         expect(telemetryValue.available).toBe(true);
         expect(telemetryValue.provenance).toBe("playback");
-        expect(telemetryValue.value.flight.altitude_m).toBeNull();
-        expect(telemetryValue.value.attitude.roll_deg).toBeNull();
+        expect(typeof telemetryValue.value.flight.altitude_m).toBe("number");
+        expect(typeof telemetryValue.value.attitude.roll_deg).toBe("number");
         expect(telemetryValue.value.power.battery_voltage_cells).toBeNull();
     });
 
@@ -536,7 +657,7 @@ describe("mock guided backend parity", () => {
                 session_id: playback.envelope.session_id,
                 source_kind: "playback",
             },
-            cursor_usec: 789,
+            cursor_usec: 1000000,
         });
     });
 
@@ -1550,5 +1671,435 @@ describe("mock firmware backend parity", () => {
                 options: { full_chip_erase: false },
             },
         })).rejects.toBe("serial bootloader handshake failed");
+    });
+
+    it("exposes deterministic log catalog seeding for ready, missing, and corrupt tlog/bin entries", async () => {
+        const controller = getMockPlatformController();
+
+        const defaultCatalog = await invokeMockCommand<LogLibraryCatalog>("log_library_list");
+        expect(defaultCatalog.entries.map((entry) => `${entry.status}:${entry.metadata.format}`)).toEqual([
+            "ready:tlog",
+            "ready:bin",
+            "missing:tlog",
+            "corrupt:bin",
+        ]);
+
+        const seededPresets: MockLogSeedPreset[] = [
+            "ready_tlog",
+            "ready_bin",
+            "missing_tlog",
+            "missing_bin",
+            "corrupt_tlog",
+            "corrupt_bin",
+        ];
+        const seededCatalog = controller.seedLogLibrary(seededPresets);
+        expect(seededCatalog.entries.map((entry) => `${entry.status}:${entry.metadata.format}`)).toEqual([
+            "ready:tlog",
+            "ready:bin",
+            "missing:tlog",
+            "missing:bin",
+            "corrupt:tlog",
+            "corrupt:bin",
+        ]);
+
+        const corruptTlog = controller.getSeededLogEntry("corrupt_tlog");
+        expect(corruptTlog.status).toBe("corrupt");
+        expect(corruptTlog.metadata.format).toBe("tlog");
+        expect(corruptTlog.diagnostics[0]?.code).toBe("invalid_crc");
+    });
+
+    it("returns deterministic log pages and emits log progress for exports", async () => {
+        const seenProgress: LogProgress[] = [];
+        const unlisten = listenMockEvent("log://progress", (payload) => {
+            seenProgress.push(payload as LogProgress);
+        });
+
+        await invokeMockCommand("log_open", { path: "/mock/logs/flight-001.tlog" });
+
+        const rawPage = await invokeMockCommand<RawMessagePage>("log_raw_messages_query", {
+            request: {
+                entry_id: "log-2026-05-08-001",
+                cursor: null,
+                start_usec: null,
+                end_usec: null,
+                message_types: ["GLOBAL_POSITION_INT"],
+                limit: 100,
+            },
+        });
+        const chartPage = await invokeMockCommand<ChartSeriesPage>("log_chart_series_query", {
+            request: {
+                entry_id: "log-2026-05-08-001",
+                selectors: [{ message_type: "VFR_HUD", field: "alt", label: "Altitude", unit: "m" }],
+                start_usec: null,
+                end_usec: null,
+                max_points: 500,
+            },
+        });
+        const exportResult = await invokeMockCommand<LogExportResult>("log_export", {
+            request: {
+                entry_id: "log-2026-05-08-001",
+                instance_id: "export-1",
+                format: "csv",
+                destination_path: "/tmp/flight-001.csv",
+                start_usec: null,
+                end_usec: null,
+                message_types: [],
+            },
+        });
+        const csvRows = await invokeMockCommand<number>("log_export_csv", { path: "/tmp/flight-001.csv" });
+        unlisten();
+
+        expect(rawPage.entry_id).toBe("log-2026-05-08-001");
+        expect(rawPage.items[0]?.message_type).toBe("GLOBAL_POSITION_INT");
+        expect(chartPage.entry_id).toBe("log-2026-05-08-001");
+        expect(chartPage.series[0]?.selector.message_type).toBe("VFR_HUD");
+        expect(exportResult).toEqual({
+            operation_id: "log_export",
+            destination_path: "/tmp/flight-001.csv",
+            bytes_written: 4096,
+            rows_written: 42,
+            diagnostics: [],
+        });
+        expect(csvRows).toBe(2400);
+        expect(seenProgress.map((event) => `${event.operation_id}:${event.phase}`)).toEqual([
+            "log_open:queued",
+            "log_open:parsing",
+            "log_open:parsing",
+            "log_open:indexing",
+            "log_open:completed",
+            "log_export:exporting",
+            "log_export:completed",
+            "log_export:completed",
+        ]);
+        expect(seenProgress.filter((event) => event.instance_id !== null).every((event) => event.instance_id === "export-1")).toBe(true);
+    });
+
+    it("rejects non-csv log exports to match the native backend", async () => {
+        await expect(invokeMockCommand("log_export", {
+            request: {
+                entry_id: "log-2026-05-08-001",
+                instance_id: "export-unsupported",
+                format: "kmz",
+                destination_path: "/tmp/flight-001.kmz",
+                start_usec: null,
+                end_usec: null,
+                message_types: [],
+                text: null,
+                field_filters: [],
+            } as any,
+        })).rejects.toThrow("log export format kmz is not implemented yet");
+    });
+
+    it("honors requested chart selectors for seeded tlog and bin fixtures", async () => {
+        const tlogChartPage = await invokeMockCommand<ChartSeriesPage>("log_chart_series_query", {
+            request: {
+                entry_id: "log-2026-05-08-001",
+                selectors: [
+                    { message_type: "ATTITUDE", field: "roll", label: "Roll", unit: "rad" },
+                    { message_type: "ATTITUDE", field: "pitch", label: "Pitch", unit: "rad" },
+                    { message_type: "SYS_STATUS", field: "voltage_battery", label: "Voltage", unit: "mV" },
+                ],
+                start_usec: null,
+                end_usec: null,
+                max_points: 500,
+            },
+        });
+
+        const binChartPage = await invokeMockCommand<ChartSeriesPage>("log_chart_series_query", {
+            request: {
+                entry_id: "log-2026-05-08-002",
+                selectors: [
+                    { message_type: "ATT", field: "Roll", label: "Roll", unit: "deg" },
+                    { message_type: "CTUN", field: "Alt", label: "Altitude", unit: "m" },
+                    { message_type: "BAT", field: "Volt", label: "Voltage", unit: "V" },
+                ],
+                start_usec: null,
+                end_usec: null,
+                max_points: 500,
+            },
+        });
+
+        expect(tlogChartPage.series.map((series) => `${series.selector.message_type}.${series.selector.field}`)).toEqual([
+            "ATTITUDE.roll",
+            "ATTITUDE.pitch",
+            "SYS_STATUS.voltage_battery",
+        ]);
+        expect(tlogChartPage.series.every((series) => series.points.length > 0)).toBe(true);
+
+        expect(binChartPage.series.map((series) => `${series.selector.message_type}.${series.selector.field}`)).toEqual([
+            "ATT.Roll",
+            "CTUN.Alt",
+            "BAT.Volt",
+        ]);
+        expect(binChartPage.series.every((series) => series.points.length > 0)).toBe(true);
+    });
+
+    it("emits native-like log progress phases when opening a seeded log", async () => {
+        const seenProgress: LogProgress[] = [];
+        const unlisten = listenMockEvent("log://progress", (payload) => {
+            seenProgress.push(payload as LogProgress);
+        });
+
+        const summary = await invokeMockCommand<any>("log_open", { path: "/mock/logs/flight-001.tlog" });
+        unlisten();
+
+        expect(summary.total_entries).toBe(2400);
+        expect(seenProgress.map((event) => `${event.operation_id}:${event.phase}:${event.completed_items}`)).toEqual([
+            "log_open:queued:0",
+            "log_open:parsing:0",
+            "log_open:parsing:2400",
+            "log_open:indexing:2400",
+            "log_open:completed:2400",
+        ]);
+    });
+
+    it("keeps mock log library list/relink/reindex/remove/cancel aligned with the native command surface", async () => {
+        const controller = getMockPlatformController();
+        controller.seedLogLibrary(["missing_tlog", "ready_bin"]);
+
+        const listed = await invokeMockCommand<LogLibraryCatalog>("log_library_list");
+        expect(listed.entries.map((entry) => entry.status)).toEqual(["missing", "ready"]);
+
+        const relinked = await invokeMockCommand<any>("log_library_relink", {
+            entryId: listed.entries[0]?.entry_id,
+            path: "/mock/logs/flight-002.bin",
+        });
+        expect(relinked.status).toBe("stale");
+        expect(relinked.diagnostics.some((diagnostic: { code: string }) => diagnostic.code === "relink_requires_reindex")).toBe(true);
+
+        const reindexed = await invokeMockCommand<any>("log_library_reindex", {
+            entryId: listed.entries[0]?.entry_id,
+        });
+        expect(reindexed.status).toBe("ready");
+
+        const removed = await invokeMockCommand<LogLibraryCatalog>("log_library_remove", {
+            entryId: listed.entries[0]?.entry_id,
+        });
+        expect(removed.entries.find((entry) => entry.entry_id === listed.entries[0]?.entry_id)).toBeUndefined();
+
+        await expect(invokeMockCommand<boolean>("log_library_cancel")).resolves.toBe(false);
+
+        controller.setCommandBehavior("log_library_cancel", { type: "defer" });
+        const activeCancel = invokeMockCommand<boolean>("log_library_cancel");
+        expect(controller.resolveDeferred("log_library_cancel", true)).toBe(true);
+        await expect(activeCancel).resolves.toBe(true);
+        controller.clearCommandBehavior("log_library_cancel");
+    });
+
+    it("rejects malformed mock log library relink and reindex requests loudly", async () => {
+        await expect(invokeMockCommand("log_library_relink", { entryId: 42, path: "/mock/logs/flight-002.bin" })).rejects.toThrow(
+            "missing or invalid log_library_relink.entryId",
+        );
+        await expect(invokeMockCommand("log_library_relink", { entryId: "entry-1", path: 42 })).rejects.toThrow(
+            "missing or invalid log_library_relink.path",
+        );
+        await expect(invokeMockCommand("log_library_reindex", { entryId: 42 })).rejects.toThrow(
+            "missing or invalid log_library_reindex.entryId",
+        );
+    });
+
+    it("rejects opening seeded missing and corrupt mock logs", async () => {
+        const controller = getMockPlatformController();
+        controller.seedLogLibrary(["missing_tlog", "corrupt_bin", "ready_tlog"]);
+
+        await expect(invokeMockCommand("log_open", { path: "/mock/missing/missing-flight.tlog" })).rejects.toThrow(
+            "mock log is missing: /mock/missing/missing-flight.tlog",
+        );
+        await expect(invokeMockCommand("log_open", { path: "/mock/logs/corrupt-flight.bin" })).rejects.toThrow(
+            "mock log is corrupt: /mock/logs/corrupt-flight.bin",
+        );
+    });
+
+    it("registers a mock log library entry from the browser picker harness", async () => {
+        const controller = getMockPlatformController();
+        const pickerFile = controller.getSeededLogPickerFile("ready_tlog");
+        const showOpenFilePicker = vi.fn(async () => [{
+            getFile: async () => new File([new Uint8Array(pickerFile.bytes)], pickerFile.name, { type: pickerFile.type }),
+        }]);
+        vi.stubGlobal("showOpenFilePicker", showOpenFilePicker);
+
+        const entry = await invokeMockCommand<any>("log_library_register_open_file");
+
+        expect(showOpenFilePicker).toHaveBeenCalledTimes(1);
+        expect(entry.metadata.display_name).toBe(pickerFile.name);
+        expect(entry.source.original_path).toContain(pickerFile.name);
+    });
+
+    it("emits playback state with replay metadata after mock log seek", async () => {
+        await invokeMockCommand("log_open", { path: "/mock/logs/flight-001.tlog" });
+        const playback = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "playback" });
+        await invokeMockCommand("ack_session_snapshot", {
+            sessionId: playback.envelope.session_id,
+            seekEpoch: playback.envelope.seek_epoch,
+            resetRevision: playback.envelope.reset_revision,
+        });
+
+        let playbackEvent: { envelope: OpenSessionSnapshot["envelope"]; value: PlaybackStateSnapshot } | null = null;
+        let telemetryEvent: { envelope: OpenSessionSnapshot["envelope"]; value: OpenSessionSnapshot["telemetry"] } | null = null;
+        const unlisteners = [
+            listenMockEvent("playback://state", (payload) => {
+                playbackEvent = payload as { envelope: OpenSessionSnapshot["envelope"]; value: PlaybackStateSnapshot };
+            }),
+            listenMockEvent("telemetry://state", (payload) => {
+                telemetryEvent = payload as { envelope: OpenSessionSnapshot["envelope"]; value: OpenSessionSnapshot["telemetry"] };
+            }),
+        ];
+
+        await invokeMockCommand("playback_seek", { cursorUsec: 42000000 });
+        unlisteners.forEach((unlisten) => unlisten());
+
+        expect(playbackEvent).not.toBeNull();
+        expect(telemetryEvent).not.toBeNull();
+        if (!playbackEvent || !telemetryEvent) {
+            throw new Error("expected playback and telemetry events");
+        }
+        const playbackPayload = playbackEvent as any;
+        const telemetryPayload = telemetryEvent as any;
+
+        expect(playbackPayload.value).toMatchObject({
+            status: "seeking",
+            entry_id: "log-2026-05-08-001",
+            operation_id: "replay_seek",
+            cursor_usec: 42000000,
+            start_usec: 1000000,
+            end_usec: 61000000,
+            duration_secs: 60,
+            speed: 1,
+            available_speeds: [0.5, 1, 2, 4, 8, 16],
+            barrier_ready: true,
+            readonly: true,
+            diagnostic: null,
+        });
+        expect(telemetryPayload.value.value?.flight?.altitude_m).toBe(12.3);
+        expect(telemetryPayload.value.value?.navigation?.latitude_deg).toBeCloseTo(47.397782, 6);
+    });
+
+    it("supports playback play pause speed and stop parity", async () => {
+        await invokeMockCommand("log_open", { path: "/mock/logs/flight-001.tlog" });
+        const playback = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "playback" });
+        await invokeMockCommand("ack_session_snapshot", {
+            sessionId: playback.envelope.session_id,
+            seekEpoch: playback.envelope.seek_epoch,
+            resetRevision: playback.envelope.reset_revision,
+        });
+
+        const playing = await invokeMockCommand<PlaybackStateSnapshot>("playback_play");
+        expect(playing).toMatchObject({
+            status: "playing",
+            operation_id: "replay_play",
+            cursor_usec: 1000000,
+            speed: 1,
+        });
+
+        const faster = await invokeMockCommand<PlaybackStateSnapshot>("playback_set_speed", { speed: 4 });
+        expect(faster).toMatchObject({
+            status: "playing",
+            operation_id: "replay_set_speed",
+            speed: 4,
+        });
+
+        const paused = await invokeMockCommand<PlaybackStateSnapshot>("playback_pause");
+        expect(paused).toMatchObject({
+            status: "paused",
+            operation_id: "replay_pause",
+            speed: 4,
+        });
+
+        const stopped = await invokeMockCommand<PlaybackStateSnapshot>("playback_stop");
+        expect(stopped).toMatchObject({
+            status: "idle",
+            operation_id: null,
+            cursor_usec: null,
+        });
+
+        await expect(invokeMockCommand("playback_play")).rejects.toThrow("no log open");
+    });
+
+    it("clamps playback seek cursor to seeded log bounds like native", async () => {
+        await invokeMockCommand("log_open", { path: "/mock/logs/flight-001.tlog" });
+        const playback = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "playback" });
+        await invokeMockCommand("ack_session_snapshot", {
+            sessionId: playback.envelope.session_id,
+            seekEpoch: playback.envelope.seek_epoch,
+            resetRevision: playback.envelope.reset_revision,
+        });
+
+        await expect(invokeMockCommand<any>("playback_seek", { cursorUsec: 0 })).resolves.toMatchObject({
+            cursor_usec: 1000000,
+        });
+        await expect(invokeMockCommand<any>("playback_seek", { cursorUsec: 999999999 })).resolves.toMatchObject({
+            cursor_usec: 61000000,
+        });
+    });
+
+    it("tracks recording settings and status through mock commands and controller setters", async () => {
+        const controller = getMockPlatformController();
+
+        const initialSettings = await invokeMockCommand<RecordingSettingsResult>("recording_settings_read");
+        expect(initialSettings.operation_id).toBe("recording_settings_read");
+        expect(initialSettings.settings).toEqual({
+            auto_record_on_connect: false,
+            auto_record_directory: "/mock-app-data/logs/recordings",
+            filename_template: "YYYY-MM-DD_HH-MM-SS_{vehicle-or-sysid-or-unknown}.tlog",
+            add_completed_recordings_to_library: true,
+        });
+
+        const savedSettings = await invokeMockCommand<RecordingSettingsResult>("recording_settings_write", {
+            settings: {
+                auto_record_on_connect: false,
+                auto_record_directory: "/tmp/recordings",
+                filename_template: "{date}_{vehicle}.tlog",
+                add_completed_recordings_to_library: true,
+            },
+        });
+        expect(savedSettings).toEqual({
+            operation_id: "recording_settings_write",
+            settings: {
+                auto_record_on_connect: false,
+                auto_record_directory: "/mock-app-data/logs/recordings",
+                filename_template: "YYYY-MM-DD_HH-MM-SS_{vehicle-or-sysid-or-unknown}.tlog",
+                add_completed_recordings_to_library: true,
+            },
+        });
+
+        await expect(invokeMockCommand<string>("recording_start", { path: "/tmp/recordings/flight-010.tlog" })).resolves.toBe(
+            "/tmp/recordings/flight-010.tlog",
+        );
+        await expect(invokeMockCommand<RecordingStatus>("recording_status")).resolves.toEqual({
+            kind: "recording",
+            operation_id: "recording_start",
+            mode: "manual",
+            file_name: "flight-010.tlog",
+            destination_path: "/tmp/recordings/flight-010.tlog",
+            bytes_written: 2048,
+            started_at_unix_msec: 1778246400000,
+        });
+
+        await expect(invokeMockCommand("recording_stop")).resolves.toBeUndefined();
+        await expect(invokeMockCommand<RecordingStatus>("recording_status")).resolves.toEqual({ kind: "idle" });
+
+        const catalogAfterStop = await invokeMockCommand<LogLibraryCatalog>("log_library_list");
+        const addedRecording = catalogAfterStop.entries.find((entry) => entry.source.original_path === "/tmp/recordings/flight-010.tlog");
+        expect(addedRecording).toMatchObject({
+            status: "ready",
+            metadata: {
+                display_name: "flight-010.tlog",
+                format: "tlog",
+            },
+        });
+        expect(addedRecording?.diagnostics[0]?.source).toBe("recording");
+
+        const failedStatus = controller.setRecordingStatus({
+            kind: "failed",
+            failure: {
+                operation_id: "recording_start",
+                reason: { kind: "failed", message: "disk full" },
+            },
+        });
+        expect(failedStatus.kind).toBe("failed");
+        if (failedStatus.kind !== "failed") {
+            throw new Error("expected failed recording status");
+        }
+        expect(failedStatus.failure.reason.message).toBe("disk full");
     });
 });

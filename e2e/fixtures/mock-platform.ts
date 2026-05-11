@@ -4,11 +4,15 @@ import type { MissionMapDebugSnapshot } from "../../src/components/mission/missi
 import { setupWorkspaceTestIds } from "../../src/components/setup/setup-workspace-test-ids";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import type { OpenSessionSnapshot } from "../../src/session";
+import type { LogLibraryCatalog, LogProgress } from "../../src/logs";
+import type { PlaybackStateSnapshot } from "../../src/playback";
+import type { RecordingSettings, RecordingStatus } from "../../src/recording";
 import type {
     MockCommandBehavior,
     MockGuidedStateValue,
     MockInvocation,
     MockLiveVehicleState,
+    MockLogSeedPreset,
     MockMissionProgressState,
     MockMissionState,
     MockPlatformEvent,
@@ -199,6 +203,57 @@ export const parameterWorkspaceSelectors = {
     reviewApply: '[data-testid="app-shell-parameter-review-apply"]',
 } as const;
 
+export const logsWorkspaceSelectors = {
+    root: '[data-testid="logs-workspace-root"]',
+    libraryPanel: '[data-testid="logs-library-panel"]',
+    importPathInput: '[data-testid="logs-import-path-input"]',
+    importButton: '[data-testid="logs-import-button"]',
+    importPickerButton: '[data-testid="logs-import-picker-button"]',
+    libraryList: '[data-testid="logs-library-list"]',
+    libraryEmpty: '[data-testid="logs-library-empty"]',
+    progressBanner: '[data-testid="logs-progress-banner"]',
+    detailsPanel: '[data-testid="logs-details-panel"]',
+    selectedStatusPill: '[data-testid="logs-selected-status-pill"]',
+    selectedMessage: '[data-testid="logs-selected-message"]',
+    relinkPathInput: '[data-testid="logs-relink-path-input"]',
+    relinkButton: '[data-testid="logs-relink-button"]',
+    reindexButton: '[data-testid="logs-reindex-button"]',
+    removeButton: '[data-testid="logs-remove-button"]',
+    replayPanel: '[data-testid="logs-replay-panel"]',
+    playbackStatusPill: '[data-testid="logs-playback-status-pill"]',
+    preparePlayback: '[data-testid="logs-prepare-playback"]',
+    playButton: '[data-testid="logs-play-button"]',
+    pauseButton: '[data-testid="logs-pause-button"]',
+    stopButton: '[data-testid="logs-stop-button"]',
+    speedSelect: '[data-testid="logs-speed-select"]',
+    timelineRange: '[data-testid="logs-timeline-range"]',
+    mapPathButton: '[data-testid="logs-map-path-button"]',
+    mapMarkerButton: '[data-testid="logs-map-marker-button"]',
+    chartsPanel: '[data-testid="logs-charts-panel"]',
+    chartExport: '[data-testid="logs-chart-export"]',
+    chartClearRange: '[data-testid="logs-chart-clear-range"]',
+    chartExportPath: '[data-testid="logs-chart-export-path"]',
+    chartExportButton: '[data-testid="logs-chart-export-button"]',
+    chartExportResult: '[data-testid="logs-chart-export-result"]',
+    chartExportError: '[data-testid="logs-chart-export-error"]',
+    rawPanel: '[data-testid="logs-raw-messages-panel"]',
+    rawRunQuery: '[data-testid="logs-raw-run-query"]',
+    rawPreviousPage: '[data-testid="logs-raw-previous-page"]',
+    rawNextPage: '[data-testid="logs-raw-next-page"]',
+    rawExportDestination: '[data-testid="logs-raw-export-destination"]',
+    rawExportButton: '[data-testid="logs-raw-export"]',
+    rawMessagesTable: '[data-testid="logs-raw-messages-table"]',
+    rawTypeFilter: '[data-testid="logs-raw-type-filter"]',
+    rawTextFilter: '[data-testid="logs-raw-text-filter"]',
+    rawLimitFilter: '[data-testid="logs-raw-limit-filter"]',
+    recordingPanel: '[data-testid="logs-recording-panel"]',
+    recordingStatus: '[data-testid="logs-recording-status"]',
+    recordingToggle: '[data-testid="logs-recording-toggle"]',
+    recordingPathInput: '[data-testid="logs-recording-path-input"]',
+    autoRecordToggle: '[data-testid="logs-auto-record-toggle"]',
+    recordingOverlap: '[data-testid="logs-recording-replay-overlap"]',
+} as const;
+
 export const telemetrySettingsSelectors = {
     launcher: '[data-testid="app-shell-telemetry-settings-launcher"]',
     dialog: '[data-testid="app-shell-telemetry-settings-dialog"]',
@@ -268,6 +323,8 @@ export const missionWorkspaceSelectors = {
     homeSummary: `[data-testid="${missionWorkspaceTestIds.homeSummary}"]`,
     homeSync: `[data-testid="${missionWorkspaceTestIds.homeSync}"]`,
     homeReadOnly: `[data-testid="${missionWorkspaceTestIds.homeReadOnly}"]`,
+    replayOverlayBanner: `[data-testid="${missionWorkspaceTestIds.replayOverlayBanner}"]`,
+    replayOverlayDismiss: `[data-testid="${missionWorkspaceTestIds.replayOverlayDismiss}"]`,
     map: `[data-testid="${missionWorkspaceTestIds.map}"]`,
     mapSurface: `[data-testid="${missionWorkspaceTestIds.mapSurface}"]`,
     mapDrawSurface: `[data-testid="${missionWorkspaceTestIds.mapDrawSurface}"]`,
@@ -278,6 +335,8 @@ export const missionWorkspaceSelectors = {
     mapMarkerCount: `[data-testid="${missionWorkspaceTestIds.mapMarkerCount}"]`,
     mapSurveyCount: `[data-testid="${missionWorkspaceTestIds.mapSurveyCount}"]`,
     mapPreviewCount: `[data-testid="${missionWorkspaceTestIds.mapPreviewCount}"]`,
+    mapReplayPath: `[data-testid="${missionWorkspaceTestIds.mapReplayPath}"]`,
+    mapReplayMarker: `[data-testid="${missionWorkspaceTestIds.mapReplayMarker}"]`,
     mapFenceCount: `[data-testid="${missionWorkspaceTestIds.mapFenceCount}"]`,
     mapFenceVertexCount: `[data-testid="${missionWorkspaceTestIds.mapFenceVertexCount}"]`,
     mapFenceReturnPointState: `[data-testid="${missionWorkspaceTestIds.mapFenceReturnPointState}"]`,
@@ -505,6 +564,14 @@ export type MockPlatformFixture = {
     emitParamStore: (paramStore: MockParamStoreState) => Promise<void>;
     emitParamProgress: (paramProgress: MockParamProgressState) => Promise<void>;
     emitLiveGuidedState: (guidedState: MockGuidedStateValue) => Promise<void>;
+    emitLogProgress: (progress: LogProgress) => Promise<void>;
+    emitPlaybackState: (playbackState: PlaybackStateSnapshot) => Promise<void>;
+    setLogLibraryCatalog: (catalog: LogLibraryCatalog) => Promise<LogLibraryCatalog>;
+    seedLogLibrary: (presets?: MockLogSeedPreset[]) => Promise<LogLibraryCatalog>;
+    getLogLibraryCatalog: () => Promise<LogLibraryCatalog>;
+    getSeededLogEntry: (preset: MockLogSeedPreset) => Promise<LogLibraryCatalog["entries"][number]>;
+    setRecordingStatus: (status: RecordingStatus) => Promise<RecordingStatus>;
+    setRecordingSettings: (settings: RecordingSettings) => Promise<{ operation_id: "recording_settings_write"; settings: RecordingSettings }>;
     resolveDeferredConnectLink: (params: {
         vehicleState: MockLiveVehicleState;
         missionState?: MockMissionState;
@@ -519,6 +586,7 @@ export type MockPlatformFixture = {
         seek_epoch: number;
         reset_revision: number;
     } | null>;
+    setOpenLogFilePreset: (preset: Extract<MockLogSeedPreset, "ready_tlog" | "ready_bin" | "corrupt_tlog" | "corrupt_bin">) => Promise<void>;
     setOpenFile: (contents: string, name?: string, type?: string) => Promise<void>;
     setOpenBinaryFile: (contents: Uint8Array | ArrayBuffer | number[], name?: string, type?: string) => Promise<void>;
     getOpenFileState: () => Promise<MockOpenFileState>;
@@ -903,6 +971,23 @@ export async function expectSetupWorkspace(page: Page): Promise<void> {
     await expect(
         page.locator(setupWorkspaceSelectors.root),
         "The setup workspace root is missing; keep the shared setup selectors in e2e/fixtures/mock-platform.ts aligned with the shipped setup markup.",
+    ).toBeVisible();
+}
+
+export async function openLogsWorkspace(page: Page): Promise<void> {
+    const logsButton = page.getByRole("button", { name: "Logs" });
+    await expect(
+        logsButton,
+        "Logs workspace entry point is missing; keep the shared shell workspace labels aligned with the shipped header tabs.",
+    ).toBeVisible();
+    await logsButton.click();
+    await expectLogsWorkspace(page);
+}
+
+export async function expectLogsWorkspace(page: Page): Promise<void> {
+    await expect(
+        page.locator(logsWorkspaceSelectors.root),
+        "The logs workspace root is missing; keep the shared logs selectors in e2e/fixtures/mock-platform.ts aligned with the shipped logs markup.",
     ).toBeVisible();
 }
 
@@ -1611,13 +1696,25 @@ export const test = base.extend<Fixtures>({
             emitLiveStatusTextDomain: (statusText) => emitLiveScopedDomain(page, "status_text://state", statusText),
             emitMissionState: (missionState) => withMockController(page, "emitMissionState", missionState),
             emitMissionProgress: (missionProgress) => withMockController(page, "emitMissionProgress", missionProgress),
-            emitParamStore: (paramStore) => withMockController(page, "emitParamStore", paramStore),
-            emitParamProgress: (paramProgress) => withMockController(page, "emitParamProgress", paramProgress),
-            emitLiveGuidedState: (guidedState) => withMockController(page, "emitLiveGuidedState", guidedState),
-            resolveDeferredConnectLink: (params) => withMockController(page, "resolveDeferredConnectLink", params),
-            getInvocations: () => withMockController(page, "getInvocations"),
-            getLiveEnvelope: () => withMockController(page, "getLiveEnvelope"),
-            setOpenFile: (contents, name, type) => withMockFilePicker(page, "setOpenFile", contents, name, type),
+    emitParamStore: (paramStore) => withMockController(page, "emitParamStore", paramStore),
+    emitParamProgress: (paramProgress) => withMockController(page, "emitParamProgress", paramProgress),
+    emitLiveGuidedState: (guidedState) => withMockController(page, "emitLiveGuidedState", guidedState),
+    emitLogProgress: (progress) => withMockController(page, "emitLogProgress", progress),
+    emitPlaybackState: (playbackState) => withMockController(page, "emitPlaybackState", playbackState),
+    setLogLibraryCatalog: (catalog) => withMockController(page, "setLogLibraryCatalog", catalog),
+    seedLogLibrary: (presets) => presets ? withMockController(page, "seedLogLibrary", presets) : withMockController(page, "seedLogLibrary"),
+    getLogLibraryCatalog: () => withMockController(page, "getLogLibraryCatalog"),
+    getSeededLogEntry: (preset) => withMockController(page, "getSeededLogEntry", preset),
+    setRecordingStatus: (status) => withMockController(page, "setRecordingStatus", status),
+    setRecordingSettings: (settings) => withMockController(page, "setRecordingSettings", settings),
+    resolveDeferredConnectLink: (params) => withMockController(page, "resolveDeferredConnectLink", params),
+    getInvocations: () => withMockController(page, "getInvocations"),
+    getLiveEnvelope: () => withMockController(page, "getLiveEnvelope"),
+    setOpenLogFilePreset: async (preset) => {
+        const seeded = await withMockController<{ name: string; type: string; bytes: number[] }>(page, "getSeededLogPickerFile", preset);
+        await withMockFilePicker(page, "setOpenBinaryFile", seeded.bytes, seeded.name, seeded.type);
+    },
+    setOpenFile: (contents, name, type) => withMockFilePicker(page, "setOpenFile", contents, name, type),
             setOpenBinaryFile: (contents, name, type) => withMockFilePicker(page, "setOpenBinaryFile", contents, name, type),
             getOpenFileState: () => withMockFilePicker(page, "getOpenFileState"),
             cancelOpenFile: (message) => withMockFilePicker(page, "cancelOpenFile", message),

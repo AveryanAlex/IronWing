@@ -5,6 +5,7 @@ import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
 import {
   adaptMissionMapViewportToAspectRatio,
   buildMissionMapViewport,
+  projectMissionMapCoordinate,
   reprojectMissionMapPoint,
   resolveMissionMapDrag,
   resolveMissionMapFenceRadiusHandleDrag,
@@ -26,6 +27,7 @@ import {
   type MissionMapViewport,
 } from "../../lib/mission-map-view";
 import { localXYToLatLon } from "../../lib/mission-coordinates";
+import type { ReplayMapOverlayState } from "../../lib/replay-map-overlay";
 import {
   minimumSurveyPointCount,
   setSurveyGeometryPoints,
@@ -55,6 +57,7 @@ type Props = {
   blockedReason?: string | null;
   readOnly?: boolean;
   readOnlyReason?: string | null;
+  replayMapOverlay?: ReplayMapOverlayState | null;
   onSelectHome: () => void;
   onSelectMissionItem: (uiId: number) => void;
   onSelectRallyPoint?: (uiId: number) => MissionPlannerRallyMutationResult | unknown;
@@ -150,6 +153,7 @@ let {
   blockedReason = null,
   readOnly = false,
   readOnlyReason = null,
+  replayMapOverlay = null,
   onSelectHome,
   onSelectMissionItem,
   onSelectRallyPoint,
@@ -191,7 +195,26 @@ let basemapLoaded = $state(false);
 let basemapInitAttempted = false;
 
 let fallbackViewport = $derived(buildMissionMapViewport(fallbackReference, [fallbackReference]));
-let interactiveViewport = $derived(view.viewport ?? lastUsableViewport ?? fallbackViewport);
+let replayOverlayCoordinates = $derived.by(() => {
+  const coordinates = replayMapOverlay?.path.map((point) => ({
+    latitude_deg: point.lat,
+    longitude_deg: point.lon,
+  })) ?? [];
+
+  if (replayMapOverlay?.marker) {
+    coordinates.push({
+      latitude_deg: replayMapOverlay.marker.lat,
+      longitude_deg: replayMapOverlay.marker.lon,
+    });
+  }
+
+  return coordinates;
+});
+let replayOverlayViewport = $derived.by(() => {
+  const reference = replayOverlayCoordinates[0] ?? null;
+  return reference ? buildMissionMapViewport(reference, replayOverlayCoordinates) : null;
+});
+let interactiveViewport = $derived(replayOverlayViewport ?? view.viewport ?? lastUsableViewport ?? fallbackViewport);
 let renderViewport = $derived.by(() => {
   if (!interactiveViewport) {
     return null;
@@ -217,6 +240,26 @@ let renderFenceRegionHandles = $derived(remapFenceRegionHandles(view.fenceRegion
 let renderFenceVertexHandles = $derived(remapFenceVertexHandles(view.fenceVertexHandles));
 let renderFenceRadiusHandles = $derived(remapFenceRadiusHandles(view.fenceRadiusHandles));
 let renderFenceReturnPoint = $derived(remapFenceReturnPoint(view.fenceReturnPoint));
+let renderReplayOverlayPath = $derived.by(() => {
+  if (!renderViewport || !replayMapOverlay || replayMapOverlay.path.length === 0) {
+    return [];
+  }
+
+  return replayMapOverlay.path.map((point) => projectMissionMapCoordinate(renderViewport, {
+    latitude_deg: point.lat,
+    longitude_deg: point.lon,
+  }));
+});
+let renderReplayOverlayMarker = $derived.by(() => {
+  if (!renderViewport || !replayMapOverlay?.marker) {
+    return null;
+  }
+
+  return projectMissionMapCoordinate(renderViewport, {
+    latitude_deg: replayMapOverlay.marker.lat,
+    longitude_deg: replayMapOverlay.marker.lon,
+  });
+});
 let selectedSurveyRegionId = $derived(view.selection.kind === "survey-block" ? view.selection.regionId : null);
 let selectedSurveyGenerationBlockedReason = $derived.by(() => {
   if (!selectedSurveyRegion || selectedSurveyRegionId !== selectedSurveyRegion.id) {
@@ -1945,6 +1988,19 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
             />
           {/each}
 
+          {#if renderReplayOverlayPath.length > 1}
+            <polyline
+              data-testid={missionWorkspaceTestIds.mapReplayPath}
+              fill="none"
+              points={toPolylinePoints(renderReplayOverlayPath)}
+              stroke="rgba(245, 158, 11, 0.92)"
+              stroke-dasharray="10 8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="4"
+            />
+          {/if}
+
           {#each renderMissionLabels as label (label.id)}
             <text
               fill="rgba(241, 245, 249, 0.88)"
@@ -2107,6 +2163,16 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
           </button>
         {/each}
 
+        {#if renderReplayOverlayMarker}
+          <div
+            class="mission-map-replay-marker"
+            data-testid={missionWorkspaceTestIds.mapReplayMarker}
+            style={positionStyle(renderReplayOverlayMarker)}
+          >
+            ▶
+          </div>
+        {/if}
+
         {#if contextMenu}
           {@const menuItems = buildContextMenuItems()}
           {#if menuItems.length > 0}
@@ -2153,6 +2219,25 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
 
   .mission-map-surface {
     touch-action: none;
+  }
+
+  .mission-map-replay-marker {
+    position: absolute;
+    width: 1.8rem;
+    height: 1.8rem;
+    margin-left: -0.9rem;
+    margin-top: -0.9rem;
+    border-radius: 9999px;
+    border: 1px solid color-mix(in srgb, var(--color-warning) 55%, white);
+    background: color-mix(in srgb, var(--color-warning) 28%, var(--color-bg-primary));
+    color: var(--color-warning);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-bg-primary) 82%, transparent);
+    pointer-events: none;
   }
 
   .mission-map-basemap,

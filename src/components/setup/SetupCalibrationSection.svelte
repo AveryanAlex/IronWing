@@ -4,6 +4,7 @@ import {
   calibrateCompassCancel,
   calibrateCompassStart,
 } from "../../calibration";
+import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../lib/replay-readonly";
 import type { SetupWorkspaceStoreState, SetupWorkspaceCalibrationCard } from "../../lib/stores/setup-workspace";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
@@ -11,9 +12,10 @@ let { view }: { view: SetupWorkspaceStoreState } = $props();
 
 let actionError = $state<string | null>(null);
 let pendingCardId = $state<SetupWorkspaceCalibrationCard["id"] | null>(null);
+let replayReadonly = $derived(isReplayReadonly(view.activeSource));
 
 async function runCompassAction(card: SetupWorkspaceCalibrationCard) {
-  if (card.id !== "compass" || card.actionAvailability !== "available" || !card.actionLabel) {
+  if (replayReadonly || card.id !== "compass" || card.actionAvailability !== "available" || !card.actionLabel) {
     return;
   }
 
@@ -66,6 +68,16 @@ function cardTone(card: SetupWorkspaceCalibrationCard): string {
     </div>
   {/if}
 
+  {#if replayReadonly}
+    <div
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm text-warning"
+      data-testid={setupWorkspaceTestIds.calibrationReplayReadonly}
+    >
+      <p class="font-semibold">{REPLAY_READONLY_TITLE}</p>
+      <p class="mt-1">{REPLAY_READONLY_COPY}</p>
+    </div>
+  {/if}
+
   {#if view.statusNotices.length > 0}
     <div
       class="rounded-lg border border-border bg-bg-primary/80 p-3"
@@ -107,7 +119,7 @@ function cardTone(card: SetupWorkspaceCalibrationCard): string {
           <button
             class="mt-4 rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
             data-testid={`${setupWorkspaceTestIds.calibrationActionPrefix}-${card.id}`}
-            disabled={card.actionAvailability !== "available" || pendingCardId === card.id}
+            disabled={replayReadonly || card.actionAvailability !== "available" || pendingCardId === card.id}
             onclick={() => runCompassAction(card)}
             type="button"
           >

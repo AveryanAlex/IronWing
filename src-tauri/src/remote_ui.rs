@@ -428,13 +428,46 @@ async fn dispatch_invoke(
             ok(())
         }
         "bt_get_bonded_devices" => ok(bt_get_bonded_devices(app).await?),
-        "recording_start" => ok(recording::recording_start(state, arg(&args, "path")?).await?),
+        "recording_start" => ok(recording::recording_start(state, app.clone(), arg(&args, "request")?).await?),
         "recording_stop" => {
-            recording::recording_stop(state).await?;
+            recording::recording_stop(state, app.clone()).await?;
             ok(())
         }
         "recording_status" => ok(recording::recording_status(state)),
+        "recording_settings_read" => ok(recording::recording_settings_read(app.clone())?),
+        "recording_settings_write" => {
+            ok(recording::recording_settings_write(app.clone(), arg(&args, "settings")?)?)
+        }
+        "log_library_list" => ok(crate::log_library::log_library_list(app.clone()).await?),
+        "log_library_register" => {
+            ok(crate::log_library::log_library_register(app.clone(), arg(&args, "path")?).await?)
+        }
+        "log_library_register_open_file" => {
+            ok(crate::log_library::log_library_register_open_file(app.clone()).await?)
+        }
+        "log_library_remove" => {
+            ok(crate::log_library::log_library_remove(app.clone(), arg(&args, "entryId")?).await?)
+        }
+        "log_library_relink" => ok(crate::log_library::log_library_relink(
+            app.clone(),
+            arg(&args, "entryId")?,
+            arg(&args, "path")?,
+        )
+        .await?),
+        "log_library_reindex" => ok(crate::log_library::log_library_reindex(
+            app.clone(),
+            arg(&args, "entryId")?,
+        )
+        .await?),
+        "log_library_cancel" => ok(crate::log_library::log_library_cancel(state).await?),
         "log_open" => ok(logs::log_open(state, app.clone(), arg(&args, "path")?).await?),
+        "log_raw_messages_query" => {
+            ok(logs::log_raw_messages_query(state, app.clone(), arg(&args, "request")?).await?)
+        }
+        "log_chart_series_query" => {
+            ok(logs::log_chart_series_query(state, app.clone(), arg(&args, "request")?).await?)
+        }
+        "log_export" => ok(logs::log_export(state, app.clone(), arg(&args, "request")?).await?),
         "log_query" => ok(logs::log_query(
             state,
             arg(&args, "msgType")?,
@@ -450,7 +483,15 @@ async fn dispatch_invoke(
         }
         "log_get_flight_summary" => ok(logs::log_get_flight_summary(state).await?),
         "log_get_flight_path" => {
-            ok(logs::log_get_flight_path(state, optional_arg(&args, "maxPoints")?).await?)
+            ok(logs::log_get_flight_path(
+                state,
+                app.clone(),
+                optional_arg(&args, "entryId")?,
+                optional_arg(&args, "startUsec")?,
+                optional_arg(&args, "endUsec")?,
+                optional_arg(&args, "maxPoints")?,
+            )
+            .await?)
         }
         "log_get_telemetry_track" => {
             ok(logs::log_get_telemetry_track(state, optional_arg(&args, "maxPoints")?).await?)
@@ -458,6 +499,12 @@ async fn dispatch_invoke(
         "playback_seek" => {
             ok(logs::playback_seek(state, app.clone(), arg(&args, "cursorUsec")?).await?)
         }
+        "playback_play" => ok(logs::playback_play(state, app.clone()).await?),
+        "playback_pause" => ok(logs::playback_pause(state, app.clone()).await?),
+        "playback_set_speed" => {
+            ok(logs::playback_set_speed(state, app.clone(), arg(&args, "speed")?).await?)
+        }
+        "playback_stop" => ok(logs::playback_stop(state, app.clone()).await?),
         "log_export_csv" => ok(logs::log_export_csv(
             state,
             arg(&args, "path")?,

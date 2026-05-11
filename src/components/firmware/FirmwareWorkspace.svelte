@@ -1,9 +1,9 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
-import { readable, type Readable } from "svelte/store";
+import { fromStore, readable, type Readable } from "svelte/store";
 
 import type { ShellChromeState } from "../../app/shell/chrome-state";
-import { getShellChromeStoreContext } from "../../app/shell/runtime-context";
+import { getSessionViewStoreContext, getShellChromeStoreContext } from "../../app/shell/runtime-context";
 import { createFirmwareFileIo, type FirmwareFileIo } from "../../lib/firmware-file-io";
 import {
   createFirmwareService,
@@ -21,6 +21,7 @@ import {
   resolveFirmwareWorkspaceLayout,
 } from "./firmware-workspace-layout";
 import { firmwareWorkspaceTestIds } from "./firmware-workspace-test-ids";
+import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../lib/replay-readonly";
 
 const internalService = createFirmwareService();
 const internalStore = createFirmwareWorkspaceStore(internalService);
@@ -33,6 +34,14 @@ function resolveChromeStore(): Readable<ShellChromeState> {
     return getShellChromeStoreContext();
   } catch {
     return readable(firmwareWorkspaceFallbackChromeState);
+  }
+}
+
+function resolveSessionViewStore(): Readable<{ activeSource: "live" | "playback" | null }> {
+  try {
+    return getSessionViewStoreContext();
+  } catch {
+    return readable({ activeSource: null });
   }
 }
 
@@ -55,7 +64,9 @@ let lastAutoReturnOutcomeKey = "";
 
 let workspaceState = $derived($store);
 let shellChrome = $derived($chromeStore);
+let sessionView = fromStore(resolveSessionViewStore());
 let layout = $derived(resolveFirmwareWorkspaceLayout(shellChrome));
+let replayReadonly = $derived(isReplayReadonly(sessionView.current.activeSource));
 let serialBusy = $derived(
   workspaceState.activePath === "serial_primary"
   || (workspaceState.sessionStatus.kind === "cancelling" && workspaceState.sessionStatus.path === "serial_primary"),
@@ -143,7 +154,7 @@ $effect(() => {
         ? "border-accent/40 bg-accent/10"
         : "border-border bg-bg-secondary hover:border-accent/30 hover:bg-bg-primary"}`}
       data-testid={firmwareWorkspaceTestIds.modeInstall}
-      disabled={recoveryBusy || serialBusy}
+      disabled={recoveryBusy || serialBusy || replayReadonly}
       onclick={() => (selectedMode = "install")}
       type="button"
     >
@@ -158,7 +169,7 @@ $effect(() => {
         ? "border-warning/40 bg-warning/10"
         : "border-border bg-bg-secondary hover:border-warning/30 hover:bg-bg-primary"}`}
       data-testid={firmwareWorkspaceTestIds.modeRecovery}
-      disabled={recoveryBusy || serialBusy}
+      disabled={recoveryBusy || serialBusy || replayReadonly}
       onclick={() => (selectedMode = "recovery")}
       type="button"
     >
@@ -175,6 +186,19 @@ $effect(() => {
     >
       <p class="font-semibold" data-testid={firmwareWorkspaceTestIds.blockedReason}>{layout.blockedTitle}</p>
       <p class="mt-1">{layout.blockedDetail}</p>
+    </div>
+  {/if}
+
+  {#if replayReadonly}
+    <div class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm text-warning" data-testid="firmware-replay-readonly-banner">
+      <p class="font-semibold">{REPLAY_READONLY_TITLE}</p>
+      <p class="mt-1">{REPLAY_READONLY_COPY}</p>
+    </div>
+  {/if}
+
+  {#if workspaceState.lastError}
+    <div class="mt-4 rounded-lg border border-danger/40 bg-danger/10 px-4 py-4 text-sm text-danger">
+      {workspaceState.lastError}
     </div>
   {/if}
 
@@ -196,9 +220,9 @@ $effect(() => {
 
   <div class="mt-4 grid gap-4">
     {#if effectiveMode === "install"}
-      <FirmwareSerialPanel {fileIo} layout={layout} {service} {store} />
+      <FirmwareSerialPanel {fileIo} layout={layout} {replayReadonly} {service} {store} />
     {:else}
-      <FirmwareRecoveryPanel {fileIo} layout={layout} {service} {store} />
+      <FirmwareRecoveryPanel {fileIo} layout={layout} {replayReadonly} {service} {store} />
     {/if}
 
 		<FirmwareOutcomePanel state={workspaceState} {store} />

@@ -1,0 +1,18 @@
+[
+  {
+    "format": "tlog",
+    "label": "MAVLink telemetry log",
+    "file_extensions": ["tlog"],
+    "supports_replay": true,
+    "supports_raw_messages": true,
+    "supports_chart_series": true
+  },
+  {
+    "format": "bin",
+    "label": "ArduPilot dataflash log",
+    "file_extensions": ["bin"],
+    "supports_replay": true,
+    "supports_raw_messages": true,
+    "supports_chart_series": true
+  }
+]

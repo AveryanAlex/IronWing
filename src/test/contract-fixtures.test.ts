@@ -5,11 +5,36 @@ import { describe, expect, it } from "vitest";
 import type { DomainValue, DomainProvenance } from "../lib/domain-status";
 import type { FencePlan, FenceRegion } from "../fence";
 import type { GuidedAction, GuidedDomain, GuidedSession, GuidedState } from "../guided";
+import type {
+  ChartPoint,
+  ChartSeries,
+  ChartSeriesPage,
+  ChartSeriesSelector,
+  JsonFieldValue,
+  LogCatalogMigrationError,
+  LogDiagnostic,
+  LogExportRequest,
+  LogExportResult,
+  LogFormatAdapter,
+  LogLibraryCatalog,
+  LogLibraryEntry,
+  LogLibraryEntryStatus,
+  LogProgress,
+  ChartSeriesRequest,
+  RawMessageFieldFilter,
+  RawMessageQuery,
+  RawMessagePage,
+  RawMessageRecord,
+  ReferencedFileFingerprint,
+  ReferencedFileStatus,
+} from "../logs";
 import type { GeoPoint2d, GeoPoint3d, HomePosition, MissionPlan, MissionItem } from "../lib/mavkit-types";
 import type { MissionState } from "../mission";
 import type { ParamProgress, ParamStore } from "../params";
+import type { PlaybackStateSnapshot } from "../playback";
 import type { RallyPlan } from "../rally";
-import type { PlaybackSnapshot, SessionConnection, SessionDomain, SessionEnvelope, SessionState, SourceKind } from "../session";
+import type { RecordingFailure, RecordingMode, RecordingSettings, RecordingSettingsResult, RecordingStartRequest, RecordingStatus } from "../recording";
+import { OPERATION_IDS, type OperationFailure, type OperationId, type PlaybackSnapshot, type ReasonKind, type SessionConnection, type SessionDomain, type SessionEnvelope, type SessionState, type SourceKind } from "../session";
 import type { StatusMessage, StatusTextDomain, StatusTextState } from "../statustext";
 import type { TelemetryState, VehicleState } from "../telemetry";
 
@@ -229,6 +254,47 @@ function expectStringArray(value: unknown, label: string): string[] {
 function expectNumberArray(value: unknown, label: string): number[] {
   expect(Array.isArray(value), `${label} should be an array`).toBe(true);
   return (value as unknown[]).map((entry, index) => expectNumber(entry, `${label}[${index}]`));
+}
+
+function expectOperationId(value: unknown, label: string): OperationId {
+  const actual = expectString(value, label);
+  expect(OPERATION_IDS).toContain(actual);
+  return actual as OperationId;
+}
+
+function expectReason(value: unknown, label: string): OperationFailure["reason"] {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["kind", "message"]);
+  const kind = expectString(object.kind, `${label}.kind`);
+  expect(["unsupported", "unavailable", "conflict", "invalid_input", "cancelled", "failed", "timeout", "permission_denied"]).toContain(kind);
+  return {
+    kind: kind as ReasonKind,
+    message: expectString(object.message, `${label}.message`),
+  };
+}
+
+function expectOperationFailure(value: unknown, label: string): OperationFailure {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["operation_id", "reason"]);
+  return {
+    operation_id: expectOperationId(object.operation_id, `${label}.operation_id`),
+    reason: expectReason(object.reason, `${label}.reason`),
+  };
+}
+
+function expectJsonFieldValue(value: unknown, label: string): JsonFieldValue {
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry, index) => expectJsonFieldValue(entry, `${label}[${index}]`));
+  }
+  const object = expectRecord(value, label);
+  const parsed: Record<string, JsonFieldValue> = {};
+  for (const [key, entry] of Object.entries(object)) {
+    parsed[key] = expectJsonFieldValue(entry, `${label}.${key}`);
+  }
+  return parsed;
 }
 
 function expectProvenance(value: unknown, label: string): DomainProvenance {
@@ -542,6 +608,408 @@ function expectPlaybackSnapshot(value: unknown, label: string): PlaybackSnapshot
   };
 }
 
+function expectFingerprint(value: unknown, label: string): ReferencedFileFingerprint {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["size_bytes", "modified_unix_msec"]);
+  return {
+    size_bytes: expectNumber(object.size_bytes, `${label}.size_bytes`),
+    modified_unix_msec: expectNumber(object.modified_unix_msec, `${label}.modified_unix_msec`),
+  };
+}
+
+function expectReferencedFileStatus(value: unknown, label: string): ReferencedFileStatus {
+  const object = expectRecord(value, label);
+  const kind = expectString(object.kind, `${label}.kind`);
+  if (kind === "available" || kind === "stale") {
+    expectExactKeys(object, label, ["kind", "current_fingerprint"]);
+    return { kind, current_fingerprint: expectFingerprint(object.current_fingerprint, `${label}.current_fingerprint`) };
+  }
+  expectExactKeys(object, label, ["kind"]);
+  expect(kind).toBe("missing");
+  return { kind: "missing" };
+}
+
+function expectLogDiagnostic(value: unknown, label: string): LogDiagnostic {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["severity", "source", "code", "message", "recoverable", "timestamp_usec"]);
+  const severity = expectString(object.severity, `${label}.severity`);
+  const source = expectString(object.source, `${label}.source`);
+  expect(["info", "warning", "error"]).toContain(severity);
+  expect(["catalog", "file_system", "parse", "index", "replay", "export", "recording"]).toContain(source);
+  return {
+    severity: severity as LogDiagnostic["severity"],
+    source: source as LogDiagnostic["source"],
+    code: expectString(object.code, `${label}.code`),
+    message: expectString(object.message, `${label}.message`),
+    recoverable: expectBoolean(object.recoverable, `${label}.recoverable`),
+    timestamp_usec: object.timestamp_usec === null ? null : expectNumber(object.timestamp_usec, `${label}.timestamp_usec`),
+  };
+}
+
+function expectLogFormatAdapter(value: unknown, label: string): LogFormatAdapter {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["format", "label", "file_extensions", "supports_replay", "supports_raw_messages", "supports_chart_series"]);
+  const format = expectString(object.format, `${label}.format`);
+  expect(["tlog", "bin"]).toContain(format);
+  return {
+    format: format as LogFormatAdapter["format"],
+    label: expectString(object.label, `${label}.label`),
+    file_extensions: expectStringArray(object.file_extensions, `${label}.file_extensions`),
+    supports_replay: expectBoolean(object.supports_replay, `${label}.supports_replay`),
+    supports_raw_messages: expectBoolean(object.supports_raw_messages, `${label}.supports_raw_messages`),
+    supports_chart_series: expectBoolean(object.supports_chart_series, `${label}.supports_chart_series`),
+  };
+}
+
+function expectLogFormatAdapters(value: unknown, label: string): LogFormatAdapter[] {
+  expect(Array.isArray(value), `${label} should be an array`).toBe(true);
+  return (value as unknown[]).map((entry, index) => expectLogFormatAdapter(entry, `${label}[${index}]`));
+}
+
+function expectLogCatalogMigrationError(value: unknown, label: string): LogCatalogMigrationError {
+  const object = expectRecord(value, label);
+  const kind = expectString(object.kind, `${label}.kind`);
+  if (kind === "missing_schema_version") {
+    expectExactKeys(object, label, ["kind"]);
+    return { kind };
+  }
+  if (kind === "unsupported_schema_version") {
+    expectExactKeys(object, label, ["kind", "schema_version", "supported_schema_version"]);
+    return {
+      kind,
+      schema_version: expectNumber(object.schema_version, `${label}.schema_version`),
+      supported_schema_version: expectNumber(object.supported_schema_version, `${label}.supported_schema_version`),
+    };
+  }
+  expect(kind).toBe("invalid_catalog");
+  expectExactKeys(object, label, ["kind", "message"]);
+  return { kind: "invalid_catalog", message: expectString(object.message, `${label}.message`) };
+}
+
+function expectLogLibraryEntry(value: unknown, label: string): LogLibraryEntry {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["entry_id", "status", "imported_at_unix_msec", "source", "metadata", "diagnostics", "index"]);
+  const source = expectRecord(object.source, `${label}.source`);
+  expectExactKeys(source, `${label}.source`, ["original_path", "fingerprint", "status"]);
+  const metadata = expectRecord(object.metadata, `${label}.metadata`);
+  expectExactKeys(metadata, `${label}.metadata`, ["display_name", "format", "start_usec", "end_usec", "duration_secs", "total_messages", "message_types", "vehicle_type", "autopilot"]);
+  const status = expectString(object.status, `${label}.status`);
+  expect(["ready", "missing", "stale", "indexing", "partial", "corrupt", "unsupported"]).toContain(status);
+  const messageTypes = expectRecord(metadata.message_types, `${label}.metadata.message_types`);
+  const diagnostics = (object.diagnostics as unknown[]).map((entry, index) => expectLogDiagnostic(entry, `${label}.diagnostics[${index}]`));
+  const index = object.index === null ? null : expectRecord(object.index, `${label}.index`);
+  if (index) {
+    expectExactKeys(index, `${label}.index`, ["index_id", "relative_path", "format", "index_version", "built_at_unix_msec", "message_count", "covers_start_usec", "covers_end_usec"]);
+  }
+  return {
+    entry_id: expectString(object.entry_id, `${label}.entry_id`),
+    status: status as LogLibraryEntryStatus,
+    imported_at_unix_msec: expectNumber(object.imported_at_unix_msec, `${label}.imported_at_unix_msec`),
+    source: {
+      original_path: expectString(source.original_path, `${label}.source.original_path`),
+      fingerprint: expectFingerprint(source.fingerprint, `${label}.source.fingerprint`),
+      status: expectReferencedFileStatus(source.status, `${label}.source.status`),
+    },
+    metadata: {
+      display_name: expectString(metadata.display_name, `${label}.metadata.display_name`),
+      format: expectString(metadata.format, `${label}.metadata.format`) as LogLibraryEntry["metadata"]["format"],
+      start_usec: metadata.start_usec === null ? null : expectNumber(metadata.start_usec, `${label}.metadata.start_usec`),
+      end_usec: metadata.end_usec === null ? null : expectNumber(metadata.end_usec, `${label}.metadata.end_usec`),
+      duration_secs: metadata.duration_secs === null ? null : expectNumber(metadata.duration_secs, `${label}.metadata.duration_secs`),
+      total_messages: expectNumber(metadata.total_messages, `${label}.metadata.total_messages`),
+      message_types: Object.fromEntries(Object.entries(messageTypes).map(([key, item]) => [key, expectNumber(item, `${label}.metadata.message_types.${key}`)])),
+      vehicle_type: metadata.vehicle_type === null ? null : expectString(metadata.vehicle_type, `${label}.metadata.vehicle_type`),
+      autopilot: metadata.autopilot === null ? null : expectString(metadata.autopilot, `${label}.metadata.autopilot`),
+    },
+    diagnostics,
+    index: index === null ? null : {
+      index_id: expectString(index.index_id, `${label}.index.index_id`),
+      relative_path: expectString(index.relative_path, `${label}.index.relative_path`),
+      format: expectString(index.format, `${label}.index.format`) as LogLibraryEntry["metadata"]["format"],
+      index_version: expectNumber(index.index_version, `${label}.index.index_version`),
+      built_at_unix_msec: expectNumber(index.built_at_unix_msec, `${label}.index.built_at_unix_msec`),
+      message_count: expectNumber(index.message_count, `${label}.index.message_count`),
+      covers_start_usec: index.covers_start_usec === null ? null : expectNumber(index.covers_start_usec, `${label}.index.covers_start_usec`),
+      covers_end_usec: index.covers_end_usec === null ? null : expectNumber(index.covers_end_usec, `${label}.index.covers_end_usec`),
+    },
+  };
+}
+
+function expectLogLibraryCatalog(value: unknown, label: string): LogLibraryCatalog {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["schema_version", "storage", "migrated_from_schema_version", "entries"]);
+  expect(object.schema_version).toBe(1);
+  const storage = expectRecord(object.storage, `${label}.storage`);
+  expectExactKeys(storage, `${label}.storage`, ["kind", "catalog_path", "indexes_dir", "recordings_dir"]);
+  expect(storage.kind).toBe("app_data");
+  return {
+    schema_version: 1,
+    storage: {
+      kind: "app_data",
+      catalog_path: expectString(storage.catalog_path, `${label}.storage.catalog_path`),
+      indexes_dir: expectString(storage.indexes_dir, `${label}.storage.indexes_dir`),
+      recordings_dir: expectString(storage.recordings_dir, `${label}.storage.recordings_dir`),
+    },
+    migrated_from_schema_version: object.migrated_from_schema_version === null ? null : expectNumber(object.migrated_from_schema_version, `${label}.migrated_from_schema_version`),
+    entries: (object.entries as unknown[]).map((entry, index) => expectLogLibraryEntry(entry, `${label}.entries[${index}]`)),
+  };
+}
+
+function expectLogProgress(value: unknown, label: string): LogProgress {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["operation_id", "phase", "completed_items", "total_items", "percent", "entry_id", "instance_id", "message"]);
+  const phase = expectString(object.phase, `${label}.phase`);
+  expect(["queued", "reading_metadata", "parsing", "indexing", "writing_catalog", "exporting", "completed", "cancelled", "failed"]).toContain(phase);
+  return {
+    operation_id: expectOperationId(object.operation_id, `${label}.operation_id`),
+    phase: phase as LogProgress["phase"],
+    completed_items: expectNumber(object.completed_items, `${label}.completed_items`),
+    total_items: object.total_items === null ? null : expectNumber(object.total_items, `${label}.total_items`),
+    percent: object.percent === null ? null : expectNumber(object.percent, `${label}.percent`),
+    entry_id: object.entry_id === null ? null : expectString(object.entry_id, `${label}.entry_id`),
+    instance_id: object.instance_id === null ? null : expectString(object.instance_id, `${label}.instance_id`),
+    message: object.message === null ? null : expectString(object.message, `${label}.message`),
+  };
+}
+
+function expectReplayState(value: unknown, label: string): PlaybackStateSnapshot {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["status", "entry_id", "operation_id", "cursor_usec", "start_usec", "end_usec", "duration_secs", "speed", "available_speeds", "barrier_ready", "readonly", "diagnostic"]);
+  const status = expectString(object.status, `${label}.status`);
+  expect(["idle", "loading", "ready", "playing", "paused", "seeking", "ended", "error"]).toContain(status);
+  return {
+    status: status as PlaybackStateSnapshot["status"],
+    entry_id: object.entry_id === null ? null : expectString(object.entry_id, `${label}.entry_id`),
+    operation_id: object.operation_id === null ? null : expectOperationId(object.operation_id, `${label}.operation_id`),
+    cursor_usec: object.cursor_usec === null ? null : expectNumber(object.cursor_usec, `${label}.cursor_usec`),
+    start_usec: object.start_usec === null ? null : expectNumber(object.start_usec, `${label}.start_usec`),
+    end_usec: object.end_usec === null ? null : expectNumber(object.end_usec, `${label}.end_usec`),
+    duration_secs: object.duration_secs === null ? null : expectNumber(object.duration_secs, `${label}.duration_secs`),
+    speed: expectNumber(object.speed, `${label}.speed`),
+    available_speeds: expectNumberArray(object.available_speeds, `${label}.available_speeds`),
+    barrier_ready: expectBoolean(object.barrier_ready, `${label}.barrier_ready`),
+    readonly: expectBoolean(object.readonly, `${label}.readonly`),
+    diagnostic: object.diagnostic === null ? null : expectLogDiagnostic(object.diagnostic, `${label}.diagnostic`),
+  };
+}
+
+function expectRawMessageRecord(value: unknown, label: string): RawMessageRecord {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["sequence", "timestamp_usec", "message_type", "system_id", "component_id", "raw_len_bytes", "fields", "detail", "hex_payload", "diagnostics"]);
+  const fields = expectRecord(object.fields, `${label}.fields`);
+  const parsedFields: Record<string, JsonFieldValue> = {};
+  for (const [key, entry] of Object.entries(fields)) {
+    parsedFields[key] = expectJsonFieldValue(entry, `${label}.fields.${key}`);
+  }
+  return {
+    sequence: expectNumber(object.sequence, `${label}.sequence`),
+    timestamp_usec: expectNumber(object.timestamp_usec, `${label}.timestamp_usec`),
+    message_type: expectString(object.message_type, `${label}.message_type`),
+    system_id: object.system_id === null ? null : expectNumber(object.system_id, `${label}.system_id`),
+    component_id: object.component_id === null ? null : expectNumber(object.component_id, `${label}.component_id`),
+    raw_len_bytes: expectNumber(object.raw_len_bytes, `${label}.raw_len_bytes`),
+    fields: parsedFields,
+    detail: object.detail === null ? null : expectJsonFieldValue(object.detail, `${label}.detail`),
+    hex_payload: object.hex_payload === null ? null : expectString(object.hex_payload, `${label}.hex_payload`),
+    diagnostics: (object.diagnostics as unknown[]).map((entry, index) => expectLogDiagnostic(entry, `${label}.diagnostics[${index}]`)),
+  };
+}
+
+function expectRawMessageFieldFilter(value: unknown, label: string): RawMessageFieldFilter {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["field", "value_text"]);
+  return {
+    field: expectString(object.field, `${label}.field`),
+    value_text: object.value_text === null ? null : expectString(object.value_text, `${label}.value_text`),
+  };
+}
+
+function expectRawMessageQuery(value: unknown, label: string): RawMessageQuery {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["entry_id", "cursor", "start_usec", "end_usec", "message_types", "text", "field_filters", "limit", "include_detail", "include_hex"]);
+  return {
+    entry_id: expectString(object.entry_id, `${label}.entry_id`),
+    cursor: object.cursor === null ? null : expectString(object.cursor, `${label}.cursor`),
+    start_usec: object.start_usec === null ? null : expectNumber(object.start_usec, `${label}.start_usec`),
+    end_usec: object.end_usec === null ? null : expectNumber(object.end_usec, `${label}.end_usec`),
+    message_types: expectStringArray(object.message_types, `${label}.message_types`),
+    text: object.text === null ? null : expectString(object.text, `${label}.text`),
+    field_filters: (object.field_filters as unknown[]).map((entry, index) => expectRawMessageFieldFilter(entry, `${label}.field_filters[${index}]`)),
+    limit: expectNumber(object.limit, `${label}.limit`),
+    include_detail: expectBoolean(object.include_detail, `${label}.include_detail`),
+    include_hex: expectBoolean(object.include_hex, `${label}.include_hex`),
+  };
+}
+
+function expectRawMessagePage(value: unknown, label: string): RawMessagePage {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["entry_id", "items", "next_cursor", "total_available"]);
+  return {
+    entry_id: expectString(object.entry_id, `${label}.entry_id`),
+    items: (object.items as unknown[]).map((entry, index) => expectRawMessageRecord(entry, `${label}.items[${index}]`)),
+    next_cursor: object.next_cursor === null ? null : expectString(object.next_cursor, `${label}.next_cursor`),
+    total_available: object.total_available === null ? null : expectNumber(object.total_available, `${label}.total_available`),
+  };
+}
+
+function expectChartSeriesSelector(value: unknown, label: string): ChartSeriesSelector {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["message_type", "field", "label", "unit"]);
+  return {
+    message_type: expectString(object.message_type, `${label}.message_type`),
+    field: expectString(object.field, `${label}.field`),
+    label: expectString(object.label, `${label}.label`),
+    unit: object.unit === null ? null : expectString(object.unit, `${label}.unit`),
+  };
+}
+
+function expectChartPoint(value: unknown, label: string): ChartPoint {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["timestamp_usec", "value"]);
+  return {
+    timestamp_usec: expectNumber(object.timestamp_usec, `${label}.timestamp_usec`),
+    value: expectNumber(object.value, `${label}.value`),
+  };
+}
+
+function expectChartSeries(value: unknown, label: string): ChartSeries {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["selector", "points"]);
+  return {
+    selector: expectChartSeriesSelector(object.selector, `${label}.selector`),
+    points: (object.points as unknown[]).map((entry, index) => expectChartPoint(entry, `${label}.points[${index}]`)),
+  };
+}
+
+function expectChartSeriesRequest(value: unknown, label: string): ChartSeriesRequest {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["entry_id", "selectors", "start_usec", "end_usec", "max_points"]);
+  return {
+    entry_id: expectString(object.entry_id, `${label}.entry_id`),
+    selectors: (object.selectors as unknown[]).map((entry, index) => expectChartSeriesSelector(entry, `${label}.selectors[${index}]`)),
+    start_usec: object.start_usec === null ? null : expectNumber(object.start_usec, `${label}.start_usec`),
+    end_usec: object.end_usec === null ? null : expectNumber(object.end_usec, `${label}.end_usec`),
+    max_points: object.max_points === null ? null : expectNumber(object.max_points, `${label}.max_points`),
+  };
+}
+
+function expectChartSeriesPage(value: unknown, label: string): ChartSeriesPage {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["entry_id", "start_usec", "end_usec", "series", "diagnostics"]);
+  return {
+    entry_id: expectString(object.entry_id, `${label}.entry_id`),
+    start_usec: object.start_usec === null ? null : expectNumber(object.start_usec, `${label}.start_usec`),
+    end_usec: object.end_usec === null ? null : expectNumber(object.end_usec, `${label}.end_usec`),
+    series: (object.series as unknown[]).map((entry, index) => expectChartSeries(entry, `${label}.series[${index}]`)),
+    diagnostics: (object.diagnostics as unknown[]).map((entry, index) => expectLogDiagnostic(entry, `${label}.diagnostics[${index}]`)),
+  };
+}
+
+function expectLogExportRequest(value: unknown, label: string): LogExportRequest {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["entry_id", "instance_id", "format", "destination_path", "start_usec", "end_usec", "message_types", "text", "field_filters"]);
+  const format = expectString(object.format, `${label}.format`);
+  expect(format).toBe("csv");
+  return {
+    entry_id: expectString(object.entry_id, `${label}.entry_id`),
+    instance_id: expectString(object.instance_id, `${label}.instance_id`),
+    format: format as LogExportRequest["format"],
+    destination_path: expectString(object.destination_path, `${label}.destination_path`),
+    start_usec: object.start_usec === null ? null : expectNumber(object.start_usec, `${label}.start_usec`),
+    end_usec: object.end_usec === null ? null : expectNumber(object.end_usec, `${label}.end_usec`),
+    message_types: expectStringArray(object.message_types, `${label}.message_types`),
+    text: object.text === null ? null : expectString(object.text, `${label}.text`),
+    field_filters: (object.field_filters as unknown[]).map((entry, index) => expectRawMessageFieldFilter(entry, `${label}.field_filters[${index}]`)),
+  };
+}
+
+function expectLogExportResult(value: unknown, label: string): LogExportResult {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["operation_id", "destination_path", "bytes_written", "rows_written", "diagnostics"]);
+  return {
+    operation_id: expectOperationId(object.operation_id, `${label}.operation_id`),
+    destination_path: expectString(object.destination_path, `${label}.destination_path`),
+    bytes_written: expectNumber(object.bytes_written, `${label}.bytes_written`),
+    rows_written: expectNumber(object.rows_written, `${label}.rows_written`),
+    diagnostics: (object.diagnostics as unknown[]).map((entry, index) => expectLogDiagnostic(entry, `${label}.diagnostics[${index}]`)),
+  };
+}
+
+function expectRecordingSettings(value: unknown, label: string): RecordingSettings {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["auto_record_on_connect", "auto_record_directory", "filename_template", "add_completed_recordings_to_library"]);
+  return {
+    auto_record_on_connect: expectBoolean(object.auto_record_on_connect, `${label}.auto_record_on_connect`),
+    auto_record_directory: expectString(object.auto_record_directory, `${label}.auto_record_directory`),
+    filename_template: expectString(object.filename_template, `${label}.filename_template`),
+    add_completed_recordings_to_library: expectBoolean(object.add_completed_recordings_to_library, `${label}.add_completed_recordings_to_library`),
+  };
+}
+
+function expectRecordingStartRequest(value: unknown, label: string): RecordingStartRequest {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["destination_path", "mode"]);
+  const mode = expectString(object.mode, `${label}.mode`);
+  expect(["manual", "auto_on_connect"]).toContain(mode);
+  return {
+    destination_path: expectString(object.destination_path, `${label}.destination_path`),
+    mode: mode as RecordingMode,
+  };
+}
+
+function expectRecordingSettingsResult(value: unknown, label: string): RecordingSettingsResult {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["operation_id", "settings"]);
+  return {
+    operation_id: expectOperationId(object.operation_id, `${label}.operation_id`),
+    settings: expectRecordingSettings(object.settings, `${label}.settings`),
+  };
+}
+
+function expectRecordingFailure(value: unknown, label: string): RecordingFailure {
+  const object = expectRecord(value, label);
+  expectExactKeys(object, label, ["operation_id", "reason", "destination_path"]);
+  return {
+    operation_id: expectOperationId(object.operation_id, `${label}.operation_id`),
+    reason: expectReason(object.reason, `${label}.reason`),
+    destination_path: object.destination_path === null ? null : expectString(object.destination_path, `${label}.destination_path`),
+  };
+}
+
+function expectRecordingStatus(value: unknown, label: string): RecordingStatus {
+  const object = expectRecord(value, label);
+  const kind = expectString(object.kind, `${label}.kind`);
+  if (kind === "idle") {
+    expectExactKeys(object, label, ["kind"]);
+    return { kind };
+  }
+  if (kind === "recording") {
+    expectExactKeys(object, label, ["kind", "operation_id", "mode", "file_name", "destination_path", "bytes_written", "started_at_unix_msec"]);
+    return {
+      kind,
+      operation_id: expectOperationId(object.operation_id, `${label}.operation_id`) as "recording_start",
+      mode: expectString(object.mode, `${label}.mode`) as RecordingMode,
+      file_name: expectString(object.file_name, `${label}.file_name`),
+      destination_path: expectString(object.destination_path, `${label}.destination_path`),
+      bytes_written: expectNumber(object.bytes_written, `${label}.bytes_written`),
+      started_at_unix_msec: expectNumber(object.started_at_unix_msec, `${label}.started_at_unix_msec`),
+    };
+  }
+  if (kind === "stopping") {
+    expectExactKeys(object, label, ["kind", "operation_id", "file_name", "destination_path", "bytes_written"]);
+    return {
+      kind,
+      operation_id: expectOperationId(object.operation_id, `${label}.operation_id`) as "recording_stop",
+      file_name: expectString(object.file_name, `${label}.file_name`),
+      destination_path: expectString(object.destination_path, `${label}.destination_path`),
+      bytes_written: expectNumber(object.bytes_written, `${label}.bytes_written`),
+    };
+  }
+  expect(kind).toBe("failed");
+  expectExactKeys(object, label, ["kind", "failure"]);
+  return { kind: "failed", failure: expectOperationFailure(object.failure, `${label}.failure`) };
+}
+
 function expectMissionState(value: unknown, label: string): MissionState {
   const object = expectRecord(value, label);
   expectExactKeys(object, label, ["active_op", "current_index", "plan", "sync"]);
@@ -702,6 +1170,16 @@ function expectRallyPlan(value: unknown, label: string): RallyPlan {
 }
 
 describe("contract fixtures", () => {
+  it("accepts every log catalog migration error discriminant used by the Rust contract", () => {
+    expectLogCatalogMigrationError({ kind: "missing_schema_version" }, "migration.missing");
+    expectLogCatalogMigrationError({
+      kind: "unsupported_schema_version",
+      schema_version: 2,
+      supported_schema_version: 1,
+    }, "migration.unsupported");
+    expectLogCatalogMigrationError({ kind: "invalid_catalog", message: "bad catalog" }, "migration.invalid");
+  });
+
   const cases: Array<[string, (value: unknown, label: string) => unknown]> = [
     ["session.domain.json", (value, label) => expectDomainValue(value, label, expectSessionState) satisfies SessionDomain],
     ["telemetry.domain.json", (value, label) => expectDomainValue(value, label, expectTelemetryState)],
@@ -716,6 +1194,22 @@ describe("contract fixtures", () => {
     ["mission.plan.json", expectMissionPlan],
     ["fence.plan.json", expectFencePlan],
     ["rally.plan.json", expectRallyPlan],
+    ["log_format_adapters.json", expectLogFormatAdapters],
+    ["log_library.catalog.v1.json", expectLogLibraryCatalog],
+    ["log_catalog.migration_error.json", expectLogCatalogMigrationError],
+    ["log_library.progress.json", expectLogProgress],
+    ["replay.state.json", expectReplayState],
+    ["log_raw_messages.query.json", expectRawMessageQuery],
+    ["log_raw_messages.page.json", expectRawMessagePage],
+    ["log_chart_series.request.json", expectChartSeriesRequest],
+    ["log_chart_series.page.json", expectChartSeriesPage],
+    ["log_export.request.json", expectLogExportRequest],
+    ["log_export.result.json", expectLogExportResult],
+    ["recording.start_request.json", expectRecordingStartRequest],
+    ["recording.settings.json", expectRecordingSettings],
+    ["recording.settings_result.json", expectRecordingSettingsResult],
+    ["recording.failure.json", expectRecordingFailure],
+    ["recording.status.json", expectRecordingStatus],
   ];
 
   it.each(cases)("validates %s against the TypeScript contract", (name, validate) => {

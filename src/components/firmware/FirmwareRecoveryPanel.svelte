@@ -24,6 +24,7 @@ type Props = {
   service: FirmwareService;
   fileIo: FirmwareFileIo;
   layout: FirmwareWorkspaceLayout;
+  replayReadonly: boolean;
 };
 
 let {
@@ -31,6 +32,7 @@ let {
   service,
   fileIo,
   layout,
+  replayReadonly,
 }: Props = $props();
 
 let workspaceState = $derived($store);
@@ -624,7 +626,7 @@ $effect(() => {
       <button
         class="rounded-xl bg-warning px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
         data-testid={firmwareWorkspaceTestIds.startRecovery}
-        disabled={!canStartRecovery || isRecoveryActive || isRecoveryCancelling}
+        disabled={!canStartRecovery || isRecoveryActive || isRecoveryCancelling || replayReadonly}
         onclick={() => void store.startDfuRecovery()}
         type="button"
       >

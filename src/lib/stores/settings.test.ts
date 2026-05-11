@@ -30,6 +30,7 @@ describe("loadSettings", () => {
           terrainSafetyMarginM: "invalid",
           cruiseSpeedMps: 17,
           hoverSpeedMps: null,
+          recordingAutoRecordOnConnect: true,
         }),
     };
 
@@ -40,6 +41,7 @@ describe("loadSettings", () => {
       terrainSafetyMarginM: settingsDefaults.terrainSafetyMarginM,
       cruiseSpeedMps: 17,
       hoverSpeedMps: settingsDefaults.hoverSpeedMps,
+      recordingAutoRecordOnConnect: true,
     });
   });
 
@@ -60,6 +62,17 @@ describe("loadSettings", () => {
       ...settingsDefaults,
       messageRates: {},
     });
+  });
+
+  it("defaults recording auto-record opt-in to disabled for malformed persisted values", () => {
+    const storage = {
+      getItem: () =>
+        JSON.stringify({
+          recordingAutoRecordOnConnect: "yes",
+        }),
+    };
+
+    expect(loadSettings(storage).recordingAutoRecordOnConnect).toBe(false);
   });
 
   it("returns fresh defaults for each load so messageRates is not shared", () => {

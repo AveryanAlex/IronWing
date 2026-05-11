@@ -1,0 +1,7 @@
+{
+  "operation_id": "log_export",
+  "destination_path": "/home/alex/exports/flight-001.csv",
+  "bytes_written": 4096,
+  "rows_written": 42,
+  "diagnostics": []
+}

@@ -1,6 +1,7 @@
 <script lang="ts">
 import { fromStore } from "svelte/store";
 
+import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../lib/replay-readonly";
 import { appShellTestIds } from "./chrome-state";
 import {
   getParamsStoreContext,
@@ -23,6 +24,7 @@ let view = $derived(parameterView.current);
 let surface = $derived(chrome.current.tier === "phone" ? "sheet" : "tray");
 let hasRebootFlaggedEdit = $derived(view.stagedEdits.some((edit) => edit.rebootRequired));
 let isApplying = $derived(view.applyPhase === "applying");
+let replayReadonly = $derived(isReplayReadonly(view.activeEnvelope?.source_kind ?? null));
 
 function applyQueuedEdits() {
   if (!open) {
@@ -81,6 +83,11 @@ function retryEdit(name: string) {
               {view.noticeText}
             </p>
           {/if}
+          {#if replayReadonly}
+            <p class="mt-2 text-sm text-warning" data-testid={appShellTestIds.parameterReviewReplayReadonly}>
+              <span class="font-semibold">{REPLAY_READONLY_TITLE}</span> · {REPLAY_READONLY_COPY}
+            </p>
+          {/if}
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
@@ -90,7 +97,7 @@ function retryEdit(name: string) {
           <button
             class="rounded-md border border-accent/30 bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             data-testid={appShellTestIds.parameterReviewApply}
-            disabled={isApplying}
+            disabled={isApplying || replayReadonly}
             onclick={applyQueuedEdits}
             type="button"
           >
@@ -160,7 +167,7 @@ function retryEdit(name: string) {
                     <button
                       class="rounded border border-accent/30 bg-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-accent transition hover:bg-accent/20 disabled:opacity-60"
                       data-testid={`${appShellTestIds.parameterReviewRetryPrefix}-${edit.name}`}
-                      disabled={isApplying}
+                      disabled={isApplying || replayReadonly}
                       onclick={() => retryEdit(edit.name)}
                       type="button"
                     >

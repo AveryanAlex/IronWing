@@ -1,23 +1,15 @@
 import { liveGuidedDomain } from "./guided";
+import {
+    getResolvedReplayCursorUsec,
+    playbackStateEvent,
+    playbackTelemetryDomain,
+    updateReplayStateForPause,
+    updateReplayStateForPlay,
+    updateReplayStateForSeek,
+    updateReplayStateForSpeed,
+} from "./logs";
 import { mockState, nextEnvelope, resetGuided, sweepExpiredPending } from "./runtime";
 import type { CommandArgs, SessionConnection, SessionEnvelope, MockPlatformEvent } from "./types";
-
-function playbackTelemetryDomain() {
-    return {
-        available: true,
-        complete: true,
-        provenance: "playback",
-        value: {
-            flight: { altitude_m: null, speed_mps: null, climb_rate_mps: null, throttle_pct: null, airspeed_mps: null },
-            navigation: { latitude_deg: null, longitude_deg: null, heading_deg: null, wp_dist_m: null, nav_bearing_deg: null, target_bearing_deg: null, xtrack_error_m: null },
-            attitude: { roll_deg: null, pitch_deg: null, yaw_deg: null },
-            power: { battery_pct: null, battery_voltage_v: null, battery_current_a: null, battery_voltage_cells: null, energy_consumed_wh: null, battery_time_remaining_s: null },
-            gps: { fix_type: null, satellites: null, hdop: null },
-            terrain: { terrain_height_m: null, height_above_terrain_m: null },
-            radio: { rc_channels: null, rc_rssi: null, servo_outputs: null },
-        },
-    };
-}
 
 function missingDomainValue() {
     return {
@@ -130,7 +122,7 @@ export function openSessionSnapshotResult(sourceKind: "live" | "playback") {
     };
 }
 
-export function playbackStreamEvents(envelope: SessionEnvelope, cursorUsec: number | null): MockPlatformEvent[] {
+export function playbackStreamEvents(envelope: SessionEnvelope): MockPlatformEvent[] {
     return [
         {
             event: "session://state",
@@ -171,13 +163,20 @@ export function playbackStreamEvents(envelope: SessionEnvelope, cursorUsec: numb
             },
         },
         {
-            event: "playback://state",
-            payload: {
-                envelope,
-                value: { cursor_usec: cursorUsec, barrier_ready: true },
-            },
+            ...playbackStateEvent(envelope),
         },
     ];
+}
+
+function requireActivePlaybackEnvelope(): SessionEnvelope {
+    if (!mockState.logOpen) {
+        throw new Error("no log open");
+    }
+    if (!mockState.playbackEnvelope) {
+        throw new Error("playback session is not active");
+    }
+
+    return mockState.playbackEnvelope;
 }
 
 function missingPendingAckResult() {
@@ -231,24 +230,54 @@ export function playbackSeekResult(args: CommandArgs): {
     cursor_usec: number | null;
     events: MockPlatformEvent[];
 } {
-    if (!mockState.logOpen) {
-        throw new Error("no log open");
-    }
-    if (!mockState.playbackEnvelope) {
-        throw new Error("playback session is not active");
-    }
+    const activeEnvelope = requireActivePlaybackEnvelope();
 
     resetGuided("source_switch", "playback source switched");
-    mockState.playbackEnvelope = {
-        ...mockState.playbackEnvelope,
-        seek_epoch: mockState.playbackEnvelope.seek_epoch + 1,
-        reset_revision: mockState.playbackEnvelope.reset_revision + 1,
+    const nextEnvelope: SessionEnvelope = {
+        ...activeEnvelope,
+        seek_epoch: activeEnvelope.seek_epoch + 1,
+        reset_revision: activeEnvelope.reset_revision,
     };
+    mockState.playbackEnvelope = nextEnvelope;
     mockState.playbackCursorUsec = (args?.cursorUsec as number | undefined) ?? null;
+    updateReplayStateForSeek(mockState.playbackCursorUsec);
+    mockState.playbackCursorUsec = getResolvedReplayCursorUsec();
 
     return {
-        envelope: mockState.playbackEnvelope,
+        envelope: nextEnvelope,
         cursor_usec: mockState.playbackCursorUsec,
-        events: playbackStreamEvents(mockState.playbackEnvelope, mockState.playbackCursorUsec),
+        events: playbackStreamEvents(nextEnvelope),
+    };
+}
+
+export function playbackPlayResult() {
+    const envelope = requireActivePlaybackEnvelope();
+    updateReplayStateForPlay();
+    return {
+        state: playbackStateEvent(envelope).payload.value,
+        events: playbackStreamEvents(envelope),
+    };
+}
+
+export function playbackPauseResult() {
+    const envelope = requireActivePlaybackEnvelope();
+    updateReplayStateForPause();
+    return {
+        state: playbackStateEvent(envelope).payload.value,
+        events: playbackStreamEvents(envelope),
+    };
+}
+
+export function playbackSetSpeedResult(args: CommandArgs) {
+    const envelope = requireActivePlaybackEnvelope();
+    const speed = args?.speed;
+    if (typeof speed !== "number" || !Number.isFinite(speed)) {
+        throw new Error("missing or invalid playback_set_speed.speed");
+    }
+
+    updateReplayStateForSpeed(speed);
+    return {
+        state: playbackStateEvent(envelope).payload.value,
+        events: playbackStreamEvents(envelope),
     };
 }

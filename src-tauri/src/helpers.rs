@@ -1,4 +1,5 @@
 use crate::AppState;
+use crate::ipc::{OperationFailure, OperationId, Reason, ReasonKind, SourceKind};
 use tokio::sync::MappedMutexGuard;
 
 pub(crate) async fn with_vehicle(
@@ -15,6 +16,33 @@ pub(crate) async fn with_log_store(
     let guard = state.log_store.lock().await;
     tokio::sync::MutexGuard::try_map(guard, |opt| opt.as_mut())
         .map_err(|_| "no log loaded".to_string())
+}
+
+pub(crate) async fn ensure_live_write_allowed(
+    state: &AppState,
+    operation_id: OperationId,
+) -> Result<(), String> {
+    let source_kind = state.session_runtime.lock().await.effective_source_kind();
+    if source_kind == SourceKind::Playback {
+        return Err(operation_failure_json(OperationFailure {
+            operation_id,
+            reason: Reason {
+                kind: ReasonKind::PermissionDenied,
+                message:
+                    "replay is read-only while playback is the effective source; switch back to the live source to send vehicle commands"
+                        .to_string(),
+            },
+        }));
+    }
+
+    Ok(())
+}
+
+pub(crate) fn operation_failure_json(failure: OperationFailure) -> String {
+    match serde_json::to_string(&failure) {
+        Ok(json) => json,
+        Err(_) => failure.reason.message,
+    }
 }
 
 pub(crate) fn downsample<T: Clone>(items: Vec<T>, max: usize) -> Vec<T> {

@@ -223,6 +223,10 @@ pub(crate) async fn spawn_event_bridges(
                     &snapshot,
                     DomainProvenance::Stream,
                 );
+                {
+                    let state: tauri::State<'_, AppState> = handle.state();
+                    *state.live_telemetry.lock().await = grouped.clone();
+                }
                 emit_scoped(&handle, "telemetry://state", grouped).await;
             }
         }));

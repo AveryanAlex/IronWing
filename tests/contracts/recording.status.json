@@ -1,0 +1,9 @@
+{
+  "kind": "recording",
+  "operation_id": "recording_start",
+  "mode": "manual",
+  "file_name": "flight-001.tlog",
+  "destination_path": "/home/alex/flights/flight-001.tlog",
+  "bytes_written": 2048,
+  "started_at_unix_msec": 1778246400000
+}

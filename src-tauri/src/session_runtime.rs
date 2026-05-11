@@ -21,6 +21,7 @@ pub(crate) struct SessionRuntime {
     next_seek_epoch: u64,
     next_session_nonce: u64,
     reset_revision: u64,
+    effective_source_kind: SourceKind,
     last_source_kind: Option<SourceKind>,
 }
 
@@ -41,6 +42,7 @@ impl SessionRuntime {
             next_seek_epoch: 0,
             next_session_nonce: 1,
             reset_revision: 0,
+            effective_source_kind: SourceKind::Live,
             last_source_kind: None,
         }
     }
@@ -139,10 +141,14 @@ impl SessionRuntime {
             SourceKind::Live => {
                 self.live_active = Some(envelope.clone());
                 self.pending_live = None;
+                if self.playback_active.is_none() {
+                    self.effective_source_kind = SourceKind::Live;
+                }
             }
             SourceKind::Playback => {
                 self.playback_active = Some(envelope.clone());
                 self.pending_playback = None;
+                self.effective_source_kind = SourceKind::Playback;
             }
         }
         AckSessionSnapshotResult::Accepted { envelope }
@@ -150,18 +156,14 @@ impl SessionRuntime {
 
     pub(crate) fn issue_playback_seek(&mut self) -> Result<SessionEnvelope, OperationFailure> {
         let Some(active) = self.playback_active.as_mut() else {
-            return Err(OperationFailure {
-                operation_id: crate::ipc::OperationId::OpenSessionSnapshot,
-                reason: Reason {
-                    kind: ReasonKind::Conflict,
-                    message: "playback session is not active".to_string(),
-                },
-            });
+            return Err(playback_session_inactive_failure(
+                crate::ipc::OperationId::ReplaySeek,
+            ));
         };
 
         if active.source_kind != SourceKind::Playback {
             return Err(OperationFailure {
-                operation_id: crate::ipc::OperationId::OpenSessionSnapshot,
+                operation_id: crate::ipc::OperationId::ReplaySeek,
                 reason: Reason {
                     kind: ReasonKind::Conflict,
                     message: "active session is not playback".to_string(),
@@ -174,21 +176,58 @@ impl SessionRuntime {
         Ok(active.clone())
     }
 
+    pub(crate) fn active_playback_envelope(
+        &self,
+        operation_id: crate::ipc::OperationId,
+    ) -> Result<SessionEnvelope, OperationFailure> {
+        let Some(active) = self.playback_active.as_ref() else {
+            return Err(playback_session_inactive_failure(operation_id));
+        };
+
+        if active.source_kind != SourceKind::Playback {
+            return Err(OperationFailure {
+                operation_id,
+                reason: Reason {
+                    kind: ReasonKind::Conflict,
+                    message: "active session is not playback".to_string(),
+                },
+            });
+        }
+
+        Ok(active.clone())
+    }
+
     pub(crate) fn current_stream_envelope(&mut self, now: Instant) -> Option<SessionEnvelope> {
         self.sweep_expired_pending(now);
         self.live_active.clone()
     }
 
-    pub(crate) fn close_playback_session(&mut self) {
-        self.playback_active = None;
+    pub(crate) fn effective_session_envelope(&mut self, now: Instant) -> Option<SessionEnvelope> {
+        self.sweep_expired_pending(now);
+        match self.effective_source_kind {
+            SourceKind::Live => self.live_active.clone(),
+            SourceKind::Playback => self.playback_active.clone(),
+        }
+    }
+
+    pub(crate) fn close_playback_session(&mut self) -> Option<SessionEnvelope> {
+        let had_effective_playback = self.effective_source_kind == SourceKind::Playback;
+        let had_playback_session = self.playback_active.take().is_some();
+        self.pending_playback = None;
+        self.effective_source_kind = SourceKind::Live;
+        if had_effective_playback || had_playback_session {
+            self.live_active.clone()
+        } else {
+            None
+        }
+    }
+
+    pub(crate) const fn effective_source_kind(&self) -> SourceKind {
+        self.effective_source_kind
     }
 
     pub(crate) fn guided_source_kind(&self) -> SourceKind {
-        if self.playback_active.is_some() {
-            SourceKind::Playback
-        } else {
-            SourceKind::Live
-        }
+        self.effective_source_kind()
     }
 
     pub(crate) fn sweep_expired_pending(&mut self, now: Instant) {
@@ -210,6 +249,11 @@ impl SessionRuntime {
     #[cfg(test)]
     fn playback_active_envelope(&self) -> Option<&SessionEnvelope> {
         self.playback_active.as_ref()
+    }
+
+    #[cfg(test)]
+    const fn effective_source_kind_for_test(&self) -> SourceKind {
+        self.effective_source_kind
     }
 
     #[cfg(test)]
@@ -249,6 +293,16 @@ impl SessionRuntime {
         }
 
         None
+    }
+}
+
+fn playback_session_inactive_failure(operation_id: crate::ipc::OperationId) -> OperationFailure {
+    OperationFailure {
+        operation_id,
+        reason: Reason {
+            kind: ReasonKind::Conflict,
+            message: "playback session is not active".to_string(),
+        },
     }
 }
 
@@ -408,6 +462,14 @@ mod tests {
             .expect("live stream envelope");
 
         assert_eq!(stream, live.envelope);
+        assert_eq!(
+            runtime.effective_session_envelope(Instant::now()),
+            Some(playback.envelope.clone())
+        );
+        assert_eq!(
+            runtime.effective_source_kind_for_test(),
+            SourceKind::Playback
+        );
         assert_eq!(runtime.live_active_envelope(), Some(&live.envelope));
         assert_eq!(runtime.playback_active_envelope(), Some(&playback.envelope));
     }
@@ -438,9 +500,53 @@ mod tests {
         runtime.close_playback_session();
 
         assert_eq!(runtime.playback_active_envelope(), None);
+        assert_eq!(runtime.effective_source_kind_for_test(), SourceKind::Live);
         assert_eq!(
             runtime.current_stream_envelope(Instant::now()),
             Some(live.envelope)
+        );
+    }
+
+    #[test]
+    fn live_ack_does_not_replace_effective_playback_source() {
+        let mut runtime = SessionRuntime::new();
+        let live = runtime.open_session_snapshot(SourceKind::Live);
+        assert!(matches!(
+            runtime.ack_session_snapshot(
+                &live.envelope.session_id,
+                live.envelope.seek_epoch,
+                live.envelope.reset_revision
+            ),
+            AckSessionSnapshotResult::Accepted { .. }
+        ));
+
+        let playback = runtime.open_session_snapshot(SourceKind::Playback);
+        assert!(matches!(
+            runtime.ack_session_snapshot(
+                &playback.envelope.session_id,
+                playback.envelope.seek_epoch,
+                playback.envelope.reset_revision
+            ),
+            AckSessionSnapshotResult::Accepted { .. }
+        ));
+
+        let refreshed_live = runtime.open_session_snapshot(SourceKind::Live);
+        assert!(matches!(
+            runtime.ack_session_snapshot(
+                &refreshed_live.envelope.session_id,
+                refreshed_live.envelope.seek_epoch,
+                refreshed_live.envelope.reset_revision
+            ),
+            AckSessionSnapshotResult::Accepted { .. }
+        ));
+
+        assert_eq!(
+            runtime.effective_source_kind_for_test(),
+            SourceKind::Playback
+        );
+        assert_eq!(
+            runtime.effective_session_envelope(Instant::now()),
+            Some(playback.envelope)
         );
     }
 

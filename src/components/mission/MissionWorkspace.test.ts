@@ -721,6 +721,7 @@ async function renderWorkspace(options: {
   fileIoOverrides?: Partial<MissionPlanFileIo>;
   chromeStore?: ReturnType<typeof createStaticShellChromeStore> | Writable<ReturnType<typeof createShellChromeState>>;
   includeShellChromeContext?: boolean;
+  componentProps?: Record<string, unknown>;
   setup?: (context: {
     plannerStore: ReturnType<typeof createMissionPlannerStore>;
     sessionStore: ReturnType<typeof createSessionStore>;
@@ -744,7 +745,9 @@ async function renderWorkspace(options: {
   render(withMissionPlannerContexts(plannerStore, MissionWorkspace, {
     chromeStore: options.chromeStore,
     includeShellChromeContext: options.includeShellChromeContext,
-  }));
+  }), {
+    props: (options.componentProps ?? {}) as never,
+  });
 
   return {
     sessionStore,
@@ -962,6 +965,28 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentState).textContent).toContain("all-visible");
     });
     expect(screen.queryByTestId(missionWorkspaceTestIds.phoneSegmentBar)).toBeNull();
+  });
+
+  it("renders a replay handoff overlay on the mission map before any planner draft is mounted", async () => {
+    await renderWorkspace({
+      componentProps: {
+        replayMapOverlay: {
+          phase: "ready",
+          entryId: "log-1",
+          path: [
+            { timestamp_usec: 1_000_000, lat: 47.397742, lon: 8.545594, alt: 488, heading: 90 },
+            { timestamp_usec: 2_000_000, lat: 47.398142, lon: 8.546094, alt: 490, heading: 92 },
+          ],
+          marker: { timestamp_usec: 2_000_000, lat: 47.398142, lon: 8.546094, alt: 490, heading: 92 },
+          error: null,
+        },
+      },
+    });
+
+    expect(screen.getByTestId("mission-replay-overlay-banner").textContent).toContain("Replay map overlay");
+    expect(screen.getByTestId(missionWorkspaceTestIds.map)).toBeTruthy();
+    expect(screen.getByTestId("mission-map-replay-path")).toBeTruthy();
+    expect(screen.getByTestId("mission-map-replay-marker")).toBeTruthy();
   });
 
   it("keeps the terrain support panel mounted across wide, compact-wide, and phone mission layouts", async () => {
@@ -1697,7 +1722,12 @@ describe("MissionWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.attachment).textContent).toContain("Playback read-only");
     });
+    expect(screen.getByTestId(missionWorkspaceTestIds.headerReplayReadonly).textContent).toContain("Replay is read-only");
     expect(screen.queryByTestId(missionWorkspaceTestIds.toolbarImport)).toBeTruthy();
+    expect((screen.getByTestId(missionWorkspaceTestIds.toolbarImport) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId(missionWorkspaceTestIds.toolbarNew) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId(missionWorkspaceTestIds.toolbarRead) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId(missionWorkspaceTestIds.toolbarUpload) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByRole("button", { name: /validate mission/i })).toBeNull();
     expect((screen.getByTestId(missionWorkspaceTestIds.homeLatitude) as HTMLInputElement).disabled).toBe(true);
 

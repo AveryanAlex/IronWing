@@ -1,0 +1,9 @@
+{
+  "operation_id": "recording_settings_read",
+  "settings": {
+    "auto_record_on_connect": false,
+    "auto_record_directory": "/home/alex/.local/share/ironwing/logs/recordings",
+    "filename_template": "YYYY-MM-DD_HH-MM-SS_{vehicle-or-sysid-or-unknown}.tlog",
+    "add_completed_recordings_to_library": true
+  }
+}

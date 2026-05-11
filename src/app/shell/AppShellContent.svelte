@@ -10,7 +10,15 @@ import MissionWorkspace from "../../components/mission/MissionWorkspace.svelte";
 import SetupWorkspace from "../../components/setup/SetupWorkspace.svelte";
 import SettingsWorkspace from "../../components/settings/SettingsWorkspace.svelte";
 import TelemetryWorkspace from "../../components/telemetry/TelemetryWorkspace.svelte";
+import { queryFlightPath } from "../../logs";
+import {
+  buildReplayMarkerFlightPathQuery,
+  createReplayPathOverlay,
+  resolveReplayMapOverlayMarker,
+  type ReplayMapOverlayState,
+} from "../../lib/replay-map-overlay";
 import { runtimeTestIds } from "../../lib/stores/runtime";
+import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../lib/replay-readonly";
 import AppShellPlaceholderWorkspace from "./AppShellPlaceholderWorkspace.svelte";
 import AppShellHeader from "./AppShellHeader.svelte";
 import { appShellWorkspaces, createAppShellController } from "./app-shell-controller";
@@ -60,8 +68,11 @@ const showVehiclePanelButtonStore = fromStore(controller.showVehiclePanelButton)
 const showDockedVehiclePanelStore = fromStore(controller.showDockedVehiclePanel);
 const vehiclePanelDrawerOpenStore = fromStore(controller.vehiclePanelDrawerOpen);
 const sessionView = fromStore(sessionViewStore);
+const REPLAY_MAP_HANDOFF_MAX_POINTS = 2000;
 
 let telemetrySettingsOpen = $state(false);
+let replayMapOverlay = $state<ReplayMapOverlayState | null>(null);
+let replayMapOverlayRequest = 0;
 
 setTelemetrySettingsDialogLauncherContext({
   open() {
@@ -93,6 +104,7 @@ let connectionTone = $derived.by<"neutral" | "positive" | "caution" | "critical"
 
   return "neutral";
 });
+let replayReadonly = $derived(isReplayReadonly($sessionStore.activeSource));
 
 onMount(() => {
   void Promise.all([controller.initialize(), liveSettingsStore.initialize(), missionPlannerStore.initialize()]);
@@ -102,6 +114,115 @@ onDestroy(() => {
   missionPlannerStore.reset();
   controller.destroy();
 });
+
+function dismissReplayMapOverlay() {
+  replayMapOverlay = null;
+}
+
+function formatReplayMapOverlayError(error: unknown): string {
+  return error instanceof Error && error.message.trim().length > 0
+    ? error.message
+    : typeof error === "string" && error.trim().length > 0
+      ? error
+      : "Unable to load the replay path for the mission map overlay.";
+}
+
+async function handleLogsMapHandoff(handoff: {
+  kind: "path";
+  entryId: string;
+  startUsec: number | null;
+  endUsec: number | null;
+} | {
+  kind: "replay_marker";
+  entryId: string;
+  cursorUsec: number | null;
+}) {
+  const requestId = ++replayMapOverlayRequest;
+  const currentOverlay = replayMapOverlay?.entryId === handoff.entryId ? replayMapOverlay : null;
+
+  controller.showWorkspace("mission");
+
+  if (handoff.kind === "path") {
+    replayMapOverlay = createReplayPathOverlay(handoff.entryId, "loading", currentOverlay?.path ?? [], null);
+
+    try {
+      const path = await queryFlightPath({
+        entry_id: handoff.entryId,
+        start_usec: handoff.startUsec,
+        end_usec: handoff.endUsec,
+        max_points: REPLAY_MAP_HANDOFF_MAX_POINTS,
+      });
+
+      if (requestId !== replayMapOverlayRequest) {
+        return;
+      }
+
+      replayMapOverlay = createReplayPathOverlay(handoff.entryId, "ready", path, null);
+    } catch (error) {
+      if (requestId !== replayMapOverlayRequest) {
+        return;
+      }
+
+      replayMapOverlay = createReplayPathOverlay(
+        handoff.entryId,
+        "failed",
+        currentOverlay?.path ?? [],
+        formatReplayMapOverlayError(error),
+      );
+    }
+
+    return;
+  }
+
+  const existingPath = currentOverlay?.path ?? [];
+  if (existingPath.length > 0) {
+    replayMapOverlay = {
+      phase: "ready",
+      entryId: handoff.entryId,
+      path: existingPath,
+      marker: resolveReplayMapOverlayMarker(existingPath, handoff.cursorUsec),
+      error: null,
+    };
+    return;
+  }
+
+  replayMapOverlay = {
+    phase: "loading",
+    entryId: handoff.entryId,
+    path: [],
+    marker: null,
+    error: null,
+  };
+
+  try {
+    const markerQuery = buildReplayMarkerFlightPathQuery(handoff.entryId, handoff.cursorUsec);
+    const markerPath = markerQuery === null ? [] : await queryFlightPath(markerQuery);
+
+    if (requestId !== replayMapOverlayRequest) {
+      return;
+    }
+
+    replayMapOverlay = {
+      phase: "ready",
+      entryId: handoff.entryId,
+      path: markerPath,
+      marker: resolveReplayMapOverlayMarker(markerPath, handoff.cursorUsec),
+      error: null,
+    };
+  } catch (error) {
+    if (requestId !== replayMapOverlayRequest) {
+      return;
+    }
+
+    replayMapOverlay = {
+      phase: "failed",
+      entryId: handoff.entryId,
+      path: [],
+      marker: null,
+      error: formatReplayMapOverlayError(error),
+    };
+  }
+}
 </script>
 
 <Toaster closeButton richColors />
@@ -138,6 +259,16 @@ onDestroy(() => {
       workspaces={appShellWorkspaces}
     />
 
+    {#if replayReadonly}
+      <div
+        class="mx-3 mt-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning"
+        data-testid={appShellTestIds.replayReadonlyBanner}
+      >
+        <p class="font-semibold">{REPLAY_READONLY_TITLE}</p>
+        <p class="mt-1">{REPLAY_READONLY_COPY}</p>
+      </div>
+    {/if}
+
     <div class="app-shell-layout" data-shell-tier={$chromeStore.tier}>
       {#if showDockedVehiclePanel}
         <aside
@@ -163,9 +294,9 @@ onDestroy(() => {
         {:else if activeWorkspace === "telemetry"}
           <TelemetryWorkspace />
         {:else if activeWorkspace === "mission"}
-          <MissionWorkspace />
+          <MissionWorkspace onDismissReplayMapOverlay={dismissReplayMapOverlay} replayMapOverlay={replayMapOverlay} />
         {:else if activeWorkspace === "logs"}
-          <LogsWorkspace />
+          <LogsWorkspace onMapHandoff={handleLogsMapHandoff} />
         {:else if activeWorkspace === "firmware"}
           <FirmwareWorkspace
             chromeStore={chromeStore}

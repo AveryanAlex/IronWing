@@ -3,6 +3,9 @@ pub(crate) mod configuration_facts;
 pub(crate) mod domain;
 pub(crate) mod envelope;
 pub(crate) mod guided;
+#[allow(dead_code)]
+// Contract-only log library shapes are consumed incrementally by later plan tasks.
+pub(crate) mod logs;
 pub(crate) mod playback;
 pub(crate) mod sensor_health;
 pub(crate) mod session;
@@ -20,6 +23,11 @@ pub(crate) use guided::{
     GuidedCommandResult, GuidedFailure, GuidedFatalityScope, GuidedLiveContext, GuidedRuntime,
     GuidedSession, GuidedSnapshot, GuidedTerminationReason, StartGuidedSessionRequest,
     UpdateGuidedSessionRequest,
+};
+pub(crate) use logs::{
+    LogDiagnostic, LogOperationPhase, LogOperationProgress, RecordingMode,
+    RecordingSettings, RecordingSettingsResult, RecordingStartRequest, RecordingStatus,
+    ReplayStatus,
 };
 pub(crate) use playback::PlaybackSnapshot;
 pub(crate) use sensor_health::sensor_health_snapshot_from_summary;

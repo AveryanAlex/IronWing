@@ -21,6 +21,7 @@ import type {
 } from "../../lib/stores/mission-planner-view";
 import { buildMissionMapView, type MissionMapSelection } from "../../lib/mission-map-view";
 import { missionPathPoints } from "../../lib/mission-path";
+import type { ReplayMapOverlayState } from "../../lib/replay-map-overlay";
 import { createMissionTerrainState } from "../../lib/mission-terrain-state";
 import { localXYToLatLon } from "../../lib/mission-coordinates";
 import type { FenceRegion, GeoPoint2d, GeoPoint3d } from "../../lib/mavkit-types";
@@ -45,6 +46,16 @@ import {
   type MissionWorkspacePhoneSegment,
 } from "./mission-workspace-layout";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
+
+type Props = {
+  replayMapOverlay?: ReplayMapOverlayState | null;
+  onDismissReplayMapOverlay?: () => void;
+};
+
+let {
+  replayMapOverlay = null,
+  onDismissReplayMapOverlay = () => {},
+}: Props = $props();
 
 const missionPlannerStore: MissionPlannerStore = getMissionPlannerStoreContext();
 const missionPlannerState = fromStore(missionPlannerStore);
@@ -212,6 +223,25 @@ let mapView = $derived(buildMissionMapView({
 let showMissionEditor = $derived(view.mode === "mission");
 let showFenceEditor = $derived(view.mode === "fence");
 let showRallyEditor = $derived(view.mode === "rally");
+let replayOverlayHasGeometry = $derived(
+  replayMapOverlay !== null
+  && (replayMapOverlay.path.length > 0 || replayMapOverlay.marker !== null),
+);
+
+function replayOverlayDetail(): string {
+  if (!replayMapOverlay) {
+    return "";
+  }
+
+  switch (replayMapOverlay.phase) {
+    case "loading":
+      return "Loading the replay path into the mission map. The overlay stays read-only and separate from the mission draft.";
+    case "failed":
+      return replayMapOverlay.error ?? "Unable to load the replay path into the mission map overlay.";
+    case "ready":
+      return `Showing ${replayMapOverlay.path.length.toLocaleString()} replay point${replayMapOverlay.path.length === 1 ? "" : "s"} from ${replayMapOverlay.entryId}. This overlay is read-only and does not change mission draft, undo, or upload state.`;
+  }
+}
 
 const DEFAULT_SURVEY_ANCHOR: GeoPoint2d = {
   latitude_deg: 47.397742,
@@ -1105,6 +1135,36 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     </section>
   {/if}
 
+  {#if replayMapOverlay}
+    <section
+      class={`mt-4 rounded-lg border px-4 py-3 text-sm ${replayMapOverlay.phase === "failed"
+        ? "border-danger/40 bg-danger/10 text-danger"
+        : replayMapOverlay.phase === "loading"
+          ? "border-warning/40 bg-warning/10 text-warning"
+          : "border-accent/30 bg-accent/10 text-text-primary"}`}
+      data-testid={missionWorkspaceTestIds.replayOverlayBanner}
+    >
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.16em]" data-testid={missionWorkspaceTestIds.replayOverlayState}>
+            Replay map overlay · {replayMapOverlay.phase}
+          </p>
+          <p class="mt-1 font-semibold">Replay map overlay</p>
+          <p class="mt-1" data-testid={missionWorkspaceTestIds.replayOverlayDetail}>{replayOverlayDetail()}</p>
+        </div>
+
+        <button
+          class="rounded-md border border-border bg-bg-primary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+          data-testid={missionWorkspaceTestIds.replayOverlayDismiss}
+          onclick={onDismissReplayMapOverlay}
+          type="button"
+        >
+          Dismiss overlay
+        </button>
+      </div>
+    </section>
+  {/if}
+
   <div aria-hidden="true" class="hidden" data-testid={missionWorkspaceTestIds.layoutDiagnostics}>
     <span data-testid={missionWorkspaceTestIds.layoutMode}>{workspaceLayout.mode}</span>
     <span data-testid={missionWorkspaceTestIds.layoutTier}>{workspaceLayout.tier}</span>
@@ -1157,6 +1217,30 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
           </button>
         {/each}
       </div>
+
+      {#if replayOverlayHasGeometry && showMissionEditor}
+        <div class="mt-5">
+          <MissionMap
+            blockedReason={planner.blockedReason}
+            fallbackReference={resolveSurveyCreationAnchor(planner)}
+            onAddWaypointAt={handleAddWaypointAt}
+            onCreateSurveyRegion={handleStartSurveyDraw}
+            onDeleteSurveyRegion={handleDeleteSurveyRegion}
+            onMoveHome={handleMoveHomeFromMap}
+            onMoveMissionItem={handleMoveMissionItemFromMap}
+            onSelectHome={missionPlannerStore.selectHome}
+            onSelectMissionItem={handleSelectMissionItemFromMap}
+            onSelectSurveyRegion={missionPlannerStore.selectSurveyRegion}
+            onSetHomeAt={handleSetHomeAt}
+            onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
+            readOnly={!view.canEdit}
+            readOnlyReason={view.attachment.detail}
+            replayMapOverlay={replayMapOverlay}
+            selectedSurveyRegion={selectedSurveyRegion}
+            view={mapView}
+          />
+        </div>
+      {/if}
     </section>
   {:else}
     <div
@@ -1185,6 +1269,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                     onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
                     readOnly={!view.canEdit}
                     readOnlyReason={view.attachment.detail}
+                    replayMapOverlay={replayMapOverlay}
                     selectedSurveyRegion={selectedSurveyRegion}
                     view={mapView}
                   />
@@ -1219,6 +1304,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                     onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
                     readOnly={!view.canEdit}
                     readOnlyReason={view.attachment.detail}
+                    replayMapOverlay={replayMapOverlay}
                     selectedSurveyRegion={selectedSurveyRegion}
                     view={mapView}
                   />
@@ -1242,6 +1328,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                     onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
                     readOnly={!view.canEdit}
                     readOnlyReason={view.attachment.detail}
+                    replayMapOverlay={replayMapOverlay}
                     selectedSurveyRegion={selectedSurveyRegion}
                     view={mapView}
                   />
@@ -1463,6 +1550,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                 onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
                 readOnly={!view.canEdit}
                 readOnlyReason={view.attachment.detail}
+                replayMapOverlay={replayMapOverlay}
                 selectedSurveyRegion={selectedSurveyRegion}
                 view={mapView}
               />
@@ -1559,6 +1647,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
               readOnly={!view.canEdit}
               readOnlyReason={view.attachment.detail}
+              replayMapOverlay={replayMapOverlay}
               selectedSurveyRegion={selectedSurveyRegion}
               view={mapView}
             />
@@ -1614,6 +1703,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               onUpdateSurveyRegion={missionPlannerStore.updateAuthoredSurveyRegion}
               readOnly={!view.canEdit}
               readOnlyReason={view.attachment.detail}
+              replayMapOverlay={replayMapOverlay}
               selectedSurveyRegion={selectedSurveyRegion}
               view={mapView}
             />

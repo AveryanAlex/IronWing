@@ -14,6 +14,7 @@ let {
   searchText,
   filter,
   highlightSourceLabel = null,
+  replayReadonly = false,
   onSearchText,
   onFilterChange,
   onStage,
@@ -25,6 +26,7 @@ let {
   searchText: string;
   filter: ParameterExpertFilter;
   highlightSourceLabel?: string | null;
+  replayReadonly?: boolean;
   onSearchText: (value: string) => void;
   onFilterChange: (value: ParameterExpertFilter) => void;
   onStage: (row: ParameterExpertRow, nextValue: number) => void;
@@ -63,10 +65,11 @@ function highlightSummaryText() {
   <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
     <label class="block">
       <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Search raw parameters</span>
-      <input
-        class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
-        data-testid={parameterWorkspaceTestIds.expertSearch}
-        oninput={(event) => onSearchText((event.currentTarget as HTMLInputElement).value)}
+        <input
+          class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
+          data-testid={parameterWorkspaceTestIds.expertSearch}
+          disabled={replayReadonly}
+          oninput={(event) => onSearchText((event.currentTarget as HTMLInputElement).value)}
         placeholder="Search by raw name, label, or description"
         type="search"
         value={searchText}
@@ -78,6 +81,7 @@ function highlightSummaryText() {
         <button
           class={`rounded-md border px-3 py-2 text-sm font-semibold transition ${filter === option.value ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-primary/80 text-text-secondary hover:border-accent hover:text-accent"}`}
           data-testid={`${parameterWorkspaceTestIds.expertFilterPrefix}-${option.value}`}
+          disabled={replayReadonly}
           onclick={() => onFilterChange(option.value)}
           type="button"
         >
@@ -160,6 +164,7 @@ function highlightSummaryText() {
                 {envelopeKey}
                 onDiscard={onDiscard}
                 onStage={onStage}
+                {replayReadonly}
                 {readiness}
                 {row}
               />

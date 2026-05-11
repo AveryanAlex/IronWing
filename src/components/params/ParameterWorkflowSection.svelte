@@ -24,12 +24,14 @@ let {
   section,
   batteryControls = null,
   flightControls = null,
+  replayReadonly = false,
   onStage,
   onOpenAdvanced,
 }: {
   section: ParameterWorkflowSectionModel;
   batteryControls?: BatteryControls | null;
   flightControls?: FlightControls | null;
+  replayReadonly?: boolean;
   onStage: (cardId: ParameterWorkflowCardId) => void;
   onOpenAdvanced: (cardId: ParameterWorkflowCardId) => void;
 } = $props();
@@ -52,6 +54,7 @@ let {
         {card}
         {flightControls}
         {onOpenAdvanced}
+        {replayReadonly}
         {onStage}
       />
     {/each}

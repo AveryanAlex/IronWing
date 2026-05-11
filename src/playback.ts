@@ -1,5 +1,7 @@
 import { invoke } from "@platform/core";
-import type { SessionEnvelope } from "./session";
+import { listen, type UnlistenFn } from "@platform/event";
+import type { LogDiagnostic } from "./logs";
+import type { OperationId, SessionEnvelope, SessionEvent } from "./session";
 import type { Telemetry, VehicleState } from "./telemetry";
 
 export type FlightPathPoint = {
@@ -41,10 +43,24 @@ export type TelemetrySnapshot = {
   servo_outputs?: number[];
 };
 
-export type PlaybackStateSnapshot = {
+export type ReplayStatus = "idle" | "loading" | "ready" | "playing" | "paused" | "seeking" | "ended" | "error";
+
+export type ReplayState = {
+  status: ReplayStatus;
+  entry_id: string | null;
+  operation_id: OperationId | null;
   cursor_usec: number | null;
+  start_usec: number | null;
+  end_usec: number | null;
+  duration_secs: number | null;
+  speed: number;
+  available_speeds: number[];
   barrier_ready: boolean;
+  readonly: boolean;
+  diagnostic: LogDiagnostic | null;
 };
+
+export type PlaybackStateSnapshot = ReplayState;
 
 export type PlaybackSeekResult = {
   envelope: SessionEnvelope;
@@ -67,8 +83,30 @@ export async function getLogTelemetryTrack(
   });
 }
 
-export async function seekPlayback(cursorUsec: number): Promise<PlaybackSeekResult> {
+export async function playPlayback(): Promise<PlaybackStateSnapshot> {
+  return invoke<PlaybackStateSnapshot>("playback_play");
+}
+
+export async function pausePlayback(): Promise<PlaybackStateSnapshot> {
+  return invoke<PlaybackStateSnapshot>("playback_pause");
+}
+
+export async function seekPlayback(cursorUsec: number | null): Promise<PlaybackSeekResult> {
   return invoke<PlaybackSeekResult>("playback_seek", { cursorUsec });
+}
+
+export async function setPlaybackSpeed(speed: number): Promise<PlaybackStateSnapshot> {
+  return invoke<PlaybackStateSnapshot>("playback_set_speed", { speed });
+}
+
+export async function stopPlayback(): Promise<PlaybackStateSnapshot> {
+  return invoke<PlaybackStateSnapshot>("playback_stop");
+}
+
+export async function subscribePlaybackState(
+  cb: (event: SessionEvent<PlaybackStateSnapshot>) => void,
+): Promise<UnlistenFn> {
+  return listen<SessionEvent<PlaybackStateSnapshot>>("playback://state", (event) => cb(event.payload));
 }
 
 function lerpOpt(

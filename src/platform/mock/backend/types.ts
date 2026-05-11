@@ -16,6 +16,10 @@ import type {
   SerialReadinessRequest,
   SerialReadinessResponse,
 } from "../../../firmware";
+import type { LogLibraryCatalog, LogProgress } from "../../../logs";
+import type { PlaybackStateSnapshot } from "../../../playback";
+import type { RecordingSettings, RecordingStatus } from "../../../recording";
+import type { MockLogSeedPreset } from "./logs";
 
 export type CommandArgs = Record<string, unknown> | undefined;
 
@@ -172,6 +176,19 @@ export type MockPlatformController = {
   emitParamStore: (paramStore: MockParamStoreState) => void;
   emitParamProgress: (paramProgress: MockParamProgressState) => void;
   emitLiveGuidedState: (guidedState: MockGuidedStateValue) => void;
+  emitLogProgress: (progress: LogProgress) => void;
+  emitPlaybackState: (playbackState: PlaybackStateSnapshot) => void;
+  setLogLibraryCatalog: (catalog: LogLibraryCatalog) => LogLibraryCatalog;
+  seedLogLibrary: (presets?: MockLogSeedPreset[]) => LogLibraryCatalog;
+  getLogLibraryCatalog: () => LogLibraryCatalog;
+  getSeededLogEntry: (preset: MockLogSeedPreset) => LogLibraryCatalog["entries"][number];
+  getSeededLogPickerFile: (preset: Extract<MockLogSeedPreset, "ready_tlog" | "ready_bin" | "corrupt_tlog" | "corrupt_bin">) => {
+    name: string;
+    type: string;
+    bytes: number[];
+  };
+  setRecordingStatus: (status: RecordingStatus) => RecordingStatus;
+  setRecordingSettings: (settings: RecordingSettings) => { operation_id: "recording_settings_write"; settings: RecordingSettings };
   resolveDeferredConnectLink: (params: {
     vehicleState: MockLiveVehicleState;
     missionState?: MockMissionState;

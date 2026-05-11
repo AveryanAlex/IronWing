@@ -237,6 +237,7 @@ export const setupWorkspaceTestIds = {
   servoOutputsRawReversePrefix: "setup-workspace-servo-outputs-raw-reverse",
   servoOutputsRawErrorPrefix: "setup-workspace-servo-outputs-raw-error",
   calibrationSection: "setup-workspace-calibration-section",
+  calibrationReplayReadonly: "setup-workspace-calibration-replay-readonly",
   calibrationNotices: "setup-workspace-calibration-notices",
   calibrationCardPrefix: "setup-workspace-calibration-card",
   calibrationStatusPrefix: "setup-workspace-calibration-status",

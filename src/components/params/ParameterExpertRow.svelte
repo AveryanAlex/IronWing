@@ -5,6 +5,7 @@ import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
 let props = $props<{
   row: ParameterExpertRow;
   readiness: "ready" | "bootstrapping" | "unavailable" | "degraded";
+  replayReadonly?: boolean;
   envelopeKey: string;
   onStage: (row: ParameterExpertRow, nextValue: number) => void;
   onDiscard: (name: string) => void;
@@ -29,11 +30,11 @@ $effect(() => {
 });
 
 function isEditingDisabled() {
-  return props.readiness !== "ready" || props.row.readOnly;
+  return props.readiness !== "ready" || props.row.readOnly || props.replayReadonly === true;
 }
 
 function stageLabel() {
-  if (props.row.readOnly) {
+  if (props.row.readOnly || props.replayReadonly) {
     return "Read only";
   }
 

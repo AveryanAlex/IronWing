@@ -28,6 +28,7 @@ import ParameterExpertBrowser from "./ParameterExpertBrowser.svelte";
 import ParameterExpertFileActions from "./ParameterExpertFileActions.svelte";
 import ParameterWorkflowSection from "./ParameterWorkflowSection.svelte";
 import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
+import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../lib/replay-readonly";
 
 type ExpertHighlightRequest = {
 	sourceLabel: string;
@@ -118,6 +119,7 @@ let expertView = $derived.by(() =>
 );
 let advancedAvailable = $derived(expertView.totalCount > 0);
 let expertHighlightSourceLabel = $derived(expertHighlightRequest?.sourceLabel ?? null);
+let replayReadonly = $derived(isReplayReadonly(view.activeEnvelope?.source_kind ?? null));
 
 function stageItem(row: ParameterExpertRow, nextValue: number) {
   store.stageParameterEdit(row, nextValue);
@@ -335,6 +337,16 @@ function parsePositiveNumber(value: string): number | null {
     </p>
   </div>
 
+  {#if replayReadonly}
+    <div
+      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-warning"
+      data-testid="parameter-replay-readonly-banner"
+    >
+      <p class="font-semibold">{REPLAY_READONLY_TITLE}</p>
+      <p class="mt-1">{REPLAY_READONLY_COPY}</p>
+    </div>
+  {/if}
+
   {#if view.noticeText}
     <div
       class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-warning"
@@ -396,6 +408,7 @@ function parsePositiveNumber(value: string): number | null {
           metadata={params.metadata}
           onStageImportedRows={stageImportedRows}
           paramStore={params.paramStore}
+          {replayReadonly}
         />
       </div>
 
@@ -412,6 +425,7 @@ function parsePositiveNumber(value: string): number | null {
             expertSearchText = nextSearchText;
           }}
           onStage={stageItem}
+          {replayReadonly}
           readiness={view.readiness}
           searchText={expertSearchText}
           view={expertView}
@@ -445,6 +459,7 @@ function parsePositiveNumber(value: string): number | null {
                 onPropInchesInput: updateFlightPropSizeInput,
               }}
               onOpenAdvanced={openWorkflowAdvanced}
+              {replayReadonly}
               onStage={stageWorkflowCard}
               {section}
             />
@@ -464,7 +479,7 @@ function parsePositiveNumber(value: string): number | null {
         <button
           class="mt-4 w-full rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
           data-testid={parameterWorkspaceTestIds.advancedButton}
-          disabled={!advancedAvailable}
+          disabled={!advancedAvailable || replayReadonly}
           onclick={() => openAdvanced()}
           type="button"
         >

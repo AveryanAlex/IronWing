@@ -1,0 +1,8 @@
+{
+  "operation_id": "recording_start",
+  "reason": {
+    "kind": "failed",
+    "message": "failed to create recording file"
+  },
+  "destination_path": "/home/alex/flights/flight-001.tlog"
+}

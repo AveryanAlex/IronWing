@@ -1,0 +1,17 @@
+{
+  "entry_id": "log-2026-05-08-001",
+  "cursor": "0000000000000007",
+  "start_usec": 1000000,
+  "end_usec": 61000000,
+  "message_types": ["GLOBAL_POSITION_INT", "VFR_HUD"],
+  "text": "alt",
+  "field_filters": [
+    {
+      "field": "relative_alt",
+      "value_text": "12000"
+    }
+  ],
+  "limit": 100,
+  "include_detail": true,
+  "include_hex": false
+}

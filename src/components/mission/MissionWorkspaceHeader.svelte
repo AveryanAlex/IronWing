@@ -3,6 +3,7 @@ import type {
   MissionPlannerAttachmentState,
   MissionPlannerMode,
 } from "../../lib/stores/mission-planner";
+import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE } from "../../lib/replay-readonly";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
 type Props = {
@@ -65,9 +66,17 @@ let undoAvailable = $derived(attachment.canEdit && canUndo && normalizedUndoCoun
 let redoAvailable = $derived(attachment.canEdit && canRedo && normalizedRedoCount > 0);
 let undoLabel = $derived(`Undo (${normalizedUndoCount} available)`);
 let redoLabel = $derived(`Redo (${normalizedRedoCount} available)`);
+let replayReadonly = $derived(attachment.kind === "playback-readonly");
 </script>
 
 <header class="mission-toolbar" data-testid={missionWorkspaceTestIds.header}>
+  {#if replayReadonly}
+    <div class="mission-toolbar__readonly-banner" data-testid={missionWorkspaceTestIds.headerReplayReadonly}>
+      <p class="mission-toolbar__readonly-title">{REPLAY_READONLY_TITLE}</p>
+      <p class="mission-toolbar__readonly-copy">{REPLAY_READONLY_COPY}</p>
+    </div>
+  {/if}
+
   <!-- Mode tabs -->
   <div class="mission-toolbar__modes">
     {#each modeButtons as item (item.mode)}
@@ -94,10 +103,10 @@ let redoLabel = $derived(`Redo (${normalizedRedoCount} available)`);
   <span class="mission-toolbar__sep" aria-hidden="true"></span>
 
   <!-- New / Import / Export -->
-  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarNew} disabled={busy} onclick={onNewMission} aria-label="New mission" title="New mission" type="button">
+  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarNew} disabled={busy || !attachment.canEdit} onclick={onNewMission} aria-label="New mission" title="New mission" type="button">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
   </button>
-  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarImport} disabled={busy} onclick={onImport} aria-label="Import mission or KML/KMZ file" title="Import mission or KML/KMZ file" type="button">
+  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarImport} disabled={busy || !attachment.canEdit} onclick={onImport} aria-label="Import mission or KML/KMZ file" title="Import mission or KML/KMZ file" type="button">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="M3 10h18l-2 8a2 2 0 0 1-2 1H5a2 2 0 0 1-2-1z"/></svg>
   </button>
   <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarExport} disabled={busy || !hasContent} onclick={onExportPlan} aria-label="Export mission file" title="Export mission file" type="button">
@@ -107,10 +116,10 @@ let redoLabel = $derived(`Redo (${normalizedRedoCount} available)`);
   <span class="mission-toolbar__sep" aria-hidden="true"></span>
 
   <!-- Vehicle actions -->
-  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarRead} disabled={busy || !canUseVehicleActions} onclick={onReadFromVehicle} aria-label="Read from vehicle" title="Read from vehicle" type="button">
+  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarRead} disabled={busy || !attachment.canUseVehicleActions || !canUseVehicleActions} onclick={onReadFromVehicle} aria-label="Read from vehicle" title="Read from vehicle" type="button">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg>
   </button>
-  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarUpload} disabled={busy || !canUseVehicleActions || !hasContent} onclick={onUploadToVehicle} aria-label="Write to vehicle" title="Write to vehicle" type="button">
+  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarUpload} disabled={busy || !attachment.canUseVehicleActions || !canUseVehicleActions || !hasContent} onclick={onUploadToVehicle} aria-label="Write to vehicle" title="Write to vehicle" type="button">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V10"/><path d="m7 13 5-5 5 5"/><path d="M5 3h14"/></svg>
   </button>
 
@@ -123,8 +132,31 @@ let redoLabel = $derived(`Redo (${normalizedRedoCount} available)`);
 <style>
   .mission-toolbar {
     display: flex; align-items: center; gap: 4px;
+    flex-wrap: wrap;
     padding: 4px 8px; border-bottom: 1px solid var(--color-border);
     background: var(--color-bg-secondary); flex-shrink: 0;
+  }
+  .mission-toolbar__readonly-banner {
+    width: 100%;
+    margin-bottom: 4px;
+    border: 1px solid color-mix(in srgb, var(--color-warning) 40%, var(--color-border));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-primary));
+    padding: 8px 10px;
+    color: var(--color-warning);
+  }
+  .mission-toolbar__readonly-title,
+  .mission-toolbar__readonly-copy {
+    margin: 0;
+  }
+  .mission-toolbar__readonly-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+  .mission-toolbar__readonly-copy {
+    margin-top: 4px;
+    font-size: 0.74rem;
+    line-height: 1.45;
   }
   .mission-toolbar__sep { width: 1px; height: 20px; background: var(--color-border); margin: 0 4px; }
   .mission-toolbar__modes { display: flex; gap: 2px; }

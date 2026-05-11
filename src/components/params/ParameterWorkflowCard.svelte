@@ -25,12 +25,14 @@ let {
   card,
   batteryControls = null,
   flightControls = null,
+  replayReadonly = false,
   onStage,
   onOpenAdvanced,
 }: {
   card: ParameterWorkflowCardModel;
   batteryControls?: BatteryControls | null;
   flightControls?: FlightControls | null;
+  replayReadonly?: boolean;
   onStage: (cardId: ParameterWorkflowCardId) => void;
   onOpenAdvanced: (cardId: ParameterWorkflowCardId) => void;
 } = $props();
@@ -44,12 +46,16 @@ let validationMessage = $derived(
 );
 
 function stageButtonDisabled() {
-  return card.status !== "ready" || card.changedCount === 0 || card.queuedCount === card.changedCount || Boolean(validationMessage);
+  return replayReadonly || card.status !== "ready" || card.changedCount === 0 || card.queuedCount === card.changedCount || Boolean(validationMessage);
 }
 
 function stageButtonLabel() {
   if (card.status !== "ready") {
     return "Guided changes unavailable";
+  }
+
+  if (replayReadonly) {
+    return "Replay is read-only";
   }
 
   if (validationMessage) {
@@ -149,6 +155,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
         <input
           class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
           data-testid={`${parameterWorkspaceTestIds.workflowInputPrefix}-${card.id}-cells`}
+          disabled={replayReadonly}
           min="1"
           oninput={(event) => batteryControls.onCellCountInput((event.currentTarget as HTMLInputElement).value)}
           placeholder="4"
@@ -163,6 +170,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
         <select
           class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition focus:border-accent"
           data-testid={`${parameterWorkspaceTestIds.workflowInputPrefix}-${card.id}-chemistry`}
+          disabled={replayReadonly}
           onchange={(event) => batteryControls.onChemistryChange(Number((event.currentTarget as HTMLSelectElement).value))}
           value={String(batteryControls.chemistryIndex)}
         >
@@ -181,6 +189,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
         <input
           class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
           data-testid={`${parameterWorkspaceTestIds.workflowInputPrefix}-${card.id}-prop`}
+          disabled={replayReadonly}
           min="1"
           oninput={(event) => flightControls.onPropInchesInput((event.currentTarget as HTMLInputElement).value)}
           placeholder="9"
@@ -287,6 +296,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
         <button
           class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
           data-testid={`${parameterWorkspaceTestIds.workflowOpenAdvancedPrefix}-${card.id}`}
+          disabled={replayReadonly}
           onclick={() => onOpenAdvanced(card.id)}
           type="button"
         >

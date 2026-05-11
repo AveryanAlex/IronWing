@@ -1579,7 +1579,7 @@ describe("SetupWorkspace", () => {
   it("keeps blocked sections inspectable while metadata recovery is active", async () => {
     await renderSetupWorkspace({ metadata: null });
 
-    expect(screen.queryByTestId(setupWorkspaceTestIds.notice)).toBeNull();
+    expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain("Parameter metadata is unavailable");
     expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain(
       "Metadata missing — recovery mode is active",
     );
@@ -2457,6 +2457,51 @@ describe("SetupWorkspace", () => {
 
     await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.calibrationActionPrefix}-compass`));
     expect(calibrationMocks.calibrateCompassAccept).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables calibration compass actions and shows replay read-only truth during playback", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      sessionOverrides: {
+        activeEnvelope: {
+          session_id: "playback-1",
+          source_kind: "playback",
+          seek_epoch: 1,
+          reset_revision: 1,
+        },
+        activeSource: "playback",
+        support: {
+          available: true,
+          complete: true,
+          provenance: "stream",
+          value: {
+            can_request_prearm_checks: true,
+            can_calibrate_accel: true,
+            can_calibrate_compass: true,
+            can_calibrate_radio: false,
+          },
+        },
+        calibration: {
+          available: true,
+          complete: true,
+          provenance: "stream",
+          value: {
+            accel: { lifecycle: "not_started", progress: null, report: null },
+            compass: { lifecycle: "not_started", progress: null, report: null },
+            radio: null,
+          },
+        },
+      },
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-calibration`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.calibrationSection)).toBeTruthy();
+    });
+
+    expect(screen.getByTestId(setupWorkspaceTestIds.calibrationReplayReadonly).textContent).toContain("Replay is read-only");
+    expect((screen.getByTestId(`${setupWorkspaceTestIds.calibrationActionPrefix}-compass`) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("mounts flight modes with live availability, stages slot edits, and retains stale same-scope mode truth", async () => {

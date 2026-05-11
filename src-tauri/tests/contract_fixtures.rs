@@ -20,6 +20,10 @@ mod ipc {
     pub mod guided {
         include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ipc/guided.rs"));
     }
+    #[allow(dead_code)] // Contract fixtures validate types that are wired into runtime in later tasks.
+    pub mod logs {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ipc/logs.rs"));
+    }
     pub mod playback {
         include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ipc/playback.rs"));
     }
@@ -46,8 +50,11 @@ mod ipc {
     }
 
     pub(crate) use domain::{DomainProvenance, DomainValue};
-    pub(crate) use envelope::{OperationId, Reason, ReasonKind, SessionEnvelope, SourceKind};
+    pub(crate) use envelope::{
+        OperationFailure, OperationId, Reason, ReasonKind, SessionEnvelope, SourceKind,
+    };
     pub(crate) use guided::GuidedSnapshot;
+    pub(crate) use logs::{LogDiagnostic, ReplayStatus};
     pub(crate) use session::{OpenSessionSnapshot, SessionDomain};
     pub(crate) use status_text::StatusTextSnapshot;
     pub(crate) use support::SupportSnapshot;
@@ -107,6 +114,38 @@ fn contract_fixtures_round_trip_through_rust_contract_types() {
     assert_round_trip::<mavkit::mission::MissionPlan>("mission.plan.json");
     assert_round_trip::<mavkit::fence::FencePlan>("fence.plan.json");
     assert_round_trip::<mavkit::rally::RallyPlan>("rally.plan.json");
+    assert_round_trip::<Vec<ipc::logs::LogFormatAdapter>>("log_format_adapters.json");
+    assert_round_trip::<ipc::logs::LogLibraryCatalog>("log_library.catalog.v1.json");
+    assert_round_trip::<ipc::logs::LogCatalogMigrationError>("log_catalog.migration_error.json");
+    assert_round_trip::<ipc::logs::LogOperationProgress>("log_library.progress.json");
+    assert_round_trip::<ipc::logs::ReplayState>("replay.state.json");
+    assert_round_trip::<ipc::logs::RawMessageQuery>("log_raw_messages.query.json");
+    assert_round_trip::<ipc::logs::RawMessagePage>("log_raw_messages.page.json");
+    assert_round_trip::<ipc::logs::ChartSeriesRequest>("log_chart_series.request.json");
+    assert_round_trip::<ipc::logs::ChartSeriesPage>("log_chart_series.page.json");
+    assert_round_trip::<ipc::logs::LogExportRequest>("log_export.request.json");
+    assert_round_trip::<ipc::logs::LogExportResult>("log_export.result.json");
+    assert_round_trip::<ipc::logs::RecordingStartRequest>("recording.start_request.json");
+    assert_round_trip::<ipc::logs::RecordingSettings>("recording.settings.json");
+    assert_round_trip::<ipc::logs::RecordingSettingsResult>("recording.settings_result.json");
+    assert_round_trip::<ipc::logs::RecordingFailure>("recording.failure.json");
+    assert_round_trip::<ipc::logs::RecordingStatus>("recording.status.json");
+}
+
+#[test]
+fn contract_fixtures_unsupported_catalog_schema_version_returns_structured_error() {
+    let mut value = load_fixture("log_library.catalog.v1.json");
+    value["schema_version"] = Value::from(999);
+
+    let error = ipc::logs::migrate_log_library_catalog(value)
+        .expect_err("schema version 999 should be rejected");
+    assert_eq!(
+        error,
+        ipc::logs::LogCatalogMigrationError::UnsupportedSchemaVersion {
+            schema_version: 999,
+            supported_schema_version: ipc::logs::LOG_LIBRARY_CATALOG_SCHEMA_VERSION,
+        }
+    );
 }
 
 #[test]

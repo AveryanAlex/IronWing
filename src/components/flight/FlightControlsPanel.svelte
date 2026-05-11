@@ -9,6 +9,7 @@
     type FlightModeEntry,
   } from "../../telemetry";
   import { guidedTakeoff } from "../../guided";
+  import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../lib/replay-readonly";
 
   const sessionView = fromStore(getSessionViewStoreContext());
 
@@ -21,6 +22,7 @@
   let availableModes = $state<FlightModeEntry[]>([]);
   let takeoffAlt = $state(10);
   let busy = $state(false);
+  let commandError = $state<string | null>(null);
 
   const QUICK_MODES = ["RTL", "LAND", "LOITER"] as const;
 
@@ -48,8 +50,11 @@
     const customMode = Number((e.target as HTMLSelectElement).value);
     if (!Number.isFinite(customMode)) return;
     busy = true;
+    commandError = null;
     try {
       await setFlightMode(customMode);
+    } catch (error) {
+      commandError = error instanceof Error ? error.message : String(error);
     } finally {
       busy = false;
     }
@@ -58,8 +63,11 @@
   async function handleTakeoff() {
     if (takeoffAlt <= 0) return;
     busy = true;
+    commandError = null;
     try {
       await guidedTakeoff(takeoffAlt);
+    } catch (error) {
+      commandError = error instanceof Error ? error.message : String(error);
     } finally {
       busy = false;
     }
@@ -71,8 +79,11 @@
     );
     if (!entry) return;
     busy = true;
+    commandError = null;
     try {
       await setFlightMode(entry.custom_mode);
+    } catch (error) {
+      commandError = error instanceof Error ? error.message : String(error);
     } finally {
       busy = false;
     }
@@ -93,12 +104,24 @@
   let canTakeoff = $derived(
     connected && armed && currentModeName.toUpperCase() === "GUIDED",
   );
+  let replayReadonly = $derived(isReplayReadonly(view.activeSource));
 </script>
 
 <section class="rounded-lg border border-border bg-bg-primary p-3">
   <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
     Controls
   </p>
+
+  {#if replayReadonly}
+    <div class="mt-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-warning" data-testid="flight-replay-readonly-banner">
+      <p class="font-semibold">{REPLAY_READONLY_TITLE}</p>
+      <p class="mt-1">{REPLAY_READONLY_COPY}</p>
+    </div>
+  {/if}
+
+  {#if commandError}
+    <div class="mt-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-3 text-sm text-danger">{commandError}</div>
+  {/if}
 
   <div class="mt-3 space-y-3">
     <!-- Flight mode selector -->
@@ -112,7 +135,7 @@
       <select
         id="flight-mode-select"
         class="mt-1 w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={!connected || busy}
+        disabled={!connected || busy || replayReadonly}
         value={currentModeCustom}
         onchange={handleModeChange}
       >
@@ -142,14 +165,14 @@
             max="500"
             step="1"
             class="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!canTakeoff || busy}
+            disabled={!canTakeoff || busy || replayReadonly}
             bind:value={takeoffAlt}
           />
           <span class="text-xs text-text-muted">m</span>
         </div>
         <button
           class="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-bg-primary transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={!canTakeoff || busy}
+          disabled={!canTakeoff || busy || replayReadonly}
           onclick={handleTakeoff}
           type="button"
         >
@@ -164,7 +187,7 @@
         {#each quickModes as modeName (modeName)}
           <button
             class="flex-1 rounded-md border border-border bg-bg-secondary px-2 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!connected || busy}
+            disabled={!connected || busy || replayReadonly}
             onclick={() => handleQuickMode(modeName)}
             type="button"
           >

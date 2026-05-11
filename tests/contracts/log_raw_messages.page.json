@@ -1,0 +1,29 @@
+{
+  "entry_id": "log-2026-05-08-001",
+  "items": [
+    {
+      "sequence": 7,
+      "timestamp_usec": 42000000,
+      "message_type": "GLOBAL_POSITION_INT",
+      "system_id": 1,
+      "component_id": 1,
+      "raw_len_bytes": 28,
+      "fields": {
+        "lat": 473977420,
+        "lon": 85455940,
+        "relative_alt": 12000,
+        "valid": true,
+        "note": null
+      },
+      "detail": {
+        "latitude_deg": 47.397742,
+        "longitude_deg": 8.545594,
+        "altitude_m": 12.3
+      },
+      "hex_payload": null,
+      "diagnostics": []
+    }
+  ],
+  "next_cursor": "0000000000000008",
+  "total_available": 2400
+}

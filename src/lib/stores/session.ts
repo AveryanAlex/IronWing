@@ -9,6 +9,7 @@ import { isNewerScopedEnvelope, isSameEnvelope } from "../scoped-session-events"
 import type { CalibrationDomain } from "../../calibration";
 import type { ConfigurationFactsDomain } from "../../configuration-facts";
 import type { GuidedDomain } from "../../guided";
+import type { PlaybackStateSnapshot } from "../../playback";
 import type { SensorHealthDomain } from "../../sensor-health";
 import type {
   SessionDomain,
@@ -67,6 +68,7 @@ export function createSessionStore(service: SessionService = createSessionServic
     assign: (buffer: {
       session?: SessionDomain;
       telemetry?: DomainValue<TelemetryState>;
+      playbackCursorUsec?: number | null;
       support?: SupportDomain;
       sensorHealth?: SensorHealthDomain;
       configurationFacts?: ConfigurationFactsDomain;
@@ -113,6 +115,38 @@ export function createSessionStore(service: SessionService = createSessionServic
         telemetryDomain: value,
       })),
     );
+  }
+
+  function applyPlaybackEvent(event: { envelope: SessionEnvelope; value: PlaybackStateSnapshot }) {
+    if (stageBootstrapEvent(event, (buffer, value) => {
+      buffer.playbackCursorUsec = value.cursor_usec;
+    })) {
+      return;
+    }
+
+    store.update((state) => {
+      if (event.envelope.source_kind !== "playback") {
+        return state;
+      }
+
+      if (state.activeEnvelope?.source_kind === "live") {
+        return state;
+      }
+
+      if (!isNewerScopedEnvelope(state.activeEnvelope, event.envelope)) {
+        return state;
+      }
+
+      return {
+        ...state,
+        activeEnvelope: event.envelope,
+        activeSource: event.envelope.source_kind,
+        bootstrap: {
+          ...state.bootstrap,
+          playbackCursorUsec: event.value.cursor_usec,
+        },
+      };
+    });
   }
 
   function applySupportEvent(event: { envelope: SessionEnvelope; value: SupportDomain }) {
@@ -334,6 +368,7 @@ export function createSessionStore(service: SessionService = createSessionServic
         subscriptions = await service.subscribeAll({
           onSession: applySessionEvent,
           onTelemetry: applyTelemetryEvent,
+          onPlayback: applyPlaybackEvent,
           onSupport: applySupportEvent,
           onSensorHealth: applySensorHealthEvent,
           onConfigurationFacts: applyConfigurationFactsEvent,

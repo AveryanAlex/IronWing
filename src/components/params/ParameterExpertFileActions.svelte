@@ -13,6 +13,7 @@ type ParameterExpertFileActionsProps = {
   metadata: ParamMetadataMap | null;
   fileIo: ParameterFileIo;
   onStageImportedRows: (rows: ParameterFileImportRow[]) => void;
+  replayReadonly?: boolean;
 };
 
 let {
@@ -20,6 +21,7 @@ let {
   metadata,
   fileIo,
   onStageImportedRows,
+  replayReadonly = false,
 }: ParameterExpertFileActionsProps = $props();
 
 type FileActionState = "idle" | "importing" | "exporting" | "success" | "cancelled" | "error";
@@ -35,7 +37,7 @@ let skippedUnknownCount = $state(0);
 let skippedUnchangedCount = $state(0);
 
 let isBusy = $derived(actionState === "importing" || actionState === "exporting");
-let actionsDisabled = $derived(!paramStore || isBusy);
+let actionsDisabled = $derived(!paramStore || isBusy || replayReadonly);
 
 async function importFile() {
   if (actionsDisabled) {

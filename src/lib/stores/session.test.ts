@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createSessionLifecycleView, type SessionConnectionFormState, type SessionService, type SessionServiceEventHandlers } from "../platform/session";
 import { createSessionStore } from "./session";
+import type { PlaybackStateSnapshot } from "../../playback";
 import { selectTelemetryView } from "../telemetry-selectors";
 import type { OpenSessionSnapshot } from "../../session";
 import type { TransportDescriptor } from "../../transport";
@@ -430,6 +431,99 @@ describe("session store", () => {
 
     const telemetry = selectTelemetryView(get(store).telemetryDomain);
     expect(telemetry.altitude_m).toBe(12);
+  });
+
+  it("tracks playback cursor updates for playback scopes", async () => {
+    const { service, emit } = createMockService({
+      openSessionSnapshot: vi.fn(async () =>
+        createSnapshot({
+          envelope: {
+            session_id: "playback-1",
+            source_kind: "playback",
+            seek_epoch: 0,
+            reset_revision: 0,
+          },
+          session: {
+            available: true,
+            complete: true,
+            provenance: "playback",
+            value: {
+              status: "active",
+              connection: { kind: "disconnected" },
+              vehicle_state: null,
+              home_position: null,
+            },
+          },
+          playback: { cursor_usec: 1000000 },
+        }),
+      ),
+    });
+    const store = createSessionStore(service);
+
+    await store.initialize("playback");
+
+    emit("onPlayback", {
+      envelope: {
+        session_id: "playback-1",
+        source_kind: "playback",
+        seek_epoch: 1,
+        reset_revision: 0,
+      },
+      value: {
+        status: "seeking",
+        entry_id: "entry-1",
+        operation_id: "replay_seek",
+        cursor_usec: 42000000,
+        start_usec: 1000000,
+        end_usec: 61000000,
+        duration_secs: 60,
+        speed: 1,
+        available_speeds: [0.5, 1, 2, 4],
+        barrier_ready: true,
+        readonly: true,
+        diagnostic: null,
+      } satisfies PlaybackStateSnapshot,
+    });
+
+    const state = get(store);
+    expect(state.activeSource).toBe("playback");
+    expect(state.activeEnvelope?.seek_epoch).toBe(1);
+    expect(state.bootstrap.playbackCursorUsec).toBe(42000000);
+  });
+
+  it("does not let playback-state events rewrite a live session scope", async () => {
+    const { service, emit } = createMockService();
+    const store = createSessionStore(service);
+
+    await store.initialize();
+
+    emit("onPlayback", {
+      envelope: {
+        session_id: "playback-1",
+        source_kind: "playback",
+        seek_epoch: 1,
+        reset_revision: 0,
+      },
+      value: {
+        status: "seeking",
+        entry_id: "entry-1",
+        operation_id: "replay_seek",
+        cursor_usec: 42000000,
+        start_usec: 1000000,
+        end_usec: 61000000,
+        duration_secs: 60,
+        speed: 1,
+        available_speeds: [0.5, 1, 2, 4],
+        barrier_ready: true,
+        readonly: true,
+        diagnostic: null,
+      } satisfies PlaybackStateSnapshot,
+    });
+
+    const state = get(store);
+    expect(state.activeSource).toBe("live");
+    expect(state.activeEnvelope?.session_id).toBe("session-1");
+    expect(state.bootstrap.playbackCursorUsec).toBeNull();
   });
 
   it("surfaces connect validation failures through phase and lastError without invoking transport IPC", async () => {

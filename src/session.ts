@@ -6,6 +6,7 @@ import type { DomainValue } from "./lib/domain-status";
 import type { ConfigurationFactsState } from "./configuration-facts";
 import type { HomePosition, MissionState } from "./mission";
 import type { ParamProgress, ParamStore } from "./params";
+import { withPersistedRecordingSettings } from "./recording";
 import type { SensorHealthDomain } from "./sensor-health";
 import type { StatusTextDomain } from "./statustext";
 import type { SupportDomain } from "./support";
@@ -19,6 +20,84 @@ export type SessionEnvelope = {
   source_kind: SourceKind;
   seek_epoch: number;
   reset_revision: number;
+};
+
+export const OPERATION_IDS = [
+  "open_session_snapshot",
+  "ack_session_snapshot",
+  "arm_vehicle",
+  "disarm_vehicle",
+  "set_flight_mode",
+  "vehicle_takeoff",
+  "start_guided_session",
+  "update_guided_session",
+  "stop_guided_session",
+  "set_message_rate",
+  "mission_upload",
+  "mission_download",
+  "mission_clear",
+  "fence_upload",
+  "fence_download",
+  "fence_clear",
+  "rally_upload",
+  "rally_download",
+  "rally_clear",
+  "mission_set_current",
+  "calibrate_accel",
+  "calibrate_gyro",
+  "param_write",
+  "param_write_batch",
+  "reboot_vehicle",
+  "motor_test",
+  "set_servo",
+  "rc_override",
+  "calibrate_compass_start",
+  "calibrate_compass_accept",
+  "calibrate_compass_cancel",
+  "request_prearm_checks",
+  "log_open",
+  "log_library_list",
+  "log_library_register",
+  "log_library_relink",
+  "log_library_remove",
+  "log_library_reindex",
+  "log_library_cancel",
+  "log_raw_messages_query",
+  "log_chart_series_query",
+  "log_export",
+  "replay_open",
+  "replay_play",
+  "replay_pause",
+  "replay_seek",
+  "replay_set_speed",
+  "replay_stop",
+  "recording_start",
+  "recording_stop",
+  "recording_status",
+  "recording_settings_read",
+  "recording_settings_write",
+  "firmware_flash_serial",
+  "firmware_flash_dfu_recovery",
+] as const;
+
+export type OperationId = (typeof OPERATION_IDS)[number];
+
+export type ReasonKind =
+  | "unsupported"
+  | "unavailable"
+  | "conflict"
+  | "invalid_input"
+  | "cancelled"
+  | "failed"
+  | "timeout"
+  | "permission_denied";
+
+export type OperationFailure = {
+  operation_id: OperationId;
+  reason: {
+    kind: ReasonKind;
+    message: string;
+  };
 };
 
 export type SessionConnection =
@@ -60,13 +139,7 @@ export type AckSessionSnapshotResult =
   | { result: "accepted"; envelope?: SessionEnvelope }
   | {
       result: "rejected";
-      failure: {
-        operation_id: "ack_session_snapshot";
-        reason: {
-          kind: "unsupported" | "unavailable" | "conflict" | "invalid_input" | "cancelled" | "failed" | "timeout" | "permission_denied";
-          message: string;
-        };
-      };
+      failure: OperationFailure & { operation_id: "ack_session_snapshot" };
     };
 
 export type SessionEvent<T> = {
@@ -87,7 +160,7 @@ export async function ackSessionSnapshot(envelope: SessionEnvelope): Promise<Ack
 }
 
 export async function connectSession(request: ConnectRequest): Promise<void> {
-  await invoke("connect_link", { request });
+  await invoke("connect_link", { request: withPersistedRecordingSettings(request) });
 }
 
 export async function disconnectSession(request?: DisconnectRequest): Promise<void> {

@@ -21,10 +21,17 @@ use firmware::commands::{
 };
 use firmware::discovery::{firmware_list_dfu_devices, firmware_list_ports};
 use firmware::types::FirmwareSessionHandle;
-use ipc::{GuidedRuntime, StatusTextEntry};
-use logs::LogStore;
+use ipc::{DomainProvenance, GuidedRuntime, StatusTextEntry, TelemetrySnapshot};
+use log_library::{
+    log_library_cancel, log_library_list, log_library_register, log_library_register_open_file,
+    log_library_reindex, log_library_relink, log_library_remove,
+};
+use logs::{LogOperationState, LogStore, PlaybackRuntimeState};
 use mavkit::Vehicle;
-use recording::{TlogRecorderHandle, recording_start, recording_status, recording_stop};
+use recording::{
+    TlogRecorderHandle, recording_settings_read, recording_settings_write, recording_start,
+    recording_status, recording_stop,
+};
 use remote_ui::RemoteUiEvent;
 use session_runtime::SessionRuntime;
 mod bluetooth;
@@ -38,6 +45,7 @@ mod firmware;
 mod guided;
 mod helpers;
 mod ipc;
+mod log_library;
 mod logs;
 mod recording;
 mod remote_ui;
@@ -57,6 +65,9 @@ pub(crate) struct AppState {
     pub(crate) background_tasks: tokio::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>,
     pub(crate) background_listeners: tokio::sync::Mutex<Vec<tauri::EventId>>,
     pub(crate) log_store: tokio::sync::Mutex<Option<LogStore>>,
+    pub(crate) cached_library_store: tokio::sync::Mutex<Option<LogStore>>,
+    pub(crate) log_operation: LogOperationState,
+    pub(crate) playback_runtime: PlaybackRuntimeState,
     pub(crate) recorder: TlogRecorderHandle,
     pub(crate) firmware_session: FirmwareSessionHandle,
     pub(crate) firmware_abort: tokio::sync::Mutex<Option<FirmwareAbortHandle>>,
@@ -67,6 +78,7 @@ pub(crate) struct AppState {
     pub(crate) guided_runtime: tokio::sync::Mutex<GuidedRuntime>,
     #[allow(dead_code)] // Read by event bridge wiring (Task 3)
     pub(crate) session_context: tokio::sync::Mutex<bridges::SessionContext>,
+    pub(crate) live_telemetry: tokio::sync::Mutex<TelemetrySnapshot>,
     pub(crate) status_text_history: tokio::sync::Mutex<Vec<StatusTextEntry>>,
     pub(crate) next_status_text_sequence: AtomicU64,
     pub(crate) remote_ui_events: tokio::sync::broadcast::Sender<RemoteUiEvent>,
@@ -81,6 +93,9 @@ pub fn run() {
         background_tasks: tokio::sync::Mutex::new(Vec::new()),
         background_listeners: tokio::sync::Mutex::new(Vec::new()),
         log_store: tokio::sync::Mutex::new(None),
+        cached_library_store: tokio::sync::Mutex::new(None),
+        log_operation: LogOperationState::new(),
+        playback_runtime: PlaybackRuntimeState::new(),
         recorder: TlogRecorderHandle::new(),
         firmware_session: FirmwareSessionHandle::new(),
         firmware_abort: tokio::sync::Mutex::new(None),
@@ -90,6 +105,9 @@ pub fn run() {
         session_runtime: tokio::sync::Mutex::new(SessionRuntime::new()),
         guided_runtime: tokio::sync::Mutex::new(GuidedRuntime::default()),
         session_context: tokio::sync::Mutex::new(bridges::SessionContext::new()),
+        live_telemetry: tokio::sync::Mutex::new(TelemetrySnapshot::missing(
+            DomainProvenance::Bootstrap,
+        )),
         status_text_history: tokio::sync::Mutex::new(Vec::new()),
         next_status_text_sequence: AtomicU64::new(1),
         remote_ui_events: remote_ui::event_channel(),
@@ -155,7 +173,17 @@ pub fn run() {
         set_servo,
         rc_override,
         request_prearm_checks,
+        log_library_list,
+        log_library_register,
+        log_library_register_open_file,
+        log_library_remove,
+        log_library_relink,
+        log_library_reindex,
+        log_library_cancel,
         crate::logs::log_open,
+        crate::logs::log_raw_messages_query,
+        crate::logs::log_chart_series_query,
+        crate::logs::log_export,
         crate::logs::log_query,
         crate::logs::log_get_summary,
         crate::logs::log_get_flight_path,
@@ -163,10 +191,16 @@ pub fn run() {
         crate::logs::log_get_flight_summary,
         crate::logs::log_export_csv,
         crate::logs::log_close,
+        crate::logs::playback_play,
+        crate::logs::playback_pause,
         crate::logs::playback_seek,
+        crate::logs::playback_set_speed,
+        crate::logs::playback_stop,
         recording_start,
         recording_stop,
         recording_status,
+        recording_settings_read,
+        recording_settings_write,
         open_session_snapshot,
         ack_session_snapshot,
         firmware_list_ports,

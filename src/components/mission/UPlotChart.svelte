@@ -35,8 +35,31 @@ let plotConfig = $derived<PlotConfig>({
 const plotAttachment = createPlotAttachment(() => plotConfig);
 let uPlotModulePromise: Promise<UPlotConstructor> | null = null;
 
+function ensureMatchMedia() {
+	if (typeof window === "undefined" || typeof window.matchMedia === "function") {
+		return;
+	}
+
+	window.matchMedia = ((_query: string) => ({
+		matches: false,
+		media: "",
+		onchange: null,
+		addListener: () => {},
+		removeListener: () => {},
+		addEventListener: () => {},
+		removeEventListener: () => {},
+		dispatchEvent: () => false,
+	})) as typeof window.matchMedia;
+}
+
+function canMountUPlot() {
+	// jsdom does not provide a usable canvas implementation, so mounting the real chart there only adds noisy async errors.
+	return typeof navigator === "undefined" || !navigator.userAgent.includes("jsdom");
+}
+
 function loadUPlot(): Promise<UPlotConstructor> {
 	if (!uPlotModulePromise) {
+		ensureMatchMedia();
 		uPlotModulePromise = import("uplot").then((module) => (module as unknown as { default: UPlotConstructor }).default);
 	}
 
@@ -63,10 +86,15 @@ function createPlotAttachment(getConfig: () => PlotConfig): Attachment<HTMLDivEl
       return Math.max(280, Math.round(rectWidth || element.clientWidth || 280));
     };
 
+    const resolveHeight = (fallbackHeight: number) => {
+      const rectHeight = element.getBoundingClientRect().height;
+      return Math.max(80, Math.round(rectHeight || element.clientHeight || fallbackHeight));
+    };
+
     const mountPlot = async (config: PlotConfig) => {
       const requestId = ++mountRequestId;
       destroyPlot();
-      if ((config.data[0]?.length ?? 0) === 0) {
+      if ((config.data[0]?.length ?? 0) === 0 || !canMountUPlot()) {
         return;
       }
 
@@ -79,7 +107,7 @@ function createPlotAttachment(getConfig: () => PlotConfig): Attachment<HTMLDivEl
         {
           ...config.options,
           width: resolveWidth(),
-          height: config.height,
+          height: resolveHeight(config.height),
         },
         config.data,
         element,
@@ -89,7 +117,7 @@ function createPlotAttachment(getConfig: () => PlotConfig): Attachment<HTMLDivEl
         resizeObserver = new ResizeObserver(() => {
           plot?.setSize({
             width: resolveWidth(),
-            height: config.height,
+            height: resolveHeight(config.height),
           });
         });
         resizeObserver.observe(element);
@@ -110,7 +138,9 @@ function createPlotAttachment(getConfig: () => PlotConfig): Attachment<HTMLDivEl
 </script>
 
 <div
-  class="min-h-[220px] w-full overflow-hidden rounded-xl border border-border/70 bg-bg-primary/70 p-2"
+  class="w-full overflow-hidden rounded-xl border border-border/70 bg-bg-primary/70 p-2"
   data-testid={testId}
-  {@attach plotAttachment}
-></div>
+  style={`height: ${height}px; min-height: ${height}px;`}
+>
+  <div class="h-full w-full overflow-hidden rounded-lg" {@attach plotAttachment}></div>
+</div>

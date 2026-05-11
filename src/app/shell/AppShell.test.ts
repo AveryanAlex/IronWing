@@ -546,6 +546,21 @@ describe("AppShell", () => {
         expect(screen.getByTestId(appShellTestIds.sessionEnvelope).textContent).toContain("session-1");
     });
 
+    it("shows a global replay read-only banner when playback is active", async () => {
+        await renderShellAt(1440, {
+            snapshot: createSnapshot({
+                envelope: {
+                    session_id: "playback-1",
+                    source_kind: "playback",
+                    seek_epoch: 1,
+                    reset_revision: 1,
+                },
+            }),
+        });
+
+        expect(screen.getByTestId(appShellTestIds.replayReadonlyBanner).textContent).toContain("Replay is read-only");
+    });
+
     it("renders the archived tab shape, keeps placeholder tabs where expected, and mounts the real mission workspace", async () => {
         await renderShellAt(1440);
 
@@ -677,7 +692,7 @@ describe("AppShell", () => {
 
         expect(screen.queryByTestId("telemetry-state-value")).toBeNull();
         expect(screen.queryByTestId(parameterWorkspaceTestIds.root)).toBeNull();
-        expect(screen.queryByTestId(setupWorkspaceTestIds.state)).toBeNull();
+        expect(screen.getByTestId(setupWorkspaceTestIds.state).textContent).toContain("Setup ready");
         // The compact nav only renders a status badge for complete / in_progress / failed — not for "unknown".
         expect(screen.queryByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`)).toBeNull();
         expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionConfidencePrefix}-frame_orientation`).textContent?.trim()).toBe("Unconfirmed");
@@ -798,8 +813,8 @@ describe("AppShell", () => {
 
         await openSetupWorkspace();
 
-        expect(screen.queryByTestId(setupWorkspaceTestIds.metadata)).toBeNull();
-        expect(screen.queryByTestId(setupWorkspaceTestIds.notice)).toBeNull();
+        expect(screen.getByTestId(setupWorkspaceTestIds.metadata).textContent).toContain("Parameter metadata is unavailable");
+        expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain("Parameter metadata is unavailable");
         expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain(
             "Metadata missing — recovery mode is active",
         );

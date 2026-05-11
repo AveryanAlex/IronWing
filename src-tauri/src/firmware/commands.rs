@@ -23,6 +23,8 @@ use crate::firmware::types::{
     SerialFlowResult, SerialPreflightInfo, SerialReadiness, SerialReadinessBlockedReason,
     SerialReadinessRequest, SerialReadinessResponse, SerialReadinessTargetHint,
 };
+use crate::helpers::ensure_live_write_allowed;
+use crate::ipc::OperationId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SessionCancelAction {
@@ -101,6 +103,7 @@ pub(crate) async fn firmware_flash_serial(
     app: tauri::AppHandle,
     request: SerialFlashRequest,
 ) -> Result<SerialFlowResult, String> {
+    ensure_live_write_allowed(state.inner(), OperationId::FirmwareFlashSerial).await?;
     let SerialFlashRequest {
         port,
         baud,
@@ -304,10 +307,11 @@ pub(crate) async fn firmware_flash_serial(
 #[cfg(target_os = "android")]
 #[tauri::command]
 pub(crate) async fn firmware_flash_serial(
-    _state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, AppState>,
     _app: tauri::AppHandle,
     _request: SerialFlashRequest,
 ) -> Result<SerialFlowResult, String> {
+    ensure_live_write_allowed(state.inner(), OperationId::FirmwareFlashSerial).await?;
     Err(crate::firmware::types::FirmwareError::PlatformUnsupported.to_string())
 }
 
@@ -805,6 +809,7 @@ pub(crate) async fn firmware_flash_dfu_recovery(
     app: tauri::AppHandle,
     request: DfuFlashRequest,
 ) -> Result<DfuRecoveryResult, String> {
+    ensure_live_write_allowed(state.inner(), OperationId::FirmwareFlashDfuRecovery).await?;
     state
         .firmware_session
         .try_start_dfu(connection::is_vehicle_connected(&state).await)
@@ -916,10 +921,11 @@ pub(crate) async fn firmware_flash_dfu_recovery(
 #[cfg(target_os = "android")]
 #[tauri::command]
 pub(crate) async fn firmware_flash_dfu_recovery(
-    _state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, AppState>,
     _app: tauri::AppHandle,
     _request: DfuFlashRequest,
 ) -> Result<DfuRecoveryResult, String> {
+    ensure_live_write_allowed(state.inner(), OperationId::FirmwareFlashDfuRecovery).await?;
     Ok(DfuRecoveryResult::PlatformUnsupported)
 }
 

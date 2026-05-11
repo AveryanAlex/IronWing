@@ -14,6 +14,8 @@ use tokio::task::JoinHandle;
 
 use crate::AppState;
 use crate::guided::emit_guided_reset;
+use crate::ipc::DomainProvenance;
+use crate::recording::auto_record_start_request;
 
 /// Total time budget for the entire connect flow (TCP handshake + MAVLink
 /// heartbeat wait).  The underlying `mavlink::connect_async` call has no
@@ -50,6 +52,8 @@ pub(crate) enum ActiveLinkTarget {
 #[derive(Deserialize)]
 pub(crate) struct ConnectRequest {
     transport: LinkEndpoint,
+    #[serde(default)]
+    auto_record_on_connect: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -184,12 +188,31 @@ async fn store_connected_vehicle(
     Ok(())
 }
 
+async fn maybe_start_auto_recording(
+    state: &AppState,
+    app: &tauri::AppHandle,
+    request: Option<crate::ipc::RecordingStartRequest>,
+) {
+    let Some(request) = request else {
+        return;
+    };
+    let Some(vehicle) = state.vehicle.lock().await.clone() else {
+        return;
+    };
+
+    if let Err(error) = state.recorder.start(&vehicle, app, request) {
+        tracing::warn!("failed to auto-start recording after connect: {error}");
+    }
+}
+
 #[tauri::command]
 pub(crate) async fn connect_link(
     state: tauri::State<'_, AppState>,
     app: tauri::AppHandle,
     request: ConnectRequest,
 ) -> Result<(), String> {
+    let auto_record_request = auto_record_start_request(request.auto_record_on_connect);
+
     // Abort any in-flight connect attempt so its socket is released
     if let Some(handle) = state.connect_abort.lock().await.take() {
         handle.abort();
@@ -226,7 +249,7 @@ pub(crate) async fn connect_link(
     match request.transport {
         LinkEndpoint::Udp { bind_addr } => {
             let vehicle = connect_via_address(&state, format!("udpin:{bind_addr}")).await?;
-            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await?;
         }
         LinkEndpoint::Tcp { address } => {
             let mut connected_vehicle =
@@ -237,17 +260,16 @@ pub(crate) async fn connect_link(
                 .push(tokio::spawn(request_tcp_telemetry_streams(vehicle)));
             store_connected_vehicle(&state, &app, connected_vehicle, ActiveLinkTarget::Other)
                 .await?;
-            Ok(())
         }
         #[cfg(not(target_os = "android"))]
         LinkEndpoint::Serial { port, baud } => {
             let vehicle = connect_via_address(&state, format!("serial:{port}:{baud}")).await?;
-            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Serial { port }).await
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Serial { port }).await?;
         }
         LinkEndpoint::BluetoothBle { address } => {
             let vehicle =
                 connect_with_abort(&state, async move { connect_ble(&address).await }).await?;
-            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await?;
         }
         #[cfg(target_os = "android")]
         LinkEndpoint::BluetoothSpp { address } => {
@@ -255,9 +277,12 @@ pub(crate) async fn connect_link(
             let vehicle =
                 connect_with_abort(&state, async move { connect_spp(&spp_app, &address).await })
                     .await?;
-            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await?;
         }
     }
+
+    maybe_start_auto_recording(&state, &app, auto_record_request).await;
+    Ok(())
 }
 
 /// Connect via BLE NUS (Nordic UART Service) using tauri-plugin-blec.
@@ -422,7 +447,7 @@ pub(crate) async fn disconnect_link(
         .session_runtime
         .lock()
         .await
-        .current_stream_envelope(std::time::Instant::now())
+        .effective_session_envelope(std::time::Instant::now())
         .map(|envelope| envelope.session_id);
     validate_disconnect_request(expected_session_id.as_deref(), request.as_ref())?;
     force_disconnect(&state, &app).await
@@ -451,8 +476,8 @@ pub(crate) async fn force_disconnect(
     state: &AppState,
     app: &tauri::AppHandle,
 ) -> Result<(), String> {
-    if let Some(handle) = state.recorder.stop() {
-        let _ = handle.await; // best-effort join on disconnect
+    if let Some(stopped_recording) = state.recorder.stop() {
+        crate::recording::queue_stopped_recording_finalization(&state.recorder, app, stopped_recording);
     }
     let _ = emit_guided_reset(
         state,
@@ -465,6 +490,9 @@ pub(crate) async fn force_disconnect(
     state.status_text_history.lock().await.clear();
     state.next_status_text_sequence.store(1, Ordering::Relaxed);
     state.session_context.lock().await.reset();
+    *state.live_telemetry.lock().await = crate::ipc::TelemetrySnapshot::missing(
+        DomainProvenance::Bootstrap,
+    );
 
     if let Some(handle) = state.connect_abort.lock().await.take() {
         handle.abort();
@@ -507,6 +535,32 @@ mod tests {
         .expect("deserialize connect request");
 
         assert!(matches!(request.transport, LinkEndpoint::Tcp { .. }));
+        assert!(!request.auto_record_on_connect);
+    }
+
+    #[test]
+    fn recording_auto_on_connect_setting() {
+        let disabled = ConnectRequest {
+            transport: LinkEndpoint::Udp {
+                bind_addr: "0.0.0.0:14550".into(),
+            },
+            auto_record_on_connect: false,
+        };
+        let enabled = ConnectRequest {
+            transport: LinkEndpoint::Udp {
+                bind_addr: "0.0.0.0:14550".into(),
+            },
+            auto_record_on_connect: true,
+        };
+
+        assert_eq!(auto_record_start_request(disabled.auto_record_on_connect), None);
+        assert_eq!(
+            auto_record_start_request(enabled.auto_record_on_connect),
+            Some(crate::ipc::RecordingStartRequest {
+                destination_path: String::new(),
+                mode: crate::ipc::RecordingMode::AutoOnConnect,
+            })
+        );
     }
 
     #[test]

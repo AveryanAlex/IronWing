@@ -1,0 +1,20 @@
+{
+  "entry_id": "log-2026-05-08-001",
+  "start_usec": 1000000,
+  "end_usec": 61000000,
+  "series": [
+    {
+      "selector": {
+        "message_type": "VFR_HUD",
+        "field": "alt",
+        "label": "Altitude",
+        "unit": "m"
+      },
+      "points": [
+        { "timestamp_usec": 1000000, "value": 0.0 },
+        { "timestamp_usec": 42000000, "value": 12.3 }
+      ]
+    }
+  ],
+  "diagnostics": []
+}

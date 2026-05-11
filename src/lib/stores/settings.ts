@@ -21,6 +21,7 @@ export type Settings = {
   terrainSafetyMarginM: number;
   cruiseSpeedMps: number;
   hoverSpeedMps: number;
+  recordingAutoRecordOnConnect: boolean;
 };
 
 const DEFAULT_TELEMETRY_RATE_HZ = 5;
@@ -28,6 +29,7 @@ const DEFAULT_SVS_ENABLED = true;
 const DEFAULT_TERRAIN_SAFETY_MARGIN_M = 10;
 const DEFAULT_CRUISE_SPEED_MPS = 15;
 const DEFAULT_HOVER_SPEED_MPS = 5;
+const DEFAULT_RECORDING_AUTO_RECORD_ON_CONNECT = false;
 
 export const settingsDefaults: Settings = createSettingsDefaults();
 
@@ -87,6 +89,9 @@ export function normalizeSettings(raw: unknown): Settings {
     terrainSafetyMarginM: readFiniteNumber(parsed.terrainSafetyMarginM, defaults.terrainSafetyMarginM),
     cruiseSpeedMps: readFiniteNumber(parsed.cruiseSpeedMps, defaults.cruiseSpeedMps),
     hoverSpeedMps: readFiniteNumber(parsed.hoverSpeedMps, defaults.hoverSpeedMps),
+    recordingAutoRecordOnConnect: typeof parsed.recordingAutoRecordOnConnect === "boolean"
+      ? parsed.recordingAutoRecordOnConnect
+      : defaults.recordingAutoRecordOnConnect,
   };
 }
 
@@ -135,6 +140,7 @@ function createSettingsDefaults(): Settings {
     terrainSafetyMarginM: DEFAULT_TERRAIN_SAFETY_MARGIN_M,
     cruiseSpeedMps: DEFAULT_CRUISE_SPEED_MPS,
     hoverSpeedMps: DEFAULT_HOVER_SPEED_MPS,
+    recordingAutoRecordOnConnect: DEFAULT_RECORDING_AUTO_RECORD_ON_CONNECT,
   };
 }
 

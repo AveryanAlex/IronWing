@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "storage": {
+    "kind": "app_data",
+    "catalog_path": "logs/catalog.json",
+    "indexes_dir": "logs/indexes",
+    "recordings_dir": "logs/recordings"
+  },
+  "migrated_from_schema_version": null,
+  "entries": [
+    {
+      "entry_id": "log-2026-05-08-001",
+      "status": "ready",
+      "imported_at_unix_msec": 1778246400000,
+      "source": {
+        "original_path": "/home/alex/flights/flight-001.tlog",
+        "fingerprint": {
+          "size_bytes": 1048576,
+          "modified_unix_msec": 1778246300000
+        },
+        "status": {
+          "kind": "available",
+          "current_fingerprint": {
+            "size_bytes": 1048576,
+            "modified_unix_msec": 1778246300000
+          }
+        }
+      },
+      "metadata": {
+        "display_name": "flight-001.tlog",
+        "format": "tlog",
+        "start_usec": 1000000,
+        "end_usec": 61000000,
+        "duration_secs": 60.0,
+        "total_messages": 2400,
+        "message_types": {
+          "ATTITUDE": 600,
+          "GLOBAL_POSITION_INT": 300,
+          "HEARTBEAT": 60,
+          "SYS_STATUS": 120
+        },
+        "vehicle_type": "quadrotor",
+        "autopilot": "ardupilotmega"
+      },
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "source": "parse",
+          "code": "partial_message",
+          "message": "one trailing frame was ignored while indexing",
+          "recoverable": true,
+          "timestamp_usec": 61000000
+        }
+      ],
+      "index": {
+        "index_id": "idx-log-2026-05-08-001",
+        "relative_path": "logs/indexes/idx-log-2026-05-08-001.json",
+        "format": "tlog",
+        "index_version": 1,
+        "built_at_unix_msec": 1778246410000,
+        "message_count": 2399,
+        "covers_start_usec": 1000000,
+        "covers_end_usec": 61000000
+      }
+    }
+  ]
+}

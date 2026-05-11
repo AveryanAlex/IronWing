@@ -1,0 +1,16 @@
+{
+  "entry_id": "log-2026-05-08-001",
+  "instance_id": "export-1",
+  "format": "csv",
+  "destination_path": "/home/alex/exports/flight-001.csv",
+  "start_usec": 1000000,
+  "end_usec": 61000000,
+  "message_types": ["GLOBAL_POSITION_INT", "VFR_HUD"],
+  "text": "alt",
+  "field_filters": [
+    {
+      "field": "relative_alt",
+      "value_text": "12000"
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import type {
   MockInvocation,
   SessionEnvelope,
 } from "./types";
+import type { OperationFailure, OperationId } from "../../../session";
 
 export const PENDING_SESSION_TTL_MS = 2_000;
 
@@ -111,4 +112,20 @@ export function requireLiveEnvelope() {
   }
 
   return mockState.liveEnvelope;
+}
+
+export function ensureMockLiveWriteAllowed(operationId: OperationId) {
+  if (!mockState.playbackEnvelope) {
+    return;
+  }
+
+  const failure: OperationFailure = {
+    operation_id: operationId,
+    reason: {
+      kind: "permission_denied",
+      message: "replay is read-only while playback is the effective source; switch back to the live source to send vehicle commands",
+    },
+  };
+
+  throw new Error(JSON.stringify(failure));
 }
