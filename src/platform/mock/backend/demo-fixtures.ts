@@ -33,7 +33,9 @@ function seededStatusText(entries: StatusMessage[]): MockLiveStatusTextState {
   return { entries };
 }
 
-function seededParams(entries: Array<[string, number, "uint8" | "int8" | "uint16" | "int16" | "uint32" | "int32" | "real32"]>): ParamStore {
+function seededParams(
+  entries: ReadonlyArray<readonly [string, number, "uint8" | "int8" | "uint16" | "int16" | "uint32" | "int32" | "real32"]>,
+): ParamStore {
   return {
     expected_count: entries.length,
     params: Object.fromEntries(entries.map(([name, value, param_type], index) => [name, { name, value, param_type, index }])),

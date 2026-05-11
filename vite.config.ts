@@ -13,7 +13,10 @@ const serverHost =
       ? (process.env.IRONWING_REMOTE_UI_VITE_HOST ?? "127.0.0.1")
       : "localhost";
 
+const isDemoBuild = process.env.IRONWING_PLATFORM === "mock" && process.env.VITE_IRONWING_MOCK_PROFILE === "demo";
+
 export default defineConfig({
+  base: isDemoBuild ? "./" : undefined,
   plugins: [svelte(), tailwindcss()],
   resolve: {
     alias: {

@@ -305,15 +305,22 @@ function isDemoConnectRequest(args: CommandArgs) {
 
 function nextDemoTelemetryValue() {
   const telemetryDomain = mockState.liveTelemetryDomain;
-  if (!telemetryDomain?.value) {
+  if (
+    !telemetryDomain?.value?.flight
+    || !telemetryDomain.value.navigation
+    || !telemetryDomain.value.attitude
+    || !telemetryDomain.value.power
+  ) {
     return null;
   }
 
   const nextDomain = structuredClone(telemetryDomain);
-  const flight = nextDomain.value.flight;
-  const navigation = nextDomain.value.navigation;
-  const power = nextDomain.value.power;
-  const attitude = nextDomain.value.attitude;
+  const nextValue = nextDomain.value;
+  if (!nextValue?.flight || !nextValue.navigation || !nextValue.attitude || !nextValue.power) {
+    return null;
+  }
+
+  const { flight, navigation, power, attitude } = nextValue;
 
   if (typeof flight.altitude_m === "number") {
     flight.altitude_m = Number((flight.altitude_m + 0.2).toFixed(1));
