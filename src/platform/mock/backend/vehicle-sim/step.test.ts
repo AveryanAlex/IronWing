@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createInitialSimVehicle } from "./fixtures";
 import { horizontalDistanceM } from "./geo";
+import { normalizeMissionPlan } from "./mission";
 import { advanceSimVehicle } from "./step";
 import { telemetryDomainFromSimVehicle } from "./telemetry";
 
@@ -87,7 +88,7 @@ describe("vehicle simulator step", () => {
     expect(step.position.latitude_deg).toBeGreaterThan(initial.position.latitude_deg);
     expect(step.position.longitude_deg).toBeGreaterThan(initial.position.longitude_deg);
     expect(step.position.relative_alt_m).toBe(2.5);
-    expect(step.groundspeed_mps).toBeGreaterThan(0);
+    expect(step.groundspeed_mps).toBe(10);
     expect(step.climb_rate_mps).toBe(2.5);
     expect(horizontalDistanceM(step.position, initial.target!)).toBeLessThan(horizontalDistanceM(initial.position, initial.target!));
   });
@@ -112,8 +113,8 @@ describe("vehicle simulator step", () => {
     expect(step.position.relative_alt_m).toBe(3);
     expect(step.heading_deg).toBeGreaterThan(initial.heading_deg);
     expect(step.heading_deg).toBeLessThan(90);
-    expect(step.groundspeed_mps).toBeGreaterThan(0);
-    expect(step.airspeed_mps).toBe(step.groundspeed_mps);
+    expect(step.groundspeed_mps).toBe(22);
+    expect(step.airspeed_mps).toBe(22);
     expect(step.climb_rate_mps).toBe(3);
     expect(horizontalDistanceM(step.position, initial.target!)).toBeLessThan(horizontalDistanceM(initial.position, initial.target!));
   });
@@ -321,7 +322,7 @@ describe("vehicle simulator step", () => {
         ],
         current_index: 0,
         completed: false,
-        speed_mps: 5,
+        speed_mps: null,
         unsupported_notes: [],
       },
       target: null,
@@ -334,6 +335,105 @@ describe("vehicle simulator step", () => {
     expect(step.mission.speed_mps).toBe(12);
     expect(step.groundspeed_mps).toBe(12);
     expect(step.airspeed_mps).toBe(12);
+    expect(step.position.longitude_deg).toBeGreaterThan(initial.position.longitude_deg);
+  });
+
+  it("copter AUTO waypoint movement uses the 10 m/s family default without an explicit mission override", () => {
+    const seeded = createInitialSimVehicle("quadcopter");
+    const initial = {
+      ...seeded,
+      armed: true,
+      custom_mode: 3,
+      mode_name: "AUTO",
+      system_status: "active",
+      mission: normalizeMissionPlan({
+        items: [
+          {
+            command: {
+              Nav: {
+                Waypoint: {
+                  position: {
+                    RelHome: {
+                      latitude_deg: seeded.position.latitude_deg,
+                      longitude_deg: seeded.position.longitude_deg + 0.002,
+                      relative_alt_m: 8,
+                    },
+                  },
+                  hold_time_s: 0,
+                  acceptance_radius_m: 1,
+                  pass_radius_m: 0,
+                  yaw_deg: 0,
+                },
+              },
+            },
+            current: true,
+            autocontinue: true,
+          },
+        ],
+      }),
+      target: null,
+    };
+
+    const step = advanceSimVehicle(initial, 1).state;
+
+    expect(step.groundspeed_mps).toBe(10);
+    expect(step.position.longitude_deg).toBeGreaterThan(initial.position.longitude_deg);
+    expect(step.position.relative_alt_m).toBe(2.5);
+  });
+
+  it("copter AUTO ChangeSpeed override beats the 10 m/s family fallback", () => {
+    const seeded = createInitialSimVehicle("quadcopter");
+    const initial = {
+      ...seeded,
+      armed: true,
+      custom_mode: 3,
+      mode_name: "AUTO",
+      system_status: "active",
+      mission: normalizeMissionPlan({
+        items: [
+          {
+            command: {
+              Do: {
+                ChangeSpeed: {
+                  speed_type: "Groundspeed",
+                  speed_mps: 12,
+                  throttle_pct: 50,
+                },
+              },
+            },
+            current: false,
+            autocontinue: true,
+          },
+          {
+            command: {
+              Nav: {
+                Waypoint: {
+                  position: {
+                    RelHome: {
+                      latitude_deg: seeded.position.latitude_deg,
+                      longitude_deg: seeded.position.longitude_deg + 0.002,
+                      relative_alt_m: 8,
+                    },
+                  },
+                  hold_time_s: 0,
+                  acceptance_radius_m: 1,
+                  pass_radius_m: 0,
+                  yaw_deg: 0,
+                },
+              },
+            },
+            current: true,
+            autocontinue: true,
+          },
+        ],
+      }),
+      target: null,
+    };
+
+    const step = advanceSimVehicle(initial, 1).state;
+
+    expect(step.mission.speed_mps).toBe(12);
+    expect(step.groundspeed_mps).toBe(12);
     expect(step.position.longitude_deg).toBeGreaterThan(initial.position.longitude_deg);
   });
 

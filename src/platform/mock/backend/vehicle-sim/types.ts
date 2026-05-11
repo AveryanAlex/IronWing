@@ -52,7 +52,7 @@ export type SimMissionRuntime = {
   items: SimMissionItem[];
   current_index: number | null;
   completed: boolean;
-  speed_mps: number;
+  speed_mps: number | null;
   unsupported_notes: string[];
 };
 

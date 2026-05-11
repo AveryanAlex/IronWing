@@ -6,8 +6,6 @@ import {
 } from "../../../../lib/mavkit-types";
 import type { SimMissionItem, SimMissionRuntime } from "./types";
 
-export const DEFAULT_SIM_MISSION_SPEED_MPS = 5;
-
 function unsupportedMissionItem(note: string): SimMissionItem {
   return {
     kind: "unsupported",
@@ -90,14 +88,29 @@ function normalizeCurrentIndex(currentIndex: number | null | undefined, itemsLen
   return currentIndex;
 }
 
+function restoredMissionSpeedOverride(items: SimMissionItem[], currentIndex: number | null, completed: boolean) {
+  const appliedItemsCount = currentIndex == null ? (completed ? items.length : 0) : currentIndex;
+  let speedMps: number | null = null;
+
+  for (const item of items.slice(0, appliedItemsCount)) {
+    if (item.kind === "change_speed") {
+      speedMps = item.speed_mps;
+    }
+  }
+
+  return speedMps;
+}
+
 export function normalizeMissionPlan(plan: MissionPlan | null | undefined): SimMissionRuntime {
   const missionPlan = plan ?? null;
   const items = missionPlan?.items.map((_, index) => normalizeMissionItem(missionPlan, index)) ?? [];
+  const currentIndex = normalizeCurrentIndex(defaultCurrentIndex(missionPlan), items.length);
+  const completed = items.length === 0;
   return {
     items,
-    current_index: normalizeCurrentIndex(defaultCurrentIndex(missionPlan), items.length),
-    completed: items.length === 0,
-    speed_mps: DEFAULT_SIM_MISSION_SPEED_MPS,
+    current_index: currentIndex,
+    completed,
+    speed_mps: restoredMissionSpeedOverride(items, currentIndex, completed),
     unsupported_notes: items.flatMap((item) => (item.kind === "unsupported" ? [item.note] : [])),
   };
 }
@@ -131,9 +144,13 @@ export function advanceMissionCurrent(mission: SimMissionRuntime): SimMissionRun
 }
 
 export function setMissionCurrentIndex(mission: SimMissionRuntime, currentIndex: number | null): SimMissionRuntime {
+  const normalizedCurrentIndex = normalizeCurrentIndex(currentIndex, mission.items.length);
+  const completed = mission.items.length === 0 ? true : currentIndex == null ? mission.completed : false;
+
   return {
     ...mission,
-    current_index: normalizeCurrentIndex(currentIndex, mission.items.length),
-    completed: mission.items.length === 0 ? true : currentIndex == null ? mission.completed : false,
+    current_index: normalizedCurrentIndex,
+    completed,
+    speed_mps: restoredMissionSpeedOverride(mission.items, normalizedCurrentIndex, completed),
   };
 }

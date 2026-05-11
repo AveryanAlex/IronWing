@@ -6,7 +6,7 @@ import type { SimStepResult, SimVehicleState } from "./types";
 export const MAX_STEP_S = 1;
 export const COPTER_CLIMB_MPS = 2.5;
 export const COPTER_DESCEND_MPS = 1.5;
-export const COPTER_HORIZONTAL_SPEED_MPS = 5;
+export const COPTER_HORIZONTAL_SPEED_MPS = 10;
 export const PLANE_CRUISE_SPEED_MPS = 22;
 export const PLANE_TURN_RATE_DEGPS = 25;
 export const PLANE_CLIMB_MPS = 3;
@@ -99,6 +99,10 @@ function clampStepSeconds(dtS: number) {
   }
 
   return Math.min(dtS, MAX_STEP_S);
+}
+
+function missionOverrideSpeedMps(speedMps: number | null) {
+  return speedMps != null && speedMps > 0 ? speedMps : null;
 }
 
 function withBattery(state: SimVehicleState, dtS: number) {
@@ -250,8 +254,9 @@ export function advanceSimVehicle(state: SimVehicleState, dtS: number): SimStepR
 
   if (isPlaneFamily(activeState)) {
     const targetKind = activeState.target ? inferredTargetKind(activeState) : null;
-    const planeSpeedMps = isAutoMode(activeState) && activeState.mission.speed_mps > 0
-      ? activeState.mission.speed_mps
+    const missionSpeedOverrideMps = missionOverrideSpeedMps(activeState.mission.speed_mps);
+    const planeSpeedMps = isAutoMode(activeState) && missionSpeedOverrideMps != null
+      ? missionSpeedOverrideMps
       : PLANE_CRUISE_SPEED_MPS;
     const targetPosition = activeState.target?.latitude_deg != null && activeState.target.longitude_deg != null
       ? {
@@ -397,7 +402,7 @@ export function advanceSimVehicle(state: SimVehicleState, dtS: number): SimStepR
     };
     const remainingDistanceM = horizontalDistanceM(activeState.position, targetPosition);
     const horizontalSpeedMps = isAutoMode(activeState)
-      ? activeState.mission.speed_mps
+      ? missionOverrideSpeedMps(activeState.mission.speed_mps) ?? COPTER_HORIZONTAL_SPEED_MPS
       : COPTER_HORIZONTAL_SPEED_MPS;
     const horizontalStepM = Math.min(remainingDistanceM, horizontalSpeedMps * appliedDtS);
 
