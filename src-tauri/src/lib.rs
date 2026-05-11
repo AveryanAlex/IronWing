@@ -84,6 +84,13 @@ pub(crate) struct AppState {
     pub(crate) remote_ui_events: tokio::sync::broadcast::Sender<RemoteUiEvent>,
 }
 
+fn ble_plugin_enabled() -> bool {
+    !matches!(
+        std::env::var("IRONWING_DISABLE_BLE_PLUGIN"),
+        Ok(value) if matches!(value.trim(), "1" | "true" | "TRUE" | "yes" | "YES")
+    )
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let state = AppState {
@@ -117,8 +124,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_blec::init())
         .plugin(tauri_plugin_opener::init());
+    if ble_plugin_enabled() {
+        builder = builder.plugin(tauri_plugin_blec::init());
+    }
     #[cfg(target_os = "android")]
     {
         builder = builder

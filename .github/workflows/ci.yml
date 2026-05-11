@@ -159,5 +159,6 @@ jobs:
       - name: Run native WebDriverIO e2e tests
         run: xvfb-run -a pnpm run e2e:native
         env:
+          IRONWING_DISABLE_BLE_PLUGIN: "1"
           NO_AT_BRIDGE: "1"
           WEBKIT_DISABLE_COMPOSITING_MODE: "1"
