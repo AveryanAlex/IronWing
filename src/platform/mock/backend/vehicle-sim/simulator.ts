@@ -57,7 +57,7 @@ export function advanceDemoSimulator(
     return { simulator, mission_current_changed: false, status_notes: [] };
   }
 
-  if (!simulator.state.connected || !simulator.state.armed) {
+  if (!simulator.state.connected) {
     return {
       simulator: {
         ...simulator,

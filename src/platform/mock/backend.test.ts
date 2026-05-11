@@ -1317,8 +1317,14 @@ describe("mock profile backend parity", () => {
         await vi.advanceTimersByTimeAsync(1_000);
         unlisten();
 
+        const firstTelemetry = telemetryEvents[0]?.value.value;
+        const lastTelemetry = telemetryEvents.at(-1)?.value.value;
+
         expect(telemetryEvents.length).toBeGreaterThan(0);
-        expect(telemetryEvents.at(-1)?.value.value).toEqual(telemetryEvents[0]?.value.value);
+        expect(lastTelemetry?.flight).toEqual(firstTelemetry?.flight);
+        expect(lastTelemetry?.attitude).toEqual(firstTelemetry?.attitude);
+        expect(lastTelemetry?.power.battery_pct ?? 0).toBeLessThan(firstTelemetry?.power.battery_pct ?? 0);
+        expect(lastTelemetry?.power.energy_consumed_wh ?? 0).toBeGreaterThan(firstTelemetry?.power.energy_consumed_wh ?? 0);
     });
 
     it("vehicle_takeoff in guided copter mode drives simulator altitude upward", async () => {

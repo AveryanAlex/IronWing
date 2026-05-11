@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createInitialSimVehicle } from "./fixtures";
 import { horizontalDistanceM } from "./geo";
 import { normalizeMissionPlan } from "./mission";
+import { advanceDemoSimulator } from "./simulator";
 import { advanceSimVehicle } from "./step";
 import { telemetryDomainFromSimVehicle } from "./telemetry";
 
@@ -510,6 +511,23 @@ describe("vehicle simulator step", () => {
 
     expect(armedStep.state.battery.remaining_pct).toBeLessThan(disarmedStep.state.battery.remaining_pct);
     expect(armedStep.state.battery.energy_consumed_wh).toBeGreaterThan(disarmedStep.state.battery.energy_consumed_wh);
+  });
+
+  it("advances connected disarmed runtime ticks through the stationary battery model", () => {
+    const initial = createInitialSimVehicle("quadcopter");
+
+    const { simulator, mission_current_changed, status_notes } = advanceDemoSimulator(
+      { state: initial, last_tick_msec: 1_000 },
+      2_000,
+    );
+
+    expect(mission_current_changed).toBe(false);
+    expect(status_notes).toEqual([]);
+    expect(simulator.state.position).toEqual(initial.position);
+    expect(simulator.state.groundspeed_mps).toBe(0);
+    expect(simulator.state.climb_rate_mps).toBe(0);
+    expect(simulator.state.battery.remaining_pct).toBeLessThan(initial.battery.remaining_pct);
+    expect(simulator.state.battery.energy_consumed_wh).toBeGreaterThan(initial.battery.energy_consumed_wh);
   });
 
   it("increases armed battery drain and current under higher speed and climb load", () => {
