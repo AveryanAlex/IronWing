@@ -107,8 +107,10 @@ import {
   connectLink,
   disconnectLink,
   emitLiveSessionState as emitLiveSessionStateUpdate,
+  getAvailableModes,
   liveSessionStreamEvent,
   requireConnectedVehicle,
+  setFlightMode,
   syncLiveVehicleArmedState,
   validateArmDisarmArgs,
   validateMotorTestArgs,
@@ -351,6 +353,19 @@ function validateStructuredPlanArg<T>(args: CommandArgs, label: string): T {
 
 function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
   switch (cmd) {
+    case "list_serial_ports_cmd":
+      return ["/dev/ttyUSB0", "/dev/ttyACM0"];
+    case "bt_request_permissions":
+    case "bt_stop_scan_ble":
+      return undefined;
+    case "bt_scan_ble":
+      return [
+        { name: "Demo BLE Radio", address: "AA:BB:CC:DD:EE:FF", device_type: "ble" },
+      ];
+    case "bt_get_bonded_devices":
+      return [
+        { name: "Demo SPP Radio", address: "11:22:33:44:55:66", device_type: "classic" },
+      ];
     case "available_transports":
       return availableTransportDescriptors();
     case "open_session_snapshot":
@@ -535,9 +550,13 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
     case "get_available_message_rates":
       return availableMessageRates();
     case "get_available_modes":
-      return [];
+      return getAvailableModes();
     case "disconnect_link":
       disconnectLink(args);
+      return undefined;
+    case "set_flight_mode":
+      ensureMockLiveWriteAllowed("set_flight_mode");
+      setFlightMode(args, emitEvent);
       return undefined;
     case "set_servo":
       ensureMockLiveWriteAllowed("set_servo");

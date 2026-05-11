@@ -30,8 +30,16 @@ export const mockState: MockBackendState = {
   liveMissionHome: null,
   liveFencePlan: null,
   liveRallyPlan: null,
+  liveTelemetryDomain: null,
   liveParamStore: null,
   liveParamProgress: null,
+  liveAvailableModes: null,
+  liveStatusText: null,
+  liveSupportDomain: null,
+  liveSensorHealthDomain: null,
+  liveConfigurationFactsDomain: null,
+  demoTelemetryIntervalId: null,
+  demoStatusIntervalId: null,
   liveVehicleArmed: false,
   liveVehicleModeName: "Stabilize",
   guidedTermination: null,
@@ -40,6 +48,7 @@ export const mockState: MockBackendState = {
 };
 
 export function resetMockState() {
+  clearDemoIntervals();
   mockState.liveEnvelope = null;
   mockState.playbackEnvelope = null;
   mockState.pendingLiveEnvelope = null;
@@ -56,13 +65,33 @@ export function resetMockState() {
   mockState.liveMissionHome = null;
   mockState.liveFencePlan = null;
   mockState.liveRallyPlan = null;
+  mockState.liveTelemetryDomain = null;
   mockState.liveParamStore = null;
   mockState.liveParamProgress = null;
+  mockState.liveAvailableModes = null;
+  mockState.liveStatusText = null;
+  mockState.liveSupportDomain = null;
+  mockState.liveSensorHealthDomain = null;
+  mockState.liveConfigurationFactsDomain = null;
+  mockState.demoTelemetryIntervalId = null;
+  mockState.demoStatusIntervalId = null;
   mockState.liveVehicleArmed = false;
   mockState.liveVehicleModeName = "Stabilize";
   mockState.guidedTermination = null;
   mockState.guidedLastCommand = null;
   mockState.guided = null;
+}
+
+export function clearDemoIntervals() {
+  if (mockState.demoTelemetryIntervalId != null) {
+    window.clearInterval(mockState.demoTelemetryIntervalId);
+    mockState.demoTelemetryIntervalId = null;
+  }
+
+  if (mockState.demoStatusIntervalId != null) {
+    window.clearInterval(mockState.demoStatusIntervalId);
+    mockState.demoStatusIntervalId = null;
+  }
 }
 
 export function currentGuidedSourceKind(): "live" | "playback" {

@@ -21,6 +21,10 @@ import type {
 
 import { getMockPlatformController, invokeMockCommand, listenMockEvent, type MockLogSeedPreset } from "./backend";
 
+function setMockProfile(profile: "test" | "demo") {
+    import.meta.env.VITE_IRONWING_MOCK_PROFILE = profile;
+}
+
 function readRustCommandsSource() {
     return readFileSync("src-tauri/src/commands.rs", "utf8");
 }
@@ -72,6 +76,7 @@ function readRustRateLimits() {
 describe("mock guided backend parity", () => {
     beforeEach(() => {
         vi.restoreAllMocks();
+        setMockProfile("test");
         getMockPlatformController().reset();
     });
 
@@ -889,6 +894,77 @@ describe("mock guided backend parity", () => {
         unlisten();
 
         expect(seen).toEqual([]);
+    });
+});
+
+describe("mock profile backend parity", () => {
+    beforeEach(() => {
+        setMockProfile("test");
+        getMockPlatformController().reset();
+    });
+
+    it("exposes only the demo transport in demo profile", async () => {
+        setMockProfile("demo");
+
+        await expect(invokeMockCommand("available_transports")).resolves.toEqual([
+            { kind: "demo", label: "Demo vehicle", available: true, validation: {} },
+        ]);
+    });
+
+    it("keeps discovery commands deterministic in the test profile", async () => {
+        await expect(invokeMockCommand("list_serial_ports_cmd")).resolves.toEqual([
+            "/dev/ttyUSB0",
+            "/dev/ttyACM0",
+        ]);
+        await expect(invokeMockCommand("bt_request_permissions")).resolves.toBeUndefined();
+        await expect(invokeMockCommand("bt_get_bonded_devices")).resolves.toEqual([
+            { name: "Demo SPP Radio", address: "11:22:33:44:55:66", device_type: "classic" },
+        ]);
+        await expect(invokeMockCommand("bt_scan_ble", { timeoutMs: 500 })).resolves.toEqual([
+            { name: "Demo BLE Radio", address: "AA:BB:CC:DD:EE:FF", device_type: "ble" },
+        ]);
+        await expect(invokeMockCommand("bt_stop_scan_ble")).resolves.toBeUndefined();
+    });
+
+    it("seeds quadplane demo connects with richer live state and available modes", async () => {
+        setMockProfile("demo");
+
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "demo", vehicle_preset: "quadplane" } },
+        });
+
+        const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+        const modes = await invokeMockCommand<any>("get_available_modes");
+
+        expect(snapshot.session.value.vehicle_state.vehicle_type).toBe("vtol");
+        expect(snapshot.param_store?.params.Q_ENABLE?.value).toBe(1);
+        expect(snapshot.mission_state?.plan?.items.length ?? 0).toBeGreaterThan(0);
+        expect(snapshot.support.available).toBe(true);
+        expect(snapshot.support.value).not.toBeNull();
+        expect(snapshot.sensor_health.available).toBe(true);
+        expect(snapshot.sensor_health.value).not.toBeNull();
+        expect(snapshot.configuration_facts.available).toBe(true);
+        expect(snapshot.configuration_facts.value).not.toBeNull();
+        expect(snapshot.status_text.value.entries.length).toBeGreaterThan(0);
+        expect(modes.map((entry: { name: string }) => entry.name)).toContain("QLOITER");
+    });
+
+    it("applies seeded demo flight modes through set_flight_mode", async () => {
+        setMockProfile("demo");
+
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "demo", vehicle_preset: "quadplane" } },
+        });
+
+        const modes = await invokeMockCommand<Array<{ custom_mode: number; name: string }>>("get_available_modes");
+        const qrtlMode = modes.find((entry) => entry.name === "QRTL");
+        expect(qrtlMode).toBeTruthy();
+
+        await invokeMockCommand("set_flight_mode", { customMode: qrtlMode!.custom_mode });
+
+        const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+        expect(snapshot.session.value.vehicle_state.custom_mode).toBe(qrtlMode!.custom_mode);
+        expect(snapshot.session.value.vehicle_state.mode_name).toBe("QRTL");
     });
 });
 

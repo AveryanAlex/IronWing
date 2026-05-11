@@ -19,6 +19,11 @@ import type {
 import type { LogLibraryCatalog, LogProgress } from "../../../logs";
 import type { PlaybackStateSnapshot } from "../../../playback";
 import type { RecordingSettings, RecordingStatus } from "../../../recording";
+import type { SensorHealthDomain } from "../../../sensor-health";
+import type { StatusMessage } from "../../../statustext";
+import type { SupportDomain } from "../../../support";
+import type { FlightModeEntry, TelemetryDomain } from "../../../telemetry";
+import type { ConfigurationFactsDomain } from "../../../configuration-facts";
 import type { MockLogSeedPreset } from "./logs";
 
 export type CommandArgs = Record<string, unknown> | undefined;
@@ -61,6 +66,12 @@ export type TransportDescriptor =
     label: string;
     available: boolean;
     validation: { address_required: boolean };
+  }
+  | {
+    kind: "demo";
+    label: string;
+    available: boolean;
+    validation: {};
   };
 
 export type MockLiveVehicleState = {
@@ -79,6 +90,11 @@ export type MockMissionState = MissionState;
 export type MockMissionProgressState = TransferProgress;
 export type MockParamStoreState = ParamStore;
 export type MockParamProgressState = ParamProgress;
+export type MockTelemetryDomain = TelemetryDomain;
+export type MockSupportDomain = SupportDomain;
+export type MockSensorHealthDomain = SensorHealthDomain;
+export type MockConfigurationFactsDomain = ConfigurationFactsDomain;
+export type MockLiveStatusTextState = { entries: StatusMessage[] };
 
 export type MockGuidedBlockingReason =
   | "live_session_required"
@@ -119,8 +135,16 @@ export type MockBackendState = {
   liveMissionHome: HomePosition | null;
   liveFencePlan: FencePlan | null;
   liveRallyPlan: RallyPlan | null;
+  liveTelemetryDomain: MockTelemetryDomain | null;
   liveParamStore: MockParamStoreState | null;
   liveParamProgress: MockParamProgressState | null;
+  liveAvailableModes: FlightModeEntry[] | null;
+  liveStatusText: MockLiveStatusTextState | null;
+  liveSupportDomain: MockSupportDomain | null;
+  liveSensorHealthDomain: MockSensorHealthDomain | null;
+  liveConfigurationFactsDomain: MockConfigurationFactsDomain | null;
+  demoTelemetryIntervalId: number | null;
+  demoStatusIntervalId: number | null;
   liveVehicleArmed: boolean;
   liveVehicleModeName: string;
   guidedTermination: null | { reason: "disconnect" | "mode_change" | "source_switch" | "vehicle_missing"; at_unix_msec: number; message: string };

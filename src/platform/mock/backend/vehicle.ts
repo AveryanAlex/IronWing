@@ -1,7 +1,10 @@
 import { emitGuidedStateIfLiveActive, liveGuidedStreamEvent, reconcileGuidedAfterLiveVehicleUpdate } from "./guided";
-import { mockState, requireLiveEnvelope, resetGuided } from "./runtime";
+import { demoFixtureForPreset } from "./demo-fixtures";
+import { isDemoProfile } from "./profile";
+import { clearDemoIntervals, mockState, requireLiveEnvelope, resetGuided } from "./runtime";
 import { applyMockMissionState } from "./mission";
 import { applyMockParamState } from "./params";
+import type { DemoVehiclePreset } from "../../../transport";
 import type {
   CommandArgs,
   MockLiveVehicleState,
@@ -190,15 +193,44 @@ export function applyMockLiveVehicleState(mockVehicleState?: Partial<MockLiveVeh
   mockState.liveVehicleModeName = normalized.mode_name;
 }
 
+function seededDemoTransportDescriptor(): TransportDescriptor {
+  return {
+    kind: "demo",
+    label: "Demo vehicle",
+    available: true,
+    validation: {},
+  };
+}
+
+function setDemoSeedState(preset: DemoVehiclePreset) {
+  const fixture = demoFixtureForPreset(preset);
+  applyMockLiveVehicleState(fixture.vehicleState);
+  applyMockMissionState(fixture.missionState);
+  applyMockParamState(fixture.paramStore, null);
+  mockState.liveTelemetryDomain = fixture.telemetryDomain;
+  mockState.liveAvailableModes = fixture.availableModes;
+  mockState.liveStatusText = fixture.statusText;
+  mockState.liveSupportDomain = fixture.supportDomain;
+  mockState.liveSensorHealthDomain = fixture.sensorHealthDomain;
+  mockState.liveConfigurationFactsDomain = fixture.configurationFactsDomain;
+}
+
 export function clearLiveVehicleState() {
+  clearDemoIntervals();
   mockState.liveVehicleAvailable = false;
   mockState.liveVehicleState = null;
   mockState.liveMissionState = null;
   mockState.liveMissionHome = null;
   mockState.liveFencePlan = null;
   mockState.liveRallyPlan = null;
+  mockState.liveTelemetryDomain = null;
   mockState.liveParamStore = null;
   mockState.liveParamProgress = null;
+  mockState.liveAvailableModes = null;
+  mockState.liveStatusText = null;
+  mockState.liveSupportDomain = null;
+  mockState.liveSensorHealthDomain = null;
+  mockState.liveConfigurationFactsDomain = null;
   mockState.liveVehicleArmed = false;
   mockState.liveVehicleModeName = "Stabilize";
 }
@@ -207,15 +239,32 @@ export function connectLink(args: CommandArgs) {
   resetGuided("source_switch", "live source switched");
   if (args?.request && typeof args.request === "object") {
     const request = args.request as ConnectLinkRequest;
+    if (request.transport?.kind === "demo") {
+      setDemoSeedState(request.transport.vehicle_preset);
+      return;
+    }
+
     applyMockLiveVehicleState(request.mockVehicleState);
     applyMockMissionState(request.mockMissionState);
     applyMockParamState(request.mockParamStore, request.mockParamProgress);
+    mockState.liveTelemetryDomain = null;
+    mockState.liveAvailableModes = null;
+    mockState.liveStatusText = null;
+    mockState.liveSupportDomain = null;
+    mockState.liveSensorHealthDomain = null;
+    mockState.liveConfigurationFactsDomain = null;
     return;
   }
 
   applyMockLiveVehicleState();
   applyMockMissionState();
   applyMockParamState();
+  mockState.liveTelemetryDomain = null;
+  mockState.liveAvailableModes = null;
+  mockState.liveStatusText = null;
+  mockState.liveSupportDomain = null;
+  mockState.liveSensorHealthDomain = null;
+  mockState.liveConfigurationFactsDomain = null;
 }
 
 export function disconnectLink(args: CommandArgs) {
@@ -285,6 +334,10 @@ export function liveSessionStreamEvent(vehicleState: MockLiveVehicleState): Mock
 }
 
 export function availableTransportDescriptors(): TransportDescriptor[] {
+  if (isDemoProfile()) {
+    return [seededDemoTransportDescriptor()];
+  }
+
   return [
     {
       kind: "udp",
@@ -314,7 +367,49 @@ export function availableTransportDescriptors(): TransportDescriptor[] {
   ];
 }
 
+export function getAvailableModes() {
+  return structuredClone(mockState.liveAvailableModes ?? []);
+}
+
+export function setFlightMode(args: CommandArgs, emitEvent: (event: string, payload: unknown) => void) {
+  requireConnectedVehicle();
+  const customMode = requireFiniteInteger(args?.customMode, "set_flight_mode.customMode");
+  const nextMode = mockState.liveAvailableModes?.find((mode) => mode.custom_mode === customMode);
+  if (!nextMode) {
+    throw new Error(`unknown flight mode custom_mode ${customMode}`);
+  }
+
+  if (mockState.liveVehicleState) {
+    mockState.liveVehicleState = {
+      ...mockState.liveVehicleState,
+      custom_mode: nextMode.custom_mode,
+      mode_name: nextMode.name,
+    };
+    mockState.liveVehicleModeName = nextMode.name;
+  }
+
+  if (!mockState.liveEnvelope || !mockState.liveVehicleState) {
+    return;
+  }
+
+  emitEvent("session://state", liveSessionStreamEvent(mockState.liveVehicleState).payload);
+  const reconciledGuided = reconcileGuidedAfterLiveVehicleUpdate();
+  if (reconciledGuided) {
+    emitEvent("guided://state", liveGuidedStreamEvent(reconciledGuided).payload);
+    return;
+  }
+
+  emitGuidedStateIfLiveActive(emitEvent);
+}
+
 export type ConnectLinkRequest = {
+  transport?:
+    | { kind: "udp"; bind_addr: string }
+    | { kind: "tcp"; address: string }
+    | { kind: "serial"; port: string; baud: number }
+    | { kind: "bluetooth_ble"; address: string }
+    | { kind: "bluetooth_spp"; address: string }
+    | { kind: "demo"; vehicle_preset: DemoVehiclePreset };
   mockVehicleState?: Partial<MockLiveVehicleState> & { modeName?: string };
   mockMissionState?: Partial<MockMissionState>;
   mockParamStore?: MockParamStoreState;
