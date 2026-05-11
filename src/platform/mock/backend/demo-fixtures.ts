@@ -312,8 +312,8 @@ const quadcopterFixture: DemoFixture = {
 const planeBaseFixture: DemoFixture = {
   vehicleState: {
     armed: false,
-    custom_mode: 10,
-    mode_name: "AUTO",
+    custom_mode: 0,
+    mode_name: "Manual",
     system_status: "standby",
     vehicle_type: "fixed_wing",
     autopilot: "ardu_pilot_mega",
@@ -355,18 +355,18 @@ const planeBaseFixture: DemoFixture = {
     ["SERVO3_MAX", 2000, "uint16"],
   ]),
   telemetryDomain: seededDomain({
-    flight: { altitude_m: 118, speed_mps: 22, climb_rate_mps: 0.6, throttle_pct: 52, airspeed_mps: 24 },
-    navigation: { latitude_deg: 47.4012, longitude_deg: 8.5531, heading_deg: 96, wp_dist_m: 180, nav_bearing_deg: 94, target_bearing_deg: 98, xtrack_error_m: 2.1 },
-    attitude: { roll_deg: 5.2, pitch_deg: 2.1, yaw_deg: 96 },
-    power: { battery_pct: 76, battery_voltage_v: 22.6, battery_current_a: 14.1, battery_voltage_cells: [3.77, 3.77, 3.76, 3.77, 3.76, 3.77], energy_consumed_wh: 112, battery_time_remaining_s: 1280 },
+    flight: { altitude_m: 0, speed_mps: 0, climb_rate_mps: 0, throttle_pct: 0, airspeed_mps: 0 },
+    navigation: { latitude_deg: 47.397742, longitude_deg: 8.545594, heading_deg: 0, wp_dist_m: 0, nav_bearing_deg: 0, target_bearing_deg: 0, xtrack_error_m: 0 },
+    attitude: { roll_deg: 0, pitch_deg: 0, yaw_deg: 0 },
+    power: { battery_pct: 76, battery_voltage_v: 22.6, battery_current_a: 0.6, battery_voltage_cells: [3.77, 3.77, 3.76, 3.77, 3.76, 3.77], energy_consumed_wh: 112, battery_time_remaining_s: 1280 },
     gps: { fix_type: "3d_fix", satellites: 19, hdop: 0.7 },
-    terrain: { terrain_height_m: 468, height_above_terrain_m: 118 },
-    radio: { rc_channels: [1500, 1500, 1600, 1500], rc_rssi: 89, servo_outputs: [1540, 1490, 1600, 1505] },
+    terrain: { terrain_height_m: 488, height_above_terrain_m: 0 },
+    radio: { rc_channels: [1500, 1500, 1000, 1500], rc_rssi: 89, servo_outputs: [1000, 1000, 1000, 1000] },
   }),
   availableModes: planeModes,
   statusText: seededStatusText([
     { sequence: 1, severity: "info", text: "Airspeed sensor healthy", timestamp_usec: 1_000_000 },
-    { sequence: 2, severity: "notice", text: "AUTO mission loaded", timestamp_usec: 2_000_000 },
+    { sequence: 2, severity: "notice", text: "Vehicle ready to arm", timestamp_usec: 2_000_000 },
   ]),
   supportDomain: seededDomain({
     can_request_prearm_checks: true,
@@ -421,13 +421,13 @@ const quadplaneFixture: DemoFixture = {
   ]),
   telemetryDomain: seededDomain({
     ...planeBaseFixture.telemetryDomain.value!,
-    flight: { ...planeBaseFixture.telemetryDomain.value!.flight, altitude_m: 42, speed_mps: 3.5, climb_rate_mps: 0.2, throttle_pct: 41, airspeed_mps: 11 },
-    navigation: { ...planeBaseFixture.telemetryDomain.value!.navigation, wp_dist_m: 35, xtrack_error_m: 0.4 },
+    flight: { ...planeBaseFixture.telemetryDomain.value!.flight },
+    navigation: { ...planeBaseFixture.telemetryDomain.value!.navigation },
   }),
   availableModes: quadplaneOverlayModes,
   statusText: seededStatusText([
     { sequence: 1, severity: "info", text: "QuadPlane assist ready", timestamp_usec: 1_000_000 },
-    { sequence: 2, severity: "notice", text: "AUTO mission loaded", timestamp_usec: 2_000_000 },
+    { sequence: 2, severity: "notice", text: "Vehicle ready to arm", timestamp_usec: 2_000_000 },
     { sequence: 3, severity: "notice", text: "QLOITER holding transition point", timestamp_usec: 3_000_000 },
   ]),
 };

@@ -1008,6 +1008,35 @@ describe("mock profile backend parity", () => {
         expect(modes.map((entry: { name: string }) => entry.name)).toContain("QLOITER");
     });
 
+    it("airplane demo connects disarmed and parked instead of disarmed AUTO flight", async () => {
+        setMockProfile("demo");
+
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "demo", vehicle_preset: "airplane" } },
+        });
+
+        const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+
+        expect(snapshot.session.value.vehicle_state).toEqual({
+            armed: false,
+            custom_mode: 0,
+            mode_name: "Manual",
+            system_status: "standby",
+            vehicle_type: "fixed_wing",
+            autopilot: "ardu_pilot_mega",
+            system_id: 1,
+            component_id: 1,
+            heartbeat_received: true,
+        });
+        expect(snapshot.telemetry.value.flight.altitude_m).toBe(0);
+        expect(snapshot.telemetry.value.flight.speed_mps).toBe(0);
+        expect(snapshot.telemetry.value.flight.climb_rate_mps).toBe(0);
+        expect(snapshot.telemetry.value.flight.airspeed_mps).toBe(0);
+        expect(snapshot.telemetry.value.navigation.latitude_deg).toBe(47.397742);
+        expect(snapshot.telemetry.value.navigation.longitude_deg).toBe(8.545594);
+        expect(snapshot.telemetry.value.terrain.height_above_terrain_m).toBe(0);
+    });
+
     it("applies seeded demo flight modes through set_flight_mode", async () => {
         setMockProfile("demo");
 

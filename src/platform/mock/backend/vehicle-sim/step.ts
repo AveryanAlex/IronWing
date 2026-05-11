@@ -7,6 +7,11 @@ export const MAX_STEP_S = 1;
 export const COPTER_CLIMB_MPS = 2.5;
 export const COPTER_DESCEND_MPS = 1.5;
 export const COPTER_HORIZONTAL_SPEED_MPS = 5;
+export const PLANE_CRUISE_SPEED_MPS = 22;
+export const PLANE_TURN_RATE_DEGPS = 25;
+export const PLANE_CLIMB_MPS = 3;
+export const PLANE_DESCEND_MPS = 2;
+export const PLANE_TARGET_REACHED_EPSILON_M = 0.1;
 
 function clampMagnitude(value: number, magnitude: number) {
   if (value > 0) {
@@ -36,6 +41,18 @@ function activeThrottlePct(horizontalSpeedMps: number, climbRateMps: number) {
   return 15;
 }
 
+function planeThrottlePct(climbRateMps: number) {
+  if (climbRateMps > 0) {
+    return 65;
+  }
+
+  if (climbRateMps < 0) {
+    return 45;
+  }
+
+  return 55;
+}
+
 function inferredTargetKind(state: SimVehicleState) {
   if (state.target?.kind) {
     return state.target.kind;
@@ -45,7 +62,20 @@ function inferredTargetKind(state: SimVehicleState) {
 }
 
 function isCopterFamily(state: SimVehicleState) {
-  return state.family === "quadcopter" || state.family === "quadplane";
+  return state.family === "quadcopter";
+}
+
+function isPlaneFamily(state: SimVehicleState) {
+  return state.family === "airplane" || state.family === "quadplane";
+}
+
+function isQuadplaneHoverHoldMode(state: SimVehicleState) {
+  if (state.family !== "quadplane") {
+    return false;
+  }
+
+  const modeName = state.mode_name.trim().toUpperCase();
+  return modeName === "QLOITER" || modeName === "QSTABILIZE";
 }
 
 function holdPosition(state: SimVehicleState) {
@@ -72,6 +102,15 @@ function withBattery(state: SimVehicleState, dtS: number) {
     ...state,
     battery: advanceBattery(state, dtS),
   };
+}
+
+export function turnToward(currentDeg: number, targetDeg: number, maxDeltaDeg: number) {
+  const normalizedCurrent = ((currentDeg % 360) + 360) % 360;
+  const normalizedTarget = ((targetDeg % 360) + 360) % 360;
+  const delta = ((normalizedTarget - normalizedCurrent + 540) % 360) - 180;
+  const clampedDelta = clampMagnitude(delta, maxDeltaDeg);
+
+  return (normalizedCurrent + clampedDelta + 360) % 360;
 }
 
 function isAutoMode(state: SimVehicleState) {
@@ -195,6 +234,129 @@ export function advanceSimVehicle(state: SimVehicleState, dtS: number): SimStepR
         statusNotes: [] as string[],
       };
   const activeState = autoPrepared.state;
+
+  if (isQuadplaneHoverHoldMode(activeState) && !activeState.target) {
+    return {
+      state: withBattery(holdPosition(activeState), appliedDtS),
+      appliedDtS,
+      mission_current_changed: autoPrepared.missionCurrentChanged,
+      status_notes: autoPrepared.statusNotes,
+    };
+  }
+
+  if (isPlaneFamily(activeState)) {
+    const targetKind = activeState.target ? inferredTargetKind(activeState) : null;
+    const planeSpeedMps = isAutoMode(activeState) && activeState.mission.speed_mps > 0
+      ? activeState.mission.speed_mps
+      : PLANE_CRUISE_SPEED_MPS;
+    const targetPosition = activeState.target?.latitude_deg != null && activeState.target.longitude_deg != null
+      ? {
+          latitude_deg: activeState.target.latitude_deg,
+          longitude_deg: activeState.target.longitude_deg,
+        }
+      : null;
+    const altitudeDeltaM = (activeState.target?.relative_alt_m ?? activeState.position.relative_alt_m) - activeState.position.relative_alt_m;
+    const climbRateMps = appliedDtS > 0
+      ? clampMagnitude(
+          altitudeDeltaM,
+          (altitudeDeltaM >= 0 ? PLANE_CLIMB_MPS : PLANE_DESCEND_MPS) * appliedDtS,
+        ) / appliedDtS
+      : 0;
+    const desiredHeadingDeg = targetPosition
+      ? headingToTargetDeg(activeState.position, targetPosition)
+      : activeState.heading_deg;
+    const nextHeadingDeg = turnToward(activeState.heading_deg, desiredHeadingDeg, PLANE_TURN_RATE_DEGPS * appliedDtS);
+    const headingRad = (nextHeadingDeg * Math.PI) / 180;
+    const remainingDistanceM = targetPosition ? horizontalDistanceM(activeState.position, targetPosition) : 0;
+    const horizontalStepM = targetPosition
+      ? Math.min(remainingDistanceM, planeSpeedMps * appliedDtS)
+      : planeSpeedMps * appliedDtS;
+    const nextPosition = {
+      ...translatePosition(
+        activeState.position,
+        Math.cos(headingRad) * horizontalStepM,
+        Math.sin(headingRad) * horizontalStepM,
+      ),
+      relative_alt_m: Math.max(0, activeState.position.relative_alt_m + climbRateMps * appliedDtS),
+    };
+    const remainingHorizontalM = targetPosition
+      ? horizontalDistanceM(nextPosition, targetPosition)
+      : 0;
+    const reachedAltitude = activeState.target
+      ? Math.abs(activeState.target.relative_alt_m - nextPosition.relative_alt_m) < 0.01
+      : false;
+    const reachedHorizontal = activeState.target?.latitude_deg == null
+      || activeState.target?.longitude_deg == null
+      || remainingHorizontalM <= PLANE_TARGET_REACHED_EPSILON_M;
+    const reachedTarget = Boolean(activeState.target) && reachedAltitude && reachedHorizontal;
+    const completedPosition = reachedTarget && targetPosition
+      ? {
+          ...nextPosition,
+          latitude_deg: targetPosition.latitude_deg,
+          longitude_deg: targetPosition.longitude_deg,
+        }
+      : nextPosition;
+    const missionItem = isAutoMode(activeState) ? currentMissionItem(activeState.mission) : null;
+    const reachedAutoMissionTarget = Boolean(
+      missionItem
+        && ((missionItem.kind === "takeoff" && targetKind === "takeoff")
+          || (missionItem.kind === "waypoint" && targetKind === "guided")
+          || (missionItem.kind === "rtl" && targetKind === "rtl")
+          || (missionItem.kind === "land" && targetKind === "land")),
+    );
+
+    let nextMission = activeState.mission;
+    let missionCurrentChanged = autoPrepared.missionCurrentChanged;
+    if (reachedTarget && reachedAutoMissionTarget) {
+      nextMission = advanceMissionCurrent(activeState.mission);
+      missionCurrentChanged = true;
+    }
+
+    const next = withBattery(
+      reachedTarget && targetKind === "land"
+        ? {
+            ...holdPosition(activeState),
+            armed: false,
+            system_status: "standby",
+            position: {
+              ...completedPosition,
+              relative_alt_m: 0,
+            },
+            heading_deg: nextHeadingDeg,
+            target: null,
+            groundspeed_mps: 0,
+            airspeed_mps: 0,
+            climb_rate_mps: 0,
+            throttle_pct: 0,
+            mission: reachedAutoMissionTarget
+              ? {
+                  ...nextMission,
+                  completed: true,
+                }
+              : nextMission,
+          }
+        : {
+            ...activeState,
+            system_status: "active",
+            position: completedPosition,
+            heading_deg: nextHeadingDeg,
+            target: activeState.target,
+            groundspeed_mps: planeSpeedMps,
+            airspeed_mps: planeSpeedMps,
+            climb_rate_mps: climbRateMps,
+            throttle_pct: planeThrottlePct(climbRateMps),
+            mission: nextMission,
+          },
+      appliedDtS,
+    );
+
+    return {
+      state: next,
+      appliedDtS,
+      mission_current_changed: missionCurrentChanged,
+      status_notes: autoPrepared.statusNotes,
+    };
+  }
 
   if (!isCopterFamily(activeState) || !activeState.target) {
     return {

@@ -20,6 +20,21 @@ describe("vehicle simulator step", () => {
     expect(state.climb_rate_mps).toBe(0);
   });
 
+  it("disarmed airplane stays parked", () => {
+    const initial = createInitialSimVehicle("airplane");
+
+    const { state } = advanceSimVehicle(initial, 5);
+
+    expect(state.connected).toBe(true);
+    expect(state.armed).toBe(false);
+    expect(state.system_status).toBe("standby");
+    expect(state.position).toEqual(initial.position);
+    expect(state.heading_deg).toBe(initial.heading_deg);
+    expect(state.groundspeed_mps).toBe(0);
+    expect(state.airspeed_mps).toBe(0);
+    expect(state.climb_rate_mps).toBe(0);
+  });
+
   it("clamps large elapsed times before stepping", () => {
     const initial = {
       ...createInitialSimVehicle("quadcopter"),
@@ -75,6 +90,238 @@ describe("vehicle simulator step", () => {
     expect(step.groundspeed_mps).toBeGreaterThan(0);
     expect(step.climb_rate_mps).toBe(2.5);
     expect(horizontalDistanceM(step.position, initial.target!)).toBeLessThan(horizontalDistanceM(initial.position, initial.target!));
+  });
+
+  it("armed airplane flies forward and turns gradually toward a target", () => {
+    const seeded = createInitialSimVehicle("airplane");
+    const initial = {
+      ...seeded,
+      armed: true,
+      system_status: "active",
+      target: {
+        latitude_deg: seeded.position.latitude_deg,
+        longitude_deg: seeded.position.longitude_deg + 0.002,
+        relative_alt_m: 30,
+      },
+    };
+
+    const step = advanceSimVehicle(initial, 1).state;
+
+    expect(step.position.latitude_deg).toBeGreaterThan(initial.position.latitude_deg);
+    expect(step.position.longitude_deg).toBeGreaterThan(initial.position.longitude_deg);
+    expect(step.position.relative_alt_m).toBe(3);
+    expect(step.heading_deg).toBeGreaterThan(initial.heading_deg);
+    expect(step.heading_deg).toBeLessThan(90);
+    expect(step.groundspeed_mps).toBeGreaterThan(0);
+    expect(step.airspeed_mps).toBe(step.groundspeed_mps);
+    expect(step.climb_rate_mps).toBe(3);
+    expect(horizontalDistanceM(step.position, initial.target!)).toBeLessThan(horizontalDistanceM(initial.position, initial.target!));
+  });
+
+  it("armed airplane maintains forward motion without a target", () => {
+    const initial = {
+      ...createInitialSimVehicle("airplane"),
+      armed: true,
+      system_status: "active",
+    };
+
+    const step = advanceSimVehicle(initial, 1).state;
+
+    expect(step.position.latitude_deg).toBeGreaterThan(initial.position.latitude_deg);
+    expect(step.position.longitude_deg).toBe(initial.position.longitude_deg);
+    expect(step.heading_deg).toBe(initial.heading_deg);
+    expect(step.groundspeed_mps).toBe(22);
+    expect(step.airspeed_mps).toBe(22);
+    expect(step.climb_rate_mps).toBe(0);
+  });
+
+  it("armed quadplane in QLOITER stays in hold when no target is active", () => {
+    const initial = {
+      ...createInitialSimVehicle("quadplane"),
+      armed: true,
+      system_status: "active",
+      groundspeed_mps: 7,
+      airspeed_mps: 11,
+      throttle_pct: 55,
+    };
+
+    const step = advanceSimVehicle(initial, 1).state;
+
+    expect(step.mode_name).toBe("QLOITER");
+    expect(step.position).toEqual(initial.position);
+    expect(step.heading_deg).toBe(initial.heading_deg);
+    expect(step.groundspeed_mps).toBe(0);
+    expect(step.airspeed_mps).toBe(0);
+    expect(step.climb_rate_mps).toBe(0);
+  });
+
+  it("armed quadplane in QSTABILIZE stays in hold when no target is active", () => {
+    const initial = {
+      ...createInitialSimVehicle("quadplane"),
+      armed: true,
+      custom_mode: 17,
+      mode_name: "QSTABILIZE",
+      system_status: "active",
+      groundspeed_mps: 6,
+      airspeed_mps: 9,
+      throttle_pct: 52,
+    };
+
+    const step = advanceSimVehicle(initial, 1).state;
+
+    expect(step.mode_name).toBe("QSTABILIZE");
+    expect(step.position).toEqual(initial.position);
+    expect(step.heading_deg).toBe(initial.heading_deg);
+    expect(step.groundspeed_mps).toBe(0);
+    expect(step.airspeed_mps).toBe(0);
+    expect(step.climb_rate_mps).toBe(0);
+  });
+
+  it("airplane keeps flying forward after reaching a non-land target", () => {
+    const initial = {
+      ...createInitialSimVehicle("airplane"),
+      armed: true,
+      system_status: "active",
+      heading_deg: 45,
+      position: {
+        latitude_deg: 47.397742,
+        longitude_deg: 8.545594,
+        relative_alt_m: 30,
+      },
+      target: {
+        latitude_deg: 47.3978,
+        longitude_deg: 8.54565,
+        relative_alt_m: 30,
+      },
+    };
+
+    const step = advanceSimVehicle(initial, 1).state;
+
+    expect(step.armed).toBe(true);
+    expect(step.target).not.toBeNull();
+    expect(step.groundspeed_mps).toBe(22);
+    expect(step.airspeed_mps).toBe(22);
+    expect(step.position.latitude_deg).not.toBe(initial.position.latitude_deg);
+    expect(step.position.longitude_deg).not.toBe(initial.position.longitude_deg);
+  });
+
+  it("airplane land target outside auto stops and disarms when reached", () => {
+    const initial = {
+      ...createInitialSimVehicle("airplane"),
+      armed: true,
+      system_status: "active",
+      heading_deg: 0,
+      position: {
+        latitude_deg: 47.397742,
+        longitude_deg: 8.545594,
+        relative_alt_m: 2,
+      },
+      target: {
+        kind: "land" as const,
+        latitude_deg: 47.39785,
+        longitude_deg: 8.545594,
+        relative_alt_m: 0,
+      },
+    };
+
+    const step = advanceSimVehicle(initial, 1).state;
+
+    expect(step.armed).toBe(false);
+    expect(step.system_status).toBe("standby");
+    expect(step.target).toBeNull();
+    expect(step.position.relative_alt_m).toBe(0);
+    expect(step.groundspeed_mps).toBe(0);
+    expect(step.airspeed_mps).toBe(0);
+    expect(step.climb_rate_mps).toBe(0);
+  });
+
+  it("airplane snaps to a nearby land target instead of overshooting on completion", () => {
+    const initial = {
+      ...createInitialSimVehicle("airplane"),
+      armed: true,
+      system_status: "active",
+      heading_deg: 0,
+      position: {
+        latitude_deg: 47.397742,
+        longitude_deg: 8.545594,
+        relative_alt_m: 2,
+      },
+      target: {
+        kind: "land" as const,
+        latitude_deg: 47.39784,
+        longitude_deg: 8.545594,
+        relative_alt_m: 0,
+      },
+    };
+
+    const step = advanceSimVehicle(initial, 1).state;
+
+    expect(step.armed).toBe(false);
+    expect(step.position.latitude_deg).toBe(initial.target.latitude_deg);
+    expect(step.position.longitude_deg).toBe(initial.target.longitude_deg);
+    expect(horizontalDistanceM(step.position, initial.target)).toBe(0);
+  });
+
+  it("airplane does not prematurely complete a close target behind its limited turn arc", () => {
+    const initial = {
+      ...createInitialSimVehicle("airplane"),
+      armed: true,
+      system_status: "active",
+      heading_deg: 0,
+      position: {
+        latitude_deg: 47.397742,
+        longitude_deg: 8.545594,
+        relative_alt_m: 20,
+      },
+      target: {
+        latitude_deg: 47.397702,
+        longitude_deg: 8.545594,
+        relative_alt_m: 20,
+      },
+    };
+
+    const step = advanceSimVehicle(initial, 1).state;
+
+    expect(step.armed).toBe(true);
+    expect(step.target).toEqual(initial.target);
+    expect(step.position.latitude_deg).not.toBe(initial.target.latitude_deg);
+    expect(step.position.longitude_deg).not.toBe(initial.target.longitude_deg);
+    expect(horizontalDistanceM(step.position, initial.target)).toBeGreaterThan(0.1);
+  });
+
+  it("airplane AUTO ChangeSpeed uses mission speed for plane-family motion", () => {
+    const initial = {
+      ...createInitialSimVehicle("airplane"),
+      armed: true,
+      custom_mode: 10,
+      mode_name: "AUTO",
+      system_status: "active",
+      mission: {
+        items: [
+          { kind: "change_speed" as const, speed_mps: 12 },
+          {
+            kind: "waypoint" as const,
+            latitude_deg: 47.397742,
+            longitude_deg: 8.547594,
+            relative_alt_m: 20,
+          },
+        ],
+        current_index: 0,
+        completed: false,
+        speed_mps: 5,
+        unsupported_notes: [],
+      },
+      target: null,
+    };
+
+    const result = advanceSimVehicle(initial, 1);
+    const step = result.state;
+
+    expect(result.mission_current_changed).toBe(true);
+    expect(step.mission.speed_mps).toBe(12);
+    expect(step.groundspeed_mps).toBe(12);
+    expect(step.airspeed_mps).toBe(12);
+    expect(step.position.longitude_deg).toBeGreaterThan(initial.position.longitude_deg);
   });
 
   it("maps simulator state into the existing telemetry domain shape", () => {
