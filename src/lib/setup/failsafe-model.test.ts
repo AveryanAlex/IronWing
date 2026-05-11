@@ -215,6 +215,23 @@ describe("failsafe-model", () => {
     expect(model.canConfirm).toBe(true);
   });
 
+  it("missing RTL rows are described as absent from the active parameter set", () => {
+    const model = buildRtlReturnModel({
+      vehicleType: "quadrotor",
+      paramStore: createParamStore({
+        RTL_ALT: 1500,
+        RTL_ALT_FINAL: 0,
+        RTL_CLIMB_MIN: 0,
+        RTL_SPEED: 500,
+      }),
+      metadata: createMetadata(),
+      stagedEdits: {},
+    });
+
+    expect(model.recoveryReasons).toContain("RTL_LOIT_TIME is absent from the active parameter set.");
+    expect(model.canConfirm).toBe(false);
+  });
+
   it("keeps the plane demo SITL fixture RTL model open instead of failing closed", () => {
     const model = buildRtlReturnModel({
       vehicleType: "fixed_wing",
