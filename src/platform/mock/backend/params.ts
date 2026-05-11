@@ -1,4 +1,4 @@
-import { mockState, requireLiveEnvelope } from "./runtime";
+import { mockProfileTiming, mockState, requireLiveEnvelope } from "./runtime";
 import type {
   CommandArgs,
   MockParamProgressState,
@@ -15,6 +15,80 @@ const VALID_PARAM_TYPES = new Set([
   "int32",
   "real32",
 ]);
+
+class ParamOperationCancelledError extends Error {}
+
+type PendingParamOperation = {
+  kind: "download" | "write";
+  cancel: () => void;
+  cancelPromise: Promise<never>;
+};
+
+let pendingParamOperation: PendingParamOperation | null = null;
+
+function cloneParamStore(paramStore: MockParamStoreState): MockParamStoreState {
+  return structuredClone(paramStore);
+}
+
+function currentParamStore(): MockParamStoreState {
+  return normalizedParamStore(mockState.liveParamStore);
+}
+
+function publishParamProgress(
+  emitEvent: (event: string, payload: unknown) => void,
+  progress: MockParamProgressState,
+) {
+  mockState.liveParamProgress = progress;
+  if (!mockState.liveEnvelope) {
+    return;
+  }
+
+  emitEvent("param://progress", liveParamProgressStreamEvent(progress).payload);
+}
+
+function publishParamStore(
+  emitEvent: (event: string, payload: unknown) => void,
+  paramStore: MockParamStoreState,
+) {
+  mockState.liveParamStore = cloneParamStore(paramStore);
+  if (!mockState.liveEnvelope) {
+    return;
+  }
+
+  emitEvent("param://store", liveParamStoreStreamEvent(paramStore).payload);
+}
+
+function beginParamOperation(kind: PendingParamOperation["kind"]): PendingParamOperation {
+  if (pendingParamOperation) {
+    throw new Error("another param transfer is already active");
+  }
+
+  let cancel!: () => void;
+  const cancelPromise = new Promise<never>((_, reject) => {
+    cancel = () => reject(new ParamOperationCancelledError(`Param ${kind} cancelled.`));
+  });
+
+  const operation: PendingParamOperation = {
+    kind,
+    cancel,
+    cancelPromise,
+  };
+  pendingParamOperation = operation;
+  return operation;
+}
+
+function finalizeParamOperation(operation: PendingParamOperation) {
+  if (pendingParamOperation === operation) {
+    pendingParamOperation = null;
+  }
+}
+
+async function waitForParamStep(operation: PendingParamOperation) {
+  await Promise.race([
+    new Promise((resolve) => window.setTimeout(resolve, mockProfileTiming().paramStepDelayMs)),
+    operation.cancelPromise,
+  ]);
+}
 
 export function normalizedParamStore(mockParamStore?: MockParamStoreState | null): MockParamStoreState {
   return structuredClone(mockParamStore ?? {
@@ -55,6 +129,17 @@ export function validateParamWriteBatchArgs(args: CommandArgs): [string, number]
 
     return [name, value];
   });
+}
+
+export function validateParamWriteArgs(args: CommandArgs): [string, number] {
+  if (typeof args?.name !== "string" || args.name.trim().length === 0) {
+    throw new Error("missing or invalid param_write.name");
+  }
+  if (typeof args.value !== "number" || !Number.isFinite(args.value)) {
+    throw new Error("missing or invalid param_write.value");
+  }
+
+  return [args.name, args.value];
 }
 
 export function validateParamParseFileArgs(args: CommandArgs): string {
@@ -158,15 +243,16 @@ export function formatParamFile(args: CommandArgs): string {
 }
 
 export function applyParamWriteBatch(params: [string, number][]) {
-  if (mockState.liveParamStore) {
-    const nextIndex = Object.keys(mockState.liveParamStore.params).length;
-    params.forEach(([name, value], index) => {
-      const existing = mockState.liveParamStore?.params[name];
-      mockState.liveParamStore!.params[name] = existing
-        ? { ...existing, value }
-        : { name, value, param_type: "real32", index: nextIndex + index };
-    });
-  }
+  const nextStore = currentParamStore();
+  const nextIndex = Object.keys(nextStore.params).length;
+  params.forEach(([name, value], index) => {
+    const existing = nextStore.params[name];
+    nextStore.params[name] = existing
+      ? { ...existing, value }
+      : { name, value, param_type: "real32", index: nextIndex + index };
+  });
+  nextStore.expected_count = Math.max(nextStore.expected_count, Object.keys(nextStore.params).length);
+  mockState.liveParamStore = nextStore;
 
   return params.map(([name, value]) => ({
     name,
@@ -176,28 +262,96 @@ export function applyParamWriteBatch(params: [string, number][]) {
   }));
 }
 
-export function writeParamBatch(args: CommandArgs, emitEvent: (event: string, payload: unknown) => void) {
-  const params = validateParamWriteBatchArgs(args);
-  const result = applyParamWriteBatch(params);
-  if (mockState.liveEnvelope) {
+export function cancelParamOperation() {
+  if (!pendingParamOperation) {
+    return false;
+  }
+
+  const operation = pendingParamOperation;
+  pendingParamOperation = null;
+  operation.cancel();
+  return true;
+}
+
+export async function downloadAllParams(emitEvent: (event: string, payload: unknown) => void) {
+  const operation = beginParamOperation("download");
+  const paramStore = currentParamStore();
+  const total = Math.max(paramStore.expected_count, Object.keys(paramStore.params).length);
+
+  try {
+    for (let received = 0; received < total; received += 1) {
+      await waitForParamStep(operation);
+      publishParamProgress(emitEvent, {
+        downloading: {
+          received: received + 1,
+          expected: total,
+        },
+      });
+    }
+
+    publishParamStore(emitEvent, paramStore);
+    publishParamProgress(emitEvent, "completed");
+  } catch (error) {
+    if (error instanceof ParamOperationCancelledError) {
+      publishParamProgress(emitEvent, "cancelled");
+      throw error;
+    }
+
+    publishParamProgress(emitEvent, "failed");
+    throw error;
+  } finally {
+    finalizeParamOperation(operation);
+  }
+}
+
+async function runParamWriteBatch(
+  params: [string, number][],
+  emitEvent: (event: string, payload: unknown) => void,
+) {
+  const operation = beginParamOperation("write");
+
+  try {
     for (const [index, [name]] of params.entries()) {
-      emitEvent("param://progress", liveParamProgressStreamEvent({
+      await waitForParamStep(operation);
+      publishParamProgress(emitEvent, {
         writing: {
           index: index + 1,
           total: params.length,
           name,
         },
-      }).payload);
+      });
     }
 
-    if (mockState.liveParamStore) {
-      emitEvent("param://store", liveParamStoreStreamEvent(mockState.liveParamStore).payload);
+    const result = applyParamWriteBatch(params);
+    publishParamStore(emitEvent, currentParamStore());
+    publishParamProgress(emitEvent, "completed");
+    return result;
+  } catch (error) {
+    if (error instanceof ParamOperationCancelledError) {
+      publishParamProgress(emitEvent, "cancelled");
+      throw error;
     }
 
-    emitEvent("param://progress", liveParamProgressStreamEvent("completed").payload);
+    publishParamProgress(emitEvent, "failed");
+    throw error;
+  } finally {
+    finalizeParamOperation(operation);
+  }
+}
+
+export async function writeParamBatch(args: CommandArgs, emitEvent: (event: string, payload: unknown) => void) {
+  const params = validateParamWriteBatchArgs(args);
+  return runParamWriteBatch(params, emitEvent);
+}
+
+export async function writeParam(args: CommandArgs, emitEvent: (event: string, payload: unknown) => void) {
+  const [name, value] = validateParamWriteArgs(args);
+  const [result] = await runParamWriteBatch([[name, value]], emitEvent);
+  if (!result || !mockState.liveParamStore) {
+    throw new Error("param_write did not persist the requested value");
   }
 
-  return result;
+  return cloneParamStore(mockState.liveParamStore).params[name];
 }
 
 export function liveParamStoreStreamEvent(paramStore: MockParamStoreState): MockPlatformEvent {

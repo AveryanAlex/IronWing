@@ -6,8 +6,33 @@ import type {
   SessionEnvelope,
 } from "./types";
 import type { OperationFailure, OperationId } from "../../../session";
+import { currentMockProfile } from "./profile";
 
 export const PENDING_SESSION_TTL_MS = 2_000;
+
+export type MockProfileTiming = {
+  missionStepDelayMs: number;
+  paramStepDelayMs: number;
+  compassStepDelayMs: number;
+  demoTelemetryIntervalMs: number;
+  demoSessionIntervalMs: number;
+};
+
+const TEST_PROFILE_TIMING: MockProfileTiming = {
+  missionStepDelayMs: 20,
+  paramStepDelayMs: 20,
+  compassStepDelayMs: 20,
+  demoTelemetryIntervalMs: 250,
+  demoSessionIntervalMs: 500,
+};
+
+const DEMO_PROFILE_TIMING: MockProfileTiming = {
+  missionStepDelayMs: 120,
+  paramStepDelayMs: 120,
+  compassStepDelayMs: 120,
+  demoTelemetryIntervalMs: 250,
+  demoSessionIntervalMs: 500,
+};
 
 export const commandBehaviors = new Map<string, MockCommandBehavior>();
 export const deferredInvocations = new Map<string, DeferredInvocation[]>();
@@ -92,6 +117,10 @@ export function clearDemoIntervals() {
     window.clearInterval(mockState.demoStatusIntervalId);
     mockState.demoStatusIntervalId = null;
   }
+}
+
+export function mockProfileTiming(): MockProfileTiming {
+  return currentMockProfile() === "demo" ? DEMO_PROFILE_TIMING : TEST_PROFILE_TIMING;
 }
 
 export function currentGuidedSourceKind(): "live" | "playback" {

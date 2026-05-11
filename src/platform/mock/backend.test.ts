@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChartSeriesPage, LogExportResult, LogLibraryCatalog, LogProgress, RawMessagePage } from "../../logs";
 import type { MissionState, TransferProgress } from "../../mission";
 import type { ParamProgress, ParamStore } from "../../params";
@@ -72,6 +72,11 @@ function readRustRateLimits() {
         },
     };
 }
+
+afterEach(() => {
+    vi.useRealTimers();
+    setMockProfile("test");
+});
 
 describe("mock guided backend parity", () => {
     beforeEach(() => {
@@ -901,7 +906,25 @@ describe("mock profile backend parity", () => {
     beforeEach(() => {
         setMockProfile("test");
         getMockPlatformController().reset();
+        vi.useRealTimers();
     });
+
+    async function openDemoLiveEnvelope() {
+        setMockProfile("demo");
+
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "demo", vehicle_preset: "quadcopter" } },
+        });
+
+        const live = await invokeMockCommand<OpenSessionSnapshot>("open_session_snapshot", { sourceKind: "live" });
+        await invokeMockCommand("ack_session_snapshot", {
+            sessionId: live.envelope.session_id,
+            seekEpoch: live.envelope.seek_epoch,
+            resetRevision: live.envelope.reset_revision,
+        });
+
+        return live.envelope;
+    }
 
     it("exposes only the demo transport in demo profile", async () => {
         setMockProfile("demo");
@@ -965,6 +988,189 @@ describe("mock profile backend parity", () => {
         const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
         expect(snapshot.session.value.vehicle_state.custom_mode).toBe(qrtlMode!.custom_mode);
         expect(snapshot.session.value.vehicle_state.mode_name).toBe("QRTL");
+    });
+
+    it("emits demo param download progress and completes with the shared vocabulary", async () => {
+        vi.useFakeTimers();
+        const envelope = await openDemoLiveEnvelope();
+        const progress: SessionEvent<ParamProgress>[] = [];
+        const unlisten = listenMockEvent("param://progress", (payload) => {
+            progress.push(payload as SessionEvent<ParamProgress>);
+        });
+
+        const downloadPromise = invokeMockCommand("param_download_all");
+
+        await vi.advanceTimersByTimeAsync(5_000);
+        await downloadPromise;
+        unlisten();
+
+        expect(progress.length).toBeGreaterThan(1);
+        expect(progress.every((entry) => entry.envelope.session_id === envelope.session_id)).toBe(true);
+        expect(progress[0]?.value).toMatchObject({
+            downloading: {
+                received: expect.any(Number),
+                expected: expect.any(Number),
+            },
+        });
+        expect(progress.at(-1)?.value).toBe("completed");
+    });
+
+    it("uses demo mission upload pacing and completes after the shared transfer phases", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+        const missionProgress: SessionEvent<TransferProgress>[] = [];
+        const unlisten = listenMockEvent("mission://progress", (payload) => {
+            missionProgress.push(payload as SessionEvent<TransferProgress>);
+        });
+
+        const uploadPromise = invokeMockCommand("mission_upload", {
+            plan: {
+                items: [
+                    {
+                        command: {
+                            Nav: {
+                                Waypoint: {
+                                    position: {
+                                        RelHome: {
+                                            latitude_deg: 47.4,
+                                            longitude_deg: 8.55,
+                                            relative_alt_m: 25,
+                                        },
+                                    },
+                                    hold_time_s: 0,
+                                    acceptance_radius_m: 1,
+                                    pass_radius_m: 0,
+                                    yaw_deg: 0,
+                                },
+                            },
+                        },
+                        current: true,
+                        autocontinue: true,
+                    },
+                ],
+            },
+        });
+
+        let settled = false;
+        void uploadPromise.then(() => {
+            settled = true;
+        });
+
+        await vi.advanceTimersByTimeAsync(359);
+        expect(settled).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(1);
+        await uploadPromise;
+        unlisten();
+
+        expect(missionProgress.map((entry) => entry.value.phase)).toEqual([
+            "request_count",
+            "transfer_items",
+            "await_ack",
+            "completed",
+        ]);
+    });
+
+    it("emits demo compass calibration progress and report events", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+        const progress: Array<{ compass_id: number; completion_pct: number; status: string; attempt: number }> = [];
+        const reports: Array<{
+            compass_id: number;
+            status: string;
+            fitness: number;
+            ofs_x: number;
+            ofs_y: number;
+            ofs_z: number;
+            autosaved: boolean;
+        }> = [];
+        const unlisteners = [
+            listenMockEvent("compass://cal_progress", (payload) => {
+                progress.push(payload as { compass_id: number; completion_pct: number; status: string; attempt: number });
+            }),
+            listenMockEvent("compass://cal_report", (payload) => {
+                reports.push(payload as {
+                    compass_id: number;
+                    status: string;
+                    fitness: number;
+                    ofs_x: number;
+                    ofs_y: number;
+                    ofs_z: number;
+                    autosaved: boolean;
+                });
+            }),
+        ];
+
+        await expect(invokeMockCommand("calibrate_compass_start", { compassMask: 0 })).resolves.toBeUndefined();
+
+        await vi.advanceTimersByTimeAsync(400);
+        unlisteners.forEach((unlisten) => unlisten());
+
+        expect(progress).toEqual([
+            { compass_id: 1, completion_pct: 15, status: "waiting_to_start", attempt: 1 },
+            { compass_id: 1, completion_pct: 55, status: "running_step_one", attempt: 1 },
+            { compass_id: 1, completion_pct: 100, status: "success", attempt: 1 },
+        ]);
+        expect(reports).toEqual([
+            { compass_id: 1, status: "success", fitness: 12.5, ofs_x: 24, ofs_y: -11, ofs_z: 7, autosaved: true },
+        ]);
+    });
+
+    it("stops demo compass calibration emission after disconnect", async () => {
+        vi.useFakeTimers();
+        const envelope = await openDemoLiveEnvelope();
+        const progress: Array<{ completion_pct: number; status: string }> = [];
+        const reports: Array<{ status: string }> = [];
+        const unlisteners = [
+            listenMockEvent("compass://cal_progress", (payload) => {
+                progress.push(payload as { completion_pct: number; status: string });
+            }),
+            listenMockEvent("compass://cal_report", (payload) => {
+                reports.push(payload as { status: string });
+            }),
+        ];
+
+        await expect(invokeMockCommand("calibrate_compass_start", { compassMask: 0 })).resolves.toBeUndefined();
+        await vi.advanceTimersByTimeAsync(120);
+        await invokeMockCommand("disconnect_link", { request: { session_id: envelope.session_id } });
+        await vi.advanceTimersByTimeAsync(1_000);
+        unlisteners.forEach((unlisten) => unlisten());
+
+        expect(progress).toEqual([{ compass_id: 1, completion_pct: 15, status: "waiting_to_start", attempt: 1 }]);
+        expect(reports).toEqual([]);
+    });
+
+    it("stops demo timers on disconnect and emits a final disconnected live session state", async () => {
+        vi.useFakeTimers();
+        const envelope = await openDemoLiveEnvelope();
+        const sessionEvents: SessionEvent<any>[] = [];
+        const telemetryEvents: SessionEvent<any>[] = [];
+        const unlisteners = [
+            listenMockEvent("session://state", (payload) => {
+                sessionEvents.push(payload as SessionEvent<any>);
+            }),
+            listenMockEvent("telemetry://state", (payload) => {
+                telemetryEvents.push(payload as SessionEvent<any>);
+            }),
+        ];
+
+        await vi.advanceTimersByTimeAsync(1_000);
+        const telemetryBeforeDisconnect = telemetryEvents.length;
+
+        await invokeMockCommand("disconnect_link", { request: { session_id: envelope.session_id } });
+        await vi.advanceTimersByTimeAsync(5_000);
+        unlisteners.forEach((unlisten) => unlisten());
+
+        expect(telemetryBeforeDisconnect).toBeGreaterThan(0);
+        expect(telemetryEvents).toHaveLength(telemetryBeforeDisconnect);
+        expect(sessionEvents.at(-1)).toMatchObject({
+            envelope,
+            value: {
+                value: {
+                    connection: { kind: "disconnected" },
+                },
+            },
+        });
     });
 });
 
@@ -1335,6 +1541,75 @@ describe("mock setup/calibration/arming backend parity", () => {
         const live = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
         expect(live.param_store.params.ARMING_CHECK.value).toBe(0);
         expect(live.param_store.params.FS_THR_ENABLE.value).toBe(1);
+    });
+
+    it("emits cancelled progress when param_download_all is cancelled", async () => {
+        vi.useFakeTimers();
+        await invokeMockCommand("connect_link", {
+            request: {
+                transport: { kind: "udp", bind_addr: "0.0.0.0:14550" },
+                mockParamStore: {
+                    expected_count: 2,
+                    params: {
+                        ARMING_CHECK: { name: "ARMING_CHECK", value: 1, param_type: "uint8", index: 0 },
+                        FS_THR_ENABLE: { name: "FS_THR_ENABLE", value: 2, param_type: "uint8", index: 1 },
+                    },
+                },
+            },
+        });
+        const live = await invokeMockCommand<OpenSessionSnapshot>("open_session_snapshot", { sourceKind: "live" });
+        await invokeMockCommand("ack_session_snapshot", {
+            sessionId: live.envelope.session_id,
+            seekEpoch: live.envelope.seek_epoch,
+            resetRevision: live.envelope.reset_revision,
+        });
+        const progress: ParamProgress[] = [];
+        const unlisten = listenMockEvent("param://progress", (payload) => {
+            progress.push((payload as SessionEvent<ParamProgress>).value);
+        });
+
+        const downloadPromise = invokeMockCommand("param_download_all");
+        await vi.advanceTimersByTimeAsync(20);
+        await expect(invokeMockCommand("param_cancel")).resolves.toBeUndefined();
+        await expect(downloadPromise).rejects.toThrow("Param download cancelled.");
+        unlisten();
+
+        expect(progress).toEqual([
+            { downloading: { received: 1, expected: 2 } },
+            "cancelled",
+        ]);
+    });
+
+    it("returns single param_write results consistent with the stored value", async () => {
+        vi.useFakeTimers();
+        await invokeMockCommand("connect_link", {
+            request: {
+                transport: { kind: "udp", bind_addr: "0.0.0.0:14550" },
+                mockParamStore: {
+                    expected_count: 1,
+                    params: {
+                        ARMING_CHECK: { name: "ARMING_CHECK", value: 1, param_type: "uint8", index: 0 },
+                    },
+                },
+            },
+        });
+
+        const writePromise = invokeMockCommand<any>("param_write", { name: "ARMING_CHECK", value: 0 });
+        await vi.advanceTimersByTimeAsync(25);
+        await expect(writePromise).resolves.toEqual({
+            name: "ARMING_CHECK",
+            value: 0,
+            param_type: "uint8",
+            index: 0,
+        });
+
+        const live = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+        expect(live.param_store.params.ARMING_CHECK).toEqual({
+            name: "ARMING_CHECK",
+            value: 0,
+            param_type: "uint8",
+            index: 0,
+        });
     });
 
     it("parses .param files with the same frontend-shaped response contract as native", async () => {

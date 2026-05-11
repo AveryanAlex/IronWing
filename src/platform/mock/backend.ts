@@ -77,20 +77,27 @@ import {
 } from "./backend/mission";
 import {
   applyMockParamState,
+  cancelParamOperation,
+  downloadAllParams,
   formatParamFile,
   liveParamProgressStreamEvent,
   liveParamStoreStreamEvent,
   parseParamFile,
+  writeParam,
   writeParamBatch,
 } from "./backend/params";
+import { isDemoProfile } from "./backend/profile";
 import {
   commandBehaviors,
+  clearDemoIntervals,
   deferredInvocations,
   invocations,
   mockState,
+  mockProfileTiming,
   resetGuided,
   resetMockState,
   ensureMockLiveWriteAllowed,
+  requireLiveEnvelope,
 } from "./backend/runtime";
 import {
   ackSessionSnapshotResult,
@@ -193,9 +200,9 @@ function validateNativeSettingsCommand(cmd: string, args: CommandArgs) {
   }
 }
 
-const MISSION_TRANSFER_STEP_DELAY_MS = 80;
-
 class MissionTransferCancelledError extends Error {}
+
+class DemoCompassCalibrationCancelledError extends Error {}
 
 type PendingMissionOperation = {
   kind: "download" | "upload" | "clear";
@@ -207,6 +214,14 @@ type PendingMissionOperation = {
 };
 
 let pendingMissionOperation: PendingMissionOperation | null = null;
+
+type PendingDemoCompassCalibration = {
+  cancel: () => void;
+  cancelPromise: Promise<never>;
+  task: Promise<void>;
+};
+
+let pendingDemoCompassCalibration: PendingDemoCompassCalibration | null = null;
 
 function publishMissionState(missionState: MockMissionState) {
   applyMockMissionState(missionState);
@@ -251,8 +266,177 @@ function beginMissionOperation(
   return operation;
 }
 
-async function waitForMissionOperationStep(operation: PendingMissionOperation, durationMs = MISSION_TRANSFER_STEP_DELAY_MS) {
+async function waitForMissionOperationStep(
+  operation: PendingMissionOperation,
+  durationMs = mockProfileTiming().missionStepDelayMs,
+) {
   await Promise.race([delay(durationMs), operation.cancelPromise]);
+}
+
+function liveTelemetryStreamPayload() {
+  return {
+    envelope: requireLiveEnvelope(),
+    value: structuredClone(mockState.liveTelemetryDomain),
+  };
+}
+
+function liveDisconnectedSessionPayload(envelope: { session_id: string; source_kind: "live" | "playback"; seek_epoch: number; reset_revision: number }) {
+  return {
+    envelope,
+    value: {
+      available: true,
+      complete: true,
+      provenance: "stream",
+      value: {
+        status: "pending",
+        connection: { kind: "disconnected" },
+        vehicle_state: null,
+        home_position: null,
+      },
+    },
+  };
+}
+
+function isDemoConnectRequest(args: CommandArgs) {
+  return args?.request
+    && typeof args.request === "object"
+    && (args.request as { transport?: { kind?: string } }).transport?.kind === "demo";
+}
+
+function nextDemoTelemetryValue() {
+  const telemetryDomain = mockState.liveTelemetryDomain;
+  if (!telemetryDomain?.value) {
+    return null;
+  }
+
+  const nextDomain = structuredClone(telemetryDomain);
+  const flight = nextDomain.value.flight;
+  const navigation = nextDomain.value.navigation;
+  const power = nextDomain.value.power;
+  const attitude = nextDomain.value.attitude;
+
+  if (typeof flight.altitude_m === "number") {
+    flight.altitude_m = Number((flight.altitude_m + 0.2).toFixed(1));
+  }
+  if (typeof flight.climb_rate_mps === "number") {
+    flight.climb_rate_mps = Number((flight.climb_rate_mps * -1).toFixed(1));
+  }
+  if (typeof navigation.heading_deg === "number") {
+    navigation.heading_deg = (navigation.heading_deg + 1) % 360;
+  }
+  if (typeof attitude.yaw_deg === "number") {
+    attitude.yaw_deg = (attitude.yaw_deg + 1) % 360;
+  }
+  if (typeof power.energy_consumed_wh === "number") {
+    power.energy_consumed_wh = Number((power.energy_consumed_wh + 0.5).toFixed(1));
+  }
+  if (typeof power.battery_time_remaining_s === "number") {
+    power.battery_time_remaining_s = Math.max(0, power.battery_time_remaining_s - 5);
+  }
+
+  return nextDomain;
+}
+
+function startDemoTimers() {
+  clearDemoIntervals();
+
+  const { demoTelemetryIntervalMs, demoSessionIntervalMs } = mockProfileTiming();
+  mockState.demoTelemetryIntervalId = window.setInterval(() => {
+    if (!mockState.liveEnvelope || !mockState.liveTelemetryDomain) {
+      return;
+    }
+
+    const nextTelemetryDomain = nextDemoTelemetryValue();
+    if (!nextTelemetryDomain) {
+      return;
+    }
+
+    mockState.liveTelemetryDomain = nextTelemetryDomain;
+    emitEvent("telemetry://state", liveTelemetryStreamPayload());
+  }, demoTelemetryIntervalMs);
+
+  mockState.demoStatusIntervalId = window.setInterval(() => {
+    if (!mockState.liveEnvelope || !mockState.liveVehicleState) {
+      return;
+    }
+
+    emitEvent("session://state", liveSessionStreamEvent(mockState.liveVehicleState).payload);
+  }, demoSessionIntervalMs);
+}
+
+async function runDemoCompassCalibration() {
+  if (!isDemoProfile()) {
+    return;
+  }
+
+  if (pendingDemoCompassCalibration) {
+    pendingDemoCompassCalibration.cancel();
+  }
+
+  let cancel!: () => void;
+  const cancelPromise = new Promise<never>((_, reject) => {
+    cancel = () => reject(new DemoCompassCalibrationCancelledError("Demo compass calibration cancelled."));
+  });
+
+  const calibration: PendingDemoCompassCalibration = {
+    cancel,
+    cancelPromise,
+    task: Promise.resolve(),
+  };
+  pendingDemoCompassCalibration = calibration;
+
+  const progressSteps = [
+    { compass_id: 1, completion_pct: 15, status: "waiting_to_start", attempt: 1 },
+    { compass_id: 1, completion_pct: 55, status: "running_step_one", attempt: 1 },
+    { compass_id: 1, completion_pct: 100, status: "success", attempt: 1 },
+  ];
+
+  calibration.task = (async () => {
+    try {
+      for (const progress of progressSteps) {
+        await Promise.race([delay(mockProfileTiming().compassStepDelayMs), calibration.cancelPromise]);
+        if (pendingDemoCompassCalibration !== calibration || !mockState.liveVehicleAvailable) {
+          return;
+        }
+        emitEvent("compass://cal_progress", progress);
+      }
+
+      if (pendingDemoCompassCalibration !== calibration || !mockState.liveVehicleAvailable) {
+        return;
+      }
+
+      emitEvent("compass://cal_report", {
+        compass_id: 1,
+        status: "success",
+        fitness: 12.5,
+        ofs_x: 24,
+        ofs_y: -11,
+        ofs_z: 7,
+        autosaved: true,
+      });
+    } catch (error) {
+      if (!(error instanceof DemoCompassCalibrationCancelledError)) {
+        throw error;
+      }
+    } finally {
+      if (pendingDemoCompassCalibration === calibration) {
+        pendingDemoCompassCalibration = null;
+      }
+    }
+  })();
+
+  void calibration.task;
+}
+
+function cancelDemoCompassCalibration() {
+  if (!pendingDemoCompassCalibration) {
+    return false;
+  }
+
+  const calibration = pendingDemoCompassCalibration;
+  pendingDemoCompassCalibration = null;
+  calibration.cancel();
+  return true;
 }
 
 function finalizeMissionOperation(operation: PendingMissionOperation) {
@@ -351,7 +535,7 @@ function validateStructuredPlanArg<T>(args: CommandArgs, label: string): T {
   return structuredClone(plan as T);
 }
 
-function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
+async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unknown> {
   switch (cmd) {
     case "list_serial_ports_cmd":
       return ["/dev/ttyUSB0", "/dev/ttyACM0"];
@@ -533,6 +717,11 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
     }
     case "connect_link":
       connectLink(args);
+      if (isDemoConnectRequest(args)) {
+        startDemoTimers();
+      } else {
+        clearDemoIntervals();
+      }
       return undefined;
     case "log_open":
       {
@@ -552,7 +741,16 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
     case "get_available_modes":
       return getAvailableModes();
     case "disconnect_link":
-      disconnectLink(args);
+      cancelPendingMissionOperation();
+      cancelParamOperation();
+      cancelDemoCompassCalibration();
+      {
+        const liveEnvelope = mockState.liveEnvelope;
+        disconnectLink(args);
+        if (liveEnvelope) {
+          emitEvent("session://state", liveDisconnectedSessionPayload(liveEnvelope));
+        }
+      }
       return undefined;
     case "set_flight_mode":
       ensureMockLiveWriteAllowed("set_flight_mode");
@@ -587,9 +785,7 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
       return undefined;
     case "calibrate_accel":
     case "calibrate_gyro":
-    case "calibrate_compass_start":
     case "calibrate_compass_accept":
-    case "calibrate_compass_cancel":
     case "reboot_vehicle":
     case "request_prearm_checks": {
       ensureMockLiveWriteAllowed(cmd as
@@ -603,6 +799,27 @@ function defaultCommandResult(cmd: string, args: CommandArgs): unknown {
       requireConnectedVehicle();
       return undefined;
     }
+    case "calibrate_compass_start":
+      ensureMockLiveWriteAllowed("calibrate_compass_start");
+      requireConnectedVehicle();
+      await runDemoCompassCalibration();
+      return undefined;
+    case "calibrate_compass_cancel":
+      ensureMockLiveWriteAllowed("calibrate_compass_cancel");
+      requireConnectedVehicle();
+      cancelDemoCompassCalibration();
+      return undefined;
+    case "param_download_all":
+      requireConnectedVehicle();
+      return downloadAllParams(emitEvent);
+    case "param_cancel":
+      requireConnectedVehicle();
+      cancelParamOperation();
+      return undefined;
+    case "param_write":
+      ensureMockLiveWriteAllowed("param_write");
+      requireConnectedVehicle();
+      return writeParam(args, emitEvent);
     case "param_write_batch":
       ensureMockLiveWriteAllowed("param_write_batch");
       requireConnectedVehicle();
@@ -753,7 +970,7 @@ export async function invokeMockCommand<T>(cmd: string, args?: CommandArgs): Pro
     return runBehavior<T>(cmd, behavior);
   }
 
-  return defaultCommandResult(cmd, args) as T;
+  return await defaultCommandResult(cmd, args) as T;
 }
 
 export function listenMockEvent<T>(event: string, handler: (payload: T) => void): () => void {
@@ -771,6 +988,8 @@ function createController(): MockPlatformController {
       commandBehaviors.clear();
       invocations.length = 0;
       cancelPendingMissionOperation();
+      cancelParamOperation();
+      cancelDemoCompassCalibration();
       rejectAllDeferred("Mock platform reset");
       resetMockState();
       resetLogsMockState();
