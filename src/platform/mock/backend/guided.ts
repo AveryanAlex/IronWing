@@ -1,5 +1,20 @@
 import { currentGuidedSourceKind, mockState, requireLiveEnvelope } from "./runtime";
+import {
+  setDemoSimulatorGuidedTarget,
+  setDemoSimulatorTakeoffTarget,
+  telemetryFromSimulator,
+  vehicleStateFromSimulator,
+} from "./vehicle-sim/simulator";
 import type { CommandArgs, MockGuidedBlockingReason, MockGuidedStateValue, MockPlatformEvent } from "./types";
+
+function syncLiveMockStateFromSimulator() {
+  if (!mockState.liveSimulator || !mockState.liveVehicleState) {
+    return;
+  }
+
+  mockState.liveVehicleState = vehicleStateFromSimulator(mockState.liveSimulator, mockState.liveVehicleState);
+  mockState.liveTelemetryDomain = telemetryFromSimulator(mockState.liveSimulator, "stream");
+}
 
 export function applyMockGuidedState(guidedState: MockGuidedStateValue) {
   mockState.guidedTermination = guidedState.termination;
@@ -302,6 +317,14 @@ export function startGuidedSession(args: CommandArgs, emitEvent: (event: string,
   mockState.guidedTermination = null;
   mockState.guidedLastCommand = { operation_id: "start_guided_session", session_kind: "goto", at_unix_msec: now };
   mockState.guided = { session, entered_at_unix_msec: now };
+  if (mockState.liveSimulator) {
+    mockState.liveSimulator = setDemoSimulatorGuidedTarget(mockState.liveSimulator, {
+      latitude_deg: session.latitude_deg,
+      longitude_deg: session.longitude_deg,
+      relative_alt_m: session.altitude_m,
+    }, now);
+    syncLiveMockStateFromSimulator();
+  }
   emitGuidedStateIfLiveActive(emitEvent);
   return { result: "accepted", state: liveGuidedDomain("stream") };
 }
@@ -340,6 +363,14 @@ export function updateGuidedSession(args: CommandArgs, emitEvent: (event: string
   mockState.guidedTermination = null;
   mockState.guidedLastCommand = { operation_id: "update_guided_session", session_kind: "goto", at_unix_msec: Date.now() };
   mockState.guided = { ...mockState.guided, session };
+  if (mockState.liveSimulator) {
+    mockState.liveSimulator = setDemoSimulatorGuidedTarget(mockState.liveSimulator, {
+      latitude_deg: session.latitude_deg,
+      longitude_deg: session.longitude_deg,
+      relative_alt_m: session.altitude_m,
+    });
+    syncLiveMockStateFromSimulator();
+  }
   emitGuidedStateIfLiveActive(emitEvent);
   return { result: "accepted", state: liveGuidedDomain("stream") };
 }
@@ -382,5 +413,10 @@ export function vehicleTakeoff(args: CommandArgs) {
   const altitudeM = args?.altitudeM;
   if (typeof altitudeM !== "number" || !Number.isFinite(altitudeM) || altitudeM <= 0) {
     throw new Error("takeoff altitude must be greater than 0 m");
+  }
+
+  if (mockState.liveSimulator) {
+    mockState.liveSimulator = setDemoSimulatorTakeoffTarget(mockState.liveSimulator, altitudeM);
+    syncLiveMockStateFromSimulator();
   }
 }

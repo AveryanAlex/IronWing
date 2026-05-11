@@ -7,6 +7,8 @@ import { telemetryDomainFromSimVehicle } from "./telemetry";
 import type { DemoSimulatorRuntime } from "./types";
 import type { MockLiveVehicleState } from "../types";
 
+const RTL_RETURN_ALT_M = 15;
+
 export function createDemoSimulator(
   preset: DemoVehiclePreset,
   nowMsec = Date.now(),
@@ -76,6 +78,13 @@ export function setDemoSimulatorArmedState(
       ...simulator.state,
       armed,
       system_status: armed ? "active" : "standby",
+      position: armed
+        ? simulator.state.position
+        : {
+            ...simulator.state.position,
+            relative_alt_m: 0,
+          },
+      target: armed ? simulator.state.target : null,
       groundspeed_mps: armed ? simulator.state.groundspeed_mps : 0,
       airspeed_mps: armed ? simulator.state.airspeed_mps : 0,
       climb_rate_mps: armed ? simulator.state.climb_rate_mps : 0,
@@ -96,6 +105,89 @@ export function setDemoSimulatorMode(
       ...simulator.state,
       custom_mode: mode.custom_mode,
       mode_name: mode.mode_name,
+    },
+  };
+}
+
+export function setDemoSimulatorHoldTarget(simulator: DemoSimulatorRuntime, nowMsec = Date.now()): DemoSimulatorRuntime {
+  return {
+    ...simulator,
+    last_tick_msec: nowMsec,
+    state: {
+      ...simulator.state,
+      target: null,
+      groundspeed_mps: 0,
+      airspeed_mps: 0,
+      climb_rate_mps: 0,
+      throttle_pct: simulator.state.armed ? 15 : 0,
+    },
+  };
+}
+
+export function setDemoSimulatorTakeoffTarget(
+  simulator: DemoSimulatorRuntime,
+  relativeAltM: number,
+  nowMsec = Date.now(),
+): DemoSimulatorRuntime {
+  return {
+    ...simulator,
+    last_tick_msec: nowMsec,
+    state: {
+      ...simulator.state,
+      target: {
+        kind: "takeoff",
+        relative_alt_m: relativeAltM,
+      },
+    },
+  };
+}
+
+export function setDemoSimulatorGuidedTarget(
+  simulator: DemoSimulatorRuntime,
+  target: { latitude_deg: number; longitude_deg: number; relative_alt_m: number },
+  nowMsec = Date.now(),
+): DemoSimulatorRuntime {
+  return {
+    ...simulator,
+    last_tick_msec: nowMsec,
+    state: {
+      ...simulator.state,
+      target: {
+        kind: "guided",
+        ...target,
+      },
+    },
+  };
+}
+
+export function setDemoSimulatorLandTarget(simulator: DemoSimulatorRuntime, nowMsec = Date.now()): DemoSimulatorRuntime {
+  return {
+    ...simulator,
+    last_tick_msec: nowMsec,
+    state: {
+      ...simulator.state,
+      target: {
+        kind: "land",
+        latitude_deg: simulator.state.position.latitude_deg,
+        longitude_deg: simulator.state.position.longitude_deg,
+        relative_alt_m: 0,
+      },
+    },
+  };
+}
+
+export function setDemoSimulatorRtlTarget(simulator: DemoSimulatorRuntime, nowMsec = Date.now()): DemoSimulatorRuntime {
+  return {
+    ...simulator,
+    last_tick_msec: nowMsec,
+    state: {
+      ...simulator.state,
+      target: {
+        kind: "rtl",
+        latitude_deg: simulator.state.home_position.latitude_deg,
+        longitude_deg: simulator.state.home_position.longitude_deg,
+        relative_alt_m: Math.max(simulator.state.position.relative_alt_m, RTL_RETURN_ALT_M),
+      },
     },
   };
 }

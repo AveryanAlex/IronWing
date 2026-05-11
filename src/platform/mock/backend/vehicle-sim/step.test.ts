@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createInitialSimVehicle } from "./fixtures";
+import { horizontalDistanceM } from "./geo";
 import { advanceSimVehicle } from "./step";
 import { telemetryDomainFromSimVehicle } from "./telemetry";
 
@@ -33,6 +34,47 @@ describe("vehicle simulator step", () => {
     expect(state.position.relative_alt_m).toBeGreaterThan(0);
     expect(state.position.relative_alt_m).toBeLessThan(10);
     expect(state.climb_rate_mps).toBeGreaterThan(0);
+  });
+
+  it("copter climbs to a takeoff target and then holds", () => {
+    const initial = {
+      ...createInitialSimVehicle("quadcopter"),
+      armed: true,
+      system_status: "active",
+      target: { relative_alt_m: 5 },
+    };
+
+    const climbed = advanceSimVehicle(initial, 3).state;
+    const held = advanceSimVehicle(climbed, 3).state;
+
+    expect(climbed.position.relative_alt_m).toBe(2.5);
+    expect(held.position.relative_alt_m).toBe(5);
+    expect(held.climb_rate_mps).toBe(0);
+    expect(held.groundspeed_mps).toBe(0);
+    expect(held.target).toBeNull();
+  });
+
+  it("copter guided target moves horizontally and vertically", () => {
+    const seeded = createInitialSimVehicle("quadcopter");
+    const initial = {
+      ...seeded,
+      armed: true,
+      system_status: "active",
+      target: {
+        latitude_deg: seeded.position.latitude_deg + 0.0001,
+        longitude_deg: seeded.position.longitude_deg + 0.0001,
+        relative_alt_m: 8,
+      },
+    };
+
+    const step = advanceSimVehicle(initial, 1).state;
+
+    expect(step.position.latitude_deg).toBeGreaterThan(initial.position.latitude_deg);
+    expect(step.position.longitude_deg).toBeGreaterThan(initial.position.longitude_deg);
+    expect(step.position.relative_alt_m).toBe(2.5);
+    expect(step.groundspeed_mps).toBeGreaterThan(0);
+    expect(step.climb_rate_mps).toBe(2.5);
+    expect(horizontalDistanceM(step.position, initial.target!)).toBeLessThan(horizontalDistanceM(initial.position, initial.target!));
   });
 
   it("maps simulator state into the existing telemetry domain shape", () => {

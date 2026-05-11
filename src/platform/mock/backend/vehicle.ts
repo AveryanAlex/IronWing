@@ -7,7 +7,10 @@ import { applyMockParamState } from "./params";
 import {
   createDemoSimulator,
   setDemoSimulatorArmedState,
+  setDemoSimulatorHoldTarget,
+  setDemoSimulatorLandTarget,
   setDemoSimulatorMode,
+  setDemoSimulatorRtlTarget,
   telemetryFromSimulator,
   vehicleStateFromSimulator,
 } from "./vehicle-sim/simulator";
@@ -311,6 +314,7 @@ export function emitLiveSessionState(vehicleState: MockLiveVehicleState, emitEve
 export function syncLiveVehicleArmedState(armed: boolean, emitEvent: (event: string, payload: unknown) => void) {
   if (mockState.liveSimulator) {
     mockState.liveSimulator = setDemoSimulatorArmedState(mockState.liveSimulator, armed);
+    mockState.liveTelemetryDomain = telemetryFromSimulator(mockState.liveSimulator, "stream");
   }
 
   mockState.liveVehicleArmed = armed;
@@ -325,6 +329,12 @@ export function syncLiveVehicleArmedState(armed: boolean, emitEvent: (event: str
   }
 
   emitEvent("session://state", liveSessionStreamEvent(mockState.liveVehicleState).payload);
+  if (mockState.liveTelemetryDomain) {
+    emitEvent("telemetry://state", {
+      envelope: requireLiveEnvelope(),
+      value: structuredClone(mockState.liveTelemetryDomain),
+    });
+  }
   const reconciledGuided = reconcileGuidedAfterLiveVehicleUpdate();
   if (reconciledGuided) {
     emitEvent("guided://state", liveGuidedStreamEvent(reconciledGuided).payload);
@@ -412,6 +422,22 @@ export function setFlightMode(args: CommandArgs, emitEvent: (event: string, payl
         custom_mode: nextMode.custom_mode,
         mode_name: nextMode.name,
       });
+      if (nextMode.name === "Land") {
+        mockState.liveSimulator = setDemoSimulatorLandTarget(mockState.liveSimulator);
+      } else if (nextMode.name === "RTL" || nextMode.name === "QRTL") {
+        mockState.liveSimulator = setDemoSimulatorRtlTarget(mockState.liveSimulator);
+      } else if (
+        nextMode.name === "Loiter"
+        || nextMode.name === "QLOITER"
+        || nextMode.name === "Stabilize"
+        || nextMode.name === "Alt Hold"
+        || nextMode.name === "Circle"
+      ) {
+        mockState.liveSimulator = setDemoSimulatorHoldTarget(mockState.liveSimulator);
+      } else if (nextMode.name !== "Guided") {
+        mockState.liveSimulator = setDemoSimulatorHoldTarget(mockState.liveSimulator);
+      }
+      mockState.liveTelemetryDomain = telemetryFromSimulator(mockState.liveSimulator, "stream");
       mockState.liveVehicleState = vehicleStateFromSimulator(mockState.liveSimulator, mockState.liveVehicleState);
     } else {
       mockState.liveVehicleState = {
@@ -428,6 +454,12 @@ export function setFlightMode(args: CommandArgs, emitEvent: (event: string, payl
   }
 
   emitEvent("session://state", liveSessionStreamEvent(mockState.liveVehicleState).payload);
+  if (mockState.liveTelemetryDomain) {
+    emitEvent("telemetry://state", {
+      envelope: requireLiveEnvelope(),
+      value: structuredClone(mockState.liveTelemetryDomain),
+    });
+  }
   const reconciledGuided = reconcileGuidedAfterLiveVehicleUpdate();
   if (reconciledGuided) {
     emitEvent("guided://state", liveGuidedStreamEvent(reconciledGuided).payload);

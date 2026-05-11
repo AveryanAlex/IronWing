@@ -27,6 +27,7 @@ export type SimBattery = {
 };
 
 export type SimTarget = {
+  kind?: "takeoff" | "guided" | "land" | "rtl";
   latitude_deg?: number;
   longitude_deg?: number;
   relative_alt_m: number;

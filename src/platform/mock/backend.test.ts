@@ -21,6 +21,7 @@ import type {
 
 import { getMockPlatformController, invokeMockCommand, listenMockEvent, type MockLogSeedPreset } from "./backend";
 import { mockState } from "./backend/runtime";
+import { horizontalDistanceM } from "./backend/vehicle-sim/geo";
 
 function setMockProfile(profile: "test" | "demo") {
     import.meta.env.VITE_IRONWING_MOCK_PROFILE = profile;
@@ -1252,6 +1253,89 @@ describe("mock profile backend parity", () => {
 
         expect(telemetryEvents.length).toBeGreaterThan(0);
         expect(telemetryEvents.at(-1)?.value.value).toEqual(telemetryEvents[0]?.value.value);
+    });
+
+    it("vehicle_takeoff in guided copter mode drives simulator altitude upward", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+
+        await invokeMockCommand("set_flight_mode", { customMode: 4 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+        await invokeMockCommand("vehicle_takeoff", { altitudeM: 12 });
+
+        await vi.advanceTimersByTimeAsync(1_000);
+
+        expect(mockState.liveSimulator?.state.position.relative_alt_m ?? 0).toBeGreaterThan(0);
+        expect(mockState.liveSimulator?.state.target?.relative_alt_m).toBe(12);
+    });
+
+    it("selecting RTL drives a copter back toward home", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+
+        await invokeMockCommand("set_flight_mode", { customMode: 4 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+        await invokeMockCommand("vehicle_takeoff", { altitudeM: 12 });
+        await vi.advanceTimersByTimeAsync(5_000);
+
+        await invokeMockCommand("start_guided_session", {
+            request: { session: { kind: "goto", latitude_deg: 47.3982, longitude_deg: 8.5461, altitude_m: 12 } },
+        });
+        await vi.advanceTimersByTimeAsync(5_000);
+
+        const beforeRtl = mockState.liveSimulator?.state.position;
+        expect(beforeRtl).toBeTruthy();
+        const distanceBeforeRtl = horizontalDistanceM(beforeRtl!, mockState.liveSimulator!.state.home_position);
+        expect(distanceBeforeRtl).toBeGreaterThan(0);
+
+        await invokeMockCommand("set_flight_mode", { customMode: 6 });
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        const afterRtl = mockState.liveSimulator?.state.position;
+        expect(afterRtl).toBeTruthy();
+        const distanceAfterRtl = horizontalDistanceM(afterRtl!, mockState.liveSimulator!.state.home_position);
+
+        expect(distanceAfterRtl).toBeLessThan(distanceBeforeRtl);
+    });
+
+    it("switching to Stabilize clears stale autonomous targets", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+
+        await invokeMockCommand("set_flight_mode", { customMode: 4 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+        await invokeMockCommand("start_guided_session", {
+            request: { session: { kind: "goto", latitude_deg: 47.3982, longitude_deg: 8.5461, altitude_m: 12 } },
+        });
+        await vi.advanceTimersByTimeAsync(1_000);
+
+        const beforeStabilize = structuredClone(mockState.liveSimulator?.state.position);
+        expect(mockState.liveSimulator?.state.target).not.toBeNull();
+
+        await invokeMockCommand("set_flight_mode", { customMode: 0 });
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        expect(mockState.liveSimulator?.state.target).toBeNull();
+        expect(mockState.liveSimulator?.state.position).toEqual(beforeStabilize);
+    });
+
+    it("disarming in flight parks the simulated copter immediately", async () => {
+        vi.useFakeTimers();
+        await openDemoLiveEnvelope();
+
+        await invokeMockCommand("set_flight_mode", { customMode: 4 });
+        await invokeMockCommand("arm_vehicle", { force: false });
+        await invokeMockCommand("vehicle_takeoff", { altitudeM: 12 });
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        expect(mockState.liveSimulator?.state.position.relative_alt_m ?? 0).toBeGreaterThan(0);
+
+        await invokeMockCommand("disarm_vehicle", { force: false });
+
+        expect(mockState.liveSimulator?.state.armed).toBe(false);
+        expect(mockState.liveSimulator?.state.position.relative_alt_m).toBe(0);
+        expect(mockState.liveSimulator?.state.groundspeed_mps).toBe(0);
+        expect(mockState.liveSimulator?.state.climb_rate_mps).toBe(0);
     });
 
     it("disconnect clears simulator state and stops demo timers", async () => {
