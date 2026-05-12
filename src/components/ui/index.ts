@@ -22,3 +22,4 @@ export { default as SplitWorkspace } from "./SplitWorkspace.svelte";
 export { default as Toolbar } from "./Toolbar.svelte";
 export { default as ToolbarGroup } from "./ToolbarGroup.svelte";
 export { default as ResponsiveTabs } from "./ResponsiveTabs.svelte";
+export { default as MobileSheet } from "./MobileSheet.svelte";
