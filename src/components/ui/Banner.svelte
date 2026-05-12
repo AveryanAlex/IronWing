@@ -10,10 +10,26 @@ type Props = {
   onAction?: () => void;
   dismissible?: boolean;
   onDismiss?: () => void;
+  details?: ReadonlyArray<string>;
   testId?: string;
+  actionTestId?: string;
+  dismissTestId?: string;
 };
 
-let { title, message, severity = "info", source, actionLabel, onAction, dismissible = false, onDismiss, testId }: Props = $props();
+let {
+  title,
+  message,
+  severity = "info",
+  source,
+  actionLabel,
+  onAction,
+  dismissible = false,
+  onDismiss,
+  details,
+  testId,
+  actionTestId,
+  dismissTestId,
+}: Props = $props();
 </script>
 
 <div class="ui-banner" data-severity={severity} role={severity === "danger" || severity === "blocking" ? "alert" : "status"} data-testid={testId}>
@@ -21,13 +37,20 @@ let { title, message, severity = "info", source, actionLabel, onAction, dismissi
     {#if source}<span class="ui-banner__source">{source}</span>{/if}
     <p class="ui-banner__title">{title}</p>
     {#if message}<p class="ui-banner__message">{message}</p>{/if}
+    {#if details && details.length > 0}
+      <ul class="ui-banner__details">
+        {#each details as line (line)}
+          <li>{line}</li>
+        {/each}
+      </ul>
+    {/if}
   </div>
   <div class="ui-banner__actions">
     {#if actionLabel && onAction}
-      <button class="ui-banner__action" onclick={onAction} type="button">{actionLabel}</button>
+      <button class="ui-banner__action" data-testid={actionTestId} onclick={onAction} type="button">{actionLabel}</button>
     {/if}
     {#if dismissible && onDismiss}
-      <button class="ui-banner__close" aria-label="Dismiss" onclick={onDismiss} type="button">×</button>
+      <button class="ui-banner__close" aria-label="Dismiss" data-testid={dismissTestId} onclick={onDismiss} type="button">×</button>
     {/if}
   </div>
 </div>
@@ -50,6 +73,15 @@ let { title, message, severity = "info", source, actionLabel, onAction, dismissi
 .ui-banner__source { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-text-muted); }
 .ui-banner__title { margin: 4px 0 0; font-weight: 600; color: var(--color-text-primary); }
 .ui-banner__message { margin: 4px 0 0; font-size: 0.88rem; color: var(--color-text-secondary); }
+.ui-banner__details {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-4);
+  list-style: disc;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+}
+.ui-banner__details li { margin-top: var(--space-1); }
+.ui-banner__details li:first-child { margin-top: 0; }
 .ui-banner__actions { display: flex; align-items: flex-start; gap: var(--space-2); }
 .ui-banner__action { border: 1px solid currentColor; background: transparent; color: inherit; border-radius: var(--radius-sm); padding: 4px 10px; font-weight: 600; cursor: pointer; }
 .ui-banner__close { background: transparent; border: none; color: var(--color-text-secondary); font-size: 1.1rem; cursor: pointer; }

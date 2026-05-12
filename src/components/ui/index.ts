@@ -7,6 +7,7 @@ export { default as Panel } from "./Panel.svelte";
 export { default as Badge } from "./Badge.svelte";
 export { default as StatusPill } from "./StatusPill.svelte";
 export { default as Banner } from "./Banner.svelte";
+export { default as StickyWarningStack } from "./StickyWarningStack.svelte";
 export { default as SectionHeader } from "./SectionHeader.svelte";
 export { default as FieldRow } from "./FieldRow.svelte";
 export { default as MetricTile } from "./MetricTile.svelte";
