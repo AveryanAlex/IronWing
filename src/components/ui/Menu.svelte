@@ -22,6 +22,7 @@ let { triggerLabel, triggerTone = "neutral", items, testId }: Props = $props();
         <Bits.Item
           class="ui-menu__item"
           data-destructive={item.destructive || undefined}
+          data-testid={item.testId}
           disabled={item.disabled}
           onSelect={() => item.onSelect()}
         >

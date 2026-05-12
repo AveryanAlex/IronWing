@@ -3,5 +3,6 @@ export type MenuItem = {
   label: string;
   destructive?: boolean;
   disabled?: boolean;
+  testId?: string;
   onSelect: () => void;
 };

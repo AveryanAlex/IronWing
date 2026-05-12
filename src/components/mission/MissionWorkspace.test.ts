@@ -660,6 +660,32 @@ async function flush() {
   await Promise.resolve();
 }
 
+async function openMissionToolbarMoreMenu(): Promise<void> {
+  const trigger = screen.getByTestId(missionWorkspaceTestIds.toolbarMoreButton);
+  if (trigger.getAttribute("aria-expanded") === "true") {
+    return;
+  }
+  trigger.focus();
+  await fireEvent.keyDown(trigger, { key: "Enter" });
+  await waitFor(() => {
+    expect(document.querySelector('[role="menuitem"]')).toBeTruthy();
+  });
+}
+
+async function getMissionToolbarMenuItem(testId: string): Promise<HTMLElement> {
+  await openMissionToolbarMoreMenu();
+  const node = document.querySelector<HTMLElement>(`[role="menuitem"][data-testid="${testId}"]`);
+  if (!node) {
+    throw new Error(`Mission toolbar menu item with testId "${testId}" was not found while the overflow menu was open.`);
+  }
+  return node;
+}
+
+async function clickMissionToolbarMenuItem(testId: string): Promise<void> {
+  const node = await getMissionToolbarMenuItem(testId);
+  await fireEvent.click(node);
+}
+
 function setMissionMapSurfaceRect() {
   const surface = screen.getByTestId(missionWorkspaceTestIds.mapSurface);
   Object.defineProperty(surface, "getBoundingClientRect", {
@@ -1723,11 +1749,11 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.attachment).textContent).toContain("Playback read-only");
     });
     expect(screen.getByTestId(missionWorkspaceTestIds.headerReplayReadonly).textContent).toContain("Replay is read-only");
-    expect(screen.queryByTestId(missionWorkspaceTestIds.toolbarImport)).toBeTruthy();
-    expect((screen.getByTestId(missionWorkspaceTestIds.toolbarImport) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId(missionWorkspaceTestIds.toolbarNew) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId(missionWorkspaceTestIds.toolbarRead) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId(missionWorkspaceTestIds.toolbarUpload) as HTMLButtonElement).disabled).toBe(true);
+    const replayImportItem = await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarImport);
+    expect(replayImportItem.getAttribute("data-disabled")).not.toBeNull();
+    expect((await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarNew)).getAttribute("data-disabled")).not.toBeNull();
+    expect((await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarRead)).getAttribute("data-disabled")).not.toBeNull();
     expect(screen.queryByRole("button", { name: /validate mission/i })).toBeNull();
     expect((screen.getByTestId(missionWorkspaceTestIds.homeLatitude) as HTMLInputElement).disabled).toBe(true);
 
@@ -2176,7 +2202,7 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.toolbarExport));
+    await clickMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarExport);
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.exportReviewTitle).textContent).toContain("Choose which planner domains");

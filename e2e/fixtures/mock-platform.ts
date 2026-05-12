@@ -1,5 +1,5 @@
 import { firmwareWorkspaceTestIds } from "../../src/components/firmware/firmware-workspace-test-ids";
-import { missionToolbarPhoneId, missionWorkspaceTestIds } from "../../src/components/mission/mission-workspace-test-ids";
+import { missionWorkspaceTestIds } from "../../src/components/mission/mission-workspace-test-ids";
 import type { MissionMapDebugSnapshot } from "../../src/components/mission/mission-map-debug";
 import { setupWorkspaceTestIds } from "../../src/components/setup/setup-workspace-test-ids";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
@@ -1015,10 +1015,10 @@ export function missionWorkspaceLocator(page: Page, selector: keyof typeof missi
 }
 
 /**
- * Test ids for secondary toolbar actions that collapse behind the phone-tier
- * "More" disclosure. Keep this list aligned with the snippet rendered inside
- * `MissionWorkspaceHeader.svelte`'s `secondaryActions` snippet — those buttons
- * are the ones that gain a `${canonical}--phone` mirror under <details>.
+ * Test ids for secondary toolbar actions hosted inside the Mission toolbar's
+ * shared `ui/Menu` overflow. Undo and Redo remain inline `IconButton`s in the
+ * toolbar — keeping them in this list lets the helpers fall through to the
+ * canonical locator when the menu does not host them.
  */
 const missionToolbarSecondaryControls = [
     "toolbarUndo",
@@ -1031,51 +1031,75 @@ const missionToolbarSecondaryControls = [
 
 export type MissionToolbarSecondaryControl = (typeof missionToolbarSecondaryControls)[number];
 
+const missionToolbarMenuControls = new Set<MissionToolbarSecondaryControl>([
+    "toolbarNew",
+    "toolbarImport",
+    "toolbarExport",
+    "toolbarRead",
+]);
+
 /**
- * Open the phone-tier Mission toolbar "More" disclosure if it is visible and
- * still closed. Idempotent: no-op on desktop/radiomaster widths (where the
- * disclosure stays display:none) or when the disclosure is already open.
+ * Open the Mission toolbar "More" overflow menu (Bits UI dropdown) if it is
+ * not already open. Idempotent: a second call while the menu is open is a
+ * no-op. Used by helpers that need to interact with menu items rendered only
+ * while the dropdown is mounted.
  */
 export async function openMissionToolbarMoreMenu(page: Page): Promise<void> {
-    const moreSummary = missionWorkspaceLocator(page, "toolbarMoreButton");
-    if (!(await moreSummary.isVisible().catch(() => false))) {
+    const moreTrigger = missionWorkspaceLocator(page, "toolbarMoreButton");
+    if (!(await moreTrigger.isVisible().catch(() => false))) {
         return;
     }
-    const details = moreSummary.locator("xpath=ancestor::details[1]");
-    const open = await details.getAttribute("open");
-    if (open === null) {
-        await moreSummary.click();
-        await expect
-            .poll(() => details.getAttribute("open"), {
-                message: "Mission toolbar More disclosure never opened; the phone-tier overflow menu must expose its actions to e2e clicks.",
-            })
-            .not.toBeNull();
+    const expanded = await moreTrigger.getAttribute("aria-expanded");
+    if (expanded === "true") {
+        return;
     }
+    await moreTrigger.click();
+    await expect
+        .poll(() => moreTrigger.getAttribute("aria-expanded"), {
+            message: "Mission toolbar More menu never opened; the overflow menu must expose its actions to e2e clicks.",
+        })
+        .toBe("true");
+}
+
+async function closeMissionToolbarMoreMenu(page: Page): Promise<void> {
+    const moreTrigger = missionWorkspaceLocator(page, "toolbarMoreButton");
+    if (!(await moreTrigger.isVisible().catch(() => false))) {
+        return;
+    }
+    const expanded = await moreTrigger.getAttribute("aria-expanded");
+    if (expanded !== "true") {
+        return;
+    }
+    await page.keyboard.press("Escape");
+    await expect
+        .poll(() => moreTrigger.getAttribute("aria-expanded"), {
+            message: "Mission toolbar More menu never closed; inline toolbar controls remained obscured by the open overflow.",
+        })
+        .not.toBe("true");
 }
 
 /**
- * Resolve the visible locator for a secondary Mission toolbar action. On
- * phone-tier widths the desktop copy is display:none, so this helper opens the
- * "More" disclosure first and returns the `--phone` mirror. On wider widths
- * the canonical locator is returned directly.
+ * Resolve the visible locator for a secondary Mission toolbar action. Undo and
+ * Redo remain inline toolbar `IconButton`s; the remaining actions live inside
+ * the shared `ui/Menu` overflow and only render when the dropdown is open, so
+ * this helper opens the menu first when needed. For inline controls the helper
+ * dismisses any open dropdown so it does not obscure the toolbar surface.
  */
 export async function missionToolbarSecondaryLocator(
     page: Page,
     control: MissionToolbarSecondaryControl,
 ): Promise<Locator> {
-    const moreSummary = missionWorkspaceLocator(page, "toolbarMoreButton");
-    if (await moreSummary.isVisible().catch(() => false)) {
+    if (missionToolbarMenuControls.has(control)) {
         await openMissionToolbarMoreMenu(page);
-        const phoneTestId = missionToolbarPhoneId(missionWorkspaceTestIds[control]);
-        return page.locator(`[data-testid="${phoneTestId}"]`);
+        return page.locator(`[role="menuitem"][data-testid="${missionWorkspaceTestIds[control]}"]`);
     }
+    await closeMissionToolbarMoreMenu(page);
     return missionWorkspaceLocator(page, control);
 }
 
 /**
- * Click a secondary Mission toolbar action, transparently opening the phone
- * "More" disclosure when the shell is at phone width. Use this for any of the
- * actions that the `secondaryActions` snippet renders inside <details>.
+ * Click a secondary Mission toolbar action, transparently opening the "More"
+ * overflow menu when the action lives inside the shared `ui/Menu`.
  */
 export async function clickMissionToolbarSecondary(
     page: Page,
