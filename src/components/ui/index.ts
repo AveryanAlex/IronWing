@@ -6,3 +6,4 @@ export { default as Card } from "./Card.svelte";
 export { default as Panel } from "./Panel.svelte";
 export { default as Badge } from "./Badge.svelte";
 export { default as StatusPill } from "./StatusPill.svelte";
+export { default as Banner } from "./Banner.svelte";
