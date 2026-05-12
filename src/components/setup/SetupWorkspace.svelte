@@ -7,6 +7,7 @@ import {
   getShellChromeStoreContext,
 } from "../../app/shell/runtime-context";
 import { createSetupWizardStore } from "../../lib/stores/setup-wizard";
+import { Panel, SectionHeader, SplitWorkspace, WorkspaceShell } from "../ui";
 import SetupBeginnerWizardSection from "./SetupBeginnerWizardSection.svelte";
 import SetupCalibrationSection from "./SetupCalibrationSection.svelte";
 import SetupCheckpointBanner from "./SetupCheckpointBanner.svelte";
@@ -126,57 +127,40 @@ function clearCheckpoint() {
 }
 </script>
 
-<section
-  class="setup-workspace"
-  data-selected-section={view.selectedSectionId}
-  data-setup-readiness={view.readiness}
-  data-testid={setupWorkspaceTestIds.root}
->
-  <SetupCheckpointBanner checkpoint={view.checkpoint} onClear={clearCheckpoint} />
+{#snippet sectionNav()}
+  <Panel>
+    <SectionHeader title="Setup sections" />
+    <SetupWorkspaceSectionNav
+      onSelect={selectSection}
+      sectionGroups={view.sectionGroups}
+      selectedSectionId={view.selectedSectionId}
+    />
+  </Panel>
+{/snippet}
 
-  <div aria-hidden="true" class="hidden">
-    <span data-testid={setupWorkspaceTestIds.state}>{view.stateText}</span>
-    <span data-testid={setupWorkspaceTestIds.scope}>{view.scopeText}</span>
-    <span data-testid={setupWorkspaceTestIds.metadata}>{view.metadataText}</span>
-    <span data-testid={setupWorkspaceTestIds.progress}>{view.progressText}</span>
-    <span data-testid={setupWorkspaceTestIds.notice}>{view.noticeText ?? ""}</span>
-  </div>
+{#snippet selectedSectionDetail()}
+  <div class="setup-workspace-detail" data-testid={setupWorkspaceTestIds.detail}>
+    <span aria-hidden="true" class="sr-only" data-testid={setupWorkspaceTestIds.selectedSection}>
+      {view.selectedSectionId}
+    </span>
 
-  <div
-    class="setup-workspace-layout"
-    class:setup-workspace-layout--phone={isPhoneTier}
-    data-shell-tier={chromeStore.current.tier}
-  >
-    {#if !isPhoneTier}
-      <SetupWorkspaceSectionNav
-        onSelect={selectSection}
-        sectionGroups={view.sectionGroups}
-        selectedSectionId={view.selectedSectionId}
-      />
+    {#if isPhoneTier}
+      <div class="mb-3 flex items-center justify-between">
+        <button
+          class="rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary hover:border-accent hover:text-accent"
+          data-testid={setupWorkspaceTestIds.sectionDrawerToggle}
+          onclick={openSectionDrawer}
+          type="button"
+        >
+          Sections
+        </button>
+        <span class="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+          {selectedSection?.title ?? "Overview"}
+        </span>
+      </div>
     {/if}
 
-    <div class="setup-workspace-detail" data-testid={setupWorkspaceTestIds.detail}>
-      <span aria-hidden="true" class="sr-only" data-testid={setupWorkspaceTestIds.selectedSection}>
-        {view.selectedSectionId}
-      </span>
-
-      {#if isPhoneTier}
-        <div class="mb-3 flex items-center justify-between">
-          <button
-            class="rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary hover:border-accent hover:text-accent"
-            data-testid={setupWorkspaceTestIds.sectionDrawerToggle}
-            onclick={openSectionDrawer}
-            type="button"
-          >
-            Sections
-          </button>
-          <span class="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
-            {selectedSection?.title ?? "Overview"}
-          </span>
-        </div>
-      {/if}
-
-      {#if view.selectedSectionId === "overview"}
+    {#if view.selectedSectionId === "overview"}
         <SetupOverviewSection {view} onSelect={selectSection} />
       {:else if view.selectedSectionId === "beginner_wizard"}
         <SetupBeginnerWizardSection {view} {wizardStore} onSelectSection={selectSection} />
@@ -275,51 +259,95 @@ function clearCheckpoint() {
           This section is not available right now.
         </div>
       {/if}
-    </div>
   </div>
+{/snippet}
 
-  {#if isPhoneTier && sectionDrawerOpen}
-    <div
-      class="fixed inset-0 z-50 bg-black/60"
-      data-testid={setupWorkspaceTestIds.sectionDrawerBackdrop}
-      onclick={closeSectionDrawer}
-      onkeydown={(event) => {
-        if (event.key === "Escape") {
-          closeSectionDrawer();
-        }
-      }}
-      role="button"
-      tabindex="-1"
-    ></div>
-    <aside
-      class="fixed inset-y-0 left-0 z-50 w-[88vw] max-w-[22rem] overflow-y-auto bg-bg-primary p-4 shadow-2xl"
-      data-testid={setupWorkspaceTestIds.sectionDrawer}
-    >
-      <div class="mb-3 flex items-center justify-between">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Setup sections</p>
-        <button
-          class="rounded-full border border-border bg-bg-primary px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary hover:border-accent hover:text-accent"
-          data-testid={setupWorkspaceTestIds.sectionDrawerClose}
-          onclick={closeSectionDrawer}
-          type="button"
-        >
-          Close
-        </button>
+<WorkspaceShell mode="split" testId={setupWorkspaceTestIds.root}>
+  <div
+    class="setup-workspace"
+    data-selected-section={view.selectedSectionId}
+    data-setup-readiness={view.readiness}
+  >
+    <SetupCheckpointBanner checkpoint={view.checkpoint} onClear={clearCheckpoint} />
+
+    <div aria-hidden="true" class="hidden">
+      <span data-testid={setupWorkspaceTestIds.state}>{view.stateText}</span>
+      <span data-testid={setupWorkspaceTestIds.scope}>{view.scopeText}</span>
+      <span data-testid={setupWorkspaceTestIds.metadata}>{view.metadataText}</span>
+      <span data-testid={setupWorkspaceTestIds.progress}>{view.progressText}</span>
+      <span data-testid={setupWorkspaceTestIds.notice}>{view.noticeText ?? ""}</span>
+    </div>
+
+    {#if isPhoneTier}
+      <div
+        class="setup-workspace-layout setup-workspace-layout--phone"
+        data-shell-tier={chromeStore.current.tier}
+      >
+        {@render selectedSectionDetail()}
       </div>
-      <SetupWorkspaceSectionNav
-        onSelect={selectSectionFromDrawer}
-        sectionGroups={view.sectionGroups}
-        selectedSectionId={view.selectedSectionId}
-      />
-    </aside>
-  {/if}
-</section>
+    {:else}
+      <div class="setup-workspace-split" data-shell-tier={chromeStore.current.tier}>
+        <SplitWorkspace primaryMax="320px">
+          {#snippet primary()}
+            {@render sectionNav()}
+          {/snippet}
+          {#snippet secondary()}
+            {@render selectedSectionDetail()}
+          {/snippet}
+        </SplitWorkspace>
+      </div>
+    {/if}
+
+    {#if isPhoneTier && sectionDrawerOpen}
+      <div
+        class="fixed inset-0 z-50 bg-black/60"
+        data-testid={setupWorkspaceTestIds.sectionDrawerBackdrop}
+        onclick={closeSectionDrawer}
+        onkeydown={(event) => {
+          if (event.key === "Escape") {
+            closeSectionDrawer();
+          }
+        }}
+        role="button"
+        tabindex="-1"
+      ></div>
+      <aside
+        class="fixed inset-y-0 left-0 z-50 w-[88vw] max-w-[22rem] overflow-y-auto bg-bg-primary p-4 shadow-2xl"
+        data-testid={setupWorkspaceTestIds.sectionDrawer}
+      >
+        <div class="mb-3 flex items-center justify-between">
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Setup sections</p>
+          <button
+            class="rounded-full border border-border bg-bg-primary px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary hover:border-accent hover:text-accent"
+            data-testid={setupWorkspaceTestIds.sectionDrawerClose}
+            onclick={closeSectionDrawer}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+        <SetupWorkspaceSectionNav
+          onSelect={selectSectionFromDrawer}
+          sectionGroups={view.sectionGroups}
+          selectedSectionId={view.selectedSectionId}
+        />
+      </aside>
+    {/if}
+  </div>
+</WorkspaceShell>
 
 <style>
   .setup-workspace {
     height: 100%;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .setup-workspace-split {
+    flex: 1;
     min-height: 0;
     overflow: hidden;
   }
@@ -330,12 +358,6 @@ function clearCheckpoint() {
     flex: 1;
     min-height: 0;
     overflow: hidden;
-  }
-  .setup-workspace-layout > :global(nav) {
-    width: 200px;
-    flex-shrink: 0;
-    overflow-y: auto;
-    border-right: 1px solid var(--color-border);
   }
   .setup-workspace-detail {
     flex: 1;
