@@ -1,7 +1,7 @@
 <script lang="ts">
 import { fromStore } from "svelte/store";
 
-import { Button, MetricTile, Panel } from "../../components/ui";
+import { Button, Panel } from "../../components/ui";
 import { hasUnsavedLiveSettings } from "../../lib/stores/live-settings";
 import { appShellTestIds } from "./chrome-state";
 import {
@@ -57,26 +57,32 @@ let launcherStatusText = $derived.by(() => {
 
     <p class="sidebar-telemetry__status">{launcherStatusText}</p>
 
-    <div class="sidebar-telemetry__grid">
-      <div data-testid="sidebar-telemetry-state">
-        <MetricTile label="State" value={statusCard.armStateText} />
+    <dl class="sidebar-telemetry__list">
+      <div class="sidebar-telemetry__row" data-testid="sidebar-telemetry-state">
+        <dt class="sidebar-telemetry__label">State</dt>
+        <dd class="sidebar-telemetry__value">{statusCard.armStateText}</dd>
       </div>
-      <div data-testid="sidebar-telemetry-mode">
-        <MetricTile label="Mode" value={statusCard.modeText} />
+      <div class="sidebar-telemetry__row" data-testid="sidebar-telemetry-mode">
+        <dt class="sidebar-telemetry__label">Mode</dt>
+        <dd class="sidebar-telemetry__value">{statusCard.modeText}</dd>
       </div>
-      <div data-testid="sidebar-telemetry-altitude">
-        <MetricTile label="Alt" value={summary.altitudeText} />
+      <div class="sidebar-telemetry__row" data-testid="sidebar-telemetry-altitude">
+        <dt class="sidebar-telemetry__label">Alt</dt>
+        <dd class="sidebar-telemetry__value">{summary.altitudeText}</dd>
       </div>
-      <div data-testid="sidebar-telemetry-speed">
-        <MetricTile label="Speed" value={summary.speedText} />
+      <div class="sidebar-telemetry__row" data-testid="sidebar-telemetry-speed">
+        <dt class="sidebar-telemetry__label">Speed</dt>
+        <dd class="sidebar-telemetry__value">{summary.speedText}</dd>
       </div>
-      <div data-testid="sidebar-telemetry-battery">
-        <MetricTile label="Battery" value={summary.batteryText} />
+      <div class="sidebar-telemetry__row" data-testid="sidebar-telemetry-battery">
+        <dt class="sidebar-telemetry__label">Battery</dt>
+        <dd class="sidebar-telemetry__value">{summary.batteryText}</dd>
       </div>
-      <div data-testid="sidebar-telemetry-gps">
-        <MetricTile label="GPS" value={gpsText} />
+      <div class="sidebar-telemetry__row" data-testid="sidebar-telemetry-gps">
+        <dt class="sidebar-telemetry__label">GPS</dt>
+        <dd class="sidebar-telemetry__value">{gpsText}</dd>
       </div>
-    </div>
+    </dl>
   </Panel>
 </div>
 
@@ -100,10 +106,42 @@ let launcherStatusText = $derived.by(() => {
   color: var(--color-text-muted);
   font-size: 0.66rem;
 }
-.sidebar-telemetry__grid {
-  margin-top: var(--space-3);
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.sidebar-telemetry__list {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sidebar-telemetry__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   gap: var(--space-2);
+  min-height: 28px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+}
+.sidebar-telemetry__row + .sidebar-telemetry__row {
+  border-top: 1px solid var(--color-border);
+}
+.sidebar-telemetry__label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.sidebar-telemetry__value {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 </style>
