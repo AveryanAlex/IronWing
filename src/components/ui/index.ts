@@ -31,3 +31,5 @@ export type { MenuItem } from "./menu-types";
 export { default as Tooltip } from "./Tooltip.svelte";
 export { default as Select } from "./Select.svelte";
 export type { SelectOption } from "./select-types";
+export { default as ContextMenu } from "./ContextMenu.svelte";
+export type { ContextMenuItem } from "./context-menu-types";
