@@ -23,7 +23,9 @@ import type {
   SetupWorkspaceStoreState,
 } from "../../lib/stores/setup-workspace";
 import { armVehicle, disarmVehicle } from "../../telemetry";
+import { Banner } from "../ui";
 import SetupBitmaskChecklist from "./shared/SetupBitmaskChecklist.svelte";
+import SetupSectionShell from "./SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 let {
@@ -264,27 +266,24 @@ async function handleDisarm() {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.armingSection}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Review pre-arm blockers and live arm controls</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Review live support, sensor health, and status text here before you arm. If a check is blocked, request fresh checks or open Full Parameters for deeper inspection; parameter edits still queue in the review tray.
-      </p>
-    </div>
+<SetupSectionShell
+  eyebrow={section.title}
+  title="Review pre-arm blockers and live arm controls"
+  description="Review live support, sensor health, and status text here before you arm. If a check is blocked, request fresh checks or open Full Parameters for deeper inspection; parameter edits still queue in the review tray."
+  testId={setupWorkspaceTestIds.armingSection}
+>
+  {#snippet actions()}
+    {#if prearmDocsUrl}
+      <a class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent" data-testid={setupWorkspaceTestIds.prearmDocsLink} href={prearmDocsUrl} rel="noreferrer" target="_blank">Pre-arm docs</a>
+    {/if}
+    {#if armingDocsUrl}
+      <a class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent" data-testid={setupWorkspaceTestIds.armingDocsLink} href={armingDocsUrl} rel="noreferrer" target="_blank">Arming docs</a>
+    {/if}
+  {/snippet}
 
-    <div class="flex flex-wrap gap-2">
-      {#if prearmDocsUrl}
-        <a class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent" data-testid={setupWorkspaceTestIds.prearmDocsLink} href={prearmDocsUrl} rel="noreferrer" target="_blank">Pre-arm docs</a>
-      {/if}
-      {#if armingDocsUrl}
-        <a class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent" data-testid={setupWorkspaceTestIds.armingDocsLink} href={armingDocsUrl} rel="noreferrer" target="_blank">Arming docs</a>
-      {/if}
-    </div>
-  </div>
-
-  <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
+  {#snippet body()}
+    <div class="setup-arming-body">
+      <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
     <div
       class="rounded-lg border border-border bg-bg-primary/80 p-3"
       data-testid={setupWorkspaceTestIds.armingSummary}
@@ -362,140 +361,151 @@ async function handleDisarm() {
     </div>
   </div>
 
-  {#if commandError}
-    <div
-      class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
-      data-testid={setupWorkspaceTestIds.armingFailure}
-    >
-      {commandError}
-    </div>
-  {/if}
-
-  {#if checksDisabled}
-    <div class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger" data-testid={`${setupWorkspaceTestIds.armingBannerPrefix}-checks-disabled`}>
-      ARMING_CHECK is disabled, so the vehicle can arm without the normal pre-flight safety validation.
-    </div>
-  {:else if checksPartial}
-    <div class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning" data-testid={`${setupWorkspaceTestIds.armingBannerPrefix}-checks-partial`}>
-      ARMING_CHECK is using a partial bitmask. Review the missing checks and request fresh blocker scans before flight.
-    </div>
-  {/if}
-
-  {#if armingMethodDisabled}
-    <div class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning" data-testid={`${setupWorkspaceTestIds.armingBannerPrefix}-method-disabled`}>
-      ARMING_REQUIRE is disabled, so GCS arming can bypass the physical arming gesture safeguards.
-    </div>
-  {/if}
-
-  {#if armingRecoveryReasons.length > 0}
-    <div
-      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
-      data-testid={setupWorkspaceTestIds.armingRecovery}
-    >
-      <p class="font-semibold text-text-primary">Arming parameter editors are staying fail-closed while metadata is partial.</p>
-      <ul class="mt-2 list-disc space-y-1 pl-5">
-        {#each armingRecoveryReasons as reason (reason)}
-          <li>{reason}</li>
-        {/each}
-      </ul>
-      <button
-        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        onclick={onSelectRecovery}
-        type="button"
-      >
-        Open Full Parameters recovery
-      </button>
-    </div>
-  {/if}
-
-  {#if prearmModel.blockers.length > 0}
-    <div class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.armingBlockers}>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Current blockers</p>
-      <div class="mt-4 space-y-3">
-        {#each prearmModel.blockers as blocker (blocker.id)}
-          <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <p class="text-sm font-semibold text-text-primary">{blocker.category}</p>
-                <p class="mt-1 text-sm text-text-secondary">{blocker.rawText}</p>
-                <p class="mt-2 text-xs leading-5 text-text-muted">{blocker.guidance}</p>
-              </div>
-              {#if blocker.stale}
-                <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-warning">stale</span>
-              {/if}
-            </div>
-          </div>
-        {/each}
-      </div>
-    </div>
-  {/if}
-
-  <div class="grid gap-3 xl:grid-cols-2">
-    <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.armingCheckChecklist}>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">ARMING_CHECK</p>
-      <p class="mt-2 text-sm text-text-secondary">
-        Review the active pre-arm check mask here. Toggling a bit stages the updated mask in the shared review tray instead of applying it directly.
-      </p>
-      <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.armingCurrentPrefix}-ARMING_CHECK`}>
-        Current · {currentValueText(armingCheckItem)}
-      </p>
-      {#if params.stagedEdits.ARMING_CHECK}
-        <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_CHECK`}>
-          Queued · {params.stagedEdits.ARMING_CHECK.nextValueText}
-        </p>
+      {#if commandError}
+        <Banner severity="danger" title={commandError} testId={setupWorkspaceTestIds.armingFailure} />
       {/if}
 
-      {#if armingCheckEntries.length > 0}
-        <div class="mt-4">
-          <SetupBitmaskChecklist
-            disabled={actionsBlocked || armingCheckItem?.readOnly === true}
-            items={armingCheckEntries}
-            onToggle={(entry) => toggleArmingCheck(Number(entry.key))}
-            title="Configured pre-arm checks"
-          />
+      {#if checksDisabled}
+        <Banner
+          severity="danger"
+          title="ARMING_CHECK is disabled, so the vehicle can arm without the normal pre-flight safety validation."
+          testId={`${setupWorkspaceTestIds.armingBannerPrefix}-checks-disabled`}
+        />
+      {:else if checksPartial}
+        <Banner
+          severity="warning"
+          title="ARMING_CHECK is using a partial bitmask. Review the missing checks and request fresh blocker scans before flight."
+          testId={`${setupWorkspaceTestIds.armingBannerPrefix}-checks-partial`}
+        />
+      {/if}
+
+      {#if armingMethodDisabled}
+        <Banner
+          severity="warning"
+          title="ARMING_REQUIRE is disabled, so GCS arming can bypass the physical arming gesture safeguards."
+          testId={`${setupWorkspaceTestIds.armingBannerPrefix}-method-disabled`}
+        />
+      {/if}
+
+      {#if armingRecoveryReasons.length > 0}
+        <div
+          class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+          data-testid={setupWorkspaceTestIds.armingRecovery}
+        >
+          <p class="font-semibold text-text-primary">Arming parameter editors are staying fail-closed while metadata is partial.</p>
+          <ul class="mt-2 list-disc space-y-1 pl-5">
+            {#each armingRecoveryReasons as reason (reason)}
+              <li>{reason}</li>
+            {/each}
+          </ul>
+          <button
+            class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+            onclick={onSelectRecovery}
+            type="button"
+          >
+            Open Full Parameters recovery
+          </button>
         </div>
-      {:else}
-        <p class="mt-4 text-sm text-warning">ARMING_CHECK metadata is incomplete for this scope, so the checklist stays read-only.</p>
-      {/if}
-    </article>
-
-    <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">ARMING_REQUIRE</p>
-      <p class="mt-2 text-sm text-text-secondary">
-        Choose how the vehicle can be armed. This selector stays read-only when the current scope is missing the required option list.
-      </p>
-      <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.armingCurrentPrefix}-ARMING_REQUIRE`}>
-        Current · {currentValueText(armingRequireItem)}
-      </p>
-      {#if params.stagedEdits.ARMING_REQUIRE}
-        <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_REQUIRE`}>
-          Queued · {params.stagedEdits.ARMING_REQUIRE.nextValueText}
-        </p>
       {/if}
 
-      <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
-        <select
-          class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-          data-testid={`${setupWorkspaceTestIds.armingInputPrefix}-ARMING_REQUIRE`}
-          disabled={actionsBlocked || armingRequireOptions.length === 0 || !armingRequireItem}
-          onchange={(event) => setDraft("ARMING_REQUIRE", (event.currentTarget as HTMLSelectElement).value)}
-          value={armingRequireDraft}
-        >
-          {#each armingRequireRenderedOptions as option (option.code)}
-            <option value={String(option.code)}>{option.label}</option>
-          {/each}
-        </select>
+      {#if prearmModel.blockers.length > 0}
+        <div class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.armingBlockers}>
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Current blockers</p>
+          <div class="mt-4 space-y-3">
+            {#each prearmModel.blockers as blocker (blocker.id)}
+              <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-semibold text-text-primary">{blocker.category}</p>
+                    <p class="mt-1 text-sm text-text-secondary">{blocker.rawText}</p>
+                    <p class="mt-2 text-xs leading-5 text-text-muted">{blocker.guidance}</p>
+                  </div>
+                  {#if blocker.stale}
+                    <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-warning">stale</span>
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
 
-        <button
-          class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.armingStageButtonPrefix}-ARMING_REQUIRE`}
-          disabled={!canStageRequire()}
-          onclick={stageRequire}
-          type="button"
-        >
-          {isQueued("ARMING_REQUIRE", armingRequireItem?.value ?? null) ? "Queued" : "Stage"}
-        </button>
+      <div class="grid gap-3 xl:grid-cols-2">
+        <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.armingCheckChecklist}>
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">ARMING_CHECK</p>
+          <p class="mt-2 text-sm text-text-secondary">
+            Review the active pre-arm check mask here. Toggling a bit stages the updated mask in the shared review tray instead of applying it directly.
+          </p>
+          <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.armingCurrentPrefix}-ARMING_CHECK`}>
+            Current · {currentValueText(armingCheckItem)}
+          </p>
+          {#if params.stagedEdits.ARMING_CHECK}
+            <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_CHECK`}>
+              Queued · {params.stagedEdits.ARMING_CHECK.nextValueText}
+            </p>
+          {/if}
+
+          {#if armingCheckEntries.length > 0}
+            <div class="mt-4">
+              <SetupBitmaskChecklist
+                disabled={actionsBlocked || armingCheckItem?.readOnly === true}
+                items={armingCheckEntries}
+                onToggle={(entry) => toggleArmingCheck(Number(entry.key))}
+                title="Configured pre-arm checks"
+              />
+            </div>
+          {:else}
+            <p class="mt-4 text-sm text-warning">ARMING_CHECK metadata is incomplete for this scope, so the checklist stays read-only.</p>
+          {/if}
+        </article>
+
+        <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
+          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">ARMING_REQUIRE</p>
+          <p class="mt-2 text-sm text-text-secondary">
+            Choose how the vehicle can be armed. This selector stays read-only when the current scope is missing the required option list.
+          </p>
+          <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.armingCurrentPrefix}-ARMING_REQUIRE`}>
+            Current · {currentValueText(armingRequireItem)}
+          </p>
+          {#if params.stagedEdits.ARMING_REQUIRE}
+            <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_REQUIRE`}>
+              Queued · {params.stagedEdits.ARMING_REQUIRE.nextValueText}
+            </p>
+          {/if}
+
+          <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+            <select
+              class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+              data-testid={`${setupWorkspaceTestIds.armingInputPrefix}-ARMING_REQUIRE`}
+              disabled={actionsBlocked || armingRequireOptions.length === 0 || !armingRequireItem}
+              onchange={(event) => setDraft("ARMING_REQUIRE", (event.currentTarget as HTMLSelectElement).value)}
+              value={armingRequireDraft}
+            >
+              {#each armingRequireRenderedOptions as option (option.code)}
+                <option value={String(option.code)}>{option.label}</option>
+              {/each}
+            </select>
+
+            <button
+              class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+              data-testid={`${setupWorkspaceTestIds.armingStageButtonPrefix}-ARMING_REQUIRE`}
+              disabled={!canStageRequire()}
+              onclick={stageRequire}
+              type="button"
+            >
+              {isQueued("ARMING_REQUIRE", armingRequireItem?.value ?? null) ? "Queued" : "Stage"}
+            </button>
+          </div>
+        </article>
       </div>
-    </article>
-  </div>
-</section>
+    </div>
+  {/snippet}
+</SetupSectionShell>
+
+<style>
+.setup-arming-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+</style>
