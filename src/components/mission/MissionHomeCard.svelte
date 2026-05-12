@@ -50,7 +50,7 @@ let altitude = $derived(draftSourceKey === syncKey && altitudeDraft !== null ? a
 let visibleValidationMessage = $derived(draftSourceKey === syncKey ? validationMessage : null);
 let shortDescription = $derived(
   home
-    ? "Shared across mission, fence, and rally."
+    ? `${home.latitude_deg.toFixed(5)}, ${home.longitude_deg.toFixed(5)} · ${home.altitude_m.toFixed(1)} m`
     : `Set a Home position for this ${modeLabel} draft.`,
 );
 
