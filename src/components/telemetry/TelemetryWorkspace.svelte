@@ -6,7 +6,7 @@ import {
   getOperatorWorkspaceViewStoreContext,
   getSessionViewStoreContext,
 } from "../../app/shell/runtime-context";
-import { MetricGroup, MetricTile, WorkspaceHeader, WorkspaceShell } from "../ui";
+import { MetricGroup, MetricTile, WorkspaceShell } from "../ui";
 
 type MetricTone = "neutral" | "info" | "success" | "warning" | "danger";
 
@@ -267,8 +267,6 @@ let sections = $derived.by<MetricSection[]>(() => {
 </script>
 
 <WorkspaceShell mode="inset">
-  <WorkspaceHeader title="Telemetry" />
-
   {#each sections as section (section.key)}
     <div class="telemetry-section">
       <button

@@ -7,7 +7,6 @@ import {
   FieldRow,
   Panel,
   SectionHeader,
-  WorkspaceHeader,
   WorkspaceShell,
 } from "../ui";
 
@@ -51,8 +50,6 @@ function handleSvsToggle() {
 </script>
 
 <WorkspaceShell mode="inset">
-  <WorkspaceHeader title="App settings" />
-
   <Panel>
     <SectionHeader title="Telemetry & runtime" />
     <FieldRow

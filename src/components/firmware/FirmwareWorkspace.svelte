@@ -13,7 +13,7 @@ import {
   createFirmwareWorkspaceStore,
   type FirmwareWorkspaceStore,
 } from "../../lib/stores/firmware-workspace";
-import { Banner, WorkspaceHeader, WorkspaceShell } from "../ui";
+import { Banner, WorkspaceShell } from "../ui";
 import FirmwareOutcomePanel from "./FirmwareOutcomePanel.svelte";
 import FirmwareRecoveryPanel from "./FirmwareRecoveryPanel.svelte";
 import FirmwareSerialPanel from "./FirmwareSerialPanel.svelte";
@@ -130,8 +130,6 @@ $effect(() => {
     data-actions-enabled={layout.actionsEnabled ? "true" : "false"}
     data-layout-mode={layout.mode}
   ></div>
-
-  <WorkspaceHeader title="Firmware" />
 
   <div class="grid gap-3 md:grid-cols-2">
     <button

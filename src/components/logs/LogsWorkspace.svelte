@@ -2,7 +2,7 @@
 import { onDestroy, onMount } from "svelte";
 
 import { logsWorkspace, type LogsWorkspaceStore } from "../../lib/stores/logs-workspace";
-import { Banner, Button, Panel, StatusPill, WorkspaceHeader, WorkspaceShell } from "../ui";
+import { Banner, Button, Panel, WorkspaceShell } from "../ui";
 import LogCharts from "./LogCharts.svelte";
 import LogsRawMessagesPanel from "./LogsRawMessagesPanel.svelte";
 import LogsDetailsPanel from "./LogsDetailsPanel.svelte";
@@ -249,17 +249,6 @@ function emitMarkerHandoff() {
 </script>
 
 <WorkspaceShell mode="inset" testId="logs-workspace-root">
-  <WorkspaceHeader title="Logs">
-    {#snippet status()}
-      <StatusPill tone={workspace.effectiveSource === "playback" ? "warning" : "neutral"}>
-        effective source · {workspace.effectiveSource}
-      </StatusPill>
-      <StatusPill tone={workspace.phase === "ready" ? "success" : "neutral"}>
-        workspace · {workspace.phase}
-      </StatusPill>
-    {/snippet}
-  </WorkspaceHeader>
-
   {#if workspace.lastError}
     <Banner severity="danger" title={workspace.lastError} testId="logs-workspace-last-error" />
   {/if}
