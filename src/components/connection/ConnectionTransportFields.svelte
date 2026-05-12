@@ -73,15 +73,14 @@ const iconButtonClass =
   {#if isConnecting}
     <button
       aria-label="Cancel connection"
-      class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning text-bg-primary transition hover:brightness-105"
+      class="connection-cancel-btn inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning text-bg-primary transition hover:brightness-105"
       data-testid="connection-cancel-btn"
       onclick={onCancelConnect}
       title="Cancel connection"
       type="button"
     >
-      <svg aria-hidden="true" class="h-4 w-4" fill="none" viewBox="0 0 24 24">
-        <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
-      </svg>
+      <span class="connection-cancel-btn__spinner" aria-hidden="true"></span>
+      <span class="sr-only">Cancel</span>
     </button>
   {:else if connected}
     <button
@@ -328,3 +327,30 @@ const iconButtonClass =
     {/if}
   </div>
 {/if}
+
+<style>
+  .connection-cancel-btn__spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+    border-top-color: currentColor;
+    animation: connection-cancel-btn-rotate 0.8s linear infinite;
+  }
+
+  @keyframes connection-cancel-btn-rotate {
+    from {
+      transform: rotate(0);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .connection-cancel-btn__spinner {
+      animation-duration: 4s;
+    }
+  }
+</style>
