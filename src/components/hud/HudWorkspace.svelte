@@ -250,17 +250,19 @@ let batteryLevel = $derived(
 
     <!-- Row 3, Col 3: Battery -->
     <div class="hud-info-cell {hasSvs ? 'hud-svs-info-bg' : ''}">
-      <div class="hud-font flex flex-col items-center gap-0.5">
-        <!-- Battery icon -->
-        <svg width="28" height="14" viewBox="0 0 28 14">
-          <rect x="0" y="1" width="24" height="12" rx="2" fill="none" stroke={batteryColor} stroke-width="1" />
-          <rect x="24" y="4" width="3" height="6" rx="1" fill={batteryColor} opacity="0.5" />
-          {#if telemetry.battery_pct != null}
-            <rect x="2" y="3" width={Math.round(batteryLevel * 0.2)} height="8" rx="1" fill={batteryColor} opacity="0.7" />
-          {/if}
-        </svg>
-        <span class="hud-info-value">{fmtInt(telemetry.battery_pct)}%</span>
-        <span class="hud-info-secondary">{fmt(telemetry.battery_voltage_v, 1)}V</span>
+      <div class="hud-font hud-battery-cell">
+        <div class="hud-battery-cell__row">
+          <!-- Battery icon -->
+          <svg class="hud-battery-cell__icon" width="20" height="10" viewBox="0 0 28 14" aria-hidden="true">
+            <rect x="0" y="1" width="24" height="12" rx="2" fill="none" stroke={batteryColor} stroke-width="1" />
+            <rect x="24" y="4" width="3" height="6" rx="1" fill={batteryColor} opacity="0.5" />
+            {#if telemetry.battery_pct != null}
+              <rect x="2" y="3" width={Math.round(batteryLevel * 0.2)} height="8" rx="1" fill={batteryColor} opacity="0.7" />
+            {/if}
+          </svg>
+          <span class="hud-info-value hud-battery-cell__pct">{fmtInt(telemetry.battery_pct)}%</span>
+        </div>
+        <span class="hud-info-secondary hud-battery-cell__volts">{fmt(telemetry.battery_voltage_v, 1)}V</span>
       </div>
     </div>
   </div>

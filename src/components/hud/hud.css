@@ -98,6 +98,55 @@
   letter-spacing: 0.06em;
 }
 
+/* ---- Battery cell (Row 3, Col 3) ---- */
+.hud-battery-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1.05;
+  min-width: 0;
+}
+.hud-battery-cell__row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.hud-battery-cell__icon {
+  flex-shrink: 0;
+}
+.hud-battery-cell__pct {
+  font-size: 0.75rem;
+}
+.hud-battery-cell__volts {
+  font-size: 0.625rem;
+  margin-top: 0;
+}
+
+@media (min-width: 1024px) {
+  .hud-battery-cell__pct {
+    font-size: 0.8125rem;
+  }
+  .hud-battery-cell__volts {
+    font-size: 0.6875rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hud-battery-cell__icon {
+    width: 18px;
+    height: 9px;
+  }
+  .hud-battery-cell__pct {
+    font-size: 0.7rem;
+  }
+  .hud-battery-cell__volts {
+    font-size: 0.6rem;
+  }
+}
+
 /* ---- Bottom status strip (MODE / THR / V/S / HDG / AGL) ---- */
 .hud-status-strip {
   display: flex;
