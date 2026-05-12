@@ -25,3 +25,4 @@ export { default as ResponsiveTabs } from "./ResponsiveTabs.svelte";
 export { default as MobileSheet } from "./MobileSheet.svelte";
 export { default as InfoWidget } from "./InfoWidget.svelte";
 export { default as SplitPane } from "./SplitPane.svelte";
+export { default as Dialog } from "./Dialog.svelte";
