@@ -78,6 +78,21 @@ const DIRECT_TAURI_IMPORT_RULES: ImportRule[] = [
   },
 ];
 
+const UI_PRIMITIVE_DIR_PREFIX = "src/components/ui/";
+
+const DIRECT_BITS_UI_IMPORT_RULE: {
+  label: string;
+  predicate: (specifier: string) => boolean;
+  allowedDirPrefix: string;
+  guidance: string;
+} = {
+  label: "bits-ui",
+  predicate: (specifier) => specifier === "bits-ui" || specifier.startsWith("bits-ui/"),
+  allowedDirPrefix: UI_PRIMITIVE_DIR_PREFIX,
+  guidance:
+    "Only wrappers under src/components/ui/ may import bits-ui directly. Feature components must consume the @/components/ui barrel (e.g. ContextMenu, Dialog, Menu, Select, Tooltip).",
+};
+
 const ACTIVE_TREE_FILE_RULES: FileRule[] = [
   {
     label: "React-era .tsx/.jsx files inside active trees",
@@ -391,6 +406,32 @@ describe("platform import boundary", () => {
       },
     );
   }
+
+  it(
+    `only ${DIRECT_BITS_UI_IMPORT_RULE.allowedDirPrefix} files import ${DIRECT_BITS_UI_IMPORT_RULE.label}`,
+    {
+      timeout: ACTIVE_RUNTIME_TIMEOUT_MS,
+    },
+    () => {
+      const violations: string[] = [];
+
+      for (const file of walkSourceFiles(SRC_DIR)) {
+        const projectRel = normalizeProjectPath(file);
+        if (projectRel.startsWith(DIRECT_BITS_UI_IMPORT_RULE.allowedDirPrefix)) continue;
+
+        const content = readFileSync(file, "utf-8");
+        const matches = extractImportSpecifiers(content).filter(DIRECT_BITS_UI_IMPORT_RULE.predicate);
+        if (matches.length > 0) {
+          violations.push(`${projectRel} -> ${matches.join(", ")}`);
+        }
+      }
+
+      expect(
+        violations.sort(),
+        `Unexpected direct ${DIRECT_BITS_UI_IMPORT_RULE.label} imports in:\n  ${violations.join("\n  ")}\n\n${DIRECT_BITS_UI_IMPORT_RULE.guidance}`,
+      ).toEqual([]);
+    },
+  );
 
   for (const rule of ACTIVE_RUNTIME_RULES) {
     it(

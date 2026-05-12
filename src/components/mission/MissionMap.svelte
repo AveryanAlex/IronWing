@@ -47,7 +47,7 @@ import {
   clearMissionMapDebugSnapshot,
   publishMissionMapDebugSnapshot,
 } from "./mission-map-debug";
-import { DropdownMenu as BitsMenu } from "bits-ui";
+import { ContextMenu, type ContextMenuItem } from "../ui";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
 type Props = {
@@ -1659,20 +1659,34 @@ function handleContextMenu(event: MouseEvent) {
   };
 }
 
-function buildContextMenuItems(): { label: string; action: () => void; destructive?: boolean }[] {
+function buildContextMenuItems(): ContextMenuItem[] {
   if (!contextMenu) {
     return [];
   }
 
   const { lat, lng } = contextMenu.lngLat;
-  const items: { label: string; action: () => void; destructive?: boolean }[] = [];
+  const items: ContextMenuItem[] = [];
 
   if (view.mode === "mission" && onAddWaypointAt) {
-    items.push({ label: "Add waypoint here", action: () => onAddWaypointAt!(lat, lng) });
+    items.push({
+      id: "add-waypoint",
+      label: "Add waypoint here",
+      onSelect: () => {
+        onAddWaypointAt!(lat, lng);
+        contextMenu = null;
+      },
+    });
   }
 
   if (onSetHomeAt) {
-    items.push({ label: "Set Home here", action: () => onSetHomeAt!(lat, lng) });
+    items.push({
+      id: "set-home",
+      label: "Set Home here",
+      onSelect: () => {
+        onSetHomeAt!(lat, lng);
+        contextMenu = null;
+      },
+    });
   }
 
   return items;
@@ -2176,29 +2190,15 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
         {#if contextMenu}
           {@const menuItems = buildContextMenuItems()}
           {#if menuItems.length > 0}
-            <BitsMenu.Root
-              open={true}
-              onOpenChange={(value) => { if (!value) contextMenu = null; }}
-            >
-              <BitsMenu.Trigger
-                aria-hidden="true"
-                tabindex={-1}
-                style="position: absolute; left: {contextMenu.x}px; top: {contextMenu.y}px; width: 0; height: 0; opacity: 0; pointer-events: none;"
-              ></BitsMenu.Trigger>
-              <BitsMenu.Portal>
-                <BitsMenu.Content class="ui-context-menu__content" sideOffset={2}>
-                  {#each menuItems as item, index (`${index}:${item.label}`)}
-                    <BitsMenu.Item
-                      class="ui-context-menu__item"
-                      data-destructive={item.destructive || undefined}
-                      onSelect={() => { item.action(); contextMenu = null; }}
-                    >
-                      {item.label}
-                    </BitsMenu.Item>
-                  {/each}
-                </BitsMenu.Content>
-              </BitsMenu.Portal>
-            </BitsMenu.Root>
+            <ContextMenu
+              items={menuItems}
+              controlled={{
+                open: true,
+                x: contextMenu.x,
+                y: contextMenu.y,
+                onOpenChange: (value) => { if (!value) contextMenu = null; },
+              }}
+            />
           {/if}
         {/if}
       </div>
@@ -2445,33 +2445,4 @@ function buildContextMenuItems(): { label: string; action: () => void; destructi
     background: rgba(6, 78, 59, 0.92);
   }
 
-  :global(.ui-context-menu__content) {
-    z-index: 60;
-    min-width: 180px;
-    padding: 4px;
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  }
-  :global(.ui-context-menu__item) {
-    display: block;
-    width: 100%;
-    padding: 6px 10px;
-    text-align: left;
-    color: var(--color-text-primary);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: 0.84rem;
-  }
-  :global(.ui-context-menu__item[data-highlighted]) {
-    background: var(--color-bg-tertiary);
-  }
-  :global(.ui-context-menu__item[data-destructive]) {
-    color: var(--color-danger);
-  }
-  :global(.ui-context-menu__item[data-disabled]) {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
 </style>
