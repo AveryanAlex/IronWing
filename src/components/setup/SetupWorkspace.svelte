@@ -7,7 +7,7 @@ import {
   getShellChromeStoreContext,
 } from "../../app/shell/runtime-context";
 import { createSetupWizardStore } from "../../lib/stores/setup-wizard";
-import { Panel, SectionHeader, SplitWorkspace, WorkspaceShell } from "../ui";
+import { SplitWorkspace, WorkspaceShell } from "../ui";
 import SetupBeginnerWizardSection from "./SetupBeginnerWizardSection.svelte";
 import SetupCalibrationSection from "./SetupCalibrationSection.svelte";
 import SetupCheckpointBanner from "./SetupCheckpointBanner.svelte";
@@ -128,14 +128,13 @@ function clearCheckpoint() {
 </script>
 
 {#snippet sectionNav()}
-  <Panel>
-    <SectionHeader title="Setup sections" />
+  <div class="setup-workspace-rail">
     <SetupWorkspaceSectionNav
       onSelect={selectSection}
       sectionGroups={view.sectionGroups}
       selectedSectionId={view.selectedSectionId}
     />
-  </Panel>
+  </div>
 {/snippet}
 
 {#snippet selectedSectionDetail()}
@@ -367,5 +366,14 @@ function clearCheckpoint() {
   }
   .setup-workspace-layout--phone {
     flex-direction: column;
+  }
+
+  .setup-workspace-rail {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    border-right: 1px solid var(--color-border);
+    background: var(--color-bg-secondary);
   }
 </style>

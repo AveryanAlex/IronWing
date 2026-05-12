@@ -116,8 +116,10 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
     display: flex;
     flex-direction: column;
     gap: 2px;
+    height: 100%;
+    min-height: 0;
     overflow-y: auto;
-    padding: 4px;
+    padding: 8px 4px;
   }
 
   .setup-nav__group-header {
