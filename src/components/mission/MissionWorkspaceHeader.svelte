@@ -69,6 +69,27 @@ let redoLabel = $derived(`Redo (${normalizedRedoCount} available)`);
 let replayReadonly = $derived(attachment.kind === "playback-readonly");
 </script>
 
+{#snippet secondaryActions(suffix: string)}
+  <button class="mission-toolbar__icon-btn" data-testid={`${missionWorkspaceTestIds.toolbarUndo}${suffix}`} disabled={!undoAvailable} onclick={onUndo} aria-label={undoLabel} title={undoLabel} type="button">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+  </button>
+  <button class="mission-toolbar__icon-btn" data-testid={`${missionWorkspaceTestIds.toolbarRedo}${suffix}`} disabled={!redoAvailable} onclick={onRedo} aria-label={redoLabel} title={redoLabel} type="button">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
+  </button>
+  <button class="mission-toolbar__icon-btn" data-testid={`${missionWorkspaceTestIds.toolbarNew}${suffix}`} disabled={busy || !attachment.canEdit} onclick={onNewMission} aria-label="New mission" title="New mission" type="button">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+  </button>
+  <button class="mission-toolbar__icon-btn" data-testid={`${missionWorkspaceTestIds.toolbarImport}${suffix}`} disabled={busy || !attachment.canEdit} onclick={onImport} aria-label="Import mission or KML/KMZ file" title="Import mission or KML/KMZ file" type="button">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="M3 10h18l-2 8a2 2 0 0 1-2 1H5a2 2 0 0 1-2-1z"/></svg>
+  </button>
+  <button class="mission-toolbar__icon-btn" data-testid={`${missionWorkspaceTestIds.toolbarExport}${suffix}`} disabled={busy || !hasContent} onclick={onExportPlan} aria-label="Export mission file" title="Export mission file" type="button">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+  </button>
+  <button class="mission-toolbar__icon-btn" data-testid={`${missionWorkspaceTestIds.toolbarRead}${suffix}`} disabled={busy || !attachment.canUseVehicleActions || !canUseVehicleActions} onclick={onReadFromVehicle} aria-label="Read from vehicle" title="Read from vehicle" type="button">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg>
+  </button>
+{/snippet}
+
 <header class="mission-toolbar" data-testid={missionWorkspaceTestIds.header}>
   {#if replayReadonly}
     <div class="mission-toolbar__readonly-banner" data-testid={missionWorkspaceTestIds.headerReplayReadonly}>
@@ -92,33 +113,21 @@ let replayReadonly = $derived(attachment.kind === "playback-readonly");
 
   <span class="mission-toolbar__sep" aria-hidden="true"></span>
 
-  <!-- Undo/Redo -->
-  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarUndo} disabled={!undoAvailable} onclick={onUndo} aria-label={undoLabel} title={undoLabel} type="button">
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
-  </button>
-  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarRedo} disabled={!redoAvailable} onclick={onRedo} aria-label={redoLabel} title={redoLabel} type="button">
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
-  </button>
+  <!-- Secondary actions: visible inline on desktop, collapsed behind <details> on phone -->
+  <div class="mission-toolbar__secondary mission-toolbar__secondary--desktop">
+    {@render secondaryActions("")}
+  </div>
+
+  <details class="mission-toolbar__secondary mission-toolbar__secondary--phone">
+    <summary class="mission-toolbar__more-btn" aria-label="More mission actions">More</summary>
+    <div class="mission-toolbar__more-list" role="group">
+      {@render secondaryActions("--phone")}
+    </div>
+  </details>
 
   <span class="mission-toolbar__sep" aria-hidden="true"></span>
 
-  <!-- New / Import / Export -->
-  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarNew} disabled={busy || !attachment.canEdit} onclick={onNewMission} aria-label="New mission" title="New mission" type="button">
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-  </button>
-  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarImport} disabled={busy || !attachment.canEdit} onclick={onImport} aria-label="Import mission or KML/KMZ file" title="Import mission or KML/KMZ file" type="button">
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="M3 10h18l-2 8a2 2 0 0 1-2 1H5a2 2 0 0 1-2-1z"/></svg>
-  </button>
-  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarExport} disabled={busy || !hasContent} onclick={onExportPlan} aria-label="Export mission file" title="Export mission file" type="button">
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
-  </button>
-
-  <span class="mission-toolbar__sep" aria-hidden="true"></span>
-
-  <!-- Vehicle actions -->
-  <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarRead} disabled={busy || !attachment.canUseVehicleActions || !canUseVehicleActions} onclick={onReadFromVehicle} aria-label="Read from vehicle" title="Read from vehicle" type="button">
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg>
-  </button>
+  <!-- Primary vehicle action: Upload (always visible) -->
   <button class="mission-toolbar__icon-btn" data-testid={missionWorkspaceTestIds.toolbarUpload} disabled={busy || !attachment.canUseVehicleActions || !canUseVehicleActions || !hasContent} onclick={onUploadToVehicle} aria-label="Write to vehicle" title="Write to vehicle" type="button">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V10"/><path d="m7 13 5-5 5 5"/><path d="M5 3h14"/></svg>
   </button>
@@ -181,4 +190,59 @@ let replayReadonly = $derived(attachment.kind === "playback-readonly");
   .mission-toolbar__text-btn:hover:not(:disabled) { border-color: var(--color-accent); color: var(--color-accent); }
   .mission-toolbar__text-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .mission-toolbar__text-btn--warning { border-color: var(--color-warning); color: var(--color-warning); }
+
+  /* Secondary action overflow: desktop renders inline, phone collapses behind <details>. */
+  .mission-toolbar__secondary--desktop {
+    display: contents;
+  }
+
+  .mission-toolbar__secondary--phone {
+    display: none;
+    position: relative;
+  }
+
+  .mission-toolbar__secondary--phone .mission-toolbar__more-btn {
+    list-style: none;
+    cursor: pointer;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .mission-toolbar__secondary--phone .mission-toolbar__more-btn::-webkit-details-marker {
+    display: none;
+  }
+
+  .mission-toolbar__secondary--phone[open] .mission-toolbar__more-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-bg-secondary);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .mission-toolbar__secondary--phone .mission-toolbar__more-list {
+    display: none;
+  }
+
+  @media (max-width: 767px) {
+    .mission-toolbar__secondary--desktop {
+      display: none;
+    }
+
+    .mission-toolbar__secondary--phone {
+      display: inline-block;
+    }
+  }
 </style>
