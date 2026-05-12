@@ -27,6 +27,7 @@ import type {
 import { selectTelemetryView } from "../../lib/telemetry-selectors";
 import SetupBitmaskChecklist from "./shared/SetupBitmaskChecklist.svelte";
 import SetupPreviewStagePanel from "./shared/SetupPreviewStagePanel.svelte";
+import SetupSectionShell from "./SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 let {
@@ -223,16 +224,13 @@ function stagePreset() {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.flightModesSection}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Six-slot mode editing with truthful live availability</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Flight-mode slots stay mapped to the live available-mode list for the current vehicle family. Presets, mode-switch channel changes, and Simple/Super Simple toggles all queue through the shared review tray instead of applying directly.
-      </p>
-    </div>
-
+<SetupSectionShell
+  eyebrow={section.title}
+  title="Six-slot mode editing with truthful live availability"
+  description="Flight-mode slots stay mapped to the live available-mode list for the current vehicle family. Presets, mode-switch channel changes, and Simple/Super Simple toggles all queue through the shared review tray instead of applying directly."
+  testId={setupWorkspaceTestIds.flightModesSection}
+>
+  {#snippet actions()}
     {#if docsUrl}
       <a
         class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
@@ -244,12 +242,14 @@ function stagePreset() {
         Flight-mode docs
       </a>
     {/if}
-  </div>
+  {/snippet}
 
-  <div
-    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
-    data-testid={setupWorkspaceTestIds.flightModesSummary}
-  >
+  {#snippet body()}
+    <div class="setup-flight-modes-body">
+      <div
+        class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
+        data-testid={setupWorkspaceTestIds.flightModesSummary}
+      >
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Available modes</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.flightModesAvailabilityState}>
@@ -486,9 +486,19 @@ function stagePreset() {
 
     {#if simpleDocsUrl}
       <p class="text-xs leading-5 text-text-muted">
-        Simple and Super Simple remain copter-only because they depend on compass/home orientation. 
+        Simple and Super Simple remain copter-only because they depend on compass/home orientation.
         <a class="font-semibold text-accent hover:underline" href={simpleDocsUrl} rel="noreferrer" target="_blank">Read the ArduPilot guidance</a>.
       </p>
     {/if}
   {/if}
-</section>
+    </div>
+  {/snippet}
+</SetupSectionShell>
+
+<style>
+.setup-flight-modes-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+</style>
