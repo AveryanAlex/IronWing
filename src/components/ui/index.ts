@@ -13,3 +13,8 @@ export { default as MetricTile } from "./MetricTile.svelte";
 export { default as MetricGroup } from "./MetricGroup.svelte";
 export { default as EmptyState } from "./EmptyState.svelte";
 export { default as LoadingState } from "./LoadingState.svelte";
+export { default as WorkspaceShell } from "./WorkspaceShell.svelte";
+export { default as WorkspaceHeader } from "./WorkspaceHeader.svelte";
+export { default as WorkspaceBody } from "./WorkspaceBody.svelte";
+export { default as WorkspacePanel } from "./WorkspacePanel.svelte";
+export { default as WorkspaceGrid } from "./WorkspaceGrid.svelte";
