@@ -282,7 +282,6 @@ async function handleDisarm() {
   {/snippet}
 
   {#snippet body()}
-    <div class="setup-arming-body">
       <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
     <div
       class="rounded-lg border border-border bg-bg-primary/80 p-3"
@@ -498,14 +497,5 @@ async function handleDisarm() {
           </div>
         </article>
       </div>
-    </div>
   {/snippet}
 </SetupSectionShell>
-
-<style>
-.setup-arming-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-</style>

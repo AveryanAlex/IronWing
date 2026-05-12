@@ -62,7 +62,6 @@ function cardTone(card: SetupWorkspaceCalibrationCard): string {
   testId={setupWorkspaceTestIds.calibrationSection}
 >
   {#snippet body()}
-    <div class="setup-calibration-body">
       {#if actionError}
         <Banner severity="danger" title={actionError} />
       {/if}
@@ -127,14 +126,5 @@ function cardTone(card: SetupWorkspaceCalibrationCard): string {
           </article>
         {/each}
       </div>
-    </div>
   {/snippet}
 </SetupSectionShell>
-
-<style>
-.setup-calibration-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-</style>

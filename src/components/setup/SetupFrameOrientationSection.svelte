@@ -480,7 +480,6 @@ function buildFrameBanners(input: {
   {/snippet}
 
   {#snippet body()}
-    <div class="setup-frame-body">
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
         data-testid={setupWorkspaceTestIds.frameSummary}
@@ -727,14 +726,5 @@ function buildFrameBanners(input: {
       </button>
     </div>
   {/if}
-    </div>
   {/snippet}
 </SetupSectionShell>
-
-<style>
-.setup-frame-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-</style>

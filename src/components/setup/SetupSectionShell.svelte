@@ -29,7 +29,7 @@ let { eyebrow, title, description, status, testId, body, actions }: Props = $pro
     <Banner severity={status.severity} title={status.title} message={status.message} />
   {/if}
   <Panel>
-    {@render body()}
+    <div class="setup-section__body">{@render body()}</div>
   </Panel>
 </section>
 
@@ -39,6 +39,11 @@ let { eyebrow, title, description, status, testId, body, actions }: Props = $pro
   flex-direction: column;
   gap: var(--space-4);
   padding: var(--space-5);
+}
+.setup-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 @media (max-width: 767px) {
   .setup-section {

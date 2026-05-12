@@ -245,7 +245,6 @@ function stagePreset() {
   {/snippet}
 
   {#snippet body()}
-    <div class="setup-flight-modes-body">
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
         data-testid={setupWorkspaceTestIds.flightModesSummary}
@@ -491,14 +490,5 @@ function stagePreset() {
       </p>
     {/if}
   {/if}
-    </div>
   {/snippet}
 </SetupSectionShell>
-
-<style>
-.setup-flight-modes-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-</style>

@@ -591,7 +591,6 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
   {/snippet}
 
   {#snippet body()}
-    <div class="setup-servo-outputs-body">
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 xl:grid-cols-4"
         data-testid={setupWorkspaceTestIds.servoOutputsSummary}
@@ -947,14 +946,5 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
       </div>
     </div>
   {/if}
-    </div>
   {/snippet}
 </SetupSectionShell>
-
-<style>
-.setup-servo-outputs-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-</style>

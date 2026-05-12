@@ -432,7 +432,6 @@ function round3(value: number): number {
   {/snippet}
 
   {#snippet body()}
-    <div class="setup-battery-body">
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
         data-testid={setupWorkspaceTestIds.batterySummary}
@@ -843,14 +842,5 @@ function round3(value: number): number {
           </button>
         </div>
       {/if}
-    </div>
   {/snippet}
 </SetupSectionShell>
-
-<style>
-.setup-battery-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-</style>

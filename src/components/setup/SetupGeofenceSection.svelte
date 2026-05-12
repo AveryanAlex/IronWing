@@ -275,7 +275,6 @@ function toggleFenceType(bit: number) {
   {/snippet}
 
   {#snippet body()}
-    <div class="setup-geofence-body">
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
         data-testid={setupWorkspaceTestIds.geofenceSummary}
@@ -430,14 +429,5 @@ function toggleFenceType(bit: number) {
       </article>
     {/each}
       </div>
-    </div>
   {/snippet}
 </SetupSectionShell>
-
-<style>
-.setup-geofence-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-</style>

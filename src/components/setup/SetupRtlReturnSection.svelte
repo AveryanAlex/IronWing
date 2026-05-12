@@ -370,7 +370,6 @@ function stage(field: RtlFieldConfig) {
   {/snippet}
 
   {#snippet body()}
-    <div class="setup-rtl-return-body">
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
         data-testid={setupWorkspaceTestIds.rtlReturnSummary}
@@ -493,14 +492,5 @@ function stage(field: RtlFieldConfig) {
       </article>
     {/each}
       </div>
-    </div>
   {/snippet}
 </SetupSectionShell>
-
-<style>
-.setup-rtl-return-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-</style>

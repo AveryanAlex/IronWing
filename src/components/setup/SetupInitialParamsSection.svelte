@@ -193,7 +193,6 @@ function resolvedInputText(): string {
   {/snippet}
 
   {#snippet body()}
-    <div class="setup-initial-params-body">
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
         data-testid={setupWorkspaceTestIds.initialParamsSummary}
@@ -358,14 +357,5 @@ function resolvedInputText(): string {
       </button>
     </div>
   {/if}
-    </div>
   {/snippet}
 </SetupSectionShell>
-
-<style>
-.setup-initial-params-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-</style>

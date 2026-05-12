@@ -572,7 +572,6 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
   {/snippet}
 
   {#snippet body()}
-    <div class="setup-motors-esc-body">
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
         data-testid={setupWorkspaceTestIds.motorsEscSummary}
@@ -794,14 +793,5 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
       {/each}
     </div>
   {/if}
-    </div>
   {/snippet}
 </SetupSectionShell>
-
-<style>
-.setup-motors-esc-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-</style>

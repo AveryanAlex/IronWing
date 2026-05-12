@@ -143,7 +143,6 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
   {/snippet}
 
   {#snippet body()}
-    <div class="setup-rc-body">
       <div class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-[minmax(0,1fr)_auto]">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Live receiver state</p>
@@ -369,14 +368,5 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
       </article>
     </div>
   </div>
-    </div>
   {/snippet}
 </SetupSectionShell>
-
-<style>
-.setup-rc-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-</style>

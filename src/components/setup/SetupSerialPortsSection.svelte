@@ -176,7 +176,6 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
   {/snippet}
 
   {#snippet body()}
-    <div class="setup-serial-ports-body">
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
         data-testid={setupWorkspaceTestIds.serialPortsSummary}
@@ -343,14 +342,5 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
       {/each}
     </div>
   {/if}
-    </div>
   {/snippet}
 </SetupSectionShell>
-
-<style>
-.setup-serial-ports-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-</style>
