@@ -13,6 +13,7 @@ import {
   createFirmwareWorkspaceStore,
   type FirmwareWorkspaceStore,
 } from "../../lib/stores/firmware-workspace";
+import { Banner, StatusPill, WorkspaceHeader, WorkspaceShell } from "../ui";
 import FirmwareOutcomePanel from "./FirmwareOutcomePanel.svelte";
 import FirmwareRecoveryPanel from "./FirmwareRecoveryPanel.svelte";
 import FirmwareSerialPanel from "./FirmwareSerialPanel.svelte";
@@ -122,32 +123,29 @@ $effect(() => {
 });
 </script>
 
-<section
-  class="firmware-workspace"
-  data-actions-enabled={layout.actionsEnabled ? "true" : "false"}
-  data-layout-mode={layout.mode}
-  data-testid={firmwareWorkspaceTestIds.root}
->
-  <div class="flex flex-wrap items-start justify-between gap-4">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Firmware workspace</p>
-      <h2 class="mt-2 text-2xl font-semibold text-text-primary">Install / Update and DFU recovery</h2>
-      <p class="mt-2 max-w-4xl text-sm leading-relaxed text-text-secondary">
-        Keep normal serial install/update and DFU bootloader rescue as separate operator paths while preserving exact retry, source, and outcome facts across workspace switches.
-      </p>
-    </div>
+<WorkspaceShell mode="inset" testId={firmwareWorkspaceTestIds.root}>
+  <div
+    aria-hidden="true"
+    class="hidden"
+    data-actions-enabled={layout.actionsEnabled ? "true" : "false"}
+    data-layout-mode={layout.mode}
+  ></div>
 
-    <div
-      class={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] ${effectiveMode === "install"
-        ? "border-accent/30 bg-accent/10 text-accent"
-        : "border-warning/30 bg-warning/10 text-warning"}`}
-      data-testid={firmwareWorkspaceTestIds.mode}
-    >
-      {effectiveMode === "install" ? "install-update" : "dfu-recovery"}
-    </div>
-  </div>
+  <WorkspaceHeader
+    eyebrow="Firmware workspace"
+    title="Install / Update and DFU recovery"
+    description="Keep normal serial install/update and DFU bootloader rescue as separate operator paths while preserving exact retry, source, and outcome facts across workspace switches."
+  >
+    {#snippet status()}
+      <div data-testid={firmwareWorkspaceTestIds.mode}>
+        <StatusPill tone={effectiveMode === "install" ? "info" : "warning"}>
+          {effectiveMode === "install" ? "install-update" : "dfu-recovery"}
+        </StatusPill>
+      </div>
+    {/snippet}
+  </WorkspaceHeader>
 
-  <div class="mt-4 grid gap-3 md:grid-cols-2">
+  <div class="grid gap-3 md:grid-cols-2">
     <button
       aria-pressed={effectiveMode === "install"}
       class={`rounded-lg border px-4 py-3 text-left transition ${effectiveMode === "install"
@@ -180,36 +178,36 @@ $effect(() => {
   </div>
 
   {#if !layout.actionsEnabled}
-    <div
-      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm text-warning"
-      data-testid={firmwareWorkspaceTestIds.blockedCopy}
-    >
-      <p class="font-semibold" data-testid={firmwareWorkspaceTestIds.blockedReason}>{layout.blockedTitle}</p>
-      <p class="mt-1">{layout.blockedDetail}</p>
+    <div data-testid={firmwareWorkspaceTestIds.blockedCopy}>
+      <Banner
+        severity="warning"
+        title={layout.blockedTitle ?? "Firmware actions blocked"}
+        message={layout.blockedDetail ?? undefined}
+      />
+      <span aria-hidden="true" class="hidden" data-testid={firmwareWorkspaceTestIds.blockedReason}>{layout.blockedTitle}</span>
     </div>
   {/if}
 
   {#if replayReadonly}
-    <div class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm text-warning" data-testid="firmware-replay-readonly-banner">
-      <p class="font-semibold">{REPLAY_READONLY_TITLE}</p>
-      <p class="mt-1">{REPLAY_READONLY_COPY}</p>
-    </div>
+    <Banner
+      severity="warning"
+      title={REPLAY_READONLY_TITLE}
+      message={REPLAY_READONLY_COPY}
+      testId="firmware-replay-readonly-banner"
+    />
   {/if}
 
   {#if workspaceState.lastError}
-    <div class="mt-4 rounded-lg border border-danger/40 bg-danger/10 px-4 py-4 text-sm text-danger">
-      {workspaceState.lastError}
-    </div>
+    <Banner severity="danger" title={workspaceState.lastError} />
   {/if}
 
   {#if showReturnGuidance}
-    <div
-      class="mt-4 rounded-lg border border-success/30 bg-success/10 px-4 py-4 text-sm text-success"
-      data-testid={firmwareWorkspaceTestIds.returnGuidance}
-    >
-      <p class="font-semibold">Bootloader recovery verified</p>
-      <p class="mt-1">Return to Install / Update now, reconnect over serial if needed, and flash the normal flight firmware. The recovery outcome remains visible below until you dismiss it.</p>
-    </div>
+    <Banner
+      severity="success"
+      title="Bootloader recovery verified"
+      message="Return to Install / Update now, reconnect over serial if needed, and flash the normal flight firmware. The recovery outcome remains visible below until you dismiss it."
+      testId={firmwareWorkspaceTestIds.returnGuidance}
+    />
   {/if}
 
   <div aria-hidden="true" class="hidden">
@@ -218,23 +216,13 @@ $effect(() => {
     <span data-testid={firmwareWorkspaceTestIds.layoutTierMismatch}>{layout.tierMismatch ? "mismatch" : "match"}</span>
   </div>
 
-  <div class="mt-4 grid gap-4">
+  <div class="grid gap-4">
     {#if effectiveMode === "install"}
       <FirmwareSerialPanel {fileIo} layout={layout} {replayReadonly} {service} {store} />
     {:else}
       <FirmwareRecoveryPanel {fileIo} layout={layout} {replayReadonly} {service} {store} />
     {/if}
 
-		<FirmwareOutcomePanel state={workspaceState} {store} />
+    <FirmwareOutcomePanel state={workspaceState} {store} />
   </div>
-</section>
-
-<style>
-  .firmware-workspace {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow-y: auto;
-  }
-</style>
+</WorkspaceShell>
