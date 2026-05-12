@@ -1,4 +1,5 @@
 <script lang="ts">
+import { Tooltip } from "../../components/ui";
 import { runtimeTestIds } from "../../lib/stores/runtime";
 import { appShellTestIds, type ShellTier } from "./chrome-state";
 import type { AppShellWorkspace } from "./app-shell-controller";
@@ -101,48 +102,52 @@ function connectionIndicatorClass(tone: ConnectionTone): string {
     </div>
 
     {#if showVehiclePanelButton}
-      <button
-        aria-controls="vehicle-panel-drawer"
-        aria-expanded={vehiclePanelOpen}
-        class="app-shell-mobile-toggle"
-        data-testid={appShellTestIds.vehiclePanelButton}
-        onclick={handleVehiclePanelToggle}
-        type="button"
-      >
-        Vehicle panel
-      </button>
+      <Tooltip label={vehiclePanelOpen ? "Close vehicle panel" : "Open vehicle panel"} side="bottom">
+        <button
+          aria-controls="vehicle-panel-drawer"
+          aria-expanded={vehiclePanelOpen}
+          class="app-shell-mobile-toggle"
+          data-testid={appShellTestIds.vehiclePanelButton}
+          onclick={handleVehiclePanelToggle}
+          type="button"
+        >
+          Vehicle panel
+        </button>
+      </Tooltip>
     {/if}
   </div>
 
   <nav aria-label="Primary" class="app-shell-tabs">
     {#each workspaces as workspace (workspace.key)}
-      <button
-        aria-label={workspace.label}
-        aria-pressed={activeWorkspace === workspace.key}
-        class={`app-shell-tab ${activeWorkspace === workspace.key ? "is-active" : ""}`}
-        data-testid={
-          workspace.key === "overview"
-            ? appShellTestIds.overviewWorkspaceButton
-            : workspace.key === "setup"
-              ? appShellTestIds.parameterWorkspaceButton
-              : undefined
-        }
-        onclick={() => onSelectWorkspace(workspace.key)}
-        type="button"
-      >
-        <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d={workspaceIconPath(workspace.key)} />
-        </svg>
-        <span class="app-shell-tab__label">{workspace.label}</span>
-        {#if workspace.key === "setup" && stagedCount > 0}
-          <span
-            class={`app-shell-tab__badge ${activeWorkspace === "setup" ? "is-active" : ""}`}
-            data-testid={appShellTestIds.parameterWorkspacePendingCount}
-          >
-            {stagedCount}
-          </span>
-        {/if}
-      </button>
+      <Tooltip label={workspace.label} side="bottom">
+        <button
+          aria-label={workspace.label}
+          aria-pressed={activeWorkspace === workspace.key}
+          class={`app-shell-tab ${activeWorkspace === workspace.key ? "is-active" : ""}`}
+          data-testid={
+            workspace.key === "overview"
+              ? appShellTestIds.overviewWorkspaceButton
+              : workspace.key === "setup"
+                ? appShellTestIds.parameterWorkspaceButton
+                : undefined
+          }
+          onclick={() => onSelectWorkspace(workspace.key)}
+          type="button"
+        >
+          <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d={workspaceIconPath(workspace.key)} />
+          </svg>
+          <span class="app-shell-tab__label">{workspace.label}</span>
+          {#if workspace.key === "setup" && stagedCount > 0}
+            <span
+              class={`app-shell-tab__badge ${activeWorkspace === "setup" ? "is-active" : ""}`}
+              data-testid={appShellTestIds.parameterWorkspacePendingCount}
+            >
+              {stagedCount}
+            </span>
+          {/if}
+        </button>
+      </Tooltip>
     {/each}
   </nav>
 

@@ -15,8 +15,12 @@ let { label, side = "top", delayMs = 250, testId, children }: Props = $props();
 
 <Bits.Provider delayDuration={delayMs}>
   <Bits.Root>
-    <Bits.Trigger class="ui-tooltip__trigger">
-      {@render children()}
+    <Bits.Trigger>
+      {#snippet child({ props })}
+        <span class="ui-tooltip__trigger" {...props}>
+          {@render children()}
+        </span>
+      {/snippet}
     </Bits.Trigger>
     <Bits.Portal>
       <Bits.Content class="ui-tooltip__content" {side} data-testid={testId} sideOffset={6}>
