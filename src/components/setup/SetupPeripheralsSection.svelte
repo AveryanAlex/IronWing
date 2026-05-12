@@ -14,6 +14,7 @@ import type {
   SetupWorkspaceStoreState,
 } from "../../lib/stores/setup-workspace";
 import ParameterExpertRowComponent from "../params/ParameterExpertRow.svelte";
+import SetupSectionShell from "./SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 type PeripheralGroupDef = {
@@ -356,43 +357,40 @@ function discardItem(name: string) {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.peripheralsSection}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Curated peripheral inventory with configured-only filtering</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Peripheral setup stays inventory-first here: known hardware families and discovered extras remain grouped, visible, and staged through the shared review tray without dropping into a generic raw-parameter browser.
-      </p>
-    </div>
-
-    <div class="flex flex-wrap gap-2">
-      <button
-        class={`rounded-md border px-4 py-2 text-sm font-semibold transition ${showConfiguredOnly ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-primary/80 text-text-primary hover:border-accent hover:text-accent"}`}
-        data-testid={setupWorkspaceTestIds.peripheralsFilter}
-        onclick={() => (showConfiguredOnly = !showConfiguredOnly)}
-        type="button"
+<SetupSectionShell
+  eyebrow={section.title}
+  title="Curated peripheral inventory with configured-only filtering"
+  description="Peripheral setup stays inventory-first here: known hardware families and discovered extras remain grouped, visible, and staged through the shared review tray without dropping into a generic raw-parameter browser."
+  testId={setupWorkspaceTestIds.peripheralsSection}
+>
+  {#snippet actions()}
+    <button
+      class={`rounded-md border px-4 py-2 text-sm font-semibold transition ${showConfiguredOnly ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-primary/80 text-text-primary hover:border-accent hover:text-accent"}`}
+      data-testid={setupWorkspaceTestIds.peripheralsFilter}
+      onclick={() => (showConfiguredOnly = !showConfiguredOnly)}
+      type="button"
+    >
+      {showConfiguredOnly ? "Configured only" : "Show all groups"}
+    </button>
+    {#if docsUrl}
+      <a
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        data-testid={setupWorkspaceTestIds.peripheralsDocsLink}
+        href={docsUrl}
+        rel="noreferrer"
+        target="_blank"
       >
-        {showConfiguredOnly ? "Configured only" : "Show all groups"}
-      </button>
-      {#if docsUrl}
-        <a
-          class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-          data-testid={setupWorkspaceTestIds.peripheralsDocsLink}
-          href={docsUrl}
-          rel="noreferrer"
-          target="_blank"
-        >
-          Optional-hardware docs
-        </a>
-      {/if}
-    </div>
-  </div>
+        Optional-hardware docs
+      </a>
+    {/if}
+  {/snippet}
 
-  <div
-    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
-    data-testid={setupWorkspaceTestIds.peripheralsSummary}
-  >
+  {#snippet body()}
+    <div class="setup-peripherals-body">
+      <div
+        class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
+        data-testid={setupWorkspaceTestIds.peripheralsSummary}
+      >
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Visible groups</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{visibleGroups.length}</p>
@@ -490,4 +488,14 @@ function discardItem(name: string) {
       {/each}
     </div>
   {/if}
-</section>
+    </div>
+  {/snippet}
+</SetupSectionShell>
+
+<style>
+.setup-peripherals-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+</style>
