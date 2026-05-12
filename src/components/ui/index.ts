@@ -29,3 +29,5 @@ export { default as Dialog } from "./Dialog.svelte";
 export { default as Menu } from "./Menu.svelte";
 export type { MenuItem } from "./menu-types";
 export { default as Tooltip } from "./Tooltip.svelte";
+export { default as Select } from "./Select.svelte";
+export type { SelectOption } from "./select-types";
