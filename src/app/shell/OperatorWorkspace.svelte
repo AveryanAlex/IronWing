@@ -2,7 +2,7 @@
 import { fromStore } from "svelte/store";
 
 import type { OperatorMetricView } from "../../lib/telemetry-selectors";
-import SplitPane from "../../components/shared/SplitPane.svelte";
+import { SplitPane } from "../../components/ui";
 import OverviewMap from "../../components/overview/OverviewMap.svelte";
 import { appShellTestIds } from "./chrome-state";
 import {

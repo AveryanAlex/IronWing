@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { HomePosition } from "../../mission";
 import type { MissionPlannerAttachmentState, MissionPlannerMode } from "../../lib/stores/mission-planner";
-import InfoWidget from "../shared/InfoWidget.svelte";
+import { InfoWidget } from "../ui";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
 type Props = {

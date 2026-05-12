@@ -23,3 +23,5 @@ export { default as Toolbar } from "./Toolbar.svelte";
 export { default as ToolbarGroup } from "./ToolbarGroup.svelte";
 export { default as ResponsiveTabs } from "./ResponsiveTabs.svelte";
 export { default as MobileSheet } from "./MobileSheet.svelte";
+export { default as InfoWidget } from "./InfoWidget.svelte";
+export { default as SplitPane } from "./SplitPane.svelte";

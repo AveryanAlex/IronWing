@@ -39,7 +39,7 @@ import MissionRallyDraftList from "./MissionRallyDraftList.svelte";
 import MissionRallyInspector from "./MissionRallyInspector.svelte";
 import MissionTerrainProfilePanel from "./MissionTerrainProfilePanel.svelte";
 import MissionWorkspaceHeader from "./MissionWorkspaceHeader.svelte";
-import SplitPane from "../shared/SplitPane.svelte";
+import { SplitPane } from "../ui";
 import {
   missionWorkspaceFallbackChromeState,
   resolveMissionWorkspaceLayout,
