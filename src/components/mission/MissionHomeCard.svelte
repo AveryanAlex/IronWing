@@ -1,7 +1,12 @@
 <script lang="ts">
+import { fromStore, readable, type Readable } from "svelte/store";
+
 import type { HomePosition } from "../../mission";
 import type { MissionPlannerAttachmentState, MissionPlannerMode } from "../../lib/stores/mission-planner";
-import { InfoWidget } from "../ui";
+import type { ShellChromeState } from "../../app/shell/chrome-state";
+import { getShellChromeStoreContext } from "../../app/shell/runtime-context";
+import { Badge, Button, FieldRow, InfoWidget, Panel, SectionHeader } from "../ui";
+import { missionWorkspaceFallbackChromeState } from "./mission-workspace-layout";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
 type Props = {
@@ -14,6 +19,17 @@ type Props = {
 };
 
 let { home, selected, mode, attachment, onSelect, onChange }: Props = $props();
+
+function resolveChromeStore(): Readable<ShellChromeState> {
+  try {
+    return getShellChromeStoreContext();
+  } catch {
+    return readable(missionWorkspaceFallbackChromeState);
+  }
+}
+
+const chrome = fromStore(resolveChromeStore());
+let isPhone = $derived(chrome.current.tier === "phone");
 
 let validationMessage = $state<string | null>(null);
 let draftSourceKey = $state<string | null>(null);
@@ -48,6 +64,12 @@ let latitude = $derived(draftSourceKey === syncKey && latitudeDraft !== null ? l
 let longitude = $derived(draftSourceKey === syncKey && longitudeDraft !== null ? longitudeDraft : baseLongitude);
 let altitude = $derived(draftSourceKey === syncKey && altitudeDraft !== null ? altitudeDraft : baseAltitude);
 let visibleValidationMessage = $derived(draftSourceKey === syncKey ? validationMessage : null);
+let homeStatusLabel = $derived(home ? "Home set" : "Home not set");
+let homeSummary = $derived(
+  home
+    ? `${home.latitude_deg.toFixed(5)}, ${home.longitude_deg.toFixed(5)} · ${home.altitude_m.toFixed(1)} m`
+    : `Set a Home position explicitly for this ${modeLabel} draft; incomplete values stay local until all three fields are valid.`,
+);
 
 function beginDraft() {
   if (draftSourceKey === syncKey) {
@@ -126,17 +148,30 @@ function handleEnter(event: KeyboardEvent) {
 }
 </script>
 
-<section
-  class={`rounded-lg border p-2.5 transition ${selected
-    ? "border-accent/40 bg-accent/10"
-    : "border-border bg-bg-primary"}`}
+<div
+  class="mission-home"
+  class:is-selected={selected}
   data-selected={selected ? "true" : "false"}
-  data-testid={missionWorkspaceTestIds.homeCard}
 >
-  <div class="flex flex-wrap items-start justify-between gap-2.5">
-    <div class="min-w-0 flex-1">
-      <div class="flex flex-wrap items-center gap-2">
-        <h3 class="text-sm font-semibold text-text-primary">Home</h3>
+  <Panel testId={missionWorkspaceTestIds.homeCard}>
+    <header class="mission-home__header">
+      <SectionHeader eyebrow="Home" title={homeStatusLabel}>
+        {#snippet actions()}
+          <Button
+            disabled={readOnly}
+            onclick={() => {
+              onSelect();
+              clearHome();
+            }}
+            size="sm"
+            testId={missionWorkspaceTestIds.homeClear}
+            tone="neutral"
+          >
+            Clear
+          </Button>
+        {/snippet}
+      </SectionHeader>
+      <div class="mission-home__info">
         <InfoWidget
           align="right"
           contentTestId={missionWorkspaceTestIds.homeSync}
@@ -146,99 +181,218 @@ function handleEnter(event: KeyboardEvent) {
           title="Shared planning context"
         />
       </div>
-      <p class="mt-1 text-xs text-text-secondary" data-testid={missionWorkspaceTestIds.homeSummary}>
-        {home
-          ? `${home.latitude_deg.toFixed(5)}, ${home.longitude_deg.toFixed(5)} · ${home.altitude_m.toFixed(1)} m`
-          : `Set a Home position explicitly for this ${modeLabel} draft; incomplete values stay local until all three fields are valid.`}
+    </header>
+
+    <p class="mission-home__summary" data-testid={missionWorkspaceTestIds.homeSummary}>
+      {homeSummary}
+    </p>
+
+    {#if readOnlyMessage}
+      <Badge testId={missionWorkspaceTestIds.homeReadOnly} tone="warning">{readOnlyMessage}</Badge>
+    {/if}
+
+    {#if isPhone}
+      <div class="mission-home__row mission-home__row--compact">
+        <label class="mission-home__field">
+          <span>Lat</span>
+          <input
+            class="mission-home__input"
+            data-testid={missionWorkspaceTestIds.homeLatitude}
+            disabled={readOnly}
+            inputmode="decimal"
+            onblur={commitHome}
+            onfocus={() => {
+              onSelect();
+              beginDraft();
+            }}
+            onkeydown={handleEnter}
+            oninput={(event) => {
+              beginDraft();
+              latitudeDraft = (event.currentTarget as HTMLInputElement).value;
+            }}
+            type="text"
+            value={latitude}
+          />
+        </label>
+        <label class="mission-home__field">
+          <span>Lon</span>
+          <input
+            class="mission-home__input"
+            data-testid={missionWorkspaceTestIds.homeLongitude}
+            disabled={readOnly}
+            inputmode="decimal"
+            onblur={commitHome}
+            onfocus={() => {
+              onSelect();
+              beginDraft();
+            }}
+            onkeydown={handleEnter}
+            oninput={(event) => {
+              beginDraft();
+              longitudeDraft = (event.currentTarget as HTMLInputElement).value;
+            }}
+            type="text"
+            value={longitude}
+          />
+        </label>
+        <label class="mission-home__field">
+          <span>Alt</span>
+          <input
+            class="mission-home__input"
+            data-testid={missionWorkspaceTestIds.homeAltitude}
+            disabled={readOnly}
+            inputmode="decimal"
+            onblur={commitHome}
+            onfocus={() => {
+              onSelect();
+              beginDraft();
+            }}
+            onkeydown={handleEnter}
+            oninput={(event) => {
+              beginDraft();
+              altitudeDraft = (event.currentTarget as HTMLInputElement).value;
+            }}
+            type="text"
+            value={altitude}
+          />
+        </label>
+      </div>
+    {:else}
+      <FieldRow label="Latitude" layout="row">
+        {#snippet control()}
+          <input
+            class="mission-home__input"
+            data-testid={missionWorkspaceTestIds.homeLatitude}
+            disabled={readOnly}
+            inputmode="decimal"
+            onblur={commitHome}
+            onfocus={() => {
+              onSelect();
+              beginDraft();
+            }}
+            onkeydown={handleEnter}
+            oninput={(event) => {
+              beginDraft();
+              latitudeDraft = (event.currentTarget as HTMLInputElement).value;
+            }}
+            type="text"
+            value={latitude}
+          />
+        {/snippet}
+      </FieldRow>
+      <FieldRow label="Longitude" layout="row">
+        {#snippet control()}
+          <input
+            class="mission-home__input"
+            data-testid={missionWorkspaceTestIds.homeLongitude}
+            disabled={readOnly}
+            inputmode="decimal"
+            onblur={commitHome}
+            onfocus={() => {
+              onSelect();
+              beginDraft();
+            }}
+            onkeydown={handleEnter}
+            oninput={(event) => {
+              beginDraft();
+              longitudeDraft = (event.currentTarget as HTMLInputElement).value;
+            }}
+            type="text"
+            value={longitude}
+          />
+        {/snippet}
+      </FieldRow>
+      <FieldRow label="Altitude (m)" layout="row">
+        {#snippet control()}
+          <input
+            class="mission-home__input"
+            data-testid={missionWorkspaceTestIds.homeAltitude}
+            disabled={readOnly}
+            inputmode="decimal"
+            onblur={commitHome}
+            onfocus={() => {
+              onSelect();
+              beginDraft();
+            }}
+            onkeydown={handleEnter}
+            oninput={(event) => {
+              beginDraft();
+              altitudeDraft = (event.currentTarget as HTMLInputElement).value;
+            }}
+            type="text"
+            value={altitude}
+          />
+        {/snippet}
+      </FieldRow>
+    {/if}
+
+    {#if visibleValidationMessage}
+      <p class="mission-home__validation" data-testid={missionWorkspaceTestIds.homeValidation}>
+        {visibleValidationMessage}
       </p>
-      {#if readOnlyMessage}
-        <p class="mt-1.5 text-xs text-warning" data-testid={missionWorkspaceTestIds.homeReadOnly}>{readOnlyMessage}</p>
-      {/if}
-    </div>
+    {/if}
+  </Panel>
+</div>
 
-    <button
-      class="rounded-md border border-border bg-bg-secondary px-2.5 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.homeClear}
-      disabled={readOnly}
-      onclick={() => {
-        onSelect();
-        clearHome();
-      }}
-      type="button"
-    >
-      Clear
-    </button>
-  </div>
-
-  <div class="mt-3 grid gap-2 sm:grid-cols-3">
-    <label class="space-y-1">
-      <span class="text-xs font-medium text-text-muted">Latitude</span>
-      <input
-        class="w-full rounded-lg border border-border bg-bg-secondary px-2.5 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
-        data-testid={missionWorkspaceTestIds.homeLatitude}
-        disabled={readOnly}
-        inputmode="decimal"
-        onblur={commitHome}
-        onfocus={() => {
-          onSelect();
-          beginDraft();
-        }}
-        onkeydown={handleEnter}
-        oninput={(event) => {
-          beginDraft();
-          latitudeDraft = (event.currentTarget as HTMLInputElement).value;
-        }}
-        type="text"
-        value={latitude}
-      />
-    </label>
-
-    <label class="space-y-1">
-      <span class="text-xs font-medium text-text-muted">Longitude</span>
-      <input
-        class="w-full rounded-lg border border-border bg-bg-secondary px-2.5 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
-        data-testid={missionWorkspaceTestIds.homeLongitude}
-        disabled={readOnly}
-        inputmode="decimal"
-        onblur={commitHome}
-        onfocus={() => {
-          onSelect();
-          beginDraft();
-        }}
-        onkeydown={handleEnter}
-        oninput={(event) => {
-          beginDraft();
-          longitudeDraft = (event.currentTarget as HTMLInputElement).value;
-        }}
-        type="text"
-        value={longitude}
-      />
-    </label>
-
-    <label class="space-y-1">
-      <span class="text-xs font-medium text-text-muted">Altitude (m)</span>
-      <input
-        class="w-full rounded-lg border border-border bg-bg-secondary px-2.5 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
-        data-testid={missionWorkspaceTestIds.homeAltitude}
-        disabled={readOnly}
-        inputmode="decimal"
-        onblur={commitHome}
-        onfocus={() => {
-          onSelect();
-          beginDraft();
-        }}
-        onkeydown={handleEnter}
-        oninput={(event) => {
-          beginDraft();
-          altitudeDraft = (event.currentTarget as HTMLInputElement).value;
-        }}
-        type="text"
-        value={altitude}
-      />
-    </label>
-  </div>
-
-  {#if visibleValidationMessage}
-    <p class="mt-2 text-xs text-warning" data-testid={missionWorkspaceTestIds.homeValidation}>{visibleValidationMessage}</p>
-  {/if}
-</section>
+<style>
+.mission-home {
+  border-radius: var(--radius-md);
+}
+.mission-home.is-selected :global(.ui-panel) {
+  border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--surface-panel));
+}
+.mission-home__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  justify-content: space-between;
+}
+.mission-home__info {
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+.mission-home__summary {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+.mission-home__row {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.mission-home__field {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  gap: 4px;
+}
+.mission-home__field span {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.mission-home__input {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-light);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: 0.86rem;
+}
+.mission-home__input:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.mission-home__validation {
+  margin: var(--space-2) 0 0;
+  color: var(--color-warning);
+  font-size: 0.78rem;
+}
+</style>
