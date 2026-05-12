@@ -51,7 +51,7 @@ import type { SessionDomain } from "../../session";
 import { formatUnknownError } from "../error-format";
 import { getBrowserStorage, readStorageJson, writeStorageJson } from "../local-storage";
 
-export const SESSION_CONNECTION_STORAGE_KEY = "mpng_connection";
+export const SESSION_CONNECTION_STORAGE_KEY = "ironwing.connection";
 
 export type SessionConnectionFormState = {
   mode: TransportType;
