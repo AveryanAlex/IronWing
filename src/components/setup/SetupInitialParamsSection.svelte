@@ -18,6 +18,7 @@ import type {
   SetupWorkspaceStoreState,
 } from "../../lib/stores/setup-workspace";
 import SetupPreviewStagePanel from "./shared/SetupPreviewStagePanel.svelte";
+import SetupSectionShell from "./SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 let {
@@ -171,16 +172,13 @@ function resolvedInputText(): string {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.initialParamsSection}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Preview starter settings from your vehicle inputs</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Enter prop size, battery chemistry, and cell count to preview starter settings for this vehicle family. Review the suggested batches here, then queue any changes through the review tray.
-      </p>
-    </div>
-
+<SetupSectionShell
+  eyebrow={section.title}
+  title="Preview starter settings from your vehicle inputs"
+  description="Enter prop size, battery chemistry, and cell count to preview starter settings for this vehicle family. Review the suggested batches here, then queue any changes through the review tray."
+  testId={setupWorkspaceTestIds.initialParamsSection}
+>
+  {#snippet actions()}
     {#if docsUrl}
       <a
         class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
@@ -192,12 +190,14 @@ function resolvedInputText(): string {
         Tuning docs
       </a>
     {/if}
-  </div>
+  {/snippet}
 
-  <div
-    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
-    data-testid={setupWorkspaceTestIds.initialParamsSummary}
-  >
+  {#snippet body()}
+    <div class="setup-initial-params-body">
+      <div
+        class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
+        data-testid={setupWorkspaceTestIds.initialParamsSummary}
+      >
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Vehicle family</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.initialParamsFamilyState}>
@@ -358,4 +358,14 @@ function resolvedInputText(): string {
       </button>
     </div>
   {/if}
-</section>
+    </div>
+  {/snippet}
+</SetupSectionShell>
+
+<style>
+.setup-initial-params-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+</style>
