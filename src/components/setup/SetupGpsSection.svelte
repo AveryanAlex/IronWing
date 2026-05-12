@@ -18,6 +18,7 @@ import type {
 import { selectTelemetryView } from "../../lib/telemetry-selectors";
 import type { ParamMeta } from "../../param-metadata";
 import SetupBitmaskChecklist from "./shared/SetupBitmaskChecklist.svelte";
+import SetupSectionShell from "./SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 type EnumOption = { code: number; label: string };
@@ -364,16 +365,13 @@ function formatHdop(value: number | null): string {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.gpsSection}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Review GPS receivers, GNSS options, and lock status</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Check receiver type, optional second-receiver settings, GNSS selections, and live fix quality here. If metadata is missing or a port is unassigned, this section shows what is blocked and where to go next.
-      </p>
-    </div>
-
+<SetupSectionShell
+  eyebrow={section.title}
+  title="Review GPS receivers, GNSS options, and lock status"
+  description="Check receiver type, optional second-receiver settings, GNSS selections, and live fix quality here. If metadata is missing or a port is unassigned, this section shows what is blocked and where to go next."
+  testId={setupWorkspaceTestIds.gpsSection}
+>
+  {#snippet actions()}
     {#if docsUrl}
       <a
         class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
@@ -385,12 +383,14 @@ function formatHdop(value: number | null): string {
         GPS &amp; compass docs
       </a>
     {/if}
-  </div>
+  {/snippet}
 
-  <div
-    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
-    data-testid={setupWorkspaceTestIds.gpsSummary}
-  >
+  {#snippet body()}
+    <div class="setup-gps-body">
+      <div
+        class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
+        data-testid={setupWorkspaceTestIds.gpsSummary}
+      >
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Live GPS state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.gpsLiveState}>
@@ -650,4 +650,14 @@ function formatHdop(value: number | null): string {
       </button>
     </div>
   {/if}
-</section>
+    </div>
+  {/snippet}
+</SetupSectionShell>
+
+<style>
+.setup-gps-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+</style>
