@@ -5,6 +5,7 @@ import { getParamsStoreContext } from "../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../lib/params/parameter-item-model";
 import type { SetupWorkspaceStoreState } from "../../lib/stores/setup-workspace";
+import SetupSectionShell from "./SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 const PRESETS = [
@@ -121,16 +122,13 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.rcSection}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">RC receiver</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Check live channel bars and queue receiver mapping changes</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Watch live PWM movement here, then queue channel-order changes in the review tray. This section shows receiver motion and mapping without applying changes on its own.
-      </p>
-    </div>
-
+<SetupSectionShell
+  eyebrow="RC receiver"
+  title="Check live channel bars and queue receiver mapping changes"
+  description="Watch live PWM movement here, then queue channel-order changes in the review tray. This section shows receiver motion and mapping without applying changes on its own."
+  testId={setupWorkspaceTestIds.rcSection}
+>
+  {#snippet actions()}
     {#if docsUrl}
       <a
         class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
@@ -142,9 +140,11 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
         RC calibration docs
       </a>
     {/if}
-  </div>
+  {/snippet}
 
-  <div class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-[minmax(0,1fr)_auto]">
+  {#snippet body()}
+    <div class="setup-rc-body">
+      <div class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-[minmax(0,1fr)_auto]">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Live receiver state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.rcSignal}>
@@ -369,4 +369,14 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
       </article>
     </div>
   </div>
-</section>
+    </div>
+  {/snippet}
+</SetupSectionShell>
+
+<style>
+.setup-rc-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+</style>
