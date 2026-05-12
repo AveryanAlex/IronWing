@@ -1,0 +1,60 @@
+@theme {
+  --color-bg-primary: #12171d;
+  --color-bg-secondary: #171e27;
+  --color-bg-tertiary: #202a36;
+  --color-bg-input: #101924;
+  --color-border: #263548;
+  --color-border-light: #304154;
+  --color-text-primary: #e6edf3;
+  --color-text-secondary: #9cb2c7;
+  --color-text-muted: #6b8299;
+  --color-accent: #12b9ff;
+  --color-accent-hover: #0ea5e9;
+  --color-danger: #ff4444;
+  --color-warning: #ffb020;
+  --color-success: #57e38b;
+}
+
+:root {
+  --safe-area-top: var(--sat, env(safe-area-inset-top, 0px));
+  --safe-area-bottom: var(--sab, env(safe-area-inset-bottom, 0px));
+
+  --hud-safe-inset: max(env(safe-area-inset-top, 0px), 0.75rem);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+
+  --workspace-gutter-inset: clamp(12px, 1.5vw, 20px);
+  --workspace-gutter-split: 12px;
+
+  --surface-card: var(--color-bg-tertiary);
+  --surface-card-elevated: color-mix(in srgb, var(--color-bg-secondary) 88%, white 4%);
+  --surface-panel: color-mix(in srgb, var(--color-bg-secondary) 88%, transparent);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 18px;
+
+  --control-h-sm: 28px;
+  --control-h-md: 34px;
+  --control-h-lg: 40px;
+
+  --density-row-compact: 36px;
+  --density-row-default: 48px;
+
+  --marker-vehicle: var(--color-danger);
+  --marker-vehicle-stroke: rgba(7, 14, 25, 0.9);
+}
+
+@media (max-width: 767px) {
+  :root {
+    --hud-safe-inset: max(env(safe-area-inset-top, 0px), 1rem);
+  }
+}
