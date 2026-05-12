@@ -1773,9 +1773,11 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
 
   /* WorkspaceShell mode="split" sets padding: 0, so the workspace itself owns the
      outer gutters. SplitPane children apply their own gutters via the
-     map-column / editor-column padding below. */
+     map-column / editor-column padding below. The toolbar header has its
+     own padding and a full-bleed border, so skip it; same for the hidden
+     diagnostic stub and the ready container (its panes pad themselves). */
   .mission-workspace > section,
-  .mission-workspace > div:not(.mission-workspace__ready):not(.hidden) {
+  .mission-workspace > div:not(.mission-workspace__ready):not(.hidden):not([data-testid="mission-workspace-header"]) {
     margin-left: var(--workspace-gutter-split);
     margin-right: var(--workspace-gutter-split);
   }
