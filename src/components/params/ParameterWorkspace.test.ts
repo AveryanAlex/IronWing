@@ -406,7 +406,9 @@ describe("ParameterWorkspace", () => {
         await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
 
         expect(screen.getByTestId(parameterWorkspaceTestIds.expertRoot)).toBeTruthy();
-        expect(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`).tagName).toBe("SELECT");
+        const armingEditor = screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`);
+        expect(armingEditor.tagName).toBe("BUTTON");
+        expect(armingEditor.getAttribute("aria-haspopup")).toBe("listbox");
         expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeNull();
 
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));

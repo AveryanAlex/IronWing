@@ -158,20 +158,59 @@ function highlightSummaryText() {
             </span>
           </div>
 
-          <div class="mt-4 space-y-3">
-            {#each group.rows as row (row.renderId)}
-              <ParameterExpertRowComponent
-                {envelopeKey}
-                onDiscard={onDiscard}
-                onStage={onStage}
-                {replayReadonly}
-                {readiness}
-                {row}
-              />
-            {/each}
+          <div class="param-table mt-4">
+            <div class="param-table__header" aria-hidden="true">
+              <span>Name</span>
+              <span>Label</span>
+              <span>Value</span>
+              <span>Editor</span>
+            </div>
+            <div class="param-table__body">
+              {#each group.rows as row (row.renderId)}
+                <ParameterExpertRowComponent
+                  {envelopeKey}
+                  onDiscard={onDiscard}
+                  onStage={onStage}
+                  {replayReadonly}
+                  {readiness}
+                  {row}
+                />
+              {/each}
+            </div>
           </div>
         </section>
       {/each}
     </div>
   {/if}
 </div>
+
+<style>
+.param-table {
+  display: flex;
+  flex-direction: column;
+}
+.param-table__header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) minmax(80px, 140px) minmax(180px, 260px);
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--space-2);
+  background: color-mix(in srgb, var(--color-bg-secondary) 80%, transparent);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.param-table__body {
+  display: flex;
+  flex-direction: column;
+}
+@media (max-width: 767px) {
+  .param-table__header { display: none; }
+}
+</style>

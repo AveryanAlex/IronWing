@@ -1,8 +1,10 @@
 <script lang="ts">
 import type {
   ParameterExpertBitmaskOption,
+  ParameterExpertEnumOption,
   ParameterExpertRow,
 } from "../../lib/params/parameter-expert-view";
+import { Select } from "../ui";
 import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
 import ParameterExpertBitmaskEditor from "./ParameterExpertBitmaskEditor.svelte";
 
@@ -74,6 +76,17 @@ function submitStage(event: SubmitEvent) {
   props.onStage(props.row, nextValue);
 }
 
+function stageEnumValue(next: string) {
+  draft = next;
+  validationMessage = null;
+  const parsed = Number(next);
+  if (!Number.isFinite(parsed)) {
+    return;
+  }
+
+  props.onStage(props.row, parsed);
+}
+
 let bitmaskDraftValue = $derived.by(() => {
   const nextValue = Number(draft.trim());
   if (Number.isFinite(nextValue) && Number.isInteger(nextValue)) {
@@ -89,152 +102,98 @@ let bitmaskDraftOptions = $derived(
     enabled: Math.floor(bitmaskDraftValue / (2 ** option.bit)) % 2 === 1,
   })),
 );
+
+let enumSelectOptions = $derived(
+  props.row.enumOptions.map((option: ParameterExpertEnumOption) => ({
+    value: String(option.code),
+    label: `${option.code} · ${option.label}`,
+  })),
+);
+
+let displayValueText = $derived(
+  `${props.row.valueText}${props.row.units ? ` ${props.row.units}` : ""}`,
+);
 </script>
 
 <form
-  class={`rounded-md border px-3 py-2.5 ${props.row.isHighlighted ? "border-accent/40 bg-accent/5" : "border-border bg-bg-primary/70"}`}
-  data-highlighted={props.row.isHighlighted}
+  class="param-row"
+  data-failure={props.row.failureMessage ? "" : undefined}
+  data-highlighted={props.row.isHighlighted ? "" : undefined}
   data-param-name={props.row.name}
+  data-readonly={props.row.readOnly ? "" : undefined}
+  data-staged={props.row.isStaged ? "" : undefined}
   data-testid={`${parameterWorkspaceTestIds.itemPrefix}-${props.row.name}`}
   onsubmit={submitStage}
 >
-  <div class="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_auto] xl:items-start">
-    <div class="min-w-0">
-      <div class="flex flex-wrap items-center gap-2">
-        <p class="text-sm font-semibold text-text-primary">{props.row.label}</p>
-        <span class="rounded-full border border-border bg-bg-secondary px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-          {props.row.userLevel === "Unknown" ? "standard" : props.row.userLevel}
+  <div class="param-row__main">
+    <span class="param-row__name">{props.row.rawName}</span>
+    <span class="param-row__label">
+      <span class="param-row__label-text">{props.row.label}</span>
+      {#if props.row.isHighlighted}
+        <span
+          class="param-row__badge param-row__badge--highlight"
+          data-testid={`${parameterWorkspaceTestIds.highlightPrefix}-${props.row.name}`}
+        >
+          workflow handoff
         </span>
-        {#if props.row.isHighlighted}
-          <span
-            class="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent"
-            data-testid={`${parameterWorkspaceTestIds.highlightPrefix}-${props.row.name}`}
-          >
-            workflow handoff
-          </span>
-        {/if}
-        {#if props.row.readOnly}
-          <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-warning">
-            read only
-          </span>
-        {/if}
-      </div>
-      <p class="mt-1 font-mono text-[11px] text-text-muted">{props.row.rawName}</p>
-      {#if props.row.description}
-        <p class="mt-1 text-xs leading-5 text-text-secondary">{props.row.description}</p>
       {/if}
-    </div>
-
-    <div class="min-w-0 xl:text-right">
-      <p class="text-sm font-semibold text-text-primary">
-        {props.row.valueText}{props.row.units ? ` ${props.row.units}` : ""}
-      </p>
-      {#if props.row.valueLabel}
-        <p class="mt-1 text-xs text-text-secondary">{props.row.valueLabel}</p>
+      {#if props.row.readOnly}
+        <span class="param-row__badge param-row__badge--readonly">read only</span>
       {/if}
       {#if props.row.rebootRequired}
-        <p
-          class="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-warning"
+        <span
+          class="param-row__badge param-row__badge--reboot"
           data-testid={`${parameterWorkspaceTestIds.rebootBadgePrefix}-${props.row.name}`}
         >
-          Reboot required
-        </p>
-      {/if}
-    </div>
-    <div class="space-y-2">
-      <label class="block">
-        <span class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-          {props.row.editorKind === "enum" ? "Choose a value" : props.row.editorKind === "bitmask" ? "Bitmask editor" : "Stage a local edit"}
+          reboot
         </span>
-
-        {#if props.row.editorKind === "enum"}
-          <select
-            class="mt-1.5 w-full rounded-md border border-border bg-bg-primary/80 px-2.5 py-2 text-sm text-text-primary outline-none transition focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
-            data-testid={`${parameterWorkspaceTestIds.inputPrefix}-${props.row.name}`}
+      {/if}
+    </span>
+    <span class="param-row__value" title={displayValueText}>
+      {displayValueText}
+    </span>
+    <div class="param-row__actions">
+      {#if props.row.editorKind === "enum"}
+        <div class="param-row__editor param-row__editor--enum">
+          <Select
             disabled={isEditingDisabled()}
-            onchange={(event) => {
-              draft = (event.currentTarget as HTMLSelectElement).value;
-              validationMessage = null;
-            }}
-            value={draft}
-          >
-            {#each props.row.enumOptions as option (`${props.row.name}:${option.code}`)}
-              <option value={String(option.code)}>{option.code} · {option.label}</option>
-            {/each}
-          </select>
-        {:else}
-          <input
-            class="mt-1.5 w-full rounded-md border border-border bg-bg-primary/80 px-2.5 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
-            data-testid={`${parameterWorkspaceTestIds.inputPrefix}-${props.row.name}`}
-            disabled={isEditingDisabled()}
-            max={props.row.range?.max}
-            min={props.row.range?.min}
-            name={`param-${props.row.name}`}
-            oninput={(event) => {
-              draft = (event.currentTarget as HTMLInputElement).value;
-              validationMessage = null;
-            }}
-            placeholder={props.row.valueText}
-            step={props.row.editorKind === "bitmask" ? 1 : props.row.increment ?? "any"}
-            type="number"
+            onChange={stageEnumValue}
+            options={enumSelectOptions}
+            testId={`${parameterWorkspaceTestIds.inputPrefix}-${props.row.name}`}
             value={draft}
           />
-        {/if}
-      </label>
-
-      {#if props.row.editorKind === "bitmask" && props.row.bitmaskOptions.length > 0}
-        <ParameterExpertBitmaskEditor
+        </div>
+      {:else}
+        <input
+          class="param-row__input"
+          data-testid={`${parameterWorkspaceTestIds.inputPrefix}-${props.row.name}`}
           disabled={isEditingDisabled()}
-          onToggle={(nextValue) => {
-            draft = String(nextValue);
+          max={props.row.range?.max}
+          min={props.row.range?.min}
+          name={`param-${props.row.name}`}
+          oninput={(event) => {
+            draft = (event.currentTarget as HTMLInputElement).value;
             validationMessage = null;
           }}
-          options={bitmaskDraftOptions}
-          value={bitmaskDraftValue}
+          placeholder={props.row.valueText}
+          step={props.row.editorKind === "bitmask" ? 1 : props.row.increment ?? "any"}
+          type="number"
+          value={draft}
         />
       {/if}
-    </div>
-
-    <div class="space-y-2 xl:text-right">
-      {#if props.row.isStaged}
-        <div
-          class="rounded-md border border-accent/20 bg-accent/5 px-2.5 py-2 text-xs text-text-secondary"
-          data-testid={`${parameterWorkspaceTestIds.diffPrefix}-${props.row.name}`}
+      {#if props.row.editorKind !== "enum"}
+        <button
+          class="param-row__stage"
+          data-testid={`${parameterWorkspaceTestIds.stageButtonPrefix}-${props.row.name}`}
+          disabled={isEditingDisabled()}
+          type="submit"
         >
-          <span class="text-text-muted">Current </span>
-          <span class="font-mono text-text-muted">
-            {displayValue(props.row.valueText, props.row.valueLabel, props.row.units)}
-          </span>
-          <span class="px-1 text-text-muted">→</span>
-          <span class="font-mono font-semibold text-accent">
-            {displayValue(props.row.stagedValueText ?? props.row.valueText, props.row.stagedValueLabel, props.row.units)}
-          </span>
-        </div>
+          {stageLabel()}
+        </button>
       {/if}
-
-      {#if props.row.failureMessage}
-        <div
-          class="rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger"
-          data-testid={`${parameterWorkspaceTestIds.failurePrefix}-${props.row.name}`}
-        >
-          {props.row.failureMessage}
-        </div>
-      {/if}
-    </div>
-
-    <div class="flex flex-wrap items-start gap-2 xl:justify-end">
-      <button
-        class="rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-sm font-semibold text-accent transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
-        data-testid={`${parameterWorkspaceTestIds.stageButtonPrefix}-${props.row.name}`}
-        disabled={isEditingDisabled()}
-        type="submit"
-      >
-        {stageLabel()}
-      </button>
-
       {#if props.row.isStaged}
         <button
-          class="rounded-md border border-border bg-bg-primary/80 px-3 py-2 text-sm font-semibold text-text-secondary transition hover:border-danger/40 hover:text-danger"
+          class="param-row__discard"
           data-testid={`${parameterWorkspaceTestIds.discardButtonPrefix}-${props.row.name}`}
           onclick={() => props.onDiscard(props.row.name)}
           type="button"
@@ -245,7 +204,237 @@ let bitmaskDraftOptions = $derived(
     </div>
   </div>
 
+  {#if props.row.description}
+    <p class="param-row__description">{props.row.description}</p>
+  {/if}
+
+  {#if props.row.editorKind === "bitmask" && props.row.bitmaskOptions.length > 0}
+    <div class="param-row__bitmask">
+      <ParameterExpertBitmaskEditor
+        disabled={isEditingDisabled()}
+        onToggle={(nextValue) => {
+          draft = String(nextValue);
+          validationMessage = null;
+        }}
+        options={bitmaskDraftOptions}
+        value={bitmaskDraftValue}
+      />
+    </div>
+  {/if}
+
+  {#if props.row.isStaged}
+    <div
+      class="param-row__diff"
+      data-testid={`${parameterWorkspaceTestIds.diffPrefix}-${props.row.name}`}
+    >
+      <span class="param-row__diff-label">Current</span>
+      <span class="param-row__diff-current">
+        {displayValue(props.row.valueText, props.row.valueLabel, props.row.units)}
+      </span>
+      <span class="param-row__diff-arrow">→</span>
+      <span class="param-row__diff-next">
+        {displayValue(props.row.stagedValueText ?? props.row.valueText, props.row.stagedValueLabel, props.row.units)}
+      </span>
+    </div>
+  {/if}
+
+  {#if props.row.failureMessage}
+    <div
+      class="param-row__failure"
+      data-testid={`${parameterWorkspaceTestIds.failurePrefix}-${props.row.name}`}
+    >
+      {props.row.failureMessage}
+    </div>
+  {/if}
+
   {#if validationMessage}
-    <p class="mt-2 text-sm text-danger">{validationMessage}</p>
+    <p class="param-row__validation">{validationMessage}</p>
   {/if}
 </form>
+
+<style>
+.param-row {
+  display: grid;
+  grid-template-rows: auto;
+  gap: 0;
+  padding: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+  font-size: 0.84rem;
+}
+.param-row__main {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) minmax(80px, 140px) minmax(180px, 260px);
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  min-height: var(--density-row-compact);
+}
+.param-row__name {
+  font-family: "SFMono-Regular", "SF Mono", Consolas, monospace;
+  color: var(--color-accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.param-row__label {
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.param-row__label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.param-row__value {
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.param-row__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  align-items: center;
+}
+.param-row__editor {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+.param-row__editor--enum :global(.ui-select__trigger) {
+  min-width: 0;
+  width: 100%;
+}
+.param-row__input {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-primary) 80%, transparent);
+  color: var(--color-text-primary);
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+}
+.param-row__input:focus { outline: none; border-color: var(--color-accent); }
+.param-row__input:disabled { opacity: 0.6; cursor: not-allowed; }
+.param-row__stage {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  color: var(--color-accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.param-row__stage:hover { border-color: var(--color-accent); }
+.param-row__stage:disabled { opacity: 0.5; cursor: not-allowed; }
+.param-row__discard {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-primary) 80%, transparent);
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.param-row__discard:hover { border-color: color-mix(in srgb, var(--color-danger) 40%, transparent); color: var(--color-danger); }
+.param-row__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.param-row__badge--highlight {
+  border-color: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  color: var(--color-accent);
+}
+.param-row__badge--readonly {
+  border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+  color: var(--color-warning);
+}
+.param-row__badge--reboot {
+  border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+  color: var(--color-warning);
+}
+.param-row__description {
+  margin: 0;
+  padding: 0 var(--space-2) 6px;
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+.param-row__bitmask {
+  padding: 0 var(--space-2) 8px;
+}
+.param-row__diff {
+  margin: 0 var(--space-2) 6px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 5%, transparent);
+  font-size: 0.76rem;
+  color: var(--color-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: baseline;
+}
+.param-row__diff-label { color: var(--color-text-muted); }
+.param-row__diff-current { color: var(--color-text-muted); font-family: "SFMono-Regular", "SF Mono", Consolas, monospace; }
+.param-row__diff-arrow { color: var(--color-text-muted); padding: 0 4px; }
+.param-row__diff-next { color: var(--color-accent); font-weight: 600; font-family: "SFMono-Regular", "SF Mono", Consolas, monospace; }
+.param-row__failure {
+  margin: 0 var(--space-2) 6px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  font-size: 0.76rem;
+  color: var(--color-danger);
+}
+.param-row__validation {
+  margin: 0 var(--space-2) 6px;
+  padding: 0;
+  color: var(--color-danger);
+  font-size: 0.76rem;
+}
+.param-row[data-staged] { background: color-mix(in srgb, var(--color-accent) 6%, transparent); }
+.param-row[data-failure] { background: color-mix(in srgb, var(--color-danger) 6%, transparent); }
+.param-row[data-highlighted] { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
+@media (max-width: 767px) {
+  .param-row__main {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    padding: var(--space-2);
+    gap: var(--space-1);
+  }
+  .param-row__name { font-size: 0.78rem; }
+  .param-row__actions { justify-content: flex-start; padding-top: var(--space-1); flex-wrap: wrap; }
+  .param-row__editor { width: 100%; }
+}
+</style>

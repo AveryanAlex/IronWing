@@ -816,14 +816,31 @@ describe("AppShell", () => {
         );
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.highlightPrefix}-ARMING_CHECK`)).toBeTruthy();
 
-        await fireEvent.change(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`), {
-            target: { value: "1" },
-        });
-        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-ARMING_CHECK`));
+        const armingTrigger = screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`);
+        armingTrigger.focus();
+        // Bits UI Select trigger opens on Enter/Space keypress in jsdom because
+        // synthetic clicks lack the pointerdown sequence the trigger listens for.
+        await fireEvent.keyDown(armingTrigger, { key: "Enter" });
 
-        expect(screen.getByTestId(appShellTestIds.parameterReviewTray)).toBeTruthy();
-        expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("1 queued");
-        expect(screen.getByTestId(appShellTestIds.parameterWorkspacePendingCount).textContent?.trim()).toBe("1");
+        // Bits UI's floating content portal sets visibility:hidden until positioning
+        // completes, so role-based queries don't pick the options up in jsdom.
+        // Fall back to a DOM selector inside the portal.
+        await waitFor(() => {
+            expect(document.querySelector('[role="option"]')).toBeTruthy();
+        });
+
+        const enumOptions = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'));
+        const allChecks = enumOptions.find((item) => item.textContent?.includes("All checks"));
+        expect(allChecks).toBeTruthy();
+        // Bits UI Select items commit selection on pointerup, not click.
+        await fireEvent.pointerDown(allChecks!, { pointerType: "mouse" });
+        await fireEvent.pointerUp(allChecks!, { pointerType: "mouse" });
+
+        await waitFor(() => {
+            expect(screen.getByTestId(appShellTestIds.parameterReviewTray)).toBeTruthy();
+            expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("1 queued");
+            expect(screen.getByTestId(appShellTestIds.parameterWorkspacePendingCount).textContent?.trim()).toBe("1");
+        });
     });
 
     it("keeps overview mounted and gates guided setup sections when metadata is unavailable", async () => {
