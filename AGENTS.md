@@ -136,6 +136,5 @@ Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavk
 ## Known Quirks
 
 - IPC event names use URI-style strings such as `telemetry://state`, `session://state`, `mission://state`, `param://store`, `param://progress`, `sensor_health://state`, `calibration://state`, `compass://cal_progress`, `compass://cal_report`, `configuration_facts://state`, `status_text://state`, `support://state`, `guided://state`, `playback://state`, `log://progress`, and `firmware://progress`.
-- `mpng_settings` is a legacy localStorage key name and should not be renamed casually.
 - `mav.tlog`, `mav.tlog.raw`, and `mav.parm` at repo root are developer SITL artifacts, not committed fixtures.
 - Parameter metadata is fetched at runtime from `autotest.ardupilot.org` via the platform HTTP layer and cached locally.
