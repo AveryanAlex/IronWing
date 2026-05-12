@@ -83,7 +83,7 @@ export type SetupWizardStore = Readable<WizardStoreState> & {
   acknowledgeHandoff(): void;
 };
 
-const STORAGE_KEY_PREFIX = "mpng_setup_wizard_";
+const STORAGE_KEY_PREFIX = "ironwing.setup_wizard.";
 const PERSIST_VERSION = 1;
 
 type PersistedBlob = {

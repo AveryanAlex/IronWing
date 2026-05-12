@@ -342,7 +342,7 @@ describe("SetupWizardShell", () => {
     await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardStart));
     const oldFamilyKey = get(store).scopeFamilyKey;
     expect(oldFamilyKey).toBe("session-1:live:0");
-    expect(storage.data.get("mpng_setup_wizard_session-1:live:0")).toBeTruthy();
+    expect(storage.data.get("ironwing.setup_wizard.session-1:live:0")).toBeTruthy();
 
     store.updateFromWorkspace(
       createSnapshot({
@@ -362,7 +362,7 @@ describe("SetupWizardShell", () => {
     await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardRestart));
 
     expect(get(store).phase).toBe("idle");
-    expect(storage.data.has("mpng_setup_wizard_session-1:live:0")).toBe(false);
+    expect(storage.data.has("ironwing.setup_wizard.session-1:live:0")).toBe(false);
   });
 
   it("checkpoint pause transitions back to active when the workspace reports resume_complete", async () => {

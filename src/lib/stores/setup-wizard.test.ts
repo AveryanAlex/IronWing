@@ -268,7 +268,7 @@ describe("createSetupWizardStore — scope changes and checkpoints", () => {
     const store = createSetupWizardStore({ storage });
     store.updateFromWorkspace(createSnapshot());
     store.start();
-    const oldKey = "mpng_setup_wizard_session-1:live:0";
+    const oldKey = "ironwing.setup_wizard.session-1:live:0";
     expect(storage.dump()[oldKey]).toBeDefined();
 
     store.updateFromWorkspace(
@@ -364,7 +364,7 @@ describe("createSetupWizardStore — persistence", () => {
     first.start();
     first.advance();
 
-    const storedKey = "mpng_setup_wizard_session-1:live:0";
+    const storedKey = "ironwing.setup_wizard.session-1:live:0";
     expect(storage.dump()[storedKey]).toBeDefined();
 
     const second = createSetupWizardStore({ storage });
@@ -394,7 +394,7 @@ describe("createSetupWizardStore — persistence", () => {
     store.start();
     store.advance();
 
-    const key = "mpng_setup_wizard_session-1:live:0";
+    const key = "ironwing.setup_wizard.session-1:live:0";
     expect(storage.dump()[key]).toBeDefined();
 
     store.restart();
