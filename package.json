@@ -38,6 +38,7 @@
     "@tauri-apps/plugin-geolocation": "^2.3.2",
     "@tauri-apps/plugin-http": "^2.3.0",
     "@tauri-apps/plugin-opener": "^2.5.3",
+    "bits-ui": "^2.18.1",
     "clsx": "^2.1.1",
     "fflate": "^0.8.2",
     "maplibre-gl": "^5.3.0",
