@@ -16,7 +16,6 @@ const telemetrySettingsDialog = getTelemetrySettingsDialogLauncherContext();
 
 let liveSettingsView = $derived(liveSettings.current);
 let view = $derived(sessionView.current);
-let statusCard = $derived(view.vehicleStatusCard);
 let summary = $derived(view.telemetrySummary);
 let gpsText = $derived(summary.gpsText.replace(/^GPS:\s*/, ""));
 let overrideCount = $derived(Object.keys(liveSettingsView.confirmedSettings.messageRates).length);
@@ -58,14 +57,6 @@ let launcherStatusText = $derived.by(() => {
     <p class="sidebar-telemetry__status">{launcherStatusText}</p>
 
     <dl class="sidebar-telemetry__list">
-      <div class="sidebar-telemetry__row" data-testid="sidebar-telemetry-state">
-        <dt class="sidebar-telemetry__label">State</dt>
-        <dd class="sidebar-telemetry__value">{statusCard.armStateText}</dd>
-      </div>
-      <div class="sidebar-telemetry__row" data-testid="sidebar-telemetry-mode">
-        <dt class="sidebar-telemetry__label">Mode</dt>
-        <dd class="sidebar-telemetry__value">{statusCard.modeText}</dd>
-      </div>
       <div class="sidebar-telemetry__row" data-testid="sidebar-telemetry-altitude">
         <dt class="sidebar-telemetry__label">Alt</dt>
         <dd class="sidebar-telemetry__value">{summary.altitudeText}</dd>
