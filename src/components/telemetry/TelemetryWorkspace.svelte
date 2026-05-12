@@ -1,11 +1,14 @@
 <script lang="ts">
 import { fromStore } from "svelte/store";
 
-import type { OperatorMetricView } from "../../lib/telemetry-selectors";
+import type { OperatorMetricView, TelemetrySummaryTone } from "../../lib/telemetry-selectors";
 import {
   getOperatorWorkspaceViewStoreContext,
   getSessionViewStoreContext,
 } from "../../app/shell/runtime-context";
+import { MetricGroup, MetricTile, WorkspaceHeader, WorkspaceShell } from "../ui";
+
+type MetricTone = "neutral" | "info" | "success" | "warning" | "danger";
 
 const operatorWorkspace = fromStore(getOperatorWorkspaceViewStoreContext());
 const sessionView = fromStore(getSessionViewStoreContext());
@@ -30,8 +33,8 @@ function toggleSection(key: string) {
 }
 
 function formatDeg(value: number | undefined): string {
-  if (value == null || Number.isNaN(value)) return "--\u00B0";
-  return `${value.toFixed(1)}\u00B0`;
+  if (value == null || Number.isNaN(value)) return "--°";
+  return `${value.toFixed(1)}°`;
 }
 
 function formatDistance(value: number | undefined): string {
@@ -64,23 +67,43 @@ function metricState(hasValue: boolean): "live" | "unavailable" {
   return hasValue ? "live" : "unavailable";
 }
 
+function metricTone(metric: OperatorMetricView): MetricTone {
+  if (metric.state === "unavailable" || metric.state === "stale") {
+    return "neutral";
+  }
+  return mapTone(metric.tone);
+}
+
+function mapTone(tone: TelemetrySummaryTone): MetricTone {
+  switch (tone) {
+    case "positive":
+      return "success";
+    case "caution":
+      return "warning";
+    case "critical":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
+
 let sections = $derived.by<MetricSection[]>(() => {
   const flight: MetricEntry[] = [
     {
       key: "altitude",
-      label: "ALTITUDE",
+      label: "Altitude",
       metric: view.primaryMetrics.altitude,
       testId: "telemetry-alt-value",
     },
     {
       key: "speed",
-      label: "SPEED",
+      label: "Speed",
       metric: view.primaryMetrics.speed,
       testId: "telemetry-speed-value",
     },
     {
       key: "ground-speed",
-      label: "GROUND SPEED",
+      label: "Ground Speed",
       metric: {
         text: telemetry.speed_mps != null ? `${telemetry.speed_mps.toFixed(1)} m/s` : "-- m/s",
         tone: "neutral",
@@ -90,13 +113,13 @@ let sections = $derived.by<MetricSection[]>(() => {
     },
     {
       key: "heading",
-      label: "HEADING",
+      label: "Heading",
       metric: view.secondaryMetrics.heading,
       testId: "telemetry-heading-value",
     },
     {
       key: "climb-rate",
-      label: "CLIMB RATE",
+      label: "Climb Rate",
       metric: view.secondaryMetrics.climbRate,
     },
   ];
@@ -104,12 +127,12 @@ let sections = $derived.by<MetricSection[]>(() => {
   const gps: MetricEntry[] = [
     {
       key: "gps-fix",
-      label: "FIX TYPE",
+      label: "Fix Type",
       metric: view.primaryMetrics.gps,
     },
     {
       key: "satellites",
-      label: "SATELLITES",
+      label: "Satellites",
       metric: view.secondaryMetrics.satellites,
     },
   ];
@@ -130,7 +153,7 @@ let sections = $derived.by<MetricSection[]>(() => {
   const battery: MetricEntry[] = [
     {
       key: "battery-voltage",
-      label: "VOLTAGE",
+      label: "Voltage",
       metric: view.secondaryMetrics.batteryVoltage,
     },
   ];
@@ -138,7 +161,7 @@ let sections = $derived.by<MetricSection[]>(() => {
   if (telemetry.battery_current_a != null) {
     battery.push({
       key: "battery-current",
-      label: "CURRENT",
+      label: "Current",
       metric: {
         text: formatCurrent(telemetry.battery_current_a),
         tone: "neutral",
@@ -150,14 +173,14 @@ let sections = $derived.by<MetricSection[]>(() => {
 
   battery.push({
     key: "battery-pct",
-    label: "CHARGE",
+    label: "Charge",
     metric: view.primaryMetrics.battery,
   });
 
   if (telemetry.battery_voltage_v != null && telemetry.battery_current_a != null) {
     battery.push({
       key: "battery-power",
-      label: "POWER",
+      label: "Power",
       metric: {
         text: formatPower(telemetry.battery_voltage_v, telemetry.battery_current_a),
         tone: "neutral",
@@ -170,7 +193,7 @@ let sections = $derived.by<MetricSection[]>(() => {
   const attitude: MetricEntry[] = [
     {
       key: "roll",
-      label: "ROLL",
+      label: "Roll",
       metric: {
         text: formatDeg(telemetry.roll_deg),
         tone: "neutral",
@@ -180,7 +203,7 @@ let sections = $derived.by<MetricSection[]>(() => {
     },
     {
       key: "pitch",
-      label: "PITCH",
+      label: "Pitch",
       metric: {
         text: formatDeg(telemetry.pitch_deg),
         tone: "neutral",
@@ -190,7 +213,7 @@ let sections = $derived.by<MetricSection[]>(() => {
     },
     {
       key: "yaw",
-      label: "YAW",
+      label: "Yaw",
       metric: {
         text: formatDeg(telemetry.yaw_deg),
         tone: "neutral",
@@ -205,7 +228,7 @@ let sections = $derived.by<MetricSection[]>(() => {
   if (telemetry.wp_dist_m != null) {
     navigation.push({
       key: "wp-dist",
-      label: "DIST TO WP",
+      label: "Dist To WP",
       metric: {
         text: formatDistance(telemetry.wp_dist_m),
         tone: "neutral",
@@ -218,7 +241,7 @@ let sections = $derived.by<MetricSection[]>(() => {
   if (telemetry.nav_bearing_deg != null) {
     navigation.push({
       key: "nav-bearing",
-      label: "NAV BEARING",
+      label: "Nav Bearing",
       metric: {
         text: formatDeg(telemetry.nav_bearing_deg),
         tone: "neutral",
@@ -241,26 +264,10 @@ let sections = $derived.by<MetricSection[]>(() => {
 
   return result;
 });
-
-function metricColorVar(metric: OperatorMetricView): string {
-  if (metric.state === "stale" || metric.state === "unavailable") {
-    return "var(--color-text-muted)";
-  }
-  switch (metric.tone) {
-    case "positive":
-      return "var(--color-success)";
-    case "caution":
-      return "var(--color-warning)";
-    case "critical":
-      return "var(--color-danger)";
-    default:
-      return "var(--color-text-primary)";
-  }
-}
 </script>
 
-<section class="telemetry-workspace">
-  <h2 class="telemetry-workspace__title">Telemetry</h2>
+<WorkspaceShell mode="inset">
+  <WorkspaceHeader title="Telemetry" description="Live flight metrics grouped by subsystem." />
 
   {#each sections as section (section.key)}
     <div class="telemetry-section">
@@ -287,44 +294,27 @@ function metricColorVar(metric: OperatorMetricView): string {
       </button>
 
       {#if !collapsed[section.key]}
-        <div class="telemetry-section__grid">
+        <MetricGroup columns={4}>
           {#each section.entries as entry (entry.key)}
-            <div class="telemetry-card" data-testid={entry.testId}>
-              <span class="telemetry-card__label">{entry.label}</span>
-              <span
-                class="telemetry-card__value"
-                style:color={metricColorVar(entry.metric)}
-              >
-                {entry.metric.text}
-              </span>
-            </div>
+            <MetricTile
+              label={entry.label}
+              value={entry.metric.text}
+              tone={metricTone(entry.metric)}
+              stale={entry.metric.state === "stale" || entry.metric.state === "unavailable"}
+              testId={entry.testId}
+            />
           {/each}
-        </div>
+        </MetricGroup>
       {/if}
     </div>
   {/each}
-</section>
+</WorkspaceShell>
 
 <style>
-  .telemetry-workspace {
-    overflow-y: auto;
-    padding: 8px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .telemetry-workspace__title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    margin: 0 0 4px 2px;
-  }
-
   .telemetry-section {
     display: flex;
     flex-direction: column;
+    gap: var(--space-2);
   }
 
   .telemetry-section__header {
@@ -344,9 +334,9 @@ function metricColorVar(metric: OperatorMetricView): string {
   }
 
   .telemetry-section__title {
-    font-size: 0.65rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
     color: var(--color-text-muted);
     text-transform: uppercase;
   }
@@ -358,37 +348,5 @@ function metricColorVar(metric: OperatorMetricView): string {
 
   .telemetry-section__chevron--collapsed {
     transform: rotate(-90deg);
-  }
-
-  .telemetry-section__grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 6px;
-    margin-top: 4px;
-  }
-
-  .telemetry-card {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    padding: 6px 8px;
-    border-radius: 6px;
-    border: 1px solid var(--color-border);
-    background: var(--color-bg-secondary);
-  }
-
-  .telemetry-card__label {
-    font-size: 0.6rem;
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    color: var(--color-text-muted);
-  }
-
-  .telemetry-card__value {
-    font-family: "JetBrains Mono", monospace;
-    font-variant-numeric: tabular-nums;
-    font-size: 1.1rem;
-    font-weight: 500;
-    line-height: 1.2;
   }
 </style>
