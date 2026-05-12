@@ -77,6 +77,7 @@ let secondaryItems = $derived<MenuItem[]>([
     label: "Read from vehicle",
     testId: missionWorkspaceTestIds.toolbarRead,
     disabled: busy || !attachment.canUseVehicleActions || !canUseVehicleActions,
+    icon: readIcon,
     onSelect: onReadFromVehicle,
   },
   {
@@ -84,6 +85,7 @@ let secondaryItems = $derived<MenuItem[]>([
     label: "Import mission or KML/KMZ file",
     testId: missionWorkspaceTestIds.toolbarImport,
     disabled: busy || !attachment.canEdit,
+    icon: importIcon,
     onSelect: onImport,
   },
   {
@@ -91,17 +93,32 @@ let secondaryItems = $derived<MenuItem[]>([
     label: "Export mission file",
     testId: missionWorkspaceTestIds.toolbarExport,
     disabled: busy || !hasContent,
+    icon: exportIcon,
     onSelect: onExportPlan,
   },
   {
     id: "new",
-    label: "New mission",
+    label: "Clear mission",
     testId: missionWorkspaceTestIds.toolbarNew,
     disabled: busy || !attachment.canEdit,
+    icon: newIcon,
     onSelect: onNewMission,
   },
 ]);
 </script>
+
+{#snippet readIcon()}
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m6 11 6 6 6-6"/><path d="M5 21h14"/></svg>
+{/snippet}
+{#snippet importIcon()}
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M3 15h6"/><path d="M6 12v6"/></svg>
+{/snippet}
+{#snippet exportIcon()}
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg>
+{/snippet}
+{#snippet newIcon()}
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M12 12v6"/><path d="M9 15h6"/></svg>
+{/snippet}
 
 <div class="mission-toolbar-shell" data-testid={missionWorkspaceTestIds.header}>
   {#if replayReadonly}
