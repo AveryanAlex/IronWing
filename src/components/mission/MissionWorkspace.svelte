@@ -1186,10 +1186,10 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
           : "Start from a vehicle download, a truthful file import, or a blank planner draft. Once you choose an entry action, Home, warnings, review state, and later domain editors stay mounted in the active workspace."}
       </p>
 
-      <div class="mt-5 grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+      <div class="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
         {#each entryCards as card (card.key)}
           <button
-            class={`rounded-[20px] border p-4 text-left transition ${card.tone === "primary"
+            class={`rounded-lg border px-4 py-3 text-left transition ${card.tone === "primary"
               ? "border-accent/40 bg-accent/10 text-text-primary hover:border-accent"
               : "border-border bg-bg-primary text-text-primary hover:border-accent"} disabled:cursor-not-allowed disabled:opacity-60`}
             data-testid={card.testId}
@@ -1197,9 +1197,9 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
             onclick={card.onclick}
             type="button"
           >
-            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Entry action</p>
-            <h4 class="mt-2 text-base font-semibold">{card.title}</h4>
-            <p class="mt-2 text-sm text-text-secondary">{card.description}</p>
+            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Entry action</p>
+            <h4 class="mt-1 text-sm font-semibold">{card.title}</h4>
+            <p class="mt-1 text-xs text-text-secondary">{card.description}</p>
           </button>
         {/each}
       </div>
@@ -1472,7 +1472,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
         </SplitPane>
       {:else}
         <!-- Phone layout: segment tabs or vertical stack -->
-        <div class="space-y-4 overflow-y-auto p-1">
+        <div class="mission-workspace__phone-stack space-y-4 overflow-y-auto">
           <MissionHomeCard
             attachment={view.attachment}
             home={planner.home}
@@ -1754,33 +1754,56 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     overflow: hidden;
   }
 
+  /* WorkspaceShell mode="split" sets padding: 0, so the workspace itself owns the
+     outer gutters. SplitPane children apply their own gutters via the
+     map-column / editor-column padding below. */
+  .mission-workspace > section,
+  .mission-workspace > div:not(.mission-workspace__ready):not(.hidden) {
+    margin-left: var(--workspace-gutter-split);
+    margin-right: var(--workspace-gutter-split);
+  }
+
   .mission-workspace__ready {
     flex: 1;
     min-height: 0;
     overflow: hidden;
-    margin-top: 1rem;
+    margin-top: var(--space-3);
   }
 
   .mission-workspace__map-column {
     display: flex;
     flex-direction: column;
     height: 100%;
-    gap: 1rem;
+    gap: var(--space-3);
     overflow: hidden;
-    padding: 4px;
+    padding: var(--workspace-gutter-split);
+  }
+
+  .mission-workspace__phone-stack {
+    padding: var(--workspace-gutter-split);
   }
 
   .mission-workspace__map-fill {
-    flex: 1;
+    /* Reserve enough vertical room that adding mission items (which grow the
+       sibling terrain panel) cannot shrink the map below a usable height. */
+    flex: 1 1 auto;
+    min-height: 240px;
+  }
+
+  /* Siblings of the map (currently the terrain profile panel) keep their
+     natural size, scrolling internally when they grow with more waypoints. */
+  .mission-workspace__map-column > :not(.mission-workspace__map-fill) {
+    flex: 0 1 auto;
     min-height: 0;
+    overflow-y: auto;
   }
 
   .mission-workspace__editor-column {
     display: flex;
     flex-direction: column;
     height: 100%;
-    gap: 1rem;
+    gap: var(--space-3);
     overflow-y: auto;
-    padding: 4px;
+    padding: var(--workspace-gutter-split);
   }
 </style>

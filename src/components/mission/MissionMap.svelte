@@ -1851,7 +1851,7 @@ function buildContextMenuItems(): ContextMenuItem[] {
     </div>
   {/if}
 
-  <div class="mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
+  <div class="mission-map__stats-grid mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
     <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
       <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Markers</p>
       <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapMarkerCount}>{view.counts.markers}</p>
@@ -2214,6 +2214,13 @@ function buildContextMenuItems(): ContextMenuItem[] {
     flex: 1;
     min-height: 0;
     margin-top: 1rem;
+  }
+
+  /* Inside .mission-map--fill (flex column with overflow:hidden), default
+     flex-shrink lets non-flex children get squashed by the flex:1 surface
+     wrap. Keep header rows, draw buttons, and stats grids fully visible. */
+  .mission-map--fill > :not(.mission-map__surface-wrap--fill) {
+    flex-shrink: 0;
   }
 
   .mission-map-surface {
