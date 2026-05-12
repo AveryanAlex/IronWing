@@ -40,7 +40,7 @@ import MissionRallyDraftList from "./MissionRallyDraftList.svelte";
 import MissionRallyInspector from "./MissionRallyInspector.svelte";
 import MissionTerrainProfilePanel from "./MissionTerrainProfilePanel.svelte";
 import MissionWorkspaceHeader from "./MissionWorkspaceHeader.svelte";
-import { SplitPane, StickyWarningStack } from "../ui";
+import { SplitPane, StickyWarningStack, WorkspaceShell } from "../ui";
 import type { Warning } from "../../lib/warnings/warning-model";
 import {
   missionWorkspaceFallbackChromeState,
@@ -889,11 +889,11 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
 
 <svelte:window onkeydown={handleWorkspaceKeydown} />
 
-<section
+<WorkspaceShell mode="split" testId={missionWorkspaceTestIds.root}>
+<div
   class="mission-workspace"
   data-readiness={view.readiness}
   data-workspace-state={view.status}
-  data-testid={missionWorkspaceTestIds.root}
 >
   <MissionWorkspaceHeader
     attachment={view.attachment}
@@ -1742,11 +1742,12 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       {/if}
     </div>
   {/if}
-</section>
+</div>
+</WorkspaceShell>
 
 <style>
   .mission-workspace {
-    height: 100%;
+    flex: 1;
     display: flex;
     flex-direction: column;
     min-height: 0;
