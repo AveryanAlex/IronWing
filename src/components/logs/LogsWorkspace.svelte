@@ -400,8 +400,6 @@ function emitMarkerHandoff() {
       />
     </div>
   </div>
-
-  <div class="logs-workspace__bottom-spacer" aria-hidden="true"></div>
 </WorkspaceShell>
 
 <style>
@@ -450,12 +448,13 @@ function emitMarkerHandoff() {
     align-items: start;
     gap: 12px;
     grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.65fr);
-    flex: 1;
+    /* Trailing margin guarantees a visible gap at the scroll-bottom that
+       survives sub-pixel rounding around the WorkspaceShell padding. */
+    margin-bottom: var(--space-2);
   }
 
   .logs-workspace__library-column,
   .logs-workspace__detail-column {
-    min-height: 0;
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -485,11 +484,6 @@ function emitMarkerHandoff() {
     .logs-workspace__detail-column {
       align-self: stretch;
     }
-  }
-
-  .logs-workspace__bottom-spacer {
-    flex-shrink: 0;
-    height: 12px;
   }
 
   @media (max-width: 720px) {
