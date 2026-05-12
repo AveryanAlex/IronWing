@@ -9,3 +9,5 @@ export { default as StatusPill } from "./StatusPill.svelte";
 export { default as Banner } from "./Banner.svelte";
 export { default as SectionHeader } from "./SectionHeader.svelte";
 export { default as FieldRow } from "./FieldRow.svelte";
+export { default as MetricTile } from "./MetricTile.svelte";
+export { default as MetricGroup } from "./MetricGroup.svelte";
