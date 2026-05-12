@@ -1,8 +1,21 @@
 import { readIronwingJson, writeIronwingJson } from "./ironwing-storage";
 import type { LocalStorageLike } from "../local-storage";
-import { appShellWorkspaces, type AppShellWorkspace } from "../../app/shell/app-shell-controller";
+import type { AppShellWorkspace } from "../../app/shell/app-shell-controller";
 
-const VALID_WORKSPACES: ReadonlySet<AppShellWorkspace> = new Set(appShellWorkspaces.map((w) => w.key));
+// Workspaces are inlined here (rather than imported from app-shell-controller)
+// to keep ui-state free of cycles: app-shell-controller imports createUiStateStore
+// during AppShell bootstrap, so any import edge back from ui-state would create
+// a circular module graph that triggers undefined-at-init failures.
+const VALID_WORKSPACES: ReadonlySet<AppShellWorkspace> = new Set<AppShellWorkspace>([
+  "overview",
+  "telemetry",
+  "hud",
+  "mission",
+  "logs",
+  "firmware",
+  "setup",
+  "settings",
+]);
 
 export type MissionMode = "mission" | "fence" | "rally";
 export type MissionSegment = "map" | "plan";

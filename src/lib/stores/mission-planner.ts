@@ -4,6 +4,7 @@ import type { FencePlan } from "../../fence";
 import type { HomePosition, MissionIssue, MissionPlan, MissionState, TransferProgress } from "../../mission";
 import type { RallyPlan } from "../../rally";
 import type { SessionEnvelope } from "../../session";
+import { createUiStateStore, type UiStateStore } from "../ui-state/ui-state";
 import { shouldDropEvent } from "../../session";
 import { parseLatitude, parseLongitude } from "../mission-coordinates";
 import {
@@ -355,6 +356,7 @@ export type MissionPlannerStoreOptions = {
   surveyGenerationTimeoutMs?: number;
   surveyEngines?: SurveyEngineRunners;
   kmlFileIo?: MissionKmlFileIo;
+  uiState?: UiStateStore | null;
 };
 
 type SessionReadable = Pick<SessionStore, "subscribe">;
@@ -567,11 +569,11 @@ function createEmptyHistoryState(): MissionPlannerHistoryState {
   };
 }
 
-function createInitialState(): MissionPlannerStoreState {
+function createInitialState(initialMode: MissionPlannerMode = "mission"): MissionPlannerStoreState {
   return {
     hydrated: false,
     workspaceMounted: false,
-    mode: "mission",
+    mode: initialMode,
     selection: { kind: "home" },
     fenceSelection: { kind: "none" },
     rallySelection: { kind: "none" },
@@ -620,7 +622,12 @@ export function createMissionPlannerStore(
   const surveyGenerationTimeoutMs = options.surveyGenerationTimeoutMs ?? actionTimeoutMs;
   const surveyEngines = options.surveyEngines;
   const kmlFileIo = options.kmlFileIo ?? createMissionKmlFileIo();
-  const store = writable<MissionPlannerStoreState>(createInitialState());
+  const uiState: UiStateStore | null =
+    options.uiState === undefined
+      ? createUiStateStore({ storage: typeof localStorage === "undefined" ? null : localStorage })
+      : options.uiState;
+  const initialMode = uiState?.getMissionMode() ?? "mission";
+  const store = writable<MissionPlannerStoreState>(createInitialState(initialMode));
   let initializePromise: Promise<void> | null = null;
   let stopSession: (() => void) | null = null;
   let stopStreams: (() => void) | null = null;
@@ -1107,6 +1114,7 @@ export function createMissionPlannerStore(
   }
 
   function setMode(mode: MissionPlannerMode) {
+    uiState?.setMissionMode(mode);
     store.update((state) => withResolvedPhase({
       ...state,
       mode,

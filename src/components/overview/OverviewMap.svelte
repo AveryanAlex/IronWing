@@ -8,6 +8,7 @@ import {
   VEHICLE_ICON_SVG,
   type VehicleIconKind,
 } from "../../lib/overview/vehicle-icon";
+import { createUiStateStore } from "../../lib/ui-state/ui-state";
 
 type Props = {
   vehicleLat?: number;
@@ -56,9 +57,17 @@ let {
 
 const iconKind = $derived<VehicleIconKind>(resolveVehicleIconKind(mavType));
 
+const overviewUiState = createUiStateStore({
+  storage: typeof localStorage === "undefined" ? null : localStorage,
+});
+
 let mapContainer = $state<HTMLDivElement | null>(null);
 let mapLayer = $state<MapLayerMode>("normal");
-let followTarget = $state<FollowTarget | null>(null);
+let followTarget = $state<FollowTarget | null>(overviewUiState.getOverviewFollow());
+
+$effect(() => {
+  overviewUiState.setOverviewFollow(followTarget);
+});
 let terrainModeEnabled = $state(false);
 let styleLoaded = $state(false);
 let deviceLocation = $state<DeviceLocation | null>(null);

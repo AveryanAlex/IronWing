@@ -27,6 +27,7 @@ import { localXYToLatLon } from "../../lib/mission-coordinates";
 import type { FenceRegion, GeoPoint2d, GeoPoint3d } from "../../lib/mavkit-types";
 import type { FenceRegionType } from "../../lib/mission-draft-typed";
 import { settings, type Settings } from "../../lib/stores/settings";
+import { createUiStateStore } from "../../lib/ui-state/ui-state";
 import type { SurveyPatternType } from "../../lib/survey-region";
 import MissionDraftList from "./MissionDraftList.svelte";
 import MissionFenceDraftList from "./MissionFenceDraftList.svelte";
@@ -78,8 +79,23 @@ onDestroy(() => {
   terrainStateStore.reset();
 });
 
+const missionUiStateStorage = typeof localStorage === "undefined" ? null : localStorage;
+const missionUiState = createUiStateStore({ storage: missionUiStateStorage });
+
+function readStoredMissionSegment(): MissionWorkspacePhoneSegment | null {
+  try {
+    const raw = missionUiStateStorage?.getItem("ironwing.ui.mission.segment");
+    if (!raw) return null;
+  } catch {
+    return null;
+  }
+  return missionUiState.getMissionSegment();
+}
+
 let missionPhoneSegment = $state<MissionWorkspacePhoneSegment>(
-  resolveMissionWorkspaceLayout(missionWorkspaceFallbackChromeState, "mission").phoneSegmentDefault ?? "plan",
+  readStoredMissionSegment() ??
+    resolveMissionWorkspaceLayout(missionWorkspaceFallbackChromeState, "mission").phoneSegmentDefault ??
+    "plan",
 );
 
 let planner = $derived(missionPlannerState.current);
@@ -526,6 +542,7 @@ function handleSelectMode(mode: MissionPlannerMode) {
 
 function handleSelectMissionPhoneSegment(segment: MissionWorkspacePhoneSegment) {
   missionPhoneSegment = segment;
+  missionUiState.setMissionSegment(segment);
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {

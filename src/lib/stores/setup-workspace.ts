@@ -21,6 +21,7 @@ import {
 import type { ParamsMetadataState, ParamsStoreState } from "./params";
 import type { SessionStorePhase, SessionStoreState } from "./session";
 import type { WizardPhase } from "./setup-wizard";
+import { createUiStateStore, type UiStateStore } from "../ui-state/ui-state";
 
 type SetupCheckpointSeed = {
   resumeSectionId: SetupSectionId;
@@ -1373,14 +1374,24 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
   };
 }
 
+export type CreateSetupWorkspaceStoreOptions = {
+  uiState?: UiStateStore | null;
+};
+
 export function createSetupWorkspaceStore(
   sessionStore: Readable<SessionStoreState>,
   paramsStore: Readable<ParamsStoreState>,
+  options: CreateSetupWorkspaceStoreOptions = {},
 ) {
   const state = writable<SetupWorkspaceStoreState>(createInitialWorkspaceState());
   let sessionState: SessionStoreState | null = null;
   let paramsState: ParamsStoreState | null = null;
+  const uiState: UiStateStore | null =
+    options.uiState === undefined
+      ? createUiStateStore({ storage: typeof localStorage === "undefined" ? null : localStorage })
+      : options.uiState;
   let selectedSectionId: SetupSectionId = "overview";
+  let previousFamilyForRestore: string | null = null;
   let checkpointState = createIdleCheckpoint();
   let pendingCheckpointSeed: SetupCheckpointSeed | null = null;
   let previous: SetupWorkspaceStoreState | null = null;
@@ -1519,6 +1530,16 @@ export function createSetupWorkspaceStore(
       metadataState: paramsState.metadataState,
       streamError: paramsState.streamError,
     });
+    if (uiState && activeFamily && activeFamily !== previousFamilyForRestore) {
+      const storedSectionId = uiState.getSetupSection(activeFamily);
+      if (storedSectionId && isSetupSectionId(storedSectionId)) {
+        const candidate = sections.find((section) => section.id === storedSectionId);
+        if (candidate && candidate.availability === "available") {
+          selectedSectionId = storedSectionId;
+        }
+      }
+    }
+    previousFamilyForRestore = activeFamily;
     selectedSectionId = resolveSelectedSectionId(selectedSectionId, sections);
 
     const progress = computeOverallProgress(new Map(SECTION_IDS.map((id) => [id, sectionStatuses[id]])));
@@ -1602,6 +1623,12 @@ export function createSetupWorkspaceStore(
       }
 
       selectedSectionId = nextSectionId;
+      if (uiState && currentActiveScopeKey) {
+        const activeFamily = scopeFamilyKey(sessionState?.activeEnvelope ?? null);
+        if (activeFamily) {
+          uiState.setSetupSection(activeFamily, nextSectionId);
+        }
+      }
       recompute();
     },
     confirmSection(sectionId: string) {

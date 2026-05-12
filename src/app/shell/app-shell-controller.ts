@@ -4,6 +4,7 @@ import type { ParameterWorkspaceViewStore, ParamsStore } from "../../lib/stores/
 import type { SessionStore } from "../../lib/stores/session";
 import type { ShellChromeStore } from "./runtime-context";
 import { isAutoConnectSitlEnabled } from "../../lib/platform/session";
+import { createUiStateStore } from "../../lib/ui-state/ui-state";
 
 export type AppShellWorkspace =
   | "overview"
@@ -39,7 +40,10 @@ export function createAppShellController(stores: {
 }) {
   const { sessionStore, parameterStore, chromeStore, parameterViewStore } = stores;
 
-  const activeWorkspace = writable<AppShellWorkspace>("overview");
+  const uiState = createUiStateStore({ storage: typeof localStorage === "undefined" ? null : localStorage });
+
+  const activeWorkspace = writable<AppShellWorkspace>(uiState.getActiveWorkspace());
+  const stopPersistActiveWorkspace = activeWorkspace.subscribe((value) => uiState.setActiveWorkspace(value));
   const vehiclePanelOpen = writable(false);
   const parameterReviewOpen = writable(false);
 
@@ -112,6 +116,7 @@ export function createAppShellController(stores: {
   function destroy() {
     stopCloseDrawerWhenDocked();
     stopCloseReviewWhenNoStagedEdits();
+    stopPersistActiveWorkspace();
   }
 
   return {
