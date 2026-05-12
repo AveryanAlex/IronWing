@@ -31,6 +31,7 @@ import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
 } from "../../lib/stores/setup-workspace";
+import SetupSectionShell from "./SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 import MotorDiagram from "./shared/MotorDiagram.svelte";
 
@@ -550,16 +551,13 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.motorsEscSection}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Fail-closed motor direction proof with one shared unlock</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Motor order, expected direction, and reversal staging only appear when this scope can prove the active layout. Unlock once at the section level, test rows directly, and queue any reversal fix through the shared review tray instead of a local apply path.
-      </p>
-    </div>
-
+<SetupSectionShell
+  eyebrow={section.title}
+  title="Fail-closed motor direction proof with one shared unlock"
+  description="Motor order, expected direction, and reversal staging only appear when this scope can prove the active layout. Unlock once at the section level, test rows directly, and queue any reversal fix through the shared review tray instead of a local apply path."
+  testId={setupWorkspaceTestIds.motorsEscSection}
+>
+  {#snippet actions()}
     {#if docsUrl}
       <a
         class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
@@ -571,12 +569,14 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
         Motor & ESC docs
       </a>
     {/if}
-  </div>
+  {/snippet}
 
-  <div
-    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
-    data-testid={setupWorkspaceTestIds.motorsEscSummary}
-  >
+  {#snippet body()}
+    <div class="setup-motors-esc-body">
+      <div
+        class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
+        data-testid={setupWorkspaceTestIds.motorsEscSummary}
+      >
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Layout truth</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.motorsEscLayoutState}>
@@ -794,4 +794,14 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
       {/each}
     </div>
   {/if}
-</section>
+    </div>
+  {/snippet}
+</SetupSectionShell>
+
+<style>
+.setup-motors-esc-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+</style>
