@@ -114,7 +114,7 @@ let secondaryItems = $derived<MenuItem[]>([
     </div>
   {/if}
 
-  <Toolbar ariaLabel="Mission actions">
+  <Toolbar ariaLabel="Mission actions" wrap>
     <ToolbarGroup>
       {#each modeButtons as item (item.mode)}
         <Button
@@ -194,8 +194,5 @@ let secondaryItems = $derived<MenuItem[]>([
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg-secondary);
   flex-shrink: 0;
-}
-.mission-toolbar-shell :global(.ui-toolbar) {
-  flex-wrap: wrap;
 }
 </style>
