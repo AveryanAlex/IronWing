@@ -18,6 +18,7 @@ import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
 } from "../../lib/stores/setup-workspace";
+import SetupSectionShell from "./SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 let {
@@ -154,16 +155,13 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.serialPortsSection}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Protocol ownership and reboot-required port truth</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Serial protocol and baud assignments stay inspectable even when metadata is degraded. Each row stages through the shared review tray, conflict detection uses staged values before apply, and completion only advances when the current scope is conflict-free without pending serial edits.
-      </p>
-    </div>
-
+<SetupSectionShell
+  eyebrow={section.title}
+  title="Protocol ownership and reboot-required port truth"
+  description="Serial protocol and baud assignments stay inspectable even when metadata is degraded. Each row stages through the shared review tray, conflict detection uses staged values before apply, and completion only advances when the current scope is conflict-free without pending serial edits."
+  testId={setupWorkspaceTestIds.serialPortsSection}
+>
+  {#snippet actions()}
     {#if docsUrl}
       <a
         class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
@@ -175,12 +173,14 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
         Serial-port docs
       </a>
     {/if}
-  </div>
+  {/snippet}
 
-  <div
-    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
-    data-testid={setupWorkspaceTestIds.serialPortsSummary}
-  >
+  {#snippet body()}
+    <div class="setup-serial-ports-body">
+      <div
+        class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
+        data-testid={setupWorkspaceTestIds.serialPortsSummary}
+      >
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Port summary</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{model.summaryText}</p>
@@ -343,4 +343,14 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
       {/each}
     </div>
   {/if}
-</section>
+    </div>
+  {/snippet}
+</SetupSectionShell>
+
+<style>
+.setup-serial-ports-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+</style>
