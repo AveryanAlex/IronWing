@@ -119,8 +119,8 @@ function describeWarning(index: number, warning: Exclude<TerrainWarning, "none">
   }
 
   return {
-    title: `Mission item ${index + 1} has no terrain data`,
-    detail: "IronWing could not resolve usable terrain data for this item, so clearance remains fail-closed until the path samples cleanly.",
+    title: `Item ${index + 1}: terrain data unavailable`,
+    detail: "Terrain sampling did not return usable data for this item. The orange terrain line stays gapped here while the green flight line still reflects the mission item altitude.",
   };
 }
 
@@ -175,7 +175,7 @@ function statusBadgeClass(status: MissionTerrainStatus): string {
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Terrain support</p>
       <h3 class="mt-1 text-sm font-semibold text-text-primary">Terrain profile</h3>
       <p class="mt-1 text-xs text-text-secondary">
-        Terrain and flight MSL stay visible together so clearance warnings can jump back to the affected mission item.
+        Orange line = terrain MSL · green line = flight MSL. Clearance warnings jump back to the affected mission item.
       </p>
     </div>
 
@@ -228,7 +228,7 @@ function statusBadgeClass(status: MissionTerrainStatus): string {
         class="rounded-lg border border-dashed border-border bg-bg-secondary/60 px-4 py-6 text-sm text-text-secondary"
         data-testid={missionWorkspaceTestIds.terrainEmpty}
       >
-        No sampled terrain profile yet. Add positional mission items or set Home to turn this into a real clearance view.
+        No sampled profile yet. Add positional mission items or set Home to turn this into a real clearance view.
       </div>
     {/if}
   </div>
