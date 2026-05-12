@@ -1033,7 +1033,7 @@ describe("AppShell", () => {
 
         expect(screen.getByTestId(appShellTestIds.telemetrySettingsDialog).getAttribute("data-surface-kind")).toBe("sheet");
 
-        await fireEvent.click(screen.getByTestId(appShellTestIds.telemetrySettingsClose));
+        await fireEvent.click(screen.getByRole("button", { name: "Close" }));
         await waitFor(() => {
             expect(screen.queryByTestId(appShellTestIds.telemetrySettingsDialog)).toBeNull();
         });

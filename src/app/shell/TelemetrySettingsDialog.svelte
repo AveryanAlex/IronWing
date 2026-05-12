@@ -9,8 +9,8 @@ import type {
 } from "../../lib/stores/live-settings";
 import { hasUnsavedLiveSettings, resolveMessageRateAvailabilityReason } from "../../lib/stores/live-settings";
 import { MESSAGE_RATE_HZ_LIMITS, TELEMETRY_RATE_HZ_LIMITS } from "../../lib/stores/settings";
+import { Dialog } from "../../components/ui";
 import { appShellTestIds } from "./chrome-state";
-import OperationalDialog from "./OperationalDialog.svelte";
 import { getLiveSettingsStoreContext } from "./runtime-context";
 
 type Props = {
@@ -677,16 +677,13 @@ $effect(() => {
   </button>
 {/snippet}
 
-<OperationalDialog
+<Dialog
   ariaLabel="Telemetry settings"
-  backdropTestId={appShellTestIds.telemetrySettingsBackdrop}
   body={body}
-  closeTestId={appShellTestIds.telemetrySettingsClose}
   description="Stage telemetry cadence and live message-rate edits here, then explicitly apply or discard them."
   footer={footer}
   onClose={onClose}
   open={open}
-  surfaceTestId={appShellTestIds.telemetrySettingsSurface}
   testId={appShellTestIds.telemetrySettingsDialog}
   title="Telemetry controls"
 />
