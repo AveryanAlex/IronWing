@@ -28,3 +28,4 @@ export { default as SplitPane } from "./SplitPane.svelte";
 export { default as Dialog } from "./Dialog.svelte";
 export { default as Menu } from "./Menu.svelte";
 export type { MenuItem } from "./menu-types";
+export { default as Tooltip } from "./Tooltip.svelte";
