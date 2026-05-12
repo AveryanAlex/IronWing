@@ -28,6 +28,7 @@ import type {
   SetupWorkspaceStoreState,
 } from "../../lib/stores/setup-workspace";
 import { selectTelemetryView } from "../../lib/telemetry-selectors";
+import SetupSectionShell from "./SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 type Tone = "info" | "warning" | "danger";
@@ -569,16 +570,13 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.servoOutputsSection}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Grouped servo proof up front, raw PWM escape hatch below</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Function-oriented testers stay grouped by the configured surface, raw per-servo PWM sends stay available as the escape hatch, and every configured output stays visible even when current metadata is partial or above the live actuation bridge window.
-      </p>
-    </div>
-
+<SetupSectionShell
+  eyebrow={section.title}
+  title="Grouped servo proof up front, raw PWM escape hatch below"
+  description="Function-oriented testers stay grouped by the configured surface, raw per-servo PWM sends stay available as the escape hatch, and every configured output stays visible even when current metadata is partial or above the live actuation bridge window."
+  testId={setupWorkspaceTestIds.servoOutputsSection}
+>
+  {#snippet actions()}
     {#if docsUrl}
       <a
         class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
@@ -590,12 +588,14 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
         Servo output docs
       </a>
     {/if}
-  </div>
+  {/snippet}
 
-  <div
-    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 xl:grid-cols-4"
-    data-testid={setupWorkspaceTestIds.servoOutputsSummary}
-  >
+  {#snippet body()}
+    <div class="setup-servo-outputs-body">
+      <div
+        class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 xl:grid-cols-4"
+        data-testid={setupWorkspaceTestIds.servoOutputsSummary}
+      >
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Function testers</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.servoOutputsTesterState}>
@@ -947,4 +947,14 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
       </div>
     </div>
   {/if}
-</section>
+    </div>
+  {/snippet}
+</SetupSectionShell>
+
+<style>
+.setup-servo-outputs-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+</style>
