@@ -1,5 +1,5 @@
 import { firmwareWorkspaceTestIds } from "../../src/components/firmware/firmware-workspace-test-ids";
-import { missionWorkspaceTestIds } from "../../src/components/mission/mission-workspace-test-ids";
+import { missionToolbarPhoneId, missionWorkspaceTestIds } from "../../src/components/mission/mission-workspace-test-ids";
 import type { MissionMapDebugSnapshot } from "../../src/components/mission/mission-map-debug";
 import { setupWorkspaceTestIds } from "../../src/components/setup/setup-workspace-test-ids";
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
@@ -305,6 +305,7 @@ export const missionWorkspaceSelectors = {
     toolbarExport: `[data-testid="${missionWorkspaceTestIds.toolbarExport}"]`,
     toolbarUpload: `[data-testid="${missionWorkspaceTestIds.toolbarUpload}"]`,
     toolbarCancel: `[data-testid="${missionWorkspaceTestIds.toolbarCancel}"]`,
+    toolbarMoreButton: `[data-testid="${missionWorkspaceTestIds.toolbarMoreButton}"]`,
     prompt: `[data-testid="${missionWorkspaceTestIds.prompt}"]`,
     promptKind: `[data-testid="${missionWorkspaceTestIds.promptKind}"]`,
     promptConfirm: `[data-testid="${missionWorkspaceTestIds.promptConfirm}"]`,
@@ -1011,6 +1012,78 @@ export async function expectMissionWorkspace(page: Page): Promise<void> {
 
 export function missionWorkspaceLocator(page: Page, selector: keyof typeof missionWorkspaceSelectors): Locator {
     return page.locator(missionWorkspaceSelectors[selector]);
+}
+
+/**
+ * Test ids for secondary toolbar actions that collapse behind the phone-tier
+ * "More" disclosure. Keep this list aligned with the snippet rendered inside
+ * `MissionWorkspaceHeader.svelte`'s `secondaryActions` snippet — those buttons
+ * are the ones that gain a `${canonical}--phone` mirror under <details>.
+ */
+const missionToolbarSecondaryControls = [
+    "toolbarUndo",
+    "toolbarRedo",
+    "toolbarNew",
+    "toolbarImport",
+    "toolbarExport",
+    "toolbarRead",
+] as const satisfies readonly (keyof typeof missionWorkspaceSelectors)[];
+
+export type MissionToolbarSecondaryControl = (typeof missionToolbarSecondaryControls)[number];
+
+/**
+ * Open the phone-tier Mission toolbar "More" disclosure if it is visible and
+ * still closed. Idempotent: no-op on desktop/radiomaster widths (where the
+ * disclosure stays display:none) or when the disclosure is already open.
+ */
+export async function openMissionToolbarMoreMenu(page: Page): Promise<void> {
+    const moreSummary = missionWorkspaceLocator(page, "toolbarMoreButton");
+    if (!(await moreSummary.isVisible().catch(() => false))) {
+        return;
+    }
+    const details = moreSummary.locator("xpath=ancestor::details[1]");
+    const open = await details.getAttribute("open");
+    if (open === null) {
+        await moreSummary.click();
+        await expect
+            .poll(() => details.getAttribute("open"), {
+                message: "Mission toolbar More disclosure never opened; the phone-tier overflow menu must expose its actions to e2e clicks.",
+            })
+            .not.toBeNull();
+    }
+}
+
+/**
+ * Resolve the visible locator for a secondary Mission toolbar action. On
+ * phone-tier widths the desktop copy is display:none, so this helper opens the
+ * "More" disclosure first and returns the `--phone` mirror. On wider widths
+ * the canonical locator is returned directly.
+ */
+export async function missionToolbarSecondaryLocator(
+    page: Page,
+    control: MissionToolbarSecondaryControl,
+): Promise<Locator> {
+    const moreSummary = missionWorkspaceLocator(page, "toolbarMoreButton");
+    if (await moreSummary.isVisible().catch(() => false)) {
+        await openMissionToolbarMoreMenu(page);
+        const phoneTestId = missionToolbarPhoneId(missionWorkspaceTestIds[control]);
+        return page.locator(`[data-testid="${phoneTestId}"]`);
+    }
+    return missionWorkspaceLocator(page, control);
+}
+
+/**
+ * Click a secondary Mission toolbar action, transparently opening the phone
+ * "More" disclosure when the shell is at phone width. Use this for any of the
+ * actions that the `secondaryActions` snippet renders inside <details>.
+ */
+export async function clickMissionToolbarSecondary(
+    page: Page,
+    control: MissionToolbarSecondaryControl,
+): Promise<void> {
+    const locator = await missionToolbarSecondaryLocator(page, control);
+    await locator.scrollIntoViewIfNeeded();
+    await locator.click();
 }
 
 type MissionHistoryKind = "undo" | "redo";

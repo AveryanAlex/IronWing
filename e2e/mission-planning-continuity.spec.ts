@@ -5,6 +5,7 @@ import type { SessionEnvelope } from "../src/session";
 import { missionWorkspaceTestIds } from "../src/components/mission/mission-workspace-test-ids";
 import {
     applyShellViewport,
+    clickMissionToolbarSecondary,
     closeVehiclePanelDrawer,
     connectionSelectors,
     expect,
@@ -12,7 +13,7 @@ import {
     expectMissionHistoryState,
     expectMissionWorkspace,
     expectRuntimeDiagnostics,
-    missionHistoryButtonLocator,
+    type MissionToolbarSecondaryControl,
     missionWorkspaceLocator,
     missionWorkspaceSelectors,
     openMissionWorkspace,
@@ -128,7 +129,26 @@ function firstRallyPointLocator(page: Page) {
     return page.locator(`[data-testid^="${missionWorkspaceTestIds.rallyPointPrefix}-"]`).first();
 }
 
+const missionToolbarSecondaryControls = new Set<MissionToolbarSecondaryControl>([
+    "toolbarUndo",
+    "toolbarRedo",
+    "toolbarNew",
+    "toolbarImport",
+    "toolbarExport",
+    "toolbarRead",
+]);
+
+function isMissionToolbarSecondaryControl(
+    selector: keyof typeof missionWorkspaceSelectors,
+): selector is MissionToolbarSecondaryControl {
+    return (missionToolbarSecondaryControls as Set<keyof typeof missionWorkspaceSelectors>).has(selector);
+}
+
 async function clickMissionControl(page: Page, selector: keyof typeof missionWorkspaceSelectors) {
+    if (isMissionToolbarSecondaryControl(selector)) {
+        await clickMissionToolbarSecondary(page, selector);
+        return;
+    }
     const locator = missionWorkspaceLocator(page, selector);
     await locator.scrollIntoViewIfNeeded();
     await locator.click();
@@ -443,7 +463,7 @@ async function proveFenceAndRallyHistoryRecovery(
         .toBeCloseTo(rallyEdit.editedAltitude, 2);
 
     const rallyHistoryBeforeUndo = await readMissionHistoryState(page);
-    await missionHistoryButtonLocator(page, "undo").click();
+    await clickMissionToolbarSecondary(page, "toolbarUndo");
     await expect
         .poll(async () => Number.parseFloat(await missionWorkspaceLocator(page, "rallyAltitude").inputValue()), {
             message: historyMessage(history, "Undoing in Rally mode did not restore the previous rally altitude in one step."),
@@ -475,7 +495,7 @@ async function proveFenceAndRallyHistoryRecovery(
     await clickMissionControl(page, "modeRally");
     await expect(firstRallyPoint).toBeVisible();
     await firstRallyPoint.click();
-    await missionHistoryButtonLocator(page, "redo").click();
+    await clickMissionToolbarSecondary(page, "toolbarRedo");
     await expect
         .poll(async () => Number.parseFloat(await missionWorkspaceLocator(page, "rallyAltitude").inputValue()), {
             message: historyMessage(history, "Redoing in Rally mode did not restore the edited rally altitude."),
@@ -492,7 +512,7 @@ async function proveFenceAndRallyHistoryRecovery(
         .toBeCloseTo(fenceEdit.editedRadius, 2);
 
     const fenceHistoryBeforeUndo = await readMissionHistoryState(page);
-    await missionHistoryButtonLocator(page, "undo").click();
+    await clickMissionToolbarSecondary(page, "toolbarUndo");
     await expect
         .poll(async () => Number.parseFloat(await missionWorkspaceLocator(page, "fenceCircleRadius").inputValue()), {
             message: historyMessage(history, "Undoing in Fence mode did not restore the previous fence radius in one step."),
@@ -510,7 +530,7 @@ async function proveFenceAndRallyHistoryRecovery(
         historyMessage(history, "Fence undo should consume exactly one history step and expose a single redo."),
     );
 
-    await missionHistoryButtonLocator(page, "redo").click();
+    await clickMissionToolbarSecondary(page, "toolbarRedo");
     await expect
         .poll(async () => Number.parseFloat(await missionWorkspaceLocator(page, "fenceCircleRadius").inputValue()), {
             message: historyMessage(history, "Redoing in Fence mode did not restore the edited fence radius."),

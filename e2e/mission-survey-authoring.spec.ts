@@ -4,6 +4,7 @@ import type { Page } from "@playwright/test";
 import { missionWorkspaceTestIds } from "../src/components/mission/mission-workspace-test-ids";
 import {
     applyShellViewport,
+    clickMissionToolbarSecondary,
     closeVehiclePanelDrawer,
     connectionSelectors,
     expect,
@@ -11,7 +12,6 @@ import {
     expectMissionHistoryState,
     expectMissionWorkspace,
     expectRuntimeDiagnostics,
-    missionHistoryButtonLocator,
     missionWorkspaceLocator,
     missionWorkspaceSelectors,
     openMissionWorkspace,
@@ -588,7 +588,7 @@ async function proveRegenerateAndDissolveHistoryRecovery(page: Page, history: st
     expect(historyAfterDissolve.redo.count).toBe(0);
     expect(historyAfterDissolve.redo.disabled).toBe(true);
 
-    await missionHistoryButtonLocator(page, "undo").click();
+    await clickMissionToolbarSecondary(page, "toolbarUndo");
     await expect(surveyBlockLocator(page, regionId)).toBeVisible();
     await expectMissionHistoryState(
         page,
@@ -599,7 +599,7 @@ async function proveRegenerateAndDissolveHistoryRecovery(page: Page, history: st
         historyMessage(history, "Undoing a confirmed survey dissolve should restore the authored region in one step."),
     );
 
-    await missionHistoryButtonLocator(page, "redo").click();
+    await clickMissionToolbarSecondary(page, "toolbarRedo");
     await expect(surveyBlockLocator(page, regionId)).toHaveCount(0);
     await expectMissionHistoryState(
         page,
@@ -610,14 +610,14 @@ async function proveRegenerateAndDissolveHistoryRecovery(page: Page, history: st
         historyMessage(history, "Redoing a confirmed survey dissolve should remove the authored region again in one step."),
     );
 
-    await missionHistoryButtonLocator(page, "undo").click();
+    await clickMissionToolbarSecondary(page, "toolbarUndo");
     await expect(surveyBlockLocator(page, regionId)).toBeVisible();
 }
 
 async function exportPlan(page: Page, mockPlatform: MockPlatformHarness, fileName: string, history: string[]) {
     note(history, `Export the mission workspace to ${fileName}.`);
     await mockPlatform.setSaveFileName(fileName);
-    await missionWorkspaceLocator(page, "toolbarExport").click();
+    await clickMissionToolbarSecondary(page, "toolbarExport");
     await expect.poll(async () => (await mockPlatform.getSavedFiles()).length, {
         message: historyMessage(history, `The mission export never produced ${fileName}.`),
     }).toBe(1);

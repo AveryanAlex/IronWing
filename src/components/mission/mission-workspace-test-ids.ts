@@ -88,6 +88,7 @@ export const missionWorkspaceTestIds = {
   toolbarExport: "mission-toolbar-export",
   toolbarUpload: "mission-toolbar-upload",
   toolbarCancel: "mission-toolbar-cancel",
+  toolbarMoreButton: "mission-toolbar-more",
   prompt: "mission-replace-prompt",
   promptKind: "mission-replace-prompt-kind",
   promptConfirm: "mission-replace-prompt-confirm",
@@ -262,3 +263,18 @@ export const missionWorkspaceTestIds = {
   surveyGeneratedAltitude: "mission-survey-generated-altitude",
   surveyGeneratedReset: "mission-survey-generated-reset",
 } as const;
+
+/**
+ * Suffix appended to secondary toolbar control test ids when the toolbar
+ * collapses into the phone-tier "More" disclosure. The disclosure renders a
+ * second copy of each secondary action with a `${canonical}--phone` test id so
+ * e2e suites can target the visible button at phone viewports without relying
+ * on display:none state.
+ *
+ * Phase 1 stop-gap. Replaced in Phase 8 by ui/Menu (Bits UI).
+ */
+export const MISSION_TOOLBAR_PHONE_SUFFIX = "--phone";
+
+export function missionToolbarPhoneId(canonicalId: string): string {
+  return `${canonicalId}${MISSION_TOOLBAR_PHONE_SUFFIX}`;
+}

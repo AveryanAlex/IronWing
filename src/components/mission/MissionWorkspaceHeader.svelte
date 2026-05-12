@@ -4,7 +4,7 @@ import type {
   MissionPlannerMode,
 } from "../../lib/stores/mission-planner";
 import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE } from "../../lib/replay-readonly";
-import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
+import { MISSION_TOOLBAR_PHONE_SUFFIX, missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
 type Props = {
   mode: MissionPlannerMode;
@@ -114,14 +114,19 @@ let replayReadonly = $derived(attachment.kind === "playback-readonly");
   <span class="mission-toolbar__sep" aria-hidden="true"></span>
 
   <!-- Secondary actions: visible inline on desktop, collapsed behind <details> on phone -->
+  <!-- Phase 1 stop-gap. Replaced in Phase 8 by ui/Menu (Bits UI). -->
   <div class="mission-toolbar__secondary mission-toolbar__secondary--desktop">
     {@render secondaryActions("")}
   </div>
 
   <details class="mission-toolbar__secondary mission-toolbar__secondary--phone">
-    <summary class="mission-toolbar__more-btn" aria-label="More mission actions">More</summary>
+    <summary
+      class="mission-toolbar__more-btn"
+      data-testid={missionWorkspaceTestIds.toolbarMoreButton}
+      aria-label="More mission actions"
+    >More</summary>
     <div class="mission-toolbar__more-list" role="group">
-      {@render secondaryActions("--phone")}
+      {@render secondaryActions(MISSION_TOOLBAR_PHONE_SUFFIX)}
     </div>
   </details>
 
