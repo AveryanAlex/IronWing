@@ -57,7 +57,7 @@ describe("recording bridge", () => {
     invokeMock.mockReset();
   });
 
-  it("defaults auto-record opt-in to disabled when mpng_settings is empty", async () => {
+  it("defaults auto-record opt-in to disabled when ironwing.settings is empty", async () => {
     const storage = createStorage();
     invokeMock.mockResolvedValue(backendSettingsResult());
 
@@ -67,7 +67,7 @@ describe("recording bridge", () => {
     expect(invokeMock).toHaveBeenCalledWith("recording_settings_read");
   });
 
-  it("persists the auto-record opt-in in mpng_settings without dropping existing settings", async () => {
+  it("persists the auto-record opt-in in ironwing.settings without dropping existing settings", async () => {
     const storage = createStorage({
       telemetryRateHz: 8,
       cruiseSpeedMps: 17,

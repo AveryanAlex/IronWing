@@ -1049,7 +1049,7 @@ describe("MissionWorkspace", () => {
     });
   });
 
-  it("hydrates new-draft planning speeds from persisted mpng_settings defaults", async () => {
+  it("hydrates new-draft planning speeds from persisted ironwing.settings defaults", async () => {
     const chromeStore = createResponsiveChromeStore(390, 844, "phone");
 
     const { plannerStore } = await renderWorkspace({ chromeStore });

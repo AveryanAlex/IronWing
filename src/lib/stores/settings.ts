@@ -2,7 +2,7 @@ import { writable } from "svelte/store";
 
 import { getBrowserStorage, readStorageJson, writeStorageJson } from "../local-storage";
 
-export const SETTINGS_STORAGE_KEY = "mpng_settings";
+export const SETTINGS_STORAGE_KEY = "ironwing.settings";
 
 export const TELEMETRY_RATE_HZ_LIMITS = {
   min: 1,

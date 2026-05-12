@@ -116,7 +116,7 @@ test.describe("telemetry settings actions", () => {
         await expect(globalPositionInput).toHaveValue("6");
         await expect.poll(async () => (await mockPlatform.getInvocations()).filter((entry) => entry.cmd === "set_message_rate").length).toBe(2);
 
-        const persistedSettings = await page.evaluate(() => JSON.parse(window.localStorage.getItem("mpng_settings") ?? "{}"));
+        const persistedSettings = await page.evaluate(() => JSON.parse(window.localStorage.getItem("ironwing.settings") ?? "{}"));
         expect(persistedSettings).toMatchObject({
             telemetryRateHz: 5,
             messageRates: { 33: 6 },

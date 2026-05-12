@@ -169,7 +169,7 @@ let recordingStatusTone = $derived(
   </label>
 
   <p class="logs-card__copy logs-content-wrap" data-testid="logs-auto-record-help">
-    Default remains off. When enabled, connect requests forward this opt-in through <code>mpng_settings</code> and auto recordings land in <code>{autoRecordDirectory ?? "—"}</code>.
+    Default remains off. When enabled, connect requests forward this opt-in through <code>ironwing.settings</code> and auto recordings land in <code>{autoRecordDirectory ?? "—"}</code>.
   </p>
 </section>
 

@@ -144,7 +144,7 @@ async function waitForMissionActionCycle(selectors, titleSubstring, label) {
 }
 
 describe("native smoke", () => {
-  it("boots the active shell, applies one setup channel-order change through the shared tray, proves compass lifecycle/status on Setup, applies one telemetry setting, uploads a real mission waypoint, reads it back, persists mpng_settings, and disconnects cleanly", async () => {
+  it("boots the active shell, applies one setup channel-order change through the shared tray, proves compass lifecycle/status on Setup, applies one telemetry setting, uploads a real mission waypoint, reads it back, persists ironwing.settings, and disconnects cleanly", async () => {
     const expectedTcpAddress = process.env.IRONWING_WDIO_TCP_ADDRESS;
     assert.ok(expectedTcpAddress, "IRONWING_WDIO_TCP_ADDRESS is required for the native smoke test.");
 
@@ -598,11 +598,11 @@ describe("native smoke", () => {
     assert.ok(Math.abs(readbackLongitude - primaryWaypoint.longitude) < 0.00001, `Mission readback longitude drifted: ${readbackLongitude}`);
     assert.ok(Math.abs(readbackAltitude - primaryWaypoint.altitude) < 0.01, `Mission readback altitude drifted: ${readbackAltitude}`);
 
-    const persistedSettings = await readStoredJson("mpng_settings");
-    console.log(`[native smoke] persisted mpng_settings ${JSON.stringify(persistedSettings)}`);
-    assert.ok(persistedSettings && typeof persistedSettings === "object", "Expected mpng_settings to persist as a JSON object.");
-    assert.ok(!("__parse_error" in persistedSettings), `mpng_settings should remain valid JSON: ${JSON.stringify(persistedSettings)}`);
-    assert.equal(persistedSettings.telemetryRateHz, nextTelemetryRate, "mpng_settings should persist the last applied telemetry cadence.");
+    const persistedSettings = await readStoredJson("ironwing.settings");
+    console.log(`[native smoke] persisted ironwing.settings ${JSON.stringify(persistedSettings)}`);
+    assert.ok(persistedSettings && typeof persistedSettings === "object", "Expected ironwing.settings to persist as a JSON object.");
+    assert.ok(!("__parse_error" in persistedSettings), `ironwing.settings should remain valid JSON: ${JSON.stringify(persistedSettings)}`);
+    assert.equal(persistedSettings.telemetryRateHz, nextTelemetryRate, "ironwing.settings should persist the last applied telemetry cadence.");
 
     await clickIntoView(setupWorkspaceButton);
     await setupWorkspaceRoot.waitForDisplayed({ timeout: 30_000 });
