@@ -2,6 +2,7 @@
 import { onDestroy, onMount } from "svelte";
 
 import { logsWorkspace, type LogsWorkspaceStore } from "../../lib/stores/logs-workspace";
+import { Banner, Button, Panel, StatusPill, WorkspaceHeader, WorkspaceShell } from "../ui";
 import LogCharts from "./LogCharts.svelte";
 import LogsRawMessagesPanel from "./LogsRawMessagesPanel.svelte";
 import LogsDetailsPanel from "./LogsDetailsPanel.svelte";
@@ -247,60 +248,54 @@ function emitMarkerHandoff() {
 }
 </script>
 
-<section class="logs-workspace" data-testid="logs-workspace-root">
-  <header class="logs-workspace__header">
-    <div>
-      <p class="logs-workspace__eyebrow">Logs workspace</p>
-      <h2 class="logs-workspace__title">Referenced library, replay control, and map handoff</h2>
-      <p class="logs-workspace__copy">
-        Browse the indexed library, preserve truthful missing or corrupt states, and drive replay without hiding the active live session boundary.
-      </p>
-    </div>
-
-    <div class="logs-workspace__header-status">
-      <span class="logs-pill" data-tone={workspace.effectiveSource === "playback" ? "caution" : "neutral"}>
+<WorkspaceShell mode="inset" testId="logs-workspace-root">
+  <WorkspaceHeader
+    eyebrow="Logs workspace"
+    title="Referenced library, replay control, and map handoff"
+    description="Browse the indexed library, preserve truthful missing or corrupt states, and drive replay without hiding the active live session boundary."
+  >
+    {#snippet status()}
+      <StatusPill tone={workspace.effectiveSource === "playback" ? "warning" : "neutral"}>
         effective source · {workspace.effectiveSource}
-      </span>
-      <span class="logs-pill" data-tone={workspace.phase === "ready" ? "positive" : "neutral"}>
+      </StatusPill>
+      <StatusPill tone={workspace.phase === "ready" ? "success" : "neutral"}>
         workspace · {workspace.phase}
-      </span>
-    </div>
-  </header>
+      </StatusPill>
+    {/snippet}
+  </WorkspaceHeader>
 
   {#if workspace.lastError}
-    <div aria-live="assertive" aria-atomic="true" class="logs-banner" data-tone="critical" data-testid="logs-workspace-last-error" role="alert">
-      {workspace.lastError}
-    </div>
+    <Banner severity="danger" title={workspace.lastError} testId="logs-workspace-last-error" />
   {/if}
 
   {#if workspace.operationProgress}
-    <section aria-atomic="true" aria-live="polite" class="logs-card logs-progress" data-testid="logs-progress-banner" role="status">
-      <div class="logs-progress__summary">
-        <div>
-          <p class="logs-card__eyebrow">Operation progress</p>
-          <h3 class="logs-card__title">{workspace.operationProgress.phase.replace(/_/g, " ")}</h3>
-          {#if workspace.operationProgress.message}
-            <p class="logs-card__copy">{workspace.operationProgress.message}</p>
+    <Panel testId="logs-progress-banner">
+      <div aria-atomic="true" aria-live="polite" class="logs-progress" role="status">
+        <div class="logs-progress__summary">
+          <div>
+            <p class="logs-card__eyebrow">Operation progress</p>
+            <h3 class="logs-card__title">{workspace.operationProgress.phase.replace(/_/g, " ")}</h3>
+            {#if workspace.operationProgress.message}
+              <p class="logs-card__copy">{workspace.operationProgress.message}</p>
+            {/if}
+          </div>
+
+          {#if hasCancelableOperation}
+            <Button onclick={() => void store.cancelOperation()}>Cancel</Button>
           {/if}
         </div>
 
-        {#if hasCancelableOperation}
-          <button class="logs-button logs-button--ghost" onclick={() => void store.cancelOperation()} type="button">
-            Cancel
-          </button>
-        {/if}
-      </div>
+        <div class="logs-progress__meter" aria-hidden="true">
+          <div class="logs-progress__fill" style={`width: ${workspace.operationProgress.percent ?? 0}%`}></div>
+        </div>
 
-      <div class="logs-progress__meter" aria-hidden="true">
-        <div class="logs-progress__fill" style={`width: ${workspace.operationProgress.percent ?? 0}%`}></div>
+        <div class="logs-progress__meta">
+          <span>{workspace.operationProgress.completed_items.toLocaleString()} completed</span>
+          <span>{workspace.operationProgress.total_items == null ? "total pending" : `${workspace.operationProgress.total_items.toLocaleString()} total`}</span>
+          <span>{workspace.operationProgress.percent == null ? "estimating" : `${workspace.operationProgress.percent}%`}</span>
+        </div>
       </div>
-
-      <div class="logs-progress__meta">
-        <span>{workspace.operationProgress.completed_items.toLocaleString()} completed</span>
-        <span>{workspace.operationProgress.total_items == null ? "total pending" : `${workspace.operationProgress.total_items.toLocaleString()} total`}</span>
-        <span>{workspace.operationProgress.percent == null ? "estimating" : `${workspace.operationProgress.percent}%`}</span>
-      </div>
-    </section>
+    </Panel>
   {/if}
 
   <div class="logs-workspace__layout">
@@ -420,22 +415,17 @@ function emitMarkerHandoff() {
       />
     </div>
   </div>
-</section>
+
+  <div class="logs-workspace__bottom-spacer" aria-hidden="true"></div>
+</WorkspaceShell>
 
 <style>
-  .logs-workspace {
-    height: 100%;
-    min-height: 0;
+  .logs-progress {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    box-sizing: border-box;
-    padding: 16px 16px 28px;
-    scroll-padding-bottom: 28px;
-    overflow-y: auto;
   }
 
-  .logs-workspace__header,
   .logs-progress__summary,
   .logs-progress__meta {
     display: flex;
@@ -444,7 +434,6 @@ function emitMarkerHandoff() {
     gap: 12px;
   }
 
-  .logs-workspace__eyebrow,
   .logs-card__eyebrow {
     margin: 0;
     color: var(--color-text-muted);
@@ -454,42 +443,20 @@ function emitMarkerHandoff() {
     text-transform: uppercase;
   }
 
-  .logs-workspace__title,
   .logs-card__title {
-    margin: 0;
+    margin: 4px 0 0;
     color: var(--color-text-primary);
+    font-size: 0.98rem;
     font-weight: 600;
     letter-spacing: -0.02em;
   }
 
-  .logs-workspace__title {
-    margin-top: 6px;
-    font-size: 1.4rem;
-  }
-
-  .logs-card__title {
-    margin-top: 4px;
-    font-size: 0.98rem;
-  }
-
-  .logs-workspace__copy,
   .logs-card__copy,
   .logs-progress__meta {
     margin: 0;
     color: var(--color-text-secondary);
     font-size: 0.8rem;
     line-height: 1.5;
-  }
-
-  .logs-workspace__copy {
-    margin-top: 8px;
-    max-width: 56rem;
-  }
-
-  .logs-workspace__header-status {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
   }
 
   .logs-workspace__layout {
@@ -509,74 +476,6 @@ function emitMarkerHandoff() {
     flex-direction: column;
     gap: 12px;
     align-self: start;
-  }
-
-  .logs-card {
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    background: var(--color-bg-secondary);
-    padding: 12px;
-  }
-
-  .logs-banner {
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    background: var(--color-bg-primary);
-    padding: 10px 12px;
-    color: var(--color-text-secondary);
-    font-size: 0.8rem;
-    line-height: 1.5;
-  }
-
-  .logs-banner[data-tone="critical"] {
-    border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
-    background: color-mix(in srgb, var(--color-danger) 10%, var(--color-bg-primary));
-    color: var(--color-danger);
-  }
-
-  .logs-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--color-border-light);
-    border-radius: 999px;
-    background: var(--color-bg-primary);
-    color: var(--color-text-secondary);
-    font-size: 0.69rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 0.25rem 0.55rem;
-  }
-
-  .logs-pill[data-tone="positive"] {
-    border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border-light));
-    color: var(--color-success);
-  }
-
-  .logs-pill[data-tone="caution"] {
-    border-color: color-mix(in srgb, var(--color-warning) 40%, var(--color-border-light));
-    color: var(--color-warning);
-  }
-
-  .logs-button {
-    border: 1px solid var(--color-accent);
-    border-radius: 6px;
-    background: color-mix(in srgb, var(--color-accent) 14%, var(--color-bg-primary));
-    color: var(--color-text-primary);
-    font-size: 0.78rem;
-    font-weight: 600;
-    padding: 0.5rem 0.8rem;
-  }
-
-  .logs-button--ghost {
-    border-color: var(--color-border);
-    background: var(--color-bg-primary);
-    color: var(--color-text-secondary);
   }
 
   .logs-progress__meter {
@@ -603,8 +502,12 @@ function emitMarkerHandoff() {
     }
   }
 
+  .logs-workspace__bottom-spacer {
+    flex-shrink: 0;
+    height: 12px;
+  }
+
   @media (max-width: 720px) {
-    .logs-workspace__header,
     .logs-progress__summary,
     .logs-progress__meta {
       flex-direction: column;

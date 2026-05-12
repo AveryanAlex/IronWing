@@ -4,6 +4,7 @@ import type uPlot from "uplot";
 import type { ChartSeries, ChartSeriesRequest, LogLibraryEntry } from "../../logs";
 import type { LogsChartState, LogsExportState } from "../../lib/stores/logs-workspace";
 import UPlotChart from "../mission/UPlotChart.svelte";
+import { Banner, Panel, StatusPill } from "../ui";
 import LogChartExportPanel from "./LogChartExportPanel.svelte";
 import LogChartGroupSelector from "./LogChartGroupSelector.svelte";
 import { getChartMessageTypeFilters, getDefaultChartGroupKey, getLogChartGroups, type LogChartGroup } from "./log-chart-config";
@@ -324,51 +325,54 @@ $effect(() => {
 
 <svelte:window onpointermove={handleWindowPointerMove} onpointerup={handleWindowPointerUp} />
 
-<section class="logs-card logs-charts" data-testid="logs-charts-panel">
-  <div class="logs-card__header">
-    <div>
-      <p class="logs-card__eyebrow">Charts</p>
-      <h3 class="logs-card__title">Bounded panels, synced cursor, and range export</h3>
-      <p class="logs-card__copy">
-        Chart queries stay clamped to the active replay window or the selected drag range. Export uses the same bounded selection instead of a full-log fetch.
-      </p>
-    </div>
-
-    {#if chartState.selectedRange}
-      <span class="logs-pill" data-tone="positive" data-testid="logs-chart-range-pill">
-        range · {formatUsec(chartState.selectedRange.startUsec, effectiveStartUsec)} → {formatUsec(chartState.selectedRange.endUsec, effectiveStartUsec)}
-      </span>
-    {/if}
-  </div>
-
-  {#if !entry}
-    <div class="logs-empty" data-testid="logs-charts-empty">
-      <p class="logs-empty__title">Select a log before opening charts.</p>
-      <p class="logs-empty__copy">The chart surface follows the active workspace selection and bounded replay window.</p>
-    </div>
-  {:else}
-    <LogChartGroupSelector {groups} {activeGroupKey} onSelectGroup={(groupKey) => onSelectGroup(groupKey)} />
-
-    {#if groups.length > 0 && groups.every((group) => !group.supported)}
-      <div class="logs-empty" data-testid="logs-charts-unsupported">
-        <p class="logs-empty__title">This log does not expose a supported chart group yet.</p>
-        <p class="logs-empty__copy">No bounded chart query was sent because the indexed message groups needed for the active panels are missing.</p>
+<Panel testId="logs-charts-panel">
+  <div class="logs-charts">
+    <div class="logs-card__header">
+      <div>
+        <p class="logs-card__eyebrow">Charts</p>
+        <h3 class="logs-card__title">Bounded panels, synced cursor, and range export</h3>
+        <p class="logs-card__copy">
+          Chart queries stay clamped to the active replay window or the selected drag range. Export uses the same bounded selection instead of a full-log fetch.
+        </p>
       </div>
-    {:else if activeGroup && !activeGroup.supported}
-      <div class="logs-empty" data-testid="logs-charts-group-unsupported">
-        <p class="logs-empty__title">{activeGroup.title} is unavailable for this log.</p>
-        <p class="logs-empty__copy">{activeGroup.emptyReason}</p>
+
+      {#if chartState.selectedRange}
+        <StatusPill tone="success" testId="logs-chart-range-pill">
+          range · {formatUsec(chartState.selectedRange.startUsec, effectiveStartUsec)} → {formatUsec(chartState.selectedRange.endUsec, effectiveStartUsec)}
+        </StatusPill>
+      {/if}
+    </div>
+
+    {#if !entry}
+      <div class="logs-empty" data-testid="logs-charts-empty">
+        <p class="logs-empty__title">Select a log before opening charts.</p>
+        <p class="logs-empty__copy">The chart surface follows the active workspace selection and bounded replay window.</p>
       </div>
     {:else}
-      {#if activeGroup?.supportsAltitudePreview}
-        <div class="logs-banner" data-testid="logs-altitude-preview-note">
-          Altitude preview follows the same bounded start/end window as the timeline and selected export range.
-        </div>
-      {/if}
+      <LogChartGroupSelector {groups} {activeGroupKey} onSelectGroup={(groupKey) => onSelectGroup(groupKey)} />
 
-      {#if chartState.error}
-        <div aria-live="assertive" aria-atomic="true" class="logs-banner" data-tone="critical" data-testid="logs-charts-error" role="alert">{chartState.error}</div>
-      {/if}
+      {#if groups.length > 0 && groups.every((group) => !group.supported)}
+        <div class="logs-empty" data-testid="logs-charts-unsupported">
+          <p class="logs-empty__title">This log does not expose a supported chart group yet.</p>
+          <p class="logs-empty__copy">No bounded chart query was sent because the indexed message groups needed for the active panels are missing.</p>
+        </div>
+      {:else if activeGroup && !activeGroup.supported}
+        <div class="logs-empty" data-testid="logs-charts-group-unsupported">
+          <p class="logs-empty__title">{activeGroup.title} is unavailable for this log.</p>
+          <p class="logs-empty__copy">{activeGroup.emptyReason}</p>
+        </div>
+      {:else}
+        {#if activeGroup?.supportsAltitudePreview}
+          <Banner
+            severity="info"
+            title="Altitude preview follows the same bounded start/end window as the timeline and selected export range."
+            testId="logs-altitude-preview-note"
+          />
+        {/if}
+
+        {#if chartState.error}
+          <Banner severity="danger" title={chartState.error} testId="logs-charts-error" />
+        {/if}
 
       {#if chartState.phase === "loading"}
         <div class="logs-empty" data-testid="logs-charts-loading">
@@ -433,23 +437,16 @@ $effect(() => {
       />
     {/if}
   {/if}
-</section>
+  </div>
+</Panel>
 
 <style>
-  .logs-card,
   .logs-charts,
   .logs-chart-series-list {
     min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 12px;
-  }
-
-  .logs-card {
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    background: var(--color-bg-secondary);
-    padding: 12px;
   }
 
   .logs-card__header,
@@ -482,46 +479,18 @@ $effect(() => {
   .logs-card__copy,
   .logs-empty__copy,
   .logs-chart-series__meta,
-  .logs-chart-series__footer,
-  .logs-banner {
+  .logs-chart-series__footer {
     margin: 0;
     color: var(--color-text-secondary);
     font-size: 0.8rem;
     line-height: 1.5;
   }
 
-  .logs-banner,
   .logs-empty {
     border: 1px solid var(--color-border);
     border-radius: 8px;
     background: var(--color-bg-primary);
     padding: 10px 12px;
-  }
-
-  .logs-banner[data-tone="critical"] {
-    border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
-    background: color-mix(in srgb, var(--color-danger) 10%, var(--color-bg-primary));
-    color: var(--color-danger);
-  }
-
-  .logs-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--color-border-light);
-    border-radius: 999px;
-    background: var(--color-bg-primary);
-    color: var(--color-text-secondary);
-    font-size: 0.69rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 0.25rem 0.55rem;
-  }
-
-  .logs-pill[data-tone="positive"] {
-    border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border-light));
-    color: var(--color-success);
   }
 
   .logs-chart-series {

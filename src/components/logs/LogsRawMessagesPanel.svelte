@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { LogExportRequest, LogLibraryEntry, RawMessageFieldFilter, RawMessageQuery, RawMessageRecord } from "../../logs";
 import type { LogsExportState, LogsRawBrowserFilters, LogsRawBrowserState } from "../../lib/stores/logs-workspace";
+import { Banner, Button, Panel, StatusPill } from "../ui";
 
 type DraftFieldFilter = RawMessageFieldFilter & { id: number };
 
@@ -350,19 +351,20 @@ function detailJson(value: unknown): string {
 }
 </script>
 
-<section class="logs-card logs-raw-browser" data-testid="logs-raw-messages-panel">
-  <div class="logs-raw-browser__header">
-    <div>
-      <p class="logs-card__eyebrow">Forensic browser</p>
-      <h3 class="logs-card__title">Raw messages</h3>
-      <p class="logs-card__copy">Filter indexed records, inspect message payloads, and export the current filtered view as CSV.</p>
+<Panel testId="logs-raw-messages-panel">
+  <div class="logs-raw-browser">
+    <div class="logs-raw-browser__header">
+      <div>
+        <p class="logs-card__eyebrow">Forensic browser</p>
+        <h3 class="logs-card__title">Raw messages</h3>
+        <p class="logs-card__copy">Filter indexed records, inspect message payloads, and export the current filtered view as CSV.</p>
+      </div>
+      <StatusPill>{rawBrowser.page?.total_available ?? 0} matched</StatusPill>
     </div>
-    <span class="logs-pill">{rawBrowser.page?.total_available ?? 0} matched</span>
-  </div>
 
-  {#if !entry}
-    <div class="logs-banner">Select a log to browse raw messages.</div>
-  {:else}
+    {#if !entry}
+      <Banner severity="info" title="Select a log to browse raw messages." />
+    {:else}
     <div class="logs-raw-browser__filters">
       <label>
         <span>Message types</span>
@@ -408,34 +410,41 @@ function detailJson(value: unknown): string {
         <div class="logs-raw-browser__field-row">
           <input aria-label={`Field name ${index + 1}`} data-testid={`logs-raw-field-name-${index}`} oninput={(event) => updateFieldFilter(fieldFilter.id, { field: (event.currentTarget as HTMLInputElement).value })} placeholder="field" value={fieldFilter.field} />
           <input aria-label={`Field value ${index + 1}`} data-testid={`logs-raw-field-value-${index}`} oninput={(event) => updateFieldFilter(fieldFilter.id, { value_text: (event.currentTarget as HTMLInputElement).value })} placeholder="contains" value={fieldFilter.value_text ?? ""} />
-          <button class="logs-button logs-button--ghost" onclick={() => removeFieldFilter(fieldFilter.id)} type="button">Remove</button>
+          <Button size="sm" onclick={() => removeFieldFilter(fieldFilter.id)}>Remove</Button>
         </div>
       {/each}
-      <button class="logs-button logs-button--ghost" onclick={addFieldFilter} type="button">Add field filter</button>
+      <Button size="sm" onclick={addFieldFilter}>Add field filter</Button>
     </div>
 
     <div class="logs-raw-browser__actions">
       <div class="logs-raw-browser__query-actions">
-        <button class="logs-button" data-testid="logs-raw-run-query" onclick={runFirstPageQuery} type="button">Run query</button>
-        <button class="logs-button logs-button--ghost" data-testid="logs-raw-previous-page" disabled={previousCursors.length === 0} onclick={runPreviousPageQuery} type="button">Previous</button>
-        <button class="logs-button logs-button--ghost" data-testid="logs-raw-next-page" disabled={!rawBrowser.page?.next_cursor} onclick={runNextPageQuery} type="button">Next</button>
+        <Button tone="accent" testId="logs-raw-run-query" onclick={runFirstPageQuery}>Run query</Button>
+        <Button testId="logs-raw-previous-page" disabled={previousCursors.length === 0} onclick={runPreviousPageQuery}>Previous</Button>
+        <Button testId="logs-raw-next-page" disabled={!rawBrowser.page?.next_cursor} onclick={runNextPageQuery}>Next</Button>
       </div>
 
       <div class="logs-raw-browser__export">
         <input aria-label="Export destination path" data-testid="logs-raw-export-destination" oninput={(event) => (exportDestination = (event.currentTarget as HTMLInputElement).value)} placeholder="/tmp/raw-messages.csv" value={exportDestination} />
-        <button class="logs-button logs-button--ghost" data-testid="logs-raw-export" disabled={exportDestination.trim().length === 0 || exportState.phase === "exporting"} onclick={handleExport} type="button">
+        <Button
+          testId="logs-raw-export"
+          disabled={exportDestination.trim().length === 0 || exportState.phase === "exporting"}
+          onclick={handleExport}
+        >
           {rawExportInFlight ? "Exporting…" : "Export filtered CSV"}
-        </button>
+        </Button>
       </div>
     </div>
 
     {#if rawBrowser.error}
-      <div aria-live="assertive" aria-atomic="true" class="logs-banner" data-tone="critical" role="alert">{rawBrowser.error}</div>
+      <Banner severity="danger" title={rawBrowser.error} />
     {/if}
     {#if rawExportVisible && exportState.error}
-      <div aria-live="assertive" aria-atomic="true" class="logs-banner" data-tone="critical" role="alert">{exportState.error}</div>
+      <Banner severity="danger" title={exportState.error} />
     {:else if rawExportVisible && exportState.phase === "completed" && exportState.result}
-      <div aria-live="polite" aria-atomic="true" class="logs-banner" role="status">Export completed · {exportState.result.rows_written.toLocaleString()} rows written.</div>
+      <Banner
+        severity="success"
+        title={`Export completed · ${exportState.result.rows_written.toLocaleString()} rows written.`}
+      />
     {/if}
 
     <div class="logs-raw-browser__content">
@@ -497,7 +506,8 @@ function detailJson(value: unknown): string {
       </aside>
     </div>
   {/if}
-</section>
+  </div>
+</Panel>
 
 <style>
   .logs-raw-browser,
@@ -512,14 +522,6 @@ function detailJson(value: unknown): string {
   .logs-raw-browser__header {
     display: flex;
     gap: 12px;
-  }
-
-  .logs-card {
-    min-height: 0;
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    background: var(--color-bg-secondary);
-    padding: 12px;
   }
 
   .logs-raw-browser,
@@ -552,8 +554,7 @@ function detailJson(value: unknown): string {
     font-weight: 600;
   }
 
-  .logs-card__copy,
-  .logs-banner {
+  .logs-card__copy {
     margin: 0;
     color: var(--color-text-secondary);
     font-size: 0.8rem;
@@ -636,54 +637,6 @@ function detailJson(value: unknown): string {
     word-break: break-word;
     color: var(--color-text-secondary);
     font-size: 0.78rem;
-  }
-
-  .logs-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--color-border-light);
-    border-radius: 999px;
-    background: var(--color-bg-primary);
-    color: var(--color-text-secondary);
-    font-size: 0.69rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 0.25rem 0.55rem;
-  }
-
-  .logs-button {
-    border: 1px solid var(--color-accent);
-    border-radius: 6px;
-    background: color-mix(in srgb, var(--color-accent) 14%, var(--color-bg-primary));
-    color: var(--color-text-primary);
-    font-size: 0.78rem;
-    font-weight: 600;
-    padding: 0.5rem 0.8rem;
-  }
-
-  .logs-button:disabled {
-    opacity: 0.45;
-  }
-
-  .logs-button--ghost {
-    border-color: var(--color-border);
-    background: var(--color-bg-primary);
-    color: var(--color-text-secondary);
-  }
-
-  .logs-banner {
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    background: var(--color-bg-primary);
-    padding: 10px 12px;
-  }
-
-  .logs-banner[data-tone="critical"] {
-    border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
-    background: color-mix(in srgb, var(--color-danger) 10%, var(--color-bg-primary));
-    color: var(--color-danger);
   }
 
   @media (max-width: 980px) {

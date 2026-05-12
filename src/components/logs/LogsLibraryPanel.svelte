@@ -1,7 +1,23 @@
 <script lang="ts">
 import type { LogLibraryEntry } from "../../logs";
+import { Banner, Button, Panel, StatusPill } from "../ui";
 import { formatCount, formatDuration } from "./logs-format";
 import { entryStatusLabel, entryTone, sourceStatusLabel } from "./logs-workspace-display";
+
+type PillTone = "neutral" | "info" | "success" | "warning" | "danger";
+
+function mapTone(tone: "neutral" | "positive" | "caution" | "critical"): PillTone {
+  switch (tone) {
+    case "positive":
+      return "success";
+    case "caution":
+      return "warning";
+    case "critical":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
 
 type Props = {
   entries: LogLibraryEntry[];
@@ -32,112 +48,98 @@ let {
 }: Props = $props();
 </script>
 
-<aside class="logs-card logs-library" data-testid="logs-library-panel">
-  <div class="logs-library__header">
-    <div>
-      <p class="logs-card__eyebrow">Library</p>
-      <h3 class="logs-card__title">Referenced catalog</h3>
-      <p class="logs-card__copy">Register existing <code>.tlog</code> and <code>.bin</code> files in place without copying bytes into app storage.</p>
+<Panel testId="logs-library-panel">
+  <div class="logs-library">
+    <div class="logs-library__header">
+      <div>
+        <p class="logs-card__eyebrow">Library</p>
+        <h3 class="logs-card__title">Referenced catalog</h3>
+        <p class="logs-card__copy">Register existing <code>.tlog</code> and <code>.bin</code> files in place without copying bytes into app storage.</p>
+      </div>
+
+      <Button onclick={onRefresh}>Refresh</Button>
     </div>
 
-    <button class="logs-button logs-button--ghost" onclick={onRefresh} type="button">
-      Refresh
-    </button>
-  </div>
+    <label class="logs-field">
+      <span class="logs-field__label">Import or register path</span>
+      <input
+        class="logs-input"
+        data-testid="logs-import-path-input"
+        oninput={(event) => onImportPathChange((event.currentTarget as HTMLInputElement).value)}
+        placeholder="/data/logs/flight-042.tlog"
+        type="text"
+        value={importPath}
+      />
+    </label>
 
-  <label class="logs-field">
-    <span class="logs-field__label">Import or register path</span>
-    <input
-      class="logs-input"
-      data-testid="logs-import-path-input"
-      oninput={(event) => onImportPathChange((event.currentTarget as HTMLInputElement).value)}
-      placeholder="/data/logs/flight-042.tlog"
-      type="text"
-      value={importPath}
-    />
-  </label>
-
-  <div class="logs-library__actions">
-    <button
-      class="logs-button logs-button--ghost"
-      data-testid="logs-import-picker-button"
-      disabled={libraryPhase === "loading"}
-      onclick={onRegisterFromPicker}
-      type="button"
-    >
-      Choose file
-    </button>
-    <button
-      class="logs-button"
-      data-testid="logs-import-button"
-      disabled={importPath.trim().length === 0 || libraryPhase === "loading"}
-      onclick={onRegisterPath}
-      type="button"
-    >
-      Register path
-    </button>
-  </div>
-
-  {#if libraryError}
-    <div class="logs-banner" data-tone="critical">{libraryError}</div>
-  {/if}
-
-  {#if entries.length === 0}
-    <div class="logs-empty" data-testid="logs-library-empty">
-      <p class="logs-empty__title">No indexed logs yet.</p>
-      <p class="logs-empty__copy">Register a referenced path to seed the durable library and its rebuildable indexes.</p>
+    <div class="logs-library__actions">
+      <Button
+        testId="logs-import-picker-button"
+        disabled={libraryPhase === "loading"}
+        onclick={onRegisterFromPicker}
+      >
+        Choose file
+      </Button>
+      <Button
+        tone="accent"
+        testId="logs-import-button"
+        disabled={importPath.trim().length === 0 || libraryPhase === "loading"}
+        onclick={onRegisterPath}
+      >
+        Register path
+      </Button>
     </div>
-  {:else}
-    <ul class="logs-library__list" data-testid="logs-library-list">
-      {#each entries as entry (entry.entry_id)}
-        <li>
-          <button
-            class={`logs-library-entry ${selectedEntryId === entry.entry_id ? "is-selected" : ""}`}
-            data-testid={`logs-entry-${entry.entry_id}`}
-            onclick={() => onSelectEntry(entry.entry_id)}
-            type="button"
-          >
-            <div class="logs-library-entry__topline">
-              <span class="logs-library-entry__name">{entry.metadata.display_name}</span>
-              <span class="logs-library-entry__format">{entry.metadata.format}</span>
-            </div>
 
-            <div class="logs-library-entry__meta">
-              <span>{formatDuration(entry.metadata.duration_secs)}</span>
-              <span>{formatCount(entry.metadata.total_messages)} msgs</span>
-            </div>
+    {#if libraryError}
+      <Banner severity="danger" title={libraryError} />
+    {/if}
 
-            <div class="logs-library-entry__badges">
-              <span class="logs-pill" data-tone={entryTone(entry)}>{entryStatusLabel(entry)}</span>
-              <span class="logs-pill" data-tone={entry.source.status.kind === "available" ? "neutral" : "caution"}>{sourceStatusLabel(entry)}</span>
-              {#if loadedEntryId === entry.entry_id}
-                <span class="logs-pill" data-tone="positive">loaded</span>
-              {/if}
-            </div>
-          </button>
-        </li>
-      {/each}
-    </ul>
-  {/if}
-</aside>
+    {#if entries.length === 0}
+      <div class="logs-empty" data-testid="logs-library-empty">
+        <p class="logs-empty__title">No indexed logs yet.</p>
+        <p class="logs-empty__copy">Register a referenced path to seed the durable library and its rebuildable indexes.</p>
+      </div>
+    {:else}
+      <ul class="logs-library__list" data-testid="logs-library-list">
+        {#each entries as entry (entry.entry_id)}
+          <li>
+            <button
+              class={`logs-library-entry ${selectedEntryId === entry.entry_id ? "is-selected" : ""}`}
+              data-testid={`logs-entry-${entry.entry_id}`}
+              onclick={() => onSelectEntry(entry.entry_id)}
+              type="button"
+            >
+              <div class="logs-library-entry__topline">
+                <span class="logs-library-entry__name">{entry.metadata.display_name}</span>
+                <span class="logs-library-entry__format">{entry.metadata.format}</span>
+              </div>
+
+              <div class="logs-library-entry__meta">
+                <span>{formatDuration(entry.metadata.duration_secs)}</span>
+                <span>{formatCount(entry.metadata.total_messages)} msgs</span>
+              </div>
+
+              <div class="logs-library-entry__badges">
+                <StatusPill tone={mapTone(entryTone(entry))}>{entryStatusLabel(entry)}</StatusPill>
+                <StatusPill tone={entry.source.status.kind === "available" ? "neutral" : "warning"}>{sourceStatusLabel(entry)}</StatusPill>
+                {#if loadedEntryId === entry.entry_id}
+                  <StatusPill tone="success">loaded</StatusPill>
+                {/if}
+              </div>
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </div>
+</Panel>
 
 <style>
-  .logs-card,
   .logs-library {
-    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 12px;
-  }
-
-  .logs-card {
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    background: var(--color-bg-secondary);
-    padding: 12px;
-  }
-
-  .logs-library {
+    min-height: 0;
     overflow: hidden;
   }
 
@@ -173,15 +175,13 @@ let {
   }
 
   .logs-card__copy,
-  .logs-empty__copy,
-  .logs-banner {
+  .logs-empty__copy {
     margin: 0;
     color: var(--color-text-secondary);
     font-size: 0.8rem;
     line-height: 1.5;
   }
 
-  .logs-banner,
   .logs-empty {
     border: 1px solid var(--color-border);
     border-radius: 8px;
@@ -189,44 +189,8 @@ let {
     padding: 10px 12px;
   }
 
-  .logs-banner[data-tone="critical"] {
-    border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
-    background: color-mix(in srgb, var(--color-danger) 10%, var(--color-bg-primary));
-    color: var(--color-danger);
-  }
-
   .logs-empty__copy {
     margin-top: 4px;
-  }
-
-  .logs-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--color-border-light);
-    border-radius: 999px;
-    background: var(--color-bg-primary);
-    color: var(--color-text-secondary);
-    font-size: 0.69rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 0.25rem 0.55rem;
-  }
-
-  .logs-pill[data-tone="positive"] {
-    border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border-light));
-    color: var(--color-success);
-  }
-
-  .logs-pill[data-tone="caution"] {
-    border-color: color-mix(in srgb, var(--color-warning) 40%, var(--color-border-light));
-    color: var(--color-warning);
-  }
-
-  .logs-pill[data-tone="critical"] {
-    border-color: color-mix(in srgb, var(--color-danger) 40%, var(--color-border-light));
-    color: var(--color-danger);
   }
 
   .logs-field {
@@ -251,26 +215,6 @@ let {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-  }
-
-  .logs-button {
-    border: 1px solid var(--color-accent);
-    border-radius: 6px;
-    background: color-mix(in srgb, var(--color-accent) 14%, var(--color-bg-primary));
-    color: var(--color-text-primary);
-    font-size: 0.78rem;
-    font-weight: 600;
-    padding: 0.5rem 0.8rem;
-  }
-
-  .logs-button:disabled {
-    opacity: 0.45;
-  }
-
-  .logs-button--ghost {
-    border-color: var(--color-border);
-    background: var(--color-bg-primary);
-    color: var(--color-text-secondary);
   }
 
   .logs-library__list {

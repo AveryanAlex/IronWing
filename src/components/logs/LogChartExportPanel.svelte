@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { LogsChartState, LogsExportState } from "../../lib/stores/logs-workspace";
+import { Banner, Button } from "../ui";
 import type { LogChartGroup } from "./log-chart-config";
 import { getChartMessageTypeFilters } from "./log-chart-config";
 import { formatUsec } from "./logs-format";
@@ -37,15 +38,13 @@ let chartExportInFlight = $derived(exportState.phase === "exporting" && chartExp
       <p class="logs-card__copy">Drag across any chart to pin a shared range, then export CSV for the active chart group only.</p>
     </div>
 
-    <button
-      class="logs-button logs-button--ghost"
-      data-testid="logs-chart-clear-range"
+    <Button
+      testId="logs-chart-clear-range"
       disabled={chartState.selectedRange == null}
       onclick={onClearRange}
-      type="button"
     >
       Clear range
-    </button>
+    </Button>
   </div>
 
   <div class="logs-chart-export__controls">
@@ -61,15 +60,14 @@ let chartExportInFlight = $derived(exportState.phase === "exporting" && chartExp
       />
     </label>
 
-    <button
-      class="logs-button"
-      data-testid="logs-chart-export-button"
+    <Button
+      tone="accent"
+      testId="logs-chart-export-button"
       disabled={!exportReady}
       onclick={onRequestExport}
-      type="button"
     >
       {chartExportInFlight ? "Exporting…" : "Export selected range as CSV"}
-    </button>
+    </Button>
   </div>
 
   {#if !chartState.selectedRange}
@@ -81,11 +79,13 @@ let chartExportInFlight = $derived(exportState.phase === "exporting" && chartExp
   {/if}
 
   {#if chartExportVisible && exportState.error}
-    <div aria-live="assertive" aria-atomic="true" class="logs-banner" data-tone="critical" data-testid="logs-chart-export-error" role="alert">{exportState.error}</div>
+    <Banner severity="danger" title={exportState.error} testId="logs-chart-export-error" />
   {:else if chartExportVisible && exportState.phase === "completed" && exportState.result}
-    <div aria-live="polite" aria-atomic="true" class="logs-banner" data-tone="positive" data-testid="logs-chart-export-result" role="status">
-      Wrote {exportState.result.rows_written.toLocaleString()} rows to {exportState.result.destination_path}.
-    </div>
+    <Banner
+      severity="success"
+      title={`Wrote ${exportState.result.rows_written.toLocaleString()} rows to ${exportState.result.destination_path}.`}
+      testId="logs-chart-export-result"
+    />
   {/if}
 </section>
 
@@ -100,8 +100,7 @@ let chartExportInFlight = $derived(exportState.phase === "exporting" && chartExp
     text-transform: uppercase;
   }
 
-  .logs-card__copy,
-  .logs-banner {
+  .logs-card__copy {
     margin: 0;
     color: var(--color-text-secondary);
     font-size: 0.8rem;
@@ -143,45 +142,6 @@ let chartExportInFlight = $derived(exportState.phase === "exporting" && chartExp
     color: var(--color-text-primary);
     font-size: 0.8rem;
     padding: 0.55rem 0.7rem;
-  }
-
-  .logs-button {
-    border: 1px solid var(--color-accent);
-    border-radius: 6px;
-    background: color-mix(in srgb, var(--color-accent) 14%, var(--color-bg-primary));
-    color: var(--color-text-primary);
-    font-size: 0.78rem;
-    font-weight: 600;
-    padding: 0.5rem 0.8rem;
-  }
-
-  .logs-button:disabled {
-    opacity: 0.45;
-  }
-
-  .logs-button--ghost {
-    border-color: var(--color-border);
-    background: var(--color-bg-primary);
-    color: var(--color-text-secondary);
-  }
-
-  .logs-banner {
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    background: var(--color-bg-primary);
-    padding: 10px 12px;
-  }
-
-  .logs-banner[data-tone="critical"] {
-    border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
-    background: color-mix(in srgb, var(--color-danger) 10%, var(--color-bg-primary));
-    color: var(--color-danger);
-  }
-
-  .logs-banner[data-tone="positive"] {
-    border-color: color-mix(in srgb, var(--color-success) 45%, var(--color-border));
-    background: color-mix(in srgb, var(--color-success) 10%, var(--color-bg-primary));
-    color: var(--color-success);
   }
 
   @media (max-width: 720px) {
