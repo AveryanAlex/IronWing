@@ -21,6 +21,7 @@ export type ParameterExpertBitmaskOption = {
 };
 
 export type ParameterExpertRow = ParameterItemModel & {
+  renderId: string;
   groupKey: string;
   groupLabel: string;
   userLevel: "Standard" | "Advanced" | "Unknown";
@@ -71,8 +72,8 @@ export function buildParameterExpertView(args: {
   searchText: string;
   highlightTargets?: string[];
 }): ParameterExpertView {
-  const rows = buildParameterItemModels(args.paramStore, args.metadata).map((item) =>
-    buildExpertRow(item, args.metadata?.get(item.name), args.stagedEdits[item.name], args.retainedFailures[item.name]),
+  const rows = buildParameterItemModels(args.paramStore, args.metadata).map((item, index) =>
+    buildExpertRow(item, index, args.metadata?.get(item.name), args.stagedEdits[item.name], args.retainedFailures[item.name]),
   );
   const normalizedSearch = args.searchText.trim().toLowerCase();
   const requestedHighlights = normalizeHighlightTargets(args.highlightTargets ?? []);
@@ -117,6 +118,7 @@ export function buildParameterExpertView(args: {
 
 function buildExpertRow(
   item: ParameterItemModel,
+  index: number,
   meta: ParamMeta | undefined,
   stagedEdit: StagedParameterEdit | undefined,
   retainedFailure: ParameterExpertRetainedFailure | undefined,
@@ -132,6 +134,7 @@ function buildExpertRow(
 
   return {
     ...item,
+    renderId: `${item.rawName}#${index}`,
     groupKey: prefix,
     groupLabel: prefix,
     userLevel,

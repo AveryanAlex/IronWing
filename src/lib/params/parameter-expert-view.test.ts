@@ -107,6 +107,34 @@ function buildView(
   });
 }
 
+describe("buildParameterExpertView renderId", () => {
+  it("produces unique renderId for rows that share the same name", () => {
+    const duplicateName = "ACRO_RP_RATE_TC:0";
+    const paramStore = {
+      expected_count: 2,
+      params: {
+        [`${duplicateName}#0`]: { name: duplicateName, value: 0, param_type: "uint8", index: 0 },
+        [`${duplicateName}#1`]: { name: duplicateName, value: 0, param_type: "uint8", index: 1 },
+      },
+    } as unknown as ParamStore;
+
+    const view = buildParameterExpertView({
+      paramStore,
+      metadata: null,
+      stagedEdits: {},
+      retainedFailures: {},
+      filter: "all",
+      searchText: "",
+    });
+
+    const allRows = view.groups.flatMap((group) => group.rows);
+    const renderIds = allRows.map((row) => row.renderId);
+
+    expect(renderIds.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(renderIds).size).toBe(renderIds.length);
+  });
+});
+
 describe("buildParameterExpertView", () => {
   it("groups rows by prefix, honors filters, and keeps highlighted workflow targets visible", () => {
     const view = buildView("standard", "", {

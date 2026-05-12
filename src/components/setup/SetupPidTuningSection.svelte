@@ -484,7 +484,7 @@ function discardItem(name: string) {
           </div>
 
           <div class="mt-4 space-y-3">
-            {#each group.rows as row (row.name)}
+            {#each group.rows as row (row.renderId)}
               <ParameterExpertRowComponent
                 envelopeKey={envelopeKey()}
                 onDiscard={discardItem}
