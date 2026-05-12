@@ -128,50 +128,8 @@ body {
 .app-shell-tabs {
   display: flex;
   flex: 1;
-  gap: 4px;
-  overflow-x: auto;
+  min-width: 0;
   margin-left: auto;
-}
-
-.app-shell-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 0.78rem;
-  font-weight: 600;
-  white-space: nowrap;
-  padding: 0.35rem 0.55rem;
-}
-
-.app-shell-tab:hover {
-  border-color: var(--color-border);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-}
-
-.app-shell-tab.is-active {
-  border-color: var(--color-border-light);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-}
-
-.app-shell-tab__badge {
-  border-radius: 999px;
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-secondary);
-  font-size: 0.7rem;
-  font-weight: 700;
-  line-height: 1;
-  padding: 0.16rem 0.36rem;
-}
-
-.app-shell-tab__badge.is-active {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
 }
 
 .runtime-eyebrow {
@@ -302,6 +260,9 @@ body {
 .app-shell-layout__main {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: var(--color-bg-primary);
 }
@@ -645,10 +606,6 @@ body {
   .app-shell-tabs {
     flex-basis: 100%;
     margin-left: 0;
-  }
-
-  .app-shell-tab__label {
-    display: none;
   }
 
   .operator-workspace__section-heading,

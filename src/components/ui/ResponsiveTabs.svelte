@@ -1,5 +1,5 @@
 <script lang="ts">
-type Tab = { key: string; label: string; badge?: string };
+type Tab = { key: string; label: string; badge?: string; testId?: string; badgeTestId?: string };
 
 type Props = {
   tabs: ReadonlyArray<Tab>;
@@ -12,19 +12,19 @@ type Props = {
 let { tabs, active, onSelect, ariaLabel, testId }: Props = $props();
 </script>
 
-<div class="ui-tabs" role="tablist" aria-label={ariaLabel} data-testid={testId}>
+<div class="ui-tabs" aria-label={ariaLabel} data-testid={testId} role="group">
   {#each tabs as tab (tab.key)}
     <button
+      aria-label={tab.label}
+      aria-pressed={tab.key === active}
       class="ui-tabs__tab"
       data-active={tab.key === active || undefined}
-      role="tab"
-      aria-selected={tab.key === active}
-      tabindex={tab.key === active ? 0 : -1}
+      data-testid={tab.testId}
       onclick={() => onSelect(tab.key)}
       type="button"
     >
       <span class="ui-tabs__label">{tab.label}</span>
-      {#if tab.badge}<span class="ui-tabs__badge">{tab.badge}</span>{/if}
+      {#if tab.badge}<span class="ui-tabs__badge" data-testid={tab.badgeTestId}>{tab.badge}</span>{/if}
     </button>
   {/each}
 </div>
