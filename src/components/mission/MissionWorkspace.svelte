@@ -8,11 +8,13 @@ import {
   getShellChromeStoreContext,
 } from "../../app/shell/runtime-context";
 import {
+  captureActiveWorkspace,
   createEmptyMissionPlannerWorkspace,
   plannerHasContent,
   type MissionPlannerMode,
   type MissionPlannerStore,
   type MissionPlannerStoreState,
+  type MissionPlannerWorkspace,
 } from "../../lib/stores/mission-planner";
 import type {
   MissionPlannerInlineStatus,
@@ -638,11 +640,22 @@ async function handleImportKml() {
 }
 
 function handleNewMission() {
-  missionPlannerStore.replaceWorkspace({
-    ...createEmptyMissionPlannerWorkspace(),
+  // Clear scopes to the currently active mode. Home stays put across modes,
+  // and the planner mode itself does not change. In mission mode we also
+  // wipe the survey extension since survey regions live alongside mission
+  // items.
+  const captured = captureActiveWorkspace(planner);
+  const empty = createEmptyMissionPlannerWorkspace();
+  const next: MissionPlannerWorkspace = {
+    mission: view.mode === "mission" ? empty.mission : captured.mission,
+    fence: view.mode === "fence" ? empty.fence : captured.fence,
+    rally: view.mode === "rally" ? empty.rally : captured.rally,
+    home: captured.home,
+    survey: view.mode === "mission" ? empty.survey : captured.survey,
     cruiseSpeed: appSettings.cruiseSpeedMps,
     hoverSpeed: appSettings.hoverSpeedMps,
-  });
+  };
+  missionPlannerStore.replaceWorkspace(next);
 }
 
 function handlePersistPlanningSpeeds(args: { cruiseSpeed?: number; hoverSpeed?: number }) {

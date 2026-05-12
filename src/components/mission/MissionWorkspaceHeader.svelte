@@ -71,6 +71,9 @@ let replayReadonly = $derived(attachment.kind === "playback-readonly");
 let uploadDisabled = $derived(
   busy || !attachment.canUseVehicleActions || !canUseVehicleActions || !hasContent,
 );
+let clearLabel = $derived(
+  mode === "fence" ? "Clear fence" : mode === "rally" ? "Clear rally" : "Clear mission",
+);
 let secondaryItems = $derived<MenuItem[]>([
   {
     id: "read",
@@ -98,7 +101,7 @@ let secondaryItems = $derived<MenuItem[]>([
   },
   {
     id: "new",
-    label: "Clear mission",
+    label: clearLabel,
     testId: missionWorkspaceTestIds.toolbarNew,
     disabled: busy || !attachment.canEdit,
     icon: newIcon,
