@@ -24,6 +24,7 @@ import {
   getParameterWorkspaceViewStoreContext,
   getParamsStoreContext,
 } from "../../app/shell/runtime-context";
+import { Button, WorkspaceHeader, WorkspaceShell } from "../ui";
 import ParameterExpertBrowser from "./ParameterExpertBrowser.svelte";
 import ParameterExpertFileActions from "./ParameterExpertFileActions.svelte";
 import ParameterWorkflowSection from "./ParameterWorkflowSection.svelte";
@@ -47,9 +48,11 @@ type ResolvedFlightWorkflowInputs = {
 let {
   fileIo = createParameterFileIo(),
   defaultMode = "workflow",
+  onReviewStaged,
 }: {
   fileIo?: ParameterFileIo;
   defaultMode?: "workflow" | "expert";
+  onReviewStaged?: () => void;
 } = $props();
 
 const store = getParamsStoreContext();
@@ -301,32 +304,40 @@ function parsePositiveNumber(value: string): number | null {
 }
 </script>
 
+<WorkspaceShell mode="inset">
 <section
   class="rounded-lg border border-border bg-bg-primary p-3"
   data-domain-readiness={view.readiness}
   data-workspace-state={view.status}
   data-testid={parameterWorkspaceTestIds.root}
 >
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Parameter workspace</p>
-      <h2 class="mt-1 text-base font-semibold text-text-primary">
-        {expertDefaultMode ? "Raw browser first" : "Workflow-first setup"}
-      </h2>
-      <p class="mt-1 text-sm text-text-secondary">
-        {expertDefaultMode
-          ? "Browse searchable raw parameters first, then use the guided helpers below when you want scoped recommendations."
-          : "Start with a few guided operational changes, then open Advanced parameters for searchable raw edits, grouped browsing, and the same shared review tray."}
-      </p>
-    </div>
-
-    <p
-      class="inline-flex items-center rounded-md border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold text-text-secondary"
-      data-testid={parameterWorkspaceTestIds.state}
-    >
-      {statusBadgeText(view.status)}
-    </p>
-  </div>
+  <WorkspaceHeader
+    description={expertDefaultMode
+      ? "Browse searchable raw parameters first, then use the guided helpers below when you want scoped recommendations."
+      : "Start with a few guided operational changes, then open Advanced parameters for searchable raw edits, grouped browsing, and the same shared review tray."}
+    eyebrow="Parameter workspace"
+    title={expertDefaultMode ? "Parameters" : "Parameters"}
+  >
+    {#snippet status()}
+      <span
+        class="inline-flex items-center rounded-md border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold text-text-secondary"
+        data-testid={parameterWorkspaceTestIds.state}
+      >
+        {statusBadgeText(view.status)}
+      </span>
+    {/snippet}
+    {#snippet actions()}
+      {#if onReviewStaged}
+        <Button
+          disabled={view.stagedCount === 0}
+          onclick={onReviewStaged}
+          tone="accent"
+        >
+          Review staged ({view.stagedCount})
+        </Button>
+      {/if}
+    {/snippet}
+  </WorkspaceHeader>
 
   <div class="mt-4 grid gap-2 md:grid-cols-3">
     <p
@@ -522,3 +533,4 @@ function parsePositiveNumber(value: string): number | null {
     {@render workflowHelpers()}
   {/if}
 </section>
+</WorkspaceShell>
