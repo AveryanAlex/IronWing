@@ -12,6 +12,8 @@ type Props = {
   onDismiss?: () => void;
   details?: ReadonlyArray<string>;
   testId?: string;
+  titleTestId?: string;
+  messageTestId?: string;
   actionTestId?: string;
   dismissTestId?: string;
 };
@@ -27,6 +29,8 @@ let {
   onDismiss,
   details,
   testId,
+  titleTestId,
+  messageTestId,
   actionTestId,
   dismissTestId,
 }: Props = $props();
@@ -35,8 +39,8 @@ let {
 <div class="ui-banner" data-severity={severity} role={severity === "danger" || severity === "blocking" ? "alert" : "status"} data-testid={testId}>
   <div class="ui-banner__body">
     {#if source}<span class="ui-banner__source">{source}</span>{/if}
-    <p class="ui-banner__title">{title}</p>
-    {#if message}<p class="ui-banner__message">{message}</p>{/if}
+    <p class="ui-banner__title" data-testid={titleTestId}>{title}</p>
+    {#if message}<p class="ui-banner__message" data-testid={messageTestId}>{message}</p>{/if}
     {#if details && details.length > 0}
       <ul class="ui-banner__details">
         {#each details as line (line)}

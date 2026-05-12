@@ -15,6 +15,7 @@ import {
 import { sanitizeCatalogTargetSummaries } from "./firmware-target-filter";
 import type { FirmwareWorkspaceLayout } from "./firmware-workspace-layout";
 import { firmwareWorkspaceTestIds } from "./firmware-workspace-test-ids";
+import { Banner, Button, Panel, SectionHeader, StatusPill } from "../ui";
 
 type CatalogLoadPhase = "idle" | "loading" | "ready" | "failed";
 type ManualRecoveryKind = "local_apj_bytes" | "local_bin_bytes";
@@ -333,34 +334,29 @@ $effect(() => {
 });
 </script>
 
-<section
-  class="rounded-lg border border-border bg-bg-secondary/40 p-3"
-  data-testid={firmwareWorkspaceTestIds.recoveryPanel}
->
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">DFU recovery</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Recover bootloader</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-relaxed text-text-secondary" data-testid={firmwareWorkspaceTestIds.recoveryGuidance}>
-        This is a separate rescue path for boards that need bootloader recovery. Restore the bootloader here, then return to Install / Update and flash normal ArduPilot firmware over serial.
-      </p>
-    </div>
+<Panel padded testId={firmwareWorkspaceTestIds.recoveryPanel}>
+  <SectionHeader
+    eyebrow="DFU recovery"
+    title="Recover bootloader"
+  >
+    {#snippet actions()}
+      <div data-testid={firmwareWorkspaceTestIds.recoveryState}>
+        <StatusPill tone="warning">{recoveryStateLabel()}</StatusPill>
+      </div>
+    {/snippet}
+  </SectionHeader>
 
-    <div
-      class="rounded-full border border-border bg-bg-primary px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary"
-      data-testid={firmwareWorkspaceTestIds.recoveryState}
-    >
-      {recoveryStateLabel()}
-    </div>
-  </div>
+  <p class="recovery-prose" data-testid={firmwareWorkspaceTestIds.recoveryGuidance}>
+    This is a separate rescue path for boards that need bootloader recovery. Restore the bootloader here, then return to Install / Update and flash normal ArduPilot firmware over serial.
+  </p>
 
-  <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
-    <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-      <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-        <label>
-          <span class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">DFU device</span>
+  <div class="recovery-grid-main">
+    <Panel padded>
+      <div class="recovery-row recovery-row--device">
+        <label class="recovery-field">
+          <span class="recovery-field__label">DFU device</span>
           <select
-            class="mt-2 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+            class="recovery-select"
             data-testid={firmwareWorkspaceTestIds.recoveryDeviceSelect}
             disabled={isRecoveryActive}
             onchange={(event) => store.setRecoveryDevice(
@@ -375,263 +371,413 @@ $effect(() => {
           </select>
         </label>
 
-        <button
-          class="rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm font-semibold text-text-primary transition hover:border-border-light hover:bg-bg-primary disabled:opacity-50"
-          data-testid={firmwareWorkspaceTestIds.recoveryDeviceRefresh}
+        <Button
+          testId={firmwareWorkspaceTestIds.recoveryDeviceRefresh}
           disabled={isRecoveryActive}
           onclick={() => void store.refreshRecoveryDevices()}
-          type="button"
         >
           Rescan DFU
-        </button>
+        </Button>
       </div>
 
-      <div
-        class="mt-3 rounded-xl border border-border/70 bg-bg-primary px-3 py-2 text-xs text-text-secondary"
-        data-testid={firmwareWorkspaceTestIds.recoveryDeviceState}
-      >
-        <span class="font-semibold text-text-primary">Selected device</span>
-        <p class="mt-1">{deviceLabel(workspaceState.recovery.device)} · {deviceDetail(workspaceState.recovery.device)}</p>
+      <div class="recovery-info-block" data-testid={firmwareWorkspaceTestIds.recoveryDeviceState}>
+        <span class="recovery-info-block__title">Selected device</span>
+        <p class="recovery-info-block__value">{deviceLabel(workspaceState.recovery.device)} · {deviceDetail(workspaceState.recovery.device)}</p>
       </div>
 
       {#if workspaceState.recovery.scanError}
-        <div class="mt-3 rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
-          {workspaceState.recovery.scanError}
+        <div class="recovery-stack">
+          <Banner severity="danger" title={workspaceState.recovery.scanError} />
         </div>
       {/if}
 
-      <div class="mt-4 rounded-lg border border-success/30 bg-success/10 p-3">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Official bootloader</p>
-            <h4 class="mt-1 text-sm font-semibold text-text-primary">Primary recovery source</h4>
+      <div class="recovery-stack">
+        <Panel padded tone="success">
+          <div class="recovery-row recovery-row--between">
+            <div>
+              <p class="recovery-eyebrow">Official bootloader</p>
+              <h4 class="recovery-subtitle">Primary recovery source</h4>
+            </div>
+            {#if !usingOfficialSource && workspaceState.recovery.target}
+              <Button
+                size="sm"
+                tone="success"
+                testId={firmwareWorkspaceTestIds.recoveryOfficialAction}
+                onclick={() => void selectOfficialTarget(workspaceState.recovery.target)}
+              >
+                Use official bootloader
+              </Button>
+            {/if}
           </div>
-          {#if !usingOfficialSource && workspaceState.recovery.target}
-            <button
-              class="rounded-md border border-success/30 bg-bg-primary px-3 py-1.5 text-xs font-semibold text-success transition hover:bg-success/5"
-              data-testid={firmwareWorkspaceTestIds.recoveryOfficialAction}
-              onclick={() => void selectOfficialTarget(workspaceState.recovery.target)}
-              type="button"
-            >
-              Use official bootloader
-            </button>
-          {/if}
-        </div>
 
-        <p class="mt-2 text-sm leading-relaxed text-text-secondary">
-          Official bootloader recovery stays primary. It writes the known bootloader image for the selected target, then hands you back to Install / Update for the normal firmware flash.
-        </p>
-
-        <label class="mt-3 block">
-          <span class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Official target</span>
-          <select
-            class="mt-2 w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
-            data-testid={firmwareWorkspaceTestIds.recoveryTargetSelect}
-            disabled={isRecoveryActive || recoveryTargets.length === 0}
-            onchange={(event) => {
-              const key = (event.currentTarget as HTMLSelectElement).value;
-              const nextTarget = recoveryTargets.find((target) => targetKey(target) === key) ?? null;
-              void selectOfficialTarget(nextTarget);
-            }}
-            value={selectedTargetKey}
-          >
-            <option value="">Choose official bootloader target…</option>
-            {#each recoveryTargets as target (targetKey(target))}
-              <option value={targetKey(target)}>{targetLabel(target)} · {targetMetadata(target)}</option>
-            {/each}
-          </select>
-        </label>
-
-        {#if targetError}
-          <div
-            class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger"
-            data-testid={firmwareWorkspaceTestIds.recoveryTargetError}
-          >
-            <span>{targetError}</span>
-            <button
-              class="rounded-md border border-danger/40 bg-bg-primary px-3 py-1.5 text-xs font-semibold text-danger transition hover:bg-danger/5"
-              data-testid={firmwareWorkspaceTestIds.recoveryTargetRetry}
-              onclick={() => void loadRecoveryTargets()}
-              type="button"
-            >
-              Retry targets
-            </button>
-          </div>
-        {/if}
-
-        {#if targetPhase === "ready" && recoveryTargets.length === 0}
-          <p
-            class="mt-3 rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-secondary"
-            data-testid={firmwareWorkspaceTestIds.recoveryTargetEmpty}
-          >
-            No official bootloader targets are available right now. Retry the target list or supply a validated manual APJ/BIN image.
+          <p class="recovery-prose">
+            Official bootloader recovery stays primary. It writes the known bootloader image for the selected target, then hands you back to Install / Update for the normal firmware flash.
           </p>
-        {/if}
 
-        <div
-          class="mt-3 rounded-xl border border-border/70 bg-bg-primary px-3 py-2 text-xs text-text-secondary"
-          data-testid={firmwareWorkspaceTestIds.recoveryTargetState}
-        >
-          <span class="font-semibold text-text-primary">Active official target</span>
-          <p class="mt-1">{targetLabel(workspaceState.recovery.target)} · {targetDetail(workspaceState.recovery.target)}</p>
-        </div>
+          <label class="recovery-field recovery-field--block">
+            <span class="recovery-field__label">Official target</span>
+            <select
+              class="recovery-select"
+              data-testid={firmwareWorkspaceTestIds.recoveryTargetSelect}
+              disabled={isRecoveryActive || recoveryTargets.length === 0}
+              onchange={(event) => {
+                const key = (event.currentTarget as HTMLSelectElement).value;
+                const nextTarget = recoveryTargets.find((target) => targetKey(target) === key) ?? null;
+                void selectOfficialTarget(nextTarget);
+              }}
+              value={selectedTargetKey}
+            >
+              <option value="">Choose official bootloader target…</option>
+              {#each recoveryTargets as target (targetKey(target))}
+                <option value={targetKey(target)}>{targetLabel(target)} · {targetMetadata(target)}</option>
+              {/each}
+            </select>
+          </label>
+
+          {#if targetError}
+            <div class="recovery-stack" data-testid={firmwareWorkspaceTestIds.recoveryTargetError}>
+              <Banner
+                severity="danger"
+                title={targetError}
+                actionLabel="Retry targets"
+                onAction={() => void loadRecoveryTargets()}
+                actionTestId={firmwareWorkspaceTestIds.recoveryTargetRetry}
+              />
+            </div>
+          {/if}
+
+          {#if targetPhase === "ready" && recoveryTargets.length === 0}
+            <p
+              class="recovery-info-block recovery-info-block--standalone"
+              data-testid={firmwareWorkspaceTestIds.recoveryTargetEmpty}
+            >
+              No official bootloader targets are available right now. Retry the target list or supply a validated manual APJ/BIN image.
+            </p>
+          {/if}
+
+          <div class="recovery-info-block" data-testid={firmwareWorkspaceTestIds.recoveryTargetState}>
+            <span class="recovery-info-block__title">Active official target</span>
+            <p class="recovery-info-block__value">{targetLabel(workspaceState.recovery.target)} · {targetDetail(workspaceState.recovery.target)}</p>
+          </div>
+        </Panel>
       </div>
-    </article>
+    </Panel>
 
-    <article class="rounded-lg border border-warning/40 bg-warning/10 p-3">
-      <div class="flex items-center justify-between gap-3">
+    <Panel padded tone="warning">
+      <div class="recovery-row recovery-row--between">
         <div>
-          <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Advanced recovery</p>
-          <h4 class="mt-1 text-sm font-semibold text-text-primary">Manual APJ / BIN source</h4>
+          <p class="recovery-eyebrow">Advanced recovery</p>
+          <h4 class="recovery-subtitle">Manual APJ / BIN source</h4>
         </div>
-        <button
-          class="rounded-md border border-warning/30 bg-bg-primary px-3 py-1.5 text-xs font-semibold text-warning transition hover:bg-warning/5"
-          data-testid={firmwareWorkspaceTestIds.recoveryAdvancedToggle}
+        <Button
+          size="sm"
+          tone="warning"
+          testId={firmwareWorkspaceTestIds.recoveryAdvancedToggle}
           onclick={() => (advancedRequestedOpen = !advancedRequestedOpen)}
-          type="button"
         >
           {manualPanelOpen ? "Hide advanced" : "Show advanced"}
-        </button>
+        </Button>
       </div>
 
-      <p class="mt-2 text-sm leading-relaxed text-text-secondary">
+      <p class="recovery-prose">
         Use manual recovery only when you deliberately need to bypass the official bootloader catalog.
       </p>
 
-      <div
-        class="mt-3 rounded-xl border border-border/70 bg-bg-primary px-3 py-2 text-xs text-text-secondary"
-        data-testid={firmwareWorkspaceTestIds.recoverySourceState}
-      >
-        <span class="font-semibold text-text-primary">Active recovery source</span>
-        <p class="mt-1">{recoverySourceState}</p>
+      <div class="recovery-info-block" data-testid={firmwareWorkspaceTestIds.recoverySourceState}>
+        <span class="recovery-info-block__title">Active recovery source</span>
+        <p class="recovery-info-block__value">{recoverySourceState}</p>
       </div>
 
       {#if manualPanelOpen}
-        <div class="mt-3 space-y-3" data-testid={firmwareWorkspaceTestIds.recoveryManualPanel}>
-          <div
-            class="rounded-xl border border-warning/40 bg-bg-primary px-3 py-3 text-sm text-warning"
-            data-testid={firmwareWorkspaceTestIds.recoveryManualWarning}
-          >
-            Manual local files may replace bootloader contents or leave the board non-bootable if the wrong image is used. Keep this path for expert recovery only.
+        <div class="recovery-manual" data-testid={firmwareWorkspaceTestIds.recoveryManualPanel}>
+          <div data-testid={firmwareWorkspaceTestIds.recoveryManualWarning}>
+            <Banner
+              severity="warning"
+              title="Manual local files may replace bootloader contents or leave the board non-bootable if the wrong image is used. Keep this path for expert recovery only."
+            />
           </div>
 
-          <div class="grid gap-2 sm:grid-cols-2">
-            <button
-              class={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${manualKind === "local_apj_bytes"
-                ? "border-warning/40 bg-warning/10 text-warning"
-                : "border-border bg-bg-primary text-text-primary hover:border-warning/30 hover:text-warning"}`}
-              data-testid={firmwareWorkspaceTestIds.recoveryManualApj}
+          <div class="recovery-manual-kinds">
+            <Button
+              tone={manualKind === "local_apj_bytes" ? "warning" : "neutral"}
+              testId={firmwareWorkspaceTestIds.recoveryManualApj}
               onclick={() => setManualKind("local_apj_bytes")}
-              type="button"
             >
               Use manual APJ
-            </button>
-            <button
-              class={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${manualKind === "local_bin_bytes"
-                ? "border-warning/40 bg-warning/10 text-warning"
-                : "border-border bg-bg-primary text-text-primary hover:border-warning/30 hover:text-warning"}`}
-              data-testid={firmwareWorkspaceTestIds.recoveryManualBin}
+            </Button>
+            <Button
+              tone={manualKind === "local_bin_bytes" ? "warning" : "neutral"}
+              testId={firmwareWorkspaceTestIds.recoveryManualBin}
               onclick={() => setManualKind("local_bin_bytes")}
-              type="button"
             >
               Use manual BIN
-            </button>
+            </Button>
           </div>
 
-          <button
-            class="rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm font-semibold text-text-primary transition hover:border-warning hover:text-warning"
-            data-testid={firmwareWorkspaceTestIds.recoveryBrowse}
+          <Button
+            tone="warning"
+            testId={firmwareWorkspaceTestIds.recoveryBrowse}
             disabled={isRecoveryActive}
             onclick={() => void handleManualBrowse()}
-            type="button"
           >
             {manualKind === "local_apj_bytes" ? "Choose manual APJ" : "Choose manual BIN"}
-          </button>
+          </Button>
 
           {#if workspaceState.recovery.sourceError}
-            <div
-              class="rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger"
-              data-testid={firmwareWorkspaceTestIds.recoverySourceError}
-            >
-              {workspaceState.recovery.sourceError}
+            <div data-testid={firmwareWorkspaceTestIds.recoverySourceError}>
+              <Banner severity="danger" title={workspaceState.recovery.sourceError} />
             </div>
           {/if}
 
           {#if usingManualSource}
-            <label class="flex items-start gap-3 rounded-xl border border-warning/30 bg-bg-primary px-3 py-3 text-sm text-text-secondary">
+            <label class="recovery-checkbox">
               <input
                 checked={manualConfirmed}
-                class="mt-1"
                 data-testid={firmwareWorkspaceTestIds.recoveryManualConfirm}
                 onchange={(event) => (manualConfirmed = (event.currentTarget as HTMLInputElement).checked)}
                 type="checkbox"
               />
               <span>
-                <span class="font-semibold text-text-primary">Manual file confirmation</span><br />
+                <span class="recovery-checkbox__title">Manual file confirmation</span><br />
                 I confirm I am manually supplying the exact bootloader image for this board and understand that the wrong APJ/BIN can leave it non-bootable.
               </span>
             </label>
           {/if}
         </div>
       {/if}
-    </article>
+    </Panel>
   </div>
 
-  <div class="mt-4 rounded-lg border border-border/70 bg-bg-primary/80 p-3">
-    <label class="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-3 text-sm text-text-secondary">
+  <Panel padded>
+    <label class="recovery-checkbox recovery-checkbox--warning">
       <input
         checked={dfuConfirmed}
-        class="mt-1"
         data-testid={firmwareWorkspaceTestIds.recoverySafetyConfirm}
         onchange={(event) => (dfuConfirmed = (event.currentTarget as HTMLInputElement).checked)}
         type="checkbox"
       />
       <span>
-        <span class="font-semibold text-text-primary">DFU safety acknowledgment</span><br />
+        <span class="recovery-checkbox__title">DFU safety acknowledgment</span><br />
         I understand that DFU bootloader recovery bypasses the normal serial safety flow and should only be used for explicit bootloader rescue.
       </span>
     </label>
 
-    <div class="mt-3 rounded-xl border border-border bg-bg-secondary px-3 py-3 text-sm text-text-secondary">
+    <div class="recovery-info-block recovery-info-block--standalone">
       <p data-testid={firmwareWorkspaceTestIds.recoveryBlockedReason}>{recoveryBlockedReason}</p>
     </div>
 
     {#if isRecoveryActive}
-      <div class="mt-3 rounded-xl border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-text-primary">
-        <p class="font-semibold">DFU recovery in progress</p>
-        <p class="mt-1">{workspaceState.progress?.phase_label ?? workspaceState.sessionPhase ?? "working"}</p>
+      <div class="recovery-active">
+        <p class="recovery-active__title">DFU recovery in progress</p>
+        <p class="recovery-active__detail">{workspaceState.progress?.phase_label ?? workspaceState.sessionPhase ?? "working"}</p>
         {#if workspaceState.progress}
-          <div class="mt-3 h-2 overflow-hidden rounded-full bg-bg-primary/70" data-testid={firmwareWorkspaceTestIds.recoveryProgress}>
-            <div class="h-full rounded-full bg-warning transition-[width]" style={`width: ${Math.max(0, Math.min(100, workspaceState.progress.pct))}%`}></div>
+          <div class="recovery-progress" data-testid={firmwareWorkspaceTestIds.recoveryProgress}>
+            <div class="recovery-progress__fill" style={`width: ${Math.max(0, Math.min(100, workspaceState.progress.pct))}%`}></div>
           </div>
-          <p class="mt-2 text-xs text-text-secondary">
+          <p class="recovery-progress__caption">
             {workspaceState.progress.bytes_written} / {workspaceState.progress.bytes_total} bytes · {Math.round(workspaceState.progress.pct)}%
           </p>
         {/if}
       </div>
     {/if}
 
-    <div class="mt-4 flex flex-wrap gap-3">
+    <div class="recovery-actions">
       {#if isRecoveryActive && !isRecoveryCancelling}
-        <button
-          class="rounded-xl border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105"
-          data-testid={firmwareWorkspaceTestIds.cancelRecovery}
+        <Button
+          tone="warning"
+          testId={firmwareWorkspaceTestIds.cancelRecovery}
           onclick={() => void store.cancel()}
-          type="button"
         >
           Cancel recovery
-        </button>
+        </Button>
       {/if}
 
-      <button
-        class="rounded-xl bg-warning px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
-        data-testid={firmwareWorkspaceTestIds.startRecovery}
+      <Button
+        tone="warning"
+        testId={firmwareWorkspaceTestIds.startRecovery}
         disabled={!canStartRecovery || isRecoveryActive || isRecoveryCancelling || replayReadonly}
         onclick={() => void store.startDfuRecovery()}
-        type="button"
       >
         Start recovery
-      </button>
+      </Button>
     </div>
-  </div>
-</section>
+  </Panel>
+</Panel>
+
+<style>
+.recovery-prose {
+  margin: var(--space-3) 0 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  max-width: 60ch;
+}
+.recovery-grid-main {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+@media (min-width: 1280px) {
+  .recovery-grid-main {
+    grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
+  }
+}
+.recovery-stack {
+  margin-top: var(--space-3);
+}
+.recovery-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.recovery-row--between {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.recovery-row--device {
+  display: grid;
+  gap: var(--space-3);
+}
+@media (min-width: 768px) {
+  .recovery-row--device {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+}
+.recovery-field {
+  display: flex;
+  flex-direction: column;
+}
+.recovery-field--block {
+  display: block;
+  margin-top: var(--space-3);
+}
+.recovery-field__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.recovery-select {
+  margin-top: var(--space-2);
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-input);
+  padding: 8px 12px;
+  font-size: 0.86rem;
+  color: var(--color-text-primary);
+}
+.recovery-info-block {
+  margin-top: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-input);
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+}
+.recovery-info-block--standalone {
+  font-size: 0.86rem;
+}
+.recovery-info-block__title {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.recovery-info-block__value {
+  margin: var(--space-1) 0 0;
+}
+.recovery-eyebrow {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.recovery-subtitle {
+  margin: 4px 0 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.recovery-manual {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.recovery-manual-kinds {
+  display: grid;
+  gap: var(--space-2);
+}
+@media (min-width: 640px) {
+  .recovery-manual-kinds {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.recovery-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-input);
+  padding: 12px;
+  font-size: 0.86rem;
+  color: var(--color-text-secondary);
+}
+.recovery-checkbox--warning {
+  border-color: color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-bg-input));
+}
+.recovery-checkbox input {
+  margin-top: 4px;
+}
+.recovery-checkbox__title {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.recovery-active {
+  margin-top: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+  padding: 12px;
+  font-size: 0.86rem;
+  color: var(--color-text-primary);
+}
+.recovery-active__title {
+  margin: 0;
+  font-weight: 600;
+}
+.recovery-active__detail {
+  margin: 4px 0 0;
+}
+.recovery-progress {
+  margin-top: var(--space-3);
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-bg-primary);
+  overflow: hidden;
+}
+.recovery-progress__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-warning);
+  transition: width 0.2s ease;
+}
+.recovery-progress__caption {
+  margin: var(--space-2) 0 0;
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+}
+.recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+</style>

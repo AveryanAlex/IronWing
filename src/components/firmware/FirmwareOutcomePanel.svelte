@@ -5,6 +5,10 @@ import type {
 } from "../../firmware";
 import type { FirmwareWorkspaceStore, FirmwareWorkspaceState } from "../../lib/stores/firmware-workspace";
 import { firmwareWorkspaceTestIds } from "./firmware-workspace-test-ids";
+import { Banner, Button, Panel, SectionHeader, StatusPill } from "../ui";
+
+type OutcomeTone = "success" | "warning" | "danger";
+type BannerSeverity = "success" | "warning" | "danger";
 
 type Props = {
   state: FirmwareWorkspaceState;
@@ -47,88 +51,88 @@ function summaryForOutcome(outcome: FirmwareOutcome) {
     switch (outcome.outcome.result) {
       case "verified":
         return {
-          tone: "success",
+          tone: "success" as OutcomeTone,
           label: "Recovery verified",
           summary: "Bootloader recovery completed. Return to Install / Update and flash normal ArduPilot firmware over serial.",
-        } as const;
+        };
       case "cancelled":
         return {
-          tone: "warning",
+          tone: "warning" as OutcomeTone,
           label: "Recovery cancelled",
           summary: "DFU recovery was cancelled before completion.",
-        } as const;
+        };
       case "reset_unconfirmed":
         return {
-          tone: "warning",
+          tone: "warning" as OutcomeTone,
           label: "Reset unconfirmed",
           summary: "DFU recovery completed, but device reset could not be confirmed. Reconnect or power-cycle the board before continuing.",
-        } as const;
+        };
       case "failed":
         return {
-          tone: "danger",
+          tone: "danger" as OutcomeTone,
           label: "Recovery failed",
           summary: outcome.outcome.reason,
-        } as const;
+        };
       case "unsupported_recovery_path":
         return {
-          tone: "warning",
+          tone: "warning" as OutcomeTone,
           label: "Recovery guidance",
           summary: outcome.outcome.guidance,
-        } as const;
+        };
     }
   }
 
   switch (outcome.outcome.result) {
     case "verified":
       return {
-        tone: "success",
+        tone: "success" as OutcomeTone,
         label: "Verified",
         summary: "Firmware flashed and verified successfully.",
-      } as const;
+      };
     case "flashed_but_unverified":
       return {
-        tone: "warning",
+        tone: "warning" as OutcomeTone,
         label: "Written, verification unavailable",
         summary: "Firmware was written, but the bootloader could not verify flash contents.",
-      } as const;
+      };
     case "reconnect_verified":
       return {
-        tone: outcome.outcome.flash_verified ? "success" : "warning",
+        tone: (outcome.outcome.flash_verified ? "success" : "warning") as OutcomeTone,
         label: outcome.outcome.flash_verified ? "Reconnect verified" : "Reconnected without CRC proof",
         summary: outcome.outcome.flash_verified
           ? "The board reconnected after install and reported a verified flash."
           : "The board reconnected after install, but CRC verification was unavailable.",
-      } as const;
+      };
     case "reconnect_failed":
       return {
-        tone: "warning",
+        tone: "warning" as OutcomeTone,
         label: "Reconnect failed",
         summary: `Firmware was written, but reconnect verification failed: ${outcome.outcome.reconnect_error}`,
-      } as const;
+      };
     case "cancelled":
       return {
-        tone: "warning",
+        tone: "warning" as OutcomeTone,
         label: "Cancelled",
         summary: "Serial install was cancelled before completion.",
-      } as const;
+      };
     case "board_detection_failed":
       return {
-        tone: "danger",
+        tone: "danger" as OutcomeTone,
         label: "Board detection failed",
         summary: outcome.outcome.reason,
-      } as const;
+      };
     case "extf_capacity_insufficient":
       return {
-        tone: "danger",
+        tone: "danger" as OutcomeTone,
         label: "External flash capacity insufficient",
         summary: outcome.outcome.reason,
-      } as const;
+      };
     case "failed":
       return {
-        tone: "danger",
+        tone: "danger" as OutcomeTone,
         label: "Failed",
         summary: outcome.outcome.reason,
-      } as const;
+      };
   }
 }
 
@@ -140,11 +144,11 @@ function detailRows(outcome: FirmwareOutcome) {
     },
   ];
 
-	if (outcome.path === "dfu_recovery") {
-		const recoveryOutcome = outcome.outcome;
-		const sourceLabel = state.recovery.sourceMetadata?.label ?? null;
-		const targetLabel = recoveryTargetLabel();
-		const deviceLabel = recoveryDeviceLabel();
+  if (outcome.path === "dfu_recovery") {
+    const recoveryOutcome = outcome.outcome;
+    const sourceLabel = state.recovery.sourceMetadata?.label ?? null;
+    const targetLabel = recoveryTargetLabel();
+    const deviceLabel = recoveryDeviceLabel();
 
     if (sourceLabel) {
       rows.push({ label: "Source", value: sourceLabel });
@@ -158,19 +162,19 @@ function detailRows(outcome: FirmwareOutcome) {
       rows.push({ label: "Device", value: deviceLabel });
     }
 
-		switch (recoveryOutcome.result) {
+    switch (recoveryOutcome.result) {
       case "verified":
         rows.push({ label: "Next step", value: "Switch back to Install / Update and flash normal ArduPilot firmware over serial." });
         break;
       case "reset_unconfirmed":
         rows.push({ label: "Next step", value: "Reconnect or power-cycle the board, then continue with Install / Update." });
         break;
-			case "failed":
-				rows.push({ label: "Reason", value: recoveryOutcome.reason });
-				break;
-			case "unsupported_recovery_path":
-				rows.push({ label: "Guidance", value: recoveryOutcome.guidance });
-				break;
+      case "failed":
+        rows.push({ label: "Reason", value: recoveryOutcome.reason });
+        break;
+      case "unsupported_recovery_path":
+        rows.push({ label: "Guidance", value: recoveryOutcome.guidance });
+        break;
       case "cancelled":
         rows.push({ label: "Result", value: "operator cancelled before completion" });
         break;
@@ -225,18 +229,6 @@ function detailRows(outcome: FirmwareOutcome) {
   return rows;
 }
 
-function toneClass(tone: ReturnType<typeof summaryForOutcome>["tone"]) {
-  switch (tone) {
-    case "success":
-      return "border-success/30 bg-success/10 text-success";
-    case "danger":
-      return "border-danger/40 bg-danger/10 text-danger";
-    case "warning":
-    default:
-      return "border-warning/40 bg-warning/10 text-warning";
-  }
-}
-
 let activeOutcome = $derived(state.lastCompletedOutcome);
 let outcomeCopy = $derived(activeOutcome ? summaryForOutcome(activeOutcome) : null);
 let rows = $derived(activeOutcome ? detailRows(activeOutcome) : []);
@@ -245,33 +237,26 @@ let sessionStateLabel = $derived(state.isActive
   : activeOutcome
     ? `completed:${activeOutcome.outcome.result}`
     : "idle");
+let bannerSeverity = $derived<BannerSeverity>(outcomeCopy?.tone ?? "warning");
 </script>
 
-<section
-  class="rounded-lg border border-border bg-bg-secondary/30 p-3"
-  data-testid={firmwareWorkspaceTestIds.outcomePanel}
->
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Outcome register</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Retained result details</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-relaxed text-text-secondary">
-        Success, cancel, and failure facts stay visible here instead of collapsing into a transient toast.
-      </p>
-    </div>
-
-    <div
-      class="rounded-full border border-border bg-bg-primary px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary"
-      data-testid={firmwareWorkspaceTestIds.outcomeState}
-    >
-      {sessionStateLabel}
-    </div>
-  </div>
+<Panel padded testId={firmwareWorkspaceTestIds.outcomePanel}>
+  <SectionHeader
+    eyebrow="Outcome register"
+    title="Retained result details"
+    description="Success, cancel, and failure facts stay visible here instead of collapsing into a transient toast."
+  >
+    {#snippet actions()}
+      <div data-testid={firmwareWorkspaceTestIds.outcomeState}>
+        <StatusPill tone="neutral">{sessionStateLabel}</StatusPill>
+      </div>
+    {/snippet}
+  </SectionHeader>
 
   {#if state.isActive}
-    <div class="mt-4 rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-text-primary">
-      <p class="font-semibold">Live firmware session</p>
-      <p class="mt-1">
+    <div class="outcome-active">
+      <p class="outcome-active__title">Live firmware session</p>
+      <p class="outcome-active__detail">
         {state.progress?.phase_label ?? state.sessionPhase ?? "Working"}
         {#if state.progress}
           · {Math.round(state.progress.pct)}%
@@ -281,41 +266,105 @@ let sessionStateLabel = $derived(state.isActive
   {/if}
 
   {#if activeOutcome && outcomeCopy}
-    <article class={`mt-4 rounded-lg border px-4 py-4 ${toneClass(outcomeCopy.tone)}`}>
-      <p class="text-xs font-semibold uppercase tracking-[0.16em]" data-testid={firmwareWorkspaceTestIds.outcomeResult}>
-        {outcomeCopy.label}
-      </p>
-      <p class="mt-2 text-sm leading-relaxed" data-testid={firmwareWorkspaceTestIds.outcomeSummary}>
-        {outcomeCopy.summary}
-      </p>
+    <div class="outcome-stack">
+      <Banner
+        severity={bannerSeverity}
+        title={outcomeCopy.label}
+        message={outcomeCopy.summary}
+        titleTestId={firmwareWorkspaceTestIds.outcomeResult}
+        messageTestId={firmwareWorkspaceTestIds.outcomeSummary}
+      />
 
-      <dl class="mt-4 grid gap-3 md:grid-cols-2">
+      <dl class="outcome-detail-grid">
         {#each rows as row, index (`${row.label}-${row.value}`)}
           <div
-            class="rounded-xl border border-current/20 bg-bg-primary/80 px-3 py-3 text-sm text-text-primary"
+            class="outcome-detail-tile"
             data-testid={`${firmwareWorkspaceTestIds.outcomeDetailPrefix}-${index}`}
           >
-            <dt class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{row.label}</dt>
-            <dd class="mt-1 break-words">{row.value}</dd>
+            <dt class="outcome-detail-tile__label">{row.label}</dt>
+            <dd class="outcome-detail-tile__value">{row.value}</dd>
           </div>
         {/each}
       </dl>
 
-      <button
-        class="mt-4 rounded-xl border border-current/20 bg-bg-primary px-4 py-2 text-sm font-semibold transition hover:brightness-105"
-        data-testid={firmwareWorkspaceTestIds.outcomeDismiss}
+      <Button
+        testId={firmwareWorkspaceTestIds.outcomeDismiss}
         onclick={() => void store.dismissOutcome()}
-        type="button"
       >
         Dismiss retained outcome
-      </button>
-    </article>
+      </Button>
+    </div>
   {:else}
-    <div
-      class="mt-4 rounded-lg border border-border bg-bg-primary px-4 py-4 text-sm text-text-secondary"
+    <p
+      class="outcome-empty"
       data-testid={firmwareWorkspaceTestIds.outcomeEmpty}
     >
       No retained firmware outcome yet. Once install or recovery runs, the exact result facts stay visible here until you dismiss them.
-    </div>
+    </p>
   {/if}
-</section>
+</Panel>
+
+<style>
+.outcome-active {
+  margin-top: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  padding: 12px 16px;
+  font-size: 0.86rem;
+  color: var(--color-text-primary);
+}
+.outcome-active__title {
+  margin: 0;
+  font-weight: 600;
+}
+.outcome-active__detail {
+  margin: 4px 0 0;
+}
+.outcome-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.outcome-detail-grid {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+}
+@media (min-width: 768px) {
+  .outcome-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.outcome-detail-tile {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-input);
+  padding: 12px;
+  font-size: 0.86rem;
+  color: var(--color-text-primary);
+}
+.outcome-detail-tile__label {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.outcome-detail-tile__value {
+  margin: var(--space-1) 0 0;
+  word-break: break-word;
+}
+.outcome-empty {
+  margin-top: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-input);
+  padding: 16px;
+  font-size: 0.86rem;
+  color: var(--color-text-secondary);
+}
+</style>

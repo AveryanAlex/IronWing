@@ -182,9 +182,9 @@ $effect(() => {
       <Banner
         severity="warning"
         title={layout.blockedTitle ?? "Firmware actions blocked"}
+        titleTestId={firmwareWorkspaceTestIds.blockedReason}
         message={layout.blockedDetail ?? undefined}
       />
-      <span aria-hidden="true" class="hidden" data-testid={firmwareWorkspaceTestIds.blockedReason}>{layout.blockedTitle}</span>
     </div>
   {/if}
 
