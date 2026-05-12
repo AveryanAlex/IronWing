@@ -110,7 +110,6 @@ onMount(() => {
   const vehicleElement = document.createElement("div");
   vehicleElement.className = "vehicle-marker";
   vehicleElement.dataset.iconKind = iconKind;
-  vehicleElement.style.zIndex = "5";
   vehicleElement.innerHTML = VEHICLE_ICON_SVG[iconKind];
   vehicleSvg = vehicleElement.querySelector("svg");
   vehicleMarker = new maplibregl.Marker({ element: vehicleElement, anchor: "center" });
@@ -189,10 +188,6 @@ $effect(() => {
   el.dataset.iconKind = iconKind;
   el.innerHTML = VEHICLE_ICON_SVG[iconKind];
   vehicleSvg = el.querySelector("svg");
-  // Re-apply heading rotation since the SVG was replaced.
-  if (vehicleSvg && typeof vehicleHeading === "number") {
-    vehicleSvg.style.transform = `rotate(${vehicleHeading}deg)`;
-  }
 });
 
 $effect(() => {
