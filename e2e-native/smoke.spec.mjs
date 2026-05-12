@@ -162,7 +162,6 @@ describe("native smoke", () => {
       runtimeMarker: '[data-testid="app-runtime-marker"]',
       runtimeFramework: '[data-testid="app-runtime-framework"]',
       runtimeEntrypoint: '[data-testid="app-runtime-entrypoint"]',
-      runtimeBoundary: '[data-testid="app-runtime-quarantine-boundary"]',
       activeWorkspace: '[data-testid="app-shell-active-workspace"]',
       missionWorkspaceButton: '//nav[@aria-label="Primary"]//button[normalize-space()="Mission"]',
       setupWorkspaceButton: '[data-testid="app-shell-parameter-workspace-btn"]',
@@ -267,8 +266,7 @@ describe("native smoke", () => {
     await waitForCheckpoint("runtime framework marker proves Svelte", async () => {
       const framework = await readTextContent(selectors.runtimeFramework);
       const entrypoint = await readTextContent(selectors.runtimeEntrypoint);
-      const boundary = await readTextContent(selectors.runtimeBoundary);
-      return framework === "Svelte 5" && entrypoint === "src/app/App.svelte" && boundary === "src-old/runtime";
+      return framework === "Svelte 5" && entrypoint === "src/app/App.svelte";
     }, {
       timeout: 30_000,
       timeoutMsg: "Timed out waiting for the hidden runtime markers that distinguish the active Svelte shell from archived runtime surfaces.",

@@ -17,7 +17,6 @@ type Props = {
   bootstrapState?: "booting" | "ready" | "failed";
   bootedAt?: string | null;
   entrypoint?: string;
-  legacyBoundary?: string;
   tier?: ShellTier;
   drawerState?: "open" | "closed" | "docked";
   showVehiclePanelButton?: boolean;
@@ -38,7 +37,6 @@ let {
   bootstrapState = "booting",
   bootedAt = null,
   entrypoint = "src/app/App.svelte",
-  legacyBoundary = "src-old/runtime",
   tier = "wide",
   drawerState = "docked",
   showVehiclePanelButton = false,
@@ -232,7 +230,6 @@ function connectionIndicatorClass(tone: ConnectionTone): string {
     <span data-testid={runtimeTestIds.bootstrapState} data-runtime-phase={bootstrapState}>{bootstrapState}</span>
     <span data-testid={runtimeTestIds.bootedAt}>{bootedAt ?? "Starting up"}</span>
     <span data-testid={runtimeTestIds.entrypoint}>{entrypoint}</span>
-    <span data-testid={runtimeTestIds.quarantineBoundary}>{legacyBoundary}</span>
     <span data-testid={appShellTestIds.tier}>{tierLabels[tier]}</span>
     <span data-testid={appShellTestIds.drawerState}>{drawerState}</span>
     <span data-testid={appShellTestIds.sessionPhase}>{lastPhase}</span>

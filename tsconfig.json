@@ -23,7 +23,6 @@
     "src/**/*.jsx",
     "src/**/*.test.ts",
     "src/**/*.test.tsx",
-    "src/lib/configuration-facts.ts",
-    "src-old/**/*"
+    "src/lib/configuration-facts.ts"
   ]
 }

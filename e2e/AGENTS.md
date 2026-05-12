@@ -28,7 +28,7 @@
 - Prefer setup/cleanup that returns the mock backend and UI to Idle before asserting the main scenario.
 - Configure mocked command behavior through `fixtures/mock-platform.ts` instead of patching DOM state.
 - Keep specs focused on user-visible transitions: connect, disconnect, error surfacing, disabled/enabled controls, telemetry arrival.
-- Keep active browser proofs self-contained under `e2e/`; do not import helpers or specs from `src-old/e2e/` or archived React test files under `src-old/legacy/`.
+- Keep active browser proofs self-contained under `e2e/`; do not import removed legacy helpers or React-era test code.
 
 ## Scope Limits
 

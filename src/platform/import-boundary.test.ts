@@ -99,7 +99,7 @@ const ACTIVE_TREE_FILE_RULES: FileRule[] = [
     classLabel: "active-path reach-through",
     matches: (projectPath) => /\.(?:tsx|jsx)$/.test(projectPath),
     guidance:
-      "Keep active src/, e2e/, and e2e-native/ on Svelte/.ts/.mjs files only. Move archived React files under src-old/legacy/ instead of reviving them in the active tree.",
+      "Keep active src/, e2e/, and e2e-native/ on Svelte/.ts/.mjs files only. Do not revive React-era files in the active tree.",
   },
 ];
 
@@ -109,14 +109,14 @@ const ACTIVE_TREE_IMPORT_RULES: ResolvedImportRule[] = [
     classLabel: "archived tests",
     matches: (edge) => isArchivedTestImport(edge),
     guidance:
-      "Do not import src-old/e2e/ or archived *.test/*.spec files into active src/, e2e/, or e2e-native/. Rebuild any reusable helpers inside the active proof lane instead.",
+      "Do not import removed legacy E2E helpers or React-era test files into active src/, e2e/, or e2e-native/. Rebuild any reusable helpers inside the active proof lane instead.",
   },
   {
     label: "archived React source imports",
     classLabel: "archived React source",
     matches: (edge) => isArchivedReactSourceImport(edge),
     guidance:
-      "Do not import src-old/legacy/ or src-old/runtime/ into active src/, e2e/, or e2e-native/. Read archived code as reference and port the intent into active modules instead.",
+      "Do not import removed React-era runtime or component paths into active src/, e2e/, or e2e-native/. Rebuild the intent in active Svelte modules instead.",
   },
   {
     label: "React package imports",
@@ -168,7 +168,7 @@ const ACTIVE_RUNTIME_RULES: ResolvedImportRule[] = [
     classLabel: "archived React source",
     matches: (edge) => isArchivedReactSourceImport(edge),
     guidance:
-      "Do not reach into src-old/. Keep the active runtime independent from the quarantined React tree.",
+      "Do not reach into removed React-era paths. Keep the active runtime independent from the old React tree.",
   },
   {
     label: "direct platform implementation imports",

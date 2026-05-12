@@ -8,7 +8,6 @@ export const runtimeTestIds = {
   bootstrapState: "app-bootstrap-state",
   bootedAt: "app-runtime-booted-at",
   entrypoint: "app-runtime-entrypoint",
-  quarantineBoundary: "app-runtime-quarantine-boundary",
   bootstrapFailure: "app-bootstrap-failure",
   bootstrapFailureMessage: "app-bootstrap-failure-message",
 } as const;
@@ -21,7 +20,6 @@ export type RuntimeState = {
   bootstrapState: RuntimeBootstrapState;
   mountTarget: "#root";
   entrypoint: "src/app/App.svelte";
-  legacyRuntimeLocation: "src-old/runtime";
   bootedAt: string | null;
   failureMessage: string | null;
 };
@@ -32,7 +30,6 @@ const initialRuntimeState: RuntimeState = {
   bootstrapState: "booting",
   mountTarget: "#root",
   entrypoint: "src/app/App.svelte",
-  legacyRuntimeLocation: "src-old/runtime",
   bootedAt: null,
   failureMessage: null,
 };
@@ -89,7 +86,6 @@ export function renderBootstrapFailureMarkup(error: unknown) {
       data-runtime-phase="failed"
       data-app-entrypoint="${initialRuntimeState.entrypoint}"
       data-mount-target="${initialRuntimeState.mountTarget}"
-      data-compat-boundary="${initialRuntimeState.legacyRuntimeLocation}"
       data-testid="${runtimeTestIds.bootstrapFailure}"
     >
       <p class="runtime-eyebrow">IronWing couldn't start</p>

@@ -17,7 +17,6 @@ describe("renderBootstrapFailureMarkup", () => {
     expect(markup).toContain(`data-testid=\"${runtimeTestIds.bootstrapFailureMessage}\"`);
     expect(markup).toContain("data-app-entrypoint");
     expect(markup).toContain("data-mount-target");
-    expect(markup).toContain("data-compat-boundary");
 
     expect(markup).not.toContain("Svelte runtime failed");
     expect(markup).not.toContain("Legacy boundary");

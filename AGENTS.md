@@ -4,16 +4,11 @@
 
 Modern ground control station for MAVLink vehicles. Tauri v2 app with a **Svelte/TypeScript frontend** for the shipped runtime, a Rust Tauri shell, and the `mavkit` SDK as the domain layer. Desktop targets Linux/macOS/Windows; Android is supported with platform-gated transports and plugins.
 
-The retired React frontend is preserved under `src-old/legacy/` and `src-old/runtime/` for reference only. Treat that tree as archived context, not active product surface.
-
 ## Where To Look
 
 | Task | Location | Notes |
 |------|----------|-------|
 | Active frontend shell, stores, IPC bridges | `src/AGENTS.md` | Shipped Svelte runtime, bridge wrappers, active frontend tests |
-| Archived mission React UI reference | `src-old/legacy/components/mission/AGENTS.md` | Legacy desktop/mobile shells, map overlays, transfer status |
-| Archived setup React UI reference | `src-old/legacy/components/setup/AGENTS.md` | Legacy shared primitives, panel orchestration |
-| Archived per-section setup rules | `src-old/legacy/components/setup/sections/AGENTS.md` | Legacy section anatomy, docs links, helper placement |
 | Platform alias boundary (`@platform/*`) | `src/platform/AGENTS.md` | Build-time Tauri vs mocked-browser split |
 | Rust shell, commands, bridges, recording, logs | `src-tauri/src/AGENTS.md` | AppState, command patterns, event relays |
 | IPC wire contracts | `src-tauri/src/ipc/AGENTS.md` | Typed payloads, serde conventions, envelope model |
@@ -84,7 +79,7 @@ Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavk
 - The active frontend owns shipped presentation, local store state, and browser-facing composition.
 - The Tauri shell owns transport setup, command dispatch, event relays, logging, recording, and firmware flows.
 - `mavkit` owns MAVLink vehicle/session behavior.
-- Archived React code under `src-old/legacy/` is reference material only and must not be imported into the active runtime.
+- The active runtime no longer carries React-era source; keep the shipped Svelte path free of React-era imports and file re-entry.
 
 ## Cross-layer Conventions
 
@@ -122,8 +117,8 @@ Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavk
 
 - Prefer behavior/contract tests over implementation-detail tests.
 - Use Vitest for unit and focused jsdom component behavior; use Playwright for mocked browser flows and WebDriverIO for the thin native desktop smoke lane.
-- Do not add source-grep tests against active Svelte or archived React source except for intentional architectural guardrails.
-- `src/platform/import-boundary.test.ts` is the quarantine guardrail: active `src/`, `e2e/`, and `e2e-native/` must stay free of archived React source imports, archived test imports, and React-era file re-entry.
+- Do not add source-grep tests against active Svelte or React-era source except for intentional architectural guardrails.
+- `src/platform/import-boundary.test.ts` is the quarantine guardrail: active `src/`, `e2e/`, and `e2e-native/` must stay free of React-era source imports, archived test imports, and React-era file re-entry.
 - Layer-specific test guidance lives in `src/AGENTS.md`, `src-tauri/src/AGENTS.md`, `e2e/AGENTS.md`, and `e2e-native/AGENTS.md`.
 - Keep native desktop coverage intentionally thin and high-value; broad UI coverage still belongs in the mocked Playwright suite.
 

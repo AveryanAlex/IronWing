@@ -1,17 +1,15 @@
-# Frontend (active Svelte runtime + archived React reference)
-
-> Active runtime note (M004/S04): the shipped frontend boots from `src/main.ts` and mounts `src/App.svelte`. The remaining React-era source tree now lives under `src-old/legacy/`; treat it as archived context only.
+# Frontend (active Svelte runtime)
 
 ## Overview
 
-The active frontend surface is the Svelte shell plus the shared TypeScript bridges, stores, and domain helpers it uses. `src/` should describe the shipped runtime; archived React components/hooks no longer live here.
+The active frontend surface is the Svelte shell plus the shared TypeScript bridges, stores, and domain helpers it uses. `src/` should describe the shipped runtime.
 
 ## Formatting
 
 - Run `pnpm run frontend:format` to apply the active frontend Biome baseline.
 - Run `pnpm run frontend:format:check` to verify the same scope without writing changes.
 - The active formatter baseline is intentionally centered on the shipped Svelte shell, its bootstrap helpers, and nearby tooling files.
-- Do not import from `src-old/legacy/` or `src-old/runtime/` into active `src/` code.
+- Do not reintroduce React-era runtime code into active `src/` code.
 
 ## Where To Look
 
@@ -23,7 +21,6 @@ The active frontend surface is the Svelte shell plus the shared TypeScript bridg
 | Session/store architecture | `lib/stores/session.ts`, `lib/platform/session.ts`, `telemetry.ts`, `session.ts`, `transport.ts` | Shared state, IPC wrappers, transport contracts |
 | Runtime stores and notifications | `lib/stores/*`, `lib/toasts.ts`, `lib/components/*` | Store contracts and reusable Svelte-side helpers |
 | Platform alias layer | `platform/AGENTS.md` | `@platform/*` imports and mocked-browser split |
-| Archived React frontend reference | `../src-old/legacy/README.md` | Legacy hooks/components/tests retained for rewrite context |
 
 ## Structure
 
@@ -61,12 +58,11 @@ src/
 - `app/shell/AppShell.svelte` owns the shipped responsive shell composition.
 - `components/connection/`, `components/status/`, and `components/telemetry/` are the only active feature surfaces under `src/components/` today.
 - Prefer neutral helpers under `src/lib/` when logic must be shared between multiple active surfaces.
-- If you need archived React behavior for reference, read it in `src-old/legacy/` and port the intent instead of importing the old module.
 
 ## Data / Lib Conventions
 
 - Keep pure shared contracts in neutral `.ts` modules under `src/lib/` or top-level bridge/domain files.
-- `lib/setup-sections.ts` holds the active, framework-neutral setup progress contract that remains relevant after the React archive.
+- `lib/setup-sections.ts` holds the active, framework-neutral setup progress contract that remains relevant after the active Svelte migration.
 - `data/ardupilot-docs.ts` is the only place to add ArduPilot docs URLs.
 - `data/battery-presets.ts` and `data/motor-layouts.ts` are shared reference data, not feature-local constants.
 
@@ -74,8 +70,8 @@ src/
 
 - `pnpm test` runs Vitest. Global environment is `node`.
 - Use `// @vitest-environment jsdom` only on files that truly need DOM rendering.
-- Prefer `@testing-library/svelte` for active UI behavior; keep legacy `@testing-library/react` coverage quarantined under `src-old/legacy/`.
-- `src/platform/import-boundary.test.ts` is the intentional quarantine guardrail: active `src/`, `e2e/`, and `e2e-native/` may not import archived React source, archived tests, or reintroduce React-era `.tsx/.jsx` files.
+- Prefer `@testing-library/svelte` for active UI behavior; do not add React test dependencies to active frontend tests.
+- `src/platform/import-boundary.test.ts` is the intentional quarantine guardrail: active `src/`, `e2e/`, and `e2e-native/` may not import React-era source, archived tests, or reintroduce React-era `.tsx/.jsx` files.
 
 ### Active frontend tests
 
@@ -89,5 +85,4 @@ src/
 ## Notes
 
 - `param-metadata.ts` fetches ArduPilot XML through the platform HTTP layer and parses it with `DOMParser`.
-- `src-old/legacy/` is intentionally excluded from the active build/test lanes; use it as rewrite context, not a dependency source.
 - If you change SITL runtime port math, update `scripts/workflow/runtime.mjs` and its tests.

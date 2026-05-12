@@ -28,7 +28,6 @@ export const runtimeSelectors = {
     bootstrapState: '[data-testid="app-bootstrap-state"]',
     bootedAt: '[data-testid="app-runtime-booted-at"]',
     entrypoint: '[data-testid="app-runtime-entrypoint"]',
-    quarantineBoundary: '[data-testid="app-runtime-quarantine-boundary"]',
     bootstrapFailure: '[data-testid="app-bootstrap-failure"]',
     bootstrapFailureMessage: '[data-testid="app-bootstrap-failure-message"]',
     shellTier: '[data-testid="app-shell-tier"]',
@@ -932,7 +931,6 @@ export async function expectRuntimeDiagnostics(page: Page): Promise<void> {
     await expect(page.locator(runtimeSelectors.bootstrapState)).toContainText("ready");
     await expect(page.locator(runtimeSelectors.bootedAt)).not.toContainText("Starting up");
     await expect(page.locator(runtimeSelectors.entrypoint)).toContainText("src/app/App.svelte");
-    await expect(page.locator(runtimeSelectors.quarantineBoundary)).toContainText("src-old/runtime");
 }
 
 export async function expectShellChrome(page: Page, presetName: ShellViewportPresetName): Promise<ShellViewportPreset> {

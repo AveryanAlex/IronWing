@@ -253,7 +253,6 @@ async function handleLogsMapHandoff(
       framework={$runtimeStore.framework}
       handleVehiclePanelToggle={controller.toggleVehiclePanel}
       lastPhase={$sessionStore.lastPhase}
-      legacyBoundary={$runtimeStore.legacyRuntimeLocation}
       onSelectWorkspace={controller.showWorkspace}
       connectionTone={connectionTone}
       showVehiclePanelButton={showVehiclePanelButton}
