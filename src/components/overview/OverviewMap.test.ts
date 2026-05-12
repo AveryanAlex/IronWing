@@ -44,11 +44,13 @@ vi.mock("maplibre-gl", () => {
     return maplibreState.mockMap;
   }
 
-  function MockMarker() {
+  function MockMarker(options?: { element?: HTMLElement }) {
+    const element = options?.element ?? document.createElement("div");
     return {
       setLngLat: vi.fn().mockReturnThis(),
       addTo: vi.fn().mockReturnThis(),
       remove: vi.fn(),
+      getElement: vi.fn(() => element),
     };
   }
 

@@ -3,10 +3,17 @@ import { onMount } from "svelte";
 import { toast } from "svelte-sonner";
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap, type Marker } from "maplibre-gl";
 
+import {
+  resolveVehicleIconKind,
+  VEHICLE_ICON_SVG,
+  type VehicleIconKind,
+} from "../../lib/overview/vehicle-icon";
+
 type Props = {
   vehicleLat?: number;
   vehicleLon?: number;
   vehicleHeading?: number;
+  mavType?: number;
   homeLat?: number;
   homeLon?: number;
   missionPath?: Array<{ lat: number; lon: number }>;
@@ -41,10 +48,13 @@ let {
   vehicleLat,
   vehicleLon,
   vehicleHeading = 0,
+  mavType,
   homeLat,
   homeLon,
   missionPath = [],
 }: Props = $props();
+
+const iconKind = $derived<VehicleIconKind>(resolveVehicleIconKind(mavType));
 
 let mapContainer = $state<HTMLDivElement | null>(null);
 let mapLayer = $state<MapLayerMode>("normal");
@@ -99,10 +109,9 @@ onMount(() => {
 
   const vehicleElement = document.createElement("div");
   vehicleElement.className = "vehicle-marker";
-  vehicleElement.innerHTML = `<svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="16" cy="16" r="10" fill="#12b9ff" stroke="#072035" stroke-width="2"/>
-    <polygon points="16,4 20,16 16,13 12,16" fill="#fff"/>
-  </svg>`;
+  vehicleElement.dataset.iconKind = iconKind;
+  vehicleElement.style.zIndex = "5";
+  vehicleElement.innerHTML = VEHICLE_ICON_SVG[iconKind];
   vehicleSvg = vehicleElement.querySelector("svg");
   vehicleMarker = new maplibregl.Marker({ element: vehicleElement, anchor: "center" });
 
@@ -171,6 +180,19 @@ $effect(() => {
   if (!styleLoaded || !map) return;
   const source = map.getSource(MISSION_PATH_SOURCE_ID) as GeoJSONSource | undefined;
   source?.setData(buildPathGeoJson(missionPath));
+});
+
+$effect(() => {
+  if (!vehicleMarker) return;
+  const el = vehicleMarker.getElement();
+  if (!el) return;
+  el.dataset.iconKind = iconKind;
+  el.innerHTML = VEHICLE_ICON_SVG[iconKind];
+  vehicleSvg = el.querySelector("svg");
+  // Re-apply heading rotation since the SVG was replaced.
+  if (vehicleSvg && typeof vehicleHeading === "number") {
+    vehicleSvg.style.transform = `rotate(${vehicleHeading}deg)`;
+  }
 });
 
 $effect(() => {

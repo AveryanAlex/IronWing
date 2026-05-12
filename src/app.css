@@ -45,6 +45,8 @@
 :root {
   --safe-area-top: var(--sat, env(safe-area-inset-top, 0px));
   --safe-area-bottom: var(--sab, env(safe-area-inset-bottom, 0px));
+  --marker-vehicle: #ff4444;
+  --marker-vehicle-stroke: rgba(7, 14, 25, 0.9);
 }
 
 /* Base resets */
@@ -727,9 +729,13 @@ body {
   width: 32px;
   height: 32px;
   cursor: default;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+  z-index: 5;
 }
 
 .vehicle-marker svg {
+  width: 100%;
+  height: 100%;
   transition: transform 0.3s ease;
 }
 
@@ -767,6 +773,7 @@ body {
 
 .mission-pin.is-home {
   background: var(--color-success);
+  z-index: 4;
 }
 
 .mission-pin.is-current {

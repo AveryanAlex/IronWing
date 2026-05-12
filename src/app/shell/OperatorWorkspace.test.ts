@@ -17,11 +17,13 @@ vi.mock("maplibre-gl", () => {
     on: vi.fn(),
     remove: vi.fn(),
   };
+  const markerElement = document.createElement("div");
   const mockMarker = {
     setLngLat: vi.fn().mockReturnThis(),
     addTo: vi.fn().mockReturnThis(),
     setRotation: vi.fn().mockReturnThis(),
     remove: vi.fn(),
+    getElement: vi.fn(() => markerElement),
   };
   // Regular functions (not arrow functions) are required for `new` to work.
   function MockMap() { return mockMap; }
