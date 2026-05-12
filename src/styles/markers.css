@@ -1,0 +1,219 @@
+/* Map markers — must stay as regular CSS since MapLibre creates DOM elements */
+.vehicle-marker {
+  width: 32px;
+  height: 32px;
+  cursor: default;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+  z-index: 5;
+}
+
+.vehicle-marker svg {
+  width: 100%;
+  height: 100%;
+  transition: transform 0.3s ease;
+}
+
+.mission-pin {
+  width: 28px;
+  height: 28px;
+  border: 2px solid #072035;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #03101a;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mission-pin.is-selected {
+  background: var(--color-warning);
+  transform: scale(1.08);
+}
+
+.mission-pin.is-multi-selected {
+  background: var(--color-accent);
+  border-color: var(--color-warning);
+  border-width: 3px;
+  transform: scale(1.04);
+  box-shadow:
+    0 0 0 2px rgba(255, 176, 32, 0.35),
+    0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+.mission-pin.is-home {
+  background: var(--color-success);
+  z-index: 4;
+}
+
+.mission-pin.is-current {
+  background: var(--color-danger);
+  animation: pulse-current 1.5s ease-in-out infinite;
+}
+
+.mission-pin.is-selected.is-current {
+  background: var(--color-warning);
+  border-color: var(--color-danger);
+  animation: pulse-current 1.5s ease-in-out infinite;
+  transform: scale(1.08);
+}
+
+.rally-pin {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #072035;
+  border-radius: 50%;
+  background: #f59e0b;
+  color: #072035;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+  font-variant-numeric: tabular-nums;
+}
+
+.rally-pin.is-selected {
+  background: #fbbf24;
+  transform: scale(1.12);
+  border-color: var(--color-accent);
+}
+
+@keyframes pulse-current {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(255, 68, 68, 0);
+  }
+}
+
+/* Polygon vertex markers for auto-grid drawing */
+.polygon-vertex {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--color-accent);
+  border-radius: 999px;
+  background: rgba(18, 185, 255, 0.2);
+  color: var(--color-accent);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    transform 0.15s;
+}
+
+.polygon-vertex:active {
+  cursor: grabbing;
+}
+
+.polygon-vertex.is-first {
+  border-width: 2.5px;
+}
+
+.polygon-vertex.is-closeable {
+  background: rgba(87, 227, 139, 0.3);
+  border-color: var(--color-success);
+  color: var(--color-success);
+  cursor: pointer;
+  transform: scale(1.15);
+}
+
+.polygon-vertex.is-closeable:hover {
+  background: rgba(87, 227, 139, 0.5);
+  transform: scale(1.25);
+}
+
+/* Map control buttons — reusable group for locate + layer switch */
+.map-locate-group {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+}
+
+.map-locate-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: none;
+  border-bottom: 1px solid #ddd;
+  cursor: pointer;
+  color: #333;
+  padding: 0;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.map-locate-btn:last-child {
+  border-bottom: none;
+}
+
+.map-locate-btn:hover {
+  background: #f0f0f0;
+}
+
+.map-locate-btn.is-active {
+  background: #4285f4;
+  color: white;
+}
+
+.map-locate-btn.is-active:hover {
+  background: #3275e4;
+}
+
+.device-location-marker {
+  width: 18px;
+  height: 18px;
+  background: #4285f4;
+  border: 3px solid white;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px rgba(66, 133, 244, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Param navigation highlight — applied transiently via JS, auto-fades */
+.setup-param-highlight {
+  animation: setup-param-flash 1.5s ease-out forwards;
+}
+
+@keyframes setup-param-flash {
+  0% {
+    box-shadow: 0 0 0 2px var(--color-accent);
+    background-color: rgba(18, 185, 255, 0.08);
+  }
+  70% {
+    box-shadow: 0 0 0 2px var(--color-accent);
+    background-color: rgba(18, 185, 255, 0.08);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    background-color: transparent;
+  }
+}
