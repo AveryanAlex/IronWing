@@ -18,3 +18,4 @@ export { default as WorkspaceHeader } from "./WorkspaceHeader.svelte";
 export { default as WorkspaceBody } from "./WorkspaceBody.svelte";
 export { default as WorkspacePanel } from "./WorkspacePanel.svelte";
 export { default as WorkspaceGrid } from "./WorkspaceGrid.svelte";
+export { default as SplitWorkspace } from "./SplitWorkspace.svelte";
