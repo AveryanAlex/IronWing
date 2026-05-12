@@ -20,6 +20,7 @@ import type {
   SetupWorkspaceStoreState,
 } from "../../lib/stores/setup-workspace";
 import SetupBitmaskChecklist from "./shared/SetupBitmaskChecklist.svelte";
+import SetupSectionShell from "./SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 let {
@@ -253,16 +254,13 @@ function toggleFenceType(bit: number) {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.geofenceSection}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Boundary enforcement that stays honest about vehicle-family limits</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Geofence keeps the selected boundary types, breach action, and family-specific range controls explicit. Copter altitude limits, plane ceiling protection, and rover radius-only fences stay separate instead of collapsing into one raw-parameter bucket.
-      </p>
-    </div>
-
+<SetupSectionShell
+  eyebrow={section.title}
+  title="Boundary enforcement that stays honest about vehicle-family limits"
+  description="Geofence keeps the selected boundary types, breach action, and family-specific range controls explicit. Copter altitude limits, plane ceiling protection, and rover radius-only fences stay separate instead of collapsing into one raw-parameter bucket."
+  testId={setupWorkspaceTestIds.geofenceSection}
+>
+  {#snippet actions()}
     {#if docsUrl}
       <a
         class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
@@ -274,12 +272,14 @@ function toggleFenceType(bit: number) {
         Geofence docs
       </a>
     {/if}
-  </div>
+  {/snippet}
 
-  <div
-    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
-    data-testid={setupWorkspaceTestIds.geofenceSummary}
-  >
+  {#snippet body()}
+    <div class="setup-geofence-body">
+      <div
+        class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
+        data-testid={setupWorkspaceTestIds.geofenceSummary}
+      >
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Fence state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{model.fenceEnabled ? "Enabled" : "Disabled"}</p>
@@ -429,5 +429,15 @@ function toggleFenceType(bit: number) {
         </div>
       </article>
     {/each}
-  </div>
-</section>
+      </div>
+    </div>
+  {/snippet}
+</SetupSectionShell>
+
+<style>
+.setup-geofence-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+</style>
