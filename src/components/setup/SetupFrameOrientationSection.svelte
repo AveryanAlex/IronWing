@@ -24,6 +24,7 @@ import type {
   SetupWorkspaceCheckpointState,
   SetupWorkspaceSection,
 } from "../../lib/stores/setup-workspace";
+import SetupSectionShell from "./SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 import MotorDiagram from "./shared/MotorDiagram.svelte";
 
@@ -458,16 +459,13 @@ function buildFrameBanners(input: {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.frameSection}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Plane vs QuadPlane truth stays explicit here</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Frame, VTOL enable, and board orientation stay separate from apply ownership: every parameter-backed change stages into the shared review tray, while stale or partial Q-frame truth fails closed instead of bluffing actuator safety.
-      </p>
-    </div>
-
+<SetupSectionShell
+  eyebrow={section.title}
+  title="Plane vs QuadPlane truth stays explicit here"
+  description="Frame, VTOL enable, and board orientation stay separate from apply ownership: every parameter-backed change stages into the shared review tray, while stale or partial Q-frame truth fails closed instead of bluffing actuator safety."
+  testId={setupWorkspaceTestIds.frameSection}
+>
+  {#snippet actions()}
     {#if docsUrl}
       <a
         class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
@@ -479,12 +477,14 @@ function buildFrameBanners(input: {
         ArduPilot frame docs
       </a>
     {/if}
-  </div>
+  {/snippet}
 
-  <div
-    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
-    data-testid={setupWorkspaceTestIds.frameSummary}
-  >
+  {#snippet body()}
+    <div class="setup-frame-body">
+      <div
+        class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
+        data-testid={setupWorkspaceTestIds.frameSummary}
+      >
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Vehicle state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.frameVehicleState}>
@@ -727,4 +727,14 @@ function buildFrameBanners(input: {
       </button>
     </div>
   {/if}
-</section>
+    </div>
+  {/snippet}
+</SetupSectionShell>
+
+<style>
+.setup-frame-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+</style>
