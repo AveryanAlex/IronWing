@@ -32,7 +32,7 @@ let armed = $derived(vehicleState?.armed ?? false);
 let modeName = $derived(vehicleState?.mode_name ?? "--");
 
 // SVS setting from localStorage
-const SVS_STORAGE_KEY = "ironwing_svs_enabled";
+const SVS_STORAGE_KEY = "ironwing.hud.svs_enabled";
 let svsEnabled = $state(loadSvsEnabled());
 
 function loadSvsEnabled(): boolean {

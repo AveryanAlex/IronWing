@@ -4,7 +4,7 @@ import { fromStore } from "svelte/store";
 import { TELEMETRY_RATE_HZ_LIMITS } from "../../lib/stores/settings";
 import { getLiveSettingsStoreContext } from "../../app/shell/runtime-context";
 
-const SVS_STORAGE_KEY = "ironwing_svs_enabled";
+const SVS_STORAGE_KEY = "ironwing.hud.svs_enabled";
 
 const liveSettingsStore = getLiveSettingsStoreContext();
 const liveSettings = fromStore(liveSettingsStore);

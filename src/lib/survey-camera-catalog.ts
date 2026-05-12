@@ -3,8 +3,8 @@ import rawData from "../data/camera-metadata.json";
 import type { CameraSpec } from "./survey-camera";
 import { getBrowserStorage, readStorageJson, writeStorageJson } from "./local-storage";
 
-const CUSTOM_CAMERA_STORAGE_KEY = "ironwing_custom_cameras";
-const RECENT_CAMERA_STORAGE_KEY = "ironwing_recent_cameras";
+const CUSTOM_CAMERA_STORAGE_KEY = "ironwing.cameras.custom";
+const RECENT_CAMERA_STORAGE_KEY = "ironwing.cameras.recent";
 const MAX_RECENT_CAMERAS = 6;
 
 type RawCatalogCamera = {

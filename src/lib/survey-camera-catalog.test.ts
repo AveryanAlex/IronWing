@@ -15,7 +15,7 @@ import {
     type CatalogCamera,
 } from "./survey-camera-catalog";
 
-const CUSTOM_CAMERA_STORAGE_KEY = "ironwing_custom_cameras";
+const CUSTOM_CAMERA_STORAGE_KEY = "ironwing.cameras.custom";
 
 const localStorageMock = (() => {
     let store: Record<string, string> = {};
