@@ -104,6 +104,7 @@ function makeRallyPoint(latitude_deg: number, longitude_deg: number, altitude_m 
 }
 
 function renderStatsPanel(overrides: Partial<{
+  mode: "mission" | "fence" | "rally";
   home: { latitude_deg: number; longitude_deg: number; altitude_m: number } | null;
   missionItems: TypedDraftItem[];
   fenceRegions: FenceRegion[];
@@ -125,6 +126,7 @@ function renderStatsPanel(overrides: Partial<{
     };
 
   const props = {
+    mode: overrides.mode ?? "mission",
     home,
     missionItems: overrides.missionItems ?? [],
     fenceRegions: overrides.fenceRegions ?? [],
@@ -145,7 +147,7 @@ function renderStatsPanel(overrides: Partial<{
 }
 
 describe("MissionPlanningStatsPanel", () => {
-  it("renders mission, fence, and rally statistics with explicit indeterminate reasons", () => {
+  it("renders mission estimates with explicit indeterminate reasons in mission mode", () => {
     const home = {
       latitude_deg: 47.3769,
       longitude_deg: 8.5417,
@@ -168,8 +170,38 @@ describe("MissionPlanningStatsPanel", () => {
     expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsMissionDistance).textContent).toContain("distance");
     expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsIndeterminate).textContent).toContain("#2");
     expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsIndeterminate).textContent).toContain("Loiter-unlimited commands");
+    // Mission mode hides the fence and rally cards.
+    expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsFenceRegions)).toBeNull();
+    expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsRallyCount)).toBeNull();
+  });
+
+  it("scopes fence stats to fence mode and rally stats to rally mode", () => {
+    const home = {
+      latitude_deg: 47.3769,
+      longitude_deg: 8.5417,
+      altitude_m: 488,
+    };
+
+    const { unmount } = renderStatsPanel({
+      mode: "fence",
+      home,
+      fenceRegions: [makeFenceRegion()],
+      rallyPoints: [makeRallyPoint(47.4012, 8.5512)],
+    });
     expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsFenceRegions).textContent).toContain("1");
+    expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsMissionCard)).toBeNull();
+    expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsRallyCount)).toBeNull();
+    unmount();
+
+    renderStatsPanel({
+      mode: "rally",
+      home,
+      fenceRegions: [makeFenceRegion()],
+      rallyPoints: [makeRallyPoint(47.4012, 8.5512)],
+    });
     expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsRallyCount).textContent).toContain("1");
+    expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsMissionCard)).toBeNull();
+    expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsFenceCard)).toBeNull();
   });
 
   it("keeps invalid speed edits local until valid and preserves the last confirmed estimate", async () => {
@@ -218,6 +250,7 @@ describe("MissionPlanningStatsPanel", () => {
 
   it("surfaces missing-home rally distance as unavailable instead of a fake zero", () => {
     renderStatsPanel({
+      mode: "rally",
       home: null,
       rallyPoints: [makeRallyPoint(47.4012, 8.5512)],
     });

@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { FenceRegion, GeoPoint3d } from "../../lib/mavkit-types";
 import type { TypedDraftItem } from "../../lib/mission-draft-typed";
+import type { MissionPlannerMode } from "../../lib/stores/mission-planner";
 import { computeFenceStats } from "../../lib/fence-statistics";
 import {
   computeMissionStatistics,
@@ -16,6 +17,7 @@ type HomeReference = {
 };
 
 type Props = {
+  mode?: MissionPlannerMode;
   home: HomeReference | null;
   missionItems: TypedDraftItem[];
   fenceRegions: FenceRegion[];
@@ -38,6 +40,7 @@ type StatEntry = {
 };
 
 let {
+  mode = "mission",
   home,
   missionItems,
   fenceRegions,
@@ -352,21 +355,23 @@ function numbersEqual(left: number, right: number): boolean {
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planning support</p>
-      <h3 class="mt-1 text-sm font-semibold text-text-primary">Mission, fence, and rally statistics</h3>
-      <p class="mt-1 text-xs text-text-secondary">
-        Mission timing stays truthful, fence/rally continuity stays visible, and speed edits remain local until the draft accepts a valid value.
-      </p>
+      <h3 class="mt-1 text-sm font-semibold text-text-primary">
+        {mode === "mission" ? "Mission estimates" : mode === "fence" ? "Fence support stats" : "Rally support stats"}
+      </h3>
     </div>
 
-    <span
-      class={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${toneClass(speedStatusTone)}`}
-      data-testid={missionWorkspaceTestIds.planningStatsSpeedStatus}
-    >
-      {readOnly ? "Read-only" : draftOverridesDefaults ? "Draft override" : "Defaults synced"}
-    </span>
+    {#if mode === "mission"}
+      <span
+        class={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${toneClass(speedStatusTone)}`}
+        data-testid={missionWorkspaceTestIds.planningStatsSpeedStatus}
+      >
+        {readOnly ? "Read-only" : draftOverridesDefaults ? "Draft override" : "Defaults synced"}
+      </span>
+    {/if}
   </div>
 
-  <div class="mt-4 grid gap-4 xl:grid-cols-3">
+  <div class="mt-4 grid gap-4">
+    {#if mode === "mission"}
     <article class="rounded-lg border border-border bg-bg-secondary/50 p-3" data-testid={missionWorkspaceTestIds.planningStatsMissionCard}>
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -454,7 +459,9 @@ function numbersEqual(left: number, right: number): boolean {
 
       <p class="mt-3 text-xs text-text-secondary">{speedStatusMessage}</p>
     </article>
+    {/if}
 
+    {#if mode === "fence"}
     <article class="rounded-lg border border-border bg-bg-secondary/50 p-3" data-testid={missionWorkspaceTestIds.planningStatsFenceCard}>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Fence continuity</p>
       <h4 class="mt-1 text-sm font-semibold text-text-primary">Fence support stats</h4>
@@ -472,7 +479,9 @@ function numbersEqual(left: number, right: number): boolean {
         {/each}
       </div>
     </article>
+    {/if}
 
+    {#if mode === "rally"}
     <article class="rounded-lg border border-border bg-bg-secondary/50 p-3" data-testid={missionWorkspaceTestIds.planningStatsRallyCard}>
       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Rally continuity</p>
       <h4 class="mt-1 text-sm font-semibold text-text-primary">Rally support stats</h4>
@@ -490,5 +499,6 @@ function numbersEqual(left: number, right: number): boolean {
         {/each}
       </div>
     </article>
+    {/if}
   </div>
 </section>

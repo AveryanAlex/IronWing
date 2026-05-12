@@ -1110,7 +1110,7 @@ describe("MissionWorkspace", () => {
     });
   });
 
-  it("keeps mission, fence, and rally support stats visible across planner mode switches", async () => {
+  it("shows only the active mode's continuity panel across planner mode switches", async () => {
     const continuityWorkspace = {
       ...makeWorkspace({
         home: { latitude_deg: 47.4, longitude_deg: 8.55, altitude_m: 500 },
@@ -1127,23 +1127,31 @@ describe("MissionWorkspace", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
-      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsFenceRegions).textContent).toContain("2");
-      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsRallyCount).textContent).toContain("2");
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsMissionCard)).toBeTruthy();
     });
+    // Mission mode hides the fence and rally cards.
+    expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsFenceCard)).toBeNull();
+    expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsRallyCard)).toBeNull();
 
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsFenceCard)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsFenceRegions).textContent).toContain("2");
     });
+    expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsMissionCard)).toBeNull();
+    expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsRallyCard)).toBeNull();
 
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsRallyCard)).toBeTruthy();
+      expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsRallyCount).textContent).toContain("2");
     });
+    expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsMissionCard)).toBeNull();
+    expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsFenceCard)).toBeNull();
   });
 
   it("jumps terrain warnings to the targeted mission item and refuses stale warning indexes", async () => {
