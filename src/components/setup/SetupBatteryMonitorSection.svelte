@@ -23,6 +23,7 @@ import type {
   SetupWorkspaceStoreState,
 } from "../../lib/stores/setup-workspace";
 import { selectTelemetryView } from "../../lib/telemetry-selectors";
+import SetupSectionShell from "./SetupSectionShell.svelte";
 import SetupPreviewStagePanel from "./shared/SetupPreviewStagePanel.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
@@ -410,16 +411,13 @@ function round3(value: number): number {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.batterySection}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Preset-first battery monitor staging with truthful live power state</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Board pins, sensor scaling, and voltage-threshold presets stay explicit here, but they still queue through the shared review tray. Manual numeric staging remains available whenever the scoped parameter family is complete enough to prove the affected rows.
-      </p>
-    </div>
-
+<SetupSectionShell
+  eyebrow={section.title}
+  title="Preset-first battery monitor staging with truthful live power state"
+  description="Board pins, sensor scaling, and voltage-threshold presets stay explicit here, but they still queue through the shared review tray. Manual numeric staging remains available whenever the scoped parameter family is complete enough to prove the affected rows."
+  testId={setupWorkspaceTestIds.batterySection}
+>
+  {#snippet actions()}
     {#if docsUrl}
       <a
         class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
@@ -431,12 +429,14 @@ function round3(value: number): number {
         Power-module docs
       </a>
     {/if}
-  </div>
+  {/snippet}
 
-  <div
-    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
-    data-testid={setupWorkspaceTestIds.batterySummary}
-  >
+  {#snippet body()}
+    <div class="setup-battery-body">
+      <div
+        class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
+        data-testid={setupWorkspaceTestIds.batterySummary}
+      >
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Live battery state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.batteryLiveState}>
@@ -823,24 +823,34 @@ function round3(value: number): number {
     </article>
   {/if}
 
-  {#if recoveryReasons.length > 0}
-    <div
-      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
-      data-testid={setupWorkspaceTestIds.batteryRecovery}
-    >
-      <p class="font-semibold text-text-primary">Battery monitor recovery is active.</p>
-      <ul class="mt-2 list-disc space-y-1 pl-5">
-        {#each recoveryReasons as reason (reason)}
-          <li>{reason}</li>
-        {/each}
-      </ul>
-      <button
-        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        onclick={onSelectRecovery}
-        type="button"
-      >
-        Open Full Parameters recovery
-      </button>
+      {#if recoveryReasons.length > 0}
+        <div
+          class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+          data-testid={setupWorkspaceTestIds.batteryRecovery}
+        >
+          <p class="font-semibold text-text-primary">Battery monitor recovery is active.</p>
+          <ul class="mt-2 list-disc space-y-1 pl-5">
+            {#each recoveryReasons as reason (reason)}
+              <li>{reason}</li>
+            {/each}
+          </ul>
+          <button
+            class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+            onclick={onSelectRecovery}
+            type="button"
+          >
+            Open Full Parameters recovery
+          </button>
+        </div>
+      {/if}
     </div>
-  {/if}
-</section>
+  {/snippet}
+</SetupSectionShell>
+
+<style>
+.setup-battery-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+</style>
