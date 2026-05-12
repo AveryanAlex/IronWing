@@ -16,6 +16,7 @@ import type {
   SetupWorkspaceStoreState,
 } from "../../lib/stores/setup-workspace";
 import ParameterExpertRowComponent from "../params/ParameterExpertRow.svelte";
+import SetupSectionShell from "./SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
 type CuratedPidGroup = {
@@ -406,16 +407,13 @@ function discardItem(name: string) {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.pidTuningSection}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{section.title}</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Vehicle-aware PID surfaces without a raw-parameter fallback</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        PID tuning stays shaped around the current vehicle family. Copter, fixed-wing, and fully refreshed QuadPlane scopes each get a purposeful expert-row surface, while partial VTOL truth stays explicit and fail-closed.
-      </p>
-    </div>
-
+<SetupSectionShell
+  eyebrow={section.title}
+  title="Vehicle-aware PID surfaces without a raw-parameter fallback"
+  description="PID tuning stays shaped around the current vehicle family. Copter, fixed-wing, and fully refreshed QuadPlane scopes each get a purposeful expert-row surface, while partial VTOL truth stays explicit and fail-closed."
+  testId={setupWorkspaceTestIds.pidTuningSection}
+>
+  {#snippet actions()}
     {#if docsUrl}
       <a
         class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
@@ -427,12 +425,14 @@ function discardItem(name: string) {
         Tuning docs
       </a>
     {/if}
-  </div>
+  {/snippet}
 
-  <div
-    class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
-    data-testid={setupWorkspaceTestIds.pidTuningSummary}
-  >
+  {#snippet body()}
+    <div class="setup-pid-tuning-body">
+      <div
+        class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
+        data-testid={setupWorkspaceTestIds.pidTuningSummary}
+      >
     <div>
       <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Family state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.pidTuningFamilyState}>
@@ -519,4 +519,14 @@ function discardItem(name: string) {
       </button>
     </div>
   {/if}
-</section>
+    </div>
+  {/snippet}
+</SetupSectionShell>
+
+<style>
+.setup-pid-tuning-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+</style>
