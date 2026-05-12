@@ -39,7 +39,8 @@ import MissionRallyDraftList from "./MissionRallyDraftList.svelte";
 import MissionRallyInspector from "./MissionRallyInspector.svelte";
 import MissionTerrainProfilePanel from "./MissionTerrainProfilePanel.svelte";
 import MissionWorkspaceHeader from "./MissionWorkspaceHeader.svelte";
-import { SplitPane } from "../ui";
+import { SplitPane, StickyWarningStack } from "../ui";
+import type { Warning } from "../../lib/warnings/warning-model";
 import {
   missionWorkspaceFallbackChromeState,
   resolveMissionWorkspaceLayout,
@@ -480,6 +481,25 @@ function warningTestId(warning: MissionPlannerWarningView, index: number): strin
   }
 
   return `${missionWorkspaceTestIds.warningItemPrefix}-${index}`;
+}
+
+function toSharedWarning(warning: MissionPlannerWarningView, index: number): Warning {
+  const action = warning.action;
+  return {
+    id: warning.id,
+    severity: warning.tone,
+    title: warning.title,
+    message: warning.detail,
+    source: warning.domain,
+    details: warning.lines,
+    actionLabel: action?.label,
+    onAction: action ? () => handleWarningAction(action) : undefined,
+    dismissible: true,
+    onDismiss: () => handleDismissWarning(warning.id),
+    testId: warningTestId(warning, index),
+    actionTestId: action ? `${missionWorkspaceTestIds.warningActionPrefix}-${index}` : undefined,
+    dismissTestId: `${missionWorkspaceTestIds.warningDismissPrefix}-${index}`,
+  };
 }
 
 function importReviewChoiceTestId(domain: MissionPlannerMode): string {
@@ -1076,63 +1096,12 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
   {/if}
 
   {#if view.warnings.length > 0}
-    <section
-      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm text-warning"
-      data-testid={missionWorkspaceTestIds.warningRegister}
-    >
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.16em] text-warning/80">Sticky warnings</p>
-          <p class="mt-1 text-xs text-warning/90">Warnings and blocked-action reasons stay visible across domain switches until you dismiss them explicitly.</p>
-        </div>
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-warning/80">{view.warningCount} visible</p>
-      </div>
-
-      <div class="mt-4 space-y-3">
-        {#each view.warnings as warning, index (warning.id)}
-          <article
-            class="rounded-lg border border-warning/30 bg-bg-primary/90 px-4 py-3 text-text-primary"
-            data-testid={warningTestId(warning, index)}
-          >
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div class="max-w-3xl">
-                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{warning.domain}</p>
-                <h3 class="mt-1 text-sm font-semibold">{warning.title}</h3>
-                <p class="mt-1 text-sm text-text-secondary">{warning.detail}</p>
-                {#if warning.lines.length > 0}
-                  <ul class="mt-2 list-inside list-disc space-y-1 text-xs text-text-secondary">
-                    {#each warning.lines as line (`${warning.id}-${line}`)}
-                      <li>{line}</li>
-                    {/each}
-                  </ul>
-                {/if}
-              </div>
-
-              <div class="flex flex-wrap gap-2">
-                {#if warning.action}
-                  <button
-                    class="rounded-md border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent transition hover:brightness-105"
-                    data-testid={`${missionWorkspaceTestIds.warningActionPrefix}-${index}`}
-                    onclick={() => handleWarningAction(warning.action!)}
-                    type="button"
-                  >
-                    {warning.action.label}
-                  </button>
-                {/if}
-                <button
-                  class="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-                  data-testid={`${missionWorkspaceTestIds.warningDismissPrefix}-${index}`}
-                  onclick={() => handleDismissWarning(warning.id)}
-                  type="button"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          </article>
-        {/each}
-      </div>
-    </section>
+    <div class="mt-4">
+      <StickyWarningStack
+        warnings={view.warnings.map((warning, index) => toSharedWarning(warning, index))}
+        testId={missionWorkspaceTestIds.warningRegister}
+      />
+    </div>
   {/if}
 
   {#if replayMapOverlay}
