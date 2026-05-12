@@ -3,64 +3,89 @@ import { fromStore } from "svelte/store";
 
 import { getSessionViewStoreContext } from "../../app/shell/runtime-context";
 import type { ViewTone } from "../../lib/session-selectors";
+import { MetricTile, Panel, StatusPill } from "../ui";
 
 const sessionView = fromStore(getSessionViewStoreContext());
 
-function toneTextClass(tone: ViewTone): string {
+function metricTone(tone: ViewTone): "neutral" | "info" | "success" | "warning" | "danger" {
   switch (tone) {
     case "positive":
-      return "text-success";
+      return "success";
     case "caution":
-      return "text-warning";
+      return "warning";
     case "critical":
-      return "text-danger";
+      return "danger";
     default:
-      return "text-text-primary";
+      return "neutral";
   }
 }
 
-function sessionBadgeClass(tone: ViewTone): string {
-  return tone === "positive" ? "bg-success/10 text-success" : "bg-bg-primary/70 text-text-secondary";
+function pillTone(tone: ViewTone): "neutral" | "info" | "success" | "warning" | "danger" {
+  switch (tone) {
+    case "positive":
+      return "success";
+    case "caution":
+      return "warning";
+    case "critical":
+      return "danger";
+    default:
+      return "neutral";
+  }
 }
 
 let view = $derived(sessionView.current);
 let statusCard = $derived(view.vehicleStatusCard);
 </script>
 
-<section class="rounded-lg border border-border bg-bg-primary p-3">
-  <div class="flex items-center justify-between gap-3">
+<Panel padded>
+  <div class="vehicle-status__header">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Vehicle status</p>
-      <h2 class="mt-1 text-base font-semibold text-text-primary">Live vehicle state</h2>
+      <p class="vehicle-status__eyebrow">Vehicle status</p>
+      <h2 class="vehicle-status__title">Live vehicle state</h2>
     </div>
-    <span
-      class={`inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold ${sessionBadgeClass(statusCard.sessionTone)}`}
-    >
-      {statusCard.sessionLabel}
-    </span>
+    <StatusPill tone={pillTone(statusCard.sessionTone)}>{statusCard.sessionLabel}</StatusPill>
   </div>
 
-  <dl class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-    <div class="rounded-lg border border-border bg-bg-secondary p-2" data-testid="telemetry-state-value">
-      <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Arm state</dt>
-      <dd class={`mt-1 text-base font-semibold ${toneTextClass(statusCard.armStateTone)}`}>
-        {statusCard.armStateText}
-      </dd>
+  <div class="vehicle-status__grid">
+    <div data-testid="telemetry-state-value">
+      <MetricTile label="Arm state" tone={metricTone(statusCard.armStateTone)} value={statusCard.armStateText} />
     </div>
+    <div data-testid="telemetry-mode-value">
+      <MetricTile label="Mode" value={statusCard.modeText} />
+    </div>
+    <MetricTile label="System" value={statusCard.systemText} />
+    <MetricTile label="Data feed" value={statusCard.dataFeedText} />
+  </div>
+</Panel>
 
-    <div class="rounded-lg border border-border bg-bg-secondary p-2" data-testid="telemetry-mode-value">
-      <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mode</dt>
-      <dd class="mt-1 text-base font-semibold text-text-primary">{statusCard.modeText}</dd>
-    </div>
-
-    <div class="rounded-lg border border-border bg-bg-secondary p-2">
-      <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">System</dt>
-      <dd class="mt-1 text-base font-semibold text-text-primary">{statusCard.systemText}</dd>
-    </div>
-
-    <div class="rounded-lg border border-border bg-bg-secondary p-2">
-      <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Data feed</dt>
-      <dd class="mt-1 text-base font-semibold text-text-primary">{statusCard.dataFeedText}</dd>
-    </div>
-  </dl>
-</section>
+<style>
+.vehicle-status__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.vehicle-status__eyebrow {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.vehicle-status__title {
+  margin: 4px 0 0;
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--color-text-primary);
+}
+.vehicle-status__grid {
+  margin-top: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 1280px) {
+  .vehicle-status__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+</style>

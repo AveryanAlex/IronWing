@@ -11,6 +11,7 @@ import {
   type ConnectionFieldErrors,
 } from "../../lib/connection/connection-form";
 import { selectConnectionPanelPresentation, type ViewTone } from "../../lib/session-selectors";
+import { Panel, StatusPill } from "../ui";
 import ConnectionDiagnostics from "./ConnectionDiagnostics.svelte";
 import ConnectionTransportFields from "./ConnectionTransportFields.svelte";
 
@@ -23,29 +24,16 @@ onMount(() => {
   }
 });
 
-function toneTextClass(tone: ViewTone): string {
+function pillTone(tone: ViewTone): "neutral" | "info" | "success" | "warning" | "danger" {
   switch (tone) {
     case "positive":
-      return "text-success";
+      return "success";
     case "caution":
-      return "text-warning";
+      return "warning";
     case "critical":
-      return "text-danger";
+      return "danger";
     default:
-      return "text-text-secondary";
-  }
-}
-
-function toneDotClass(tone: ViewTone): string {
-  switch (tone) {
-    case "positive":
-      return "bg-success";
-    case "caution":
-      return "bg-warning";
-    case "critical":
-      return "bg-danger";
-    default:
-      return "bg-text-muted";
+      return "neutral";
   }
 }
 
@@ -116,19 +104,15 @@ async function onSubmit(event: SubmitEvent) {
 }
 </script>
 
-<section class="rounded-lg border border-border bg-bg-primary p-3">
-  <div class="flex items-center justify-between gap-2">
-    <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Connection</p>
-    <div
-      class={`inline-flex items-center gap-1.5 text-xs font-semibold ${toneTextClass(panelView.statusTone)}`}
-      data-testid="connection-status-text"
-    >
-      <span class={`h-2 w-2 rounded-full ${toneDotClass(panelView.statusTone)}`}></span>
-      {panelView.statusLabel}
-    </div>
+<Panel padded>
+  <div class="connection-panel__header">
+    <p class="connection-panel__eyebrow">Connection</p>
+    <span data-testid="connection-status-text">
+      <StatusPill tone={pillTone(panelView.statusTone)}>{panelView.statusLabel}</StatusPill>
+    </span>
   </div>
 
-  <form class="mt-3 space-y-3" onsubmit={onSubmit}>
+  <form class="connection-panel__form" onsubmit={onSubmit}>
     <ConnectionTransportFields
       btDevices={$store.btDevices}
       btScanning={$store.btScanning}
@@ -149,14 +133,43 @@ async function onSubmit(event: SubmitEvent) {
     />
 
     {#if visibleError}
-      <p
-        class="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"
-        data-testid="connection-error-message"
-      >
+      <p class="connection-panel__error" data-testid="connection-error-message">
         {visibleError}
       </p>
     {/if}
 
     <ConnectionDiagnostics state={$store} />
   </form>
-</section>
+</Panel>
+
+<style>
+.connection-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.connection-panel__eyebrow {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.connection-panel__form {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.connection-panel__error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  color: var(--color-danger);
+  font-size: 0.86rem;
+}
+</style>
