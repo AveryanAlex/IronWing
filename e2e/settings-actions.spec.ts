@@ -137,6 +137,6 @@ test.describe("telemetry settings actions", () => {
         await openTelemetrySettings(page);
 
         await expect(page.locator(telemetrySettingsSelectors.dialog)).toHaveAttribute("data-surface-kind", "sheet");
-        await expect(page.locator(telemetrySettingsSelectors.surface)).toBeVisible();
+        await expect(page.locator(telemetrySettingsSelectors.dialog)).toBeVisible();
     });
 });
