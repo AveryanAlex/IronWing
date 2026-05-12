@@ -8,7 +8,7 @@
   overflow: hidden;
   font-family: "JetBrains Mono", "Consolas", "Monaco", monospace;
   font-variant-numeric: tabular-nums;
-  color: #12b9ff;
+  color: var(--color-accent);
 }
 
 /* Faint cyan grid background */
@@ -181,13 +181,13 @@
 
 /* SVG text defaults */
 .hud-svg-text {
-  fill: #12b9ff;
+  fill: var(--color-accent);
   font-family: "JetBrains Mono", "Consolas", "Monaco", monospace;
   font-variant-numeric: tabular-nums;
 }
 
 .hud-svg-line {
-  stroke: #12b9ff;
+  stroke: var(--color-accent);
   stroke-width: 1.5;
 }
 
