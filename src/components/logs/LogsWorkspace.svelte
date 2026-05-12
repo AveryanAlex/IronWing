@@ -249,11 +249,7 @@ function emitMarkerHandoff() {
 </script>
 
 <WorkspaceShell mode="inset" testId="logs-workspace-root">
-  <WorkspaceHeader
-    eyebrow="Logs workspace"
-    title="Referenced library, replay control, and map handoff"
-    description="Browse the indexed library, preserve truthful missing or corrupt states, and drive replay without hiding the active live session boundary."
-  >
+  <WorkspaceHeader title="Logs">
     {#snippet status()}
       <StatusPill tone={workspace.effectiveSource === "playback" ? "warning" : "neutral"}>
         effective source · {workspace.effectiveSource}

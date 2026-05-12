@@ -267,7 +267,7 @@ let sections = $derived.by<MetricSection[]>(() => {
 </script>
 
 <WorkspaceShell mode="inset">
-  <WorkspaceHeader title="Telemetry" description="Live flight metrics grouped by subsystem." />
+  <WorkspaceHeader title="Telemetry" />
 
   {#each sections as section (section.key)}
     <div class="telemetry-section">

@@ -13,7 +13,7 @@ import {
   createFirmwareWorkspaceStore,
   type FirmwareWorkspaceStore,
 } from "../../lib/stores/firmware-workspace";
-import { Banner, StatusPill, WorkspaceHeader, WorkspaceShell } from "../ui";
+import { Banner, WorkspaceHeader, WorkspaceShell } from "../ui";
 import FirmwareOutcomePanel from "./FirmwareOutcomePanel.svelte";
 import FirmwareRecoveryPanel from "./FirmwareRecoveryPanel.svelte";
 import FirmwareSerialPanel from "./FirmwareSerialPanel.svelte";
@@ -131,19 +131,7 @@ $effect(() => {
     data-layout-mode={layout.mode}
   ></div>
 
-  <WorkspaceHeader
-    eyebrow="Firmware workspace"
-    title="Install / Update and DFU recovery"
-    description="Keep normal serial install/update and DFU bootloader rescue as separate operator paths while preserving exact retry, source, and outcome facts across workspace switches."
-  >
-    {#snippet status()}
-      <div data-testid={firmwareWorkspaceTestIds.mode}>
-        <StatusPill tone={effectiveMode === "install" ? "info" : "warning"}>
-          {effectiveMode === "install" ? "install-update" : "dfu-recovery"}
-        </StatusPill>
-      </div>
-    {/snippet}
-  </WorkspaceHeader>
+  <WorkspaceHeader title="Firmware" />
 
   <div class="grid gap-3 md:grid-cols-2">
     <button
@@ -211,6 +199,9 @@ $effect(() => {
   {/if}
 
   <div aria-hidden="true" class="hidden">
+    <span data-testid={firmwareWorkspaceTestIds.mode}
+      >{effectiveMode === "install" ? "install-update" : "dfu-recovery"}</span
+    >
     <span data-testid={firmwareWorkspaceTestIds.layoutMode}>{layout.mode}</span>
     <span data-testid={firmwareWorkspaceTestIds.layoutTier}>{layout.tier}</span>
     <span data-testid={firmwareWorkspaceTestIds.layoutTierMismatch}>{layout.tierMismatch ? "mismatch" : "match"}</span>

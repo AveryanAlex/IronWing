@@ -51,10 +51,7 @@ function handleSvsToggle() {
 </script>
 
 <WorkspaceShell mode="inset">
-  <WorkspaceHeader
-    title="App settings"
-    description="Configure runtime behavior of the IronWing ground station."
-  />
+  <WorkspaceHeader title="App settings" />
 
   <Panel>
     <SectionHeader title="Telemetry & runtime" />

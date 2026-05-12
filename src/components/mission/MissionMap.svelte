@@ -1696,25 +1696,7 @@ function buildContextMenuItems(): ContextMenuItem[] {
 <svelte:window onkeydown={handleKeydown} onpointercancel={handlePointerCancel} onpointermove={handlePointerMove} onpointerup={handlePointerUp} />
 
 <section class={["rounded-lg border border-border bg-bg-primary p-3", fillContainer && "mission-map--fill"]} data-testid={missionWorkspaceTestIds.map}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planner map</p>
-      <h3 class="mt-1 text-sm font-semibold text-text-primary">
-        {view.mode === "fence"
-          ? "Fence-first geometry editor"
-          : view.mode === "rally"
-            ? "Rally marker editor"
-            : "Shared mission geometry"}
-      </h3>
-      <p class="mt-1 text-xs text-text-secondary">
-        {view.mode === "fence"
-          ? "Fence regions, return-point truth, and shared Home context stay on one projected map surface so list, inspector, and warning navigation all point at the same geometry."
-          : view.mode === "rally"
-            ? "Rally markers, drag edits, and altitude-frame truth stay on one projected surface so warning navigation, list ordering, and inspector precision all point at the same rally draft."
-            : "The map, list, and inspector all read from the same mission draft so survey drawing, vertex edits, and preview overlays stay truthful."}
-      </p>
-    </div>
-
+  <div class="flex flex-wrap items-start justify-end gap-3">
     <div class="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-secondary">
       <span
         class={`rounded-full border px-3 py-1 ${view.state === "degraded"

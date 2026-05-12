@@ -241,11 +241,7 @@ let bannerSeverity = $derived<BannerSeverity>(outcomeCopy?.tone ?? "warning");
 </script>
 
 <Panel padded testId={firmwareWorkspaceTestIds.outcomePanel}>
-  <SectionHeader
-    eyebrow="Outcome register"
-    title="Retained result details"
-    description="Success, cancel, and failure facts stay visible here instead of collapsing into a transient toast."
-  >
+  <SectionHeader title="Outcome">
     {#snippet actions()}
       <div data-testid={firmwareWorkspaceTestIds.outcomeState}>
         <StatusPill tone="neutral">{sessionStateLabel}</StatusPill>
