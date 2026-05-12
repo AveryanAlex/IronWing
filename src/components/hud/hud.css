@@ -261,3 +261,22 @@
 .hud-svs-bg :global(.maplibregl-ctrl-attrib) {
   display: none !important;
 }
+
+/* Phone-tier safe insets and compact bottom strip */
+@media (max-width: 767px) {
+  .hud-info-cell {
+    padding-inline: var(--hud-safe-inset);
+  }
+
+  .hud-status-strip {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px var(--hud-safe-inset);
+  }
+}
+
+@media (max-width: 360px) {
+  .hud-strip-label {
+    display: none;
+  }
+}

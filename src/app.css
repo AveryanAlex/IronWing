@@ -47,6 +47,7 @@
   --safe-area-bottom: var(--sab, env(safe-area-inset-bottom, 0px));
   --marker-vehicle: #ff4444;
   --marker-vehicle-stroke: rgba(7, 14, 25, 0.9);
+  --hud-safe-inset: max(env(safe-area-inset-top, 0px), 0.75rem);
 }
 
 /* Base resets */
@@ -689,6 +690,10 @@ body {
 }
 
 @media (max-width: 767px) {
+  :root {
+    --hud-safe-inset: max(env(safe-area-inset-top, 0px), 1rem);
+  }
+
   .app-shell-header {
     justify-content: space-between;
   }
