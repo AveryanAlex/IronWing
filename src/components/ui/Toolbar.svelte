@@ -1,15 +1,42 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
 
-type Props = { ariaLabel?: string; testId?: string; wrap?: boolean; children: Snippet };
+type Density = "comfortable" | "compact" | "tight";
+type Overflow = "visible" | "scroll";
 
-let { ariaLabel, testId, wrap = false, children }: Props = $props();
+type Props = {
+  ariaLabel?: string;
+  testId?: string;
+  wrap?: boolean;
+  density?: Density;
+  overflow?: Overflow;
+  children: Snippet;
+};
+
+let {
+  ariaLabel,
+  testId,
+  wrap = false,
+  density = "comfortable",
+  overflow = "visible",
+  children,
+}: Props = $props();
+
+let toolbarClass = $derived([
+  "flex max-w-full min-w-0 flex-nowrap items-center gap-[var(--space-2)] [scrollbar-width:thin] [&>*]:shrink-0",
+  density === "compact" ? "gap-[var(--space-1)]" : "",
+  density === "tight" ? "gap-[3px]" : "",
+  wrap ? "flex-wrap" : "",
+  overflow === "scroll" ? "overflow-x-auto overflow-y-hidden" : "",
+].filter(Boolean).join(" "));
 </script>
 
-<div class="ui-toolbar" data-wrap={wrap || undefined} role="toolbar" aria-label={ariaLabel} data-testid={testId}>{@render children()}</div>
-
-<style>
-.ui-toolbar { display: flex; align-items: center; gap: var(--space-2); flex-wrap: nowrap; min-width: 0; }
-.ui-toolbar[data-wrap] { flex-wrap: wrap; }
-.ui-toolbar > * { flex-shrink: 0; }
-</style>
+<div
+  class={toolbarClass}
+  data-density={density}
+  data-overflow={overflow}
+  data-wrap={wrap || undefined}
+  role="toolbar"
+  aria-label={ariaLabel}
+  data-testid={testId}
+>{@render children()}</div>

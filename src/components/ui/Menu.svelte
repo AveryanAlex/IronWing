@@ -1,49 +1,60 @@
 <script lang="ts">
 import { DropdownMenu as Bits } from "bits-ui";
+import type { Snippet } from "svelte";
 import type { MenuItem } from "./menu-types";
 
 type Props = {
   triggerLabel: string;
+  triggerAriaLabel?: string;
+  triggerIcon?: Snippet;
+  triggerClass?: string;
+  triggerLabelClass?: string;
   triggerTone?: "neutral" | "accent";
   items: ReadonlyArray<MenuItem>;
   testId?: string;
 };
 
-let { triggerLabel, triggerTone = "neutral", items, testId }: Props = $props();
+let {
+  triggerLabel,
+  triggerAriaLabel,
+  triggerIcon,
+  triggerClass = "",
+  triggerLabelClass = "",
+  triggerTone = "neutral",
+  items,
+  testId,
+}: Props = $props();
+
+let triggerClasses = $derived([
+  "ui-menu__trigger inline-flex cursor-pointer items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border-light)] bg-[var(--color-bg-primary)] px-[0.65rem] py-[0.35rem] text-[0.82rem] font-semibold text-[var(--color-text-primary)]",
+  triggerTone === "accent" ? "border-[var(--color-accent)] text-[var(--color-accent)]" : "",
+  triggerClass,
+].filter(Boolean).join(" "));
 </script>
 
 <Bits.Root>
-  <Bits.Trigger class="ui-menu__trigger" data-tone={triggerTone} data-testid={testId}>
-    {triggerLabel}
+  <Bits.Trigger class={triggerClasses} aria-label={triggerAriaLabel ?? triggerLabel} data-tone={triggerTone} data-testid={testId}>
+    {#if triggerIcon}
+      <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">{@render triggerIcon()}</span>
+    {/if}
+    <span class={`ui-menu__trigger-label min-w-0 overflow-hidden text-ellipsis ${triggerLabelClass}`}>{triggerLabel}</span>
   </Bits.Trigger>
   <Bits.Portal>
-    <Bits.Content class="ui-menu__content" sideOffset={6}>
+    <Bits.Content class="z-[60] min-w-[180px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-1 shadow-[0_8px_24px_rgba(0,0,0,0.45)]" sideOffset={6}>
       {#each items as item (item.id)}
         <Bits.Item
-          class="ui-menu__item"
+          class="flex w-full cursor-pointer items-center gap-[var(--space-2)] rounded-[var(--radius-sm)] px-2.5 py-1.5 text-left text-[0.84rem] text-[var(--color-text-primary)] data-[destructive]:text-[var(--color-danger)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-55 data-[highlighted]:bg-[var(--color-bg-tertiary)]"
           data-destructive={item.destructive || undefined}
           data-testid={item.testId}
           disabled={item.disabled}
           onSelect={() => item.onSelect()}
         >
           {#if item.icon}
-            <span class="ui-menu__icon" aria-hidden="true">{@render item.icon()}</span>
+            <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[var(--color-text-secondary)]" aria-hidden="true">{@render item.icon()}</span>
           {/if}
-          <span class="ui-menu__label">{item.label}</span>
+          <span class="min-w-0 flex-1">{item.label}</span>
         </Bits.Item>
       {/each}
     </Bits.Content>
   </Bits.Portal>
 </Bits.Root>
-
-<style>
-:global(.ui-menu__trigger) { display: inline-flex; align-items: center; gap: 4px; padding: 0.35rem 0.65rem; border-radius: var(--radius-sm); border: 1px solid var(--color-border-light); background: var(--color-bg-primary); color: var(--color-text-primary); font-weight: 600; font-size: 0.82rem; cursor: pointer; }
-:global(.ui-menu__trigger[data-tone="accent"]) { color: var(--color-accent); border-color: var(--color-accent); }
-:global(.ui-menu__content) { z-index: 60; min-width: 180px; padding: 4px; background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0,0,0,0.45); }
-:global(.ui-menu__item) { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: 6px 10px; text-align: left; color: var(--color-text-primary); border-radius: var(--radius-sm); cursor: pointer; font-size: 0.84rem; }
-:global(.ui-menu__icon) { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; color: var(--color-text-secondary); }
-:global(.ui-menu__label) { flex: 1; min-width: 0; }
-:global(.ui-menu__item[data-highlighted]) { background: var(--color-bg-tertiary); }
-:global(.ui-menu__item[data-destructive]) { color: var(--color-danger); }
-:global(.ui-menu__item[data-disabled]) { opacity: 0.55; cursor: not-allowed; }
-</style>

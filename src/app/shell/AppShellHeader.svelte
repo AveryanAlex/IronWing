@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
 
-import { ResponsiveTabs, Tooltip } from "../../components/ui";
+import { AdaptiveRail, ResponsiveTabs, Tooltip } from "../../components/ui";
 import { runtimeTestIds } from "../../lib/stores/runtime";
 import { appShellTestIds, type ShellTier } from "./chrome-state";
 import type { AppShellWorkspace } from "./app-shell-controller";
@@ -189,40 +189,42 @@ function connectionIndicatorClass(tone: ConnectionTone): string {
 {/snippet}
 
 <header class="app-shell-header">
-  <div class="app-shell-header__top">
-    <div class="app-shell-header__brand">
-      <h1 class="app-shell-header__title" data-testid={runtimeTestIds.heading}>IronWing</h1>
-      <span
-        aria-hidden="true"
-        class={`app-shell-header__connection-indicator ${connectionIndicatorClass(connectionTone)}`}
-        data-testid={appShellTestIds.connectionIndicator}
-      ></span>
+  <AdaptiveRail split>
+    <div class="app-shell-header__top">
+      <div class="app-shell-header__brand">
+        <h1 class="app-shell-header__title" data-testid={runtimeTestIds.heading}>IronWing</h1>
+        <span
+          aria-hidden="true"
+          class={`app-shell-header__connection-indicator ${connectionIndicatorClass(connectionTone)}`}
+          data-testid={appShellTestIds.connectionIndicator}
+        ></span>
+      </div>
+
+      {#if showVehiclePanelButton}
+        <Tooltip label={vehiclePanelOpen ? "Close vehicle panel" : "Open vehicle panel"} side="bottom">
+          <button
+            aria-controls="vehicle-panel-drawer"
+            aria-expanded={vehiclePanelOpen}
+            class="app-shell-mobile-toggle"
+            data-testid={appShellTestIds.vehiclePanelButton}
+            onclick={handleVehiclePanelToggle}
+            type="button"
+          >
+            Vehicle panel
+          </button>
+        </Tooltip>
+      {/if}
     </div>
 
-    {#if showVehiclePanelButton}
-      <Tooltip label={vehiclePanelOpen ? "Close vehicle panel" : "Open vehicle panel"} side="bottom">
-        <button
-          aria-controls="vehicle-panel-drawer"
-          aria-expanded={vehiclePanelOpen}
-          class="app-shell-mobile-toggle"
-          data-testid={appShellTestIds.vehiclePanelButton}
-          onclick={handleVehiclePanelToggle}
-          type="button"
-        >
-          Vehicle panel
-        </button>
-      </Tooltip>
-    {/if}
-  </div>
-
-  <nav aria-label="Primary" class="app-shell-tabs">
-    <ResponsiveTabs
-      active={activeWorkspace}
-      ariaLabel="Top-level workspaces"
-      onSelect={(key) => onSelectWorkspace(key as AppShellWorkspace)}
-      tabs={tabItems}
-    />
-  </nav>
+    <nav aria-label="Primary" class="app-shell-tabs">
+      <ResponsiveTabs
+        active={activeWorkspace}
+        ariaLabel="Top-level workspaces"
+        onSelect={(key) => onSelectWorkspace(key as AppShellWorkspace)}
+        tabs={tabItems}
+      />
+    </nav>
+  </AdaptiveRail>
 
   <div aria-hidden="true" class="hidden">
     <span data-testid={runtimeTestIds.runtimeMarker}>IronWing runtime marker</span>

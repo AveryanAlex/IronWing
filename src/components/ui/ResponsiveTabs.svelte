@@ -1,4 +1,5 @@
 <script lang="ts">
+import { tick } from "svelte";
 import type { Snippet } from "svelte";
 
 type Tab = {
@@ -19,53 +20,129 @@ type Props = {
 };
 
 let { tabs, active, onSelect, ariaLabel, testId }: Props = $props();
+
+type Density = "labels" | "compact" | "icons" | "scroll";
+
+let containerElement: HTMLDivElement | undefined = $state();
+let trackElement: HTMLDivElement | undefined = $state();
+let density = $state<Density>("labels");
+let measurePending = false;
+let measureVersion = 0;
+
+function hasOverflow(): boolean {
+  if (!containerElement || !trackElement) {
+    return false;
+  }
+
+  return trackElement.scrollWidth > containerElement.clientWidth + 1;
+}
+
+async function updateDensity() {
+  const version = ++measureVersion;
+
+  density = "labels";
+  await tick();
+  if (version !== measureVersion || !hasOverflow()) {
+    return;
+  }
+
+  density = "compact";
+  await tick();
+  if (version !== measureVersion || !hasOverflow()) {
+    return;
+  }
+
+  density = "icons";
+  await tick();
+  if (version !== measureVersion || !hasOverflow()) {
+    return;
+  }
+
+  density = "scroll";
+}
+
+function scheduleMeasure() {
+  if (measurePending) {
+    return;
+  }
+
+  measurePending = true;
+  queueMicrotask(() => {
+    measurePending = false;
+    void updateDensity();
+  });
+}
+
+let trackClass = $derived([
+  "flex min-w-0 justify-end gap-[clamp(3px,0.65cqi,10px)] overflow-x-hidden [scrollbar-width:thin]",
+  density === "compact" ? "gap-[3px]" : "",
+  density === "icons" ? "justify-around gap-[clamp(4px,1cqi,10px)]" : "",
+  density === "scroll" ? "justify-start gap-[3px] overflow-x-auto" : "",
+].filter(Boolean).join(" "));
+
+function tabClass(): string {
+  return [
+    "inline-flex min-w-0 flex-[0_1_auto] cursor-pointer items-center justify-center gap-[clamp(3px,0.45cqi,6px)] whitespace-nowrap rounded-[var(--radius-sm)] border border-transparent bg-transparent px-[clamp(0.38rem,0.8cqi,0.72rem)] py-[0.4rem] font-semibold text-[var(--color-text-secondary)] hover:border-[var(--color-border)] hover:text-[var(--color-text-primary)] data-[active]:border-[var(--color-border-light)] data-[active]:bg-[var(--color-bg-primary)] data-[active]:text-[var(--color-text-primary)]",
+    density === "compact" ? "gap-[3px] px-[0.34rem]" : "",
+    density === "icons" ? "max-w-14 flex-[1_1_42px] px-[0.42rem]" : "",
+    density === "scroll" ? "max-w-none flex-[0_0_40px] px-[0.34rem]" : "",
+  ].filter(Boolean).join(" ");
+}
+
+function labelClass(hasIcon: boolean): string {
+  return [
+    "min-w-0 overflow-hidden text-ellipsis",
+    hasIcon && (density === "icons" || density === "scroll") ? "hidden" : "",
+  ].filter(Boolean).join(" ");
+}
+
+$effect(() => {
+  tabs;
+  scheduleMeasure();
+});
+
+$effect(() => {
+  if (!containerElement || !trackElement) {
+    return;
+  }
+
+  const ResizeObserverCtor = globalThis.ResizeObserver;
+  if (!ResizeObserverCtor) {
+    scheduleMeasure();
+    return;
+  }
+
+  const observer = new ResizeObserverCtor(scheduleMeasure);
+  observer.observe(containerElement);
+  observer.observe(trackElement);
+  scheduleMeasure();
+
+  return () => {
+    measureVersion += 1;
+    observer.disconnect();
+  };
+});
 </script>
 
-<div class="ui-tabs" aria-label={ariaLabel} data-testid={testId} role="group">
-  {#each tabs as tab (tab.key)}
-    <button
-      aria-label={tab.label}
-      aria-pressed={tab.key === active}
-      class="ui-tabs__tab"
-      data-active={tab.key === active || undefined}
-      data-testid={tab.testId}
-      onclick={() => onSelect(tab.key)}
-      type="button"
-    >
-      {#if tab.icon}
-        <span class="ui-tabs__icon" aria-hidden="true">{@render tab.icon()}</span>
-      {/if}
-      <span class="ui-tabs__label">{tab.label}</span>
-      {#if tab.badge}<span class="ui-tabs__badge" data-testid={tab.badgeTestId}>{tab.badge}</span>{/if}
-    </button>
-  {/each}
+<div bind:this={containerElement} class="@container min-w-0 w-full overflow-hidden" aria-label={ariaLabel} data-density={density} data-testid={testId} role="group">
+  <div bind:this={trackElement} class={trackClass}>
+    {#each tabs as tab (tab.key)}
+      <button
+        aria-label={tab.label}
+        aria-pressed={tab.key === active}
+        class={tabClass()}
+        data-active={tab.key === active || undefined}
+        data-has-icon={tab.icon ? true : undefined}
+        data-testid={tab.testId}
+        onclick={() => onSelect(tab.key)}
+        type="button"
+      >
+        {#if tab.icon}
+          <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">{@render tab.icon()}</span>
+        {/if}
+        <span class={labelClass(Boolean(tab.icon))}>{tab.label}</span>
+        {#if tab.badge}<span class="shrink-0 rounded-full bg-[var(--color-bg-tertiary)] px-[0.36rem] py-[0.16rem] text-[0.7rem] font-bold text-[var(--color-text-secondary)]" data-testid={tab.badgeTestId}>{tab.badge}</span>{/if}
+      </button>
+    {/each}
+  </div>
 </div>
-
-<style>
-.ui-tabs { display: flex; gap: 4px; min-width: 0; flex-wrap: nowrap; }
-.ui-tabs__tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); font-weight: 600; padding: 0.4rem 0.7rem; cursor: pointer; white-space: nowrap; min-width: 0; }
-.ui-tabs__tab:hover { color: var(--color-text-primary); border-color: var(--color-border); }
-.ui-tabs__tab[data-active] { color: var(--color-text-primary); border-color: var(--color-border-light); background: var(--color-bg-primary); }
-.ui-tabs__icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; }
-.ui-tabs__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ui-tabs__badge { border-radius: 999px; background: var(--color-bg-tertiary); color: var(--color-text-secondary); font-size: 0.7rem; font-weight: 700; padding: 0.16rem 0.36rem; flex-shrink: 0; }
-
-/* Phone tier: icon-only, tabs stretch evenly. */
-@media (max-width: 767px) {
-  .ui-tabs { overflow-x: auto; scrollbar-width: thin; }
-  .ui-tabs__tab { flex: 1 1 auto; min-width: 36px; padding: 0.45rem 0.4rem; }
-  .ui-tabs__label { display: none; }
-}
-
-/* Medium screens: icon + label, tabs stretch evenly. */
-@media (min-width: 768px) and (max-width: 1279px) {
-  .ui-tabs { overflow-x: auto; scrollbar-width: thin; }
-  .ui-tabs__tab { flex: 1 1 auto; min-width: 0; }
-}
-
-/* Large screens: icon + label, hug content, no stretch. */
-@media (min-width: 1280px) {
-  .ui-tabs { overflow-x: visible; }
-  .ui-tabs__tab { flex: 0 0 auto; }
-}
-</style>

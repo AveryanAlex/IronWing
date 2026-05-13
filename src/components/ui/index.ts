@@ -20,6 +20,7 @@ export { default as WorkspaceBody } from "./WorkspaceBody.svelte";
 export { default as WorkspacePanel } from "./WorkspacePanel.svelte";
 export { default as WorkspaceGrid } from "./WorkspaceGrid.svelte";
 export { default as SplitWorkspace } from "./SplitWorkspace.svelte";
+export { default as AdaptiveRail } from "./AdaptiveRail.svelte";
 export { default as Toolbar } from "./Toolbar.svelte";
 export { default as ToolbarGroup } from "./ToolbarGroup.svelte";
 export { default as ResponsiveTabs } from "./ResponsiveTabs.svelte";

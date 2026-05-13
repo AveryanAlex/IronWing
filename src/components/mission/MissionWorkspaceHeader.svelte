@@ -74,6 +74,15 @@ let uploadDisabled = $derived(
 let clearLabel = $derived(
   mode === "fence" ? "Clear fence" : mode === "rally" ? "Clear rally" : "Clear mission",
 );
+let activeModeLabel = $derived(modeButtons.find((item) => item.mode === mode)?.label ?? "Mode");
+let modeItems = $derived<MenuItem[]>(
+  modeButtons.map((item) => ({
+    id: `mode-${item.mode}`,
+    label: item.label,
+    disabled: item.mode === mode,
+    onSelect: () => onSelectMode(item.mode),
+  })),
+);
 let secondaryItems = $derived<MenuItem[]>([
   {
     id: "read",
@@ -122,8 +131,20 @@ let secondaryItems = $derived<MenuItem[]>([
 {#snippet newIcon()}
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M12 12v6"/><path d="M9 15h6"/></svg>
 {/snippet}
+{#snippet uploadIcon()}
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="m6 15 6-6 6 6"/><path d="M5 3h14"/></svg>
+{/snippet}
+{#snippet cancelIcon()}
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+{/snippet}
+{#snippet moreIcon()}
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+{/snippet}
 
-<div class="mission-toolbar-shell" data-testid={missionWorkspaceTestIds.header}>
+<div
+  class="@container flex shrink-0 flex-col gap-[var(--space-2)] border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-[var(--space-3)] py-[var(--space-2)] @max-[520px]:[&_.ui-btn]:min-w-[var(--control-h-sm)] @max-[520px]:[&_.ui-btn]:px-2"
+  data-testid={missionWorkspaceTestIds.header}
+>
   {#if replayReadonly}
     <div data-testid={missionWorkspaceTestIds.headerReplayReadonly}>
       <Banner
@@ -134,19 +155,30 @@ let secondaryItems = $derived<MenuItem[]>([
     </div>
   {/if}
 
-  <Toolbar ariaLabel="Mission actions" wrap>
-    <ToolbarGroup>
-      {#each modeButtons as item (item.mode)}
-        <Button
-          onclick={() => onSelectMode(item.mode)}
-          size="sm"
-          testId={item.testId}
-          tone={item.mode === mode ? "accent" : "neutral"}
-        >
-          {item.label}
-        </Button>
-      {/each}
-    </ToolbarGroup>
+  <Toolbar ariaLabel="Mission actions" density="compact" overflow="scroll">
+    <div class="mission-mode-switcher">
+      <div class="@max-[640px]:hidden">
+        <ToolbarGroup>
+          {#each modeButtons as item (item.mode)}
+            <Button
+              onclick={() => onSelectMode(item.mode)}
+              size="sm"
+              testId={item.testId}
+              tone={item.mode === mode ? "accent" : "neutral"}
+            >
+              {item.label}
+            </Button>
+          {/each}
+        </ToolbarGroup>
+      </div>
+      <div class="hidden @max-[640px]:block">
+        <Menu
+          items={modeItems}
+          triggerAriaLabel="Select mission editing mode"
+          triggerLabel={activeModeLabel}
+        />
+      </div>
+    </div>
 
     <ToolbarGroup>
       <Tooltip label={undoLabel}>
@@ -177,42 +209,40 @@ let secondaryItems = $derived<MenuItem[]>([
 
     <ToolbarGroup>
       <Button
+        ariaLabel="Upload to vehicle"
         disabled={uploadDisabled}
         onclick={onUploadToVehicle}
         size="sm"
         testId={missionWorkspaceTestIds.toolbarUpload}
         tone="accent"
       >
-        Upload
+        <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">{@render uploadIcon()}</span>
+        <span class="@max-[520px]:hidden">Upload</span>
       </Button>
       {#if canCancel}
         <Button
+          ariaLabel="Cancel transfer"
           onclick={onCancelTransfer}
           size="sm"
           testId={missionWorkspaceTestIds.toolbarCancel}
           tone="warning"
         >
-          Cancel
+          <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">{@render cancelIcon()}</span>
+          <span class="@max-[520px]:hidden">Cancel</span>
         </Button>
       {/if}
     </ToolbarGroup>
 
-    <Menu
-      items={secondaryItems}
-      testId={missionWorkspaceTestIds.toolbarMoreButton}
-      triggerLabel="More"
-    />
+    <div>
+      <Menu
+        items={secondaryItems}
+        testId={missionWorkspaceTestIds.toolbarMoreButton}
+        triggerClass="h-[var(--control-h-sm)] @max-[520px]:min-w-[var(--control-h-sm)] @max-[520px]:justify-center @max-[520px]:px-2"
+        triggerAriaLabel="More mission actions"
+        triggerIcon={moreIcon}
+        triggerLabelClass="@max-[520px]:hidden"
+        triggerLabel="More"
+      />
+    </div>
   </Toolbar>
 </div>
-
-<style>
-.mission-toolbar-shell {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  flex-shrink: 0;
-}
-</style>
