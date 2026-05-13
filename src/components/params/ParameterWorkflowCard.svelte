@@ -118,19 +118,19 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
 >
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{card.eyebrow}</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">{card.eyebrow}</p>
       <h3 class="mt-2 text-lg font-semibold text-text-primary">{card.title}</h3>
       <p class="mt-2 text-sm leading-6 text-text-secondary">{card.description}</p>
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
       <span
-        class={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${card.status === "ready" ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-warning"}`}
+        class={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${card.status === "ready" ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-warning"}`}
       >
         {card.status === "ready" ? "ready" : "guided disabled"}
       </span>
       {#if card.changedCount > 0}
-        <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">
+        <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
           {card.changedCount} change{card.changedCount === 1 ? "" : "s"}
         </span>
       {/if}
@@ -151,7 +151,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
   {#if card.id === "battery" && batteryControls}
     <div class="mt-4 grid gap-3 md:grid-cols-2">
       <label class="block">
-        <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Battery cells</span>
+        <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Battery cells</span>
         <input
           class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
           data-testid={`${parameterWorkspaceTestIds.workflowInputPrefix}-${card.id}-cells`}
@@ -166,7 +166,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
       </label>
 
       <label class="block">
-        <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Chemistry</span>
+        <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Chemistry</span>
         <select
           class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition focus:border-accent"
           data-testid={`${parameterWorkspaceTestIds.workflowInputPrefix}-${card.id}-chemistry`}
@@ -185,7 +185,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
   {#if card.id === "flight" && flightControls}
     <div class="mt-4 grid gap-3 md:max-w-xs">
       <label class="block">
-        <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Prop size (in)</span>
+        <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Prop size (in)</span>
         <input
           class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
           data-testid={`${parameterWorkspaceTestIds.workflowInputPrefix}-${card.id}-prop`}
@@ -204,7 +204,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
   {#if validationMessage}
     <div class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-warning">
       <p class="font-medium">{validationMessage}</p>
-      <p class="mt-1 text-xs uppercase tracking-[0.16em] text-warning/80">
+      <p class="mt-1 text-xs uppercase tracking-wide text-warning/80">
         Showing the last valid recommendation set until the inputs are corrected.
       </p>
     </div>
@@ -242,12 +242,12 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
             </div>
             <div class="flex flex-wrap items-center gap-2">
               {#if recommendation.rebootRequired}
-                <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-warning">
+                <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-warning">
                   reboot required
                 </span>
               {/if}
               <span
-                class={`rounded-full border px-2 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${rowStateClass(recommendation)}`}
+                class={`rounded-full border px-2 py-1 text-xs font-semibold uppercase tracking-wide ${rowStateClass(recommendation)}`}
                 data-testid={`${parameterWorkspaceTestIds.workflowRowStatePrefix}-${card.id}-${recommendation.name}`}
               >
                 {rowStateText(recommendation)}
@@ -257,7 +257,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
 
           <div class="mt-3 grid gap-3 lg:grid-cols-2">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Current</p>
+              <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Current</p>
               <p
                 class="mt-2 rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm font-mono text-text-secondary"
                 data-testid={`${parameterWorkspaceTestIds.workflowCurrentPrefix}-${card.id}-${recommendation.name}`}
@@ -266,7 +266,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
               </p>
             </div>
             <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Proposed</p>
+              <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Proposed</p>
               <p
                 class={`mt-2 rounded-lg border px-3 py-2 text-sm font-mono ${recommendation.changed ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-primary/80 text-text-secondary"}`}
                 data-testid={`${parameterWorkspaceTestIds.workflowProposedPrefix}-${card.id}-${recommendation.name}`}
@@ -289,7 +289,7 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
     {/if}
 
     <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">
         Queue from this card, inspect the raw parameters, then review and apply everything from the shared tray.
       </p>
       <div class="flex flex-wrap items-center gap-2">

@@ -38,11 +38,11 @@ let {
 </script>
 
 <section
-  class="rounded-[28px] border border-border bg-bg-primary/55 p-4"
+  class="rounded-lg border border-border bg-bg-primary/55 p-4"
   data-testid={`${parameterWorkspaceTestIds.workflowSectionPrefix}-${section.id}`}
 >
   <div>
-    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Guided workflows</p>
+    <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Guided workflows</p>
     <h3 class="mt-2 text-lg font-semibold text-text-primary">{section.title}</h3>
     <p class="mt-2 text-sm leading-6 text-text-secondary">{section.description}</p>
   </div>

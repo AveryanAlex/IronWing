@@ -29,7 +29,7 @@ function handleChange(event: Event) {
 </script>
 
 <select
-  class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+  class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
   data-testid={missionWorkspaceTestIds.inspectorCommandSelect}
   disabled={disabled}
   onchange={handleChange}

@@ -41,7 +41,7 @@ function resolveVehicleSlug(vehicleType: string | null): VehicleSlug | null {
 <section class="space-y-4" data-testid={setupWorkspaceTestIds.fullParameters}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Full Parameters</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Full Parameters</p>
       <h3 class="mt-2 text-lg font-semibold text-text-primary">Inspect and edit the raw parameter list</h3>
       <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
         Use this page to inspect, search, and queue raw parameter changes. Open the raw list below to inspect settings or queue changes for review.

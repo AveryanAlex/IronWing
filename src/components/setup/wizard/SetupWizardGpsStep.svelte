@@ -110,14 +110,14 @@ function resolvePrimaryGpsTypeItem(
       </div>
     {/if}
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Primary GPS type</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Primary GPS type</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{currentGpsTypeLabel}</p>
-      <p class="mt-1 text-[11px] text-text-muted">{gpsTypeItem?.name ?? "GPS_TYPE"}</p>
+      <p class="mt-1 text-xs text-text-muted">{gpsTypeItem?.name ?? "GPS_TYPE"}</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Auto switch</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Auto switch</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{currentAutoSwitchLabel}</p>
-      <p class="mt-1 text-[11px] text-text-muted">GPS_AUTO_SWITCH</p>
+      <p class="mt-1 text-xs text-text-muted">GPS_AUTO_SWITCH</p>
     </div>
   </div>
 

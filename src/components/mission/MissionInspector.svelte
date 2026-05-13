@@ -267,12 +267,12 @@ function updateField(fieldKey: string, value: unknown) {
 <section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.inspector}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Inspector</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Inspector</p>
       <h3 class="mt-1 text-sm font-semibold text-text-primary">Selected mission detail</h3>
     </div>
 
     <span
-      class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary"
+      class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-wide text-text-secondary"
       data-testid={missionWorkspaceTestIds.inspectorSelectionKind}
     >
       {selection.kind}
@@ -315,7 +315,7 @@ function updateField(fieldKey: string, value: unknown) {
   {:else}
     <div class="mt-4 space-y-4">
       <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Manual item {item.index + 1}</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Manual item {item.index + 1}</p>
         <h4 class="mt-1 text-base font-semibold text-text-primary">{commandDisplayName(missionItem.command)}</h4>
         {#if previousCoordinates}
           <p class="mt-1 text-xs text-text-secondary">Previous manual item · {previousCoordinates}</p>
@@ -328,7 +328,7 @@ function updateField(fieldKey: string, value: unknown) {
           <p class="mt-1 text-xs text-warning/90">This preserved command stays read-only. Its raw parameters remain visible so imported content is not flattened away.</p>
           <dl class="mt-3 grid gap-2 sm:grid-cols-2">
             {#each fields as field (field.key)}
-              <div class="rounded-xl border border-warning/30 bg-bg-primary px-3 py-2 text-xs">
+              <div class="rounded-lg border border-warning/30 bg-bg-primary px-3 py-2 text-xs">
                 <dt class="text-warning/80">{field.label}</dt>
                 <dd class="mt-1 font-medium text-text-primary">{field.value}{field.units ? ` ${field.units}` : ""}</dd>
               </div>
@@ -360,7 +360,7 @@ function updateField(fieldKey: string, value: unknown) {
                 {#if field.type === "number"}
                   <div class="relative">
                     <input
-                      class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 pr-12 text-sm text-text-primary"
+                       class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 pr-12 text-sm text-text-primary"
                       data-testid={`${missionWorkspaceTestIds.inspectorFieldPrefix}-${field.key}`}
                       inputmode="decimal"
                       onchange={(event) => {
@@ -393,7 +393,7 @@ function updateField(fieldKey: string, value: unknown) {
                   </button>
                 {:else}
                   <select
-                    class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
+                    class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
                     data-testid={`${missionWorkspaceTestIds.inspectorFieldPrefix}-${field.key}`}
                     onchange={(event) => updateField(field.key, (event.currentTarget as HTMLSelectElement).value)}
                     value={field.value}
@@ -417,7 +417,7 @@ function updateField(fieldKey: string, value: unknown) {
             <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
               <span class="text-xs font-medium text-text-muted">Latitude</span>
               <input
-                class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
+                class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
                 data-testid={missionWorkspaceTestIds.inspectorLatitude}
                 inputmode="decimal"
                 onchange={(event) => {
@@ -438,7 +438,7 @@ function updateField(fieldKey: string, value: unknown) {
             <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
               <span class="text-xs font-medium text-text-muted">Longitude</span>
               <input
-                class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
+                class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
                 data-testid={missionWorkspaceTestIds.inspectorLongitude}
                 inputmode="decimal"
                 onchange={(event) => {
@@ -459,7 +459,7 @@ function updateField(fieldKey: string, value: unknown) {
             <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
               <span class="text-xs font-medium text-text-muted">Altitude</span>
               <input
-                class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
+                class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
                 data-testid={missionWorkspaceTestIds.inspectorAltitude}
                 inputmode="decimal"
                 onchange={(event) => {

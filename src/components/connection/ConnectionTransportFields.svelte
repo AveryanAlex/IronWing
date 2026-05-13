@@ -112,7 +112,7 @@ const iconButtonClass =
 {/snippet}
 
 <label class="block space-y-1.5">
-  <span class="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">Transport</span>
+  <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Transport</span>
   <select
     class={inputClass}
     data-testid="connection-transport-select"
@@ -136,7 +136,7 @@ const iconButtonClass =
   <div class="space-y-1.5">
     <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
       <label class="block min-w-0 space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">UDP bind</span>
+        <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">UDP bind</span>
         <input
           class={inputClass}
           data-testid="connection-udp-bind"
@@ -159,7 +159,7 @@ const iconButtonClass =
   <div class="space-y-1.5">
     <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
       <label class="block min-w-0 space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">Demo vehicle</span>
+        <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Demo vehicle</span>
         <select
           class={inputClass}
           data-testid="connection-demo-preset"
@@ -186,7 +186,7 @@ const iconButtonClass =
   <div class="space-y-1.5">
     <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
       <label class="block min-w-0 space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">TCP address</span>
+        <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">TCP address</span>
         <input
           class={inputClass}
           data-testid="connection-tcp-address"
@@ -209,7 +209,7 @@ const iconButtonClass =
   <div class="space-y-1.5">
     <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2">
       <label class="block min-w-0 space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">Serial port</span>
+        <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Serial port</span>
         <select
           class={inputClass}
           data-testid="connection-serial-port"
@@ -254,9 +254,9 @@ const iconButtonClass =
   </div>
 
   <details class="rounded-lg border border-border/80 bg-bg-input/30 px-3 py-2" bind:open={serialAdvancedOpen}>
-    <summary class="cursor-pointer text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">Advanced</summary>
+    <summary class="cursor-pointer text-xs font-semibold uppercase tracking-wider text-text-muted">Advanced</summary>
     <label class="mt-2 block space-y-1.5">
-      <span class="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">Baud</span>
+      <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Baud</span>
       <input
         class={inputClass}
         data-testid="connection-serial-baud"
@@ -281,7 +281,7 @@ const iconButtonClass =
   <div class="space-y-1.5">
     <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2">
       <label class="block min-w-0 space-y-1.5">
-        <span class="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">
+        <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">
           {form.mode === "bluetooth_ble" ? "BLE device" : "Paired device"}
         </span>
         <select

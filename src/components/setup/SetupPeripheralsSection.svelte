@@ -391,19 +391,19 @@ function discardItem(name: string) {
         data-testid={setupWorkspaceTestIds.peripheralsSummary}
       >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Visible groups</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Visible groups</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{visibleGroups.length}</p>
       <p class="mt-1 text-sm text-text-secondary">Known hardware families and discovered extras stay separated by inventory group.</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Filter state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Filter state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{showConfiguredOnly ? "Configured only" : "All discovered groups"}</p>
       <p class="mt-1 text-sm text-text-secondary">
         Groups without truthful enable-state evidence disappear under configured-only mode instead of being guessed as active.
       </p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Metadata fallback</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Metadata fallback</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{metadataFallbackCount} locked row{metadataFallbackCount === 1 ? "" : "s"}</p>
       <p class="mt-1 text-sm text-text-secondary">
         Raw-name fallback keeps partial-metadata rows visible and read-only rather than inventing friendly labels.
@@ -442,7 +442,7 @@ function discardItem(name: string) {
         >
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Inventory group</p>
+              <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Inventory group</p>
               <h4 class="mt-2 text-lg font-semibold text-text-primary">{group.label}</h4>
               <p class="mt-2 text-sm text-text-secondary">
                 {group.stateText} · {group.rowCount} row{group.rowCount === 1 ? "" : "s"}
@@ -451,7 +451,7 @@ function discardItem(name: string) {
                 {/if}
               </p>
             </div>
-            <span class={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${group.configured === true ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-secondary text-text-secondary"}`}>
+            <span class={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-widest ${group.configured === true ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-secondary text-text-secondary"}`}>
               {group.stateText}
             </span>
           </div>
@@ -461,10 +461,10 @@ function discardItem(name: string) {
               <div class="rounded-lg border border-border bg-bg-primary/70 p-3">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Subgroup</p>
+                    <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Subgroup</p>
                     <h5 class="mt-2 text-base font-semibold text-text-primary">{subgroup.label}</h5>
                   </div>
-                  <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                  <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
                     {subgroup.rows.length} row{subgroup.rows.length === 1 ? "" : "s"}
                   </span>
                 </div>

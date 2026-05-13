@@ -22,12 +22,12 @@ let {
 </script>
 
 <section
-  class="rounded-[20px] border border-border bg-bg-primary/60 p-4"
+  class="rounded-lg border border-border bg-bg-primary/60 p-4"
   data-testid={`${parameterWorkspaceTestIds.sectionPrefix}-${section.id}`}
 >
   <div class="flex items-start justify-between gap-3">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">
         {section.mode === "fallback" ? "Available settings" : "Common settings"}
       </p>
       <h3 class="mt-2 text-lg font-semibold text-text-primary">{section.title}</h3>

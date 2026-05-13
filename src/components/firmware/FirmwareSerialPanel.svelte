@@ -534,17 +534,17 @@ let readinessDetail = $derived.by(() => {
   return "Ready to install over serial once you confirm the selected source and bootloader path.";
 });
 
-const fieldLabelClass = "text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]";
-const selectInputClass = "mt-[var(--space-2)] w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-[0.86rem] text-[var(--color-text-primary)]";
-const proseClass = "mt-[var(--space-2)] text-[0.88rem] leading-[1.5] text-[var(--color-text-secondary)]";
-const tightProseClass = `${proseClass} mt-[var(--space-1)]`;
-const smallProseClass = `${proseClass} text-[0.78rem]`;
-const infoBlockClass = "mt-[var(--space-3)] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-[0.78rem] text-[var(--color-text-secondary)]";
-const standaloneInfoBlockClass = `${infoBlockClass} text-[0.86rem]`;
-const eyebrowClass = "m-0 text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]";
-const subtitleClass = "m-0 mt-1 text-[0.92rem] font-semibold text-[var(--color-text-primary)]";
-const tagClass = "text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]";
-const checkboxClass = "mt-[var(--space-3)] flex items-start gap-[var(--space-3)] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-input)] p-3 text-[0.86rem] text-[var(--color-text-secondary)]";
+const fieldLabelClass = "text-xs font-semibold uppercase tracking-wide text-text-muted";
+const selectInputClass = "mt-2 w-full rounded-md border border-border bg-bg-input px-3 py-2 text-sm text-text-primary";
+const proseClass = "mt-2 text-sm leading-6 text-text-secondary";
+const tightProseClass = "mt-1 text-sm leading-6 text-text-secondary";
+const smallProseClass = "mt-2 text-xs leading-5 text-text-secondary";
+const infoBlockClass = "mt-3 rounded-md border border-border bg-bg-input px-3 py-2 text-xs text-text-secondary";
+const standaloneInfoBlockClass = "mt-3 rounded-md border border-border bg-bg-input px-3 py-2 text-sm text-text-secondary";
+const eyebrowClass = "m-0 text-xs font-semibold uppercase tracking-wide text-text-muted";
+const subtitleClass = "m-0 mt-1 text-sm font-semibold text-text-primary";
+const tagClass = "text-xs font-semibold uppercase tracking-wide text-text-muted";
+const checkboxClass = "mt-3 flex items-start gap-3 rounded-md border border-border bg-bg-input p-3 text-sm text-text-secondary";
 
 $effect(() => {
   const port = workspaceState.serial.port;
@@ -624,9 +624,9 @@ $effect(() => {
     {/snippet}
   </SectionHeader>
 
-  <div class="mt-[var(--space-3)] grid gap-[var(--space-3)] xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
+  <div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
     <Panel padded>
-      <div class="flex flex-wrap items-center gap-[var(--space-3)]">
+      <div class="flex flex-wrap items-center gap-3">
         <label class="flex min-w-[13rem] flex-1 flex-col">
           <span class={fieldLabelClass}>Serial port</span>
           <select
@@ -672,14 +672,14 @@ $effect(() => {
       </div>
 
       {#if workspaceState.serial.preflightError}
-        <div class="mt-[var(--space-3)]">
+        <div class="mt-3">
           <Banner severity="danger" title={workspaceState.serial.preflightError} />
         </div>
       {/if}
 
-      <div class="mt-[var(--space-4)] grid gap-[var(--space-3)] xl:grid-cols-2">
+      <div class="mt-4 grid gap-3 xl:grid-cols-2">
         <Panel padded tone={usingCatalogSource ? "info" : "neutral"} testId={firmwareWorkspaceTestIds.sourceCatalog}>
-          <div class="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
+          <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p class={eyebrowClass}>Official catalog</p>
               <h4 class={subtitleClass}>Recommended source</h4>
@@ -694,23 +694,23 @@ $effect(() => {
           </p>
 
           <div class={infoBlockClass}>
-            <span class="font-semibold text-[var(--color-text-primary)]">Target proof</span>
-            <p class="m-0 mt-[var(--space-1)]" data-testid={firmwareWorkspaceTestIds.selectedTargetState}>{selectedTargetState}</p>
+            <span class="font-semibold text-text-primary">Target proof</span>
+            <p class="m-0 mt-1" data-testid={firmwareWorkspaceTestIds.selectedTargetState}>{selectedTargetState}</p>
           </div>
 
           {#if !manualTargetRequired}
-            <div class="mt-[var(--space-3)]">
+            <div class="mt-3">
               <Banner severity="success" title={targetProofMessage} />
             </div>
           {/if}
 
           <div class={infoBlockClass}>
-            <span class="font-semibold text-[var(--color-text-primary)]">Catalog source</span>
-            <p class="m-0 mt-[var(--space-1)]" data-testid={firmwareWorkspaceTestIds.selectedSourceState}>{selectedSourceState}</p>
+            <span class="font-semibold text-text-primary">Catalog source</span>
+            <p class="m-0 mt-1" data-testid={firmwareWorkspaceTestIds.selectedSourceState}>{selectedSourceState}</p>
           </div>
 
           <Panel padded>
-            <div class="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
+            <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p class={eyebrowClass}>Manual target override</p>
                 <p class={tightProseClass}>Search targets when board proof is missing or uncertain.</p>
@@ -726,7 +726,7 @@ $effect(() => {
             </div>
 
             {#if manualTargetRequired}
-              <div class="mt-[var(--space-3)]">
+              <div class="mt-3">
                 <Banner
                   severity="warning"
                   title={targetProofMessage}
@@ -736,7 +736,7 @@ $effect(() => {
             {/if}
 
             {#if manualSectionOpen}
-              <div class="mt-[var(--space-3)] grid gap-[var(--space-2)] md:grid-cols-[minmax(0,1fr)_14rem]">
+              <div class="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_14rem]">
                 <label class="flex flex-col">
                   <span class={fieldLabelClass}>Search target</span>
                   <input
@@ -766,7 +766,7 @@ $effect(() => {
               </div>
 
               {#if targetListError}
-                <div class="mt-[var(--space-3)]" data-testid={firmwareWorkspaceTestIds.targetListError}>
+                <div class="mt-3" data-testid={firmwareWorkspaceTestIds.targetListError}>
                   <Banner
                     severity="danger"
                     title={targetListError}
@@ -781,23 +781,23 @@ $effect(() => {
                 <p class={proseClass}>Loading official targets…</p>
               {:else if filteredTargets.length > 0}
                 <div
-                  class="mt-[var(--space-3)] grid max-h-72 gap-[var(--space-2)] overflow-y-auto pr-1"
+                  class="mt-3 grid max-h-72 gap-2 overflow-y-auto pr-1"
                   data-testid={firmwareWorkspaceTestIds.manualTargetResults}
                 >
                   {#each filteredTargets as match (match.key)}
                     <button
                       aria-pressed={selectedTargetKey === match.key}
-                      class="block rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-3 text-left transition-[background-color,border-color] duration-150 ease-in-out hover:border-[var(--color-border-light)] hover:bg-[var(--color-bg-primary)] data-[selected]:border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] data-[selected]:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)]"
+                      class="block rounded-md border border-border bg-bg-secondary p-3 text-left transition-colors hover:border-border-light hover:bg-bg-primary data-[selected]:border-accent/45 data-[selected]:bg-accent/10"
                       data-selected={selectedTargetKey === match.key || undefined}
                       onclick={() => void handleSelectManualTarget(match.target)}
                       type="button"
                     >
-                      <div class="flex flex-wrap items-center justify-between gap-[var(--space-2)]">
-                        <span class="text-[0.88rem] font-semibold text-[var(--color-text-primary)]">{match.label}</span>
-                        <span class="text-[0.72rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">{match.target.platform}</span>
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-sm font-semibold text-text-primary">{match.label}</span>
+                        <span class="text-xs uppercase tracking-wide text-text-muted">{match.target.platform}</span>
                       </div>
-                      <p class="m-0 mt-1 text-[0.78rem] text-[var(--color-text-secondary)]">{match.metadata.join(" · ")}</p>
-                      <p class="m-0 mt-1 text-[0.78rem] text-[var(--color-text-muted)]">{match.vehicleTypesLabel}</p>
+                      <p class="m-0 mt-1 text-xs text-text-secondary">{match.metadata.join(" · ")}</p>
+                      <p class="m-0 mt-1 text-xs text-text-muted">{match.vehicleTypesLabel}</p>
                     </button>
                   {/each}
                 </div>
@@ -818,7 +818,7 @@ $effect(() => {
               {/if}
 
               {#if manualSelectionActive && workspaceState.serial.target}
-                <div class="mt-[var(--space-3)]" data-testid={firmwareWorkspaceTestIds.manualTargetSelected}>
+                <div class="mt-3" data-testid={firmwareWorkspaceTestIds.manualTargetSelected}>
                   <Banner
                     severity="info"
                     title={`Manual target selected · ${targetLabel(workspaceState.serial.target)} · ${targetMeta(workspaceState.serial.target)}`}
@@ -827,7 +827,7 @@ $effect(() => {
               {/if}
 
               {#if manualSelectionActive && !selectedTargetVisible}
-                <div class="mt-[var(--space-3)]" data-testid={firmwareWorkspaceTestIds.manualTargetHidden}>
+                <div class="mt-3" data-testid={firmwareWorkspaceTestIds.manualTargetHidden}>
                   <Banner
                     severity="warning"
                     title="The selected manual target is hidden by the current filter. Clear the filter or reselect a visible target before flashing."
@@ -838,7 +838,7 @@ $effect(() => {
           </Panel>
 
           <Panel padded>
-            <div class="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
+            <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p class={eyebrowClass}>Official APJ entry</p>
                 <p class={tightProseClass}>Keep the proven catalog entry selected unless you explicitly need a different release.</p>
@@ -849,7 +849,7 @@ $effect(() => {
             </div>
 
             {#if catalogEntryError}
-              <div class="mt-[var(--space-3)]" data-testid={firmwareWorkspaceTestIds.catalogEntryError}>
+              <div class="mt-3" data-testid={firmwareWorkspaceTestIds.catalogEntryError}>
                 <Banner
                   severity="danger"
                   title={catalogEntryError}
@@ -861,7 +861,7 @@ $effect(() => {
             {/if}
 
             {#if catalogEntries.length > 0}
-              <label class="mt-[var(--space-3)] block">
+              <label class="mt-3 block">
                 <span class={fieldLabelClass}>Selected release</span>
                 <select
                   class={selectInputClass}
@@ -889,7 +889,7 @@ $effect(() => {
         </Panel>
 
         <Panel padded tone={usingLocalSource ? "warning" : "neutral"} testId={firmwareWorkspaceTestIds.sourceLocal}>
-          <div class="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
+          <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p class={eyebrowClass}>Advanced source</p>
               <h4 class={subtitleClass}>Local APJ</h4>
@@ -913,12 +913,12 @@ $effect(() => {
           </Button>
 
           <div class={infoBlockClass}>
-            <span class="font-semibold text-[var(--color-text-primary)]">Selected source</span>
-            <p class="m-0 mt-[var(--space-1)]">{selectedSourceState}</p>
+            <span class="font-semibold text-text-primary">Selected source</span>
+            <p class="m-0 mt-1">{selectedSourceState}</p>
           </div>
 
           {#if workspaceState.serial.sourceError}
-            <div class="mt-[var(--space-3)]" data-testid={firmwareWorkspaceTestIds.sourceError}>
+            <div class="mt-3" data-testid={firmwareWorkspaceTestIds.sourceError}>
               <Banner severity="danger" title={workspaceState.serial.sourceError} />
             </div>
           {/if}
@@ -933,13 +933,13 @@ $effect(() => {
               type="checkbox"
             />
             <span>
-              <span class="font-semibold text-[var(--color-text-primary)]">Full-chip erase</span><br />
+              <span class="font-semibold text-text-primary">Full-chip erase</span><br />
               Use this only when you intentionally need to clear the full external flash area instead of performing a normal update.
             </span>
           </label>
 
           {#if workspaceState.serial.preflight?.has_params_to_backup}
-            <div class="mt-[var(--space-3)]" data-testid={firmwareWorkspaceTestIds.paramBackup}>
+            <div class="mt-3" data-testid={firmwareWorkspaceTestIds.paramBackup}>
               <Banner
                 severity="warning"
                 title="Parameter backup recommended"
@@ -959,7 +959,7 @@ $effect(() => {
       </div>
 
       <Panel padded testId={firmwareWorkspaceTestIds.serialReadiness}>
-        <div class="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
+        <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p class={eyebrowClass}>Readiness</p>
             <h4 class={subtitleClass}>Bootloader and start gating</h4>
@@ -984,21 +984,21 @@ $effect(() => {
         </div>
 
         {#if isSerialActive}
-          <div class="mt-[var(--space-3)] rounded-[var(--radius-md)] border border-[color-mix(in_srgb,var(--color-accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] p-3 text-[0.86rem] text-[var(--color-text-primary)]">
+          <div class="mt-3 rounded-md border border-accent/35 bg-accent/10 p-3 text-sm text-text-primary">
             <p class="m-0 font-semibold">Serial install in progress</p>
             <p class="m-0 mt-1">{workspaceState.progress?.phase_label ?? workspaceState.sessionPhase ?? "working"}</p>
             {#if workspaceState.progress}
-              <div class="mt-[var(--space-3)] h-2 overflow-hidden rounded-full bg-[var(--color-bg-primary)]" data-testid={firmwareWorkspaceTestIds.serialProgress}>
-                <div class="h-full rounded-full bg-[var(--color-accent)] transition-[width] duration-200 ease-in-out" style={`width: ${Math.max(0, Math.min(100, workspaceState.progress.pct))}%`}></div>
+              <div class="mt-3 h-2 overflow-hidden rounded-full bg-bg-primary" data-testid={firmwareWorkspaceTestIds.serialProgress}>
+                <div class="h-full rounded-full bg-accent transition-[width] duration-200 ease-in-out" style={`width: ${Math.max(0, Math.min(100, workspaceState.progress.pct))}%`}></div>
               </div>
-              <p class="m-0 mt-[var(--space-2)] text-[0.72rem] text-[var(--color-text-secondary)]">
+              <p class="m-0 mt-2 text-xs text-text-secondary">
                 {workspaceState.progress.bytes_written} / {workspaceState.progress.bytes_total} bytes · {Math.round(workspaceState.progress.pct)}%
               </p>
             {/if}
           </div>
         {/if}
 
-        <div class="mt-[var(--space-4)] flex flex-wrap gap-[var(--space-3)]">
+        <div class="mt-4 flex flex-wrap gap-3">
           {#if isSerialActive && !isSerialCancelling}
             <Button
               tone="warning"

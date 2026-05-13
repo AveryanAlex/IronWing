@@ -385,12 +385,12 @@ function parsePositiveNumber(value: string): number | null {
     </p>
 
     <div class="flex flex-wrap items-center gap-2">
-      <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={parameterWorkspaceTestIds.advancedState}>
+      <span class="text-xs font-semibold uppercase tracking-wide text-text-muted" data-testid={parameterWorkspaceTestIds.advancedState}>
         {showAdvanced ? "advanced" : "workflow"}
       </span>
       {#if view.stagedCount > 0}
         <span
-          class="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-accent"
+          class="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-accent"
           data-testid={parameterWorkspaceTestIds.pendingCount}
         >
           {view.stagedCount} pending
@@ -442,7 +442,7 @@ function parsePositiveNumber(value: string): number | null {
           class="rounded-lg border border-border bg-bg-secondary/60 p-3"
           data-testid={parameterWorkspaceTestIds.advancedEntry}
         >
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Advanced parameters</p>
+          <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Advanced parameters</p>
           <h3 class="mt-2 text-lg font-semibold text-text-primary">Open the full raw parameter browser</h3>
           <p class="mt-2 text-sm leading-6 text-text-secondary">
             Open the searchable raw list when you need direct control, need to inspect settings a guided card does not cover, or need to work around missing metadata.
@@ -468,7 +468,7 @@ function parsePositiveNumber(value: string): number | null {
     >
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Advanced parameters</p>
+          <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Advanced parameters</p>
           <h3 class="mt-2 text-lg font-semibold text-text-primary">
             {expertDefaultMode ? "Raw browser" : "Raw parameter browser"}
           </h3>

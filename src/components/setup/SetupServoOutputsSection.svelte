@@ -596,28 +596,28 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
         data-testid={setupWorkspaceTestIds.servoOutputsSummary}
       >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Function testers</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Function testers</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.servoOutputsTesterState}>
         {testerSummaryLabel}
       </p>
       <p class="mt-1 text-sm text-text-secondary">{testerSummaryDetail}</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Safety unlock</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Safety unlock</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.servoOutputsSafetyState}>
         {safetyStateLabel}
       </p>
       <p class="mt-1 text-sm text-text-secondary">{safetyStateDetail}</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Readback truth</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Readback truth</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.servoOutputsReadbackState}>
         {readbackSummary.label}
       </p>
       <p class="mt-1 text-sm text-text-secondary">{readbackSummary.detail}</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Shared review tray</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Shared review tray</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.servoOutputsReversalState}>
         {reversalStateLabel}
       </p>
@@ -651,7 +651,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
   <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Servo actuation gate</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Servo actuation gate</p>
         <p class="mt-2 text-sm text-text-secondary">
           Configured outputs · {configuredOutputs.length} · Live-testable targets · {supportedTargets.length} · Unsupported outputs · {unsupportedOutputs.length}
         </p>
@@ -693,7 +693,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
       <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Function-oriented tester</p>
+            <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Function-oriented tester</p>
             <p class="mt-2 text-sm text-text-secondary">Grouped by configured function so expert operators can test a surface family first, then confirm direction and stage shared-tray reversal fixes without dropping straight to raw PWM.</p>
           </div>
           <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold text-text-secondary" data-testid={setupWorkspaceTestIds.servoOutputsSelectedTarget}>
@@ -715,7 +715,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                     <p class="text-sm font-semibold text-text-primary">{group.functionLabel}</p>
                     <p class="mt-1 text-xs text-text-muted">Min → {guidance.minLabel} · Max → {guidance.maxLabel}</p>
                   </div>
-                  <span class="rounded-full border border-border bg-bg-primary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                  <span class="rounded-full border border-border bg-bg-primary px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
                     {group.targets.length} output{group.targets.length === 1 ? "" : "s"}
                   </span>
                 </div>
@@ -734,16 +734,16 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                         <div>
                           <div class="flex flex-wrap items-center gap-2">
                             <button
-                              class="rounded-md border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary transition hover:border-accent hover:text-accent"
+                              class="rounded-md border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary transition hover:border-accent hover:text-accent"
                               onclick={() => selectOutput(target.index)}
                               type="button"
                             >
                               {target.outputLabel}
                             </button>
-                            <span class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                            <span class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
                               {target.minPwm}–{target.maxPwm} µs
                             </span>
-                            <span class={`rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${readbackTone(readback)}`} data-testid={`${setupWorkspaceTestIds.servoOutputsRowReadbackPrefix}-${target.index}`}>
+                            <span class={`rounded-full border px-2 py-1 text-xs font-semibold uppercase tracking-widest ${readbackTone(readback)}`} data-testid={`${setupWorkspaceTestIds.servoOutputsRowReadbackPrefix}-${target.index}`}>
                               {readback.state} · {readback.text}
                             </span>
                           </div>
@@ -784,8 +784,8 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                       {#if directionControlsVisible(target)}
                         <div class="mt-4 rounded-lg border border-border bg-bg-secondary/70 px-4 py-4">
                           <div class="flex flex-wrap items-center gap-2">
-                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Observed direction</p>
-                            <span class={`rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${resultTone(directionResult)}`} data-testid={`${setupWorkspaceTestIds.servoOutputsRowResultPrefix}-${target.index}`}>
+                            <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Observed direction</p>
+                            <span class={`rounded-full border px-2 py-1 text-xs font-semibold uppercase tracking-widest ${resultTone(directionResult)}`} data-testid={`${setupWorkspaceTestIds.servoOutputsRowResultPrefix}-${target.index}`}>
                               {directionResult ?? "Awaiting confirmation"}
                             </span>
                           </div>
@@ -847,7 +847,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 
       <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Raw PWM escape hatch</p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Raw PWM escape hatch</p>
           <p class="mt-2 text-sm text-text-secondary">Every configured output stays visible here. Use the raw send only when the grouped tester is not enough, and keep unsupported or motor-owned rows visible for diagnosis instead of pretending they do not exist.</p>
         </div>
 
@@ -872,14 +872,14 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                       <div>
                         <div class="flex flex-wrap items-center gap-2">
                           <button
-                            class="rounded-md border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary transition hover:border-accent hover:text-accent"
+                            class="rounded-md border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary transition hover:border-accent hover:text-accent"
                             onclick={() => selectOutput(output.index)}
                             type="button"
                           >
                             {output.outputLabel}
                           </button>
                           <span class="text-sm font-semibold text-text-primary">{output.functionLabel}</span>
-                          <span class={`rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${readbackTone(readback)}`} data-testid={`${setupWorkspaceTestIds.servoOutputsRawReadbackPrefix}-${output.index}`}>
+                          <span class={`rounded-full border px-2 py-1 text-xs font-semibold uppercase tracking-widest ${readbackTone(readback)}`} data-testid={`${setupWorkspaceTestIds.servoOutputsRawReadbackPrefix}-${output.index}`}>
                             {readback.state} · {readback.text}
                           </span>
                         </div>
@@ -891,7 +891,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 
                       <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
                         <input
-                          class="w-28 rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm font-mono text-text-primary"
+                          class="w-28 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm font-mono text-text-primary"
                           data-testid={`${setupWorkspaceTestIds.servoOutputsRawInputPrefix}-${output.index}`}
                           disabled={!output.supported || !testUnlocked || activeOutputIndex !== null || !liveConnected || view.checkpoint.blocksActions}
                           max={output.maxPwm}

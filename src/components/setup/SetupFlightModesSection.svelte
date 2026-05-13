@@ -250,7 +250,7 @@ function stagePreset() {
         data-testid={setupWorkspaceTestIds.flightModesSummary}
       >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Available modes</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Available modes</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.flightModesAvailabilityState}>
         {model.availabilityText}
       </p>
@@ -259,7 +259,7 @@ function stagePreset() {
       </p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Current mode</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Current mode</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.flightModesCurrentMode}>
         {model.currentModeName ?? "Unknown"}
       </p>
@@ -272,7 +272,7 @@ function stagePreset() {
       </p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Mode switch channel</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Mode switch channel</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">
         {#if flightModeChannelItem}
           {currentValueText(flightModeChannelItem)}
@@ -311,7 +311,7 @@ function stagePreset() {
     <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.flightModesPresetPreview}>
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Recommended preset</p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Recommended preset</p>
           <h4 class="mt-2 text-base font-semibold text-text-primary">{presetTitle}</h4>
           <p class="mt-2 text-sm text-text-secondary">
             Use the vehicle-family default slot order when you want a conservative audited starting point. The preview stays visible even if the live mode list is currently stale.
@@ -349,14 +349,14 @@ function stagePreset() {
   <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{FLIGHT_MODE_CHANNEL_PARAM}</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{FLIGHT_MODE_CHANNEL_PARAM}</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">Mode switch channel</h4>
         <p class="mt-2 text-sm text-text-secondary">
           Select which RC channel feeds the six-slot mode PWM ranges. This stays editable even if the live mode list is currently stale.
         </p>
       </div>
       <div class="text-right">
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.flightModesCurrentPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`}>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.flightModesCurrentPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`}>
           Current · {currentValueText(flightModeChannelItem)}
         </p>
         {#if params.stagedEdits[FLIGHT_MODE_CHANNEL_PARAM]}
@@ -369,7 +369,7 @@ function stagePreset() {
 
     <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
       <select
-        class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+        class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
         data-testid={`${setupWorkspaceTestIds.flightModesInputPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`}
         disabled={actionsBlocked || !flightModeChannelItem}
         onchange={(event) => setDraft(FLIGHT_MODE_CHANNEL_PARAM, (event.currentTarget as HTMLSelectElement).value)}
@@ -399,7 +399,7 @@ function stagePreset() {
             <div class="flex items-center gap-2">
               <p class="text-sm font-semibold text-text-primary">Slot {slot.slot}</p>
               {#if slot.active}
-                <span class="rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
+                <span class="rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-accent">
                   active
                 </span>
               {/if}
@@ -407,7 +407,7 @@ function stagePreset() {
             <p class="mt-2 text-sm text-text-secondary">PWM range {slot.pwmLabel}</p>
           </div>
           <div class="text-right">
-            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.flightModesCurrentPrefix}-${slot.paramName}`}>
+            <p class="text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.flightModesCurrentPrefix}-${slot.paramName}`}>
               Current · {slot.currentName}
             </p>
             {#if params.stagedEdits[slot.paramName]}
@@ -420,7 +420,7 @@ function stagePreset() {
 
         <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
           <select
-            class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+            class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
             data-testid={`${setupWorkspaceTestIds.flightModesInputPrefix}-${slot.paramName}`}
             disabled={actionsBlocked || model.availabilityState !== "live" || model.options.length === 0 || !item(slot.paramName)}
             onchange={(event) => setDraft(slot.paramName, (event.currentTarget as HTMLSelectElement).value)}

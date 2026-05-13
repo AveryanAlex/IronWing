@@ -108,7 +108,7 @@
 </script>
 
 <section class="rounded-lg border border-border bg-bg-primary p-3">
-  <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">
+  <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">
     Controls
   </p>
 
@@ -127,7 +127,7 @@
     <!-- Flight mode selector -->
     <div>
       <label
-        class="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-text-muted"
+        class="text-xs font-semibold uppercase tracking-wide text-text-muted"
         for="flight-mode-select"
       >
         Flight mode
@@ -151,7 +151,7 @@
     <!-- Takeoff -->
     <div>
       <label
-        class="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-text-muted"
+        class="text-xs font-semibold uppercase tracking-wide text-text-muted"
         for="takeoff-alt"
       >
         Takeoff altitude

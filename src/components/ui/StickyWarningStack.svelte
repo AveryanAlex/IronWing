@@ -15,7 +15,7 @@ let visible = $derived(sorted.slice(0, maxVisible));
 let hiddenCount = $derived(Math.max(0, sorted.length - maxVisible));
 </script>
 
-<div class="sticky top-0 z-30 flex flex-col gap-[var(--space-1)] md:gap-[var(--space-2)]" data-testid={testId}>
+<div class="sticky top-0 z-30 flex flex-col gap-2 md:gap-3" data-testid={testId}>
   {#each visible as w (w.id)}
     <Banner
       title={w.title}
@@ -33,6 +33,6 @@ let hiddenCount = $derived(Math.max(0, sorted.length - maxVisible));
     />
   {/each}
   {#if hiddenCount > 0}
-    <p class="m-0 px-[var(--space-3)] py-[var(--space-2)] text-[0.86rem] text-[var(--color-text-secondary)]">{hiddenCount} more warning{hiddenCount === 1 ? "" : "s"}</p>
+    <p class="m-0 px-3 py-2 text-sm text-text-secondary">{hiddenCount} more warning{hiddenCount === 1 ? "" : "s"}</p>
   {/if}
 </div>

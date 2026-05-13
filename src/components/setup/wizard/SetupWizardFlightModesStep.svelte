@@ -142,13 +142,13 @@ function handleMarkReviewed() {
         Apply failed. Staged edits remain in the review tray so you can retry. {failureMessage}
       </div>
     {/if}
-    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
+    <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">
       Recommended {preset} preset
     </p>
     <ul class="mt-2 space-y-1 text-sm text-text-primary">
       {#each slotRows as row (row.paramName)}
         <li class="flex items-center justify-between gap-2">
-          <span class="font-mono text-[12px]">{row.paramName}</span>
+          <span class="font-mono text-xs">{row.paramName}</span>
           <span class="text-text-secondary">
             {row.currentLabel} → {row.recommendedLabel}
             {#if row.item === null}

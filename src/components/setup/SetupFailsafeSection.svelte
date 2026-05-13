@@ -326,14 +326,14 @@ function stageDefaults() {
         data-testid={setupWorkspaceTestIds.failsafeSummary}
       >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Defaults preview</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Defaults preview</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.failsafeDefaultsState}>
         {defaultsStateText}
       </p>
       <p class="mt-1 text-sm text-text-secondary">Recommended loss-of-link actions stay inspectable before you queue them.</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Radio / GCS state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Radio / GCS state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">
         {#if model.family === "plane"}
           {currentValueText(item("THR_FAILSAFE"))} radio · {currentValueText(item("FS_LONG_ACTN"))} GCS
@@ -346,7 +346,7 @@ function stageDefaults() {
       <p class="mt-1 text-sm text-text-secondary">Review the loss-of-link actions for this vehicle family here instead of guessing from generic labels.</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Battery thresholds</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Battery thresholds</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">
         Low {currentValueText(item("BATT_LOW_VOLT"))} · Critical {currentValueText(item("BATT_CRT_VOLT"))}
       </p>
@@ -387,7 +387,7 @@ function stageDefaults() {
   <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.failsafePreview}>
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Recommended defaults</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Recommended defaults</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">Preview safe starting actions</h4>
         <p class="mt-2 text-sm text-text-secondary">
           Stage the audited defaults for the current vehicle family through the shared review tray. You can still keep intentional deviations visible afterwards.
@@ -420,7 +420,7 @@ function stageDefaults() {
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={`${setupWorkspaceTestIds.failsafeCardPrefix}-${card.id}`}>
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{card.title}</p>
+            <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{card.title}</p>
             <h4 class="mt-2 text-base font-semibold text-text-primary">{card.summary}</h4>
           </div>
           {#if card.docsUrl}
@@ -431,11 +431,11 @@ function stageDefaults() {
         <div class="mt-4 grid gap-3 xl:grid-cols-2">
           {#each card.fields as field (field.name)}
             <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
-              <label class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted" for={`${card.id}-${field.name}`}>
+              <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`${card.id}-${field.name}`}>
                 {field.label}
               </label>
               <p class="mt-2 text-sm text-text-secondary">{field.description}</p>
-              <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.failsafeCurrentPrefix}-${field.name}`}>
+              <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.failsafeCurrentPrefix}-${field.name}`}>
                 Current · {currentValueText(item(field.name))}
               </p>
               {#if params.stagedEdits[field.name]}
@@ -447,7 +447,7 @@ function stageDefaults() {
               <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
                 {#if field.kind === "enum"}
                   <select
-                    class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+                    class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
                     data-testid={`${setupWorkspaceTestIds.failsafeInputPrefix}-${field.name}`}
                     disabled={actionsBlocked || resolveEnumOptions(field.name).length === 0 || !item(field.name)}
                     id={`${card.id}-${field.name}`}
@@ -461,7 +461,7 @@ function stageDefaults() {
                 {:else}
                   <div class="flex items-center gap-2">
                     <input
-                      class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+                      class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
                       data-testid={`${setupWorkspaceTestIds.failsafeInputPrefix}-${field.name}`}
                       disabled={actionsBlocked || !item(field.name)}
                       id={`${card.id}-${field.name}`}

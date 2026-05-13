@@ -11,19 +11,19 @@ type Props = {
 };
 
 const toneClasses: Record<Tone, string> = {
-  neutral: "border-[var(--color-border)]",
-  info: "border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))]",
-  success: "border-[color-mix(in_srgb,var(--color-success)_35%,var(--color-border))]",
-  warning: "border-[color-mix(in_srgb,var(--color-warning)_35%,var(--color-border))]",
-  danger: "border-[color-mix(in_srgb,var(--color-danger)_35%,var(--color-border))]",
+  neutral: "border-border",
+  info: "border-accent/30",
+  success: "border-success/30",
+  warning: "border-warning/30",
+  danger: "border-danger/30",
 };
 
 let { tone = "neutral", padded = true, testId, children }: Props = $props();
 
 let panelClass = $derived(
   [
-    "rounded-[var(--radius-md)] border bg-[var(--surface-panel)] text-[var(--color-text-primary)]",
-    padded ? "p-[var(--space-3)]" : "",
+    "rounded-lg border bg-surface-panel text-text-primary",
+    padded ? "p-3" : "",
     toneClasses[tone],
   ].join(" "),
 );

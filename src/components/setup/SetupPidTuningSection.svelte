@@ -433,21 +433,21 @@ function discardItem(name: string) {
         data-testid={setupWorkspaceTestIds.pidTuningSummary}
       >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Family state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Family state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.pidTuningFamilyState}>
         {curated.familyStateText}
       </p>
       <p class="mt-1 text-sm text-text-secondary">{curated.familyDetailText}</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Visible groups</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Visible groups</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{curated.groups.length}</p>
       <p class="mt-1 text-sm text-text-secondary">
         Purpose-built groups stay mounted only when the current snapshot exposes truthful family-specific rows.
       </p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Metadata fallback</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Metadata fallback</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{curated.metadataFallbackCount} locked row{curated.metadataFallbackCount === 1 ? "" : "s"}</p>
       <p class="mt-1 text-sm text-text-secondary">
         Incomplete enum or label metadata downgrades affected expert rows to raw-name, read-only visibility here.
@@ -473,11 +473,11 @@ function discardItem(name: string) {
         >
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Curated group</p>
+              <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Curated group</p>
               <h4 class="mt-2 text-lg font-semibold text-text-primary">{group.title}</h4>
               <p class="mt-2 text-sm text-text-secondary">{group.description}</p>
             </div>
-            <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">
+            <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
               {group.rows.length} row{group.rows.length === 1 ? "" : "s"}
             </span>
           </div>

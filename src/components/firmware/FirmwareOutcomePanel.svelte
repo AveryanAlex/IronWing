@@ -239,7 +239,7 @@ let sessionStateLabel = $derived(state.isActive
     : "idle");
 let bannerSeverity = $derived<BannerSeverity>(outcomeCopy?.tone ?? "warning");
 
-const detailTileClass = "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-input)] p-3 text-[0.86rem] text-[var(--color-text-primary)]";
+const detailTileClass = "rounded-md border border-border bg-bg-input p-3 text-sm text-text-primary";
 </script>
 
 <Panel padded testId={firmwareWorkspaceTestIds.outcomePanel}>
@@ -252,7 +252,7 @@ const detailTileClass = "rounded-[var(--radius-md)] border border-[var(--color-b
   </SectionHeader>
 
   {#if state.isActive}
-    <div class="mt-[var(--space-4)] rounded-[var(--radius-md)] border border-[color-mix(in_srgb,var(--color-accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] px-4 py-3 text-[0.86rem] text-[var(--color-text-primary)]">
+    <div class="mt-4 rounded-md border border-accent/35 bg-accent/10 px-4 py-3 text-sm text-text-primary">
       <p class="m-0 font-semibold">Live firmware session</p>
       <p class="m-0 mt-1">
         {state.progress?.phase_label ?? state.sessionPhase ?? "Working"}
@@ -264,7 +264,7 @@ const detailTileClass = "rounded-[var(--radius-md)] border border-[var(--color-b
   {/if}
 
   {#if activeOutcome && outcomeCopy}
-    <div class="mt-[var(--space-4)] flex flex-col gap-[var(--space-3)]">
+    <div class="mt-4 flex flex-col gap-3">
       <Banner
         severity={bannerSeverity}
         title={outcomeCopy.label}
@@ -273,14 +273,14 @@ const detailTileClass = "rounded-[var(--radius-md)] border border-[var(--color-b
         messageTestId={firmwareWorkspaceTestIds.outcomeSummary}
       />
 
-      <dl class="m-0 grid gap-[var(--space-3)] p-0 md:grid-cols-2">
+      <dl class="m-0 grid gap-3 p-0 md:grid-cols-2">
         {#each rows as row, index (`${row.label}-${row.value}`)}
           <div
             class={detailTileClass}
             data-testid={`${firmwareWorkspaceTestIds.outcomeDetailPrefix}-${index}`}
           >
-            <dt class="m-0 text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">{row.label}</dt>
-            <dd class="m-0 mt-[var(--space-1)] break-words">{row.value}</dd>
+            <dt class="m-0 text-xs font-semibold uppercase tracking-wide text-text-muted">{row.label}</dt>
+            <dd class="m-0 mt-1 break-words">{row.value}</dd>
           </div>
         {/each}
       </dl>
@@ -294,7 +294,7 @@ const detailTileClass = "rounded-[var(--radius-md)] border border-[var(--color-b
     </div>
   {:else}
     <p
-      class="mt-[var(--space-4)] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-input)] p-4 text-[0.86rem] text-[var(--color-text-secondary)]"
+      class="mt-4 rounded-md border border-border bg-bg-input p-4 text-sm text-text-secondary"
       data-testid={firmwareWorkspaceTestIds.outcomeEmpty}
     >
       No retained firmware outcome yet. Once install or recovery runs, the exact result facts stay visible here until you dismiss them.

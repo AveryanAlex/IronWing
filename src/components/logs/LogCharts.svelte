@@ -327,11 +327,11 @@ $effect(() => {
 
 <Panel testId="logs-charts-panel">
   <div class="flex min-h-0 flex-col gap-3">
-    <div class="flex items-center justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+    <div class="flex items-center justify-between gap-3 max-md:flex-col max-md:items-stretch">
       <div>
-        <p class="m-0 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">Charts</p>
-        <h3 class="m-0 text-[0.84rem] font-semibold text-[var(--color-text-primary)]">Bounded panels, synced cursor, and range export</h3>
-        <p class="m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]">
+        <p class="m-0 text-xs font-semibold uppercase tracking-wide text-text-muted">Charts</p>
+        <h3 class="m-0 text-sm font-semibold text-text-primary">Bounded panels, synced cursor, and range export</h3>
+        <p class="m-0 text-sm leading-6 text-text-secondary">
           Chart queries stay clamped to the active replay window or the selected drag range. Export uses the same bounded selection instead of a full-log fetch.
         </p>
       </div>
@@ -344,22 +344,22 @@ $effect(() => {
     </div>
 
     {#if !entry}
-      <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5" data-testid="logs-charts-empty">
-        <p class="m-0 font-semibold text-[var(--color-text-primary)]">Select a log before opening charts.</p>
-        <p class="m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]">The chart surface follows the active workspace selection and bounded replay window.</p>
+      <div class="rounded-lg border border-border bg-bg-primary px-3 py-3" data-testid="logs-charts-empty">
+        <p class="m-0 font-semibold text-text-primary">Select a log before opening charts.</p>
+        <p class="m-0 text-sm leading-6 text-text-secondary">The chart surface follows the active workspace selection and bounded replay window.</p>
       </div>
     {:else}
       <LogChartGroupSelector {groups} {activeGroupKey} onSelectGroup={(groupKey) => onSelectGroup(groupKey)} />
 
       {#if groups.length > 0 && groups.every((group) => !group.supported)}
-        <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5" data-testid="logs-charts-unsupported">
-          <p class="m-0 font-semibold text-[var(--color-text-primary)]">This log does not expose a supported chart group yet.</p>
-          <p class="m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]">No bounded chart query was sent because the indexed message groups needed for the active panels are missing.</p>
+        <div class="rounded-lg border border-border bg-bg-primary px-3 py-3" data-testid="logs-charts-unsupported">
+          <p class="m-0 font-semibold text-text-primary">This log does not expose a supported chart group yet.</p>
+          <p class="m-0 text-sm leading-6 text-text-secondary">No bounded chart query was sent because the indexed message groups needed for the active panels are missing.</p>
         </div>
       {:else if activeGroup && !activeGroup.supported}
-        <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5" data-testid="logs-charts-group-unsupported">
-          <p class="m-0 font-semibold text-[var(--color-text-primary)]">{activeGroup.title} is unavailable for this log.</p>
-          <p class="m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]">{activeGroup.emptyReason}</p>
+        <div class="rounded-lg border border-border bg-bg-primary px-3 py-3" data-testid="logs-charts-group-unsupported">
+          <p class="m-0 font-semibold text-text-primary">{activeGroup.title} is unavailable for this log.</p>
+          <p class="m-0 text-sm leading-6 text-text-secondary">{activeGroup.emptyReason}</p>
         </div>
       {:else}
         {#if activeGroup?.supportsAltitudePreview}
@@ -375,26 +375,26 @@ $effect(() => {
         {/if}
 
       {#if chartState.phase === "loading"}
-        <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5" data-testid="logs-charts-loading">
-          <p class="m-0 font-semibold text-[var(--color-text-primary)]">Loading bounded chart series…</p>
-          <p class="m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]">The workspace is querying only the active group and active range.</p>
+        <div class="rounded-lg border border-border bg-bg-primary px-3 py-3" data-testid="logs-charts-loading">
+          <p class="m-0 font-semibold text-text-primary">Loading bounded chart series…</p>
+          <p class="m-0 text-sm leading-6 text-text-secondary">The workspace is querying only the active group and active range.</p>
         </div>
       {:else if chartState.phase === "ready" && (!series.length || !hasRenderableSeries)}
-        <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5" data-testid="logs-charts-no-series">
-          <p class="m-0 font-semibold text-[var(--color-text-primary)]">No chart data landed for this bounded range.</p>
-          <p class="m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]">Try a different group or clear the selected range if the current slice is empty.</p>
+        <div class="rounded-lg border border-border bg-bg-primary px-3 py-3" data-testid="logs-charts-no-series">
+          <p class="m-0 font-semibold text-text-primary">No chart data landed for this bounded range.</p>
+          <p class="m-0 text-sm leading-6 text-text-secondary">Try a different group or clear the selected range if the current slice is empty.</p>
         </div>
       {:else}
         <div class="flex min-h-0 flex-col gap-3">
           {#each series as nextSeries (`${nextSeries.selector.message_type}-${nextSeries.selector.field}`)}
             {@const summary = summarizeSeries(nextSeries)}
-            <article class="flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5" data-testid={`logs-chart-series-${nextSeries.selector.field}`}>
-              <div class="flex items-center justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+            <article class="flex flex-col gap-2 rounded-lg border border-border bg-bg-primary px-3 py-3" data-testid={`logs-chart-series-${nextSeries.selector.field}`}>
+              <div class="flex items-center justify-between gap-3 max-md:flex-col max-md:items-stretch">
                 <div>
-                  <p class="m-0 text-[0.84rem] font-semibold text-[var(--color-text-primary)]">{nextSeries.selector.label}</p>
-                  <p class="mt-0.5 m-0 font-mono text-[0.73rem] text-[var(--color-text-muted)]">{nextSeries.selector.message_type}.{nextSeries.selector.field}</p>
+                  <p class="m-0 text-sm font-semibold text-text-primary">{nextSeries.selector.label}</p>
+                  <p class="mt-0.5 m-0 font-mono text-xs text-text-muted">{nextSeries.selector.message_type}.{nextSeries.selector.field}</p>
                 </div>
-                <span class="m-0 text-[0.84rem] font-semibold text-[var(--color-text-primary)]">{formatValue(summary.latestValue, nextSeries.selector.unit)}</span>
+                <span class="m-0 text-sm font-semibold text-text-primary">{formatValue(summary.latestValue, nextSeries.selector.unit)}</span>
               </div>
 
               <div
@@ -413,7 +413,7 @@ $effect(() => {
                 </div>
               </div>
 
-              <div class="flex items-center justify-between gap-3 font-mono text-[0.73rem] text-[var(--color-text-muted)] max-[720px]:flex-col max-[720px]:items-stretch">
+              <div class="flex items-center justify-between gap-3 font-mono text-xs text-text-muted max-md:flex-col max-md:items-stretch">
                 <span>{formatValue(summary.minValue, nextSeries.selector.unit)}</span>
                 <span data-testid={`logs-chart-cursor-${nextSeries.selector.field}`}>
                   cursor · {formatUsec(syncedCursorUsec, effectiveStartUsec)}

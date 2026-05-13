@@ -75,16 +75,16 @@ function handleContinue() {
   </p>
 
   <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
-    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Arming readiness</p>
+    <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Arming readiness</p>
     <p class="mt-2 text-sm font-semibold text-text-primary">{armingStatusText}</p>
-    <p class="mt-1 text-[11px] uppercase tracking-[0.16em] text-text-muted">status · {armingStatus}</p>
+    <p class="mt-1 text-xs uppercase tracking-widest text-text-muted">status · {armingStatus}</p>
   </div>
 
   <div
     class="rounded-lg border border-border bg-bg-primary/60 p-3"
     data-testid={setupWorkspaceTestIds.wizardStepArmingBlockers}
   >
-    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Recent status text</p>
+    <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Recent status text</p>
     {#if blockerNotices.length === 0}
       <p class="mt-2 text-sm text-text-secondary">
         No recent status-text notices. Request pre-arm checks to refresh the blocker list.
@@ -92,7 +92,7 @@ function handleContinue() {
     {:else}
       <ul class="mt-2 space-y-1 text-sm text-text-secondary">
         {#each blockerNotices as notice (notice.id)}
-          <li class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2">
+          <li class="rounded-lg border border-border bg-bg-secondary/60 px-3 py-2">
             {notice.text}
           </li>
         {/each}

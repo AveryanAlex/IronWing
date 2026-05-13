@@ -146,14 +146,14 @@ function clearCheckpoint() {
     {#if isPhoneTier}
       <div class="mb-3 flex items-center justify-between">
         <button
-          class="rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary hover:border-accent hover:text-accent"
+          class="rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary hover:border-accent hover:text-accent"
           data-testid={setupWorkspaceTestIds.sectionDrawerToggle}
           onclick={openSectionDrawer}
           type="button"
         >
           Sections
         </button>
-        <span class="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+        <span class="text-xs font-semibold uppercase tracking-widest text-text-muted">
           {selectedSection?.title ?? "Overview"}
         </span>
       </div>
@@ -315,9 +315,9 @@ function clearCheckpoint() {
         data-testid={setupWorkspaceTestIds.sectionDrawer}
       >
         <div class="mb-3 flex items-center justify-between">
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Setup sections</p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Setup sections</p>
           <button
-            class="rounded-full border border-border bg-bg-primary px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary hover:border-accent hover:text-accent"
+            class="rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary hover:border-accent hover:text-accent"
             data-testid={setupWorkspaceTestIds.sectionDrawerClose}
             onclick={closeSectionDrawer}
             type="button"

@@ -89,7 +89,7 @@ function returnPointSummary(point: GeoPoint2d | null): string {
 <section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.fenceList}>
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Fence list</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Fence list</p>
       <h3 class="mt-1 text-sm font-semibold text-text-primary">Fence regions and return point</h3>
     </div>
 
@@ -151,7 +151,7 @@ function returnPointSummary(point: GeoPoint2d | null): string {
   >
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Fence return point</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Fence return point</p>
         <p class="mt-1 text-sm font-semibold text-text-primary">Return-point handle</p>
         <p class="mt-1 text-xs text-text-secondary">{returnPointSummary(returnPoint)}</p>
       </div>
@@ -199,7 +199,7 @@ function returnPointSummary(point: GeoPoint2d | null): string {
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Fence region {item.index + 1}</p>
+              <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Fence region {item.index + 1}</p>
               <h4 class="mt-1 text-sm font-semibold text-text-primary">{regionLabel(item.document as FenceRegion)}</h4>
               <p class="mt-1 text-xs text-text-secondary">{regionSummary(item.document as FenceRegion)}</p>
               {#if item.preview.latitude_deg !== null && item.preview.longitude_deg !== null}
@@ -208,7 +208,7 @@ function returnPointSummary(point: GeoPoint2d | null): string {
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
-              <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+              <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
                 {regionBadge(item.document as FenceRegion)}
               </span>
               <button

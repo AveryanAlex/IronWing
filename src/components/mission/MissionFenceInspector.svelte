@@ -376,12 +376,12 @@ function handleEnter(event: KeyboardEvent) {
 <section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.fenceInspector}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Fence inspector</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Fence inspector</p>
       <h3 class="mt-1 text-sm font-semibold text-text-primary">Selected fence detail</h3>
     </div>
 
     <span
-      class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary"
+      class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-wide text-text-secondary"
       data-testid={missionWorkspaceTestIds.fenceInspectorSelectionKind}
     >
       {selectionLabel}
@@ -395,7 +395,7 @@ function handleEnter(event: KeyboardEvent) {
   {:else if selection.kind === "return-point"}
     <div class="mt-4 space-y-4" data-testid={missionWorkspaceTestIds.fenceInspectorReturnPoint}>
       <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Fence return point</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Fence return point</p>
         <p class="mt-1 text-sm text-text-secondary">This point stays separate from Home so fence recovery can target a dedicated location without implying Home sync or mission upload parity.</p>
       </div>
 
@@ -403,7 +403,7 @@ function handleEnter(event: KeyboardEvent) {
         <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
           <span class="text-xs font-medium text-text-muted">Latitude</span>
           <input
-            class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+            class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
             data-testid={missionWorkspaceTestIds.fenceReturnLatitude}
             disabled={readOnly}
             inputmode="decimal"
@@ -422,7 +422,7 @@ function handleEnter(event: KeyboardEvent) {
         <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
           <span class="text-xs font-medium text-text-muted">Longitude</span>
           <input
-            class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+            class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
             data-testid={missionWorkspaceTestIds.fenceReturnLongitude}
             disabled={readOnly}
             inputmode="decimal"
@@ -461,7 +461,7 @@ function handleEnter(event: KeyboardEvent) {
   {:else}
     <div class="mt-4 space-y-4">
       <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Fence region {item.index + 1}</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Fence region {item.index + 1}</p>
         <h4 class="mt-1 text-base font-semibold text-text-primary">{regionLabel(regionKind(region))}</h4>
         <p class="mt-1 text-xs text-text-secondary">Switch between inclusion / exclusion and polygon / circle without leaving the active fence selection.</p>
       </div>
@@ -469,7 +469,7 @@ function handleEnter(event: KeyboardEvent) {
       <label class="space-y-1">
         <span class="text-xs font-medium text-text-muted">Region type</span>
         <select
-          class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+          class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
           data-testid={missionWorkspaceTestIds.fenceInspectorType}
           disabled={readOnly}
           onchange={(event) => {
@@ -489,7 +489,7 @@ function handleEnter(event: KeyboardEvent) {
         <div class="space-y-3 rounded-lg border border-border bg-bg-secondary/60 p-3">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Vertices</p>
+              <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Vertices</p>
               <p class="mt-1 text-xs text-text-secondary">Edit polygon vertices numerically when map dragging needs tighter control.</p>
             </div>
             <button
@@ -513,11 +513,11 @@ function handleEnter(event: KeyboardEvent) {
           <div class="space-y-3">
             {#each polygonVertices(region) as vertex, index (`vertex-${index}`)}
               <div class="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
-                <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">V{index + 1}</span>
+                <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">V{index + 1}</span>
                 <label class="space-y-1">
                   <span class="text-xs font-medium text-text-muted">Latitude</span>
                   <input
-                    class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+                    class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
                     data-testid={`${missionWorkspaceTestIds.fenceVertexLatitudePrefix}-${index}`}
                     disabled={readOnly}
                     inputmode="decimal"
@@ -533,7 +533,7 @@ function handleEnter(event: KeyboardEvent) {
                 <label class="space-y-1">
                   <span class="text-xs font-medium text-text-muted">Longitude</span>
                   <input
-                    class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+                    class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
                     data-testid={`${missionWorkspaceTestIds.fenceVertexLongitudePrefix}-${index}`}
                     disabled={readOnly}
                     inputmode="decimal"
@@ -568,7 +568,7 @@ function handleEnter(event: KeyboardEvent) {
             <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
               <span class="text-xs font-medium text-text-muted">Center latitude</span>
               <input
-                class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+                class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
                 data-testid={missionWorkspaceTestIds.fenceCircleLatitude}
                 disabled={readOnly}
                 inputmode="decimal"
@@ -587,7 +587,7 @@ function handleEnter(event: KeyboardEvent) {
             <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
               <span class="text-xs font-medium text-text-muted">Center longitude</span>
               <input
-                class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+                class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
                 data-testid={missionWorkspaceTestIds.fenceCircleLongitude}
                 disabled={readOnly}
                 inputmode="decimal"
@@ -607,7 +607,7 @@ function handleEnter(event: KeyboardEvent) {
           <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
             <span class="text-xs font-medium text-text-muted">Radius (m)</span>
             <input
-              class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+              class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
               data-testid={missionWorkspaceTestIds.fenceCircleRadius}
               disabled={readOnly}
               inputmode="decimal"
@@ -631,7 +631,7 @@ function handleEnter(event: KeyboardEvent) {
         <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
           <span class="text-xs font-medium text-text-muted">Inclusion group</span>
           <input
-            class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+            class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
             data-testid={missionWorkspaceTestIds.fenceInclusionGroup}
             disabled={readOnly}
             inputmode="numeric"

@@ -41,22 +41,22 @@ let {
   onRemove,
 }: Props = $props();
 
-const eyebrowClass = "m-0 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]";
-const titleClass = "mt-1 m-0 text-[0.98rem] font-semibold text-[var(--color-text-primary)]";
-const copyClass = "m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]";
-const factCardClass = "min-w-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5";
-const monoValueClass = "min-w-0 overflow-wrap-anywhere break-words font-mono text-[0.74rem]";
-const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-bg-input)] px-[0.7rem] py-[0.55rem] text-[0.8rem] text-[var(--color-text-primary)]";
-const diagnosticBaseClass = "rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5";
+const eyebrowClass = "m-0 text-xs font-semibold uppercase tracking-wide text-text-muted";
+const titleClass = "mt-1 m-0 text-base font-semibold text-text-primary";
+const copyClass = "m-0 text-sm leading-6 text-text-secondary";
+const factCardClass = "min-w-0 rounded-lg border border-border bg-bg-primary px-3 py-3";
+const monoValueClass = "min-w-0 overflow-wrap-anywhere break-words font-mono text-xs";
+const inputClass = "w-full min-w-0 rounded-md border border-border bg-bg-input px-3 py-2 text-sm text-text-primary";
+const diagnosticBaseClass = "rounded-lg border border-border bg-bg-primary px-3 py-3";
 const diagnosticToneClass: Record<string, string> = {
-  critical: "border-[color:color-mix(in_srgb,var(--color-danger)_45%,var(--color-border))] bg-[color:color-mix(in_srgb,var(--color-danger)_10%,var(--color-bg-primary))] text-[var(--color-danger)]",
-  caution: "border-[color:color-mix(in_srgb,var(--color-warning)_45%,var(--color-border))] bg-[color:color-mix(in_srgb,var(--color-warning)_10%,var(--color-bg-primary))] text-[var(--color-warning)]",
+  critical: "border-[color:color-mix(in_srgb,var(--color-danger)_45%,var(--color-border))] bg-[color:color-mix(in_srgb,var(--color-danger)_10%,var(--color-bg-primary))] text-danger",
+  caution: "border-[color:color-mix(in_srgb,var(--color-warning)_45%,var(--color-border))] bg-[color:color-mix(in_srgb,var(--color-warning)_10%,var(--color-bg-primary))] text-warning",
 };
 </script>
 
 <Panel testId="logs-details-panel">
   <div class="flex min-h-0 flex-col gap-3">
-    <div class="flex flex-wrap items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+    <div class="flex flex-wrap items-start justify-between gap-3 max-md:flex-col max-md:items-stretch">
       <div class="min-w-0">
         <p class={eyebrowClass}>Details</p>
         <h3 class={titleClass}>Selection facts and maintenance actions</h3>
@@ -71,35 +71,35 @@ const diagnosticToneClass: Record<string, string> = {
     </div>
 
     {#if !selectedEntry}
-      <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5" data-testid="logs-selection-empty">
-        <p class="m-0 text-[0.9rem] font-semibold text-[var(--color-text-primary)]">Select a log to inspect it.</p>
-        <p class="mt-1 m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]">The details panel will show truthful source, index, diagnostics, replay, and maintenance state for the chosen catalog entry.</p>
+      <div class="rounded-lg border border-border bg-bg-primary px-3 py-3" data-testid="logs-selection-empty">
+        <p class="m-0 text-base font-semibold text-text-primary">Select a log to inspect it.</p>
+        <p class="mt-1 m-0 text-sm leading-6 text-text-secondary">The details panel will show truthful source, index, diagnostics, replay, and maintenance state for the chosen catalog entry.</p>
       </div>
     {:else}
-      <div class="grid gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
+      <div class="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
         <div class={factCardClass}>
           <span class={eyebrowClass}>Source path</span>
-          <span class={`m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-primary)] ${monoValueClass}`}>{selectedEntry.source.original_path}</span>
+          <span class={`m-0 text-sm leading-6 text-text-primary ${monoValueClass}`}>{selectedEntry.source.original_path}</span>
         </div>
         <div class={factCardClass}>
           <span class={eyebrowClass}>Imported</span>
-          <span class="m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-primary)]">{formatImportedAt(selectedEntry.imported_at_unix_msec)}</span>
+          <span class="m-0 text-sm leading-6 text-text-primary">{formatImportedAt(selectedEntry.imported_at_unix_msec)}</span>
         </div>
         <div class={factCardClass}>
           <span class={eyebrowClass}>Messages</span>
-          <span class="m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-primary)]">{formatCount(selectedEntry.metadata.total_messages)}</span>
+          <span class="m-0 text-sm leading-6 text-text-primary">{formatCount(selectedEntry.metadata.total_messages)}</span>
         </div>
         <div class={factCardClass}>
           <span class={eyebrowClass}>Duration</span>
-          <span class="m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-primary)]">{formatDuration(selectedEntry.metadata.duration_secs)}</span>
+          <span class="m-0 text-sm leading-6 text-text-primary">{formatDuration(selectedEntry.metadata.duration_secs)}</span>
         </div>
         <div class={factCardClass}>
           <span class={eyebrowClass}>Indexed range</span>
-          <span class="m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-primary)]">{formatUsec(selectedEntry.metadata.start_usec)} → {formatUsec(selectedEntry.metadata.end_usec, selectedEntry.metadata.start_usec)}</span>
+          <span class="m-0 text-sm leading-6 text-text-primary">{formatUsec(selectedEntry.metadata.start_usec)} → {formatUsec(selectedEntry.metadata.end_usec, selectedEntry.metadata.start_usec)}</span>
         </div>
         <div class={factCardClass}>
           <span class={eyebrowClass}>Index file</span>
-          <span class={`m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-primary)] ${monoValueClass}`}>{selectedEntry.index?.relative_path ?? "not built"}</span>
+          <span class={`m-0 text-sm leading-6 text-text-primary ${monoValueClass}`}>{selectedEntry.index?.relative_path ?? "not built"}</span>
         </div>
       </div>
 

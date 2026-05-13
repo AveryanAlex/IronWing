@@ -13,7 +13,7 @@ import {
   createFirmwareWorkspaceStore,
   type FirmwareWorkspaceStore,
 } from "../../lib/stores/firmware-workspace";
-import { Banner, WorkspaceShell } from "../ui";
+  import { Banner, WorkspaceShell } from "../ui";
 import FirmwareOutcomePanel from "./FirmwareOutcomePanel.svelte";
 import FirmwareRecoveryPanel from "./FirmwareRecoveryPanel.svelte";
 import FirmwareSerialPanel from "./FirmwareSerialPanel.svelte";
@@ -131,36 +131,38 @@ $effect(() => {
     data-layout-mode={layout.mode}
   ></div>
 
-  <div class="grid gap-3 md:grid-cols-2">
-    <button
-      aria-pressed={effectiveMode === "install"}
-      class={`rounded-lg border px-4 py-3 text-left transition ${effectiveMode === "install"
-        ? "border-accent/40 bg-accent/10"
-        : "border-border bg-bg-secondary hover:border-accent/30 hover:bg-bg-primary"}`}
-      data-testid={firmwareWorkspaceTestIds.modeInstall}
-      disabled={recoveryBusy || serialBusy || replayReadonly}
-      onclick={() => (selectedMode = "install")}
-      type="button"
-    >
-      <span class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Install / Update</span>
-      <span class="mt-1 block text-sm font-semibold text-text-primary">Primary serial path</span>
-      <span class="mt-1 block text-sm text-text-secondary">Use the official APJ catalog first, with a clearly marked local APJ override for expert cases.</span>
-    </button>
+  <div class="rounded-lg border border-border bg-bg-secondary p-1">
+    <div class="grid gap-1 md:grid-cols-2">
+      <button
+        aria-pressed={effectiveMode === "install"}
+        class={`rounded-md border px-3 py-3 text-left transition-colors ${effectiveMode === "install"
+          ? "border-accent/40 bg-accent/10"
+          : "border-transparent bg-transparent hover:border-accent/30 hover:bg-bg-primary"}`}
+        data-testid={firmwareWorkspaceTestIds.modeInstall}
+        disabled={recoveryBusy || serialBusy || replayReadonly}
+        onclick={() => (selectedMode = "install")}
+        type="button"
+      >
+        <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Install / Update</span>
+        <span class="mt-1 block text-sm font-semibold text-text-primary">Primary serial path</span>
+        <span class="mt-1 block text-sm text-text-secondary">Use the official APJ catalog first, with a clearly marked local APJ override for expert cases.</span>
+      </button>
 
-    <button
-      aria-pressed={effectiveMode === "recovery"}
-      class={`rounded-lg border px-4 py-3 text-left transition ${effectiveMode === "recovery"
-        ? "border-warning/40 bg-warning/10"
-        : "border-border bg-bg-secondary hover:border-warning/30 hover:bg-bg-primary"}`}
-      data-testid={firmwareWorkspaceTestIds.modeRecovery}
-      disabled={recoveryBusy || serialBusy || replayReadonly}
-      onclick={() => (selectedMode = "recovery")}
-      type="button"
-    >
-      <span class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">DFU recovery</span>
-      <span class="mt-1 block text-sm font-semibold text-text-primary">Separate bootloader rescue path</span>
-      <span class="mt-1 block text-sm text-text-secondary">Recover only the bootloader here, then return to Install / Update for the normal firmware flash.</span>
-    </button>
+      <button
+        aria-pressed={effectiveMode === "recovery"}
+        class={`rounded-md border px-3 py-3 text-left transition-colors ${effectiveMode === "recovery"
+          ? "border-warning/40 bg-warning/10"
+          : "border-transparent bg-transparent hover:border-warning/30 hover:bg-bg-primary"}`}
+        data-testid={firmwareWorkspaceTestIds.modeRecovery}
+        disabled={recoveryBusy || serialBusy || replayReadonly}
+        onclick={() => (selectedMode = "recovery")}
+        type="button"
+      >
+        <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">DFU recovery</span>
+        <span class="mt-1 block text-sm font-semibold text-text-primary">Separate bootloader rescue path</span>
+        <span class="mt-1 block text-sm text-text-secondary">Recover only the bootloader here, then return to Install / Update for the normal firmware flash.</span>
+      </button>
+    </div>
   </div>
 
   {#if !layout.actionsEnabled}

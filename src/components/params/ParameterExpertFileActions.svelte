@@ -174,7 +174,7 @@ function formatError(error: unknown) {
 >
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">File workflows</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">File workflows</p>
       <h4 class="mt-2 text-base font-semibold text-text-primary">Import or export expert parameter files</h4>
       <p class="mt-2 text-sm leading-6 text-text-secondary">
         Import `.param` files into the shared staged tray or export the current vehicle snapshot without leaving expert mode.
@@ -212,11 +212,11 @@ function formatError(error: unknown) {
     data-testid={parameterWorkspaceTestIds.expertFileStatus}
   >
     <p class="font-medium" data-testid={parameterWorkspaceTestIds.expertFileMessage}>{message}</p>
-    <p class="mt-2 text-xs uppercase tracking-[0.16em] opacity-80">
+    <p class="mt-2 text-xs uppercase tracking-wide opacity-80">
       {detail}
     </p>
     {#if actionKind === "import" && actionState === "success" && skippedCount > 0}
-      <p class="mt-2 text-xs uppercase tracking-[0.16em] opacity-80">
+      <p class="mt-2 text-xs uppercase tracking-wide opacity-80">
         Unknown rows skipped: {skippedUnknownCount} · Unchanged rows skipped: {skippedUnchangedCount}
       </p>
     {/if}

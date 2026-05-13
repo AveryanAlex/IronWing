@@ -198,21 +198,21 @@ function resolvedInputText(): string {
         data-testid={setupWorkspaceTestIds.initialParamsSummary}
       >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Vehicle family</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Vehicle family</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.initialParamsFamilyState}>
         {model.family.headline}
       </p>
       <p class="mt-1 text-sm text-text-secondary">{model.family.detail}</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Preview state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Preview state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.initialParamsPreviewState}>
         {model.previewStateText}
       </p>
       <p class="mt-1 text-sm text-text-secondary">{model.previewDetailText}</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Resolved inputs</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Resolved inputs</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{resolvedInputText()}</p>
       <p class="mt-1 text-sm text-text-secondary">
         {#if model.usingFallbackInputs}
@@ -225,7 +225,7 @@ function resolvedInputText(): string {
   </div>
 
   <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Vehicle inputs</p>
+    <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Vehicle inputs</p>
     <h4 class="mt-2 text-base font-semibold text-text-primary">Starter assumptions</h4>
     <p class="mt-2 text-sm text-text-secondary">
       Update the physical assumptions first. Preview batches stay hidden until inputs are valid, and stale retained previews remain non-stageable.
@@ -233,9 +233,9 @@ function resolvedInputText(): string {
 
     <div class="mt-4 grid gap-3 md:grid-cols-3">
       <label class="block">
-        <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Prop size (inches)</span>
+        <span class="text-xs font-semibold uppercase tracking-widest text-text-muted">Prop size (inches)</span>
         <input
-          class="mt-2 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-2 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.initialParamsInputPrefix}-prop_inches`}
           inputmode="decimal"
           min="1"
@@ -247,9 +247,9 @@ function resolvedInputText(): string {
       </label>
 
       <label class="block">
-        <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Battery cells</span>
+        <span class="text-xs font-semibold uppercase tracking-widest text-text-muted">Battery cells</span>
         <input
-          class="mt-2 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-2 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.initialParamsInputPrefix}-cell_count`}
           inputmode="numeric"
           min="1"
@@ -261,9 +261,9 @@ function resolvedInputText(): string {
       </label>
 
       <label class="block">
-        <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Battery chemistry</span>
+        <span class="text-xs font-semibold uppercase tracking-widest text-text-muted">Battery chemistry</span>
         <select
-          class="mt-2 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-2 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.initialParamsInputPrefix}-chemistry`}
           onchange={(event) => updateChemistry((event.currentTarget as HTMLSelectElement).value)}
           value={String(chemistryIndex)}
@@ -293,7 +293,7 @@ function resolvedInputText(): string {
           data-testid={`${setupWorkspaceTestIds.initialParamsPreviewPrefix}-${batch.id}`}
         >
           <div class="flex items-center justify-between mb-2">
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Preview batch</p>
+            <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Preview batch</p>
             {#if batch.stageAllowed}
               <label class="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
                 <input

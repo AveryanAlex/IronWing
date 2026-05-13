@@ -36,7 +36,7 @@ function itemTone(item: SetupBitmaskChecklistItem): string {
 <div class="space-y-3 rounded-lg border border-border bg-bg-primary/80 p-3">
   {#if title}
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{title}</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{title}</p>
       <p class="mt-1 text-sm text-text-secondary">Selected capabilities stay explicit even when some flags are unavailable.</p>
     </div>
   {/if}
@@ -56,7 +56,7 @@ function itemTone(item: SetupBitmaskChecklistItem): string {
               <p class="mt-1 text-xs leading-5 text-text-secondary">{item.description}</p>
             {/if}
           </div>
-          <span class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+          <span class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
             {#if item.supported === false}
               unsupported
             {:else if item.checked}

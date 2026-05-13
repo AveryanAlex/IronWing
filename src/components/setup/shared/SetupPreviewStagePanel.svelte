@@ -36,14 +36,14 @@ let resolvedStageDisabled = $derived(stageDisabled || changeCount === 0);
 </script>
 
 <div class="rounded-lg border border-accent/20 bg-accent/5 p-3">
-  <div class="mb-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+  <div class="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
     {resolvedHeader}
   </div>
 
   <div class="flex flex-col gap-1">
     {#each rows as row (row.key)}
       <button
-        class={`flex items-center gap-2 rounded-xl px-2 py-2 text-left text-xs transition-colors ${row.willChange ? onRowClick ? "cursor-pointer text-text-primary hover:bg-accent/10" : "text-text-primary" : "cursor-default text-text-muted"}`}
+        class={`flex items-center gap-2 rounded-lg px-2 py-2 text-left text-xs transition-colors ${row.willChange ? onRowClick ? "cursor-pointer text-text-primary hover:bg-accent/10" : "text-text-primary" : "cursor-default text-text-muted"}`}
         disabled={!row.willChange || !onRowClick}
         onclick={() => onRowClick?.(row)}
         type="button"
@@ -56,10 +56,10 @@ let resolvedStageDisabled = $derived(stageDisabled || changeCount === 0);
           <span class="text-text-secondary">{row.detail}</span>
         {/if}
         {#if row.paramName}
-          <span class="font-mono text-[10px] text-text-muted">{row.paramName}</span>
+          <span class="font-mono text-xs text-text-muted">{row.paramName}</span>
         {/if}
         {#if !row.willChange}
-          <span class="ml-auto text-[10px] text-text-muted/70">already set</span>
+          <span class="ml-auto text-xs text-text-muted/70">already set</span>
         {/if}
       </button>
     {/each}

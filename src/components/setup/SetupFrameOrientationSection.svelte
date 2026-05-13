@@ -485,14 +485,14 @@ function buildFrameBanners(input: {
         data-testid={setupWorkspaceTestIds.frameSummary}
       >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Vehicle state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Vehicle state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.frameVehicleState}>
         {frameStateLabel(profile)}
       </p>
       <p class="mt-1 text-sm text-text-secondary">{frameStateDetail(profile)}</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Layout truth</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Layout truth</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.frameLayoutState}>
         {layoutStateLabel(profile, previewVtolLayout)}
       </p>
@@ -508,7 +508,7 @@ function buildFrameBanners(input: {
       </div>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Orientation</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Orientation</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.frameOrientationState}>
         {previewOrientationLabel}
       </p>
@@ -545,12 +545,12 @@ function buildFrameBanners(input: {
         class="rounded-lg border border-border bg-bg-primary/80 p-3"
         data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-Q_ENABLE`}
       >
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Q_ENABLE</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Q_ENABLE</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{qEnableItem?.label ?? "QuadPlane enable"}</h4>
         <p class="mt-2 text-sm text-text-secondary">
           {qEnableItem?.description ?? "Enable QuadPlane on Plane firmware before expecting VTOL frame, motor, or actuator truth."}
         </p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.frameCurrentPrefix}-Q_ENABLE`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.frameCurrentPrefix}-Q_ENABLE`}>
           Current · {currentValueText(qEnableItem)}
         </p>
         {#if params.stagedEdits.Q_ENABLE}
@@ -560,7 +560,7 @@ function buildFrameBanners(input: {
         {/if}
         <select
           bind:value={qEnableDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.frameInputPrefix}-Q_ENABLE`}
           disabled={checkpoint.blocksActions}
         >
@@ -585,14 +585,14 @@ function buildFrameBanners(input: {
         class="rounded-lg border border-border bg-bg-primary/80 p-3"
         data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-${frameClassItem.name}`}
       >
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{frameClassItem.name}</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{frameClassItem.name}</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{frameClassItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">
           {frameClassItem.description ?? (profile.frameParamFamily === "quadplane"
             ? "Choose the authoritative QuadPlane lift-motor frame family after the VTOL params refresh."
             : "Choose the current frame family reported by ArduPilot metadata.")}
         </p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.frameCurrentPrefix}-${frameClassItem.name}`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.frameCurrentPrefix}-${frameClassItem.name}`}>
           Current · {currentValueText(frameClassItem)}
         </p>
         {#if params.stagedEdits[frameClassItem.name]}
@@ -602,7 +602,7 @@ function buildFrameBanners(input: {
         {/if}
         <select
           bind:value={frameClassDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.frameInputPrefix}-${frameClassItem.name}`}
           disabled={checkpoint.blocksActions}
         >
@@ -625,14 +625,14 @@ function buildFrameBanners(input: {
         class="rounded-lg border border-border bg-bg-primary/80 p-3"
         data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-${frameTypeItem.name}`}
       >
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{frameTypeItem.name}</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{frameTypeItem.name}</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{frameTypeItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">
           {frameTypeItem.description ?? (profile.frameParamFamily === "quadplane"
             ? "Choose the authoritative QuadPlane layout inside the refreshed VTOL frame family."
             : "Choose the layout inside the current frame family.")}
         </p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.frameCurrentPrefix}-${frameTypeItem.name}`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.frameCurrentPrefix}-${frameTypeItem.name}`}>
           Current · {currentValueText(frameTypeItem)}
         </p>
         {#if params.stagedEdits[frameTypeItem.name]}
@@ -642,7 +642,7 @@ function buildFrameBanners(input: {
         {/if}
         <select
           bind:value={frameTypeDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.frameInputPrefix}-${frameTypeItem.name}`}
           disabled={checkpoint.blocksActions}
         >
@@ -667,12 +667,12 @@ function buildFrameBanners(input: {
         class="rounded-lg border border-border bg-bg-primary/80 p-3"
         data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-AHRS_ORIENTATION`}
       >
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">AHRS_ORIENTATION</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">AHRS_ORIENTATION</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{orientationItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">
           {orientationItem.description ?? "Confirm the board orientation before continuing with calibration or actuator work."}
         </p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.frameCurrentPrefix}-AHRS_ORIENTATION`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.frameCurrentPrefix}-AHRS_ORIENTATION`}>
           Current · {currentValueText(orientationItem)}
         </p>
         {#if params.stagedEdits.AHRS_ORIENTATION}
@@ -682,7 +682,7 @@ function buildFrameBanners(input: {
         {/if}
         <select
           bind:value={orientationDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.frameInputPrefix}-AHRS_ORIENTATION`}
           disabled={checkpoint.blocksActions}
         >

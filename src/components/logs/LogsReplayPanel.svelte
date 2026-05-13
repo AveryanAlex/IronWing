@@ -89,15 +89,15 @@ let playbackTone = $derived<"neutral" | "positive" | "caution" | "critical">(
         : "neutral",
 );
 
-const eyebrowClass = "m-0 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]";
-const titleClass = "mt-1 m-0 text-[0.98rem] font-semibold text-[var(--color-text-primary)]";
-const copyClass = "m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]";
-const selectClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-bg-input)] px-[0.7rem] py-[0.55rem] text-[0.8rem] text-[var(--color-text-primary)]";
+const eyebrowClass = "m-0 text-xs font-semibold uppercase tracking-wide text-text-muted";
+const titleClass = "mt-1 m-0 text-base font-semibold text-text-primary";
+const copyClass = "m-0 text-sm leading-6 text-text-secondary";
+const selectClass = "w-full min-w-0 rounded-md border border-border bg-bg-input px-3 py-2 text-sm text-text-primary";
 </script>
 
 <Panel testId="logs-replay-panel">
   <div class="flex min-h-0 flex-col gap-3">
-    <div class="flex items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+    <div class="flex items-start justify-between gap-3 max-md:flex-col max-md:items-stretch">
       <div>
         <p class={eyebrowClass}>Replay</p>
         <h3 class={titleClass}>Playback controls and timeline cursor</h3>
@@ -109,9 +109,9 @@ const selectClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-bor
       </StatusPill>
     </div>
 
-    <div class="flex items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+    <div class="flex items-start justify-between gap-3 max-md:flex-col max-md:items-stretch">
       <div>
-        <p class="m-0 text-[0.86rem] font-semibold text-[var(--color-text-primary)]" data-testid="logs-playback-label">{playbackLabel}</p>
+        <p class="m-0 text-sm font-semibold text-text-primary" data-testid="logs-playback-label">{playbackLabel}</p>
         {#if playbackError}
           <p aria-live={playbackStatus === "error" ? "assertive" : "polite"} aria-atomic="true" class={copyClass} data-testid="logs-playback-error" role={playbackStatus === "error" ? "alert" : "status"}>{playbackError}</p>
         {:else if openedSummary}
@@ -135,10 +135,10 @@ const selectClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-bor
       </div>
     </div>
 
-    <div class="logs-timeline rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-3">
-      <div class="flex items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+    <div class="logs-timeline rounded-lg border border-border bg-bg-primary p-3">
+      <div class="flex items-start justify-between gap-3 max-md:flex-col max-md:items-stretch">
         <span class={eyebrowClass}>Timeline</span>
-        <span class="font-mono text-[0.73rem] tabular-nums text-[var(--color-text-muted)]" data-testid="logs-timeline-time">
+        <span class="font-mono text-xs tabular-nums text-text-muted" data-testid="logs-timeline-time">
           {formatUsec(syncedChartCursorUsec, playbackRangeStartUsec)} / {formatUsec(playbackRangeEndUsec, playbackRangeStartUsec)}
         </span>
       </div>
@@ -167,8 +167,8 @@ const selectClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-bor
         value={playbackCursorUsec}
       />
 
-      <div class="flex items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
-        <label class="flex min-w-[100px] flex-col gap-1.5">
+      <div class="flex items-start justify-between gap-3 max-md:flex-col max-md:items-stretch">
+        <label class="flex min-w-24 flex-col gap-1.5">
           <span class={eyebrowClass}>Speed</span>
           <select
             class={selectClass}

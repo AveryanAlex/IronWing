@@ -49,7 +49,7 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
   {#each sectionGroups as group (group.id)}
     <div data-testid={`${setupWorkspaceTestIds.navGroupPrefix}-${group.id}`}>
       <button
-        class="flex w-full cursor-pointer items-center gap-1.5 border-none bg-transparent px-2 py-1.5 text-[0.68rem] font-bold uppercase tracking-[0.1em] text-text-muted"
+        class="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent px-2 py-1.5 text-xs font-bold uppercase tracking-widest text-text-muted"
         onclick={() => toggleGroup(group.id)}
         type="button"
       >
@@ -69,7 +69,7 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
         {group.title}
         {#if group.progressText}
           <span
-            class="ml-auto text-[0.6rem] font-medium normal-case tracking-normal text-text-muted"
+            class="ml-auto text-xs font-medium normal-case tracking-normal text-text-muted"
             data-testid={`${setupWorkspaceTestIds.navGroupProgressPrefix}-${group.id}`}
           >
             {group.progressText}
@@ -82,7 +82,7 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
           <button
             aria-current={selectedSectionId === section.id ? "page" : undefined}
             class={[
-              "flex w-full items-center gap-1.5 rounded-r-md border-none border-l-2 border-transparent bg-transparent px-2 py-1.5 pl-[26px] text-left text-[0.8rem] text-text-primary transition-all duration-100 hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-40",
+              "flex w-full items-center gap-2 rounded-r-md border-none border-l-2 border-transparent bg-transparent px-2 py-1.5 pl-[26px] text-left text-xs text-text-primary transition-all duration-100 hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-40",
               selectedSectionId === section.id && "border-l-accent bg-bg-tertiary font-semibold text-accent",
             ]}
             data-availability={section.availability}
@@ -95,15 +95,15 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
             <span>{section.title}</span>
 
             {#if section.id === "beginner_wizard"}
-              <span class="rounded border border-accent px-1 py-px text-[0.6rem] font-bold uppercase text-accent">Guide</span>
+              <span class="rounded border border-accent px-1 py-px text-xs font-bold uppercase text-accent">Guide</span>
             {/if}
 
             {#if isComingLater(section)}
-              <span class="ml-auto text-[0.6rem] font-bold uppercase text-text-muted">Coming later</span>
+              <span class="ml-auto text-xs font-bold uppercase text-text-muted">Coming later</span>
             {:else if statusLabel(section)}
               {@const label = statusLabel(section)!}
               <span
-                class={`ml-auto text-[0.6rem] font-bold uppercase ${label.className}`}
+                class={`ml-auto text-xs font-bold uppercase ${label.className}`}
                 data-testid={`${setupWorkspaceTestIds.sectionStatusPrefix}-${section.id}`}
               >
                 {label.text}

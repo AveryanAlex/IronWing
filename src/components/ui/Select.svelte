@@ -18,7 +18,7 @@ let selectedLabel = $derived(options.find((o) => o.value === value)?.label ?? pl
 
 <Bits.Root type="single" {value} onValueChange={(next) => { if (typeof next === "string") onChange(next); }}>
   <Bits.Trigger
-    class="inline-flex min-w-[160px] cursor-pointer items-center justify-between rounded-[var(--radius-sm)] border border-[var(--color-border-light)] bg-[var(--color-bg-primary)] px-[10px] py-1.5 text-[0.86rem] text-[var(--color-text-primary)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-[0.55]"
+    class="inline-flex min-w-40 cursor-pointer items-center justify-between rounded-md border border-border-light bg-bg-secondary px-2.5 py-1.5 text-sm text-text-primary data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
     {disabled}
     data-testid={testId}
   >
@@ -26,13 +26,13 @@ let selectedLabel = $derived(options.find((o) => o.value === value)?.label ?? pl
   </Bits.Trigger>
   <Bits.Portal>
     <Bits.Content
-      class="z-[60] max-h-[280px] min-w-[var(--bits-select-anchor-width)] overflow-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-1 shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+      class="z-[60] max-h-72 min-w-[var(--bits-select-anchor-width)] overflow-auto rounded-md border border-border bg-bg-secondary p-1 shadow-lg shadow-black/30"
       sideOffset={6}
     >
       <Bits.Viewport>
         {#each options as option (option.value)}
           <Bits.Item
-            class="cursor-pointer rounded-[var(--radius-sm)] px-[10px] py-1.5 text-[0.86rem] text-[var(--color-text-primary)] data-[highlighted]:bg-[var(--color-bg-tertiary)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-[0.55]"
+            class="cursor-pointer rounded-md px-2.5 py-1.5 text-sm text-text-primary data-[highlighted]:bg-bg-tertiary data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
             value={option.value}
             label={option.label}
             disabled={option.disabled}

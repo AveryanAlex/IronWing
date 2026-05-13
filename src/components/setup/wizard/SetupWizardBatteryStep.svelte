@@ -127,19 +127,19 @@ function resolveDraftNumber(value: string): number | null {
         Apply failed. Staged edits remain in the review tray so you can retry. {failureMessage}
       </div>
     {/if}
-    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Current battery monitor</p>
+    <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Current battery monitor</p>
     <p class="mt-2 text-sm font-semibold text-text-primary">{currentMonitorLabel}</p>
-    <p class="mt-1 text-[11px] text-text-muted">BATT_MONITOR</p>
+    <p class="mt-1 text-xs text-text-muted">BATT_MONITOR</p>
   </div>
 
   {#if monitorItem && monitorOptions.length > 0}
     <label class="block">
-      <span class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
+      <span class="text-xs font-semibold uppercase tracking-widest text-text-muted">
         Battery monitor preset
       </span>
       <select
         bind:value={monitorDraft}
-        class="mt-2 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+        class="mt-2 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
         data-testid={setupWorkspaceTestIds.wizardStepBatteryPreset}
         disabled={view.checkpoint.blocksActions || applyPending}
       >

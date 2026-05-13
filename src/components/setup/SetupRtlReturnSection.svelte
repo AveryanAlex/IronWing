@@ -375,17 +375,17 @@ function stage(field: RtlFieldConfig) {
         data-testid={setupWorkspaceTestIds.rtlReturnSummary}
       >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Return summary</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Return summary</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{model.summaryText}</p>
       <p class="mt-1 text-sm text-text-secondary">{model.detailText}</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Current family</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Current family</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{model.family}</p>
       <p class="mt-1 text-sm text-text-secondary">Only the parameters that make sense for this vehicle family remain in the purpose-built card.</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Stage state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Stage state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{model.hasPendingChanges ? "Queued changes present" : "No queued RTL edits"}</p>
       <p class="mt-1 text-sm text-text-secondary">Return changes remain unconfirmed until the shared review tray is clear and metadata is complete.</p>
     </div>
@@ -425,18 +425,18 @@ function stage(field: RtlFieldConfig) {
     {#each cards as card (card.id)}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={`${setupWorkspaceTestIds.rtlReturnCardPrefix}-${card.id}`}>
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{card.title}</p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{card.title}</p>
           <h4 class="mt-2 text-base font-semibold text-text-primary">{card.summary}</h4>
         </div>
 
         <div class="mt-4 grid gap-3 xl:grid-cols-2">
           {#each card.fields as field (field.name)}
             <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
-              <label class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted" for={`${card.id}-${field.name}`}>
+              <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`${card.id}-${field.name}`}>
                 {field.label}
               </label>
               <p class="mt-2 text-sm text-text-secondary">{field.description}</p>
-              <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.rtlReturnCurrentPrefix}-${field.name}`}>
+              <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.rtlReturnCurrentPrefix}-${field.name}`}>
                 Current · {#if field.kind === "enum"}{item(field.name)?.valueLabel ?? item(field.name)?.valueText ?? "Unavailable"}{:else}{currentDisplayText(field.name, field.factor, field.decimals, field.unit, field.sentinel)}{/if}
               </p>
               {#if params.stagedEdits[field.name]}
@@ -448,7 +448,7 @@ function stage(field: RtlFieldConfig) {
               <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
                 {#if field.kind === "enum"}
                   <select
-                    class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+                    class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
                     data-testid={`${setupWorkspaceTestIds.rtlReturnInputPrefix}-${field.name}`}
                     disabled={actionsBlocked || enumOptions(field.name).length === 0 || !item(field.name)}
                     id={`${card.id}-${field.name}`}
@@ -462,7 +462,7 @@ function stage(field: RtlFieldConfig) {
                 {:else}
                   <div class="flex items-center gap-2">
                     <input
-                      class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+                      class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
                       data-testid={`${setupWorkspaceTestIds.rtlReturnInputPrefix}-${field.name}`}
                       disabled={actionsBlocked || !item(field.name)}
                       id={`${card.id}-${field.name}`}

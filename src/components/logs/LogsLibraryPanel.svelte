@@ -47,18 +47,18 @@ let {
   onSelectEntry,
 }: Props = $props();
 
-const eyebrowClass = "m-0 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]";
-const titleClass = "mt-1 m-0 text-[0.98rem] font-semibold text-[var(--color-text-primary)]";
-const copyClass = "m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]";
+const eyebrowClass = "m-0 text-xs font-semibold uppercase tracking-wide text-text-muted";
+const titleClass = "mt-1 m-0 text-base font-semibold text-text-primary";
+const copyClass = "m-0 text-sm leading-6 text-text-secondary";
 const fieldLabelClass = eyebrowClass;
-const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-bg-input)] px-[0.7rem] py-[0.55rem] text-[0.8rem] text-[var(--color-text-primary)]";
-const emptyCardClass = "rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5";
-const selectedEntryClass = "border-[var(--color-accent)] [background:color-mix(in_srgb,var(--color-accent)_8%,var(--color-bg-primary))]";
+const inputClass = "w-full min-w-0 rounded-md border border-border bg-bg-input px-3 py-2 text-sm text-text-primary";
+const emptyCardClass = "rounded-lg border border-border bg-bg-primary px-3 py-3";
+const selectedEntryClass = "border-accent/40 bg-accent/10";
 </script>
 
 <Panel testId="logs-library-panel">
   <div class="flex min-h-0 flex-col gap-3 overflow-hidden">
-    <div class="flex items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+    <div class="flex items-start justify-between gap-3 max-md:flex-col max-md:items-stretch">
       <div>
         <p class={eyebrowClass}>Library</p>
         <h3 class={titleClass}>Referenced catalog</h3>
@@ -104,28 +104,28 @@ const selectedEntryClass = "border-[var(--color-accent)] [background:color-mix(i
 
     {#if entries.length === 0}
       <div class={emptyCardClass} data-testid="logs-library-empty">
-        <p class="m-0 text-[0.98rem] font-semibold text-[var(--color-text-primary)]">No indexed logs yet.</p>
-        <p class="mt-1 m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]">Register a referenced path to seed the durable library and its rebuildable indexes.</p>
+        <p class="m-0 text-base font-semibold text-text-primary">No indexed logs yet.</p>
+        <p class="mt-1 m-0 text-sm leading-6 text-text-secondary">Register a referenced path to seed the durable library and its rebuildable indexes.</p>
       </div>
     {:else}
       <ul class="m-0 flex flex-col gap-2 overflow-y-auto p-0 list-none" data-testid="logs-library-list">
         {#each entries as entry (entry.entry_id)}
           <li>
-            <button
-              class={`flex w-full flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5 text-left ${selectedEntryId === entry.entry_id ? selectedEntryClass : ""}`}
-              data-testid={`logs-entry-${entry.entry_id}`}
-              onclick={() => onSelectEntry(entry.entry_id)}
-              type="button"
-            >
-              <div class="flex items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
-                <span class="text-[0.86rem] font-semibold text-[var(--color-text-primary)]">{entry.metadata.display_name}</span>
-                <span class="font-mono text-[0.73rem] tabular-nums text-[var(--color-text-muted)]">{entry.metadata.format}</span>
-              </div>
+              <button
+                class={`flex w-full flex-col gap-2 rounded-lg border border-border bg-bg-primary px-3 py-3 text-left ${selectedEntryId === entry.entry_id ? selectedEntryClass : ""}`}
+                data-testid={`logs-entry-${entry.entry_id}`}
+                onclick={() => onSelectEntry(entry.entry_id)}
+                type="button"
+              >
+                <div class="flex items-start justify-between gap-3 max-md:flex-col max-md:items-stretch">
+                  <span class="text-sm font-semibold text-text-primary">{entry.metadata.display_name}</span>
+                  <span class="font-mono text-xs tabular-nums text-text-muted">{entry.metadata.format}</span>
+                </div>
 
-              <div class="flex items-start justify-between gap-3 font-mono text-[0.73rem] tabular-nums text-[var(--color-text-muted)] max-[720px]:flex-col max-[720px]:items-stretch">
-                <span>{formatDuration(entry.metadata.duration_secs)}</span>
-                <span>{formatCount(entry.metadata.total_messages)} msgs</span>
-              </div>
+                <div class="flex items-start justify-between gap-3 font-mono text-xs tabular-nums text-text-muted max-md:flex-col max-md:items-stretch">
+                  <span>{formatDuration(entry.metadata.duration_secs)}</span>
+                  <span>{formatCount(entry.metadata.total_messages)} msgs</span>
+                </div>
 
               <div class="flex flex-wrap gap-2">
                 <StatusPill tone={mapTone(entryTone(entry))}>{entryStatusLabel(entry)}</StatusPill>

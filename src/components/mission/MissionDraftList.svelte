@@ -105,7 +105,7 @@ function missionDocument(item: TypedDraftItem): MissionItem {
 <section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.draftList}>
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mission list</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Mission list</p>
       <h3 class="mt-1 text-sm font-semibold text-text-primary">Manual items and first-class survey blocks</h3>
     </div>
 
@@ -176,7 +176,7 @@ function missionDocument(item: TypedDraftItem): MissionItem {
           >
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
+                <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">
                   Manual item {entry.item.index + 1}
                 </p>
 						<h4 class="mt-1 text-sm font-semibold text-text-primary">
@@ -187,12 +187,12 @@ function missionDocument(item: TypedDraftItem): MissionItem {
 
               <div class="flex flex-wrap items-center gap-2">
                 {#if entry.item.readOnly}
-                  <span class="rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-warning">
+                  <span class="rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-warning">
                     Read-only
                   </span>
                 {/if}
 						{#if missionDocument(entry.item).current}
-                  <span class="rounded-full border border-success/30 bg-success/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-success">
+                  <span class="rounded-full border border-success/30 bg-success/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-success">
                     Current
                   </span>
                 {/if}

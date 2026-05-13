@@ -82,7 +82,7 @@ let trackClass = $derived([
 
 function tabClass(): string {
   return [
-    "inline-flex min-w-0 flex-[0_1_auto] cursor-pointer items-center justify-center gap-[clamp(3px,0.45cqi,6px)] whitespace-nowrap rounded-[var(--radius-sm)] border border-transparent bg-transparent px-[clamp(0.38rem,0.8cqi,0.72rem)] py-[0.4rem] font-semibold text-[var(--color-text-secondary)] hover:border-[var(--color-border)] hover:text-[var(--color-text-primary)] data-[active]:border-[var(--color-border-light)] data-[active]:bg-[var(--color-bg-primary)] data-[active]:text-[var(--color-text-primary)]",
+    "inline-flex min-w-0 flex-[0_1_auto] cursor-pointer items-center justify-center gap-[clamp(3px,0.45cqi,6px)] whitespace-nowrap rounded-md border border-transparent bg-transparent px-[clamp(0.38rem,0.8cqi,0.72rem)] py-[0.4rem] font-semibold text-text-secondary hover:border-border hover:text-text-primary data-[active]:border-border-light data-[active]:bg-bg-primary data-[active]:text-text-primary",
     density === "compact" ? "gap-[3px] px-[0.34rem]" : "",
     density === "icons" ? "max-w-14 flex-[1_1_42px] px-[0.42rem]" : "",
     density === "scroll" ? "max-w-none flex-[0_0_40px] px-[0.34rem]" : "",
@@ -141,7 +141,7 @@ $effect(() => {
           <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">{@render tab.icon()}</span>
         {/if}
         <span class={labelClass(Boolean(tab.icon))}>{tab.label}</span>
-        {#if tab.badge}<span class="shrink-0 rounded-full bg-[var(--color-bg-tertiary)] px-[0.36rem] py-[0.16rem] text-[0.7rem] font-bold text-[var(--color-text-secondary)]" data-testid={tab.badgeTestId}>{tab.badge}</span>{/if}
+        {#if tab.badge}<span class="shrink-0 rounded-full bg-bg-tertiary px-1.5 py-0.5 text-xs font-bold text-text-secondary" data-testid={tab.badgeTestId}>{tab.badge}</span>{/if}
       </button>
     {/each}
   </div>

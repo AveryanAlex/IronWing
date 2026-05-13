@@ -350,16 +350,16 @@ function detailJson(value: unknown): string {
   return JSON.stringify(value, null, 2) ?? "null";
 }
 
-const eyebrowClass = "m-0 block text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]";
-const titleClass = "mt-1 m-0 text-[0.98rem] font-semibold text-[var(--color-text-primary)]";
-const copyClass = "m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]";
-const inputClass = "w-full rounded-[6px] border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-[0.6rem] py-[0.45rem] text-[var(--color-text-primary)]";
-const errorClass = "mt-1 text-[0.78rem] text-[var(--color-danger)]";
+const eyebrowClass = "m-0 block text-xs font-semibold uppercase tracking-wide text-text-muted";
+const titleClass = "mt-1 m-0 text-base font-semibold text-text-primary";
+const copyClass = "m-0 text-sm leading-6 text-text-secondary";
+const inputClass = "w-full rounded-md border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary";
+const errorClass = "mt-1 text-xs text-danger";
 </script>
 
 <Panel testId="logs-raw-messages-panel">
   <div class="flex flex-col gap-3">
-    <div class="flex items-start justify-between gap-3 max-[980px]:flex-col">
+    <div class="flex items-start justify-between gap-3 max-lg:flex-col">
       <div>
         <p class={eyebrowClass}>Forensic browser</p>
         <h3 class={titleClass}>Raw messages</h3>
@@ -371,71 +371,71 @@ const errorClass = "mt-1 text-[0.78rem] text-[var(--color-danger)]";
     {#if !entry}
       <Banner severity="info" title="Select a log to browse raw messages." />
     {:else}
-    <div class="flex flex-wrap gap-3">
-      <label class="flex-[1_1_10rem]">
-        <span class={`${eyebrowClass} mb-1`}>Message types</span>
-        <input class={inputClass} data-testid="logs-raw-type-filter" oninput={(event) => updateFilters((current) => ({ ...current, messageTypesInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.messageTypesInput} />
-      </label>
-      <label class="flex-[1_1_10rem]">
-        <span class={`${eyebrowClass} mb-1`}>Text</span>
-        <input class={inputClass} data-testid="logs-raw-text-filter" oninput={(event) => updateFilters((current) => ({ ...current, textInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.textInput} />
-      </label>
-      <label class="flex-[1_1_10rem]">
-        <span class={`${eyebrowClass} mb-1`}>Start μs</span>
-        <input class={inputClass} data-testid="logs-raw-start-filter" oninput={(event) => updateFilters((current) => ({ ...current, startUsecInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.startUsecInput} />
-        {#if numericValidation.startUsec}
-          <p class={errorClass} data-testid="logs-raw-start-error">{numericValidation.startUsec}</p>
-        {/if}
-      </label>
-      <label class="flex-[1_1_10rem]">
-        <span class={`${eyebrowClass} mb-1`}>End μs</span>
-        <input class={inputClass} data-testid="logs-raw-end-filter" oninput={(event) => updateFilters((current) => ({ ...current, endUsecInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.endUsecInput} />
-        {#if numericValidation.endUsec}
-          <p class={errorClass} data-testid="logs-raw-end-error">{numericValidation.endUsec}</p>
-        {/if}
-      </label>
-      <label class="flex-[1_1_10rem]">
-        <span class={`${eyebrowClass} mb-1`}>Page size</span>
-        <input class={inputClass} data-testid="logs-raw-limit-filter" max={MAX_RAW_PAGE_SIZE} min="1" oninput={(event) => updateFilters((current) => ({ ...current, limitInput: (event.currentTarget as HTMLInputElement).value }))} step="1" type="number" value={draftFilters.limitInput} />
-        {#if numericValidation.limit}
-          <p class={errorClass} data-testid="logs-raw-limit-error">{numericValidation.limit}</p>
-        {/if}
-      </label>
-      <label class="inline-flex flex-none items-center gap-2">
-        <input checked={draftFilters.includeDetail} onchange={(event) => updateFilters((current) => ({ ...current, includeDetail: (event.currentTarget as HTMLInputElement).checked }))} type="checkbox" />
-        <span>Detail</span>
-      </label>
-      <label class="inline-flex flex-none items-center gap-2">
-        <input checked={draftFilters.includeHex} onchange={(event) => updateFilters((current) => ({ ...current, includeHex: (event.currentTarget as HTMLInputElement).checked }))} type="checkbox" />
-        <span>Hex</span>
-      </label>
-    </div>
-
-    <div class="flex flex-col gap-3">
-      {#each draftFilters.fieldFilters as fieldFilter, index (fieldFilter.id)}
-        <div class="flex flex-1 gap-3 max-[720px]:flex-col">
-          <input aria-label={`Field name ${index + 1}`} class={`${inputClass} flex-1`} data-testid={`logs-raw-field-name-${index}`} oninput={(event) => updateFieldFilter(fieldFilter.id, { field: (event.currentTarget as HTMLInputElement).value })} placeholder="field" value={fieldFilter.field} />
-          <input aria-label={`Field value ${index + 1}`} class={`${inputClass} flex-1`} data-testid={`logs-raw-field-value-${index}`} oninput={(event) => updateFieldFilter(fieldFilter.id, { value_text: (event.currentTarget as HTMLInputElement).value })} placeholder="contains" value={fieldFilter.value_text ?? ""} />
-          <Button size="sm" onclick={() => removeFieldFilter(fieldFilter.id)}>Remove</Button>
-        </div>
-      {/each}
-      <Button size="sm" onclick={addFieldFilter}>Add field filter</Button>
-    </div>
-
-    <div class="flex items-start justify-between gap-3 max-[980px]:flex-col">
       <div class="flex flex-wrap gap-3">
-        <Button tone="accent" testId="logs-raw-run-query" onclick={runFirstPageQuery}>Run query</Button>
-        <Button testId="logs-raw-previous-page" disabled={previousCursors.length === 0} onclick={runPreviousPageQuery}>Previous</Button>
-        <Button testId="logs-raw-next-page" disabled={!rawBrowser.page?.next_cursor} onclick={runNextPageQuery}>Next</Button>
+        <label class="flex-[1_1_10rem]">
+          <span class={`${eyebrowClass} mb-1`}>Message types</span>
+          <input class={inputClass} data-testid="logs-raw-type-filter" oninput={(event) => updateFilters((current) => ({ ...current, messageTypesInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.messageTypesInput} />
+        </label>
+        <label class="flex-[1_1_10rem]">
+          <span class={`${eyebrowClass} mb-1`}>Text</span>
+          <input class={inputClass} data-testid="logs-raw-text-filter" oninput={(event) => updateFilters((current) => ({ ...current, textInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.textInput} />
+        </label>
+        <label class="flex-[1_1_10rem]">
+          <span class={`${eyebrowClass} mb-1`}>Start μs</span>
+          <input class={inputClass} data-testid="logs-raw-start-filter" oninput={(event) => updateFilters((current) => ({ ...current, startUsecInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.startUsecInput} />
+          {#if numericValidation.startUsec}
+            <p class={errorClass} data-testid="logs-raw-start-error">{numericValidation.startUsec}</p>
+          {/if}
+        </label>
+        <label class="flex-[1_1_10rem]">
+          <span class={`${eyebrowClass} mb-1`}>End μs</span>
+          <input class={inputClass} data-testid="logs-raw-end-filter" oninput={(event) => updateFilters((current) => ({ ...current, endUsecInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.endUsecInput} />
+          {#if numericValidation.endUsec}
+            <p class={errorClass} data-testid="logs-raw-end-error">{numericValidation.endUsec}</p>
+          {/if}
+        </label>
+        <label class="flex-[1_1_10rem]">
+          <span class={`${eyebrowClass} mb-1`}>Page size</span>
+          <input class={inputClass} data-testid="logs-raw-limit-filter" max={MAX_RAW_PAGE_SIZE} min="1" oninput={(event) => updateFilters((current) => ({ ...current, limitInput: (event.currentTarget as HTMLInputElement).value }))} step="1" type="number" value={draftFilters.limitInput} />
+          {#if numericValidation.limit}
+            <p class={errorClass} data-testid="logs-raw-limit-error">{numericValidation.limit}</p>
+          {/if}
+        </label>
+        <label class="inline-flex flex-none items-center gap-2">
+          <input checked={draftFilters.includeDetail} onchange={(event) => updateFilters((current) => ({ ...current, includeDetail: (event.currentTarget as HTMLInputElement).checked }))} type="checkbox" />
+          <span>Detail</span>
+        </label>
+        <label class="inline-flex flex-none items-center gap-2">
+          <input checked={draftFilters.includeHex} onchange={(event) => updateFilters((current) => ({ ...current, includeHex: (event.currentTarget as HTMLInputElement).checked }))} type="checkbox" />
+          <span>Hex</span>
+        </label>
       </div>
 
-      <div class="flex flex-1 gap-3 max-[980px]:w-full">
+      <div class="flex flex-col gap-3">
+        {#each draftFilters.fieldFilters as fieldFilter, index (fieldFilter.id)}
+          <div class="flex flex-1 gap-3 max-md:flex-col">
+            <input aria-label={`Field name ${index + 1}`} class={`${inputClass} flex-1`} data-testid={`logs-raw-field-name-${index}`} oninput={(event) => updateFieldFilter(fieldFilter.id, { field: (event.currentTarget as HTMLInputElement).value })} placeholder="field" value={fieldFilter.field} />
+            <input aria-label={`Field value ${index + 1}`} class={`${inputClass} flex-1`} data-testid={`logs-raw-field-value-${index}`} oninput={(event) => updateFieldFilter(fieldFilter.id, { value_text: (event.currentTarget as HTMLInputElement).value })} placeholder="contains" value={fieldFilter.value_text ?? ""} />
+            <Button size="sm" onclick={() => removeFieldFilter(fieldFilter.id)}>Remove</Button>
+          </div>
+        {/each}
+        <Button size="sm" onclick={addFieldFilter}>Add field filter</Button>
+      </div>
+
+      <div class="flex items-start justify-between gap-3 max-lg:flex-col">
+        <div class="flex flex-wrap gap-3">
+          <Button tone="accent" testId="logs-raw-run-query" onclick={runFirstPageQuery}>Run query</Button>
+          <Button testId="logs-raw-previous-page" disabled={previousCursors.length === 0} onclick={runPreviousPageQuery}>Previous</Button>
+          <Button testId="logs-raw-next-page" disabled={!rawBrowser.page?.next_cursor} onclick={runNextPageQuery}>Next</Button>
+        </div>
+
+      <div class="flex flex-1 gap-3 max-lg:w-full">
         <input aria-label="Export destination path" class={`${inputClass} flex-1`} data-testid="logs-raw-export-destination" oninput={(event) => (exportDestination = (event.currentTarget as HTMLInputElement).value)} placeholder="/tmp/raw-messages.csv" value={exportDestination} />
         <Button
           testId="logs-raw-export"
           disabled={exportDestination.trim().length === 0 || exportState.phase === "exporting"}
-          onclick={handleExport}
-        >
+            onclick={handleExport}
+          >
           {rawExportInFlight ? "Exporting…" : "Export filtered CSV"}
         </Button>
       </div>
@@ -453,8 +453,8 @@ const errorClass = "mt-1 text-[0.78rem] text-[var(--color-danger)]";
       />
     {/if}
 
-    <div class="grid min-h-0 gap-3 max-[980px]:grid-cols-1 [grid-template-columns:minmax(0,1.4fr)_minmax(18rem,0.9fr)]">
-      <div class="min-h-0 overflow-auto rounded-lg border border-[var(--color-border)]">
+    <div class="grid min-h-0 gap-3 max-lg:grid-cols-1 [grid-template-columns:minmax(0,1.4fr)_minmax(18rem,0.9fr)]">
+      <div class="min-h-0 overflow-auto rounded-lg border border-border">
         <table class="logs-raw-browser__table" data-testid="logs-raw-messages-table">
           <thead>
             <tr>
@@ -493,17 +493,17 @@ const errorClass = "mt-1 text-[0.78rem] text-[var(--color-danger)]";
         </table>
       </div>
 
-      <aside class="flex min-h-0 flex-col gap-3 overflow-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-3">
+      <aside class="flex min-h-0 flex-col gap-3 overflow-auto rounded-lg border border-border bg-bg-primary p-3">
         <p class={eyebrowClass}>Detail drawer</p>
         {#if selectedRecord}
           <h4 class={titleClass}>{selectedRecord.message_type} · seq {selectedRecord.sequence}</h4>
           <pre>{detailJson(selectedRecord.fields)}</pre>
           {#if selectedRecord.detail !== null}
-            <h5 class="m-0 mb-1 block text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">Raw detail</h5>
+            <h5 class="m-0 mb-1 block text-xs font-semibold uppercase tracking-wide text-text-muted">Raw detail</h5>
             <pre>{detailJson(selectedRecord.detail)}</pre>
           {/if}
           {#if selectedRecord.hex_payload}
-            <h5 class="m-0 mb-1 block text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">Hex payload</h5>
+            <h5 class="m-0 mb-1 block text-xs font-semibold uppercase tracking-wide text-text-muted">Hex payload</h5>
             <pre>{selectedRecord.hex_payload}</pre>
           {/if}
         {:else}

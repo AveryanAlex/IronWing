@@ -36,13 +36,13 @@ let { items, testId, trigger, controlled }: Props = $props();
     ></BitsDropdown.Trigger>
     <BitsDropdown.Portal>
       <BitsDropdown.Content
-        class="z-[60] min-w-[180px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-1 shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+        class="z-[60] min-w-40 rounded-md border border-border bg-bg-secondary p-1 shadow-lg shadow-black/30"
         data-testid={testId}
         sideOffset={2}
       >
         {#each items as item (item.id)}
           <BitsDropdown.Item
-            class="block w-full cursor-pointer rounded-[var(--radius-sm)] px-[10px] py-1.5 text-left text-[0.84rem] text-[var(--color-text-primary)] data-[highlighted]:bg-[var(--color-bg-tertiary)] data-[destructive]:text-[var(--color-danger)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-[0.55]"
+            class="block w-full cursor-pointer rounded-md px-2.5 py-1.5 text-left text-sm text-text-primary data-[highlighted]:bg-bg-tertiary data-[destructive]:text-danger data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
             data-destructive={item.destructive || undefined}
             disabled={item.disabled}
             onSelect={() => item.onSelect()}
@@ -58,12 +58,12 @@ let { items, testId, trigger, controlled }: Props = $props();
     <BitsContext.Trigger class="contents">{@render trigger()}</BitsContext.Trigger>
     <BitsContext.Portal>
       <BitsContext.Content
-        class="z-[60] min-w-[180px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-1 shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+        class="z-[60] min-w-40 rounded-md border border-border bg-bg-secondary p-1 shadow-lg shadow-black/30"
         data-testid={testId}
       >
         {#each items as item (item.id)}
           <BitsContext.Item
-            class="block w-full cursor-pointer rounded-[var(--radius-sm)] px-[10px] py-1.5 text-left text-[0.84rem] text-[var(--color-text-primary)] data-[highlighted]:bg-[var(--color-bg-tertiary)] data-[destructive]:text-[var(--color-danger)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-[0.55]"
+            class="block w-full cursor-pointer rounded-md px-2.5 py-1.5 text-left text-sm text-text-primary data-[highlighted]:bg-bg-tertiary data-[destructive]:text-danger data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
             data-destructive={item.destructive || undefined}
             disabled={item.disabled}
             onSelect={() => item.onSelect()}

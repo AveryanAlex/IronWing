@@ -93,12 +93,12 @@ function commitAltitude(rawValue: string) {
 <section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.rallyInspector}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Rally inspector</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Rally inspector</p>
       <h3 class="mt-1 text-sm font-semibold text-text-primary">Selected rally detail</h3>
     </div>
 
     <span
-      class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary"
+      class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-wide text-text-secondary"
       data-testid={missionWorkspaceTestIds.rallyInspectorSelectionKind}
     >
       {selectionLabel}
@@ -117,7 +117,7 @@ function commitAltitude(rawValue: string) {
   {:else}
     <div class="mt-4 space-y-4">
       <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Rally point {item.index + 1}</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Rally point {item.index + 1}</p>
         <h4 class="mt-1 text-base font-semibold text-text-primary">Emergency / diversion target</h4>
         <p class="mt-1 text-xs text-text-secondary">
           Edit latitude, longitude, altitude, and frame here. IronWing preserves MSL, Rel Home, and Terrain locally, but .plan export will warn when QGroundControl forces non-RelHome rally frames into a lossy relative-alt bucket.
@@ -134,7 +134,7 @@ function commitAltitude(rawValue: string) {
         <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
           <span class="text-xs font-medium text-text-muted">Latitude</span>
           <input
-            class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+            class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
             data-testid={missionWorkspaceTestIds.rallyLatitude}
             disabled={readOnly}
             inputmode="decimal"
@@ -147,7 +147,7 @@ function commitAltitude(rawValue: string) {
         <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
           <span class="text-xs font-medium text-text-muted">Longitude</span>
           <input
-            class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+            class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
             data-testid={missionWorkspaceTestIds.rallyLongitude}
             disabled={readOnly}
             inputmode="decimal"
@@ -160,7 +160,7 @@ function commitAltitude(rawValue: string) {
         <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
           <span class="text-xs font-medium text-text-muted">Altitude (m)</span>
           <input
-            class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+            class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
             data-testid={missionWorkspaceTestIds.rallyAltitude}
             disabled={readOnly}
             inputmode="decimal"
@@ -174,7 +174,7 @@ function commitAltitude(rawValue: string) {
       <label class="space-y-1">
         <span class="text-xs font-medium text-text-muted">Altitude frame</span>
         <select
-          class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
+          class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
           data-testid={missionWorkspaceTestIds.rallyAltitudeFrame}
           disabled={readOnly}
           onchange={(event) => {

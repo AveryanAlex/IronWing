@@ -240,13 +240,13 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
 <section class="space-y-4" data-testid={setupWorkspaceTestIds.overviewSection}>
   {#if overviewMode === "disconnected"}
     <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-text-secondary" data-testid={setupWorkspaceTestIds.overviewBanner}>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Overview</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Overview</p>
       <h3 class="mt-2 text-lg font-semibold text-text-primary">Connect to a vehicle to begin setup</h3>
       <p class="mt-2 text-sm leading-6">Setup editors stay locked until a live vehicle session is connected.</p>
     </div>
   {:else if overviewMode === "needs_params"}
     <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-text-secondary" data-testid={setupWorkspaceTestIds.overviewBanner}>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Overview</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Overview</p>
       <h3 class="mt-2 text-lg font-semibold text-text-primary">Download parameters to continue</h3>
       <p class="mt-2 text-sm leading-6">Setup editors stay locked until the vehicle parameter list has been downloaded.</p>
       <div class="mt-4 flex flex-wrap gap-2">
@@ -263,13 +263,13 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
     </div>
   {:else if overviewMode === "loading_metadata"}
     <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-text-secondary" data-testid={setupWorkspaceTestIds.overviewBanner}>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Overview</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Overview</p>
       <h3 class="mt-2 text-lg font-semibold text-text-primary">Loading parameter descriptions</h3>
       <p class="mt-2 text-sm leading-6">Setup editors stay locked until parameter descriptions finish loading.</p>
     </div>
   {:else}
     <div class={`rounded-lg border px-4 py-4 ${bannerTone}`} data-testid={setupWorkspaceTestIds.overviewBanner}>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em]">Overview</p>
+      <p class="text-xs font-semibold uppercase tracking-widest">Overview</p>
       <h3 class="mt-2 text-lg font-semibold text-text-primary">{bannerTitle}</h3>
       <p class="mt-2 text-sm leading-6">{bannerBody}</p>
     </div>
@@ -280,7 +280,7 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
           class="rounded-lg border border-border bg-bg-primary/80 p-3"
           data-testid={`${setupWorkspaceTestIds.overviewMetricPrefix}-${metric.id}`}
         >
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{metric.label}</p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{metric.label}</p>
           <p class="mt-2 text-base font-semibold text-text-primary">{metric.value}</p>
           <p class="mt-2 text-sm leading-6 text-text-secondary">{metric.detail}</p>
         </article>
@@ -297,7 +297,7 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
             rel="noreferrer"
             target="_blank"
           >
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Docs</p>
+            <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Docs</p>
             <p class="mt-2 text-base font-semibold text-text-primary">{doc.label}</p>
             <p class="mt-2 text-sm leading-6 text-text-secondary">{doc.detail}</p>
           </a>
@@ -306,7 +306,7 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
     </div>
 
     <div class="rounded-lg border border-border bg-bg-primary/80 p-4">
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Parameter actions</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Parameter actions</p>
       <p class="mt-2 text-sm text-text-secondary">Refresh all values from the vehicle, or save/load a parameter file snapshot. File imports stage changes in the review tray.</p>
       <div class="mt-4 flex flex-wrap gap-2">
         <button
@@ -343,7 +343,7 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
       class="rounded-lg border border-border bg-bg-secondary/60 p-4"
       data-testid={setupWorkspaceTestIds.notices}
     >
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Status text</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Status text</p>
       <ul class="mt-3 space-y-2">
         {#each view.statusNotices as notice (notice.id)}
           <li
@@ -394,7 +394,7 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{group.title}</p>
+              <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{group.title}</p>
               <p class="mt-1 text-sm leading-6 text-text-secondary">{group.description}</p>
               <p
                 class="mt-2 text-xs text-text-muted"
@@ -405,12 +405,12 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
             </div>
             <div class="text-right">
               <p
-                class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary"
+                class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary"
                 data-testid={`${setupWorkspaceTestIds.overviewGroupProgressPrefix}-${group.id}`}
               >
                 {group.progressText}
               </p>
-              <p class="mt-2 text-[11px] text-text-muted">
+              <p class="mt-2 text-xs text-text-muted">
                 {group.blockedCount} blocked · {group.unconfirmedCount} unconfirmed
               </p>
             </div>
@@ -427,14 +427,14 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
                     <p class="text-sm font-semibold text-text-primary">{section.title}</p>
                     <p class="mt-1 text-xs text-text-secondary">{section.description}</p>
                   </div>
-                  <span class="rounded-full border border-border bg-bg-primary/80 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                  <span class="rounded-full border border-border bg-bg-primary/80 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
                     {section.statusText}
                   </span>
                 </div>
 
                 {#if section.confidenceText}
                   <p
-                    class="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted"
+                    class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted"
                     data-testid={`${setupWorkspaceTestIds.sectionConfidencePrefix}-${section.id}`}
                   >
                     {section.confidenceText}
@@ -448,7 +448,7 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
                 {/if}
 
                 {#if sectionIsComingLater(section)}
-                  <p class="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Coming later</p>
+                  <p class="mt-4 text-xs font-semibold uppercase tracking-widest text-text-muted">Coming later</p>
                 {:else}
                   <button
                     class="mt-4 rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
@@ -471,7 +471,7 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
     >
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="max-w-3xl">
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Recovery path</p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Recovery path</p>
           <p class="mt-2">
             Full Parameters stays separate from the guided sections. Open Full Parameters to inspect settings not covered above, check blocked items, and queue raw changes in the review tray.
           </p>

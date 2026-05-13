@@ -23,9 +23,9 @@ let {
 }: Props = $props();
 
 let toolbarClass = $derived([
-  "flex max-w-full min-w-0 flex-nowrap items-center gap-[var(--space-2)] [scrollbar-width:thin] [&>*]:shrink-0",
-  density === "compact" ? "gap-[var(--space-1)]" : "",
-  density === "tight" ? "gap-[3px]" : "",
+  "flex max-w-full min-w-0 flex-nowrap items-center gap-2 [scrollbar-width:thin] [&>*]:shrink-0",
+  density === "compact" ? "gap-1.5" : "",
+  density === "tight" ? "gap-1" : "",
   wrap ? "flex-wrap" : "",
   overflow === "scroll" ? "overflow-x-auto overflow-y-hidden" : "",
 ].filter(Boolean).join(" "));

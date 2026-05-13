@@ -7,7 +7,7 @@ let { testId, children }: Props = $props();
 </script>
 
 <div
-  class="inline-flex items-center gap-[var(--space-1)] rounded-[var(--radius-sm)] border border-[var(--color-border-light)] bg-[var(--color-bg-primary)] p-[2px]"
+  class="inline-flex items-center gap-1 rounded-md border border-border-light bg-bg-secondary p-0.5"
   data-testid={testId}
 >
   {@render children()}

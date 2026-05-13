@@ -280,17 +280,17 @@ function toggleFenceType(bit: number) {
         data-testid={setupWorkspaceTestIds.geofenceSummary}
       >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Fence state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Fence state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{model.fenceEnabled ? "Enabled" : "Disabled"}</p>
       <p class="mt-1 text-sm text-text-secondary">{model.selectedTypeCount > 0 ? model.selectedTypeLabels.join(", ") : "No fence types selected yet."}</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Vehicle family</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Vehicle family</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{model.family}</p>
       <p class="mt-1 text-sm text-text-secondary">The visible boundary controls stay limited to what this vehicle family actually supports.</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Stage state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Stage state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{model.hasPendingChanges ? "Queued fence edits present" : "No queued fence edits"}</p>
       <p class="mt-1 text-sm text-text-secondary">Fence confirmation stays conservative until the shared review tray is clear and at least one type is configured when enabled.</p>
     </div>
@@ -328,11 +328,11 @@ function toggleFenceType(bit: number) {
 
   <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.geofenceTypeChecklist}>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Fence boundary types</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Fence boundary types</p>
       <p class="mt-2 text-sm text-text-secondary">
         Circle, polygon, and altitude fence selections stay visible here. When the bitmask metadata is malformed, the checklist stays read-only and recovery moves to the raw parameter workspace.
       </p>
-      <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.geofenceCurrentPrefix}-FENCE_TYPE`}>
+      <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.geofenceCurrentPrefix}-FENCE_TYPE`}>
         Current · {fenceTypeItem?.valueLabel ?? fenceTypeItem?.valueText ?? "Unavailable"}
       </p>
       {#if params.stagedEdits.FENCE_TYPE}
@@ -360,18 +360,18 @@ function toggleFenceType(bit: number) {
     {#each cards as card (card.id)}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={`${setupWorkspaceTestIds.geofenceCardPrefix}-${card.id}`}>
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{card.title}</p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{card.title}</p>
           <h4 class="mt-2 text-base font-semibold text-text-primary">{card.summary}</h4>
         </div>
 
         <div class="mt-4 grid gap-3 xl:grid-cols-2">
           {#each card.fields as field (field.name)}
             <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
-              <label class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted" for={`${card.id}-${field.name}`}>
+              <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`${card.id}-${field.name}`}>
                 {field.label}
               </label>
               <p class="mt-2 text-sm text-text-secondary">{field.description}</p>
-              <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.geofenceCurrentPrefix}-${field.name}`}>
+              <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.geofenceCurrentPrefix}-${field.name}`}>
                 Current · {currentValueText(item(field.name))}
               </p>
               {#if params.stagedEdits[field.name]}
@@ -383,7 +383,7 @@ function toggleFenceType(bit: number) {
               <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
                 {#if field.kind === "enum"}
                   <select
-                    class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+                    class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
                     data-testid={`${setupWorkspaceTestIds.geofenceInputPrefix}-${field.name}`}
                     disabled={actionsBlocked || enumOptions(field.name).length === 0 || !item(field.name)}
                     id={`${card.id}-${field.name}`}
@@ -397,7 +397,7 @@ function toggleFenceType(bit: number) {
                 {:else}
                   <div class="flex items-center gap-2">
                     <input
-                      class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+                      class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
                       data-testid={`${setupWorkspaceTestIds.geofenceInputPrefix}-${field.name}`}
                       disabled={actionsBlocked || !item(field.name)}
                       id={`${card.id}-${field.name}`}

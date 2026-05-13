@@ -32,26 +32,26 @@ let surfaceKind = $derived(chrome?.current?.tier === "phone" ? "sheet" : "dialog
 
 <BitsDialog.Root bind:open onOpenChange={(value) => { if (!value) onClose(); }}>
   <BitsDialog.Portal>
-    <BitsDialog.Overlay class="fixed inset-0 z-40 bg-[rgba(5,9,14,0.72)]" aria-label="Close dialog" />
+    <BitsDialog.Overlay class="fixed inset-0 z-40 bg-black/70" aria-label="Close dialog" />
     <BitsDialog.Content
-      class="fixed z-50 flex flex-col border border-[var(--color-border)] bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] shadow-[0_28px_90px_rgba(0,0,0,0.4)] data-[surface-kind=dialog]:inset-[50%_auto_auto_50%] data-[surface-kind=dialog]:max-h-[80vh] data-[surface-kind=dialog]:w-[min(92vw,720px)] data-[surface-kind=dialog]:-translate-x-1/2 data-[surface-kind=dialog]:-translate-y-1/2 data-[surface-kind=dialog]:rounded-[var(--radius-xl)] data-[surface-kind=sheet]:inset-[auto_0_0] data-[surface-kind=sheet]:max-h-[85dvh] data-[surface-kind=sheet]:w-full data-[surface-kind=sheet]:rounded-t-[var(--radius-lg)]"
+      class="fixed z-50 flex flex-col border border-border bg-bg-secondary text-text-primary shadow-2xl shadow-black/40 data-[surface-kind=dialog]:inset-[50%_auto_auto_50%] data-[surface-kind=dialog]:max-h-[80vh] data-[surface-kind=dialog]:w-[92vw] data-[surface-kind=dialog]:max-w-2xl data-[surface-kind=dialog]:-translate-x-1/2 data-[surface-kind=dialog]:-translate-y-1/2 data-[surface-kind=dialog]:rounded-xl data-[surface-kind=sheet]:inset-[auto_0_0] data-[surface-kind=sheet]:max-h-[85dvh] data-[surface-kind=sheet]:w-full data-[surface-kind=sheet]:rounded-t-xl"
       data-surface-kind={surfaceKind}
       data-testid={testId}
       aria-label={ariaLabel ?? title}
     >
       {#if title || description}
-        <header class="relative flex flex-col gap-1 border-b [border-bottom-color:color-mix(in_srgb,var(--color-border)_80%,transparent)] p-[var(--space-4)]">
-          {#if title}<BitsDialog.Title class="m-0 text-[1.05rem] font-[650]">{title}</BitsDialog.Title>{/if}
-          {#if description}<BitsDialog.Description class="m-0 text-[0.92rem] text-[var(--color-text-secondary)]">{description}</BitsDialog.Description>{/if}
+        <header class="relative flex flex-col gap-1 border-b border-border/80 p-4">
+          {#if title}<BitsDialog.Title class="m-0 text-base font-semibold">{title}</BitsDialog.Title>{/if}
+          {#if description}<BitsDialog.Description class="m-0 text-sm leading-5 text-text-secondary">{description}</BitsDialog.Description>{/if}
           <BitsDialog.Close
-            class="absolute right-[var(--space-3)] top-[var(--space-3)] h-7 w-7 cursor-pointer rounded-[var(--radius-sm)] border border-[var(--color-border-light)] bg-transparent text-[var(--color-text-primary)]"
+            class="absolute right-3 top-3 h-7 w-7 cursor-pointer rounded-md border border-border-light bg-transparent text-text-primary"
             aria-label="Close"
           >×</BitsDialog.Close>
         </header>
       {/if}
-      <div class="overflow-auto p-[var(--space-4)]">{@render body()}</div>
+      <div class="overflow-auto p-4">{@render body()}</div>
       {#if footer}
-        <footer class="flex justify-end gap-[var(--space-2)] border-t [border-top-color:color-mix(in_srgb,var(--color-border)_80%,transparent)] px-[var(--space-4)] py-[var(--space-3)]">
+        <footer class="flex justify-end gap-2 border-t border-border/80 px-4 py-3">
           {@render footer()}
         </footer>
       {/if}

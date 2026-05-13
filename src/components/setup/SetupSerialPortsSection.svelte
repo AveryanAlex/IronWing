@@ -181,12 +181,12 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
         data-testid={setupWorkspaceTestIds.serialPortsSummary}
       >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Port summary</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Port summary</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{model.summaryText}</p>
       <p class="mt-1 text-sm text-text-secondary">Visible rows stay scoped to detected SERIALn_* families instead of a hardcoded port list.</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Conflict state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Conflict state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.serialPortsConflictState}>
         {conflictTone()}
       </p>
@@ -197,7 +197,7 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
       </p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Reboot state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Reboot state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.serialPortsRebootState}>
         {rebootTone()}
       </p>
@@ -244,12 +244,12 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
               <div class="flex flex-wrap items-center gap-2">
                 <p class="text-sm font-semibold text-text-primary">{row.prefix}</p>
                 {#if row.boardLabel}
-                  <span class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                  <span class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
                     {row.boardLabel}
                   </span>
                 {/if}
                 {#if row.hasPendingChange}
-                  <span class="rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
+                  <span class="rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-accent">
                     {row.pendingChangeCount} queued
                   </span>
                 {/if}
@@ -264,11 +264,11 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
 
           <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto]">
             <div>
-              <label class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted" for={`${row.prefix}-protocol-select`}>
+              <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`${row.prefix}-protocol-select`}>
                 Protocol
               </label>
               <select
-                class="mt-2 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+                class="mt-2 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
                 data-testid={`${setupWorkspaceTestIds.serialPortsInputPrefix}-${row.protocolParamName}`}
                 disabled={actionsBlocked || !row.protocolMetadataReady}
                 id={`${row.prefix}-protocol-select`}
@@ -297,11 +297,11 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
             </button>
 
             <div>
-              <label class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted" for={`${row.prefix}-baud-select`}>
+              <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`${row.prefix}-baud-select`}>
                 Baud
               </label>
               <select
-                class="mt-2 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+                class="mt-2 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
                 data-testid={`${setupWorkspaceTestIds.serialPortsInputPrefix}-${row.baudParamName}`}
                 disabled={actionsBlocked || !row.baudMetadataReady}
                 id={`${row.prefix}-baud-select`}

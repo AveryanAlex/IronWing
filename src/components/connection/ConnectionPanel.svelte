@@ -106,7 +106,7 @@ async function onSubmit(event: SubmitEvent) {
 
 <Panel padded>
   <div class="flex items-center justify-between gap-2">
-    <p class="m-0 text-[0.72rem] font-bold uppercase tracking-[0.12em] text-text-muted">Connection</p>
+    <p class="m-0 text-xs font-bold uppercase tracking-wider text-text-muted">Connection</p>
     <span data-testid="connection-status-text">
       <StatusPill tone={pillTone(panelView.statusTone)}>{panelView.statusLabel}</StatusPill>
     </span>
@@ -134,7 +134,7 @@ async function onSubmit(event: SubmitEvent) {
 
     {#if visibleError}
       <p
-        class="m-0 rounded-sm border px-3 py-2 text-[0.86rem] text-danger [background:color-mix(in_srgb,var(--color-danger)_10%,transparent)] [border-color:color-mix(in_srgb,var(--color-danger)_30%,transparent)]"
+        class="m-0 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"
         data-testid="connection-error-message"
       >
         {visibleError}

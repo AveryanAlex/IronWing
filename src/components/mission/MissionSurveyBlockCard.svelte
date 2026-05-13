@@ -108,11 +108,11 @@ function titleCase(value: string): string {
       type="button"
     >
       <div class="flex flex-wrap items-center gap-2">
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
+        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">
           Survey block {position + 1}
         </p>
         {#if region.importWarnings?.length}
-          <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-warning">
+          <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-warning">
             Imported
           </span>
         {/if}
@@ -129,7 +129,7 @@ function titleCase(value: string): string {
     </button>
 
     <div class="flex flex-wrap items-center gap-2">
-      <span class={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${region.generationState === "generating"
+      <span class={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${region.generationState === "generating"
         ? "border-accent/30 bg-accent/10 text-accent"
         : warningList.length > 0
           ? "border-warning/40 bg-warning/10 text-warning"
@@ -159,35 +159,35 @@ function titleCase(value: string): string {
 
       {#if formattedStats}
         <div class="grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-4">
-          <div class="rounded-xl border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">GSD</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.gsd}</dd></div>
-          <div class="rounded-xl border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Photos</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.photoCount}</dd></div>
-          <div class="rounded-xl border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Trigger</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.triggerDistance}</dd></div>
-          <div class="rounded-xl border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Flight</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.flightTime}</dd></div>
+          <div class="rounded-lg border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">GSD</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.gsd}</dd></div>
+          <div class="rounded-lg border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Photos</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.photoCount}</dd></div>
+          <div class="rounded-lg border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Trigger</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.triggerDistance}</dd></div>
+          <div class="rounded-lg border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Flight</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.flightTime}</dd></div>
         </div>
       {/if}
 
       <div class="space-y-2">
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Nested generated items</p>
+          <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Nested generated items</p>
           {#if region.manualEdits.size > 0}
-            <span class="rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-warning">
+            <span class="rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-warning">
               {region.manualEdits.size} manual edit{region.manualEdits.size === 1 ? "" : "s"}
             </span>
           {/if}
         </div>
 
         {#if generatedEntries.length === 0}
-          <div class="rounded-xl border border-dashed border-border bg-bg-secondary/60 px-4 py-4 text-sm text-text-secondary">
+          <div class="rounded-lg border border-dashed border-border bg-bg-secondary/60 px-4 py-4 text-sm text-text-secondary">
             Generate this region to see nested survey items here, or keep the existing authored geometry and parameters queued until you are ready.
           </div>
         {:else}
           <div class="space-y-2">
             {#each generatedEntries as entry (`${region.id}-generated-${entry.index}`)}
-              <div class="rounded-xl border border-border/70 bg-bg-secondary/60 px-3 py-3" data-testid={`${missionWorkspaceTestIds.surveyGeneratedItemPrefix}-${region.id}-${entry.index}`}>
+              <div class="rounded-lg border border-border/70 bg-bg-secondary/60 px-3 py-3" data-testid={`${missionWorkspaceTestIds.surveyGeneratedItemPrefix}-${region.id}-${entry.index}`}>
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                  <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Item {entry.index + 1}</p>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Item {entry.index + 1}</p>
                   {#if entry.edited}
-                    <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-warning">
+                    <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-warning">
                       Manual edit
                     </span>
                   {/if}

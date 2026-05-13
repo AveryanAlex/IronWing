@@ -29,7 +29,7 @@ let tone = $derived.by(() => {
   <div class={`mt-4 rounded-lg border px-4 py-4 ${tone}`} data-testid={setupWorkspaceTestIds.checkpoint}>
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.18em]" data-testid={setupWorkspaceTestIds.checkpointTitle}>
+        <p class="text-xs font-semibold uppercase tracking-widest" data-testid={setupWorkspaceTestIds.checkpointTitle}>
           {checkpoint.title ?? "Setup checkpoint"}
         </p>
         {#if checkpoint.detailText}

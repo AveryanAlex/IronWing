@@ -13,28 +13,28 @@ type Props = {
 };
 
 const densityClasses: Record<Density, string> = {
-  compact: "p-[var(--space-3)]",
-  default: "p-[var(--space-4)]",
-  comfortable: "p-[var(--space-5)]",
+  compact: "p-3",
+  default: "p-4",
+  comfortable: "p-5",
 };
 
 const toneClasses: Record<Tone, string> = {
-  neutral: "border-[var(--color-border)] bg-[var(--surface-card)]",
-  info: "border-[color-mix(in_srgb,var(--color-accent)_35%,var(--color-border))] bg-[var(--surface-card)]",
-  success: "border-[color-mix(in_srgb,var(--color-success)_35%,var(--color-border))] bg-[var(--surface-card)]",
-  warning: "border-[color-mix(in_srgb,var(--color-warning)_35%,var(--color-border))] bg-[var(--surface-card)]",
-  danger: "border-[color-mix(in_srgb,var(--color-danger)_35%,var(--color-border))] bg-[var(--surface-card)]",
-  blocking: "border-[var(--color-danger)] bg-[color-mix(in_srgb,var(--color-danger)_8%,var(--surface-card))]",
+  neutral: "border-border bg-surface-card",
+  info: "border-accent/30 bg-surface-card",
+  success: "border-success/30 bg-surface-card",
+  warning: "border-warning/30 bg-surface-card",
+  danger: "border-danger/30 bg-surface-card",
+  blocking: "border-danger/40 bg-danger/10",
 };
 
 let { tone = "neutral", density = "default", selected = false, testId, children }: Props = $props();
 
 let cardClass = $derived(
   [
-    "rounded-[var(--radius-lg)] border text-[var(--color-text-primary)]",
+    "rounded-lg border text-text-primary",
     densityClasses[density],
     toneClasses[tone],
-    selected ? "shadow-[0_0_0_2px_var(--color-accent)]" : "",
+    selected ? "ring-2 ring-accent/50" : "",
   ].join(" "),
 );
 </script>

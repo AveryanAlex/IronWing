@@ -5,14 +5,14 @@ let { label = "Loading…", testId }: Props = $props();
 </script>
 
 <div
-  class="inline-flex items-center gap-[6px] text-[0.88rem] text-[var(--color-text-secondary)]"
+  class="inline-flex items-center gap-2 text-sm text-text-secondary"
   role="status"
   aria-live="polite"
   data-testid={testId}
 >
-  <span class="ui-loading__dot size-[6px] rounded-full bg-[var(--color-text-muted)]"></span>
-  <span class="ui-loading__dot size-[6px] rounded-full bg-[var(--color-text-muted)]"></span>
-  <span class="ui-loading__dot size-[6px] rounded-full bg-[var(--color-text-muted)]"></span>
+  <span class="ui-loading__dot size-1.5 rounded-full bg-text-muted"></span>
+  <span class="ui-loading__dot size-1.5 rounded-full bg-text-muted"></span>
+  <span class="ui-loading__dot size-1.5 rounded-full bg-text-muted"></span>
   <span>{label}</span>
 </div>
 

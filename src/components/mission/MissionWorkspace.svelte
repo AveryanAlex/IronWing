@@ -949,7 +949,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm text-warning"
       data-testid={missionWorkspaceTestIds.importReview}
     >
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-warning/80">Import review</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-warning/80">Import review</p>
       <h3 class="mt-1 text-base font-semibold text-warning" data-testid={missionWorkspaceTestIds.importReviewTitle}>
         Review {view.importReview.fileName ?? `.${view.importReview.source}`} before replacing planner domains
       </h3>
@@ -971,7 +971,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
             class="rounded-lg border border-warning/30 bg-bg-primary/90 p-3 text-text-primary"
             data-testid={importReviewChoiceTestId(choice.domain)}
           >
-            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{choice.label}</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">{choice.label}</p>
             <p class="mt-2 text-xs text-text-secondary">Current · {choice.currentSummary}</p>
             <p class="mt-1 text-xs text-text-secondary">Incoming · {choice.incomingSummary}</p>
             <div class="mt-3 flex flex-wrap gap-2">
@@ -1026,7 +1026,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       class="mt-4 rounded-lg border border-accent/30 bg-accent/10 px-4 py-4 text-sm text-text-primary"
       data-testid={missionWorkspaceTestIds.exportReview}
     >
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-accent/80">Export chooser</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-accent/80">Export chooser</p>
       <h3 class="mt-1 text-base font-semibold" data-testid={missionWorkspaceTestIds.exportReviewTitle}>
         Choose which planner domains to include in the exported .plan file
       </h3>
@@ -1046,7 +1046,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               type="checkbox"
             />
             <span>
-              <span class="block text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{choice.label}</span>
+              <span class="block text-xs font-semibold uppercase tracking-wide text-text-muted">{choice.label}</span>
               <span class="mt-2 block text-xs text-text-secondary">{choice.summary}</span>
             </span>
           </label>
@@ -1079,7 +1079,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm text-warning"
       data-testid={missionWorkspaceTestIds.prompt}
     >
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-warning/80" data-testid={missionWorkspaceTestIds.promptKind}>
+      <p class="text-xs font-semibold uppercase tracking-wide text-warning/80" data-testid={missionWorkspaceTestIds.promptKind}>
         {planner.replacePrompt.kind === "recoverable" ? "recoverable-draft" : `${planner.replacePrompt.action}-replace`}
       </p>
       <h3 class="mt-1 text-base font-semibold text-warning">{replacePromptTitle(planner)}</h3>
@@ -1145,7 +1145,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
     >
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.16em]" data-testid={missionWorkspaceTestIds.replayOverlayState}>
+          <p class="text-xs font-semibold uppercase tracking-wide" data-testid={missionWorkspaceTestIds.replayOverlayState}>
             Replay map overlay · {replayMapOverlay.phase}
           </p>
           <p class="mt-1 font-semibold">Replay map overlay</p>
@@ -1178,7 +1178,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       class="mt-4 rounded-lg border border-border bg-bg-secondary/60 p-5"
       data-testid={missionWorkspaceTestIds.bootstrapping}
     >
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planner scope</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Planner scope</p>
       <h3 class="mt-2 text-lg font-semibold text-text-primary">Loading the planner domain</h3>
       <p class="mt-2 text-sm text-text-secondary">
         IronWing is subscribing the planner workspace to the active session scope before live actions unlock.
@@ -1189,7 +1189,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
       class="mt-4 rounded-lg border border-border bg-bg-secondary/60 p-5"
       data-testid={view.status === "unavailable" ? missionWorkspaceTestIds.unavailable : missionWorkspaceTestIds.empty}
     >
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planner entry</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Planner entry</p>
       <h3 class="mt-2 text-lg font-semibold text-text-primary">
         {view.status === "unavailable" ? "Start planning locally or reconnect for live sync" : "Start this scope with a real planner entry action"}
       </h3>
@@ -1210,7 +1210,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
             onclick={card.onclick}
             type="button"
           >
-            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">Entry action</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Entry action</p>
             <h4 class="mt-1 text-sm font-semibold">{card.title}</h4>
             <p class="mt-1 text-xs text-text-secondary">{card.description}</p>
           </button>
@@ -1478,7 +1478,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                   class="rounded-lg border border-border bg-bg-primary p-5"
                   data-testid={missionWorkspaceTestIds.modeShell}
                 >
-                  <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{view.mode} mode</p>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">{view.mode} mode</p>
                   <h3 class="mt-2 text-lg font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.modeShellTitle}>{modeShellTitle(view.mode)}</h3>
                   <p class="mt-2 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.modeShellBody}>{modeShellBody(view.mode, view)}</p>
                 </section>
@@ -1750,7 +1750,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               class="rounded-lg border border-border bg-bg-primary p-5"
               data-testid={missionWorkspaceTestIds.modeShell}
             >
-              <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">{view.mode} mode</p>
+              <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">{view.mode} mode</p>
               <h3 class="mt-2 text-lg font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.modeShellTitle}>{modeShellTitle(view.mode)}</h3>
               <p class="mt-2 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.modeShellBody}>{modeShellBody(view.mode, view)}</p>
             </section>

@@ -7,7 +7,7 @@ let { columns = 2, testId, children }: Props = $props();
 </script>
 
 <div
-  class="grid grid-cols-[repeat(var(--ui-grid-columns,2),minmax(0,1fr))] gap-[var(--space-4)] max-[900px]:grid-cols-1"
+  class="grid grid-cols-1 gap-4 md:grid-cols-[repeat(var(--ui-grid-columns,2),minmax(0,1fr))]"
   data-testid={testId}
   style="--ui-grid-columns: {columns};"
 >

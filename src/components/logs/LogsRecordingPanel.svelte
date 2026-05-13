@@ -62,16 +62,16 @@ let recordingStatusTone = $derived<"neutral" | "positive" | "caution" | "critica
       : "neutral",
 );
 
-const eyebrowClass = "m-0 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]";
-const titleClass = "mt-1 m-0 text-[0.98rem] font-semibold text-[var(--color-text-primary)]";
-const copyClass = "m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]";
-const valueCardClass = "flex min-w-0 flex-col gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5";
-const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-bg-input)] px-[0.7rem] py-[0.55rem] text-[0.8rem] text-[var(--color-text-primary)]";
+const eyebrowClass = "m-0 text-xs font-semibold uppercase tracking-wide text-text-muted";
+const titleClass = "mt-1 m-0 text-base font-semibold text-text-primary";
+const copyClass = "m-0 text-sm leading-6 text-text-secondary";
+const valueCardClass = "flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-bg-primary px-3 py-3";
+const inputClass = "w-full min-w-0 rounded-md border border-border bg-bg-input px-3 py-2 text-sm text-text-primary";
 </script>
 
 <Panel testId="logs-recording-panel">
   <div class="flex min-h-0 flex-col gap-3">
-    <div class="flex items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+    <div class="flex items-start justify-between gap-3 max-md:flex-col max-md:items-stretch">
       <div class="min-w-0">
         <p class={eyebrowClass}>Recording</p>
         <h3 class={titleClass}>Capture state and auto-record setting</h3>
@@ -97,9 +97,9 @@ const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-bord
       />
     {/if}
 
-    <div class="flex items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+    <div class="flex items-start justify-between gap-3 max-md:flex-col max-md:items-stretch">
       <div class="min-w-0">
-        <p class="m-0 text-[0.86rem] font-semibold text-[var(--color-text-primary)]" data-testid="logs-recording-status">{recordingLabel}</p>
+        <p class="m-0 text-sm font-semibold text-text-primary" data-testid="logs-recording-status">{recordingLabel}</p>
         {#if recordingStatus.kind === "recording" || recordingStatus.kind === "stopping"}
           <p class={`min-w-0 overflow-wrap-anywhere break-words ${copyClass}`} data-testid="logs-recording-status-copy">{recordingStatus.destination_path} · {formatBytes(recordingStatus.bytes_written)}</p>
         {:else if recordingStatus.kind === "failed"}
@@ -123,10 +123,10 @@ const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-bord
       </Button>
     </div>
 
-    <div class="grid gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]">
+    <div class="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]">
       <div class={valueCardClass}>
         <span class={eyebrowClass}>Manual destination</span>
-        <span class="min-w-0 overflow-wrap-anywhere break-words font-mono text-[0.74rem] leading-[1.5] text-[var(--color-text-primary)]" data-testid="logs-recording-destination-value">
+        <span class="min-w-0 overflow-wrap-anywhere break-words font-mono text-xs leading-6 text-text-primary" data-testid="logs-recording-destination-value">
         {recordingStatus.kind === "recording" || recordingStatus.kind === "stopping"
           ? recordingStatus.destination_path
           : recordingPath || "not chosen yet"}
@@ -134,7 +134,7 @@ const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-bord
       </div>
       <div class={valueCardClass}>
         <span class={eyebrowClass}>Active file</span>
-        <span class="min-w-0 overflow-wrap-anywhere break-words font-mono text-[0.74rem] leading-[1.5] text-[var(--color-text-primary)]" data-testid="logs-recording-file-value">
+        <span class="min-w-0 overflow-wrap-anywhere break-words font-mono text-xs leading-6 text-text-primary" data-testid="logs-recording-file-value">
         {recordingStatus.kind === "recording" || recordingStatus.kind === "stopping"
           ? recordingStatus.file_name
           : "—"}
@@ -142,7 +142,7 @@ const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-bord
       </div>
       <div class={valueCardClass}>
         <span class={eyebrowClass}>Bytes written</span>
-        <span class="text-[0.8rem] leading-[1.5] text-[var(--color-text-primary)]" data-testid="logs-recording-bytes-value">
+        <span class="text-sm leading-6 text-text-primary" data-testid="logs-recording-bytes-value">
         {recordingStatus.kind === "recording" || recordingStatus.kind === "stopping"
           ? formatBytes(recordingStatus.bytes_written)
           : "—"}
@@ -150,7 +150,7 @@ const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-bord
       </div>
       <div class={valueCardClass}>
         <span class={eyebrowClass}>Auto-record on connect</span>
-        <span class="text-[0.8rem] leading-[1.5] text-[var(--color-text-primary)]" data-testid="logs-auto-record-value">
+        <span class="text-sm leading-6 text-text-primary" data-testid="logs-auto-record-value">
         {autoRecordEnabled ? "enabled" : "disabled"}
         </span>
       </div>
@@ -163,8 +163,8 @@ const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-bord
         data-testid="logs-recording-path-input"
         disabled={recordingStatus.kind === "recording" || recordingStatus.kind === "stopping"}
         oninput={(event) => onRecordingPathChange((event.currentTarget as HTMLInputElement).value)}
-      placeholder="/data/recordings/manual-capture.tlog"
-      type="text"
+        placeholder="/data/recordings/manual-capture.tlog"
+        type="text"
         value={recordingPath}
       />
     </label>
@@ -175,7 +175,7 @@ const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-bord
         : "If save picking is unavailable on this surface, start uses the typed destination path directly."}
     </p>
 
-    <label class="inline-flex items-center gap-2 text-[0.82rem] text-[var(--color-text-secondary)]">
+    <label class="inline-flex items-center gap-2 text-sm text-text-secondary">
       <input
         checked={autoRecordEnabled}
         data-testid="logs-auto-record-toggle"

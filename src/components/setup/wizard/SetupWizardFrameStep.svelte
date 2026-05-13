@@ -191,28 +191,28 @@ function resolveDraftNumber(value: string): number | null {
       </div>
     {/if}
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Frame class</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Frame class</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{currentFrameClassLabel}</p>
       {#if frameClassItem}
-        <p class="mt-1 text-[11px] text-text-muted">{frameClassItem.name}</p>
+        <p class="mt-1 text-xs text-text-muted">{frameClassItem.name}</p>
       {/if}
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Orientation</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Orientation</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{currentOrientationLabel}</p>
-      <p class="mt-1 text-[11px] text-text-muted">AHRS_ORIENTATION</p>
+      <p class="mt-1 text-xs text-text-muted">AHRS_ORIENTATION</p>
     </div>
   </div>
 
   <div class="grid gap-3 md:grid-cols-2">
     {#if frameClassItem && frameClassOptions.length > 0}
       <label class="block">
-        <span class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
+        <span class="text-xs font-semibold uppercase tracking-widest text-text-muted">
           {frameClassItem.name}
         </span>
         <select
           bind:value={frameClassDraft}
-          class="mt-2 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-2 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.wizardStepBodyPrefix}-frame_orientation-frame-class`}
           disabled={view.checkpoint.blocksActions || applyPending}
         >
@@ -225,12 +225,12 @@ function resolveDraftNumber(value: string): number | null {
 
     {#if orientationItem && orientationOptions.length > 0}
       <label class="block">
-        <span class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
+        <span class="text-xs font-semibold uppercase tracking-widest text-text-muted">
           AHRS_ORIENTATION
         </span>
         <select
           bind:value={orientationDraft}
-          class="mt-2 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-2 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.wizardStepBodyPrefix}-frame_orientation-orientation`}
           disabled={view.checkpoint.blocksActions || applyPending}
         >

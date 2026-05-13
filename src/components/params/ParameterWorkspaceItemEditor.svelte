@@ -79,7 +79,7 @@ function submitStage(event: SubmitEvent) {
       <p class="text-lg font-semibold text-text-primary">{props.item.valueText}{props.item.units ? ` ${props.item.units}` : ""}</p>
       {#if props.item.rebootRequired}
         <p
-          class="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-warning"
+          class="mt-1 text-xs font-semibold uppercase tracking-wide text-warning"
           data-testid={`${parameterWorkspaceTestIds.rebootBadgePrefix}-${props.item.name}`}
         >
           Reboot required
@@ -110,7 +110,7 @@ function submitStage(event: SubmitEvent) {
 
   <div class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end">
     <label class="block">
-      <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Stage a local edit</span>
+      <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Stage a local edit</span>
       <input
         class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={`${parameterWorkspaceTestIds.inputPrefix}-${props.item.name}`}

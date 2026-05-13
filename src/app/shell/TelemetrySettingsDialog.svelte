@@ -523,7 +523,7 @@ $effect(() => {
           </p>
         </div>
 
-        <span class="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+        <span class="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-accent">
           {formatHz(liveSettingsView.confirmedSettings.telemetryRateHz)} confirmed
         </span>
       </div>
@@ -542,7 +542,7 @@ $effect(() => {
           type="number"
           value={telemetryRateInput}
         />
-        <p class="text-xs uppercase tracking-[0.16em] text-text-muted">
+        <p class="text-xs uppercase tracking-wider text-text-muted">
           Allowed range · {TELEMETRY_RATE_HZ_LIMITS.min}–{TELEMETRY_RATE_HZ_LIMITS.max} Hz
         </p>
         {#if telemetryFieldError}
@@ -566,25 +566,25 @@ $effect(() => {
           </p>
         </div>
 
-        <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">
+        <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-wider text-text-secondary">
           {messageRateRows.length} row{messageRateRows.length === 1 ? "" : "s"}
         </span>
       </div>
 
       {#if unknownMessageRateIds.length > 0}
-        <div class="mt-4 rounded-[22px] border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+        <div class="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
           Stored message-rate overrides could not be mapped to the current catalog.
         </div>
       {/if}
 
       {#if liveSettingsView.catalogPhase === "loading"}
-        <div class="mt-4 rounded-[22px] border border-border bg-bg-secondary px-4 py-3 text-sm text-text-secondary">
+        <div class="mt-4 rounded-lg border border-border bg-bg-secondary px-4 py-3 text-sm text-text-secondary">
           Loading the available message-rate rows…
         </div>
       {/if}
 
       {#if liveSettingsView.catalogPhase !== "loading" && messageRateRows.length === 0}
-        <div class="mt-4 rounded-[22px] border border-border bg-bg-secondary px-4 py-3 text-sm text-text-secondary">
+        <div class="mt-4 rounded-lg border border-border bg-bg-secondary px-4 py-3 text-sm text-text-secondary">
           No message-rate rows are available for this shell yet.
         </div>
       {/if}
@@ -599,12 +599,12 @@ $effect(() => {
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p class="text-sm font-semibold text-text-primary">{row.name}</p>
-                <p class="mt-1 text-xs uppercase tracking-[0.16em] text-text-muted">
+                <p class="mt-1 text-xs uppercase tracking-wider text-text-muted">
                   MAVLink #{row.id} · default {formatHz(row.defaultRateHz)}
                 </p>
               </div>
 
-              <span class={`rounded-full border px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] ${statusClass(row.stateKind)}`}>
+              <span class={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wider ${statusClass(row.stateKind)}`}>
                 {row.stateLabel}
               </span>
             </div>

@@ -64,7 +64,7 @@ function highlightSummaryText() {
 <div class="space-y-4" data-testid={parameterWorkspaceTestIds.expertRoot}>
   <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
     <label class="block">
-      <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Search raw parameters</span>
+      <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Search raw parameters</span>
         <input
           class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
           data-testid={parameterWorkspaceTestIds.expertSearch}
@@ -150,10 +150,10 @@ function highlightSummaryText() {
         >
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Parameter prefix</p>
+              <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Parameter prefix</p>
               <h4 class="mt-2 text-lg font-semibold text-text-primary">{group.label}</h4>
             </div>
-            <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">
+            <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
               {group.rows.length} row{group.rows.length === 1 ? "" : "s"}
             </span>
           </div>

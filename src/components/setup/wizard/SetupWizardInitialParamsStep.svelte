@@ -145,18 +145,18 @@ function handleMarkReviewed() {
         Apply failed. Staged edits remain in the review tray so you can retry. {failureMessage}
       </div>
     {/if}
-    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
+    <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">
       {model.family.headline}
     </p>
     <p class="mt-1 text-sm text-text-secondary">{model.previewStateText}</p>
     {#if model.batches.length > 0}
       <ul class="mt-3 space-y-2">
         {#each model.batches as batch (batch.id)}
-          <li class="rounded-xl border border-border/60 bg-bg-primary/40 px-3 py-2">
-            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">
+          <li class="rounded-lg border border-border/60 bg-bg-primary/40 px-3 py-2">
+            <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">
               {batch.title}
             </p>
-            <p class="mt-1 text-[12px] text-text-secondary">
+            <p class="mt-1 text-xs text-text-secondary">
               {batch.changedCount} recommended change{batch.changedCount === 1 ? "" : "s"}
             </p>
           </li>

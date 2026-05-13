@@ -391,7 +391,7 @@ function formatHdop(value: number | null): string {
         data-testid={setupWorkspaceTestIds.gpsSummary}
       >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Live GPS state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Live GPS state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.gpsLiveState}>
         {liveSummary.stateText}
       </p>
@@ -400,14 +400,14 @@ function formatHdop(value: number | null): string {
       </p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Serial assignment</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Serial assignment</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.gpsPortState}>
         {portStateText}
       </p>
       <p class="mt-1 text-sm text-text-secondary">{portDetailText}</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Fix snapshot</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Fix snapshot</p>
       {#if liveSummary.observation}
         <p class="mt-2 text-sm font-semibold text-text-primary">
           {formatFixType(liveSummary.observation.fixType)} · {liveSummary.observation.satellites ?? "--"} sats
@@ -442,12 +442,12 @@ function formatHdop(value: number | null): string {
   <div class="grid gap-3 xl:grid-cols-2">
     {#if primaryTypeItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">{primaryTypeItem.name}</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{primaryTypeItem.name}</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{primaryTypeItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">
           {primaryTypeItem.description ?? "Choose the primary GPS receiver type without bypassing the shared review tray."}
         </p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.gpsCurrentPrefix}-${primaryTypeItem.name}`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.gpsCurrentPrefix}-${primaryTypeItem.name}`}>
           Current · {currentValueText(primaryTypeItem)}
         </p>
         {#if params.stagedEdits[primaryTypeItem.name]}
@@ -457,7 +457,7 @@ function formatHdop(value: number | null): string {
         {/if}
         <select
           bind:value={primaryTypeDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.gpsInputPrefix}-${primaryTypeItem.name}`}
           disabled={actionsBlocked || primaryTypeOptions.length === 0}
         >
@@ -479,12 +479,12 @@ function formatHdop(value: number | null): string {
 
     {#if autoConfigItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">GPS_AUTO_CONFIG</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">GPS_AUTO_CONFIG</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{autoConfigItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">
           {autoConfigItem.description ?? "Review module auto-configuration here and queue changes through the review tray."}
         </p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.gpsCurrentPrefix}-GPS_AUTO_CONFIG`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.gpsCurrentPrefix}-GPS_AUTO_CONFIG`}>
           Current · {currentValueText(autoConfigItem)}
         </p>
         {#if params.stagedEdits.GPS_AUTO_CONFIG}
@@ -494,7 +494,7 @@ function formatHdop(value: number | null): string {
         {/if}
         <select
           bind:value={autoConfigDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.gpsInputPrefix}-GPS_AUTO_CONFIG`}
           disabled={actionsBlocked || autoConfigOptions.length === 0}
         >
@@ -519,12 +519,12 @@ function formatHdop(value: number | null): string {
     <div class="grid gap-3 xl:grid-cols-2">
       {#if secondaryTypeItem}
         <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">GPS2_TYPE</p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">GPS2_TYPE</p>
           <h4 class="mt-2 text-base font-semibold text-text-primary">{secondaryTypeItem.label}</h4>
           <p class="mt-2 text-sm text-text-secondary">
             {secondaryTypeItem.description ?? "Inspect the optional second GPS receiver here when the firmware exposes it."}
           </p>
-          <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.gpsCurrentPrefix}-GPS2_TYPE`}>
+          <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.gpsCurrentPrefix}-GPS2_TYPE`}>
             Current · {currentValueText(secondaryTypeItem)}
           </p>
           {#if params.stagedEdits.GPS2_TYPE}
@@ -534,7 +534,7 @@ function formatHdop(value: number | null): string {
           {/if}
           <select
             bind:value={secondaryTypeDraft}
-            class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+            class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
             data-testid={`${setupWorkspaceTestIds.gpsInputPrefix}-GPS2_TYPE`}
             disabled={actionsBlocked || secondaryTypeOptions.length === 0}
           >
@@ -556,12 +556,12 @@ function formatHdop(value: number | null): string {
 
       {#if autoSwitchItem}
         <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">GPS_AUTO_SWITCH</p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">GPS_AUTO_SWITCH</p>
           <h4 class="mt-2 text-base font-semibold text-text-primary">{autoSwitchItem.label}</h4>
           <p class="mt-2 text-sm text-text-secondary">
             {autoSwitchItem.description ?? "Review primary/secondary GPS switching here and queue changes through the review tray."}
           </p>
-          <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.gpsCurrentPrefix}-GPS_AUTO_SWITCH`}>
+          <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.gpsCurrentPrefix}-GPS_AUTO_SWITCH`}>
             Current · {currentValueText(autoSwitchItem)}
           </p>
           {#if params.stagedEdits.GPS_AUTO_SWITCH}
@@ -571,7 +571,7 @@ function formatHdop(value: number | null): string {
           {/if}
           <select
             bind:value={autoSwitchDraft}
-            class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+            class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
             data-testid={`${setupWorkspaceTestIds.gpsInputPrefix}-GPS_AUTO_SWITCH`}
             disabled={actionsBlocked || autoSwitchOptions.length === 0}
           >
@@ -595,7 +595,7 @@ function formatHdop(value: number | null): string {
 
   <div class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.gpsGnssChecklist}>
     <div class="mb-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">GNSS constellation mask</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">GNSS constellation mask</p>
       <p class="mt-2 text-sm text-text-secondary">
         {#if gnssModeItem}
           {gnssModeItem.description ?? "Choose which constellations the vehicle should keep enabled. Each toggle stages a new bitmask in the shared review tray."}
@@ -604,7 +604,7 @@ function formatHdop(value: number | null): string {
         {/if}
       </p>
       {#if gnssModeItem}
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.gpsCurrentPrefix}-GPS_GNSS_MODE`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.gpsCurrentPrefix}-GPS_GNSS_MODE`}>
           Current · {currentValueText(gnssModeItem)}
         </p>
       {/if}

@@ -145,7 +145,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
   {#snippet body()}
       <div class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-[minmax(0,1fr)_auto]">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Live receiver state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Live receiver state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.rcSignal}>
         {view.rcReceiver.statusText}
       </p>
@@ -175,12 +175,12 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
 
   <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
     <div class="flex flex-wrap items-center gap-2">
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Live channel bars</p>
-      <span class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Live channel bars</p>
+      <span class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
         {view.rcReceiver.signalState}
       </span>
       {#if currentPreset}
-        <span class="rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
+        <span class="rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-accent">
           {currentPreset.label}
         </span>
       {/if}
@@ -198,7 +198,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
             data-testid={`${setupWorkspaceTestIds.rcBarPrefix}-${channel.channel}`}
           >
             <div class="flex items-center justify-between gap-2">
-              <p class="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">CH{channel.channel}</p>
+              <p class="font-mono text-xs font-semibold uppercase tracking-widest text-text-muted">CH{channel.channel}</p>
               <p class="font-mono text-sm font-semibold text-text-primary">{channel.pwm}</p>
             </div>
             <div class="relative mt-3 h-2.5 overflow-hidden rounded-full bg-bg-primary/90">
@@ -206,7 +206,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
               <div class="absolute top-0 h-full w-1 rounded-full bg-accent" style:left={`calc(${channel.percent}% - 2px)`}></div>
             </div>
             {#if channel.stale}
-              <p class="mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-warning">Stale sample</p>
+              <p class="mt-2 text-xs font-semibold uppercase tracking-widest text-warning">Stale sample</p>
             {/if}
           </article>
         {/each}
@@ -216,7 +216,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
 
   <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
     <div class="flex flex-wrap items-center gap-2">
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Channel-order presets</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Channel-order presets</p>
       <span class="text-sm text-text-secondary">Start with a known transmitter order, then fine-tune individual axes if needed.</span>
     </div>
 
@@ -236,10 +236,10 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
 
     <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">RCMAP_ROLL</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">RCMAP_ROLL</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">Roll</h4>
         <p class="mt-2 text-sm text-text-secondary">Map the primary roll axis to the receiver channel that is moving for roll.</p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_ROLL`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_ROLL`}>
           Current · {rollItem?.valueText ?? "Unavailable"}
         </p>
         {#if params.stagedEdits.RCMAP_ROLL}
@@ -249,7 +249,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
         {/if}
         <select
           bind:value={rollDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.rcInputPrefix}-RCMAP_ROLL`}
           disabled={view.checkpoint.blocksActions}
         >
@@ -269,10 +269,10 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
       </article>
 
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">RCMAP_PITCH</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">RCMAP_PITCH</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">Pitch</h4>
         <p class="mt-2 text-sm text-text-secondary">Map the primary pitch axis to the receiver channel that is moving for pitch.</p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_PITCH`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_PITCH`}>
           Current · {pitchItem?.valueText ?? "Unavailable"}
         </p>
         {#if params.stagedEdits.RCMAP_PITCH}
@@ -282,7 +282,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
         {/if}
         <select
           bind:value={pitchDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.rcInputPrefix}-RCMAP_PITCH`}
           disabled={view.checkpoint.blocksActions}
         >
@@ -302,10 +302,10 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
       </article>
 
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">RCMAP_THROTTLE</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">RCMAP_THROTTLE</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">Throttle</h4>
         <p class="mt-2 text-sm text-text-secondary">Map the primary throttle axis to the receiver channel that is moving for throttle.</p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_THROTTLE`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_THROTTLE`}>
           Current · {throttleItem?.valueText ?? "Unavailable"}
         </p>
         {#if params.stagedEdits.RCMAP_THROTTLE}
@@ -315,7 +315,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
         {/if}
         <select
           bind:value={throttleDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.rcInputPrefix}-RCMAP_THROTTLE`}
           disabled={view.checkpoint.blocksActions}
         >
@@ -335,10 +335,10 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
       </article>
 
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">RCMAP_YAW</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">RCMAP_YAW</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">Yaw</h4>
         <p class="mt-2 text-sm text-text-secondary">Map the primary yaw axis to the receiver channel that is moving for yaw.</p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_YAW`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_YAW`}>
           Current · {yawItem?.valueText ?? "Unavailable"}
         </p>
         {#if params.stagedEdits.RCMAP_YAW}
@@ -348,7 +348,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
         {/if}
         <select
           bind:value={yawDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.rcInputPrefix}-RCMAP_YAW`}
           disabled={view.checkpoint.blocksActions}
         >

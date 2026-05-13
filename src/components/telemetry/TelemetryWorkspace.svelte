@@ -270,11 +270,11 @@ let sections = $derived.by<MetricSection[]>(() => {
   {#each sections as section (section.key)}
     <div class="flex flex-col gap-2">
       <button
-        class="flex cursor-pointer items-center justify-between rounded border-none bg-transparent px-1.5 py-1 transition-colors duration-150 hover:bg-bg-secondary"
+        class="flex cursor-pointer items-center justify-between rounded-md border-none bg-transparent px-2 py-1 transition-colors duration-150 hover:bg-bg-secondary"
         onclick={() => toggleSection(section.key)}
         type="button"
       >
-        <span class="text-[0.72rem] font-bold uppercase tracking-[0.16em] text-text-muted">{section.title}</span>
+        <span class="text-xs font-bold uppercase tracking-wider text-text-muted">{section.title}</span>
         <svg
           class={[
             "h-3.5 w-3.5 text-text-muted transition-transform duration-150 ease-in-out",

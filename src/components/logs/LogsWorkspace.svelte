@@ -256,12 +256,12 @@ function emitMarkerHandoff() {
   {#if workspace.operationProgress}
     <Panel testId="logs-progress-banner">
       <div aria-atomic="true" aria-live="polite" class="flex flex-col gap-3" role="status">
-        <div class="flex items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+        <div class="flex items-start justify-between gap-3 max-md:flex-col max-md:items-stretch">
           <div>
-            <p class="m-0 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">Operation progress</p>
-            <h3 class="mt-1 m-0 text-[0.98rem] font-semibold tracking-[-0.02em] text-[var(--color-text-primary)]">{workspace.operationProgress.phase.replace(/_/g, " ")}</h3>
+            <p class="m-0 text-xs font-semibold uppercase tracking-wide text-text-muted">Operation progress</p>
+            <h3 class="mt-1 m-0 text-base font-semibold text-text-primary">{workspace.operationProgress.phase.replace(/_/g, " ")}</h3>
             {#if workspace.operationProgress.message}
-              <p class="m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]">{workspace.operationProgress.message}</p>
+              <p class="m-0 text-sm leading-6 text-text-secondary">{workspace.operationProgress.message}</p>
             {/if}
           </div>
 
@@ -270,11 +270,11 @@ function emitMarkerHandoff() {
           {/if}
         </div>
 
-        <div class="h-2 w-full overflow-hidden rounded-full bg-[var(--color-bg-primary)]" aria-hidden="true">
-          <div class="h-full bg-[var(--color-accent)]" style={`width: ${workspace.operationProgress.percent ?? 0}%`}></div>
+        <div class="h-2 w-full overflow-hidden rounded-full bg-bg-primary" aria-hidden="true">
+          <div class="h-full bg-accent" style={`width: ${workspace.operationProgress.percent ?? 0}%`}></div>
         </div>
 
-        <div class="flex items-start justify-between gap-3 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)] max-[720px]:flex-col max-[720px]:items-stretch">
+        <div class="flex items-start justify-between gap-3 text-sm leading-6 text-text-secondary max-md:flex-col max-md:items-stretch">
           <span>{workspace.operationProgress.completed_items.toLocaleString()} completed</span>
           <span>{workspace.operationProgress.total_items == null ? "total pending" : `${workspace.operationProgress.total_items.toLocaleString()} total`}</span>
           <span>{workspace.operationProgress.percent == null ? "estimating" : `${workspace.operationProgress.percent}%`}</span>
@@ -283,8 +283,8 @@ function emitMarkerHandoff() {
     </Panel>
   {/if}
 
-  <div class="mb-[var(--space-2)] grid min-h-0 items-start gap-3 [grid-template-columns:minmax(300px,0.9fr)_minmax(0,1.65fr)] max-[980px]:grid-cols-1">
-    <div class="flex min-w-0 flex-col gap-3 self-start max-[980px]:self-stretch">
+  <div class="mb-2 grid min-h-0 items-start gap-3 [grid-template-columns:minmax(300px,0.9fr)_minmax(0,1.65fr)] max-lg:grid-cols-1">
+    <div class="flex min-w-0 flex-col gap-3 self-start max-lg:self-stretch">
       <LogsLibraryPanel
         {entries}
         importPath={importPath}
@@ -311,7 +311,7 @@ function emitMarkerHandoff() {
       />
     </div>
 
-    <div class="flex min-w-0 flex-col gap-3 self-start max-[980px]:self-stretch">
+    <div class="flex min-w-0 flex-col gap-3 self-start max-lg:self-stretch">
       <LogsRecordingPanel
         autoRecordDirectory={workspace.recording.settings?.auto_record_directory ?? null}
         autoRecordEnabled={workspace.recording.settings?.auto_record_on_connect ?? false}

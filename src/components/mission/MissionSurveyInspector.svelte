@@ -402,13 +402,13 @@ function localMessageClass(tone: LocalMessageTone): string {
   <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Survey region</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Survey region</p>
         <h4 class="mt-1 text-base font-semibold text-text-primary">
           {titleCase(region.patternType)} region · {geometryPoints.length} {region.patternType === "corridor" ? "centerline points" : "vertices"}
         </h4>
       </div>
 
-      <div class="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.14em]">
+      <div class="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-wide">
         <span class="rounded-full border border-border bg-bg-primary px-3 py-1 text-text-secondary">
           {region.generatedItems.length} generated item{region.generatedItems.length === 1 ? "" : "s"}
         </span>
@@ -440,7 +440,7 @@ function localMessageClass(tone: LocalMessageTone): string {
       class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm text-warning"
       data-testid={missionWorkspaceTestIds.surveyPrompt}
     >
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-warning/80" data-testid={missionWorkspaceTestIds.surveyPromptKind}>
+      <p class="text-xs font-semibold uppercase tracking-wide text-warning/80" data-testid={missionWorkspaceTestIds.surveyPromptKind}>
         {promptForRegion.kind}
       </p>
       <p class="mt-2 text-text-primary">{promptForRegion.message}</p>
@@ -478,7 +478,7 @@ function localMessageClass(tone: LocalMessageTone): string {
       <section class="rounded-lg border border-border bg-bg-primary p-3">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Geometry</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Geometry</p>
             <h5 class="mt-1 text-sm font-semibold text-text-primary">{geometryLabel}</h5>
           </div>
 
@@ -493,18 +493,18 @@ function localMessageClass(tone: LocalMessageTone): string {
         </div>
 
         {#if geometryPoints.length === 0}
-          <div class="mt-4 rounded-xl border border-dashed border-border bg-bg-secondary/60 px-4 py-4 text-sm text-text-secondary">
+          <div class="mt-4 rounded-lg border border-dashed border-border bg-bg-secondary/60 px-4 py-4 text-sm text-text-secondary">
             This {region.patternType} region has no editable geometry yet. Add points here now or use the planner map draw controls to author the region directly on the shared workspace surface.
           </div>
         {:else}
           <div class="mt-4 space-y-3">
             {#each geometryPoints as point, index (`${region.id}-point-${index}`)}
-              <div class="rounded-xl border border-border/70 bg-bg-secondary/60 p-3">
+              <div class="rounded-lg border border-border/70 bg-bg-secondary/60 p-3">
                 <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                   <label class="space-y-1">
                     <span class="text-xs font-medium text-text-muted">Latitude</span>
                     <input
-                      class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
+                       class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
                       data-testid={`${missionWorkspaceTestIds.surveyPointPrefix}-${index}-latitude`}
                       inputmode="decimal"
                       onchange={(event) => updateGeometryPoint(index, "latitude_deg", (event.currentTarget as HTMLInputElement).value)}
@@ -515,7 +515,7 @@ function localMessageClass(tone: LocalMessageTone): string {
                   <label class="space-y-1">
                     <span class="text-xs font-medium text-text-muted">Longitude</span>
                     <input
-                      class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
+                       class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
                       data-testid={`${missionWorkspaceTestIds.surveyPointPrefix}-${index}-longitude`}
                       inputmode="decimal"
                       onchange={(event) => updateGeometryPoint(index, "longitude_deg", (event.currentTarget as HTMLInputElement).value)}
@@ -551,35 +551,35 @@ function localMessageClass(tone: LocalMessageTone): string {
 
     <div class="space-y-4">
       <section class="rounded-lg border border-border bg-bg-primary p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Parameters</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Parameters</p>
         <div class="mt-4 grid gap-3 md:grid-cols-2">
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Altitude (m)</span>
-            <input class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-altitude_m`} inputmode="decimal" onchange={(event) => updateNumericParam("altitude_m", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.altitude_m} />
+            <input class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-altitude_m`} inputmode="decimal" onchange={(event) => updateNumericParam("altitude_m", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.altitude_m} />
           </label>
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Orientation</span>
-            <select class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-orientation`} onchange={(event) => updateStringParam("orientation", (event.currentTarget as HTMLSelectElement).value)} value={region.params.orientation}>
+            <select class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-orientation`} onchange={(event) => updateStringParam("orientation", (event.currentTarget as HTMLSelectElement).value)} value={region.params.orientation}>
               <option value="landscape">Landscape</option>
               <option value="portrait">Portrait</option>
             </select>
           </label>
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Side overlap (%)</span>
-            <input class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-sideOverlap_pct`} inputmode="decimal" onchange={(event) => updateNumericParam("sideOverlap_pct", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.sideOverlap_pct} />
+            <input class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-sideOverlap_pct`} inputmode="decimal" onchange={(event) => updateNumericParam("sideOverlap_pct", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.sideOverlap_pct} />
           </label>
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Front overlap (%)</span>
-            <input class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-frontOverlap_pct`} inputmode="decimal" onchange={(event) => updateNumericParam("frontOverlap_pct", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.frontOverlap_pct} />
+            <input class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-frontOverlap_pct`} inputmode="decimal" onchange={(event) => updateNumericParam("frontOverlap_pct", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.frontOverlap_pct} />
           </label>
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Capture mode</span>
-            <select class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-captureMode`} onchange={(event) => updateStringParam("captureMode", (event.currentTarget as HTMLSelectElement).value)} value={region.params.captureMode}>
+            <select class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-captureMode`} onchange={(event) => updateStringParam("captureMode", (event.currentTarget as HTMLSelectElement).value)} value={region.params.captureMode}>
               <option value="distance">Distance</option>
               <option value="hover">Hover</option>
             </select>
           </label>
-          <label class="flex items-center gap-2 rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-sm text-text-primary md:mt-6">
+          <label class="flex items-center gap-2 rounded-lg border border-border bg-bg-secondary/60 px-3 py-2 text-sm text-text-primary md:mt-6">
             <input checked={region.params.terrainFollow} data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-terrainFollow`} onchange={(event) => updateBooleanParam("terrainFollow", (event.currentTarget as HTMLInputElement).checked)} type="checkbox" />
             Terrain follow
           </label>
@@ -587,11 +587,11 @@ function localMessageClass(tone: LocalMessageTone): string {
           {#if region.patternType === "grid"}
             <label class="space-y-1">
               <span class="text-xs font-medium text-text-muted">Track angle (deg)</span>
-              <input class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-trackAngle_deg`} inputmode="decimal" onchange={(event) => updateNumericParam("trackAngle_deg", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.trackAngle_deg} />
+              <input class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-trackAngle_deg`} inputmode="decimal" onchange={(event) => updateNumericParam("trackAngle_deg", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.trackAngle_deg} />
             </label>
             <label class="space-y-1">
               <span class="text-xs font-medium text-text-muted">Start corner</span>
-              <select class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-startCorner`} onchange={(event) => updateStringParam("startCorner", (event.currentTarget as HTMLSelectElement).value)} value={region.params.startCorner}>
+              <select class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-startCorner`} onchange={(event) => updateStringParam("startCorner", (event.currentTarget as HTMLSelectElement).value)} value={region.params.startCorner}>
                 <option value="bottom_left">Bottom left</option>
                 <option value="bottom_right">Bottom right</option>
                 <option value="top_left">Top left</option>
@@ -600,48 +600,48 @@ function localMessageClass(tone: LocalMessageTone): string {
             </label>
             <label class="space-y-1">
               <span class="text-xs font-medium text-text-muted">Turn direction</span>
-              <select class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-turnDirection`} onchange={(event) => updateStringParam("turnDirection", (event.currentTarget as HTMLSelectElement).value)} value={region.params.turnDirection}>
+              <select class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-turnDirection`} onchange={(event) => updateStringParam("turnDirection", (event.currentTarget as HTMLSelectElement).value)} value={region.params.turnDirection}>
                 <option value="clockwise">Clockwise</option>
                 <option value="counter_clockwise">Counter clockwise</option>
               </select>
             </label>
             <label class="space-y-1">
               <span class="text-xs font-medium text-text-muted">Turnaround distance (m)</span>
-              <input class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-turnaroundDistance_m`} inputmode="decimal" onchange={(event) => updateNumericParam("turnaroundDistance_m", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.turnaroundDistance_m} />
+              <input class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-turnaroundDistance_m`} inputmode="decimal" onchange={(event) => updateNumericParam("turnaroundDistance_m", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.turnaroundDistance_m} />
             </label>
-            <label class="flex items-center gap-2 rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-sm text-text-primary md:mt-6">
+            <label class="flex items-center gap-2 rounded-lg border border-border bg-bg-secondary/60 px-3 py-2 text-sm text-text-primary md:mt-6">
               <input checked={region.params.crosshatch} data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-crosshatch`} onchange={(event) => updateBooleanParam("crosshatch", (event.currentTarget as HTMLInputElement).checked)} type="checkbox" />
               Crosshatch
             </label>
           {:else if region.patternType === "corridor"}
             <label class="space-y-1">
               <span class="text-xs font-medium text-text-muted">Left width (m)</span>
-              <input class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-leftWidth_m`} inputmode="decimal" onchange={(event) => updateNumericParam("leftWidth_m", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.leftWidth_m} />
+              <input class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-leftWidth_m`} inputmode="decimal" onchange={(event) => updateNumericParam("leftWidth_m", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.leftWidth_m} />
             </label>
             <label class="space-y-1">
               <span class="text-xs font-medium text-text-muted">Right width (m)</span>
-              <input class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-rightWidth_m`} inputmode="decimal" onchange={(event) => updateNumericParam("rightWidth_m", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.rightWidth_m} />
+              <input class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-rightWidth_m`} inputmode="decimal" onchange={(event) => updateNumericParam("rightWidth_m", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.rightWidth_m} />
             </label>
             <label class="space-y-1">
               <span class="text-xs font-medium text-text-muted">Turnaround distance (m)</span>
-              <input class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-turnaroundDistance_m`} inputmode="decimal" onchange={(event) => updateNumericParam("turnaroundDistance_m", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.turnaroundDistance_m} />
+              <input class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-turnaroundDistance_m`} inputmode="decimal" onchange={(event) => updateNumericParam("turnaroundDistance_m", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.turnaroundDistance_m} />
             </label>
           {:else}
             <label class="space-y-1">
               <span class="text-xs font-medium text-text-muted">Structure height (m)</span>
-              <input class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-structureHeight_m`} inputmode="decimal" onchange={(event) => updateNumericParam("structureHeight_m", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.structureHeight_m} />
+              <input class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-structureHeight_m`} inputmode="decimal" onchange={(event) => updateNumericParam("structureHeight_m", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.structureHeight_m} />
             </label>
             <label class="space-y-1">
               <span class="text-xs font-medium text-text-muted">Scan distance (m)</span>
-              <input class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-scanDistance_m`} inputmode="decimal" onchange={(event) => updateNumericParam("scanDistance_m", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.scanDistance_m} />
+              <input class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-scanDistance_m`} inputmode="decimal" onchange={(event) => updateNumericParam("scanDistance_m", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.scanDistance_m} />
             </label>
             <label class="space-y-1">
               <span class="text-xs font-medium text-text-muted">Layer count</span>
-              <input class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-layerCount`} inputmode="numeric" onchange={(event) => updateNumericParam("layerCount", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.layerCount} />
+              <input class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-layerCount`} inputmode="numeric" onchange={(event) => updateNumericParam("layerCount", (event.currentTarget as HTMLInputElement).value)} type="number" value={region.params.layerCount} />
             </label>
             <label class="space-y-1">
               <span class="text-xs font-medium text-text-muted">Layer order</span>
-              <select class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-layerOrder`} onchange={(event) => updateStringParam("layerOrder", (event.currentTarget as HTMLSelectElement).value)} value={region.params.layerOrder}>
+              <select class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary" data-testid={`${missionWorkspaceTestIds.surveyParamPrefix}-layerOrder`} onchange={(event) => updateStringParam("layerOrder", (event.currentTarget as HTMLSelectElement).value)} value={region.params.layerOrder}>
                 <option value="bottom_to_top">Bottom to top</option>
                 <option value="top_to_bottom">Top to bottom</option>
               </select>
@@ -653,7 +653,7 @@ function localMessageClass(tone: LocalMessageTone): string {
       <section class="rounded-lg border border-border bg-bg-primary p-3">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Generated review</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Generated review</p>
             <h5 class="mt-1 text-sm font-semibold text-text-primary">Nested generated items stay subordinate here</h5>
           </div>
 
@@ -690,22 +690,22 @@ function localMessageClass(tone: LocalMessageTone): string {
 
         {#if formattedStats}
           <div class="mt-4 grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-3">
-            <div class="rounded-xl border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">GSD</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.gsd}</dd></div>
-            <div class="rounded-xl border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Photos</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.photoCount}</dd></div>
-            <div class="rounded-xl border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Flight time</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.flightTime}</dd></div>
-            <div class="rounded-xl border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Trigger distance</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.triggerDistance}</dd></div>
+            <div class="rounded-lg border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">GSD</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.gsd}</dd></div>
+            <div class="rounded-lg border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Photos</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.photoCount}</dd></div>
+            <div class="rounded-lg border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Flight time</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.flightTime}</dd></div>
+            <div class="rounded-lg border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Trigger distance</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.triggerDistance}</dd></div>
             {#if region.patternType === "structure"}
-              <div class="rounded-xl border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Layers</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.layerCount ?? "—"}</dd></div>
-              <div class="rounded-xl border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Photos per layer</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.photosPerLayer ?? "—"}</dd></div>
+              <div class="rounded-lg border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Layers</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.layerCount ?? "—"}</dd></div>
+              <div class="rounded-lg border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Photos per layer</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.photosPerLayer ?? "—"}</dd></div>
             {:else}
-              <div class="rounded-xl border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Lane spacing</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.laneSpacing}</dd></div>
-              <div class="rounded-xl border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Lane count</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.laneCount}</dd></div>
+              <div class="rounded-lg border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Lane spacing</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.laneSpacing}</dd></div>
+              <div class="rounded-lg border border-border/70 bg-bg-secondary px-3 py-2"><dt class="text-text-muted">Lane count</dt><dd class="mt-1 font-medium text-text-primary">{formattedStats.laneCount}</dd></div>
             {/if}
           </div>
         {/if}
 
         {#if generatedEntries.length === 0}
-          <div class="mt-4 rounded-xl border border-dashed border-border bg-bg-secondary/60 px-4 py-4 text-sm text-text-secondary">
+          <div class="mt-4 rounded-lg border border-dashed border-border bg-bg-secondary/60 px-4 py-4 text-sm text-text-secondary">
             Generated mission items will appear here after a successful generate. Existing geometry and parameter changes stay local until you explicitly regenerate.
           </div>
         {:else}
@@ -713,7 +713,7 @@ function localMessageClass(tone: LocalMessageTone): string {
             <div class="space-y-2">
               {#each generatedEntries as entry (`${region.id}-generated-${entry.index}`)}
                 <button
-                  class={`w-full rounded-xl border px-3 py-3 text-left transition ${activeGeneratedEntry?.index === entry.index
+                  class={`w-full rounded-lg border px-3 py-3 text-left transition ${activeGeneratedEntry?.index === entry.index
                     ? "border-accent/40 bg-accent/10 text-text-primary"
                     : "border-border bg-bg-secondary/60 text-text-primary hover:border-accent/40"}`}
                   data-testid={`${missionWorkspaceTestIds.surveyGeneratedItemPrefix}-${entry.index}`}
@@ -724,9 +724,9 @@ function localMessageClass(tone: LocalMessageTone): string {
                   type="button"
                 >
                   <div class="flex flex-wrap items-center justify-between gap-2">
-                    <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Item {entry.index + 1}</span>
+                    <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Item {entry.index + 1}</span>
                     {#if entry.edited}
-                      <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-warning" data-testid={`${missionWorkspaceTestIds.surveyGeneratedEditedPrefix}-${entry.index}`}>
+                      <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-warning" data-testid={`${missionWorkspaceTestIds.surveyGeneratedEditedPrefix}-${entry.index}`}>
                         Manual edit
                       </span>
                     {/if}
@@ -738,10 +738,10 @@ function localMessageClass(tone: LocalMessageTone): string {
             </div>
 
             {#if activeGeneratedEntry}
-              <div class="rounded-xl border border-border/70 bg-bg-secondary/60 p-4">
+              <div class="rounded-lg border border-border/70 bg-bg-secondary/60 p-4">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Selected generated item</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Selected generated item</p>
                     <h6 class="mt-1 text-sm font-semibold text-text-primary">{commandDisplayName(activeGeneratedEntry.item.command)}</h6>
                   </div>
 
@@ -761,19 +761,19 @@ function localMessageClass(tone: LocalMessageTone): string {
                   <div class="mt-4 grid gap-3 md:grid-cols-3">
                     <label class="space-y-1">
                       <span class="text-xs font-medium text-text-muted">Latitude</span>
-                      <input class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.surveyGeneratedLatitude} inputmode="decimal" onchange={(event) => updateGeneratedItemCoordinate("latitude", (event.currentTarget as HTMLInputElement).value)} type="number" value={activeGeneratedLatLon.latitude_deg} />
+                      <input class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.surveyGeneratedLatitude} inputmode="decimal" onchange={(event) => updateGeneratedItemCoordinate("latitude", (event.currentTarget as HTMLInputElement).value)} type="number" value={activeGeneratedLatLon.latitude_deg} />
                     </label>
                     <label class="space-y-1">
                       <span class="text-xs font-medium text-text-muted">Longitude</span>
-                      <input class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.surveyGeneratedLongitude} inputmode="decimal" onchange={(event) => updateGeneratedItemCoordinate("longitude", (event.currentTarget as HTMLInputElement).value)} type="number" value={activeGeneratedLatLon.longitude_deg} />
+                      <input class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.surveyGeneratedLongitude} inputmode="decimal" onchange={(event) => updateGeneratedItemCoordinate("longitude", (event.currentTarget as HTMLInputElement).value)} type="number" value={activeGeneratedLatLon.longitude_deg} />
                     </label>
                     <label class="space-y-1">
                       <span class="text-xs font-medium text-text-muted">Altitude</span>
-                      <input class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.surveyGeneratedAltitude} inputmode="decimal" onchange={(event) => updateGeneratedItemCoordinate("altitude", (event.currentTarget as HTMLInputElement).value)} type="number" value={activeGeneratedAltitude} />
+                      <input class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.surveyGeneratedAltitude} inputmode="decimal" onchange={(event) => updateGeneratedItemCoordinate("altitude", (event.currentTarget as HTMLInputElement).value)} type="number" value={activeGeneratedAltitude} />
                     </label>
                   </div>
                 {:else}
-                  <div class="mt-4 rounded-xl border border-dashed border-border bg-bg-primary px-4 py-4 text-sm text-text-secondary">
+                  <div class="mt-4 rounded-lg border border-dashed border-border bg-bg-primary px-4 py-4 text-sm text-text-secondary">
                     This generated command does not expose a position payload, so it remains visible here without pretending to be a draggable top-level mission row.
                   </div>
                 {/if}

@@ -105,14 +105,14 @@ function handleContinue() {
     data-testid={setupWorkspaceTestIds.wizardStepRcSummary}
   >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Signal state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Signal state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary">{view.rcReceiver.statusText}</p>
-      <p class="mt-1 text-[11px] uppercase tracking-[0.16em] text-text-muted">
+      <p class="mt-1 text-xs uppercase tracking-widest text-text-muted">
         {view.rcReceiver.signalState}{view.rcReceiver.rssiText ? ` · ${view.rcReceiver.rssiText}` : ""}
       </p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Current RCMAP</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Current RCMAP</p>
       <p class="mt-2 font-mono text-xs text-text-secondary">
         ROLL={rollItem?.valueText ?? "--"} · PITCH={pitchItem?.valueText ?? "--"} ·
         THROTTLE={throttleItem?.valueText ?? "--"} · YAW={yawItem?.valueText ?? "--"}
@@ -123,8 +123,8 @@ function handleContinue() {
   {#if firstFourChannels.length > 0}
     <div class="grid gap-2 rounded-lg border border-border bg-bg-primary/60 p-3 md:grid-cols-4">
       {#each firstFourChannels as channel (channel.channel)}
-        <div class="rounded-xl border border-border bg-bg-secondary/70 px-3 py-2 text-xs text-text-secondary">
-          <p class="font-mono font-semibold uppercase tracking-[0.18em] text-text-muted">
+        <div class="rounded-lg border border-border bg-bg-secondary/70 px-3 py-2 text-xs text-text-secondary">
+          <p class="font-mono font-semibold uppercase tracking-widest text-text-muted">
             CH{channel.channel}
           </p>
           <p class="mt-1 font-mono text-sm font-semibold text-text-primary">{channel.pwm}</p>

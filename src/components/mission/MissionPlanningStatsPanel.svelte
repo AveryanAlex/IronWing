@@ -354,7 +354,7 @@ function numbersEqual(left: number, right: number): boolean {
 <section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.planningStatsPanel}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Planning support</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Planning support</p>
       <h3 class="mt-1 text-sm font-semibold text-text-primary">
         {mode === "mission" ? "Mission estimates" : mode === "fence" ? "Fence support stats" : "Rally support stats"}
       </h3>
@@ -362,7 +362,7 @@ function numbersEqual(left: number, right: number): boolean {
 
     {#if mode === "mission"}
       <span
-        class={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${toneClass(speedStatusTone)}`}
+        class={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${toneClass(speedStatusTone)}`}
         data-testid={missionWorkspaceTestIds.planningStatsSpeedStatus}
       >
         {readOnly ? "Read-only" : draftOverridesDefaults ? "Draft override" : "Defaults synced"}
@@ -375,12 +375,12 @@ function numbersEqual(left: number, right: number): boolean {
     <article class="rounded-lg border border-border bg-bg-secondary/50 p-3" data-testid={missionWorkspaceTestIds.planningStatsMissionCard}>
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Mission envelope</p>
+          <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Mission envelope</p>
           <h4 class="mt-1 text-sm font-semibold text-text-primary">Mission estimates</h4>
         </div>
 
         <span
-          class={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${missionStats.isTimeIndeterminate
+          class={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${missionStats.isTimeIndeterminate
             ? toneClass("warning")
             : toneClass("success")}`}
           data-testid={missionWorkspaceTestIds.planningStatsMissionState}
@@ -392,7 +392,7 @@ function numbersEqual(left: number, right: number): boolean {
       <div class="mt-4 grid gap-3 sm:grid-cols-2">
         {#each missionStatsEntries as stat (stat.testId)}
           <div class={`rounded-lg border px-3 py-3 ${toneClass(stat.tone ?? "default")}`} data-testid={stat.testId}>
-            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{stat.label}</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">{stat.label}</p>
             <p class="mt-2 text-base font-semibold tabular-nums text-current">{stat.value}</p>
             <p class="mt-1 text-xs leading-relaxed text-text-secondary">{stat.hint}</p>
           </div>
@@ -418,7 +418,7 @@ function numbersEqual(left: number, right: number): boolean {
         <label class="space-y-1 rounded-lg border border-border bg-bg-primary px-3 py-3">
           <span class="text-xs font-medium text-text-muted">Cruise speed (m/s)</span>
           <input
-            class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+            class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
             data-testid={missionWorkspaceTestIds.planningStatsCruiseInput}
             disabled={readOnly}
             inputmode="decimal"
@@ -439,7 +439,7 @@ function numbersEqual(left: number, right: number): boolean {
         <label class="space-y-1 rounded-lg border border-border bg-bg-primary px-3 py-3">
           <span class="text-xs font-medium text-text-muted">Hover speed (m/s)</span>
           <input
-            class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+            class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
             data-testid={missionWorkspaceTestIds.planningStatsHoverInput}
             disabled={readOnly}
             inputmode="decimal"
@@ -463,7 +463,7 @@ function numbersEqual(left: number, right: number): boolean {
 
     {#if mode === "fence"}
     <article class="rounded-lg border border-border bg-bg-secondary/50 p-3" data-testid={missionWorkspaceTestIds.planningStatsFenceCard}>
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Fence continuity</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Fence continuity</p>
       <h4 class="mt-1 text-sm font-semibold text-text-primary">Fence support stats</h4>
       <p class="mt-1 text-xs text-text-secondary">
         Fence perimeter and area stay visible even when the active editor is focused on Mission or Rally work.
@@ -472,7 +472,7 @@ function numbersEqual(left: number, right: number): boolean {
       <div class="mt-4 grid gap-3">
         {#each fenceStatsEntries as stat (stat.testId)}
           <div class={`rounded-lg border px-3 py-3 ${toneClass(stat.tone ?? "default")}`} data-testid={stat.testId}>
-            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{stat.label}</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">{stat.label}</p>
             <p class="mt-2 text-base font-semibold tabular-nums text-current">{stat.value}</p>
             <p class="mt-1 text-xs leading-relaxed text-text-secondary">{stat.hint}</p>
           </div>
@@ -483,7 +483,7 @@ function numbersEqual(left: number, right: number): boolean {
 
     {#if mode === "rally"}
     <article class="rounded-lg border border-border bg-bg-secondary/50 p-3" data-testid={missionWorkspaceTestIds.planningStatsRallyCard}>
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Rally continuity</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Rally continuity</p>
       <h4 class="mt-1 text-sm font-semibold text-text-primary">Rally support stats</h4>
       <p class="mt-1 text-xs text-text-secondary">
         Rally distance stays explicit about missing Home truth instead of collapsing to a fake zero-distance answer.
@@ -492,7 +492,7 @@ function numbersEqual(left: number, right: number): boolean {
       <div class="mt-4 grid gap-3">
         {#each rallyStatsEntries as stat (stat.testId)}
           <div class={`rounded-lg border px-3 py-3 ${toneClass(stat.tone ?? "default")}`} data-testid={stat.testId}>
-            <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{stat.label}</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">{stat.label}</p>
             <p class="mt-2 text-base font-semibold tabular-nums text-current">{stat.value}</p>
             <p class="mt-1 text-xs leading-relaxed text-text-secondary">{stat.hint}</p>
           </div>

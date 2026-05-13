@@ -30,14 +30,14 @@ let {
 let chartExportVisible = $derived(exportState.origin === "chart");
 let chartExportInFlight = $derived(exportState.phase === "exporting" && chartExportVisible);
 
-const eyebrowClass = "m-0 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]";
-const copyClass = "m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]";
+const eyebrowClass = "m-0 text-xs font-semibold uppercase tracking-wide text-text-muted";
+const copyClass = "m-0 text-sm leading-6 text-text-secondary";
 const fieldLabelClass = eyebrowClass;
-const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-bg-input)] px-[0.7rem] py-[0.55rem] text-[0.8rem] text-[var(--color-text-primary)]";
+const inputClass = "w-full min-w-0 rounded-md border border-border bg-bg-input px-3 py-2 text-sm text-text-primary";
 </script>
 
-<section class="flex flex-col gap-3 border-t border-[var(--color-border)] pt-3" data-testid="logs-chart-export">
-  <div class="flex items-center justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+<section class="flex flex-col gap-3 border-t border-border pt-3" data-testid="logs-chart-export">
+  <div class="flex items-center justify-between gap-3 max-md:flex-col max-md:items-stretch">
     <div>
       <p class={eyebrowClass}>Selected-range export</p>
       <p class={copyClass}>Drag across any chart to pin a shared range, then export CSV for the active chart group only.</p>
@@ -52,7 +52,7 @@ const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-bord
     </Button>
   </div>
 
-  <div class="flex items-center justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+  <div class="flex items-center justify-between gap-3 max-md:flex-col max-md:items-stretch">
     <label class="flex flex-1 flex-col gap-1.5">
       <span class={fieldLabelClass}>Destination path</span>
       <input

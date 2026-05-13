@@ -96,7 +96,7 @@ function stepById(id: string): WizardStepSnapshot | null {
       {step.title}
     </span>
     <button
-      class="rounded-full border border-border bg-bg-primary px-2 py-[2px] text-[10px] font-semibold uppercase tracking-[0.14em] text-text-secondary hover:border-accent hover:text-accent"
+      class="rounded-full border border-border bg-bg-primary px-2 py-[2px] text-xs font-semibold uppercase tracking-widest text-text-secondary hover:border-accent hover:text-accent"
       data-testid={`${setupWorkspaceTestIds.wizardHandoffJumpPrefix}-${step.id}`}
       onclick={() => handleHandoffJump(step.sectionId)}
       type="button"
@@ -116,7 +116,7 @@ function stepById(id: string): WizardStepSnapshot | null {
     data-testid={setupWorkspaceTestIds.wizardHeader}
   >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">
         Beginner setup wizard
       </p>
       <p class="mt-1 text-sm text-text-secondary">
@@ -125,13 +125,13 @@ function stepById(id: string): WizardStepSnapshot | null {
     </div>
     <div class="flex items-center gap-2">
       <span
-        class="rounded-full border border-border bg-bg-primary/80 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary"
+        class="rounded-full border border-border bg-bg-primary/80 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary"
         data-testid={setupWorkspaceTestIds.wizardPhase}
       >
         {phaseLabel(wizardState)}
       </span>
       <button
-        class="rounded-full border border-border bg-bg-primary px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary hover:border-accent hover:text-accent"
+        class="rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary hover:border-accent hover:text-accent"
         data-testid={setupWorkspaceTestIds.wizardClose}
         onclick={onClose}
         type="button"
@@ -154,7 +154,7 @@ function stepById(id: string): WizardStepSnapshot | null {
   >
     {#each wizardState.steps as step (step.id)}
       <li
-        class="rounded-full border border-border bg-bg-primary/80 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary"
+        class="rounded-full border border-border bg-bg-primary/80 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary"
         data-testid={`${setupWorkspaceTestIds.wizardStepItemPrefix}-${step.id}`}
         data-status={step.status}
         data-tier={step.tier}
@@ -189,7 +189,7 @@ function stepById(id: string): WizardStepSnapshot | null {
     >
       <header class="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">
             {currentStep.tier === "required" ? "Required" : "Recommended"}
           </p>
           <h4 class="mt-1 text-sm font-semibold text-text-primary">{currentStep.title}</h4>
@@ -203,7 +203,7 @@ function stepById(id: string): WizardStepSnapshot | null {
 
       <footer class="mt-4 flex flex-wrap gap-2">
         <button
-          class="rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary hover:border-accent hover:text-accent"
+          class="rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary hover:border-accent hover:text-accent"
           data-testid={setupWorkspaceTestIds.wizardStepDetour}
           onclick={handleDetour}
           type="button"
@@ -211,7 +211,7 @@ function stepById(id: string): WizardStepSnapshot | null {
           Open full section
         </button>
         <button
-          class="rounded-full border border-accent bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-accent hover:bg-accent/20 disabled:border-border disabled:bg-bg-primary disabled:text-text-muted"
+          class="rounded-full border border-accent bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-accent hover:bg-accent/20 disabled:border-border disabled:bg-bg-primary disabled:text-text-muted"
           data-testid={setupWorkspaceTestIds.wizardStepAdvance}
           disabled={blocksActions}
           onclick={handleAdvance}
@@ -221,7 +221,7 @@ function stepById(id: string): WizardStepSnapshot | null {
         </button>
         {#if currentStep.tier === "recommended"}
           <button
-            class="rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary hover:border-accent hover:text-accent disabled:text-text-muted"
+            class="rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary hover:border-accent hover:text-accent disabled:text-text-muted"
             data-testid={setupWorkspaceTestIds.wizardStepSkip}
             disabled={blocksActions}
             onclick={handleSkip}
@@ -249,7 +249,7 @@ function stepById(id: string): WizardStepSnapshot | null {
       </p>
       <div class="mt-3 flex flex-wrap gap-2">
         <button
-          class="rounded-full border border-accent bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-accent hover:bg-accent/20"
+          class="rounded-full border border-accent bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-accent hover:bg-accent/20"
           data-testid={setupWorkspaceTestIds.wizardResume}
           onclick={handleResume}
           type="button"
@@ -278,7 +278,7 @@ function stepById(id: string): WizardStepSnapshot | null {
       </p>
       <div class="mt-3 flex flex-wrap gap-2">
         <button
-          class="rounded-full border border-accent bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-accent hover:bg-accent/20"
+          class="rounded-full border border-accent bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-accent hover:bg-accent/20"
           data-testid={setupWorkspaceTestIds.wizardRestart}
           onclick={handleRestart}
           type="button"
@@ -293,13 +293,13 @@ function stepById(id: string): WizardStepSnapshot | null {
       data-testid={setupWorkspaceTestIds.wizardHandoff}
     >
       <header>
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-success">Wizard complete</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-success">Wizard complete</p>
         <h4 class="mt-1 text-sm font-semibold text-text-primary">Here's what we configured</h4>
       </header>
       {#if wizardState.handoffSummary}
         <div class="grid gap-3 text-xs text-text-secondary">
           <div>
-            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+            <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">
               Configured
             </p>
             <ul class="mt-1 space-y-1">
@@ -313,7 +313,7 @@ function stepById(id: string): WizardStepSnapshot | null {
           </div>
           {#if wizardState.handoffSummary.skippedSteps.length > 0}
             <div>
-              <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">
+              <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">
                 Skipped
               </p>
               <ul class="mt-1 space-y-1">
@@ -328,7 +328,7 @@ function stepById(id: string): WizardStepSnapshot | null {
           {/if}
           {#if wizardState.handoffSummary.remainingRequired.length > 0}
             <div>
-              <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-warning">
+              <p class="text-xs font-semibold uppercase tracking-widest text-warning">
                 Still required
               </p>
               <ul class="mt-1 space-y-1">
@@ -344,7 +344,7 @@ function stepById(id: string): WizardStepSnapshot | null {
         </div>
       {/if}
       <button
-        class="rounded-full border border-success bg-success/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-success hover:bg-success/20"
+        class="rounded-full border border-success bg-success/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-success hover:bg-success/20"
         data-testid={setupWorkspaceTestIds.wizardHandoffAcknowledge}
         onclick={handleAcknowledge}
         type="button"

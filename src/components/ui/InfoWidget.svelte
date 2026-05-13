@@ -61,7 +61,7 @@ function handleDocumentKeydown(event: KeyboardEvent) {
     aria-expanded={open}
     aria-haspopup="dialog"
     aria-label={label}
-    class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border bg-bg-secondary text-[11px] font-semibold text-text-muted transition hover:border-accent hover:text-accent"
+    class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border bg-bg-secondary text-xs font-semibold text-text-muted transition hover:border-accent hover:text-accent"
     data-testid={testId}
     onclick={toggle}
     title={label}
@@ -72,12 +72,12 @@ function handleDocumentKeydown(event: KeyboardEvent) {
 
   {#if open}
     <div
-      class={`absolute top-full z-20 mt-2 w-72 rounded-xl border border-border bg-bg-primary p-3 text-left shadow-2xl ${align === "right" ? "right-0" : "left-0"}`}
+      class={`absolute top-full z-20 mt-2 w-72 rounded-lg border border-border bg-bg-primary p-3 text-left shadow-2xl ${align === "right" ? "right-0" : "left-0"}`}
       data-testid={panelTestId}
       role="dialog"
     >
       {#if title}
-        <p class="text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">{title}</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">{title}</p>
       {/if}
       <p class={`text-xs leading-5 text-text-secondary ${title ? "mt-2" : ""}`} data-testid={contentTestId}>{description}</p>
     </div>

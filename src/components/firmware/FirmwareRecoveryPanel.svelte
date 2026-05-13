@@ -310,14 +310,14 @@ let canStartRecovery = $derived(
   && dfuConfirmed,
 );
 
-const proseClass = "mt-[var(--space-3)] max-w-[60ch] text-[0.88rem] leading-[1.5] text-[var(--color-text-secondary)]";
-const fieldLabelClass = "text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]";
-const selectClass = "mt-[var(--space-2)] w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-[0.86rem] text-[var(--color-text-primary)]";
-const infoBlockClass = "mt-[var(--space-3)] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-[0.78rem] text-[var(--color-text-secondary)]";
-const standaloneInfoBlockClass = `${infoBlockClass} text-[0.86rem]`;
-const eyebrowClass = "m-0 text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]";
-const subtitleClass = "m-0 mt-1 text-[0.92rem] font-semibold text-[var(--color-text-primary)]";
-const checkboxClass = "flex items-start gap-[var(--space-3)] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-input)] p-3 text-[0.86rem] text-[var(--color-text-secondary)]";
+const proseClass = "mt-3 max-w-[60ch] text-sm leading-6 text-text-secondary";
+const fieldLabelClass = "text-xs font-semibold uppercase tracking-wide text-text-muted";
+const selectClass = "mt-2 w-full rounded-md border border-border bg-bg-input px-3 py-2 text-sm text-text-primary";
+const infoBlockClass = "mt-3 rounded-md border border-border bg-bg-input px-3 py-2 text-xs text-text-secondary";
+const standaloneInfoBlockClass = "mt-3 rounded-md border border-border bg-bg-input px-3 py-2 text-sm text-text-secondary";
+const eyebrowClass = "m-0 text-xs font-semibold uppercase tracking-wide text-text-muted";
+const subtitleClass = "m-0 mt-1 text-sm font-semibold text-text-primary";
+const checkboxClass = "flex items-start gap-3 rounded-md border border-border bg-bg-input p-3 text-sm text-text-secondary";
 
 onMount(() => {
   void loadRecoveryTargets();
@@ -359,9 +359,9 @@ $effect(() => {
     This is a separate rescue path for boards that need bootloader recovery. Restore the bootloader here, then return to Install / Update and flash normal ArduPilot firmware over serial.
   </p>
 
-  <div class="mt-[var(--space-3)] grid gap-[var(--space-3)] xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
+  <div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
     <Panel padded>
-      <div class="grid gap-[var(--space-3)] md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+      <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
         <label class="flex flex-col">
           <span class={fieldLabelClass}>DFU device</span>
           <select
@@ -390,19 +390,19 @@ $effect(() => {
       </div>
 
       <div class={infoBlockClass} data-testid={firmwareWorkspaceTestIds.recoveryDeviceState}>
-        <span class="font-semibold text-[var(--color-text-primary)]">Selected device</span>
-        <p class="m-0 mt-[var(--space-1)]">{deviceLabel(workspaceState.recovery.device)} · {deviceDetail(workspaceState.recovery.device)}</p>
+        <span class="font-semibold text-text-primary">Selected device</span>
+        <p class="m-0 mt-1">{deviceLabel(workspaceState.recovery.device)} · {deviceDetail(workspaceState.recovery.device)}</p>
       </div>
 
       {#if workspaceState.recovery.scanError}
-        <div class="mt-[var(--space-3)]">
+        <div class="mt-3">
           <Banner severity="danger" title={workspaceState.recovery.scanError} />
         </div>
       {/if}
 
-      <div class="mt-[var(--space-3)]">
+      <div class="mt-3">
         <Panel padded tone="success">
-          <div class="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
+          <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p class={eyebrowClass}>Official bootloader</p>
               <h4 class={subtitleClass}>Primary recovery source</h4>
@@ -423,7 +423,7 @@ $effect(() => {
             Official bootloader recovery stays primary. It writes the known bootloader image for the selected target, then hands you back to Install / Update for the normal firmware flash.
           </p>
 
-          <label class="mt-[var(--space-3)] block">
+          <label class="mt-3 block">
             <span class={fieldLabelClass}>Official target</span>
             <select
               class={selectClass}
@@ -444,7 +444,7 @@ $effect(() => {
           </label>
 
           {#if targetError}
-            <div class="mt-[var(--space-3)]" data-testid={firmwareWorkspaceTestIds.recoveryTargetError}>
+            <div class="mt-3" data-testid={firmwareWorkspaceTestIds.recoveryTargetError}>
               <Banner
                 severity="danger"
                 title={targetError}
@@ -465,15 +465,15 @@ $effect(() => {
           {/if}
 
           <div class={infoBlockClass} data-testid={firmwareWorkspaceTestIds.recoveryTargetState}>
-            <span class="font-semibold text-[var(--color-text-primary)]">Active official target</span>
-            <p class="m-0 mt-[var(--space-1)]">{targetLabel(workspaceState.recovery.target)} · {targetDetail(workspaceState.recovery.target)}</p>
+            <span class="font-semibold text-text-primary">Active official target</span>
+            <p class="m-0 mt-1">{targetLabel(workspaceState.recovery.target)} · {targetDetail(workspaceState.recovery.target)}</p>
           </div>
         </Panel>
       </div>
     </Panel>
 
     <Panel padded tone="warning">
-      <div class="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
+      <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p class={eyebrowClass}>Advanced recovery</p>
           <h4 class={subtitleClass}>Manual APJ / BIN source</h4>
@@ -493,12 +493,12 @@ $effect(() => {
       </p>
 
       <div class={infoBlockClass} data-testid={firmwareWorkspaceTestIds.recoverySourceState}>
-        <span class="font-semibold text-[var(--color-text-primary)]">Active recovery source</span>
-        <p class="m-0 mt-[var(--space-1)]">{recoverySourceState}</p>
+        <span class="font-semibold text-text-primary">Active recovery source</span>
+        <p class="m-0 mt-1">{recoverySourceState}</p>
       </div>
 
       {#if manualPanelOpen}
-        <div class="mt-[var(--space-3)] flex flex-col gap-[var(--space-3)]" data-testid={firmwareWorkspaceTestIds.recoveryManualPanel}>
+        <div class="mt-3 flex flex-col gap-3" data-testid={firmwareWorkspaceTestIds.recoveryManualPanel}>
           <div data-testid={firmwareWorkspaceTestIds.recoveryManualWarning}>
             <Banner
               severity="warning"
@@ -506,7 +506,7 @@ $effect(() => {
             />
           </div>
 
-          <div class="grid gap-[var(--space-2)] sm:grid-cols-2">
+          <div class="grid gap-2 sm:grid-cols-2 rounded-lg border border-border bg-bg-secondary p-1">
             <Button
               tone={manualKind === "local_apj_bytes" ? "warning" : "neutral"}
               testId={firmwareWorkspaceTestIds.recoveryManualApj}
@@ -546,12 +546,12 @@ $effect(() => {
                 data-testid={firmwareWorkspaceTestIds.recoveryManualConfirm}
                 onchange={(event) => (manualConfirmed = (event.currentTarget as HTMLInputElement).checked)}
                 type="checkbox"
-              />
-              <span>
-                <span class="font-semibold text-[var(--color-text-primary)]">Manual file confirmation</span><br />
-                I confirm I am manually supplying the exact bootloader image for this board and understand that the wrong APJ/BIN can leave it non-bootable.
-              </span>
-            </label>
+            />
+            <span>
+              <span class="font-semibold text-text-primary">Manual file confirmation</span><br />
+              I confirm I am manually supplying the exact bootloader image for this board and understand that the wrong APJ/BIN can leave it non-bootable.
+            </span>
+          </label>
           {/if}
         </div>
       {/if}
@@ -559,7 +559,7 @@ $effect(() => {
   </div>
 
   <Panel padded>
-    <label class={`${checkboxClass} border-[color-mix(in_srgb,var(--color-warning)_35%,var(--color-border))] bg-[color-mix(in_srgb,var(--color-warning)_8%,var(--color-bg-input))]`}>
+    <label class={`${checkboxClass} border-warning/35 bg-warning/10`}>
       <input
         class="mt-1"
         checked={dfuConfirmed}
@@ -568,7 +568,7 @@ $effect(() => {
         type="checkbox"
       />
       <span>
-        <span class="font-semibold text-[var(--color-text-primary)]">DFU safety acknowledgment</span><br />
+        <span class="font-semibold text-text-primary">DFU safety acknowledgment</span><br />
         I understand that DFU bootloader recovery bypasses the normal serial safety flow and should only be used for explicit bootloader rescue.
       </span>
     </label>
@@ -578,21 +578,21 @@ $effect(() => {
     </div>
 
     {#if isRecoveryActive}
-      <div class="mt-[var(--space-3)] rounded-[var(--radius-md)] border border-[color-mix(in_srgb,var(--color-warning)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_10%,transparent)] p-3 text-[0.86rem] text-[var(--color-text-primary)]">
+      <div class="mt-3 rounded-md border border-warning/35 bg-warning/10 p-3 text-sm text-text-primary">
         <p class="m-0 font-semibold">DFU recovery in progress</p>
         <p class="m-0 mt-1">{workspaceState.progress?.phase_label ?? workspaceState.sessionPhase ?? "working"}</p>
         {#if workspaceState.progress}
-          <div class="mt-[var(--space-3)] h-2 overflow-hidden rounded-full bg-[var(--color-bg-primary)]" data-testid={firmwareWorkspaceTestIds.recoveryProgress}>
-            <div class="h-full rounded-full bg-[var(--color-warning)] transition-[width] duration-200 ease-in-out" style={`width: ${Math.max(0, Math.min(100, workspaceState.progress.pct))}%`}></div>
+          <div class="mt-3 h-2 overflow-hidden rounded-full bg-bg-primary" data-testid={firmwareWorkspaceTestIds.recoveryProgress}>
+            <div class="h-full rounded-full bg-warning transition-[width] duration-200 ease-in-out" style={`width: ${Math.max(0, Math.min(100, workspaceState.progress.pct))}%`}></div>
           </div>
-          <p class="m-0 mt-[var(--space-2)] text-[0.72rem] text-[var(--color-text-secondary)]">
+          <p class="m-0 mt-2 text-xs text-text-secondary">
             {workspaceState.progress.bytes_written} / {workspaceState.progress.bytes_total} bytes · {Math.round(workspaceState.progress.pct)}%
           </p>
         {/if}
       </div>
     {/if}
 
-    <div class="mt-[var(--space-4)] flex flex-wrap gap-[var(--space-3)]">
+    <div class="mt-4 flex flex-wrap gap-3">
       {#if isRecoveryActive && !isRecoveryCancelling}
         <Button
           tone="warning"

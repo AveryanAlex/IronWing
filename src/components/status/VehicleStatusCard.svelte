@@ -40,7 +40,7 @@ let statusCard = $derived(view.vehicleStatusCard);
 <Panel padded>
   <div class="flex items-center justify-between gap-3">
     <div>
-      <p class="m-0 text-[0.72rem] font-bold uppercase tracking-[0.12em] text-text-muted">Vehicle status</p>
+      <p class="m-0 text-xs font-bold uppercase tracking-wider text-text-muted">Vehicle status</p>
       <h2 class="mt-1 mb-0 text-base font-[650] text-text-primary">Live vehicle state</h2>
     </div>
     <StatusPill tone={pillTone(statusCard.sessionTone)}>{statusCard.sessionLabel}</StatusPill>

@@ -3,6 +3,9 @@
   --color-bg-secondary: #171e27;
   --color-bg-tertiary: #202a36;
   --color-bg-input: #101924;
+  --color-surface-card: var(--color-bg-tertiary);
+  --color-surface-card-elevated: color-mix(in srgb, var(--color-bg-secondary) 88%, white 4%);
+  --color-surface-panel: color-mix(in srgb, var(--color-bg-secondary) 88%, transparent);
   --color-border: #263548;
   --color-border-light: #304154;
   --color-text-primary: #e6edf3;
@@ -13,6 +16,11 @@
   --color-danger: #ff4444;
   --color-warning: #ffb020;
   --color-success: #57e38b;
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
 }
 
 :root {
@@ -33,14 +41,10 @@
   --workspace-gutter-inset: clamp(12px, 1.5vw, 20px);
   --workspace-gutter-split: 12px;
 
-  --surface-card: var(--color-bg-tertiary);
-  --surface-card-elevated: color-mix(in srgb, var(--color-bg-secondary) 88%, white 4%);
-  --surface-panel: color-mix(in srgb, var(--color-bg-secondary) 88%, transparent);
-
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 18px;
+  /* Legacy aliases for the remaining raw-CSS exception surfaces. */
+  --surface-card: var(--color-surface-card);
+  --surface-card-elevated: var(--color-surface-card-elevated);
+  --surface-panel: var(--color-surface-panel);
 
   --control-h-sm: 28px;
   --control-h-md: 34px;

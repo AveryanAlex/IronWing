@@ -20,8 +20,14 @@
 ## Styling Rules
 
 - Prefer Tailwind for new UI code.
-- Use shared theme tokens from `src/styles/*` and the Tailwind v4 theme layer instead of introducing one-off colors or spacing values.
-- Keep raw CSS for `src/styles/*`, vendor overrides, generated/map DOM, and dense visual widgets where utilities would reduce clarity.
+- Use shared theme tokens from `src/styles/*` and the Tailwind v4 `@theme` layer instead of introducing one-off colors, spacing, or radius values. Do not add `tailwind.config.js`.
+- Prefer the standard Tailwind text scale such as `text-xs`, `text-sm`, `text-base`, and `text-lg` before arbitrary font sizes.
+- Prefer the standard spacing scale such as `gap-2/3/4`, `p-2/3/4`, and related utilities before custom spacing values.
+- Prefer semantic theme utilities such as `text-text-primary`, `bg-bg-secondary`, and `border-border` over hardcoded palette classes.
+- Prefer `rounded-md`, `rounded-lg`, and `rounded-full` over arbitrary radius utilities.
+- Prefer standard breakpoints such as `sm`, `md`, `lg`, and `xl` before arbitrary breakpoint values.
+- Keep arbitrary utilities for true exceptions only: dense widgets, generated or map DOM, HUD or chart overlays, range pseudo-elements, calc-based geometry, and similar cases where standard utilities would reduce clarity.
+- Keep raw CSS for `src/styles/*`, vendor overrides, generated/map DOM, and the same exceptional dense visual widgets where utilities would reduce clarity.
 - If a component needs custom CSS, keep it scoped and minimal. Do not add large style blocks to otherwise utility-first components without a clear reason.
 - New UI must work cleanly on mobile phones, tablets, and desktop; for layout changes, verify phone-width scrolling containers, dialogs/drawers, sticky bars, bottom safe-area spacing, usable tap targets, and behavior that does not depend on mouse-only interaction.
 

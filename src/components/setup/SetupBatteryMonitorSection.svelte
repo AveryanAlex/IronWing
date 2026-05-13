@@ -437,7 +437,7 @@ function round3(value: number): number {
         data-testid={setupWorkspaceTestIds.batterySummary}
       >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Live battery state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Live battery state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.batteryLiveState}>
         {liveSummary.stateText}
       </p>
@@ -446,7 +446,7 @@ function round3(value: number): number {
       </p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Preset state</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Preset state</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.batteryPresetState}>
         {presetStateText}
       </p>
@@ -455,7 +455,7 @@ function round3(value: number): number {
       </p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Power snapshot</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Power snapshot</p>
       {#if liveSummary.observation}
         <p class="mt-2 text-sm font-semibold text-text-primary">
           {formatVoltage(liveSummary.observation.voltage)} · {formatCurrent(liveSummary.observation.current)}
@@ -471,12 +471,12 @@ function round3(value: number): number {
 
   <div class="grid gap-3 xl:grid-cols-3">
     <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Board preset</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Board preset</p>
       <h4 class="mt-2 text-base font-semibold text-text-primary">Voltage and current sense pins</h4>
       <p class="mt-2 text-sm text-text-secondary">Choose a known flight-controller preset to preview BATT_VOLT_PIN and BATT_CURR_PIN before staging.</p>
       <select
         bind:value={selectedBoardPreset}
-        class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+        class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
         data-testid={`${setupWorkspaceTestIds.batteryPresetSelectPrefix}-board`}
         disabled={actionsBlocked || validBoardPresets.length === 0}
       >
@@ -502,12 +502,12 @@ function round3(value: number): number {
     </article>
 
     <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Sensor preset</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Sensor preset</p>
       <h4 class="mt-2 text-base font-semibold text-text-primary">Voltage multiplier and amps-per-volt</h4>
       <p class="mt-2 text-sm text-text-secondary">Choose a known power-module scaling preset to preview BATT_VOLT_MULT and BATT_AMP_PERVLT.</p>
       <select
         bind:value={selectedSensorPreset}
-        class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+        class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
         data-testid={`${setupWorkspaceTestIds.batteryPresetSelectPrefix}-sensor`}
         disabled={actionsBlocked || validSensorPresets.length === 0}
       >
@@ -533,13 +533,13 @@ function round3(value: number): number {
     </article>
 
     <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Chemistry preset</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Chemistry preset</p>
       <h4 class="mt-2 text-base font-semibold text-text-primary">Voltage-threshold preview</h4>
       <p class="mt-2 text-sm text-text-secondary">Choose a chemistry and cell count to preview BATT_ARM_VOLT, BATT_LOW_VOLT, and BATT_CRT_VOLT.</p>
       <div class="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
         <select
           bind:value={selectedChemistry}
-          class="rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryPresetSelectPrefix}-chemistry`}
           disabled={actionsBlocked || validChemistries.length === 0}
         >
@@ -550,7 +550,7 @@ function round3(value: number): number {
         </select>
         <input
           bind:value={batteryCellCount}
-          class="rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           inputmode="numeric"
           min="1"
           step="1"
@@ -585,10 +585,10 @@ function round3(value: number): number {
   <div class="grid gap-3 xl:grid-cols-3">
     {#if monitorItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">BATT_MONITOR</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">BATT_MONITOR</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{monitorItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">{monitorItem.description ?? "Choose the primary battery-monitor backend without bypassing the shared review tray."}</p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_MONITOR`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_MONITOR`}>
           Current · {currentValueText(monitorItem)}
         </p>
         {#if params.stagedEdits.BATT_MONITOR}
@@ -598,7 +598,7 @@ function round3(value: number): number {
         {/if}
         <select
           bind:value={monitorDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_MONITOR`}
           disabled={actionsBlocked || monitorOptions.length === 0}
         >
@@ -620,10 +620,10 @@ function round3(value: number): number {
 
     {#if voltPinItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">BATT_VOLT_PIN</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">BATT_VOLT_PIN</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{voltPinItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Manual voltage-pin staging remains available when board presets do not fit the current wiring.</p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_VOLT_PIN`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_VOLT_PIN`}>
           Current · {currentValueText(voltPinItem)}
         </p>
         {#if params.stagedEdits.BATT_VOLT_PIN}
@@ -633,7 +633,7 @@ function round3(value: number): number {
         {/if}
         <input
           bind:value={voltPinDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_VOLT_PIN`}
           inputmode="numeric"
           step="1"
@@ -653,10 +653,10 @@ function round3(value: number): number {
 
     {#if voltMultItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">BATT_VOLT_MULT</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">BATT_VOLT_MULT</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{voltMultItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Manual scaling remains available if the current sensor is not covered by the validated preset list.</p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_VOLT_MULT`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_VOLT_MULT`}>
           Current · {currentValueText(voltMultItem)}
         </p>
         {#if params.stagedEdits.BATT_VOLT_MULT}
@@ -666,7 +666,7 @@ function round3(value: number): number {
         {/if}
         <input
           bind:value={voltMultDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_VOLT_MULT`}
           inputmode="decimal"
           step="0.01"
@@ -688,10 +688,10 @@ function round3(value: number): number {
   <div class="grid gap-3 xl:grid-cols-3">
     {#if ampPerVoltItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">BATT_AMP_PERVLT</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">BATT_AMP_PERVLT</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{ampPerVoltItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Manual current scaling remains staged through the shared review tray.</p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_AMP_PERVLT`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_AMP_PERVLT`}>
           Current · {currentValueText(ampPerVoltItem)}
         </p>
         {#if params.stagedEdits.BATT_AMP_PERVLT}
@@ -701,7 +701,7 @@ function round3(value: number): number {
         {/if}
         <input
           bind:value={ampPerVoltDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_AMP_PERVLT`}
           inputmode="decimal"
           step="0.01"
@@ -721,10 +721,10 @@ function round3(value: number): number {
 
     {#if capacityItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">BATT_CAPACITY</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">BATT_CAPACITY</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{capacityItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Set the truthful pack capacity when the current installation differs from defaults.</p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_CAPACITY`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_CAPACITY`}>
           Current · {currentValueText(capacityItem)}
         </p>
         {#if params.stagedEdits.BATT_CAPACITY}
@@ -734,7 +734,7 @@ function round3(value: number): number {
         {/if}
         <input
           bind:value={capacityDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_CAPACITY`}
           inputmode="decimal"
           step="100"
@@ -754,10 +754,10 @@ function round3(value: number): number {
 
     {#if lowVoltItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">BATT_LOW_VOLT</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">BATT_LOW_VOLT</p>
         <h4 class="mt-2 text-base font-semibold text-text-primary">{lowVoltItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Manual low-voltage staging remains available alongside chemistry presets.</p>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_LOW_VOLT`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_LOW_VOLT`}>
           Current · {currentValueText(lowVoltItem)}
         </p>
         {#if params.stagedEdits.BATT_LOW_VOLT}
@@ -767,7 +767,7 @@ function round3(value: number): number {
         {/if}
         <input
           bind:value={lowVoltDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_LOW_VOLT`}
           inputmode="decimal"
           step="0.1"
@@ -788,18 +788,18 @@ function round3(value: number): number {
 
   {#if secondBatteryVisible}
     <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Battery 2</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Battery 2</p>
       <h4 class="mt-2 text-base font-semibold text-text-primary">Optional secondary monitor visibility</h4>
       <p class="mt-2 text-sm text-text-secondary">
         The active scope exposes at least part of the BATT2_* family, so the secondary monitor stays visible instead of disappearing behind generic raw rows.
       </p>
       {#if secondMonitorItem}
-        <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT2_MONITOR`}>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT2_MONITOR`}>
           Current · {currentValueText(secondMonitorItem)}
         </p>
         <select
           bind:value={secondMonitorDraft}
-          class="mt-4 w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT2_MONITOR`}
           disabled={actionsBlocked || secondMonitorOptions.length === 0}
         >

@@ -45,27 +45,27 @@ function retryEdit(name: string) {
     data-surface-kind={surface}
     data-testid={appShellTestIds.parameterReviewTray}
   >
-    <div class="mx-auto max-w-5xl rounded-lg border border-border bg-bg-secondary/95 shadow-[0_-24px_80px_rgba(0,0,0,0.28)] backdrop-blur">
+    <div class="mx-auto max-w-5xl rounded-lg border border-border bg-bg-secondary/95 shadow-xl backdrop-blur">
       <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
         <div class="min-w-0">
           <p class="runtime-eyebrow">Parameter changes</p>
           <div class="mt-1 flex flex-wrap items-center gap-2">
-            <h2 class="text-base font-semibold tracking-[-0.03em] text-text-primary sm:text-lg">
+            <h2 class="text-base font-semibold text-text-primary sm:text-lg">
               {view.stagedCount} pending change{view.stagedCount === 1 ? "" : "s"}
             </h2>
             <span
-              class="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.16em] text-accent"
+              class="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-accent"
               data-testid={appShellTestIds.parameterReviewCount}
             >
               {view.stagedCount} queued
             </span>
             {#if hasRebootFlaggedEdit}
-              <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.16em] text-warning">
+              <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-warning">
                 reboot needed
               </span>
             {/if}
             {#if view.hasRetainedFailures}
-              <span class="rounded-full border border-danger/40 bg-danger/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.16em] text-danger">
+              <span class="rounded-full border border-danger/40 bg-danger/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-danger">
                 retained failures
               </span>
             {/if}
@@ -74,7 +74,7 @@ function retryEdit(name: string) {
             {view.applySummaryText ?? "Review your staged parameter edits before applying them."}
           </p>
           {#if view.applyProgressText}
-            <p class="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={appShellTestIds.parameterReviewProgress}>
+            <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-text-muted" data-testid={appShellTestIds.parameterReviewProgress}>
               {view.applyProgressText}
             </p>
           {/if}
@@ -91,7 +91,7 @@ function retryEdit(name: string) {
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-          <span class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted" data-testid={appShellTestIds.parameterReviewState}>
+          <span class="text-xs font-semibold uppercase tracking-wide text-text-muted" data-testid={appShellTestIds.parameterReviewState}>
             {open ? "open" : "closed"}
           </span>
           <button
@@ -136,7 +136,7 @@ function retryEdit(name: string) {
                 data-testid={`${appShellTestIds.parameterReviewRowPrefix}-${edit.name}`}
               >
                 <div class="flex flex-wrap items-center gap-4">
-                  <div class="min-w-0 max-w-[200px] truncate">
+                  <div class="min-w-0 max-w-52 truncate">
                     <p class="truncate text-sm font-semibold text-text-primary" title={edit.label}>{edit.label}</p>
                     <p class="truncate font-mono text-xs text-text-muted" title={edit.rawName}>{edit.rawName}</p>
                   </div>
@@ -154,18 +154,18 @@ function retryEdit(name: string) {
 
                 <div class="flex items-center gap-2 ml-auto">
                   {#if edit.rebootRequired}
-                    <span class="rounded border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
+                    <span class="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-warning">
                       reboot required
                     </span>
                   {/if}
                   {#if edit.isWriting}
-                    <span class="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent">
+                    <span class="rounded-md border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-accent">
                       writing
                     </span>
                   {/if}
                   {#if edit.failureMessage}
                     <button
-                      class="rounded border border-accent/30 bg-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-accent transition hover:bg-accent/20 disabled:opacity-60"
+                      class="rounded-md border border-accent/30 bg-accent/10 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-accent transition hover:bg-accent/20 disabled:opacity-60"
                       data-testid={`${appShellTestIds.parameterReviewRetryPrefix}-${edit.name}`}
                       disabled={isApplying || replayReadonly}
                       onclick={() => retryEdit(edit.name)}
@@ -175,7 +175,7 @@ function retryEdit(name: string) {
                     </button>
                   {/if}
                   <button
-                    class="rounded border border-border bg-bg-secondary/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-text-secondary transition hover:border-danger/40 hover:text-danger disabled:opacity-60"
+                    class="rounded-md border border-border bg-bg-secondary/80 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-text-secondary transition hover:border-danger/40 hover:text-danger disabled:opacity-60"
                     data-testid={`${appShellTestIds.parameterReviewDiscardPrefix}-${edit.name}`}
                     disabled={isApplying}
                     onclick={() => store.discardStagedEdit(edit.name)}
@@ -192,7 +192,7 @@ function retryEdit(name: string) {
                   >
                     <span class="font-semibold">{edit.failureMessage}</span>
                     {#if edit.confirmedValueText}
-                      <span class="ml-2 uppercase tracking-[0.16em] opacity-80">
+                      <span class="ml-2 uppercase tracking-wide opacity-80">
                         confirmed: {edit.confirmedValueText}{edit.units ? ` ${edit.units}` : ""}
                       </span>
                     {/if}

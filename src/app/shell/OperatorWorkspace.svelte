@@ -176,7 +176,7 @@ function metricColorVar(metric: OperatorMetricView): string {
         <!-- Quality state indicators -->
         {#if view.quality.stale}
           <div
-            class="rounded px-2 py-1 text-[0.7rem] font-semibold text-[var(--color-bg-primary)] bg-[var(--color-warning)]"
+            class="rounded-md bg-warning px-2 py-1 text-xs font-semibold text-bg-primary"
             data-testid="operator-workspace-stale"
           >
             <span>Telemetry stale</span>
@@ -184,7 +184,7 @@ function metricColorVar(metric: OperatorMetricView): string {
         {/if}
         {#if view.quality.disconnected}
           <div
-            class="rounded bg-[var(--color-border)] px-2 py-1 text-[0.7rem] font-semibold text-[var(--color-text-muted)]"
+            class="rounded-md bg-border px-2 py-1 text-xs font-semibold text-text-muted"
             data-testid="operator-workspace-disconnected"
           >
             <span>Disconnected</span>
@@ -194,41 +194,41 @@ function metricColorVar(metric: OperatorMetricView): string {
         <!-- Degraded data source badges -->
         {#if view.quality.telemetry.degraded}
           <span
-            class="inline-block rounded px-1.5 py-[2px] text-[0.65rem] font-medium text-[var(--color-bg-primary)] bg-[var(--color-warning)]"
+            class="inline-block rounded-md bg-warning px-2 py-1 text-xs font-medium text-bg-primary"
             data-testid="operator-workspace-degraded-telemetry"
           >degraded</span>
         {/if}
         {#if view.quality.support.degraded}
           <span
-            class="inline-block rounded px-1.5 py-[2px] text-[0.65rem] font-medium text-[var(--color-bg-primary)] bg-[var(--color-warning)]"
+            class="inline-block rounded-md bg-warning px-2 py-1 text-xs font-medium text-bg-primary"
             data-testid="operator-workspace-degraded-support"
           >degraded</span>
         {/if}
         {#if view.quality.notices.degraded}
           <span
-            class="inline-block rounded px-1.5 py-[2px] text-[0.65rem] font-medium text-[var(--color-bg-primary)] bg-[var(--color-warning)]"
+            class="inline-block rounded-md bg-warning px-2 py-1 text-xs font-medium text-bg-primary"
             data-testid="operator-workspace-degraded-notices"
           >degraded</span>
         {/if}
 
         <!-- Readiness strip -->
-        <div class="px-[2px] py-1 text-[0.7rem] font-medium text-[var(--color-text-muted)]" data-testid="operator-workspace-readiness">
+        <div class="py-1 text-xs font-medium text-text-muted" data-testid="operator-workspace-readiness">
           {view.readiness.label}
         </div>
 
         <!-- Metric groups -->
         {#each metricGroups as group (group.title)}
           <div>
-            <h3 class="mb-1 ml-[2px] text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">{group.title}</h3>
-            <div class="grid grid-cols-2 gap-1">
+            <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-text-muted">{group.title}</h3>
+            <div class="grid grid-cols-2 gap-2">
               {#each group.entries as entry (entry.key)}
                 <div
-                  class="flex flex-col gap-px rounded-[6px] border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-2 py-1.5"
+                  class="flex flex-col gap-1 rounded-md border border-border bg-bg-secondary px-2 py-2"
                   data-testid={entry.testId}
                 >
-                  <span class="text-[0.6rem] font-medium tracking-[0.06em] text-[var(--color-text-muted)]">{entry.label}</span>
+                  <span class="text-xs font-medium tracking-wide text-text-muted">{entry.label}</span>
                   <span
-                    class="font-mono text-[0.875rem] font-medium leading-[1.2] tabular-nums"
+                    class="font-mono text-sm font-medium leading-tight tabular-nums"
                     style:color={metricColorVar(entry.metric)}
                   >
                     {entry.metric.text}
@@ -242,23 +242,23 @@ function metricColorVar(metric: OperatorMetricView): string {
         <!-- Status notice strip -->
         <div class="mt-1">
           <div class="mb-1 flex items-center justify-between">
-            <span class="text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">Notices</span>
+            <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Notices</span>
             {#if view.notices.length > 0}
-              <span class="text-[0.65rem] text-[var(--color-text-muted)]" data-testid="operator-workspace-notice-count">{view.notices.length} shown</span>
+              <span class="text-xs text-text-muted" data-testid="operator-workspace-notice-count">{view.notices.length} shown</span>
             {/if}
           </div>
           {#if view.notices.length === 0}
-            <div class="px-[2px] py-1 text-[0.7rem] text-[var(--color-text-muted)]" data-testid="operator-workspace-notices-empty">
+            <div class="py-1 text-xs text-text-muted" data-testid="operator-workspace-notices-empty">
               No active notices
             </div>
           {:else}
-            <ul class="m-0 flex list-none flex-col gap-[3px] p-0">
+            <ul class="m-0 flex list-none flex-col gap-1 p-0">
               {#each view.notices as notice (notice.id)}
                 <li
                   class={[
-                    "rounded border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-2 py-1 text-[0.75rem] text-[var(--color-text-primary)]",
-                    notice.tone === "critical" && "border-[var(--color-danger)] text-[var(--color-danger)]",
-                    notice.tone === "caution" && "border-[var(--color-warning)] text-[var(--color-warning)]",
+                    "rounded-md border border-border bg-bg-secondary px-2 py-1 text-sm text-text-primary",
+                    notice.tone === "critical" && "border-danger text-danger",
+                    notice.tone === "caution" && "border-warning text-warning",
                   ]}
                 >
                   {notice.text}

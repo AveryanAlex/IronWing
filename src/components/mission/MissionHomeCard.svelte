@@ -132,13 +132,13 @@ function handleEnter(event: KeyboardEvent) {
 </script>
 
 <div
-  class="mission-home rounded-[var(--radius-md)]"
+  class="mission-home rounded-md"
   data-selected={selected ? "true" : "false"}
 >
   <Panel testId={missionWorkspaceTestIds.homeCard}>
-    <header class="flex flex-wrap items-center justify-between gap-[var(--space-2)]">
-      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-[var(--space-2)]">
-        <span class="text-[0.72rem] font-bold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">Home</span>
+    <header class="flex flex-wrap items-center justify-between gap-2">
+      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+        <span class="text-xs font-bold uppercase tracking-wide text-text-muted">Home</span>
         <InfoWidget
           align="right"
           contentTestId={missionWorkspaceTestIds.homeSync}
@@ -148,7 +148,7 @@ function handleEnter(event: KeyboardEvent) {
           title="Shared planning context"
         />
         <p
-          class="m-0 text-[0.78rem] leading-[1.3] text-[var(--color-text-secondary)]"
+          class="m-0 text-sm leading-snug text-text-secondary"
           data-testid={missionWorkspaceTestIds.homeSummary}
         >
           {shortDescription}
@@ -172,11 +172,11 @@ function handleEnter(event: KeyboardEvent) {
       <Badge testId={missionWorkspaceTestIds.homeReadOnly} tone="warning">{readOnlyMessage}</Badge>
     {/if}
 
-    <div class="mt-[var(--space-2)] grid grid-cols-3 gap-[var(--space-2)]">
+    <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
       <label class="flex min-w-0 flex-col gap-1">
-        <span class="text-[0.7rem] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Latitude</span>
+        <span class="text-xs font-bold uppercase tracking-wide text-text-muted">Latitude</span>
         <input
-          class="w-full rounded-[var(--radius-sm)] border border-[var(--color-border-light)] bg-[var(--color-bg-secondary)] px-2 py-1.5 text-[0.86rem] text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-70"
+          class="w-full rounded-md border border-border bg-bg-secondary px-2 py-1.5 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
           data-testid={missionWorkspaceTestIds.homeLatitude}
           disabled={readOnly}
           inputmode="decimal"
@@ -195,9 +195,9 @@ function handleEnter(event: KeyboardEvent) {
         />
       </label>
       <label class="flex min-w-0 flex-col gap-1">
-        <span class="text-[0.7rem] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Longitude</span>
+        <span class="text-xs font-bold uppercase tracking-wide text-text-muted">Longitude</span>
         <input
-          class="w-full rounded-[var(--radius-sm)] border border-[var(--color-border-light)] bg-[var(--color-bg-secondary)] px-2 py-1.5 text-[0.86rem] text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-70"
+          class="w-full rounded-md border border-border bg-bg-secondary px-2 py-1.5 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
           data-testid={missionWorkspaceTestIds.homeLongitude}
           disabled={readOnly}
           inputmode="decimal"
@@ -216,9 +216,9 @@ function handleEnter(event: KeyboardEvent) {
         />
       </label>
       <label class="flex min-w-0 flex-col gap-1">
-        <span class="text-[0.7rem] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Altitude (m)</span>
+        <span class="text-xs font-bold uppercase tracking-wide text-text-muted">Altitude (m)</span>
         <input
-          class="w-full rounded-[var(--radius-sm)] border border-[var(--color-border-light)] bg-[var(--color-bg-secondary)] px-2 py-1.5 text-[0.86rem] text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-70"
+          class="w-full rounded-md border border-border bg-bg-secondary px-2 py-1.5 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-70"
           data-testid={missionWorkspaceTestIds.homeAltitude}
           disabled={readOnly}
           inputmode="decimal"
@@ -240,7 +240,7 @@ function handleEnter(event: KeyboardEvent) {
 
     {#if visibleValidationMessage}
       <p
-        class="mt-[var(--space-2)] mb-0 text-[0.78rem] text-[var(--color-warning)]"
+        class="mt-2 mb-0 text-sm text-warning"
         data-testid={missionWorkspaceTestIds.homeValidation}
       >
         {visibleValidationMessage}

@@ -290,7 +290,7 @@ async function handleDisarm() {
     >
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Pre-arm readiness</p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Pre-arm readiness</p>
           <p class="mt-2 text-base font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.armingReadiness}>
             {prearmModel.statusText}
           </p>
@@ -313,7 +313,7 @@ async function handleDisarm() {
     </div>
 
     <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Live control</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Live control</p>
       <p class={`mt-2 text-base font-semibold ${armed ? "text-danger" : "text-text-primary"}`}>
         {armed ? "Armed" : "Disarmed"}
       </p>
@@ -409,7 +409,7 @@ async function handleDisarm() {
 
       {#if prearmModel.blockers.length > 0}
         <div class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.armingBlockers}>
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Current blockers</p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Current blockers</p>
           <div class="mt-4 space-y-3">
             {#each prearmModel.blockers as blocker (blocker.id)}
               <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
@@ -420,7 +420,7 @@ async function handleDisarm() {
                     <p class="mt-2 text-xs leading-5 text-text-muted">{blocker.guidance}</p>
                   </div>
                   {#if blocker.stale}
-                    <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-warning">stale</span>
+                    <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-warning">stale</span>
                   {/if}
                 </div>
               </div>
@@ -431,11 +431,11 @@ async function handleDisarm() {
 
       <div class="grid gap-3 xl:grid-cols-2">
         <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.armingCheckChecklist}>
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">ARMING_CHECK</p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">ARMING_CHECK</p>
           <p class="mt-2 text-sm text-text-secondary">
             Review the active pre-arm check mask here. Toggling a bit stages the updated mask in the shared review tray instead of applying it directly.
           </p>
-          <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.armingCurrentPrefix}-ARMING_CHECK`}>
+          <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.armingCurrentPrefix}-ARMING_CHECK`}>
             Current · {currentValueText(armingCheckItem)}
           </p>
           {#if params.stagedEdits.ARMING_CHECK}
@@ -459,11 +459,11 @@ async function handleDisarm() {
         </article>
 
         <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">ARMING_REQUIRE</p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">ARMING_REQUIRE</p>
           <p class="mt-2 text-sm text-text-secondary">
             Choose how the vehicle can be armed. This selector stays read-only when the current scope is missing the required option list.
           </p>
-          <p class="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.armingCurrentPrefix}-ARMING_REQUIRE`}>
+          <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.armingCurrentPrefix}-ARMING_REQUIRE`}>
             Current · {currentValueText(armingRequireItem)}
           </p>
           {#if params.stagedEdits.ARMING_REQUIRE}
@@ -474,7 +474,7 @@ async function handleDisarm() {
 
           <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
             <select
-              class="w-full rounded-xl border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+              class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
               data-testid={`${setupWorkspaceTestIds.armingInputPrefix}-ARMING_REQUIRE`}
               disabled={actionsBlocked || armingRequireOptions.length === 0 || !armingRequireItem}
               onchange={(event) => setDraft("ARMING_REQUIRE", (event.currentTarget as HTMLSelectElement).value)}

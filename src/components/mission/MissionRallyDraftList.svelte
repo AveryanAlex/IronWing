@@ -50,7 +50,7 @@ function pointSummary(item: TypedDraftItem): string {
 <section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.rallyList}>
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Rally list</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Rally list</p>
       <h3 class="mt-1 text-sm font-semibold text-text-primary">Rally points</h3>
     </div>
 
@@ -93,12 +93,12 @@ function pointSummary(item: TypedDraftItem): string {
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Rally point {item.index + 1}</p>
+              <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Rally point {item.index + 1}</p>
               <h4 class="mt-1 text-sm font-semibold text-text-primary">Emergency / diversion target</h4>
               <p class="mt-1 text-xs text-text-secondary">{pointSummary(item)}</p>
             </div>
 
-            <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+            <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
               {(item.document as GeoPoint3d) && altitudeFrameLabel(item.document as GeoPoint3d)}
             </span>
           </div>

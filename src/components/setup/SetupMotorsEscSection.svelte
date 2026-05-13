@@ -577,7 +577,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
         data-testid={setupWorkspaceTestIds.motorsEscSummary}
       >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Layout truth</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Layout truth</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.motorsEscLayoutState}>
         {layoutStateLabel}
       </p>
@@ -590,14 +590,14 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
       {/if}
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Safety unlock</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Safety unlock</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.motorsEscSafetyState}>
         {safetyStateLabel}
       </p>
       <p class="mt-1 text-sm text-text-secondary">{safetyStateDetail}</p>
     </div>
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Reversal staging</p>
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Reversal staging</p>
       <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.motorsEscReversalState}>
         {reversalStateLabel}
       </p>
@@ -631,7 +631,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
   <div class="rounded-lg border border-border bg-bg-primary/80 p-3">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Motor test gate</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Motor test gate</p>
         <p class="mt-2 text-sm text-text-secondary">
           Visible rows · {rows.length} · Direct test rows · {testableCount} · Bridge-limited rows · {bridgeLimitedCount}
         </p>
@@ -685,24 +685,24 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
             <div>
               <div class="flex flex-wrap items-center gap-2">
                 <button
-                  class="rounded-md border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary transition hover:border-accent hover:text-accent"
+                  class="rounded-md border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary transition hover:border-accent hover:text-accent"
                   onclick={() => selectRow(row.motorNumber)}
                   type="button"
                 >
                   Test #{row.testOrder}
                 </button>
                 <span class="text-sm font-semibold text-text-primary">Motor {row.motorNumber}</span>
-                <span class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                <span class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
                   {row.roleLabel}
                 </span>
-                <span class={`rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${badge.className}`}>
+                <span class={`rounded-full border px-2 py-1 text-xs font-semibold uppercase tracking-widest ${badge.className}`}>
                   {badge.label}
                 </span>
               </div>
               <p class="mt-2 text-sm leading-6 text-text-secondary" data-testid={`${setupWorkspaceTestIds.motorsEscRowAvailabilityPrefix}-${row.motorNumber}`}>
                 {rowAvailabilityText(row)}
               </p>
-              <p class="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-text-muted" data-testid={`${setupWorkspaceTestIds.motorsEscRowOwnerPrefix}-${row.motorNumber}`}>
+              <p class="mt-1 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.motorsEscRowOwnerPrefix}-${row.motorNumber}`}>
                 {rowOwnerText(row)}
               </p>
             </div>
@@ -730,8 +730,8 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
           {#if directionControlsVisible(row)}
             <div class="mt-4 rounded-lg border border-border bg-bg-secondary/70 px-4 py-4">
               <div class="flex flex-wrap items-center gap-2">
-                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">Observed direction</p>
-                <span class={`rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${resultTone(directionResult)}`} data-testid={`${setupWorkspaceTestIds.motorsEscRowResultPrefix}-${row.motorNumber}`}>
+                <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Observed direction</p>
+                <span class={`rounded-full border px-2 py-1 text-xs font-semibold uppercase tracking-widest ${resultTone(directionResult)}`} data-testid={`${setupWorkspaceTestIds.motorsEscRowResultPrefix}-${row.motorNumber}`}>
                   {directionResult ?? "Awaiting confirmation"}
                 </span>
               </div>

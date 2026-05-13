@@ -85,11 +85,11 @@ function handleContinue() {
   >
     {#if accelCard}
       <article class="rounded-lg border border-border bg-bg-secondary/60 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">
           {accelCard.title}
         </p>
         <p class="mt-2 text-sm font-semibold text-text-primary">{accelCard.statusText}</p>
-        <p class="mt-1 text-[11px] uppercase tracking-[0.16em] text-text-muted">
+        <p class="mt-1 text-xs uppercase tracking-widest text-text-muted">
           {accelCard.lifecycle}
         </p>
         <button
@@ -106,11 +106,11 @@ function handleContinue() {
 
     {#if compassCard}
       <article class="rounded-lg border border-border bg-bg-secondary/60 p-3">
-        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">
           {compassCard.title}
         </p>
         <p class="mt-2 text-sm font-semibold text-text-primary">{compassCard.statusText}</p>
-        <p class="mt-1 text-[11px] uppercase tracking-[0.16em] text-text-muted">
+        <p class="mt-1 text-xs uppercase tracking-widest text-text-muted">
           {compassCard.lifecycle}
         </p>
         <button

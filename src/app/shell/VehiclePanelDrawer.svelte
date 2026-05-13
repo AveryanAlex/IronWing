@@ -28,7 +28,7 @@ let { open = false, onClose = () => {} }: Props = $props();
   <div class="app-shell-drawer__sheet">
     <div class="app-shell-drawer__header">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-muted">Vehicle panel</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Vehicle panel</p>
         <h2 class="mt-1 text-base font-semibold text-text-primary">Connection & telemetry</h2>
       </div>
 

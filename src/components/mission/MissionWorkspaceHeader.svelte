@@ -142,7 +142,7 @@ let secondaryItems = $derived<MenuItem[]>([
 {/snippet}
 
 <div
-  class="@container flex shrink-0 flex-col gap-[var(--space-2)] border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-[var(--space-3)] py-[var(--space-2)] @max-[520px]:[&_.ui-btn]:min-w-[var(--control-h-sm)] @max-[520px]:[&_.ui-btn]:px-2"
+  class="flex shrink-0 flex-col gap-2 border-b border-border bg-bg-secondary px-3 py-2 [&_.ui-btn]:min-w-[var(--control-h-sm)] [&_.ui-btn]:px-2 sm:[&_.ui-btn]:min-w-0 sm:[&_.ui-btn]:px-3"
   data-testid={missionWorkspaceTestIds.header}
 >
   {#if replayReadonly}
@@ -157,7 +157,7 @@ let secondaryItems = $derived<MenuItem[]>([
 
   <Toolbar ariaLabel="Mission actions" density="compact" overflow="scroll">
     <div class="mission-mode-switcher">
-      <div class="@max-[640px]:hidden">
+      <div class="hidden sm:block">
         <ToolbarGroup>
           {#each modeButtons as item (item.mode)}
             <Button
@@ -171,7 +171,7 @@ let secondaryItems = $derived<MenuItem[]>([
           {/each}
         </ToolbarGroup>
       </div>
-      <div class="hidden @max-[640px]:block">
+      <div class="sm:hidden">
         <Menu
           items={modeItems}
           triggerAriaLabel="Select mission editing mode"
@@ -217,7 +217,7 @@ let secondaryItems = $derived<MenuItem[]>([
         tone="accent"
       >
         <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">{@render uploadIcon()}</span>
-        <span class="@max-[520px]:hidden">Upload</span>
+        <span class="hidden sm:inline">Upload</span>
       </Button>
       {#if canCancel}
         <Button
@@ -228,7 +228,7 @@ let secondaryItems = $derived<MenuItem[]>([
           tone="warning"
         >
           <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">{@render cancelIcon()}</span>
-          <span class="@max-[520px]:hidden">Cancel</span>
+          <span class="hidden sm:inline">Cancel</span>
         </Button>
       {/if}
     </ToolbarGroup>
@@ -237,10 +237,10 @@ let secondaryItems = $derived<MenuItem[]>([
       <Menu
         items={secondaryItems}
         testId={missionWorkspaceTestIds.toolbarMoreButton}
-        triggerClass="h-[var(--control-h-sm)] @max-[520px]:min-w-[var(--control-h-sm)] @max-[520px]:justify-center @max-[520px]:px-2"
+        triggerClass="h-[var(--control-h-sm)] min-w-[var(--control-h-sm)] justify-center px-2 sm:min-w-0 sm:px-3"
         triggerAriaLabel="More mission actions"
         triggerIcon={moreIcon}
-        triggerLabelClass="@max-[520px]:hidden"
+        triggerLabelClass="hidden sm:inline"
         triggerLabel="More"
       />
     </div>

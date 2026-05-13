@@ -172,7 +172,7 @@ function statusBadgeClass(status: MissionTerrainStatus): string {
 <section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.terrainPanel}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Terrain support</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Terrain support</p>
       <h3 class="mt-1 text-sm font-semibold text-text-primary">Terrain profile</h3>
       <p class="mt-1 text-xs text-text-secondary">
         Orange line = terrain MSL · green line = flight MSL. Clearance warnings jump back to the affected mission item.
@@ -181,13 +181,13 @@ function statusBadgeClass(status: MissionTerrainStatus): string {
 
     <div class="flex flex-wrap items-center gap-2">
       <span
-        class={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${statusClass}`}
+        class={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusClass}`}
         data-testid={missionWorkspaceTestIds.terrainStatus}
       >
         {statusLabel}
       </span>
       <span
-        class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary"
+        class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-wide text-text-secondary"
         data-testid={missionWorkspaceTestIds.terrainWarningCount}
       >
         {warningCountLabel}

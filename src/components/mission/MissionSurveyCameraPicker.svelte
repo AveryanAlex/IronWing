@@ -252,7 +252,7 @@ function pickerMessageClass(tone: PickerMessageTone): string {
   <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Camera</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Camera</p>
         <div data-testid={missionWorkspaceTestIds.cameraCurrent}>
           {#if region.camera}
             <h4 class="mt-1 text-sm font-semibold text-text-primary">{currentCameraLabel}</h4>
@@ -265,15 +265,15 @@ function pickerMessageClass(tone: PickerMessageTone): string {
       </div>
 
       {#if region.camera && customCameraNames.has(region.camera.canonicalName)}
-        <span class="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
+        <span class="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-accent">
           Custom
         </span>
       {:else if region.camera}
-        <span class="rounded-full border border-success/30 bg-success/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-success">
+        <span class="rounded-full border border-success/30 bg-success/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-success">
           Ready
         </span>
       {:else}
-        <span class="rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-warning">
+        <span class="rounded-full border border-warning/40 bg-warning/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-warning">
           Missing
         </span>
       {/if}
@@ -281,13 +281,13 @@ function pickerMessageClass(tone: PickerMessageTone): string {
 
     {#if region.camera}
       <dl class="mt-3 grid gap-2 text-xs sm:grid-cols-2">
-        <div class="rounded-xl border border-border/70 bg-bg-primary px-3 py-2">
+        <div class="rounded-lg border border-border/70 bg-bg-primary px-3 py-2">
           <dt class="text-text-muted">Sensor</dt>
           <dd class="mt-1 font-medium text-text-primary">
             {region.camera.sensorWidth_mm} × {region.camera.sensorHeight_mm} mm
           </dd>
         </div>
-        <div class="rounded-xl border border-border/70 bg-bg-primary px-3 py-2">
+        <div class="rounded-lg border border-border/70 bg-bg-primary px-3 py-2">
           <dt class="text-text-muted">Image</dt>
           <dd class="mt-1 font-medium text-text-primary">
             {region.camera.imageWidth_px} × {region.camera.imageHeight_px} px
@@ -320,7 +320,7 @@ function pickerMessageClass(tone: PickerMessageTone): string {
     <span class="text-xs font-medium text-text-muted">Search cameras</span>
     <input
       bind:value={query}
-      class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
+      class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
       data-testid={missionWorkspaceTestIds.cameraSearch}
       placeholder="Search builtin and custom cameras"
       type="search"
@@ -329,7 +329,7 @@ function pickerMessageClass(tone: PickerMessageTone): string {
 
   {#if catalogState.recent.length > 0}
     <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
-      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Recent</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Recent</p>
       <div class="mt-3 flex flex-wrap gap-2">
         {#each catalogState.recent as camera (camera.canonicalName)}
           <button
@@ -348,7 +348,7 @@ function pickerMessageClass(tone: PickerMessageTone): string {
   <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Catalog</p>
+        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Catalog</p>
         <p class="mt-1 text-xs text-text-secondary">
           Matching builtin and custom profiles stay searchable without leaving the mission workspace.
         </p>
@@ -369,18 +369,18 @@ function pickerMessageClass(tone: PickerMessageTone): string {
 
     <div class="mt-4 space-y-3">
       {#if visibleResults.length === 0}
-        <div class="rounded-xl border border-dashed border-border bg-bg-primary px-3 py-4 text-sm text-text-secondary">
+        <div class="rounded-lg border border-dashed border-border bg-bg-primary px-3 py-4 text-sm text-text-secondary">
           No catalog cameras matched this search. Save a custom profile or clear the query to keep working.
         </div>
       {:else}
         {#each visibleResults as camera (camera.canonicalName)}
-          <div class="rounded-xl border border-border/70 bg-bg-primary px-3 py-3">
+          <div class="rounded-lg border border-border/70 bg-bg-primary px-3 py-3">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div class="flex flex-wrap items-center gap-2">
                   <h5 class="text-sm font-semibold text-text-primary">{camera.canonicalName}</h5>
                   {#if customCameraNames.has(camera.canonicalName)}
-                    <span class="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">
+                    <span class="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-accent">
                       Custom
                     </span>
                   {/if}
@@ -419,45 +419,45 @@ function pickerMessageClass(tone: PickerMessageTone): string {
         <div class="grid gap-3 md:grid-cols-2">
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Canonical name</span>
-            <input bind:value={customForm.canonicalName} class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomName} type="text" />
+            <input bind:value={customForm.canonicalName} class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomName} type="text" />
           </label>
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Brand</span>
-            <input bind:value={customForm.brand} class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomBrand} type="text" />
+            <input bind:value={customForm.brand} class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomBrand} type="text" />
           </label>
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Model</span>
-            <input bind:value={customForm.model} class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomModel} type="text" />
+            <input bind:value={customForm.model} class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomModel} type="text" />
           </label>
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Focal length (mm)</span>
-            <input bind:value={customForm.focalLength_mm} class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomFocal} inputmode="decimal" type="text" />
+            <input bind:value={customForm.focalLength_mm} class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomFocal} inputmode="decimal" type="text" />
           </label>
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Sensor width (mm)</span>
-            <input bind:value={customForm.sensorWidth_mm} class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomSensorWidth} inputmode="decimal" type="text" />
+            <input bind:value={customForm.sensorWidth_mm} class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomSensorWidth} inputmode="decimal" type="text" />
           </label>
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Sensor height (mm)</span>
-            <input bind:value={customForm.sensorHeight_mm} class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomSensorHeight} inputmode="decimal" type="text" />
+            <input bind:value={customForm.sensorHeight_mm} class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomSensorHeight} inputmode="decimal" type="text" />
           </label>
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Image width (px)</span>
-            <input bind:value={customForm.imageWidth_px} class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomImageWidth} inputmode="numeric" type="text" />
+            <input bind:value={customForm.imageWidth_px} class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomImageWidth} inputmode="numeric" type="text" />
           </label>
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Image height (px)</span>
-            <input bind:value={customForm.imageHeight_px} class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomImageHeight} inputmode="numeric" type="text" />
+            <input bind:value={customForm.imageHeight_px} class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomImageHeight} inputmode="numeric" type="text" />
           </label>
           <label class="space-y-1">
             <span class="text-xs font-medium text-text-muted">Min trigger interval (s)</span>
-            <input bind:value={customForm.minTriggerInterval_s} class="w-full rounded-xl border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomMinTrigger} inputmode="decimal" type="text" />
+            <input bind:value={customForm.minTriggerInterval_s} class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary" data-testid={missionWorkspaceTestIds.cameraCustomMinTrigger} inputmode="decimal" type="text" />
           </label>
-          <label class="flex items-center gap-2 rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-sm text-text-primary">
+          <label class="flex items-center gap-2 rounded-lg border border-border bg-bg-secondary/60 px-3 py-2 text-sm text-text-primary">
             <input bind:checked={customForm.landscape} type="checkbox" />
             Landscape default
           </label>
-          <label class="flex items-center gap-2 rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-sm text-text-primary">
+          <label class="flex items-center gap-2 rounded-lg border border-border bg-bg-secondary/60 px-3 py-2 text-sm text-text-primary">
             <input bind:checked={customForm.fixedOrientation} type="checkbox" />
             Fixed orientation
           </label>

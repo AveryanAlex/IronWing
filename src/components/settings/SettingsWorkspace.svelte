@@ -66,7 +66,7 @@ function handleSvsToggle() {
           type="range"
           value={telemetryRateHz}
         />
-        <span class="min-w-[3.5em] text-right font-mono text-sm font-medium tabular-nums text-text-primary">{telemetryRateHz} Hz</span>
+        <span class="w-14 text-right font-mono text-sm font-medium tabular-nums text-text-primary">{telemetryRateHz} Hz</span>
       {/snippet}
     </FieldRow>
   </Panel>

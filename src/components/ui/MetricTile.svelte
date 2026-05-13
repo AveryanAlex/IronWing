@@ -17,21 +17,21 @@ let displayValue = $derived(unavailable ? "—" : value);
 </script>
 
 <div
-  class="flex min-w-0 flex-col gap-[var(--space-2)] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--surface-card)] p-[var(--space-3)] data-[stale]:opacity-[0.6]"
+  class="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface-card p-3 data-[stale]:opacity-60"
   data-tone={tone}
   data-stale={stale || undefined}
   data-unavailable={unavailable || undefined}
   data-testid={testId}
 >
-  <div class="text-[0.7rem] font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
-    {label}{#if hint} <span class="font-medium text-[var(--color-text-secondary)]">({hint})</span>{/if}
+  <div class="text-xs font-semibold uppercase tracking-wide text-text-muted">
+    {label}{#if hint} <span class="font-medium text-text-secondary">({hint})</span>{/if}
   </div>
   <div class="flex items-baseline gap-1.5 [font-variant-numeric:tabular-nums]">
     <span
-      class="text-[1.15rem] font-[650] text-[var(--color-text-primary)] data-[tone=info]:text-[var(--color-accent)] data-[tone=success]:text-[var(--color-success)] data-[tone=warning]:text-[var(--color-warning)] data-[tone=danger]:text-[var(--color-danger)] data-[unavailable]:text-[var(--color-text-muted)]"
+      class="text-lg font-semibold text-text-primary data-[tone=info]:text-accent data-[tone=success]:text-success data-[tone=warning]:text-warning data-[tone=danger]:text-danger data-[unavailable]:text-text-muted"
       data-tone={tone}
       data-unavailable={unavailable || undefined}
     >{displayValue}</span>
-    {#if unit && !unavailable}<span class="text-[0.85rem] text-[var(--color-text-secondary)]">{unit}</span>{/if}
+    {#if unit && !unavailable}<span class="text-sm text-text-secondary">{unit}</span>{/if}
   </div>
 </div>
