@@ -47,6 +47,11 @@ const copyClass = "m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-second
 const factCardClass = "min-w-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5";
 const monoValueClass = "min-w-0 overflow-wrap-anywhere break-words font-mono text-[0.74rem]";
 const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-bg-input)] px-[0.7rem] py-[0.55rem] text-[0.8rem] text-[var(--color-text-primary)]";
+const diagnosticBaseClass = "rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5";
+const diagnosticToneClass: Record<string, string> = {
+  critical: "border-[color:color-mix(in_srgb,var(--color-danger)_45%,var(--color-border))] bg-[color:color-mix(in_srgb,var(--color-danger)_10%,var(--color-bg-primary))] text-[var(--color-danger)]",
+  caution: "border-[color:color-mix(in_srgb,var(--color-warning)_45%,var(--color-border))] bg-[color:color-mix(in_srgb,var(--color-warning)_10%,var(--color-bg-primary))] text-[var(--color-warning)]",
+};
 </script>
 
 <Panel testId="logs-details-panel">
@@ -166,7 +171,7 @@ const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-bord
         {:else}
           <ul class="m-0 flex flex-col gap-2 p-0 list-none">
             {#each selectedEntry.diagnostics as diagnostic (`${diagnostic.code}-${diagnostic.timestamp_usec ?? "none"}`)}
-              <li class="logs-diagnostic" data-tone={diagnosticTone(diagnostic)}>
+              <li class={`${diagnosticBaseClass} ${diagnosticToneClass[diagnosticTone(diagnostic)] ?? ""}`} data-tone={diagnosticTone(diagnostic)}>
                 <span class={eyebrowClass}>{diagnostic.source} · {diagnostic.code}</span>
                 <span class={copyClass}>{diagnostic.message}</span>
               </li>
@@ -177,24 +182,3 @@ const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-bord
     {/if}
   </div>
 </Panel>
-
-<style>
-  .logs-diagnostic {
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    background: var(--color-bg-primary);
-    padding: 10px 12px;
-  }
-
-  .logs-diagnostic[data-tone="critical"] {
-    border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
-    background: color-mix(in srgb, var(--color-danger) 10%, var(--color-bg-primary));
-    color: var(--color-danger);
-  }
-
-  .logs-diagnostic[data-tone="caution"] {
-    border-color: color-mix(in srgb, var(--color-warning) 45%, var(--color-border));
-    background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-primary));
-    color: var(--color-warning);
-  }
-</style>

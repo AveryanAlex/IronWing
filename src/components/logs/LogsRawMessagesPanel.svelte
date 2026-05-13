@@ -453,8 +453,8 @@ const errorClass = "mt-1 text-[0.78rem] text-[var(--color-danger)]";
       />
     {/if}
 
-    <div class="logs-raw-browser__content">
-      <div class="logs-raw-browser__table-shell">
+    <div class="grid min-h-0 gap-3 max-[980px]:grid-cols-1 [grid-template-columns:minmax(0,1.4fr)_minmax(18rem,0.9fr)]">
+      <div class="min-h-0 overflow-auto rounded-lg border border-[var(--color-border)]">
         <table class="logs-raw-browser__table" data-testid="logs-raw-messages-table">
           <thead>
             <tr>
@@ -493,17 +493,17 @@ const errorClass = "mt-1 text-[0.78rem] text-[var(--color-danger)]";
         </table>
       </div>
 
-      <aside class="logs-raw-browser__drawer">
+      <aside class="flex min-h-0 flex-col gap-3 overflow-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] p-3">
         <p class={eyebrowClass}>Detail drawer</p>
         {#if selectedRecord}
           <h4 class={titleClass}>{selectedRecord.message_type} · seq {selectedRecord.sequence}</h4>
           <pre>{detailJson(selectedRecord.fields)}</pre>
           {#if selectedRecord.detail !== null}
-            <h5>Raw detail</h5>
+            <h5 class="m-0 mb-1 block text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">Raw detail</h5>
             <pre>{detailJson(selectedRecord.detail)}</pre>
           {/if}
           {#if selectedRecord.hex_payload}
-            <h5>Hex payload</h5>
+            <h5 class="m-0 mb-1 block text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">Hex payload</h5>
             <pre>{selectedRecord.hex_payload}</pre>
           {/if}
         {:else}
@@ -516,40 +516,6 @@ const errorClass = "mt-1 text-[0.78rem] text-[var(--color-danger)]";
 </Panel>
 
 <style>
-  .logs-raw-browser__content,
-  .logs-raw-browser__table-shell,
-  .logs-raw-browser__drawer {
-    display: flex;
-    gap: 12px;
-  }
-
-  .logs-raw-browser__drawer {
-    flex-direction: column;
-  }
-
-  .logs-raw-browser__drawer h5 {
-    display: block;
-    margin: 0 0 4px;
-    color: var(--color-text-muted);
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-  }
-
-  .logs-raw-browser__content {
-    min-height: 0;
-    display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(18rem, 0.9fr);
-  }
-
-  .logs-raw-browser__table-shell {
-    min-height: 0;
-    overflow: auto;
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-  }
-
   .logs-raw-browser__table {
     width: 100%;
     border-collapse: collapse;
@@ -568,26 +534,11 @@ const errorClass = "mt-1 text-[0.78rem] text-[var(--color-danger)]";
     background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg-primary));
   }
 
-  .logs-raw-browser__drawer {
-    min-height: 0;
-    overflow: auto;
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    background: var(--color-bg-primary);
-    padding: 12px;
-  }
-
-  .logs-raw-browser__drawer pre {
+  aside pre {
     margin: 0;
     white-space: pre-wrap;
     word-break: break-word;
     color: var(--color-text-secondary);
     font-size: 0.78rem;
-  }
-
-  @media (max-width: 980px) {
-    .logs-raw-browser__content {
-      grid-template-columns: 1fr;
-    }
   }
 </style>
