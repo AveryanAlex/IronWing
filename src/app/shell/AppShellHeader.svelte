@@ -1,14 +1,5 @@
 <script lang="ts">
-import {
-  Activity,
-  Cpu,
-  Crosshair,
-  FileText,
-  LayoutDashboard,
-  Route,
-  Settings,
-  Wrench,
-} from "lucide-svelte";
+import { Activity, Cpu, Crosshair, FileText, LayoutDashboard, Route, Settings, Wrench } from "lucide-svelte";
 import type { Snippet } from "svelte";
 
 import { AdaptiveRail, ResponsiveTabs, Tooltip } from "../../components/ui";
