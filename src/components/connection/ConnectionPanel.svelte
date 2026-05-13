@@ -105,14 +105,14 @@ async function onSubmit(event: SubmitEvent) {
 </script>
 
 <Panel padded>
-  <div class="connection-panel__header">
-    <p class="connection-panel__eyebrow">Connection</p>
+  <div class="flex items-center justify-between gap-2">
+    <p class="m-0 text-[0.72rem] font-bold uppercase tracking-[0.12em] text-text-muted">Connection</p>
     <span data-testid="connection-status-text">
       <StatusPill tone={pillTone(panelView.statusTone)}>{panelView.statusLabel}</StatusPill>
     </span>
   </div>
 
-  <form class="connection-panel__form" onsubmit={onSubmit}>
+  <form class="mt-3 flex flex-col gap-3" onsubmit={onSubmit}>
     <ConnectionTransportFields
       btDevices={$store.btDevices}
       btScanning={$store.btScanning}
@@ -133,7 +133,10 @@ async function onSubmit(event: SubmitEvent) {
     />
 
     {#if visibleError}
-      <p class="connection-panel__error" data-testid="connection-error-message">
+      <p
+        class="m-0 rounded-sm border px-3 py-2 text-[0.86rem] text-danger [background:color-mix(in_srgb,var(--color-danger)_10%,transparent)] [border-color:color-mix(in_srgb,var(--color-danger)_30%,transparent)]"
+        data-testid="connection-error-message"
+      >
         {visibleError}
       </p>
     {/if}
@@ -141,35 +144,3 @@ async function onSubmit(event: SubmitEvent) {
     <ConnectionDiagnostics state={$store} />
   </form>
 </Panel>
-
-<style>
-.connection-panel__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-.connection-panel__eyebrow {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.connection-panel__form {
-  margin-top: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-.connection-panel__error {
-  margin: 0;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
-  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
-  color: var(--color-danger);
-  font-size: 0.86rem;
-}
-</style>

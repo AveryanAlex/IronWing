@@ -128,7 +128,7 @@ function clearCheckpoint() {
 </script>
 
 {#snippet sectionNav()}
-  <div class="setup-workspace-rail">
+  <div class="flex h-full min-h-0 flex-col border-r border-border bg-bg-secondary">
     <SetupWorkspaceSectionNav
       onSelect={selectSection}
       sectionGroups={view.sectionGroups}
@@ -138,7 +138,7 @@ function clearCheckpoint() {
 {/snippet}
 
 {#snippet selectedSectionDetail()}
-  <div class="setup-workspace-detail" data-testid={setupWorkspaceTestIds.detail}>
+  <div class="min-w-0 flex-1 overflow-y-auto p-2" data-testid={setupWorkspaceTestIds.detail}>
     <span aria-hidden="true" class="sr-only" data-testid={setupWorkspaceTestIds.selectedSection}>
       {view.selectedSectionId}
     </span>
@@ -263,7 +263,7 @@ function clearCheckpoint() {
 
 <WorkspaceShell mode="split" testId={setupWorkspaceTestIds.root}>
   <div
-    class="setup-workspace"
+    class="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
     data-selected-section={view.selectedSectionId}
     data-setup-readiness={view.readiness}
   >
@@ -279,13 +279,13 @@ function clearCheckpoint() {
 
     {#if isPhoneTier}
       <div
-        class="setup-workspace-layout setup-workspace-layout--phone"
+        class="flex flex-1 min-h-0 flex-col gap-2 overflow-hidden"
         data-shell-tier={chromeStore.current.tier}
       >
         {@render selectedSectionDetail()}
       </div>
     {:else}
-      <div class="setup-workspace-split" data-shell-tier={chromeStore.current.tier}>
+      <div class="min-h-0 flex-1 overflow-hidden" data-shell-tier={chromeStore.current.tier}>
         <SplitWorkspace primaryMax="320px">
           {#snippet primary()}
             {@render sectionNav()}
@@ -334,46 +334,3 @@ function clearCheckpoint() {
     {/if}
   </div>
 </WorkspaceShell>
-
-<style>
-  .setup-workspace {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    flex: 1;
-    overflow: hidden;
-  }
-
-  .setup-workspace-split {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .setup-workspace-layout {
-    display: flex;
-    gap: 8px;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-  }
-  .setup-workspace-detail {
-    flex: 1;
-    min-width: 0;
-    overflow-y: auto;
-    padding: 8px;
-  }
-  .setup-workspace-layout--phone {
-    flex-direction: column;
-  }
-
-  .setup-workspace-rail {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
-    border-right: 1px solid var(--color-border);
-    background: var(--color-bg-secondary);
-  }
-</style>

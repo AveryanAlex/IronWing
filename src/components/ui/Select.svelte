@@ -17,14 +17,26 @@ let selectedLabel = $derived(options.find((o) => o.value === value)?.label ?? pl
 </script>
 
 <Bits.Root type="single" {value} onValueChange={(next) => { if (typeof next === "string") onChange(next); }}>
-  <Bits.Trigger class="ui-select__trigger" {disabled} data-testid={testId}>
+  <Bits.Trigger
+    class="inline-flex min-w-[160px] cursor-pointer items-center justify-between rounded-[var(--radius-sm)] border border-[var(--color-border-light)] bg-[var(--color-bg-primary)] px-[10px] py-1.5 text-[0.86rem] text-[var(--color-text-primary)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-[0.55]"
+    {disabled}
+    data-testid={testId}
+  >
     <span>{selectedLabel}</span>
   </Bits.Trigger>
   <Bits.Portal>
-    <Bits.Content class="ui-select__content" sideOffset={6}>
+    <Bits.Content
+      class="z-[60] max-h-[280px] min-w-[var(--bits-select-anchor-width)] overflow-auto rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-1 shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+      sideOffset={6}
+    >
       <Bits.Viewport>
         {#each options as option (option.value)}
-          <Bits.Item class="ui-select__item" value={option.value} label={option.label} disabled={option.disabled}>
+          <Bits.Item
+            class="cursor-pointer rounded-[var(--radius-sm)] px-[10px] py-1.5 text-[0.86rem] text-[var(--color-text-primary)] data-[highlighted]:bg-[var(--color-bg-tertiary)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-[0.55]"
+            value={option.value}
+            label={option.label}
+            disabled={option.disabled}
+          >
             {option.label}
           </Bits.Item>
         {/each}
@@ -32,12 +44,3 @@ let selectedLabel = $derived(options.find((o) => o.value === value)?.label ?? pl
     </Bits.Content>
   </Bits.Portal>
 </Bits.Root>
-
-<style>
-:global(.ui-select__trigger) { display: inline-flex; align-items: center; justify-content: space-between; min-width: 160px; padding: 6px 10px; border: 1px solid var(--color-border-light); border-radius: var(--radius-sm); background: var(--color-bg-primary); color: var(--color-text-primary); font-size: 0.86rem; cursor: pointer; }
-:global(.ui-select__trigger[data-disabled]) { opacity: 0.55; cursor: not-allowed; }
-:global(.ui-select__content) { z-index: 60; min-width: var(--bits-select-anchor-width); background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0,0,0,0.45); padding: 4px; max-height: 280px; overflow: auto; }
-:global(.ui-select__item) { padding: 6px 10px; border-radius: var(--radius-sm); color: var(--color-text-primary); cursor: pointer; font-size: 0.86rem; }
-:global(.ui-select__item[data-highlighted]) { background: var(--color-bg-tertiary); }
-:global(.ui-select__item[data-disabled]) { opacity: 0.55; cursor: not-allowed; }
-</style>

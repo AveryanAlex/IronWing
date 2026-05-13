@@ -16,6 +16,20 @@ type Props = {
   children?: Snippet;
 };
 
+const sizeClasses: Record<Size, string> = {
+  sm: "h-[var(--control-h-sm)] px-[10px] text-[0.78rem]",
+  md: "h-[var(--control-h-md)] px-[14px] text-[0.86rem]",
+  lg: "h-[var(--control-h-lg)] px-[18px] text-[0.95rem]",
+};
+
+const toneClasses: Record<Tone, string> = {
+  neutral: "border-[var(--color-border-light)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] enabled:hover:bg-[var(--color-bg-input)]",
+  accent: "border-[var(--color-accent)] bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] text-[var(--color-accent)] enabled:hover:bg-[var(--color-bg-input)]",
+  success: "border-[color-mix(in_srgb,var(--color-success)_55%,transparent)] bg-[color-mix(in_srgb,var(--color-success)_12%,transparent)] text-[var(--color-success)] enabled:hover:bg-[var(--color-bg-input)]",
+  warning: "border-[color-mix(in_srgb,var(--color-warning)_55%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)] text-[var(--color-warning)] enabled:hover:bg-[var(--color-bg-input)]",
+  danger: "border-[color-mix(in_srgb,var(--color-danger)_55%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] text-[var(--color-danger)] enabled:hover:bg-[var(--color-bg-input)]",
+};
+
 let {
   tone = "neutral",
   size = "md",
@@ -34,10 +48,18 @@ function handleClick(event: MouseEvent) {
   }
   onclick?.(event);
 }
+
+let buttonClass = $derived(
+  [
+    "inline-flex items-center justify-center gap-[6px] rounded-[var(--radius-sm)] border font-semibold transition-[background-color,border-color,color] duration-150 ease-in-out focus-visible:outline-2 focus-visible:outline-[var(--color-accent)] focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-55",
+    sizeClasses[size],
+    toneClasses[tone],
+  ].join(" "),
+);
 </script>
 
 <button
-  class="ui-btn"
+  class={buttonClass}
   data-tone={tone}
   data-size={size}
   data-testid={testId}
@@ -49,29 +71,3 @@ function handleClick(event: MouseEvent) {
 >
   {@render children?.()}
 </button>
-
-<style>
-.ui-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border-light);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-.ui-btn[data-size="sm"] { height: var(--control-h-sm); padding: 0 10px; font-size: 0.78rem; }
-.ui-btn[data-size="md"] { height: var(--control-h-md); padding: 0 14px; font-size: 0.86rem; }
-.ui-btn[data-size="lg"] { height: var(--control-h-lg); padding: 0 18px; font-size: 0.95rem; }
-.ui-btn[data-tone="accent"] { border-color: var(--color-accent); color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
-.ui-btn[data-tone="success"] { border-color: color-mix(in srgb, var(--color-success) 55%, transparent); color: var(--color-success); background: color-mix(in srgb, var(--color-success) 12%, transparent); }
-.ui-btn[data-tone="warning"] { border-color: color-mix(in srgb, var(--color-warning) 55%, transparent); color: var(--color-warning); background: color-mix(in srgb, var(--color-warning) 12%, transparent); }
-.ui-btn[data-tone="danger"]  { border-color: color-mix(in srgb, var(--color-danger) 55%, transparent);  color: var(--color-danger);  background: color-mix(in srgb, var(--color-danger) 12%, transparent); }
-.ui-btn:hover:not([disabled]) { background: var(--color-bg-input); }
-.ui-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
-.ui-btn[disabled] { opacity: 0.55; cursor: not-allowed; }
-</style>

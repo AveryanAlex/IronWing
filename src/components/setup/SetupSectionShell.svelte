@@ -23,32 +23,12 @@ type Props = {
 let { eyebrow, title, description, status, testId, body, actions }: Props = $props();
 </script>
 
-<section class="setup-section" data-testid={testId}>
+<section class="flex flex-col gap-3 p-3 md:gap-4 md:p-5" data-testid={testId}>
   <SectionHeader {eyebrow} {title} {description} {actions} />
   {#if status}
     <Banner severity={status.severity} title={status.title} message={status.message} />
   {/if}
   <Panel>
-    <div class="setup-section__body">{@render body()}</div>
+    <div class="flex flex-col gap-3">{@render body()}</div>
   </Panel>
 </section>
-
-<style>
-.setup-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-5);
-}
-.setup-section__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-@media (max-width: 767px) {
-  .setup-section {
-    padding: var(--space-3);
-    gap: var(--space-3);
-  }
-}
-</style>

@@ -5,27 +5,22 @@ type Tone = "neutral" | "info" | "success" | "warning" | "danger";
 
 type Props = { tone?: Tone; testId?: string; children: Snippet };
 
+const toneClasses: Record<Tone, string> = {
+  neutral: "text-[var(--color-text-secondary)]",
+  info: "border-[color-mix(in_srgb,var(--color-accent)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] text-[var(--color-accent)]",
+  success: "border-[color-mix(in_srgb,var(--color-success)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-success)_12%,transparent)] text-[var(--color-success)]",
+  warning: "border-[color-mix(in_srgb,var(--color-warning)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-warning)_12%,transparent)] text-[var(--color-warning)]",
+  danger: "border-[color-mix(in_srgb,var(--color-danger)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] text-[var(--color-danger)]",
+};
+
 let { tone = "neutral", testId, children }: Props = $props();
+
+let badgeClass = $derived(
+  [
+    "inline-flex min-h-[22px] items-center rounded-[var(--radius-sm)] border border-[var(--color-border-light)] px-[6px] text-[0.68rem] font-bold tracking-[0.1em] uppercase",
+    toneClasses[tone],
+  ].join(" "),
+);
 </script>
 
-<span class="ui-badge" data-tone={tone} data-testid={testId}>{@render children()}</span>
-
-<style>
-.ui-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  padding: 0 6px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-text-secondary);
-}
-.ui-badge[data-tone="info"]    { color: var(--color-accent);  border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);  background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
-.ui-badge[data-tone="success"] { color: var(--color-success); border-color: color-mix(in srgb, var(--color-success) 40%, transparent); background: color-mix(in srgb, var(--color-success) 12%, transparent); }
-.ui-badge[data-tone="warning"] { color: var(--color-warning); border-color: color-mix(in srgb, var(--color-warning) 40%, transparent); background: color-mix(in srgb, var(--color-warning) 12%, transparent); }
-.ui-badge[data-tone="danger"]  { color: var(--color-danger);  border-color: color-mix(in srgb, var(--color-danger) 40%, transparent);  background: color-mix(in srgb, var(--color-danger) 12%, transparent); }
-</style>
+<span class={badgeClass} data-tone={tone} data-testid={testId}>{@render children()}</span>

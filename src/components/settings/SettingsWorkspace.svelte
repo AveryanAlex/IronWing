@@ -58,7 +58,7 @@ function handleSvsToggle() {
     >
       {#snippet control()}
         <input
-          class="settings-slider"
+          class="settings-slider min-w-40 flex-1"
           max={TELEMETRY_RATE_HZ_LIMITS.max}
           min={TELEMETRY_RATE_HZ_LIMITS.min}
           oninput={handleRateChange}
@@ -66,7 +66,7 @@ function handleSvsToggle() {
           type="range"
           value={telemetryRateHz}
         />
-        <span class="settings-slider__value">{telemetryRateHz} Hz</span>
+        <span class="min-w-[3.5em] text-right font-mono text-sm font-medium tabular-nums text-text-primary">{telemetryRateHz} Hz</span>
       {/snippet}
     </FieldRow>
   </Panel>
@@ -79,14 +79,21 @@ function handleSvsToggle() {
     >
       {#snippet control()}
         <button
-          class="settings-toggle"
-          class:settings-toggle--active={svsEnabled}
+          class={[
+            "relative h-6 w-11 cursor-pointer rounded-full border p-0 transition-colors duration-200",
+            svsEnabled ? "border-accent bg-accent" : "border-border bg-bg-primary",
+          ]}
           aria-label="Toggle Synthetic Vision System"
           aria-pressed={svsEnabled}
           onclick={handleSvsToggle}
           type="button"
         >
-          <span class="settings-toggle__thumb"></span>
+          <span
+            class={[
+              "absolute top-0.5 left-0.5 h-[18px] w-[18px] rounded-full bg-text-primary transition-transform duration-200",
+              svsEnabled && "translate-x-5",
+            ]}
+          ></span>
         </button>
       {/snippet}
     </FieldRow>
@@ -95,8 +102,6 @@ function handleSvsToggle() {
 
 <style>
   .settings-slider {
-    flex: 1;
-    min-width: 160px;
     height: 4px;
     appearance: none;
     background: var(--color-border);
@@ -122,47 +127,5 @@ function handleSvsToggle() {
     background: var(--color-accent);
     cursor: pointer;
     border: none;
-  }
-
-  .settings-slider__value {
-    font-family: "JetBrains Mono", monospace;
-    font-variant-numeric: tabular-nums;
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--color-text-primary);
-    min-width: 3.5em;
-    text-align: right;
-  }
-
-  .settings-toggle {
-    position: relative;
-    width: 44px;
-    height: 24px;
-    border-radius: 12px;
-    border: 1px solid var(--color-border);
-    background: var(--color-bg-primary);
-    cursor: pointer;
-    padding: 0;
-    transition: background-color 0.2s, border-color 0.2s;
-  }
-
-  .settings-toggle--active {
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-  }
-
-  .settings-toggle__thumb {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--color-text-primary);
-    transition: transform 0.2s;
-  }
-
-  .settings-toggle--active .settings-toggle__thumb {
-    transform: translateX(20px);
   }
 </style>

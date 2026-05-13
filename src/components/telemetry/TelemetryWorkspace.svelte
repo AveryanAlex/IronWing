@@ -268,16 +268,18 @@ let sections = $derived.by<MetricSection[]>(() => {
 
 <WorkspaceShell mode="inset">
   {#each sections as section (section.key)}
-    <div class="telemetry-section">
+    <div class="flex flex-col gap-2">
       <button
-        class="telemetry-section__header"
+        class="flex cursor-pointer items-center justify-between rounded border-none bg-transparent px-1.5 py-1 transition-colors duration-150 hover:bg-bg-secondary"
         onclick={() => toggleSection(section.key)}
         type="button"
       >
-        <span class="telemetry-section__title">{section.title}</span>
+        <span class="text-[0.72rem] font-bold uppercase tracking-[0.16em] text-text-muted">{section.title}</span>
         <svg
-          class="telemetry-section__chevron"
-          class:telemetry-section__chevron--collapsed={collapsed[section.key]}
+          class={[
+            "h-3.5 w-3.5 text-text-muted transition-transform duration-150 ease-in-out",
+            collapsed[section.key] && "-rotate-90",
+          ]}
           fill="none"
           height="14"
           stroke="currentColor"
@@ -307,44 +309,3 @@ let sections = $derived.by<MetricSection[]>(() => {
     </div>
   {/each}
 </WorkspaceShell>
-
-<style>
-  .telemetry-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .telemetry-section__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 4px 6px;
-    border: none;
-    background: none;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: background-color 0.15s;
-  }
-
-  .telemetry-section__header:hover {
-    background: var(--color-bg-secondary);
-  }
-
-  .telemetry-section__title {
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    color: var(--color-text-muted);
-    text-transform: uppercase;
-  }
-
-  .telemetry-section__chevron {
-    color: var(--color-text-muted);
-    transition: transform 0.15s ease;
-  }
-
-  .telemetry-section__chevron--collapsed {
-    transform: rotate(-90deg);
-  }
-</style>

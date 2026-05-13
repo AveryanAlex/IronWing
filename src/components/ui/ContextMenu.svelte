@@ -31,14 +31,18 @@ let { items, testId, trigger, controlled }: Props = $props();
     <BitsDropdown.Trigger
       aria-hidden="true"
       tabindex={-1}
-      class="ui-context-menu__virtual-trigger"
+      class="pointer-events-none absolute h-0 w-0 opacity-0"
       style="position: absolute; left: {controlled.x}px; top: {controlled.y}px;"
     ></BitsDropdown.Trigger>
     <BitsDropdown.Portal>
-      <BitsDropdown.Content class="ui-context-menu__content" data-testid={testId} sideOffset={2}>
+      <BitsDropdown.Content
+        class="z-[60] min-w-[180px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-1 shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+        data-testid={testId}
+        sideOffset={2}
+      >
         {#each items as item (item.id)}
           <BitsDropdown.Item
-            class="ui-context-menu__item"
+            class="block w-full cursor-pointer rounded-[var(--radius-sm)] px-[10px] py-1.5 text-left text-[0.84rem] text-[var(--color-text-primary)] data-[highlighted]:bg-[var(--color-bg-tertiary)] data-[destructive]:text-[var(--color-danger)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-[0.55]"
             data-destructive={item.destructive || undefined}
             disabled={item.disabled}
             onSelect={() => item.onSelect()}
@@ -51,12 +55,15 @@ let { items, testId, trigger, controlled }: Props = $props();
   </BitsDropdown.Root>
 {:else if trigger}
   <BitsContext.Root>
-    <BitsContext.Trigger class="ui-context-menu__trigger">{@render trigger()}</BitsContext.Trigger>
+    <BitsContext.Trigger class="contents">{@render trigger()}</BitsContext.Trigger>
     <BitsContext.Portal>
-      <BitsContext.Content class="ui-context-menu__content" data-testid={testId}>
+      <BitsContext.Content
+        class="z-[60] min-w-[180px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-1 shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
+        data-testid={testId}
+      >
         {#each items as item (item.id)}
           <BitsContext.Item
-            class="ui-context-menu__item"
+            class="block w-full cursor-pointer rounded-[var(--radius-sm)] px-[10px] py-1.5 text-left text-[0.84rem] text-[var(--color-text-primary)] data-[highlighted]:bg-[var(--color-bg-tertiary)] data-[destructive]:text-[var(--color-danger)] data-[disabled]:cursor-not-allowed data-[disabled]:opacity-[0.55]"
             data-destructive={item.destructive || undefined}
             disabled={item.disabled}
             onSelect={() => item.onSelect()}
@@ -68,13 +75,3 @@ let { items, testId, trigger, controlled }: Props = $props();
     </BitsContext.Portal>
   </BitsContext.Root>
 {/if}
-
-<style>
-:global(.ui-context-menu__trigger) { display: contents; }
-:global(.ui-context-menu__virtual-trigger) { width: 0; height: 0; opacity: 0; pointer-events: none; }
-:global(.ui-context-menu__content) { z-index: 60; min-width: 180px; padding: 4px; background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0,0,0,0.45); }
-:global(.ui-context-menu__item) { display: block; width: 100%; padding: 6px 10px; text-align: left; color: var(--color-text-primary); border-radius: var(--radius-sm); cursor: pointer; font-size: 0.84rem; }
-:global(.ui-context-menu__item[data-highlighted]) { background: var(--color-bg-tertiary); }
-:global(.ui-context-menu__item[data-destructive]) { color: var(--color-danger); }
-:global(.ui-context-menu__item[data-disabled]) { opacity: 0.55; cursor: not-allowed; }
-</style>

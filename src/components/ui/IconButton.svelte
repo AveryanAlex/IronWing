@@ -15,11 +15,30 @@ type Props = {
   children: Snippet;
 };
 
+const sizeClasses: Record<Size, string> = {
+  sm: "size-[var(--control-h-sm)]",
+  md: "size-[var(--control-h-md)]",
+};
+
+const toneClasses: Record<Tone, string> = {
+  neutral: "border-[var(--color-border-light)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] enabled:hover:bg-[var(--color-bg-input)]",
+  accent: "border-[var(--color-accent)] bg-[var(--color-bg-primary)] text-[var(--color-accent)] enabled:hover:bg-[var(--color-bg-input)]",
+  danger: "border-[color-mix(in_srgb,var(--color-danger)_55%,transparent)] bg-[var(--color-bg-primary)] text-[var(--color-danger)] enabled:hover:bg-[var(--color-bg-input)]",
+};
+
 let { ariaLabel, tone = "neutral", size = "md", disabled, testId, title, onclick, children }: Props = $props();
+
+let buttonClass = $derived(
+  [
+    "inline-flex items-center justify-center rounded-[var(--radius-sm)] border cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--color-accent)] focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-55",
+    sizeClasses[size],
+    toneClasses[tone],
+  ].join(" "),
+);
 </script>
 
 <button
-  class="ui-icon-btn"
+  class={buttonClass}
   data-tone={tone}
   data-size={size}
   data-testid={testId}
@@ -31,23 +50,3 @@ let { ariaLabel, tone = "neutral", size = "md", disabled, testId, title, onclick
 >
   {@render children()}
 </button>
-
-<style>
-.ui-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border-light);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  cursor: pointer;
-}
-.ui-icon-btn[data-size="sm"] { width: var(--control-h-sm); height: var(--control-h-sm); }
-.ui-icon-btn[data-size="md"] { width: var(--control-h-md); height: var(--control-h-md); }
-.ui-icon-btn[data-tone="accent"] { color: var(--color-accent); border-color: var(--color-accent); }
-.ui-icon-btn[data-tone="danger"] { color: var(--color-danger); border-color: color-mix(in srgb, var(--color-danger) 55%, transparent); }
-.ui-icon-btn:hover:not([disabled]) { background: var(--color-bg-input); }
-.ui-icon-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
-.ui-icon-btn[disabled] { opacity: 0.55; cursor: not-allowed; }
-</style>

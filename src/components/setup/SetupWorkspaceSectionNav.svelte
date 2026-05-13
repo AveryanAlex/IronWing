@@ -29,13 +29,13 @@ function isDisabled(section: SetupWorkspaceSection): boolean {
 
 function statusLabel(section: SetupWorkspaceSection): { text: string; className: string } | null {
   if (section.status === "complete") {
-    return { text: "Done", className: "setup-nav__status--done" };
+    return { text: "Done", className: "text-success" };
   }
   if (section.status === "in_progress") {
-    return { text: "In Progress", className: "setup-nav__status--active" };
+    return { text: "In Progress", className: "text-accent" };
   }
   if (section.status === "failed") {
-    return { text: "Check", className: "setup-nav__status--warn" };
+    return { text: "Check", className: "text-warning" };
   }
   return null;
 }
@@ -43,18 +43,21 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
 
 <nav
   aria-label="Setup sections"
+  class="flex h-full min-h-0 flex-col gap-[2px] overflow-y-auto px-1 py-2"
   data-testid={setupWorkspaceTestIds.nav}
 >
   {#each sectionGroups as group (group.id)}
     <div data-testid={`${setupWorkspaceTestIds.navGroupPrefix}-${group.id}`}>
       <button
-        class="setup-nav__group-header"
+        class="flex w-full cursor-pointer items-center gap-1.5 border-none bg-transparent px-2 py-1.5 text-[0.68rem] font-bold uppercase tracking-[0.1em] text-text-muted"
         onclick={() => toggleGroup(group.id)}
         type="button"
       >
         <svg
-          class="setup-nav__chevron"
-          class:is-collapsed={collapsedGroups[group.id]}
+          class={[
+            "transition-transform duration-150",
+            collapsedGroups[group.id] && "-rotate-90",
+          ]}
           width="12"
           height="12"
           viewBox="0 0 12 12"
@@ -66,7 +69,7 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
         {group.title}
         {#if group.progressText}
           <span
-            class="setup-nav__group-progress"
+            class="ml-auto text-[0.6rem] font-medium normal-case tracking-normal text-text-muted"
             data-testid={`${setupWorkspaceTestIds.navGroupProgressPrefix}-${group.id}`}
           >
             {group.progressText}
@@ -78,8 +81,10 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
         {#each group.sections as section (section.id)}
           <button
             aria-current={selectedSectionId === section.id ? "page" : undefined}
-            class="setup-nav__item"
-            class:is-active={selectedSectionId === section.id}
+            class={[
+              "flex w-full items-center gap-1.5 rounded-r-md border-none border-l-2 border-transparent bg-transparent px-2 py-1.5 pl-[26px] text-left text-[0.8rem] text-text-primary transition-all duration-100 hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-40",
+              selectedSectionId === section.id && "border-l-accent bg-bg-tertiary font-semibold text-accent",
+            ]}
             data-availability={section.availability}
             data-implemented={section.implemented ? "true" : "false"}
             data-testid={`${setupWorkspaceTestIds.navPrefix}-${section.id}`}
@@ -90,15 +95,15 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
             <span>{section.title}</span>
 
             {#if section.id === "beginner_wizard"}
-              <span class="setup-nav__badge">Guide</span>
+              <span class="rounded border border-accent px-1 py-px text-[0.6rem] font-bold uppercase text-accent">Guide</span>
             {/if}
 
             {#if isComingLater(section)}
-              <span class="setup-nav__status setup-nav__status--muted">Coming later</span>
+              <span class="ml-auto text-[0.6rem] font-bold uppercase text-text-muted">Coming later</span>
             {:else if statusLabel(section)}
               {@const label = statusLabel(section)!}
               <span
-                class="setup-nav__status {label.className}"
+                class={`ml-auto text-[0.6rem] font-bold uppercase ${label.className}`}
                 data-testid={`${setupWorkspaceTestIds.sectionStatusPrefix}-${section.id}`}
               >
                 {label.text}
@@ -110,105 +115,3 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
     </div>
   {/each}
 </nav>
-
-<style>
-  nav {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    height: 100%;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 8px 4px;
-  }
-
-  .setup-nav__group-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    padding: 6px 8px;
-    font-size: 0.68rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--color-text-muted);
-    background: none;
-    border: none;
-    cursor: pointer;
-  }
-
-  .setup-nav__chevron {
-    transition: transform 0.15s;
-  }
-  .setup-nav__chevron.is-collapsed {
-    transform: rotate(-90deg);
-  }
-
-  .setup-nav__item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    padding: 6px 8px 6px 26px;
-    font-size: 0.8rem;
-    color: var(--color-text-primary);
-    background: none;
-    border: none;
-    border-left: 2px solid transparent;
-    border-radius: 0 6px 6px 0;
-    cursor: pointer;
-    transition: all 0.1s;
-  }
-  .setup-nav__item:hover:not(:disabled) {
-    background: var(--color-bg-tertiary);
-  }
-  .setup-nav__item.is-active {
-    background: var(--color-bg-tertiary);
-    border-left-color: var(--color-accent);
-    color: var(--color-accent);
-    font-weight: 600;
-  }
-  .setup-nav__item:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  .setup-nav__badge {
-    font-size: 0.6rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    color: var(--color-accent);
-    border: 1px solid var(--color-accent);
-    border-radius: 4px;
-    padding: 1px 4px;
-  }
-
-  .setup-nav__status {
-    margin-left: auto;
-    font-size: 0.6rem;
-    font-weight: 700;
-    text-transform: uppercase;
-  }
-  .setup-nav__status--done {
-    color: var(--color-success);
-  }
-  .setup-nav__status--active {
-    color: var(--color-accent);
-  }
-  .setup-nav__status--warn {
-    color: var(--color-warning);
-  }
-  .setup-nav__status--muted {
-    color: var(--color-text-muted);
-  }
-
-  .setup-nav__group-progress {
-    margin-left: auto;
-    font-size: 0.6rem;
-    font-weight: 500;
-    color: var(--color-text-muted);
-    text-transform: none;
-    letter-spacing: 0;
-  }
-</style>

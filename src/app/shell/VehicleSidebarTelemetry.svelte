@@ -41,10 +41,10 @@ let launcherStatusText = $derived.by(() => {
 });
 </script>
 
-<div class="sidebar-telemetry" data-testid="sidebar-telemetry-panel">
+<div data-testid="sidebar-telemetry-panel">
   <Panel padded>
-    <div class="sidebar-telemetry__header">
-      <p class="sidebar-telemetry__eyebrow">Vehicle</p>
+    <div class="flex items-center justify-between gap-2">
+      <p class="m-0 text-[0.66rem] font-bold uppercase tracking-[0.12em] text-text-muted">Vehicle</p>
       <Button
         onclick={() => telemetrySettingsDialog.open()}
         size="sm"
@@ -54,85 +54,25 @@ let launcherStatusText = $derived.by(() => {
       </Button>
     </div>
 
-    <p class="sidebar-telemetry__status">{launcherStatusText}</p>
+    <p class="mt-1 mb-0 text-[0.66rem] text-text-muted">{launcherStatusText}</p>
 
-    <dl class="sidebar-telemetry__list">
-      <div class="sidebar-telemetry__row" data-testid="sidebar-telemetry-altitude">
-        <dt class="sidebar-telemetry__label">Alt</dt>
-        <dd class="sidebar-telemetry__value">{summary.altitudeText}</dd>
+    <dl class="m-0 mt-3 flex flex-col gap-[2px] divide-y divide-border p-0">
+      <div class="flex min-h-7 items-baseline justify-between gap-2 rounded-sm px-1.5 py-1" data-testid="sidebar-telemetry-altitude">
+        <dt class="m-0 shrink-0 text-[0.66rem] font-bold uppercase tracking-[0.12em] text-text-muted">Alt</dt>
+        <dd class="m-0 min-w-0 text-right text-[0.82rem] font-semibold tabular-nums text-text-primary [overflow-wrap:anywhere]">{summary.altitudeText}</dd>
       </div>
-      <div class="sidebar-telemetry__row" data-testid="sidebar-telemetry-speed">
-        <dt class="sidebar-telemetry__label">Speed</dt>
-        <dd class="sidebar-telemetry__value">{summary.speedText}</dd>
+      <div class="flex min-h-7 items-baseline justify-between gap-2 rounded-sm px-1.5 py-1" data-testid="sidebar-telemetry-speed">
+        <dt class="m-0 shrink-0 text-[0.66rem] font-bold uppercase tracking-[0.12em] text-text-muted">Speed</dt>
+        <dd class="m-0 min-w-0 text-right text-[0.82rem] font-semibold tabular-nums text-text-primary [overflow-wrap:anywhere]">{summary.speedText}</dd>
       </div>
-      <div class="sidebar-telemetry__row" data-testid="sidebar-telemetry-battery">
-        <dt class="sidebar-telemetry__label">Battery</dt>
-        <dd class="sidebar-telemetry__value">{summary.batteryText}</dd>
+      <div class="flex min-h-7 items-baseline justify-between gap-2 rounded-sm px-1.5 py-1" data-testid="sidebar-telemetry-battery">
+        <dt class="m-0 shrink-0 text-[0.66rem] font-bold uppercase tracking-[0.12em] text-text-muted">Battery</dt>
+        <dd class="m-0 min-w-0 text-right text-[0.82rem] font-semibold tabular-nums text-text-primary [overflow-wrap:anywhere]">{summary.batteryText}</dd>
       </div>
-      <div class="sidebar-telemetry__row" data-testid="sidebar-telemetry-gps">
-        <dt class="sidebar-telemetry__label">GPS</dt>
-        <dd class="sidebar-telemetry__value">{gpsText}</dd>
+      <div class="flex min-h-7 items-baseline justify-between gap-2 rounded-sm px-1.5 py-1" data-testid="sidebar-telemetry-gps">
+        <dt class="m-0 shrink-0 text-[0.66rem] font-bold uppercase tracking-[0.12em] text-text-muted">GPS</dt>
+        <dd class="m-0 min-w-0 text-right text-[0.82rem] font-semibold tabular-nums text-text-primary [overflow-wrap:anywhere]">{gpsText}</dd>
       </div>
     </dl>
   </Panel>
 </div>
-
-<style>
-.sidebar-telemetry__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-.sidebar-telemetry__eyebrow {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.sidebar-telemetry__status {
-  margin: var(--space-1) 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.66rem;
-}
-.sidebar-telemetry__list {
-  margin: var(--space-3) 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.sidebar-telemetry__row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
-  min-height: 28px;
-  padding: 4px 6px;
-  border-radius: var(--radius-sm);
-}
-.sidebar-telemetry__row + .sidebar-telemetry__row {
-  border-top: 1px solid var(--color-border);
-}
-.sidebar-telemetry__label {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-.sidebar-telemetry__value {
-  margin: 0;
-  color: var(--color-text-primary);
-  font-size: 0.82rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-</style>

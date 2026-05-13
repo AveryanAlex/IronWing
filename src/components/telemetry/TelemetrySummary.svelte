@@ -33,7 +33,7 @@ let summary = $derived(view.telemetrySummary);
     {/snippet}
   </SectionHeader>
 
-  <div class="telemetry-summary__metrics">
+  <div class="mt-3">
     <MetricGroup columns={5}>
       <MetricTile label="Altitude" value={summary.altitudeText} testId="telemetry-alt-value" />
       <MetricTile label="Speed" value={summary.speedText} testId="telemetry-speed-value" />
@@ -53,9 +53,3 @@ let summary = $derived(view.telemetrySummary);
     </MetricGroup>
   </div>
 </Panel>
-
-<style>
-  .telemetry-summary__metrics {
-    margin-top: var(--space-3);
-  }
-</style>

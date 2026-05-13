@@ -59,12 +59,12 @@
 
 <div
   bind:this={containerEl}
-  class="split-pane"
+  class="split-pane flex h-full min-h-0 w-full"
   class:split-pane--horizontal={direction === "horizontal"}
   class:split-pane--vertical={direction === "vertical"}
   class:split-pane--dragging={dragging}
 >
-  <div class="split-pane__panel" style={firstStyle}>
+  <div class="min-h-0 min-w-0 overflow-hidden" style={firstStyle}>
     {@render first()}
   </div>
   <!--
@@ -87,28 +87,17 @@
     onpointerup={onPointerUp}
     onlostpointercapture={onPointerUp}
   ></div>
-  <div class="split-pane__panel" style={secondStyle}>
+  <div class="min-h-0 min-w-0 overflow-hidden" style={secondStyle}>
     {@render second()}
   </div>
 </div>
 
 <style>
-  .split-pane {
-    display: flex;
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-  }
   .split-pane--horizontal {
     flex-direction: row;
   }
   .split-pane--vertical {
     flex-direction: column;
-  }
-  .split-pane__panel {
-    overflow: hidden;
-    min-width: 0;
-    min-height: 0;
   }
   .split-pane__divider {
     flex-shrink: 0;

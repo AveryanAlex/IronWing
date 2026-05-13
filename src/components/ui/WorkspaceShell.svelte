@@ -9,16 +9,19 @@ type Props = {
   children: Snippet;
 };
 
+const modeClasses: Record<Mode, string> = {
+  inset: "gap-[var(--space-3)] overflow-auto p-[var(--workspace-gutter-inset)]",
+  split: "gap-0 p-0",
+  "edge-to-edge": "gap-0 p-0",
+};
+
 let { mode = "inset", testId, children }: Props = $props();
+
+let shellClass = $derived(
+  ["flex min-h-0 flex-1 flex-col overflow-hidden text-[var(--color-text-primary)]", modeClasses[mode]].join(" "),
+);
 </script>
 
-<section class="ui-workspace" data-mode={mode} data-testid={testId}>
+<section class={shellClass} data-mode={mode} data-testid={testId}>
   {@render children()}
 </section>
-
-<style>
-.ui-workspace { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: hidden; color: var(--color-text-primary); }
-.ui-workspace[data-mode="inset"]        { padding: var(--workspace-gutter-inset); gap: var(--space-3); overflow: auto; }
-.ui-workspace[data-mode="split"]        { padding: 0; gap: 0; }
-.ui-workspace[data-mode="edge-to-edge"] { padding: 0; gap: 0; }
-</style>

@@ -5,25 +5,22 @@ type Tone = "neutral" | "info" | "success" | "warning" | "danger";
 
 type Props = { tone?: Tone; testId?: string; children: Snippet };
 
+const toneClasses: Record<Tone, string> = {
+  neutral: "bg-[color-mix(in_srgb,var(--color-bg-tertiary)_80%,transparent)] text-[var(--color-text-secondary)]",
+  info: "bg-[color-mix(in_srgb,var(--color-accent)_14%,transparent)] text-[var(--color-accent)]",
+  success: "bg-[color-mix(in_srgb,var(--color-success)_14%,transparent)] text-[var(--color-success)]",
+  warning: "bg-[color-mix(in_srgb,var(--color-warning)_14%,transparent)] text-[var(--color-warning)]",
+  danger: "bg-[color-mix(in_srgb,var(--color-danger)_14%,transparent)] text-[var(--color-danger)]",
+};
+
 let { tone = "neutral", testId, children }: Props = $props();
+
+let pillClass = $derived(
+  [
+    "inline-flex items-center gap-[var(--space-2)] rounded-full px-[10px] py-1 text-[0.78rem] font-semibold",
+    toneClasses[tone],
+  ].join(" "),
+);
 </script>
 
-<span class="ui-pill" data-tone={tone} data-testid={testId}>{@render children()}</span>
-
-<style>
-.ui-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  background: color-mix(in srgb, var(--color-bg-tertiary) 80%, transparent);
-  color: var(--color-text-secondary);
-}
-.ui-pill[data-tone="info"]    { color: var(--color-accent);  background: color-mix(in srgb, var(--color-accent) 14%, transparent); }
-.ui-pill[data-tone="success"] { color: var(--color-success); background: color-mix(in srgb, var(--color-success) 14%, transparent); }
-.ui-pill[data-tone="warning"] { color: var(--color-warning); background: color-mix(in srgb, var(--color-warning) 14%, transparent); }
-.ui-pill[data-tone="danger"]  { color: var(--color-danger);  background: color-mix(in srgb, var(--color-danger) 14%, transparent); }
-</style>
+<span class={pillClass} data-tone={tone} data-testid={testId}>{@render children()}</span>

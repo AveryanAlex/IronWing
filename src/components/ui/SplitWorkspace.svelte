@@ -12,13 +12,11 @@ type Props = {
 let { primaryMin = "0", primaryMax = "1fr", testId, primary, secondary }: Props = $props();
 </script>
 
-<div class="ui-split" data-testid={testId} style="--split-primary-min: {primaryMin}; --split-primary-max: {primaryMax};">
-  <div class="ui-split__primary">{@render primary()}</div>
-  <div class="ui-split__secondary">{@render secondary()}</div>
+<div
+  class="grid min-h-0 grid-cols-[minmax(var(--split-primary-min),var(--split-primary-max))_minmax(280px,360px)] gap-[var(--workspace-gutter-split)] max-[1024px]:grid-cols-1"
+  data-testid={testId}
+  style="--split-primary-min: {primaryMin}; --split-primary-max: {primaryMax};"
+>
+  <div class="min-h-0 min-w-0">{@render primary()}</div>
+  <div class="min-h-0 min-w-0">{@render secondary()}</div>
 </div>
-
-<style>
-.ui-split { display: grid; min-height: 0; gap: var(--workspace-gutter-split); grid-template-columns: minmax(var(--split-primary-min), var(--split-primary-max)) minmax(280px, 360px); }
-.ui-split__primary, .ui-split__secondary { min-width: 0; min-height: 0; }
-@media (max-width: 1024px) { .ui-split { grid-template-columns: 1fr; } }
-</style>

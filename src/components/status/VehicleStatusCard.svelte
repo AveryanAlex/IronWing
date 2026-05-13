@@ -38,15 +38,15 @@ let statusCard = $derived(view.vehicleStatusCard);
 </script>
 
 <Panel padded>
-  <div class="vehicle-status__header">
+  <div class="flex items-center justify-between gap-3">
     <div>
-      <p class="vehicle-status__eyebrow">Vehicle status</p>
-      <h2 class="vehicle-status__title">Live vehicle state</h2>
+      <p class="m-0 text-[0.72rem] font-bold uppercase tracking-[0.12em] text-text-muted">Vehicle status</p>
+      <h2 class="mt-1 mb-0 text-base font-[650] text-text-primary">Live vehicle state</h2>
     </div>
     <StatusPill tone={pillTone(statusCard.sessionTone)}>{statusCard.sessionLabel}</StatusPill>
   </div>
 
-  <div class="vehicle-status__grid">
+  <div class="mt-4 grid grid-cols-2 gap-2 xl:grid-cols-4">
     <div data-testid="telemetry-state-value">
       <MetricTile label="Arm state" tone={metricTone(statusCard.armStateTone)} value={statusCard.armStateText} />
     </div>
@@ -57,35 +57,3 @@ let statusCard = $derived(view.vehicleStatusCard);
     <MetricTile label="Data feed" value={statusCard.dataFeedText} />
   </div>
 </Panel>
-
-<style>
-.vehicle-status__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-.vehicle-status__eyebrow {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.vehicle-status__title {
-  margin: 4px 0 0;
-  font-size: 1rem;
-  font-weight: 650;
-  color: var(--color-text-primary);
-}
-.vehicle-status__grid {
-  margin-top: var(--space-4);
-  display: grid;
-  gap: var(--space-2);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-@media (min-width: 1280px) {
-  .vehicle-status__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
-</style>

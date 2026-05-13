@@ -65,15 +65,19 @@
     </p>
   </div>
 
-  <div class="arm-slider" class:arm-slider--locked={locked || busy}>
-    <div class="arm-slider__track">
+  <div class="mt-2" class:opacity-50={locked || busy} class:pointer-events-none={locked || busy}>
+    <div class="relative flex h-9 rounded-full bg-bg-tertiary p-[3px]">
       <div
-        class="arm-slider__pill"
-        class:arm-slider__pill--armed={armed}
+        class={[
+          "absolute top-[3px] left-[3px] h-[calc(100%_-_6px)] w-[calc(50%_-_3px)] rounded-full bg-bg-secondary transition-[left,background] duration-200 ease-in-out",
+          armed && "left-1/2 bg-danger/45",
+        ]}
       ></div>
       <button
-        class="arm-slider__btn"
-        class:arm-slider__btn--active={!armed}
+        class={[
+          "relative z-[1] flex-1 rounded-full border-none bg-transparent text-xs font-semibold text-text-muted transition-colors duration-150 disabled:cursor-default",
+          !armed && "text-text-primary",
+        ]}
         disabled={!armed || locked || busy}
         onclick={handleDisarm}
         type="button"
@@ -81,8 +85,10 @@
         Disarm
       </button>
       <button
-        class="arm-slider__btn"
-        class:arm-slider__btn--active={armed}
+        class={[
+          "relative z-[1] flex-1 rounded-full border-none bg-transparent text-xs font-semibold text-text-muted transition-colors duration-150 disabled:cursor-default",
+          armed && "text-text-primary",
+        ]}
         disabled={armed || locked || busy}
         onclick={handleArm}
         type="button"
@@ -92,61 +98,3 @@
     </div>
   </div>
 </div>
-
-<style>
-  .arm-slider {
-    margin-top: 8px;
-  }
-
-  .arm-slider--locked {
-    pointer-events: none;
-    opacity: 0.5;
-  }
-
-  .arm-slider__track {
-    position: relative;
-    display: flex;
-    height: 36px;
-    border-radius: 999px;
-    background: var(--color-bg-tertiary);
-    padding: 3px;
-  }
-
-  .arm-slider__pill {
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: calc(50% - 3px);
-    height: calc(100% - 6px);
-    border-radius: 999px;
-    background: var(--color-bg-secondary);
-    transition: left 0.2s ease, background 0.2s ease;
-  }
-
-  .arm-slider__pill--armed {
-    left: 50%;
-    background: rgba(255, 68, 68, 0.45);
-  }
-
-  .arm-slider__btn {
-    position: relative;
-    z-index: 1;
-    flex: 1;
-    border: none;
-    border-radius: 999px;
-    background: transparent;
-    font-size: 0.75rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: color 0.15s;
-    color: var(--color-text-muted);
-  }
-
-  .arm-slider__btn--active {
-    color: var(--color-text-primary);
-  }
-
-  .arm-slider__btn:disabled {
-    cursor: default;
-  }
-</style>

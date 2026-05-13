@@ -16,34 +16,22 @@ let { label, value, unit, tone = "neutral", stale = false, unavailable = false, 
 let displayValue = $derived(unavailable ? "—" : value);
 </script>
 
-<div class="ui-metric" data-tone={tone} data-stale={stale || undefined} data-unavailable={unavailable || undefined} data-testid={testId}>
-  <div class="ui-metric__label">{label}{#if hint} <span class="ui-metric__hint">({hint})</span>{/if}</div>
-  <div class="ui-metric__value">
-    <span class="ui-metric__number">{displayValue}</span>
-    {#if unit && !unavailable}<span class="ui-metric__unit">{unit}</span>{/if}
+<div
+  class="flex min-w-0 flex-col gap-[var(--space-2)] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--surface-card)] p-[var(--space-3)] data-[stale]:opacity-[0.6]"
+  data-tone={tone}
+  data-stale={stale || undefined}
+  data-unavailable={unavailable || undefined}
+  data-testid={testId}
+>
+  <div class="text-[0.7rem] font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
+    {label}{#if hint} <span class="font-medium text-[var(--color-text-secondary)]">({hint})</span>{/if}
+  </div>
+  <div class="flex items-baseline gap-1.5 [font-variant-numeric:tabular-nums]">
+    <span
+      class="text-[1.15rem] font-[650] text-[var(--color-text-primary)] data-[tone=info]:text-[var(--color-accent)] data-[tone=success]:text-[var(--color-success)] data-[tone=warning]:text-[var(--color-warning)] data-[tone=danger]:text-[var(--color-danger)] data-[unavailable]:text-[var(--color-text-muted)]"
+      data-tone={tone}
+      data-unavailable={unavailable || undefined}
+    >{displayValue}</span>
+    {#if unit && !unavailable}<span class="text-[0.85rem] text-[var(--color-text-secondary)]">{unit}</span>{/if}
   </div>
 </div>
-
-<style>
-.ui-metric {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  background: var(--surface-card);
-  min-width: 0;
-}
-.ui-metric__label { color: var(--color-text-muted); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
-.ui-metric__hint { color: var(--color-text-secondary); font-weight: 500; }
-.ui-metric__value { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
-.ui-metric__number { font-size: 1.15rem; font-weight: 650; color: var(--color-text-primary); }
-.ui-metric__unit { font-size: 0.85rem; color: var(--color-text-secondary); }
-.ui-metric[data-tone="info"]    .ui-metric__number { color: var(--color-accent); }
-.ui-metric[data-tone="success"] .ui-metric__number { color: var(--color-success); }
-.ui-metric[data-tone="warning"] .ui-metric__number { color: var(--color-warning); }
-.ui-metric[data-tone="danger"]  .ui-metric__number { color: var(--color-danger); }
-.ui-metric[data-stale] { opacity: 0.6; }
-.ui-metric[data-unavailable] .ui-metric__number { color: var(--color-text-muted); }
-</style>
