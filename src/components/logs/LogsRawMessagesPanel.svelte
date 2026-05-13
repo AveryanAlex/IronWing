@@ -349,15 +349,21 @@ function previewText(record: RawMessageRecord): string {
 function detailJson(value: unknown): string {
   return JSON.stringify(value, null, 2) ?? "null";
 }
+
+const eyebrowClass = "m-0 block text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]";
+const titleClass = "mt-1 m-0 text-[0.98rem] font-semibold text-[var(--color-text-primary)]";
+const copyClass = "m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]";
+const inputClass = "w-full rounded-[6px] border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-[0.6rem] py-[0.45rem] text-[var(--color-text-primary)]";
+const errorClass = "mt-1 text-[0.78rem] text-[var(--color-danger)]";
 </script>
 
 <Panel testId="logs-raw-messages-panel">
-  <div class="logs-raw-browser">
-    <div class="logs-raw-browser__header">
+  <div class="flex flex-col gap-3">
+    <div class="flex items-start justify-between gap-3 max-[980px]:flex-col">
       <div>
-        <p class="logs-card__eyebrow">Forensic browser</p>
-        <h3 class="logs-card__title">Raw messages</h3>
-        <p class="logs-card__copy">Filter indexed records, inspect message payloads, and export the current filtered view as CSV.</p>
+        <p class={eyebrowClass}>Forensic browser</p>
+        <h3 class={titleClass}>Raw messages</h3>
+        <p class={copyClass}>Filter indexed records, inspect message payloads, and export the current filtered view as CSV.</p>
       </div>
       <StatusPill>{rawBrowser.page?.total_available ?? 0} matched</StatusPill>
     </div>
@@ -365,66 +371,66 @@ function detailJson(value: unknown): string {
     {#if !entry}
       <Banner severity="info" title="Select a log to browse raw messages." />
     {:else}
-    <div class="logs-raw-browser__filters">
-      <label>
-        <span>Message types</span>
-        <input data-testid="logs-raw-type-filter" oninput={(event) => updateFilters((current) => ({ ...current, messageTypesInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.messageTypesInput} />
+    <div class="flex flex-wrap gap-3">
+      <label class="flex-[1_1_10rem]">
+        <span class={`${eyebrowClass} mb-1`}>Message types</span>
+        <input class={inputClass} data-testid="logs-raw-type-filter" oninput={(event) => updateFilters((current) => ({ ...current, messageTypesInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.messageTypesInput} />
       </label>
-      <label>
-        <span>Text</span>
-        <input data-testid="logs-raw-text-filter" oninput={(event) => updateFilters((current) => ({ ...current, textInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.textInput} />
+      <label class="flex-[1_1_10rem]">
+        <span class={`${eyebrowClass} mb-1`}>Text</span>
+        <input class={inputClass} data-testid="logs-raw-text-filter" oninput={(event) => updateFilters((current) => ({ ...current, textInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.textInput} />
       </label>
-      <label>
-        <span>Start μs</span>
-        <input data-testid="logs-raw-start-filter" oninput={(event) => updateFilters((current) => ({ ...current, startUsecInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.startUsecInput} />
+      <label class="flex-[1_1_10rem]">
+        <span class={`${eyebrowClass} mb-1`}>Start μs</span>
+        <input class={inputClass} data-testid="logs-raw-start-filter" oninput={(event) => updateFilters((current) => ({ ...current, startUsecInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.startUsecInput} />
         {#if numericValidation.startUsec}
-          <p class="logs-raw-browser__input-error" data-testid="logs-raw-start-error">{numericValidation.startUsec}</p>
+          <p class={errorClass} data-testid="logs-raw-start-error">{numericValidation.startUsec}</p>
         {/if}
       </label>
-      <label>
-        <span>End μs</span>
-        <input data-testid="logs-raw-end-filter" oninput={(event) => updateFilters((current) => ({ ...current, endUsecInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.endUsecInput} />
+      <label class="flex-[1_1_10rem]">
+        <span class={`${eyebrowClass} mb-1`}>End μs</span>
+        <input class={inputClass} data-testid="logs-raw-end-filter" oninput={(event) => updateFilters((current) => ({ ...current, endUsecInput: (event.currentTarget as HTMLInputElement).value }))} value={draftFilters.endUsecInput} />
         {#if numericValidation.endUsec}
-          <p class="logs-raw-browser__input-error" data-testid="logs-raw-end-error">{numericValidation.endUsec}</p>
+          <p class={errorClass} data-testid="logs-raw-end-error">{numericValidation.endUsec}</p>
         {/if}
       </label>
-      <label>
-        <span>Page size</span>
-        <input data-testid="logs-raw-limit-filter" max={MAX_RAW_PAGE_SIZE} min="1" oninput={(event) => updateFilters((current) => ({ ...current, limitInput: (event.currentTarget as HTMLInputElement).value }))} step="1" type="number" value={draftFilters.limitInput} />
+      <label class="flex-[1_1_10rem]">
+        <span class={`${eyebrowClass} mb-1`}>Page size</span>
+        <input class={inputClass} data-testid="logs-raw-limit-filter" max={MAX_RAW_PAGE_SIZE} min="1" oninput={(event) => updateFilters((current) => ({ ...current, limitInput: (event.currentTarget as HTMLInputElement).value }))} step="1" type="number" value={draftFilters.limitInput} />
         {#if numericValidation.limit}
-          <p class="logs-raw-browser__input-error" data-testid="logs-raw-limit-error">{numericValidation.limit}</p>
+          <p class={errorClass} data-testid="logs-raw-limit-error">{numericValidation.limit}</p>
         {/if}
       </label>
-      <label class="logs-raw-browser__toggle">
+      <label class="inline-flex flex-none items-center gap-2">
         <input checked={draftFilters.includeDetail} onchange={(event) => updateFilters((current) => ({ ...current, includeDetail: (event.currentTarget as HTMLInputElement).checked }))} type="checkbox" />
         <span>Detail</span>
       </label>
-      <label class="logs-raw-browser__toggle">
+      <label class="inline-flex flex-none items-center gap-2">
         <input checked={draftFilters.includeHex} onchange={(event) => updateFilters((current) => ({ ...current, includeHex: (event.currentTarget as HTMLInputElement).checked }))} type="checkbox" />
         <span>Hex</span>
       </label>
     </div>
 
-    <div class="logs-raw-browser__field-filters">
+    <div class="flex flex-col gap-3">
       {#each draftFilters.fieldFilters as fieldFilter, index (fieldFilter.id)}
-        <div class="logs-raw-browser__field-row">
-          <input aria-label={`Field name ${index + 1}`} data-testid={`logs-raw-field-name-${index}`} oninput={(event) => updateFieldFilter(fieldFilter.id, { field: (event.currentTarget as HTMLInputElement).value })} placeholder="field" value={fieldFilter.field} />
-          <input aria-label={`Field value ${index + 1}`} data-testid={`logs-raw-field-value-${index}`} oninput={(event) => updateFieldFilter(fieldFilter.id, { value_text: (event.currentTarget as HTMLInputElement).value })} placeholder="contains" value={fieldFilter.value_text ?? ""} />
+        <div class="flex flex-1 gap-3 max-[720px]:flex-col">
+          <input aria-label={`Field name ${index + 1}`} class={`${inputClass} flex-1`} data-testid={`logs-raw-field-name-${index}`} oninput={(event) => updateFieldFilter(fieldFilter.id, { field: (event.currentTarget as HTMLInputElement).value })} placeholder="field" value={fieldFilter.field} />
+          <input aria-label={`Field value ${index + 1}`} class={`${inputClass} flex-1`} data-testid={`logs-raw-field-value-${index}`} oninput={(event) => updateFieldFilter(fieldFilter.id, { value_text: (event.currentTarget as HTMLInputElement).value })} placeholder="contains" value={fieldFilter.value_text ?? ""} />
           <Button size="sm" onclick={() => removeFieldFilter(fieldFilter.id)}>Remove</Button>
         </div>
       {/each}
       <Button size="sm" onclick={addFieldFilter}>Add field filter</Button>
     </div>
 
-    <div class="logs-raw-browser__actions">
-      <div class="logs-raw-browser__query-actions">
+    <div class="flex items-start justify-between gap-3 max-[980px]:flex-col">
+      <div class="flex flex-wrap gap-3">
         <Button tone="accent" testId="logs-raw-run-query" onclick={runFirstPageQuery}>Run query</Button>
         <Button testId="logs-raw-previous-page" disabled={previousCursors.length === 0} onclick={runPreviousPageQuery}>Previous</Button>
         <Button testId="logs-raw-next-page" disabled={!rawBrowser.page?.next_cursor} onclick={runNextPageQuery}>Next</Button>
       </div>
 
-      <div class="logs-raw-browser__export">
-        <input aria-label="Export destination path" data-testid="logs-raw-export-destination" oninput={(event) => (exportDestination = (event.currentTarget as HTMLInputElement).value)} placeholder="/tmp/raw-messages.csv" value={exportDestination} />
+      <div class="flex flex-1 gap-3 max-[980px]:w-full">
+        <input aria-label="Export destination path" class={`${inputClass} flex-1`} data-testid="logs-raw-export-destination" oninput={(event) => (exportDestination = (event.currentTarget as HTMLInputElement).value)} placeholder="/tmp/raw-messages.csv" value={exportDestination} />
         <Button
           testId="logs-raw-export"
           disabled={exportDestination.trim().length === 0 || exportState.phase === "exporting"}
@@ -488,9 +494,9 @@ function detailJson(value: unknown): string {
       </div>
 
       <aside class="logs-raw-browser__drawer">
-        <p class="logs-card__eyebrow">Detail drawer</p>
+        <p class={eyebrowClass}>Detail drawer</p>
         {#if selectedRecord}
-          <h4 class="logs-card__title">{selectedRecord.message_type} · seq {selectedRecord.sequence}</h4>
+          <h4 class={titleClass}>{selectedRecord.message_type} · seq {selectedRecord.sequence}</h4>
           <pre>{detailJson(selectedRecord.fields)}</pre>
           {#if selectedRecord.detail !== null}
             <h5>Raw detail</h5>
@@ -501,7 +507,7 @@ function detailJson(value: unknown): string {
             <pre>{selectedRecord.hex_payload}</pre>
           {/if}
         {:else}
-          <p class="logs-card__copy">Run a query and choose a row to inspect raw fields and payload details.</p>
+          <p class={copyClass}>Run a query and choose a row to inspect raw fields and payload details.</p>
         {/if}
       </aside>
     </div>
@@ -510,33 +516,17 @@ function detailJson(value: unknown): string {
 </Panel>
 
 <style>
-  .logs-raw-browser,
   .logs-raw-browser__content,
   .logs-raw-browser__table-shell,
-  .logs-raw-browser__drawer,
-  .logs-raw-browser__filters,
-  .logs-raw-browser__actions,
-  .logs-raw-browser__query-actions,
-  .logs-raw-browser__export,
-  .logs-raw-browser__field-row,
-  .logs-raw-browser__header {
+  .logs-raw-browser__drawer {
     display: flex;
     gap: 12px;
   }
 
-  .logs-raw-browser,
   .logs-raw-browser__drawer {
     flex-direction: column;
   }
 
-  .logs-raw-browser__header,
-  .logs-raw-browser__actions {
-    justify-content: space-between;
-    align-items: flex-start;
-  }
-
-  .logs-card__eyebrow,
-  .logs-raw-browser__filters span,
   .logs-raw-browser__drawer h5 {
     display: block;
     margin: 0 0 4px;
@@ -545,50 +535,6 @@ function detailJson(value: unknown): string {
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-  }
-
-  .logs-card__title {
-    margin: 4px 0 0;
-    color: var(--color-text-primary);
-    font-size: 0.98rem;
-    font-weight: 600;
-  }
-
-  .logs-card__copy {
-    margin: 0;
-    color: var(--color-text-secondary);
-    font-size: 0.8rem;
-    line-height: 1.5;
-  }
-
-  .logs-raw-browser__filters {
-    flex-wrap: wrap;
-  }
-
-  .logs-raw-browser__filters label,
-  .logs-raw-browser__export,
-  .logs-raw-browser__field-row {
-    flex: 1 1 10rem;
-  }
-
-  .logs-raw-browser input {
-    width: 100%;
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    padding: 0.45rem 0.6rem;
-  }
-
-  .logs-raw-browser__toggle {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .logs-raw-browser__toggle input {
-    width: auto;
   }
 
   .logs-raw-browser__content {
@@ -642,11 +588,6 @@ function detailJson(value: unknown): string {
   @media (max-width: 980px) {
     .logs-raw-browser__content {
       grid-template-columns: 1fr;
-    }
-
-    .logs-raw-browser__header,
-    .logs-raw-browser__actions {
-      flex-direction: column;
     }
   }
 </style>

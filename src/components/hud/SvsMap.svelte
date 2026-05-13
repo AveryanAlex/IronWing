@@ -128,11 +128,4 @@ $effect(() => {
 });
 </script>
 
-<div bind:this={mapContainer} class="svs-map-container"></div>
-
-<style>
-  .svs-map-container {
-    width: 100%;
-    height: 100%;
-  }
-</style>
+<div bind:this={mapContainer} class="size-full"></div>

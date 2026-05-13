@@ -255,13 +255,13 @@ function emitMarkerHandoff() {
 
   {#if workspace.operationProgress}
     <Panel testId="logs-progress-banner">
-      <div aria-atomic="true" aria-live="polite" class="logs-progress" role="status">
-        <div class="logs-progress__summary">
+      <div aria-atomic="true" aria-live="polite" class="flex flex-col gap-3" role="status">
+        <div class="flex items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
           <div>
-            <p class="logs-card__eyebrow">Operation progress</p>
-            <h3 class="logs-card__title">{workspace.operationProgress.phase.replace(/_/g, " ")}</h3>
+            <p class="m-0 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">Operation progress</p>
+            <h3 class="mt-1 m-0 text-[0.98rem] font-semibold tracking-[-0.02em] text-[var(--color-text-primary)]">{workspace.operationProgress.phase.replace(/_/g, " ")}</h3>
             {#if workspace.operationProgress.message}
-              <p class="logs-card__copy">{workspace.operationProgress.message}</p>
+              <p class="m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]">{workspace.operationProgress.message}</p>
             {/if}
           </div>
 
@@ -270,11 +270,11 @@ function emitMarkerHandoff() {
           {/if}
         </div>
 
-        <div class="logs-progress__meter" aria-hidden="true">
-          <div class="logs-progress__fill" style={`width: ${workspace.operationProgress.percent ?? 0}%`}></div>
+        <div class="h-2 w-full overflow-hidden rounded-full bg-[var(--color-bg-primary)]" aria-hidden="true">
+          <div class="h-full bg-[var(--color-accent)]" style={`width: ${workspace.operationProgress.percent ?? 0}%`}></div>
         </div>
 
-        <div class="logs-progress__meta">
+        <div class="flex items-start justify-between gap-3 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)] max-[720px]:flex-col max-[720px]:items-stretch">
           <span>{workspace.operationProgress.completed_items.toLocaleString()} completed</span>
           <span>{workspace.operationProgress.total_items == null ? "total pending" : `${workspace.operationProgress.total_items.toLocaleString()} total`}</span>
           <span>{workspace.operationProgress.percent == null ? "estimating" : `${workspace.operationProgress.percent}%`}</span>
@@ -283,8 +283,8 @@ function emitMarkerHandoff() {
     </Panel>
   {/if}
 
-  <div class="logs-workspace__layout">
-    <div class="logs-workspace__library-column">
+  <div class="mb-[var(--space-2)] grid min-h-0 items-start gap-3 [grid-template-columns:minmax(300px,0.9fr)_minmax(0,1.65fr)] max-[980px]:grid-cols-1">
+    <div class="flex min-w-0 flex-col gap-3 self-start max-[980px]:self-stretch">
       <LogsLibraryPanel
         {entries}
         importPath={importPath}
@@ -311,7 +311,7 @@ function emitMarkerHandoff() {
       />
     </div>
 
-    <div class="logs-workspace__detail-column">
+    <div class="flex min-w-0 flex-col gap-3 self-start max-[980px]:self-stretch">
       <LogsRecordingPanel
         autoRecordDirectory={workspace.recording.settings?.auto_record_directory ?? null}
         autoRecordEnabled={workspace.recording.settings?.auto_record_on_connect ?? false}
@@ -401,96 +401,3 @@ function emitMarkerHandoff() {
     </div>
   </div>
 </WorkspaceShell>
-
-<style>
-  .logs-progress {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .logs-progress__summary,
-  .logs-progress__meta {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .logs-card__eyebrow {
-    margin: 0;
-    color: var(--color-text-muted);
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-  }
-
-  .logs-card__title {
-    margin: 4px 0 0;
-    color: var(--color-text-primary);
-    font-size: 0.98rem;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-  }
-
-  .logs-card__copy,
-  .logs-progress__meta {
-    margin: 0;
-    color: var(--color-text-secondary);
-    font-size: 0.8rem;
-    line-height: 1.5;
-  }
-
-  .logs-workspace__layout {
-    min-height: 0;
-    display: grid;
-    align-items: start;
-    gap: 12px;
-    grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.65fr);
-    /* Trailing margin guarantees a visible gap at the scroll-bottom that
-       survives sub-pixel rounding around the WorkspaceShell padding. */
-    margin-bottom: var(--space-2);
-  }
-
-  .logs-workspace__library-column,
-  .logs-workspace__detail-column {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    align-self: start;
-  }
-
-  .logs-progress__meter {
-    width: 100%;
-    height: 8px;
-    border-radius: 999px;
-    background: var(--color-bg-primary);
-    overflow: hidden;
-  }
-
-  .logs-progress__fill {
-    height: 100%;
-    background: var(--color-accent);
-  }
-
-  @media (max-width: 980px) {
-    .logs-workspace__layout {
-      grid-template-columns: 1fr;
-    }
-
-    .logs-workspace__library-column,
-    .logs-workspace__detail-column {
-      align-self: stretch;
-    }
-  }
-
-  @media (max-width: 720px) {
-    .logs-progress__summary,
-    .logs-progress__meta {
-      flex-direction: column;
-      align-items: stretch;
-    }
-  }
-</style>

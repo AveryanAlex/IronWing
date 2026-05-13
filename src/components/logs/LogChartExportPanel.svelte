@@ -29,13 +29,18 @@ let {
 
 let chartExportVisible = $derived(exportState.origin === "chart");
 let chartExportInFlight = $derived(exportState.phase === "exporting" && chartExportVisible);
+
+const eyebrowClass = "m-0 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]";
+const copyClass = "m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]";
+const fieldLabelClass = eyebrowClass;
+const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-bg-input)] px-[0.7rem] py-[0.55rem] text-[0.8rem] text-[var(--color-text-primary)]";
 </script>
 
-<section class="logs-chart-export" data-testid="logs-chart-export">
-  <div class="logs-chart-export__header">
+<section class="flex flex-col gap-3 border-t border-[var(--color-border)] pt-3" data-testid="logs-chart-export">
+  <div class="flex items-center justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
     <div>
-      <p class="logs-card__eyebrow">Selected-range export</p>
-      <p class="logs-card__copy">Drag across any chart to pin a shared range, then export CSV for the active chart group only.</p>
+      <p class={eyebrowClass}>Selected-range export</p>
+      <p class={copyClass}>Drag across any chart to pin a shared range, then export CSV for the active chart group only.</p>
     </div>
 
     <Button
@@ -47,11 +52,11 @@ let chartExportInFlight = $derived(exportState.phase === "exporting" && chartExp
     </Button>
   </div>
 
-  <div class="logs-chart-export__controls">
-    <label class="logs-field logs-chart-export__field">
-      <span class="logs-field__label">Destination path</span>
+  <div class="flex items-center justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+    <label class="flex flex-1 flex-col gap-1.5">
+      <span class={fieldLabelClass}>Destination path</span>
       <input
-        class="logs-input"
+        class={inputClass}
         data-testid="logs-chart-export-path"
         oninput={(event) => onExportDestinationChange((event.currentTarget as HTMLInputElement).value)}
         placeholder="/tmp/selected-range.csv"
@@ -71,9 +76,9 @@ let chartExportInFlight = $derived(exportState.phase === "exporting" && chartExp
   </div>
 
   {#if !chartState.selectedRange}
-    <p class="logs-card__copy" data-testid="logs-chart-export-help">Drag on a chart to choose the export window before dispatching CSV export.</p>
+    <p class={copyClass} data-testid="logs-chart-export-help">Drag on a chart to choose the export window before dispatching CSV export.</p>
   {:else}
-    <p class="logs-card__copy" data-testid="logs-chart-export-range-summary">
+    <p class={copyClass} data-testid="logs-chart-export-range-summary">
       Exporting {formatUsec(chartState.selectedRange.startUsec, effectiveStartUsec)} → {formatUsec(chartState.selectedRange.endUsec, effectiveStartUsec)} for {getChartMessageTypeFilters(activeGroup).join(", ") || "the active chart group"}.
     </p>
   {/if}
@@ -88,67 +93,3 @@ let chartExportInFlight = $derived(exportState.phase === "exporting" && chartExp
     />
   {/if}
 </section>
-
-<style>
-  .logs-card__eyebrow,
-  .logs-field__label {
-    margin: 0;
-    color: var(--color-text-muted);
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-  }
-
-  .logs-card__copy {
-    margin: 0;
-    color: var(--color-text-secondary);
-    font-size: 0.8rem;
-    line-height: 1.5;
-  }
-
-  .logs-chart-export {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    border-top: 1px solid var(--color-border);
-    padding-top: 12px;
-  }
-
-  .logs-chart-export__controls,
-  .logs-chart-export__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .logs-chart-export__field {
-    flex: 1;
-  }
-
-  .logs-field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .logs-input {
-    width: 100%;
-    min-width: 0;
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    background: var(--color-bg-input);
-    color: var(--color-text-primary);
-    font-size: 0.8rem;
-    padding: 0.55rem 0.7rem;
-  }
-
-  @media (max-width: 720px) {
-    .logs-chart-export__controls,
-    .logs-chart-export__header {
-      flex-direction: column;
-      align-items: stretch;
-    }
-  }
-</style>

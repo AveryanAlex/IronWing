@@ -62,11 +62,4 @@ $effect(() => {
 });
 </script>
 
-<div bind:this={mapContainer} class="hud-minimap-container"></div>
-
-<style>
-  .hud-minimap-container {
-    width: 100%;
-    height: 100%;
-  }
-</style>
+<div bind:this={mapContainer} class="size-full"></div>

@@ -238,6 +238,8 @@ let sessionStateLabel = $derived(state.isActive
     ? `completed:${activeOutcome.outcome.result}`
     : "idle");
 let bannerSeverity = $derived<BannerSeverity>(outcomeCopy?.tone ?? "warning");
+
+const detailTileClass = "rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-input)] p-3 text-[0.86rem] text-[var(--color-text-primary)]";
 </script>
 
 <Panel padded testId={firmwareWorkspaceTestIds.outcomePanel}>
@@ -250,9 +252,9 @@ let bannerSeverity = $derived<BannerSeverity>(outcomeCopy?.tone ?? "warning");
   </SectionHeader>
 
   {#if state.isActive}
-    <div class="outcome-active">
-      <p class="outcome-active__title">Live firmware session</p>
-      <p class="outcome-active__detail">
+    <div class="mt-[var(--space-4)] rounded-[var(--radius-md)] border border-[color-mix(in_srgb,var(--color-accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] px-4 py-3 text-[0.86rem] text-[var(--color-text-primary)]">
+      <p class="m-0 font-semibold">Live firmware session</p>
+      <p class="m-0 mt-1">
         {state.progress?.phase_label ?? state.sessionPhase ?? "Working"}
         {#if state.progress}
           · {Math.round(state.progress.pct)}%
@@ -262,7 +264,7 @@ let bannerSeverity = $derived<BannerSeverity>(outcomeCopy?.tone ?? "warning");
   {/if}
 
   {#if activeOutcome && outcomeCopy}
-    <div class="outcome-stack">
+    <div class="mt-[var(--space-4)] flex flex-col gap-[var(--space-3)]">
       <Banner
         severity={bannerSeverity}
         title={outcomeCopy.label}
@@ -271,14 +273,14 @@ let bannerSeverity = $derived<BannerSeverity>(outcomeCopy?.tone ?? "warning");
         messageTestId={firmwareWorkspaceTestIds.outcomeSummary}
       />
 
-      <dl class="outcome-detail-grid">
+      <dl class="m-0 grid gap-[var(--space-3)] p-0 md:grid-cols-2">
         {#each rows as row, index (`${row.label}-${row.value}`)}
           <div
-            class="outcome-detail-tile"
+            class={detailTileClass}
             data-testid={`${firmwareWorkspaceTestIds.outcomeDetailPrefix}-${index}`}
           >
-            <dt class="outcome-detail-tile__label">{row.label}</dt>
-            <dd class="outcome-detail-tile__value">{row.value}</dd>
+            <dt class="m-0 text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">{row.label}</dt>
+            <dd class="m-0 mt-[var(--space-1)] break-words">{row.value}</dd>
           </div>
         {/each}
       </dl>
@@ -292,75 +294,10 @@ let bannerSeverity = $derived<BannerSeverity>(outcomeCopy?.tone ?? "warning");
     </div>
   {:else}
     <p
-      class="outcome-empty"
+      class="mt-[var(--space-4)] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-input)] p-4 text-[0.86rem] text-[var(--color-text-secondary)]"
       data-testid={firmwareWorkspaceTestIds.outcomeEmpty}
     >
       No retained firmware outcome yet. Once install or recovery runs, the exact result facts stay visible here until you dismiss them.
     </p>
   {/if}
 </Panel>
-
-<style>
-.outcome-active {
-  margin-top: var(--space-4);
-  border-radius: var(--radius-md);
-  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
-  padding: 12px 16px;
-  font-size: 0.86rem;
-  color: var(--color-text-primary);
-}
-.outcome-active__title {
-  margin: 0;
-  font-weight: 600;
-}
-.outcome-active__detail {
-  margin: 4px 0 0;
-}
-.outcome-stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-}
-.outcome-detail-grid {
-  display: grid;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-}
-@media (min-width: 768px) {
-  .outcome-detail-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-.outcome-detail-tile {
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-input);
-  padding: 12px;
-  font-size: 0.86rem;
-  color: var(--color-text-primary);
-}
-.outcome-detail-tile__label {
-  margin: 0;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-.outcome-detail-tile__value {
-  margin: var(--space-1) 0 0;
-  word-break: break-word;
-}
-.outcome-empty {
-  margin-top: var(--space-4);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-input);
-  padding: 16px;
-  font-size: 0.86rem;
-  color: var(--color-text-secondary);
-}
-</style>

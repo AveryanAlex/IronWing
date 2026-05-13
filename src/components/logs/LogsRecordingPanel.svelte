@@ -52,24 +52,30 @@ let {
   onToggleAutoRecord,
 }: Props = $props();
 
-let recordingStatusTone = $derived(
+let recordingStatusTone = $derived<"neutral" | "positive" | "caution" | "critical">(
   recordingStatus.kind === "recording"
     ? "critical"
     : recordingStatus.kind === "stopping"
       ? "caution"
       : recordingStatus.kind === "failed"
         ? "critical"
-        : "neutral",
+      : "neutral",
 );
+
+const eyebrowClass = "m-0 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]";
+const titleClass = "mt-1 m-0 text-[0.98rem] font-semibold text-[var(--color-text-primary)]";
+const copyClass = "m-0 text-[0.8rem] leading-[1.5] text-[var(--color-text-secondary)]";
+const valueCardClass = "flex min-w-0 flex-col gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] px-3 py-2.5";
+const inputClass = "w-full min-w-0 rounded-[6px] border border-[var(--color-border)] bg-[var(--color-bg-input)] px-[0.7rem] py-[0.55rem] text-[0.8rem] text-[var(--color-text-primary)]";
 </script>
 
 <Panel testId="logs-recording-panel">
-  <div class="logs-recording">
-    <div class="logs-card__header">
-      <div>
-        <p class="logs-card__eyebrow">Recording</p>
-        <h3 class="logs-card__title">Capture state and auto-record setting</h3>
-        <p class="logs-card__copy">Surface idle, recording, stopping, and failure states honestly while the library registration settles in the background.</p>
+  <div class="flex min-h-0 flex-col gap-3">
+    <div class="flex items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+      <div class="min-w-0">
+        <p class={eyebrowClass}>Recording</p>
+        <h3 class={titleClass}>Capture state and auto-record setting</h3>
+        <p class={copyClass}>Surface idle, recording, stopping, and failure states honestly while the library registration settles in the background.</p>
       </div>
 
       <StatusPill tone={mapTone(recordingStatusTone)}>{recordingStatus.kind}</StatusPill>
@@ -91,13 +97,13 @@ let recordingStatusTone = $derived(
       />
     {/if}
 
-    <div class="logs-recording__row">
-      <div>
-        <p class="logs-recording__status" data-testid="logs-recording-status">{recordingLabel}</p>
+    <div class="flex items-start justify-between gap-3 max-[720px]:flex-col max-[720px]:items-stretch">
+      <div class="min-w-0">
+        <p class="m-0 text-[0.86rem] font-semibold text-[var(--color-text-primary)]" data-testid="logs-recording-status">{recordingLabel}</p>
         {#if recordingStatus.kind === "recording" || recordingStatus.kind === "stopping"}
-          <p class="logs-card__copy logs-content-wrap" data-testid="logs-recording-status-copy">{recordingStatus.destination_path} · {formatBytes(recordingStatus.bytes_written)}</p>
+          <p class={`min-w-0 overflow-wrap-anywhere break-words ${copyClass}`} data-testid="logs-recording-status-copy">{recordingStatus.destination_path} · {formatBytes(recordingStatus.bytes_written)}</p>
         {:else if recordingStatus.kind === "failed"}
-          <p class="logs-card__copy logs-content-wrap" data-testid="logs-recording-status-copy">operation · {recordingStatus.failure.operation_id} · {recordingStatus.failure.reason.kind}</p>
+          <p class={`min-w-0 overflow-wrap-anywhere break-words ${copyClass}`} data-testid="logs-recording-status-copy">operation · {recordingStatus.failure.operation_id} · {recordingStatus.failure.reason.kind}</p>
         {/if}
       </div>
 
@@ -117,195 +123,71 @@ let recordingStatusTone = $derived(
       </Button>
     </div>
 
-  <div class="logs-facts-grid logs-facts-grid--compact">
-    <div class="logs-fact">
-      <span class="logs-fact__label">Manual destination</span>
-      <span class="logs-fact__value logs-fact__value--mono logs-content-wrap" data-testid="logs-recording-destination-value">
+    <div class="grid gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]">
+      <div class={valueCardClass}>
+        <span class={eyebrowClass}>Manual destination</span>
+        <span class="min-w-0 overflow-wrap-anywhere break-words font-mono text-[0.74rem] leading-[1.5] text-[var(--color-text-primary)]" data-testid="logs-recording-destination-value">
         {recordingStatus.kind === "recording" || recordingStatus.kind === "stopping"
           ? recordingStatus.destination_path
           : recordingPath || "not chosen yet"}
-      </span>
-    </div>
-    <div class="logs-fact">
-      <span class="logs-fact__label">Active file</span>
-      <span class="logs-fact__value logs-fact__value--mono logs-content-wrap" data-testid="logs-recording-file-value">
+        </span>
+      </div>
+      <div class={valueCardClass}>
+        <span class={eyebrowClass}>Active file</span>
+        <span class="min-w-0 overflow-wrap-anywhere break-words font-mono text-[0.74rem] leading-[1.5] text-[var(--color-text-primary)]" data-testid="logs-recording-file-value">
         {recordingStatus.kind === "recording" || recordingStatus.kind === "stopping"
           ? recordingStatus.file_name
           : "—"}
-      </span>
-    </div>
-    <div class="logs-fact">
-      <span class="logs-fact__label">Bytes written</span>
-      <span class="logs-fact__value" data-testid="logs-recording-bytes-value">
+        </span>
+      </div>
+      <div class={valueCardClass}>
+        <span class={eyebrowClass}>Bytes written</span>
+        <span class="text-[0.8rem] leading-[1.5] text-[var(--color-text-primary)]" data-testid="logs-recording-bytes-value">
         {recordingStatus.kind === "recording" || recordingStatus.kind === "stopping"
           ? formatBytes(recordingStatus.bytes_written)
           : "—"}
-      </span>
-    </div>
-    <div class="logs-fact">
-      <span class="logs-fact__label">Auto-record on connect</span>
-      <span class="logs-fact__value" data-testid="logs-auto-record-value">
+        </span>
+      </div>
+      <div class={valueCardClass}>
+        <span class={eyebrowClass}>Auto-record on connect</span>
+        <span class="text-[0.8rem] leading-[1.5] text-[var(--color-text-primary)]" data-testid="logs-auto-record-value">
         {autoRecordEnabled ? "enabled" : "disabled"}
-      </span>
+        </span>
+      </div>
     </div>
-  </div>
 
-  <label class="logs-field">
-    <span class="logs-field__label">Manual destination path</span>
-    <input
-      class="logs-input"
-      data-testid="logs-recording-path-input"
-      disabled={recordingStatus.kind === "recording" || recordingStatus.kind === "stopping"}
-      oninput={(event) => onRecordingPathChange((event.currentTarget as HTMLInputElement).value)}
+    <label class="flex flex-col gap-1.5">
+      <span class={eyebrowClass}>Manual destination path</span>
+      <input
+        class={inputClass}
+        data-testid="logs-recording-path-input"
+        disabled={recordingStatus.kind === "recording" || recordingStatus.kind === "stopping"}
+        oninput={(event) => onRecordingPathChange((event.currentTarget as HTMLInputElement).value)}
       placeholder="/data/recordings/manual-capture.tlog"
       type="text"
-      value={recordingPath}
-    />
-  </label>
+        value={recordingPath}
+      />
+    </label>
 
-  <p class="logs-card__copy logs-content-wrap" data-testid="logs-recording-path-help">
-    {supportsRecordingPicker
-      ? "The start button uses the browser save picker when available, then records to the chosen filename on this path. Edit the path first to override the suggested directory or fallback destination."
-      : "If save picking is unavailable on this surface, start uses the typed destination path directly."}
-  </p>
+    <p class={`min-w-0 overflow-wrap-anywhere break-words ${copyClass}`} data-testid="logs-recording-path-help">
+      {supportsRecordingPicker
+        ? "The start button uses the browser save picker when available, then records to the chosen filename on this path. Edit the path first to override the suggested directory or fallback destination."
+        : "If save picking is unavailable on this surface, start uses the typed destination path directly."}
+    </p>
 
-  <label class="logs-checkbox">
-    <input
-      checked={autoRecordEnabled}
-      data-testid="logs-auto-record-toggle"
-      disabled={!hasSettings || settingsLoading}
-      onchange={onToggleAutoRecord}
-      type="checkbox"
-    />
-    <span>Auto-record on connect</span>
-  </label>
+    <label class="inline-flex items-center gap-2 text-[0.82rem] text-[var(--color-text-secondary)]">
+      <input
+        checked={autoRecordEnabled}
+        data-testid="logs-auto-record-toggle"
+        disabled={!hasSettings || settingsLoading}
+        onchange={onToggleAutoRecord}
+        type="checkbox"
+      />
+      <span>Auto-record on connect</span>
+    </label>
 
-  <p class="logs-card__copy logs-content-wrap" data-testid="logs-auto-record-help">
-    Default remains off. When enabled, connect requests forward this opt-in through <code>ironwing.settings</code> and auto recordings land in <code>{autoRecordDirectory ?? "—"}</code>.
-  </p>
+    <p class={`min-w-0 overflow-wrap-anywhere break-words ${copyClass}`} data-testid="logs-auto-record-help">
+      Default remains off. When enabled, connect requests forward this opt-in through <code>ironwing.settings</code> and auto recordings land in <code>{autoRecordDirectory ?? "—"}</code>.
+    </p>
   </div>
 </Panel>
-
-<style>
-  .logs-recording {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    min-height: 0;
-  }
-
-  .logs-card__header,
-  .logs-recording__row {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .logs-card__header > div,
-  .logs-recording__row > div,
-  .logs-fact {
-    min-width: 0;
-  }
-
-  .logs-card__eyebrow,
-  .logs-fact__label,
-  .logs-field__label {
-    margin: 0;
-    color: var(--color-text-muted);
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-  }
-
-  .logs-card__title {
-    margin: 4px 0 0;
-    color: var(--color-text-primary);
-    font-size: 0.98rem;
-    font-weight: 600;
-  }
-
-  .logs-card__copy,
-  .logs-fact__value,
-  .logs-recording__status {
-    margin: 0;
-    color: var(--color-text-secondary);
-    font-size: 0.8rem;
-    line-height: 1.5;
-  }
-
-  .logs-recording__status,
-  .logs-fact__value {
-    color: var(--color-text-primary);
-  }
-
-  .logs-recording__status {
-    font-size: 0.86rem;
-    font-weight: 600;
-  }
-
-  .logs-facts-grid {
-    display: grid;
-    gap: 10px;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  }
-
-  .logs-facts-grid--compact {
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  }
-
-  .logs-fact {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    background: var(--color-bg-primary);
-    padding: 10px 12px;
-  }
-
-  .logs-fact__value--mono {
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.74rem;
-  }
-
-  .logs-content-wrap {
-    min-width: 0;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-
-  .logs-field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .logs-input {
-    width: 100%;
-    min-width: 0;
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    background: var(--color-bg-input);
-    color: var(--color-text-primary);
-    font-size: 0.8rem;
-    padding: 0.55rem 0.7rem;
-  }
-
-  .logs-checkbox {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--color-text-secondary);
-    font-size: 0.82rem;
-  }
-
-  @media (max-width: 720px) {
-    .logs-card__header,
-    .logs-recording__row {
-      flex-direction: column;
-      align-items: stretch;
-    }
-  }
-</style>

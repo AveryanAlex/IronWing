@@ -132,14 +132,13 @@ function handleEnter(event: KeyboardEvent) {
 </script>
 
 <div
-  class="mission-home"
-  class:is-selected={selected}
+  class="mission-home rounded-[var(--radius-md)]"
   data-selected={selected ? "true" : "false"}
 >
   <Panel testId={missionWorkspaceTestIds.homeCard}>
-    <header class="mission-home__header">
-      <div class="mission-home__heading">
-        <span class="mission-home__eyebrow">Home</span>
+    <header class="flex flex-wrap items-center justify-between gap-[var(--space-2)]">
+      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-[var(--space-2)]">
+        <span class="text-[0.72rem] font-bold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">Home</span>
         <InfoWidget
           align="right"
           contentTestId={missionWorkspaceTestIds.homeSync}
@@ -148,7 +147,10 @@ function handleEnter(event: KeyboardEvent) {
           testId={missionWorkspaceTestIds.homeInfoButton}
           title="Shared planning context"
         />
-        <p class="mission-home__description" data-testid={missionWorkspaceTestIds.homeSummary}>
+        <p
+          class="m-0 text-[0.78rem] leading-[1.3] text-[var(--color-text-secondary)]"
+          data-testid={missionWorkspaceTestIds.homeSummary}
+        >
           {shortDescription}
         </p>
       </div>
@@ -170,11 +172,11 @@ function handleEnter(event: KeyboardEvent) {
       <Badge testId={missionWorkspaceTestIds.homeReadOnly} tone="warning">{readOnlyMessage}</Badge>
     {/if}
 
-    <div class="mission-home__grid">
-      <label class="mission-home__field">
-        <span>Latitude</span>
+    <div class="mt-[var(--space-2)] grid grid-cols-3 gap-[var(--space-2)]">
+      <label class="flex min-w-0 flex-col gap-1">
+        <span class="text-[0.7rem] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Latitude</span>
         <input
-          class="mission-home__input"
+          class="w-full rounded-[var(--radius-sm)] border border-[var(--color-border-light)] bg-[var(--color-bg-secondary)] px-2 py-1.5 text-[0.86rem] text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-70"
           data-testid={missionWorkspaceTestIds.homeLatitude}
           disabled={readOnly}
           inputmode="decimal"
@@ -192,10 +194,10 @@ function handleEnter(event: KeyboardEvent) {
           value={latitude}
         />
       </label>
-      <label class="mission-home__field">
-        <span>Longitude</span>
+      <label class="flex min-w-0 flex-col gap-1">
+        <span class="text-[0.7rem] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Longitude</span>
         <input
-          class="mission-home__input"
+          class="w-full rounded-[var(--radius-sm)] border border-[var(--color-border-light)] bg-[var(--color-bg-secondary)] px-2 py-1.5 text-[0.86rem] text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-70"
           data-testid={missionWorkspaceTestIds.homeLongitude}
           disabled={readOnly}
           inputmode="decimal"
@@ -213,10 +215,10 @@ function handleEnter(event: KeyboardEvent) {
           value={longitude}
         />
       </label>
-      <label class="mission-home__field">
-        <span>Altitude (m)</span>
+      <label class="flex min-w-0 flex-col gap-1">
+        <span class="text-[0.7rem] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Altitude (m)</span>
         <input
-          class="mission-home__input"
+          class="w-full rounded-[var(--radius-sm)] border border-[var(--color-border-light)] bg-[var(--color-bg-secondary)] px-2 py-1.5 text-[0.86rem] text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-70"
           data-testid={missionWorkspaceTestIds.homeAltitude}
           disabled={readOnly}
           inputmode="decimal"
@@ -237,7 +239,10 @@ function handleEnter(event: KeyboardEvent) {
     </div>
 
     {#if visibleValidationMessage}
-      <p class="mission-home__validation" data-testid={missionWorkspaceTestIds.homeValidation}>
+      <p
+        class="mt-[var(--space-2)] mb-0 text-[0.78rem] text-[var(--color-warning)]"
+        data-testid={missionWorkspaceTestIds.homeValidation}
+      >
         {visibleValidationMessage}
       </p>
     {/if}
@@ -245,76 +250,8 @@ function handleEnter(event: KeyboardEvent) {
 </div>
 
 <style>
-.mission-home {
-  border-radius: var(--radius-md);
-}
-.mission-home.is-selected :global(.ui-panel) {
+.mission-home[data-selected="true"] :global(.ui-panel) {
   border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
   background: color-mix(in srgb, var(--color-accent) 10%, var(--surface-panel));
-}
-.mission-home__header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
-.mission-home__heading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-.mission-home__eyebrow {
-  color: var(--color-text-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-.mission-home__description {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-size: 0.78rem;
-  line-height: 1.3;
-}
-.mission-home__grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-.mission-home__field {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: 4px;
-}
-.mission-home__field span {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--color-text-muted);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.mission-home__input {
-  width: 100%;
-  padding: 6px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border-light);
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
-  font-size: 0.86rem;
-}
-.mission-home__input:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-.mission-home__validation {
-  margin: var(--space-2) 0 0;
-  color: var(--color-warning);
-  font-size: 0.78rem;
 }
 </style>

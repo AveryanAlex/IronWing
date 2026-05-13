@@ -534,6 +534,18 @@ let readinessDetail = $derived.by(() => {
   return "Ready to install over serial once you confirm the selected source and bootloader path.";
 });
 
+const fieldLabelClass = "text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]";
+const selectInputClass = "mt-[var(--space-2)] w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-[0.86rem] text-[var(--color-text-primary)]";
+const proseClass = "mt-[var(--space-2)] text-[0.88rem] leading-[1.5] text-[var(--color-text-secondary)]";
+const tightProseClass = `${proseClass} mt-[var(--space-1)]`;
+const smallProseClass = `${proseClass} text-[0.78rem]`;
+const infoBlockClass = "mt-[var(--space-3)] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-[0.78rem] text-[var(--color-text-secondary)]";
+const standaloneInfoBlockClass = `${infoBlockClass} text-[0.86rem]`;
+const eyebrowClass = "m-0 text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]";
+const subtitleClass = "m-0 mt-1 text-[0.92rem] font-semibold text-[var(--color-text-primary)]";
+const tagClass = "text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]";
+const checkboxClass = "mt-[var(--space-3)] flex items-start gap-[var(--space-3)] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-input)] p-3 text-[0.86rem] text-[var(--color-text-secondary)]";
+
 $effect(() => {
   const port = workspaceState.serial.port;
   if (!portObservationInitialized) {
@@ -612,13 +624,13 @@ $effect(() => {
     {/snippet}
   </SectionHeader>
 
-  <div class="firmware-grid-main">
+  <div class="mt-[var(--space-3)] grid gap-[var(--space-3)] xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
     <Panel padded>
-      <div class="firmware-row">
-        <label class="firmware-field firmware-field--grow">
-          <span class="firmware-field__label">Serial port</span>
+      <div class="flex flex-wrap items-center gap-[var(--space-3)]">
+        <label class="flex min-w-[13rem] flex-1 flex-col">
+          <span class={fieldLabelClass}>Serial port</span>
           <select
-            class="firmware-select"
+            class={selectInputClass}
             data-testid={firmwareWorkspaceTestIds.serialPort}
             disabled={isSerialActive}
             onchange={(event) => void store.setSerialPort((event.currentTarget as HTMLSelectElement).value)}
@@ -635,10 +647,10 @@ $effect(() => {
           </select>
         </label>
 
-        <label class="firmware-field firmware-field--baud">
-          <span class="firmware-field__label">Baud</span>
+        <label class="flex w-full flex-col sm:w-40">
+          <span class={fieldLabelClass}>Baud</span>
           <select
-            class="firmware-select"
+            class={selectInputClass}
             data-testid={firmwareWorkspaceTestIds.serialBaud}
             disabled={isSerialActive}
             onchange={(event) => store.setSerialBaud(Number((event.currentTarget as HTMLSelectElement).value))}
@@ -660,48 +672,48 @@ $effect(() => {
       </div>
 
       {#if workspaceState.serial.preflightError}
-        <div class="firmware-stack">
+        <div class="mt-[var(--space-3)]">
           <Banner severity="danger" title={workspaceState.serial.preflightError} />
         </div>
       {/if}
 
-      <div class="firmware-grid-sources">
+      <div class="mt-[var(--space-4)] grid gap-[var(--space-3)] xl:grid-cols-2">
         <Panel padded tone={usingCatalogSource ? "info" : "neutral"} testId={firmwareWorkspaceTestIds.sourceCatalog}>
-          <div class="firmware-row firmware-row--between">
+          <div class="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
             <div>
-              <p class="firmware-eyebrow">Official catalog</p>
-              <h4 class="firmware-subtitle">Recommended source</h4>
+              <p class={eyebrowClass}>Official catalog</p>
+              <h4 class={subtitleClass}>Recommended source</h4>
             </div>
             {#if !usingCatalogSource}
               <Button size="sm" tone="accent" onclick={handleUseCatalogSource}>Use catalog</Button>
             {/if}
           </div>
 
-          <p class="firmware-prose">
+          <p class={proseClass}>
             Use official APJ releases for the selected target first. Manual APJ files stay available below as an advanced override.
           </p>
 
-          <div class="firmware-info-block">
-            <span class="firmware-info-block__title">Target proof</span>
-            <p class="firmware-info-block__value" data-testid={firmwareWorkspaceTestIds.selectedTargetState}>{selectedTargetState}</p>
+          <div class={infoBlockClass}>
+            <span class="font-semibold text-[var(--color-text-primary)]">Target proof</span>
+            <p class="m-0 mt-[var(--space-1)]" data-testid={firmwareWorkspaceTestIds.selectedTargetState}>{selectedTargetState}</p>
           </div>
 
           {#if !manualTargetRequired}
-            <div class="firmware-stack">
+            <div class="mt-[var(--space-3)]">
               <Banner severity="success" title={targetProofMessage} />
             </div>
           {/if}
 
-          <div class="firmware-info-block">
-            <span class="firmware-info-block__title">Catalog source</span>
-            <p class="firmware-info-block__value" data-testid={firmwareWorkspaceTestIds.selectedSourceState}>{selectedSourceState}</p>
+          <div class={infoBlockClass}>
+            <span class="font-semibold text-[var(--color-text-primary)]">Catalog source</span>
+            <p class="m-0 mt-[var(--space-1)]" data-testid={firmwareWorkspaceTestIds.selectedSourceState}>{selectedSourceState}</p>
           </div>
 
           <Panel padded>
-            <div class="firmware-row firmware-row--between">
+            <div class="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
               <div>
-                <p class="firmware-eyebrow">Manual target override</p>
-                <p class="firmware-prose firmware-prose--tight">Search targets when board proof is missing or uncertain.</p>
+                <p class={eyebrowClass}>Manual target override</p>
+                <p class={tightProseClass}>Search targets when board proof is missing or uncertain.</p>
               </div>
               <Button
                 size="sm"
@@ -714,7 +726,7 @@ $effect(() => {
             </div>
 
             {#if manualTargetRequired}
-              <div class="firmware-stack">
+              <div class="mt-[var(--space-3)]">
                 <Banner
                   severity="warning"
                   title={targetProofMessage}
@@ -724,11 +736,11 @@ $effect(() => {
             {/if}
 
             {#if manualSectionOpen}
-              <div class="firmware-grid-filters">
-                <label class="firmware-field">
-                  <span class="firmware-field__label">Search target</span>
+              <div class="mt-[var(--space-3)] grid gap-[var(--space-2)] md:grid-cols-[minmax(0,1fr)_14rem]">
+                <label class="flex flex-col">
+                  <span class={fieldLabelClass}>Search target</span>
                   <input
-                    class="firmware-input"
+                    class={selectInputClass}
                     data-testid={firmwareWorkspaceTestIds.manualTargetSearch}
                     oninput={(event) => (targetSearch = (event.currentTarget as HTMLInputElement).value)}
                     placeholder="Cube, Matek, board ID…"
@@ -737,10 +749,10 @@ $effect(() => {
                   />
                 </label>
 
-                <label class="firmware-field">
-                  <span class="firmware-field__label">Vehicle type</span>
+                <label class="flex flex-col">
+                  <span class={fieldLabelClass}>Vehicle type</span>
                   <select
-                    class="firmware-select"
+                    class={selectInputClass}
                     data-testid={firmwareWorkspaceTestIds.manualTargetVehicleFilter}
                     onchange={(event) => (targetVehicleType = (event.currentTarget as HTMLSelectElement).value)}
                     value={targetVehicleType}
@@ -754,7 +766,7 @@ $effect(() => {
               </div>
 
               {#if targetListError}
-                <div class="firmware-stack" data-testid={firmwareWorkspaceTestIds.targetListError}>
+                <div class="mt-[var(--space-3)]" data-testid={firmwareWorkspaceTestIds.targetListError}>
                   <Banner
                     severity="danger"
                     title={targetListError}
@@ -766,39 +778,39 @@ $effect(() => {
               {/if}
 
               {#if targetListPhase === "loading" && catalogTargets.length === 0}
-                <p class="firmware-prose">Loading official targets…</p>
+                <p class={proseClass}>Loading official targets…</p>
               {:else if filteredTargets.length > 0}
                 <div
-                  class="firmware-target-grid"
+                  class="mt-[var(--space-3)] grid max-h-72 gap-[var(--space-2)] overflow-y-auto pr-1"
                   data-testid={firmwareWorkspaceTestIds.manualTargetResults}
                 >
                   {#each filteredTargets as match (match.key)}
                     <button
                       aria-pressed={selectedTargetKey === match.key}
-                      class="firmware-target-card"
+                      class="block rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-3 text-left transition-[background-color,border-color] duration-150 ease-in-out hover:border-[var(--color-border-light)] hover:bg-[var(--color-bg-primary)] data-[selected]:border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] data-[selected]:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)]"
                       data-selected={selectedTargetKey === match.key || undefined}
                       onclick={() => void handleSelectManualTarget(match.target)}
                       type="button"
                     >
-                      <div class="firmware-target-card__row">
-                        <span class="firmware-target-card__name">{match.label}</span>
-                        <span class="firmware-target-card__platform">{match.target.platform}</span>
+                      <div class="flex flex-wrap items-center justify-between gap-[var(--space-2)]">
+                        <span class="text-[0.88rem] font-semibold text-[var(--color-text-primary)]">{match.label}</span>
+                        <span class="text-[0.72rem] uppercase tracking-[0.1em] text-[var(--color-text-muted)]">{match.target.platform}</span>
                       </div>
-                      <p class="firmware-target-card__meta">{match.metadata.join(" · ")}</p>
-                      <p class="firmware-target-card__vehicles">{match.vehicleTypesLabel}</p>
+                      <p class="m-0 mt-1 text-[0.78rem] text-[var(--color-text-secondary)]">{match.metadata.join(" · ")}</p>
+                      <p class="m-0 mt-1 text-[0.78rem] text-[var(--color-text-muted)]">{match.vehicleTypesLabel}</p>
                     </button>
                   {/each}
                 </div>
               {:else if catalogTargets.length === 0}
                 <p
-                  class="firmware-info-block firmware-info-block--standalone"
+                  class={standaloneInfoBlockClass}
                   data-testid={firmwareWorkspaceTestIds.manualTargetEmpty}
                 >
                   No catalog targets are available right now. Retry the list or keep browsing with a local APJ.
                 </p>
               {:else}
                 <p
-                  class="firmware-info-block firmware-info-block--standalone"
+                  class={standaloneInfoBlockClass}
                   data-testid={firmwareWorkspaceTestIds.manualTargetNoMatches}
                 >
                   No targets match the current search or vehicle filter.
@@ -806,7 +818,7 @@ $effect(() => {
               {/if}
 
               {#if manualSelectionActive && workspaceState.serial.target}
-                <div class="firmware-stack" data-testid={firmwareWorkspaceTestIds.manualTargetSelected}>
+                <div class="mt-[var(--space-3)]" data-testid={firmwareWorkspaceTestIds.manualTargetSelected}>
                   <Banner
                     severity="info"
                     title={`Manual target selected · ${targetLabel(workspaceState.serial.target)} · ${targetMeta(workspaceState.serial.target)}`}
@@ -815,7 +827,7 @@ $effect(() => {
               {/if}
 
               {#if manualSelectionActive && !selectedTargetVisible}
-                <div class="firmware-stack" data-testid={firmwareWorkspaceTestIds.manualTargetHidden}>
+                <div class="mt-[var(--space-3)]" data-testid={firmwareWorkspaceTestIds.manualTargetHidden}>
                   <Banner
                     severity="warning"
                     title="The selected manual target is hidden by the current filter. Clear the filter or reselect a visible target before flashing."
@@ -826,18 +838,18 @@ $effect(() => {
           </Panel>
 
           <Panel padded>
-            <div class="firmware-row firmware-row--between">
+            <div class="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
               <div>
-                <p class="firmware-eyebrow">Official APJ entry</p>
-                <p class="firmware-prose firmware-prose--tight">Keep the proven catalog entry selected unless you explicitly need a different release.</p>
+                <p class={eyebrowClass}>Official APJ entry</p>
+                <p class={tightProseClass}>Keep the proven catalog entry selected unless you explicitly need a different release.</p>
               </div>
-              <span class="firmware-tag" data-testid={firmwareWorkspaceTestIds.catalogEntryState}>
+              <span class={tagClass} data-testid={firmwareWorkspaceTestIds.catalogEntryState}>
                 {catalogEntryPhase}
               </span>
             </div>
 
             {#if catalogEntryError}
-              <div class="firmware-stack" data-testid={firmwareWorkspaceTestIds.catalogEntryError}>
+              <div class="mt-[var(--space-3)]" data-testid={firmwareWorkspaceTestIds.catalogEntryError}>
                 <Banner
                   severity="danger"
                   title={catalogEntryError}
@@ -849,10 +861,10 @@ $effect(() => {
             {/if}
 
             {#if catalogEntries.length > 0}
-              <label class="firmware-field firmware-field--block">
-                <span class="firmware-field__label">Selected release</span>
+              <label class="mt-[var(--space-3)] block">
+                <span class={fieldLabelClass}>Selected release</span>
                 <select
-                  class="firmware-select"
+                  class={selectInputClass}
                   data-testid={firmwareWorkspaceTestIds.catalogEntrySelect}
                   disabled={isSerialActive}
                   onchange={(event) => void handleCatalogEntryChange(Number((event.currentTarget as HTMLSelectElement).value))}
@@ -864,10 +876,10 @@ $effect(() => {
                 </select>
               </label>
               {#if selectedCatalogEntry}
-                <p class="firmware-prose firmware-prose--small">{entryDetail(selectedCatalogEntry)}</p>
+                <p class={smallProseClass}>{entryDetail(selectedCatalogEntry)}</p>
               {/if}
             {:else}
-              <p class="firmware-prose">
+              <p class={proseClass}>
                 {catalogEntryPhase === "loading"
                   ? "Loading official APJ entries for the current target…"
                   : "No official APJ entry is selected yet."}
@@ -877,17 +889,17 @@ $effect(() => {
         </Panel>
 
         <Panel padded tone={usingLocalSource ? "warning" : "neutral"} testId={firmwareWorkspaceTestIds.sourceLocal}>
-          <div class="firmware-row firmware-row--between">
+          <div class="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
             <div>
-              <p class="firmware-eyebrow">Advanced source</p>
-              <h4 class="firmware-subtitle">Local APJ</h4>
+              <p class={eyebrowClass}>Advanced source</p>
+              <h4 class={subtitleClass}>Local APJ</h4>
             </div>
             {#if usingLocalSource}
               <Button size="sm" onclick={handleUseCatalogSource}>Use catalog instead</Button>
             {/if}
           </div>
 
-          <p class="firmware-prose">
+          <p class={proseClass}>
             Supply a local APJ only when you deliberately need to override the catalog. The workspace keeps that choice visible instead of silently pretending it came from the official feed.
           </p>
 
@@ -900,19 +912,20 @@ $effect(() => {
             Choose local APJ
           </Button>
 
-          <div class="firmware-info-block">
-            <span class="firmware-info-block__title">Selected source</span>
-            <p class="firmware-info-block__value">{selectedSourceState}</p>
+          <div class={infoBlockClass}>
+            <span class="font-semibold text-[var(--color-text-primary)]">Selected source</span>
+            <p class="m-0 mt-[var(--space-1)]">{selectedSourceState}</p>
           </div>
 
           {#if workspaceState.serial.sourceError}
-            <div class="firmware-stack" data-testid={firmwareWorkspaceTestIds.sourceError}>
+            <div class="mt-[var(--space-3)]" data-testid={firmwareWorkspaceTestIds.sourceError}>
               <Banner severity="danger" title={workspaceState.serial.sourceError} />
             </div>
           {/if}
 
-          <label class="firmware-checkbox">
+          <label class={checkboxClass}>
             <input
+              class="mt-1"
               checked={workspaceState.serial.fullChipErase}
               data-testid={firmwareWorkspaceTestIds.fullChipErase}
               disabled={isSerialActive}
@@ -920,13 +933,13 @@ $effect(() => {
               type="checkbox"
             />
             <span>
-              <span class="firmware-checkbox__title">Full-chip erase</span><br />
+              <span class="font-semibold text-[var(--color-text-primary)]">Full-chip erase</span><br />
               Use this only when you intentionally need to clear the full external flash area instead of performing a normal update.
             </span>
           </label>
 
           {#if workspaceState.serial.preflight?.has_params_to_backup}
-            <div class="firmware-stack" data-testid={firmwareWorkspaceTestIds.paramBackup}>
+            <div class="mt-[var(--space-3)]" data-testid={firmwareWorkspaceTestIds.paramBackup}>
               <Banner
                 severity="warning"
                 title="Parameter backup recommended"
@@ -936,7 +949,7 @@ $effect(() => {
             </div>
           {:else if workspaceState.serial.preflightPhase === "ready"}
             <p
-              class="firmware-info-block firmware-info-block--standalone"
+              class={standaloneInfoBlockClass}
               data-testid={firmwareWorkspaceTestIds.paramBackupState}
             >
               No backed-up parameter set is currently reported for this controller, so install proceeds without a preflight backup reminder.
@@ -946,46 +959,46 @@ $effect(() => {
       </div>
 
       <Panel padded testId={firmwareWorkspaceTestIds.serialReadiness}>
-        <div class="firmware-row firmware-row--between">
+        <div class="flex flex-wrap items-start justify-between gap-[var(--space-3)]">
           <div>
-            <p class="firmware-eyebrow">Readiness</p>
-            <h4 class="firmware-subtitle">Bootloader and start gating</h4>
+            <p class={eyebrowClass}>Readiness</p>
+            <h4 class={subtitleClass}>Bootloader and start gating</h4>
           </div>
-          <span class="firmware-tag" data-testid={firmwareWorkspaceTestIds.serialReadinessState}>
+          <span class={tagClass} data-testid={firmwareWorkspaceTestIds.serialReadinessState}>
             {workspaceState.serial.readiness.phase}
           </span>
         </div>
 
-        <p class="firmware-prose" data-testid={firmwareWorkspaceTestIds.serialBootloaderTransition}>
+        <p class={proseClass} data-testid={firmwareWorkspaceTestIds.serialBootloaderTransition}>
           {bootloaderTransitionCopy()}
         </p>
 
         {#if workspaceState.serial.readiness.response?.validation_pending}
-          <p class="firmware-prose firmware-prose--small" data-testid={firmwareWorkspaceTestIds.serialValidationPending}>
+          <p class={smallProseClass} data-testid={firmwareWorkspaceTestIds.serialValidationPending}>
             Firmware compatibility will be validated after bootloader sync before erase/program begins.
           </p>
         {/if}
 
-        <div class="firmware-info-block firmware-info-block--standalone">
+        <div class={standaloneInfoBlockClass}>
           <p data-testid={firmwareWorkspaceTestIds.serialBlockedReason}>{readinessDetail}</p>
         </div>
 
         {#if isSerialActive}
-          <div class="firmware-active">
-            <p class="firmware-active__title">Serial install in progress</p>
-            <p class="firmware-active__detail">{workspaceState.progress?.phase_label ?? workspaceState.sessionPhase ?? "working"}</p>
+          <div class="mt-[var(--space-3)] rounded-[var(--radius-md)] border border-[color-mix(in_srgb,var(--color-accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] p-3 text-[0.86rem] text-[var(--color-text-primary)]">
+            <p class="m-0 font-semibold">Serial install in progress</p>
+            <p class="m-0 mt-1">{workspaceState.progress?.phase_label ?? workspaceState.sessionPhase ?? "working"}</p>
             {#if workspaceState.progress}
-              <div class="firmware-progress" data-testid={firmwareWorkspaceTestIds.serialProgress}>
-                <div class="firmware-progress__fill" style={`width: ${Math.max(0, Math.min(100, workspaceState.progress.pct))}%`}></div>
+              <div class="mt-[var(--space-3)] h-2 overflow-hidden rounded-full bg-[var(--color-bg-primary)]" data-testid={firmwareWorkspaceTestIds.serialProgress}>
+                <div class="h-full rounded-full bg-[var(--color-accent)] transition-[width] duration-200 ease-in-out" style={`width: ${Math.max(0, Math.min(100, workspaceState.progress.pct))}%`}></div>
               </div>
-              <p class="firmware-progress__caption">
+              <p class="m-0 mt-[var(--space-2)] text-[0.72rem] text-[var(--color-text-secondary)]">
                 {workspaceState.progress.bytes_written} / {workspaceState.progress.bytes_total} bytes · {Math.round(workspaceState.progress.pct)}%
               </p>
             {/if}
           </div>
         {/if}
 
-        <div class="firmware-actions">
+        <div class="mt-[var(--space-4)] flex flex-wrap gap-[var(--space-3)]">
           {#if isSerialActive && !isSerialCancelling}
             <Button
               tone="warning"
@@ -1009,254 +1022,3 @@ $effect(() => {
     </Panel>
   </div>
 </Panel>
-
-<style>
-.firmware-grid-main {
-  display: grid;
-  gap: var(--space-3);
-  margin-top: var(--space-3);
-}
-@media (min-width: 1280px) {
-  .firmware-grid-main {
-    grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.8fr);
-  }
-}
-.firmware-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-}
-.firmware-row--between {
-  justify-content: space-between;
-  align-items: flex-start;
-}
-.firmware-field {
-  display: flex;
-  flex-direction: column;
-}
-.firmware-field--grow {
-  flex: 1;
-  min-width: 13rem;
-}
-.firmware-field--baud {
-  width: 100%;
-}
-@media (min-width: 640px) {
-  .firmware-field--baud {
-    width: 10rem;
-  }
-}
-.firmware-field--block {
-  display: block;
-  margin-top: var(--space-3);
-}
-.firmware-field__label {
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-.firmware-select,
-.firmware-input {
-  margin-top: var(--space-2);
-  width: 100%;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-input);
-  padding: 8px 12px;
-  font-size: 0.86rem;
-  color: var(--color-text-primary);
-}
-.firmware-stack {
-  margin-top: var(--space-3);
-}
-.firmware-grid-sources {
-  display: grid;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-}
-@media (min-width: 1280px) {
-  .firmware-grid-sources {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-.firmware-eyebrow {
-  margin: 0;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-.firmware-subtitle {
-  margin: 4px 0 0;
-  font-size: 0.92rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-.firmware-prose {
-  margin: var(--space-2) 0 0;
-  font-size: 0.88rem;
-  line-height: 1.5;
-  color: var(--color-text-secondary);
-}
-.firmware-prose--tight {
-  margin-top: var(--space-1);
-}
-.firmware-prose--small {
-  margin-top: var(--space-2);
-  font-size: 0.78rem;
-}
-.firmware-info-block {
-  margin-top: var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-input);
-  padding: 8px 12px;
-  font-size: 0.78rem;
-  color: var(--color-text-secondary);
-}
-.firmware-info-block--standalone {
-  margin-top: var(--space-3);
-  font-size: 0.86rem;
-}
-.firmware-info-block__title {
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-.firmware-info-block__value {
-  margin: var(--space-1) 0 0;
-}
-.firmware-grid-filters {
-  display: grid;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-}
-@media (min-width: 768px) {
-  .firmware-grid-filters {
-    grid-template-columns: minmax(0, 1fr) 14rem;
-  }
-}
-.firmware-target-grid {
-  display: grid;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  max-height: 18rem;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-.firmware-target-card {
-  display: block;
-  text-align: left;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  padding: 12px;
-  cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-.firmware-target-card:hover {
-  background: var(--color-bg-primary);
-  border-color: var(--color-border-light);
-}
-.firmware-target-card[data-selected] {
-  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
-}
-.firmware-target-card__row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-.firmware-target-card__name {
-  font-weight: 600;
-  color: var(--color-text-primary);
-  font-size: 0.88rem;
-}
-.firmware-target-card__platform {
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-.firmware-target-card__meta {
-  margin: 4px 0 0;
-  font-size: 0.78rem;
-  color: var(--color-text-secondary);
-}
-.firmware-target-card__vehicles {
-  margin: 4px 0 0;
-  font-size: 0.78rem;
-  color: var(--color-text-muted);
-}
-.firmware-tag {
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-.firmware-checkbox {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  margin-top: var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-input);
-  padding: 12px;
-  font-size: 0.86rem;
-  color: var(--color-text-secondary);
-}
-.firmware-checkbox input {
-  margin-top: 4px;
-}
-.firmware-checkbox__title {
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-.firmware-active {
-  margin-top: var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
-  padding: 12px;
-  font-size: 0.86rem;
-  color: var(--color-text-primary);
-}
-.firmware-active__title {
-  margin: 0;
-  font-weight: 600;
-}
-.firmware-active__detail {
-  margin: 4px 0 0;
-}
-.firmware-progress {
-  margin-top: var(--space-3);
-  height: 8px;
-  border-radius: 999px;
-  background: var(--color-bg-primary);
-  overflow: hidden;
-}
-.firmware-progress__fill {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--color-accent);
-  transition: width 0.2s ease;
-}
-.firmware-progress__caption {
-  margin: var(--space-2) 0 0;
-  font-size: 0.72rem;
-  color: var(--color-text-secondary);
-}
-.firmware-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-}
-</style>

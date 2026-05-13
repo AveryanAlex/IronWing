@@ -150,7 +150,7 @@ function metricColorVar(metric: OperatorMetricView): string {
 </script>
 
 <section
-  class="operator-workspace"
+  class="size-full min-h-0"
   data-shell-tier={tier}
   data-testid={appShellTestIds.operatorWorkspace}
 >
@@ -161,7 +161,7 @@ function metricColorVar(metric: OperatorMetricView): string {
     maxRatio={0.85}
   >
     {#snippet first()}
-      <div class="operator-workspace__map">
+      <div class="size-full">
         <OverviewMap
           vehicleLat={vehiclePos?.latitude_deg}
           vehicleLon={vehiclePos?.longitude_deg}
@@ -172,45 +172,63 @@ function metricColorVar(metric: OperatorMetricView): string {
       </div>
     {/snippet}
     {#snippet second()}
-      <div class="operator-workspace__metrics">
+      <div class="flex h-full flex-col gap-2 overflow-y-auto p-2">
         <!-- Quality state indicators -->
         {#if view.quality.stale}
-          <div class="quality-banner quality-banner--stale" data-testid="operator-workspace-stale">
+          <div
+            class="rounded px-2 py-1 text-[0.7rem] font-semibold text-[var(--color-bg-primary)] bg-[var(--color-warning)]"
+            data-testid="operator-workspace-stale"
+          >
             <span>Telemetry stale</span>
           </div>
         {/if}
         {#if view.quality.disconnected}
-          <div class="quality-banner quality-banner--disconnected" data-testid="operator-workspace-disconnected">
+          <div
+            class="rounded bg-[var(--color-border)] px-2 py-1 text-[0.7rem] font-semibold text-[var(--color-text-muted)]"
+            data-testid="operator-workspace-disconnected"
+          >
             <span>Disconnected</span>
           </div>
         {/if}
 
         <!-- Degraded data source badges -->
         {#if view.quality.telemetry.degraded}
-          <span class="degraded-badge" data-testid="operator-workspace-degraded-telemetry">degraded</span>
+          <span
+            class="inline-block rounded px-1.5 py-[2px] text-[0.65rem] font-medium text-[var(--color-bg-primary)] bg-[var(--color-warning)]"
+            data-testid="operator-workspace-degraded-telemetry"
+          >degraded</span>
         {/if}
         {#if view.quality.support.degraded}
-          <span class="degraded-badge" data-testid="operator-workspace-degraded-support">degraded</span>
+          <span
+            class="inline-block rounded px-1.5 py-[2px] text-[0.65rem] font-medium text-[var(--color-bg-primary)] bg-[var(--color-warning)]"
+            data-testid="operator-workspace-degraded-support"
+          >degraded</span>
         {/if}
         {#if view.quality.notices.degraded}
-          <span class="degraded-badge" data-testid="operator-workspace-degraded-notices">degraded</span>
+          <span
+            class="inline-block rounded px-1.5 py-[2px] text-[0.65rem] font-medium text-[var(--color-bg-primary)] bg-[var(--color-warning)]"
+            data-testid="operator-workspace-degraded-notices"
+          >degraded</span>
         {/if}
 
         <!-- Readiness strip -->
-        <div class="readiness-strip" data-testid="operator-workspace-readiness">
+        <div class="px-[2px] py-1 text-[0.7rem] font-medium text-[var(--color-text-muted)]" data-testid="operator-workspace-readiness">
           {view.readiness.label}
         </div>
 
         <!-- Metric groups -->
         {#each metricGroups as group (group.title)}
-          <div class="metric-group">
-            <h3 class="metric-group__title">{group.title}</h3>
-            <div class="metric-group__grid">
+          <div>
+            <h3 class="mb-1 ml-[2px] text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">{group.title}</h3>
+            <div class="grid grid-cols-2 gap-1">
               {#each group.entries as entry (entry.key)}
-                <div class="metric-card" data-testid={entry.testId}>
-                  <span class="metric-card__label">{entry.label}</span>
+                <div
+                  class="flex flex-col gap-px rounded-[6px] border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-2 py-1.5"
+                  data-testid={entry.testId}
+                >
+                  <span class="text-[0.6rem] font-medium tracking-[0.06em] text-[var(--color-text-muted)]">{entry.label}</span>
                   <span
-                    class="metric-card__value"
+                    class="font-mono text-[0.875rem] font-medium leading-[1.2] tabular-nums"
                     style:color={metricColorVar(entry.metric)}
                   >
                     {entry.metric.text}
@@ -222,21 +240,27 @@ function metricColorVar(metric: OperatorMetricView): string {
         {/each}
 
         <!-- Status notice strip -->
-        <div class="notice-strip">
-          <div class="notice-strip__header">
-            <span class="notice-strip__title">Notices</span>
+        <div class="mt-1">
+          <div class="mb-1 flex items-center justify-between">
+            <span class="text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">Notices</span>
             {#if view.notices.length > 0}
-              <span class="notice-strip__count" data-testid="operator-workspace-notice-count">{view.notices.length} shown</span>
+              <span class="text-[0.65rem] text-[var(--color-text-muted)]" data-testid="operator-workspace-notice-count">{view.notices.length} shown</span>
             {/if}
           </div>
           {#if view.notices.length === 0}
-            <div class="notice-strip__empty" data-testid="operator-workspace-notices-empty">
+            <div class="px-[2px] py-1 text-[0.7rem] text-[var(--color-text-muted)]" data-testid="operator-workspace-notices-empty">
               No active notices
             </div>
           {:else}
-            <ul class="notice-strip__list">
+            <ul class="m-0 flex list-none flex-col gap-[3px] p-0">
               {#each view.notices as notice (notice.id)}
-                <li class="notice-entry notice-entry--{notice.tone}">
+                <li
+                  class={[
+                    "rounded border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-2 py-1 text-[0.75rem] text-[var(--color-text-primary)]",
+                    notice.tone === "critical" && "border-[var(--color-danger)] text-[var(--color-danger)]",
+                    notice.tone === "caution" && "border-[var(--color-warning)] text-[var(--color-warning)]",
+                  ]}
+                >
                   {notice.text}
                 </li>
               {/each}
@@ -247,156 +271,3 @@ function metricColorVar(metric: OperatorMetricView): string {
     {/snippet}
   </SplitPane>
 </section>
-
-<style>
-  .operator-workspace {
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-  }
-
-  .operator-workspace__map {
-    width: 100%;
-    height: 100%;
-  }
-
-  .operator-workspace__metrics {
-    overflow-y: auto;
-    padding: 8px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .quality-banner {
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: 600;
-  }
-
-  .quality-banner--stale {
-    background: var(--color-warning);
-    color: var(--color-bg-primary);
-  }
-
-  .quality-banner--disconnected {
-    background: var(--color-border);
-    color: var(--color-text-muted);
-  }
-
-  .degraded-badge {
-    display: inline-block;
-    font-size: 0.65rem;
-    font-weight: 500;
-    padding: 2px 6px;
-    border-radius: 4px;
-    background: var(--color-warning);
-    color: var(--color-bg-primary);
-  }
-
-  .readiness-strip {
-    font-size: 0.7rem;
-    font-weight: 500;
-    color: var(--color-text-muted);
-    padding: 4px 2px;
-  }
-
-  .metric-group__title {
-    font-size: 0.65rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    color: var(--color-text-muted);
-    text-transform: uppercase;
-    margin: 0 0 4px 2px;
-  }
-
-  .metric-group__grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px;
-  }
-
-  .metric-card {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    padding: 6px 8px;
-    border-radius: 6px;
-    border: 1px solid var(--color-border);
-    background: var(--color-bg-secondary);
-  }
-
-  .metric-card__label {
-    font-size: 0.6rem;
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    color: var(--color-text-muted);
-  }
-
-  .metric-card__value {
-    font-family: "JetBrains Mono", monospace;
-    font-variant-numeric: tabular-nums;
-    font-size: 0.875rem;
-    font-weight: 500;
-    line-height: 1.2;
-  }
-
-  .notice-strip {
-    margin-top: 4px;
-  }
-
-  .notice-strip__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 4px;
-  }
-
-  .notice-strip__title {
-    font-size: 0.65rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    color: var(--color-text-muted);
-    text-transform: uppercase;
-  }
-
-  .notice-strip__count {
-    font-size: 0.65rem;
-    color: var(--color-text-muted);
-  }
-
-  .notice-strip__empty {
-    font-size: 0.7rem;
-    color: var(--color-text-muted);
-    padding: 4px 2px;
-  }
-
-  .notice-strip__list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-
-  .notice-entry {
-    font-size: 0.75rem;
-    padding: 4px 8px;
-    border-radius: 4px;
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border);
-  }
-
-  .notice-entry--critical {
-    border-color: var(--color-danger);
-    color: var(--color-danger);
-  }
-
-  .notice-entry--caution {
-    border-color: var(--color-warning);
-    color: var(--color-warning);
-  }
-</style>
