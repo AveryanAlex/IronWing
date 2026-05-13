@@ -1,4 +1,6 @@
 <script lang="ts">
+import { X } from "lucide-svelte";
+
 type Severity = "info" | "success" | "warning" | "danger" | "blocking";
 
 type Props = {
@@ -52,7 +54,7 @@ let {
 >
   <div class="min-w-0 flex-1">
     {#if source}<span class="text-xs font-semibold uppercase tracking-wide text-text-muted">{source}</span>{/if}
-    <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={titleTestId}>{title}</p>
+    <p class="ui-banner__title mt-1 text-sm font-semibold text-text-primary" data-testid={titleTestId}>{title}</p>
     {#if message}<p class="mt-1 text-sm leading-5 text-text-secondary" data-testid={messageTestId}>{message}</p>{/if}
     {#if details && details.length > 0}
       <ul class="mt-2 list-disc pl-4 text-sm leading-5 text-text-secondary">
@@ -73,12 +75,12 @@ let {
     {/if}
     {#if dismissible && onDismiss}
       <button
-        class="cursor-pointer border-none bg-transparent text-base text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+        class="inline-flex cursor-pointer items-center justify-center border-none bg-transparent text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
         aria-label="Dismiss"
         data-testid={dismissTestId}
         onclick={onDismiss}
         type="button"
-      >×</button>
+      ><X aria-hidden="true" size={14} /></button>
     {/if}
   </div>
 </div>

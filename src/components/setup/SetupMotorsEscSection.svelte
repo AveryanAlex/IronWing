@@ -552,6 +552,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
 </script>
 
 <SetupSectionShell
+  sectionId={section.id}
   eyebrow={section.title}
   title="Fail-closed motor direction proof with one shared unlock"
   description="Motor order, expected direction, and reversal staging only appear when this scope can prove the active layout. Unlock once at the section level, test rows directly, and queue any reversal fix through the shared review tray instead of a local apply path."

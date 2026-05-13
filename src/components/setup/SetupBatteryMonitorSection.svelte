@@ -412,6 +412,7 @@ function round3(value: number): number {
 </script>
 
 <SetupSectionShell
+  sectionId={section.id}
   eyebrow={section.title}
   title="Preset-first battery monitor staging with truthful live power state"
   description="Board pins, sensor scaling, and voltage-threshold presets stay explicit here, but they still queue through the shared review tray. Manual numeric staging remains available whenever the scoped parameter family is complete enough to prove the affected rows."

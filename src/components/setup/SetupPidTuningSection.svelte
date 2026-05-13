@@ -408,6 +408,7 @@ function discardItem(name: string) {
 </script>
 
 <SetupSectionShell
+  sectionId={section.id}
   eyebrow={section.title}
   title="Vehicle-aware PID surfaces without a raw-parameter fallback"
   description="PID tuning stays shaped around the current vehicle family. Copter, fixed-wing, and fully refreshed QuadPlane scopes each get a purposeful expert-row surface, while partial VTOL truth stays explicit and fail-closed."

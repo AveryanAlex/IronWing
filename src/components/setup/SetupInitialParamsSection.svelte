@@ -173,6 +173,7 @@ function resolvedInputText(): string {
 </script>
 
 <SetupSectionShell
+  sectionId={section.id}
   eyebrow={section.title}
   title="Preview starter settings from your vehicle inputs"
   description="Enter prop size, battery chemistry, and cell count to preview starter settings for this vehicle family. Review the suggested batches here, then queue any changes through the review tray."

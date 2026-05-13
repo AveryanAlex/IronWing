@@ -27,6 +27,7 @@ import SetupPidTuningSection from "./SetupPidTuningSection.svelte";
 import SetupRcReceiverSection from "./SetupRcReceiverSection.svelte";
 import SetupRtlReturnSection from "./SetupRtlReturnSection.svelte";
 import SetupSerialPortsSection from "./SetupSerialPortsSection.svelte";
+import SetupSectionIcon from "./SetupSectionIcon.svelte";
 import SetupServoOutputsSection from "./SetupServoOutputsSection.svelte";
 import SetupWorkspaceSectionNav from "./SetupWorkspaceSectionNav.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
@@ -153,9 +154,14 @@ function clearCheckpoint() {
         >
           Sections
         </button>
-        <span class="text-xs font-semibold uppercase tracking-widest text-text-muted">
-          {selectedSection?.title ?? "Overview"}
-        </span>
+        {#if selectedSection}
+          <span class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-text-muted">
+            <SetupSectionIcon sectionId={selectedSection.id} size={12} />
+            {selectedSection.title}
+          </span>
+        {:else}
+          <span class="text-xs font-semibold uppercase tracking-widest text-text-muted">Overview</span>
+        {/if}
       </div>
     {/if}
 

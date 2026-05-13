@@ -301,6 +301,7 @@ function stageDefaults() {
 </script>
 
 <SetupSectionShell
+  sectionId={section.id}
   eyebrow={section.title}
   title="Vehicle-aware protective defaults and loss-of-link actions"
   description="Failsafe actions stay split by the active vehicle family so copter, plane, and rover operators can stage protective defaults without dropping straight into raw parameters. Every change still queues through the shared review tray."

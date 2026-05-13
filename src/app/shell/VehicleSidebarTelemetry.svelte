@@ -1,4 +1,5 @@
 <script lang="ts">
+import { ArrowUp, Battery, Gauge, Plane, Satellite } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { Button, Panel } from "../../components/ui";
@@ -44,7 +45,7 @@ let launcherStatusText = $derived.by(() => {
 <div data-testid="sidebar-telemetry-panel">
   <Panel padded>
     <div class="flex items-center justify-between gap-2">
-      <p class="m-0 text-xs font-bold uppercase tracking-wider text-text-muted">Vehicle</p>
+      <p class="m-0 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-muted"><Plane aria-hidden="true" size={14} />Vehicle</p>
       <Button
         onclick={() => telemetrySettingsDialog.open()}
         size="sm"
@@ -58,19 +59,19 @@ let launcherStatusText = $derived.by(() => {
 
     <dl class="m-0 mt-3 flex flex-col gap-2 divide-y divide-border p-0">
       <div class="flex min-h-7 items-baseline justify-between gap-2 rounded-md px-2 py-1" data-testid="sidebar-telemetry-altitude">
-        <dt class="m-0 shrink-0 text-xs font-bold uppercase tracking-wider text-text-muted">Alt</dt>
+        <dt class="m-0 flex shrink-0 items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-muted"><ArrowUp aria-hidden="true" size={14} />Alt</dt>
         <dd class="m-0 min-w-0 break-words text-right text-sm font-semibold tabular-nums text-text-primary">{summary.altitudeText}</dd>
       </div>
       <div class="flex min-h-7 items-baseline justify-between gap-2 rounded-md px-2 py-1" data-testid="sidebar-telemetry-speed">
-        <dt class="m-0 shrink-0 text-xs font-bold uppercase tracking-wider text-text-muted">Speed</dt>
+        <dt class="m-0 flex shrink-0 items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-muted"><Gauge aria-hidden="true" size={14} />Speed</dt>
         <dd class="m-0 min-w-0 break-words text-right text-sm font-semibold tabular-nums text-text-primary">{summary.speedText}</dd>
       </div>
       <div class="flex min-h-7 items-baseline justify-between gap-2 rounded-md px-2 py-1" data-testid="sidebar-telemetry-battery">
-        <dt class="m-0 shrink-0 text-xs font-bold uppercase tracking-wider text-text-muted">Battery</dt>
+        <dt class="m-0 flex shrink-0 items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-muted"><Battery aria-hidden="true" size={14} />Battery</dt>
         <dd class="m-0 min-w-0 break-words text-right text-sm font-semibold tabular-nums text-text-primary">{summary.batteryText}</dd>
       </div>
       <div class="flex min-h-7 items-baseline justify-between gap-2 rounded-md px-2 py-1" data-testid="sidebar-telemetry-gps">
-        <dt class="m-0 shrink-0 text-xs font-bold uppercase tracking-wider text-text-muted">GPS</dt>
+        <dt class="m-0 flex shrink-0 items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-muted"><Satellite aria-hidden="true" size={14} />GPS</dt>
         <dd class="m-0 min-w-0 break-words text-right text-sm font-semibold tabular-nums text-text-primary">{gpsText}</dd>
       </div>
     </dl>

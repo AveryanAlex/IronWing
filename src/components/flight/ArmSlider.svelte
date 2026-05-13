@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Shield } from "lucide-svelte";
   import { fromStore } from "svelte/store";
 
   import { getSessionViewStoreContext } from "../../app/shell/runtime-context";
@@ -57,9 +58,7 @@
   {/if}
 
   <div class="flex items-center gap-2">
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-text-muted">
-      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
-    </svg>
+    <Shield aria-hidden="true" class="text-text-muted" size={14} />
     <p class="text-xs font-semibold uppercase tracking-wider text-text-muted">
       {armed ? "Armed" : "Disarmed"}
     </p>

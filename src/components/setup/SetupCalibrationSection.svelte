@@ -56,6 +56,7 @@ function cardTone(card: SetupWorkspaceCalibrationCard): string {
 </script>
 
 <SetupSectionShell
+  sectionId="calibration"
   eyebrow="Calibration"
   title="Broad cards, honest lifecycle truth"
   description="Accelerometer, gyroscope, compass, and radio remain visible together, but this slice only treats the compass lifecycle as a fully actionable setup path."

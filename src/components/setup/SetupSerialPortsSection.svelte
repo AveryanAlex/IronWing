@@ -156,6 +156,7 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
 </script>
 
 <SetupSectionShell
+  sectionId={section.id}
   eyebrow={section.title}
   title="Protocol ownership and reboot-required port truth"
   description="Serial protocol and baud assignments stay inspectable even when metadata is degraded. Each row stages through the shared review tray, conflict detection uses staged values before apply, and completion only advances when the current scope is conflict-free without pending serial edits."

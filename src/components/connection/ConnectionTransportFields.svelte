@@ -1,4 +1,5 @@
 <script lang="ts">
+import { PlugZap, RefreshCw, Unplug } from "lucide-svelte";
 import { type DemoVehiclePreset, type TransportDescriptor, type TransportType } from "../../transport";
 import type { BluetoothDevice } from "../../telemetry";
 import type { SessionConnectionFormState } from "../../lib/platform/session";
@@ -91,9 +92,7 @@ const iconButtonClass =
       title="Disconnect"
       type="button"
     >
-      <svg aria-hidden="true" class="h-4 w-4" fill="none" viewBox="0 0 24 24">
-        <path d="M7 8v8M17 8v8M8 12h8" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
-      </svg>
+      <Unplug aria-hidden="true" size={16} />
     </button>
   {:else}
     <button
@@ -104,9 +103,7 @@ const iconButtonClass =
       title="Connect"
       type="submit"
     >
-      <svg aria-hidden="true" class="h-4 w-4" fill="none" viewBox="0 0 24 24">
-        <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-      </svg>
+      <PlugZap aria-hidden="true" size={16} />
     </button>
   {/if}
 {/snippet}
@@ -236,16 +233,7 @@ const iconButtonClass =
         title="Refresh serial ports"
         type="button"
       >
-        <svg aria-hidden="true" class="h-4 w-4" fill="none" viewBox="0 0 24 24">
-          <path
-            d="M20 12a8 8 0 1 1-2.34-5.66"
-            stroke="currentColor"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="1.8"
-          ></path>
-          <path d="M20 4v4h-4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
-        </svg>
+        <RefreshCw aria-hidden="true" size={16} />
       </button>
     </div>
     {#if errors.serialPort}
@@ -310,16 +298,7 @@ const iconButtonClass =
         title={form.mode === "bluetooth_ble" ? (btScanning ? "Scanning BLE devices" : "Scan BLE devices") : "Refresh paired devices"}
         type="button"
       >
-        <svg aria-hidden="true" class="h-4 w-4" fill="none" viewBox="0 0 24 24">
-          <path
-            d="M20 12a8 8 0 1 1-2.34-5.66"
-            stroke="currentColor"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="1.8"
-          ></path>
-          <path d="M20 4v4h-4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
-        </svg>
+        <RefreshCw aria-hidden="true" size={16} />
       </button>
     </div>
     {#if errors.selectedBtDevice}

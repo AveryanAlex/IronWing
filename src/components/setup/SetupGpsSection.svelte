@@ -366,6 +366,7 @@ function formatHdop(value: number | null): string {
 </script>
 
 <SetupSectionShell
+  sectionId={section.id}
   eyebrow={section.title}
   title="Review GPS receivers, GNSS options, and lock status"
   description="Check receiver type, optional second-receiver settings, GNSS selections, and live fix quality here. If metadata is missing or a port is unassigned, this section shows what is blocked and where to go next."

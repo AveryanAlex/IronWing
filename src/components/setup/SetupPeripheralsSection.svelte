@@ -358,6 +358,7 @@ function discardItem(name: string) {
 </script>
 
 <SetupSectionShell
+  sectionId={section.id}
   eyebrow={section.title}
   title="Curated peripheral inventory with configured-only filtering"
   description="Peripheral setup stays inventory-first here: known hardware families and discovered extras remain grouped, visible, and staged through the shared review tray without dropping into a generic raw-parameter browser."

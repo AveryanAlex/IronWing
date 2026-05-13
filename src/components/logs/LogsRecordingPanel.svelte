@@ -65,6 +65,7 @@ let recordingStatusTone = $derived<"neutral" | "positive" | "caution" | "critica
 const eyebrowClass = "m-0 text-xs font-semibold uppercase tracking-wide text-text-muted";
 const titleClass = "mt-1 m-0 text-base font-semibold text-text-primary";
 const copyClass = "m-0 text-sm leading-6 text-text-secondary";
+const wrapClass = "logs-content-wrap min-w-0 overflow-wrap-anywhere break-words";
 const valueCardClass = "flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-bg-primary px-3 py-3";
 const inputClass = "w-full min-w-0 rounded-md border border-border bg-bg-input px-3 py-2 text-sm text-text-primary";
 </script>
@@ -101,9 +102,9 @@ const inputClass = "w-full min-w-0 rounded-md border border-border bg-bg-input p
       <div class="min-w-0">
         <p class="m-0 text-sm font-semibold text-text-primary" data-testid="logs-recording-status">{recordingLabel}</p>
         {#if recordingStatus.kind === "recording" || recordingStatus.kind === "stopping"}
-          <p class={`min-w-0 overflow-wrap-anywhere break-words ${copyClass}`} data-testid="logs-recording-status-copy">{recordingStatus.destination_path} · {formatBytes(recordingStatus.bytes_written)}</p>
+          <p class={`${wrapClass} ${copyClass}`} data-testid="logs-recording-status-copy">{recordingStatus.destination_path} · {formatBytes(recordingStatus.bytes_written)}</p>
         {:else if recordingStatus.kind === "failed"}
-          <p class={`min-w-0 overflow-wrap-anywhere break-words ${copyClass}`} data-testid="logs-recording-status-copy">operation · {recordingStatus.failure.operation_id} · {recordingStatus.failure.reason.kind}</p>
+          <p class={`${wrapClass} ${copyClass}`} data-testid="logs-recording-status-copy">operation · {recordingStatus.failure.operation_id} · {recordingStatus.failure.reason.kind}</p>
         {/if}
       </div>
 
@@ -126,7 +127,7 @@ const inputClass = "w-full min-w-0 rounded-md border border-border bg-bg-input p
     <div class="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]">
       <div class={valueCardClass}>
         <span class={eyebrowClass}>Manual destination</span>
-        <span class="min-w-0 overflow-wrap-anywhere break-words font-mono text-xs leading-6 text-text-primary" data-testid="logs-recording-destination-value">
+        <span class={`${wrapClass} font-mono text-xs leading-6 text-text-primary`} data-testid="logs-recording-destination-value">
         {recordingStatus.kind === "recording" || recordingStatus.kind === "stopping"
           ? recordingStatus.destination_path
           : recordingPath || "not chosen yet"}
@@ -134,7 +135,7 @@ const inputClass = "w-full min-w-0 rounded-md border border-border bg-bg-input p
       </div>
       <div class={valueCardClass}>
         <span class={eyebrowClass}>Active file</span>
-        <span class="min-w-0 overflow-wrap-anywhere break-words font-mono text-xs leading-6 text-text-primary" data-testid="logs-recording-file-value">
+        <span class={`${wrapClass} font-mono text-xs leading-6 text-text-primary`} data-testid="logs-recording-file-value">
         {recordingStatus.kind === "recording" || recordingStatus.kind === "stopping"
           ? recordingStatus.file_name
           : "—"}
@@ -169,7 +170,7 @@ const inputClass = "w-full min-w-0 rounded-md border border-border bg-bg-input p
       />
     </label>
 
-    <p class={`min-w-0 overflow-wrap-anywhere break-words ${copyClass}`} data-testid="logs-recording-path-help">
+    <p class={`${wrapClass} ${copyClass}`} data-testid="logs-recording-path-help">
       {supportsRecordingPicker
         ? "The start button uses the browser save picker when available, then records to the chosen filename on this path. Edit the path first to override the suggested directory or fallback destination."
         : "If save picking is unavailable on this surface, start uses the typed destination path directly."}
@@ -186,7 +187,7 @@ const inputClass = "w-full min-w-0 rounded-md border border-border bg-bg-input p
       <span>Auto-record on connect</span>
     </label>
 
-    <p class={`min-w-0 overflow-wrap-anywhere break-words ${copyClass}`} data-testid="logs-auto-record-help">
+    <p class={`${wrapClass} ${copyClass}`} data-testid="logs-auto-record-help">
       Default remains off. When enabled, connect requests forward this opt-in through <code>ironwing.settings</code> and auto recordings land in <code>{autoRecordDirectory ?? "—"}</code>.
     </p>
   </div>

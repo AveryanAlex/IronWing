@@ -267,6 +267,7 @@ async function handleDisarm() {
 </script>
 
 <SetupSectionShell
+  sectionId={section.id}
   eyebrow={section.title}
   title="Review pre-arm blockers and live arm controls"
   description="Review live support, sensor health, and status text here before you arm. If a check is blocked, request fresh checks or open Full Parameters for deeper inspection; parameter edits still queue in the review tray."

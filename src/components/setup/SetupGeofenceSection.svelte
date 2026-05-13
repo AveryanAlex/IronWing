@@ -255,6 +255,7 @@ function toggleFenceType(bit: number) {
 </script>
 
 <SetupSectionShell
+  sectionId={section.id}
   eyebrow={section.title}
   title="Boundary enforcement that stays honest about vehicle-family limits"
   description="Geofence keeps the selected boundary types, breach action, and family-specific range controls explicit. Copter altitude limits, plane ceiling protection, and rover radius-only fences stay separate instead of collapsing into one raw-parameter bucket."

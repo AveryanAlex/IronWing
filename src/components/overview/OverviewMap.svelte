@@ -1,4 +1,5 @@
 <script lang="ts">
+import { Home, Layers, LocateFixed, Map as MapIcon, Navigation, Satellite } from "lucide-svelte";
 import { onMount } from "svelte";
 import { toast } from "svelte-sonner";
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap, type Marker } from "maplibre-gl";
@@ -646,10 +647,7 @@ function buildPathGeoJson(
       title="Normal"
       type="button"
     >
-      <svg aria-hidden="true" class="overview-map__icon" fill="none" viewBox="0 0 24 24">
-        <path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.75"></path>
-        <path d="M9 4v13.5M15 6.5V20" stroke="currentColor" stroke-width="1.75"></path>
-      </svg>
+      <MapIcon aria-hidden="true" size={16} />
     </button>
     <button
       aria-label="Hybrid map mode"
@@ -662,11 +660,7 @@ function buildPathGeoJson(
       title="Hybrid"
       type="button"
     >
-      <svg aria-hidden="true" class="overview-map__icon" fill="none" viewBox="0 0 24 24">
-        <rect height="14" rx="2" stroke="currentColor" stroke-width="1.75" width="18" x="3" y="5"></rect>
-        <path d="M3 10h18" stroke="currentColor" stroke-width="1.75"></path>
-        <path d="M8 5v14" stroke="currentColor" stroke-width="1.75"></path>
-      </svg>
+      <Layers aria-hidden="true" size={16} />
     </button>
     <button
       aria-label="Satellite map mode"
@@ -679,11 +673,7 @@ function buildPathGeoJson(
       title="Satellite"
       type="button"
     >
-      <svg aria-hidden="true" class="overview-map__icon" fill="none" viewBox="0 0 24 24">
-        <path d="m9.5 14.5 5-5" stroke="currentColor" stroke-linecap="round" stroke-width="1.75"></path>
-        <path d="m7.5 11.5 5 5 4-4-5-5Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.75"></path>
-        <path d="M5 19l3-3M16 8l3-3M13 19h6M5 11V5" stroke="currentColor" stroke-linecap="round" stroke-width="1.75"></path>
-      </svg>
+      <Satellite aria-hidden="true" size={16} />
     </button>
     <button
       aria-label="Toggle 3D mode"
@@ -714,10 +704,7 @@ function buildPathGeoJson(
         title="My Location (hold to follow)"
         type="button"
       >
-        <svg aria-hidden="true" class="overview-map__icon" fill="none" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.75"></circle>
-          <path d="M12 3v3M12 18v3M3 12h3M18 12h3" stroke="currentColor" stroke-linecap="round" stroke-width="1.75"></path>
-        </svg>
+        <LocateFixed aria-hidden="true" size={16} />
       </button>
     {/if}
     <button
@@ -732,10 +719,7 @@ function buildPathGeoJson(
       title="Home Location (hold to follow)"
       type="button"
     >
-      <svg aria-hidden="true" class="overview-map__icon" fill="none" viewBox="0 0 24 24">
-        <path d="M4 10.5 12 4l8 6.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path>
-        <path d="M6.5 9.5V20h11V9.5" stroke="currentColor" stroke-linejoin="round" stroke-width="1.75"></path>
-      </svg>
+      <Home aria-hidden="true" size={16} />
     </button>
     <button
       aria-label="Vehicle location"
@@ -749,9 +733,7 @@ function buildPathGeoJson(
       title="Vehicle Location (hold to follow)"
       type="button"
     >
-      <svg aria-hidden="true" class="overview-map__icon" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M12 2 21 22l-9-4-9 4Z"></path>
-      </svg>
+      <Navigation aria-hidden="true" size={16} />
     </button>
   </div>
 </div>
@@ -778,11 +760,6 @@ function buildPathGeoJson(
   .overview-map__control-group--targets {
     right: 12px;
     bottom: 12px;
-  }
-
-  .overview-map__icon {
-    width: 16px;
-    height: 16px;
   }
 
   .overview-map__button-text {

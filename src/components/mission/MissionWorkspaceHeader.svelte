@@ -1,4 +1,15 @@
 <script lang="ts">
+import {
+  Download,
+  FileDown,
+  FilePlus,
+  FileUp,
+  MoreHorizontal,
+  Redo2,
+  Undo2,
+  Upload,
+  X,
+} from "lucide-svelte";
 import type {
   MissionPlannerAttachmentState,
   MissionPlannerMode,
@@ -120,29 +131,29 @@ let secondaryItems = $derived<MenuItem[]>([
 </script>
 
 {#snippet readIcon()}
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m6 11 6 6 6-6"/><path d="M5 21h14"/></svg>
+  <Download aria-hidden="true" size={16} />
 {/snippet}
 {#snippet importIcon()}
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M3 15h6"/><path d="M6 12v6"/></svg>
+  <FileUp aria-hidden="true" size={16} />
 {/snippet}
 {#snippet exportIcon()}
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg>
+  <FileDown aria-hidden="true" size={16} />
 {/snippet}
 {#snippet newIcon()}
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M12 12v6"/><path d="M9 15h6"/></svg>
+  <FilePlus aria-hidden="true" size={16} />
 {/snippet}
 {#snippet uploadIcon()}
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="m6 15 6-6 6 6"/><path d="M5 3h14"/></svg>
+  <Upload aria-hidden="true" size={16} />
 {/snippet}
 {#snippet cancelIcon()}
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+  <X aria-hidden="true" size={16} />
 {/snippet}
 {#snippet moreIcon()}
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+  <MoreHorizontal aria-hidden="true" size={16} />
 {/snippet}
 
 <div
-  class="flex shrink-0 flex-col gap-2 border-b border-border bg-bg-secondary px-3 py-2 [&_.ui-btn]:min-w-[var(--control-h-sm)] [&_.ui-btn]:px-2 sm:[&_.ui-btn]:min-w-0 sm:[&_.ui-btn]:px-3"
+  class="@container flex shrink-0 flex-col gap-[var(--space-2)] border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-[var(--space-3)] py-[var(--space-2)] @max-[520px]:[&_.ui-btn]:min-w-[var(--control-h-sm)] @max-[520px]:[&_.ui-btn]:px-2"
   data-testid={missionWorkspaceTestIds.header}
 >
   {#if replayReadonly}
@@ -157,7 +168,7 @@ let secondaryItems = $derived<MenuItem[]>([
 
   <Toolbar ariaLabel="Mission actions" density="compact" overflow="scroll">
     <div class="mission-mode-switcher">
-      <div class="hidden sm:block">
+      <div class="@max-[640px]:hidden">
         <ToolbarGroup>
           {#each modeButtons as item (item.mode)}
             <Button
@@ -171,7 +182,7 @@ let secondaryItems = $derived<MenuItem[]>([
           {/each}
         </ToolbarGroup>
       </div>
-      <div class="sm:hidden">
+      <div class="hidden @max-[640px]:block">
         <Menu
           items={modeItems}
           triggerAriaLabel="Select mission editing mode"
@@ -190,7 +201,7 @@ let secondaryItems = $derived<MenuItem[]>([
           testId={missionWorkspaceTestIds.toolbarUndo}
           title={undoLabel}
         >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+          <Undo2 aria-hidden="true" size={16} />
         </IconButton>
       </Tooltip>
       <Tooltip label={redoLabel}>
@@ -202,7 +213,7 @@ let secondaryItems = $derived<MenuItem[]>([
           testId={missionWorkspaceTestIds.toolbarRedo}
           title={redoLabel}
         >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
+          <Redo2 aria-hidden="true" size={16} />
         </IconButton>
       </Tooltip>
     </ToolbarGroup>
@@ -217,7 +228,7 @@ let secondaryItems = $derived<MenuItem[]>([
         tone="accent"
       >
         <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">{@render uploadIcon()}</span>
-        <span class="hidden sm:inline">Upload</span>
+        <span class="@max-[520px]:hidden">Upload</span>
       </Button>
       {#if canCancel}
         <Button
@@ -228,7 +239,7 @@ let secondaryItems = $derived<MenuItem[]>([
           tone="warning"
         >
           <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">{@render cancelIcon()}</span>
-          <span class="hidden sm:inline">Cancel</span>
+          <span class="@max-[520px]:hidden">Cancel</span>
         </Button>
       {/if}
     </ToolbarGroup>
@@ -237,10 +248,10 @@ let secondaryItems = $derived<MenuItem[]>([
       <Menu
         items={secondaryItems}
         testId={missionWorkspaceTestIds.toolbarMoreButton}
-        triggerClass="h-[var(--control-h-sm)] min-w-[var(--control-h-sm)] justify-center px-2 sm:min-w-0 sm:px-3"
+        triggerClass="h-[var(--control-h-sm)] @max-[520px]:min-w-[var(--control-h-sm)] @max-[520px]:justify-center @max-[520px]:px-2"
         triggerAriaLabel="More mission actions"
         triggerIcon={moreIcon}
-        triggerLabelClass="hidden sm:inline"
+        triggerLabelClass="@max-[520px]:hidden"
         triggerLabel="More"
       />
     </div>

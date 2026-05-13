@@ -1,4 +1,5 @@
 <script lang="ts">
+import { X } from "lucide-svelte";
 import type { Snippet } from "svelte";
 import { Dialog as BitsDialog } from "bits-ui";
 import { fromStore } from "svelte/store";
@@ -46,7 +47,7 @@ let surfaceKind = $derived(chrome?.current?.tier === "phone" ? "sheet" : "dialog
           <BitsDialog.Close
             class="absolute right-3 top-3 h-7 w-7 cursor-pointer rounded-md border border-border-light bg-transparent text-text-primary"
             aria-label="Close"
-          >×</BitsDialog.Close>
+          ><span class="inline-flex h-full w-full items-center justify-center"><X aria-hidden="true" size={14} /></span></BitsDialog.Close>
         </header>
       {/if}
       <div class="overflow-auto p-4">{@render body()}</div>

@@ -225,6 +225,7 @@ function stagePreset() {
 </script>
 
 <SetupSectionShell
+  sectionId={section.id}
   eyebrow={section.title}
   title="Six-slot mode editing with truthful live availability"
   description="Flight-mode slots stay mapped to the live available-mode list for the current vehicle family. Presets, mode-switch channel changes, and Simple/Super Simple toggles all queue through the shared review tray instead of applying directly."

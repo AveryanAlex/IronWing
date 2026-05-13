@@ -571,6 +571,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 </script>
 
 <SetupSectionShell
+  sectionId={section.id}
   eyebrow={section.title}
   title="Grouped servo proof up front, raw PWM escape hatch below"
   description="Function-oriented testers stay grouped by the configured surface, raw per-servo PWM sends stay available as the escape hatch, and every configured output stays visible even when current metadata is partial or above the live actuation bridge window."

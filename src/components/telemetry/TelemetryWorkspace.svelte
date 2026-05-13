@@ -1,4 +1,5 @@
 <script lang="ts">
+import { ChevronDown } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import type { OperatorMetricView, TelemetrySummaryTone } from "../../lib/telemetry-selectors";
@@ -275,22 +276,11 @@ let sections = $derived.by<MetricSection[]>(() => {
         type="button"
       >
         <span class="text-xs font-bold uppercase tracking-wider text-text-muted">{section.title}</span>
-        <svg
-          class={[
-            "h-3.5 w-3.5 text-text-muted transition-transform duration-150 ease-in-out",
-            collapsed[section.key] && "-rotate-90",
-          ]}
-          fill="none"
-          height="14"
-          stroke="currentColor"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          viewBox="0 0 24 24"
-          width="14"
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        <ChevronDown
+          aria-hidden="true"
+          class={`h-3.5 w-3.5 text-text-muted transition-transform duration-150 ease-in-out ${collapsed[section.key] ? "-rotate-90" : ""}`}
+          size={14}
+        />
       </button>
 
       {#if !collapsed[section.key]}

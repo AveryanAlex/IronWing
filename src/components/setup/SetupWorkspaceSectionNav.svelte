@@ -1,6 +1,10 @@
 <script lang="ts">
+import { ChevronRight } from "lucide-svelte";
+
 import type { SetupWorkspaceSection, SetupWorkspaceSectionGroup } from "../../lib/stores/setup-workspace";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+import SectionStatusIcon from "./shared/SectionStatusIcon.svelte";
+import SetupSectionIcon from "./SetupSectionIcon.svelte";
 
 let {
   sectionGroups,
@@ -53,19 +57,11 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
         onclick={() => toggleGroup(group.id)}
         type="button"
       >
-        <svg
-          class={[
-            "transition-transform duration-150",
-            collapsedGroups[group.id] && "-rotate-90",
-          ]}
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
+        <ChevronRight
+          class={`transition-transform duration-150 ${!collapsedGroups[group.id] ? "rotate-90" : ""}`}
+          size={12}
           aria-hidden="true"
-        >
-          <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
+        />
         {group.title}
         {#if group.progressText}
           <span
@@ -92,6 +88,7 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
             onclick={() => onSelect(section.id)}
             type="button"
           >
+            <SetupSectionIcon sectionId={section.id} class="text-text-muted" />
             <span>{section.title}</span>
 
             {#if section.id === "beginner_wizard"}
@@ -103,9 +100,10 @@ function statusLabel(section: SetupWorkspaceSection): { text: string; className:
             {:else if statusLabel(section)}
               {@const label = statusLabel(section)!}
               <span
-                class={`ml-auto text-xs font-bold uppercase ${label.className}`}
+                class={`ml-auto inline-flex items-center gap-1 text-xs font-bold uppercase ${label.className}`}
                 data-testid={`${setupWorkspaceTestIds.sectionStatusPrefix}-${section.id}`}
               >
+                <SectionStatusIcon status={section.status} />
                 {label.text}
               </span>
             {/if}

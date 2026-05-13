@@ -31,6 +31,13 @@
 - If a component needs custom CSS, keep it scoped and minimal. Do not add large style blocks to otherwise utility-first components without a clear reason.
 - New UI must work cleanly on mobile phones, tablets, and desktop; for layout changes, verify phone-width scrolling containers, dialogs/drawers, sticky bars, bottom safe-area spacing, usable tap targets, and behavior that does not depend on mouse-only interaction.
 
+## Icon Rules
+
+- Use `lucide-svelte` for generic UI icons, don't hand-copy generic Lucide SVG paths.
+- Decorative icons must be hidden from assistive tech with `aria-hidden="true"`; icon-only controls still need explicit accessible labels or titles.
+- Prefer `size={14}` for dense labels/navigation and `size={16}` for normal controls. Let icons inherit `currentColor` through text color utilities.
+- Keep custom SVGs for domain graphics such as vehicle markers, HUD instruments, motor diagrams, and generated/map DOM where a Lucide glyph would be less accurate.
+
 ## Svelte Rules
 
 - Use Svelte 5 for active frontend code.

@@ -123,6 +123,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
 </script>
 
 <SetupSectionShell
+  sectionId="rc_receiver"
   eyebrow="RC receiver"
   title="Check live channel bars and queue receiver mapping changes"
   description="Watch live PWM movement here, then queue channel-order changes in the review tray. This section shows receiver motion and mapping without applying changes on its own."

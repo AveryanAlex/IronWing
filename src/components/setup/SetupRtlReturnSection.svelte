@@ -350,6 +350,7 @@ function stage(field: RtlFieldConfig) {
 </script>
 
 <SetupSectionShell
+  sectionId={section.id}
   eyebrow={section.title}
   title="Return-home behavior in operator-facing units"
   description="RTL / Return keeps altitude, speed, timing, and landing behavior in purpose-built cards for the active vehicle family. The UI speaks in meters, meters per second, and seconds while the shared review tray still carries the raw parameter writes underneath."

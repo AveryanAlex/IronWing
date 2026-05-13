@@ -460,6 +460,7 @@ function buildFrameBanners(input: {
 </script>
 
 <SetupSectionShell
+  sectionId={section.id}
   eyebrow={section.title}
   title="Plane vs QuadPlane truth stays explicit here"
   description="Frame, VTOL enable, and board orientation stay separate from apply ownership: every parameter-backed change stages into the shared review tray, while stale or partial Q-frame truth fails closed instead of bluffing actuator safety."

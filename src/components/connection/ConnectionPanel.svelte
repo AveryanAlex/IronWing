@@ -1,4 +1,5 @@
 <script lang="ts">
+import { Radio } from "lucide-svelte";
 import { onMount } from "svelte";
 import { toast } from "svelte-sonner";
 
@@ -106,7 +107,7 @@ async function onSubmit(event: SubmitEvent) {
 
 <Panel padded>
   <div class="flex items-center justify-between gap-2">
-    <p class="m-0 text-xs font-bold uppercase tracking-wider text-text-muted">Connection</p>
+    <p class="m-0 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-muted"><Radio aria-hidden="true" size={14} />Connection</p>
     <span data-testid="connection-status-text">
       <StatusPill tone={pillTone(panelView.statusTone)}>{panelView.statusLabel}</StatusPill>
     </span>

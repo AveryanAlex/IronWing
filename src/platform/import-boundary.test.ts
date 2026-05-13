@@ -130,7 +130,7 @@ const ACTIVE_TREE_IMPORT_RULES: ResolvedImportRule[] = [
     classLabel: "active-path reach-through",
     matches: (edge) => LUCIDE_REACT_PACKAGE_RE.test(edge.specifier),
     guidance:
-      "Do not reintroduce lucide-react into the active tree. Use a Svelte-safe icon approach or neutral data instead of the archived React icon package.",
+      "Do not reintroduce lucide-react into the active tree. Use lucide-svelte or neutral data instead of the archived React icon package.",
   },
 ];
 
@@ -147,7 +147,7 @@ const ACTIVE_RUNTIME_RULES: ResolvedImportRule[] = [
     classLabel: "active-path reach-through",
     matches: (edge) => /^(?:lucide-react)(?:\/|$)/.test(edge.specifier),
     guidance:
-      "The active runtime graph must not reach React-era icon packages. Use Svelte-safe icons/assets or a neutral data module instead of lucide-react.",
+      "The active runtime graph must not reach React-era icon packages. Use lucide-svelte icons/assets or a neutral data module instead of lucide-react.",
   },
   {
     label: "React-era .tsx reach-through",

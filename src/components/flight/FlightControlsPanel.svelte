@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Home, Navigation, Orbit } from "lucide-svelte";
   import { onMount } from "svelte";
   import { fromStore } from "svelte/store";
 
@@ -108,7 +109,8 @@
 </script>
 
 <section class="rounded-lg border border-border bg-bg-primary p-3">
-  <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">
+  <p class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-muted">
+    <Navigation aria-hidden="true" size={14} />
     Controls
   </p>
 
@@ -186,11 +188,16 @@
       <div class="flex gap-2">
         {#each quickModes as modeName (modeName)}
           <button
-            class="flex-1 rounded-md border border-border bg-bg-secondary px-2 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+            class="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-bg-secondary px-2 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!connected || busy || replayReadonly}
             onclick={() => handleQuickMode(modeName)}
             type="button"
           >
+            {#if modeName === "RTL"}
+              <Home aria-hidden="true" size={14} />
+            {:else if modeName === "LOITER"}
+              <Orbit aria-hidden="true" size={14} />
+            {/if}
             {modeName}
           </button>
         {/each}
