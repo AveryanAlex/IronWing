@@ -680,6 +680,7 @@ $effect(() => {
 <Dialog
   ariaLabel="Telemetry settings"
   body={body}
+  closeTestId={appShellTestIds.telemetrySettingsClose}
   description="Stage telemetry cadence and live message-rate edits here, then explicitly apply or discard them."
   footer={footer}
   onClose={onClose}

@@ -13,11 +13,12 @@ type Props = {
   ariaLabel?: string;
   onClose: () => void;
   testId?: string;
+  closeTestId?: string;
   body: Snippet;
   footer?: Snippet;
 };
 
-let { open = $bindable(), title, description, ariaLabel, onClose, testId, body, footer }: Props = $props();
+let { open = $bindable(), title, description, ariaLabel, onClose, testId, closeTestId, body, footer }: Props = $props();
 
 // Defensive context lookup: the shell chrome context may be absent in standalone
 // component tests. Fall back to a desktop-default tier so the wrapper still renders.
@@ -46,6 +47,7 @@ let surfaceKind = $derived(chrome?.current?.tier === "phone" ? "sheet" : "dialog
           {#if description}<BitsDialog.Description class="m-0 text-sm leading-5 text-text-secondary">{description}</BitsDialog.Description>{/if}
           <BitsDialog.Close
             class="absolute right-3 top-3 h-7 w-7 cursor-pointer rounded-md border border-border-light bg-transparent text-text-primary"
+            data-testid={closeTestId}
             aria-label="Close"
           ><span class="inline-flex h-full w-full items-center justify-center"><X aria-hidden="true" size={14} /></span></BitsDialog.Close>
         </header>

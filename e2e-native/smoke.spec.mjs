@@ -74,6 +74,14 @@ async function clickIntoView(element) {
   await browser.execute((el) => (el instanceof HTMLElement ? el.click() : null), element);
 }
 
+async function clickMenuItem(trigger, itemSelector) {
+  if ((await trigger.getAttribute("aria-expanded")) !== "true") {
+    await clickIntoView(trigger);
+  }
+  const item = await $(itemSelector);
+  await clickIntoView(item);
+}
+
 async function setCommittedFieldValue(selector, nextValue) {
   return browser.execute((valueSelector, value) => {
     const element = document.querySelector(valueSelector);
@@ -163,6 +171,7 @@ describe("native smoke", () => {
       runtimeFramework: '[data-testid="app-runtime-framework"]',
       runtimeEntrypoint: '[data-testid="app-runtime-entrypoint"]',
       activeWorkspace: '[data-testid="app-shell-active-workspace"]',
+      overviewWorkspaceButton: '[data-testid="app-shell-overview-workspace-btn"]',
       missionWorkspaceButton: '//nav[@aria-label="Primary"]//button[normalize-space()="Mission"]',
       setupWorkspaceButton: '[data-testid="app-shell-parameter-workspace-btn"]',
       setupWorkspaceRoot: '[data-testid="setup-workspace"]',
@@ -209,8 +218,9 @@ describe("native smoke", () => {
       missionInspectorLongitude: '[data-testid="mission-inspector-longitude"]',
       missionInspectorAltitude: '[data-testid="mission-inspector-altitude"]',
       missionToolbarUpload: '[data-testid="mission-toolbar-upload"]',
-      missionToolbarNew: '[data-testid="mission-toolbar-new"]',
-      missionToolbarRead: '[data-testid="mission-toolbar-read"]',
+      missionToolbarMore: '[data-testid="mission-toolbar-more"]',
+      missionToolbarNewMenuItem: '[role="menuitem"][data-testid="mission-toolbar-new"]',
+      missionToolbarReadMenuItem: '[role="menuitem"][data-testid="mission-toolbar-read"]',
       missionDraftItem: 'div[role="button"][data-testid^="mission-draft-item-"]',
     };
 
@@ -221,6 +231,7 @@ describe("native smoke", () => {
     const disconnectButton = await $(selectors.disconnectButton);
     const telemetryAltValue = await $(selectors.telemetryAltValue);
     const telemetryModeValue = await $(selectors.telemetryModeValue);
+    const overviewWorkspaceButton = await $(selectors.overviewWorkspaceButton);
     const setupWorkspaceButton = await $(selectors.setupWorkspaceButton);
     const setupWorkspaceRoot = await $(selectors.setupWorkspaceRoot);
     const setupNavRcReceiver = await $(selectors.setupNavRcReceiver);
@@ -247,8 +258,7 @@ describe("native smoke", () => {
     const missionReady = await $(selectors.missionReady);
     const missionListAdd = await $(selectors.missionListAdd);
     const missionToolbarUpload = await $(selectors.missionToolbarUpload);
-    const missionToolbarNew = await $(selectors.missionToolbarNew);
-    const missionToolbarRead = await $(selectors.missionToolbarRead);
+    const missionToolbarMore = await $(selectors.missionToolbarMore);
 
     await statusText.waitForDisplayed({ timeout: 60_000 });
     await browser.waitUntil(async () => (await browser.getTitle()).includes("IronWing"), {
@@ -275,6 +285,15 @@ describe("native smoke", () => {
     await waitForCheckpoint("idle shell visible", async () => /Idle/i.test(await statusText.getText()), {
       timeout: 30_000,
       timeoutMsg: "Timed out waiting for the active shell to report Idle before connect.",
+    });
+    if ((await readTextContent(selectors.activeWorkspace)) !== "overview") {
+      await clickIntoView(overviewWorkspaceButton);
+    }
+    await waitForCheckpoint("overview workspace selected for telemetry proof", async () => {
+      return (await readTextContent(selectors.activeWorkspace)) === "overview";
+    }, {
+      timeout: 30_000,
+      timeoutMsg: "Timed out returning the native shell to Overview before telemetry assertions.",
     });
 
     const currentTransport = await readElementValue(selectors.transportSelect);
@@ -552,7 +571,7 @@ describe("native smoke", () => {
     await clickIntoView(missionToolbarUpload);
     await waitForMissionActionCycle(selectors, "Uploading planning state", "mission upload");
 
-    await clickIntoView(missionToolbarNew);
+    await clickMenuItem(missionToolbarMore, selectors.missionToolbarNewMenuItem);
     await waitForCheckpoint("local mission draft reset to blank", async () => {
       const counts = await readMissionCounts(selectors.missionCountsMission);
       return counts?.mission === 0 && counts?.survey === 0;
@@ -561,7 +580,7 @@ describe("native smoke", () => {
       timeoutMsg: "Timed out waiting for the local Mission draft to reset after upload.",
     });
 
-    await clickIntoView(missionToolbarRead);
+    await clickMenuItem(missionToolbarMore, selectors.missionToolbarReadMenuItem);
     await waitForMissionActionCycle(selectors, "Reading planning state", "mission readback");
     await waitForCheckpoint("vehicle readback restored two mission items", async () => {
       const counts = await readMissionCounts(selectors.missionCountsMission);

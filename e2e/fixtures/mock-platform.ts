@@ -1423,7 +1423,9 @@ export function liveSurfaceLocator(page: Page, selector: keyof typeof liveSurfac
 }
 
 export function liveSurfaceValueLocator(page: Page, selector: keyof typeof liveSurfaceSelectors): Locator {
-    return liveSurfaceLocator(page, selector).locator(".metric-card__value");
+    return liveSurfaceLocator(page, selector).locator(
+        ".metric-card__value, :scope > span:last-child, :scope > div:last-child span:first-child",
+    );
 }
 
 export function operatorNoticeListLocator(page: Page): Locator {
