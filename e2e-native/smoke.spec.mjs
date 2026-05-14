@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
 
+const LOG_PROGRESS = process.env.IRONWING_NATIVE_E2E_VERBOSE === "1" || process.env.IRONWING_NATIVE_E2E_PROGRESS === "1";
+
+function logProgress(message) {
+  if (LOG_PROGRESS) {
+    console.log(message);
+  }
+}
+
 async function waitForCheckpoint(label, predicate, { timeout = 60_000, timeoutMsg }) {
   const msg = timeoutMsg || `${label}: timed out after ${timeout / 1000}s`;
   const hardDeadline = new Promise((_, reject) => {
@@ -11,7 +19,7 @@ async function waitForCheckpoint(label, predicate, { timeout = 60_000, timeoutMs
     browser.waitUntil(predicate, { timeout, timeoutMsg: msg }),
     hardDeadline,
   ]);
-  console.log(`[native smoke] ${label}`);
+  logProgress(`[native smoke] ${label}`);
 }
 
 async function readTextContent(selector) {
@@ -616,7 +624,7 @@ describe("native smoke", () => {
     assert.ok(Math.abs(readbackAltitude - primaryWaypoint.altitude) < 0.01, `Mission readback altitude drifted: ${readbackAltitude}`);
 
     const persistedSettings = await readStoredJson("ironwing.settings");
-    console.log(`[native smoke] persisted ironwing.settings ${JSON.stringify(persistedSettings)}`);
+    logProgress(`[native smoke] persisted ironwing.settings ${JSON.stringify(persistedSettings)}`);
     assert.ok(persistedSettings && typeof persistedSettings === "object", "Expected ironwing.settings to persist as a JSON object.");
     assert.ok(!("__parse_error" in persistedSettings), `ironwing.settings should remain valid JSON: ${JSON.stringify(persistedSettings)}`);
     assert.equal(persistedSettings.telemetryRateHz, nextTelemetryRate, "ironwing.settings should persist the last applied telemetry cadence.");

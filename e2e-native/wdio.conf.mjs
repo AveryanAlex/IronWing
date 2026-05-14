@@ -6,6 +6,8 @@ const WEBDRIVER_HOST = "127.0.0.1";
 const WEBDRIVER_PORT = Number.parseInt(process.env.IRONWING_WDIO_PORT ?? "4444", 10);
 const NATIVE_WEBDRIVER_PORT = Number.parseInt(process.env.IRONWING_WDIO_NATIVE_PORT ?? "4445", 10);
 const TAURI_DRIVER_COMMAND = process.env.IRONWING_TAURI_DRIVER_PATH ?? "tauri-driver";
+const NATIVE_E2E_VERBOSE = process.env.IRONWING_NATIVE_E2E_VERBOSE === "1";
+const WDIO_LOG_LEVEL = process.env.IRONWING_WDIO_LOG_LEVEL ?? (NATIVE_E2E_VERBOSE ? "info" : "error");
 
 function requireApplicationPath() {
   const application = process.env.IRONWING_WDIO_APPLICATION;
@@ -45,6 +47,7 @@ export const config = {
   specs: [fileURLToPath(new URL("./smoke.spec.mjs", import.meta.url))],
   maxInstances: 1,
   reporters: ["spec"],
+  logLevel: WDIO_LOG_LEVEL,
   framework: "mocha",
   waitforTimeout: 30_000,
   mochaOpts: {
@@ -64,7 +67,7 @@ export const config = {
       TAURI_DRIVER_COMMAND,
       ["--port", String(WEBDRIVER_PORT), "--native-port", String(NATIVE_WEBDRIVER_PORT)],
       {
-      stdio: "inherit",
+        stdio: NATIVE_E2E_VERBOSE ? "inherit" : "ignore",
       },
     );
 
