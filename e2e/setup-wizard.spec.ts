@@ -115,6 +115,7 @@ test.describe("setup wizard proof", () => {
     await emitHealthySensorHealth(mockPlatform);
 
     await openConnectedSetupWorkspace(page);
+    await expect(page.locator(setupWorkspaceSelectors.metadata)).toContainText("Metadata ready");
     await openSetupWizard(page);
 
     // Frame: seeded fixture already matches, so apply falls through to advance.
@@ -181,6 +182,7 @@ test.describe("setup wizard proof", () => {
     await page.goto("/");
     await mockPlatform.reset();
     await mockPlatform.waitForRuntimeSurface();
+    await mockPlatform.setCommandBehavior("param_download_all", { type: "resolve" });
 
     await connectSetupSession(page, mockPlatform, {
       vehicleState: setupConnectedVehicleState,
@@ -196,6 +198,7 @@ test.describe("setup wizard proof", () => {
     });
 
     await openConnectedSetupWorkspace(page);
+    await expect(page.locator(setupWorkspaceSelectors.metadata)).toContainText("Metadata ready");
     await openSetupWizard(page);
 
     // Change FRAME_CLASS to Hexa (code 2). FRAME_CLASS is flagged

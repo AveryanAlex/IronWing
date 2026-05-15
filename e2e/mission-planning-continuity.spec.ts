@@ -137,6 +137,11 @@ const missionToolbarSecondaryControls = new Set<MissionToolbarSecondaryControl>(
     "toolbarExport",
     "toolbarRead",
 ]);
+const missionModeControls = new Map<keyof typeof missionWorkspaceSelectors, string>([
+    ["modeMission", "Mission"],
+    ["modeFence", "Fence"],
+    ["modeRally", "Rally"],
+]);
 
 function isMissionToolbarSecondaryControl(
     selector: keyof typeof missionWorkspaceSelectors,
@@ -147,6 +152,26 @@ function isMissionToolbarSecondaryControl(
 async function clickMissionControl(page: Page, selector: keyof typeof missionWorkspaceSelectors) {
     if (isMissionToolbarSecondaryControl(selector)) {
         await clickMissionToolbarSecondary(page, selector);
+        return;
+    }
+    const modeLabel = missionModeControls.get(selector);
+    if (modeLabel) {
+        const inlineModeButton = missionWorkspaceLocator(page, selector);
+        if (await inlineModeButton.isVisible().catch(() => false)) {
+            await inlineModeButton.click();
+            return;
+        }
+
+        await page.getByRole("button", { name: "Select mission editing mode" }).click();
+        const menuItem = page.getByRole("menuitem", { name: modeLabel, exact: true });
+        const ariaDisabled = await menuItem.getAttribute("aria-disabled");
+        const dataDisabled = await menuItem.getAttribute("data-disabled");
+        const disabled = ariaDisabled === "true" || dataDisabled !== null;
+        if (disabled) {
+            await page.keyboard.press("Escape");
+            return;
+        }
+        await menuItem.click();
         return;
     }
     const locator = missionWorkspaceLocator(page, selector);

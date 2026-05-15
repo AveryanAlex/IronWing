@@ -311,7 +311,7 @@ function emitMarkerHandoff() {
       />
     </div>
 
-    <div class="flex min-w-0 flex-col gap-3 self-start max-lg:self-stretch">
+    <div class="flex min-w-0 flex-col gap-3 self-start pb-6 max-lg:self-stretch">
       <LogsRecordingPanel
         autoRecordDirectory={workspace.recording.settings?.auto_record_directory ?? null}
         autoRecordEnabled={workspace.recording.settings?.auto_record_on_connect ?? false}

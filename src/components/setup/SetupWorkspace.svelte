@@ -139,7 +139,7 @@ function clearCheckpoint() {
 {/snippet}
 
 {#snippet selectedSectionDetail()}
-  <div class="min-w-0 flex-1 overflow-y-auto p-2" data-testid={setupWorkspaceTestIds.detail}>
+  <div class="min-h-0 min-w-0 flex-1 overflow-y-auto p-2" data-testid={setupWorkspaceTestIds.detail}>
     <span aria-hidden="true" class="sr-only" data-testid={setupWorkspaceTestIds.selectedSection}>
       {view.selectedSectionId}
     </span>

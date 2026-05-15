@@ -2,6 +2,7 @@ import type { Locator, Page } from "@playwright/test";
 
 import {
   applyShellViewport,
+  clickMissionToolbarSecondary,
   connectionSelectors,
   expect,
   liveSurfaceSelectors,
@@ -102,7 +103,7 @@ function angularDeltaDeg(a: number, b: number): number {
 async function importUploadAndReadAutoMission(page: Page, mockPlatform: MockPlatformFixture) {
   await openMissionWorkspace(page);
   await mockPlatform.setOpenFile(AUTO_MISSION_PLAN, "demo-auto.plan", "application/json");
-  await missionWorkspaceLocator(page, "toolbarImport").click();
+  await clickMissionToolbarSecondary(page, "toolbarImport");
   await missionWorkspaceLocator(page, "importReview").waitFor({ state: "visible", timeout: 2_000 }).catch(() => undefined);
   if (await missionWorkspaceLocator(page, "importReview").isVisible().catch(() => false)) {
     await missionWorkspaceLocator(page, "importReviewConfirm").click();
@@ -114,7 +115,7 @@ async function importUploadAndReadAutoMission(page: Page, mockPlatform: MockPlat
   await expect(missionWorkspaceLocator(page, "inlineStatusMessage")).toContainText("Uploading planning state");
   await expect(missionWorkspaceLocator(page, "inlineStatus")).toHaveCount(0, { timeout: 10_000 });
 
-  await missionWorkspaceLocator(page, "toolbarRead").click();
+  await clickMissionToolbarSecondary(page, "toolbarRead");
   await expect(missionWorkspaceLocator(page, "inlineStatusMessage")).toContainText("Reading planning state");
   await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
   await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("3");

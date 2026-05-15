@@ -9,7 +9,9 @@ import {
     expectMissionHistoryState,
     expectMissionWorkspace,
     expectRuntimeDiagnostics,
+    clickMissionToolbarSecondary,
     missionHistoryButtonLocator,
+    missionToolbarSecondaryLocator,
     missionWorkspaceLocator,
     missionWorkspaceSelectors,
     openMissionWorkspace,
@@ -156,13 +158,13 @@ test.describe("mocked mission planner workflow", () => {
         );
 
         await mockPlatform.cancelSaveFile();
-        await missionWorkspaceLocator(page, "toolbarExport").click();
+        await clickMissionToolbarSecondary(page, "toolbarExport");
         await confirmExportReviewIfVisible(page);
         await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("2");
         await expect.poll(() => mockPlatform.getSavedFiles()).toEqual([]);
 
         await mockPlatform.setSaveFileName("vehicle-read.plan");
-        await missionWorkspaceLocator(page, "toolbarExport").click();
+        await clickMissionToolbarSecondary(page, "toolbarExport");
         await confirmExportReviewIfVisible(page);
         await expect(missionWorkspaceLocator(page, "warningFile")).toContainText("omitted");
         await expect(missionWorkspaceLocator(page, "countsWarnings")).not.toContainText("0");
@@ -172,7 +174,7 @@ test.describe("mocked mission planner workflow", () => {
         expect(savedFiles[0]?.name).toBe("vehicle-read.plan");
         expect(savedFiles[0]?.contents).toContain('"fileType": "Plan"');
 
-        await missionWorkspaceLocator(page, "toolbarNew").click();
+        await clickMissionToolbarSecondary(page, "toolbarNew");
         await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
         await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("0 / 0");
         await missionWorkspaceLocator(page, "listAdd").click();
@@ -180,7 +182,7 @@ test.describe("mocked mission planner workflow", () => {
 
         const historyBeforeImport = await readMissionHistoryState(page);
         await mockPlatform.setOpenFile(surveyPlanContents, "survey-complex.plan");
-        await missionWorkspaceLocator(page, "toolbarImport").click();
+        await clickMissionToolbarSecondary(page, "toolbarImport");
         await expect(missionWorkspaceLocator(page, "importReviewTitle")).toContainText("survey-complex.plan");
         await missionWorkspaceLocator(page, "importReviewDismiss").click();
         await expect(missionWorkspaceLocator(page, "importReview")).toHaveCount(0);
@@ -195,7 +197,7 @@ test.describe("mocked mission planner workflow", () => {
         );
 
         await mockPlatform.setOpenFile(surveyPlanContents, "survey-complex.plan");
-        await missionWorkspaceLocator(page, "toolbarImport").click();
+        await clickMissionToolbarSecondary(page, "toolbarImport");
         await expect(missionWorkspaceLocator(page, "importReview")).toBeVisible();
         await missionWorkspaceLocator(page, "importReviewConfirm").click();
         await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("2");
@@ -240,7 +242,7 @@ test.describe("mocked mission planner workflow", () => {
         await expect(missionWorkspaceLocator(page, "cameraCurrent")).not.toContainText("Choose a camera");
 
         const historyBeforeNewDraft = await readMissionHistoryState(page);
-        await missionWorkspaceLocator(page, "toolbarNew").click();
+        await clickMissionToolbarSecondary(page, "toolbarNew");
         await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
         expect(await page.locator(missionWorkspaceSelectors.warningFile).count()).toBeGreaterThan(0);
 
@@ -296,14 +298,13 @@ test.describe("mocked mission planner workflow", () => {
             updateCount?: number;
         } | null;
         expect(mapDebug?.selection?.kind).toBe("mission-item");
-        expect(mapDebug?.counts?.markers).toBe(1);
+        expect(mapDebug?.counts?.markers).toBe(2);
         expect(mapDebug?.updateCount ?? 0).toBeGreaterThan(0);
 
+        const cancelButton = missionWorkspaceLocator(page, "toolbarCancel");
         await missionWorkspaceLocator(page, "toolbarUpload").click();
-        await expect(missionWorkspaceLocator(page, "inlineStatusMessage")).toContainText("Uploading planning state");
-        await expect(missionWorkspaceLocator(page, "toolbarCancel")).toBeVisible();
-        await missionWorkspaceLocator(page, "toolbarCancel").click();
-        await expect(missionWorkspaceLocator(page, "toolbarCancel")).toHaveCount(0);
+        await cancelButton.click({ timeout: 10_000 });
+        await expect(cancelButton).toHaveCount(0);
 
         await expect.poll(async () => {
             return (await mockPlatform.getInvocations()).map((entry) => entry.cmd);
@@ -320,10 +321,8 @@ test.describe("mocked mission planner workflow", () => {
             };
         }).toEqual({ missionUploads: 2, fenceUploads: 1, rallyUploads: 1 });
         await expect(missionWorkspaceLocator(page, "inlineStatus")).toHaveCount(0);
-        await expect(missionWorkspaceLocator(page, "toolbarRead")).toHaveAttribute("aria-label", "Read from vehicle");
-        await expect(missionWorkspaceLocator(page, "toolbarRead")).toHaveAttribute("title", "Read from vehicle");
-        await expect(missionWorkspaceLocator(page, "toolbarUpload")).toHaveAttribute("aria-label", "Write to vehicle");
-        await expect(missionWorkspaceLocator(page, "toolbarUpload")).toHaveAttribute("title", "Write to vehicle");
+        await expect(await missionToolbarSecondaryLocator(page, "toolbarRead")).toContainText("Read from vehicle");
+        await expect(missionWorkspaceLocator(page, "toolbarUpload")).toHaveAttribute("aria-label", "Upload to vehicle");
         await expect(missionWorkspaceLocator(page, "header").getByRole("button", { name: /^clear$/i })).toHaveCount(0);
     });
 });

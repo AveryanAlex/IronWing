@@ -2211,8 +2211,8 @@ function buildContextMenuItems(): ContextMenuItem[] {
   }
 
   .mission-map__surface-wrap--fill {
-    flex: 1;
-    min-height: 0;
+    flex: 1 0 220px;
+    min-height: 220px;
     margin-top: 1rem;
   }
 

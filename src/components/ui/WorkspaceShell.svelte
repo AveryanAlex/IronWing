@@ -11,14 +11,14 @@ type Props = {
 
 const modeClasses: Record<Mode, string> = {
   inset: "gap-3 overflow-auto p-[var(--workspace-gutter-inset)]",
-  split: "gap-0 p-0",
-  "edge-to-edge": "gap-0 p-0",
+  split: "gap-0 overflow-hidden p-0",
+  "edge-to-edge": "gap-0 overflow-hidden p-0",
 };
 
 let { mode = "inset", testId, children }: Props = $props();
 
 let shellClass = $derived(
-  ["flex min-h-0 flex-1 flex-col overflow-hidden text-text-primary", modeClasses[mode]].join(" "),
+  ["flex min-h-0 flex-1 flex-col text-text-primary", modeClasses[mode]].join(" "),
 );
 </script>
 

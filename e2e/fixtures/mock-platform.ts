@@ -1042,36 +1042,34 @@ const missionToolbarMenuControls = new Set<MissionToolbarSecondaryControl>([
  */
 export async function openMissionToolbarMoreMenu(page: Page): Promise<void> {
     const moreTrigger = missionWorkspaceLocator(page, "toolbarMoreButton");
+    const readMenuItem = page.locator(`[role="menuitem"][data-testid="${missionWorkspaceTestIds.toolbarRead}"]`);
     if (!(await moreTrigger.isVisible().catch(() => false))) {
         return;
     }
-    const expanded = await moreTrigger.getAttribute("aria-expanded");
-    if (expanded === "true") {
+    if (await readMenuItem.isVisible().catch(() => false)) {
         return;
     }
     await moreTrigger.click();
-    await expect
-        .poll(() => moreTrigger.getAttribute("aria-expanded"), {
-            message: "Mission toolbar More menu never opened; the overflow menu must expose its actions to e2e clicks.",
-        })
-        .toBe("true");
+    await expect(
+        readMenuItem,
+        "Mission toolbar More menu never opened; the overflow menu must expose its actions to e2e clicks.",
+    ).toBeVisible();
 }
 
 async function closeMissionToolbarMoreMenu(page: Page): Promise<void> {
     const moreTrigger = missionWorkspaceLocator(page, "toolbarMoreButton");
+    const readMenuItem = page.locator(`[role="menuitem"][data-testid="${missionWorkspaceTestIds.toolbarRead}"]`);
     if (!(await moreTrigger.isVisible().catch(() => false))) {
         return;
     }
-    const expanded = await moreTrigger.getAttribute("aria-expanded");
-    if (expanded !== "true") {
+    if (!(await readMenuItem.isVisible().catch(() => false))) {
         return;
     }
     await page.keyboard.press("Escape");
-    await expect
-        .poll(() => moreTrigger.getAttribute("aria-expanded"), {
-            message: "Mission toolbar More menu never closed; inline toolbar controls remained obscured by the open overflow.",
-        })
-        .not.toBe("true");
+    await expect(
+        readMenuItem,
+        "Mission toolbar More menu never closed; inline toolbar controls remained obscured by the open overflow.",
+    ).toHaveCount(0);
 }
 
 /**
@@ -1665,16 +1663,15 @@ export async function expectMissionLayoutState(page: Page, expected: MissionLayo
         page.locator(missionWorkspaceLayoutSelectors.layoutTierMismatch),
         "Mission layout tier-sync diagnostics are missing.",
     ).toContainText((expected.tierMismatch ?? false) ? "mismatch" : "match");
-    await expect(
-        page.locator(missionWorkspaceLayoutSelectors.mapPane),
-        `Mission map pane visibility drifted; expected data-visible=${expected.mapVisible}.`,
-    ).toHaveAttribute("data-visible", expected.mapVisible ? "true" : "false");
-    await expect(
-        page.locator(missionWorkspaceLayoutSelectors.planPane),
-        `Mission plan pane visibility drifted; expected data-visible=${expected.planVisible}.`,
-    ).toHaveAttribute("data-visible", expected.planVisible ? "true" : "false");
-
     if (expected.showPhoneSegments) {
+        await expect(
+            page.locator(missionWorkspaceLayoutSelectors.mapPane),
+            `Mission map pane visibility drifted; expected data-visible=${expected.mapVisible}.`,
+        ).toHaveAttribute("data-visible", expected.mapVisible ? "true" : "false");
+        await expect(
+            page.locator(missionWorkspaceLayoutSelectors.planPane),
+            `Mission plan pane visibility drifted; expected data-visible=${expected.planVisible}.`,
+        ).toHaveAttribute("data-visible", expected.planVisible ? "true" : "false");
         await expect(
             page.locator(missionWorkspaceLayoutSelectors.phoneSegmentBar),
             "Phone-segmented Mission layout should keep the segment bar visible.",
@@ -1683,6 +1680,14 @@ export async function expectMissionLayoutState(page: Page, expected: MissionLayo
         await expect(
             page.locator(missionWorkspaceLayoutSelectors.phoneSegmentBar),
             "Non-phone Mission layouts should not render the phone-only segment bar.",
+        ).toHaveCount(0);
+        await expect(
+            page.locator(missionWorkspaceLayoutSelectors.mapPane),
+            "Non-phone Mission layouts should not render the phone-only map pane wrapper.",
+        ).toHaveCount(0);
+        await expect(
+            page.locator(missionWorkspaceLayoutSelectors.planPane),
+            "Non-phone Mission layouts should not render the phone-only plan pane wrapper.",
         ).toHaveCount(0);
     }
 }

@@ -1799,6 +1799,8 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
   }
 
   .mission-workspace__phone-stack {
+    height: 100%;
+    min-height: 0;
     padding: var(--workspace-gutter-split);
   }
 
