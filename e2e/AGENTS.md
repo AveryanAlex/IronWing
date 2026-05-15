@@ -8,7 +8,7 @@
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Playwright config | `../playwright.config.ts` | Serial workers, build + preview web server |
+| Playwright config | `../playwright.config.ts` | Local serial workers, CI dual workers, build + preview web server |
 | Mock platform | `../src/platform/mock/` | Browser-only invoke/listen/fetch shim |
 | Playwright fixture | `fixtures/mock-platform.ts` | Command overrides and emitted events |
 | Minimal liveness check | `smoke.spec.ts` | Fastest spec to debug harness issues |
@@ -19,7 +19,7 @@
 
 - Run with `pnpm e2e` or `pnpm e2e:headed`.
 - Playwright builds the frontend with `IRONWING_PLATFORM=mock`, starts a local preview server, then runs the browser suite against that server.
-- `workers: 1` is intentional.
+- Local runs stay on `workers: 1`; CI uses `workers: 2` to reduce wall-clock time without fully parallelizing individual spec files.
 - Failure artifacts (trace, screenshot, video) are enabled via Playwright config.
 
 ## Spec Conventions
