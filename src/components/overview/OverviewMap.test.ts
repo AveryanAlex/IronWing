@@ -18,6 +18,8 @@ const maplibreState = vi.hoisted(() => {
     addControl: vi.fn(),
     addSource: vi.fn(),
     addLayer: vi.fn(),
+    addImage: vi.fn(),
+    hasImage: vi.fn(() => false),
     getSource: vi.fn((id: string) => (id === "overview-mission-path" ? missionPathSource : null)),
     getLayer: vi.fn((_id?: string): unknown => null),
     getStyle: vi.fn(() => ({
@@ -169,6 +171,9 @@ describe("OverviewMap", () => {
     maplibreState.mockMap.addControl.mockReset();
     maplibreState.mockMap.addSource.mockReset();
     maplibreState.mockMap.addLayer.mockReset();
+    maplibreState.mockMap.addImage.mockReset();
+    maplibreState.mockMap.hasImage.mockReset();
+    maplibreState.mockMap.hasImage.mockReturnValue(false);
     maplibreState.mockMap.getSource.mockClear();
     maplibreState.mockMap.getLayer.mockReset();
     maplibreState.mockMap.getLayer.mockReturnValue(null);
@@ -427,13 +432,35 @@ describe("OverviewMap", () => {
 
     const markerOne = maplibreState.markers.find((marker) => marker.element.textContent === "1")?.element;
     const markerTwo = maplibreState.markers.find((marker) => marker.element.textContent === "2")?.element;
+    const markerOneHandle = maplibreState.markers.find((marker) => marker.element.textContent === "1");
     expect(markerOne?.className).toContain("mission-pin");
     expect(markerOne?.className).not.toContain("is-current");
     expect(markerTwo?.className).toContain("is-current");
+    expect(markerOneHandle).toBeDefined();
+    const setLngLatOrder = markerOneHandle?.setLngLat.mock.invocationCallOrder[0] ?? 0;
+    const addToOrder = markerOneHandle?.addTo.mock.invocationCallOrder[0] ?? 0;
+    expect(setLngLatOrder).toBeLessThan(addToOrder);
 
     const calls = maplibreState.missionPathSource.setData.mock.calls;
     const lastData = calls[calls.length - 1]?.[0] as GeoJSON.FeatureCollection;
     expect(lastData.features.some((feature) => feature.properties?.segmentStatus === "active")).toBe(true);
+  });
+
+  it("provides a transparent fallback for missing base style icons", async () => {
+    setNavigatorGeolocation(createGeolocationMock());
+
+    render(OverviewMap, {
+      vehicleLat: 47.397742,
+      vehicleLon: 8.545594,
+    });
+
+    maplibreState.handlers.get("styleimagemissing")?.({ type: "styleimagemissing", id: "gymnastics" });
+
+    expect(maplibreState.mockMap.addImage).toHaveBeenCalledWith("gymnastics", {
+      width: 1,
+      height: 1,
+      data: expect.any(Uint8Array),
+    });
   });
 
   it("does not let a pending device recenter override a later home selection", async () => {

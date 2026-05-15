@@ -174,6 +174,7 @@ export function ensureMissionPathLayers(map: MapLibreMap, showLabels = true): vo
       minzoom: 10,
       layout: {
         "text-field": ["get", "label"],
+        "text-font": ["Noto Sans Regular"],
         "text-size": 11,
         "text-anchor": "center",
         visibility: showLabels ? "visible" : "none",

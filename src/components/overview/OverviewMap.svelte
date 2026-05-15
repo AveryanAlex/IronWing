@@ -2,7 +2,12 @@
 import { Home, Layers, LocateFixed, Map as MapIcon, Navigation, Satellite } from "lucide-svelte";
 import { onMount } from "svelte";
 import { toast } from "svelte-sonner";
-import maplibregl, { type Map as MapLibreMap, type MapMouseEvent, type Marker } from "maplibre-gl";
+import maplibregl, {
+  type Map as MapLibreMap,
+  type MapMouseEvent,
+  type MapStyleImageMissingEvent,
+  type Marker,
+} from "maplibre-gl";
 
 import { startGuidedSession, updateGuidedSession, type GuidedDomain } from "../../guided";
 import type { HomePosition, MissionItem, MissionPlan } from "../../mission";
@@ -182,6 +187,7 @@ onMount(() => {
   });
 
   map.on("contextmenu", handleMapContextMenu);
+  map.on("styleimagemissing", handleMapStyleImageMissing);
 
   map.on("style.load", () => {
     if (!map) return;
@@ -442,6 +448,12 @@ function handleMapContextMenu(event: MapMouseEvent & { originalEvent: MouseEvent
   };
 }
 
+function handleMapStyleImageMissing(event: MapStyleImageMissingEvent) {
+  if (!map || map.hasImage(event.id)) return;
+
+  map.addImage(event.id, { width: 1, height: 1, data: new Uint8Array(4) });
+}
+
 async function handleFlyHere(latitude_deg: number, longitude_deg: number) {
   const altitude_m = Number.isFinite(currentAltitudeM) ? Number(currentAltitudeM) : 25;
   const session = { kind: "goto" as const, latitude_deg, longitude_deg, altitude_m };
@@ -479,14 +491,24 @@ function syncMissionMarkers(specs: MissionMarkerSpec[], currentIndex: number | n
   }
 
   for (const spec of specs) {
+    const lngLat = asLngLat(spec.latitude_deg, spec.longitude_deg);
+    if (!lngLat) {
+      const marker = missionMarkers.get(spec.index);
+      marker?.remove();
+      missionMarkers.delete(spec.index);
+      continue;
+    }
+
     let marker = missionMarkers.get(spec.index);
     if (!marker) {
       const element = createMissionMarkerElement(spec.index);
-      marker = new maplibregl.Marker({ element, anchor: "center" }).addTo(map);
+      marker = new maplibregl.Marker({ element, anchor: "center" });
       missionMarkers.set(spec.index, marker);
+      marker.setLngLat(lngLat).addTo(map);
+    } else {
+      marker.setLngLat(lngLat);
     }
 
-    marker.setLngLat([spec.longitude_deg, spec.latitude_deg]);
     updateMissionMarkerElement(marker.getElement(), spec.index, currentIndex);
   }
 }

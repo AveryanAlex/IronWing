@@ -36,5 +36,8 @@ export default defineConfig({
   },
   server: {
     host: serverHost,
+    watch: {
+      ignored: ["**/.direnv/**"],
+    },
   },
 });
