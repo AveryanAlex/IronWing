@@ -18,7 +18,7 @@ const chrome = fromStore(getShellChromeStoreContext());
 let view = $derived(operatorWorkspace.current);
 let session = $derived(sessionView.current);
 let tier = $derived(chrome.current.tier);
-let isPhone = $derived(tier === "phone");
+let useVerticalSplit = $derived(tier === "phone" || tier === "tablet");
 
 let vehiclePos = $derived(session.vehiclePosition);
 let homePos = $derived(session.homePosition);
@@ -155,8 +155,8 @@ function metricColorVar(metric: OperatorMetricView): string {
   data-testid={appShellTestIds.operatorWorkspace}
 >
   <SplitPane
-    direction={isPhone ? "vertical" : "horizontal"}
-    initialRatio={isPhone ? 0.55 : 0.7}
+    direction={useVerticalSplit ? "vertical" : "horizontal"}
+    initialRatio={useVerticalSplit ? 0.55 : 0.7}
     minRatio={0.3}
     maxRatio={0.85}
   >
@@ -223,12 +223,12 @@ function metricColorVar(metric: OperatorMetricView): string {
             <div class="grid grid-cols-2 gap-2">
               {#each group.entries as entry (entry.key)}
                 <div
-                  class="flex flex-col gap-1 rounded-md border border-border bg-bg-secondary px-2 py-2"
+                  class="flex min-w-0 flex-col gap-1 rounded-md border border-border bg-bg-secondary px-2 py-2"
                   data-testid={entry.testId}
                 >
-                  <span class="text-xs font-medium tracking-wide text-text-muted">{entry.label}</span>
+                  <span class="min-w-0 truncate text-xs font-medium tracking-wide text-text-muted">{entry.label}</span>
                   <span
-                    class="font-mono text-sm font-medium leading-tight tabular-nums"
+                    class="min-w-0 break-words font-mono text-sm font-medium leading-tight tabular-nums"
                     style:color={metricColorVar(entry.metric)}
                   >
                     {entry.metric.text}

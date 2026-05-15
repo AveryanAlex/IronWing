@@ -453,7 +453,7 @@ const errorClass = "mt-1 text-xs text-danger";
       />
     {/if}
 
-    <div class="grid min-h-0 gap-3 max-lg:grid-cols-1 [grid-template-columns:minmax(0,1.4fr)_minmax(18rem,0.9fr)]">
+    <div class="grid min-h-0 grid-cols-1 gap-3 xl:[grid-template-columns:minmax(0,1.4fr)_minmax(18rem,0.9fr)]">
       <div class="min-h-0 overflow-auto rounded-lg border border-border">
         <table class="logs-raw-browser__table" data-testid="logs-raw-messages-table">
           <thead>
@@ -518,6 +518,7 @@ const errorClass = "mt-1 text-xs text-danger";
 <style>
   .logs-raw-browser__table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
   }
 
@@ -528,6 +529,7 @@ const errorClass = "mt-1 text-xs text-danger";
     text-align: left;
     font-size: 0.8rem;
     vertical-align: top;
+    word-break: break-word;
   }
 
   .logs-raw-browser__table tr[data-selected="true"] {

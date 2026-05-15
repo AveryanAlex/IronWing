@@ -25,8 +25,8 @@
     "android:build": "tauri android build --apk",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "node scripts/e2e-run.mjs e2e/smoke.spec.ts e2e/connect-telemetry.spec.ts e2e/logs-workspace.spec.ts e2e/parameter-workspace.spec.ts e2e/setup-workspace.spec.ts e2e/settings-actions.spec.ts e2e/responsive-shell.spec.ts e2e/invalid-udp-bind.spec.ts e2e/wrong-port-cancel.spec.ts",
-    "e2e:headed": "node scripts/e2e-run.mjs --headed e2e/smoke.spec.ts e2e/connect-telemetry.spec.ts e2e/logs-workspace.spec.ts e2e/parameter-workspace.spec.ts e2e/setup-workspace.spec.ts e2e/settings-actions.spec.ts e2e/responsive-shell.spec.ts e2e/invalid-udp-bind.spec.ts e2e/wrong-port-cancel.spec.ts",
+    "e2e": "node scripts/e2e-run.mjs e2e/smoke.spec.ts e2e/connect-telemetry.spec.ts e2e/logs-workspace.spec.ts e2e/parameter-workspace.spec.ts e2e/setup-workspace.spec.ts e2e/settings-actions.spec.ts e2e/responsive-shell.spec.ts e2e/invalid-udp-bind.spec.ts e2e/wrong-port-cancel.spec.ts e2e/layout-fit.spec.ts",
+    "e2e:headed": "node scripts/e2e-run.mjs --headed e2e/smoke.spec.ts e2e/connect-telemetry.spec.ts e2e/logs-workspace.spec.ts e2e/parameter-workspace.spec.ts e2e/setup-workspace.spec.ts e2e/settings-actions.spec.ts e2e/responsive-shell.spec.ts e2e/invalid-udp-bind.spec.ts e2e/wrong-port-cancel.spec.ts e2e/layout-fit.spec.ts",
     "e2e:demo": "VITE_IRONWING_MOCK_PROFILE=demo node scripts/e2e-run.mjs e2e/demo-simulator.spec.ts",
     "e2e:layout-fit": "node scripts/e2e-run.mjs e2e/layout-fit.spec.ts",
     "e2e:native": "node scripts/e2e-native.mjs"

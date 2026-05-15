@@ -13,7 +13,7 @@ let { primaryMin = "0", primaryMax = "1fr", testId, primary, secondary }: Props 
 </script>
 
 <div
-  class="grid min-h-0 grid-cols-[minmax(var(--split-primary-min),var(--split-primary-max))_minmax(280px,360px)] gap-[var(--workspace-gutter-split)] max-[1024px]:grid-cols-1"
+  class="grid min-h-0 grid-cols-[minmax(var(--split-primary-min),var(--split-primary-max))_minmax(280px,1fr)] gap-[var(--workspace-gutter-split)] max-[1024px]:grid-cols-1"
   data-testid={testId}
   style="--split-primary-min: {primaryMin}; --split-primary-max: {primaryMax};"
 >

@@ -736,8 +736,8 @@ $effect(() => {
             {/if}
 
             {#if manualSectionOpen}
-              <div class="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_14rem]">
-                <label class="flex flex-col">
+              <div class="mt-3 grid gap-2">
+                <label class="flex min-w-0 flex-col">
                   <span class={fieldLabelClass}>Search target</span>
                   <input
                     class={selectInputClass}
@@ -749,7 +749,7 @@ $effect(() => {
                   />
                 </label>
 
-                <label class="flex flex-col">
+                <label class="flex min-w-0 flex-col">
                   <span class={fieldLabelClass}>Vehicle type</span>
                   <select
                     class={selectInputClass}

@@ -106,8 +106,8 @@ async function onSubmit(event: SubmitEvent) {
 </script>
 
 <Panel padded>
-  <div class="flex items-center justify-between gap-2">
-    <p class="m-0 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-muted"><Radio aria-hidden="true" size={14} />Connection</p>
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <p class="m-0 flex min-w-0 items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-muted"><Radio aria-hidden="true" size={14} />Connection</p>
     <span data-testid="connection-status-text">
       <StatusPill tone={pillTone(panelView.statusTone)}>{panelView.statusLabel}</StatusPill>
     </span>

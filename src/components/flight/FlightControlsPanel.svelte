@@ -159,7 +159,7 @@
         Takeoff altitude
       </label>
       <div class="mt-1 flex gap-2">
-        <div class="flex flex-1 items-center gap-1">
+        <div class="flex min-w-0 flex-1 items-center gap-1">
           <input
             id="takeoff-alt"
             type="number"
@@ -185,10 +185,10 @@
 
     <!-- Quick mode buttons -->
     {#if quickModes.length > 0}
-      <div class="flex gap-2">
+      <div class="grid grid-cols-2 gap-2">
         {#each quickModes as modeName (modeName)}
           <button
-            class="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-bg-secondary px-2 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+            class="flex min-w-0 items-center justify-center gap-1.5 rounded-md border border-border bg-bg-secondary px-2 py-1.5 text-xs font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!connected || busy || replayReadonly}
             onclick={() => handleQuickMode(modeName)}
             type="button"
