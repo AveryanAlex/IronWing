@@ -1,10 +1,11 @@
 <script lang="ts">
 import { onDestroy } from "svelte";
-import { fromStore, readable } from "svelte/store";
+import { fromStore, readable, type Readable } from "svelte/store";
 
 import {
   getMissionPlannerStoreContext,
   getMissionPlannerViewStoreContext,
+  getSessionViewStoreContext,
   getShellChromeStoreContext,
 } from "../../app/shell/runtime-context";
 import {
@@ -56,6 +57,12 @@ type Props = {
   onDismissReplayMapOverlay?: () => void;
 };
 
+type MissionWorkspaceSessionView = {
+  vehiclePosition: (GeoPoint2d & { heading_deg?: number | null }) | null;
+  homePosition: GeoPoint2d | null;
+  telemetry: { heading_deg?: number | null };
+};
+
 let {
   replayMapOverlay = null,
   onDismissReplayMapOverlay = () => {},
@@ -64,6 +71,7 @@ let {
 const missionPlannerStore: MissionPlannerStore = getMissionPlannerStoreContext();
 const missionPlannerState = fromStore(missionPlannerStore);
 const missionPlannerView = fromStore(getMissionPlannerViewStoreContext());
+const sessionViewStore = fromStore(resolveMissionWorkspaceSessionViewStore());
 const shellChromeStore = fromStore(resolveMissionWorkspaceChromeStore());
 const terrainStateStore = createMissionTerrainState();
 const terrainState = fromStore(terrainStateStore);
@@ -74,6 +82,18 @@ function resolveMissionWorkspaceChromeStore() {
     return getShellChromeStoreContext();
   } catch {
     return readable(missionWorkspaceFallbackChromeState);
+  }
+}
+
+function resolveMissionWorkspaceSessionViewStore(): Readable<MissionWorkspaceSessionView> {
+  try {
+    return getSessionViewStoreContext() as Readable<MissionWorkspaceSessionView>;
+  } catch {
+    return readable({
+      vehiclePosition: null,
+      homePosition: null,
+      telemetry: { heading_deg: 0 },
+    });
   }
 }
 
@@ -102,6 +122,10 @@ let missionPhoneSegment = $state<MissionWorkspacePhoneSegment>(
 
 let planner = $derived(missionPlannerState.current);
 let view = $derived(missionPlannerView.current);
+let sessionView = $derived(sessionViewStore.current);
+let sessionVehiclePosition = $derived(sessionView.vehiclePosition);
+let sessionHomePosition = $derived(sessionView.homePosition);
+let sessionVehicleHeadingDeg = $derived(sessionView.telemetry.heading_deg ?? sessionVehiclePosition?.heading_deg ?? null);
 let shellChrome = $derived(shellChromeStore.current);
 let workspaceLayout = $derived(resolveMissionWorkspaceLayout(shellChrome, view.mode));
 let missionMapVisible = $derived(!workspaceLayout.showPhoneSegments || missionPhoneSegment === "map");
@@ -1222,6 +1246,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
           <MissionMap
             blockedReason={planner.blockedReason}
             fallbackReference={resolveSurveyCreationAnchor(planner)}
+            homePosition={sessionHomePosition}
             onAddWaypointAt={handleAddWaypointAt}
             onCreateSurveyRegion={handleStartSurveyDraw}
             onDeleteSurveyRegion={handleDeleteSurveyRegion}
@@ -1236,6 +1261,8 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
             readOnlyReason={view.attachment.detail}
             replayMapOverlay={replayMapOverlay}
             selectedSurveyRegion={selectedSurveyRegion}
+            vehicleHeadingDeg={sessionVehicleHeadingDeg}
+            vehiclePosition={sessionVehiclePosition}
             view={mapView}
           />
         </div>
@@ -1256,6 +1283,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                     blockedReason={planner.blockedReason}
                     fallbackReference={resolveSurveyCreationAnchor(planner)}
                     fillContainer
+                    homePosition={sessionHomePosition}
                     onAddWaypointAt={handleAddWaypointAt}
                     onCreateSurveyRegion={handleStartSurveyDraw}
                     onDeleteSurveyRegion={handleDeleteSurveyRegion}
@@ -1270,6 +1298,8 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                     readOnlyReason={view.attachment.detail}
                     replayMapOverlay={replayMapOverlay}
                     selectedSurveyRegion={selectedSurveyRegion}
+                    vehicleHeadingDeg={sessionVehicleHeadingDeg}
+                    vehiclePosition={sessionVehiclePosition}
                     view={mapView}
                   />
                 </div>
@@ -1284,6 +1314,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                     blockedReason={planner.blockedReason}
                     fallbackReference={resolveSurveyCreationAnchor(planner)}
                     fillContainer
+                    homePosition={sessionHomePosition}
                     onAddFenceRegion={handleAddFenceRegion}
                     onClearFenceReturnPoint={() => handleSetFenceReturnPoint(null)}
                     onCreateSurveyRegion={handleStartSurveyDraw}
@@ -1305,6 +1336,8 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                     readOnlyReason={view.attachment.detail}
                     replayMapOverlay={replayMapOverlay}
                     selectedSurveyRegion={selectedSurveyRegion}
+                    vehicleHeadingDeg={sessionVehicleHeadingDeg}
+                    vehiclePosition={sessionVehiclePosition}
                     view={mapView}
                   />
                 </div>
@@ -1314,6 +1347,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                     blockedReason={planner.blockedReason}
                     fallbackReference={resolveSurveyCreationAnchor(planner)}
                     fillContainer
+                    homePosition={sessionHomePosition}
                     onCreateSurveyRegion={handleStartSurveyDraw}
                     onDeleteSurveyRegion={handleDeleteSurveyRegion}
                     onMoveHome={handleMoveHomeFromMap}
@@ -1329,6 +1363,8 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                     readOnlyReason={view.attachment.detail}
                     replayMapOverlay={replayMapOverlay}
                     selectedSurveyRegion={selectedSurveyRegion}
+                    vehicleHeadingDeg={sessionVehicleHeadingDeg}
+                    vehiclePosition={sessionVehiclePosition}
                     view={mapView}
                   />
                 </div>
@@ -1540,6 +1576,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               <MissionMap
                 blockedReason={planner.blockedReason}
                 fallbackReference={resolveSurveyCreationAnchor(planner)}
+                homePosition={sessionHomePosition}
                 onAddWaypointAt={handleAddWaypointAt}
                 onCreateSurveyRegion={handleStartSurveyDraw}
                 onDeleteSurveyRegion={handleDeleteSurveyRegion}
@@ -1554,6 +1591,8 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
                 readOnlyReason={view.attachment.detail}
                 replayMapOverlay={replayMapOverlay}
                 selectedSurveyRegion={selectedSurveyRegion}
+                vehicleHeadingDeg={sessionVehicleHeadingDeg}
+                vehiclePosition={sessionVehiclePosition}
                 view={mapView}
               />
             </div>
@@ -1631,6 +1670,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
             <MissionMap
               blockedReason={planner.blockedReason}
               fallbackReference={resolveSurveyCreationAnchor(planner)}
+              homePosition={sessionHomePosition}
               onAddFenceRegion={handleAddFenceRegion}
               onClearFenceReturnPoint={() => handleSetFenceReturnPoint(null)}
               onCreateSurveyRegion={handleStartSurveyDraw}
@@ -1652,6 +1692,8 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               readOnlyReason={view.attachment.detail}
               replayMapOverlay={replayMapOverlay}
               selectedSurveyRegion={selectedSurveyRegion}
+              vehicleHeadingDeg={sessionVehicleHeadingDeg}
+              vehiclePosition={sessionVehiclePosition}
               view={mapView}
             />
 
@@ -1693,6 +1735,7 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
             <MissionMap
               blockedReason={planner.blockedReason}
               fallbackReference={resolveSurveyCreationAnchor(planner)}
+              homePosition={sessionHomePosition}
               onCreateSurveyRegion={handleStartSurveyDraw}
               onDeleteSurveyRegion={handleDeleteSurveyRegion}
               onMoveHome={handleMoveHomeFromMap}
@@ -1708,6 +1751,8 @@ let entryCards = $derived(buildEntryActionCards(view.status, canUseVehicleAction
               readOnlyReason={view.attachment.detail}
               replayMapOverlay={replayMapOverlay}
               selectedSurveyRegion={selectedSurveyRegion}
+              vehicleHeadingDeg={sessionVehicleHeadingDeg}
+              vehiclePosition={sessionVehiclePosition}
               view={mapView}
             />
 

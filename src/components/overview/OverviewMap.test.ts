@@ -5,7 +5,7 @@ import { tick } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const maplibreState = vi.hoisted(() => {
-  const handlers = new Map<string, () => void>();
+  const handlers = new Map<string, (...args: unknown[]) => void>();
   const markers: Array<{
     element: HTMLElement;
     setLngLat: ReturnType<typeof vi.fn>;
@@ -19,7 +19,7 @@ const maplibreState = vi.hoisted(() => {
     addSource: vi.fn(),
     addLayer: vi.fn(),
     getSource: vi.fn((id: string) => (id === "overview-mission-path" ? missionPathSource : null)),
-    getLayer: vi.fn(() => null),
+    getLayer: vi.fn((_id?: string): unknown => null),
     getStyle: vi.fn(() => ({
       layers: [
         { id: "background", type: "background" },
@@ -33,7 +33,7 @@ const maplibreState = vi.hoisted(() => {
     flyTo: vi.fn(),
     easeTo: vi.fn(),
     getZoom: vi.fn(() => 12),
-    on: vi.fn((event: string, handler: () => void) => {
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       handlers.set(event, handler);
     }),
     remove: vi.fn(),
@@ -46,6 +46,11 @@ const maplibreState = vi.hoisted(() => {
     mockMap,
   };
 });
+
+const guidedState = vi.hoisted(() => ({
+  startGuidedSession: vi.fn(),
+  updateGuidedSession: vi.fn(),
+}));
 
 vi.mock("maplibre-gl", () => {
   function MockMap() {
@@ -84,7 +89,14 @@ vi.mock("svelte-sonner", () => ({
   },
 }));
 
+vi.mock("../../guided", () => ({
+  startGuidedSession: guidedState.startGuidedSession,
+  updateGuidedSession: guidedState.updateGuidedSession,
+}));
+
 import OverviewMap from "./OverviewMap.svelte";
+import { startGuidedSession, updateGuidedSession } from "../../guided";
+import { toast } from "svelte-sonner";
 
 const originalGeolocationDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "geolocation");
 
@@ -125,6 +137,30 @@ function createControllableGeolocationMock() {
   return state;
 }
 
+function waypoint(lat: number, lon: number) {
+  return {
+    command: {
+      Nav: {
+        Waypoint: {
+          position: {
+            RelHome: {
+              latitude_deg: lat,
+              longitude_deg: lon,
+              relative_alt_m: 25,
+            },
+          },
+          hold_time_s: 0,
+          acceptance_radius_m: 1,
+          pass_radius_m: 0,
+          yaw_deg: 0,
+        },
+      },
+    },
+    current: false,
+    autocontinue: true,
+  };
+}
+
 describe("OverviewMap", () => {
   beforeEach(() => {
     maplibreState.handlers.clear();
@@ -145,6 +181,12 @@ describe("OverviewMap", () => {
     maplibreState.mockMap.getZoom.mockReturnValue(12);
     maplibreState.mockMap.on.mockClear();
     maplibreState.mockMap.remove.mockReset();
+    guidedState.startGuidedSession.mockReset();
+    guidedState.updateGuidedSession.mockReset();
+    guidedState.startGuidedSession.mockResolvedValue({ result: "accepted", state: null });
+    guidedState.updateGuidedSession.mockResolvedValue({ result: "accepted", state: null });
+    vi.mocked(toast.error).mockReset();
+    vi.mocked(toast.success).mockReset();
     vi.useRealTimers();
   });
 
@@ -258,6 +300,7 @@ describe("OverviewMap", () => {
 
     maplibreState.handlers.get("style.load")?.();
     await tick();
+    maplibreState.mockMap.getLayer.mockImplementation((id?: string) => ({ id }));
 
     await fireEvent.click(screen.getByTestId("overview-map-layer-satellite"));
 
@@ -284,6 +327,113 @@ describe("OverviewMap", () => {
         exaggeration: 1.5,
       });
     });
+  });
+
+  it("opens a context menu and starts guided goto at the clicked coordinate", async () => {
+    setNavigatorGeolocation(createGeolocationMock());
+
+    render(OverviewMap, {
+      vehicleLat: 47.397742,
+      vehicleLon: 8.545594,
+      homeLat: 47.397742,
+      homeLon: 8.545594,
+      currentAltitudeM: 42,
+    });
+
+    const preventDefault = vi.fn();
+    maplibreState.handlers.get("contextmenu")?.({
+      preventDefault,
+      originalEvent: { preventDefault, clientX: 120, clientY: 80 },
+      lngLat: { lat: 47.4, lng: 8.55 },
+    });
+    await tick();
+
+    expect(screen.getByTestId("overview-map-context-menu")).toBeTruthy();
+    await fireEvent.click(screen.getByTestId("overview-map-fly-here"));
+
+    await waitFor(() => {
+      expect(startGuidedSession).toHaveBeenCalledWith({
+        session: { kind: "goto", latitude_deg: 47.4, longitude_deg: 8.55, altitude_m: 42 },
+      });
+      expect(toast.success).toHaveBeenCalledWith("Guided target sent");
+    });
+    expect(updateGuidedSession).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("overview-map-context-menu")).toBeNull();
+  });
+
+  it("updates an active guided goto from the context menu using fallback altitude", async () => {
+    setNavigatorGeolocation(createGeolocationMock());
+
+    render(OverviewMap, {
+      vehicleLat: 47.397742,
+      vehicleLon: 8.545594,
+      guided: {
+        available: true,
+        complete: true,
+        provenance: "stream",
+        value: {
+          status: "active",
+          session: { kind: "goto", latitude_deg: 47, longitude_deg: 8, altitude_m: 30 },
+          entered_at_unix_msec: 1,
+          blocking_reason: null,
+          termination: null,
+          last_command: null,
+          actions: {
+            start: { allowed: true, blocking_reason: null },
+            update: { allowed: true, blocking_reason: null },
+            stop: { allowed: true, blocking_reason: null },
+          },
+        },
+      },
+      currentAltitudeM: Number.NaN,
+    });
+
+    const preventDefault = vi.fn();
+    maplibreState.handlers.get("contextmenu")?.({
+      preventDefault,
+      originalEvent: { preventDefault, clientX: 60, clientY: 40 },
+      lngLat: { lat: 47.41, lng: 8.56 },
+    });
+    await tick();
+
+    await fireEvent.click(screen.getByTestId("overview-map-fly-here"));
+
+    await waitFor(() => {
+      expect(updateGuidedSession).toHaveBeenCalledWith({
+        session: { kind: "goto", latitude_deg: 47.41, longitude_deg: 8.56, altitude_m: 25 },
+      });
+    });
+    expect(startGuidedSession).not.toHaveBeenCalled();
+  });
+
+  it("renders mission markers and an active mission path segment", async () => {
+    setNavigatorGeolocation(createGeolocationMock());
+
+    render(OverviewMap, {
+      homeLat: 47.397742,
+      homeLon: 8.545594,
+      homeAltitude: 488,
+      missionPlan: {
+        items: [
+          waypoint(47.398, 8.546),
+          waypoint(47.399, 8.547),
+        ],
+      },
+      currentMissionIndex: 1,
+    });
+
+    maplibreState.handlers.get("style.load")?.();
+    await tick();
+
+    const markerOne = maplibreState.markers.find((marker) => marker.element.textContent === "1")?.element;
+    const markerTwo = maplibreState.markers.find((marker) => marker.element.textContent === "2")?.element;
+    expect(markerOne?.className).toContain("mission-pin");
+    expect(markerOne?.className).not.toContain("is-current");
+    expect(markerTwo?.className).toContain("is-current");
+
+    const calls = maplibreState.missionPathSource.setData.mock.calls;
+    const lastData = calls[calls.length - 1]?.[0] as GeoJSON.FeatureCollection;
+    expect(lastData.features.some((feature) => feature.properties?.segmentStatus === "active")).toBe(true);
   });
 
   it("does not let a pending device recenter override a later home selection", async () => {

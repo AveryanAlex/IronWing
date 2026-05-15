@@ -7,23 +7,29 @@ import {
   unwrapAngleDeg,
   type LngLatTuple,
 } from "../../lib/map-marker-motion";
+import {
+  createHomeMarkerElement,
+  createVehicleMarkerElement,
+  OPENFREEMAP_BRIGHT_STYLE_URL,
+  setVehicleMarkerHeading,
+} from "../../lib/map";
 
 type Props = {
   latitude: number;
   longitude: number;
   heading?: number;
+  homeLatitude?: number | null;
+  homeLongitude?: number | null;
 };
 
-let { latitude, longitude, heading = 0 }: Props = $props();
-
-const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/bright";
+let { latitude, longitude, heading = 0, homeLatitude, homeLongitude }: Props = $props();
 
 let mapContainer = $state<HTMLDivElement | null>(null);
 
 // Plain variables to avoid reactive proxy wrapping of MapLibre internals
 let map: MapLibreMap | null = null;
 let vehicleMarker: Marker | null = null;
-let vehicleSvg: SVGSVGElement | null = null;
+let homeMarker: Marker | null = null;
 let renderedVehicleHeadingDeg: number | null = null;
 const vehicleMotion = createMarkerMotion();
 
@@ -32,32 +38,27 @@ onMount(() => {
 
   map = new maplibregl.Map({
     container: mapContainer,
-    style: MAP_STYLE_URL,
+    style: OPENFREEMAP_BRIGHT_STYLE_URL,
     center: [longitude, latitude],
     zoom: 15,
     attributionControl: false,
   });
 
-  // Vehicle marker
-  const vehicleEl = document.createElement("div");
-  vehicleEl.innerHTML = `<svg viewBox="0 0 32 32" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="16" cy="16" r="10" fill="#12b9ff" stroke="#072035" stroke-width="2"/>
-    <polygon points="16,4 20,16 16,13 12,16" fill="#fff"/>
-  </svg>`;
-  vehicleSvg = vehicleEl.querySelector("svg");
-
+  const vehicleEl = createVehicleMarkerElement();
   vehicleMarker = new maplibregl.Marker({ element: vehicleEl, anchor: "center" });
   vehicleMotion.setInstant(vehicleMarker, currentLngLat());
   vehicleMarker.addTo(map);
   applyVehicleHeading(heading);
+  syncHomeMarker();
 
   return () => {
     vehicleMotion.reset();
+    homeMarker?.remove();
     vehicleMarker?.remove();
     map?.remove();
     map = null;
+    homeMarker = null;
     vehicleMarker = null;
-    vehicleSvg = null;
     renderedVehicleHeadingDeg = null;
   };
 });
@@ -74,15 +75,50 @@ $effect(() => {
   applyVehicleHeading(heading);
 });
 
+$effect(() => {
+  syncHomeMarker();
+});
+
 function currentLngLat(): LngLatTuple {
   return [longitude, latitude];
 }
 
 function applyVehicleHeading(headingDeg: number) {
-  if (!vehicleSvg) return;
+  if (!vehicleMarker) return;
 
   renderedVehicleHeadingDeg = unwrapAngleDeg(renderedVehicleHeadingDeg, headingDeg);
-  vehicleSvg.style.transform = `rotate(${renderedVehicleHeadingDeg}deg)`;
+  setVehicleMarkerHeading(vehicleMarker.getElement(), renderedVehicleHeadingDeg);
+}
+
+function syncHomeMarker() {
+  if (!map) return;
+
+  if (!hasHomePosition()) {
+    homeMarker?.remove();
+    homeMarker = null;
+    return;
+  }
+
+  const lngLat: LngLatTuple = [homeLongitude!, homeLatitude!];
+
+  if (homeMarker) {
+    homeMarker.setLngLat(lngLat);
+    return;
+  }
+
+  homeMarker = new maplibregl.Marker({
+    element: createHomeMarkerElement(),
+    anchor: "center",
+  })
+    .setLngLat(lngLat)
+    .addTo(map);
+}
+
+function hasHomePosition(): boolean {
+  return typeof homeLatitude === "number"
+    && typeof homeLongitude === "number"
+    && Number.isFinite(homeLatitude)
+    && Number.isFinite(homeLongitude);
 }
 </script>
 

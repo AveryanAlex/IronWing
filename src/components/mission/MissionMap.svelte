@@ -1,18 +1,13 @@
 <script lang="ts">
+import { Home, Layers, LocateFixed, Map as MapIcon, Navigation, Satellite } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
-import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
+import maplibregl, { type Map as MapLibreMap, type Marker } from "maplibre-gl";
 
 import {
   adaptMissionMapViewportToAspectRatio,
   buildMissionMapViewport,
   projectMissionMapCoordinate,
   reprojectMissionMapPoint,
-  resolveMissionMapDrag,
-  resolveMissionMapFenceRadiusHandleDrag,
-  resolveMissionMapFenceRegionHandleDrag,
-  resolveMissionMapFenceReturnPointDrag,
-  resolveMissionMapFenceVertexHandleDrag,
-  resolveMissionMapSurveyHandleDrag,
   unprojectMissionMapPoint,
   type MissionMapFenceRadiusHandle,
   type MissionMapFenceRegionHandle,
@@ -26,8 +21,23 @@ import {
   type MissionMapView,
   type MissionMapViewport,
 } from "../../lib/mission-map-view";
+import { haversineM } from "../../lib/geo-utils";
 import { localXYToLatLon } from "../../lib/mission-coordinates";
 import type { ReplayMapOverlayState } from "../../lib/replay-map-overlay";
+import {
+  applyMapLayerMode,
+  createDeviceMarkerElement,
+  createHomeMarkerElement,
+  createVehicleMarkerElement,
+  ensureMapFoundation,
+  getFirstNonFillLayerId,
+  getMapLayerIds,
+  OPENFREEMAP_BRIGHT_STYLE_URL,
+  resolveMapFoundationIds,
+  setMapTerrain,
+  setVehicleMarkerHeading,
+  type MapLayerMode,
+} from "../../lib/map";
 import {
   minimumSurveyPointCount,
   setSurveyGeometryPoints,
@@ -58,6 +68,9 @@ type Props = {
   readOnly?: boolean;
   readOnlyReason?: string | null;
   replayMapOverlay?: ReplayMapOverlayState | null;
+  vehiclePosition?: MissionMapLivePosition | null;
+  homePosition?: GeoPoint2d | null;
+  vehicleHeadingDeg?: number | null;
   onSelectHome: () => void;
   onSelectMissionItem: (uiId: number) => void;
   onSelectRallyPoint?: (uiId: number) => MissionPlannerRallyMutationResult | unknown;
@@ -144,7 +157,26 @@ type LocalMapMessage = {
   text: string;
 };
 
-const MISSION_MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/bright";
+type MissionMapLivePosition = GeoPoint2d & {
+  heading_deg?: number | null;
+};
+
+type PointerMapCoordinate = {
+  point: MissionMapPoint;
+  latitude_deg: number;
+  longitude_deg: number;
+  projectedByBasemap: boolean;
+};
+
+type CameraTarget = "device" | "home" | "vehicle";
+type DeviceLocation = {
+  latitude_deg: number;
+  longitude_deg: number;
+  accuracy_m: number;
+};
+
+const DEFAULT_CENTER: [number, number] = [8.545594, 47.397742];
+const MAP_FOUNDATION_OPTIONS = { namespace: "mission-editor" } as const;
 
 let {
   view,
@@ -154,6 +186,9 @@ let {
   readOnly = false,
   readOnlyReason = null,
   replayMapOverlay = null,
+  vehiclePosition = null,
+  homePosition = null,
+  vehicleHeadingDeg = null,
   onSelectHome,
   onSelectMissionItem,
   onSelectRallyPoint,
@@ -185,14 +220,31 @@ let activeFenceDrag = $state<ActiveFenceDrag | null>(null);
 let surveySession = $state<SurveySession | null>(null);
 let fencePlacementMode = $state<FenceRegionType | "return-point" | null>(null);
 let localMessage = $state<LocalMapMessage | null>(null);
+let mapLayerMode = $state<MapLayerMode>("normal");
+let terrainModeEnabled = $state(false);
+let deviceLocation = $state<DeviceLocation | null>(null);
+let deviceLocationSupported = $state(browserGeolocationSupported());
+let devicePermissionDenied = $state(false);
 let lastUsableViewport = $state<MissionMapViewport | null>(null);
 let contextMenu = $state<{ x: number; y: number; lngLat: { lng: number; lat: number } } | null>(null);
 let surfaceSize = $state({ width: 0, height: 0 });
 let basemapWarning = $state<string | null>(null);
+let mapCameraRevision = $state(0);
 
 let basemap: MapLibreMap | null = null;
+let vehicleMarker: Marker | null = null;
+let homeMarker: Marker | null = null;
+let deviceMarker: Marker | null = null;
+let baseLayerIds: string[] = [];
 let basemapLoaded = $state(false);
+let basemapStyleReady = $state(false);
 let basemapInitAttempted = false;
+let initialFitApplied = false;
+let vehicleMarkerAttached = false;
+let homeMarkerAttached = false;
+let deviceMarkerAttached = false;
+let deviceWatchId: number | null = null;
+let appliedTerrainMode: boolean | null = null;
 
 let fallbackViewport = $derived(buildMissionMapViewport(fallbackReference, [fallbackReference]));
 let replayOverlayCoordinates = $derived.by(() => {
@@ -226,6 +278,29 @@ let renderViewport = $derived.by(() => {
 
   return adaptMissionMapViewportToAspectRatio(interactiveViewport, surfaceSize.width / surfaceSize.height);
 });
+let overlayUsesBasemapProjection = $derived.by(() => {
+  mapCameraRevision;
+  return canUseBasemapProjection();
+});
+let overlayViewBox = $derived.by(() => {
+  if (overlayUsesBasemapProjection && surfaceSize.width > 0 && surfaceSize.height > 0) {
+    return { width: surfaceSize.width, height: surfaceSize.height };
+  }
+
+  const size = renderViewport?.viewBoxSize ?? interactiveViewport?.viewBoxSize ?? 1000;
+  return { width: size, height: size };
+});
+let plannerHomePosition = $derived.by<GeoPoint2d | null>(() => {
+  const marker = view.markers.find((candidate) => candidate.kind === "home") ?? null;
+  return marker
+    ? { latitude_deg: marker.latitude_deg, longitude_deg: marker.longitude_deg }
+    : null;
+});
+let homeCameraTarget = $derived(plannerHomePosition ?? homePosition);
+let vehicleLngLat = $derived(asLngLat(vehiclePosition?.latitude_deg, vehiclePosition?.longitude_deg));
+let homeMarkerLngLat = $derived(plannerHomePosition ? null : asLngLat(homePosition?.latitude_deg, homePosition?.longitude_deg));
+let deviceLngLat = $derived(asLngLat(deviceLocation?.latitude_deg, deviceLocation?.longitude_deg));
+let liveVehicleHeadingDeg = $derived(vehiclePosition?.heading_deg ?? vehicleHeadingDeg ?? 0);
 let renderMissionLines = $derived(remapLineFeatures(view.missionLines));
 let renderMissionPolygons = $derived(remapPolygonFeatures(view.missionPolygons));
 let renderMissionLabels = $derived(remapLabelFeatures(view.missionLabels));
@@ -245,7 +320,7 @@ let renderReplayOverlayPath = $derived.by(() => {
     return [];
   }
 
-  return replayMapOverlay.path.map((point) => projectMissionMapCoordinate(renderViewport, {
+  return replayMapOverlay.path.map((point) => projectGeoCoordinate({
     latitude_deg: point.lat,
     longitude_deg: point.lon,
   }));
@@ -255,7 +330,7 @@ let renderReplayOverlayMarker = $derived.by(() => {
     return null;
   }
 
-  return projectMissionMapCoordinate(renderViewport, {
+  return projectGeoCoordinate({
     latitude_deg: replayMapOverlay.marker.lat,
     longitude_deg: replayMapOverlay.marker.lon,
   });
@@ -303,6 +378,7 @@ let drawModeText = $derived.by(() => {
 
   return `${surveySession.mode}:${surveySession.patternType}:${activeSurveyPointCount}`;
 });
+let mapControlsPassive = $derived(surveySession !== null || fencePlacementMode !== null);
 let dragStateText = $derived.by(() => {
   if (activeMarkerDrag) {
     return `${activeMarkerDrag.kind}:${activeMarkerDrag.markerId}:${activeMarkerDrag.updateCount}`;
@@ -460,6 +536,7 @@ $effect(() => {
 
   const observer = new ResizeObserver(() => {
     syncSurfaceSize();
+    resizeBasemap();
   });
   observer.observe(surfaceElement);
 
@@ -480,10 +557,11 @@ onMount(() => {
   try {
     basemap = new maplibregl.Map({
       container: basemapElement,
-      style: MISSION_MAP_STYLE_URL,
-      center: [8.545594, 47.397742],
+      style: OPENFREEMAP_BRIGHT_STYLE_URL,
+      center: DEFAULT_CENTER,
       zoom: 14,
-      interactive: false,
+      pitch: 0,
+      maxPitch: 85,
       attributionControl: false,
     });
   } catch {
@@ -492,9 +570,31 @@ onMount(() => {
     return;
   }
 
+  if (typeof basemap.addControl === "function" && typeof maplibregl.NavigationControl === "function") {
+    basemap.addControl(
+      new maplibregl.NavigationControl({ showZoom: true, showCompass: true, visualizePitch: true }),
+      "top-right",
+    );
+  }
+
+  if (typeof maplibregl.Marker === "function") {
+    vehicleMarker = new maplibregl.Marker({ element: createVehicleMarkerElement(), anchor: "center" });
+    homeMarker = new maplibregl.Marker({ element: createHomeMarkerElement(), anchor: "center" });
+    deviceMarker = new maplibregl.Marker({ element: createDeviceMarkerElement(), anchor: "center" });
+  }
+
+  basemap.on("move", handleBasemapCameraChange);
+  basemap.on("style.load", () => {
+    basemapStyleReady = true;
+    ensureBasemapStyleExtensions();
+  });
+
   basemap.on("load", () => {
     basemapLoaded = true;
-    syncBasemapToViewport();
+    basemapStyleReady = true;
+    ensureBasemapStyleExtensions();
+    fitInitialBasemapToViewport();
+    handleBasemapCameraChange();
   });
 
   basemap.on("error", () => {
@@ -504,10 +604,24 @@ onMount(() => {
   });
 
   return () => {
+    stopDeviceLocationWatch();
+    vehicleMarker?.remove();
+    homeMarker?.remove();
+    deviceMarker?.remove();
     basemap?.remove();
     basemap = null;
+    vehicleMarker = null;
+    homeMarker = null;
+    deviceMarker = null;
     basemapLoaded = false;
+    basemapStyleReady = false;
     basemapInitAttempted = false;
+    initialFitApplied = false;
+    vehicleMarkerAttached = false;
+    homeMarkerAttached = false;
+    deviceMarkerAttached = false;
+    baseLayerIds = [];
+    appliedTerrainMode = null;
   };
 });
 
@@ -516,15 +630,19 @@ $effect(() => {
     return;
   }
 
-  syncBasemapToViewport();
+  fitInitialBasemapToViewport();
 });
 
-function syncBasemapToViewport() {
+function fitInitialBasemapToViewport() {
+  if (initialFitApplied) {
+    return;
+  }
+
   if (!basemap || !renderViewport) {
     return;
   }
 
-  basemap.resize();
+  resizeBasemap();
 
   const southWest = localXYToLatLon(renderViewport.reference, renderViewport.minX_m, renderViewport.minY_m);
   const northEast = localXYToLatLon(renderViewport.reference, renderViewport.maxX_m, renderViewport.maxY_m);
@@ -536,9 +654,195 @@ function syncBasemapToViewport() {
     ],
     { duration: 0, padding: 0 },
   );
+  initialFitApplied = true;
+  handleBasemapCameraChange();
+}
+
+function browserGeolocationSupported(): boolean {
+  return typeof navigator !== "undefined" && typeof navigator.geolocation !== "undefined";
+}
+
+function asLngLat(latitude?: number | null, longitude?: number | null): [number, number] | null {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  return [Number(longitude), Number(latitude)];
+}
+
+function canUseBasemapProjection(): boolean {
+  return Boolean(
+    basemap
+    && basemapLoaded
+    && view.viewport
+    && surfaceSize.width > 0
+    && surfaceSize.height > 0
+    && typeof basemap.project === "function"
+    && typeof basemap.unproject === "function",
+  );
+}
+
+function projectGeoCoordinate(coordinate: GeoPoint2d): MissionMapPoint {
+  mapCameraRevision;
+
+  if (basemap && overlayUsesBasemapProjection && typeof basemap.project === "function") {
+    const point = basemap.project([coordinate.longitude_deg, coordinate.latitude_deg]);
+    return { x: point.x, y: point.y };
+  }
+
+  const viewport = renderViewport;
+  if (!viewport) {
+    return { x: 0, y: 0 };
+  }
+
+  return projectMissionMapCoordinate(viewport, coordinate);
+}
+
+function resizeBasemap() {
+  if (!basemap || typeof basemap.resize !== "function") {
+    return;
+  }
+
+  basemap.resize();
+  handleBasemapCameraChange();
+}
+
+function handleBasemapCameraChange() {
+  mapCameraRevision += 1;
+}
+
+function mapSupportsStyleExtensions(currentMap: MapLibreMap): boolean {
+  return typeof currentMap.getStyle === "function"
+    && typeof currentMap.getSource === "function"
+    && typeof currentMap.addSource === "function"
+    && typeof currentMap.getLayer === "function"
+    && typeof currentMap.addLayer === "function"
+    && typeof currentMap.setLayoutProperty === "function";
+}
+
+function ensureBasemapStyleExtensions() {
+  if (!basemap || !mapSupportsStyleExtensions(basemap)) {
+    return;
+  }
+
+  try {
+    ensureMapFoundation(basemap, {
+      ...MAP_FOUNDATION_OPTIONS,
+      satelliteBeforeLayerId: getFirstNonFillLayerId(basemap),
+    });
+    baseLayerIds = getMapLayerIds(basemap, { excludeLayerIds: Object.values(resolveMapFoundationIds(MAP_FOUNDATION_OPTIONS)) });
+    applyMapLayerMode(basemap, mapLayerMode, { ...MAP_FOUNDATION_OPTIONS, baseLayerIds });
+  } catch {
+    if (!basemapWarning) {
+      basemapWarning = "Basemap layer controls are unavailable because the map style extensions failed to initialize.";
+    }
+  }
+}
+
+$effect(() => {
+  if (!basemapStyleReady || !basemap) {
+    return;
+  }
+
+  ensureBasemapStyleExtensions();
+  applyMapLayerMode(basemap, mapLayerMode, { ...MAP_FOUNDATION_OPTIONS, baseLayerIds });
+});
+
+$effect(() => {
+  if (!basemapStyleReady || !basemap) {
+    return;
+  }
+
+  applyTerrainMode(terrainModeEnabled);
+});
+
+$effect(() => {
+  syncVehicleMarker();
+});
+
+$effect(() => {
+  syncHomeMarker();
+});
+
+$effect(() => {
+  syncDeviceMarker();
+});
+
+$effect(() => {
+  if (vehicleMarker) {
+    setVehicleMarkerHeading(vehicleMarker.getElement(), liveVehicleHeadingDeg);
+  }
+});
+
+function applyTerrainMode(enabled: boolean) {
+  if (!basemap || !mapSupportsStyleExtensions(basemap) || appliedTerrainMode === enabled) {
+    return;
+  }
+
+  appliedTerrainMode = enabled;
+  setMapTerrain(basemap, enabled, MAP_FOUNDATION_OPTIONS);
+
+  if (typeof basemap.easeTo !== "function") {
+    return;
+  }
+
+  basemap.easeTo({ pitch: enabled ? 70 : 0, duration: 500 });
+}
+
+function syncVehicleMarker() {
+  if (!basemap || !vehicleMarker || !vehicleLngLat) {
+    if (vehicleMarker && vehicleMarkerAttached && !vehicleLngLat) {
+      vehicleMarker.remove();
+      vehicleMarkerAttached = false;
+    }
+    return;
+  }
+
+  vehicleMarker.setLngLat(vehicleLngLat);
+  setVehicleMarkerHeading(vehicleMarker.getElement(), liveVehicleHeadingDeg);
+  if (!vehicleMarkerAttached) {
+    vehicleMarker.addTo(basemap);
+    vehicleMarkerAttached = true;
+  }
+}
+
+function syncHomeMarker() {
+  if (!basemap || !homeMarker || !homeMarkerLngLat) {
+    if (homeMarker && homeMarkerAttached) {
+      homeMarker.remove();
+      homeMarkerAttached = false;
+    }
+    return;
+  }
+
+  homeMarker.setLngLat(homeMarkerLngLat);
+  if (!homeMarkerAttached) {
+    homeMarker.addTo(basemap);
+    homeMarkerAttached = true;
+  }
+}
+
+function syncDeviceMarker() {
+  if (!basemap || !deviceMarker || !deviceLngLat) {
+    if (deviceMarker && deviceMarkerAttached) {
+      deviceMarker.remove();
+      deviceMarkerAttached = false;
+    }
+    return;
+  }
+
+  deviceMarker.setLngLat(deviceLngLat);
+  if (!deviceMarkerAttached) {
+    deviceMarker.addTo(basemap);
+    deviceMarkerAttached = true;
+  }
 }
 
 function remapPoint(point: MissionMapPoint): MissionMapPoint {
+  if (view.viewport && overlayUsesBasemapProjection) {
+    return projectGeoCoordinate(unprojectMissionMapPoint(view.viewport, point));
+  }
+
   if (!interactiveViewport || !renderViewport) {
     return point;
   }
@@ -682,6 +986,10 @@ function toPolygonPoints(polygon: MissionMapPolygonFeature): string {
 }
 
 function positionStyle(point: MissionMapPoint): string {
+  if (overlayUsesBasemapProjection) {
+    return `left:${point.x}px;top:${point.y}px;`;
+  }
+
   const viewBoxSize = renderViewport?.viewBoxSize ?? interactiveViewport?.viewBoxSize ?? 1000;
   return `left:${(point.x / viewBoxSize) * 100}%;top:${(point.y / viewBoxSize) * 100}%;`;
 }
@@ -1252,6 +1560,22 @@ function applyFenceMutationResult(result: unknown): boolean {
   return true;
 }
 
+function pointerOffset(event: Pick<MouseEvent, "clientX" | "clientY">): MissionMapPoint | null {
+  if (!surfaceElement) {
+    return null;
+  }
+
+  const rect = readSurfaceDrawableBox();
+  if (!rect) {
+    return null;
+  }
+
+  return {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  };
+}
+
 function projectedPointFromPointer(event: Pick<MouseEvent, "clientX" | "clientY">): MissionMapPoint | null {
   const viewport = renderViewport;
   if (!surfaceElement || !viewport) {
@@ -1269,14 +1593,68 @@ function projectedPointFromPointer(event: Pick<MouseEvent, "clientX" | "clientY"
   };
 }
 
-function appendSurveyPoint(point: MissionMapPoint) {
-  const currentSession = surveySession;
+function coordinateFromPointer(event: Pick<MouseEvent, "clientX" | "clientY">): PointerMapCoordinate | null {
+  const offset = pointerOffset(event);
+  if (offset && basemap && overlayUsesBasemapProjection && typeof basemap.unproject === "function") {
+    const lngLat = basemap.unproject([offset.x, offset.y]);
+    return {
+      point: offset,
+      latitude_deg: lngLat.lat,
+      longitude_deg: lngLat.lng,
+      projectedByBasemap: true,
+    };
+  }
+
+  const point = projectedPointFromPointer(event);
   const viewport = renderViewport;
-  if (!currentSession || !viewport || activeMarkerDrag || activeSurveyHandleDrag || activeFenceDrag) {
+  if (!point || !viewport) {
+    return null;
+  }
+
+  const coordinate = unprojectMissionMapPoint(viewport, point);
+  return {
+    point,
+    ...coordinate,
+    projectedByBasemap: false,
+  };
+}
+
+function coordinateFromMapCenter(): PointerMapCoordinate | null {
+  if (basemap && overlayUsesBasemapProjection && typeof basemap.getCenter === "function") {
+    const center = basemap.getCenter();
+    return {
+      point: {
+        x: overlayViewBox.width / 2,
+        y: overlayViewBox.height / 2,
+      },
+      latitude_deg: center.lat,
+      longitude_deg: center.lng,
+      projectedByBasemap: true,
+    };
+  }
+
+  const viewport = renderViewport;
+  if (!viewport) {
+    return null;
+  }
+
+  const point = {
+    x: viewport.viewBoxSize / 2,
+    y: viewport.viewBoxSize / 2,
+  };
+  return {
+    point,
+    ...unprojectMissionMapPoint(viewport, point),
+    projectedByBasemap: false,
+  };
+}
+
+function appendSurveyCoordinate(latitude_deg: number, longitude_deg: number) {
+  const currentSession = surveySession;
+  if (!currentSession || activeMarkerDrag || activeSurveyHandleDrag || activeFenceDrag) {
     return;
   }
 
-  const { latitude_deg, longitude_deg } = unprojectMissionMapPoint(viewport, point);
   let applied = false;
   onUpdateSurveyRegion(currentSession.regionId, (current) => {
     const points = [...surveyGeometryPoints(current)];
@@ -1298,8 +1676,8 @@ function appendSurveyPoint(point: MissionMapPoint) {
 }
 
 function appendSurveyPointFromSurface(event: MouseEvent) {
-  const point = projectedPointFromPointer(event);
-  if (!point) {
+  const coordinate = coordinateFromPointer(event);
+  if (!coordinate) {
     localMessage = {
       tone: "warning",
       text: "Ignored the draw click because the planner map surface has no usable bounds yet.",
@@ -1307,17 +1685,15 @@ function appendSurveyPointFromSurface(event: MouseEvent) {
     return;
   }
 
-  appendSurveyPoint(point);
+  appendSurveyCoordinate(coordinate.latitude_deg, coordinate.longitude_deg);
 }
 
-function placeFenceFeature(point: MissionMapPoint) {
-  const viewport = renderViewport;
+function placeFenceFeatureAt(latitude_deg: number, longitude_deg: number) {
   const placementMode = fencePlacementMode;
-  if (!viewport || !placementMode || activeMarkerDrag || activeSurveyHandleDrag || activeFenceDrag) {
+  if (!placementMode || activeMarkerDrag || activeSurveyHandleDrag || activeFenceDrag) {
     return;
   }
 
-  const { latitude_deg, longitude_deg } = unprojectMissionMapPoint(viewport, point);
   const result = placementMode === "return-point"
     ? onSetFenceReturnPoint?.(latitude_deg, longitude_deg)
     : onAddFenceRegion?.(placementMode, latitude_deg, longitude_deg);
@@ -1334,8 +1710,8 @@ function placeFenceFeature(point: MissionMapPoint) {
 }
 
 function placeFenceFeatureFromSurface(event: MouseEvent) {
-  const point = projectedPointFromPointer(event);
-  if (!point) {
+  const coordinate = coordinateFromPointer(event);
+  if (!coordinate) {
     localMessage = {
       tone: "warning",
       text: "Ignored the fence placement click because the planner map surface has no usable bounds yet.",
@@ -1343,14 +1719,14 @@ function placeFenceFeatureFromSurface(event: MouseEvent) {
     return;
   }
 
-  placeFenceFeature(point);
+  placeFenceFeatureAt(coordinate.latitude_deg, coordinate.longitude_deg);
 }
 
 function handleSurfaceKeydown(event: KeyboardEvent) {
-  const viewport = renderViewport;
+  const center = coordinateFromMapCenter();
 
   if (view.mode === "fence") {
-    if (!fencePlacementMode || !viewport) {
+    if (!fencePlacementMode || !center) {
       return;
     }
 
@@ -1359,14 +1735,11 @@ function handleSurfaceKeydown(event: KeyboardEvent) {
     }
 
     event.preventDefault();
-    placeFenceFeature({
-      x: viewport.viewBoxSize / 2,
-      y: viewport.viewBoxSize / 2,
-    });
+    placeFenceFeatureAt(center.latitude_deg, center.longitude_deg);
     return;
   }
 
-  if (!surveySession || !viewport) {
+  if (!surveySession || !center) {
     return;
   }
 
@@ -1375,30 +1748,32 @@ function handleSurfaceKeydown(event: KeyboardEvent) {
   }
 
   event.preventDefault();
-  appendSurveyPoint({
-    x: viewport.viewBoxSize / 2,
-    y: viewport.viewBoxSize / 2,
-  });
+  appendSurveyCoordinate(center.latitude_deg, center.longitude_deg);
 }
 
 function handlePointerMove(event: PointerEvent) {
+  const nextCoordinate = coordinateFromPointer(event);
+  if (!nextCoordinate) {
+    return;
+  }
+
   if (activeMarkerDrag) {
-    const nextPoint = projectedPointFromPointer(event);
-    if (!nextPoint) {
+    const marker = view.markers.find((candidate) => candidate.id === activeMarkerDrag?.markerId) ?? null;
+    if (!marker) {
+      cancelActiveMarkerDrag("Ignored a stale drag because the marker is no longer present in the active map view.", true);
       return;
     }
 
-    const resolution = resolveMissionMapDrag(view, activeMarkerDrag.markerId, nextPoint, renderViewport);
-    if (resolution.status === "rejected") {
-      cancelActiveMarkerDrag(resolution.message, true);
+    if (!marker.draggable) {
+      cancelActiveMarkerDrag("Ignored the drag because this surface is read-only on the planner map.", true);
       return;
     }
 
     const moved = activeMarkerDrag.kind === "home"
-      ? onMoveHome(resolution.latitude_deg, resolution.longitude_deg)
+      ? onMoveHome(nextCoordinate.latitude_deg, nextCoordinate.longitude_deg)
       : activeMarkerDrag.kind === "rally-point"
         ? activeMarkerDrag.uiId !== null
-          ? onMoveRallyPoint?.(activeMarkerDrag.uiId, resolution.latitude_deg, resolution.longitude_deg) ?? {
+          ? onMoveRallyPoint?.(activeMarkerDrag.uiId, nextCoordinate.latitude_deg, nextCoordinate.longitude_deg) ?? {
             status: "rejected",
             reason: "item-not-found",
             message: "Ignored the drag because the rally point target disappeared.",
@@ -1409,7 +1784,7 @@ function handlePointerMove(event: PointerEvent) {
             message: "Ignored the drag because the rally point target disappeared.",
           } satisfies MissionPlannerMapMoveResult
         : activeMarkerDrag.uiId !== null
-          ? onMoveMissionItem(activeMarkerDrag.uiId, resolution.latitude_deg, resolution.longitude_deg)
+          ? onMoveMissionItem(activeMarkerDrag.uiId, nextCoordinate.latitude_deg, nextCoordinate.longitude_deg)
           : {
             status: "rejected",
             reason: "item-not-found",
@@ -1429,14 +1804,9 @@ function handlePointerMove(event: PointerEvent) {
 
   if (activeSurveyHandleDrag) {
     const currentSurveyHandleDrag = activeSurveyHandleDrag;
-    const nextPoint = projectedPointFromPointer(event);
-    if (!nextPoint) {
-      return;
-    }
-
-    const resolution = resolveMissionMapSurveyHandleDrag(view, currentSurveyHandleDrag.handleId, nextPoint, renderViewport);
-    if (resolution.status === "rejected") {
-      cancelActiveSurveyHandleDrag(resolution.message);
+    const handle = view.surveyVertexHandles.find((candidate) => candidate.id === currentSurveyHandleDrag.handleId) ?? null;
+    if (!handle) {
+      cancelActiveSurveyHandleDrag("Ignored a stale survey-handle drag because that vertex is no longer present in the active map view.");
       return;
     }
 
@@ -1454,8 +1824,8 @@ function handlePointerMove(event: PointerEvent) {
       }
 
       points[currentSurveyHandleDrag.index] = {
-        latitude_deg: resolution.latitude_deg,
-        longitude_deg: resolution.longitude_deg,
+        latitude_deg: nextCoordinate.latitude_deg,
+        longitude_deg: nextCoordinate.longitude_deg,
       };
       applied = true;
       return setSurveyGeometryPoints(current, points);
@@ -1479,23 +1849,19 @@ function handlePointerMove(event: PointerEvent) {
     return;
   }
 
-  const nextPoint = projectedPointFromPointer(event);
-  if (!nextPoint) {
-    return;
-  }
-
   if (activeFenceDrag.kind === "vertex") {
-    const resolution = resolveMissionMapFenceVertexHandleDrag(view, activeFenceDrag.handleId, nextPoint, renderViewport);
-    if (resolution.status === "rejected") {
-      cancelActiveFenceDrag(resolution.message, true);
+    const currentFenceDrag = activeFenceDrag;
+    const handle = view.fenceVertexHandles.find((candidate) => candidate.id === currentFenceDrag.handleId) ?? null;
+    if (!handle) {
+      cancelActiveFenceDrag("Ignored a stale fence-vertex drag because that vertex is no longer present in the active map view.", true);
       return;
     }
 
     const moved = onMoveFenceVertex?.(
       activeFenceDrag.regionUiId,
       activeFenceDrag.index,
-      resolution.latitude_deg,
-      resolution.longitude_deg,
+      nextCoordinate.latitude_deg,
+      nextCoordinate.longitude_deg,
     );
     if (!applyFenceMutationResult(moved)) {
       cancelActiveFenceDrag((moved as Extract<MissionPlannerFenceMutationResult, { status: "rejected" }>)?.message ?? "Fence vertex drag failed.", true);
@@ -1510,16 +1876,22 @@ function handlePointerMove(event: PointerEvent) {
   }
 
   if (activeFenceDrag.kind === "region") {
-    const resolution = resolveMissionMapFenceRegionHandleDrag(view, activeFenceDrag.handleId, nextPoint, renderViewport);
-    if (resolution.status === "rejected") {
-      cancelActiveFenceDrag(resolution.message, true);
+    const currentFenceDrag = activeFenceDrag;
+    const handle = view.fenceRegionHandles.find((candidate) => candidate.id === currentFenceDrag.handleId) ?? null;
+    if (!handle) {
+      cancelActiveFenceDrag("Ignored a stale fence-region drag because that handle is no longer present in the active map view.", true);
+      return;
+    }
+
+    if (!handle.draggable) {
+      cancelActiveFenceDrag("Ignored the drag because this fence region is not movable from its current map handle.", true);
       return;
     }
 
     const moved = onMoveFenceCircleCenter?.(
       activeFenceDrag.regionUiId,
-      resolution.latitude_deg,
-      resolution.longitude_deg,
+      nextCoordinate.latitude_deg,
+      nextCoordinate.longitude_deg,
     );
     if (!applyFenceMutationResult(moved)) {
       cancelActiveFenceDrag((moved as Extract<MissionPlannerFenceMutationResult, { status: "rejected" }>)?.message ?? "Fence region drag failed.", true);
@@ -1534,13 +1906,26 @@ function handlePointerMove(event: PointerEvent) {
   }
 
   if (activeFenceDrag.kind === "radius") {
-    const resolution = resolveMissionMapFenceRadiusHandleDrag(view, activeFenceDrag.handleId, nextPoint, renderViewport);
-    if (resolution.status === "rejected") {
-      cancelActiveFenceDrag(resolution.message, true);
+    const currentFenceDrag = activeFenceDrag;
+    const handle = view.fenceRadiusHandles.find((candidate) => candidate.id === currentFenceDrag.handleId) ?? null;
+    if (!handle) {
+      cancelActiveFenceDrag("Ignored a stale fence-radius drag because that handle is no longer present in the active map view.", true);
       return;
     }
 
-    const moved = onUpdateFenceCircleRadius?.(activeFenceDrag.regionUiId, resolution.radius_m);
+    const radius_m = haversineM(
+      handle.centerLatitude_deg,
+      handle.centerLongitude_deg,
+      nextCoordinate.latitude_deg,
+      nextCoordinate.longitude_deg,
+    );
+
+    if (!Number.isFinite(radius_m) || radius_m <= 0) {
+      cancelActiveFenceDrag("Ignored the fence-radius drag because the resulting radius was not valid.", true);
+      return;
+    }
+
+    const moved = onUpdateFenceCircleRadius?.(activeFenceDrag.regionUiId, radius_m);
     if (!applyFenceMutationResult(moved)) {
       cancelActiveFenceDrag((moved as Extract<MissionPlannerFenceMutationResult, { status: "rejected" }>)?.message ?? "Fence radius drag failed.", true);
       return;
@@ -1553,13 +1938,12 @@ function handlePointerMove(event: PointerEvent) {
     return;
   }
 
-  const resolution = resolveMissionMapFenceReturnPointDrag(view, nextPoint, renderViewport);
-  if (resolution.status === "rejected") {
-    cancelActiveFenceDrag(resolution.message, true);
+  if (!view.fenceReturnPoint) {
+    cancelActiveFenceDrag("Ignored a stale fence return-point drag because the return point is no longer present in the active map view.", true);
     return;
   }
 
-  const moved = onSetFenceReturnPoint?.(resolution.latitude_deg, resolution.longitude_deg);
+  const moved = onSetFenceReturnPoint?.(nextCoordinate.latitude_deg, nextCoordinate.longitude_deg);
   if (!applyFenceMutationResult(moved)) {
     cancelActiveFenceDrag((moved as Extract<MissionPlannerFenceMutationResult, { status: "rejected" }>)?.message ?? "Fence return-point drag failed.", true);
     return;
@@ -1634,28 +2018,20 @@ function handleContextMenu(event: MouseEvent) {
   event.preventDefault();
   contextMenu = null;
 
-  const viewport = renderViewport;
-  if (!viewport || !surfaceElement || readOnly) {
+  if (!surfaceElement || readOnly) {
     return;
   }
 
-  const rect = readSurfaceDrawableBox();
-  if (!rect) {
+  const offset = pointerOffset(event);
+  const coordinate = coordinateFromPointer(event);
+  if (!offset || !coordinate) {
     return;
   }
-
-  const offsetX = event.clientX - rect.left;
-  const offsetY = event.clientY - rect.top;
-  const mapPoint: MissionMapPoint = {
-    x: (offsetX / rect.width) * viewport.viewBoxSize,
-    y: (offsetY / rect.height) * viewport.viewBoxSize,
-  };
-  const geo = unprojectMissionMapPoint(viewport, mapPoint);
 
   contextMenu = {
-    x: offsetX,
-    y: offsetY,
-    lngLat: { lng: geo.longitude_deg, lat: geo.latitude_deg },
+    x: offset.x,
+    y: offset.y,
+    lngLat: { lng: coordinate.longitude_deg, lat: coordinate.latitude_deg },
   };
 }
 
@@ -1690,6 +2066,121 @@ function buildContextMenuItems(): ContextMenuItem[] {
   }
 
   return items;
+}
+
+function flyToCoordinates(lngLat: [number, number]) {
+  if (!basemap || typeof basemap.flyTo !== "function") {
+    return;
+  }
+
+  const zoom = typeof basemap.getZoom === "function" ? Math.max(basemap.getZoom(), 15) : 15;
+  basemap.flyTo({ center: lngLat, zoom, duration: 800 });
+}
+
+function activateCameraTarget(target: CameraTarget) {
+  contextMenu = null;
+
+  if (target === "vehicle") {
+    if (!vehicleLngLat) {
+      localMessage = { tone: "warning", text: "No vehicle position is available for the mission map yet." };
+      return;
+    }
+
+    flyToCoordinates(vehicleLngLat);
+    localMessage = null;
+    return;
+  }
+
+  if (target === "home") {
+    const lngLat = asLngLat(homeCameraTarget?.latitude_deg, homeCameraTarget?.longitude_deg);
+    if (!lngLat) {
+      localMessage = { tone: "warning", text: "No home position is available for the mission map yet." };
+      return;
+    }
+
+    flyToCoordinates(lngLat);
+    localMessage = null;
+    return;
+  }
+
+  devicePermissionDenied = false;
+  if (!deviceLocationSupported || !browserGeolocationSupported()) {
+    deviceLocationSupported = false;
+    localMessage = { tone: "warning", text: "Device geolocation is not available in this runtime." };
+    return;
+  }
+
+  if (deviceLocation) {
+    flyToCoordinates([deviceLocation.longitude_deg, deviceLocation.latitude_deg]);
+    localMessage = null;
+    return;
+  }
+
+  ensureDeviceLocationWatch(true);
+}
+
+function ensureDeviceLocationWatch(flyWhenReady: boolean): boolean {
+  if (!browserGeolocationSupported()) {
+    deviceLocationSupported = false;
+    return false;
+  }
+
+  if (deviceWatchId !== null) {
+    return true;
+  }
+
+  try {
+    deviceWatchId = navigator.geolocation.watchPosition(
+      (position) => {
+        deviceLocation = {
+          latitude_deg: position.coords.latitude,
+          longitude_deg: position.coords.longitude,
+          accuracy_m: position.coords.accuracy,
+        };
+
+        if (flyWhenReady) {
+          flyToCoordinates([position.coords.longitude, position.coords.latitude]);
+          localMessage = null;
+        }
+      },
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) {
+          devicePermissionDenied = true;
+          deviceLocation = null;
+          stopDeviceLocationWatch();
+          localMessage = { tone: "warning", text: "Location permission denied. Enable it in system settings to use my location." };
+          return;
+        }
+
+        if (error.code === error.POSITION_UNAVAILABLE) {
+          deviceLocation = null;
+          stopDeviceLocationWatch();
+          localMessage = { tone: "warning", text: "Current device location is unavailable." };
+        }
+      },
+      { enableHighAccuracy: true },
+    );
+  } catch {
+    deviceLocationSupported = false;
+    localMessage = { tone: "warning", text: "Device geolocation is not available in this runtime." };
+    return false;
+  }
+
+  return true;
+}
+
+function stopDeviceLocationWatch() {
+  if (deviceWatchId === null || !browserGeolocationSupported()) {
+    deviceWatchId = null;
+    return;
+  }
+
+  navigator.geolocation.clearWatch(deviceWatchId);
+  deviceWatchId = null;
+}
+
+function preventContextMenu(event: MouseEvent) {
+  event.preventDefault();
 }
 </script>
 
@@ -1918,7 +2409,7 @@ function buildContextMenuItems(): ContextMenuItem[] {
       >
         <div bind:this={basemapElement} class="mission-map-basemap" data-testid={missionWorkspaceTestIds.mapBasemap}></div>
         <div class="mission-map-basemap-scrim"></div>
-        <svg aria-hidden="true" class="mission-map-overlay absolute inset-0 h-full w-full" preserveAspectRatio="none" viewBox={`0 0 ${renderViewport.viewBoxSize} ${renderViewport.viewBoxSize}`}>
+        <svg aria-hidden="true" class="mission-map-overlay absolute inset-0 h-full w-full" preserveAspectRatio="none" viewBox={`0 0 ${overlayViewBox.width} ${overlayViewBox.height}`}>
 
           {#each renderSurveyPolygons as polygon (polygon.id)}
             <polygon
@@ -2021,6 +2512,35 @@ function buildContextMenuItems(): ContextMenuItem[] {
             type="button"
           ></button>
         {/if}
+
+        <div class={["map-locate-group mission-map__control-group mission-map__control-group--layers", mapControlsPassive && "is-passive"]}>
+          <button aria-label="Normal map mode" aria-pressed={mapLayerMode === "normal"} class={["map-locate-btn", mapLayerMode === "normal" && "is-active"]} onclick={() => { mapLayerMode = "normal"; }} title="Normal" type="button">
+            <MapIcon aria-hidden="true" size={16} />
+          </button>
+          <button aria-label="Hybrid map mode" aria-pressed={mapLayerMode === "hybrid"} class={["map-locate-btn", mapLayerMode === "hybrid" && "is-active"]} onclick={() => { mapLayerMode = "hybrid"; }} title="Hybrid" type="button">
+            <Layers aria-hidden="true" size={16} />
+          </button>
+          <button aria-label="Satellite map mode" aria-pressed={mapLayerMode === "satellite"} class={["map-locate-btn", mapLayerMode === "satellite" && "is-active"]} onclick={() => { mapLayerMode = "satellite"; }} title="Satellite" type="button">
+            <Satellite aria-hidden="true" size={16} />
+          </button>
+          <button aria-label="Toggle 3D terrain" aria-pressed={terrainModeEnabled} class={["map-locate-btn", terrainModeEnabled && "is-active"]} onclick={() => { terrainModeEnabled = !terrainModeEnabled; }} title="3D terrain" type="button">
+            <span class="mission-map__button-text">3D</span>
+          </button>
+        </div>
+
+        <div class={["map-locate-group mission-map__control-group mission-map__control-group--targets", mapControlsPassive && "is-passive"]}>
+          {#if deviceLocationSupported || devicePermissionDenied}
+            <button aria-label="My location" class="map-locate-btn" oncontextmenu={preventContextMenu} onclick={() => activateCameraTarget("device")} title="My location" type="button">
+              <LocateFixed aria-hidden="true" size={16} />
+            </button>
+          {/if}
+          <button aria-label="Home location" class="map-locate-btn" oncontextmenu={preventContextMenu} onclick={() => activateCameraTarget("home")} title="Home location" type="button">
+            <Home aria-hidden="true" size={16} />
+          </button>
+          <button aria-label="Vehicle location" class="map-locate-btn" oncontextmenu={preventContextMenu} onclick={() => activateCameraTarget("vehicle")} title="Vehicle location" type="button">
+            <Navigation aria-hidden="true" size={16} />
+          </button>
+        </div>
 
         {#if view.state === "empty"}
           <div
@@ -2264,14 +2784,6 @@ function buildContextMenuItems(): ContextMenuItem[] {
     height: 100%;
   }
 
-  .mission-map-basemap :global(.maplibregl-control-container),
-  .mission-map-basemap :global(.maplibregl-ctrl-bottom-right),
-  .mission-map-basemap :global(.maplibregl-ctrl-bottom-left),
-  .mission-map-basemap :global(.maplibregl-ctrl-top-right),
-  .mission-map-basemap :global(.maplibregl-ctrl-top-left) {
-    display: none;
-  }
-
   .mission-map-basemap-scrim {
     z-index: 0;
     pointer-events: none;
@@ -2283,6 +2795,29 @@ function buildContextMenuItems(): ContextMenuItem[] {
   .mission-map-overlay {
     z-index: 0;
     pointer-events: none;
+  }
+
+  .mission-map__control-group--layers {
+    top: 12px;
+    left: 12px;
+    right: auto;
+    bottom: auto;
+  }
+
+  .mission-map__control-group--targets {
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .mission-map__control-group.is-passive {
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  .mission-map__button-text {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
   }
 
   .mission-map-draw-surface {

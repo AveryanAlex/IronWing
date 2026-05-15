@@ -6,22 +6,29 @@ import { SplitPane } from "../../components/ui";
 import OverviewMap from "../../components/overview/OverviewMap.svelte";
 import { appShellTestIds } from "./chrome-state";
 import {
+  getMissionPlannerStoreContext,
   getOperatorWorkspaceViewStoreContext,
+  getSessionStoreContext,
   getSessionViewStoreContext,
   getShellChromeStoreContext,
 } from "./runtime-context";
 
 const operatorWorkspace = fromStore(getOperatorWorkspaceViewStoreContext());
+const sessionStore = fromStore(getSessionStoreContext());
 const sessionView = fromStore(getSessionViewStoreContext());
+const missionPlanner = fromStore(getMissionPlannerStoreContext());
 const chrome = fromStore(getShellChromeStoreContext());
 
 let view = $derived(operatorWorkspace.current);
+let rawSession = $derived(sessionStore.current);
 let session = $derived(sessionView.current);
+let missionState = $derived(missionPlanner.current.missionState);
 let tier = $derived(chrome.current.tier);
 let useVerticalSplit = $derived(tier === "phone" || tier === "tablet");
 
 let vehiclePos = $derived(session.vehiclePosition);
 let homePos = $derived(session.homePosition);
+let currentAltitudeM = $derived(session.telemetry.altitude_m);
 
 type MetricEntry = {
   key: string;
@@ -168,6 +175,11 @@ function metricColorVar(metric: OperatorMetricView): string {
           vehicleHeading={vehiclePos?.heading_deg}
           homeLat={homePos?.latitude_deg}
           homeLon={homePos?.longitude_deg}
+          homeAltitude={homePos?.altitude_m}
+          missionPlan={missionState?.plan}
+          currentMissionIndex={missionState?.current_index}
+          guided={rawSession.guided}
+          {currentAltitudeM}
         />
       </div>
     {/snippet}

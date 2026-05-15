@@ -2,19 +2,38 @@
 import { Home, Layers, LocateFixed, Map as MapIcon, Navigation, Satellite } from "lucide-svelte";
 import { onMount } from "svelte";
 import { toast } from "svelte-sonner";
-import maplibregl, { type GeoJSONSource, type Map as MapLibreMap, type Marker } from "maplibre-gl";
+import maplibregl, { type Map as MapLibreMap, type MapMouseEvent, type Marker } from "maplibre-gl";
 
-import {
-  resolveVehicleIconKind,
-  VEHICLE_ICON_SVG,
-  type VehicleIconKind,
-} from "../../lib/overview/vehicle-icon";
+import { startGuidedSession, updateGuidedSession, type GuidedDomain } from "../../guided";
+import type { HomePosition, MissionItem, MissionPlan } from "../../mission";
+import { commandPosition, geoPoint3dLatLon } from "../../lib/mavkit-types";
+import type { TypedDraftItem, TypedDraftPreview } from "../../lib/mission-draft-typed";
+import { buildMissionRenderFeatures } from "../../lib/mission-path-render";
+import { resolveVehicleIconKind, type VehicleIconKind } from "../../lib/overview/vehicle-icon";
 import {
   createMarkerMotion,
   unwrapAngleDeg,
   type LngLatTuple,
 } from "../../lib/map-marker-motion";
+import {
+  applyMapLayerMode,
+  createDeviceMarkerElement,
+  createHomeMarkerElement,
+  createVehicleMarkerElement,
+  ensureMapFoundation,
+  ensureMissionPathLayers,
+  getFirstNonFillLayerId,
+  getMapLayerIds,
+  OPENFREEMAP_BRIGHT_STYLE_URL,
+  resolveMapFoundationIds,
+  setMapTerrain,
+  setVehicleMarkerHeading,
+  setVehicleMarkerIcon,
+  updateMissionPathSource,
+  type MapLayerMode,
+} from "../../lib/map";
 import { createUiStateStore } from "../../lib/ui-state/ui-state";
+import MapContextMenu from "../map/MapContextMenu.svelte";
 
 type Props = {
   vehicleLat?: number;
@@ -23,10 +42,14 @@ type Props = {
   mavType?: number;
   homeLat?: number;
   homeLon?: number;
+  homeAltitude?: number;
   missionPath?: Array<{ lat: number; lon: number }>;
+  missionPlan?: MissionPlan | null;
+  currentMissionIndex?: number | null;
+  guided?: GuidedDomain | null;
+  currentAltitudeM?: number;
 };
 
-type MapLayerMode = "normal" | "hybrid" | "satellite";
 type FollowTarget = "device" | "home" | "vehicle";
 type DeviceLocation = {
   latitude_deg: number;
@@ -36,19 +59,20 @@ type DeviceLocation = {
 type PendingDeviceAction = {
   follow: boolean;
 };
+type ContextMenuState = {
+  x: number;
+  y: number;
+  lat: number;
+  lon: number;
+} | null;
+type MissionMarkerSpec = {
+  index: number;
+  latitude_deg: number;
+  longitude_deg: number;
+};
 
 const DEFAULT_CENTER: [number, number] = [8.545594, 47.397742];
-const BASE_STYLE_URL = "https://tiles.openfreemap.org/styles/bright";
-const SATELLITE_TILE_URL =
-  "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg";
-const DEM_TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
-const SATELLITE_SOURCE_ID = "overview-satellite-source";
-const TERRAIN_SOURCE_ID = "overview-terrain-source";
-const HILLSHADE_SOURCE_ID = "overview-hillshade-source";
-const SATELLITE_LAYER_ID = "overview-satellite";
-const HILLSHADE_LAYER_ID = "overview-hills";
-const MISSION_PATH_SOURCE_ID = "overview-mission-path";
-const MISSION_PATH_LAYER_ID = "overview-mission-path-line";
+const MAP_FOUNDATION_OPTIONS = { namespace: "overview" } as const;
 const LONG_PRESS_MS = 500;
 
 let {
@@ -58,10 +82,21 @@ let {
   mavType,
   homeLat,
   homeLon,
+  homeAltitude,
   missionPath = [],
+  missionPlan = null,
+  currentMissionIndex = null,
+  guided = null,
+  currentAltitudeM,
 }: Props = $props();
 
 const iconKind = $derived<VehicleIconKind>(resolveVehicleIconKind(mavType));
+const missionHome = $derived.by<HomePosition | null>(() => toHomePosition(homeLat, homeLon, homeAltitude));
+const missionRenderItems = $derived.by<TypedDraftItem[]>(() => missionPlanToDraftItems(missionPlan, missionPath));
+const missionRenderFeatures = $derived.by(() =>
+  buildMissionRenderFeatures(missionHome, missionRenderItems, { currentSeq: currentMissionIndex }),
+);
+const missionMarkerSpecs = $derived.by<MissionMarkerSpec[]>(() => missionPlanToMarkerSpecs(missionPlan));
 
 const overviewUiState = createUiStateStore({
   storage: typeof localStorage === "undefined" ? null : localStorage,
@@ -80,6 +115,8 @@ let deviceLocation = $state<DeviceLocation | null>(null);
 let deviceLocationSupported = $state(browserGeolocationSupported());
 let devicePermissionDenied = $state(false);
 let pendingDeviceAction = $state<PendingDeviceAction | null>(null);
+let contextMenu = $state<ContextMenuState>(null);
+let guidedCommandPending = $state(false);
 
 // Held as plain variables rather than $state to avoid reactive proxy wrapping
 // of MapLibre's internal object graph, which would break its methods.
@@ -87,7 +124,7 @@ let map: MapLibreMap | null = null;
 let vehicleMarker: Marker | null = null;
 let homeMarker: Marker | null = null;
 let deviceMarker: Marker | null = null;
-let vehicleSvg: SVGSVGElement | null = null;
+let missionMarkers = new Map<number, Marker>();
 let baseLayerIds: string[] = [];
 let programmaticMovePending = false;
 let deviceWatchId: number | null = null;
@@ -111,7 +148,7 @@ onMount(() => {
 
   map = new maplibregl.Map({
     container: mapContainer,
-    style: BASE_STYLE_URL,
+    style: OPENFREEMAP_BRIGHT_STYLE_URL,
     center: initialCenter,
     zoom: 15,
     pitch: 0,
@@ -124,23 +161,13 @@ onMount(() => {
     "top-right",
   );
 
-  const vehicleElement = document.createElement("div");
-  vehicleElement.className = "vehicle-marker";
-  vehicleElement.dataset.iconKind = iconKind;
-  vehicleElement.innerHTML = VEHICLE_ICON_SVG[iconKind];
-  vehicleSvg = vehicleElement.querySelector("svg");
+  const vehicleElement = createVehicleMarkerElement({ iconKind });
   vehicleMarker = new maplibregl.Marker({ element: vehicleElement, anchor: "center" });
 
-  const homeElement = document.createElement("button");
-  homeElement.type = "button";
-  homeElement.className = "mission-pin is-home";
-  homeElement.textContent = "H";
-  homeElement.setAttribute("aria-label", "Home position marker");
-  homeElement.addEventListener("click", (event) => event.stopPropagation());
+  const homeElement = createHomeMarkerElement();
   homeMarker = new maplibregl.Marker({ element: homeElement, anchor: "center" });
 
-  const deviceElement = document.createElement("div");
-  deviceElement.className = "device-location-marker";
+  const deviceElement = createDeviceMarkerElement();
   deviceMarker = new maplibregl.Marker({ element: deviceElement, anchor: "center" });
 
   map.on("movestart", () => {
@@ -151,7 +178,10 @@ onMount(() => {
 
     followTarget = null;
     pendingDeviceAction = null;
+    contextMenu = null;
   });
+
+  map.on("contextmenu", handleMapContextMenu);
 
   map.on("style.load", () => {
     if (!map) return;
@@ -168,13 +198,13 @@ onMount(() => {
     vehicleMarker?.remove();
     homeMarker?.remove();
     deviceMarker?.remove();
+    clearMissionMarkers();
     map?.remove();
     vehicleMotion.reset();
     map = null;
     vehicleMarker = null;
     homeMarker = null;
     deviceMarker = null;
-    vehicleSvg = null;
     renderedVehicleHeadingDeg = null;
     styleLoaded = false;
     baseLayerIds = [];
@@ -186,7 +216,7 @@ onMount(() => {
 
 $effect(() => {
   if (!styleLoaded || !map) return;
-  applyMapLayerMode(map, mapLayer);
+  applyMapLayerMode(map, mapLayer, { ...MAP_FOUNDATION_OPTIONS, baseLayerIds });
 });
 
 $effect(() => {
@@ -196,19 +226,20 @@ $effect(() => {
 
 $effect(() => {
   if (!styleLoaded || !map) return;
-  const source = map.getSource(MISSION_PATH_SOURCE_ID) as GeoJSONSource | undefined;
-  source?.setData(buildPathGeoJson(missionPath));
+  updateMissionPathSource(map, missionRenderFeatures);
+});
+
+$effect(() => {
+  syncMissionMarkers(missionMarkerSpecs, currentMissionIndex);
 });
 
 $effect(() => {
   if (!vehicleMarker) return;
   const el = vehicleMarker.getElement();
   if (!el) return;
-  el.dataset.iconKind = iconKind;
-  el.innerHTML = VEHICLE_ICON_SVG[iconKind];
-  vehicleSvg = el.querySelector("svg");
-  if (vehicleSvg && renderedVehicleHeadingDeg != null) {
-    vehicleSvg.style.transform = `rotate(${renderedVehicleHeadingDeg}deg)`;
+  setVehicleMarkerIcon(el, { iconKind });
+  if (renderedVehicleHeadingDeg != null) {
+    setVehicleMarkerHeading(el, renderedVehicleHeadingDeg);
   }
 });
 
@@ -305,108 +336,201 @@ function asLngLat(latitude?: number, longitude?: number): LngLatTuple | null {
   return [Number(longitude), Number(latitude)];
 }
 
+function toHomePosition(latitude?: number, longitude?: number, altitude?: number): HomePosition | null {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  return {
+    latitude_deg: Number(latitude),
+    longitude_deg: Number(longitude),
+    altitude_m: Number.isFinite(altitude) ? Number(altitude) : 0,
+  };
+}
+
+function missionPlanToDraftItems(
+  plan: MissionPlan | null,
+  fallbackPath: Array<{ lat: number; lon: number }>,
+): TypedDraftItem[] {
+  const items = plan?.items ?? fallbackPath.map(createMissionPathFallbackItem);
+  return items.map((item, index) => ({
+    uiId: index + 1,
+    index,
+    document: item,
+    readOnly: false,
+    preview: missionItemPreview(item),
+  }));
+}
+
+function missionPlanToMarkerSpecs(plan: MissionPlan | null): MissionMarkerSpec[] {
+  if (!plan) {
+    return [];
+  }
+
+  const specs: MissionMarkerSpec[] = [];
+  plan.items.forEach((item, index) => {
+    const coordinate = missionItemCoordinate(item);
+    if (!coordinate) {
+      return;
+    }
+
+    specs.push({ index, ...coordinate });
+  });
+  return specs;
+}
+
+function missionItemPreview(item: MissionItem): TypedDraftPreview {
+  const coordinate = missionItemCoordinate(item);
+  return {
+    latitude_deg: coordinate?.latitude_deg ?? null,
+    longitude_deg: coordinate?.longitude_deg ?? null,
+    altitude_m: null,
+  };
+}
+
+function missionItemCoordinate(item: MissionItem): Omit<MissionMarkerSpec, "index"> | null {
+  const position = commandPosition(item.command);
+  if (!position) {
+    return null;
+  }
+
+  const coordinate = geoPoint3dLatLon(position);
+  if (!Number.isFinite(coordinate.latitude_deg) || !Number.isFinite(coordinate.longitude_deg)) {
+    return null;
+  }
+
+  return coordinate;
+}
+
+function createMissionPathFallbackItem(point: { lat: number; lon: number }): MissionItem {
+  return {
+    command: {
+      Nav: {
+        Waypoint: {
+          position: {
+            RelHome: {
+              latitude_deg: point.lat,
+              longitude_deg: point.lon,
+              relative_alt_m: 25,
+            },
+          },
+          hold_time_s: 0,
+          acceptance_radius_m: 1,
+          pass_radius_m: 0,
+          yaw_deg: 0,
+        },
+      },
+    },
+    current: false,
+    autocontinue: true,
+  };
+}
+
+function handleMapContextMenu(event: MapMouseEvent & { originalEvent: MouseEvent }) {
+  if (!mapContainer) {
+    return;
+  }
+
+  event.preventDefault();
+  event.originalEvent.preventDefault();
+  const rect = mapContainer.getBoundingClientRect();
+  contextMenu = {
+    x: event.originalEvent.clientX - rect.left,
+    y: event.originalEvent.clientY - rect.top,
+    lat: event.lngLat.lat,
+    lon: event.lngLat.lng,
+  };
+}
+
+async function handleFlyHere(latitude_deg: number, longitude_deg: number) {
+  const altitude_m = Number.isFinite(currentAltitudeM) ? Number(currentAltitudeM) : 25;
+  const session = { kind: "goto" as const, latitude_deg, longitude_deg, altitude_m };
+  const command = guided?.value?.session?.kind === "goto" ? updateGuidedSession : startGuidedSession;
+
+  guidedCommandPending = true;
+  try {
+    const result = await command({ session });
+    if (result.result === "rejected") {
+      toast.error(result.failure.reason.message);
+      return;
+    }
+
+    contextMenu = null;
+    toast.success("Guided target sent");
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : String(error));
+  } finally {
+    guidedCommandPending = false;
+  }
+}
+
+function syncMissionMarkers(specs: MissionMarkerSpec[], currentIndex: number | null) {
+  if (!map) {
+    clearMissionMarkers();
+    return;
+  }
+
+  const expected = new Set(specs.map((spec) => spec.index));
+  for (const [index, marker] of missionMarkers) {
+    if (!expected.has(index)) {
+      marker.remove();
+      missionMarkers.delete(index);
+    }
+  }
+
+  for (const spec of specs) {
+    let marker = missionMarkers.get(spec.index);
+    if (!marker) {
+      const element = createMissionMarkerElement(spec.index);
+      marker = new maplibregl.Marker({ element, anchor: "center" }).addTo(map);
+      missionMarkers.set(spec.index, marker);
+    }
+
+    marker.setLngLat([spec.longitude_deg, spec.latitude_deg]);
+    updateMissionMarkerElement(marker.getElement(), spec.index, currentIndex);
+  }
+}
+
+function createMissionMarkerElement(index: number): HTMLButtonElement {
+  const element = document.createElement("button");
+  element.type = "button";
+  element.addEventListener("click", (event) => event.stopPropagation());
+  updateMissionMarkerElement(element, index, null);
+  return element;
+}
+
+function updateMissionMarkerElement(element: HTMLElement, index: number, currentIndex: number | null) {
+  const isCurrent = currentIndex !== null && index === currentIndex;
+  const isNext = currentIndex !== null && index === currentIndex + 1;
+  element.className = ["mission-pin", isCurrent && "is-current", isNext && "is-next"].filter(Boolean).join(" ");
+  element.textContent = String(index + 1);
+  element.setAttribute("aria-label", `Mission item ${index + 1}${isCurrent ? " current" : isNext ? " next" : ""}`);
+}
+
+function clearMissionMarkers() {
+  for (const marker of missionMarkers.values()) {
+    marker.remove();
+  }
+  missionMarkers.clear();
+}
+
 function applyVehicleHeading(headingDeg: number) {
-  if (!vehicleSvg) return;
+  if (!vehicleMarker) return;
 
   renderedVehicleHeadingDeg = unwrapAngleDeg(renderedVehicleHeadingDeg, headingDeg);
-  vehicleSvg.style.transform = `rotate(${renderedVehicleHeadingDeg}deg)`;
+  setVehicleMarkerHeading(vehicleMarker.getElement(), renderedVehicleHeadingDeg);
 }
 
 function ensureStyleExtensions(currentMap: MapLibreMap) {
-  const currentLayers = currentMap.getStyle().layers ?? [];
-  baseLayerIds = currentLayers.map((layer) => layer.id);
+  const foundationIds = resolveMapFoundationIds(MAP_FOUNDATION_OPTIONS);
+  baseLayerIds = getMapLayerIds(currentMap, { excludeLayerIds: Object.values(foundationIds) });
 
-  if (!currentMap.getSource(SATELLITE_SOURCE_ID)) {
-    currentMap.addSource(SATELLITE_SOURCE_ID, {
-      type: "raster",
-      tiles: [SATELLITE_TILE_URL],
-      tileSize: 256,
-      maxzoom: 15,
-    });
-  }
-
-  if (!currentMap.getSource(TERRAIN_SOURCE_ID)) {
-    currentMap.addSource(TERRAIN_SOURCE_ID, {
-      type: "raster-dem",
-      tiles: [DEM_TILE_URL],
-      tileSize: 256,
-      maxzoom: 15,
-      encoding: "terrarium",
-    });
-  }
-
-  if (!currentMap.getSource(HILLSHADE_SOURCE_ID)) {
-    currentMap.addSource(HILLSHADE_SOURCE_ID, {
-      type: "raster-dem",
-      tiles: [DEM_TILE_URL],
-      tileSize: 256,
-      maxzoom: 15,
-      encoding: "terrarium",
-    });
-  }
-
-  const firstNonFillLayerId = currentLayers.find((layer) => layer.type !== "fill" && layer.type !== "background")?.id;
-
-  if (!currentMap.getLayer(SATELLITE_LAYER_ID)) {
-    currentMap.addLayer(
-      {
-        id: SATELLITE_LAYER_ID,
-        type: "raster",
-        source: SATELLITE_SOURCE_ID,
-        layout: { visibility: "none" },
-        paint: { "raster-opacity": 1 },
-      },
-      firstNonFillLayerId,
-    );
-  }
-
-  if (!currentMap.getLayer(HILLSHADE_LAYER_ID)) {
-    currentMap.addLayer({
-      id: HILLSHADE_LAYER_ID,
-      type: "hillshade",
-      source: HILLSHADE_SOURCE_ID,
-      layout: { visibility: "none" },
-      paint: {
-        "hillshade-shadow-color": "#473B24",
-        "hillshade-exaggeration": 0.5,
-      },
-    });
-  }
-
-  if (!currentMap.getSource(MISSION_PATH_SOURCE_ID)) {
-    currentMap.addSource(MISSION_PATH_SOURCE_ID, {
-      type: "geojson",
-      data: buildPathGeoJson(missionPath),
-    });
-  }
-
-  if (!currentMap.getLayer(MISSION_PATH_LAYER_ID)) {
-    currentMap.addLayer({
-      id: MISSION_PATH_LAYER_ID,
-      type: "line",
-      source: MISSION_PATH_SOURCE_ID,
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": "rgba(241, 245, 249, 0.82)",
-        "line-width": 2,
-      },
-    });
-  }
-}
-
-function applyMapLayerMode(currentMap: MapLibreMap, mode: MapLayerMode) {
-  const showSatellite = mode !== "normal";
-  const showVector = mode !== "satellite";
-
-  safelySetLayerVisibility(currentMap, SATELLITE_LAYER_ID, showSatellite ? "visible" : "none");
-  safelySetLayerVisibility(currentMap, HILLSHADE_LAYER_ID, showSatellite ? "visible" : "none");
-
-  for (const layerId of baseLayerIds) {
-    safelySetLayerVisibility(currentMap, layerId, showVector ? "visible" : "none");
-  }
+  ensureMapFoundation(currentMap, {
+    ...MAP_FOUNDATION_OPTIONS,
+    satelliteBeforeLayerId: getFirstNonFillLayerId(currentMap),
+  });
+  ensureMissionPathLayers(currentMap);
+  updateMissionPathSource(currentMap, missionRenderFeatures);
 }
 
 function applyTerrainMode(currentMap: MapLibreMap, enabled: boolean) {
@@ -416,7 +540,7 @@ function applyTerrainMode(currentMap: MapLibreMap, enabled: boolean) {
   }
 
   appliedTerrainMode = enabled;
-  currentMap.setTerrain(enabled ? { source: TERRAIN_SOURCE_ID, exaggeration: 1.5 } : null);
+  setMapTerrain(currentMap, enabled, MAP_FOUNDATION_OPTIONS);
 
   if (!enabled) {
     if (previouslyEnabled) {
@@ -428,19 +552,6 @@ function applyTerrainMode(currentMap: MapLibreMap, enabled: boolean) {
 
   programmaticMovePending = true;
   currentMap.easeTo({ pitch: 70, duration: 500 });
-}
-
-function safelySetLayerVisibility(
-  currentMap: MapLibreMap,
-  layerId: string,
-  visibility: "visible" | "none",
-) {
-  try {
-    currentMap.setLayoutProperty(layerId, "visibility", visibility);
-  } catch {
-    // Layers can disappear briefly while a style is reloading; skipping the
-    // toggle here is safe because the next style-ready pass reapplies state.
-  }
 }
 
 function flyToCoordinates(lngLat: [number, number]) {
@@ -643,23 +754,24 @@ function activateTarget(target: FollowTarget, follow: boolean) {
 function preventContextMenu(event: MouseEvent) {
   event.preventDefault();
 }
-
-function buildPathGeoJson(
-  path: Array<{ lat: number; lon: number }>,
-): GeoJSON.Feature<GeoJSON.LineString> {
-  return {
-    type: "Feature",
-    properties: {},
-    geometry: {
-      type: "LineString",
-      coordinates: path.map((point) => [point.lon, point.lat]),
-    },
-  };
-}
 </script>
 
 <div class="overview-map" data-testid="overview-map-root">
   <div bind:this={mapContainer} class="overview-map-container" data-testid="overview-map-surface"></div>
+
+  {#if contextMenu}
+    <MapContextMenu
+      x={contextMenu.x}
+      y={contextMenu.y}
+      lat={contextMenu.lat}
+      lon={contextMenu.lon}
+      flyHereDisabled={guidedCommandPending}
+      onFlyHere={handleFlyHere}
+      onClose={() => {
+        contextMenu = null;
+      }}
+    />
+  {/if}
 
   <div class="map-locate-group overview-map__control-group overview-map__control-group--layers">
     <button
@@ -792,5 +904,13 @@ function buildPathGeoJson(
     font-size: 0.62rem;
     font-weight: 700;
     letter-spacing: 0.04em;
+  }
+
+  :global(.overview-map .mission-pin.is-next) {
+    border-color: var(--color-warning);
+    box-shadow:
+      0 0 0 2px rgba(255, 176, 32, 0.35),
+      0 2px 12px rgba(0, 0, 0, 0.35);
+    transform: scale(1.04);
   }
 </style>

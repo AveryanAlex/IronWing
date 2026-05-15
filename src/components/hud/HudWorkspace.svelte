@@ -14,6 +14,7 @@ const sessionView = fromStore(getSessionViewStoreContext());
 let telemetry = $derived(sessionView.current.telemetry);
 let vehicleState = $derived(sessionView.current.vehicleState);
 let vehiclePosition = $derived(sessionView.current.vehiclePosition);
+let homePosition = $derived(sessionView.current.homePosition);
 
 let pitch = $derived(telemetry.pitch_deg);
 let roll = $derived(telemetry.roll_deg);
@@ -158,7 +159,7 @@ let batteryLevel = $derived(
         <div class="hud-info-secondary">
           {telemetry.gps_satellites != null ? `${telemetry.gps_satellites} sat` : "-- sat"}
           {#if telemetry.gps_hdop != null}
-            {" "}{fmt(telemetry.gps_hdop, 1)}
+            {` ${fmt(telemetry.gps_hdop, 1)}`}
           {/if}
         </div>
       </div>
@@ -275,6 +276,8 @@ let batteryLevel = $derived(
           latitude={vehiclePosition.latitude_deg}
           longitude={vehiclePosition.longitude_deg}
           heading={vehiclePosition.heading_deg}
+          homeLatitude={homePosition?.latitude_deg}
+          homeLongitude={homePosition?.longitude_deg}
         />
       {/await}
     </div>
