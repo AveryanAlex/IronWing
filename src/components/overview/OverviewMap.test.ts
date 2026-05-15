@@ -97,7 +97,7 @@ vi.mock("../../guided", () => ({
 }));
 
 import OverviewMap from "./OverviewMap.svelte";
-import { startGuidedSession, updateGuidedSession } from "../../guided";
+import { startGuidedSession, updateGuidedSession, type GuidedDomain } from "../../guided";
 import { toast } from "svelte-sonner";
 
 const originalGeolocationDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "geolocation");
@@ -160,6 +160,27 @@ function waypoint(lat: number, lon: number) {
     },
     current: false,
     autocontinue: true,
+  };
+}
+
+function guidedGoto(latitude_deg: number, longitude_deg: number, altitude_m = 30): GuidedDomain {
+  return {
+    available: true,
+    complete: true,
+    provenance: "stream",
+    value: {
+      status: "active",
+      session: { kind: "goto", latitude_deg, longitude_deg, altitude_m },
+      entered_at_unix_msec: 1,
+      blocking_reason: null,
+      termination: null,
+      last_command: null,
+      actions: {
+        start: { allowed: true, blocking_reason: null },
+        update: { allowed: true, blocking_reason: null },
+        stop: { allowed: true, blocking_reason: null },
+      },
+    },
   };
 }
 
@@ -409,6 +430,25 @@ describe("OverviewMap", () => {
       });
     });
     expect(startGuidedSession).not.toHaveBeenCalled();
+  });
+
+  it("shows and clears the active guided goto target marker", async () => {
+    setNavigatorGeolocation(createGeolocationMock());
+
+    const { rerender } = render(OverviewMap, {
+      guided: guidedGoto(47.41, 8.56, 35),
+    });
+    await tick();
+
+    const marker = maplibreState.markers.find((item) => item.element.className.includes("guided-target-marker"));
+    expect(marker?.element.getAttribute("aria-label")).toBe("Guided target at 35 m");
+    expect(marker?.setLngLat).toHaveBeenCalledWith([8.56, 47.41]);
+    expect(marker?.addTo).toHaveBeenCalledWith(maplibreState.mockMap);
+
+    await rerender({ guided: null });
+    await tick();
+
+    expect(marker?.remove).toHaveBeenCalled();
   });
 
   it("renders mission markers and an active mission path segment", async () => {

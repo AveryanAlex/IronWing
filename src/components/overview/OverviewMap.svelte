@@ -23,6 +23,7 @@ import {
 import {
   applyMapLayerMode,
   createDeviceMarkerElement,
+  createGuidedTargetMarkerElement,
   createHomeMarkerElement,
   createVehicleMarkerElement,
   ensureMapFoundation,
@@ -34,6 +35,7 @@ import {
   setMapTerrain,
   setVehicleMarkerHeading,
   setVehicleMarkerIcon,
+  updateGuidedTargetMarkerElement,
   updateMissionPathSource,
   type MapLayerMode,
 } from "../../lib/map";
@@ -75,6 +77,11 @@ type MissionMarkerSpec = {
   latitude_deg: number;
   longitude_deg: number;
 };
+type GuidedTargetSpec = {
+  latitude_deg: number;
+  longitude_deg: number;
+  altitude_m: number;
+};
 
 const DEFAULT_CENTER: [number, number] = [8.545594, 47.397742];
 const MAP_FOUNDATION_OPTIONS = { namespace: "overview" } as const;
@@ -102,6 +109,7 @@ const missionRenderFeatures = $derived.by(() =>
   buildMissionRenderFeatures(missionHome, missionRenderItems, { currentSeq: currentMissionIndex }),
 );
 const missionMarkerSpecs = $derived.by<MissionMarkerSpec[]>(() => missionPlanToMarkerSpecs(missionPlan));
+const guidedTarget = $derived.by<GuidedTargetSpec | null>(() => guidedDomainToTarget(guided));
 
 const overviewUiState = createUiStateStore({
   storage: typeof localStorage === "undefined" ? null : localStorage,
@@ -129,6 +137,7 @@ let map: MapLibreMap | null = null;
 let vehicleMarker: Marker | null = null;
 let homeMarker: Marker | null = null;
 let deviceMarker: Marker | null = null;
+let guidedTargetMarker: Marker | null = null;
 let missionMarkers = new Map<number, Marker>();
 let baseLayerIds: string[] = [];
 let programmaticMovePending = false;
@@ -137,6 +146,7 @@ let appliedTerrainMode: boolean | null = null;
 let vehicleMarkerAttached = false;
 let homeMarkerAttached = false;
 let deviceMarkerAttached = false;
+let guidedTargetMarkerAttached = false;
 let renderedVehicleHeadingDeg: number | null = null;
 const vehicleMotion = createMarkerMotion();
 
@@ -149,7 +159,10 @@ const pressTimers: Record<FollowTarget, ReturnType<typeof setTimeout> | null> = 
 onMount(() => {
   if (!mapContainer) return;
 
-  const initialCenter = asLngLat(vehicleLat, vehicleLon) ?? asLngLat(homeLat, homeLon) ?? DEFAULT_CENTER;
+  const initialCenter = asLngLat(vehicleLat, vehicleLon)
+    ?? asLngLat(homeLat, homeLon)
+    ?? guidedTargetLngLat(guidedTarget)
+    ?? DEFAULT_CENTER;
 
   map = new maplibregl.Map({
     container: mapContainer,
@@ -204,6 +217,7 @@ onMount(() => {
     vehicleMarker?.remove();
     homeMarker?.remove();
     deviceMarker?.remove();
+    guidedTargetMarker?.remove();
     clearMissionMarkers();
     map?.remove();
     vehicleMotion.reset();
@@ -211,12 +225,14 @@ onMount(() => {
     vehicleMarker = null;
     homeMarker = null;
     deviceMarker = null;
+    guidedTargetMarker = null;
     renderedVehicleHeadingDeg = null;
     styleLoaded = false;
     baseLayerIds = [];
     vehicleMarkerAttached = false;
     homeMarkerAttached = false;
     deviceMarkerAttached = false;
+    guidedTargetMarkerAttached = false;
   };
 });
 
@@ -237,6 +253,10 @@ $effect(() => {
 
 $effect(() => {
   syncMissionMarkers(missionMarkerSpecs, currentMissionIndex);
+});
+
+$effect(() => {
+  syncGuidedTargetMarker(guidedTarget);
 });
 
 $effect(() => {
@@ -340,6 +360,28 @@ function asLngLat(latitude?: number, longitude?: number): LngLatTuple | null {
   }
 
   return [Number(longitude), Number(latitude)];
+}
+
+function guidedDomainToTarget(domain: GuidedDomain | null): GuidedTargetSpec | null {
+  const state = domain?.value;
+  const session = state?.session;
+  if (state?.status !== "active" || session?.kind !== "goto") {
+    return null;
+  }
+
+  if (!Number.isFinite(session.latitude_deg) || !Number.isFinite(session.longitude_deg)) {
+    return null;
+  }
+
+  return {
+    latitude_deg: Number(session.latitude_deg),
+    longitude_deg: Number(session.longitude_deg),
+    altitude_m: Number.isFinite(session.altitude_m) ? Number(session.altitude_m) : 0,
+  };
+}
+
+function guidedTargetLngLat(target: GuidedTargetSpec | null): LngLatTuple | null {
+  return target ? asLngLat(target.latitude_deg, target.longitude_deg) : null;
 }
 
 function toHomePosition(latitude?: number, longitude?: number, altitude?: number): HomePosition | null {
@@ -534,6 +576,34 @@ function clearMissionMarkers() {
     marker.remove();
   }
   missionMarkers.clear();
+}
+
+function syncGuidedTargetMarker(target: GuidedTargetSpec | null) {
+  const lngLat = guidedTargetLngLat(target);
+  if (!map || !target || !lngLat) {
+    if (guidedTargetMarkerAttached) {
+      guidedTargetMarker?.remove();
+      guidedTargetMarkerAttached = false;
+    }
+    return;
+  }
+
+  if (!guidedTargetMarker) {
+    guidedTargetMarker = new maplibregl.Marker({
+      element: createGuidedTargetMarkerElement({ altitudeM: target.altitude_m }),
+      anchor: "bottom",
+    });
+  } else {
+    updateGuidedTargetMarkerElement(guidedTargetMarker.getElement(), { altitudeM: target.altitude_m });
+  }
+
+  if (guidedTargetMarkerAttached) {
+    guidedTargetMarker.setLngLat(lngLat);
+    return;
+  }
+
+  guidedTargetMarker.setLngLat(lngLat).addTo(map);
+  guidedTargetMarkerAttached = true;
 }
 
 function applyVehicleHeading(headingDeg: number) {

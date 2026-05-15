@@ -198,6 +198,62 @@
     0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+.guided-target-marker {
+  position: relative;
+  z-index: 6;
+  width: 42px;
+  height: 52px;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+}
+
+.guided-target-marker__halo {
+  position: absolute;
+  bottom: 1px;
+  left: 50%;
+  width: 34px;
+  height: 14px;
+  border: 2px solid rgba(255, 176, 32, 0.75);
+  border-radius: 999px;
+  transform: translateX(-50%);
+  animation: guided-target-pulse 1.6s ease-in-out infinite;
+}
+
+.guided-target-marker__pin {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  display: flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #072035;
+  border-radius: 999px 999px 999px 4px;
+  background: var(--color-warning);
+  color: #03101a;
+  transform: translateX(-50%) rotate(-45deg);
+}
+
+.guided-target-marker__label {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  transform: rotate(45deg);
+}
+
+@keyframes guided-target-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: translateX(-50%) scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.08);
+  }
+}
+
 /* Param navigation highlight — applied transiently via JS, auto-fades */
 .setup-param-highlight {
   animation: setup-param-flash 1.5s ease-out forwards;
