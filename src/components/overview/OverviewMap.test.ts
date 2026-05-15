@@ -6,6 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const maplibreState = vi.hoisted(() => {
   const handlers = new Map<string, () => void>();
+  const markers: Array<{
+    element: HTMLElement;
+    setLngLat: ReturnType<typeof vi.fn>;
+    addTo: ReturnType<typeof vi.fn>;
+    remove: ReturnType<typeof vi.fn>;
+    getElement: ReturnType<typeof vi.fn>;
+  }> = [];
   const missionPathSource = { setData: vi.fn() };
   const mockMap = {
     addControl: vi.fn(),
@@ -34,6 +41,7 @@ const maplibreState = vi.hoisted(() => {
 
   return {
     handlers,
+    markers,
     missionPathSource,
     mockMap,
   };
@@ -46,12 +54,14 @@ vi.mock("maplibre-gl", () => {
 
   function MockMarker(options?: { element?: HTMLElement }) {
     const element = options?.element ?? document.createElement("div");
-    return {
+    const marker = {
       setLngLat: vi.fn().mockReturnThis(),
       addTo: vi.fn().mockReturnThis(),
       remove: vi.fn(),
       getElement: vi.fn(() => element),
     };
+    maplibreState.markers.push({ element, ...marker });
+    return marker;
   }
 
   function MockNavigationControl() {
@@ -118,6 +128,7 @@ function createControllableGeolocationMock() {
 describe("OverviewMap", () => {
   beforeEach(() => {
     maplibreState.handlers.clear();
+    maplibreState.markers.length = 0;
     maplibreState.missionPathSource.setData.mockReset();
     maplibreState.mockMap.addControl.mockReset();
     maplibreState.mockMap.addSource.mockReset();
@@ -142,7 +153,7 @@ describe("OverviewMap", () => {
     if (originalGeolocationDescriptor) {
       Object.defineProperty(window.navigator, "geolocation", originalGeolocationDescriptor);
     } else {
-      delete (window.navigator as Navigator & { geolocation?: Geolocation }).geolocation;
+      delete (window.navigator as { geolocation?: Geolocation }).geolocation;
     }
   });
 
@@ -159,6 +170,44 @@ describe("OverviewMap", () => {
     expect(screen.queryByTestId("overview-map-target-device")).toBeNull();
     expect(screen.getByTestId("overview-map-target-home")).toBeTruthy();
     expect(screen.getByTestId("overview-map-target-vehicle")).toBeTruthy();
+  });
+
+  it("rotates the vehicle marker through north without a full spin", async () => {
+    setNavigatorGeolocation(createGeolocationMock());
+
+    const { rerender } = render(OverviewMap, {
+      props: {
+        vehicleLat: 47.397742,
+        vehicleLon: 8.545594,
+        vehicleHeading: 359,
+        homeLat: 47.397742,
+        homeLon: 8.545594,
+      },
+    });
+    await tick();
+
+    const vehicleSvg = maplibreState.markers[0]?.element.querySelector("svg") as SVGSVGElement | null;
+    expect(vehicleSvg?.style.transform).toBe("rotate(359deg)");
+
+    await rerender({
+      vehicleLat: 47.397742,
+      vehicleLon: 8.545594,
+      vehicleHeading: 0,
+      homeLat: 47.397742,
+      homeLon: 8.545594,
+    });
+    await tick();
+    expect(vehicleSvg?.style.transform).toBe("rotate(360deg)");
+
+    await rerender({
+      vehicleLat: 47.397742,
+      vehicleLon: 8.545594,
+      vehicleHeading: 1,
+      homeLat: 47.397742,
+      homeLon: 8.545594,
+    });
+    await tick();
+    expect(vehicleSvg?.style.transform).toBe("rotate(361deg)");
   });
 
   it("enters vehicle follow mode on hold and cancels it after a manual move", async () => {

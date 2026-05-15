@@ -9,6 +9,11 @@ import {
   VEHICLE_ICON_SVG,
   type VehicleIconKind,
 } from "../../lib/overview/vehicle-icon";
+import {
+  createMarkerMotion,
+  unwrapAngleDeg,
+  type LngLatTuple,
+} from "../../lib/map-marker-motion";
 import { createUiStateStore } from "../../lib/ui-state/ui-state";
 
 type Props = {
@@ -90,6 +95,8 @@ let appliedTerrainMode: boolean | null = null;
 let vehicleMarkerAttached = false;
 let homeMarkerAttached = false;
 let deviceMarkerAttached = false;
+let renderedVehicleHeadingDeg: number | null = null;
+const vehicleMotion = createMarkerMotion();
 
 const pressTimers: Record<FollowTarget, ReturnType<typeof setTimeout> | null> = {
   device: null,
@@ -162,11 +169,13 @@ onMount(() => {
     homeMarker?.remove();
     deviceMarker?.remove();
     map?.remove();
+    vehicleMotion.reset();
     map = null;
     vehicleMarker = null;
     homeMarker = null;
     deviceMarker = null;
     vehicleSvg = null;
+    renderedVehicleHeadingDeg = null;
     styleLoaded = false;
     baseLayerIds = [];
     vehicleMarkerAttached = false;
@@ -198,12 +207,17 @@ $effect(() => {
   el.dataset.iconKind = iconKind;
   el.innerHTML = VEHICLE_ICON_SVG[iconKind];
   vehicleSvg = el.querySelector("svg");
+  if (vehicleSvg && renderedVehicleHeadingDeg != null) {
+    vehicleSvg.style.transform = `rotate(${renderedVehicleHeadingDeg}deg)`;
+  }
 });
 
 $effect(() => {
   const lngLat = asLngLat(vehicleLat, vehicleLon);
   if (!vehicleMarker || !lngLat) {
     if (vehicleMarker && vehicleMarkerAttached && !lngLat) {
+      vehicleMotion.reset();
+      renderedVehicleHeadingDeg = null;
       vehicleMarker.remove();
       vehicleMarkerAttached = false;
       if (followTarget === "vehicle") {
@@ -213,17 +227,22 @@ $effect(() => {
     return;
   }
 
-  vehicleMarker.setLngLat(lngLat);
+  if (vehicleMarkerAttached) {
+    vehicleMotion.animateTo(vehicleMarker, lngLat);
+  } else {
+    vehicleMotion.setInstant(vehicleMarker, lngLat);
+  }
   if (map && !vehicleMarkerAttached) {
     vehicleMarker.addTo(map);
     vehicleMarkerAttached = true;
   }
-  if (vehicleSvg) {
-    vehicleSvg.style.transform = `rotate(${vehicleHeading}deg)`;
-  }
   if (followTarget === "vehicle") {
     easeToCoordinates(lngLat);
   }
+});
+
+$effect(() => {
+  applyVehicleHeading(vehicleHeading);
 });
 
 $effect(() => {
@@ -278,12 +297,19 @@ function browserGeolocationSupported(): boolean {
   return typeof navigator !== "undefined" && typeof navigator.geolocation !== "undefined";
 }
 
-function asLngLat(latitude?: number, longitude?: number): [number, number] | null {
+function asLngLat(latitude?: number, longitude?: number): LngLatTuple | null {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     return null;
   }
 
   return [Number(longitude), Number(latitude)];
+}
+
+function applyVehicleHeading(headingDeg: number) {
+  if (!vehicleSvg) return;
+
+  renderedVehicleHeadingDeg = unwrapAngleDeg(renderedVehicleHeadingDeg, headingDeg);
+  vehicleSvg.style.transform = `rotate(${renderedVehicleHeadingDeg}deg)`;
 }
 
 function ensureStyleExtensions(currentMap: MapLibreMap) {

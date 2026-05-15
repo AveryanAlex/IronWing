@@ -2,6 +2,12 @@
 import { onMount } from "svelte";
 import maplibregl, { type Map as MapLibreMap, type Marker } from "maplibre-gl";
 
+import {
+  createMarkerMotion,
+  unwrapAngleDeg,
+  type LngLatTuple,
+} from "../../lib/map-marker-motion";
+
 type Props = {
   latitude: number;
   longitude: number;
@@ -18,6 +24,8 @@ let mapContainer = $state<HTMLDivElement | null>(null);
 let map: MapLibreMap | null = null;
 let vehicleMarker: Marker | null = null;
 let vehicleSvg: SVGSVGElement | null = null;
+let renderedVehicleHeadingDeg: number | null = null;
+const vehicleMotion = createMarkerMotion();
 
 onMount(() => {
   if (!mapContainer) return;
@@ -38,28 +46,44 @@ onMount(() => {
   </svg>`;
   vehicleSvg = vehicleEl.querySelector("svg");
 
-  vehicleMarker = new maplibregl.Marker({ element: vehicleEl, anchor: "center" })
-    .setLngLat([longitude, latitude])
-    .addTo(map);
+  vehicleMarker = new maplibregl.Marker({ element: vehicleEl, anchor: "center" });
+  vehicleMotion.setInstant(vehicleMarker, currentLngLat());
+  vehicleMarker.addTo(map);
+  applyVehicleHeading(heading);
 
   return () => {
+    vehicleMotion.reset();
     vehicleMarker?.remove();
     map?.remove();
     map = null;
     vehicleMarker = null;
     vehicleSvg = null;
+    renderedVehicleHeadingDeg = null;
   };
 });
 
 // Sync vehicle position and heading
 $effect(() => {
   if (!vehicleMarker) return;
-  vehicleMarker.setLngLat([longitude, latitude]);
-  if (vehicleSvg) {
-    vehicleSvg.style.transform = `rotate(${heading}deg)`;
-  }
-  map?.setCenter([longitude, latitude]);
+  const lngLat = currentLngLat();
+  vehicleMotion.animateTo(vehicleMarker, lngLat);
+  map?.setCenter(lngLat);
 });
+
+$effect(() => {
+  applyVehicleHeading(heading);
+});
+
+function currentLngLat(): LngLatTuple {
+  return [longitude, latitude];
+}
+
+function applyVehicleHeading(headingDeg: number) {
+  if (!vehicleSvg) return;
+
+  renderedVehicleHeadingDeg = unwrapAngleDeg(renderedVehicleHeadingDeg, headingDeg);
+  vehicleSvg.style.transform = `rotate(${renderedVehicleHeadingDeg}deg)`;
+}
 </script>
 
 <div bind:this={mapContainer} class="size-full"></div>
