@@ -40,6 +40,7 @@ let surfaceKind = $derived(chrome?.current?.tier === "phone" ? "sheet" : "dialog
       data-surface-kind={surfaceKind}
       data-testid={testId}
       aria-label={ariaLabel ?? title}
+      preventScroll={false}
     >
       {#if title || description}
         <header class="relative flex flex-col gap-1 border-b border-border/80 p-4">

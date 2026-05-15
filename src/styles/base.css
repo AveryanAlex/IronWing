@@ -679,8 +679,17 @@ body {
 
 @media (max-width: 767px) {
   .app-shell-header {
-    min-height: 48px;
+    order: 1;
+    min-height: 0;
     padding: 0;
+    border-top: 1px solid var(--color-border);
+    border-bottom: 0;
+  }
+
+  .app-shell-phone-nav__item {
+    min-height: 48px;
+    padding-top: 7px;
+    padding-bottom: calc(var(--safe-area-bottom, 0px) + 6px);
   }
 
   .app-shell-tabs {
