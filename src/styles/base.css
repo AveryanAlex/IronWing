@@ -107,26 +107,107 @@ body {
   font-weight: 600;
 }
 
-.app-shell-mobile-toggle {
-  border: 1px solid var(--color-border-light);
-  border-radius: 6px;
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 0.35rem 0.65rem;
-}
-
-.app-shell-mobile-toggle:hover {
-  border-color: var(--color-border-light);
-  background: var(--color-bg-input);
-}
-
 .app-shell-tabs {
   display: flex;
   flex: 1 1 0;
   min-width: 0;
   margin-left: auto;
+}
+
+.app-shell-phone-nav {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.app-shell-phone-nav__item {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.56rem;
+  font-weight: 650;
+  line-height: 1;
+  padding: 7px 1px 6px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.app-shell-phone-nav__item:hover,
+.app-shell-phone-nav__item[data-active] {
+  background: var(--color-bg-primary);
+  color: var(--color-accent);
+}
+
+.app-shell-phone-nav__item[data-active]::after {
+  position: absolute;
+  right: 8px;
+  bottom: 0;
+  left: 8px;
+  height: 2px;
+  border-radius: 999px 999px 0 0;
+  background: var(--color-accent);
+  content: "";
+}
+
+.app-shell-phone-nav__icon,
+.app-shell-phone-nav__status-dot {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-shell-phone-nav__status-dot {
+  width: 12px;
+  height: 12px;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 999px;
+  background: var(--color-text-muted);
+}
+
+.app-shell-phone-nav__status-dot.is-positive {
+  background: var(--color-success);
+}
+
+.app-shell-phone-nav__status-dot.is-caution {
+  background: var(--color-warning);
+}
+
+.app-shell-phone-nav__status-dot.is-critical {
+  background: var(--color-danger);
+}
+
+.app-shell-phone-nav__label {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell-phone-nav__badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 14px;
+  border-radius: 999px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  font-size: 0.58rem;
+  line-height: 1;
+  padding: 2px 4px;
 }
 
 .runtime-eyebrow {
@@ -596,6 +677,11 @@ body {
 }
 
 @media (max-width: 767px) {
+  .app-shell-header {
+    min-height: 48px;
+    padding: 0;
+  }
+
   .app-shell-tabs {
     margin-left: 0;
   }
