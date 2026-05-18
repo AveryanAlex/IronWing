@@ -148,7 +148,7 @@ pub(crate) async fn spawn_event_bridges(
 
     // Current flight mode
     {
-        let mode_obs = vehicle.current_mode();
+        let mode_obs = vehicle.available_modes().current();
         let mut mode_sub = mode_obs.subscribe();
         let handle = app.clone();
         tasks.push(tokio::spawn(async move {

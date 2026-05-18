@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-mavkit = { git = "https://github.com/AveryanAlex/mavkit.git", branch = "main", default-features = false, features = ["ardupilot"] }
+mavkit = { git = "https://github.com/AveryanAlex/mavkit.git", rev = "9ef60f03d8392cad6a3e07f0e79302228afd475f", default-features = false, features = ["ardupilot"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 web-time = "1"

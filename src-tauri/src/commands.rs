@@ -298,11 +298,13 @@ pub(crate) async fn arm_vehicle(
     force: bool,
 ) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::ArmVehicle).await?;
-    with_vehicle(&state)
-        .await?
-        .arm(force)
-        .await
-        .map_err(|e| e.to_string())
+    let vehicle = with_vehicle(&state).await?;
+    if force {
+        vehicle.force_arm().await
+    } else {
+        vehicle.arm().await
+    }
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -311,11 +313,13 @@ pub(crate) async fn disarm_vehicle(
     force: bool,
 ) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::DisarmVehicle).await?;
-    with_vehicle(&state)
-        .await?
-        .disarm(force)
-        .await
-        .map_err(|e| e.to_string())
+    let vehicle = with_vehicle(&state).await?;
+    if force {
+        vehicle.force_disarm().await
+    } else {
+        vehicle.disarm().await
+    }
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -326,7 +330,7 @@ pub(crate) async fn set_flight_mode(
     ensure_live_write_allowed(state.inner(), OperationId::SetFlightMode).await?;
     with_vehicle(&state)
         .await?
-        .set_mode(custom_mode, false)
+        .set_mode_no_wait(custom_mode)
         .await
         .map_err(|e| e.to_string())
 }
@@ -535,20 +539,8 @@ pub(crate) async fn set_message_rate(
     with_vehicle(&state)
         .await?
         .raw()
-        .command_long(
-            MavCmd::MAV_CMD_SET_MESSAGE_INTERVAL as u16,
-            [
-                message_id as f32,
-                interval_usec as f32,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-            ],
-        )
+        .set_message_interval(message_id, interval_usec)
         .await
-        .map(|_| ())
         .map_err(|e| e.to_string())
 }
 
@@ -646,7 +638,7 @@ pub(crate) async fn mission_download(
     let plan = op.wait().await.map_err(|e| e.to_string());
     state.mission_op_cancel.lock().await.take();
     let plan = plan?;
-    let home = vehicle.home().latest().map(|sample| HomePosition {
+    let home = vehicle.telemetry().home().latest().map(|sample| HomePosition {
         latitude_deg: sample.value.latitude_deg,
         longitude_deg: sample.value.longitude_deg,
         altitude_m: sample.value.altitude_msl_m,

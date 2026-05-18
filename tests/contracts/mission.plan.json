@@ -15,7 +15,6 @@
           }
         }
       },
-      "current": true,
       "autocontinue": true
     },
     {
@@ -36,7 +35,6 @@
           }
         }
       },
-      "current": false,
       "autocontinue": true
     },
     {
@@ -53,7 +51,6 @@
           "z": 789.0
         }
       },
-      "current": false,
       "autocontinue": false
     }
   ]

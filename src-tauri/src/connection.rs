@@ -1,8 +1,5 @@
-use mavkit::dialect::{
-    ATTITUDE_DATA, GLOBAL_POSITION_INT_DATA, GPS_RAW_INT_DATA, MavCmd, SYS_STATUS_DATA,
-};
+use mavkit::stream::{ChannelBridge, StreamConnection};
 use mavkit::{Vehicle, VehicleConfig};
-use mavlink::MessageData;
 use serde::Deserialize;
 use std::future::Future;
 use std::sync::atomic::Ordering;
@@ -149,21 +146,14 @@ where
 
 async fn request_tcp_telemetry_streams(vehicle: Vehicle) {
     let interval_requests = [
-        (GLOBAL_POSITION_INT_DATA::ID as f32, 200_000.0),
-        (ATTITUDE_DATA::ID as f32, 200_000.0),
-        (GPS_RAW_INT_DATA::ID as f32, 500_000.0),
-        (SYS_STATUS_DATA::ID as f32, 1_000_000.0),
+        (33_u32, 200_000_i32),
+        (30_u32, 200_000_i32),
+        (24_u32, 500_000_i32),
+        (1_u32, 1_000_000_i32),
     ];
 
     for (message_id, interval_usec) in interval_requests {
-        if let Err(err) = vehicle
-            .raw()
-            .command_long(
-                MavCmd::MAV_CMD_SET_MESSAGE_INTERVAL as u16,
-                [message_id, interval_usec, 0.0, 0.0, 0.0, 0.0, 0.0],
-            )
-            .await
-        {
+        if let Err(err) = vehicle.raw().set_message_interval(message_id, interval_usec).await {
             tracing::warn!("failed to request telemetry stream for message id {message_id}: {err}");
         }
     }
@@ -288,9 +278,6 @@ pub(crate) async fn connect_link(
 
 /// Connect via BLE NUS (Nordic UART Service) using tauri-plugin-blec.
 async fn connect_ble(address: &str) -> Result<ConnectedVehicle, String> {
-    use mavkit::ble_transport::channel_pair;
-    use mavkit::stream_connection::StreamConnection;
-
     let handler =
         tauri_plugin_blec::get_handler().map_err(|e| format!("BLE plugin not initialized: {e}"))?;
 
@@ -321,7 +308,12 @@ async fn connect_ble(address: &str) -> Result<ConnectedVehicle, String> {
     }
 
     // Set up channel pair for bridging BLE ↔ AsyncRead/AsyncWrite
-    let (reader, writer, incoming_tx, mut outgoing_rx) = channel_pair(64);
+    let ChannelBridge {
+        reader,
+        writer,
+        incoming_tx,
+        mut outgoing_rx,
+    } = ChannelBridge::new(64);
 
     // Subscribe to NUS TX notifications → push into incoming channel
     let tx_sender = incoming_tx.clone();
@@ -382,8 +374,6 @@ async fn connect_ble(address: &str) -> Result<ConnectedVehicle, String> {
 #[cfg(target_os = "android")]
 async fn connect_spp(app: &tauri::AppHandle, address: &str) -> Result<ConnectedVehicle, String> {
     use base64::Engine;
-    use mavkit::ble_transport::channel_pair;
-    use mavkit::stream_connection::StreamConnection;
     use tauri::Listener;
 
     let bt: tauri::State<'_, tauri_plugin_bluetooth_classic::BluetoothClassic<tauri::Wry>> =
@@ -391,7 +381,12 @@ async fn connect_spp(app: &tauri::AppHandle, address: &str) -> Result<ConnectedV
     bt.connect(address)
         .map_err(|e: Box<dyn std::error::Error>| e.to_string())?;
 
-    let (reader, writer, incoming_tx, mut outgoing_rx) = channel_pair(64);
+    let ChannelBridge {
+        reader,
+        writer,
+        incoming_tx,
+        mut outgoing_rx,
+    } = ChannelBridge::new(64);
 
     // Listen for incoming data events from the Kotlin plugin
     let tx_sender = incoming_tx.clone();

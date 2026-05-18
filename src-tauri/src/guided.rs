@@ -20,7 +20,8 @@ pub(crate) fn live_context_from_vehicle(vehicle: &mavkit::Vehicle) -> GuidedLive
         .map(|s| s.value)
         .unwrap_or(false);
     let mode_name = vehicle
-        .current_mode()
+        .available_modes()
+        .current()
         .latest()
         .map(|m| m.name.to_ascii_uppercase())
         .unwrap_or_default();
