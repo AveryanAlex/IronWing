@@ -4,7 +4,13 @@ import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath, URL } from "url";
 
 const platformDir =
-  process.env.IRONWING_PLATFORM === "mock" ? "mock" : process.env.IRONWING_PLATFORM === "remote" ? "remote" : "tauri";
+  process.env.IRONWING_PLATFORM === "mock"
+    ? "mock"
+    : process.env.IRONWING_PLATFORM === "remote"
+      ? "remote"
+      : process.env.IRONWING_PLATFORM === "web"
+        ? "web"
+        : "tauri";
 
 const serverHost =
   process.env.TAURI_ENV_PLATFORM === "android"
@@ -16,7 +22,7 @@ const serverHost =
 const isDemoBuild = process.env.IRONWING_PLATFORM === "mock" && process.env.VITE_IRONWING_MOCK_PROFILE === "demo";
 
 export default defineConfig({
-  base: isDemoBuild ? "./" : undefined,
+  base: process.env.IRONWING_BASE ?? (isDemoBuild ? "./" : undefined),
   plugins: [svelte(), tailwindcss()],
   resolve: {
     alias: {
@@ -33,6 +39,7 @@ export default defineConfig({
   build: {
     target: "es2022",
     chunkSizeWarningLimit: 3000,
+    outDir: process.env.IRONWING_OUT_DIR ?? "dist",
   },
   server: {
     host: serverHost,

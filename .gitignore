@@ -48,3 +48,7 @@ vendor/
 coverage/
 .cache/
 tmp/
+src/platform/web/generated/.gitignore
+src/platform/web/generated/ironwing_wasm.js
+src/platform/web/generated/ironwing_wasm_bg.wasm
+src/platform/web/generated/ironwing_wasm_bg.wasm.d.ts

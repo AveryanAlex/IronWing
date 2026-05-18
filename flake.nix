@@ -71,6 +71,7 @@
             "aarch64-linux-android"
             "armv7-linux-androideabi"
             "i686-linux-android"
+            "wasm32-unknown-unknown"
             "x86_64-linux-android"
           ];
         };
@@ -114,6 +115,8 @@
               pnpm
               pkg-config
               nixfmt
+              wasm-pack
+              binaryen
             ])
             ++ [
               jdk
