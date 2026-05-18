@@ -7,7 +7,14 @@ import type { ConnectionFieldErrors } from "../../lib/connection/connection-form
 
 type Field = keyof Pick<
   SessionConnectionFormState,
-  "mode" | "udpBind" | "tcpAddress" | "serialPort" | "baud" | "selectedBtDevice" | "demoVehiclePreset"
+  | "mode"
+  | "udpBind"
+  | "tcpAddress"
+  | "websocketUrl"
+  | "serialPort"
+  | "baud"
+  | "selectedBtDevice"
+  | "demoVehiclePreset"
 >;
 
 const demoVehiclePresetOptions: Array<{ value: DemoVehiclePreset; label: string }> = [
@@ -202,6 +209,32 @@ const iconButtonClass =
   </div>
 {/if}
 
+{#if form.mode === "websocket"}
+  <div class="space-y-1.5">
+    <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+      <label class="block min-w-0 space-y-1.5">
+        <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">WebSocket URL</span>
+        <input
+          class={inputClass}
+          data-testid="connection-websocket-url"
+          disabled={formLocked}
+          name="websocketUrl"
+          oninput={(event) => onFieldChange("websocketUrl", (event.currentTarget as HTMLInputElement).value)}
+          placeholder="ws://127.0.0.1:14560"
+          value={form.websocketUrl}
+        />
+      </label>
+      {@render primaryActionButton()}
+    </div>
+    <p class="text-xs text-text-secondary">
+      Connect through a raw MAVLink WebSocket bridge such as the local <code>pnpm run sitl:ws</code> helper.
+    </p>
+    {#if errors.websocketUrl}
+      <p class="text-xs text-danger">{errors.websocketUrl}</p>
+    {/if}
+  </div>
+{/if}
+
 {#if form.mode === "serial"}
   <div class="space-y-1.5">
     <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2">
@@ -265,6 +298,39 @@ const iconButtonClass =
   </details>
 {/if}
 
+{#if form.mode === "web_serial"}
+  <div class="space-y-1.5">
+    <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+      <div class="min-w-0 space-y-1.5">
+        <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Web Serial</span>
+        <p class="text-xs text-text-secondary">
+          Your browser will ask you to choose a serial port when you connect.
+        </p>
+      </div>
+      {@render primaryActionButton()}
+    </div>
+    <label class="block space-y-1.5">
+      <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Baud</span>
+      <input
+        class={inputClass}
+        data-testid="connection-web-serial-baud"
+        disabled={formLocked}
+        inputmode="numeric"
+        name="baud"
+        oninput={(event) => {
+          const nextBaud = Number.parseInt((event.currentTarget as HTMLInputElement).value, 10);
+          onFieldChange("baud", Number.isFinite(nextBaud) ? nextBaud : form.baud);
+        }}
+        type="number"
+        value={form.baud}
+      />
+    </label>
+    {#if errors.baud}
+      <p class="text-xs text-danger">{errors.baud}</p>
+    {/if}
+  </div>
+{/if}
+
 {#if form.mode === "bluetooth_ble" || form.mode === "bluetooth_spp"}
   <div class="space-y-1.5">
     <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2">
@@ -304,6 +370,20 @@ const iconButtonClass =
     {#if errors.selectedBtDevice}
       <p class="text-xs text-danger">{errors.selectedBtDevice}</p>
     {/if}
+  </div>
+{/if}
+
+{#if form.mode === "web_bluetooth"}
+  <div class="space-y-1.5">
+    <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+      <div class="min-w-0 space-y-1.5">
+        <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Web Bluetooth</span>
+        <p class="text-xs text-text-secondary">
+          Your browser will ask you to choose a Nordic UART BLE device when you connect.
+        </p>
+      </div>
+      {@render primaryActionButton()}
+    </div>
   </div>
 {/if}
 

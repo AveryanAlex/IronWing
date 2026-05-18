@@ -83,6 +83,41 @@ jobs:
       - name: Cargo test
         run: cargo test --workspace
 
+  pure-web-app:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build pure web app
+        run: IRONWING_OUT_DIR=dist-web-app IRONWING_BASE=./ pnpm run web:build
+
+      - name: Upload pure web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pure-web-app
+          path: dist-web-app
+
   e2e:
     needs: [frontend]
     runs-on: ubuntu-latest

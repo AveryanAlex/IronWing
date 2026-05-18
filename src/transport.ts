@@ -2,7 +2,16 @@ import { invoke } from "@platform/core";
 
 export type DemoVehiclePreset = "quadcopter" | "airplane" | "quadplane";
 
-export type TransportType = "udp" | "tcp" | "serial" | "bluetooth_ble" | "bluetooth_spp" | "demo";
+export type TransportType =
+  | "udp"
+  | "tcp"
+  | "serial"
+  | "bluetooth_ble"
+  | "bluetooth_spp"
+  | "websocket"
+  | "web_serial"
+  | "web_bluetooth"
+  | "demo";
 
 type TransportDescriptorBase = {
   kind: TransportType;
@@ -32,6 +41,23 @@ export type BluetoothTransportDescriptor = TransportDescriptorBase & {
   validation: { address_required: true };
 };
 
+export type WebSocketTransportDescriptor = TransportDescriptorBase & {
+  kind: "websocket";
+  validation: { url_required: true };
+};
+
+export type WebSerialTransportDescriptor = TransportDescriptorBase & {
+  kind: "web_serial";
+  validation: { chooser_required: true; baud_required: true };
+  default_baud: number;
+};
+
+export type WebBluetoothTransportDescriptor = TransportDescriptorBase & {
+  kind: "web_bluetooth";
+  validation: { chooser_required: true };
+  profile: "nordic_uart";
+};
+
 export type DemoTransportDescriptor = TransportDescriptorBase & {
   kind: "demo";
   validation: {};
@@ -42,12 +68,16 @@ export type TransportDescriptor =
   | TcpTransportDescriptor
   | SerialTransportDescriptor
   | BluetoothTransportDescriptor
+  | WebSocketTransportDescriptor
+  | WebSerialTransportDescriptor
+  | WebBluetoothTransportDescriptor
   | DemoTransportDescriptor;
 
 export type ConnectFormValue = {
   bind_addr?: string;
   address?: string;
   port?: string;
+  websocket_url?: string;
   baud?: number | null;
   demo_vehicle_preset?: DemoVehiclePreset;
 };
@@ -58,6 +88,9 @@ export type ConnectTransport =
   | { kind: "serial"; port: string; baud: number }
   | { kind: "bluetooth_ble"; address: string }
   | { kind: "bluetooth_spp"; address: string }
+  | { kind: "websocket"; url: string }
+  | { kind: "web_serial"; baud: number; port_id?: string }
+  | { kind: "web_bluetooth"; device_id?: string; profile: "nordic_uart" }
   | { kind: "demo"; vehicle_preset: DemoVehiclePreset };
 
 export type ConnectRequest = {
@@ -100,6 +133,14 @@ export function validateTransportDescriptor(
     case "bluetooth_spp":
       if (!value.address) errors.push("address is required");
       break;
+    case "websocket":
+      if (!value.websocket_url) errors.push("websocket_url is required");
+      break;
+    case "web_serial":
+      if (value.baud == null) errors.push("baud is required");
+      break;
+    case "web_bluetooth":
+      break;
     case "demo":
       break;
   }
@@ -128,6 +169,22 @@ export function buildConnectRequest(
       return { transport: { kind: "bluetooth_ble", address: value.address ?? "" } };
     case "bluetooth_spp":
       return { transport: { kind: "bluetooth_spp", address: value.address ?? "" } };
+    case "websocket":
+      return { transport: { kind: "websocket", url: value.websocket_url ?? "" } };
+    case "web_serial":
+      return {
+        transport: {
+          kind: "web_serial",
+          baud: value.baud ?? descriptor.default_baud,
+        },
+      };
+    case "web_bluetooth":
+      return {
+        transport: {
+          kind: "web_bluetooth",
+          profile: "nordic_uart",
+        },
+      };
     case "demo":
       return {
         transport: {

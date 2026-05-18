@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_TCP_ADDRESS,
+  DEFAULT_WS_URL,
   defaultTcpAddress,
+  defaultWebSocketUrl,
   isAutoConnectSitlEnabled,
   loadConnectionForm,
   resolveSessionConnectionDefaults,
@@ -47,6 +49,17 @@ describe("defaultTcpAddress", () => {
   });
 });
 
+describe("defaultWebSocketUrl", () => {
+  it("uses the configured SITL websocket url when present", () => {
+    expect(defaultWebSocketUrl({ VITE_IRONWING_SITL_WS_URL: "ws://127.0.0.1:15555" })).toBe("ws://127.0.0.1:15555");
+  });
+
+  it("falls back to the shipped websocket address", () => {
+    expect(defaultWebSocketUrl({})).toBe(DEFAULT_WS_URL);
+    expect(defaultWebSocketUrl({ VITE_IRONWING_SITL_WS_URL: "" })).toBe(DEFAULT_WS_URL);
+  });
+});
+
 describe("resolveSessionConnectionDefaults", () => {
   it("preseeds the shipped shell to tcp for native and dev SITL builds", () => {
     expect(
@@ -57,6 +70,7 @@ describe("resolveSessionConnectionDefaults", () => {
     ).toMatchObject({
       mode: "tcp",
       tcpAddress: "127.0.0.1:5768",
+      websocketUrl: DEFAULT_WS_URL,
       udpBind: "0.0.0.0:14550",
       baud: 57600,
     });
@@ -120,6 +134,7 @@ describe("loadConnectionForm", () => {
         JSON.stringify({
           mode: "serial",
           tcpAddress: "127.0.0.1:9999",
+          websocketUrl: "ws://127.0.0.1:15555",
           serialPort: "/dev/ttyUSB0",
           followVehicle: false,
         }),
@@ -127,6 +142,7 @@ describe("loadConnectionForm", () => {
 
     expect(loadConnectionForm(storage, defaults)).toEqual({
       ...defaults,
+      websocketUrl: "ws://127.0.0.1:15555",
       serialPort: "/dev/ttyUSB0",
       followVehicle: false,
     });
@@ -191,7 +207,10 @@ describe("loadConnectionForm", () => {
           mode: "udp",
           udpBind: 14550,
           tcpAddress: "127.0.0.1:9999",
+          websocketUrl: 123,
           serialPort: "/dev/ttyUSB0",
+          webSerialPortId: "serial-1",
+          webBluetoothDeviceId: "bluetooth-1",
           baud: "57600",
           selectedBtDevice: "AA:BB:CC",
           takeoffAlt: 20,
@@ -202,6 +221,8 @@ describe("loadConnectionForm", () => {
     expect(loadConnectionForm(storage, defaults)).toEqual({
       ...defaults,
       serialPort: "/dev/ttyUSB0",
+      webSerialPortId: "serial-1",
+      webBluetoothDeviceId: "bluetooth-1",
       selectedBtDevice: "AA:BB:CC",
       followVehicle: false,
     });

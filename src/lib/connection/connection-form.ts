@@ -6,14 +6,18 @@ import {
 } from "../../transport";
 
 export type ConnectionFieldErrors = Partial<
-  Record<"udpBind" | "tcpAddress" | "serialPort" | "baud" | "selectedBtDevice", string>
+  Record<
+    "udpBind" | "tcpAddress" | "serialPort" | "baud" | "selectedBtDevice" | "websocketUrl",
+    string
+  >
 >;
 
 export function toConnectFormValue(form: SessionConnectionFormState): ConnectFormValue {
   return {
-    bind_addr: form.udpBind.trim(),
+    bind_addr: (form.udpBind ?? "").trim(),
     address: (form.mode === "tcp" ? form.tcpAddress : form.selectedBtDevice).trim(),
-    port: form.serialPort.trim(),
+    port: (form.serialPort ?? "").trim(),
+    websocket_url: (form.websocketUrl ?? "").trim(),
     baud: form.baud,
     demo_vehicle_preset: form.demoVehiclePreset,
   };
@@ -48,6 +52,11 @@ export function mapConnectionFieldErrors(
       continue;
     }
 
+    if (error.includes("websocket_url")) {
+      fieldErrors.websocketUrl = error;
+      continue;
+    }
+
     if (error.includes("port")) {
       fieldErrors.serialPort = error;
       continue;
@@ -62,7 +71,13 @@ export function mapConnectionFieldErrors(
 }
 
 export function firstConnectionFieldError(errors: ConnectionFieldErrors): string | null {
-  return errors.udpBind ?? errors.tcpAddress ?? errors.serialPort ?? errors.baud ?? errors.selectedBtDevice ?? null;
+  return errors.udpBind
+    ?? errors.tcpAddress
+    ?? errors.websocketUrl
+    ?? errors.serialPort
+    ?? errors.baud
+    ?? errors.selectedBtDevice
+    ?? null;
 }
 
 export function hasConnectionFieldErrors(errors: ConnectionFieldErrors): boolean {

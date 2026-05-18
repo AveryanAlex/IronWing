@@ -57,7 +57,10 @@ export type SessionConnectionFormState = {
   mode: TransportType;
   udpBind: string;
   tcpAddress: string;
+  websocketUrl: string;
   serialPort: string;
+  webSerialPortId: string;
+  webBluetoothDeviceId: string;
   baud: number;
   selectedBtDevice: string;
   demoVehiclePreset?: DemoVehiclePreset;
@@ -68,11 +71,13 @@ export type SessionConnectionFormState = {
 export type SessionConnectionEnv = {
   VITE_IRONWING_SITL_MODE?: string;
   VITE_IRONWING_SITL_TCP_PORT?: string;
+  VITE_IRONWING_SITL_WS_URL?: string;
   VITE_IRONWING_AUTO_CONNECT_SITL?: string;
   VITE_IRONWING_MOCK_PROFILE?: string;
 };
 
 export const DEFAULT_TCP_ADDRESS = "127.0.0.1:5760";
+export const DEFAULT_WS_URL = "ws://127.0.0.1:14560";
 export const DEFAULT_DEMO_VEHICLE_PRESET: DemoVehiclePreset = "quadcopter";
 
 export const sessionConnectionDefaults: SessionConnectionFormState = resolveSessionConnectionDefaults();
@@ -116,6 +121,7 @@ type ConnectionFormValue = {
   bind_addr?: string;
   address?: string;
   port?: string;
+  websocket_url?: string;
   baud?: number | null;
   demo_vehicle_preset?: DemoVehiclePreset;
 };
@@ -209,7 +215,10 @@ export function resolveSessionConnectionDefaults(
     mode: resolveMockProfileMode(env) ?? mode,
     udpBind: "0.0.0.0:14550",
     tcpAddress: defaultTcpAddress(env),
+    websocketUrl: defaultWebSocketUrl(env),
     serialPort: "",
+    webSerialPortId: "",
+    webBluetoothDeviceId: "",
     baud: 57600,
     selectedBtDevice: "",
     demoVehiclePreset: DEFAULT_DEMO_VEHICLE_PRESET,
@@ -235,6 +244,10 @@ export function defaultTcpAddress(env: SessionConnectionEnv = import.meta.env as
   return DEFAULT_TCP_ADDRESS;
 }
 
+export function defaultWebSocketUrl(env: SessionConnectionEnv = import.meta.env as SessionConnectionEnv) {
+  return env.VITE_IRONWING_SITL_WS_URL?.trim() || DEFAULT_WS_URL;
+}
+
 function normalizeConnectionForm(raw: unknown, defaults: SessionConnectionFormState): SessionConnectionFormState {
   if (!raw || typeof raw !== "object") {
     return { ...defaults };
@@ -255,8 +268,20 @@ function normalizeConnectionForm(raw: unknown, defaults: SessionConnectionFormSt
     normalized.tcpAddress = parsed.tcpAddress;
   }
 
+  if (typeof parsed.websocketUrl === "string") {
+    normalized.websocketUrl = parsed.websocketUrl;
+  }
+
   if (typeof parsed.serialPort === "string") {
     normalized.serialPort = parsed.serialPort;
+  }
+
+  if (typeof parsed.webSerialPortId === "string") {
+    normalized.webSerialPortId = parsed.webSerialPortId;
+  }
+
+  if (typeof parsed.webBluetoothDeviceId === "string") {
+    normalized.webBluetoothDeviceId = parsed.webBluetoothDeviceId;
   }
 
   if (typeof parsed.baud === "number" && Number.isFinite(parsed.baud)) {
@@ -306,6 +331,9 @@ function isTransportType(value: unknown): value is TransportType {
     || value === "serial"
     || value === "bluetooth_ble"
     || value === "bluetooth_spp"
+    || value === "websocket"
+    || value === "web_serial"
+    || value === "web_bluetooth"
     || value === "demo";
 }
 

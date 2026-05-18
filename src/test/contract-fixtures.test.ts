@@ -1125,12 +1125,16 @@ function expectMissionCommand(value: unknown, label: string): Record<string, unk
 
 function expectMissionItem(value: unknown, label: string): MissionItem {
   const object = expectRecord(value, label);
-  expectExactKeys(object, label, ["command", "current", "autocontinue"]);
+  expect([
+    ["autocontinue", "command"],
+    ["autocontinue", "command", "current"],
+  ]).toContainEqual(Object.keys(object).sort());
+  const current = object.current == null ? false : expectBoolean(object.current, `${label}.current`);
   return {
     command: expectMissionCommand(object.command, `${label}.command`) as MissionItem["command"],
-    current: expectBoolean(object.current, `${label}.current`),
+    ...(object.current == null ? {} : { current }),
     autocontinue: expectBoolean(object.autocontinue, `${label}.autocontinue`),
-  };
+  } as MissionItem;
 }
 
 function expectMissionPlan(value: unknown, label: string): MissionPlan {
