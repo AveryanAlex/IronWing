@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use futures::channel::oneshot;
 use ironwing_core::ipc::{AckSessionSnapshotResult, SourceKind};
 use ironwing_core::runtime::SessionRuntime;
 use wasm_bindgen::prelude::*;
@@ -14,6 +15,9 @@ struct RuntimeState {
     #[allow(dead_code)]
     event_sink: EventSink,
     session_runtime: SessionRuntime,
+    vehicle: Option<mavkit::Vehicle>,
+    bridge: Option<mavkit::byte_connection::ByteBridge>,
+    connect_waiter: Option<oneshot::Receiver<Result<(), String>>>,
 }
 
 #[wasm_bindgen]
@@ -29,22 +33,91 @@ impl IronwingWasmRuntime {
             state: Rc::new(RefCell::new(RuntimeState {
                 event_sink: EventSink::new(event_sink),
                 session_runtime: SessionRuntime::new(),
+                vehicle: None,
+                bridge: None,
+                connect_waiter: None,
             })),
         }
     }
 
     #[wasm_bindgen(js_name = beginConnect)]
     pub fn begin_connect(&self) -> Result<WasmByteBridge, JsValue> {
-        Ok(WasmByteBridge::new())
+        let (bridge, vehicle_future) = mavkit::Vehicle::from_byte_connection(
+            mavkit::VehicleConfig::default(),
+            mavkit::byte_connection::ByteConnectionConfig::default(),
+        );
+        let wasm_bridge = WasmByteBridge::new(bridge.clone());
+        let (connect_tx, connect_rx) = oneshot::channel();
+
+        {
+            let mut state = self.state.borrow_mut();
+            if let Some(existing_bridge) = state.bridge.take() {
+                existing_bridge.close();
+            }
+            state.vehicle = None;
+            state.bridge = Some(bridge);
+            state.connect_waiter = Some(connect_rx);
+        }
+
+        let state = Rc::clone(&self.state);
+        wasm_bindgen_futures::spawn_local(async move {
+            let result = vehicle_future.await.map_err(|error| error.to_string());
+            match result {
+                Ok(vehicle) => {
+                    state.borrow_mut().vehicle = Some(vehicle);
+                    let _ = connect_tx.send(Ok(()));
+                }
+                Err(error) => {
+                    let mut state = state.borrow_mut();
+                    if let Some(bridge) = state.bridge.take() {
+                        bridge.close();
+                    }
+                    let _ = connect_tx.send(Err(error));
+                }
+            }
+        });
+
+        Ok(wasm_bridge)
     }
 
     #[wasm_bindgen(js_name = waitConnect)]
     pub async fn wait_connect(&self) -> Result<(), JsValue> {
-        Ok(())
+        if self.state.borrow().vehicle.is_some() {
+            return Ok(());
+        }
+
+        let waiter = self
+            .state
+            .borrow_mut()
+            .connect_waiter
+            .take()
+            .ok_or_else(|| JsValue::from_str("no pending wasm connection"))?;
+
+        match waiter.await {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(error)) => Err(JsValue::from_str(&error)),
+            Err(_) => Err(JsValue::from_str("wasm connection task dropped")),
+        }
     }
 
     #[wasm_bindgen(js_name = disconnectLink)]
     pub async fn disconnect_link(&self) -> Result<(), JsValue> {
+        let vehicle = {
+            let mut state = self.state.borrow_mut();
+            if let Some(bridge) = state.bridge.take() {
+                bridge.close();
+            }
+            state.connect_waiter = None;
+            state.vehicle.take()
+        };
+
+        if let Some(vehicle) = vehicle {
+            vehicle
+                .disconnect()
+                .await
+                .map_err(|error| JsValue::from_str(&error.to_string()))?;
+        }
+
         Ok(())
     }
 

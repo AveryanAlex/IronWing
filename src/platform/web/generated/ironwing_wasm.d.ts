@@ -19,7 +19,7 @@ export class WasmByteBridge {
     close(): void;
     isClosed(): boolean;
     nextOutbound(): Promise<any>;
-    pushInbound(_bytes: Uint8Array): Promise<void>;
+    pushInbound(bytes: Uint8Array): Promise<void>;
 }
 
 export function start(): void;
@@ -35,14 +35,15 @@ export interface InitOutput {
     readonly ironwingwasmruntime_new: (a: any) => number;
     readonly ironwingwasmruntime_openSessionSnapshot: (a: number, b: number, c: number) => [number, number, number];
     readonly ironwingwasmruntime_waitConnect: (a: number) => any;
+    readonly start: () => void;
     readonly __wbg_wasmbytebridge_free: (a: number, b: number) => void;
     readonly wasmbytebridge_close: (a: number) => void;
     readonly wasmbytebridge_isClosed: (a: number) => number;
     readonly wasmbytebridge_nextOutbound: (a: number) => any;
     readonly wasmbytebridge_pushInbound: (a: number, b: any) => any;
-    readonly start: () => void;
     readonly wasm_bindgen__convert__closures_____invoke__h157532a21e05ac18: (a: number, b: number, c: any) => [number, number];
     readonly wasm_bindgen__convert__closures_____invoke__h831f6e81e7b0bf6f: (a: number, b: number, c: any, d: any) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__hba32844d06b6d595: (a: number, b: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;
