@@ -448,7 +448,7 @@ pub(crate) async fn disconnect_link(
         .session_runtime
         .lock()
         .await
-        .effective_session_envelope(std::time::Instant::now())
+        .effective_session_envelope(web_time::Instant::now())
         .map(|envelope| envelope.session_id);
     validate_disconnect_request(expected_session_id.as_deref(), request.as_ref())?;
     force_disconnect(&state, &app).await

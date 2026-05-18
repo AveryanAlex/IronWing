@@ -16,6 +16,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+ironwing-core = { path = "../crates/ironwing-core" }
 mavkit = { git = "https://github.com/AveryanAlex/mavkit.git", branch = "main", default-features = false, features = ["udp", "tcp", "ardupilot", "stream", "tlog"] }
 mavlink = { version = "0.17", features = ["tokio-1", "emit-extensions"] }
 serde = { version = "1", features = ["derive"] }
@@ -37,6 +38,7 @@ crc32fast = "1"
 ureq = "3"
 tokio-util = { version = "0.7.18", features = ["rt"] }
 humantime = "2"
+web-time = "1"
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3", features = ["fmt"] }

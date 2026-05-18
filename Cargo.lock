@@ -2104,6 +2104,7 @@ dependencies = [
  "dfu-core",
  "flate2",
  "humantime",
+ "ironwing-core",
  "mavkit",
  "mavlink",
  "nusb",
@@ -2126,6 +2127,7 @@ dependencies = [
  "tracing-subscriber",
  "ureq",
  "uuid",
+ "web-time",
 ]
 
 [[package]]

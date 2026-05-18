@@ -1,6 +1,11 @@
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 
+use ironwing_core::event_names;
+use ironwing_core::live::{LiveSnapshotInput, base_live_snapshot_from_caches};
+use ironwing_core::transport::{
+    AddressValidation, SerialValidation, TcpValidation, TransportDescriptor, UdpValidation,
+};
 use crate::bridges::TELEMETRY_INTERVAL_MS;
 use crate::bridges::emit_scoped;
 use crate::e2e_emit::emit_event;
@@ -8,10 +13,9 @@ use crate::guided::{emit_guided_snapshot, live_context_from_vehicle};
 use crate::ipc::{
     AckSessionSnapshotResult, DomainProvenance, DomainValue, GuidedCommandResult, GuidedFailure,
     GuidedFatalityScope, GuidedLiveContext, OpenSessionSnapshot, OperationId, ScopedEvent,
-    SessionConnection, SessionEnvelope, SessionSnapshot, SessionStatus, SourceKind,
-    StartGuidedSessionRequest, StatusTextEntry, UpdateGuidedSessionRequest,
+    SessionEnvelope, SourceKind, StartGuidedSessionRequest, StatusTextEntry,
+    UpdateGuidedSessionRequest,
     calibration_snapshot_from_sources, configuration_facts_snapshot_from_param_store,
-    status_text_snapshot_from_entries, support_snapshot,
 };
 use crate::{
     AppState,
@@ -24,6 +28,9 @@ use mavkit::{
     validate_plan,
 };
 use tauri::Manager;
+
+#[cfg(test)]
+use crate::ipc::SessionConnection;
 
 /// Result of downloading a mission plan from a vehicle.
 /// Home position is extracted from the telemetry home, not from plan items.
@@ -82,59 +89,6 @@ pub(crate) fn list_serial_ports_cmd() -> Result<Vec<String>, String> {
 #[tauri::command]
 pub(crate) fn mission_validate(plan: MissionPlan) -> Vec<MissionIssue> {
     validate_plan(&plan)
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub(crate) enum TransportDescriptor {
-    Udp {
-        label: &'static str,
-        available: bool,
-        validation: UdpValidation,
-    },
-    Tcp {
-        label: &'static str,
-        available: bool,
-        validation: TcpValidation,
-    },
-    Serial {
-        label: &'static str,
-        available: bool,
-        validation: SerialValidation,
-        default_baud: u32,
-    },
-    BluetoothBle {
-        label: &'static str,
-        available: bool,
-        validation: AddressValidation,
-    },
-    #[cfg(target_os = "android")]
-    BluetoothSpp {
-        label: &'static str,
-        available: bool,
-        validation: AddressValidation,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub(crate) struct UdpValidation {
-    bind_addr_required: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub(crate) struct TcpValidation {
-    address_required: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub(crate) struct SerialValidation {
-    port_required: bool,
-    baud_required: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub(crate) struct AddressValidation {
-    address_required: bool,
 }
 
 #[tauri::command]
@@ -222,46 +176,6 @@ fn guided_operation_failure(
     }
 }
 
-fn reprovenance<T: Clone>(value: &DomainValue<T>, provenance: DomainProvenance) -> DomainValue<T> {
-    DomainValue {
-        available: value.available,
-        complete: value.complete,
-        provenance,
-        value: value.value.clone(),
-    }
-}
-
-fn session_snapshot_from_context(
-    session_context: &crate::bridges::SessionContext,
-    connected: bool,
-    provenance: DomainProvenance,
-) -> DomainValue<SessionSnapshot> {
-    let status = if connected {
-        SessionStatus::Active
-    } else {
-        SessionStatus::Pending
-    };
-    let connection = if connected {
-        session_context.connection.clone()
-    } else {
-        SessionConnection::Disconnected
-    };
-
-    DomainValue::present(
-        SessionSnapshot {
-            status,
-            connection,
-            vehicle_state: connected
-                .then(|| session_context.vehicle_state.clone())
-                .flatten(),
-            home_position: connected
-                .then(|| session_context.home_position.clone())
-                .flatten(),
-        },
-        provenance,
-    )
-}
-
 fn live_snapshot_from_caches(
     envelope: SessionEnvelope,
     session_context: &crate::bridges::SessionContext,
@@ -270,29 +184,14 @@ fn live_snapshot_from_caches(
     connected: bool,
     provenance: DomainProvenance,
 ) -> OpenSessionSnapshot {
-    OpenSessionSnapshot {
+    base_live_snapshot_from_caches(LiveSnapshotInput {
         envelope,
-        session: session_snapshot_from_context(session_context, connected, provenance),
-        telemetry: if connected {
-            reprovenance(live_telemetry, provenance)
-        } else {
-            DomainValue::missing(provenance)
-        },
-        mission_state: None,
-        param_store: None,
-        param_progress: None,
-        support: if connected {
-            support_snapshot(provenance)
-        } else {
-            DomainValue::missing(provenance)
-        },
-        sensor_health: DomainValue::missing(provenance),
-        configuration_facts: DomainValue::missing(provenance),
-        calibration: DomainValue::missing(provenance),
-        guided: DomainValue::missing(provenance),
-        status_text: status_text_snapshot_from_entries(status_text_entries.to_vec(), provenance),
-        playback: crate::ipc::PlaybackSnapshot { cursor_usec: None },
-    }
+        session_context,
+        live_telemetry,
+        status_text_entries,
+        connected,
+        provenance,
+    })
 }
 
 async fn build_live_snapshot(
@@ -361,7 +260,7 @@ pub(crate) async fn emit_live_snapshot_restore(
 
     emit_event(
         app,
-        "session://state",
+        event_names::SESSION_STATE,
         &ScopedEvent {
             envelope: envelope.clone(),
             value: snapshot.session,
@@ -369,7 +268,7 @@ pub(crate) async fn emit_live_snapshot_restore(
     );
     emit_event(
         app,
-        "telemetry://state",
+        event_names::TELEMETRY_STATE,
         &ScopedEvent {
             envelope: envelope.clone(),
             value: snapshot.telemetry,
@@ -377,7 +276,7 @@ pub(crate) async fn emit_live_snapshot_restore(
     );
     emit_event(
         app,
-        "support://state",
+        event_names::SUPPORT_STATE,
         &ScopedEvent {
             envelope: envelope.clone(),
             value: snapshot.support,
@@ -385,7 +284,7 @@ pub(crate) async fn emit_live_snapshot_restore(
     );
     emit_event(
         app,
-        "status_text://state",
+        event_names::STATUS_TEXT_STATE,
         &ScopedEvent {
             envelope,
             value: snapshot.status_text,

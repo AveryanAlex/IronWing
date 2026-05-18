@@ -1,49 +1,32 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use std::time::Instant;
 
+use ironwing_core::event_names;
+use ironwing_core::vehicle_snapshot::{
+    mav_severity_name, seeded_vehicle_state, telemetry_snapshot_from_vehicle,
+};
 use mavkit::{
     SensorHealthSummary, Vehicle,
     ardupilot::{MagCalProgress, MagCalReport},
 };
 use serde::Serialize;
 use tauri::Manager;
+use web_time::Instant;
 
 use crate::AppState;
 use crate::e2e_emit::emit_event;
 use crate::guided::{emit_guided_snapshot, live_context_from_vehicle};
 use crate::ipc::calibration::CalibrationSources;
-use crate::ipc::session::{SessionConnection, VehicleState};
+use crate::ipc::session::SessionConnection;
 use crate::ipc::{
     DomainProvenance, DomainValue, ScopedEvent, SessionEnvelope, SessionSnapshot, SessionStatus,
     configuration_facts_snapshot_from_param_store, push_status_text_entry,
     sensor_health_snapshot_from_summary, session_connection_from_link_state,
     status_text_entry_from_value, status_text_snapshot_from_entries, support_snapshot,
-    telemetry_snapshot_from_value,
 };
 
-pub(crate) struct SessionContext {
-    pub connection: SessionConnection,
-    pub vehicle_state: Option<VehicleState>,
-    pub home_position: Option<mavkit::HomePosition>,
-}
-
-impl SessionContext {
-    pub(crate) fn new() -> Self {
-        Self {
-            connection: SessionConnection::Disconnected,
-            vehicle_state: None,
-            home_position: None,
-        }
-    }
-
-    pub(crate) fn reset(&mut self) {
-        self.connection = SessionConnection::Disconnected;
-        self.vehicle_state = None;
-        self.home_position = None;
-    }
-}
+pub(crate) use ironwing_core::live::SessionContext;
 
 pub(crate) static TELEMETRY_INTERVAL_MS: AtomicU64 = AtomicU64::new(200);
 
@@ -88,23 +71,6 @@ async fn reconcile_guided_runtime(handle: &tauri::AppHandle, vehicle: &Vehicle) 
     }
 }
 
-/// Maps `dialect::MavSeverity` to the lowercase snake_case names used on the
-/// IPC wire. `dialect::MavSeverity` is a generated mavlink enum without a
-/// `Serialize` impl, so we map it by hand here.
-fn mav_severity_name(severity: mavkit::dialect::MavSeverity) -> &'static str {
-    use mavkit::dialect::MavSeverity::*;
-    match severity {
-        MAV_SEVERITY_EMERGENCY => "emergency",
-        MAV_SEVERITY_ALERT => "alert",
-        MAV_SEVERITY_CRITICAL => "critical",
-        MAV_SEVERITY_ERROR => "error",
-        MAV_SEVERITY_WARNING => "warning",
-        MAV_SEVERITY_NOTICE => "notice",
-        MAV_SEVERITY_INFO => "info",
-        MAV_SEVERITY_DEBUG => "debug",
-    }
-}
-
 pub(crate) async fn spawn_event_bridges(
     app: &tauri::AppHandle,
     vehicle: &Vehicle,
@@ -113,121 +79,29 @@ pub(crate) async fn spawn_event_bridges(
 
     // Seed identity-derived fields so the first session://state has vehicle info
     {
-        let identity = vehicle.identity();
         let state: tauri::State<'_, AppState> = app.state();
         let mut ctx = state.session_context.lock().await;
-        ctx.vehicle_state = Some(VehicleState {
-            armed: false,
-            custom_mode: 0,
-            mode_name: "unknown".into(),
-            system_status: mavkit::SystemStatus::Active,
-            vehicle_type: identity.vehicle_type,
-            autopilot: identity.autopilot,
-            system_id: identity.system_id,
-            component_id: identity.component_id,
-            heartbeat_received: true,
-        });
+        ctx.vehicle_state = Some(seeded_vehicle_state(vehicle));
         ctx.connection = SessionConnection::Connected;
     }
 
     let calibration_sources = Arc::new(tokio::sync::Mutex::new(CalibrationSources::default()));
 
     // Telemetry — throttled by TELEMETRY_INTERVAL_MS.
-    // The new mavkit API uses MetricHandle/ObservationHandle per metric, not a
-    // single monolith watch channel. We grab a snapshot of grouped telemetry
-    // by serializing individual metric handles on each tick.
     {
-        let telemetry = vehicle.telemetry();
-        let position_global = telemetry.position().global();
-        let groundspeed = telemetry.position().groundspeed_mps();
-        let airspeed = telemetry.position().airspeed_mps();
-        let climb_rate = telemetry.position().climb_rate_mps();
-        let heading = telemetry.position().heading_deg();
-        let throttle = telemetry.position().throttle_pct();
-        let attitude = telemetry.attitude().euler();
-        let bat_remaining = telemetry.battery().remaining_pct();
-        let bat_voltage = telemetry.battery().voltage_v();
-        let bat_current = telemetry.battery().current_a();
-        let bat_cells = telemetry.battery().cells();
-        let bat_energy = telemetry.battery().energy_consumed_wh();
-        let bat_time_remaining = telemetry.battery().time_remaining_s();
-        let gps_quality = telemetry.gps().quality();
-        let nav_wp = telemetry.navigation().waypoint();
-        let nav_guidance = telemetry.navigation().guidance();
-        let terrain_clearance = telemetry.terrain().clearance();
-        let rc = telemetry.rc();
-        let rc_channels: Vec<_> = (0..18)
-            .filter_map(|index| rc.channel_pwm_us(index))
-            .collect();
-        let rc_rssi = rc.rssi_pct();
-        let actuators = telemetry.actuators();
-        let servo_outputs: Vec<_> = (0..16)
-            .filter_map(|index| actuators.servo_pwm_us(index))
-            .collect();
-
+        let telemetry_vehicle = vehicle.clone();
         let handle = app.clone();
         tasks.push(tokio::spawn(async move {
             loop {
                 let ms = TELEMETRY_INTERVAL_MS.load(Ordering::Relaxed);
                 tokio::time::sleep(Duration::from_millis(ms)).await;
 
-                let rc_channel_values: Vec<f64> = rc_channels
-                    .iter()
-                    .filter_map(|channel| channel.latest().map(|s| f64::from(s.value)))
-                    .collect();
-                let servo_output_values: Vec<f64> = servo_outputs
-                    .iter()
-                    .filter_map(|servo| servo.latest().map(|s| f64::from(s.value)))
-                    .collect();
-
-                // Build a flat JSON snapshot keyed to match telemetry_state_from_value()
-                let snapshot = serde_json::json!({
-                    // Position — extract from nested GlobalPosition
-                    "latitude_deg": position_global.latest().map(|s| s.value.latitude_deg),
-                    "longitude_deg": position_global.latest().map(|s| s.value.longitude_deg),
-                    "altitude_m": position_global.latest().map(|s| s.value.altitude_msl_m),
-                    // Flight
-                    "speed_mps": groundspeed.latest().map(|s| s.value),
-                    "airspeed_mps": airspeed.latest().map(|s| s.value),
-                    "climb_rate_mps": climb_rate.latest().map(|s| s.value),
-                    "heading_deg": heading.latest().map(|s| s.value),
-                    "throttle_pct": throttle.latest().map(|s| s.value),
-                    // Attitude — extract from nested EulerAttitude
-                    "roll_deg": attitude.latest().map(|s| s.value.roll_deg),
-                    "pitch_deg": attitude.latest().map(|s| s.value.pitch_deg),
-                    "yaw_deg": attitude.latest().map(|s| s.value.yaw_deg),
-                    // Battery
-                    "battery_pct": bat_remaining.latest().map(|s| s.value),
-                    "battery_voltage_v": bat_voltage.latest().map(|s| s.value),
-                    "battery_current_a": bat_current.latest().map(|s| s.value),
-                    "battery_voltage_cells": bat_cells.latest().map(|s| s.value.voltages_v.clone()),
-                    "energy_consumed_wh": bat_energy.latest().map(|s| s.value),
-                    "battery_time_remaining_s": bat_time_remaining.latest().map(|s| f64::from(s.value)),
-                    // GPS — extract from nested GpsQuality
-                    "gps_fix_type": gps_quality.latest().map(|s| s.value.fix_type),
-                    "gps_satellites": gps_quality.latest().and_then(|s| s.value.satellites.map(|v| v as u64)),
-                    "gps_hdop": gps_quality.latest().and_then(|s| s.value.hdop),
-                    // Navigation waypoint — extract from nested WaypointProgress
-                    "wp_dist_m": nav_wp.latest().map(|s| s.value.distance_m),
-                    "nav_bearing_deg": nav_wp.latest().map(|s| s.value.bearing_deg),
-                    "target_bearing_deg": nav_guidance.latest().map(|s| s.value.bearing_deg),
-                    "xtrack_error_m": nav_guidance.latest().map(|s| s.value.cross_track_error_m),
-                    "terrain_height_m": terrain_clearance.latest().map(|s| s.value.terrain_height_m),
-                    "height_above_terrain_m": terrain_clearance.latest().map(|s| s.value.height_above_terrain_m),
-                    "rc_channels": (!rc_channel_values.is_empty()).then_some(rc_channel_values),
-                    "rc_rssi": rc_rssi.latest().map(|s| f64::from(s.value)),
-                    "servo_outputs": (!servo_output_values.is_empty()).then_some(servo_output_values),
-                });
-
-                let grouped = telemetry_snapshot_from_value(
-                    &snapshot,
-                    DomainProvenance::Stream,
-                );
+                let grouped = telemetry_snapshot_from_vehicle(&telemetry_vehicle, DomainProvenance::Stream);
                 {
                     let state: tauri::State<'_, AppState> = handle.state();
                     *state.live_telemetry.lock().await = grouped.clone();
                 }
-                emit_scoped(&handle, "telemetry://state", grouped).await;
+                emit_scoped(&handle, event_names::TELEMETRY_STATE, grouped).await;
             }
         }));
     }
@@ -246,7 +120,7 @@ pub(crate) async fn spawn_event_bridges(
                     ctx.connection = session_connection_from_link_state(&ls);
                 }
                 let snapshot = snapshot_from_context(&handle).await;
-                emit_scoped(&handle, "session://state", snapshot).await;
+                emit_scoped(&handle, event_names::SESSION_STATE, snapshot).await;
                 reconcile_guided_runtime(&handle, &guided_vehicle).await;
             }
         }));
@@ -267,7 +141,7 @@ pub(crate) async fn spawn_event_bridges(
                     }
                 }
                 let snapshot = snapshot_from_context(&handle).await;
-                emit_scoped(&handle, "session://state", snapshot).await;
+                emit_scoped(&handle, event_names::SESSION_STATE, snapshot).await;
             }
         }));
     }
@@ -288,7 +162,7 @@ pub(crate) async fn spawn_event_bridges(
                     }
                 }
                 let snapshot = snapshot_from_context(&handle).await;
-                emit_scoped(&handle, "session://state", snapshot).await;
+                emit_scoped(&handle, event_names::SESSION_STATE, snapshot).await;
             }
         }));
     }
@@ -311,7 +185,7 @@ pub(crate) async fn spawn_event_bridges(
                     });
                 }
                 let snapshot = snapshot_from_context(&handle).await;
-                emit_scoped(&handle, "session://state", snapshot).await;
+                emit_scoped(&handle, event_names::SESSION_STATE, snapshot).await;
             }
         }));
     }
@@ -322,7 +196,7 @@ pub(crate) async fn spawn_event_bridges(
         let handle = app.clone();
         tasks.push(tokio::spawn(async move {
             while let Some(ms) = mission_sub.recv().await {
-                emit_scoped(&handle, "mission://state", ms).await;
+                emit_scoped(&handle, event_names::MISSION_STATE, ms).await;
             }
         }));
     }
@@ -334,10 +208,10 @@ pub(crate) async fn spawn_event_bridges(
         tasks.push(tokio::spawn(async move {
             while let Some(ps) = param_sub.recv().await {
                 if let Some(ref store) = ps.store {
-                    emit_scoped(&handle, "param://store", store.clone()).await;
+                    emit_scoped(&handle, event_names::PARAM_STORE, store.clone()).await;
                     emit_scoped(
                         &handle,
-                        "configuration_facts://state",
+                        event_names::CONFIGURATION_FACTS_STATE,
                         configuration_facts_snapshot_from_param_store(
                             store,
                             DomainProvenance::Stream,
@@ -373,7 +247,7 @@ pub(crate) async fn spawn_event_bridges(
                     push_status_text_entry(&mut history, entry);
                     emit_scoped(
                         &handle,
-                        "status_text://state",
+                        event_names::STATUS_TEXT_STATE,
                         status_text_snapshot_from_entries(
                             history.clone(),
                             DomainProvenance::Stream,
@@ -395,13 +269,13 @@ pub(crate) async fn spawn_event_bridges(
                 let val: SensorHealthSummary = sample.value;
                 emit_scoped(
                     &handle,
-                    "support://state",
+                    event_names::SUPPORT_STATE,
                     support_snapshot(DomainProvenance::Stream),
                 )
                 .await;
                 emit_scoped(
                     &handle,
-                    "sensor_health://state",
+                    event_names::SENSOR_HEALTH_STATE,
                     sensor_health_snapshot_from_summary(&val, DomainProvenance::Stream),
                 )
                 .await;
@@ -420,14 +294,14 @@ pub(crate) async fn spawn_event_bridges(
                 // Take the first compass entry for the existing single-compass UI
                 let val: Option<MagCalProgress> = progress_vec.first().cloned();
                 if let Some(ref val) = val {
-                    emit_event(&handle, "compass://cal_progress", val);
+                    emit_event(&handle, event_names::COMPASS_CAL_PROGRESS, val);
                 }
                 let calibration = {
                     let mut sources = calibration_sources.lock().await;
                     sources.update_mag_progress(val);
                     sources.snapshot(DomainProvenance::Stream)
                 };
-                emit_scoped(&handle, "calibration://state", calibration).await;
+                emit_scoped(&handle, event_names::CALIBRATION_STATE, calibration).await;
             }
         }));
     }
@@ -443,14 +317,14 @@ pub(crate) async fn spawn_event_bridges(
                 // Take the first compass entry for the existing single-compass UI
                 let val: Option<MagCalReport> = report_vec.first().cloned();
                 if let Some(ref val) = val {
-                    emit_event(&handle, "compass://cal_report", val);
+                    emit_event(&handle, event_names::COMPASS_CAL_REPORT, val);
                 }
                 let calibration = {
                     let mut sources = calibration_sources.lock().await;
                     sources.update_mag_report(val);
                     sources.snapshot(DomainProvenance::Stream)
                 };
-                emit_scoped(&handle, "calibration://state", calibration).await;
+                emit_scoped(&handle, event_names::CALIBRATION_STATE, calibration).await;
             }
         }));
     }

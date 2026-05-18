@@ -1,4 +1,5 @@
-use std::time::Instant;
+use ironwing_core::event_names;
+use web_time::Instant;
 
 use crate::AppState;
 use crate::e2e_emit::emit_event;
@@ -43,7 +44,7 @@ pub(crate) async fn emit_guided_snapshot(
     if let Some(envelope) = envelope {
         emit_event(
             app,
-            "guided://state",
+            event_names::GUIDED_STATE,
             &ScopedEvent {
                 envelope,
                 value: guided,
