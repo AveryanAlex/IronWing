@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "src-tauri",
+    "crates/ironwing-core",
     "crates/tauri-plugin-bluetooth-classic",
 ]
 default-members = ["src-tauri"]

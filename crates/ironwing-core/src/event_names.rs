@@ -1,0 +1,17 @@
+pub const SESSION_STATE: &str = "session://state";
+pub const TELEMETRY_STATE: &str = "telemetry://state";
+pub const MISSION_STATE: &str = "mission://state";
+pub const MISSION_PROGRESS: &str = "mission://progress";
+pub const PARAM_STORE: &str = "param://store";
+pub const PARAM_PROGRESS: &str = "param://progress";
+pub const SENSOR_HEALTH_STATE: &str = "sensor_health://state";
+pub const CALIBRATION_STATE: &str = "calibration://state";
+pub const COMPASS_CAL_PROGRESS: &str = "compass://cal_progress";
+pub const COMPASS_CAL_REPORT: &str = "compass://cal_report";
+pub const CONFIGURATION_FACTS_STATE: &str = "configuration_facts://state";
+pub const STATUS_TEXT_STATE: &str = "status_text://state";
+pub const SUPPORT_STATE: &str = "support://state";
+pub const GUIDED_STATE: &str = "guided://state";
+pub const PLAYBACK_STATE: &str = "playback://state";
+pub const LOG_PROGRESS: &str = "log://progress";
+pub const FIRMWARE_PROGRESS: &str = "firmware://progress";
