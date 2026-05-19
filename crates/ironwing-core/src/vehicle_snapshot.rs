@@ -1,4 +1,6 @@
-use crate::ipc::{DomainProvenance, TelemetrySnapshot, VehicleState, telemetry_snapshot_from_value};
+use crate::ipc::{
+    DomainProvenance, TelemetrySnapshot, VehicleState, telemetry_snapshot_from_value,
+};
 
 pub fn telemetry_snapshot_from_vehicle(
     vehicle: &mavkit::Vehicle,

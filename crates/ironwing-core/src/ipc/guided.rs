@@ -348,11 +348,7 @@ impl GuidedRuntime {
         }
     }
 
-    pub fn stop(
-        &self,
-        source_kind: SourceKind,
-        context: GuidedLiveContext,
-    ) -> GuidedCommandResult {
+    pub fn stop(&self, source_kind: SourceKind, context: GuidedLiveContext) -> GuidedCommandResult {
         if let Err(failure) =
             self.validate_live_operation(OperationId::StopGuidedSession, source_kind)
         {

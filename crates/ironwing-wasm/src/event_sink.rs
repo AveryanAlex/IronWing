@@ -20,3 +20,12 @@ impl EventSink {
             .map(|_| ())
     }
 }
+
+impl ironwing_core::live_runtime::EventSink for EventSink {
+    fn emit<T>(&self, event: &'static str, payload: &T)
+    where
+        T: serde::Serialize + Clone + Send + 'static,
+    {
+        let _ = EventSink::emit(self, event, payload);
+    }
+}

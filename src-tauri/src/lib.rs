@@ -1,6 +1,4 @@
 use bluetooth::{bt_get_bonded_devices, bt_request_permissions, bt_scan_ble, bt_stop_scan_ble};
-use std::sync::atomic::AtomicU64;
-
 use commands::{
     ack_session_snapshot, arm_vehicle, available_transports, calibrate_accel,
     calibrate_compass_accept, calibrate_compass_cancel, calibrate_compass_start, calibrate_gyro,
@@ -9,8 +7,9 @@ use commands::{
     mission_set_current, mission_upload, mission_validate, motor_test, open_session_snapshot,
     param_cancel, param_download_all, param_format_file, param_parse_file, param_write,
     param_write_batch, rally_clear, rally_download, rally_upload, rc_override, reboot_vehicle,
-    request_prearm_checks, set_flight_mode, set_message_rate, set_servo, set_telemetry_rate,
-    start_guided_session, stop_guided_session, update_guided_session, vehicle_takeoff,
+    request_prearm_checks, runtime_capabilities, set_flight_mode, set_message_rate, set_servo,
+    set_telemetry_rate, start_guided_session, stop_guided_session, update_guided_session,
+    vehicle_takeoff,
 };
 use connection::{ActiveLinkTarget, connect_link, disconnect_link};
 use firmware::commands::{
@@ -21,19 +20,19 @@ use firmware::commands::{
 };
 use firmware::discovery::{firmware_list_dfu_devices, firmware_list_ports};
 use firmware::types::FirmwareSessionHandle;
-use ipc::{DomainProvenance, GuidedRuntime, StatusTextEntry, TelemetrySnapshot};
+use ipc::GuidedRuntime;
+use ironwing_core::live_runtime::{LiveVehicleRuntime, SharedLiveRuntime};
 use log_library::{
     log_library_cancel, log_library_list, log_library_register, log_library_register_open_file,
     log_library_reindex, log_library_relink, log_library_remove,
 };
 use logs::{LogOperationState, LogStore, PlaybackRuntimeState};
-use mavkit::Vehicle;
 use recording::{
     TlogRecorderHandle, recording_settings_read, recording_settings_write, recording_start,
     recording_status, recording_stop,
 };
 use remote_ui::RemoteUiEvent;
-use session_runtime::SessionRuntime;
+use tauri_event_sink::TauriEventSink;
 mod bluetooth;
 mod bridges;
 mod commands;
@@ -50,6 +49,7 @@ mod logs;
 mod recording;
 mod remote_ui;
 mod session_runtime;
+mod tauri_event_sink;
 
 pub(crate) type MissionCancelToken = tokio_util::sync::CancellationToken;
 
@@ -59,7 +59,7 @@ pub(crate) enum FirmwareAbortHandle {
 }
 
 pub(crate) struct AppState {
-    pub(crate) vehicle: tokio::sync::Mutex<Option<Vehicle>>,
+    pub(crate) live_runtime: SharedLiveRuntime<TauriEventSink>,
     pub(crate) active_link_target: tokio::sync::Mutex<Option<ActiveLinkTarget>>,
     pub(crate) connect_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
     pub(crate) background_tasks: tokio::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>,
@@ -74,13 +74,7 @@ pub(crate) struct AppState {
     pub(crate) firmware_cancel_requested: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub(crate) param_download_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
     pub(crate) mission_op_cancel: tokio::sync::Mutex<Option<MissionCancelToken>>,
-    pub(crate) session_runtime: tokio::sync::Mutex<SessionRuntime>,
     pub(crate) guided_runtime: tokio::sync::Mutex<GuidedRuntime>,
-    #[allow(dead_code)] // Read by event bridge wiring (Task 3)
-    pub(crate) session_context: tokio::sync::Mutex<bridges::SessionContext>,
-    pub(crate) live_telemetry: tokio::sync::Mutex<TelemetrySnapshot>,
-    pub(crate) status_text_history: tokio::sync::Mutex<Vec<StatusTextEntry>>,
-    pub(crate) next_status_text_sequence: AtomicU64,
     pub(crate) remote_ui_events: tokio::sync::broadcast::Sender<RemoteUiEvent>,
 }
 
@@ -93,8 +87,9 @@ fn ble_plugin_enabled() -> bool {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let tauri_event_sink = TauriEventSink::default();
     let state = AppState {
-        vehicle: tokio::sync::Mutex::new(None),
+        live_runtime: SharedLiveRuntime::new(LiveVehicleRuntime::new(tauri_event_sink.clone())),
         active_link_target: tokio::sync::Mutex::new(None),
         connect_abort: tokio::sync::Mutex::new(None),
         background_tasks: tokio::sync::Mutex::new(Vec::new()),
@@ -109,17 +104,14 @@ pub fn run() {
         firmware_cancel_requested: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         param_download_abort: tokio::sync::Mutex::new(None),
         mission_op_cancel: tokio::sync::Mutex::new(None),
-        session_runtime: tokio::sync::Mutex::new(SessionRuntime::new()),
         guided_runtime: tokio::sync::Mutex::new(GuidedRuntime::default()),
-        session_context: tokio::sync::Mutex::new(bridges::SessionContext::new()),
-        live_telemetry: tokio::sync::Mutex::new(TelemetrySnapshot::missing(
-            DomainProvenance::Bootstrap,
-        )),
-        status_text_history: tokio::sync::Mutex::new(Vec::new()),
-        next_status_text_sequence: AtomicU64::new(1),
         remote_ui_events: remote_ui::event_channel(),
     };
     let mut builder = tauri::Builder::default()
+        .setup(move |app| {
+            tauri_event_sink.set_handle(app.handle().clone());
+            Ok(())
+        })
         .manage(state)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -139,6 +131,7 @@ pub fn run() {
         disconnect_link,
         list_serial_ports_cmd,
         available_transports,
+        runtime_capabilities,
         bt_request_permissions,
         bt_scan_ble,
         bt_stop_scan_ble,

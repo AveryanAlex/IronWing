@@ -6,7 +6,9 @@ pub struct LocalTaskSet {
 
 impl LocalTaskSet {
     pub fn new() -> Self {
-        Self { handles: Vec::new() }
+        Self {
+            handles: Vec::new(),
+        }
     }
 
     pub fn spawn(&mut self, future: impl std::future::Future<Output = ()> + 'static) {
@@ -27,5 +29,14 @@ impl LocalTaskSet {
 impl Default for LocalTaskSet {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl ironwing_core::live_runtime::LocalTaskSpawner for LocalTaskSet {
+    fn spawn_local<F>(&mut self, future: F)
+    where
+        F: std::future::Future<Output = ()> + 'static,
+    {
+        self.spawn(future);
     }
 }

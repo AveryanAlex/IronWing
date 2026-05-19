@@ -2,12 +2,11 @@ use crate::AppState;
 use crate::ipc::{OperationFailure, OperationId, Reason, ReasonKind, SourceKind};
 use tokio::sync::MappedMutexGuard;
 
-pub(crate) async fn with_vehicle(
-    state: &AppState,
-) -> Result<MappedMutexGuard<'_, mavkit::Vehicle>, String> {
-    let guard = state.vehicle.lock().await;
-    tokio::sync::MutexGuard::try_map(guard, |opt| opt.as_mut())
-        .map_err(|_| "not connected".to_string())
+pub(crate) async fn with_vehicle(state: &AppState) -> Result<mavkit::Vehicle, String> {
+    state
+        .live_runtime
+        .with_runtime(|runtime| runtime.vehicle())
+        .ok_or_else(|| "not connected".to_string())
 }
 
 pub(crate) async fn with_log_store(
@@ -22,7 +21,9 @@ pub(crate) async fn ensure_live_write_allowed(
     state: &AppState,
     operation_id: OperationId,
 ) -> Result<(), String> {
-    let source_kind = state.session_runtime.lock().await.effective_source_kind();
+    let source_kind = state
+        .live_runtime
+        .with_runtime(|runtime| runtime.effective_source_kind());
     if source_kind == SourceKind::Playback {
         return Err(operation_failure_json(OperationFailure {
             operation_id,

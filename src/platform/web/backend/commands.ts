@@ -14,6 +14,21 @@ import type {
 } from "../../../firmware";
 import type { LogFormatAdapter, LogLibraryCatalog } from "../../../logs";
 import type { RecordingSettings, RecordingSettingsResult, RecordingStatus } from "../../../recording";
+import type { TransportDescriptor } from "../../../transport";
+
+type Capability =
+  | { kind: "supported" }
+  | { kind: "maybe"; reason: string }
+  | { kind: "unsupported"; reason: string };
+
+type RuntimeCapabilities = {
+  transports: TransportDescriptor[];
+  firmware_flash: Capability;
+  log_library_filesystem: Capability;
+  recording_filesystem: Capability;
+  mission_transfer: Capability;
+  parameter_transfer: Capability;
+};
 
 const DEFAULT_WEB_RECORDING_SETTINGS: RecordingSettings = {
   auto_record_on_connect: false,
@@ -75,6 +90,53 @@ const WEB_MESSAGE_RATES = [
   { id: 62, name: "Nav Controller", default_rate_hz: 2.0 },
 ];
 
+const maybe = (reason: string): Capability => ({ kind: "maybe", reason });
+const unsupportedCapability = (reason: string): Capability => ({ kind: "unsupported", reason });
+
+function webTransportDescriptors(): TransportDescriptor[] {
+  return [
+    {
+      kind: "websocket",
+      label: "WebSocket",
+      available: typeof WebSocket !== "undefined",
+      validation: { url_required: true },
+      discovery_error:
+        typeof WebSocket === "undefined" ? "WebSocket is not available in this browser" : undefined,
+    },
+    {
+      kind: "web_serial",
+      label: "Web Serial",
+      available: isWebSerialAvailable(),
+      validation: { chooser_required: true, baud_required: true },
+      default_baud: 57600,
+      discovery_error: isWebSerialAvailable()
+        ? undefined
+        : "Web Serial is not available in this browser",
+    },
+    {
+      kind: "web_bluetooth",
+      label: "Web Bluetooth (NUS)",
+      available: isWebBluetoothAvailable(),
+      validation: { chooser_required: true },
+      profile: "nordic_uart",
+      discovery_error: isWebBluetoothAvailable()
+        ? undefined
+        : "Web Bluetooth is not available in this browser",
+    },
+  ];
+}
+
+function webRuntimeCapabilities(): RuntimeCapabilities {
+  return {
+    transports: webTransportDescriptors(),
+    firmware_flash: unsupportedCapability("Firmware flashing is not available in pure web mode."),
+    log_library_filesystem: unsupportedCapability("Native log-library filesystem access is not available in pure web mode."),
+    recording_filesystem: unsupportedCapability("Native recording filesystem access is not available in pure web mode."),
+    mission_transfer: maybe("Mission transfer depends on the connected MAVLink browser transport."),
+    parameter_transfer: maybe("Parameter transfer depends on the connected MAVLink browser transport."),
+  };
+}
+
 function computeSerialReadinessToken(request: SerialReadinessRequest): string {
   const encoder = new TextEncoder();
   const sourceIdentity = request.source.kind === "catalog_url"
@@ -97,36 +159,9 @@ function fnv1a64Digest(bytes: number[]): string {
 export async function invokeWebCommand<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   switch (cmd) {
     case "available_transports":
-      return [
-        {
-          kind: "websocket",
-          label: "WebSocket",
-          available: typeof WebSocket !== "undefined",
-          validation: { url_required: true },
-          discovery_error:
-            typeof WebSocket === "undefined" ? "WebSocket is not available in this browser" : undefined,
-        },
-        {
-          kind: "web_serial",
-          label: "Web Serial",
-          available: isWebSerialAvailable(),
-          validation: { chooser_required: true, baud_required: true },
-          default_baud: 57600,
-          discovery_error: isWebSerialAvailable()
-            ? undefined
-            : "Web Serial is not available in this browser",
-        },
-        {
-          kind: "web_bluetooth",
-          label: "Web Bluetooth (NUS)",
-          available: isWebBluetoothAvailable(),
-          validation: { chooser_required: true },
-          profile: "nordic_uart",
-          discovery_error: isWebBluetoothAvailable()
-            ? undefined
-            : "Web Bluetooth is not available in this browser",
-        },
-      ] as T;
+      return webTransportDescriptors() as T;
+    case "runtime_capabilities":
+      return webRuntimeCapabilities() as T;
     case "list_serial_ports_cmd":
       return [] as T;
     case "bt_request_permissions":
@@ -254,8 +289,12 @@ export async function invokeWebCommand<T>(cmd: string, args?: Record<string, unk
     }
     case "get_available_message_rates":
       return WEB_MESSAGE_RATES as T;
-    case "set_telemetry_rate":
+    case "set_telemetry_rate": {
+      const runtime = await ensureWasmRuntime();
+      webBackendRuntime.runtimeLoaded = true;
+      runtime.setTelemetryRate(Number(args?.rateHz ?? 0));
       return undefined as T;
+    }
     case "log_format_adapters":
       return WEB_LOG_FORMAT_ADAPTERS as T;
     case "log_library_list":

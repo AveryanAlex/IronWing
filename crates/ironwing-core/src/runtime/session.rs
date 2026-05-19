@@ -3,9 +3,9 @@ use std::time::Duration;
 use web_time::Instant;
 
 use crate::ipc::{
-    AckSessionSnapshotResult, DomainProvenance, OpenSessionSnapshot, OperationFailure,
-    OperationId, PlaybackSnapshot, Reason, ReasonKind, SessionConnection, SessionEnvelope,
-    SessionSnapshot, SessionStatus, SourceKind,
+    AckSessionSnapshotResult, DomainProvenance, OpenSessionSnapshot, OperationFailure, OperationId,
+    PlaybackSnapshot, Reason, ReasonKind, SessionConnection, SessionEnvelope, SessionSnapshot,
+    SessionStatus, SourceKind,
 };
 
 #[derive(Debug, Clone)]

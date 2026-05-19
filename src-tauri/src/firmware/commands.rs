@@ -189,8 +189,7 @@ pub(crate) async fn firmware_flash_serial(
     ) {
         // Connected preflight path: request bootloader reboot via MAVLink, then disconnect
         let reboot_result = {
-            let guard = state.vehicle.lock().await;
-            if let Some(vehicle) = guard.as_ref() {
+            if let Some(vehicle) = state.live_runtime.with_runtime(|runtime| runtime.vehicle()) {
                 vehicle.ardupilot().reboot_to_bootloader().await
             } else {
                 Ok(())
@@ -322,9 +321,9 @@ pub(crate) async fn firmware_serial_preflight(
     let vehicle_connected = connection::is_vehicle_connected(&state).await;
 
     let param_count = if vehicle_connected {
-        let guard = state.vehicle.lock().await;
-        guard
-            .as_ref()
+        state
+            .live_runtime
+            .with_runtime(|runtime| runtime.vehicle())
             .and_then(|v| {
                 v.params()
                     .latest()

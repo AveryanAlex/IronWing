@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const wasmRuntimeMock = vi.hoisted(() => ({
+  beginConnect: vi.fn(() => ({ close: vi.fn(), isClosed: () => false })),
+  waitConnect: vi.fn(async () => undefined),
+  disconnectLink: vi.fn(async () => undefined),
+  getAvailableModes: vi.fn(() => [{ custom_mode: 4, name: "GUIDED" }]),
+  setTelemetryRate: vi.fn(() => undefined),
+  openSessionSnapshot: vi.fn(() => ({ envelope: { session_id: "session-1", source_kind: "live", seek_epoch: 0, reset_revision: 0 } })),
+  ackSessionSnapshot: vi.fn(() => ({ result: "accepted", envelope: { session_id: "session-1", source_kind: "live", seek_epoch: 0, reset_revision: 0 } })),
+}));
+
 vi.mock("../wasm", () => ({
-  ensureWasmRuntime: vi.fn(async () => ({
-    beginConnect: vi.fn(() => ({ close: vi.fn(), isClosed: () => false })),
-    waitConnect: vi.fn(async () => undefined),
-    disconnectLink: vi.fn(async () => undefined),
-    openSessionSnapshot: vi.fn(() => ({ envelope: { session_id: "session-1", source_kind: "live", seek_epoch: 0, reset_revision: 0 } })),
-    ackSessionSnapshot: vi.fn(() => ({ result: "accepted", envelope: { session_id: "session-1", source_kind: "live", seek_epoch: 0, reset_revision: 0 } })),
-  })),
+  ensureWasmRuntime: vi.fn(async () => wasmRuntimeMock),
 }));
 
 vi.mock("../transports/websocket", () => ({
@@ -70,6 +74,19 @@ describe("web backend commands", () => {
     ]);
   });
 
+  it("reports typed pure-web runtime capabilities", async () => {
+    const capabilities = await invokeWebCommand<Record<string, unknown>>("runtime_capabilities");
+
+    expect(capabilities.firmware_flash).toEqual(expect.objectContaining({ kind: "unsupported" }));
+    expect(capabilities.log_library_filesystem).toEqual(expect.objectContaining({ kind: "unsupported" }));
+    expect(capabilities.recording_filesystem).toEqual(expect.objectContaining({ kind: "unsupported" }));
+    expect(capabilities.mission_transfer).toEqual(expect.objectContaining({ kind: "maybe" }));
+    expect(capabilities.parameter_transfer).toEqual(expect.objectContaining({ kind: "maybe" }));
+    expect(capabilities.transports).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "websocket" }),
+    ]));
+  });
+
   it("starts Web Serial and Web Bluetooth transports from connect requests", async () => {
     await invokeWebCommand("connect_link", { request: { transport: { kind: "web_serial", baud: 115200 } } });
     expect(createWebSerialTransport).toHaveBeenCalledWith(
@@ -84,6 +101,18 @@ describe("web backend commands", () => {
       expect.anything(),
       expect.any(AbortSignal),
     );
+  });
+
+  it("available modes command delegates to the shared wasm runtime after connect", async () => {
+    await expect(invokeWebCommand("get_available_modes")).resolves.toEqual([
+      { custom_mode: 4, name: "GUIDED" },
+    ]);
+  });
+
+  it("telemetry rate command delegates to the shared wasm runtime", async () => {
+    await expect(invokeWebCommand("set_telemetry_rate", { rateHz: 5 })).resolves.toBeUndefined();
+
+    expect(wasmRuntimeMock.setTelemetryRate).toHaveBeenCalledWith(5);
   });
 
   it("returns graceful empty browser state for out-of-scope filesystem flows", async () => {
@@ -126,5 +155,6 @@ describe("web backend commands", () => {
     await expect(invokeWebCommand("mission_upload")).rejects.toThrow(
       "mission_upload is not available in the browser-only web runtime",
     );
+    await expect(invokeWebCommand("mission_upload")).rejects.not.toThrow("not wired");
   });
 });

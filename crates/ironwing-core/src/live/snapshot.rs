@@ -15,7 +15,10 @@ pub struct LiveSnapshotInput<'a> {
     pub provenance: DomainProvenance,
 }
 
-pub fn reprovenance<T: Clone>(value: &DomainValue<T>, provenance: DomainProvenance) -> DomainValue<T> {
+pub fn reprovenance<T: Clone>(
+    value: &DomainValue<T>,
+    provenance: DomainProvenance,
+) -> DomainValue<T> {
     DomainValue {
         available: value.available,
         complete: value.complete,
@@ -44,8 +47,12 @@ pub fn session_snapshot_from_context(
         SessionSnapshot {
             status,
             connection,
-            vehicle_state: connected.then(|| session_context.vehicle_state.clone()).flatten(),
-            home_position: connected.then(|| session_context.home_position.clone()).flatten(),
+            vehicle_state: connected
+                .then(|| session_context.vehicle_state.clone())
+                .flatten(),
+            home_position: connected
+                .then(|| session_context.home_position.clone())
+                .flatten(),
         },
         provenance,
     )

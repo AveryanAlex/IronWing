@@ -38,8 +38,9 @@ pub(crate) async fn emit_guided_snapshot(
     guided: GuidedSnapshot,
 ) {
     let envelope = {
-        let mut runtime = state.session_runtime.lock().await;
-        runtime.current_stream_envelope(Instant::now())
+        state
+            .live_runtime
+            .with_runtime(|runtime| runtime.current_stream_envelope(Instant::now()))
     };
 
     if let Some(envelope) = envelope {

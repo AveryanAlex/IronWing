@@ -550,6 +550,17 @@ function validateStructuredPlanArg<T>(args: CommandArgs, label: string): T {
   return structuredClone(plan as T);
 }
 
+function mockRuntimeCapabilities() {
+  return {
+    transports: availableTransportDescriptors(),
+    firmware_flash: { kind: "supported" },
+    log_library_filesystem: { kind: "supported" },
+    recording_filesystem: { kind: "supported" },
+    mission_transfer: { kind: "supported" },
+    parameter_transfer: { kind: "supported" },
+  };
+}
+
 async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unknown> {
   switch (cmd) {
     case "list_serial_ports_cmd":
@@ -567,6 +578,8 @@ async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unk
       ];
     case "available_transports":
       return availableTransportDescriptors();
+    case "runtime_capabilities":
+      return mockRuntimeCapabilities();
     case "open_session_snapshot":
       return openSessionSnapshotResult(((args?.sourceKind as "live" | "playback" | undefined) ?? "live"));
     case "ack_session_snapshot":

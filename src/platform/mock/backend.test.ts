@@ -32,6 +32,10 @@ function readRustCommandsSource() {
     return readFileSync("src-tauri/src/commands.rs", "utf8");
 }
 
+function readRustLiveRuntimeCommandsSource() {
+    return readFileSync("crates/ironwing-core/src/live_runtime/commands.rs", "utf8");
+}
+
 function readRustMessageRateCatalog() {
     const source = readRustCommandsSource();
     const functionMatch = source.match(
@@ -56,9 +60,10 @@ function readRustMessageRateCatalog() {
 }
 
 function readRustRateLimits() {
-    const source = readRustCommandsSource();
-    const messageRateMatch = source.match(/if !\(([0-9.]+)\.\.=([0-9.]+)\)\.contains\(&rate_hz\)/);
-    const telemetryRateMatch = source.match(/if rate_hz == 0 \|\| rate_hz > (\d+)/);
+    const liveRuntimeCommandsSource = readRustLiveRuntimeCommandsSource();
+    const tauriCommandsSource = readRustCommandsSource();
+    const messageRateMatch = liveRuntimeCommandsSource.match(/if !\(([0-9.]+)\.\.=([0-9.]+)\)\.contains\(&rate_hz\)/);
+    const telemetryRateMatch = tauriCommandsSource.match(/if rate_hz == 0 \|\| rate_hz > (\d+)/);
 
     if (!messageRateMatch || !telemetryRateMatch) {
         throw new Error("Could not parse telemetry/message-rate limits from Rust commands.rs");

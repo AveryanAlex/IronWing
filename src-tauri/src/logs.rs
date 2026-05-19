@@ -1854,10 +1854,12 @@ async fn playback_stop_inner(
     app: &tauri::AppHandle,
 ) -> Result<PlaybackState, String> {
     let playback_envelope = {
-        let runtime = state.session_runtime.lock().await;
-        runtime
-            .active_playback_envelope(OperationId::ReplayStop)
-            .ok()
+        state.live_runtime.with_runtime(|runtime| {
+            runtime
+                .session_runtime()
+                .active_playback_envelope(OperationId::ReplayStop)
+                .ok()
+        })
     };
 
     let idle_state = state.playback_runtime.prepare_idle().await;
@@ -1867,7 +1869,9 @@ async fn playback_stop_inner(
         emit_playback_state_snapshot(app, envelope, &idle_state);
     }
 
-    let live_envelope = state.session_runtime.lock().await.close_playback_session();
+    let live_envelope = state
+        .live_runtime
+        .with_runtime(|runtime| runtime.close_playback_session());
     if let Some(envelope) = live_envelope {
         crate::commands::emit_live_snapshot_restore(state, app, envelope).await;
     }
@@ -1884,10 +1888,12 @@ pub(crate) async fn playback_seek(
     let mut guard = state.log_store.lock().await;
     let store = guard.as_mut().ok_or_else(|| "no log open".to_string())?;
     let envelope = {
-        let mut runtime = state.session_runtime.lock().await;
-        runtime
-            .issue_playback_seek()
-            .map_err(|failure| failure.reason.message)?
+        state.live_runtime.with_runtime(|runtime| {
+            runtime
+                .session_runtime_mut()
+                .issue_playback_seek()
+                .map_err(|failure| failure.reason.message)
+        })?
     };
     state
         .guided_runtime
@@ -1907,10 +1913,12 @@ pub(crate) async fn playback_play(
     app: tauri::AppHandle,
 ) -> Result<PlaybackState, String> {
     let envelope = {
-        let runtime = state.session_runtime.lock().await;
-        runtime
-            .active_playback_envelope(OperationId::ReplayPlay)
-            .map_err(|failure| failure.reason.message)?
+        state.live_runtime.with_runtime(|runtime| {
+            runtime
+                .session_runtime()
+                .active_playback_envelope(OperationId::ReplayPlay)
+                .map_err(|failure| failure.reason.message)
+        })?
     };
     let mut guard = state.log_store.lock().await;
     let store = guard.as_mut().ok_or_else(|| "no log open".to_string())?;
@@ -1949,10 +1957,12 @@ pub(crate) async fn playback_pause(
     app: tauri::AppHandle,
 ) -> Result<PlaybackState, String> {
     let envelope = {
-        let runtime = state.session_runtime.lock().await;
-        runtime
-            .active_playback_envelope(OperationId::ReplayPause)
-            .map_err(|failure| failure.reason.message)?
+        state.live_runtime.with_runtime(|runtime| {
+            runtime
+                .session_runtime()
+                .active_playback_envelope(OperationId::ReplayPause)
+                .map_err(|failure| failure.reason.message)
+        })?
     };
     let mut guard = state.log_store.lock().await;
     let store = guard.as_mut().ok_or_else(|| "no log open".to_string())?;
@@ -1969,10 +1979,12 @@ pub(crate) async fn playback_set_speed(
     speed: f32,
 ) -> Result<PlaybackState, String> {
     let envelope = {
-        let runtime = state.session_runtime.lock().await;
-        runtime
-            .active_playback_envelope(OperationId::ReplaySetSpeed)
-            .map_err(|failure| failure.reason.message)?
+        state.live_runtime.with_runtime(|runtime| {
+            runtime
+                .session_runtime()
+                .active_playback_envelope(OperationId::ReplaySetSpeed)
+                .map_err(|failure| failure.reason.message)
+        })?
     };
     let mut guard = state.log_store.lock().await;
     let store = guard.as_mut().ok_or_else(|| "no log open".to_string())?;

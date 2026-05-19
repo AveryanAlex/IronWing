@@ -155,7 +155,9 @@ pub enum LogCatalogMigrationError {
     },
 }
 
-pub fn migrate_log_library_catalog(value: Value) -> Result<LogLibraryCatalog, LogCatalogMigrationError> {
+pub fn migrate_log_library_catalog(
+    value: Value,
+) -> Result<LogLibraryCatalog, LogCatalogMigrationError> {
     let schema_version = value
         .get("schema_version")
         .and_then(Value::as_u64)
@@ -163,8 +165,10 @@ pub fn migrate_log_library_catalog(value: Value) -> Result<LogLibraryCatalog, Lo
 
     match schema_version {
         version if version == u64::from(LOG_LIBRARY_CATALOG_SCHEMA_VERSION) => {
-            serde_json::from_value(value).map_err(|error| LogCatalogMigrationError::InvalidCatalog {
-                message: error.to_string(),
+            serde_json::from_value(value).map_err(|error| {
+                LogCatalogMigrationError::InvalidCatalog {
+                    message: error.to_string(),
+                }
             })
         }
         version => Err(LogCatalogMigrationError::UnsupportedSchemaVersion {

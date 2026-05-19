@@ -2,7 +2,6 @@ use mavkit::stream::{ChannelBridge, StreamConnection};
 use mavkit::{Vehicle, VehicleConfig};
 use serde::Deserialize;
 use std::future::Future;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tauri::Listener;
 #[cfg(target_os = "android")]
@@ -153,7 +152,11 @@ async fn request_tcp_telemetry_streams(vehicle: Vehicle) {
     ];
 
     for (message_id, interval_usec) in interval_requests {
-        if let Err(err) = vehicle.raw().set_message_interval(message_id, interval_usec).await {
+        if let Err(err) = vehicle
+            .raw()
+            .set_message_interval(message_id, interval_usec)
+            .await
+        {
             tracing::warn!("failed to request telemetry stream for message id {message_id}: {err}");
         }
     }
@@ -173,7 +176,9 @@ async fn store_connected_vehicle(
     tasks.extend(crate::bridges::spawn_event_bridges(app, &vehicle).await);
     *state.background_tasks.lock().await = tasks;
     *state.background_listeners.lock().await = listeners;
-    *state.vehicle.lock().await = Some(vehicle);
+    state
+        .live_runtime
+        .with_runtime(|runtime| runtime.seed_connected_vehicle(&vehicle));
     *state.active_link_target.lock().await = Some(active_target);
     Ok(())
 }
@@ -186,7 +191,7 @@ async fn maybe_start_auto_recording(
     let Some(request) = request else {
         return;
     };
-    let Some(vehicle) = state.vehicle.lock().await.clone() else {
+    let Some(vehicle) = state.live_runtime.with_runtime(|runtime| runtime.vehicle()) else {
         return;
     };
 
@@ -227,10 +232,11 @@ pub(crate) async fn connect_link(
             "live source switched",
         )
         .await;
-        let prev = state.vehicle.lock().await.take();
-        state.status_text_history.lock().await.clear();
-        state.next_status_text_sequence.store(1, Ordering::Relaxed);
-        state.session_context.lock().await.reset();
+        let prev = state.live_runtime.with_runtime(|runtime| {
+            let previous = runtime.take_vehicle();
+            runtime.reset_live_state();
+            previous
+        });
         if let Some(v) = prev {
             let _ = v.disconnect().await;
         }
@@ -440,10 +446,8 @@ pub(crate) async fn disconnect_link(
     request: Option<DisconnectRequest>,
 ) -> Result<(), String> {
     let expected_session_id = state
-        .session_runtime
-        .lock()
-        .await
-        .effective_session_envelope(web_time::Instant::now())
+        .live_runtime
+        .with_runtime(|runtime| runtime.effective_session_envelope(web_time::Instant::now()))
         .map(|envelope| envelope.session_id);
     validate_disconnect_request(expected_session_id.as_deref(), request.as_ref())?;
     force_disconnect(&state, &app).await
@@ -487,12 +491,6 @@ pub(crate) async fn force_disconnect(
         "live vehicle disconnected",
     )
     .await;
-    state.status_text_history.lock().await.clear();
-    state.next_status_text_sequence.store(1, Ordering::Relaxed);
-    state.session_context.lock().await.reset();
-    *state.live_telemetry.lock().await =
-        crate::ipc::TelemetrySnapshot::missing(DomainProvenance::Bootstrap);
-
     if let Some(handle) = state.connect_abort.lock().await.take() {
         handle.abort();
     }
@@ -506,7 +504,13 @@ pub(crate) async fn force_disconnect(
     abort_background_tasks(state).await;
     clear_background_listeners(state, app).await;
 
-    let vehicle = state.vehicle.lock().await.take();
+    let vehicle = state.live_runtime.with_runtime(|runtime| {
+        let previous = runtime.take_vehicle();
+        runtime.reset_live_state();
+        previous
+    });
+    ironwing_core::live_runtime::emit_session_state(&state.live_runtime, DomainProvenance::Stream);
+
     *state.active_link_target.lock().await = None;
     if let Some(v) = vehicle {
         v.disconnect().await.map_err(|e| e.to_string())?;
@@ -515,7 +519,9 @@ pub(crate) async fn force_disconnect(
 }
 
 pub(crate) async fn is_vehicle_connected(state: &AppState) -> bool {
-    state.vehicle.lock().await.is_some()
+    state
+        .live_runtime
+        .with_runtime(|runtime| runtime.is_connected())
 }
 
 pub(crate) async fn active_link_target(state: &AppState) -> Option<ActiveLinkTarget> {
