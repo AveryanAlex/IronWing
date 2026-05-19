@@ -17,6 +17,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      IRONWING_APTABASE_KEY: ${{ vars.IRONWING_APTABASE_KEY }}
+      IRONWING_APTABASE_HOST: ${{ vars.IRONWING_APTABASE_HOST }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,19 +33,27 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build demo bundle
-        run: pnpm run build:demo
+      - name: Build pure web bundle
+        run: pnpm run build:web
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist/demo
+          path: dist/web
 
   deploy:
     needs: build

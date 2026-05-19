@@ -1,6 +1,7 @@
 import { mount } from "svelte";
 import App from "./App.svelte";
 import "./styles/app.css";
+import { initializeAnalytics } from "./lib/analytics/client";
 import { markRuntimeFailure, markRuntimeReady, renderBootstrapFailureMarkup } from "./lib/stores/runtime";
 
 const rootTargetId = "root";
@@ -12,6 +13,7 @@ try {
   }
 
   mount(App, { target });
+  void initializeAnalytics();
   markRuntimeReady();
 } catch (error) {
   console.error("[ironwing/bootstrap] active runtime bootstrap failed", error);

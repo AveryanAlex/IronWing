@@ -109,6 +109,7 @@ export default defineConfig({
       "@platform/core": fileURLToPath(new URL(`src/platform/${platformDir}/core.ts`, import.meta.url)),
       "@platform/event": fileURLToPath(new URL(`src/platform/${platformDir}/event.ts`, import.meta.url)),
       "@platform/http": fileURLToPath(new URL(`src/platform/${platformDir}/http.ts`, import.meta.url)),
+      "@platform/analytics": fileURLToPath(new URL(`src/platform/${platformDir}/analytics.ts`, import.meta.url)),
     },
   },
   optimizeDeps: {

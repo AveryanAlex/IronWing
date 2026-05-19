@@ -12,7 +12,7 @@
 ## Core Rules
 
 - Keep active `src/` on `.svelte` and neutral `.ts` only. Do not introduce alternate frontend runtimes into active code.
-- Frontend IPC imports go through `@platform/core`, `@platform/event`, or `@platform/http` only.
+- Frontend IPC imports go through `@platform/core`, `@platform/event`, or `@platform/http` only. Feature analytics must go through `src/lib/analytics/*`, not Aptabase SDKs or platform adapters directly.
 - Put shared state and shared logic in Svelte stores or neutral helpers under `src/lib/*`, not ad-hoc component or module globals.
 - Keep Rust and TypeScript wire contracts aligned. Event payloads use Rust serde names; invoke arguments stay camelCase on the frontend.
 - If you change SITL runtime port math, update `scripts/workflow/runtime.mjs` and its tests.

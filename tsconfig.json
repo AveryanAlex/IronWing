@@ -14,7 +14,8 @@
     "paths": {
       "@platform/core": ["./src/platform/web/core.ts"],
       "@platform/event": ["./src/platform/web/event.ts"],
-      "@platform/http": ["./src/platform/web/http.ts"]
+      "@platform/http": ["./src/platform/web/http.ts"],
+      "@platform/analytics": ["./src/platform/web/analytics.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "vite.config.ts"],

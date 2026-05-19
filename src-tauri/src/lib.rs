@@ -1,3 +1,4 @@
+use analytics::{analytics_status, analytics_track_event};
 use bluetooth::{bt_get_bonded_devices, bt_request_permissions, bt_scan_ble, bt_stop_scan_ble};
 use commands::{
     ack_session_snapshot, arm_vehicle, available_transports, calibrate_accel,
@@ -34,6 +35,7 @@ use recording::{
 use remote_ui::RemoteUiEvent;
 use tauri::Manager;
 use tauri_event_sink::TauriEventSink;
+mod analytics;
 mod bluetooth;
 mod bridges;
 mod commands;
@@ -114,6 +116,13 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init());
+    if let Some(app_key) = analytics::aptabase_native_key() {
+        builder = builder.plugin(
+            tauri_plugin_aptabase::Builder::new(app_key)
+                .with_options(analytics::aptabase_options())
+                .build(),
+        );
+    }
     if ble_plugin_enabled() {
         builder = builder.plugin(tauri_plugin_blec::init());
     }
@@ -126,6 +135,8 @@ pub fn run() {
     builder = builder.invoke_handler(tauri::generate_handler![
         connect_link,
         disconnect_link,
+        analytics_status,
+        analytics_track_event,
         list_serial_ports_cmd,
         available_transports,
         runtime_capabilities,

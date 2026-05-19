@@ -85,6 +85,9 @@ jobs:
 
   pure-web-app:
     runs-on: ubuntu-latest
+    env:
+      IRONWING_APTABASE_KEY: ${{ vars.IRONWING_APTABASE_KEY }}
+      IRONWING_APTABASE_HOST: ${{ vars.IRONWING_APTABASE_HOST }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6

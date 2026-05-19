@@ -78,6 +78,24 @@ const DIRECT_TAURI_IMPORT_RULES: ImportRule[] = [
   },
 ];
 
+const DIRECT_APTABASE_IMPORT_RULES: ImportRule[] = [
+  {
+    label: "@aptabase/web",
+    predicate: (specifier) => specifier === "@aptabase/web",
+    allowlist: new Set(["src/platform/web/analytics.ts"]),
+    guidance: "Use src/lib/analytics/* and the @platform/analytics adapter instead.",
+  },
+];
+
+const DIRECT_ANALYTICS_ADAPTER_IMPORT_RULES: ImportRule[] = [
+  {
+    label: "@platform/analytics",
+    predicate: (specifier) => specifier === "@platform/analytics",
+    allowlist: new Set(["src/lib/analytics/client.ts"]),
+    guidance: "Use the shared src/lib/analytics client instead of binding feature code to platform adapters.",
+  },
+];
+
 const UI_PRIMITIVE_DIR_PREFIX = "src/components/ui/";
 
 const DIRECT_BITS_UI_IMPORT_RULE: {
@@ -389,7 +407,11 @@ function isArchivedTestPath(projectPath: string | null): boolean {
 }
 
 describe("platform import boundary", () => {
-  for (const rule of DIRECT_TAURI_IMPORT_RULES) {
+  for (const rule of [
+    ...DIRECT_TAURI_IMPORT_RULES,
+    ...DIRECT_APTABASE_IMPORT_RULES,
+    ...DIRECT_ANALYTICS_ADAPTER_IMPORT_RULES,
+  ]) {
     it(
       `no files outside the allowlist import ${rule.label}`,
       {

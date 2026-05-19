@@ -15,6 +15,7 @@ export default defineConfig({
       "@platform/core": fileURLToPath(new URL("src/platform/tauri/core.ts", import.meta.url)),
       "@platform/event": fileURLToPath(new URL("src/platform/tauri/event.ts", import.meta.url)),
       "@platform/http": fileURLToPath(new URL("src/platform/tauri/http.ts", import.meta.url)),
+      "@platform/analytics": fileURLToPath(new URL("src/platform/tauri/analytics.ts", import.meta.url)),
     },
     conditions: ["browser"],
   },

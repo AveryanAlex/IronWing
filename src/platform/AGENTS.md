@@ -12,12 +12,14 @@
 | Pure web IPC surface | `web/core.ts`, `web/event.ts`, `web/http.ts` | Browser/WASM runtime for raw Vite builds |
 | Agent remote UI IPC surface | `remote/core.ts`, `remote/event.ts`, `remote/http.ts` | Browser-facing bridge to a running Tauri app |
 | Mocked browser IPC surface | `mock/core.ts`, `mock/event.ts`, `mock/http.ts` | Browser-only invoke/event/fetch stubs |
+| Analytics surface | `<platform>/analytics.ts` | Same app analytics facade, platform-specific Aptabase backend/no-op |
 | Mock backend controller | `mock/backend.ts` | Idle startup defaults, command overrides, emitted events |
 | Boundary enforcement | `import-boundary.test.ts` | Architectural guardrail |
 
 ## Rules
 
 - All frontend IPC imports outside this directory must use `@platform/core`, `@platform/event`, or `@platform/http`.
+- All frontend analytics imports outside this directory must use `src/lib/analytics/*`; only the shared analytics client imports `@platform/analytics`.
 - Do not import `@tauri-apps/api/core` or `@tauri-apps/api/event` directly anywhere else.
 - Keep the `web/`, `tauri/`, `remote/`, and `mock/` surfaces compatible: same function names, same argument shapes, same return expectations.
 - `vite.config.ts` defaults to `web/`, switches to `tauri/` for Tauri CLI hook environments, and accepts explicit `IRONWING_PLATFORM=tauri|web|remote|mock` overrides.
@@ -27,6 +29,12 @@
 
 - Raw Vite commands (`pnpm exec vite`, `pnpm exec vite build`) use `web/` and build the Rust WASM bridge through the Vite config.
 - The generated `ironwing_wasm.js` and `.wasm` files are transient and ignored; keep `ironwing_wasm.d.ts` checked in unless intentionally regenerating bindings.
+
+## Analytics Notes
+
+- CI and local release builds use one shared Aptabase config: `IRONWING_APTABASE_KEY` and optional `IRONWING_APTABASE_HOST`.
+- Web build helpers map those shared names to `VITE_IRONWING_APTABASE_KEY` and `VITE_IRONWING_APTABASE_HOST`; native builds read the same shared names at Rust compile time.
+- `IRONWING_APTABASE_DISABLED=1` disables analytics across editions.
 
 ## Mock Platform Notes
 

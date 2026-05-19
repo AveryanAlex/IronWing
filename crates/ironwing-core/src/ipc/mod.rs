@@ -1,3 +1,4 @@
+pub mod analytics;
 pub mod calibration;
 pub mod configuration_facts;
 pub mod domain;
@@ -13,6 +14,7 @@ pub mod status_text;
 pub mod support;
 pub mod telemetry;
 
+pub use analytics::{AnalyticsProperties, AnalyticsProperty};
 pub use calibration::{CalibrationSources, calibration_snapshot_from_sources};
 pub use configuration_facts::configuration_facts_snapshot_from_param_store;
 pub use domain::{DomainProvenance, DomainValue};

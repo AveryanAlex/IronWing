@@ -90,7 +90,7 @@ Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavk
 
 ## Cross-layer Conventions
 
-- Frontend IPC imports go through `@platform/core`, `@platform/event`, and `@platform/http` only. Do not import Tauri SDK modules directly outside the platform boundary.
+- Frontend IPC imports go through `@platform/core`, `@platform/event`, and `@platform/http` only. Shared analytics goes through `src/lib/analytics/*`, which owns the `@platform/analytics` adapter. Do not import Tauri SDK modules or Aptabase SDKs directly outside the platform boundary.
 - Rust IPC wire contracts live in `crates/ironwing-core/src/ipc`; `src-tauri/src/ipc/mod.rs` only re-exports them for the Tauri crate.
 - All IPC-facing Rust enums use snake_case serde names. Tagged unions usually use a `kind` discriminant, but some outcome wrappers use more specific tags such as `result` or `path`.
 - TypeScript invoke arguments stay camelCase; Tauri maps them to Rust snake_case.
