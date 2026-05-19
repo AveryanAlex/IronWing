@@ -3,6 +3,9 @@
 pub(crate) mod calibration {
     pub(crate) use ironwing_core::ipc::calibration::*;
 }
+pub(crate) mod analytics {
+    pub(crate) use ironwing_core::ipc::analytics::*;
+}
 pub(crate) mod configuration_facts {
     pub(crate) use ironwing_core::ipc::configuration_facts::*;
 }

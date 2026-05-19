@@ -23,10 +23,28 @@ export function mockProfileEnv(mockProfile) {
   return mockProfile ? { VITE_IRONWING_MOCK_PROFILE: mockProfile } : {};
 }
 
-export function tauriFrontendEnv(overrides = {}) {
+function analyticsCommonFrontendEnv(env = process.env) {
+  return {
+    ...(env.IRONWING_APTABASE_DISABLED
+      ? { VITE_IRONWING_APTABASE_DISABLED: env.IRONWING_APTABASE_DISABLED }
+      : {}),
+    ...(env.IRONWING_APP_VERSION ? { VITE_IRONWING_APP_VERSION: env.IRONWING_APP_VERSION } : {}),
+  };
+}
+
+function analyticsWebFrontendEnv(env = process.env) {
+  return {
+    ...analyticsCommonFrontendEnv(env),
+    ...(env.IRONWING_APTABASE_KEY ? { VITE_IRONWING_APTABASE_KEY: env.IRONWING_APTABASE_KEY } : {}),
+    ...(env.IRONWING_APTABASE_HOST ? { VITE_IRONWING_APTABASE_HOST: env.IRONWING_APTABASE_HOST } : {}),
+  };
+}
+
+export function tauriFrontendEnv(overrides = {}, env = process.env) {
   return {
     IRONWING_PLATFORM: "tauri",
     IRONWING_OUT_DIR: DIST_DIRS.tauri,
+    ...analyticsCommonFrontendEnv(env),
     ...overrides,
   };
 }
@@ -34,6 +52,7 @@ export function tauriFrontendEnv(overrides = {}) {
 export function webFrontendEnv(overrides = {}, env = process.env) {
   return {
     IRONWING_PLATFORM: "web",
+    ...analyticsWebFrontendEnv(env),
     ...overrides,
     ...(env.IRONWING_OUT_DIR ? { IRONWING_OUT_DIR: env.IRONWING_OUT_DIR } : {}),
     ...(env.IRONWING_BASE ? { IRONWING_BASE: env.IRONWING_BASE } : {}),
