@@ -1,9 +1,11 @@
 use std::cell::RefCell;
+use std::future::Future;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use mavkit::ardupilot::{MagCalProgress, MagCalReport};
-use mavkit::{HomePosition, ParamStore, SensorHealthSummary, Vehicle};
+use mavkit::{HomePosition, ObservationSubscription, ParamStore, SensorHealthSummary, Vehicle};
 use web_time::Instant;
 
 use crate::event_names;
@@ -366,6 +368,133 @@ where
     emit_session_state(handle, DomainProvenance::Stream);
 }
 
+fn telemetry_poll_bridge<H, I, F, Sleep>(
+    handle: H,
+    interval: I,
+    vehicle: Vehicle,
+    sleep: F,
+) -> impl Future<Output = ()>
+where
+    H: LiveRuntimeHandle,
+    I: TelemetryIntervalProvider,
+    F: Fn(Duration) -> Sleep + 'static,
+    Sleep: Future<Output = ()> + 'static,
+{
+    async move {
+        loop {
+            sleep(interval.telemetry_interval()).await;
+            emit_telemetry_update(&handle, &vehicle);
+        }
+    }
+}
+
+fn observation_bridge<H, T, F>(
+    handle: H,
+    mut subscription: ObservationSubscription<T>,
+    mut update: F,
+) -> impl Future<Output = ()>
+where
+    H: LiveRuntimeHandle,
+    T: Clone + Send + Sync + 'static,
+    F: FnMut(&H, T) + 'static,
+{
+    async move {
+        while let Some(value) = subscription.recv().await {
+            update(&handle, value);
+        }
+    }
+}
+
+trait ObservationBridgeRegistrar {
+    type Handle: LiveRuntimeHandle;
+
+    fn spawn_observation<T, F>(&mut self, subscription: ObservationSubscription<T>, update: F)
+    where
+        T: Clone + Send + Sync + 'static,
+        F: FnMut(&Self::Handle, T) + Send + 'static;
+}
+
+struct LocalObservationBridgeRegistrar<'a, H, S>
+where
+    H: LiveRuntimeHandle,
+    S: LocalTaskSpawner,
+{
+    handle: H,
+    spawner: &'a mut S,
+}
+
+impl<'a, H, S> LocalObservationBridgeRegistrar<'a, H, S>
+where
+    H: LiveRuntimeHandle,
+    S: LocalTaskSpawner,
+{
+    fn new(handle: H, spawner: &'a mut S) -> Self {
+        Self { handle, spawner }
+    }
+}
+
+impl<H, S> ObservationBridgeRegistrar for LocalObservationBridgeRegistrar<'_, H, S>
+where
+    H: LiveRuntimeHandle,
+    S: LocalTaskSpawner,
+{
+    type Handle = H;
+
+    fn spawn_observation<T, F>(&mut self, subscription: ObservationSubscription<T>, update: F)
+    where
+        T: Clone + Send + Sync + 'static,
+        F: FnMut(&Self::Handle, T) + Send + 'static,
+    {
+        self.spawner.spawn_local(observation_bridge(
+            self.handle.clone(),
+            subscription,
+            update,
+        ));
+    }
+}
+
+struct SendObservationBridgeRegistrar<'a, H, S>
+where
+    H: LiveRuntimeHandle + Send + Sync,
+    H::Sink: Send + Sync,
+    S: SendTaskSpawner,
+{
+    handle: H,
+    spawner: &'a mut S,
+}
+
+impl<'a, H, S> SendObservationBridgeRegistrar<'a, H, S>
+where
+    H: LiveRuntimeHandle + Send + Sync,
+    H::Sink: Send + Sync,
+    S: SendTaskSpawner,
+{
+    fn new(handle: H, spawner: &'a mut S) -> Self {
+        Self { handle, spawner }
+    }
+}
+
+impl<H, S> ObservationBridgeRegistrar for SendObservationBridgeRegistrar<'_, H, S>
+where
+    H: LiveRuntimeHandle + Send + Sync,
+    H::Sink: Send + Sync,
+    S: SendTaskSpawner,
+{
+    type Handle = H;
+
+    fn spawn_observation<T, F>(&mut self, subscription: ObservationSubscription<T>, update: F)
+    where
+        T: Clone + Send + Sync + 'static,
+        F: FnMut(&Self::Handle, T) + Send + 'static,
+    {
+        self.spawner.spawn_send(observation_bridge(
+            self.handle.clone(),
+            subscription,
+            update,
+        ));
+    }
+}
+
 fn emit_telemetry_update<H>(handle: &H, vehicle: &Vehicle)
 where
     H: LiveRuntimeHandle,
@@ -457,6 +586,104 @@ fn snapshot_after_mag_report_update(
     sources.snapshot(DomainProvenance::Stream)
 }
 
+trait CalibrationSourcesState: Clone + 'static {
+    fn snapshot_after_progress(&self, value: Option<MagCalProgress>) -> CalibrationSnapshot;
+
+    fn snapshot_after_report(&self, value: Option<MagCalReport>) -> CalibrationSnapshot;
+}
+
+#[derive(Clone)]
+struct LocalCalibrationSources {
+    inner: Rc<RefCell<CalibrationSources>>,
+}
+
+impl LocalCalibrationSources {
+    fn new() -> Self {
+        Self {
+            inner: Rc::new(RefCell::new(CalibrationSources::default())),
+        }
+    }
+}
+
+impl CalibrationSourcesState for LocalCalibrationSources {
+    fn snapshot_after_progress(&self, value: Option<MagCalProgress>) -> CalibrationSnapshot {
+        let mut sources = self.inner.borrow_mut();
+        snapshot_after_mag_progress_update(&mut sources, value)
+    }
+
+    fn snapshot_after_report(&self, value: Option<MagCalReport>) -> CalibrationSnapshot {
+        let mut sources = self.inner.borrow_mut();
+        snapshot_after_mag_report_update(&mut sources, value)
+    }
+}
+
+#[derive(Clone)]
+struct SendCalibrationSources {
+    inner: Arc<Mutex<CalibrationSources>>,
+}
+
+impl SendCalibrationSources {
+    fn new() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(CalibrationSources::default())),
+        }
+    }
+}
+
+impl CalibrationSourcesState for SendCalibrationSources {
+    fn snapshot_after_progress(&self, value: Option<MagCalProgress>) -> CalibrationSnapshot {
+        let mut sources = self
+            .inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        snapshot_after_mag_progress_update(&mut sources, value)
+    }
+
+    fn snapshot_after_report(&self, value: Option<MagCalReport>) -> CalibrationSnapshot {
+        let mut sources = self
+            .inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        snapshot_after_mag_report_update(&mut sources, value)
+    }
+}
+
+fn mag_progress_bridge<H, C>(
+    handle: H,
+    calibration_sources: C,
+    mut progress_sub: ObservationSubscription<Vec<MagCalProgress>>,
+) -> impl Future<Output = ()>
+where
+    H: LiveRuntimeHandle,
+    C: CalibrationSourcesState,
+{
+    async move {
+        while let Some(progress_list) = progress_sub.recv().await {
+            let value = progress_list.first().cloned();
+            let calibration = calibration_sources.snapshot_after_progress(value.clone());
+            emit_mag_progress_update(&handle, value, calibration);
+        }
+    }
+}
+
+fn mag_report_bridge<H, C>(
+    handle: H,
+    calibration_sources: C,
+    mut report_sub: ObservationSubscription<Vec<MagCalReport>>,
+) -> impl Future<Output = ()>
+where
+    H: LiveRuntimeHandle,
+    C: CalibrationSourcesState,
+{
+    async move {
+        while let Some(report_list) = report_sub.recv().await {
+            let value = report_list.first().cloned();
+            let calibration = calibration_sources.snapshot_after_report(value.clone());
+            emit_mag_report_update(&handle, value, calibration);
+        }
+    }
+}
+
 fn emit_mag_progress_update<H>(
     handle: &H,
     value: Option<MagCalProgress>,
@@ -483,6 +710,74 @@ fn emit_mag_report_update<H>(
     emit_scoped(handle, event_names::CALIBRATION_STATE, calibration);
 }
 
+fn spawn_observation_event_bridges<R>(registrar: &mut R, vehicle: &Vehicle)
+where
+    R: ObservationBridgeRegistrar,
+{
+    registrar.spawn_observation(vehicle.link().state().subscribe(), |handle, link_state| {
+        emit_link_state_update(handle, &link_state);
+    });
+
+    registrar.spawn_observation(vehicle.telemetry().armed().subscribe(), |handle, sample| {
+        emit_armed_update(handle, sample.value);
+    });
+
+    registrar.spawn_observation(
+        vehicle.available_modes().current().subscribe(),
+        |handle, current_mode| {
+            emit_current_mode_update(handle, current_mode.custom_mode, &current_mode.name);
+        },
+    );
+
+    registrar.spawn_observation(vehicle.telemetry().home().subscribe(), |handle, sample| {
+        let geo = sample.value;
+        emit_home_position_update(
+            handle,
+            geo.latitude_deg,
+            geo.longitude_deg,
+            geo.altitude_msl_m,
+        );
+    });
+
+    registrar.spawn_observation(vehicle.mission().subscribe(), |handle, mission_state| {
+        emit_scoped(handle, event_names::MISSION_STATE, mission_state);
+    });
+
+    registrar.spawn_observation(vehicle.params().subscribe(), |handle, param_state| {
+        if let Some(store) = param_state.store.as_ref() {
+            emit_param_store_update(handle, store);
+        }
+    });
+
+    registrar.spawn_observation(
+        vehicle.telemetry().sensor_health().subscribe(),
+        |handle, sample| {
+            let value: SensorHealthSummary = sample.value;
+            emit_sensor_health_update(handle, &value);
+        },
+    );
+
+    registrar.spawn_observation(
+        vehicle.telemetry().messages().status_text().subscribe(),
+        |handle, sample| {
+            let message = sample.value;
+            let value = serde_json::json!({
+                "text": message.text,
+                "severity": mav_severity_name(message.severity),
+                "id": message.id,
+                "source_system": message.source_system,
+                "source_component": message.source_component,
+            });
+            let snapshot = handle.with_runtime(|runtime| {
+                runtime.push_status_text_from_value(&value, DomainProvenance::Stream)
+            });
+            if let Some(snapshot) = snapshot {
+                emit_scoped(handle, event_names::STATUS_TEXT_STATE, snapshot);
+            }
+        },
+    );
+}
+
 pub fn spawn_local_event_bridges<H, S, T, I>(
     handle: H,
     spawner: &mut S,
@@ -502,124 +797,19 @@ pub fn spawn_local_event_bridges<H, S, T, I>(
         let timer = timer.clone();
         let interval = interval.clone();
         let vehicle = vehicle.clone();
-        spawner.spawn_local(async move {
-            loop {
-                timer.sleep(interval.telemetry_interval()).await;
-                emit_telemetry_update(&handle, &vehicle);
-            }
-        });
+        spawner.spawn_local(telemetry_poll_bridge(
+            handle,
+            interval,
+            vehicle,
+            move |duration| timer.sleep(duration),
+        ));
     }
 
-    {
-        let handle = handle.clone();
-        let mut link_sub = vehicle.link().state().subscribe();
-        spawner.spawn_local(async move {
-            while let Some(link_state) = link_sub.recv().await {
-                emit_link_state_update(&handle, &link_state);
-            }
-        });
-    }
-
-    {
-        let handle = handle.clone();
-        let mut armed_sub = vehicle.telemetry().armed().subscribe();
-        spawner.spawn_local(async move {
-            while let Some(sample) = armed_sub.recv().await {
-                emit_armed_update(&handle, sample.value);
-            }
-        });
-    }
-
-    {
-        let handle = handle.clone();
-        let mut mode_sub = vehicle.available_modes().current().subscribe();
-        spawner.spawn_local(async move {
-            while let Some(current_mode) = mode_sub.recv().await {
-                emit_current_mode_update(&handle, current_mode.custom_mode, &current_mode.name);
-            }
-        });
-    }
-
-    {
-        let handle = handle.clone();
-        let mut home_sub = vehicle.telemetry().home().subscribe();
-        spawner.spawn_local(async move {
-            while let Some(sample) = home_sub.recv().await {
-                let geo = sample.value;
-                emit_home_position_update(
-                    &handle,
-                    geo.latitude_deg,
-                    geo.longitude_deg,
-                    geo.altitude_msl_m,
-                );
-            }
-        });
-    }
-
-    spawn_local_domain_bridges(handle.clone(), spawner, vehicle);
+    spawn_observation_event_bridges(
+        &mut LocalObservationBridgeRegistrar::new(handle.clone(), spawner),
+        vehicle,
+    );
     spawn_local_calibration_bridges(handle, spawner, vehicle);
-}
-
-fn spawn_local_domain_bridges<H, S>(handle: H, spawner: &mut S, vehicle: &Vehicle)
-where
-    H: LiveRuntimeHandle,
-    S: LocalTaskSpawner,
-{
-    {
-        let handle = handle.clone();
-        let mut mission_sub = vehicle.mission().subscribe();
-        spawner.spawn_local(async move {
-            while let Some(mission_state) = mission_sub.recv().await {
-                emit_scoped(&handle, event_names::MISSION_STATE, mission_state);
-            }
-        });
-    }
-
-    {
-        let handle = handle.clone();
-        let mut param_sub = vehicle.params().subscribe();
-        spawner.spawn_local(async move {
-            while let Some(param_state) = param_sub.recv().await {
-                if let Some(store) = param_state.store.as_ref() {
-                    emit_param_store_update(&handle, store);
-                }
-            }
-        });
-    }
-
-    {
-        let handle = handle.clone();
-        let mut sensor_sub = vehicle.telemetry().sensor_health().subscribe();
-        spawner.spawn_local(async move {
-            while let Some(sample) = sensor_sub.recv().await {
-                let value: SensorHealthSummary = sample.value;
-                emit_sensor_health_update(&handle, &value);
-            }
-        });
-    }
-
-    {
-        let handle = handle.clone();
-        let mut status_sub = vehicle.telemetry().messages().status_text().subscribe();
-        spawner.spawn_local(async move {
-            while let Some(sample) = status_sub.recv().await {
-                let message = sample.value;
-                let value = serde_json::json!({
-                    "text": message.text,
-                    "severity": mav_severity_name(message.severity),
-                    "id": message.id,
-                    "source_system": message.source_system,
-                    "source_component": message.source_component,
-                });
-                let snapshot = handle.with_runtime(|runtime| {
-                    runtime.push_status_text_from_value(&value, DomainProvenance::Stream)
-                });
-                if let Some(snapshot) = snapshot {
-                    emit_scoped(&handle, event_names::STATUS_TEXT_STATE, snapshot);
-                }
-            }
-        });
-    }
 }
 
 fn spawn_local_calibration_bridges<H, S>(handle: H, spawner: &mut S, vehicle: &Vehicle)
@@ -627,39 +817,18 @@ where
     H: LiveRuntimeHandle,
     S: LocalTaskSpawner,
 {
-    let calibration_sources = Rc::new(RefCell::new(CalibrationSources::default()));
+    let calibration_sources = LocalCalibrationSources::new();
 
-    {
-        let handle = handle.clone();
-        let calibration_sources = Rc::clone(&calibration_sources);
-        let mut progress_sub = vehicle.ardupilot().mag_cal_progress().subscribe();
-        spawner.spawn_local(async move {
-            while let Some(progress_list) = progress_sub.recv().await {
-                let value = progress_list.first().cloned();
-                let calibration = {
-                    let mut sources = calibration_sources.borrow_mut();
-                    snapshot_after_mag_progress_update(&mut sources, value.clone())
-                };
-                emit_mag_progress_update(&handle, value, calibration);
-            }
-        });
-    }
-
-    {
-        let handle = handle.clone();
-        let calibration_sources = Rc::clone(&calibration_sources);
-        let mut report_sub = vehicle.ardupilot().mag_cal_report().subscribe();
-        spawner.spawn_local(async move {
-            while let Some(report_list) = report_sub.recv().await {
-                let value = report_list.first().cloned();
-                let calibration = {
-                    let mut sources = calibration_sources.borrow_mut();
-                    snapshot_after_mag_report_update(&mut sources, value.clone())
-                };
-                emit_mag_report_update(&handle, value, calibration);
-            }
-        });
-    }
+    spawner.spawn_local(mag_progress_bridge(
+        handle.clone(),
+        calibration_sources.clone(),
+        vehicle.ardupilot().mag_cal_progress().subscribe(),
+    ));
+    spawner.spawn_local(mag_report_bridge(
+        handle,
+        calibration_sources,
+        vehicle.ardupilot().mag_cal_report().subscribe(),
+    ));
 }
 
 pub fn spawn_send_event_bridges<H, S, T, I>(
@@ -682,124 +851,18 @@ pub fn spawn_send_event_bridges<H, S, T, I>(
         let timer = timer.clone();
         let interval = interval.clone();
         let vehicle = vehicle.clone();
-        spawner.spawn_send(async move {
-            loop {
-                timer.sleep(interval.telemetry_interval()).await;
-                emit_telemetry_update(&handle, &vehicle);
-            }
-        });
+        spawner.spawn_send(telemetry_poll_bridge(
+            handle,
+            interval,
+            vehicle,
+            move |duration| timer.sleep(duration),
+        ));
     }
 
-    {
-        let handle = handle.clone();
-        let mut link_sub = vehicle.link().state().subscribe();
-        spawner.spawn_send(async move {
-            while let Some(link_state) = link_sub.recv().await {
-                emit_link_state_update(&handle, &link_state);
-            }
-        });
-    }
-
-    {
-        let handle = handle.clone();
-        let mut armed_sub = vehicle.telemetry().armed().subscribe();
-        spawner.spawn_send(async move {
-            while let Some(sample) = armed_sub.recv().await {
-                emit_armed_update(&handle, sample.value);
-            }
-        });
-    }
-
-    {
-        let handle = handle.clone();
-        let mut mode_sub = vehicle.available_modes().current().subscribe();
-        spawner.spawn_send(async move {
-            while let Some(current_mode) = mode_sub.recv().await {
-                emit_current_mode_update(&handle, current_mode.custom_mode, &current_mode.name);
-            }
-        });
-    }
-
-    {
-        let handle = handle.clone();
-        let mut home_sub = vehicle.telemetry().home().subscribe();
-        spawner.spawn_send(async move {
-            while let Some(sample) = home_sub.recv().await {
-                let geo = sample.value;
-                emit_home_position_update(
-                    &handle,
-                    geo.latitude_deg,
-                    geo.longitude_deg,
-                    geo.altitude_msl_m,
-                );
-            }
-        });
-    }
-
-    spawn_send_domain_bridges(handle, spawner, vehicle);
-}
-
-fn spawn_send_domain_bridges<H, S>(handle: H, spawner: &mut S, vehicle: &Vehicle)
-where
-    H: LiveRuntimeHandle + Send + Sync,
-    H::Sink: Send + Sync,
-    S: SendTaskSpawner,
-{
-    {
-        let handle = handle.clone();
-        let mut mission_sub = vehicle.mission().subscribe();
-        spawner.spawn_send(async move {
-            while let Some(mission_state) = mission_sub.recv().await {
-                emit_scoped(&handle, event_names::MISSION_STATE, mission_state);
-            }
-        });
-    }
-
-    {
-        let handle = handle.clone();
-        let mut param_sub = vehicle.params().subscribe();
-        spawner.spawn_send(async move {
-            while let Some(param_state) = param_sub.recv().await {
-                if let Some(store) = param_state.store.as_ref() {
-                    emit_param_store_update(&handle, store);
-                }
-            }
-        });
-    }
-
-    {
-        let handle = handle.clone();
-        let mut sensor_sub = vehicle.telemetry().sensor_health().subscribe();
-        spawner.spawn_send(async move {
-            while let Some(sample) = sensor_sub.recv().await {
-                let value: SensorHealthSummary = sample.value;
-                emit_sensor_health_update(&handle, &value);
-            }
-        });
-    }
-
-    {
-        let handle = handle.clone();
-        let mut status_sub = vehicle.telemetry().messages().status_text().subscribe();
-        spawner.spawn_send(async move {
-            while let Some(sample) = status_sub.recv().await {
-                let message = sample.value;
-                let value = serde_json::json!({
-                    "text": message.text,
-                    "severity": mav_severity_name(message.severity),
-                    "id": message.id,
-                    "source_system": message.source_system,
-                    "source_component": message.source_component,
-                });
-                let snapshot = handle.with_runtime(|runtime| {
-                    runtime.push_status_text_from_value(&value, DomainProvenance::Stream)
-                });
-                if let Some(snapshot) = snapshot {
-                    emit_scoped(&handle, event_names::STATUS_TEXT_STATE, snapshot);
-                }
-            }
-        });
-    }
+    spawn_observation_event_bridges(
+        &mut SendObservationBridgeRegistrar::new(handle.clone(), spawner),
+        vehicle,
+    );
 
     spawn_send_calibration_bridges(handle, spawner, vehicle);
 }
@@ -810,43 +873,18 @@ where
     H::Sink: Send + Sync,
     S: SendTaskSpawner,
 {
-    let calibration_sources = Arc::new(Mutex::new(CalibrationSources::default()));
+    let calibration_sources = SendCalibrationSources::new();
 
-    {
-        let handle = handle.clone();
-        let calibration_sources = Arc::clone(&calibration_sources);
-        let mut progress_sub = vehicle.ardupilot().mag_cal_progress().subscribe();
-        spawner.spawn_send(async move {
-            while let Some(progress_list) = progress_sub.recv().await {
-                let value = progress_list.first().cloned();
-                let calibration = {
-                    let mut sources = calibration_sources
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner());
-                    snapshot_after_mag_progress_update(&mut sources, value.clone())
-                };
-                emit_mag_progress_update(&handle, value, calibration);
-            }
-        });
-    }
-
-    {
-        let handle = handle.clone();
-        let calibration_sources = Arc::clone(&calibration_sources);
-        let mut report_sub = vehicle.ardupilot().mag_cal_report().subscribe();
-        spawner.spawn_send(async move {
-            while let Some(report_list) = report_sub.recv().await {
-                let value = report_list.first().cloned();
-                let calibration = {
-                    let mut sources = calibration_sources
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner());
-                    snapshot_after_mag_report_update(&mut sources, value.clone())
-                };
-                emit_mag_report_update(&handle, value, calibration);
-            }
-        });
-    }
+    spawner.spawn_send(mag_progress_bridge(
+        handle.clone(),
+        calibration_sources.clone(),
+        vehicle.ardupilot().mag_cal_progress().subscribe(),
+    ));
+    spawner.spawn_send(mag_report_bridge(
+        handle,
+        calibration_sources,
+        vehicle.ardupilot().mag_cal_report().subscribe(),
+    ));
 }
 
 #[cfg(test)]
