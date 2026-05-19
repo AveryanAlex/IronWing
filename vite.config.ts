@@ -118,7 +118,7 @@ export default defineConfig({
   },
   build: {
     target: "es2022",
-    chunkSizeWarningLimit: 3000,
+    chunkSizeWarningLimit: 5120,
     outDir: process.env.IRONWING_OUT_DIR ?? (isDemoBuild ? "dist/demo" : DEFAULT_OUT_DIRS[platformDir]),
   },
   server: {
