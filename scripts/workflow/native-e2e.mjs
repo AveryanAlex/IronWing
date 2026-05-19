@@ -1,17 +1,17 @@
 import path from "node:path";
 import { isTcpPortFree, runtimeEnv } from "./runtime.mjs";
 import { findFreeTcpPort } from "./ports.mjs";
-import { sitlTcpEnv } from "./env.mjs";
+import { sitlTcpEnv, tauriFrontendEnv } from "./env.mjs";
 
 export const NATIVE_E2E_WEBDRIVER_HOST = "127.0.0.1";
 export const NATIVE_E2E_WEBDRIVER_PORT = 4444;
 export const NATIVE_E2E_NATIVE_DRIVER_PORT = 4445;
 
 export function nativeE2eBuildEnv(runtime) {
-  return {
+  return tauriFrontendEnv({
     ...runtimeEnv(runtime),
     ...sitlTcpEnv(runtime),
-  };
+  });
 }
 
 export function nativeE2eApplicationPath(

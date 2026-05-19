@@ -2,7 +2,7 @@
 
 ## Overview
 
-Thin Tauri IPC shell between the React frontend and `mavkit`. This layer owns transport setup, command dispatch, event relays, logs/recording, firmware flows, and platform-gated plugin registration.
+Thin Tauri IPC shell between the Svelte frontend and `mavkit`. This layer owns transport setup, command dispatch, event relays, logs/recording, firmware flows, and platform-gated plugin registration.
 
 ## Where To Look
 

@@ -1,4 +1,4 @@
-import { androidSitlTcpEnv } from "./workflow/env.mjs";
+import { androidSitlTcpEnv, tauriFrontendEnv } from "./workflow/env.mjs";
 import { projectRoot } from "./workflow/paths.mjs";
 import { startSitlSession } from "./workflow/sitl-session.mjs";
 import { runTauriAndroidDev } from "./workflow/tauri.mjs";
@@ -15,6 +15,6 @@ console.log("[dev:android] Override IRONWING_ANDROID_SITL_HOST for physical devi
 
 const tauriResult = await runTauriAndroidDev(cleanup, {
   cwd: projectRoot,
-  env,
+  env: tauriFrontendEnv(env),
 });
 await exitWithCleanup(tauriResult.code);

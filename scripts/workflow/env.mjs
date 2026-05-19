@@ -23,6 +23,14 @@ export function mockProfileEnv(mockProfile) {
   return mockProfile ? { VITE_IRONWING_MOCK_PROFILE: mockProfile } : {};
 }
 
+export function tauriFrontendEnv(overrides = {}) {
+  return {
+    IRONWING_PLATFORM: "tauri",
+    IRONWING_OUT_DIR: DIST_DIRS.tauri,
+    ...overrides,
+  };
+}
+
 export function webFrontendEnv(overrides = {}, env = process.env) {
   return {
     IRONWING_PLATFORM: "web",

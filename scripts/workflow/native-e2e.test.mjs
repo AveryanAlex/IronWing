@@ -8,7 +8,7 @@ import {
 } from "./native-e2e.mjs";
 
 describe("nativeE2eBuildEnv", () => {
-  it("adds SITL TCP defaults on top of the runtime environment", () => {
+  it("adds Tauri and SITL TCP defaults on top of the runtime environment", () => {
     const runtime = runtimeForInstance(4);
 
     expect(nativeE2eBuildEnv(runtime)).toEqual({
@@ -16,6 +16,8 @@ describe("nativeE2eBuildEnv", () => {
       E2E_SITL_TCP_PORT: "5764",
       E2E_SITL_UDP_PORT: "14590",
       E2E_SITL_CONTAINER: "ardupilot-sitl-4",
+      IRONWING_PLATFORM: "tauri",
+      IRONWING_OUT_DIR: "dist/tauri",
       VITE_IRONWING_SITL_MODE: "tcp",
       VITE_IRONWING_SITL_TCP_PORT: "5764",
     });

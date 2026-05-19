@@ -1,7 +1,6 @@
 import { sitlWebSocketEnv, webFrontendEnv } from "./workflow/env.mjs";
 import { runViteDev } from "./workflow/frontend.mjs";
 import { forwardedArgs, projectRoot } from "./workflow/paths.mjs";
-import { PNPM_COMMAND, runCommand } from "./workflow/process.mjs";
 import { startSitlSession } from "./workflow/sitl-session.mjs";
 import {
   DEFAULT_SITL_TCP_HOST,
@@ -10,10 +9,6 @@ import {
   parsePort,
   startSitlWebSocketBridgeSession,
 } from "./workflow/sitl-ws.mjs";
-
-await runCommand(PNPM_COMMAND, ["run", "internal:wasm:web:debug"], {
-  cwd: projectRoot,
-});
 
 const { cleanup, exitWithCleanup, runtime } = await startSitlSession({
   cwd: projectRoot,

@@ -12,9 +12,9 @@
     "skipLibCheck": true,
     "types": ["vite/client", "geojson"],
     "paths": {
-      "@platform/core": ["./src/platform/tauri/core.ts"],
-      "@platform/event": ["./src/platform/tauri/event.ts"],
-      "@platform/http": ["./src/platform/tauri/http.ts"]
+      "@platform/core": ["./src/platform/web/core.ts"],
+      "@platform/event": ["./src/platform/web/event.ts"],
+      "@platform/http": ["./src/platform/web/http.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "vite.config.ts"],

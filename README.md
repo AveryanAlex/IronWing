@@ -1,11 +1,11 @@
 # IronWing
 
-Modern ground control station using Tauri + React + Rust.
+Modern ground control station using Tauri + Svelte + Rust.
 
 ## Stack
 
 - Desktop + Mobile: Tauri v2 (desktop + Android)
-- Frontend: React + TypeScript + Vite + Radix UI + Tailwind CSS
+- Frontend: Svelte + TypeScript + Vite + Tailwind CSS
 - Core: Rust (MAVKit, crate: `mavkit` — async MAVLink SDK)
 - Map: MapLibre GL JS (3D terrain + satellite)
 - Transports: UDP, Serial, BLE (Nordic UART), Classic SPP (Android)
@@ -14,6 +14,7 @@ Modern ground control station using Tauri + React + Rust.
 
 - Node.js 20+
 - Rust stable toolchain
+- `wasm-pack` and the `wasm32-unknown-unknown` target for default Vite/web builds
 - pnpm
 - Optional but recommended: Nix (`nix develop`) for a preconfigured shell
 
@@ -34,6 +35,8 @@ pnpm run test
 pnpm run build:frontend
 pnpm run dev:web
 ```
+
+Raw Vite commands default to the pure web platform: `pnpm exec vite` serves the browser/WASM frontend, and `pnpm exec vite build` writes `dist/web`. Use `pnpm run dev:web` when you also want SITL and the WebSocket bridge managed for you.
 
 ## Use IronWing with ArduPilot SITL (development)
 
@@ -178,7 +181,8 @@ Frontend bundles are separated by target under `dist/`:
 
 | Command | Output |
 | --- | --- |
-| `pnpm run build:frontend` | `dist/tauri` |
+| `pnpm exec vite build` | `dist/web` |
+| `pnpm run build:frontend` | `dist/web` |
 | `pnpm run build:desktop` | `dist/tauri` |
 | `pnpm run build:android` | `dist/tauri` |
 | `pnpm run build:web` | `dist/web` |

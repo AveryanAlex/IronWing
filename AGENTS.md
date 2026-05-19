@@ -9,13 +9,13 @@ Modern ground control station for MAVLink vehicles. Tauri v2 app with a **Svelte
 | Task | Location | Notes |
 |------|----------|-------|
 | Active frontend shell, stores, IPC bridges | `src/AGENTS.md` | Shipped Svelte runtime, bridge wrappers, active frontend tests |
-| Platform alias boundary (`@platform/*`) | `src/platform/AGENTS.md` | Build-time Tauri vs mocked-browser split |
+| Platform alias boundary (`@platform/*`) | `src/platform/AGENTS.md` | Build-time web, Tauri, remote, and mocked-browser split |
 | Rust shell, commands, bridges, recording, logs | `src-tauri/src/AGENTS.md` | AppState, command patterns, event relays |
 | IPC wire contracts | `src-tauri/src/ipc/AGENTS.md` | Typed payloads, serde conventions, envelope model |
 | Firmware flashing / DFU recovery | `src-tauri/src/firmware/AGENTS.md` | Session model, serial vs DFU paths |
 | Playwright E2E | `e2e/AGENTS.md` | Mocked browser workflow, spec conventions |
 | Native WebDriver E2E | `e2e-native/AGENTS.md` | Real Tauri + Rust + SITL smoke lane |
-| Dev/E2E workflow helpers | `scripts/workflow/AGENTS.md` | Runtime port math, cleanup, SITL helpers |
+| Scripts and workflow helpers | `scripts/AGENTS.md` | Entrypoints, runtime port math, cleanup, SITL helpers |
 
 ## Build & Test Commands
 
@@ -47,6 +47,7 @@ pnpm run e2e:native
 
 Run commands from the repo root. Nix (`flake.nix` + `.envrc`) is the canonical reproducible environment.
 Dev commands start SITL automatically except `pnpm run dev:demo`.
+Plain Vite defaults to the pure web/WASM platform and writes `dist/web`; Tauri commands opt into the Tauri platform and `dist/tauri`.
 
 ## Agent Remote UI
 

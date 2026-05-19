@@ -1,4 +1,4 @@
-import { sitlTcpEnv } from "./workflow/env.mjs";
+import { sitlTcpEnv, tauriFrontendEnv } from "./workflow/env.mjs";
 import { projectRoot } from "./workflow/paths.mjs";
 import { startSitlSession } from "./workflow/sitl-session.mjs";
 import { runTauriDesktopDev } from "./workflow/tauri.mjs";
@@ -13,6 +13,6 @@ console.log("[dev:desktop] The app will preselect TCP mode with the matching add
 
 const tauriResult = await runTauriDesktopDev(cleanup, {
   cwd: projectRoot,
-  env: sitlTcpEnv(runtime),
+  env: tauriFrontendEnv(sitlTcpEnv(runtime)),
 });
 await exitWithCleanup(tauriResult.code);
