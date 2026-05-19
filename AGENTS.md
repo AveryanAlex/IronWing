@@ -10,8 +10,9 @@ Modern ground control station for MAVLink vehicles. Tauri v2 app with a **Svelte
 |------|----------|-------|
 | Active frontend shell, stores, IPC bridges | `src/AGENTS.md` | Shipped Svelte runtime, bridge wrappers, active frontend tests |
 | Platform alias boundary (`@platform/*`) | `src/platform/AGENTS.md` | Build-time web, Tauri, remote, and mocked-browser split |
+| Shared Rust core / IPC contracts | `crates/ironwing-core/AGENTS.md` | IPC source of truth, runtime descriptors, shared live/log helpers |
 | Rust shell, commands, bridges, recording, logs | `src-tauri/src/AGENTS.md` | AppState, command patterns, event relays |
-| IPC wire contracts | `src-tauri/src/ipc/AGENTS.md` | Typed payloads, serde conventions, envelope model |
+| Tauri IPC adapter re-exports | `src-tauri/src/ipc/AGENTS.md` | Tauri-local re-export surface for shared core contracts |
 | Firmware flashing / DFU recovery | `src-tauri/src/firmware/AGENTS.md` | Session model, serial vs DFU paths |
 | Playwright E2E | `e2e/AGENTS.md` | Mocked browser workflow, spec conventions |
 | Native WebDriver E2E | `e2e-native/AGENTS.md` | Real Tauri + Rust + SITL smoke lane |
@@ -90,6 +91,7 @@ Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavk
 ## Cross-layer Conventions
 
 - Frontend IPC imports go through `@platform/core`, `@platform/event`, and `@platform/http` only. Do not import Tauri SDK modules directly outside the platform boundary.
+- Rust IPC wire contracts live in `crates/ironwing-core/src/ipc`; `src-tauri/src/ipc/mod.rs` only re-exports them for the Tauri crate.
 - All IPC-facing Rust enums use snake_case serde names. Tagged unions usually use a `kind` discriminant, but some outcome wrappers use more specific tags such as `result` or `path`.
 - TypeScript invoke arguments stay camelCase; Tauri maps them to Rust snake_case.
 - Numeric field names carry unit suffixes such as `_m`, `_deg`, `_mps`, `_v`, `_a`, `_pct`, `_usec`, `_secs`, `_hz`.

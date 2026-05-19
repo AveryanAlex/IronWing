@@ -2,7 +2,7 @@
 
 ## Overview
 
-Thin Tauri IPC shell between the Svelte frontend and `mavkit`. This layer owns transport setup, command dispatch, event relays, logs/recording, firmware flows, and platform-gated plugin registration.
+Thin Tauri IPC shell between the Svelte frontend and `mavkit`. This layer owns platform integration, command dispatch, event relays, recording, firmware flows, and plugin registration. Shared contracts and runtime helpers live in `crates/ironwing-core`; Tauri imports or re-exports them instead of defining wire types locally.
 
 ## Where To Look
 
@@ -10,11 +10,12 @@ Thin Tauri IPC shell between the Svelte frontend and `mavkit`. This layer owns t
 |------|----------|-------|
 | App bootstrap / plugin registration | `lib.rs` | `AppState`, `invoke_handler!`, Android setup |
 | General vehicle/mission/param commands | `commands.rs` | Most Tauri commands live here |
-| Transport setup / connect lifecycle | `connection.rs` | `LinkEndpoint`, BLE/SPP connection paths |
+| Shared core contracts/runtime helpers | `../../crates/ironwing-core/AGENTS.md` | IPC source of truth, telemetry, transport, playback, live runtime helpers |
+| Transport setup / connect lifecycle | `connection.rs` | Tauri bridge into shared transport descriptors, BLE/SPP paths |
 | Event relays | `bridges.rs`, `e2e_emit.rs` | Watch channels + inline emit wrapper |
 | Session envelope / source tracking | `session_runtime.rs` | Live/playback session state machine |
 | Guided flight runtime | `guided.rs` | Vehicle context extraction, guided snapshot emission |
-| IPC wire contracts | `ipc/AGENTS.md` | Typed event/command payloads, serde conventions |
+| IPC adapter re-exports | `ipc/AGENTS.md` | Tauri-local re-export surface for shared core contracts |
 | Logs / playback source | `logs.rs` | Dual TLOG/BIN parsing and queries |
 | Recording | `recording.rs` | TLOG recorder lifecycle |
 | Agent remote UI bridge | `remote_ui.rs` | Dev-only HTTP invoke + SSE event bridge for browser-capable agents |
@@ -27,17 +28,17 @@ Thin Tauri IPC shell between the Svelte frontend and `mavkit`. This layer owns t
 |------|---------|
 | `lib.rs` | Entry point, plugin setup, command registration |
 | `commands.rs` | Vehicle, mission, param, calibration, guided commands |
-| `connection.rs` | Transport setup, connect/disconnect lifecycle |
+| `connection.rs` | Transport setup, connect/disconnect lifecycle using shared transport descriptors |
 | `bridges.rs` | Watch-channel relays for frontend events |
 | `e2e_emit.rs` | Unified emit wrapper for the native webview |
 | `bluetooth.rs` | BLE scan and permissions helpers |
 | `session_runtime.rs` | Session envelope state machine (live/playback tracking, pending sessions, seek epochs) |
 | `guided.rs` | Guided flight helpers and snapshot emission |
-| `logs.rs` | Log parsing, summary, track/path export, CSV export |
+| `logs.rs` | Tauri log commands around shared playback helpers, summary, track/path export, CSV export |
 | `recording.rs` | TLOG recording lifecycle |
 | `remote_ui.rs` | Agent remote UI bridge used by `pnpm run dev:desktop:remote`; not an automated test lane |
 | `helpers.rs` | Shared guards and utilities |
-| `ipc/` | Wire-type contract layer for all IPC-facing payloads |
+| `ipc/` | Adapter modules that re-export `ironwing-core::ipc` for Tauri-local imports |
 | `firmware/` | Firmware flashing, DFU recovery, catalog, typed session model |
 | `main.rs` | Binary stub calling `ironwing::run()` |
 
@@ -72,6 +73,7 @@ pub(crate) struct AppState {
 - Async vehicle commands use `with_vehicle(&state).await?`.
 - Log-only commands use `with_log_store()` when they need an open log.
 - IPC boundary types return `Result<T, String>`; stringify errors before crossing the boundary.
+- Add or change wire types in `crates/ironwing-core/src/ipc` first, then re-export through `ipc/mod.rs` only as needed.
 
 ## Platform Gating
 

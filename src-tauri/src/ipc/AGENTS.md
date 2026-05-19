@@ -2,7 +2,7 @@
 
 ## Overview
 
-`crates/ironwing-core/src/ipc/` is the shared typed contract layer between the Rust shell and the frontend. `src-tauri/src/ipc/mod.rs` is only the Tauri-side adapter that re-exports those contracts. Every struct and enum here is a wire type that crosses the IPC boundary via serde. Changes here require matching TypeScript updates and contract-fixture test coverage.
+`crates/ironwing-core/src/ipc/` is the shared typed contract layer between the Rust shell and the frontend. `src-tauri/src/ipc/mod.rs` is only the Tauri-side adapter that re-exports those contracts. Every struct and enum in core IPC is a wire type that crosses the IPC boundary via serde. Changes require matching TypeScript updates and contract-fixture test coverage.
 
 ## Where To Look
 
@@ -36,7 +36,7 @@
 
 ## Rules
 
-- Wire types are `pub(crate)` — do not expose outside the crate.
+- Wire types are defined in `ironwing-core`; keep Tauri exposure crate-local through these adapter re-exports.
 - `src-tauri/src/ipc/mod.rs` re-exports the shared core API for the Tauri crate. Add new types in `ironwing-core` first, then re-export as needed.
 - Do not add business logic to this module; it is a contract/translation layer only.
 - Changes to tagged enums or field shapes require updating the corresponding TypeScript types and contract-fixture tests in `tests/contracts/`.
