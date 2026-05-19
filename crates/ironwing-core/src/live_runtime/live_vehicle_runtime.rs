@@ -368,12 +368,7 @@ where
     emit_session_state(handle, DomainProvenance::Stream);
 }
 
-async fn telemetry_poll_bridge<H, I, F, Sleep>(
-    handle: H,
-    interval: I,
-    vehicle: Vehicle,
-    sleep: F,
-)
+async fn telemetry_poll_bridge<H, I, F, Sleep>(handle: H, interval: I, vehicle: Vehicle, sleep: F)
 where
     H: LiveRuntimeHandle,
     I: TelemetryIntervalProvider,
@@ -390,8 +385,7 @@ async fn observation_bridge<H, T, F>(
     handle: H,
     mut subscription: ObservationSubscription<T>,
     mut update: F,
-)
-where
+) where
     H: LiveRuntimeHandle,
     T: Clone + Send + Sync + 'static,
     F: FnMut(&H, T) + 'static,
@@ -648,8 +642,7 @@ async fn mag_progress_bridge<H, C>(
     handle: H,
     calibration_sources: C,
     mut progress_sub: ObservationSubscription<Vec<MagCalProgress>>,
-)
-where
+) where
     H: LiveRuntimeHandle,
     C: CalibrationSourcesState,
 {
@@ -664,8 +657,7 @@ async fn mag_report_bridge<H, C>(
     handle: H,
     calibration_sources: C,
     mut report_sub: ObservationSubscription<Vec<MagCalReport>>,
-)
-where
+) where
     H: LiveRuntimeHandle,
     C: CalibrationSourcesState,
 {
