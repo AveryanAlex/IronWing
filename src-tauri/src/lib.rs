@@ -32,6 +32,7 @@ use recording::{
     recording_status, recording_stop,
 };
 use remote_ui::RemoteUiEvent;
+use tauri::Manager;
 use tauri_event_sink::TauriEventSink;
 mod bluetooth;
 mod bridges;
@@ -108,10 +109,6 @@ pub fn run() {
         remote_ui_events: remote_ui::event_channel(),
     };
     let mut builder = tauri::Builder::default()
-        .setup(move |app| {
-            tauri_event_sink.set_handle(app.handle().clone());
-            Ok(())
-        })
         .manage(state)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -221,9 +218,13 @@ pub fn run() {
 
     builder
         .setup(|_app| {
+            let state = _app.state::<AppState>();
+            state
+                .live_runtime
+                .with_runtime(|runtime| runtime.event_sink().set_handle(_app.handle().clone()));
+
             #[cfg(desktop)]
             {
-                use tauri::Manager;
                 let bg = tauri::utils::config::Color(18, 23, 29, 255);
                 if let Some(w) = _app.get_webview_window("main") {
                     let _ = w.set_background_color(Some(bg));
