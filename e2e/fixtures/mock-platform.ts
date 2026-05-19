@@ -990,7 +990,7 @@ export async function expectLogsWorkspace(page: Page): Promise<void> {
 }
 
 export async function openMissionWorkspace(page: Page): Promise<void> {
-    const missionButton = page.getByRole("button", { name: "Mission" });
+    const missionButton = page.getByRole("button", { name: "Mission", exact: true });
     await expect(
         missionButton,
         "Mission workspace entry point is missing; keep the shared shell workspace labels aligned with the shipped header tabs.",

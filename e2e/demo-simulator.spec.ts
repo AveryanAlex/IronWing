@@ -6,6 +6,7 @@ import {
   connectionSelectors,
   expect,
   liveSurfaceSelectors,
+  liveSurfaceValueLocator,
   missionWorkspaceLocator,
   missionWorkspaceSelectors,
   openMissionWorkspace,
@@ -77,8 +78,6 @@ async function readMetricValue(locator: Locator): Promise<number> {
 }
 
 const sidebarTelemetrySelectors = {
-  state: '[data-testid="sidebar-telemetry-state"] dd',
-  mode: '[data-testid="sidebar-telemetry-mode"] dd',
   altitude: '[data-testid="sidebar-telemetry-altitude"] dd',
   speed: '[data-testid="sidebar-telemetry-speed"] dd',
 } as const;
@@ -88,12 +87,20 @@ function sidebarMetric(page: Page, selector: keyof typeof sidebarTelemetrySelect
 }
 
 async function openTelemetryWorkspace(page: Page) {
-  await page.getByRole("button", { name: "Telemetry" }).click();
-  await expect(page.locator(liveSurfaceSelectors.altitudeValue)).toBeVisible();
+  await page.getByRole("button", { name: "Telemetry", exact: true }).click();
+  await expect(liveSurfaceValueLocator(page, "altitudeValue")).toBeVisible();
 }
 
 function liveMetric(page: Page, selector: keyof typeof liveSurfaceSelectors): Locator {
-  return page.locator(liveSurfaceSelectors[selector]).locator("dd, .telemetry-card__value");
+  return liveSurfaceValueLocator(page, selector);
+}
+
+function selectedFlightMode(page: Page): Locator {
+  return page.locator("#flight-mode-select option:checked");
+}
+
+function armButton(page: Page): Locator {
+  return page.getByRole("button", { name: "Arm", exact: true });
 }
 
 function angularDeltaDeg(a: number, b: number): number {
@@ -140,7 +147,7 @@ test("demo copter stays parked while disarmed, then takeoff changes altitude", a
   await page.waitForTimeout(1500);
   expect(await readMetricValue(altitude)).toBeCloseTo(altitudeBefore, 1);
 
-  await page.getByRole("button", { name: "Arm", exact: true }).click();
+  await armButton(page).click();
   await page.locator("#flight-mode-select").selectOption({ label: "Guided" });
   await page.getByRole("button", { name: "Takeoff" }).click();
 
@@ -152,13 +159,13 @@ test("demo AUTO mission upload/read progresses current item and lands", async ({
   await importUploadAndReadAutoMission(page, mockPlatform);
   const initialCurrent = await currentMissionMarkerTestId(page);
 
-  await page.getByRole("button", { name: "Arm", exact: true }).click();
+  await armButton(page).click();
   await page.locator("#flight-mode-select").selectOption({ label: "Auto" });
 
-  await expect(sidebarMetric(page, "mode")).toContainText(/auto/i, { timeout: 5_000 });
+  await expect(selectedFlightMode(page)).toContainText(/auto/i, { timeout: 5_000 });
   await expect.poll(async () => currentMissionMarkerTestId(page), { timeout: 20_000 }).not.toBe(initialCurrent);
   await expect.poll(async () => readMetricValue(sidebarMetric(page, "altitude")), { timeout: 30_000 }).toBeLessThanOrEqual(0.6);
-  await expect.poll(async () => sidebarMetric(page, "state").innerText(), { timeout: 15_000 }).toMatch(/disarmed/i);
+  await expect.poll(async () => armButton(page).isEnabled(), { timeout: 15_000 }).toBe(true);
 });
 
 test("demo airplane connects parked, then after arming + AUTO it gains forward speed and heading changes", async ({
@@ -167,17 +174,17 @@ test("demo airplane connects parked, then after arming + AUTO it gains forward s
   }) => {
   await connectDemo(page, mockPlatform, "airplane");
 
-  await expect(sidebarMetric(page, "state")).toContainText(/disarmed/i);
-  await expect(sidebarMetric(page, "mode")).not.toContainText(/auto/i);
+  await expect(liveMetric(page, "stateValue")).toContainText(/disarmed/i);
+  await expect(liveMetric(page, "modeValue")).not.toContainText(/auto/i);
   expect(await readMetricValue(sidebarMetric(page, "speed"))).toBe(0);
 
   await openTelemetryWorkspace(page);
   const initialHeading = await readMetricValue(liveMetric(page, "headingValue"));
   await importUploadAndReadAutoMission(page, mockPlatform);
-  await page.getByRole("button", { name: "Arm", exact: true }).click();
+  await armButton(page).click();
   await page.locator("#flight-mode-select").selectOption({ label: "Auto" });
 
-  await expect(sidebarMetric(page, "mode")).toContainText(/auto/i, { timeout: 5_000 });
+  await expect(selectedFlightMode(page)).toContainText(/auto/i, { timeout: 5_000 });
   await expect.poll(async () => readMetricValue(sidebarMetric(page, "speed")), { timeout: 15_000 }).toBeGreaterThanOrEqual(5);
   await openTelemetryWorkspace(page);
   await expect.poll(

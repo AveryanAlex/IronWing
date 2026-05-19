@@ -368,40 +368,36 @@ where
     emit_session_state(handle, DomainProvenance::Stream);
 }
 
-fn telemetry_poll_bridge<H, I, F, Sleep>(
+async fn telemetry_poll_bridge<H, I, F, Sleep>(
     handle: H,
     interval: I,
     vehicle: Vehicle,
     sleep: F,
-) -> impl Future<Output = ()>
+)
 where
     H: LiveRuntimeHandle,
     I: TelemetryIntervalProvider,
     F: Fn(Duration) -> Sleep + 'static,
     Sleep: Future<Output = ()> + 'static,
 {
-    async move {
-        loop {
-            sleep(interval.telemetry_interval()).await;
-            emit_telemetry_update(&handle, &vehicle);
-        }
+    loop {
+        sleep(interval.telemetry_interval()).await;
+        emit_telemetry_update(&handle, &vehicle);
     }
 }
 
-fn observation_bridge<H, T, F>(
+async fn observation_bridge<H, T, F>(
     handle: H,
     mut subscription: ObservationSubscription<T>,
     mut update: F,
-) -> impl Future<Output = ()>
+)
 where
     H: LiveRuntimeHandle,
     T: Clone + Send + Sync + 'static,
     F: FnMut(&H, T) + 'static,
 {
-    async move {
-        while let Some(value) = subscription.recv().await {
-            update(&handle, value);
-        }
+    while let Some(value) = subscription.recv().await {
+        update(&handle, value);
     }
 }
 
@@ -648,39 +644,35 @@ impl CalibrationSourcesState for SendCalibrationSources {
     }
 }
 
-fn mag_progress_bridge<H, C>(
+async fn mag_progress_bridge<H, C>(
     handle: H,
     calibration_sources: C,
     mut progress_sub: ObservationSubscription<Vec<MagCalProgress>>,
-) -> impl Future<Output = ()>
+)
 where
     H: LiveRuntimeHandle,
     C: CalibrationSourcesState,
 {
-    async move {
-        while let Some(progress_list) = progress_sub.recv().await {
-            let value = progress_list.first().cloned();
-            let calibration = calibration_sources.snapshot_after_progress(value.clone());
-            emit_mag_progress_update(&handle, value, calibration);
-        }
+    while let Some(progress_list) = progress_sub.recv().await {
+        let value = progress_list.first().cloned();
+        let calibration = calibration_sources.snapshot_after_progress(value.clone());
+        emit_mag_progress_update(&handle, value, calibration);
     }
 }
 
-fn mag_report_bridge<H, C>(
+async fn mag_report_bridge<H, C>(
     handle: H,
     calibration_sources: C,
     mut report_sub: ObservationSubscription<Vec<MagCalReport>>,
-) -> impl Future<Output = ()>
+)
 where
     H: LiveRuntimeHandle,
     C: CalibrationSourcesState,
 {
-    async move {
-        while let Some(report_list) = report_sub.recv().await {
-            let value = report_list.first().cloned();
-            let calibration = calibration_sources.snapshot_after_report(value.clone());
-            emit_mag_report_update(&handle, value, calibration);
-        }
+    while let Some(report_list) = report_sub.recv().await {
+        let value = report_list.first().cloned();
+        let calibration = calibration_sources.snapshot_after_report(value.clone());
+        emit_mag_report_update(&handle, value, calibration);
     }
 }
 

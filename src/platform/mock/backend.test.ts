@@ -28,8 +28,8 @@ function setMockProfile(profile: "test" | "demo") {
     import.meta.env.VITE_IRONWING_MOCK_PROFILE = profile;
 }
 
-function readRustCommandsSource() {
-    return readFileSync("src-tauri/src/commands.rs", "utf8");
+function readRustTelemetrySource() {
+    return readFileSync("crates/ironwing-core/src/telemetry.rs", "utf8");
 }
 
 function readRustLiveRuntimeCommandsSource() {
@@ -37,16 +37,14 @@ function readRustLiveRuntimeCommandsSource() {
 }
 
 function readRustMessageRateCatalog() {
-    const source = readRustCommandsSource();
-    const functionMatch = source.match(
-        /pub\(crate\) fn get_available_message_rates\(\) -> Vec<MessageRateInfo> \{\s*vec!\[(.*?)\n\s*]\n\}/s,
-    );
-    if (!functionMatch) {
-        throw new Error("Could not locate get_available_message_rates in Rust commands.rs");
+    const source = readRustTelemetrySource();
+    const catalogMatch = source.match(/pub const AVAILABLE_MESSAGE_RATES: &\[MessageRateInfo\] = &\[(.*?)\n\];/s);
+    if (!catalogMatch) {
+        throw new Error("Could not locate AVAILABLE_MESSAGE_RATES in Rust telemetry.rs");
     }
 
-    const entryPattern = /MessageRateInfo \{\s*id: (\d+),\s*name: "([^"]+)"\.into\(\),\s*default_rate_hz: ([0-9.]+),\s*}/g;
-    const entries = [...functionMatch[1].matchAll(entryPattern)].map((match) => ({
+    const entryPattern = /MessageRateInfo \{\s*id: (\d+),\s*name: "([^"]+)",\s*default_rate_hz: ([0-9.]+),\s*}/g;
+    const entries = [...(catalogMatch[1] ?? "").matchAll(entryPattern)].map((match) => ({
         id: Number(match[1]),
         name: match[2] ?? "",
         default_rate_hz: Number(match[3]),
@@ -60,13 +58,14 @@ function readRustMessageRateCatalog() {
 }
 
 function readRustRateLimits() {
+    const telemetrySource = readRustTelemetrySource();
     const liveRuntimeCommandsSource = readRustLiveRuntimeCommandsSource();
-    const tauriCommandsSource = readRustCommandsSource();
     const messageRateMatch = liveRuntimeCommandsSource.match(/if !\(([0-9.]+)\.\.=([0-9.]+)\)\.contains\(&rate_hz\)/);
-    const telemetryRateMatch = tauriCommandsSource.match(/if rate_hz == 0 \|\| rate_hz > (\d+)/);
+    const telemetryMinMatch = telemetrySource.match(/pub const MIN_TELEMETRY_RATE_HZ: u32 = (\d+);/);
+    const telemetryMaxMatch = telemetrySource.match(/pub const MAX_TELEMETRY_RATE_HZ: u32 = (\d+);/);
 
-    if (!messageRateMatch || !telemetryRateMatch) {
-        throw new Error("Could not parse telemetry/message-rate limits from Rust commands.rs");
+    if (!messageRateMatch || !telemetryMinMatch || !telemetryMaxMatch) {
+        throw new Error("Could not parse telemetry/message-rate limits from Rust core sources");
     }
 
     return {
@@ -75,8 +74,8 @@ function readRustRateLimits() {
             max: Number(messageRateMatch[2]),
         },
         telemetryRate: {
-            min: 1,
-            max: Number(telemetryRateMatch[1]),
+            min: Number(telemetryMinMatch[1]),
+            max: Number(telemetryMaxMatch[1]),
         },
     };
 }
