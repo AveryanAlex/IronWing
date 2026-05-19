@@ -12,7 +12,14 @@ use tauri::Manager;
 use tokio::task::AbortHandle;
 use tokio_util::sync::CancellationToken;
 
-use ironwing_core::event_names;
+pub(crate) use ironwing_core::log_playback::PlaybackFrame;
+use ironwing_core::{
+    event_names,
+    log_playback::{
+        PlaybackLogBounds, idle_playback_state, playback_frame_from_parts, playback_state_for_log,
+        resolve_playback_cursor_usec, validate_playback_speed,
+    },
+};
 
 mod raw_messages;
 
@@ -21,18 +28,14 @@ use crate::{
     e2e_emit::emit_event,
     helpers::{self, operation_failure_json},
     ipc::{
-        DomainProvenance, DomainValue, LogDiagnostic, LogOperationPhase, LogOperationProgress,
-        OperationFailure, OperationId, PlaybackSnapshot, Reason, ReasonKind, ReplayStatus,
-        ScopedEvent, SessionConnection, SessionEnvelope, SessionSnapshot, SessionStatus,
-        StatusTextSnapshot, SupportSnapshot, TelemetrySnapshot as GroupedTelemetrySnapshot,
-        VehicleState,
+        LogDiagnostic, LogOperationPhase, LogOperationProgress, OperationFailure, OperationId,
+        Reason, ReasonKind, ReplayStatus, ScopedEvent, SessionEnvelope, VehicleState,
         logs::{
             ChartPoint, ChartSeries, ChartSeriesPage, ChartSeriesRequest, LogDiagnosticSeverity,
             LogDiagnosticSource, LogExportFormat, LogExportRequest, LogExportResult,
             RawMessageFieldFilter, RawMessagePage, RawMessageQuery,
         },
         playback::{PlaybackSeekResult, PlaybackState},
-        status_text_snapshot_from_entries, telemetry_snapshot_from_value,
     },
 };
 
@@ -89,16 +92,6 @@ pub(crate) struct ParsedLog {
     pub(crate) diagnostics: Vec<LogDiagnostic>,
 }
 
-#[derive(Clone, PartialEq)]
-pub(crate) struct PlaybackFrame {
-    pub session: DomainValue<SessionSnapshot>,
-    pub telemetry: GroupedTelemetrySnapshot,
-    pub support: SupportSnapshot,
-    pub status_text: StatusTextSnapshot,
-    pub playback: PlaybackSnapshot,
-}
-
-const AVAILABLE_PLAYBACK_SPEEDS: [f32; 6] = [0.5, 1.0, 2.0, 4.0, 8.0, 16.0];
 const DEFAULT_COMPAT_QUERY_POINTS: usize = 2_000;
 const DEFAULT_CHART_QUERY_POINTS: usize = 1_000;
 const MAX_CHART_QUERY_POINTS: usize = 5_000;
@@ -351,20 +344,7 @@ impl PlaybackRuntime {
     }
 
     fn idle_state() -> PlaybackState {
-        PlaybackState {
-            status: ReplayStatus::Idle,
-            entry_id: None,
-            operation_id: None,
-            cursor_usec: None,
-            start_usec: None,
-            end_usec: None,
-            duration_secs: None,
-            speed: 1.0,
-            available_speeds: AVAILABLE_PLAYBACK_SPEEDS.to_vec(),
-            barrier_ready: false,
-            readonly: true,
-            diagnostic: None,
-        }
+        idle_playback_state()
     }
 
     fn cancel_task(&mut self) {
@@ -385,34 +365,18 @@ impl PlaybackRuntime {
         store: &LogStore,
         barrier_ready: bool,
     ) -> PlaybackState {
-        PlaybackState {
+        playback_state_for_log(
             status,
-            entry_id: None,
             operation_id,
-            cursor_usec: store.resolved_playback_cursor_usec(),
-            start_usec: Some(store.summary.start_usec),
-            end_usec: Some(store.summary.end_usec),
-            duration_secs: Some(store.summary.duration_secs),
-            speed: self.state.speed,
-            available_speeds: AVAILABLE_PLAYBACK_SPEEDS.to_vec(),
+            PlaybackLogBounds {
+                cursor_usec: store.resolved_playback_cursor_usec(),
+                start_usec: store.summary.start_usec,
+                end_usec: store.summary.end_usec,
+                duration_secs: store.summary.duration_secs,
+            },
+            self.state.speed,
             barrier_ready,
-            readonly: true,
-            diagnostic: None,
-        }
-    }
-}
-
-fn validate_playback_speed(speed: f32) -> Result<(), String> {
-    if AVAILABLE_PLAYBACK_SPEEDS
-        .iter()
-        .any(|candidate| (*candidate - speed).abs() < f32::EPSILON)
-    {
-        Ok(())
-    } else {
-        Err(format!(
-            "unsupported playback speed {speed}; expected one of {:?}",
-            AVAILABLE_PLAYBACK_SPEEDS
-        ))
+        )
     }
 }
 
@@ -639,34 +603,20 @@ impl LogStore {
         let telemetry = self.telemetry_at(cursor_usec);
         let vehicle_state = self.vehicle_state_at(&telemetry);
 
-        PlaybackFrame {
-            session: DomainValue::present(
-                SessionSnapshot {
-                    status: SessionStatus::Active,
-                    connection: SessionConnection::Disconnected,
-                    vehicle_state,
-                    home_position: None,
-                },
-                DomainProvenance::Playback,
-            ),
-            telemetry: telemetry_snapshot_from_value(
-                &serde_json::to_value(telemetry).unwrap_or(serde_json::Value::Null),
-                DomainProvenance::Playback,
-            ),
-            support: DomainValue::missing(DomainProvenance::Playback),
-            status_text: status_text_snapshot_from_entries(Vec::new(), DomainProvenance::Playback),
-            playback: PlaybackSnapshot { cursor_usec },
-        }
+        playback_frame_from_parts(
+            vehicle_state,
+            &serde_json::to_value(telemetry).unwrap_or(serde_json::Value::Null),
+            cursor_usec,
+        )
     }
 
     fn resolve_cursor_usec(&self, cursor_usec: Option<u64>) -> Option<u64> {
-        if self.entries.is_empty() {
-            return None;
-        }
-
-        let min = self.summary.start_usec;
-        let max = self.summary.end_usec;
-        Some(cursor_usec.unwrap_or(min).clamp(min, max))
+        resolve_playback_cursor_usec(
+            !self.entries.is_empty(),
+            self.summary.start_usec,
+            self.summary.end_usec,
+            cursor_usec,
+        )
     }
 
     fn telemetry_at(&self, cursor_usec: Option<u64>) -> TelemetrySnapshot {
