@@ -1,4 +1,8 @@
-import { ensureWasmRuntime } from "../wasm";
+import {
+  ensureWasmRuntime,
+  wasmAvailableMessageRates,
+  wasmWebTransportDescriptors,
+} from "../wasm";
 import { createWebBluetoothTransport, isWebBluetoothAvailable } from "../transports/web-bluetooth";
 import { createWebSerialTransport, isWebSerialAvailable } from "../transports/web-serial";
 import { createWebSocketTransport } from "../transports/websocket";
@@ -79,56 +83,20 @@ const WEB_DFU_RECOVERY_UNSUPPORTED_RESULT = {
   result: "platform_unsupported",
 } satisfies DfuRecoveryResult;
 
-const WEB_MESSAGE_RATES = [
-  { id: 33, name: "Global Position", default_rate_hz: 4.0 },
-  { id: 30, name: "Attitude", default_rate_hz: 4.0 },
-  { id: 24, name: "GPS Raw", default_rate_hz: 2.0 },
-  { id: 1, name: "System Status", default_rate_hz: 1.0 },
-  { id: 65, name: "RC Channels", default_rate_hz: 2.0 },
-  { id: 36, name: "Servo Output", default_rate_hz: 2.0 },
-  { id: 74, name: "VFR HUD", default_rate_hz: 4.0 },
-  { id: 62, name: "Nav Controller", default_rate_hz: 2.0 },
-];
-
 const maybe = (reason: string): Capability => ({ kind: "maybe", reason });
 const unsupportedCapability = (reason: string): Capability => ({ kind: "unsupported", reason });
 
-function webTransportDescriptors(): TransportDescriptor[] {
-  return [
-    {
-      kind: "websocket",
-      label: "WebSocket",
-      available: typeof WebSocket !== "undefined",
-      validation: { url_required: true },
-      discovery_error:
-        typeof WebSocket === "undefined" ? "WebSocket is not available in this browser" : undefined,
-    },
-    {
-      kind: "web_serial",
-      label: "Web Serial",
-      available: isWebSerialAvailable(),
-      validation: { chooser_required: true, baud_required: true },
-      default_baud: 57600,
-      discovery_error: isWebSerialAvailable()
-        ? undefined
-        : "Web Serial is not available in this browser",
-    },
-    {
-      kind: "web_bluetooth",
-      label: "Web Bluetooth (NUS)",
-      available: isWebBluetoothAvailable(),
-      validation: { chooser_required: true },
-      profile: "nordic_uart",
-      discovery_error: isWebBluetoothAvailable()
-        ? undefined
-        : "Web Bluetooth is not available in this browser",
-    },
-  ];
+function webTransportDescriptors(): Promise<TransportDescriptor[]> {
+  return wasmWebTransportDescriptors({
+    websocketAvailable: typeof WebSocket !== "undefined",
+    webSerialAvailable: isWebSerialAvailable(),
+    webBluetoothAvailable: isWebBluetoothAvailable(),
+  });
 }
 
-function webRuntimeCapabilities(): RuntimeCapabilities {
+async function webRuntimeCapabilities(): Promise<RuntimeCapabilities> {
   return {
-    transports: webTransportDescriptors(),
+    transports: await webTransportDescriptors(),
     firmware_flash: unsupportedCapability("Firmware flashing is not available in pure web mode."),
     log_library_filesystem: unsupportedCapability("Native log-library filesystem access is not available in pure web mode."),
     recording_filesystem: unsupportedCapability("Native recording filesystem access is not available in pure web mode."),
@@ -159,9 +127,9 @@ function fnv1a64Digest(bytes: number[]): string {
 export async function invokeWebCommand<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   switch (cmd) {
     case "available_transports":
-      return webTransportDescriptors() as T;
+      return await webTransportDescriptors() as T;
     case "runtime_capabilities":
-      return webRuntimeCapabilities() as T;
+      return await webRuntimeCapabilities() as T;
     case "list_serial_ports_cmd":
       return [] as T;
     case "bt_request_permissions":
@@ -288,7 +256,7 @@ export async function invokeWebCommand<T>(cmd: string, args?: Record<string, unk
       return undefined as T;
     }
     case "get_available_message_rates":
-      return WEB_MESSAGE_RATES as T;
+      return await wasmAvailableMessageRates() as T;
     case "set_telemetry_rate": {
       const runtime = await ensureWasmRuntime();
       webBackendRuntime.runtimeLoaded = true;

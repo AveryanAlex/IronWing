@@ -29,17 +29,19 @@ export class WasmByteBridge {
     pushInbound(bytes: Uint8Array): Promise<void>;
 }
 
+export function availableMessageRates(): any;
+
 export function start(): void;
+
+export function webTransportDescriptors(websocket_available: boolean, web_serial_available: boolean, web_bluetooth_available: boolean): any;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
-    readonly __wbg_wasmbytebridge_free: (a: number, b: number) => void;
-    readonly wasmbytebridge_close: (a: number) => void;
-    readonly wasmbytebridge_isClosed: (a: number) => number;
-    readonly wasmbytebridge_nextOutbound: (a: number) => any;
-    readonly wasmbytebridge_pushInbound: (a: number, b: any) => any;
+    readonly availableMessageRates: () => [number, number, number];
+    readonly start: () => void;
+    readonly webTransportDescriptors: (a: number, b: number, c: number) => [number, number, number];
     readonly __wbg_ironwingwasmruntime_free: (a: number, b: number) => void;
     readonly ironwingwasmruntime_ackSessionSnapshot: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly ironwingwasmruntime_armVehicle: (a: number, b: number) => any;
@@ -54,10 +56,15 @@ export interface InitOutput {
     readonly ironwingwasmruntime_setTelemetryRate: (a: number, b: number) => [number, number];
     readonly ironwingwasmruntime_vehicleTakeoff: (a: number, b: number) => any;
     readonly ironwingwasmruntime_waitConnect: (a: number) => any;
-    readonly start: () => void;
-    readonly wasm_bindgen__convert__closures_____invoke__h157532a21e05ac18: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen__convert__closures_____invoke__h831f6e81e7b0bf6f: (a: number, b: number, c: any, d: any) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__hba32844d06b6d595: (a: number, b: number) => void;
+    readonly __wbg_wasmbytebridge_free: (a: number, b: number) => void;
+    readonly wasmbytebridge_close: (a: number) => void;
+    readonly wasmbytebridge_isClosed: (a: number) => number;
+    readonly wasmbytebridge_nextOutbound: (a: number) => any;
+    readonly wasmbytebridge_pushInbound: (a: number, b: any) => any;
+    readonly wasm_bindgen__convert__closures_____invoke__hdb519a66166eae10: (a: number, b: number, c: any) => [number, number];
+    readonly wasm_bindgen__convert__closures_____invoke__h3c099da163a3c89b: (a: number, b: number, c: any, d: any) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__h50282636345e2517: (a: number, b: number) => number;
+    readonly wasm_bindgen__convert__closures_____invoke__h631c439813541c6b: (a: number, b: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

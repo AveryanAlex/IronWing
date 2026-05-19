@@ -10,8 +10,42 @@ const wasmRuntimeMock = vi.hoisted(() => ({
   ackSessionSnapshot: vi.fn(() => ({ result: "accepted", envelope: { session_id: "session-1", source_kind: "live", seek_epoch: 0, reset_revision: 0 } })),
 }));
 
+const wasmContractMock = vi.hoisted(() => ({
+  availableMessageRates: vi.fn(async () => [
+    { id: 33, name: "Core Global Position", default_rate_hz: 4 },
+  ]),
+  webTransportDescriptors: vi.fn(async (options: {
+    websocketAvailable: boolean;
+    webSerialAvailable: boolean;
+    webBluetoothAvailable: boolean;
+  }) => [
+    {
+      kind: "websocket",
+      label: "Core WebSocket",
+      available: options.websocketAvailable,
+      validation: { url_required: true },
+    },
+    {
+      kind: "web_serial",
+      label: "Core Web Serial",
+      available: options.webSerialAvailable,
+      validation: { chooser_required: true, baud_required: true },
+      default_baud: 57600,
+    },
+    {
+      kind: "web_bluetooth",
+      label: "Core Web Bluetooth",
+      available: options.webBluetoothAvailable,
+      validation: { chooser_required: true },
+      profile: "nordic_uart",
+    },
+  ]),
+}));
+
 vi.mock("../wasm", () => ({
   ensureWasmRuntime: vi.fn(async () => wasmRuntimeMock),
+  wasmAvailableMessageRates: wasmContractMock.availableMessageRates,
+  wasmWebTransportDescriptors: wasmContractMock.webTransportDescriptors,
 }));
 
 vi.mock("../transports/websocket", () => ({
@@ -72,6 +106,11 @@ describe("web backend commands", () => {
       expect.objectContaining({ kind: "web_serial", available: true, validation: { chooser_required: true, baud_required: true } }),
       expect.objectContaining({ kind: "web_bluetooth", available: false, profile: "nordic_uart" }),
     ]);
+    expect(wasmContractMock.webTransportDescriptors).toHaveBeenCalledWith({
+      websocketAvailable: true,
+      webSerialAvailable: true,
+      webBluetoothAvailable: false,
+    });
   });
 
   it("reports typed pure-web runtime capabilities", async () => {
@@ -85,6 +124,14 @@ describe("web backend commands", () => {
     expect(capabilities.transports).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: "websocket" }),
     ]));
+  });
+
+  it("reports available message rates from the shared wasm contract", async () => {
+    await expect(invokeWebCommand("get_available_message_rates")).resolves.toEqual([
+      { id: 33, name: "Core Global Position", default_rate_hz: 4 },
+    ]);
+
+    expect(wasmContractMock.availableMessageRates).toHaveBeenCalledTimes(1);
   });
 
   it("starts Web Serial and Web Bluetooth transports from connect requests", async () => {
