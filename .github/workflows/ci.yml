@@ -80,7 +80,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Create dist directory
-        run: mkdir -p dist
+        run: mkdir -p dist/tauri
 
       - name: Check Rust formatting
         run: cargo fmt --all -- --check
