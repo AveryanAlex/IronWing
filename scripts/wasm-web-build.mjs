@@ -1,50 +1,40 @@
-import { rm } from "node:fs/promises";
-import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
-
-const rootDir = path.dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
-const generatedDir = path.join(rootDir, "src/platform/web/generated");
-
-function run(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: rootDir,
-      stdio: "inherit",
-      ...options,
-    });
-    child.on("exit", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(`${command} exited with code ${code ?? "unknown"}`));
-    });
-    child.on("error", reject);
-  });
-}
-
-async function cleanupGeneratedMetadata() {
-  await Promise.all([
-    rm(path.join(generatedDir, ".gitignore"), { force: true }),
-    rm(path.join(generatedDir, "ironwing_wasm_bg.wasm.d.ts"), { force: true }),
-  ]);
-}
+import { runCommand } from "./workflow/process.mjs";
+import { projectRoot } from "./workflow/paths.mjs";
+import {
+  removeTransientWasmWebFiles,
+  removeWasmWebMetadataFiles,
+  removeWasmWebRuntimeFiles,
+  shouldKeepWasmGenerated,
+} from "./workflow/wasm-web.mjs";
 
 const isDev = process.argv.includes("--dev");
+const cleanAfter = process.argv.includes("--clean-after") && !shouldKeepWasmGenerated();
+const cleanupOnly = process.argv.includes("--cleanup-only");
 const profileFlag = isDev ? "--dev" : "--release";
 
-await run("wasm-pack", [
-  "build",
-  "crates/ironwing-wasm",
-  "--target",
-  "web",
-  "--out-dir",
-  "../../src/platform/web/generated",
-  "--out-name",
-  "ironwing_wasm",
-  "--no-pack",
-  profileFlag,
-]);
+if (cleanupOnly) {
+  if (!shouldKeepWasmGenerated()) {
+    await removeTransientWasmWebFiles();
+  }
+} else {
+  await removeTransientWasmWebFiles();
 
-await cleanupGeneratedMetadata();
+  await runCommand("wasm-pack", [
+    "build",
+    "crates/ironwing-wasm",
+    "--target",
+    "web",
+    "--out-dir",
+    "../../src/platform/web/generated",
+    "--out-name",
+    "ironwing_wasm",
+    "--no-pack",
+    profileFlag,
+  ], { cwd: projectRoot });
+
+  await removeWasmWebMetadataFiles();
+
+  if (cleanAfter) {
+    await removeWasmWebRuntimeFiles();
+  }
+}

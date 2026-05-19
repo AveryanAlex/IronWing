@@ -1,37 +1,5 @@
-import { spawn } from "node:child_process";
+import { demoBuildEnv } from "./workflow/env.mjs";
+import { runFrontendBuild } from "./workflow/frontend.mjs";
+import { projectRoot } from "./workflow/paths.mjs";
 
-const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-
-const env = {
-  ...process.env,
-  IRONWING_PLATFORM: "mock",
-  VITE_IRONWING_MOCK_PROFILE: "demo",
-};
-
-function run(command, args) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      stdio: "inherit",
-      env,
-    });
-
-    child.on("error", reject);
-    child.on("close", (code, signal) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-
-      reject(
-        new Error(
-          signal
-            ? `${command} ${args.join(" ")} terminated with signal ${signal}`
-            : `${command} ${args.join(" ")} exited with code ${code}`,
-        ),
-      );
-    });
-  });
-}
-
-await run(pnpmCommand, ["exec", "tsc", "--noEmit"]);
-await run(pnpmCommand, ["exec", "vite", "build"]);
+await runFrontendBuild({ cwd: projectRoot, env: demoBuildEnv() });

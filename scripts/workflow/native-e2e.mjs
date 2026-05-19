@@ -1,5 +1,7 @@
 import path from "node:path";
 import { isTcpPortFree, runtimeEnv } from "./runtime.mjs";
+import { findFreeTcpPort } from "./ports.mjs";
+import { sitlTcpEnv } from "./env.mjs";
 
 export const NATIVE_E2E_WEBDRIVER_HOST = "127.0.0.1";
 export const NATIVE_E2E_WEBDRIVER_PORT = 4444;
@@ -8,8 +10,7 @@ export const NATIVE_E2E_NATIVE_DRIVER_PORT = 4445;
 export function nativeE2eBuildEnv(runtime) {
   return {
     ...runtimeEnv(runtime),
-    VITE_IRONWING_SITL_MODE: "tcp",
-    VITE_IRONWING_SITL_TCP_PORT: String(runtime.sitlTcpPort),
+    ...sitlTcpEnv(runtime),
   };
 }
 
@@ -30,11 +31,11 @@ export async function resolveNativeE2eDriverPort({
   maxPort = defaultPort + 20,
   isPortFree = isTcpPortFree,
 } = {}) {
-  for (let candidatePort = defaultPort; candidatePort <= maxPort; candidatePort += 1) {
-    if (await isPortFree(host, candidatePort)) {
-      return candidatePort;
-    }
-  }
-
-  throw new Error(`No free native E2E WebDriver port found in range ${defaultPort}-${maxPort}`);
+  return findFreeTcpPort({
+    host,
+    defaultPort,
+    maxPort,
+    isPortFree,
+    description: "native E2E WebDriver port",
+  });
 }

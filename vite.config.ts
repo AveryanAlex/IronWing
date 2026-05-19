@@ -39,7 +39,7 @@ export default defineConfig({
   build: {
     target: "es2022",
     chunkSizeWarningLimit: 3000,
-    outDir: process.env.IRONWING_OUT_DIR ?? "dist",
+    outDir: process.env.IRONWING_OUT_DIR ?? "dist/tauri",
   },
   server: {
     host: serverHost,

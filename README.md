@@ -28,23 +28,24 @@ pnpm install
 Common commands:
 
 ```bash
-pnpm run dev
-pnpm run frontend:typecheck
-pnpm run frontend:build
-cargo check --workspace
-cargo test --workspace
-pnpm run tauri:dev
+pnpm run dev:desktop
+pnpm run check
+pnpm run test
+pnpm run build:frontend
+pnpm run dev:web
 ```
 
 ## Use IronWing with ArduPilot SITL (development)
 
-`pnpm run dev` is the local SITL workflow. It picks a free instance, starts ArduPilot SITL in Docker, launches `pnpm run tauri:dev`, and tears the SITL container down automatically when the app exits or you press Ctrl+C.
+Dev commands start ArduPilot SITL automatically, except for `pnpm run dev:demo`, which uses the mocked demo profile.
+
+`pnpm run dev:desktop` is the local desktop SITL workflow. It picks a free instance, starts ArduPilot SITL in Docker, launches Tauri dev, and tears the SITL container down automatically when the app exits or you press Ctrl+C.
 
 ```bash
-pnpm run dev
+pnpm run dev:desktop
 ```
 
-In the app, TCP mode is preselected for this workflow and the matching `127.0.0.1:<port>` address is prefilled. If another stack is already using the baseline port, the script prints the chosen TCP address before the app opens.
+In the desktop app, TCP mode is preselected for this workflow and the matching `127.0.0.1:<port>` address is prefilled. If another stack is already using the baseline port, the script prints the chosen TCP address before the app opens. `pnpm run dev:web` starts SITL plus a WebSocket bridge and preselects the bridge URL. `pnpm run dev:android` starts SITL and preselects an emulator-friendly TCP address; set `IRONWING_ANDROID_SITL_HOST` for physical devices or custom networking.
 
 ## Flight Operations (GUI)
 
@@ -97,11 +98,11 @@ Connect → Takeoff (10m) → right-click map to fly around → Land or RTL
 
 ## Android
 
-Requires Android SDK + NDK. Run on a connected device or emulator:
+Requires Android SDK + NDK. Run on a connected device or emulator. The dev command starts SITL automatically:
 
 ```bash
-pnpm run android:dev       # Dev build on device/emulator
-pnpm run android:build     # Build APK
+pnpm run dev:android       # Dev build on device/emulator
+pnpm run build:android     # Build APK
 ```
 
 Android supports UDP, BLE, and Classic SPP transports. Serial is excluded (doesn't compile for Android targets).
@@ -121,16 +122,18 @@ Browser-based E2E tests now run against the production frontend bundle with the 
 
 ```bash
 # One-shot: build the frontend bundle, start a local preview, run Playwright
-pnpm e2e
+pnpm run e2e:browser
 ```
 
 Other useful commands:
 
 ```bash
-pnpm e2e:headed          # Run tests with a visible browser window
+pnpm run e2e:browser:headed   # Run tests with a visible browser window
+pnpm run e2e:browser:demo     # Run the demo-profile browser spec
+pnpm run e2e                  # Run all browser, demo, and native E2E lanes sequentially
 ```
 
-`pnpm e2e` uses Playwright's built-in `webServer` support to build the frontend, start a preview server, run the browser suite, and clean up afterward.
+`pnpm run e2e:browser` uses Playwright's built-in `webServer` support to build the frontend, start a preview server, run the browser suite, and clean up afterward.
 
 ### Current test scope
 
@@ -146,7 +149,7 @@ Each Playwright invocation still runs serially (`workers: 1`). Traces, screensho
 ### Scope limits
 
 - These tests do **not** prove real Tauri or Rust integration.
-- `pnpm run dev` remains the real SITL workflow: it starts ArduPilot SITL and launches the native Tauri app with the matching TCP address prefilled.
+- `pnpm run dev:desktop` remains the real SITL workflow: it starts ArduPilot SITL and launches the native Tauri app with the matching TCP address prefilled.
 
 ## Native End-to-End Testing (WebDriverIO)
 
@@ -169,9 +172,24 @@ pnpm run e2e:native
 
 Keep this lane intentionally small. Broad UI coverage still belongs in the browser-only Playwright suite above.
 
+## Build outputs
+
+Frontend bundles are separated by target under `dist/`:
+
+| Command | Output |
+| --- | --- |
+| `pnpm run build:frontend` | `dist/tauri` |
+| `pnpm run build:desktop` | `dist/tauri` |
+| `pnpm run build:android` | `dist/tauri` |
+| `pnpm run build:web` | `dist/web` |
+| `pnpm run build:demo` | `dist/demo` |
+| `pnpm run e2e:browser` | `dist/e2e` |
+
+Set `IRONWING_OUT_DIR` to override a specific build artifact directory.
+
 ## CI
 
-- `.github/workflows/ci.yml`: frontend typecheck/build + Rust check/tests on every push and PR
+- `.github/workflows/ci.yml`: frontend checks/build/tests + Rust check/tests on every push and PR
 
 ## Planning
 

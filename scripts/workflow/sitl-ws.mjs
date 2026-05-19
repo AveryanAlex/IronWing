@@ -19,7 +19,7 @@ function readStringFlag(argv, flag, fallback) {
   return readFlagValue(argv, flag) ?? fallback;
 }
 
-function parsePort(value, name) {
+export function parsePort(value, name) {
   const parsed = Number.parseInt(String(value), 10);
   if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535) {
     throw new Error(`Invalid port for ${name}: ${value}`);
@@ -150,6 +150,32 @@ export function createSitlWebSocketBridge({ tcpHost, tcpPort, wsHost, wsPort }) 
         });
       });
     },
+  };
+}
+
+export function browserHostForListenHost(host) {
+  return host === "0.0.0.0" ? "127.0.0.1" : host;
+}
+
+export async function startSitlWebSocketBridgeSession({ cleanup, config, exitWithCleanup }) {
+  const bridge = createSitlWebSocketBridge(config);
+
+  cleanup.add(async () => {
+    await bridge.close();
+  });
+  bridge.server.on("error", (error) => {
+    console.error(error);
+    void exitWithCleanup(1);
+  });
+  await waitForBridgeListening(bridge.server);
+
+  const browserWsHost = browserHostForListenHost(config.wsHost);
+
+  return {
+    bridge,
+    browserWsUrl: `ws://${browserWsHost}:${config.wsPort}`,
+    listenWsUrl: `ws://${config.wsHost}:${config.wsPort}`,
+    tcpUrl: `tcp://${config.tcpHost}:${config.tcpPort}`,
   };
 }
 

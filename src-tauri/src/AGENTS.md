@@ -35,7 +35,7 @@ Thin Tauri IPC shell between the React frontend and `mavkit`. This layer owns tr
 | `guided.rs` | Guided flight helpers and snapshot emission |
 | `logs.rs` | Log parsing, summary, track/path export, CSV export |
 | `recording.rs` | TLOG recording lifecycle |
-| `remote_ui.rs` | Agent remote UI bridge used by `pnpm run remote-ui`; not an automated test lane |
+| `remote_ui.rs` | Agent remote UI bridge used by `pnpm run dev:desktop:remote`; not an automated test lane |
 | `helpers.rs` | Shared guards and utilities |
 | `ipc/` | Wire-type contract layer for all IPC-facing payloads |
 | `firmware/` | Firmware flashing, DFU recovery, catalog, typed session model |

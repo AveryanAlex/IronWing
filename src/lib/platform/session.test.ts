@@ -27,8 +27,9 @@ describe("isAutoConnectSitlEnabled", () => {
 });
 
 describe("resolveSitlMode", () => {
-  it("preselects tcp only for the supported SITL mode", () => {
+  it("preselects supported SITL modes", () => {
     expect(resolveSitlMode("tcp")).toBe("tcp");
+    expect(resolveSitlMode("websocket")).toBe("websocket");
     expect(resolveSitlMode("udp")).toBe("udp");
     expect(resolveSitlMode("serial")).toBe("udp");
     expect(resolveSitlMode("bogus")).toBe("udp");
@@ -37,6 +38,10 @@ describe("resolveSitlMode", () => {
 });
 
 describe("defaultTcpAddress", () => {
+  it("uses the configured SITL tcp address when present", () => {
+    expect(defaultTcpAddress({ VITE_IRONWING_SITL_TCP_ADDRESS: "10.0.2.2:5771" })).toBe("10.0.2.2:5771");
+  });
+
   it("uses the configured SITL tcp port when it is valid", () => {
     expect(defaultTcpAddress({ VITE_IRONWING_SITL_TCP_PORT: "5771" })).toBe("127.0.0.1:5771");
   });
@@ -73,6 +78,18 @@ describe("resolveSessionConnectionDefaults", () => {
       websocketUrl: DEFAULT_WS_URL,
       udpBind: "0.0.0.0:14550",
       baud: 57600,
+    });
+  });
+
+  it("preseeds the pure web shell to websocket for web SITL builds", () => {
+    expect(
+      resolveSessionConnectionDefaults({
+        VITE_IRONWING_SITL_MODE: "websocket",
+        VITE_IRONWING_SITL_WS_URL: "ws://127.0.0.1:14561",
+      }),
+    ).toMatchObject({
+      mode: "websocket",
+      websocketUrl: "ws://127.0.0.1:14561",
     });
   });
 

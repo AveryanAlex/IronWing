@@ -1,13 +1,9 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   PNPM_COMMAND,
-  createCleanupRunner,
+  runManagedChild,
   runCommand,
-  spawnCommand,
-  terminateChild,
-  waitForExit,
 } from "./workflow/process.mjs";
 import {
   NATIVE_E2E_NATIVE_DRIVER_PORT,
@@ -16,53 +12,14 @@ import {
   nativeE2eBuildEnv,
   resolveNativeE2eDriverPort,
 } from "./workflow/native-e2e.mjs";
-import { resolveRequestedRuntime } from "./workflow/runtime.mjs";
-import { startSitl, stopSitl } from "./workflow/sitl.mjs";
-import { waitForTcp } from "./workflow/wait.mjs";
+import { projectRoot } from "./workflow/paths.mjs";
+import { createSitlSession } from "./workflow/sitl-session.mjs";
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const projectRoot = path.resolve(scriptDir, "..");
-const runtime = await resolveRequestedRuntime(process.env);
-const cleanup = createCleanupRunner();
-
-let wdioChild;
-let exiting = false;
-
-cleanup.add(async () => {
-  console.log(`[e2e:native] Stopping SITL container ${runtime.sitlContainer}...`);
-  await stopSitl(runtime, { cwd: projectRoot });
+const sitlSession = await createSitlSession({
+  cwd: projectRoot,
+  logPrefix: "e2e:native",
 });
-cleanup.add(async () => {
-  if (wdioChild) {
-    await terminateChild(wdioChild);
-  }
-});
-
-async function exitWithCleanup(exitCode) {
-  if (exiting) {
-    return;
-  }
-
-  exiting = true;
-  await cleanup.run();
-  process.exit(exitCode);
-}
-
-for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.on(signal, () => {
-    void exitWithCleanup(signal === "SIGINT" ? 130 : 143);
-  });
-}
-
-process.on("uncaughtException", (error) => {
-  console.error(error);
-  void exitWithCleanup(1);
-});
-
-process.on("unhandledRejection", (error) => {
-  console.error(error);
-  void exitWithCleanup(1);
-});
+const { cleanup, exitWithCleanup, runtime } = sitlSession;
 
 async function readMainBinaryName() {
   const tauriConfigPath = path.join(projectRoot, "src-tauri", "tauri.conf.json");
@@ -97,13 +54,12 @@ const applicationPath = nativeE2eApplicationPath(projectRoot, mainBinaryName, {
 });
 await access(applicationPath);
 
-console.log(`[e2e:native] Starting SITL instance ${runtime.instanceId} on ${runtime.tcpAddress}...`);
-await startSitl(runtime, { cwd: projectRoot });
-await waitForTcp("127.0.0.1", runtime.sitlTcpPort, 90_000);
+await sitlSession.start();
 
 console.log(`[e2e:native] SITL ready. Launching WebDriverIO against ${applicationPath}.`);
-wdioChild = spawnCommand(PNPM_COMMAND, ["exec", "wdio", "run", "e2e-native/wdio.conf.mjs"], {
+const wdioResult = await runManagedChild(cleanup, PNPM_COMMAND, ["exec", "wdio", "run", "e2e-native/wdio.conf.mjs"], {
   cwd: projectRoot,
+  description: "pnpm exec wdio run e2e-native/wdio.conf.mjs",
   env: {
     ...buildEnv,
     IRONWING_WDIO_APPLICATION: applicationPath,
@@ -112,6 +68,4 @@ wdioChild = spawnCommand(PNPM_COMMAND, ["exec", "wdio", "run", "e2e-native/wdio.
     IRONWING_WDIO_NATIVE_PORT: String(nativeDriverPort),
   },
 });
-
-const wdioResult = await waitForExit(wdioChild, "pnpm exec wdio run e2e-native/wdio.conf.mjs");
 await exitWithCleanup(wdioResult.code);

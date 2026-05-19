@@ -1,34 +1,19 @@
-import { spawn } from "node:child_process";
+import { demoFrontendEnv } from "./workflow/env.mjs";
+import { runViteDev } from "./workflow/frontend.mjs";
+import { forwardedArgs, projectRoot } from "./workflow/paths.mjs";
+import {
+  createCleanupRunner,
+  createExitWithCleanup,
+  installProcessCleanupHandlers,
+} from "./workflow/process.mjs";
 
-const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const cleanup = createCleanupRunner();
+const exitWithCleanup = createExitWithCleanup(cleanup);
+installProcessCleanupHandlers(exitWithCleanup);
 
-const env = {
-  ...process.env,
-  IRONWING_PLATFORM: "mock",
-  VITE_IRONWING_MOCK_PROFILE: "demo",
-};
-
-const viteArgs = process.argv.slice(2);
-
-if (viteArgs[0] === "--") {
-  viteArgs.shift();
-}
-
-const child = spawn(pnpmCommand, ["exec", "vite", ...viteArgs], {
-  stdio: "inherit",
-  env,
+const viteResult = await runViteDev(cleanup, {
+  cwd: projectRoot,
+  env: demoFrontendEnv(),
+  args: forwardedArgs(),
 });
-
-child.on("error", (error) => {
-  console.error(error);
-  process.exit(1);
-});
-
-child.on("close", (code, signal) => {
-  if (signal) {
-    process.kill(process.pid, signal);
-    return;
-  }
-
-  process.exit(code ?? 0);
-});
+await exitWithCleanup(viteResult.code);

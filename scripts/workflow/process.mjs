@@ -32,6 +32,17 @@ export async function runCommand(command, args, options = {}) {
   return result;
 }
 
+export async function runManagedChild(cleanup, command, args, options = {}) {
+  const description = options.description ?? `${command} ${args.join(" ")}`;
+  const child = spawnCommand(command, args, options);
+
+  cleanup.add(async () => {
+    await terminateChild(child);
+  });
+
+  return waitForExit(child, description);
+}
+
 export function captureCommand(command, args, options = {}) {
   return execFileSync(command, args, {
     cwd: options.cwd,
@@ -102,4 +113,36 @@ export function createCleanupRunner() {
       await runningCleanup;
     },
   };
+}
+
+export function createExitWithCleanup(cleanup) {
+  let exiting = false;
+
+  return async function exitWithCleanup(exitCode) {
+    if (exiting) {
+      return;
+    }
+
+    exiting = true;
+    await cleanup.run();
+    process.exit(exitCode);
+  };
+}
+
+export function installProcessCleanupHandlers(exitWithCleanup) {
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    process.on(signal, () => {
+      void exitWithCleanup(signal === "SIGINT" ? 130 : 143);
+    });
+  }
+
+  process.on("uncaughtException", (error) => {
+    console.error(error);
+    void exitWithCleanup(1);
+  });
+
+  process.on("unhandledRejection", (error) => {
+    console.error(error);
+    void exitWithCleanup(1);
+  });
 }

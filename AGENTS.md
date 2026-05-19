@@ -21,34 +21,39 @@ Modern ground control station for MAVLink vehicles. Tauri v2 app with a **Svelte
 
 ```bash
 # Frontend
-pnpm run frontend:typecheck
-pnpm run frontend:build
-pnpm test
+pnpm run check:frontend
+pnpm run build:frontend
+pnpm run test:frontend
 
 # Rust
-cargo check --workspace
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --workspace
+pnpm run check:rust
+pnpm run test:rust
+
+# Aggregates
+pnpm run check
+pnpm run test
+pnpm run e2e
 
 # Dev / E2E
-pnpm run dev
-pnpm run remote-ui
-pnpm run tauri:dev
-pnpm run android:dev
-pnpm run android:build
-pnpm e2e
-pnpm e2e:headed
+pnpm run dev:desktop
+pnpm run dev:desktop:remote
+pnpm run dev:android
+pnpm run dev:web
+pnpm run build:android
+pnpm run e2e:browser
+pnpm run e2e:browser:headed
 pnpm run e2e:native
 ```
 
 Run commands from the repo root. Nix (`flake.nix` + `.envrc`) is the canonical reproducible environment.
+Dev commands start SITL automatically except `pnpm run dev:demo`.
 
 ## Agent Remote UI
 
-Use `pnpm run remote-ui` when an agent needs to see and manipulate the real app with a real Rust + SITL backend from browser-capable agent tools. This is an agent quality-of-life workflow, not an automated test lane; do not add Playwright specs for it unless explicitly requested.
+Use `pnpm run dev:desktop:remote` when an agent needs to see and manipulate the real app with a real Rust + SITL backend from browser-capable agent tools. This is an agent quality-of-life workflow, not an automated test lane; do not add Playwright specs for it unless explicitly requested.
 
 ```bash
-pnpm run remote-ui
+pnpm run dev:desktop:remote
 ```
 
 The script starts Docker SITL, launches `tauri dev`, switches the frontend aliases to `src/platform/remote/*`, and starts a dev-only Rust bridge at `http://127.0.0.1:14242` for command invokes and event streaming. Open the printed Vite URL, normally `http://127.0.0.1:5173`, with the agent browser tool. The shell automatically connects to the SITL TCP address upon initialization so the agent can immediately observe live telemetry.
@@ -58,9 +63,9 @@ For screenshots, navigate the agent browser to the printed Vite URL, wait for th
 Useful knobs:
 
 ```bash
-IRONWING_REMOTE_UI_HOST=0.0.0.0 pnpm run remote-ui
-IRONWING_REMOTE_UI_PORT=14250 pnpm run remote-ui
-IRONWING_REMOTE_UI_VITE_HOST=0.0.0.0 pnpm run remote-ui
+IRONWING_REMOTE_UI_HOST=0.0.0.0 pnpm run dev:desktop:remote
+IRONWING_REMOTE_UI_PORT=14250 pnpm run dev:desktop:remote
+IRONWING_REMOTE_UI_VITE_HOST=0.0.0.0 pnpm run dev:desktop:remote
 ```
 
 ## mavkit Boundary

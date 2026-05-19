@@ -1,13 +1,12 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { captureCommand, createCleanupRunner, runCommand } from "./workflow/process.mjs";
+import { projectRoot as repoRoot } from "./workflow/paths.mjs";
 import { SITL_HOME, SITL_IMAGE, resolveRequestedRuntime, runtimeForInstance } from "./workflow/runtime.mjs";
 import { waitForTcp } from "./workflow/wait.mjs";
 
-const repoRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const fixtureDir = join(repoRoot, "src/platform/mock/backend/fixtures/params");
 const exportBinManifest = join(repoRoot, "src-tauri/Cargo.toml");
 const tcpReadyTimeoutMs = 180_000;

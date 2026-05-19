@@ -77,7 +77,14 @@ $effect(() => {
 function updateField<
   K extends keyof Pick<
     SessionConnectionFormState,
-    "mode" | "udpBind" | "tcpAddress" | "serialPort" | "baud" | "selectedBtDevice" | "demoVehiclePreset"
+    | "mode"
+    | "udpBind"
+    | "tcpAddress"
+    | "websocketUrl"
+    | "serialPort"
+    | "baud"
+    | "selectedBtDevice"
+    | "demoVehiclePreset"
   >,
 >(field: K, value: SessionConnectionFormState[K]) {
   const patch = { [field]: value } as Partial<SessionConnectionFormState>;

@@ -17,7 +17,7 @@
 
 ## Workflow
 
-- Run with `pnpm e2e` or `pnpm e2e:headed`.
+- Run with `pnpm run e2e:browser` or `pnpm run e2e:browser:headed`.
 - Playwright builds the frontend with `IRONWING_PLATFORM=mock`, starts a local preview server, then runs the browser suite against that server.
 - Local runs stay on `workers: 1`; CI uses `workers: 2` to reduce wall-clock time without fully parallelizing individual spec files.
 - Failure artifacts (trace, screenshot, video) are enabled via Playwright config.

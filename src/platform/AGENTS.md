@@ -31,6 +31,6 @@
 ## Remote Platform Notes
 
 - `remote/` is for agent-operated browser sessions against a live Tauri shell, not for automated browser E2E.
-- `pnpm run remote-ui` sets `IRONWING_PLATFORM=remote`, starts the Rust bridge, and prints the browser URL.
+- `pnpm run dev:desktop:remote` sets `IRONWING_PLATFORM=remote`, starts the Rust bridge, and prints the browser URL.
 - Keep `remote/` compatible with the `tauri/` and `mock/` surfaces: `invoke`, `listen`, `openUrl`, and `fetch` must keep the same call shapes.
 - The bridge is dev-only and unauthenticated. Do not expose it outside trusted local agent workflows.

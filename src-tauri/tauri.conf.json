@@ -5,10 +5,10 @@
   "identifier": "dev.averylex.ironwing",
   "mainBinaryName": "ironwing-app",
   "build": {
-    "beforeDevCommand": "pnpm run frontend:dev",
-    "beforeBuildCommand": "pnpm run build",
+    "beforeDevCommand": "pnpm exec vite",
+    "beforeBuildCommand": "pnpm run build:frontend",
     "devUrl": "http://localhost:5173",
-    "frontendDist": "../dist"
+    "frontendDist": "../dist/tauri"
   },
   "app": {
     "windows": [

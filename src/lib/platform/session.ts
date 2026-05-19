@@ -70,6 +70,7 @@ export type SessionConnectionFormState = {
 
 export type SessionConnectionEnv = {
   VITE_IRONWING_SITL_MODE?: string;
+  VITE_IRONWING_SITL_TCP_ADDRESS?: string;
   VITE_IRONWING_SITL_TCP_PORT?: string;
   VITE_IRONWING_SITL_WS_URL?: string;
   VITE_IRONWING_AUTO_CONNECT_SITL?: string;
@@ -232,10 +233,15 @@ export function isAutoConnectSitlEnabled(env: SessionConnectionEnv = import.meta
 }
 
 export function resolveSitlMode(mode: string | undefined): TransportType {
-  return mode === "tcp" ? "tcp" : "udp";
+  return mode === "tcp" || mode === "websocket" ? mode : "udp";
 }
 
 export function defaultTcpAddress(env: SessionConnectionEnv = import.meta.env as SessionConnectionEnv) {
+  const address = env.VITE_IRONWING_SITL_TCP_ADDRESS?.trim();
+  if (address) {
+    return address;
+  }
+
   const port = Number.parseInt(env.VITE_IRONWING_SITL_TCP_PORT ?? "", 10);
   if (Number.isFinite(port) && port > 0) {
     return `127.0.0.1:${port}`;

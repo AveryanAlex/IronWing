@@ -25,17 +25,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check frontend formatting
-        run: pnpm run frontend:format:check
-
-      - name: Typecheck frontend
-        run: pnpm run frontend:typecheck
+      - name: Check frontend
+        run: pnpm run check:frontend
 
       - name: Build frontend
-        run: pnpm run frontend:build
+        run: pnpm run build:frontend
 
       - name: Run frontend tests
-        run: pnpm test
+        run: pnpm run test:frontend
 
   backend:
     runs-on: ubuntu-latest
@@ -110,13 +107,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build pure web app
-        run: IRONWING_OUT_DIR=dist-web-app IRONWING_BASE=./ pnpm run web:build
+        run: pnpm run build:web
 
       - name: Upload pure web artifact
         uses: actions/upload-artifact@v4
         with:
           name: pure-web-app
-          path: dist-web-app
+          path: dist/web
 
   e2e:
     needs: [frontend]
@@ -149,7 +146,7 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run Playwright e2e tests
-        run: pnpm e2e
+        run: pnpm run e2e:browser
 
   native-e2e:
     needs: [e2e, backend]

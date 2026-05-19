@@ -14,13 +14,14 @@ export default defineConfig({
   reporter: process.env.CI ? "github" : "list",
 
   webServer: {
-    command: `${PNPM_COMMAND} run frontend:build && ${PNPM_COMMAND} exec vite preview --host ${PLAYWRIGHT_HOST} --port ${PLAYWRIGHT_PORT}`,
+    command: `${PNPM_COMMAND} run build:frontend && ${PNPM_COMMAND} exec vite preview --host ${PLAYWRIGHT_HOST} --port ${PLAYWRIGHT_PORT}`,
     url: PLAYWRIGHT_BASE_URL,
     reuseExistingServer: false,
     timeout: 120_000,
     env: {
       ...process.env,
       IRONWING_PLATFORM: "mock",
+      IRONWING_OUT_DIR: "dist/e2e",
     },
   },
 
