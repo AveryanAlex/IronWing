@@ -4,6 +4,7 @@ mod app;
 mod bridge;
 mod error;
 mod event_sink;
+mod firmware;
 mod js_value;
 mod task;
 

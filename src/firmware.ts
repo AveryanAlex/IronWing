@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from "@platform/event";
 
 // ── Session status (mirrors Rust FirmwareSessionStatus) ──
 
-export type SerialFlashPhase =
+export type FirmwareInstallUpdatePhase =
   | "idle"
   | "probing"
   | "erasing"
@@ -11,7 +11,7 @@ export type SerialFlashPhase =
   | "verifying"
   | "rebooting";
 
-export type DfuRecoveryPhase =
+export type BootloaderInstallationPhase =
   | "idle"
   | "detecting"
   | "downloading"
@@ -29,42 +29,44 @@ type SerialReconnectFields = {
 type SerialReconnectFailedFields = SerialReconnectFields & { reconnect_error: string };
 type SerialFailureFields = { reason: string };
 
-type SerialFlashOutcomeVerified = { result: "verified" } & SerialVerifiedFields;
-type SerialFlashOutcomeFlashedButUnverified = {
+type FirmwareInstallUpdateOutcomeVerified = { result: "verified" } & SerialVerifiedFields;
+type FirmwareInstallUpdateOutcomeFlashedButUnverified = {
   result: "flashed_but_unverified";
 } & SerialVerifiedFields;
-type SerialFlashOutcomeReconnectVerified = { result: "reconnect_verified" } & SerialReconnectFields;
-type SerialFlashOutcomeReconnectFailed = { result: "reconnect_failed" } & SerialReconnectFailedFields;
-type SerialFlashOutcomeFailed = { result: "failed" } & SerialFailureFields;
-type SerialFlashOutcomeBoardDetectionFailed = { result: "board_detection_failed" } & SerialFailureFields;
-type SerialFlashOutcomeExtfCapacityInsufficient = { result: "extf_capacity_insufficient" } & SerialFailureFields;
+type FirmwareInstallUpdateOutcomeReconnectVerified = { result: "reconnect_verified" } & SerialReconnectFields;
+type FirmwareInstallUpdateOutcomeReconnectFailed = { result: "reconnect_failed" } & SerialReconnectFailedFields;
+type FirmwareInstallUpdateOutcomeFailed = { result: "failed" } & SerialFailureFields;
+type FirmwareInstallUpdateOutcomeBoardDetectionFailed = { result: "board_detection_failed" } & SerialFailureFields;
+type FirmwareInstallUpdateOutcomeExtfCapacityInsufficient = { result: "extf_capacity_insufficient" } & SerialFailureFields;
 
-export type SerialFlashOutcome =
+export type FirmwareInstallUpdateOutcome =
   | SerialCancelledResult
-  | SerialFlashOutcomeVerified
-  | SerialFlashOutcomeFlashedButUnverified
-  | SerialFlashOutcomeReconnectVerified
-  | SerialFlashOutcomeReconnectFailed
-  | SerialFlashOutcomeFailed
-  | SerialFlashOutcomeBoardDetectionFailed
-  | SerialFlashOutcomeExtfCapacityInsufficient;
+  | FirmwareInstallUpdateOutcomeVerified
+  | FirmwareInstallUpdateOutcomeFlashedButUnverified
+  | FirmwareInstallUpdateOutcomeReconnectVerified
+  | FirmwareInstallUpdateOutcomeReconnectFailed
+  | FirmwareInstallUpdateOutcomeFailed
+  | FirmwareInstallUpdateOutcomeBoardDetectionFailed
+  | FirmwareInstallUpdateOutcomeExtfCapacityInsufficient;
 
-export type DfuRecoveryOutcome =
+export type BootloaderInstallationOutcome =
   | { result: "verified" }
   | { result: "cancelled" }
   | { result: "reset_unconfirmed" }
   | { result: "failed"; reason: string }
-  | { result: "unsupported_recovery_path"; guidance: string };
+  | { result: "unsupported_bootloader_installation_path"; guidance: string };
+
+export type FirmwareSessionPath = "firmware_install_update" | "bootloader_installation";
 
 export type FirmwareOutcome =
-  | { path: "serial_primary"; outcome: SerialFlashOutcome }
-  | { path: "dfu_recovery"; outcome: DfuRecoveryOutcome };
+  | { path: "firmware_install_update"; outcome: FirmwareInstallUpdateOutcome }
+  | { path: "bootloader_installation"; outcome: BootloaderInstallationOutcome };
 
 export type FirmwareSessionStatus =
   | { kind: "idle" }
-  | { kind: "serial_primary"; phase: SerialFlashPhase }
-  | { kind: "dfu_recovery"; phase: DfuRecoveryPhase }
-  | { kind: "cancelling"; path: "serial_primary" | "dfu_recovery" }
+  | { kind: "firmware_install_update"; phase: FirmwareInstallUpdatePhase }
+  | { kind: "bootloader_installation"; phase: BootloaderInstallationPhase }
+  | { kind: "cancelling"; path: FirmwareSessionPath }
   | { kind: "completed"; outcome: FirmwareOutcome };
 
 // ── Progress (mirrors Rust FirmwareProgress) ──
@@ -105,9 +107,9 @@ export type DfuScanResult =
   | { kind: "available"; devices: DfuDeviceInfo[] }
   | { kind: "unsupported" };
 
-// ── Preflight (serial path) ──
+// ── Preflight (firmware install/update path) ──
 
-export type SerialPreflightInfo = {
+export type FirmwareInstallPreflightInfo = {
   vehicle_connected: boolean;
   param_count: number;
   has_params_to_backup: boolean;
@@ -117,58 +119,58 @@ export type SerialPreflightInfo = {
   session_status: FirmwareSessionStatus;
 };
 
-// ── Serial flash source / result ──
+// ── Firmware install/update source / result ──
 
-export type SerialFlashSource =
+export type FirmwareInstallSource =
   | { kind: "catalog_url"; url: string }
   | { kind: "local_apj_bytes"; data: number[] };
 
-export type SerialFlashOptions = {
+export type FirmwareInstallOptions = {
   full_chip_erase: boolean;
 };
 
-export type SerialReadinessRequest = {
+export type FirmwareInstallReadinessRequest = {
   port: string;
-  source: SerialFlashSource;
-  options?: SerialFlashOptions;
+  source: FirmwareInstallSource;
+  options?: FirmwareInstallOptions;
 };
 
-export type SerialReadinessBlockedReason =
+export type FirmwareInstallReadinessBlockedReason =
   | "session_busy"
   | "port_unselected"
   | "port_unavailable"
   | "source_missing";
 
-export type SerialReadiness =
+export type FirmwareInstallReadiness =
   | { kind: "advisory" }
-  | { kind: "blocked"; reason: SerialReadinessBlockedReason };
+  | { kind: "blocked"; reason: FirmwareInstallReadinessBlockedReason };
 
-export type SerialReadinessTargetHint = {
+export type FirmwareInstallReadinessTargetHint = {
   detected_board_id: number | null;
 };
 
-export type SerialBootloaderTransition =
+export type FirmwareInstallBootloaderTransition =
   | { kind: "auto_reboot_supported" }
   | { kind: "already_in_bootloader" }
   | { kind: "auto_reboot_attemptable" }
   | { kind: "manual_bootloader_entry_required" }
   | { kind: "target_mismatch" };
 
-export type SerialReadinessResponse = {
+export type FirmwareInstallReadinessResponse = {
   request_token: string;
   session_status: FirmwareSessionStatus;
-  readiness: SerialReadiness;
-  target_hint: SerialReadinessTargetHint | null;
+  readiness: FirmwareInstallReadiness;
+  target_hint: FirmwareInstallReadinessTargetHint | null;
   validation_pending: boolean;
-  bootloader_transition: SerialBootloaderTransition;
+  bootloader_transition: FirmwareInstallBootloaderTransition;
 };
 
-export type DfuRecoverySource =
+export type BootloaderInstallationSource =
   | { kind: "official_bootloader"; board_target: string }
   | { kind: "local_apj_bytes"; data: number[] }
   | { kind: "local_bin_bytes"; data: number[] };
 
-export type SerialFlowResult =
+export type FirmwareInstallResult =
   | SerialCancelledResult
   | ({ result: "verified" } & SerialVerifiedFields)
   | ({ result: "flashed_but_unverified" } & SerialVerifiedFields)
@@ -178,9 +180,9 @@ export type SerialFlowResult =
   | ({ result: "board_detection_failed" } & SerialFailureFields)
   | ({ result: "extf_capacity_insufficient" } & SerialFailureFields);
 
-// ── DFU recovery result ──
+// ── Bootloader installation result ──
 
-export type DfuRecoveryResult =
+export type BootloaderInstallationResult =
   | { result: "verified" }
   | { result: "cancelled" }
   | { result: "reset_unconfirmed" }
@@ -225,40 +227,50 @@ export async function firmwareCatalogTargets(): Promise<CatalogTargetSummary[]> 
   return invoke<CatalogTargetSummary[]>("firmware_catalog_targets");
 }
 
-export async function firmwareRecoveryCatalogTargets(): Promise<CatalogTargetSummary[]> {
-  return invoke<CatalogTargetSummary[]>("firmware_recovery_catalog_targets");
+export async function firmwareBootloaderCatalogTargets(): Promise<CatalogTargetSummary[]> {
+  return invoke<CatalogTargetSummary[]>("firmware_bootloader_catalog_targets");
 }
 
-// ── Serial primary commands ──
-
-export async function firmwareSerialPreflight(): Promise<SerialPreflightInfo> {
-  return invoke<SerialPreflightInfo>("firmware_serial_preflight");
+function isUnsupportedFirmwareCommandError(error: unknown, command: string): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  return message.includes(command)
+    && (normalized.includes("unmocked command")
+      || normalized.includes("unknown command")
+      || normalized.includes("command not found")
+      || normalized.includes("not found"));
 }
 
-export async function firmwareFlashSerial(
+// ── Firmware install/update commands ──
+
+export async function firmwareInstallPreflight(): Promise<FirmwareInstallPreflightInfo> {
+  return invoke<FirmwareInstallPreflightInfo>("firmware_install_update_preflight");
+}
+
+export async function firmwareInstallUpdate(
   port: string,
   baud: number,
-  source: SerialFlashSource,
-  options?: SerialFlashOptions,
-): Promise<SerialFlowResult> {
-  return invoke<SerialFlowResult>("firmware_flash_serial", {
+  source: FirmwareInstallSource,
+  options?: FirmwareInstallOptions,
+): Promise<FirmwareInstallResult> {
+  return invoke<FirmwareInstallResult>("firmware_install_update", {
     request: { port, baud, source, options: options ?? null },
   });
 }
 
-export async function firmwareSerialReadiness(
-  request: SerialReadinessRequest,
-): Promise<SerialReadinessResponse> {
-  return invoke<SerialReadinessResponse>("firmware_serial_readiness", { request });
+export async function firmwareInstallReadiness(
+  request: FirmwareInstallReadinessRequest,
+): Promise<FirmwareInstallReadinessResponse> {
+  return invoke<FirmwareInstallReadinessResponse>("firmware_install_update_readiness", { request });
 }
 
-// ── DFU recovery commands ──
+// ── Bootloader installation commands ──
 
-export async function firmwareFlashDfuRecovery(
+export async function firmwareBootloaderInstallation(
   device: DfuDeviceInfo,
-  source: DfuRecoverySource,
-): Promise<DfuRecoveryResult> {
-  return invoke<DfuRecoveryResult>("firmware_flash_dfu_recovery", {
+  source: BootloaderInstallationSource,
+): Promise<BootloaderInstallationResult> {
+  return invoke<BootloaderInstallationResult>("firmware_bootloader_installation", {
     request: { device, source },
   });
 }
@@ -281,6 +293,17 @@ export async function firmwareSessionClearCompleted(): Promise<void> {
 
 export async function firmwareListPorts(): Promise<InventoryResult> {
   return invoke<InventoryResult>("firmware_list_ports");
+}
+
+export async function firmwareRequestSerialPort(): Promise<PortInfo | null> {
+  try {
+    return await invoke<PortInfo | null>("firmware_request_serial_port");
+  } catch (error) {
+    if (isUnsupportedFirmwareCommandError(error, "firmware_request_serial_port")) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function firmwareListDfuDevices(): Promise<DfuScanResult> {

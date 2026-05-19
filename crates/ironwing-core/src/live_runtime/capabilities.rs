@@ -29,7 +29,7 @@ impl Capability {
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct RuntimeCapabilities {
     pub transports: Vec<TransportDescriptor>,
-    pub firmware_flash: Capability,
+    pub firmware_install_update: Capability,
     pub log_library_filesystem: Capability,
     pub recording_filesystem: Capability,
     pub mission_transfer: Capability,
@@ -40,8 +40,8 @@ impl RuntimeCapabilities {
     pub fn web(transports: Vec<TransportDescriptor>) -> Self {
         Self {
             transports,
-            firmware_flash: Capability::unsupported(
-                "firmware flashing is not available in the browser runtime",
+            firmware_install_update: Capability::unsupported(
+                "firmware install/update is not available in the browser runtime",
             ),
             log_library_filesystem: Capability::unsupported(
                 "native log-library filesystem access is not available in the browser runtime",
@@ -61,7 +61,7 @@ impl RuntimeCapabilities {
     pub fn native(transports: Vec<TransportDescriptor>) -> Self {
         Self {
             transports,
-            firmware_flash: Capability::supported(),
+            firmware_install_update: Capability::supported(),
             log_library_filesystem: Capability::supported(),
             recording_filesystem: Capability::supported(),
             mission_transfer: Capability::supported(),

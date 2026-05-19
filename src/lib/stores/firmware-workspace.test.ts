@@ -4,18 +4,18 @@ import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  BootloaderInstallationSource,
   CatalogTargetSummary,
   DfuDeviceInfo,
-  DfuRecoverySource,
+  FirmwareInstallReadinessBlockedReason,
+  FirmwareInstallReadinessRequest,
+  FirmwareInstallReadinessResponse,
+  FirmwareInstallSource,
   FirmwareSessionStatus,
   PortInfo,
-  SerialFlashSource,
-  SerialReadinessBlockedReason,
-  SerialReadinessRequest,
-  SerialReadinessResponse,
 } from "../../firmware";
 import {
-  computeSerialReadinessToken,
+  computeFirmwareInstallReadinessToken,
   type FirmwareService,
 } from "../platform/firmware";
 import {
@@ -67,11 +67,11 @@ const DEFAULT_DFU_DEVICES: DfuDeviceInfo[] = [
   },
 ];
 
-function defaultReadiness(request: SerialReadinessRequest): SerialReadinessResponse {
+function defaultReadiness(request: FirmwareInstallReadinessRequest): FirmwareInstallReadinessResponse {
   const blockedReason = resolveBlockedReason(request);
 
   return {
-    request_token: computeSerialReadinessToken(request),
+    request_token: computeFirmwareInstallReadinessToken(request),
     session_status: { kind: "idle" },
     readiness: blockedReason ? { kind: "blocked", reason: blockedReason } : { kind: "advisory" },
     target_hint: null,
@@ -80,7 +80,7 @@ function defaultReadiness(request: SerialReadinessRequest): SerialReadinessRespo
   };
 }
 
-function resolveBlockedReason(request: SerialReadinessRequest): SerialReadinessBlockedReason | null {
+function resolveBlockedReason(request: FirmwareInstallReadinessRequest): FirmwareInstallReadinessBlockedReason | null {
   if (request.port.trim().length === 0) {
     return "port_unselected";
   }
@@ -105,7 +105,7 @@ function createService(overrides: Partial<FirmwareService> = {}) {
     sessionStatus: vi.fn(async () => ({ kind: "idle" } satisfies FirmwareSessionStatus)),
     sessionCancel: vi.fn(async () => undefined),
     sessionClearCompleted: vi.fn(async () => undefined),
-    serialPreflight: vi.fn(async () => ({
+    installPreflight: vi.fn(async () => ({
       vehicle_connected: false,
       param_count: 12,
       has_params_to_backup: true,
@@ -115,13 +115,14 @@ function createService(overrides: Partial<FirmwareService> = {}) {
       session_status: { kind: "idle" },
     })),
     listPorts: vi.fn(async () => ({ kind: "available", ports: DEFAULT_PORTS })),
+    requestFirmwareInstallPort: vi.fn(async () => null),
     listDfuDevices: vi.fn(async () => ({ kind: "available", devices: DEFAULT_DFU_DEVICES })),
     catalogTargets: vi.fn(async () => [DEFAULT_TARGET]),
-    recoveryCatalogTargets: vi.fn(async () => [DEFAULT_TARGET]),
+    bootloaderCatalogTargets: vi.fn(async () => [DEFAULT_TARGET]),
     catalogEntries: vi.fn(async () => []),
-    serialReadiness: vi.fn(async (request: SerialReadinessRequest) => defaultReadiness(request)),
-    flashSerial: vi.fn(async () => ({ result: "verified", board_id: 140, bootloader_rev: 5, port: "/dev/ttyACM0" })),
-    flashDfuRecovery: vi.fn(async () => ({ result: "verified" })),
+    installReadiness: vi.fn(async (request: FirmwareInstallReadinessRequest) => defaultReadiness(request)),
+    startFirmwareInstallUpdate: vi.fn(async () => ({ result: "verified", board_id: 140, bootloader_rev: 5, port: "/dev/ttyACM0" })),
+    startBootloaderInstallation: vi.fn(async () => ({ result: "verified" })),
     subscribeProgress: vi.fn(async () => () => undefined),
     formatError: vi.fn((error: unknown) => (error instanceof Error ? error.message : String(error))),
     ...overrides,
@@ -137,26 +138,26 @@ describe("createFirmwareWorkspaceStore", () => {
 
   it("normalizes rejected serial starts into a retained completed failure without clearing retry selections", async () => {
     const service = createService({
-      flashSerial: vi.fn(async () => {
+      startFirmwareInstallUpdate: vi.fn(async () => {
         throw new Error("serial bootloader handshake failed");
       }),
     });
     const store = createFirmwareWorkspaceStore(service, { sessionPollMs: 0 });
 
-    store.setSerialTarget(DEFAULT_TARGET);
-    await store.setSerialPort("/dev/ttyACM0");
-    await store.setSerialSource(
-      { kind: "catalog_url", url: "https://example.com/cubeorange.apj" } satisfies SerialFlashSource,
+    store.setFirmwareInstallTarget(DEFAULT_TARGET);
+    await store.setFirmwareInstallPort("/dev/ttyACM0");
+    await store.setFirmwareInstallSource(
+      { kind: "catalog_url", url: "https://example.com/cubeorange.apj" } satisfies FirmwareInstallSource,
       createCatalogSourceMetadata("https://example.com/cubeorange.apj", "Cube Orange stable"),
     );
 
-    await store.startSerial();
+    await store.startFirmwareInstallUpdate();
 
     const state = get(store);
     expect(state.sessionStatus).toEqual({
       kind: "completed",
       outcome: {
-        path: "serial_primary",
+        path: "firmware_install_update",
         outcome: {
           result: "failed",
           reason: "serial bootloader handshake failed",
@@ -175,39 +176,39 @@ describe("createFirmwareWorkspaceStore", () => {
   });
 
   it("ignores stale readiness responses when a newer port/source token is already active", async () => {
-    const serialReadiness = vi.fn();
-    const service = createService({ serialReadiness });
+    const installReadiness = vi.fn();
+    const service = createService({ installReadiness });
     const store = createFirmwareWorkspaceStore(service, { sessionPollMs: 0 });
 
-    await store.setSerialPort("/dev/ttyACM0");
-    await store.setSerialSource(
+    await store.setFirmwareInstallPort("/dev/ttyACM0");
+    await store.setFirmwareInstallSource(
       { kind: "catalog_url", url: "https://example.com/initial.apj" },
       createCatalogSourceMetadata("https://example.com/initial.apj", "Initial"),
     );
 
     const first = deferred<unknown>();
     const second = deferred<unknown>();
-    serialReadiness.mockReset();
-    serialReadiness
+    installReadiness.mockReset();
+    installReadiness
       .mockImplementationOnce(() => first.promise)
       .mockImplementationOnce(() => second.promise);
 
-    const firstRequest: SerialReadinessRequest = {
+    const firstRequest: FirmwareInstallReadinessRequest = {
       port: "/dev/ttyACM0",
       source: { kind: "catalog_url", url: "https://example.com/first.apj" },
       options: { full_chip_erase: false },
     };
-    const secondRequest: SerialReadinessRequest = {
+    const secondRequest: FirmwareInstallReadinessRequest = {
       port: "/dev/ttyACM0",
       source: { kind: "catalog_url", url: "https://example.com/second.apj" },
       options: { full_chip_erase: false },
     };
 
-    const firstChange = store.setSerialSource(
+    const firstChange = store.setFirmwareInstallSource(
       firstRequest.source,
       createCatalogSourceMetadata("https://example.com/first.apj", "First"),
     );
-    const secondChange = store.setSerialSource(
+    const secondChange = store.setFirmwareInstallSource(
       secondRequest.source,
       createCatalogSourceMetadata("https://example.com/second.apj", "Second"),
     );
@@ -221,21 +222,21 @@ describe("createFirmwareWorkspaceStore", () => {
     const state = get(store);
     expect(state.serial.source).toEqual(secondRequest.source);
     expect(state.serial.readiness.phase).toBe("ready");
-    expect(state.serial.readiness.response?.request_token).toBe(computeSerialReadinessToken(secondRequest));
+    expect(state.serial.readiness.response?.request_token).toBe(computeFirmwareInstallReadinessToken(secondRequest));
     expect(state.serial.readiness.staleResponseCount).toBe(1);
   });
 
   it("applies an optimistic cancelling overlay while the backend cancel request is still pending", async () => {
     const cancelRequest = deferred<void>();
-    const sessionStatus = vi.fn(async () => ({ kind: "serial_primary", phase: "programming" } satisfies FirmwareSessionStatus));
+    const sessionStatus = vi.fn(async () => ({ kind: "firmware_install_update", phase: "programming" } satisfies FirmwareSessionStatus));
     const service = createService({
       sessionStatus,
       sessionCancel: vi.fn(() => cancelRequest.promise),
     });
     const store = createFirmwareWorkspaceStore(service, { sessionPollMs: 0 });
 
-    await store.setSerialPort("/dev/ttyACM0");
-    await store.setSerialSource(
+    await store.setFirmwareInstallPort("/dev/ttyACM0");
+    await store.setFirmwareInstallSource(
       { kind: "catalog_url", url: "https://example.com/fw.apj" },
       createCatalogSourceMetadata("https://example.com/fw.apj", "Stable"),
     );
@@ -245,9 +246,9 @@ describe("createFirmwareWorkspaceStore", () => {
 
     expect(get(store).sessionStatus).toEqual({
       kind: "cancelling",
-      path: "serial_primary",
+      path: "firmware_install_update",
     });
-    expect(get(store).activePath).toBe("serial_primary");
+    expect(get(store).activePath).toBe("firmware_install_update");
     expect(get(store).serial.port).toBe("/dev/ttyACM0");
     expect(get(store).serial.source).toEqual({ kind: "catalog_url", url: "https://example.com/fw.apj" });
 
@@ -256,7 +257,7 @@ describe("createFirmwareWorkspaceStore", () => {
 
     expect(get(store).sessionStatus).toEqual({
       kind: "cancelling",
-      path: "serial_primary",
+      path: "firmware_install_update",
     });
   });
 
@@ -266,7 +267,7 @@ describe("createFirmwareWorkspaceStore", () => {
         .mockResolvedValueOnce({
           kind: "completed",
           outcome: {
-            path: "serial_primary",
+            path: "firmware_install_update",
             outcome: { result: "cancelled" },
           },
         } satisfies FirmwareSessionStatus)
@@ -282,12 +283,12 @@ describe("createFirmwareWorkspaceStore", () => {
     expect(state.sessionStatus).toEqual({
       kind: "completed",
       outcome: {
-        path: "serial_primary",
+        path: "firmware_install_update",
         outcome: { result: "cancelled" },
       },
     });
     expect(state.lastCompletedOutcome).toEqual({
-      path: "serial_primary",
+      path: "firmware_install_update",
       outcome: { result: "cancelled" },
     });
   });
@@ -308,17 +309,17 @@ describe("createFirmwareWorkspaceStore", () => {
   });
 
   it("normalizes rejected DFU starts into a retained completed failure without clearing selected recovery context", async () => {
-    const recoverySource: DfuRecoverySource = { kind: "official_bootloader", board_target: "CubeOrange" };
+    const recoverySource: BootloaderInstallationSource = { kind: "official_bootloader", board_target: "CubeOrange" };
     const service = createService({
-      flashDfuRecovery: vi.fn(async () => {
+      startBootloaderInstallation: vi.fn(async () => {
         throw new Error("dfu reset verification timed out");
       }),
     });
     const store = createFirmwareWorkspaceStore(service, { sessionPollMs: 0 });
 
     await store.refreshRecoveryDevices();
-    store.setRecoveryTarget(DEFAULT_TARGET);
-    store.setRecoverySource(recoverySource, {
+    store.setBootloaderTarget(DEFAULT_TARGET);
+    store.setBootloaderSource(recoverySource, {
       kind: "official_bootloader",
       label: "CubeOrange",
       detail: "Official bootloader",
@@ -327,13 +328,13 @@ describe("createFirmwareWorkspaceStore", () => {
       digest: null,
     });
 
-    await store.startDfuRecovery();
+    await store.startBootloaderInstallation();
 
     const state = get(store);
     expect(state.sessionStatus).toEqual({
       kind: "completed",
       outcome: {
-        path: "dfu_recovery",
+        path: "bootloader_installation",
         outcome: {
           result: "failed",
           reason: "dfu reset verification timed out",

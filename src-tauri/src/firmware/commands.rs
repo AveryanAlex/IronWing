@@ -19,11 +19,12 @@ use crate::firmware::dfu_recovery::{self, DfuRecoveryResult};
 use crate::firmware::discovery;
 use crate::firmware::serial_executor::{self, PreflightSnapshot};
 use crate::firmware::types::{
-    CatalogEntry, CatalogTargetSummary, DfuDeviceInfo, DfuRecoveryPhase, DfuRecoverySource,
-    FirmwareError, FirmwareProgress, FirmwareSessionStatus, InventoryResult, PortInfo,
-    SerialBootloaderTransition, SerialFlashOptions, SerialFlashPhase, SerialFlashSource,
-    SerialFlowResult, SerialPreflightInfo, SerialReadiness, SerialReadinessBlockedReason,
-    SerialReadinessRequest, SerialReadinessResponse, SerialReadinessTargetHint,
+    BOOTLOADER_INSTALLATION_PATH, CatalogEntry, CatalogTargetSummary, DfuDeviceInfo,
+    DfuRecoveryPhase, DfuRecoverySource, FIRMWARE_INSTALL_UPDATE_PATH, FirmwareError,
+    FirmwareProgress, FirmwareSessionStatus, InventoryResult, PortInfo, SerialBootloaderTransition,
+    SerialFlashOptions, SerialFlashPhase, SerialFlashSource, SerialFlowResult, SerialPreflightInfo,
+    SerialReadiness, SerialReadinessBlockedReason, SerialReadinessRequest, SerialReadinessResponse,
+    SerialReadinessTargetHint,
 };
 use crate::helpers::ensure_live_write_allowed;
 use crate::ipc::OperationId;
@@ -86,7 +87,7 @@ fn report_dfu_phase(
     session: &crate::firmware::types::FirmwareSessionHandle,
     phase: DfuRecoveryPhase,
 ) {
-    session.set_dfu_phase(phase);
+    session.set_bootloader_installation_phase(phase);
     emit_dfu_progress(app, phase, 0, 0);
 }
 
@@ -100,12 +101,12 @@ pub(crate) struct SerialFlashRequest {
 
 #[cfg(not(target_os = "android"))]
 #[tauri::command]
-pub(crate) async fn firmware_flash_serial(
+pub(crate) async fn firmware_install_update(
     state: tauri::State<'_, AppState>,
     app: tauri::AppHandle,
     request: SerialFlashRequest,
 ) -> Result<SerialFlowResult, String> {
-    ensure_live_write_allowed(state.inner(), OperationId::FirmwareFlashSerial).await?;
+    ensure_live_write_allowed(state.inner(), OperationId::FirmwareInstallUpdate).await?;
     let SerialFlashRequest {
         port,
         baud,
@@ -117,7 +118,7 @@ pub(crate) async fn firmware_flash_serial(
 
     state
         .firmware_session
-        .try_start_serial()
+        .try_start_firmware_install_update()
         .map_err(|e| e.to_string())?;
 
     let readiness_request = SerialReadinessRequest {
@@ -251,7 +252,7 @@ pub(crate) async fn firmware_flash_serial(
             let artifact = artifact.clone();
             let cancel_requested = state.firmware_cancel_requested.clone();
             move || {
-                firmware_session.set_serial_phase(SerialFlashPhase::Probing);
+                firmware_session.set_firmware_install_update_phase(SerialFlashPhase::Probing);
                 let deps = serial_executor::RealSerialDeps;
                 serial_executor::execute_serial_flash_with_options(
                     &deps,
@@ -261,7 +262,7 @@ pub(crate) async fn firmware_flash_serial(
                     &|| cancel_requested.load(Ordering::SeqCst),
                     |phase, written, total| {
                         if let Some(serial_phase) = serial_phase_from_label(phase) {
-                            firmware_session.set_serial_phase(serial_phase);
+                            firmware_session.set_firmware_install_update_phase(serial_phase);
                         }
                         let pct = if total > 0 {
                             (written as f32 / total as f32) * 100.0
@@ -307,17 +308,17 @@ pub(crate) async fn firmware_flash_serial(
 
 #[cfg(target_os = "android")]
 #[tauri::command]
-pub(crate) async fn firmware_flash_serial(
+pub(crate) async fn firmware_install_update(
     state: tauri::State<'_, AppState>,
     _app: tauri::AppHandle,
     _request: SerialFlashRequest,
 ) -> Result<SerialFlowResult, String> {
-    ensure_live_write_allowed(state.inner(), OperationId::FirmwareFlashSerial).await?;
+    ensure_live_write_allowed(state.inner(), OperationId::FirmwareInstallUpdate).await?;
     Err(crate::firmware::types::FirmwareError::PlatformUnsupported.to_string())
 }
 
 #[tauri::command]
-pub(crate) async fn firmware_serial_preflight(
+pub(crate) async fn firmware_install_update_preflight(
     state: tauri::State<'_, AppState>,
 ) -> Result<SerialPreflightInfo, String> {
     let vehicle_connected = connection::is_vehicle_connected(&state).await;
@@ -400,7 +401,7 @@ pub(crate) async fn firmware_catalog_targets(
 }
 
 #[tauri::command]
-pub(crate) async fn firmware_recovery_catalog_targets(
+pub(crate) async fn firmware_bootloader_catalog_targets(
     app: tauri::AppHandle,
 ) -> Result<Vec<CatalogTargetSummary>, String> {
     tokio::task::spawn_blocking(move || {
@@ -468,7 +469,7 @@ pub(crate) async fn firmware_session_cancel(
 }
 
 #[tauri::command]
-pub(crate) async fn firmware_serial_readiness(
+pub(crate) async fn firmware_install_update_readiness(
     state: tauri::State<'_, AppState>,
     request: SerialReadinessRequest,
 ) -> Result<SerialReadinessResponse, String> {
@@ -682,11 +683,11 @@ fn serial_readiness_blocked_error(
 ) -> String {
     match blocked_reason {
         SerialReadinessBlockedReason::SessionBusy => match session_status {
-            FirmwareSessionStatus::SerialPrimary { .. } => {
-                "firmware session already active: serial_primary".into()
+            FirmwareSessionStatus::FirmwareInstallUpdate { .. } => {
+                format!("firmware session already active: {FIRMWARE_INSTALL_UPDATE_PATH}")
             }
-            FirmwareSessionStatus::DfuRecovery { .. } => {
-                "firmware session already active: dfu_recovery".into()
+            FirmwareSessionStatus::BootloaderInstallation { .. } => {
+                format!("firmware session already active: {BOOTLOADER_INSTALLATION_PATH}")
             }
             FirmwareSessionStatus::Cancelling { .. } => {
                 "firmware session already active: cancelling".into()
@@ -737,8 +738,8 @@ fn classify_session_cancel_action(
     }
 
     match status {
-        FirmwareSessionStatus::SerialPrimary { .. }
-        | FirmwareSessionStatus::DfuRecovery { .. }
+        FirmwareSessionStatus::FirmwareInstallUpdate { .. }
+        | FirmwareSessionStatus::BootloaderInstallation { .. }
         | FirmwareSessionStatus::Cancelling { .. } => SessionCancelAction::MarkCancelling,
         FirmwareSessionStatus::Idle | FirmwareSessionStatus::Completed { .. } => {
             SessionCancelAction::Ignore
@@ -758,29 +759,29 @@ fn reset_firmware_cancellation(state: &tauri::State<'_, AppState>) {
 
 fn finish_serial_session(state: &tauri::State<'_, AppState>, result: &SerialFlowResult) {
     reset_firmware_cancellation(state);
-    state
-        .firmware_session
-        .complete(crate::firmware::types::FirmwareOutcome::SerialPrimary {
+    state.firmware_session.complete(
+        crate::firmware::types::FirmwareOutcome::FirmwareInstallUpdate {
             outcome: result.to_outcome(),
-        });
+        },
+    );
 }
 
 fn finish_dfu_session(state: &tauri::State<'_, AppState>, result: &DfuRecoveryResult) {
     reset_firmware_cancellation(state);
-    state
-        .firmware_session
-        .complete(crate::firmware::types::FirmwareOutcome::DfuRecovery {
+    state.firmware_session.complete(
+        crate::firmware::types::FirmwareOutcome::BootloaderInstallation {
             outcome: result.to_outcome(),
-        });
+        },
+    );
 }
 
 fn finish_serial_session_failed(state: &tauri::State<'_, AppState>, reason: String) {
     reset_firmware_cancellation(state);
-    state
-        .firmware_session
-        .complete(crate::firmware::types::FirmwareOutcome::SerialPrimary {
+    state.firmware_session.complete(
+        crate::firmware::types::FirmwareOutcome::FirmwareInstallUpdate {
             outcome: crate::firmware::types::SerialFlashOutcome::Failed { reason },
-        });
+        },
+    );
 }
 
 fn capture_preflight(port: &str, baud: u32) -> PreflightSnapshot {
@@ -805,15 +806,15 @@ pub(crate) struct DfuFlashRequest {
 
 #[cfg(not(target_os = "android"))]
 #[tauri::command]
-pub(crate) async fn firmware_flash_dfu_recovery(
+pub(crate) async fn firmware_bootloader_installation(
     state: tauri::State<'_, AppState>,
     app: tauri::AppHandle,
     request: DfuFlashRequest,
 ) -> Result<DfuRecoveryResult, String> {
-    ensure_live_write_allowed(state.inner(), OperationId::FirmwareFlashDfuRecovery).await?;
+    ensure_live_write_allowed(state.inner(), OperationId::FirmwareBootloaderInstallation).await?;
     state
         .firmware_session
-        .try_start_dfu(connection::is_vehicle_connected(&state).await)
+        .try_start_bootloader_installation(connection::is_vehicle_connected(&state).await)
         .map_err(|e| e.to_string())?;
 
     let request = match validate_selected_dfu_request(request) {
@@ -921,12 +922,12 @@ pub(crate) async fn firmware_flash_dfu_recovery(
 
 #[cfg(target_os = "android")]
 #[tauri::command]
-pub(crate) async fn firmware_flash_dfu_recovery(
+pub(crate) async fn firmware_bootloader_installation(
     state: tauri::State<'_, AppState>,
     _app: tauri::AppHandle,
     _request: DfuFlashRequest,
 ) -> Result<DfuRecoveryResult, String> {
-    ensure_live_write_allowed(state.inner(), OperationId::FirmwareFlashDfuRecovery).await?;
+    ensure_live_write_allowed(state.inner(), OperationId::FirmwareBootloaderInstallation).await?;
     Ok(DfuRecoveryResult::PlatformUnsupported)
 }
 
@@ -1165,7 +1166,7 @@ mod tests {
         assert!(matches!(
             classify_session_cancel_action(
                 &FirmwareSessionStatus::Completed {
-                    outcome: crate::firmware::types::FirmwareOutcome::SerialPrimary {
+                    outcome: crate::firmware::types::FirmwareOutcome::FirmwareInstallUpdate {
                         outcome: crate::firmware::types::SerialFlashOutcome::Cancelled,
                     },
                 },
@@ -1179,7 +1180,7 @@ mod tests {
     fn cancel_action_marks_active_sessions_cancelling_without_pending_start_flag() {
         assert!(matches!(
             classify_session_cancel_action(
-                &FirmwareSessionStatus::SerialPrimary {
+                &FirmwareSessionStatus::FirmwareInstallUpdate {
                     phase: crate::firmware::types::SerialFlashPhase::Idle,
                 },
                 false,
@@ -1188,7 +1189,7 @@ mod tests {
         ));
         assert!(matches!(
             classify_session_cancel_action(
-                &FirmwareSessionStatus::DfuRecovery {
+                &FirmwareSessionStatus::BootloaderInstallation {
                     phase: crate::firmware::types::DfuRecoveryPhase::Detecting,
                 },
                 false,
@@ -1241,7 +1242,7 @@ mod tests {
             &request,
             &ports,
             &FirmwareSessionStatus::Completed {
-                outcome: crate::firmware::types::FirmwareOutcome::SerialPrimary {
+                outcome: crate::firmware::types::FirmwareOutcome::FirmwareInstallUpdate {
                     outcome: crate::firmware::types::SerialFlashOutcome::Verified {
                         board_id: 9,
                         bootloader_rev: 4,
@@ -1255,7 +1256,7 @@ mod tests {
             &request,
             &ports,
             &FirmwareSessionStatus::Cancelling {
-                path: crate::firmware::types::FirmwareSessionPath::SerialPrimary,
+                path: crate::firmware::types::FirmwareSessionPath::FirmwareInstallUpdate,
             }
         ));
 
@@ -1343,7 +1344,7 @@ mod tests {
         let result = with_serial_flash_start_guard(
             &request,
             &ports,
-            &FirmwareSessionStatus::SerialPrimary {
+            &FirmwareSessionStatus::FirmwareInstallUpdate {
                 phase: crate::firmware::types::SerialFlashPhase::Idle,
             },
             || {
@@ -1354,7 +1355,7 @@ mod tests {
 
         assert_eq!(
             result.unwrap_err(),
-            "firmware session already active: serial_primary"
+            "firmware session already active: firmware_install_update"
         );
         assert!(!attempted_flash_setup);
     }
@@ -1756,11 +1757,11 @@ mod tests {
     #[test]
     fn cancellation_requested_only_for_cancelling_status() {
         assert!(cancellation_requested(&FirmwareSessionStatus::Cancelling {
-            path: crate::firmware::types::FirmwareSessionPath::SerialPrimary,
+            path: crate::firmware::types::FirmwareSessionPath::FirmwareInstallUpdate,
         }));
         assert!(!cancellation_requested(&FirmwareSessionStatus::Idle));
         assert!(!cancellation_requested(
-            &FirmwareSessionStatus::SerialPrimary {
+            &FirmwareSessionStatus::FirmwareInstallUpdate {
                 phase: crate::firmware::types::SerialFlashPhase::Idle,
             }
         ));
@@ -1770,7 +1771,7 @@ mod tests {
     fn cancel_action_prefers_aborting_pretransfer_tasks() {
         assert!(matches!(
             classify_session_cancel_action(
-                &FirmwareSessionStatus::SerialPrimary {
+                &FirmwareSessionStatus::FirmwareInstallUpdate {
                     phase: crate::firmware::types::SerialFlashPhase::Idle,
                 },
                 true,

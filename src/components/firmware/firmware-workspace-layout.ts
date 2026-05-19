@@ -62,12 +62,12 @@ function blockedCopy(reason: FirmwareWorkspaceBlockedReason) {
     case "viewport_unsettled":
       return {
         title: "Browse-only until the viewport settles",
-        detail: "Shell tier and viewport dimensions disagree, so Install / Update stays blocked until desktop-sized layout is confirmed.",
+        detail: "Shell tier and viewport dimensions disagree, so firmware install/update stays blocked until desktop-sized layout is confirmed.",
       };
     case "phone_viewport":
       return {
         title: "Browse-only on phone widths",
-        detail: "You can search targets, inspect catalog entries, and review outcomes here, but actual flash actions stay desktop-only.",
+        detail: "You can search targets, inspect catalog entries, and review outcomes here, but firmware and bootloader write actions stay desktop-only.",
       };
     case "radiomaster_viewport":
       return {

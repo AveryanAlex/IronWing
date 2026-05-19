@@ -12,6 +12,9 @@ pub(crate) mod domain {
 pub(crate) mod envelope {
     pub(crate) use ironwing_core::ipc::envelope::*;
 }
+pub(crate) mod firmware {
+    pub(crate) use ironwing_core::ipc::firmware::*;
+}
 pub(crate) mod guided {
     pub(crate) use ironwing_core::ipc::guided::*;
 }

@@ -1,9 +1,10 @@
 import { readable } from "svelte/store";
 
 import type { FirmwareFileIo } from "../lib/firmware-file-io";
+import type { FirmwareInstallReadinessRequest } from "../firmware";
 import { createFirmwareFileIo } from "../lib/firmware-file-io";
 import {
-  computeSerialReadinessToken,
+  computeFirmwareInstallReadinessToken,
   type FirmwareService,
 } from "../lib/platform/firmware";
 import {
@@ -121,7 +122,7 @@ function createHarnessFirmwareService(): FirmwareService {
     sessionStatus: async () => ({ kind: "idle" }),
     sessionCancel: async () => undefined,
     sessionClearCompleted: async () => undefined,
-    serialPreflight: async () => ({
+    installPreflight: async () => ({
       vehicle_connected: false,
       param_count: 0,
       has_params_to_backup: false,
@@ -154,6 +155,7 @@ function createHarnessFirmwareService(): FirmwareService {
         },
       ],
     }),
+    requestFirmwareInstallPort: async () => null,
     listDfuDevices: async () => ({
       kind: "available",
       devices: [
@@ -177,7 +179,7 @@ function createHarnessFirmwareService(): FirmwareService {
         latest_version: "4.5.0",
       },
     ],
-    recoveryCatalogTargets: async () => [
+    bootloaderCatalogTargets: async () => [
       {
         board_id: 140,
         platform: "CubeOrange",
@@ -203,8 +205,8 @@ function createHarnessFirmwareService(): FirmwareService {
         manufacturer: "Hex",
       },
     ],
-    serialReadiness: async (request) => ({
-      request_token: computeSerialReadinessToken(request),
+    installReadiness: async (request: FirmwareInstallReadinessRequest) => ({
+      request_token: computeFirmwareInstallReadinessToken(request),
       session_status: { kind: "idle" },
       readiness: request.source.kind === "catalog_url" && request.source.url.trim().length === 0
         ? { kind: "blocked", reason: "source_missing" }
@@ -215,8 +217,8 @@ function createHarnessFirmwareService(): FirmwareService {
       validation_pending: false,
       bootloader_transition: { kind: "manual_bootloader_entry_required" },
     }),
-    flashSerial: async () => ({ result: "verified", board_id: 140, bootloader_rev: 5, port: "/dev/ttyACM0" }),
-    flashDfuRecovery: async () => ({ result: "verified" }),
+    startFirmwareInstallUpdate: async () => ({ result: "verified", board_id: 140, bootloader_rev: 5, port: "/dev/ttyACM0" }),
+    startBootloaderInstallation: async () => ({ result: "verified" }),
     subscribeProgress: async () => () => undefined,
     formatError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
   } satisfies FirmwareService;

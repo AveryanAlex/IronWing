@@ -8,18 +8,18 @@ import type {
   CatalogEntry,
   CatalogTargetSummary,
   DfuDeviceInfo,
+  FirmwareInstallReadinessBlockedReason,
+  FirmwareInstallReadinessRequest,
+  FirmwareInstallReadinessResponse,
+  FirmwareInstallSource,
   FirmwareSessionStatus,
   PortInfo,
-  SerialFlashSource,
-  SerialReadinessBlockedReason,
-  SerialReadinessRequest,
-  SerialReadinessResponse,
 } from "../../firmware";
 import { createShellChromeState, type ShellChromeState } from "../../app/shell/chrome-state";
 import type { FirmwareFileIo } from "../../lib/firmware-file-io";
 import { missingDomainValue } from "../../lib/domain-status";
 import {
-  computeSerialReadinessToken,
+  computeFirmwareInstallReadinessToken,
   type FirmwareService,
 } from "../../lib/platform/firmware";
 import { createFirmwareWorkspaceStore } from "../../lib/stores/firmware-workspace";
@@ -106,7 +106,7 @@ const DEFAULT_DFU_DEVICES: DfuDeviceInfo[] = [
   },
 ];
 
-function resolveBlockedReason(request: SerialReadinessRequest): SerialReadinessBlockedReason | null {
+function resolveBlockedReason(request: FirmwareInstallReadinessRequest): FirmwareInstallReadinessBlockedReason | null {
   if (request.port.trim().length === 0) {
     return "port_unselected";
   }
@@ -127,13 +127,13 @@ function resolveBlockedReason(request: SerialReadinessRequest): SerialReadinessB
 }
 
 function defaultReadiness(
-  request: SerialReadinessRequest,
+  request: FirmwareInstallReadinessRequest,
   detectedBoardId: number | null,
-): SerialReadinessResponse {
+): FirmwareInstallReadinessResponse {
   const blockedReason = resolveBlockedReason(request);
 
   return {
-    request_token: computeSerialReadinessToken(request),
+    request_token: computeFirmwareInstallReadinessToken(request),
     session_status: { kind: "idle" },
     readiness: blockedReason ? { kind: "blocked", reason: blockedReason } : { kind: "advisory" },
     target_hint: { detected_board_id: detectedBoardId },
@@ -191,7 +191,7 @@ function createService(
     sessionStatus: vi.fn(async () => ({ kind: "idle" } satisfies FirmwareSessionStatus)),
     sessionCancel: vi.fn(async () => undefined),
     sessionClearCompleted: vi.fn(async () => undefined),
-    serialPreflight: vi.fn(async () => ({
+    installPreflight: vi.fn(async () => ({
       vehicle_connected: false,
       param_count: config.paramCount ?? 12,
       has_params_to_backup: config.hasParamsToBackup ?? true,
@@ -201,18 +201,19 @@ function createService(
       session_status: { kind: "idle" },
     })),
     listPorts: vi.fn(async () => ({ kind: "available", ports: DEFAULT_PORTS })),
+    requestFirmwareInstallPort: vi.fn(async () => null),
     listDfuDevices: vi.fn(async () => ({ kind: "available", devices: dfuDevices })),
     catalogTargets: vi.fn(async () => targets),
-    recoveryCatalogTargets: vi.fn(async () => recoveryTargets),
+    bootloaderCatalogTargets: vi.fn(async () => recoveryTargets),
     catalogEntries: vi.fn(async (_boardId: number, platform?: string) => entries[platform ?? ""] ?? []),
-    serialReadiness: vi.fn(async (request: SerialReadinessRequest) => defaultReadiness(request, detectedBoardId)),
-    flashSerial: vi.fn(async (_port: string, _baud: number, _source: SerialFlashSource) => ({
+    installReadiness: vi.fn(async (request: FirmwareInstallReadinessRequest) => defaultReadiness(request, detectedBoardId)),
+    startFirmwareInstallUpdate: vi.fn(async (_port: string, _baud: number, _source: FirmwareInstallSource) => ({
       result: "verified",
       board_id: 140,
       bootloader_rev: 5,
       port: "/dev/ttyACM0",
     })),
-    flashDfuRecovery: vi.fn(async () => ({ result: "verified" })),
+    startBootloaderInstallation: vi.fn(async () => ({ result: "verified" })),
     subscribeProgress: vi.fn(async () => () => undefined),
     formatError: vi.fn((error: unknown) => (error instanceof Error ? error.message : String(error))),
     ...overrides,
@@ -450,7 +451,7 @@ describe("FirmwareWorkspace", () => {
 
   it("retains target and source context after a rejected serial start and renders the failure outcome inline", async () => {
     const service = createService({
-      flashSerial: vi.fn(async () => {
+      startFirmwareInstallUpdate: vi.fn(async () => {
         throw new Error("serial bootloader handshake failed");
       }),
     });
@@ -474,7 +475,7 @@ describe("FirmwareWorkspace", () => {
 
   it("retains cancelled serial outcomes without clearing the retryable selection context", async () => {
     const service = createService({
-      flashSerial: vi.fn(async () => ({ result: "cancelled" })),
+      startFirmwareInstallUpdate: vi.fn(async () => ({ result: "cancelled" })),
     });
 
     await renderWorkspace({ service });
@@ -496,7 +497,7 @@ describe("FirmwareWorkspace", () => {
 
   it("renders detailed outcome facts for reconnect verification failures instead of collapsing them into a generic error", async () => {
     const service = createService({
-      flashSerial: vi.fn(async () => ({
+      startFirmwareInstallUpdate: vi.fn(async () => ({
         result: "reconnect_failed",
         board_id: 140,
         bootloader_rev: 6,
@@ -523,7 +524,7 @@ describe("FirmwareWorkspace", () => {
     });
   });
 
-  it("keeps DFU recovery separate from install/update and gates dangerous manual recovery behind explicit confirmation", async () => {
+  it("keeps bootloader installation separate from firmware install/update and gates dangerous manual bootloader images behind explicit confirmation", async () => {
     const fileIo = createFileIo({
       pickBinFile: vi.fn(async () => ({
         status: "success" as const,
@@ -729,7 +730,7 @@ describe("FirmwareWorkspace", () => {
 
   it("keeps retryable recovery guidance outcomes in the recovery mode instead of auto-returning", async () => {
     const service = createService({
-      flashDfuRecovery: vi.fn(async () => ({
+      startBootloaderInstallation: vi.fn(async () => ({
         result: "driver_guidance",
         guidance: "Install the STM32 DFU driver, reconnect the board in DFU mode, and retry recovery.",
       })),
@@ -746,9 +747,9 @@ describe("FirmwareWorkspace", () => {
     await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.startRecovery));
 
     await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.mode).textContent).toContain("dfu-recovery");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.mode).textContent).toContain("bootloader-installation");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.recoveryPanel)).toBeTruthy();
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeResult).textContent).toContain("Recovery guidance");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeResult).textContent).toContain("Bootloader installation guidance");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeSummary).textContent).toContain("STM32 DFU driver");
     });
   });
@@ -765,11 +766,11 @@ describe("FirmwareWorkspace", () => {
     await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.startRecovery));
 
     await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.mode).textContent).toContain("install-update");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.mode).textContent).toContain("firmware-install-update");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.serialPanel)).toBeTruthy();
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.returnGuidance).textContent).toContain("Return to Install / Update now");
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeResult).textContent).toContain("Recovery verified");
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeSummary).textContent).toContain("Return to Install / Update");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.returnGuidance).textContent).toContain("Return to firmware install/update now");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeResult).textContent).toContain("Bootloader installation verified");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeSummary).textContent).toContain("Return to firmware install/update");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel).textContent).toContain("STM32 DFU");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel).textContent).toContain("Next step");
     });

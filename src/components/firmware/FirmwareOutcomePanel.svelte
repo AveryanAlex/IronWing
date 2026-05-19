@@ -1,7 +1,7 @@
 <script lang="ts">
 import type {
+  FirmwareInstallUpdateOutcome,
   FirmwareOutcome,
-  SerialFlashOutcome,
 } from "../../firmware";
 import type { FirmwareWorkspaceStore, FirmwareWorkspaceState } from "../../lib/stores/firmware-workspace";
 import { firmwareWorkspaceTestIds } from "./firmware-workspace-test-ids";
@@ -47,36 +47,36 @@ function recoveryTargetLabel() {
 }
 
 function summaryForOutcome(outcome: FirmwareOutcome) {
-  if (outcome.path === "dfu_recovery") {
+  if (outcome.path === "bootloader_installation") {
     switch (outcome.outcome.result) {
       case "verified":
         return {
           tone: "success" as OutcomeTone,
-          label: "Recovery verified",
-          summary: "Bootloader recovery completed. Return to Install / Update and flash normal ArduPilot firmware over serial.",
+          label: "Bootloader installation verified",
+          summary: "Bootloader installation completed. Return to firmware install/update and flash normal ArduPilot firmware over serial.",
         };
       case "cancelled":
         return {
           tone: "warning" as OutcomeTone,
-          label: "Recovery cancelled",
-          summary: "DFU recovery was cancelled before completion.",
+          label: "Bootloader installation cancelled",
+          summary: "Bootloader installation was cancelled before completion.",
         };
       case "reset_unconfirmed":
         return {
           tone: "warning" as OutcomeTone,
           label: "Reset unconfirmed",
-          summary: "DFU recovery completed, but device reset could not be confirmed. Reconnect or power-cycle the board before continuing.",
+          summary: "Bootloader installation completed, but device reset could not be confirmed. Reconnect or power-cycle the board before continuing.",
         };
       case "failed":
         return {
           tone: "danger" as OutcomeTone,
-          label: "Recovery failed",
+          label: "Bootloader installation failed",
           summary: outcome.outcome.reason,
         };
-      case "unsupported_recovery_path":
+      case "unsupported_bootloader_installation_path":
         return {
           tone: "warning" as OutcomeTone,
-          label: "Recovery guidance",
+          label: "Bootloader installation guidance",
           summary: outcome.outcome.guidance,
         };
     }
@@ -113,7 +113,7 @@ function summaryForOutcome(outcome: FirmwareOutcome) {
       return {
         tone: "warning" as OutcomeTone,
         label: "Cancelled",
-        summary: "Serial install was cancelled before completion.",
+        summary: "Firmware install/update was cancelled before completion.",
       };
     case "board_detection_failed":
       return {
@@ -140,11 +140,11 @@ function detailRows(outcome: FirmwareOutcome) {
   const rows: Array<{ label: string; value: string }> = [
     {
       label: "Path",
-      value: outcome.path === "serial_primary" ? "Install / Update" : "DFU recovery",
+      value: outcome.path === "firmware_install_update" ? "Firmware install/update" : "Bootloader installation",
     },
   ];
 
-  if (outcome.path === "dfu_recovery") {
+  if (outcome.path === "bootloader_installation") {
     const recoveryOutcome = outcome.outcome;
     const sourceLabel = state.recovery.sourceMetadata?.label ?? null;
     const targetLabel = recoveryTargetLabel();
@@ -164,15 +164,15 @@ function detailRows(outcome: FirmwareOutcome) {
 
     switch (recoveryOutcome.result) {
       case "verified":
-        rows.push({ label: "Next step", value: "Switch back to Install / Update and flash normal ArduPilot firmware over serial." });
+        rows.push({ label: "Next step", value: "Switch back to firmware install/update and flash normal ArduPilot firmware over serial." });
         break;
       case "reset_unconfirmed":
-        rows.push({ label: "Next step", value: "Reconnect or power-cycle the board, then continue with Install / Update." });
+        rows.push({ label: "Next step", value: "Reconnect or power-cycle the board, then continue with firmware install/update." });
         break;
       case "failed":
         rows.push({ label: "Reason", value: recoveryOutcome.reason });
         break;
-      case "unsupported_recovery_path":
+      case "unsupported_bootloader_installation_path":
         rows.push({ label: "Guidance", value: recoveryOutcome.guidance });
         break;
       case "cancelled":
@@ -190,7 +190,7 @@ function detailRows(outcome: FirmwareOutcome) {
     });
   }
 
-  const serialOutcome = outcome.outcome as SerialFlashOutcome;
+  const serialOutcome = outcome.outcome as FirmwareInstallUpdateOutcome;
 
   switch (serialOutcome.result) {
     case "verified":
@@ -297,7 +297,7 @@ const detailTileClass = "rounded-md border border-border bg-bg-input p-3 text-sm
       class="mt-4 rounded-md border border-border bg-bg-input p-4 text-sm text-text-secondary"
       data-testid={firmwareWorkspaceTestIds.outcomeEmpty}
     >
-      No retained firmware outcome yet. Once install or recovery runs, the exact result facts stay visible here until you dismiss them.
+      No retained firmware outcome yet. Once firmware install/update or bootloader installation runs, the exact result facts stay visible here until you dismiss them.
     </p>
   {/if}
 </Panel>

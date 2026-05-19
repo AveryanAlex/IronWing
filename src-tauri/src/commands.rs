@@ -1161,14 +1161,14 @@ mod tests {
         assert_eq!(param_failure.reason.kind, ReasonKind::PermissionDenied);
 
         let firmware_failure: OperationFailure = serde_json::from_str(
-            &ensure_live_write_allowed(&state, OperationId::FirmwareFlashSerial)
+            &ensure_live_write_allowed(&state, OperationId::FirmwareInstallUpdate)
                 .await
                 .expect_err("firmware flashing should be blocked"),
         )
         .expect("deserialize firmware failure");
         assert_eq!(
             firmware_failure.operation_id,
-            OperationId::FirmwareFlashSerial
+            OperationId::FirmwareInstallUpdate
         );
         assert_eq!(firmware_failure.reason.kind, ReasonKind::PermissionDenied);
 

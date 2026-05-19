@@ -2,6 +2,7 @@ pub mod calibration;
 pub mod configuration_facts;
 pub mod domain;
 pub mod envelope;
+pub mod firmware;
 pub mod guided;
 #[allow(dead_code)]
 pub mod logs;
@@ -18,6 +19,7 @@ pub use domain::{DomainProvenance, DomainValue};
 pub use envelope::{
     OperationFailure, OperationId, Reason, ReasonKind, ScopedEvent, SessionEnvelope, SourceKind,
 };
+pub use firmware::*;
 pub use guided::{
     GuidedCommandResult, GuidedFailure, GuidedFatalityScope, GuidedLiveContext, GuidedRuntime,
     GuidedSession, GuidedSnapshot, GuidedTerminationReason, StartGuidedSessionRequest,

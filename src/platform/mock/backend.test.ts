@@ -8,15 +8,15 @@ import type { PlaybackStateSnapshot } from "../../playback";
 import type { RecordingSettingsResult, RecordingStatus } from "../../recording";
 import type { OpenSessionSnapshot, SessionEvent } from "../../session";
 import type {
+    BootloaderInstallationResult,
     CatalogEntry,
     CatalogTargetSummary,
-    DfuRecoveryResult,
     DfuScanResult,
+    FirmwareInstallPreflightInfo,
+    FirmwareInstallReadinessRequest,
+    FirmwareInstallResult,
     InventoryResult,
     PortInfo,
-    SerialFlowResult,
-    SerialPreflightInfo,
-    SerialReadinessRequest,
 } from "../../firmware";
 
 import { getMockPlatformController, invokeMockCommand, listenMockEvent, type MockLogSeedPreset } from "./backend";
@@ -394,7 +394,7 @@ describe("mock guided backend parity", () => {
             { cmd: "motor_test", args: { motorInstance: 1, throttlePct: 10, durationS: 1 }, operationId: "motor_test" },
             { cmd: "rc_override", args: { channels: [{ channel: 1, value: 1500 }] }, operationId: "rc_override" },
             {
-                cmd: "firmware_flash_serial",
+                cmd: "firmware_install_update",
                 args: {
                     request: {
                         port: "/dev/ttyACM0",
@@ -403,10 +403,10 @@ describe("mock guided backend parity", () => {
                         options: { full_chip_erase: false },
                     },
                 },
-                operationId: "firmware_flash_serial",
+                operationId: "firmware_install_update",
             },
             {
-                cmd: "firmware_flash_dfu_recovery",
+                cmd: "firmware_bootloader_installation",
                 args: {
                     request: {
                         device: {
@@ -420,7 +420,7 @@ describe("mock guided backend parity", () => {
                         source: { kind: "official_bootloader", board_target: "CubeOrange" },
                     },
                 },
-                operationId: "firmware_flash_dfu_recovery",
+                operationId: "firmware_bootloader_installation",
             },
         ] as const;
 
@@ -2350,14 +2350,14 @@ describe("mock firmware backend parity", () => {
         },
     ];
 
-    const serialReadinessRequest: SerialReadinessRequest = {
+    const serialReadinessRequest: FirmwareInstallReadinessRequest = {
         port: "/dev/ttyACM0",
         source: { kind: "catalog_url", url: "https://example.com/cubeorange-copter.apj" },
         options: { full_chip_erase: false },
     };
 
     it("implements the firmware commands used by the standalone tab with frontend-shaped responses", async () => {
-        const preflight = await invokeMockCommand<SerialPreflightInfo>("firmware_serial_preflight");
+        const preflight = await invokeMockCommand<FirmwareInstallPreflightInfo>("firmware_install_update_preflight");
         expect(preflight).toEqual({
             vehicle_connected: false,
             param_count: 0,
@@ -2409,7 +2409,7 @@ describe("mock firmware backend parity", () => {
             },
         ]);
 
-        const recoveryTargets = await invokeMockCommand<CatalogTargetSummary[]>("firmware_recovery_catalog_targets");
+        const recoveryTargets = await invokeMockCommand<CatalogTargetSummary[]>("firmware_bootloader_catalog_targets");
         expect(recoveryTargets).toEqual([
             {
                 board_id: 140,
@@ -2456,11 +2456,11 @@ describe("mock firmware backend parity", () => {
             },
         ]);
 
-        const readiness = await invokeMockCommand("firmware_serial_readiness", {
+        const readiness = await invokeMockCommand("firmware_install_update_readiness", {
             request: serialReadinessRequest,
         });
         expect(readiness).toEqual({
-            request_token: "serial-readiness:port=/dev/ttyACM0:source_kind=catalog_url:source_identity=41-c7f40b36334f961c:full_chip_erase=0",
+            request_token: "firmware-install-readiness:port=/dev/ttyACM0:source_kind=catalog_url:source_identity=41-c7f40b36334f961c:full_chip_erase=0",
             session_status: { kind: "idle" },
             readiness: { kind: "advisory" },
             target_hint: null,
@@ -2468,7 +2468,7 @@ describe("mock firmware backend parity", () => {
             bootloader_transition: { kind: "manual_bootloader_entry_required" },
         });
 
-        const serialResult = await invokeMockCommand<SerialFlowResult>("firmware_flash_serial", {
+        const serialResult = await invokeMockCommand<FirmwareInstallResult>("firmware_install_update", {
             request: {
                 port: "/dev/ttyACM0",
                 baud: 115200,
@@ -2483,7 +2483,7 @@ describe("mock firmware backend parity", () => {
             port: "/dev/ttyACM0",
         });
 
-        const localSerialResult = await invokeMockCommand<SerialFlowResult>("firmware_flash_serial", {
+        const localSerialResult = await invokeMockCommand<FirmwareInstallResult>("firmware_install_update", {
             request: {
                 port: "/dev/ttyACM0",
                 baud: 115200,
@@ -2504,7 +2504,7 @@ describe("mock firmware backend parity", () => {
             port: "/dev/ttyACM0",
         });
 
-        const dfuResult = await invokeMockCommand<DfuRecoveryResult>("firmware_flash_dfu_recovery", {
+        const dfuResult = await invokeMockCommand<BootloaderInstallationResult>("firmware_bootloader_installation", {
             request: {
                 device: {
                     vid: 0x0483,
@@ -2519,7 +2519,7 @@ describe("mock firmware backend parity", () => {
         });
         expect(dfuResult).toEqual({ result: "verified" });
 
-        const localDfuResult = await invokeMockCommand<DfuRecoveryResult>("firmware_flash_dfu_recovery", {
+        const localDfuResult = await invokeMockCommand<BootloaderInstallationResult>("firmware_bootloader_installation", {
             request: {
                 device: {
                     vid: 0x0483,
@@ -2536,7 +2536,7 @@ describe("mock firmware backend parity", () => {
     });
 
     it("returns blocked serial readiness states instead of inventing usable defaults", async () => {
-        await expect(invokeMockCommand("firmware_serial_readiness", {
+        await expect(invokeMockCommand("firmware_install_update_readiness", {
             request: {
                 port: "",
                 source: { kind: "catalog_url", url: "" },
@@ -2544,7 +2544,7 @@ describe("mock firmware backend parity", () => {
             },
         })).resolves.toMatchObject({ readiness: { kind: "blocked", reason: "port_unselected" } });
 
-        await expect(invokeMockCommand("firmware_serial_readiness", {
+        await expect(invokeMockCommand("firmware_install_update_readiness", {
             request: {
                 port: "/dev/ttyUSB9",
                 source: { kind: "catalog_url", url: "https://example.com/cubeorange-copter.apj" },
@@ -2552,7 +2552,7 @@ describe("mock firmware backend parity", () => {
             },
         })).resolves.toMatchObject({ readiness: { kind: "blocked", reason: "port_unavailable" } });
 
-        await expect(invokeMockCommand("firmware_serial_readiness", {
+        await expect(invokeMockCommand("firmware_install_update_readiness", {
             request: {
                 port: "/dev/ttyACM0",
                 source: { kind: "catalog_url", url: "" },
@@ -2565,21 +2565,21 @@ describe("mock firmware backend parity", () => {
         await expect(invokeMockCommand("firmware_catalog_entries", {})).rejects.toThrow(
             "missing or invalid firmware_catalog_entries.boardId",
         );
-        await expect(invokeMockCommand("firmware_serial_readiness", {})).rejects.toThrow(
-            "missing or invalid firmware_serial_readiness.request",
+        await expect(invokeMockCommand("firmware_install_update_readiness", {})).rejects.toThrow(
+            "missing or invalid firmware_install_update_readiness.request",
         );
-        await expect(invokeMockCommand("firmware_flash_serial", {
+        await expect(invokeMockCommand("firmware_install_update", {
             request: { baud: 115200, source: { kind: "catalog_url", url: "https://example.com/cubeorange-copter.apj" } },
-        })).rejects.toThrow("missing or invalid firmware_flash_serial.request.port");
-        await expect(invokeMockCommand("firmware_flash_serial", {
+        })).rejects.toThrow("missing or invalid firmware_install_update.request.port");
+        await expect(invokeMockCommand("firmware_install_update", {
             request: {
                 port: "/dev/ttyACM0",
                 baud: 115200,
                 source: { kind: "local_apj_bytes", data: "bad-payload" },
                 options: { full_chip_erase: false },
             },
-        })).rejects.toThrow("missing or invalid firmware_flash_serial.request.source.data");
-        await expect(invokeMockCommand("firmware_flash_dfu_recovery", {
+        })).rejects.toThrow("missing or invalid firmware_install_update.request.source.data");
+        await expect(invokeMockCommand("firmware_bootloader_installation", {
             request: {
                 device: {
                     vid: 0x0483,
@@ -2591,8 +2591,8 @@ describe("mock firmware backend parity", () => {
                 },
                 source: { kind: "official_bootloader", board_target: "CubeOrange" },
             },
-        })).rejects.toThrow("missing or invalid firmware_flash_dfu_recovery.request.device.unique_id");
-        await expect(invokeMockCommand("firmware_flash_dfu_recovery", {
+        })).rejects.toThrow("missing or invalid firmware_bootloader_installation.request.device.unique_id");
+        await expect(invokeMockCommand("firmware_bootloader_installation", {
             request: {
                 device: {
                     vid: 0x0483,
@@ -2604,7 +2604,7 @@ describe("mock firmware backend parity", () => {
                 },
                 source: { kind: "local_bin_bytes", data: "bad-payload" },
             },
-        })).rejects.toThrow("missing or invalid firmware_flash_dfu_recovery.request.source.data");
+        })).rejects.toThrow("missing or invalid firmware_bootloader_installation.request.source.data");
     });
 
     it("keeps mock message-rate defaults aligned with the Rust command catalog", async () => {
@@ -2680,12 +2680,12 @@ describe("mock firmware backend parity", () => {
 
     it("surfaces rejected firmware starts without papering over controller overrides", async () => {
         const controller = getMockPlatformController();
-        controller.setCommandBehavior("firmware_flash_serial", {
+        controller.setCommandBehavior("firmware_install_update", {
             type: "reject",
             error: "serial bootloader handshake failed",
         });
 
-        await expect(invokeMockCommand("firmware_flash_serial", {
+        await expect(invokeMockCommand("firmware_install_update", {
             request: {
                 port: "/dev/ttyACM0",
                 baud: 115200,

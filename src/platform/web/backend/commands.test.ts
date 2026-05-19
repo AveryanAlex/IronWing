@@ -40,13 +40,37 @@ const wasmContractMock = vi.hoisted(() => ({
       profile: "nordic_uart",
     },
   ]),
+  webSerialFirmwareInstallUpdate: vi.fn(async ({ onProgress }: { onProgress: (phase: string, written: number, total: number) => void }) => {
+    onProgress("programming", 4, 4);
+    return { result: "verified", board_id: 140, bootloader_rev: 5, port: "webserial:1" };
+  }),
 }));
 
 vi.mock("../wasm", () => ({
   ensureWasmRuntime: vi.fn(async () => wasmRuntimeMock),
   wasmAvailableMessageRates: wasmContractMock.availableMessageRates,
+  wasmWebSerialFirmwareInstallUpdate: wasmContractMock.webSerialFirmwareInstallUpdate,
   wasmWebTransportDescriptors: wasmContractMock.webTransportDescriptors,
 }));
+
+const webSerialFirmwareMock = vi.hoisted(() => ({
+  isWebSerialFirmwareAvailable: vi.fn(() => false),
+  listGrantedWebSerialFirmwarePorts: vi.fn(async (): Promise<unknown[]> => []),
+  requestWebSerialFirmwarePort: vi.fn(async () => ({
+    port_name: "webserial:1",
+    vid: 1155,
+    pid: 22336,
+    serial_number: null,
+    manufacturer: null,
+    product: "WebSerial device",
+    location: "webserial:1",
+  })),
+  openWebSerialFirmwarePort: vi.fn(async () => ({
+    close: vi.fn(async () => undefined),
+  })),
+}));
+
+vi.mock("../firmware/web-serial", () => webSerialFirmwareMock);
 
 vi.mock("../transports/websocket", () => ({
   createWebSocketTransport: vi.fn(() => ({
@@ -91,6 +115,8 @@ describe("web backend commands", () => {
     );
     vi.mocked(isWebSerialAvailable).mockReturnValue(false);
     vi.mocked(isWebBluetoothAvailable).mockReturnValue(false);
+    webSerialFirmwareMock.isWebSerialFirmwareAvailable.mockReturnValue(false);
+    webSerialFirmwareMock.listGrantedWebSerialFirmwarePorts.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -116,7 +142,7 @@ describe("web backend commands", () => {
   it("reports typed pure-web runtime capabilities", async () => {
     const capabilities = await invokeWebCommand<Record<string, unknown>>("runtime_capabilities");
 
-    expect(capabilities.firmware_flash).toEqual(expect.objectContaining({ kind: "unsupported" }));
+    expect(capabilities.firmware_install_update).toEqual(expect.objectContaining({ kind: "unsupported" }));
     expect(capabilities.log_library_filesystem).toEqual(expect.objectContaining({ kind: "unsupported" }));
     expect(capabilities.recording_filesystem).toEqual(expect.objectContaining({ kind: "unsupported" }));
     expect(capabilities.mission_transfer).toEqual(expect.objectContaining({ kind: "maybe" }));
@@ -124,6 +150,14 @@ describe("web backend commands", () => {
     expect(capabilities.transports).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: "websocket" }),
     ]));
+  });
+
+  it("advertises firmware install/update when WebSerial firmware support is available", async () => {
+    webSerialFirmwareMock.isWebSerialFirmwareAvailable.mockReturnValue(true);
+
+    const capabilities = await invokeWebCommand<Record<string, unknown>>("runtime_capabilities");
+
+    expect(capabilities.firmware_install_update).toEqual({ kind: "supported" });
   });
 
   it("reports available message rates from the shared wasm contract", async () => {
@@ -170,24 +204,60 @@ describe("web backend commands", () => {
       operation_id: "recording_settings_read",
     }));
     await expect(invokeWebCommand("firmware_session_status")).resolves.toEqual({ kind: "idle" });
-    await expect(invokeWebCommand("firmware_serial_preflight")).resolves.toEqual(expect.objectContaining({
+    await expect(invokeWebCommand("firmware_install_update_preflight")).resolves.toEqual(expect.objectContaining({
       session_ready: false,
       available_ports: [],
     }));
-    await expect(invokeWebCommand("firmware_serial_readiness", {
+    await expect(invokeWebCommand("firmware_install_update_readiness", {
       request: {
         port: "",
         source: { kind: "local_apj_bytes", data: [] },
         options: { full_chip_erase: false },
       },
     })).resolves.toEqual(expect.objectContaining({
-      request_token: "serial-readiness:port=:source_kind=local_apj_bytes:source_identity=0-cbf29ce484222325:full_chip_erase=0",
+      request_token: "firmware-install-readiness:port=:source_kind=local_apj_bytes:source_identity=0-cbf29ce484222325:full_chip_erase=0",
     }));
-    await expect(invokeWebCommand("firmware_flash_serial")).resolves.toEqual({
+    await expect(invokeWebCommand("firmware_install_update")).resolves.toEqual({
       result: "failed",
-      reason: "Firmware flashing is not available in the browser-only web runtime.",
+      reason: "Firmware install/update requires WebSerial in the browser-only web runtime.",
     });
-    await expect(invokeWebCommand("firmware_flash_dfu_recovery")).resolves.toEqual({ result: "platform_unsupported" });
+    await expect(invokeWebCommand("firmware_bootloader_installation")).resolves.toEqual({ result: "platform_unsupported" });
+  });
+
+  it("lists granted WebSerial firmware ports and installs through the wasm firmware bridge", async () => {
+    webSerialFirmwareMock.isWebSerialFirmwareAvailable.mockReturnValue(true);
+    webSerialFirmwareMock.listGrantedWebSerialFirmwarePorts.mockResolvedValue([{ port_name: "webserial:1", vid: 1155, pid: 22336, serial_number: null, manufacturer: null, product: "WebSerial device", location: "webserial:1" }]);
+
+    await expect(invokeWebCommand("firmware_request_serial_port")).resolves.toEqual(expect.objectContaining({ port_name: "webserial:1" }));
+    await expect(invokeWebCommand("firmware_list_ports")).resolves.toEqual({
+      kind: "available",
+      ports: [expect.objectContaining({ port_name: "webserial:1" })],
+    });
+    await expect(invokeWebCommand("firmware_install_update_preflight")).resolves.toEqual(expect.objectContaining({
+      session_ready: true,
+      available_ports: [expect.objectContaining({ port_name: "webserial:1" })],
+    }));
+
+    await expect(invokeWebCommand("firmware_install_update", {
+      request: {
+        port: "webserial:1",
+        baud: 115200,
+        source: { kind: "local_apj_bytes", data: [1, 2, 3] },
+        options: { full_chip_erase: false },
+      },
+    })).resolves.toEqual({ result: "verified", board_id: 140, bootloader_rev: 5, port: "webserial:1" });
+    expect(webSerialFirmwareMock.openWebSerialFirmwarePort).toHaveBeenCalledWith("webserial:1", 115200, expect.any(AbortSignal));
+    expect(wasmContractMock.webSerialFirmwareInstallUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      portName: "webserial:1",
+      source: { kind: "local_apj_bytes", data: [1, 2, 3] },
+    }));
+    await expect(invokeWebCommand("firmware_session_status")).resolves.toEqual({
+      kind: "completed",
+      outcome: {
+        path: "firmware_install_update",
+        outcome: { result: "verified", board_id: 140, bootloader_rev: 5, port: "webserial:1" },
+      },
+    });
   });
 
   it("returns benign empty results for browser transport probes", async () => {

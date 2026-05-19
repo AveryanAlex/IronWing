@@ -37,9 +37,9 @@ let {
 }: Props = $props();
 
 let workspaceState = $derived($store);
-let isRecoveryActive = $derived(workspaceState.activePath === "dfu_recovery");
+let isRecoveryActive = $derived(workspaceState.activePath === "bootloader_installation");
 let isRecoveryCancelling = $derived(
-  workspaceState.sessionStatus.kind === "cancelling" && workspaceState.sessionStatus.path === "dfu_recovery",
+  workspaceState.sessionStatus.kind === "cancelling" && workspaceState.sessionStatus.path === "bootloader_installation",
 );
 let usingManualSource = $derived(
   workspaceState.recovery.source?.kind === "local_apj_bytes" || workspaceState.recovery.source?.kind === "local_bin_bytes",
@@ -100,7 +100,7 @@ function deviceLabel(device: DfuDeviceInfo | null): string {
 
 function deviceDetail(device: DfuDeviceInfo | null): string {
   if (!device) {
-    return "If more than one DFU device is present, choose the exact bootloader target explicitly before recovery starts.";
+    return "If more than one DFU device is present, choose the exact bootloader target explicitly before installation starts.";
   }
 
   const details = [
@@ -119,14 +119,14 @@ function createOfficialMetadata(target: CatalogTargetSummary) {
 }
 
 async function selectOfficialTarget(target: CatalogTargetSummary | null) {
-  store.setRecoveryTarget(target);
+  store.setBootloaderTarget(target);
 
   if (!target) {
-    store.setRecoverySource(null, null);
+    store.setBootloaderSource(null, null);
     return;
   }
 
-  store.setRecoverySource(
+  store.setBootloaderSource(
     { kind: "official_bootloader", board_target: target.platform },
     createOfficialMetadata(target),
   );
@@ -138,13 +138,13 @@ async function loadRecoveryTargets() {
   targetError = null;
 
   try {
-    const rawTargets = await service.recoveryCatalogTargets();
+    const rawTargets = await service.bootloaderCatalogTargets();
     if (requestId !== targetRequest) {
       return;
     }
 
     if (!Array.isArray(rawTargets)) {
-      throw new Error("Firmware recovery catalog targets returned an unexpected payload.");
+      throw new Error("Bootloader catalog targets returned an unexpected payload.");
     }
 
     recoveryTargets = sanitizeCatalogTargetSummaries(rawTargets);
@@ -159,7 +159,7 @@ async function loadRecoveryTargets() {
       if (workspaceState.recovery.source?.kind === "official_bootloader" && workspaceState.recovery.source.board_target !== matchedTarget.platform) {
         await selectOfficialTarget(matchedTarget);
       } else if (!workspaceState.recovery.target || targetKey(workspaceState.recovery.target) !== targetKey(matchedTarget)) {
-        store.setRecoveryTarget(matchedTarget);
+          store.setBootloaderTarget(matchedTarget);
       }
       return;
     }
@@ -170,11 +170,11 @@ async function loadRecoveryTargets() {
     }
 
     if (workspaceState.recovery.target !== null) {
-      store.setRecoveryTarget(null);
+      store.setBootloaderTarget(null);
     }
 
     if (workspaceState.recovery.source?.kind === "official_bootloader") {
-      store.setRecoverySource(null, null);
+      store.setBootloaderSource(null, null);
     }
   } catch (error) {
     if (requestId !== targetRequest) {
@@ -195,7 +195,7 @@ async function handleManualBrowse() {
       return;
     }
 
-    store.setRecoverySource(
+    store.setBootloaderSource(
       result.selection,
       createLocalFileSourceMetadata({
         kind: result.selection.kind,
@@ -207,18 +207,18 @@ async function handleManualBrowse() {
     );
   } catch (error) {
     manualConfirmed = false;
-    store.setRecoverySourceError(service.formatError(error));
+    store.setBootloaderSourceError(service.formatError(error));
   }
 }
 
 function setManualKind(nextKind: ManualRecoveryKind) {
   manualKind = nextKind;
   manualConfirmed = false;
-  store.setRecoverySourceError(null);
+  store.setBootloaderSourceError(null);
 
   if (workspaceState.recovery.source?.kind === "local_apj_bytes" || workspaceState.recovery.source?.kind === "local_bin_bytes") {
     if (workspaceState.recovery.source.kind !== nextKind) {
-      store.setRecoverySource(null, null);
+      store.setBootloaderSource(null, null);
     }
   }
 }
@@ -248,7 +248,7 @@ let manualPanelOpen = $derived(advancedRequestedOpen || usingManualSource || Boo
 let recoverySourceState = $derived.by(() => {
   const metadata = workspaceState.recovery.sourceMetadata;
   if (!metadata) {
-    return "No DFU recovery source armed";
+    return "No bootloader installation source armed";
   }
 
   const detail = metadata.detail ? ` · ${metadata.detail}` : "";
@@ -256,7 +256,7 @@ let recoverySourceState = $derived.by(() => {
 });
 let recoveryBlockedReason = $derived.by(() => {
   if (!layout.actionsEnabled) {
-    return layout.blockedDetail ?? "Firmware start is blocked on constrained layouts.";
+      return layout.blockedDetail ?? "Bootloader installation is blocked on constrained layouts.";
   }
 
   if (workspaceState.recovery.scanPhase === "loading" && workspaceState.recovery.devices.length === 0) {
@@ -272,17 +272,17 @@ let recoveryBlockedReason = $derived.by(() => {
   }
 
   if (workspaceState.recovery.device === null) {
-    return "More than one DFU device is visible. Choose the exact device explicitly before starting recovery.";
+      return "More than one DFU device is visible. Choose the exact device explicitly before installing the bootloader.";
   }
 
   if (usingOfficialSource && workspaceState.recovery.target === null) {
     return recoveryTargets.length === 0
-      ? "No official bootloader target is available right now. Retry the target list or use a validated manual recovery image."
-      : "Choose the exact official bootloader target before starting recovery.";
+      ? "No official bootloader target is available right now. Retry the target list or use a validated manual bootloader image."
+      : "Choose the exact official bootloader target before installation.";
   }
 
   if (workspaceState.recovery.source === null) {
-    return "Choose an official bootloader target or supply a validated manual APJ/BIN image before starting recovery.";
+    return "Choose an official bootloader target or supply a validated manual APJ/BIN image before installation.";
   }
 
   if (workspaceState.recovery.sourceError) {
@@ -290,14 +290,14 @@ let recoveryBlockedReason = $derived.by(() => {
   }
 
   if (usingManualSource && !manualConfirmed) {
-    return "Manual APJ/BIN recovery stays disabled until you confirm the supplied file is the exact bootloader image for this board.";
+    return "Manual APJ/BIN bootloader installation stays disabled until you confirm the supplied file is the exact bootloader image for this board.";
   }
 
   if (!dfuConfirmed) {
-    return "Acknowledge the DFU safety warning before starting recovery.";
+    return "Acknowledge the DFU safety warning before installing the bootloader.";
   }
 
-  return "Ready to recover the bootloader. After a verified recovery, return to Install / Update and flash normal firmware over serial.";
+  return "Ready to install the bootloader. After verification, return to firmware install/update and flash normal firmware over serial.";
 });
 let canStartRecovery = $derived(
   layout.actionsEnabled
@@ -345,8 +345,8 @@ $effect(() => {
 
 <Panel padded testId={firmwareWorkspaceTestIds.recoveryPanel}>
   <SectionHeader
-    eyebrow="DFU recovery"
-    title="Recover bootloader"
+    eyebrow="Bootloader installation"
+    title="Install bootloader"
   >
     {#snippet actions()}
       <div data-testid={firmwareWorkspaceTestIds.recoveryState}>
@@ -356,7 +356,7 @@ $effect(() => {
   </SectionHeader>
 
   <p class={proseClass} data-testid={firmwareWorkspaceTestIds.recoveryGuidance}>
-    This is a separate rescue path for boards that need bootloader recovery. Restore the bootloader here, then return to Install / Update and flash normal ArduPilot firmware over serial.
+    This is a separate native DFU path for boards that need bootloader installation. Install the bootloader here, then return to firmware install/update and flash normal ArduPilot firmware over serial.
   </p>
 
   <div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
@@ -368,7 +368,7 @@ $effect(() => {
             class={selectClass}
             data-testid={firmwareWorkspaceTestIds.recoveryDeviceSelect}
             disabled={isRecoveryActive}
-            onchange={(event) => store.setRecoveryDevice(
+              onchange={(event) => store.setBootloaderDevice(
               workspaceState.recovery.devices.find((device) => device.unique_id === (event.currentTarget as HTMLSelectElement).value) ?? null,
             )}
             value={workspaceState.recovery.device?.unique_id ?? ""}
@@ -420,7 +420,7 @@ $effect(() => {
           </div>
 
           <p class={proseClass}>
-            Official bootloader recovery stays primary. It writes the known bootloader image for the selected target, then hands you back to Install / Update for the normal firmware flash.
+            Official bootloader installation stays primary. It writes the known bootloader image for the selected target, then hands you back to firmware install/update for normal firmware.
           </p>
 
           <label class="mt-3 block">
@@ -460,7 +460,7 @@ $effect(() => {
               class={standaloneInfoBlockClass}
               data-testid={firmwareWorkspaceTestIds.recoveryTargetEmpty}
             >
-              No official bootloader targets are available right now. Retry the target list or supply a validated manual APJ/BIN image.
+              No official bootloader targets are available right now. Retry the target list or supply a validated manual bootloader APJ/BIN image.
             </p>
           {/if}
 
@@ -489,7 +489,7 @@ $effect(() => {
       </div>
 
       <p class={proseClass}>
-        Use manual recovery only when you deliberately need to bypass the official bootloader catalog.
+        Use manual bootloader images only when you deliberately need to bypass the official bootloader catalog.
       </p>
 
       <div class={infoBlockClass} data-testid={firmwareWorkspaceTestIds.recoverySourceState}>
@@ -502,7 +502,7 @@ $effect(() => {
           <div data-testid={firmwareWorkspaceTestIds.recoveryManualWarning}>
             <Banner
               severity="warning"
-              title="Manual local files may replace bootloader contents or leave the board non-bootable if the wrong image is used. Keep this path for expert recovery only."
+               title="Manual local files may replace bootloader contents or leave the board non-bootable if the wrong image is used. Keep this path for expert bootloader installation only."
             />
           </div>
 
@@ -569,7 +569,7 @@ $effect(() => {
       />
       <span>
         <span class="font-semibold text-text-primary">DFU safety acknowledgment</span><br />
-        I understand that DFU bootloader recovery bypasses the normal serial safety flow and should only be used for explicit bootloader rescue.
+        I understand that DFU bootloader installation bypasses the normal serial safety flow and should only be used for explicit bootloader work.
       </span>
     </label>
 
@@ -579,7 +579,7 @@ $effect(() => {
 
     {#if isRecoveryActive}
       <div class="mt-3 rounded-md border border-warning/35 bg-warning/10 p-3 text-sm text-text-primary">
-        <p class="m-0 font-semibold">DFU recovery in progress</p>
+        <p class="m-0 font-semibold">Bootloader installation in progress</p>
         <p class="m-0 mt-1">{workspaceState.progress?.phase_label ?? workspaceState.sessionPhase ?? "working"}</p>
         {#if workspaceState.progress}
           <div class="mt-3 h-2 overflow-hidden rounded-full bg-bg-primary" data-testid={firmwareWorkspaceTestIds.recoveryProgress}>
@@ -599,7 +599,7 @@ $effect(() => {
           testId={firmwareWorkspaceTestIds.cancelRecovery}
           onclick={() => void store.cancel()}
         >
-          Cancel recovery
+          Cancel bootloader installation
         </Button>
       {/if}
 
@@ -607,9 +607,9 @@ $effect(() => {
         tone="warning"
         testId={firmwareWorkspaceTestIds.startRecovery}
         disabled={!canStartRecovery || isRecoveryActive || isRecoveryCancelling || replayReadonly}
-        onclick={() => void store.startDfuRecovery()}
+        onclick={() => void store.startBootloaderInstallation()}
       >
-        Start recovery
+        Install bootloader
       </Button>
     </div>
   </Panel>

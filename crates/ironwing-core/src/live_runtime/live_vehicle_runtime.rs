@@ -874,7 +874,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ipc::telemetry::{TelemetryState, telemetry_snapshot_from_value};
+    use crate::ipc::telemetry::telemetry_snapshot_from_value;
     use crate::live_runtime::{EventSink, NoopEventSink};
 
     #[derive(Clone, Default)]
@@ -928,7 +928,7 @@ mod tests {
             snapshot
                 .telemetry
                 .value
-                .unwrap_or_else(TelemetryState::default)
+                .unwrap_or_default()
                 .navigation
                 .latitude_deg,
             Some(47.397742)

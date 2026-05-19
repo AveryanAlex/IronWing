@@ -57,8 +57,8 @@ describe("session contract", () => {
       "recording_status",
       "recording_settings_read",
       "recording_settings_write",
-      "firmware_flash_serial",
-      "firmware_flash_dfu_recovery",
+      "firmware_install_update",
+      "firmware_bootloader_installation",
     ]);
   });
 
@@ -87,14 +87,14 @@ describe("session contract", () => {
       { operation_id: "arm_vehicle", reason: { kind: "failed", message: "arm rejected" } },
       { operation_id: "mission_upload", reason: { kind: "conflict", message: "transfer active" } },
       { operation_id: "param_write_batch", reason: { kind: "invalid_input", message: "param blocked" } },
-      { operation_id: "firmware_flash_serial", reason: { kind: "unavailable", message: "port busy" } },
+      { operation_id: "firmware_install_update", reason: { kind: "unavailable", message: "port busy" } },
     ];
 
     expect(failures.map((failure) => failure.operation_id)).toEqual([
       "arm_vehicle",
       "mission_upload",
       "param_write_batch",
-      "firmware_flash_serial",
+      "firmware_install_update",
     ]);
   });
 });

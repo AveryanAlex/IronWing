@@ -69,12 +69,12 @@ let sessionView = fromStore(resolveSessionViewStore());
 let layout = $derived(resolveFirmwareWorkspaceLayout(shellChrome));
 let replayReadonly = $derived(isReplayReadonly(sessionView.current.activeSource));
 let serialBusy = $derived(
-  workspaceState.activePath === "serial_primary"
-  || (workspaceState.sessionStatus.kind === "cancelling" && workspaceState.sessionStatus.path === "serial_primary"),
+  workspaceState.activePath === "firmware_install_update"
+  || (workspaceState.sessionStatus.kind === "cancelling" && workspaceState.sessionStatus.path === "firmware_install_update"),
 );
 let recoveryBusy = $derived(
-  workspaceState.activePath === "dfu_recovery"
-  || (workspaceState.sessionStatus.kind === "cancelling" && workspaceState.sessionStatus.path === "dfu_recovery"),
+  workspaceState.activePath === "bootloader_installation"
+  || (workspaceState.sessionStatus.kind === "cancelling" && workspaceState.sessionStatus.path === "bootloader_installation"),
 );
 let effectiveMode = $derived.by<WorkspaceMode>(() => {
   if (serialBusy) {
@@ -89,7 +89,7 @@ let effectiveMode = $derived.by<WorkspaceMode>(() => {
 });
 let showReturnGuidance = $derived(
   effectiveMode === "install"
-  && workspaceState.lastCompletedOutcome?.path === "dfu_recovery"
+  && workspaceState.lastCompletedOutcome?.path === "bootloader_installation"
   && workspaceState.lastCompletedOutcome.outcome.result === "verified",
 );
 
@@ -104,9 +104,9 @@ onDestroy(() => {
 });
 
 $effect(() => {
-  const autoReturnOutcomeKey = workspaceState.lastCompletedOutcome?.path === "dfu_recovery"
+  const autoReturnOutcomeKey = workspaceState.lastCompletedOutcome?.path === "bootloader_installation"
     && workspaceState.lastCompletedOutcome.outcome.result === "verified"
-    ? "dfu_recovery:verified"
+    ? "bootloader_installation:verified"
     : "";
 
   if (autoReturnOutcomeKey.length === 0) {
@@ -143,8 +143,8 @@ $effect(() => {
         onclick={() => (selectedMode = "install")}
         type="button"
       >
-        <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Install / Update</span>
-        <span class="mt-1 block text-sm font-semibold text-text-primary">Primary serial path</span>
+        <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Firmware install/update</span>
+        <span class="mt-1 block text-sm font-semibold text-text-primary">Normal firmware path</span>
         <span class="mt-1 block text-sm text-text-secondary">Use the official APJ catalog first, with a clearly marked local APJ override for expert cases.</span>
       </button>
 
@@ -158,9 +158,9 @@ $effect(() => {
         onclick={() => (selectedMode = "recovery")}
         type="button"
       >
-        <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">DFU recovery</span>
-        <span class="mt-1 block text-sm font-semibold text-text-primary">Separate bootloader rescue path</span>
-        <span class="mt-1 block text-sm text-text-secondary">Recover only the bootloader here, then return to Install / Update for the normal firmware flash.</span>
+        <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Bootloader installation</span>
+        <span class="mt-1 block text-sm font-semibold text-text-primary">Native DFU bootloader path</span>
+        <span class="mt-1 block text-sm text-text-secondary">Install only the bootloader here, then return to firmware install/update for normal firmware.</span>
       </button>
     </div>
   </div>
@@ -192,15 +192,15 @@ $effect(() => {
   {#if showReturnGuidance}
     <Banner
       severity="success"
-      title="Bootloader recovery verified"
-      message="Return to Install / Update now, reconnect over serial if needed, and flash the normal flight firmware. The recovery outcome remains visible below until you dismiss it."
+      title="Bootloader installation verified"
+      message="Return to firmware install/update now, reconnect over serial if needed, and flash the normal flight firmware. The bootloader outcome remains visible below until you dismiss it."
       testId={firmwareWorkspaceTestIds.returnGuidance}
     />
   {/if}
 
   <div aria-hidden="true" class="hidden">
     <span data-testid={firmwareWorkspaceTestIds.mode}
-      >{effectiveMode === "install" ? "install-update" : "dfu-recovery"}</span
+      >{effectiveMode === "install" ? "firmware-install-update" : "bootloader-installation"}</span
     >
     <span data-testid={firmwareWorkspaceTestIds.layoutMode}>{layout.mode}</span>
     <span data-testid={firmwareWorkspaceTestIds.layoutTier}>{layout.tier}</span>

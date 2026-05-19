@@ -63,7 +63,8 @@ import {
     type SessionStore,
 } from "../../lib/stores/session";
 import { createFirmwareWorkspaceStore } from "../../lib/stores/firmware-workspace";
-import { computeSerialReadinessToken, type FirmwareService } from "../../lib/platform/firmware";
+import type { FirmwareInstallReadinessRequest } from "../../firmware";
+import { computeFirmwareInstallReadinessToken, type FirmwareService } from "../../lib/platform/firmware";
 import type { ParamsService, ParamsServiceEventHandlers } from "../../lib/platform/params";
 import type {
     SessionConnectionFormState,
@@ -310,7 +311,7 @@ function createMockFirmwareService(overrides: Partial<FirmwareService> = {}) {
         sessionStatus: vi.fn(async () => ({ kind: "idle" })),
         sessionCancel: vi.fn(async () => undefined),
         sessionClearCompleted: vi.fn(async () => undefined),
-        serialPreflight: vi.fn(async () => ({
+        installPreflight: vi.fn(async () => ({
             vehicle_connected: false,
             param_count: 0,
             has_params_to_backup: false,
@@ -343,6 +344,7 @@ function createMockFirmwareService(overrides: Partial<FirmwareService> = {}) {
                 },
             ],
         })),
+        requestFirmwareInstallPort: vi.fn(async () => null),
         listDfuDevices: vi.fn(async () => ({
             kind: "available",
             devices: [
@@ -366,7 +368,7 @@ function createMockFirmwareService(overrides: Partial<FirmwareService> = {}) {
                 latest_version: "4.5.0",
             },
         ]),
-        recoveryCatalogTargets: vi.fn(async () => [
+        bootloaderCatalogTargets: vi.fn(async () => [
             {
                 board_id: 140,
                 platform: "CubeOrange",
@@ -392,8 +394,8 @@ function createMockFirmwareService(overrides: Partial<FirmwareService> = {}) {
                 manufacturer: "Hex",
             },
         ]),
-        serialReadiness: vi.fn(async (request) => ({
-            request_token: computeSerialReadinessToken(request),
+        installReadiness: vi.fn(async (request: FirmwareInstallReadinessRequest) => ({
+            request_token: computeFirmwareInstallReadinessToken(request),
             session_status: { kind: "idle" },
             readiness: request.source.kind === "catalog_url" && request.source.url.trim().length === 0
                 ? { kind: "blocked", reason: "source_missing" }
@@ -404,8 +406,8 @@ function createMockFirmwareService(overrides: Partial<FirmwareService> = {}) {
             validation_pending: false,
             bootloader_transition: { kind: "manual_bootloader_entry_required" },
         })),
-        flashSerial: vi.fn(async () => ({ result: "verified", board_id: 140, bootloader_rev: 5, port: "/dev/ttyACM0" })),
-        flashDfuRecovery: vi.fn(async () => ({ result: "verified" })),
+        startFirmwareInstallUpdate: vi.fn(async () => ({ result: "verified", board_id: 140, bootloader_rev: 5, port: "/dev/ttyACM0" })),
+        startBootloaderInstallation: vi.fn(async () => ({ result: "verified" })),
         subscribeProgress: vi.fn(async () => () => undefined),
         formatError: vi.fn((error: unknown) => (error instanceof Error ? error.message : String(error))),
         ...overrides,

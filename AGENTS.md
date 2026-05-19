@@ -97,6 +97,7 @@ Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavk
 - Numeric field names carry unit suffixes such as `_m`, `_deg`, `_mps`, `_v`, `_a`, `_pct`, `_usec`, `_secs`, `_hz`.
 - `MissionItem.x` / `MissionItem.y` are always degE7 integers. `Telemetry` and `HomePosition` use floating-point `latitude_deg` / `longitude_deg`.
 - Mission home handling is a wire-boundary concern only: upload/download conversion happens in mavkit helpers, not in arbitrary frontend/backend code.
+- Active IPC and web<->Rust contracts have no repo-internal backward-compatibility burden unless explicitly required. Change Rust, Tauri/web/remote/mock layers, and TypeScript together instead of carrying serde aliases, wrapper commands, fallback command arrays, or old wire names just for compatibility.
 - Parameter edits stage locally first and apply in batches. Do not bypass staging for general settings flows.
 - Playwright covers mocked browser flows; the thin real Rust↔frontend desktop integration lane now lives in `e2e-native/` via WebDriverIO.
 

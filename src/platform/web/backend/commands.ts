@@ -1,20 +1,33 @@
 import {
   ensureWasmRuntime,
   wasmAvailableMessageRates,
+  wasmWebSerialFirmwareInstallUpdate,
   wasmWebTransportDescriptors,
 } from "../wasm";
+import { emitWebEvent } from "../event";
+import {
+  isWebSerialFirmwareAvailable,
+  listGrantedWebSerialFirmwarePorts,
+  openWebSerialFirmwarePort,
+  requestWebSerialFirmwarePort,
+} from "../firmware/web-serial";
 import { createWebBluetoothTransport, isWebBluetoothAvailable } from "../transports/web-bluetooth";
 import { createWebSerialTransport, isWebSerialAvailable } from "../transports/web-serial";
 import { createWebSocketTransport } from "../transports/websocket";
-import { resetActiveConnection, webBackendRuntime } from "./runtime";
+import { IDLE_WEB_FIRMWARE_STATUS, resetActiveConnection, webBackendRuntime } from "./runtime";
 import { unsupported } from "./unsupported";
 import type {
-  DfuRecoveryResult,
+  BootloaderInstallationResult,
+  FirmwareInstallOptions,
+  FirmwareInstallPreflightInfo,
+  FirmwareInstallReadinessRequest,
+  FirmwareInstallReadinessResponse,
+  FirmwareInstallResult,
+  FirmwareInstallSource,
+  FirmwareProgress,
   FirmwareSessionStatus,
-  SerialFlowResult,
-  SerialPreflightInfo,
-  SerialReadinessRequest,
-  SerialReadinessResponse,
+  InventoryResult,
+  PortInfo,
 } from "../../../firmware";
 import type { LogFormatAdapter, LogLibraryCatalog } from "../../../logs";
 import type { RecordingSettings, RecordingSettingsResult, RecordingStatus } from "../../../recording";
@@ -27,7 +40,7 @@ type Capability =
 
 type RuntimeCapabilities = {
   transports: TransportDescriptor[];
-  firmware_flash: Capability;
+  firmware_install_update: Capability;
   log_library_filesystem: Capability;
   recording_filesystem: Capability;
   mission_transfer: Capability;
@@ -72,16 +85,14 @@ const WEB_LOG_FORMAT_ADAPTERS: LogFormatAdapter[] = [
   },
 ];
 
-const IDLE_FIRMWARE_STATUS: FirmwareSessionStatus = { kind: "idle" };
-
 const WEB_SERIAL_FLASH_UNSUPPORTED_RESULT = {
   result: "failed",
-  reason: "Firmware flashing is not available in the browser-only web runtime.",
-} satisfies SerialFlowResult;
+  reason: "Firmware install/update requires WebSerial in the browser-only web runtime.",
+} satisfies FirmwareInstallResult;
 
-const WEB_DFU_RECOVERY_UNSUPPORTED_RESULT = {
+const WEB_BOOTLOADER_INSTALLATION_UNSUPPORTED_RESULT = {
   result: "platform_unsupported",
-} satisfies DfuRecoveryResult;
+} satisfies BootloaderInstallationResult;
 
 const maybe = (reason: string): Capability => ({ kind: "maybe", reason });
 const unsupportedCapability = (reason: string): Capability => ({ kind: "unsupported", reason });
@@ -95,9 +106,12 @@ function webTransportDescriptors(): Promise<TransportDescriptor[]> {
 }
 
 async function webRuntimeCapabilities(): Promise<RuntimeCapabilities> {
+  const webSerialFirmwareAvailable = isWebSerialFirmwareAvailable();
   return {
     transports: await webTransportDescriptors(),
-    firmware_flash: unsupportedCapability("Firmware flashing is not available in pure web mode."),
+    firmware_install_update: webSerialFirmwareAvailable
+      ? { kind: "supported" }
+      : unsupportedCapability("Firmware install/update requires WebSerial in pure web mode."),
     log_library_filesystem: unsupportedCapability("Native log-library filesystem access is not available in pure web mode."),
     recording_filesystem: unsupportedCapability("Native recording filesystem access is not available in pure web mode."),
     mission_transfer: maybe("Mission transfer depends on the connected MAVLink browser transport."),
@@ -105,13 +119,104 @@ async function webRuntimeCapabilities(): Promise<RuntimeCapabilities> {
   };
 }
 
-function computeSerialReadinessToken(request: SerialReadinessRequest): string {
+function isFirmwareSessionReady(status: FirmwareSessionStatus): boolean {
+  return status.kind === "idle" || status.kind === "completed";
+}
+
+function setFirmwareInstallPhase(phase: "probing" | "erasing" | "programming" | "verifying" | "rebooting"): void {
+  webBackendRuntime.firmwareSessionStatus = { kind: "firmware_install_update", phase };
+}
+
+function completeFirmwareInstall(result: FirmwareInstallResult): void {
+  webBackendRuntime.firmwareSessionStatus = {
+    kind: "completed",
+    outcome: {
+      path: "firmware_install_update",
+      outcome: result,
+    },
+  };
+}
+
+function webFirmwarePhaseFromProgress(phase: string): "erasing" | "programming" | "verifying" | "rebooting" | null {
+  if (phase === "erasing" || phase === "extf_erasing") {
+    return "erasing";
+  }
+  if (phase === "programming" || phase === "extf_programming") {
+    return "programming";
+  }
+  if (phase === "verifying" || phase === "extf_verifying") {
+    return "verifying";
+  }
+  if (phase === "rebooting") {
+    return "rebooting";
+  }
+  return null;
+}
+
+function emitWebFirmwareProgress(phase: string, written: number, total: number): void {
+  const mappedPhase = webFirmwarePhaseFromProgress(phase);
+  if (mappedPhase) {
+    setFirmwareInstallPhase(mappedPhase);
+  }
+  const progress = {
+    phase_label: phase,
+    bytes_written: written,
+    bytes_total: total,
+    pct: total > 0 ? (written / total) * 100 : 0,
+  } satisfies FirmwareProgress;
+  emitWebEvent("firmware://progress", progress);
+}
+
+async function webFirmwarePorts(): Promise<PortInfo[]> {
+  return isWebSerialFirmwareAvailable() ? await listGrantedWebSerialFirmwarePorts() : [];
+}
+
+async function resolveWebFirmwareSource(source: FirmwareInstallSource, signal: AbortSignal): Promise<FirmwareInstallSource> {
+  if (source.kind === "local_apj_bytes") {
+    return source;
+  }
+  const url = source.url.trim();
+  if (url.length === 0) {
+    return source;
+  }
+
+  const response = await fetch(url, { signal });
+  if (!response.ok) {
+    throw new Error(`Firmware catalog download failed: HTTP ${response.status}`);
+  }
+  return {
+    kind: "local_apj_bytes",
+    data: [...new Uint8Array(await response.arrayBuffer())],
+  };
+}
+
+function webFirmwareInstallReadinessBlockedReason(
+  request: FirmwareInstallReadinessRequest,
+  availablePorts: PortInfo[],
+  sessionStatus: FirmwareSessionStatus,
+): "session_busy" | "port_unselected" | "port_unavailable" | "source_missing" | null {
+  if (!isFirmwareSessionReady(sessionStatus)) {
+    return "session_busy";
+  }
+  if (request.port.trim().length === 0) {
+    return "port_unselected";
+  }
+  if (!availablePorts.some((port) => port.port_name === request.port)) {
+    return "port_unavailable";
+  }
+  if (request.source.kind === "catalog_url" ? request.source.url.trim().length === 0 : request.source.data.length === 0) {
+    return "source_missing";
+  }
+  return null;
+}
+
+function computeFirmwareInstallReadinessToken(request: FirmwareInstallReadinessRequest): string {
   const encoder = new TextEncoder();
   const sourceIdentity = request.source.kind === "catalog_url"
     ? `${request.source.url.length}-${fnv1a64Digest([...encoder.encode(request.source.url)])}`
     : `${request.source.data.length}-${fnv1a64Digest(request.source.data)}`;
 
-  return `serial-readiness:port=${request.port}:source_kind=${request.source.kind}:source_identity=${sourceIdentity}:full_chip_erase=${request.options?.full_chip_erase ? 1 : 0}`;
+  return `firmware-install-readiness:port=${request.port}:source_kind=${request.source.kind}:source_identity=${sourceIdentity}:full_chip_erase=${request.options?.full_chip_erase ? 1 : 0}`;
 }
 
 function fnv1a64Digest(bytes: number[]): string {
@@ -287,45 +392,133 @@ export async function invokeWebCommand<T>(cmd: string, args?: Record<string, unk
     case "log_library_cancel":
       return false as T;
     case "firmware_session_status":
-      return IDLE_FIRMWARE_STATUS as T;
+      return webBackendRuntime.firmwareSessionStatus as T;
     case "firmware_session_cancel":
-    case "firmware_session_clear_completed":
+      webBackendRuntime.firmwareInstallAbort?.abort();
+      if (webBackendRuntime.firmwareSessionStatus.kind === "firmware_install_update") {
+        webBackendRuntime.firmwareSessionStatus = { kind: "cancelling", path: "firmware_install_update" };
+      }
       return undefined as T;
-    case "firmware_list_ports":
-      return { kind: "unsupported" } as T;
+    case "firmware_session_clear_completed":
+      if (webBackendRuntime.firmwareSessionStatus.kind === "completed") {
+        webBackendRuntime.firmwareSessionStatus = IDLE_WEB_FIRMWARE_STATUS;
+      }
+      return undefined as T;
+    case "firmware_request_serial_port":
+      return isWebSerialFirmwareAvailable() ? await requestWebSerialFirmwarePort() as T : null as T;
+    case "firmware_list_ports": {
+      if (!isWebSerialFirmwareAvailable()) {
+        return { kind: "unsupported" } satisfies InventoryResult as T;
+      }
+      return { kind: "available", ports: await webFirmwarePorts() } satisfies InventoryResult as T;
+    }
     case "firmware_list_dfu_devices":
       return { kind: "unsupported" } as T;
-    case "firmware_serial_preflight":
+    case "firmware_install_update_preflight": {
+      const availablePorts = await webFirmwarePorts();
       return {
         vehicle_connected: false,
         param_count: 0,
         has_params_to_backup: false,
-        available_ports: [],
+        available_ports: availablePorts,
         detected_board_id: null,
-        session_ready: false,
-        session_status: IDLE_FIRMWARE_STATUS,
-      } satisfies SerialPreflightInfo as T;
+        session_ready: isWebSerialFirmwareAvailable() && isFirmwareSessionReady(webBackendRuntime.firmwareSessionStatus),
+        session_status: webBackendRuntime.firmwareSessionStatus,
+      } satisfies FirmwareInstallPreflightInfo as T;
+    }
     case "firmware_catalog_targets":
-    case "firmware_recovery_catalog_targets":
+    case "firmware_bootloader_catalog_targets":
     case "firmware_catalog_entries":
       return [] as T;
-    case "firmware_serial_readiness": {
-      const readinessRequest = args?.request as SerialReadinessRequest | undefined;
+    case "firmware_install_update_readiness": {
+      const readinessRequest = args?.request as FirmwareInstallReadinessRequest | undefined;
+      const availablePorts = await webFirmwarePorts();
+      const blockedReason = readinessRequest
+        ? webFirmwareInstallReadinessBlockedReason(readinessRequest, availablePorts, webBackendRuntime.firmwareSessionStatus)
+        : "port_unselected";
       return {
         request_token: readinessRequest
-          ? computeSerialReadinessToken(readinessRequest)
+          ? computeFirmwareInstallReadinessToken(readinessRequest)
           : "web-runtime-firmware-out-of-scope",
-        session_status: IDLE_FIRMWARE_STATUS,
-        readiness: { kind: "blocked", reason: "port_unselected" },
-        target_hint: null,
-        validation_pending: false,
+        session_status: webBackendRuntime.firmwareSessionStatus,
+        readiness: blockedReason === null ? { kind: "advisory" } : { kind: "blocked", reason: blockedReason },
+        target_hint: { detected_board_id: null },
+        validation_pending: blockedReason === null,
         bootloader_transition: { kind: "manual_bootloader_entry_required" },
-      } satisfies SerialReadinessResponse as T;
+      } satisfies FirmwareInstallReadinessResponse as T;
     }
-    case "firmware_flash_serial":
-      return WEB_SERIAL_FLASH_UNSUPPORTED_RESULT as T;
-    case "firmware_flash_dfu_recovery":
-      return WEB_DFU_RECOVERY_UNSUPPORTED_RESULT as T;
+    case "firmware_install_update": {
+      if (!isWebSerialFirmwareAvailable()) {
+        return WEB_SERIAL_FLASH_UNSUPPORTED_RESULT as T;
+      }
+      if (!isFirmwareSessionReady(webBackendRuntime.firmwareSessionStatus)) {
+        throw new Error("firmware session already active: firmware_install_update");
+      }
+
+      const request = args?.request as {
+        port?: string;
+        baud?: number;
+        source?: FirmwareInstallSource;
+        options?: FirmwareInstallOptions | null;
+      } | undefined;
+      const port = String(request?.port ?? "");
+      const source = request?.source;
+      const options = request?.options ?? null;
+      const availablePorts = await webFirmwarePorts();
+      if (!source) {
+        throw new Error("firmware source missing");
+      }
+      const blockedReason = webFirmwareInstallReadinessBlockedReason(
+        { port, source, options: options ?? undefined },
+        availablePorts,
+        webBackendRuntime.firmwareSessionStatus,
+      );
+      if (blockedReason === "port_unselected") {
+        throw new Error("serial port not selected");
+      }
+      if (blockedReason === "port_unavailable") {
+        throw new Error("serial port not found");
+      }
+      if (blockedReason === "source_missing") {
+        throw new Error("firmware source missing");
+      }
+
+      await resetActiveConnection();
+      const abort = new AbortController();
+      webBackendRuntime.firmwareInstallAbort = abort;
+      setFirmwareInstallPhase("probing");
+      let adapter: { close(): Promise<void> } | null = null;
+
+      try {
+        const resolvedSource = await resolveWebFirmwareSource(source, abort.signal);
+        adapter = await openWebSerialFirmwarePort(port, Number(request?.baud ?? 115200), abort.signal);
+        const result = await wasmWebSerialFirmwareInstallUpdate({
+          portName: port,
+          serialAdapter: adapter,
+          source: resolvedSource,
+          installOptions: options,
+          onProgress: emitWebFirmwareProgress,
+          isCancelled: () => abort.signal.aborted,
+        });
+        completeFirmwareInstall(result);
+        return result as T;
+      } catch (error) {
+        if (abort.signal.aborted) {
+          const result = { result: "cancelled" } satisfies FirmwareInstallResult;
+          completeFirmwareInstall(result);
+          return result as T;
+        }
+        const reason = error instanceof Error ? error.message : String(error);
+        const result = { result: "failed", reason } satisfies FirmwareInstallResult;
+        completeFirmwareInstall(result);
+        return result as T;
+      } finally {
+        webBackendRuntime.firmwareInstallAbort = null;
+        await adapter?.close().catch(() => undefined);
+      }
+    }
+    case "firmware_bootloader_installation":
+      return WEB_BOOTLOADER_INSTALLATION_UNSUPPORTED_RESULT as T;
     default:
       unsupported(cmd, "This feature is not supported in pure web mode.");
   }

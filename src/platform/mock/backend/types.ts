@@ -3,18 +3,18 @@ import type { ParamProgress, ParamStore } from "../../../params";
 import type { FencePlan } from "../../../fence";
 import type { RallyPlan } from "../../../rally";
 import type {
+  BootloaderInstallationResult,
   CatalogEntry,
   CatalogTargetSummary,
   DfuDeviceInfo,
-  DfuRecoveryResult,
   DfuScanResult,
+  FirmwareInstallPreflightInfo,
+  FirmwareInstallReadinessBlockedReason,
+  FirmwareInstallReadinessRequest,
+  FirmwareInstallReadinessResponse,
+  FirmwareInstallResult,
   InventoryResult,
   PortInfo,
-  SerialFlowResult,
-  SerialPreflightInfo,
-  SerialReadinessBlockedReason,
-  SerialReadinessRequest,
-  SerialReadinessResponse,
 } from "../../../firmware";
 import type { LogLibraryCatalog, LogProgress } from "../../../logs";
 import type { PlaybackStateSnapshot } from "../../../playback";
@@ -230,14 +230,14 @@ export type FirmwareModuleTypes = {
   CatalogEntry: CatalogEntry;
   CatalogTargetSummary: CatalogTargetSummary;
   DfuDeviceInfo: DfuDeviceInfo;
-  DfuRecoveryResult: DfuRecoveryResult;
+  BootloaderInstallationResult: BootloaderInstallationResult;
   DfuScanResult: DfuScanResult;
   InventoryResult: InventoryResult;
   PortInfo: PortInfo;
-  SerialFlowResult: SerialFlowResult;
-  SerialPreflightInfo: SerialPreflightInfo;
-  SerialReadinessBlockedReason: SerialReadinessBlockedReason;
-  SerialReadinessRequest: SerialReadinessRequest;
-  SerialReadinessResponse: SerialReadinessResponse;
+  FirmwareInstallResult: FirmwareInstallResult;
+  FirmwareInstallPreflightInfo: FirmwareInstallPreflightInfo;
+  FirmwareInstallReadinessBlockedReason: FirmwareInstallReadinessBlockedReason;
+  FirmwareInstallReadinessRequest: FirmwareInstallReadinessRequest;
+  FirmwareInstallReadinessResponse: FirmwareInstallReadinessResponse;
 };
 ;

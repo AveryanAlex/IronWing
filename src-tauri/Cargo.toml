@@ -17,6 +17,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 ironwing-core = { path = "../crates/ironwing-core" }
+ironwing-firmware = { path = "../crates/ironwing-firmware", features = ["dfu-core-error"] }
 mavkit = { git = "https://github.com/AveryanAlex/mavkit.git", rev = "9ef60f03d8392cad6a3e07f0e79302228afd475f", default-features = false, features = ["udp", "tcp", "ardupilot", "stream", "tlog"] }
 mavlink = { git = "https://github.com/AveryanAlex/rust-mavlink.git", rev = "a35d19c2708806f623406b5bfcd13a633416795a", package = "mavlink", default-features = false, features = ["std", "tokio", "serde", "format-generated-code", "mav2-message-extensions", "dialect-all"] }
 serde = { version = "1", features = ["derive"] }

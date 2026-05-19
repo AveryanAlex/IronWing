@@ -1,4 +1,5 @@
 import { emitWebEvent } from "./event";
+import type { FirmwareInstallOptions, FirmwareInstallResult, FirmwareInstallSource } from "../../firmware";
 import type { MessageRateInfo } from "../../telemetry";
 import type { TransportDescriptor } from "../../transport";
 import type { IronwingWasmRuntime } from "./generated/ironwing_wasm";
@@ -45,4 +46,23 @@ export async function wasmWebTransportDescriptors(options: {
     options.webSerialAvailable,
     options.webBluetoothAvailable,
   ) as TransportDescriptor[];
+}
+
+export async function wasmWebSerialFirmwareInstallUpdate(options: {
+  portName: string;
+  serialAdapter: unknown;
+  source: FirmwareInstallSource;
+  installOptions?: FirmwareInstallOptions | null;
+  onProgress: (phase: string, written: number, total: number) => void;
+  isCancelled: () => boolean;
+}): Promise<FirmwareInstallResult> {
+  const module = await ensureWasmModule();
+  return module.webSerialFirmwareInstallUpdate(
+    options.portName,
+    options.serialAdapter,
+    options.source,
+    options.installOptions ?? null,
+    options.onProgress,
+    options.isCancelled,
+  ) as Promise<FirmwareInstallResult>;
 }

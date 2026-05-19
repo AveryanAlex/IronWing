@@ -2127,6 +2127,7 @@ dependencies = [
  "flate2",
  "humantime",
  "ironwing-core",
+ "ironwing-firmware",
  "mavkit",
  "mavlink",
  "nusb",
@@ -2156,10 +2157,23 @@ dependencies = [
 name = "ironwing-core"
 version = "0.1.0"
 dependencies = [
+ "ironwing-firmware",
  "mavkit",
  "serde",
  "serde_json",
  "web-time",
+]
+
+[[package]]
+name = "ironwing-firmware"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "dfu-core",
+ "flate2",
+ "futures",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2170,6 +2184,7 @@ dependencies = [
  "futures",
  "gloo-timers",
  "ironwing-core",
+ "ironwing-firmware",
  "js-sys",
  "mavkit",
  "serde",

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Firmware flashing is its own subsystem with two independent product paths: serial bootloader flashing and DFU recovery. It has a typed session model, typed outcomes, inline progress events, and a large in-module test harness.
+Firmware flashing is its own subsystem with two independent product paths: firmware install/update and bootloader installation. It has a typed session model, typed outcomes, inline progress events, and a large in-module test harness.
 
 ## Where To Look
 
@@ -19,7 +19,7 @@ Firmware flashing is its own subsystem with two independent product paths: seria
 
 ## Core Rules
 
-- Serial primary and DFU recovery are separate flows. Do not fold one into the other.
+- Firmware install/update and bootloader installation are separate flows. Do not fold one into the other.
 - `FirmwareSessionHandle` prevents concurrent firmware operations. `firmware_abort` cancels the running async task. Both matter.
 - Internal code uses typed firmware enums/errors; stringify only at the outer IPC boundary.
 - `firmware://progress` is emitted inline from commands, not via the generic watch-bridge system.

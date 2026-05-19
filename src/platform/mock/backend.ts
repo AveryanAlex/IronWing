@@ -44,19 +44,19 @@ import {
 } from "./backend/logs";
 import type { RecordingSettings } from "../../recording";
 import {
+  defaultBootloaderCatalogTargets,
   defaultFirmwareCatalogTargets,
-  defaultRecoveryCatalogTargets,
+  mockBootloaderInstallationResult,
   mockDfuScanResult,
   mockFirmwareCatalogEntries,
-  mockFirmwareFlashDfuRecoveryResult,
-  mockFirmwareFlashSerialResult,
+  mockFirmwareInstallPreflightInfo,
+  mockFirmwareInstallReadinessResponse,
+  mockFirmwareInstallUpdateResult,
   mockInventoryResult,
-  mockSerialPreflightInfo,
-  mockSerialReadinessResponse,
+  validateBootloaderInstallationArgs,
   validateFirmwareCatalogEntriesArgs,
-  validateFirmwareFlashDfuRecoveryArgs,
-  validateFirmwareFlashSerialArgs,
-  validateSerialReadinessRequest,
+  validateFirmwareInstallReadinessRequest,
+  validateFirmwareInstallUpdateArgs,
 } from "./backend/firmware";
 import {
   applyMockMissionState,
@@ -553,7 +553,7 @@ function validateStructuredPlanArg<T>(args: CommandArgs, label: string): T {
 function mockRuntimeCapabilities() {
   return {
     transports: availableTransportDescriptors(),
-    firmware_flash: { kind: "supported" },
+    firmware_install_update: { kind: "supported" },
     log_library_filesystem: { kind: "supported" },
     recording_filesystem: { kind: "supported" },
     mission_transfer: { kind: "supported" },
@@ -715,33 +715,37 @@ async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unk
       return { kind: "idle" };
     case "firmware_session_clear_completed":
       return undefined;
-    case "firmware_serial_preflight":
-      return mockSerialPreflightInfo();
+    case "firmware_install_update_preflight":
+      return mockFirmwareInstallPreflightInfo();
     case "firmware_list_ports":
       return mockInventoryResult();
+    case "firmware_request_serial_port": {
+      const inventory = mockInventoryResult();
+      return inventory.kind === "available" ? inventory.ports[0] ?? null : null;
+    }
     case "firmware_list_dfu_devices":
       return mockDfuScanResult();
     case "firmware_catalog_targets":
       return defaultFirmwareCatalogTargets();
-    case "firmware_recovery_catalog_targets":
-      return defaultRecoveryCatalogTargets();
+    case "firmware_bootloader_catalog_targets":
+      return defaultBootloaderCatalogTargets();
     case "firmware_catalog_entries": {
       const { boardId, platform } = validateFirmwareCatalogEntriesArgs(args);
       return mockFirmwareCatalogEntries(boardId, platform);
     }
-    case "firmware_serial_readiness": {
-      const request = validateSerialReadinessRequest(args);
-      return mockSerialReadinessResponse(request);
+    case "firmware_install_update_readiness": {
+      const request = validateFirmwareInstallReadinessRequest(args);
+      return mockFirmwareInstallReadinessResponse(request);
     }
-    case "firmware_flash_serial": {
-      ensureMockLiveWriteAllowed("firmware_flash_serial");
-      const request = validateFirmwareFlashSerialArgs(args);
-      return mockFirmwareFlashSerialResult(request);
+    case "firmware_install_update": {
+      ensureMockLiveWriteAllowed("firmware_install_update");
+      const request = validateFirmwareInstallUpdateArgs(args);
+      return mockFirmwareInstallUpdateResult(request);
     }
-    case "firmware_flash_dfu_recovery": {
-      ensureMockLiveWriteAllowed("firmware_flash_dfu_recovery");
-      const request = validateFirmwareFlashDfuRecoveryArgs(args);
-      return mockFirmwareFlashDfuRecoveryResult(request);
+    case "firmware_bootloader_installation": {
+      ensureMockLiveWriteAllowed("firmware_bootloader_installation");
+      const request = validateBootloaderInstallationArgs(args);
+      return mockBootloaderInstallationResult(request);
     }
     case "connect_link":
       connectLink(args);

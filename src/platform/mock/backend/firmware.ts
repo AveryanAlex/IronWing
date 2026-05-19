@@ -1,16 +1,16 @@
 import type {
+  BootloaderInstallationResult,
   CatalogEntry,
   CatalogTargetSummary,
   DfuDeviceInfo,
-  DfuRecoveryResult,
   DfuScanResult,
+  FirmwareInstallPreflightInfo,
+  FirmwareInstallReadinessBlockedReason,
+  FirmwareInstallReadinessRequest,
+  FirmwareInstallReadinessResponse,
+  FirmwareInstallResult,
   InventoryResult,
   PortInfo,
-  SerialFlowResult,
-  SerialPreflightInfo,
-  SerialReadinessBlockedReason,
-  SerialReadinessRequest,
-  SerialReadinessResponse,
 } from "../../../firmware";
 import { mockState } from "./runtime";
 import type { CommandArgs } from "./types";
@@ -120,7 +120,7 @@ function firmwareCatalogTargetsFromEntries(entries: CatalogEntry[]): CatalogTarg
 }
 
 const DEFAULT_FIRMWARE_CATALOG_TARGETS = firmwareCatalogTargetsFromEntries(DEFAULT_FIRMWARE_CATALOG_ENTRIES);
-const DEFAULT_RECOVERY_CATALOG_TARGETS = DEFAULT_FIRMWARE_CATALOG_TARGETS.filter((target) => target.platform === "CubeOrange");
+const DEFAULT_BOOTLOADER_CATALOG_TARGETS = DEFAULT_FIRMWARE_CATALOG_TARGETS.filter((target) => target.platform === "CubeOrange");
 
 function cloneValue<T>(value: T): T {
   return structuredClone(value);
@@ -142,8 +142,8 @@ export function defaultFirmwareCatalogTargets(): CatalogTargetSummary[] {
   return cloneValue(DEFAULT_FIRMWARE_CATALOG_TARGETS);
 }
 
-export function defaultRecoveryCatalogTargets(): CatalogTargetSummary[] {
-  return cloneValue(DEFAULT_RECOVERY_CATALOG_TARGETS);
+export function defaultBootloaderCatalogTargets(): CatalogTargetSummary[] {
+  return cloneValue(DEFAULT_BOOTLOADER_CATALOG_TARGETS);
 }
 
 function requireFiniteInteger(value: unknown, label: string): number {
@@ -178,7 +178,7 @@ function requireByteArray(value: unknown, label: string): number[] {
   return value as number[];
 }
 
-export function mockSerialPreflightInfo(): SerialPreflightInfo {
+export function mockFirmwareInstallPreflightInfo(): FirmwareInstallPreflightInfo {
   const availablePorts = defaultFirmwarePorts();
   const paramCount = mockState.liveParamStore
     ? Object.keys(mockState.liveParamStore.params).length
@@ -217,18 +217,18 @@ export function validateFirmwareCatalogEntriesArgs(args: CommandArgs): { boardId
   return { boardId, platform: rawPlatform ?? undefined };
 }
 
-export function validateSerialReadinessRequest(args: CommandArgs): SerialReadinessRequest {
-  const request = requireRecord(args?.request, "firmware_serial_readiness.request");
+export function validateFirmwareInstallReadinessRequest(args: CommandArgs): FirmwareInstallReadinessRequest {
+  const request = requireRecord(args?.request, "firmware_install_update_readiness.request");
   if (typeof request.port !== "string") {
-    throw new Error("missing or invalid firmware_serial_readiness.request.port");
+    throw new Error("missing or invalid firmware_install_update_readiness.request.port");
   }
-  const source = requireRecord(request.source, "firmware_serial_readiness.request.source");
-  const kind = requireNonEmptyString(source.kind, "firmware_serial_readiness.request.source.kind");
+  const source = requireRecord(request.source, "firmware_install_update_readiness.request.source");
+  const kind = requireNonEmptyString(source.kind, "firmware_install_update_readiness.request.source.kind");
 
-  let normalizedSource: SerialReadinessRequest["source"];
+  let normalizedSource: FirmwareInstallReadinessRequest["source"];
   if (kind === "catalog_url") {
     if (typeof source.url !== "string") {
-      throw new Error("missing or invalid firmware_serial_readiness.request.source.url");
+      throw new Error("missing or invalid firmware_install_update_readiness.request.source.url");
     }
     normalizedSource = {
       kind,
@@ -237,18 +237,18 @@ export function validateSerialReadinessRequest(args: CommandArgs): SerialReadine
   } else if (kind === "local_apj_bytes") {
     normalizedSource = {
       kind,
-      data: requireByteArray(source.data, "firmware_serial_readiness.request.source.data"),
+      data: requireByteArray(source.data, "firmware_install_update_readiness.request.source.data"),
     };
   } else {
-    throw new Error("missing or invalid firmware_serial_readiness.request.source.kind");
+    throw new Error("missing or invalid firmware_install_update_readiness.request.source.kind");
   }
 
   const rawOptions = request.options;
-  let options: SerialReadinessRequest["options"] | undefined;
+  let options: FirmwareInstallReadinessRequest["options"] | undefined;
   if (rawOptions !== undefined && rawOptions !== null) {
-    const optionsRecord = requireRecord(rawOptions, "firmware_serial_readiness.request.options");
+    const optionsRecord = requireRecord(rawOptions, "firmware_install_update_readiness.request.options");
     if (typeof optionsRecord.full_chip_erase !== "boolean") {
-      throw new Error("missing or invalid firmware_serial_readiness.request.options.full_chip_erase");
+      throw new Error("missing or invalid firmware_install_update_readiness.request.options.full_chip_erase");
     }
     options = { full_chip_erase: optionsRecord.full_chip_erase };
   }
@@ -256,41 +256,41 @@ export function validateSerialReadinessRequest(args: CommandArgs): SerialReadine
   return { port: request.port, source: normalizedSource, options };
 }
 
-export function validateFirmwareFlashSerialArgs(args: CommandArgs): {
+export function validateFirmwareInstallUpdateArgs(args: CommandArgs): {
   port: string;
   baud: number;
   source: { kind: "catalog_url"; url: string } | { kind: "local_apj_bytes"; data: number[] };
   options: { full_chip_erase: boolean } | null;
 } {
-  const request = requireRecord(args?.request, "firmware_flash_serial.request");
-  const port = requireNonEmptyString(request.port, "firmware_flash_serial.request.port");
-  const baud = requireFiniteInteger(request.baud, "firmware_flash_serial.request.baud");
+  const request = requireRecord(args?.request, "firmware_install_update.request");
+  const port = requireNonEmptyString(request.port, "firmware_install_update.request.port");
+  const baud = requireFiniteInteger(request.baud, "firmware_install_update.request.baud");
   if (baud <= 0) {
-    throw new Error("firmware_flash_serial.request.baud must be greater than 0");
+    throw new Error("firmware_install_update.request.baud must be greater than 0");
   }
 
-  const source = requireRecord(request.source, "firmware_flash_serial.request.source");
-  const kind = requireNonEmptyString(source.kind, "firmware_flash_serial.request.source.kind");
+  const source = requireRecord(request.source, "firmware_install_update.request.source");
+  const kind = requireNonEmptyString(source.kind, "firmware_install_update.request.source.kind");
   let normalizedSource: { kind: "catalog_url"; url: string } | { kind: "local_apj_bytes"; data: number[] };
   if (kind === "catalog_url") {
     normalizedSource = {
       kind: "catalog_url",
-      url: requireNonEmptyString(source.url, "firmware_flash_serial.request.source.url"),
+      url: requireNonEmptyString(source.url, "firmware_install_update.request.source.url"),
     };
   } else if (kind === "local_apj_bytes") {
     normalizedSource = {
       kind: "local_apj_bytes",
-      data: requireByteArray(source.data, "firmware_flash_serial.request.source.data"),
+      data: requireByteArray(source.data, "firmware_install_update.request.source.data"),
     };
   } else {
-    throw new Error("missing or invalid firmware_flash_serial.request.source.kind");
+    throw new Error("missing or invalid firmware_install_update.request.source.kind");
   }
 
   let options: { full_chip_erase: boolean } | null = null;
   if (request.options !== undefined && request.options !== null) {
-    const optionsRecord = requireRecord(request.options, "firmware_flash_serial.request.options");
+    const optionsRecord = requireRecord(request.options, "firmware_install_update.request.options");
     if (typeof optionsRecord.full_chip_erase !== "boolean") {
-      throw new Error("missing or invalid firmware_flash_serial.request.options.full_chip_erase");
+      throw new Error("missing or invalid firmware_install_update.request.options.full_chip_erase");
     }
     options = { full_chip_erase: optionsRecord.full_chip_erase };
   }
@@ -298,32 +298,32 @@ export function validateFirmwareFlashSerialArgs(args: CommandArgs): {
   return { port, baud, source: normalizedSource, options };
 }
 
-export function validateFirmwareFlashDfuRecoveryArgs(args: CommandArgs): {
+export function validateBootloaderInstallationArgs(args: CommandArgs): {
   device: DfuDeviceInfo;
   source:
     | { kind: "official_bootloader"; board_target: string }
     | { kind: "local_apj_bytes"; data: number[] }
     | { kind: "local_bin_bytes"; data: number[] };
 } {
-  const request = requireRecord(args?.request, "firmware_flash_dfu_recovery.request");
-  const deviceRecord = requireRecord(request.device, "firmware_flash_dfu_recovery.request.device");
+  const request = requireRecord(args?.request, "firmware_bootloader_installation.request");
+  const deviceRecord = requireRecord(request.device, "firmware_bootloader_installation.request.device");
   const device: DfuDeviceInfo = {
-    vid: requireFiniteInteger(deviceRecord.vid, "firmware_flash_dfu_recovery.request.device.vid"),
-    pid: requireFiniteInteger(deviceRecord.pid, "firmware_flash_dfu_recovery.request.device.pid"),
-    unique_id: requireNonEmptyString(deviceRecord.unique_id, "firmware_flash_dfu_recovery.request.device.unique_id"),
+    vid: requireFiniteInteger(deviceRecord.vid, "firmware_bootloader_installation.request.device.vid"),
+    pid: requireFiniteInteger(deviceRecord.pid, "firmware_bootloader_installation.request.device.pid"),
+    unique_id: requireNonEmptyString(deviceRecord.unique_id, "firmware_bootloader_installation.request.device.unique_id"),
     serial_number: deviceRecord.serial_number === null || typeof deviceRecord.serial_number === "string"
       ? (deviceRecord.serial_number as string | null)
-      : (() => { throw new Error("missing or invalid firmware_flash_dfu_recovery.request.device.serial_number"); })(),
+      : (() => { throw new Error("missing or invalid firmware_bootloader_installation.request.device.serial_number"); })(),
     manufacturer: deviceRecord.manufacturer === null || typeof deviceRecord.manufacturer === "string"
       ? (deviceRecord.manufacturer as string | null)
-      : (() => { throw new Error("missing or invalid firmware_flash_dfu_recovery.request.device.manufacturer"); })(),
+      : (() => { throw new Error("missing or invalid firmware_bootloader_installation.request.device.manufacturer"); })(),
     product: deviceRecord.product === null || typeof deviceRecord.product === "string"
       ? (deviceRecord.product as string | null)
-      : (() => { throw new Error("missing or invalid firmware_flash_dfu_recovery.request.device.product"); })(),
+      : (() => { throw new Error("missing or invalid firmware_bootloader_installation.request.device.product"); })(),
   };
 
-  const sourceRecord = requireRecord(request.source, "firmware_flash_dfu_recovery.request.source");
-  const kind = requireNonEmptyString(sourceRecord.kind, "firmware_flash_dfu_recovery.request.source.kind");
+  const sourceRecord = requireRecord(request.source, "firmware_bootloader_installation.request.source");
+  const kind = requireNonEmptyString(sourceRecord.kind, "firmware_bootloader_installation.request.source.kind");
   let source:
     | { kind: "official_bootloader"; board_target: string }
     | { kind: "local_apj_bytes"; data: number[] }
@@ -331,20 +331,20 @@ export function validateFirmwareFlashDfuRecoveryArgs(args: CommandArgs): {
   if (kind === "official_bootloader") {
     source = {
       kind: "official_bootloader",
-      board_target: requireNonEmptyString(sourceRecord.board_target, "firmware_flash_dfu_recovery.request.source.board_target"),
+      board_target: requireNonEmptyString(sourceRecord.board_target, "firmware_bootloader_installation.request.source.board_target"),
     };
   } else if (kind === "local_apj_bytes") {
     source = {
       kind: "local_apj_bytes",
-      data: requireByteArray(sourceRecord.data, "firmware_flash_dfu_recovery.request.source.data"),
+      data: requireByteArray(sourceRecord.data, "firmware_bootloader_installation.request.source.data"),
     };
   } else if (kind === "local_bin_bytes") {
     source = {
       kind: "local_bin_bytes",
-      data: requireByteArray(sourceRecord.data, "firmware_flash_dfu_recovery.request.source.data"),
+      data: requireByteArray(sourceRecord.data, "firmware_bootloader_installation.request.source.data"),
     };
   } else {
-    throw new Error("missing or invalid firmware_flash_dfu_recovery.request.source.kind");
+    throw new Error("missing or invalid firmware_bootloader_installation.request.source.kind");
   }
 
   return { device, source };
@@ -359,19 +359,19 @@ function fnv1a64Digest(bytes: number[]): string {
   return hash.toString(16).padStart(16, "0");
 }
 
-function mockSerialReadinessRequestToken(request: SerialReadinessRequest): string {
+function mockFirmwareInstallReadinessRequestToken(request: FirmwareInstallReadinessRequest): string {
   const encoder = new TextEncoder();
   const sourceIdentity = request.source.kind === "catalog_url"
     ? `${request.source.url.length}-${fnv1a64Digest([...encoder.encode(request.source.url)])}`
     : `${request.source.data.length}-${fnv1a64Digest(request.source.data)}`;
 
-  return `serial-readiness:port=${request.port}:source_kind=${request.source.kind}:source_identity=${sourceIdentity}:full_chip_erase=${request.options?.full_chip_erase ? 1 : 0}`;
+  return `firmware-install-readiness:port=${request.port}:source_kind=${request.source.kind}:source_identity=${sourceIdentity}:full_chip_erase=${request.options?.full_chip_erase ? 1 : 0}`;
 }
 
-function mockSerialReadinessBlockedReason(
-  request: SerialReadinessRequest,
+function mockFirmwareInstallReadinessBlockedReason(
+  request: FirmwareInstallReadinessRequest,
   ports: PortInfo[],
-): SerialReadinessBlockedReason | null {
+): FirmwareInstallReadinessBlockedReason | null {
   if (request.port.trim().length === 0) {
     return "port_unselected";
   }
@@ -387,12 +387,12 @@ function mockSerialReadinessBlockedReason(
   return null;
 }
 
-export function mockSerialReadinessResponse(request: SerialReadinessRequest): SerialReadinessResponse {
+export function mockFirmwareInstallReadinessResponse(request: FirmwareInstallReadinessRequest): FirmwareInstallReadinessResponse {
   const ports = defaultFirmwarePorts();
-  const blockedReason = mockSerialReadinessBlockedReason(request, ports);
+  const blockedReason = mockFirmwareInstallReadinessBlockedReason(request, ports);
 
   return {
-    request_token: mockSerialReadinessRequestToken(request),
+    request_token: mockFirmwareInstallReadinessRequestToken(request),
     session_status: { kind: "idle" },
     readiness: blockedReason === null ? { kind: "advisory" } : { kind: "blocked", reason: blockedReason },
     target_hint: null,
@@ -405,7 +405,7 @@ export function mockFirmwareCatalogEntries(boardId: number, platform?: string): 
   return defaultFirmwareCatalogEntries().filter((entry) => entry.board_id === boardId && (platform === undefined || entry.platform === platform));
 }
 
-export function mockFirmwareFlashSerialResult(args: ReturnType<typeof validateFirmwareFlashSerialArgs>): SerialFlowResult {
+export function mockFirmwareInstallUpdateResult(args: ReturnType<typeof validateFirmwareInstallUpdateArgs>): FirmwareInstallResult {
   const sourceUrl = (args.source as { url?: string }).url ?? null;
   const matchedEntry = sourceUrl === null
     ? null
@@ -419,6 +419,6 @@ export function mockFirmwareFlashSerialResult(args: ReturnType<typeof validateFi
   };
 }
 
-export function mockFirmwareFlashDfuRecoveryResult(_args: ReturnType<typeof validateFirmwareFlashDfuRecoveryArgs>): DfuRecoveryResult {
+export function mockBootloaderInstallationResult(_args: ReturnType<typeof validateBootloaderInstallationArgs>): BootloaderInstallationResult {
   return { result: "verified" };
 }

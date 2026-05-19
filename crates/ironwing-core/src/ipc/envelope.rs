@@ -69,8 +69,8 @@ pub enum OperationId {
     RecordingStatus,
     RecordingSettingsRead,
     RecordingSettingsWrite,
-    FirmwareFlashSerial,
-    FirmwareFlashDfuRecovery,
+    FirmwareInstallUpdate,
+    FirmwareBootloaderInstallation,
 }
 
 impl OperationId {
@@ -130,8 +130,8 @@ impl OperationId {
             Self::RecordingStatus => "recording_status",
             Self::RecordingSettingsRead => "recording_settings_read",
             Self::RecordingSettingsWrite => "recording_settings_write",
-            Self::FirmwareFlashSerial => "firmware_flash_serial",
-            Self::FirmwareFlashDfuRecovery => "firmware_flash_dfu_recovery",
+            Self::FirmwareInstallUpdate => "firmware_install_update",
+            Self::FirmwareBootloaderInstallation => "firmware_bootloader_installation",
         }
     }
 }

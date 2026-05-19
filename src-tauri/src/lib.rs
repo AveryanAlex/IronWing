@@ -13,10 +13,10 @@ use commands::{
 };
 use connection::{ActiveLinkTarget, connect_link, disconnect_link};
 use firmware::commands::{
-    firmware_catalog_entries, firmware_catalog_targets, firmware_flash_dfu_recovery,
-    firmware_flash_serial, firmware_recovery_catalog_targets, firmware_serial_preflight,
-    firmware_serial_readiness, firmware_session_cancel, firmware_session_clear_completed,
-    firmware_session_status,
+    firmware_bootloader_catalog_targets, firmware_bootloader_installation,
+    firmware_catalog_entries, firmware_catalog_targets, firmware_install_update,
+    firmware_install_update_preflight, firmware_install_update_readiness, firmware_session_cancel,
+    firmware_session_clear_completed, firmware_session_status,
 };
 use firmware::discovery::{firmware_list_dfu_devices, firmware_list_ports};
 use firmware::types::FirmwareSessionHandle;
@@ -204,16 +204,16 @@ pub fn run() {
         ack_session_snapshot,
         firmware_list_ports,
         firmware_list_dfu_devices,
-        firmware_flash_serial,
+        firmware_install_update,
         firmware_session_status,
         firmware_session_cancel,
         firmware_session_clear_completed,
-        firmware_serial_readiness,
-        firmware_serial_preflight,
+        firmware_install_update_readiness,
+        firmware_install_update_preflight,
         firmware_catalog_entries,
         firmware_catalog_targets,
-        firmware_recovery_catalog_targets,
-        firmware_flash_dfu_recovery
+        firmware_bootloader_catalog_targets,
+        firmware_bootloader_installation
     ]);
 
     builder

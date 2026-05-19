@@ -78,7 +78,7 @@ test.describe("firmware workspace mocked-browser proof", () => {
         await expect(firmwareLocator(page, "catalogEntrySelect")).toBeVisible();
         await waitForSerialStartEnabled(page);
 
-        await mockPlatform.setCommandBehavior("firmware_flash_serial", {
+        await mockPlatform.setCommandBehavior("firmware_install_update", {
             type: "reject",
             error: "serial bootloader handshake failed",
         });
@@ -94,7 +94,7 @@ test.describe("firmware workspace mocked-browser proof", () => {
         await expect(firmwareLocator(page, "catalogEntrySelect")).toBeVisible();
         await waitForSerialStartEnabled(page);
         await expect.poll(() => mockPlatform.getInvocations()).toContainEqual({
-            cmd: "firmware_flash_serial",
+            cmd: "firmware_install_update",
             args: cubeOrangeCatalogRequest,
         });
     });
@@ -112,7 +112,7 @@ test.describe("firmware workspace mocked-browser proof", () => {
         await selectManualTarget(page, { searchText: "cube", targetName: /Cube Orange/i });
         await waitForSerialStartEnabled(page);
 
-        await mockPlatform.setCommandBehavior("firmware_flash_serial", { type: "defer" });
+        await mockPlatform.setCommandBehavior("firmware_install_update", { type: "defer" });
         await firmwareLocator(page, "startSerial").click();
 
         await expect(firmwareLocator(page, "serialState")).toContainText(/active:/i);
@@ -180,7 +180,7 @@ test.describe("firmware workspace mocked-browser proof", () => {
         });
         await expect.poll(async () => {
             const invocations = await mockPlatform.getInvocations();
-            return invocations.find((entry) => entry.cmd === "firmware_flash_serial")?.args ?? null;
+            return invocations.find((entry) => entry.cmd === "firmware_install_update")?.args ?? null;
         }).toMatchObject({
             request: {
                 port: "/dev/ttyACM0",
@@ -196,7 +196,7 @@ test.describe("firmware workspace mocked-browser proof", () => {
         });
     });
 
-    test("recovery retries target failures, proves manual BIN browsing, and auto-returns after verified DFU", async ({
+    test("bootloader installation retries target failures, proves manual BIN browsing, and auto-returns after verified DFU", async ({
         page,
         mockPlatform,
     }) => {
@@ -204,9 +204,9 @@ test.describe("firmware workspace mocked-browser proof", () => {
         await page.goto("/");
         await mockPlatform.reset();
         await mockPlatform.waitForRuntimeSurface();
-        await mockPlatform.setCommandBehavior("firmware_recovery_catalog_targets", {
+        await mockPlatform.setCommandBehavior("firmware_bootloader_catalog_targets", {
             type: "reject",
-            error: "Could not load official bootloader targets from the recovery catalog.",
+            error: "Could not load official bootloader targets from the bootloader catalog.",
         });
 
         await openFirmwareWorkspace(page);
@@ -214,11 +214,11 @@ test.describe("firmware workspace mocked-browser proof", () => {
 
         await expect(firmwareLocator(page, "recoveryPanel")).toBeVisible();
         await expect(firmwareLocator(page, "recoveryTargetError")).toContainText(
-            "Could not load official bootloader targets from the recovery catalog.",
+            "Could not load official bootloader targets from the bootloader catalog.",
         );
         await expect(firmwareLocator(page, "startRecovery")).toBeDisabled();
 
-        await mockPlatform.clearCommandBehavior("firmware_recovery_catalog_targets");
+        await mockPlatform.clearCommandBehavior("firmware_bootloader_catalog_targets");
         await firmwareLocator(page, "recoveryTargetRetry").click();
         await expect(firmwareLocator(page, "recoveryTargetSelect")).toBeVisible();
 
@@ -240,7 +240,7 @@ test.describe("firmware workspace mocked-browser proof", () => {
         await firmwareLocator(page, "recoveryOfficialAction").click();
         await expect(firmwareLocator(page, "recoverySourceState")).toContainText("official_bootloader");
 
-        await mockPlatform.setCommandBehavior("firmware_flash_dfu_recovery", { type: "defer" });
+        await mockPlatform.setCommandBehavior("firmware_bootloader_installation", { type: "defer" });
         await firmwareLocator(page, "recoverySafetyConfirm").check();
         await waitForRecoveryStartEnabled(page);
         await firmwareLocator(page, "startRecovery").click();
@@ -255,17 +255,17 @@ test.describe("firmware workspace mocked-browser proof", () => {
             }),
         ]);
 
-        await expect(firmwareLocator(page, "mode")).toContainText("install-update");
+        await expect(firmwareLocator(page, "mode")).toContainText("firmware-install-update");
         await expect(firmwareLocator(page, "serialPanel")).toBeVisible();
-        await expect(firmwareLocator(page, "returnGuidance")).toContainText("Return to Install / Update now");
+        await expect(firmwareLocator(page, "returnGuidance")).toContainText("Return to firmware install/update now");
         await expectOutcome(page, {
-            label: /Recovery verified/i,
-            summary: /Return to Install \/ Update/i,
+            label: /Bootloader installation verified/i,
+            summary: /Return to firmware install\/update/i,
         });
         await expect(firmwareLocator(page, "outcomePanel")).toContainText("STM32 BOOTLOADER");
         await expect(firmwareLocator(page, "outcomePanel")).toContainText("Next step");
         await expect.poll(() => mockPlatform.getInvocations()).toContainEqual({
-            cmd: "firmware_flash_dfu_recovery",
+            cmd: "firmware_bootloader_installation",
             args: defaultRecoveryRequest,
         });
     });
@@ -297,7 +297,7 @@ test.describe("firmware workspace mocked-browser proof", () => {
         await expect(firmwareLocator(page, "layoutMode")).toContainText("browse-phone");
         await expect(firmwareLocator(page, "blockedReason")).toContainText("Browse-only on phone widths");
         await expect(firmwareLocator(page, "recoveryGuidance")).toBeVisible();
-        await expect(firmwareLocator(page, "recoveryBlockedReason")).toContainText("actual flash actions stay desktop-only");
+        await expect(firmwareLocator(page, "recoveryBlockedReason")).toContainText("firmware and bootloader write actions stay desktop-only");
         await expect(firmwareLocator(page, "startRecovery")).toBeDisabled();
     });
 
@@ -311,7 +311,7 @@ test.describe("firmware workspace mocked-browser proof", () => {
         await selectManualTarget(page, { searchText: "cube", targetName: /Cube Orange/i });
         await waitForSerialStartEnabled(page);
 
-        await mockPlatform.setCommandBehavior("firmware_flash_serial", { type: "defer" });
+        await mockPlatform.setCommandBehavior("firmware_install_update", { type: "defer" });
         await firmwareLocator(page, "startSerial").click();
         await expect(firmwareLocator(page, "cancelSerial")).toBeVisible();
 
@@ -331,7 +331,7 @@ test.describe("firmware workspace mocked-browser proof", () => {
         await expect(firmwareLocator(page, "selectedTargetState")).toContainText("Cube Orange");
         await expect(firmwareLocator(page, "selectedSourceState")).toContainText("catalog_url");
         await expect.poll(() => mockPlatform.getInvocations()).toContainEqual({
-            cmd: "firmware_flash_serial",
+            cmd: "firmware_install_update",
             args: cubeOrangeCatalogRequest,
         });
     });

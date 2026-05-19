@@ -26,28 +26,28 @@ mod tests {
     // ── Session contract serialization tests ──
 
     #[test]
-    fn session_contracts_serial_primary_status_serializes() {
-        let status = FirmwareSessionStatus::SerialPrimary {
+    fn session_contracts_firmware_install_update_status_serializes() {
+        let status = FirmwareSessionStatus::FirmwareInstallUpdate {
             phase: SerialFlashPhase::Idle,
         };
         assert_serializes_to(
             &status,
             json!({
-                "kind": "serial_primary",
+                "kind": "firmware_install_update",
                 "phase": "idle"
             }),
         );
     }
 
     #[test]
-    fn session_contracts_dfu_recovery_status_serializes() {
-        let status = FirmwareSessionStatus::DfuRecovery {
+    fn session_contracts_bootloader_installation_status_serializes() {
+        let status = FirmwareSessionStatus::BootloaderInstallation {
             phase: DfuRecoveryPhase::Idle,
         };
         assert_serializes_to(
             &status,
             json!({
-                "kind": "dfu_recovery",
+                "kind": "bootloader_installation",
                 "phase": "idle"
             }),
         );
@@ -56,37 +56,37 @@ mod tests {
     #[test]
     fn session_contracts_cancelling_status_serializes() {
         let status = FirmwareSessionStatus::Cancelling {
-            path: FirmwareSessionPath::SerialPrimary,
+            path: FirmwareSessionPath::FirmwareInstallUpdate,
         };
         assert_serializes_to(
             &status,
             json!({
                 "kind": "cancelling",
-                "path": "serial_primary"
+                "path": "firmware_install_update"
             }),
         );
     }
 
     #[test]
     fn session_contracts_dfu_new_phases_serialize() {
-        let erasing = FirmwareSessionStatus::DfuRecovery {
+        let erasing = FirmwareSessionStatus::BootloaderInstallation {
             phase: DfuRecoveryPhase::Erasing,
         };
-        let manifesting_or_resetting = FirmwareSessionStatus::DfuRecovery {
+        let manifesting_or_resetting = FirmwareSessionStatus::BootloaderInstallation {
             phase: DfuRecoveryPhase::ManifestingOrResetting,
         };
 
         assert_serializes_to(
             &erasing,
             json!({
-                "kind": "dfu_recovery",
+                "kind": "bootloader_installation",
                 "phase": "erasing"
             }),
         );
         assert_serializes_to(
             &manifesting_or_resetting,
             json!({
-                "kind": "dfu_recovery",
+                "kind": "bootloader_installation",
                 "phase": "manifesting_or_resetting"
             }),
         );
@@ -248,7 +248,7 @@ mod tests {
         let failed = DfuRecoveryOutcome::Failed {
             reason: "usb error".into(),
         };
-        let unsupported = DfuRecoveryOutcome::UnsupportedRecoveryPath {
+        let unsupported = DfuRecoveryOutcome::UnsupportedBootloaderInstallationPath {
             guidance: "use serial".into(),
         };
 
@@ -263,7 +263,7 @@ mod tests {
         assert_serializes_to(
             &unsupported,
             json!({
-                "result": "unsupported_recovery_path",
+                "result": "unsupported_bootloader_installation_path",
                 "guidance": "use serial"
             }),
         );
@@ -370,7 +370,7 @@ mod tests {
         assert!(!evaluate_serial_readiness(
             &request,
             &ports,
-            &FirmwareSessionStatus::SerialPrimary {
+            &FirmwareSessionStatus::FirmwareInstallUpdate {
                 phase: SerialFlashPhase::Idle,
             },
         ));
@@ -458,7 +458,7 @@ mod tests {
         let request_token = serial_readiness_request_token(&request);
         let response = SerialReadinessResponse {
             request_token: request_token.clone(),
-            session_status: FirmwareSessionStatus::SerialPrimary {
+            session_status: FirmwareSessionStatus::FirmwareInstallUpdate {
                 phase: SerialFlashPhase::Idle,
             },
             readiness: SerialReadiness::Blocked {
@@ -476,7 +476,7 @@ mod tests {
             json!({
                 "request_token": request_token,
                 "session_status": {
-                    "kind": "serial_primary",
+                    "kind": "firmware_install_update",
                     "phase": "idle"
                 },
                 "readiness": {
@@ -622,13 +622,13 @@ mod tests {
     #[test]
     fn session_contracts_firmware_error_serializes() {
         let err = FirmwareError::SessionBusy {
-            current_session: "serial_primary".into(),
+            current_session: "firmware_install_update".into(),
         };
         assert_serializes_to(
             &err,
             json!({
                 "code": "session_busy",
-                "current_session": "serial_primary"
+                "current_session": "firmware_install_update"
             }),
         );
     }
@@ -640,10 +640,10 @@ mod tests {
         // Serial session now accepts connected state — the command handles
         // reboot-then-disconnect before flashing.
         let session = FirmwareSessionHandle::new();
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
         assert!(matches!(
             session.status(),
-            FirmwareSessionStatus::SerialPrimary { .. }
+            FirmwareSessionStatus::FirmwareInstallUpdate { .. }
         ));
         session.stop();
     }
@@ -653,14 +653,14 @@ mod tests {
         let session = FirmwareSessionHandle::new();
 
         // Start a serial session successfully
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
 
         // Attempt a DFU session while serial is active
-        let result = session.try_start_dfu(false);
+        let result = session.try_start_bootloader_installation(false);
         assert!(result.is_err(), "should reject conflicting session");
         match result.unwrap_err() {
             FirmwareError::SessionBusy { current_session } => {
-                assert_eq!(current_session, "serial_primary");
+                assert_eq!(current_session, "firmware_install_update");
             }
             other => panic!("expected SessionBusy, got: {other:?}"),
         }
@@ -670,13 +670,13 @@ mod tests {
     fn rejects_conflicting_session_state_dfu_blocks_serial() {
         let session = FirmwareSessionHandle::new();
 
-        session.try_start_dfu(false).unwrap();
+        session.try_start_bootloader_installation(false).unwrap();
 
-        let result = session.try_start_serial();
+        let result = session.try_start_firmware_install_update();
         assert!(result.is_err());
         match result.unwrap_err() {
             FirmwareError::SessionBusy { current_session } => {
-                assert_eq!(current_session, "dfu_recovery");
+                assert_eq!(current_session, "bootloader_installation");
             }
             other => panic!("expected SessionBusy, got: {other:?}"),
         }
@@ -686,14 +686,14 @@ mod tests {
     fn rejects_conflicting_session_state_stop_then_restart() {
         let session = FirmwareSessionHandle::new();
 
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
         session.stop();
 
         // After stop, should be able to start a new session
-        session.try_start_dfu(false).unwrap();
+        session.try_start_bootloader_installation(false).unwrap();
         let status = session.status();
         match status {
-            FirmwareSessionStatus::DfuRecovery { phase } => {
+            FirmwareSessionStatus::BootloaderInstallation { phase } => {
                 assert!(matches!(phase, DfuRecoveryPhase::Idle));
             }
             other => panic!("expected DfuRecovery, got: {other:?}"),
@@ -703,13 +703,13 @@ mod tests {
     #[test]
     fn session_mark_cancelling_exposes_cancelling_status() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
 
         session.mark_cancelling();
         assert!(matches!(
             session.status(),
             FirmwareSessionStatus::Cancelling {
-                path: FirmwareSessionPath::SerialPrimary
+                path: FirmwareSessionPath::FirmwareInstallUpdate
             }
         ));
 
@@ -720,13 +720,13 @@ mod tests {
     #[test]
     fn session_mark_cancelling_exposes_dfu_cancelling_status() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_dfu(false).unwrap();
+        session.try_start_bootloader_installation(false).unwrap();
 
         session.mark_cancelling();
         assert!(matches!(
             session.status(),
             FirmwareSessionStatus::Cancelling {
-                path: FirmwareSessionPath::DfuRecovery
+                path: FirmwareSessionPath::BootloaderInstallation
             }
         ));
 
@@ -735,15 +735,15 @@ mod tests {
     }
 
     #[test]
-    fn session_set_dfu_phase_exposes_runtime_phase_status() {
+    fn session_set_bootloader_installation_phase_exposes_runtime_phase_status() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_dfu(false).unwrap();
+        session.try_start_bootloader_installation(false).unwrap();
 
-        session.set_dfu_phase(DfuRecoveryPhase::Erasing);
+        session.set_bootloader_installation_phase(DfuRecoveryPhase::Erasing);
 
         assert!(matches!(
             session.status(),
-            FirmwareSessionStatus::DfuRecovery {
+            FirmwareSessionStatus::BootloaderInstallation {
                 phase: DfuRecoveryPhase::Erasing,
             }
         ));
@@ -752,16 +752,16 @@ mod tests {
     #[test]
     fn session_complete_exposes_backend_terminal_status_until_cleared() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
 
-        session.complete(FirmwareOutcome::SerialPrimary {
+        session.complete(FirmwareOutcome::FirmwareInstallUpdate {
             outcome: SerialFlashOutcome::Cancelled,
         });
 
         assert!(matches!(
             session.status(),
             FirmwareSessionStatus::Completed {
-                outcome: FirmwareOutcome::SerialPrimary {
+                outcome: FirmwareOutcome::FirmwareInstallUpdate {
                     outcome: SerialFlashOutcome::Cancelled,
                 },
             }
@@ -774,8 +774,8 @@ mod tests {
     #[test]
     fn session_can_restart_after_backend_terminal_status() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_serial().unwrap();
-        session.complete(FirmwareOutcome::SerialPrimary {
+        session.try_start_firmware_install_update().unwrap();
+        session.complete(FirmwareOutcome::FirmwareInstallUpdate {
             outcome: SerialFlashOutcome::Verified {
                 board_id: 140,
                 bootloader_rev: 5,
@@ -783,19 +783,19 @@ mod tests {
             },
         });
 
-        session.try_start_dfu(false).unwrap();
+        session.try_start_bootloader_installation(false).unwrap();
 
         assert!(matches!(
             session.status(),
-            FirmwareSessionStatus::DfuRecovery { .. }
+            FirmwareSessionStatus::BootloaderInstallation { .. }
         ));
     }
 
     #[test]
     fn session_clear_completed_resets_terminal_status_to_idle() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_dfu(false).unwrap();
-        session.complete(FirmwareOutcome::DfuRecovery {
+        session.try_start_bootloader_installation(false).unwrap();
+        session.complete(FirmwareOutcome::BootloaderInstallation {
             outcome: DfuRecoveryOutcome::ResetUnconfirmed,
         });
 
@@ -807,14 +807,14 @@ mod tests {
     #[test]
     fn session_clear_completed_does_not_interrupt_active_session() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_dfu(false).unwrap();
-        session.set_dfu_phase(DfuRecoveryPhase::Erasing);
+        session.try_start_bootloader_installation(false).unwrap();
+        session.set_bootloader_installation_phase(DfuRecoveryPhase::Erasing);
 
         session.clear_completed();
 
         assert!(matches!(
             session.status(),
-            FirmwareSessionStatus::DfuRecovery {
+            FirmwareSessionStatus::BootloaderInstallation {
                 phase: DfuRecoveryPhase::Erasing,
             }
         ));
@@ -842,7 +842,7 @@ mod tests {
     }
 
     #[test]
-    fn session_contracts_dfu_recovery_identity_serializes() {
+    fn session_contracts_bootloader_installation_identity_serializes() {
         let device = DfuRecoveryIdentity {
             vendor_id: 0x0483,
             product_id: 0xdf11,
@@ -900,7 +900,7 @@ mod tests {
             }),
         );
 
-        let confirm_dfu = ActionRequired::ConfirmDfuRecovery {
+        let confirm_dfu = ActionRequired::ConfirmBootloaderInstallation {
             device: DfuRecoveryIdentity {
                 vendor_id: 0x0483,
                 product_id: 0xdf11,
@@ -911,7 +911,7 @@ mod tests {
         assert_serializes_to(
             &confirm_dfu,
             json!({
-                "kind": "confirm_dfu_recovery",
+                "kind": "confirm_bootloader_installation",
                 "device": {
                     "vendor_id": 1155,
                     "product_id": 57105,
@@ -4765,25 +4765,25 @@ mod tests {
     #[test]
     fn serial_flow_session_exclusivity_blocks_concurrent() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
 
-        let result = session.try_start_serial();
+        let result = session.try_start_firmware_install_update();
         assert!(result.is_err());
         match result.unwrap_err() {
             FirmwareError::SessionBusy { current_session } => {
-                assert_eq!(current_session, "serial_primary");
+                assert_eq!(current_session, "firmware_install_update");
             }
             other => panic!("expected SessionBusy, got: {other:?}"),
         }
 
         session.stop();
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
     }
 
     #[test]
     fn serial_flow_dfu_session_rejects_when_vehicle_connected() {
         let session = FirmwareSessionHandle::new();
-        let err = session.try_start_dfu(true).unwrap_err();
+        let err = session.try_start_bootloader_installation(true).unwrap_err();
         match err {
             FirmwareError::VehicleConnected => {}
             other => panic!("expected VehicleConnected, got: {other:?}"),
@@ -4798,7 +4798,7 @@ mod tests {
         let bootloader_port = make_bootloader_port();
 
         let session = FirmwareSessionHandle::new();
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
 
         let deps = MockFlowDeps::new()
             .with_ports_sequence(vec![vec![bootloader_port]])
@@ -4815,13 +4815,13 @@ mod tests {
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         let outcome = result.to_outcome();
-        let session_outcome = FirmwareOutcome::SerialPrimary { outcome };
+        let session_outcome = FirmwareOutcome::FirmwareInstallUpdate { outcome };
         let completed = FirmwareSessionStatus::Completed {
             outcome: session_outcome,
         };
         let json = serde_json::to_string(&completed).unwrap();
         assert!(json.contains("completed"), "got: {json}");
-        assert!(json.contains("serial_primary"), "got: {json}");
+        assert!(json.contains("firmware_install_update"), "got: {json}");
         assert!(json.contains("verified"), "got: {json}");
 
         session.stop();
@@ -4832,7 +4832,7 @@ mod tests {
     #[test]
     fn serial_flow_integrated_failure_cleans_session() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
 
         let deps = MockFlowDeps::new().with_ports_sequence(vec![vec![]]);
 
@@ -4850,14 +4850,14 @@ mod tests {
         ));
 
         session.stop();
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
         session.stop();
     }
 
     #[test]
     fn serial_flow_integrated_never_produces_dfu_outcome() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
 
         let deps = MockFlowDeps::new().with_ports_sequence(vec![vec![]]);
 
@@ -4870,9 +4870,9 @@ mod tests {
 
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
         let outcome = result.to_outcome();
-        let wrapped = FirmwareOutcome::SerialPrimary { outcome };
+        let wrapped = FirmwareOutcome::FirmwareInstallUpdate { outcome };
         let json = serde_json::to_string(&wrapped).unwrap();
-        assert!(json.contains("serial_primary"), "got: {json}");
+        assert!(json.contains("firmware_install_update"), "got: {json}");
         assert!(!json.contains("dfu"), "must not contain dfu: {json}");
 
         session.stop();
@@ -4942,13 +4942,13 @@ mod tests {
             available_ports: vec![],
             detected_board_id: None,
             session_ready: false,
-            session_status: FirmwareSessionStatus::SerialPrimary {
+            session_status: FirmwareSessionStatus::FirmwareInstallUpdate {
                 phase: SerialFlashPhase::Idle,
             },
         };
         let json = serde_json::to_string(&info).unwrap();
         assert!(json.contains("\"session_ready\":false"), "got: {json}");
-        assert!(json.contains("serial_primary"), "got: {json}");
+        assert!(json.contains("firmware_install_update"), "got: {json}");
     }
 
     #[test]
@@ -5018,10 +5018,10 @@ mod tests {
     #[test]
     fn serial_flow_session_stop_returns_to_idle() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
         assert!(matches!(
             session.status(),
-            FirmwareSessionStatus::SerialPrimary { .. }
+            FirmwareSessionStatus::FirmwareInstallUpdate { .. }
         ));
         session.stop();
         assert!(matches!(session.status(), FirmwareSessionStatus::Idle));
@@ -5141,7 +5141,7 @@ mod tests {
     // ── DFU recovery happy path ──
 
     #[test]
-    fn dfu_recovery_happy_path_verified() {
+    fn bootloader_installation_happy_path_verified() {
         let usb = MockDfuUsb::success();
         let device = stm32_dfu_device();
         let bin_data = vec![0x00, 0x20, 0x00, 0x08, 0x01, 0x02, 0x03, 0x04];
@@ -5165,7 +5165,7 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_emits_staged_phases_in_order() {
+    fn bootloader_installation_emits_staged_phases_in_order() {
         let usb = MockDfuUsb::success();
         let device = stm32_dfu_device();
         let bin_data = vec![0x00, 0x20, 0x00, 0x08, 0x01, 0x02, 0x03, 0x04];
@@ -5193,7 +5193,7 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_outcome_maps_correctly() {
+    fn bootloader_installation_outcome_maps_correctly() {
         let verified = DfuRecoveryResult::Verified;
         let reset_unconfirmed = DfuRecoveryResult::ResetUnconfirmed;
         let failed = DfuRecoveryResult::Failed {
@@ -5219,23 +5219,23 @@ mod tests {
             other => panic!("expected ResetUnconfirmed, got: {other:?}"),
         }
         match driver.to_outcome() {
-            DfuRecoveryOutcome::UnsupportedRecoveryPath { guidance } => {
+            DfuRecoveryOutcome::UnsupportedBootloaderInstallationPath { guidance } => {
                 assert!(guidance.contains("WinUSB"), "got: {guidance}");
             }
-            other => panic!("expected UnsupportedRecoveryPath, got: {other:?}"),
+            other => panic!("expected UnsupportedBootloaderInstallationPath, got: {other:?}"),
         }
         match unsupported.to_outcome() {
-            DfuRecoveryOutcome::UnsupportedRecoveryPath { guidance } => {
+            DfuRecoveryOutcome::UnsupportedBootloaderInstallationPath { guidance } => {
                 assert!(guidance.contains("not supported"), "got: {guidance}");
             }
-            other => panic!("expected UnsupportedRecoveryPath, got: {other:?}"),
+            other => panic!("expected UnsupportedBootloaderInstallationPath, got: {other:?}"),
         }
     }
 
     // ── Non-STM32 device rejection ──
 
     #[test]
-    fn dfu_recovery_rejects_non_stm32_device() {
+    fn bootloader_installation_rejects_non_stm32_device() {
         let usb = MockDfuUsb::success();
         let device = non_stm32_device();
         let bin_data = vec![0x01, 0x02, 0x03, 0x04];
@@ -5259,13 +5259,13 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_validate_stm32_positive() {
+    fn bootloader_installation_validate_stm32_positive() {
         let device = stm32_dfu_device();
         validate_stm32_dfu_device(&device).unwrap();
     }
 
     #[test]
-    fn dfu_recovery_validate_stm32_negative() {
+    fn bootloader_installation_validate_stm32_negative() {
         let device = non_stm32_device();
         let err = validate_stm32_dfu_device(&device).unwrap_err();
         match err {
@@ -5279,7 +5279,7 @@ mod tests {
     // ── .bin only enforcement ──
 
     #[test]
-    fn dfu_recovery_rejects_empty_bin() {
+    fn bootloader_installation_rejects_empty_bin() {
         let usb = MockDfuUsb::success();
         let device = stm32_dfu_device();
 
@@ -5296,7 +5296,7 @@ mod tests {
     // ── USB driver guidance ──
 
     #[test]
-    fn dfu_recovery_usb_driver_guidance() {
+    fn bootloader_installation_usb_driver_guidance() {
         let usb = MockDfuUsb::success().with_open_error(FirmwareError::UsbAccessDenied {
             guidance: "cannot open USB device: access denied".into(),
         });
@@ -5321,15 +5321,15 @@ mod tests {
         // Verify outcome mapping
         let outcome = result.to_outcome();
         match outcome {
-            DfuRecoveryOutcome::UnsupportedRecoveryPath { guidance } => {
+            DfuRecoveryOutcome::UnsupportedBootloaderInstallationPath { guidance } => {
                 assert!(guidance.contains("WinUSB"), "got: {guidance}");
             }
-            other => panic!("expected UnsupportedRecoveryPath, got: {other:?}"),
+            other => panic!("expected UnsupportedBootloaderInstallationPath, got: {other:?}"),
         }
     }
 
     #[test]
-    fn dfu_recovery_driver_guidance_text_is_comprehensive() {
+    fn bootloader_installation_driver_guidance_text_is_comprehensive() {
         let text = usb_driver_guidance();
         assert!(text.contains("WinUSB"), "should mention WinUSB: {text}");
         assert!(text.contains("Zadig"), "should mention Zadig: {text}");
@@ -5342,7 +5342,7 @@ mod tests {
     // ── Download / detach failure paths ──
 
     #[test]
-    fn dfu_recovery_download_failure() {
+    fn bootloader_installation_download_failure() {
         let usb = MockDfuUsb::success().with_download_error(FirmwareError::ProtocolError {
             detail: "USB pipe error".into(),
         });
@@ -5360,7 +5360,7 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_does_not_emit_downloading_before_byte_progress_begins() {
+    fn bootloader_installation_does_not_emit_downloading_before_byte_progress_begins() {
         let usb = MockDfuUsb::success()
             .with_silent_download_progress()
             .with_download_error(FirmwareError::ProtocolError {
@@ -5387,7 +5387,7 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_detach_failure() {
+    fn bootloader_installation_detach_failure() {
         let usb = MockDfuUsb::success().with_detach_error(FirmwareError::ProtocolError {
             detail: "device unresponsive".into(),
         });
@@ -5405,7 +5405,7 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_reset_unconfirmed_when_reset_is_not_confirmable() {
+    fn bootloader_installation_reset_unconfirmed_when_reset_is_not_confirmable() {
         let usb = MockDfuUsb::success().with_unconfirmed_reset();
         let device = stm32_dfu_device();
         let bin_data = vec![0x01, 0x02, 0x03, 0x04];
@@ -5419,7 +5419,7 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_reset_confirmation_accepts_app_mode_reenumeration() {
+    fn bootloader_installation_reset_confirmation_accepts_app_mode_reenumeration() {
         let mut dfu_polls = vec![Ok(true), Ok(true), Ok(true)].into_iter();
         let mut app_polls = vec![Ok(false), Ok(false), Ok(true)].into_iter();
         let mut sleeps = Vec::new();
@@ -5443,7 +5443,7 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_cancellation_requested_before_download_returns_cancelled() {
+    fn bootloader_installation_cancellation_requested_before_download_returns_cancelled() {
         let usb = MockDfuUsb::success();
         let device = stm32_dfu_device();
         let bin_data = vec![0x01, 0x02, 0x03, 0x04];
@@ -5464,45 +5464,45 @@ mod tests {
     // ── DFU recovery is separate from serial path ──
 
     #[test]
-    fn dfu_recovery_session_isolation_from_serial() {
+    fn bootloader_installation_session_isolation_from_serial() {
         let session = FirmwareSessionHandle::new();
 
         // Start DFU session
-        session.try_start_dfu(false).unwrap();
+        session.try_start_bootloader_installation(false).unwrap();
         let status = session.status();
         match status {
-            FirmwareSessionStatus::DfuRecovery { .. } => {}
+            FirmwareSessionStatus::BootloaderInstallation { .. } => {}
             other => panic!("expected DfuRecovery, got: {other:?}"),
         }
 
         // Serial must be blocked
-        let err = session.try_start_serial().unwrap_err();
+        let err = session.try_start_firmware_install_update().unwrap_err();
         match err {
             FirmwareError::SessionBusy { current_session } => {
-                assert_eq!(current_session, "dfu_recovery");
+                assert_eq!(current_session, "bootloader_installation");
             }
             other => panic!("expected SessionBusy, got: {other:?}"),
         }
 
         // After DFU stop, serial can start
         session.stop();
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
         session.stop();
     }
 
     #[test]
-    fn dfu_recovery_never_produces_serial_outcome() {
+    fn bootloader_installation_never_produces_serial_outcome() {
         let usb = MockDfuUsb::success();
         let device = stm32_dfu_device();
         let bin_data = vec![0x01, 0x02, 0x03, 0x04];
 
         let result = execute_dfu_recovery(&usb, &device, &bin_data, &|| false, |_, _| {});
         let outcome = result.to_outcome();
-        let wrapped = FirmwareOutcome::DfuRecovery { outcome };
+        let wrapped = FirmwareOutcome::BootloaderInstallation { outcome };
         let json = serde_json::to_string(&wrapped).unwrap();
-        assert!(json.contains("dfu_recovery"), "got: {json}");
+        assert!(json.contains("bootloader_installation"), "got: {json}");
         assert!(
-            !json.contains("serial_primary"),
+            !json.contains("firmware_install_update"),
             "must not contain serial: {json}"
         );
     }
@@ -5510,9 +5510,9 @@ mod tests {
     // ── DFU recovery integrated with session + artifact validation ──
 
     #[test]
-    fn dfu_recovery_integrated_session_to_outcome() {
+    fn bootloader_installation_integrated_session_to_outcome() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_dfu(false).unwrap();
+        session.try_start_bootloader_installation(false).unwrap();
 
         let usb = MockDfuUsb::success();
         let device = stm32_dfu_device();
@@ -5520,13 +5520,13 @@ mod tests {
 
         let result = execute_dfu_recovery(&usb, &device, &bin_data, &|| false, |_, _| {});
         let outcome = result.to_outcome();
-        let session_outcome = FirmwareOutcome::DfuRecovery { outcome };
+        let session_outcome = FirmwareOutcome::BootloaderInstallation { outcome };
         let completed = FirmwareSessionStatus::Completed {
             outcome: session_outcome,
         };
         let json = serde_json::to_string(&completed).unwrap();
         assert!(json.contains("completed"), "got: {json}");
-        assert!(json.contains("dfu_recovery"), "got: {json}");
+        assert!(json.contains("bootloader_installation"), "got: {json}");
         assert!(json.contains("verified"), "got: {json}");
 
         session.stop();
@@ -5536,23 +5536,23 @@ mod tests {
     // ── Unsupported platform behavior ──
 
     #[test]
-    fn dfu_recovery_platform_unsupported_outcome() {
+    fn bootloader_installation_platform_unsupported_outcome() {
         let result = DfuRecoveryResult::PlatformUnsupported;
         let outcome = result.to_outcome();
         match outcome {
-            DfuRecoveryOutcome::UnsupportedRecoveryPath { guidance } => {
+            DfuRecoveryOutcome::UnsupportedBootloaderInstallationPath { guidance } => {
                 assert!(guidance.contains("not supported"), "got: {guidance}");
             }
-            other => panic!("expected UnsupportedRecoveryPath, got: {other:?}"),
+            other => panic!("expected UnsupportedBootloaderInstallationPath, got: {other:?}"),
         }
     }
 
     // ── End-to-end fixture tests (Task 10) ──
 
     #[test]
-    fn e2e_serial_primary_happy_path() {
+    fn e2e_firmware_install_update_happy_path() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
 
         let image = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
@@ -5584,11 +5584,11 @@ mod tests {
             "e2e serial happy path must produce ReconnectVerified(flash_verified=true), got: {outcome:?}"
         );
 
-        let wrapped = FirmwareOutcome::SerialPrimary { outcome };
+        let wrapped = FirmwareOutcome::FirmwareInstallUpdate { outcome };
         let status = FirmwareSessionStatus::Completed { outcome: wrapped };
         let json = serde_json::to_string(&status).unwrap();
         assert!(json.contains("verified"));
-        assert!(json.contains("serial_primary"));
+        assert!(json.contains("firmware_install_update"));
         assert!(!json.contains("dfu"));
 
         session.stop();
@@ -5598,7 +5598,7 @@ mod tests {
     #[test]
     fn e2e_serial_failure_recovery_needed() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
 
         let deps = MockFlowDeps::new().with_ports_sequence(vec![vec![]]);
 
@@ -5629,9 +5629,9 @@ mod tests {
             }
         }
 
-        let wrapped = FirmwareOutcome::SerialPrimary { outcome };
+        let wrapped = FirmwareOutcome::FirmwareInstallUpdate { outcome };
         let json = serde_json::to_string(&wrapped).unwrap();
-        assert!(json.contains("serial_primary"));
+        assert!(json.contains("firmware_install_update"));
         assert!(json.contains("board_detection_failed"));
         assert!(!json.contains("dfu"));
 
@@ -5641,7 +5641,7 @@ mod tests {
     #[test]
     fn e2e_serial_flashed_but_unverified_stays_distinct() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_serial().unwrap();
+        session.try_start_firmware_install_update().unwrap();
 
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 1_048_576;
@@ -5681,7 +5681,8 @@ mod tests {
             "BL_REV 2 + reconnect failure must be ReconnectFailed(flash_verified=false), got: {outcome:?}"
         );
 
-        let json = serde_json::to_string(&FirmwareOutcome::SerialPrimary { outcome }).unwrap();
+        let json =
+            serde_json::to_string(&FirmwareOutcome::FirmwareInstallUpdate { outcome }).unwrap();
         assert!(json.contains("reconnect_failed"));
         assert!(!json.contains("\"verified\""));
 
@@ -5689,9 +5690,9 @@ mod tests {
     }
 
     #[test]
-    fn e2e_dfu_recovery_happy_path() {
+    fn e2e_bootloader_installation_happy_path() {
         let session = FirmwareSessionHandle::new();
-        session.try_start_dfu(false).unwrap();
+        session.try_start_bootloader_installation(false).unwrap();
 
         let usb = MockDfuUsb::success();
         let device = stm32_dfu_device();
@@ -5709,12 +5710,12 @@ mod tests {
         assert!(!progress_calls.is_empty());
 
         let outcome = result.to_outcome();
-        let wrapped = FirmwareOutcome::DfuRecovery { outcome };
+        let wrapped = FirmwareOutcome::BootloaderInstallation { outcome };
         let status = FirmwareSessionStatus::Completed { outcome: wrapped };
         let json = serde_json::to_string(&status).unwrap();
-        assert!(json.contains("dfu_recovery"));
+        assert!(json.contains("bootloader_installation"));
         assert!(json.contains("verified"));
-        assert!(!json.contains("serial_primary"));
+        assert!(!json.contains("firmware_install_update"));
 
         session.stop();
         assert!(matches!(session.status(), FirmwareSessionStatus::Idle));
@@ -5726,16 +5727,18 @@ mod tests {
         let outcome = result.to_outcome();
 
         match &outcome {
-            DfuRecoveryOutcome::UnsupportedRecoveryPath { guidance } => {
+            DfuRecoveryOutcome::UnsupportedBootloaderInstallationPath { guidance } => {
                 assert!(guidance.contains("not supported"), "got: {guidance}");
             }
-            other => panic!("platform unsupported must map to UnsupportedRecoveryPath: {other:?}"),
+            other => panic!(
+                "platform unsupported must map to UnsupportedBootloaderInstallationPath: {other:?}"
+            ),
         }
 
-        let wrapped = FirmwareOutcome::DfuRecovery { outcome };
+        let wrapped = FirmwareOutcome::BootloaderInstallation { outcome };
         let json = serde_json::to_string(&wrapped).unwrap();
-        assert!(json.contains("unsupported_recovery_path"));
-        assert!(json.contains("dfu_recovery"));
+        assert!(json.contains("unsupported_bootloader_installation_path"));
+        assert!(json.contains("bootloader_installation"));
     }
 
     #[test]
@@ -5750,17 +5753,20 @@ mod tests {
         let outcome = result.to_outcome();
 
         match &outcome {
-            DfuRecoveryOutcome::UnsupportedRecoveryPath { guidance } => {
+            DfuRecoveryOutcome::UnsupportedBootloaderInstallationPath { guidance } => {
                 assert!(guidance.contains("WinUSB"), "got: {guidance}");
                 assert!(guidance.contains("Zadig"), "got: {guidance}");
                 assert!(guidance.contains("Linux"), "got: {guidance}");
                 assert!(guidance.contains("macOS"), "got: {guidance}");
             }
-            other => panic!("driver denied must produce UnsupportedRecoveryPath: {other:?}"),
+            other => panic!(
+                "driver denied must produce UnsupportedBootloaderInstallationPath: {other:?}"
+            ),
         }
 
-        let json = serde_json::to_string(&FirmwareOutcome::DfuRecovery { outcome }).unwrap();
-        assert!(json.contains("unsupported_recovery_path"));
+        let json =
+            serde_json::to_string(&FirmwareOutcome::BootloaderInstallation { outcome }).unwrap();
+        assert!(json.contains("unsupported_bootloader_installation_path"));
     }
 
     #[test]
@@ -6275,7 +6281,7 @@ mod tests {
     use super::types::DfuRecoverySource;
 
     #[test]
-    fn dfu_recovery_source_local_bin_bytes_passthrough() {
+    fn bootloader_installation_source_local_bin_bytes_passthrough() {
         let bin = vec![0x00, 0x20, 0x00, 0x08, 0x01, 0x02, 0x03, 0x04];
         let source: DfuRecoverySource = serde_json::from_str(
             &serde_json::to_string(&serde_json::json!({
@@ -6294,7 +6300,7 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_source_deserializes_official_bootloader_by_board_target() {
+    fn bootloader_installation_source_deserializes_official_bootloader_by_board_target() {
         let json = r#"{"kind":"official_bootloader","board_target":"CubeOrange"}"#;
         let source: DfuRecoverySource = serde_json::from_str(json).unwrap();
         match source {
@@ -6306,7 +6312,7 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_source_deserializes_manual_local_apj_bytes() {
+    fn bootloader_installation_source_deserializes_manual_local_apj_bytes() {
         let json = r#"{"kind":"local_apj_bytes","data":[1,2,3,4]}"#;
         let source: DfuRecoverySource = serde_json::from_str(json).unwrap();
         match source {
@@ -6318,7 +6324,7 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_source_rejects_catalog_application_image_path() {
+    fn bootloader_installation_source_rejects_catalog_application_image_path() {
         let json = r#"{"kind":"catalog_url","url":"https://firmware.ardupilot.org/fw.apj"}"#;
         let result: Result<DfuRecoverySource, _> = serde_json::from_str(json);
         assert!(
@@ -6328,14 +6334,14 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_source_rejects_unknown_kind() {
+    fn bootloader_installation_source_rejects_unknown_kind() {
         let json = r#"{"kind":"unknown_source","data":[1]}"#;
         let result: Result<DfuRecoverySource, _> = serde_json::from_str(json);
         assert!(result.is_err());
     }
 
     #[test]
-    fn dfu_recovery_phase_order_serializes_as_staged_contract() {
+    fn bootloader_installation_phase_order_serializes_as_staged_contract() {
         assert_serializes_to(
             &vec![
                 DfuRecoveryPhase::Detecting,
@@ -6353,9 +6359,9 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_completed_status_preserves_reset_unconfirmed_as_typed_outcome() {
+    fn bootloader_installation_completed_status_preserves_reset_unconfirmed_as_typed_outcome() {
         let status = FirmwareSessionStatus::Completed {
-            outcome: FirmwareOutcome::DfuRecovery {
+            outcome: FirmwareOutcome::BootloaderInstallation {
                 outcome: DfuRecoveryOutcome::ResetUnconfirmed,
             },
         };
@@ -6365,7 +6371,7 @@ mod tests {
             json!({
                 "kind": "completed",
                 "outcome": {
-                    "path": "dfu_recovery",
+                    "path": "bootloader_installation",
                     "outcome": {
                         "result": "reset_unconfirmed"
                     }
@@ -6375,7 +6381,7 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_source_apj_without_extf_extracts_internal_image() {
+    fn bootloader_installation_source_apj_without_extf_extracts_internal_image() {
         let firmware_bytes = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04];
         let apj_data = make_apj(140, &firmware_bytes, &[]);
 
@@ -6384,7 +6390,7 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_extf_block_rejects_apj_with_external_flash() {
+    fn bootloader_installation_extf_block_rejects_apj_with_external_flash() {
         let internal = vec![0x01, 0x02, 0x03, 0x04];
         let external = vec![0xCA, 0xFE, 0xBA, 0xBE];
         let apj_data = ApjFixture::new(140, &internal).with_extf(&external).build();
@@ -6402,7 +6408,7 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_source_apj_metadata_only_extf_fields_allowed() {
+    fn bootloader_installation_source_apj_metadata_only_extf_fields_allowed() {
         let apj_data = ApjFixture::new(140, &[0x01, 0x02])
             .with_extflash_total(2_097_152)
             .build();
@@ -6412,7 +6418,7 @@ mod tests {
     }
 
     #[test]
-    fn dfu_recovery_source_invalid_apj_propagates_error() {
+    fn bootloader_installation_source_invalid_apj_propagates_error() {
         let result = apj_to_dfu_bin(b"not json at all");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("invalid APJ JSON"));
@@ -7594,11 +7600,11 @@ mod tests {
         );
     }
 
-    // R3: firmware_serial_preflight on unsupported platform (Unsupported inventory)
+    // R3: firmware_install_update_preflight on unsupported platform (Unsupported inventory)
     // returns empty ports list, not an error.
     #[test]
     fn preflight_unsupported_inventory_yields_empty_ports() {
-        // Simulate the _ arm in firmware_serial_preflight:
+        // Simulate the _ arm in firmware_install_update_preflight:
         //   let available_ports = match list_firmware_ports() {
         //       InventoryResult::Available { ports } => ports,
         //       _ => vec![],
@@ -7661,11 +7667,11 @@ mod tests {
         );
     }
 
-    // R7: rejected try_start_dfu(vehicle_connected=true) leaves session Idle.
+    // R7: rejected try_start_bootloader_installation(vehicle_connected=true) leaves session Idle.
     #[test]
     fn session_status_remains_idle_after_rejected_dfu_vehicle_connected() {
         let session = FirmwareSessionHandle::new();
-        let result = session.try_start_dfu(true);
+        let result = session.try_start_bootloader_installation(true);
         assert!(result.is_err(), "must reject DFU when vehicle connected");
         match result.unwrap_err() {
             FirmwareError::VehicleConnected => {}
@@ -7674,7 +7680,7 @@ mod tests {
         // Session must still be Idle — not corrupted
         assert!(
             matches!(session.status(), FirmwareSessionStatus::Idle),
-            "session must remain Idle after rejected try_start_dfu"
+            "session must remain Idle after rejected try_start_bootloader_installation"
         );
     }
 
@@ -7836,11 +7842,11 @@ mod tests {
     #[test]
     fn firmware_error_session_busy_to_string() {
         let err = FirmwareError::SessionBusy {
-            current_session: "serial_primary".into(),
+            current_session: "firmware_install_update".into(),
         };
         let s = err.to_string();
         assert_eq!(
-            s, "firmware session already active: serial_primary",
+            s, "firmware session already active: firmware_install_update",
             "SessionBusy string must match IPC contract; got: {s:?}"
         );
     }

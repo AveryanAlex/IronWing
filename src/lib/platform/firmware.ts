@@ -1,58 +1,58 @@
 import {
+  firmwareBootloaderCatalogTargets,
   firmwareCatalogEntries,
   firmwareCatalogTargets,
-  firmwareFlashDfuRecovery,
-  firmwareFlashSerial,
+  firmwareBootloaderInstallation,
+  firmwareInstallPreflight,
+  firmwareInstallReadiness,
+  firmwareInstallUpdate,
   firmwareListDfuDevices,
   firmwareListPorts,
-  firmwareRecoveryCatalogTargets,
-  firmwareSerialPreflight,
-  firmwareSerialReadiness,
+  firmwareRequestSerialPort,
   firmwareSessionCancel,
   firmwareSessionClearCompleted,
   firmwareSessionStatus,
   subscribeFirmwareProgress,
+  type BootloaderInstallationOutcome,
+  type BootloaderInstallationPhase,
+  type BootloaderInstallationResult,
+  type BootloaderInstallationSource,
   type CatalogEntry,
   type CatalogTargetSummary,
   type DfuDeviceInfo,
-  type DfuRecoveryOutcome,
-  type DfuRecoveryPhase,
-  type DfuRecoveryResult,
-  type DfuRecoverySource,
   type DfuScanResult,
+  type FirmwareInstallBootloaderTransition,
+  type FirmwareInstallOptions,
+  type FirmwareInstallPreflightInfo,
+  type FirmwareInstallReadiness,
+  type FirmwareInstallReadinessBlockedReason,
+  type FirmwareInstallReadinessRequest,
+  type FirmwareInstallReadinessResponse,
+  type FirmwareInstallResult,
+  type FirmwareInstallSource,
+  type FirmwareInstallUpdateOutcome,
+  type FirmwareInstallUpdatePhase,
   type FirmwareOutcome,
   type FirmwareProgress,
   type FirmwareSessionStatus,
+  type FirmwareSessionPath,
   type InventoryResult,
   type PortInfo,
-  type SerialBootloaderTransition,
-  type SerialFlashOptions,
-  type SerialFlashOutcome,
-  type SerialFlashPhase,
-  type SerialFlashSource,
-  type SerialFlowResult,
-  type SerialPreflightInfo,
-  type SerialReadiness,
-  type SerialReadinessBlockedReason,
-  type SerialReadinessRequest,
-  type SerialReadinessResponse,
 } from "../../firmware";
 import { formatUnknownError } from "../error-format";
 
-export type FirmwareSessionPath = "serial_primary" | "dfu_recovery";
-
 const MALFORMED_SESSION_STATUS_MESSAGE = "Firmware session status returned an unexpected payload.";
 const MALFORMED_PROGRESS_MESSAGE = "Firmware progress update returned an unexpected payload.";
-const MALFORMED_SERIAL_RESULT_MESSAGE = "Serial firmware flash returned an unexpected payload.";
-const MALFORMED_DFU_RESULT_MESSAGE = "DFU recovery returned an unexpected payload.";
-const MALFORMED_READINESS_MESSAGE = "Firmware serial readiness returned an unexpected payload.";
-const MALFORMED_PREFLIGHT_MESSAGE = "Firmware serial preflight returned an unexpected payload.";
+const MALFORMED_INSTALL_RESULT_MESSAGE = "Firmware install/update returned an unexpected payload.";
+const MALFORMED_BOOTLOADER_RESULT_MESSAGE = "Bootloader installation returned an unexpected payload.";
+const MALFORMED_READINESS_MESSAGE = "Firmware install/update readiness returned an unexpected payload.";
+const MALFORMED_PREFLIGHT_MESSAGE = "Firmware install/update preflight returned an unexpected payload.";
 const MALFORMED_PORT_INVENTORY_MESSAGE = "Firmware port inventory returned an unexpected payload.";
 const MALFORMED_DFU_INVENTORY_MESSAGE = "Firmware DFU inventory returned an unexpected payload.";
 const MALFORMED_CATALOG_ENTRY_MESSAGE = "Firmware catalog entries returned an unexpected payload.";
 const MALFORMED_CATALOG_TARGET_MESSAGE = "Firmware catalog targets returned an unexpected payload.";
 
-const SERIAL_FLASH_PHASES = new Set<SerialFlashPhase>([
+const FIRMWARE_INSTALL_UPDATE_PHASES = new Set<FirmwareInstallUpdatePhase>([
   "idle",
   "probing",
   "erasing",
@@ -61,7 +61,7 @@ const SERIAL_FLASH_PHASES = new Set<SerialFlashPhase>([
   "rebooting",
 ]);
 
-const DFU_RECOVERY_PHASES = new Set<DfuRecoveryPhase>([
+const BOOTLOADER_INSTALLATION_PHASES = new Set<BootloaderInstallationPhase>([
   "idle",
   "detecting",
   "downloading",
@@ -70,14 +70,14 @@ const DFU_RECOVERY_PHASES = new Set<DfuRecoveryPhase>([
   "manifesting_or_resetting",
 ]);
 
-const SERIAL_READINESS_BLOCKED_REASONS = new Set<SerialReadinessBlockedReason>([
+const FIRMWARE_INSTALL_READINESS_BLOCKED_REASONS = new Set<FirmwareInstallReadinessBlockedReason>([
   "session_busy",
   "port_unselected",
   "port_unavailable",
   "source_missing",
 ]);
 
-const SERIAL_BOOTLOADER_TRANSITIONS = new Set<SerialBootloaderTransition["kind"]>([
+const FIRMWARE_INSTALL_BOOTLOADER_TRANSITIONS = new Set<FirmwareInstallBootloaderTransition["kind"]>([
   "auto_reboot_supported",
   "already_in_bootloader",
   "auto_reboot_attemptable",
@@ -85,7 +85,7 @@ const SERIAL_BOOTLOADER_TRANSITIONS = new Set<SerialBootloaderTransition["kind"]
   "target_mismatch",
 ]);
 
-const SERIAL_OUTCOME_RESULTS = new Set<SerialFlashOutcome["result"]>([
+const FIRMWARE_INSTALL_OUTCOME_RESULTS = new Set<FirmwareInstallUpdateOutcome["result"]>([
   "cancelled",
   "verified",
   "flashed_but_unverified",
@@ -96,15 +96,15 @@ const SERIAL_OUTCOME_RESULTS = new Set<SerialFlashOutcome["result"]>([
   "extf_capacity_insufficient",
 ]);
 
-const DFU_OUTCOME_RESULTS = new Set<DfuRecoveryOutcome["result"]>([
+const BOOTLOADER_OUTCOME_RESULTS = new Set<BootloaderInstallationOutcome["result"]>([
   "verified",
   "cancelled",
   "reset_unconfirmed",
   "failed",
-  "unsupported_recovery_path",
+  "unsupported_bootloader_installation_path",
 ]);
 
-const DFU_RESULT_RESULTS = new Set<DfuRecoveryResult["result"]>([
+const BOOTLOADER_RESULT_RESULTS = new Set<BootloaderInstallationResult["result"]>([
   "verified",
   "cancelled",
   "reset_unconfirmed",
@@ -117,20 +117,21 @@ export type FirmwareService = {
   sessionStatus(): Promise<unknown>;
   sessionCancel(): Promise<void>;
   sessionClearCompleted(): Promise<void>;
-  serialPreflight(): Promise<unknown>;
+  installPreflight(): Promise<unknown>;
+  requestFirmwareInstallPort(): Promise<unknown>;
   listPorts(): Promise<unknown>;
   listDfuDevices(): Promise<unknown>;
   catalogTargets(): Promise<unknown>;
-  recoveryCatalogTargets(): Promise<unknown>;
+  bootloaderCatalogTargets(): Promise<unknown>;
   catalogEntries(boardId: number, platform?: string): Promise<unknown>;
-  serialReadiness(request: SerialReadinessRequest): Promise<unknown>;
-  flashSerial(
+  installReadiness(request: FirmwareInstallReadinessRequest): Promise<unknown>;
+  startFirmwareInstallUpdate(
     port: string,
     baud: number,
-    source: SerialFlashSource,
-    options?: SerialFlashOptions,
+    source: FirmwareInstallSource,
+    options?: FirmwareInstallOptions,
   ): Promise<unknown>;
-  flashDfuRecovery(device: DfuDeviceInfo, source: DfuRecoverySource): Promise<unknown>;
+  startBootloaderInstallation(device: DfuDeviceInfo, source: BootloaderInstallationSource): Promise<unknown>;
   subscribeProgress(cb: (progress: FirmwareProgress) => void): Promise<() => void>;
   formatError(error: unknown): string;
 };
@@ -140,31 +141,32 @@ export function createFirmwareService(): FirmwareService {
     sessionStatus: firmwareSessionStatus,
     sessionCancel: firmwareSessionCancel,
     sessionClearCompleted: firmwareSessionClearCompleted,
-    serialPreflight: firmwareSerialPreflight,
+    installPreflight: firmwareInstallPreflight,
+    requestFirmwareInstallPort: firmwareRequestSerialPort,
     listPorts: firmwareListPorts,
     listDfuDevices: firmwareListDfuDevices,
     catalogTargets: firmwareCatalogTargets,
-    recoveryCatalogTargets: firmwareRecoveryCatalogTargets,
+    bootloaderCatalogTargets: firmwareBootloaderCatalogTargets,
     catalogEntries: firmwareCatalogEntries,
-    serialReadiness: firmwareSerialReadiness,
-    flashSerial: firmwareFlashSerial,
-    flashDfuRecovery: firmwareFlashDfuRecovery,
+    installReadiness: firmwareInstallReadiness,
+    startFirmwareInstallUpdate: firmwareInstallUpdate,
+    startBootloaderInstallation: firmwareBootloaderInstallation,
     subscribeProgress: subscribeFirmwareProgress,
     formatError: formatUnknownError,
   };
 }
 
 export function isFirmwareSessionActive(status: FirmwareSessionStatus): boolean {
-  return status.kind === "serial_primary" || status.kind === "dfu_recovery" || status.kind === "cancelling";
+  return status.kind === "firmware_install_update" || status.kind === "bootloader_installation" || status.kind === "cancelling";
 }
 
 export function deriveFirmwareSessionPath(status: FirmwareSessionStatus): FirmwareSessionPath | null {
-  if (status.kind === "serial_primary") {
-    return "serial_primary";
+  if (status.kind === "firmware_install_update") {
+    return "firmware_install_update";
   }
 
-  if (status.kind === "dfu_recovery") {
-    return "dfu_recovery";
+  if (status.kind === "bootloader_installation") {
+    return "bootloader_installation";
   }
 
   if (status.kind === "cancelling") {
@@ -179,7 +181,7 @@ export function deriveFirmwareSessionPath(status: FirmwareSessionStatus): Firmwa
 }
 
 export function deriveFirmwareSessionPhase(status: FirmwareSessionStatus): string | null {
-  if (status.kind === "serial_primary" || status.kind === "dfu_recovery") {
+  if (status.kind === "firmware_install_update" || status.kind === "bootloader_installation") {
     return status.phase;
   }
 
@@ -194,11 +196,11 @@ export function deriveFirmwareSessionPhase(status: FirmwareSessionStatus): strin
   return null;
 }
 
-export function buildSerialFailureStatus(error: unknown): FirmwareSessionStatus {
+export function buildFirmwareInstallFailureStatus(error: unknown): FirmwareSessionStatus {
   return {
     kind: "completed",
     outcome: {
-      path: "serial_primary",
+      path: "firmware_install_update",
       outcome: {
         result: "failed",
         reason: formatUnknownError(error),
@@ -207,11 +209,11 @@ export function buildSerialFailureStatus(error: unknown): FirmwareSessionStatus 
   };
 }
 
-export function buildDfuFailureStatus(error: unknown): FirmwareSessionStatus {
+export function buildBootloaderInstallationFailureStatus(error: unknown): FirmwareSessionStatus {
   return {
     kind: "completed",
     outcome: {
-      path: "dfu_recovery",
+      path: "bootloader_installation",
       outcome: {
         result: "failed",
         reason: formatUnknownError(error),
@@ -220,13 +222,13 @@ export function buildDfuFailureStatus(error: unknown): FirmwareSessionStatus {
   };
 }
 
-export function serialResultToStatus(result: SerialFlowResult): FirmwareSessionStatus {
+export function firmwareInstallResultToStatus(result: FirmwareInstallResult): FirmwareSessionStatus {
   switch (result.result) {
     case "cancelled":
       return {
         kind: "completed",
         outcome: {
-          path: "serial_primary",
+          path: "firmware_install_update",
           outcome: { result: "cancelled" },
         },
       };
@@ -240,14 +242,14 @@ export function serialResultToStatus(result: SerialFlowResult): FirmwareSessionS
       return {
         kind: "completed",
         outcome: {
-          path: "serial_primary",
+          path: "firmware_install_update",
           outcome: result,
         },
       };
   }
 }
 
-export function dfuResultToStatus(result: DfuRecoveryResult): FirmwareSessionStatus {
+export function bootloaderInstallationResultToStatus(result: BootloaderInstallationResult): FirmwareSessionStatus {
   switch (result.result) {
     case "verified":
     case "cancelled":
@@ -256,7 +258,7 @@ export function dfuResultToStatus(result: DfuRecoveryResult): FirmwareSessionSta
       return {
         kind: "completed",
         outcome: {
-          path: "dfu_recovery",
+          path: "bootloader_installation",
           outcome: result,
         },
       };
@@ -264,9 +266,9 @@ export function dfuResultToStatus(result: DfuRecoveryResult): FirmwareSessionSta
       return {
         kind: "completed",
         outcome: {
-          path: "dfu_recovery",
+          path: "bootloader_installation",
           outcome: {
-            result: "unsupported_recovery_path",
+            result: "unsupported_bootloader_installation_path",
             guidance: result.guidance,
           },
         },
@@ -275,10 +277,10 @@ export function dfuResultToStatus(result: DfuRecoveryResult): FirmwareSessionSta
       return {
         kind: "completed",
         outcome: {
-          path: "dfu_recovery",
+          path: "bootloader_installation",
           outcome: {
-            result: "unsupported_recovery_path",
-            guidance: "DFU recovery is not supported on this platform.",
+            result: "unsupported_bootloader_installation_path",
+            guidance: "Bootloader installation is not supported on this platform.",
           },
         },
       };
@@ -294,13 +296,13 @@ export function normalizeFirmwareSessionStatus(value: unknown): FirmwareSessionS
   switch (candidate.kind) {
     case "idle":
       return { kind: "idle" };
-    case "serial_primary": {
-      const phase = requireEnumValue(candidate.phase, SERIAL_FLASH_PHASES, MALFORMED_SESSION_STATUS_MESSAGE);
-      return { kind: "serial_primary", phase };
+    case "firmware_install_update": {
+      const phase = requireEnumValue(candidate.phase, FIRMWARE_INSTALL_UPDATE_PHASES, MALFORMED_SESSION_STATUS_MESSAGE);
+      return { kind: "firmware_install_update", phase };
     }
-    case "dfu_recovery": {
-      const phase = requireEnumValue(candidate.phase, DFU_RECOVERY_PHASES, MALFORMED_SESSION_STATUS_MESSAGE);
-      return { kind: "dfu_recovery", phase };
+    case "bootloader_installation": {
+      const phase = requireEnumValue(candidate.phase, BOOTLOADER_INSTALLATION_PHASES, MALFORMED_SESSION_STATUS_MESSAGE);
+      return { kind: "bootloader_installation", phase };
     }
     case "cancelling": {
       const path = requireSessionPath(candidate.path, MALFORMED_SESSION_STATUS_MESSAGE);
@@ -330,17 +332,17 @@ export function normalizeFirmwareProgress(value: unknown): FirmwareProgress {
   };
 }
 
-export function normalizeSerialFlowResult(value: unknown): SerialFlowResult {
-  return normalizeSerialOutcome(value, MALFORMED_SERIAL_RESULT_MESSAGE);
+export function normalizeFirmwareInstallResult(value: unknown): FirmwareInstallResult {
+  return normalizeFirmwareInstallOutcome(value, MALFORMED_INSTALL_RESULT_MESSAGE);
 }
 
-export function normalizeDfuRecoveryResult(value: unknown): DfuRecoveryResult {
+export function normalizeBootloaderInstallationResult(value: unknown): BootloaderInstallationResult {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(MALFORMED_DFU_RESULT_MESSAGE);
+    throw new Error(MALFORMED_BOOTLOADER_RESULT_MESSAGE);
   }
 
   const candidate = value as Record<string, unknown>;
-  const result = requireEnumValue(candidate.result, DFU_RESULT_RESULTS, MALFORMED_DFU_RESULT_MESSAGE);
+  const result = requireEnumValue(candidate.result, BOOTLOADER_RESULT_RESULTS, MALFORMED_BOOTLOADER_RESULT_MESSAGE);
 
   switch (result) {
     case "verified":
@@ -351,17 +353,17 @@ export function normalizeDfuRecoveryResult(value: unknown): DfuRecoveryResult {
     case "failed":
       return {
         result,
-        reason: requireString(candidate.reason, MALFORMED_DFU_RESULT_MESSAGE),
+        reason: requireString(candidate.reason, MALFORMED_BOOTLOADER_RESULT_MESSAGE),
       };
     case "driver_guidance":
       return {
         result,
-        guidance: requireString(candidate.guidance, MALFORMED_DFU_RESULT_MESSAGE),
+        guidance: requireString(candidate.guidance, MALFORMED_BOOTLOADER_RESULT_MESSAGE),
       };
   }
 }
 
-export function normalizeSerialReadinessResponse(value: unknown): SerialReadinessResponse {
+export function normalizeFirmwareInstallReadinessResponse(value: unknown): FirmwareInstallReadinessResponse {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(MALFORMED_READINESS_MESSAGE);
   }
@@ -370,14 +372,14 @@ export function normalizeSerialReadinessResponse(value: unknown): SerialReadines
   return {
     request_token: requireString(candidate.request_token, MALFORMED_READINESS_MESSAGE),
     session_status: normalizeFirmwareSessionStatus(candidate.session_status),
-    readiness: normalizeSerialReadiness(candidate.readiness),
-    target_hint: normalizeSerialTargetHint(candidate.target_hint),
+    readiness: normalizeFirmwareInstallReadiness(candidate.readiness),
+    target_hint: normalizeFirmwareInstallTargetHint(candidate.target_hint),
     validation_pending: requireBoolean(candidate.validation_pending, MALFORMED_READINESS_MESSAGE),
-    bootloader_transition: normalizeSerialBootloaderTransition(candidate.bootloader_transition),
+    bootloader_transition: normalizeFirmwareInstallBootloaderTransition(candidate.bootloader_transition),
   };
 }
 
-export function normalizeSerialPreflightInfo(value: unknown): SerialPreflightInfo {
+export function normalizeFirmwareInstallPreflightInfo(value: unknown): FirmwareInstallPreflightInfo {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(MALFORMED_PREFLIGHT_MESSAGE);
   }
@@ -450,13 +452,13 @@ export function normalizeCatalogTargetSummaryList(value: unknown): CatalogTarget
   return value.map((entry) => normalizeCatalogTargetSummary(entry, MALFORMED_CATALOG_TARGET_MESSAGE));
 }
 
-export function computeSerialReadinessToken(request: SerialReadinessRequest): string {
+export function computeFirmwareInstallReadinessToken(request: FirmwareInstallReadinessRequest): string {
   const encoder = new TextEncoder();
   const sourceIdentity = request.source.kind === "catalog_url"
     ? `${request.source.url.length}-${fnv1a64Digest([...encoder.encode(request.source.url)])}`
     : `${request.source.data.length}-${fnv1a64Digest(request.source.data)}`;
 
-  return `serial-readiness:port=${request.port}:source_kind=${request.source.kind}:source_identity=${sourceIdentity}:full_chip_erase=${request.options?.full_chip_erase ? 1 : 0}`;
+  return `firmware-install-readiness:port=${request.port}:source_kind=${request.source.kind}:source_identity=${sourceIdentity}:full_chip_erase=${request.options?.full_chip_erase ? 1 : 0}`;
 }
 
 function normalizeFirmwareOutcome(value: unknown, message: string): FirmwareOutcome {
@@ -467,26 +469,26 @@ function normalizeFirmwareOutcome(value: unknown, message: string): FirmwareOutc
   const candidate = value as Record<string, unknown>;
   const path = requireSessionPath(candidate.path, message);
 
-  if (path === "serial_primary") {
+  if (path === "firmware_install_update") {
     return {
       path,
-      outcome: normalizeSerialOutcome(candidate.outcome, message),
+      outcome: normalizeFirmwareInstallOutcome(candidate.outcome, message),
     };
   }
 
   return {
     path,
-    outcome: normalizeDfuOutcome(candidate.outcome, message),
+    outcome: normalizeBootloaderInstallationOutcome(candidate.outcome, message),
   };
 }
 
-function normalizeSerialOutcome(value: unknown, message: string): SerialFlashOutcome {
+function normalizeFirmwareInstallOutcome(value: unknown, message: string): FirmwareInstallUpdateOutcome {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(message);
   }
 
   const candidate = value as Record<string, unknown>;
-  const result = requireEnumValue(candidate.result, SERIAL_OUTCOME_RESULTS, message);
+  const result = requireEnumValue(candidate.result, FIRMWARE_INSTALL_OUTCOME_RESULTS, message);
 
   switch (result) {
     case "cancelled":
@@ -524,13 +526,13 @@ function normalizeSerialOutcome(value: unknown, message: string): SerialFlashOut
   }
 }
 
-function normalizeDfuOutcome(value: unknown, message: string): DfuRecoveryOutcome {
+function normalizeBootloaderInstallationOutcome(value: unknown, message: string): BootloaderInstallationOutcome {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(message);
   }
 
   const candidate = value as Record<string, unknown>;
-  const result = requireEnumValue(candidate.result, DFU_OUTCOME_RESULTS, message);
+  const result = requireEnumValue(candidate.result, BOOTLOADER_OUTCOME_RESULTS, message);
 
   switch (result) {
     case "verified":
@@ -542,15 +544,15 @@ function normalizeDfuOutcome(value: unknown, message: string): DfuRecoveryOutcom
         result,
         reason: requireString(candidate.reason, message),
       };
-    case "unsupported_recovery_path":
+    case "unsupported_bootloader_installation_path":
       return {
-        result,
+        result: "unsupported_bootloader_installation_path",
         guidance: requireString(candidate.guidance, message),
       };
   }
 }
 
-function normalizeSerialReadiness(value: unknown): SerialReadiness {
+function normalizeFirmwareInstallReadiness(value: unknown): FirmwareInstallReadiness {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(MALFORMED_READINESS_MESSAGE);
   }
@@ -563,14 +565,14 @@ function normalizeSerialReadiness(value: unknown): SerialReadiness {
   if (candidate.kind === "blocked") {
     return {
       kind: "blocked",
-      reason: requireEnumValue(candidate.reason, SERIAL_READINESS_BLOCKED_REASONS, MALFORMED_READINESS_MESSAGE),
+      reason: requireEnumValue(candidate.reason, FIRMWARE_INSTALL_READINESS_BLOCKED_REASONS, MALFORMED_READINESS_MESSAGE),
     };
   }
 
   throw new Error(MALFORMED_READINESS_MESSAGE);
 }
 
-function normalizeSerialTargetHint(value: unknown): SerialReadinessResponse["target_hint"] {
+function normalizeFirmwareInstallTargetHint(value: unknown): FirmwareInstallReadinessResponse["target_hint"] {
   if (value == null) {
     return null;
   }
@@ -585,14 +587,14 @@ function normalizeSerialTargetHint(value: unknown): SerialReadinessResponse["tar
   };
 }
 
-function normalizeSerialBootloaderTransition(value: unknown): SerialBootloaderTransition {
+function normalizeFirmwareInstallBootloaderTransition(value: unknown): FirmwareInstallBootloaderTransition {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(MALFORMED_READINESS_MESSAGE);
   }
 
   const candidate = value as Record<string, unknown>;
   return {
-    kind: requireEnumValue(candidate.kind, SERIAL_BOOTLOADER_TRANSITIONS, MALFORMED_READINESS_MESSAGE),
+    kind: requireEnumValue(candidate.kind, FIRMWARE_INSTALL_BOOTLOADER_TRANSITIONS, MALFORMED_READINESS_MESSAGE),
   };
 }
 
@@ -757,8 +759,12 @@ function requireEnumValue<T extends string>(value: unknown, allowed: Set<T>, mes
 }
 
 function requireSessionPath(value: unknown, message: string): FirmwareSessionPath {
-  if (value === "serial_primary" || value === "dfu_recovery") {
-    return value;
+  if (value === "firmware_install_update") {
+    return "firmware_install_update";
+  }
+
+  if (value === "bootloader_installation") {
+    return "bootloader_installation";
   }
 
   throw new Error(message);

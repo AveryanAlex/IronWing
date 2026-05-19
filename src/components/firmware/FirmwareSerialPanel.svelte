@@ -4,7 +4,7 @@ import { onMount } from "svelte";
 import type {
   CatalogEntry,
   CatalogTargetSummary,
-  SerialReadinessBlockedReason,
+  FirmwareInstallReadinessBlockedReason,
 } from "../../firmware";
 import type { FirmwareFileIo } from "../../lib/firmware-file-io";
 import type { FirmwareService } from "../../lib/platform/firmware";
@@ -54,9 +54,9 @@ let {
 }: Props = $props();
 
 let workspaceState = $derived($store);
-let isSerialActive = $derived(workspaceState.activePath === "serial_primary");
+let isSerialActive = $derived(workspaceState.activePath === "firmware_install_update");
 let isSerialCancelling = $derived(
-  workspaceState.sessionStatus.kind === "cancelling" && workspaceState.sessionStatus.path === "serial_primary",
+  workspaceState.sessionStatus.kind === "cancelling" && workspaceState.sessionStatus.path === "firmware_install_update",
 );
 
 let catalogTargets = $state<CatalogTargetSummary[]>([]);
@@ -174,7 +174,7 @@ function entryDetail(entry: CatalogEntry): string {
   return details.join(" · ");
 }
 
-function blockedReasonCopy(reason: SerialReadinessBlockedReason | null): string {
+function blockedReasonCopy(reason: FirmwareInstallReadinessBlockedReason | null): string {
   switch (reason) {
     case "session_busy":
       return "Another firmware session is already active.";
@@ -185,7 +185,7 @@ function blockedReasonCopy(reason: SerialReadinessBlockedReason | null): string 
     case "source_missing":
       return "Choose an official catalog entry or load a local APJ before flashing.";
     default:
-      return "Serial install is still blocked by the current readiness state.";
+      return "Firmware install/update is still blocked by the current readiness state.";
   }
 }
 
@@ -247,10 +247,10 @@ async function loadCatalogTargets() {
 
 function setCatalogSourceFromEntry(entry: CatalogEntry | null) {
   if (!entry) {
-    return store.setSerialSource({ kind: "catalog_url", url: "" }, null);
+    return store.setFirmwareInstallSource({ kind: "catalog_url", url: "" }, null);
   }
 
-  return store.setSerialSource(
+  return store.setFirmwareInstallSource(
     { kind: "catalog_url", url: entry.url },
     createCatalogSourceMetadata(entry.url, entryLabel(entry), entryDetail(entry)),
   );
@@ -270,7 +270,7 @@ async function loadCatalogEntriesForTarget(target: CatalogTargetSummary, sourceK
     currentEntryTargetKey = targetKey;
 
     if (workspaceState.serial.source.kind === "catalog_url") {
-      await store.setSerialSource({ kind: "catalog_url", url: "" }, null);
+      await store.setFirmwareInstallSource({ kind: "catalog_url", url: "" }, null);
     }
   }
 
@@ -300,7 +300,7 @@ async function loadCatalogEntriesForTarget(target: CatalogTargetSummary, sourceK
     }
 
     if (sourceKind === "detected") {
-      await store.setSerialTarget(target);
+      await store.setFirmwareInstallTarget(target);
     }
   } catch (error) {
     if (requestId !== entryLoadRequest) {
@@ -311,7 +311,7 @@ async function loadCatalogEntriesForTarget(target: CatalogTargetSummary, sourceK
     catalogEntryError = service.formatError(error);
 
     if (workspaceState.serial.source.kind === "catalog_url") {
-      await store.setSerialSource({ kind: "catalog_url", url: "" }, null);
+      await store.setFirmwareInstallSource({ kind: "catalog_url", url: "" }, null);
     }
   }
 }
@@ -328,7 +328,7 @@ async function retryCatalogEntries() {
 async function handleSelectManualTarget(target: CatalogTargetSummary) {
   manualSelectionCommitted = true;
   manualOverrideExpanded = true;
-  await store.setSerialTarget(target);
+  await store.setFirmwareInstallTarget(target);
   await loadCatalogEntriesForTarget(target, "manual");
 }
 
@@ -351,7 +351,7 @@ async function handleChooseLocalApj() {
       return;
     }
 
-    await store.setSerialSource(
+    await store.setFirmwareInstallSource(
       result.selection,
       createLocalFileSourceMetadata({
         kind: result.selection.kind,
@@ -362,7 +362,7 @@ async function handleChooseLocalApj() {
       }),
     );
   } catch (error) {
-    store.setSerialSourceError(service.formatError(error));
+    store.setFirmwareInstallSourceError(service.formatError(error));
   }
 }
 
@@ -567,11 +567,11 @@ $effect(() => {
   selectedEntryIndex = 0;
 
   if (workspaceState.serial.target !== null) {
-    void store.setSerialTarget(null);
+    void store.setFirmwareInstallTarget(null);
   }
 
   if (workspaceState.serial.source.kind === "catalog_url" && workspaceState.serial.source.url.trim().length > 0) {
-    void store.setSerialSource({ kind: "catalog_url", url: "" }, null);
+    void store.setFirmwareInstallSource({ kind: "catalog_url", url: "" }, null);
   }
 });
 
@@ -602,7 +602,7 @@ $effect(() => {
 
   if (!autoTarget) {
     if (workspaceState.serial.target !== null) {
-      void store.setSerialTarget(null);
+      void store.setFirmwareInstallTarget(null);
     }
     return;
   }
@@ -613,8 +613,8 @@ $effect(() => {
 
 <Panel padded testId={firmwareWorkspaceTestIds.serialPanel}>
   <SectionHeader
-    eyebrow="Serial install"
-    title="Install / Update"
+    eyebrow="Firmware install/update"
+    title="Install or update firmware"
     description="Use the official ArduPilot catalog first. Manual target override stays available when the backend cannot prove the exact board lineage."
   >
     {#snippet actions()}
@@ -633,7 +633,7 @@ $effect(() => {
             class={selectInputClass}
             data-testid={firmwareWorkspaceTestIds.serialPort}
             disabled={isSerialActive}
-            onchange={(event) => void store.setSerialPort((event.currentTarget as HTMLSelectElement).value)}
+            onchange={(event) => void store.setFirmwareInstallPort((event.currentTarget as HTMLSelectElement).value)}
             value={workspaceState.serial.port}
           >
             {#if workspaceState.serial.availablePorts.length === 0}
@@ -653,7 +653,7 @@ $effect(() => {
             class={selectInputClass}
             data-testid={firmwareWorkspaceTestIds.serialBaud}
             disabled={isSerialActive}
-            onchange={(event) => store.setSerialBaud(Number((event.currentTarget as HTMLSelectElement).value))}
+            onchange={(event) => store.setFirmwareInstallBaud(Number((event.currentTarget as HTMLSelectElement).value))}
             value={String(workspaceState.serial.baud)}
           >
             {#each BAUD_RATES as baud (baud)}
@@ -665,9 +665,16 @@ $effect(() => {
         <Button
           testId={firmwareWorkspaceTestIds.serialPortRefresh}
           disabled={isSerialActive}
-          onclick={() => void store.refreshSerialPreflight()}
+          onclick={() => void store.refreshFirmwareInstallPreflight()}
         >
           Refresh ports
+        </Button>
+
+        <Button
+          disabled={isSerialActive}
+          onclick={() => void store.requestFirmwareInstallPort()}
+        >
+          Grant WebSerial port
         </Button>
       </div>
 
@@ -929,7 +936,7 @@ $effect(() => {
               checked={workspaceState.serial.fullChipErase}
               data-testid={firmwareWorkspaceTestIds.fullChipErase}
               disabled={isSerialActive}
-              onchange={(event) => void store.setSerialFullChipErase((event.currentTarget as HTMLInputElement).checked)}
+              onchange={(event) => void store.setFirmwareInstallFullChipErase((event.currentTarget as HTMLInputElement).checked)}
               type="checkbox"
             />
             <span>
@@ -985,7 +992,7 @@ $effect(() => {
 
         {#if isSerialActive}
           <div class="mt-3 rounded-md border border-accent/35 bg-accent/10 p-3 text-sm text-text-primary">
-            <p class="m-0 font-semibold">Serial install in progress</p>
+            <p class="m-0 font-semibold">Firmware install/update in progress</p>
             <p class="m-0 mt-1">{workspaceState.progress?.phase_label ?? workspaceState.sessionPhase ?? "working"}</p>
             {#if workspaceState.progress}
               <div class="mt-3 h-2 overflow-hidden rounded-full bg-bg-primary" data-testid={firmwareWorkspaceTestIds.serialProgress}>
@@ -1005,7 +1012,7 @@ $effect(() => {
               testId={firmwareWorkspaceTestIds.cancelSerial}
               onclick={() => void store.cancel()}
             >
-              Cancel install
+              Cancel firmware install/update
             </Button>
           {/if}
 
@@ -1013,9 +1020,9 @@ $effect(() => {
             tone="accent"
             testId={firmwareWorkspaceTestIds.startSerial}
             disabled={!canStartSerial || isSerialActive || isSerialCancelling || replayReadonly}
-            onclick={() => void store.startSerial()}
+            onclick={() => void store.startFirmwareInstallUpdate()}
           >
-            Start install
+            Start firmware install/update
           </Button>
         </div>
       </Panel>

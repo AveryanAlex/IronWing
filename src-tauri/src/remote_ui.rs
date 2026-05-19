@@ -522,29 +522,30 @@ async fn dispatch_invoke(
         "firmware_catalog_targets" => {
             ok(firmware::commands::firmware_catalog_targets(app.clone()).await?)
         }
-        "firmware_recovery_catalog_targets" => {
-            ok(firmware::commands::firmware_recovery_catalog_targets(app.clone()).await?)
+        "firmware_bootloader_catalog_targets" => {
+            ok(firmware::commands::firmware_bootloader_catalog_targets(app.clone()).await?)
         }
-        "firmware_serial_preflight" => {
-            ok(firmware::commands::firmware_serial_preflight(state).await?)
+        "firmware_install_update_preflight" => {
+            ok(firmware::commands::firmware_install_update_preflight(state).await?)
         }
-        "firmware_flash_serial" => ok(firmware::commands::firmware_flash_serial(
+        "firmware_install_update" => ok(firmware::commands::firmware_install_update(
             state,
             app.clone(),
             arg(&args, "request")?,
         )
         .await?),
-        "firmware_serial_readiness" => ok(firmware::commands::firmware_serial_readiness(
-            state,
-            arg(&args, "request")?,
-        )
-        .await?),
-        "firmware_flash_dfu_recovery" => ok(firmware::commands::firmware_flash_dfu_recovery(
-            state,
-            app.clone(),
-            arg(&args, "request")?,
-        )
-        .await?),
+        "firmware_install_update_readiness" => ok(
+            firmware::commands::firmware_install_update_readiness(state, arg(&args, "request")?)
+                .await?,
+        ),
+        "firmware_bootloader_installation" => {
+            ok(firmware::commands::firmware_bootloader_installation(
+                state,
+                app.clone(),
+                arg(&args, "request")?,
+            )
+            .await?)
+        }
         "firmware_session_status" => ok(firmware::commands::firmware_session_status(state)),
         "firmware_session_cancel" => {
             firmware::commands::firmware_session_cancel(state).await?;

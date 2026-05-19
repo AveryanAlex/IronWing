@@ -76,8 +76,8 @@ export const OPERATION_IDS = [
   "recording_status",
   "recording_settings_read",
   "recording_settings_write",
-  "firmware_flash_serial",
-  "firmware_flash_dfu_recovery",
+  "firmware_install_update",
+  "firmware_bootloader_installation",
 ] as const;
 
 export type OperationId = (typeof OPERATION_IDS)[number];

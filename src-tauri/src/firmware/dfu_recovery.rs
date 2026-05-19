@@ -142,12 +142,16 @@ impl DfuRecoveryResult {
             Self::Failed { reason } => DfuRecoveryOutcome::Failed {
                 reason: reason.clone(),
             },
-            Self::DriverGuidance { guidance } => DfuRecoveryOutcome::UnsupportedRecoveryPath {
-                guidance: guidance.clone(),
-            },
-            Self::PlatformUnsupported => DfuRecoveryOutcome::UnsupportedRecoveryPath {
-                guidance: "DFU recovery is not supported on this platform".into(),
-            },
+            Self::DriverGuidance { guidance } => {
+                DfuRecoveryOutcome::UnsupportedBootloaderInstallationPath {
+                    guidance: guidance.clone(),
+                }
+            }
+            Self::PlatformUnsupported => {
+                DfuRecoveryOutcome::UnsupportedBootloaderInstallationPath {
+                    guidance: "DFU recovery is not supported on this platform".into(),
+                }
+            }
         }
     }
 }

@@ -3,46 +3,46 @@ import { get, writable } from "svelte/store";
 import type {
   CatalogTargetSummary,
   DfuDeviceInfo,
-  DfuRecoveryResult,
-  DfuRecoverySource,
+  BootloaderInstallationResult,
+  BootloaderInstallationSource,
+  FirmwareInstallResult,
+  FirmwareInstallPreflightInfo,
+  FirmwareInstallReadinessRequest,
+  FirmwareInstallReadinessResponse,
+  FirmwareInstallOptions,
+  FirmwareInstallSource,
   FirmwareOutcome,
   FirmwareProgress,
   FirmwareSessionStatus,
   PortInfo,
-  SerialFlowResult,
-  SerialPreflightInfo,
-  SerialReadinessRequest,
-  SerialReadinessResponse,
-  SerialFlashOptions,
-  SerialFlashSource,
 } from "../../firmware";
 import {
-  buildDfuFailureStatus,
-  buildSerialFailureStatus,
-  computeSerialReadinessToken,
+  bootloaderInstallationResultToStatus,
+  buildBootloaderInstallationFailureStatus,
+  buildFirmwareInstallFailureStatus,
+  computeFirmwareInstallReadinessToken,
   createFirmwareService,
   deriveFirmwareSessionPath,
   deriveFirmwareSessionPhase,
-  dfuResultToStatus,
+  firmwareInstallResultToStatus,
   isFirmwareSessionActive,
-  normalizeDfuRecoveryResult,
+  normalizeBootloaderInstallationResult,
   normalizeDfuScanResult,
+  normalizeFirmwareInstallPreflightInfo,
+  normalizeFirmwareInstallReadinessResponse,
+  normalizeFirmwareInstallResult,
   normalizeFirmwareProgress,
   normalizeFirmwareSessionStatus,
-  normalizeSerialFlowResult,
-  normalizeSerialPreflightInfo,
-  normalizeSerialReadinessResponse,
-  serialResultToStatus,
   type FirmwareService,
-  type FirmwareSessionPath,
 } from "../platform/firmware";
+import type { FirmwareSessionPath } from "../../firmware";
 
 export const DEFAULT_FIRMWARE_BAUD = 115200;
 const READINESS_TOKEN_MISMATCH_MESSAGE = "Firmware readiness returned a mismatched request token.";
-const MISSING_SERIAL_PORT_MESSAGE = "Choose a serial port before starting firmware install.";
-const MISSING_SERIAL_SOURCE_MESSAGE = "Choose a firmware source before starting firmware install.";
-const MISSING_DFU_DEVICE_MESSAGE = "Choose a DFU device before starting recovery.";
-const MISSING_DFU_SOURCE_MESSAGE = "Choose a DFU recovery source before starting recovery.";
+const MISSING_INSTALL_PORT_MESSAGE = "Choose a serial port before starting firmware install/update.";
+const MISSING_INSTALL_SOURCE_MESSAGE = "Choose a firmware source before starting firmware install/update.";
+const MISSING_BOOTLOADER_DEVICE_MESSAGE = "Choose a DFU device before starting bootloader installation.";
+const MISSING_BOOTLOADER_SOURCE_MESSAGE = "Choose a bootloader source before starting bootloader installation.";
 
 export type FirmwareWorkspaceAsyncPhase = "idle" | "loading" | "ready" | "failed";
 export type FirmwareWorkspaceReadinessPhase = "idle" | "checking" | "ready" | "blocked" | "failed";
@@ -77,7 +77,7 @@ export type FirmwareWorkspaceReadinessState = {
   phase: FirmwareWorkspaceReadinessPhase;
   requestToken: string | null;
   acceptedToken: string | null;
-  response: SerialReadinessResponse | null;
+  response: FirmwareInstallReadinessResponse | null;
   error: string | null;
   staleResponseCount: number;
 };
@@ -87,12 +87,12 @@ export type FirmwareWorkspaceSerialState = {
   baud: number;
   fullChipErase: boolean;
   target: CatalogTargetSummary | null;
-  source: SerialFlashSource;
+  source: FirmwareInstallSource;
   sourceMetadata: FirmwareSourceMetadata | null;
   sourceError: string | null;
   availablePorts: PortInfo[];
   preflightPhase: FirmwareWorkspaceAsyncPhase;
-  preflight: SerialPreflightInfo | null;
+  preflight: FirmwareInstallPreflightInfo | null;
   preflightError: string | null;
   readiness: FirmwareWorkspaceReadinessState;
 };
@@ -100,7 +100,7 @@ export type FirmwareWorkspaceSerialState = {
 export type FirmwareWorkspaceRecoveryState = {
   device: DfuDeviceInfo | null;
   target: CatalogTargetSummary | null;
-  source: DfuRecoverySource | null;
+  source: BootloaderInstallationSource | null;
   sourceMetadata: FirmwareSourceMetadata | null;
   sourceError: string | null;
   devices: DfuDeviceInfo[];
@@ -128,7 +128,7 @@ export type FirmwareWorkspaceStoreOptions = {
   sessionPollMs?: number;
 };
 
-const DEFAULT_SERIAL_SOURCE: SerialFlashSource = {
+const DEFAULT_SERIAL_SOURCE: FirmwareInstallSource = {
   kind: "catalog_url",
   url: "",
 };
@@ -213,9 +213,9 @@ export function createFirmwareWorkspaceStore(
     }
 
     if (pendingStartPath !== null && observedSessionStatus.kind === "idle") {
-      return pendingStartPath === "serial_primary"
-        ? { kind: "serial_primary", phase: "idle" }
-        : { kind: "dfu_recovery", phase: "idle" };
+      return pendingStartPath === "firmware_install_update"
+        ? { kind: "firmware_install_update", phase: "idle" }
+        : { kind: "bootloader_installation", phase: "idle" };
     }
 
     if (observedSessionStatus.kind === "idle" && lastCompletedOutcome) {
@@ -276,7 +276,7 @@ export function createFirmwareWorkspaceStore(
 
       await Promise.allSettled([
         refreshSessionStatus(),
-        refreshSerialPreflight(),
+        refreshFirmwareInstallPreflight(),
         refreshRecoveryDevices(),
       ]);
 
@@ -309,7 +309,7 @@ export function createFirmwareWorkspaceStore(
     }
   }
 
-  async function refreshSerialPreflight() {
+  async function refreshFirmwareInstallPreflight() {
     updateState((state) => ({
       ...state,
       serial: {
@@ -320,7 +320,7 @@ export function createFirmwareWorkspaceStore(
     }));
 
     try {
-      const preflight = normalizeSerialPreflightInfo(await service.serialPreflight());
+      const preflight = normalizeFirmwareInstallPreflightInfo(await service.installPreflight());
       applyObservedSessionStatus(preflight.session_status);
 
       const previous = get(store);
@@ -339,9 +339,35 @@ export function createFirmwareWorkspaceStore(
       }));
 
       if (nextPort !== previous.serial.port || previous.serial.readiness.phase === "idle") {
-        await requestSerialReadiness();
+        await requestFirmwareInstallReadiness();
       }
 
+      return preflight;
+    } catch (error) {
+      const message = service.formatError(error);
+      updateState((state) => ({
+        ...state,
+        lastError: message,
+        serial: {
+          ...state.serial,
+          preflightPhase: "failed",
+          preflightError: message,
+        },
+      }));
+      return null;
+    }
+  }
+
+  async function requestFirmwareInstallPort() {
+    try {
+      const requested = await service.requestFirmwareInstallPort();
+      const preflight = await refreshFirmwareInstallPreflight();
+      if (requested && typeof requested === "object" && !Array.isArray(requested)) {
+        const portName = (requested as Record<string, unknown>).port_name;
+        if (typeof portName === "string" && portName.trim().length > 0) {
+          await setFirmwareInstallPort(portName);
+        }
+      }
       return preflight;
     } catch (error) {
       const message = service.formatError(error);
@@ -381,7 +407,7 @@ export function createFirmwareWorkspaceStore(
           device: selectedDevice,
           devices,
           scanPhase: "ready",
-          scanError: scan.kind === "unsupported" ? "DFU recovery is unsupported on this platform." : null,
+          scanError: scan.kind === "unsupported" ? "Bootloader installation is unsupported on this platform." : null,
         },
       }));
 
@@ -401,10 +427,10 @@ export function createFirmwareWorkspaceStore(
     }
   }
 
-  async function requestSerialReadiness() {
+  async function requestFirmwareInstallReadiness() {
     const currentState = get(store);
-    const request = buildSerialReadinessRequest(currentState.serial);
-    const requestToken = computeSerialReadinessToken(request);
+    const request = buildFirmwareInstallReadinessRequest(currentState.serial);
+    const requestToken = computeFirmwareInstallReadinessToken(request);
 
     updateState((state) => ({
       ...state,
@@ -420,7 +446,7 @@ export function createFirmwareWorkspaceStore(
     }));
 
     try {
-      const response = normalizeSerialReadinessResponse(await service.serialReadiness(request));
+      const response = normalizeFirmwareInstallReadinessResponse(await service.installReadiness(request));
       const latest = get(store);
       if (latest.serial.readiness.requestToken !== requestToken) {
         updateState((state) => ({
@@ -501,7 +527,7 @@ export function createFirmwareWorkspaceStore(
     }
   }
 
-  async function setSerialPort(port: string) {
+  async function setFirmwareInstallPort(port: string) {
     const normalizedPort = typeof port === "string" ? port : "";
     const current = get(store).serial.port;
     if (normalizedPort === current) {
@@ -516,10 +542,10 @@ export function createFirmwareWorkspaceStore(
       },
     }));
 
-    return requestSerialReadiness();
+    return requestFirmwareInstallReadiness();
   }
 
-  function setSerialTarget(target: CatalogTargetSummary | null) {
+  function setFirmwareInstallTarget(target: CatalogTargetSummary | null) {
     updateState((state) => ({
       ...state,
       serial: {
@@ -529,7 +555,7 @@ export function createFirmwareWorkspaceStore(
     }));
   }
 
-  async function setSerialSource(source: SerialFlashSource | null, metadata: FirmwareSourceMetadata | null = null) {
+  async function setFirmwareInstallSource(source: FirmwareInstallSource | null, metadata: FirmwareSourceMetadata | null = null) {
     updateState((state) => ({
       ...state,
       serial: {
@@ -540,10 +566,10 @@ export function createFirmwareWorkspaceStore(
       },
     }));
 
-    return requestSerialReadiness();
+    return requestFirmwareInstallReadiness();
   }
 
-  function setSerialSourceError(error: string | null) {
+  function setFirmwareInstallSourceError(error: string | null) {
     updateState((state) => ({
       ...state,
       serial: {
@@ -553,7 +579,7 @@ export function createFirmwareWorkspaceStore(
     }));
   }
 
-  function setSerialBaud(baud: number) {
+  function setFirmwareInstallBaud(baud: number) {
     if (!Number.isFinite(baud) || baud <= 0) {
       return;
     }
@@ -567,7 +593,7 @@ export function createFirmwareWorkspaceStore(
     }));
   }
 
-  async function setSerialFullChipErase(fullChipErase: boolean) {
+  async function setFirmwareInstallFullChipErase(fullChipErase: boolean) {
     updateState((state) => ({
       ...state,
       serial: {
@@ -576,10 +602,10 @@ export function createFirmwareWorkspaceStore(
       },
     }));
 
-    return requestSerialReadiness();
+    return requestFirmwareInstallReadiness();
   }
 
-  function setRecoveryDevice(device: DfuDeviceInfo | null) {
+  function setBootloaderDevice(device: DfuDeviceInfo | null) {
     updateState((state) => ({
       ...state,
       recovery: {
@@ -589,7 +615,7 @@ export function createFirmwareWorkspaceStore(
     }));
   }
 
-  function setRecoveryTarget(target: CatalogTargetSummary | null) {
+  function setBootloaderTarget(target: CatalogTargetSummary | null) {
     updateState((state) => ({
       ...state,
       recovery: {
@@ -599,7 +625,7 @@ export function createFirmwareWorkspaceStore(
     }));
   }
 
-  function setRecoverySource(source: DfuRecoverySource | null, metadata: FirmwareSourceMetadata | null = null) {
+  function setBootloaderSource(source: BootloaderInstallationSource | null, metadata: FirmwareSourceMetadata | null = null) {
     updateState((state) => ({
       ...state,
       recovery: {
@@ -611,7 +637,7 @@ export function createFirmwareWorkspaceStore(
     }));
   }
 
-  function setRecoverySourceError(error: string | null) {
+  function setBootloaderSourceError(error: string | null) {
     updateState((state) => ({
       ...state,
       recovery: {
@@ -621,14 +647,14 @@ export function createFirmwareWorkspaceStore(
     }));
   }
 
-  async function startSerial(): Promise<SerialFlowResult | null> {
+  async function startFirmwareInstallUpdate(): Promise<FirmwareInstallResult | null> {
     const state = get(store);
     const source = state.serial.source;
 
     if (state.serial.port.trim().length === 0) {
       updateState((current) => ({
         ...current,
-        lastError: MISSING_SERIAL_PORT_MESSAGE,
+        lastError: MISSING_INSTALL_PORT_MESSAGE,
       }));
       return null;
     }
@@ -636,13 +662,13 @@ export function createFirmwareWorkspaceStore(
     if (source.kind === "catalog_url" && source.url.trim().length === 0) {
       updateState((current) => ({
         ...current,
-        lastError: MISSING_SERIAL_SOURCE_MESSAGE,
+        lastError: MISSING_INSTALL_SOURCE_MESSAGE,
       }));
       return null;
     }
 
     pendingCancelPath = null;
-    pendingStartPath = "serial_primary";
+    pendingStartPath = "firmware_install_update";
 
     updateState((current) => ({
       ...current,
@@ -653,8 +679,8 @@ export function createFirmwareWorkspaceStore(
     }));
 
     try {
-      const result = normalizeSerialFlowResult(
-        await service.flashSerial(
+      const result = normalizeFirmwareInstallResult(
+        await service.startFirmwareInstallUpdate(
           state.serial.port,
           state.serial.baud,
           source,
@@ -662,7 +688,7 @@ export function createFirmwareWorkspaceStore(
         ),
       );
       pendingStartPath = null;
-      const nextStatus = serialResultToStatus(result);
+      const nextStatus = firmwareInstallResultToStatus(result);
       applyObservedSessionStatus(nextStatus, { clearLastError: true });
       updateState((current) => ({
         ...current,
@@ -672,7 +698,7 @@ export function createFirmwareWorkspaceStore(
     } catch (error) {
       pendingStartPath = null;
       const message = service.formatError(error);
-      applyObservedSessionStatus(buildSerialFailureStatus(message));
+      applyObservedSessionStatus(buildFirmwareInstallFailureStatus(message));
       updateState((current) => ({
         ...current,
         lastError: message,
@@ -682,12 +708,12 @@ export function createFirmwareWorkspaceStore(
     }
   }
 
-  async function startDfuRecovery(): Promise<DfuRecoveryResult | null> {
+  async function startBootloaderInstallation(): Promise<BootloaderInstallationResult | null> {
     const state = get(store);
     if (!state.recovery.device) {
       updateState((current) => ({
         ...current,
-        lastError: MISSING_DFU_DEVICE_MESSAGE,
+        lastError: MISSING_BOOTLOADER_DEVICE_MESSAGE,
       }));
       return null;
     }
@@ -695,13 +721,13 @@ export function createFirmwareWorkspaceStore(
     if (!state.recovery.source) {
       updateState((current) => ({
         ...current,
-        lastError: MISSING_DFU_SOURCE_MESSAGE,
+        lastError: MISSING_BOOTLOADER_SOURCE_MESSAGE,
       }));
       return null;
     }
 
     pendingCancelPath = null;
-    pendingStartPath = "dfu_recovery";
+    pendingStartPath = "bootloader_installation";
 
     updateState((current) => ({
       ...current,
@@ -712,11 +738,11 @@ export function createFirmwareWorkspaceStore(
     }));
 
     try {
-      const result = normalizeDfuRecoveryResult(
-        await service.flashDfuRecovery(state.recovery.device, state.recovery.source),
+      const result = normalizeBootloaderInstallationResult(
+        await service.startBootloaderInstallation(state.recovery.device, state.recovery.source),
       );
       pendingStartPath = null;
-      const nextStatus = dfuResultToStatus(result);
+      const nextStatus = bootloaderInstallationResultToStatus(result);
       applyObservedSessionStatus(nextStatus, { clearLastError: true });
       updateState((current) => ({
         ...current,
@@ -726,7 +752,7 @@ export function createFirmwareWorkspaceStore(
     } catch (error) {
       pendingStartPath = null;
       const message = service.formatError(error);
-      applyObservedSessionStatus(buildDfuFailureStatus(message));
+      applyObservedSessionStatus(buildBootloaderInstallationFailureStatus(message));
       updateState((current) => ({
         ...current,
         lastError: message,
@@ -843,21 +869,22 @@ export function createFirmwareWorkspaceStore(
     subscribe: store.subscribe,
     initialize,
     refreshSessionStatus,
-    refreshSerialPreflight,
+    refreshFirmwareInstallPreflight,
+    requestFirmwareInstallPort,
     refreshRecoveryDevices,
-    requestSerialReadiness,
-    setSerialPort,
-    setSerialTarget,
-    setSerialSource,
-    setSerialSourceError,
-    setSerialBaud,
-    setSerialFullChipErase,
-    setRecoveryDevice,
-    setRecoveryTarget,
-    setRecoverySource,
-    setRecoverySourceError,
-    startSerial,
-    startDfuRecovery,
+    requestFirmwareInstallReadiness,
+    setFirmwareInstallPort,
+    setFirmwareInstallTarget,
+    setFirmwareInstallSource,
+    setFirmwareInstallSourceError,
+    setFirmwareInstallBaud,
+    setFirmwareInstallFullChipErase,
+    setBootloaderDevice,
+    setBootloaderTarget,
+    setBootloaderSource,
+    setBootloaderSourceError,
+    startFirmwareInstallUpdate,
+    startBootloaderInstallation,
     cancel,
     dismissOutcome,
     clearError,
@@ -906,7 +933,7 @@ export function createLocalFileSourceMetadata(input: {
   };
 }
 
-function buildSerialReadinessRequest(serial: FirmwareWorkspaceSerialState): SerialReadinessRequest {
+function buildFirmwareInstallReadinessRequest(serial: FirmwareWorkspaceSerialState): FirmwareInstallReadinessRequest {
   return {
     port: serial.port,
     source: serial.source,
@@ -914,7 +941,7 @@ function buildSerialReadinessRequest(serial: FirmwareWorkspaceSerialState): Seri
   };
 }
 
-function serialOptionsFromState(serial: Pick<FirmwareWorkspaceSerialState, "fullChipErase">): SerialFlashOptions {
+function serialOptionsFromState(serial: Pick<FirmwareWorkspaceSerialState, "fullChipErase">): FirmwareInstallOptions {
   return {
     full_chip_erase: serial.fullChipErase,
   };

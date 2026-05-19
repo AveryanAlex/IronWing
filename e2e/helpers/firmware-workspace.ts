@@ -96,14 +96,14 @@ export async function selectManualTarget(
 export async function waitForSerialStartEnabled(page: Page): Promise<void> {
     await expect(
         firmwareLocator(page, "startSerial"),
-        "Serial install never became startable; check target proof, source selection, readiness copy, and constrained-tier blocking before assuming the workspace is ready.",
+        "Firmware install/update never became startable; check target proof, source selection, readiness copy, and constrained-tier blocking before assuming the workspace is ready.",
     ).toBeEnabled();
 }
 
 export async function waitForRecoveryStartEnabled(page: Page): Promise<void> {
     await expect(
         firmwareLocator(page, "startRecovery"),
-        "DFU recovery never became startable; check device selection, source confirmation, and blocked guidance before assuming the rescue path is armed.",
+        "Bootloader installation never became startable; check device selection, source confirmation, and blocked guidance before assuming the path is armed.",
     ).toBeEnabled();
 }
 
@@ -141,10 +141,10 @@ export async function resolveDeferredSerialFlash(
     result: SerialFlowResult,
     emit: MockPlatformEvent[] = [],
 ): Promise<void> {
-    const resolved = await mockPlatform.resolveDeferred("firmware_flash_serial", result, emit);
+    const resolved = await mockPlatform.resolveDeferred("firmware_install_update", result, emit);
     expect(
         resolved,
-        "No deferred firmware_flash_serial invocation was waiting to resolve. Keep the test flow tied to an active serial start instead of resolving hidden state opportunistically.",
+        "No deferred firmware_install_update invocation was waiting to resolve. Keep the test flow tied to an active firmware install/update start instead of resolving hidden state opportunistically.",
     ).toBe(true);
 }
 
@@ -153,10 +153,10 @@ export async function rejectDeferredSerialFlash(
     error: string,
     emit: MockPlatformEvent[] = [],
 ): Promise<void> {
-    const rejected = await mockPlatform.rejectDeferred("firmware_flash_serial", error, emit);
+    const rejected = await mockPlatform.rejectDeferred("firmware_install_update", error, emit);
     expect(
         rejected,
-        "No deferred firmware_flash_serial invocation was waiting to reject. Keep the test flow tied to an active serial start instead of rejecting hidden state opportunistically.",
+        "No deferred firmware_install_update invocation was waiting to reject. Keep the test flow tied to an active firmware install/update start instead of rejecting hidden state opportunistically.",
     ).toBe(true);
 }
 
@@ -165,10 +165,10 @@ export async function resolveDeferredRecovery(
     result: DfuRecoveryResult,
     emit: MockPlatformEvent[] = [],
 ): Promise<void> {
-    const resolved = await mockPlatform.resolveDeferred("firmware_flash_dfu_recovery", result, emit);
+    const resolved = await mockPlatform.resolveDeferred("firmware_bootloader_installation", result, emit);
     expect(
         resolved,
-        "No deferred firmware_flash_dfu_recovery invocation was waiting to resolve. Keep the recovery proof tied to an active DFU start instead of resolving hidden state opportunistically.",
+        "No deferred firmware_bootloader_installation invocation was waiting to resolve. Keep the bootloader proof tied to an active DFU start instead of resolving hidden state opportunistically.",
     ).toBe(true);
 }
 
