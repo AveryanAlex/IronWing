@@ -1,56 +1,75 @@
-import net from "node:net";
-import { WebSocketServer } from "ws";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createCleanupRunner } from "./workflow/process.mjs";
+import { resolveRequestedRuntime } from "./workflow/runtime.mjs";
+import { startSitl, stopSitl } from "./workflow/sitl.mjs";
+import {
+  createSitlWebSocketBridge,
+  resolveSitlWsConfig,
+  waitForBridgeListening,
+} from "./workflow/sitl-ws.mjs";
+import { waitForTcp } from "./workflow/wait.mjs";
 
-function readNumberFlag(flag, fallback) {
-  const index = process.argv.indexOf(flag);
-  if (index === -1) return fallback;
-  const parsed = Number.parseInt(process.argv[index + 1] ?? "", 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(scriptDir, "..");
+const runtime = await resolveRequestedRuntime(process.env);
+const config = resolveSitlWsConfig({ argv: process.argv.slice(2), env: process.env, runtime });
+const cleanup = createCleanupRunner();
+
+let bridge;
+let exiting = false;
+
+if (config.startSitl) {
+  cleanup.add(async () => {
+    console.log(`[sitl-ws] Stopping SITL container ${config.runtime.sitlContainer}...`);
+    await stopSitl(config.runtime, { cwd: projectRoot });
+  });
 }
 
-function readStringFlag(flag, fallback) {
-  const index = process.argv.indexOf(flag);
-  return index === -1 ? fallback : (process.argv[index + 1] ?? fallback);
+async function exitWithCleanup(exitCode) {
+  if (exiting) {
+    return;
+  }
+
+  exiting = true;
+  await cleanup.run();
+  process.exit(exitCode);
 }
 
-const tcpHost = readStringFlag("--tcp-host", "127.0.0.1");
-const tcpPort = readNumberFlag("--tcp-port", Number.parseInt(process.env.VITE_IRONWING_SITL_TCP_PORT ?? "5760", 10));
-const wsHost = readStringFlag("--ws-host", "127.0.0.1");
-const wsPort = readNumberFlag("--ws-port", 14560);
-
-const server = new WebSocketServer({ host: wsHost, port: wsPort });
-
-server.on("connection", (socket) => {
-  const tcp = net.createConnection({ host: tcpHost, port: tcpPort });
-
-  tcp.on("data", (chunk) => {
-    if (socket.readyState === socket.OPEN) {
-      socket.send(chunk);
-    }
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, () => {
+    void exitWithCleanup(signal === "SIGINT" ? 130 : 143);
   });
+}
 
-  tcp.on("error", () => {
-    socket.close();
-  });
-
-  tcp.on("close", () => {
-    socket.close();
-  });
-
-  socket.on("message", (data, isBinary) => {
-    const payload = isBinary ? data : Buffer.from(String(data));
-    tcp.write(payload);
-  });
-
-  socket.on("close", () => {
-    tcp.destroy();
-  });
-
-  socket.on("error", () => {
-    tcp.destroy();
-  });
+process.on("uncaughtException", (error) => {
+  console.error(error);
+  void exitWithCleanup(1);
 });
 
-server.on("listening", () => {
-  console.log(`SITL WebSocket bridge listening on ws://${wsHost}:${wsPort} -> tcp://${tcpHost}:${tcpPort}`);
+process.on("unhandledRejection", (error) => {
+  console.error(error);
+  void exitWithCleanup(1);
 });
+
+if (config.startSitl) {
+  console.log(`[sitl-ws] Starting SITL instance ${config.runtime.instanceId} on ${config.runtime.tcpAddress}...`);
+  await startSitl(config.runtime, { cwd: projectRoot });
+  await waitForTcp(config.tcpHost, config.tcpPort, 90_000);
+  console.log(`[sitl-ws] SITL ready on tcp://${config.tcpHost}:${config.tcpPort}.`);
+} else {
+  console.log(`[sitl-ws] Using existing SITL at tcp://${config.tcpHost}:${config.tcpPort}.`);
+}
+
+bridge = createSitlWebSocketBridge(config);
+cleanup.add(async () => {
+  await bridge?.close();
+});
+bridge.server.on("error", (error) => {
+  console.error(error);
+  void exitWithCleanup(1);
+});
+await waitForBridgeListening(bridge.server);
+
+console.log(`[sitl-ws] WebSocket bridge listening on ws://${config.wsHost}:${config.wsPort} -> tcp://${config.tcpHost}:${config.tcpPort}`);
+console.log(`[sitl-ws] Connect the pure web app to ws://${config.wsHost}:${config.wsPort}.`);

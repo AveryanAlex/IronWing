@@ -285,6 +285,12 @@ impl SessionRuntime {
     }
 }
 
+impl Default for SessionRuntime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 trait BootstrapSessionDomain {
     fn present_session(self) -> crate::ipc::DomainValue<SessionSnapshot>;
 }

@@ -5,10 +5,16 @@ export class IronwingWasmRuntime {
     free(): void;
     [Symbol.dispose](): void;
     ackSessionSnapshot(session_id: string, seek_epoch: number, reset_revision: number): any;
+    armVehicle(force: boolean): Promise<void>;
     beginConnect(): WasmByteBridge;
+    disarmVehicle(force: boolean): Promise<void>;
     disconnectLink(): Promise<void>;
+    getAvailableModes(): any;
     constructor(event_sink: Function);
     openSessionSnapshot(source_kind: string): any;
+    setFlightMode(custom_mode: number): Promise<void>;
+    setMessageRate(message_id: number, rate_hz: number): Promise<void>;
+    vehicleTakeoff(altitude_m: number): Promise<void>;
     waitConnect(): Promise<void>;
 }
 
@@ -30,17 +36,23 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_ironwingwasmruntime_free: (a: number, b: number) => void;
     readonly ironwingwasmruntime_ackSessionSnapshot: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly ironwingwasmruntime_armVehicle: (a: number, b: number) => any;
     readonly ironwingwasmruntime_beginConnect: (a: number) => [number, number, number];
+    readonly ironwingwasmruntime_disarmVehicle: (a: number, b: number) => any;
     readonly ironwingwasmruntime_disconnectLink: (a: number) => any;
+    readonly ironwingwasmruntime_getAvailableModes: (a: number) => [number, number, number];
     readonly ironwingwasmruntime_new: (a: any) => number;
     readonly ironwingwasmruntime_openSessionSnapshot: (a: number, b: number, c: number) => [number, number, number];
+    readonly ironwingwasmruntime_setFlightMode: (a: number, b: number) => any;
+    readonly ironwingwasmruntime_setMessageRate: (a: number, b: number, c: number) => any;
+    readonly ironwingwasmruntime_vehicleTakeoff: (a: number, b: number) => any;
     readonly ironwingwasmruntime_waitConnect: (a: number) => any;
-    readonly start: () => void;
     readonly __wbg_wasmbytebridge_free: (a: number, b: number) => void;
     readonly wasmbytebridge_close: (a: number) => void;
     readonly wasmbytebridge_isClosed: (a: number) => number;
     readonly wasmbytebridge_nextOutbound: (a: number) => any;
     readonly wasmbytebridge_pushInbound: (a: number, b: any) => any;
+    readonly start: () => void;
     readonly wasm_bindgen__convert__closures_____invoke__h157532a21e05ac18: (a: number, b: number, c: any) => [number, number];
     readonly wasm_bindgen__convert__closures_____invoke__h831f6e81e7b0bf6f: (a: number, b: number, c: any, d: any) => void;
     readonly wasm_bindgen__convert__closures_____invoke__hba32844d06b6d595: (a: number, b: number) => void;

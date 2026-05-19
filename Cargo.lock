@@ -2168,6 +2168,7 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "futures",
+ "gloo-timers",
  "ironwing-core",
  "js-sys",
  "mavkit",
@@ -2176,6 +2177,7 @@ dependencies = [
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-time",
 ]
 
 [[package]]
