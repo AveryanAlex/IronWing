@@ -1,7 +1,0 @@
-# Legacy runtime quarantine
-src-old/**
-
-# Legacy React/frontend surfaces still awaiting Svelte rewrite slices
-src/**/*.tsx
-src/**/*.jsx
-src/**/*.test.tsx
