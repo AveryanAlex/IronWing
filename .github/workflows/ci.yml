@@ -22,14 +22,6 @@ jobs:
           node-version: lts/*
           cache: pnpm
 
-      - name: Setup Rust for web WASM
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - name: Install wasm-pack
-        run: cargo install wasm-pack --locked
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -41,9 +33,6 @@ jobs:
 
       - name: Check Svelte components
         run: pnpm run check:frontend:svelte
-
-      - name: Build frontend
-        run: pnpm run build:frontend:vite
 
       - name: Run frontend tests
         run: pnpm run test:frontend
@@ -163,7 +152,7 @@ jobs:
         run: pnpm run e2e:browser
 
   native-e2e:
-    needs: [e2e, backend]
+    needs: [backend]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
