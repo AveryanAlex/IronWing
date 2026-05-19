@@ -190,7 +190,3 @@ Set `IRONWING_OUT_DIR` to override a specific build artifact directory.
 ## CI
 
 - `.github/workflows/ci.yml`: frontend checks/build/tests + Rust check/tests on every push and PR
-
-## Planning
-
-Project roadmap and current milestone tracking live in `PLAN.md`.

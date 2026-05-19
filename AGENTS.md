@@ -127,12 +127,6 @@ Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavk
 - Layer-specific test guidance lives in `src/AGENTS.md`, `src-tauri/src/AGENTS.md`, `e2e/AGENTS.md`, and `e2e-native/AGENTS.md`.
 - Keep native desktop coverage intentionally thin and high-value; broad UI coverage still belongs in the mocked Playwright suite.
 
-## PLAN.md Maintenance
-
-- Treat `PLAN.md` as a living roadmap, not a changelog.
-- Update milestone status when shipped work materially changes scope or completion state.
-- Keep completed milestones summarized and current/future work detailed.
-
 ## Known Quirks
 
 - IPC event names use URI-style strings such as `telemetry://state`, `session://state`, `mission://state`, `param://store`, `param://progress`, `sensor_health://state`, `calibration://state`, `compass://cal_progress`, `compass://cal_report`, `configuration_facts://state`, `status_text://state`, `support://state`, `guided://state`, `playback://state`, `log://progress`, and `firmware://progress`.
