@@ -8,6 +8,7 @@ use ironwing_core::live_runtime::commands as live_commands;
 use ironwing_core::live_runtime::{
     self, LiveVehicleRuntime, LocalLiveRuntime, LocalTimer, TelemetryIntervalProvider,
 };
+use ironwing_core::telemetry;
 use wasm_bindgen::prelude::*;
 
 use crate::bridge::WasmByteBridge;
@@ -15,8 +16,6 @@ use crate::error::WasmError;
 use crate::event_sink::EventSink;
 use crate::js_value::to_js;
 use crate::task::LocalTaskSet;
-
-const DEFAULT_TELEMETRY_INTERVAL_MS: u32 = 200;
 
 #[derive(Clone)]
 struct WasmTimer;
@@ -57,7 +56,11 @@ impl RuntimeState {
             bridge: None,
             connect_waiter: None,
             tasks: LocalTaskSet::new(),
-            telemetry_interval_ms: Rc::new(Cell::new(DEFAULT_TELEMETRY_INTERVAL_MS)),
+            telemetry_interval_ms: Rc::new(Cell::new(
+                telemetry::DEFAULT_TELEMETRY_INTERVAL_MS
+                    .try_into()
+                    .unwrap_or(u32::MAX),
+            )),
         }
     }
 
@@ -257,14 +260,13 @@ impl IronwingWasmRuntime {
 
     #[wasm_bindgen(js_name = setTelemetryRate)]
     pub fn set_telemetry_rate(&self, rate_hz: u32) -> Result<(), JsValue> {
-        if rate_hz == 0 || rate_hz > 20 {
-            return Err(WasmError::invalid_input("rate_hz must be between 1 and 20").into());
-        }
+        let interval_ms =
+            telemetry::telemetry_interval_ms_for_rate(rate_hz).map_err(WasmError::invalid_input)?;
 
         self.state
             .borrow()
             .telemetry_interval_ms
-            .set(1000 / rate_hz);
+            .set(interval_ms.try_into().unwrap_or(u32::MAX));
         Ok(())
     }
 
@@ -334,17 +336,10 @@ fn emit_session_state(state: &Rc<RefCell<RuntimeState>>, provenance: DomainProve
 }
 
 async fn request_telemetry_streams(vehicle: mavkit::Vehicle) {
-    let interval_requests = [
-        (33_u32, 200_000_i32),
-        (30_u32, 200_000_i32),
-        (24_u32, 500_000_i32),
-        (1_u32, 1_000_000_i32),
-    ];
-
-    for (message_id, interval_usec) in interval_requests {
+    for request in telemetry::DEFAULT_TELEMETRY_STREAM_REQUESTS {
         let _ = vehicle
             .raw()
-            .set_message_interval(message_id, interval_usec)
+            .set_message_interval(request.message_id, request.interval_usec)
             .await;
     }
 }

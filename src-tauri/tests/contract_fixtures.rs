@@ -1,68 +1,6 @@
-mod ipc {
-    pub mod calibration {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/ipc/calibration.rs"
-        ));
-    }
-    pub mod configuration_facts {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/ipc/configuration_facts.rs"
-        ));
-    }
-    pub mod domain {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ipc/domain.rs"));
-    }
-    pub mod envelope {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ipc/envelope.rs"));
-    }
-    pub mod guided {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ipc/guided.rs"));
-    }
-    #[allow(dead_code)] // Contract fixtures validate types that are wired into runtime in later tasks.
-    pub mod logs {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ipc/logs.rs"));
-    }
-    pub mod playback {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ipc/playback.rs"));
-    }
-    pub mod sensor_health {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/ipc/sensor_health.rs"
-        ));
-    }
-    pub mod session {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ipc/session.rs"));
-    }
-    pub mod status_text {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/ipc/status_text.rs"
-        ));
-    }
-    pub mod support {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ipc/support.rs"));
-    }
-    pub mod telemetry {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/ipc/telemetry.rs"));
-    }
-
-    pub(crate) use domain::{DomainProvenance, DomainValue};
-    pub(crate) use envelope::{
-        OperationFailure, OperationId, Reason, ReasonKind, SessionEnvelope, SourceKind,
-    };
-    pub(crate) use guided::GuidedSnapshot;
-    pub(crate) use logs::{LogDiagnostic, ReplayStatus};
-    pub(crate) use session::{OpenSessionSnapshot, SessionDomain};
-    pub(crate) use status_text::StatusTextSnapshot;
-    pub(crate) use support::SupportSnapshot;
-    pub(crate) use telemetry::TelemetrySnapshot;
-}
-
 use std::{fmt::Debug, fs, path::PathBuf};
 
+use ironwing_core::ipc;
 use mavkit::ardupilot::{MagCalProgress, MagCalReport, MagCalStatus};
 use mavkit::{Param, ParamStore, ParamType, SensorHealthState, SensorHealthSummary};
 use serde::{Serialize, de::DeserializeOwned};
@@ -105,7 +43,7 @@ fn contract_fixtures_round_trip_through_rust_contract_types() {
     assert_round_trip::<ipc::sensor_health::SensorHealthSnapshot>("sensor_health.domain.json");
     assert_round_trip::<ipc::calibration::CalibrationSnapshot>("calibration.domain.json");
     assert_round_trip::<ipc::GuidedSnapshot>("guided.domain.json");
-    assert_round_trip::<ipc::SessionDomain>("session.domain.json");
+    assert_round_trip::<ipc::DomainValue<ipc::session::SessionSnapshot>>("session.domain.json");
     assert_round_trip::<ipc::TelemetrySnapshot>("telemetry.domain.json");
     assert_round_trip::<ipc::SupportSnapshot>("support.domain.json");
     assert_round_trip::<ipc::StatusTextSnapshot>("status_text.domain.json");

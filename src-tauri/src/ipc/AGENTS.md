@@ -2,23 +2,23 @@
 
 ## Overview
 
-`ipc/` is the typed contract layer between the Rust shell and the frontend. Every struct and enum here is a wire type that crosses the IPC boundary via serde. Changes here require matching TypeScript updates and contract-fixture test coverage.
+`crates/ironwing-core/src/ipc/` is the shared typed contract layer between the Rust shell and the frontend. `src-tauri/src/ipc/mod.rs` is only the Tauri-side adapter that re-exports those contracts. Every struct and enum here is a wire type that crosses the IPC boundary via serde. Changes here require matching TypeScript updates and contract-fixture test coverage.
 
 ## Where To Look
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Session envelope / source tracking | `envelope.rs` | `SessionEnvelope`, `ScopedEvent`, `OperationFailure`, `ReasonKind` |
-| Domain wrapper pattern | `domain.rs` | `DomainValue<T>`, `DomainProvenance` |
-| Session/connection state | `session.rs` | `SessionSnapshot`, `VehicleState`, `SessionConnection` |
-| Telemetry payload | `telemetry.rs` | Flight, navigation, attitude, power, GPS, RC, rangefinder snapshots |
-| Guided flight contract | `guided.rs` | `GuidedRuntime`, `GuidedSession`, `GuidedSnapshot`, command results |
-| Calibration state | `calibration.rs` | Compass/accel calibration snapshots |
-| Sensor health | `sensor_health.rs` | Subsystem health summary |
-| Status text | `status_text.rs` | MAVLink status text entries and history |
-| Support / config facts | `support.rs`, `configuration_facts.rs` | Vehicle support capabilities, param-derived facts |
-| Playback state | `playback.rs` | Playback progress snapshot |
-| Re-exports | `mod.rs` | Public API surface for the rest of the crate |
+| Session envelope / source tracking | `crates/ironwing-core/src/ipc/envelope.rs` | `SessionEnvelope`, `ScopedEvent`, `OperationFailure`, `ReasonKind` |
+| Domain wrapper pattern | `crates/ironwing-core/src/ipc/domain.rs` | `DomainValue<T>`, `DomainProvenance` |
+| Session/connection state | `crates/ironwing-core/src/ipc/session.rs` | `SessionSnapshot`, `VehicleState`, `SessionConnection` |
+| Telemetry payload | `crates/ironwing-core/src/ipc/telemetry.rs` | Flight, navigation, attitude, power, GPS, RC, rangefinder snapshots |
+| Guided flight contract | `crates/ironwing-core/src/ipc/guided.rs` | `GuidedRuntime`, `GuidedSession`, `GuidedSnapshot`, command results |
+| Calibration state | `crates/ironwing-core/src/ipc/calibration.rs` | Compass/accel calibration snapshots |
+| Sensor health | `crates/ironwing-core/src/ipc/sensor_health.rs` | Subsystem health summary |
+| Status text | `crates/ironwing-core/src/ipc/status_text.rs` | MAVLink status text entries and history |
+| Support / config facts | `crates/ironwing-core/src/ipc/support.rs`, `crates/ironwing-core/src/ipc/configuration_facts.rs` | Vehicle support capabilities, param-derived facts |
+| Playback state | `crates/ironwing-core/src/ipc/playback.rs` | Playback progress snapshot |
+| Tauri adapter re-exports | `src-tauri/src/ipc/mod.rs` | Public API surface for the rest of the Tauri crate |
 
 ## Serde Conventions
 
@@ -37,6 +37,6 @@
 ## Rules
 
 - Wire types are `pub(crate)` — do not expose outside the crate.
-- `mod.rs` re-exports the public API. Add new types to the re-export list.
+- `src-tauri/src/ipc/mod.rs` re-exports the shared core API for the Tauri crate. Add new types in `ironwing-core` first, then re-export as needed.
 - Do not add business logic to this module; it is a contract/translation layer only.
 - Changes to tagged enums or field shapes require updating the corresponding TypeScript types and contract-fixture tests in `tests/contracts/`.

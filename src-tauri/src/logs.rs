@@ -12,6 +12,8 @@ use tauri::Manager;
 use tokio::task::AbortHandle;
 use tokio_util::sync::CancellationToken;
 
+use ironwing_core::event_names;
+
 mod raw_messages;
 
 use crate::{
@@ -508,7 +510,7 @@ impl LogOperationReporter {
 }
 
 pub(crate) fn app_log_progress_emitter(app: tauri::AppHandle) -> LogProgressEmitter {
-    Arc::new(move |progress| emit_event(&app, "log://progress", &progress))
+    Arc::new(move |progress| emit_event(&app, event_names::LOG_PROGRESS, &progress))
 }
 
 pub(crate) async fn run_log_operation<T, F, Fut>(
@@ -1730,7 +1732,7 @@ pub(crate) fn emit_playback_state_snapshot(
 ) {
     emit_event(
         app,
-        "playback://state",
+        event_names::PLAYBACK_STATE,
         &ScopedEvent {
             envelope: envelope.clone(),
             value: playback_state.clone(),
@@ -1746,7 +1748,7 @@ fn emit_playback_frame(
 ) {
     emit_event(
         app,
-        "session://state",
+        event_names::SESSION_STATE,
         &ScopedEvent {
             envelope: envelope.clone(),
             value: frame.session.clone(),
@@ -1754,7 +1756,7 @@ fn emit_playback_frame(
     );
     emit_event(
         app,
-        "telemetry://state",
+        event_names::TELEMETRY_STATE,
         &ScopedEvent {
             envelope: envelope.clone(),
             value: frame.telemetry.clone(),
@@ -1762,7 +1764,7 @@ fn emit_playback_frame(
     );
     emit_event(
         app,
-        "support://state",
+        event_names::SUPPORT_STATE,
         &ScopedEvent {
             envelope: envelope.clone(),
             value: frame.support.clone(),
@@ -1770,7 +1772,7 @@ fn emit_playback_frame(
     );
     emit_event(
         app,
-        "status_text://state",
+        event_names::STATUS_TEXT_STATE,
         &ScopedEvent {
             envelope: envelope.clone(),
             value: frame.status_text.clone(),

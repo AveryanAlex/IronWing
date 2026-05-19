@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use ironwing_core::live_runtime::{self, SendTaskSpawner, SendTimer, TelemetryIntervalProvider};
+use ironwing_core::telemetry;
 use mavkit::Vehicle;
 use serde::Serialize;
 use tauri::Manager;
@@ -12,7 +13,8 @@ use crate::guided::{emit_guided_snapshot, live_context_from_vehicle};
 #[cfg(test)]
 pub(crate) use ironwing_core::live::SessionContext;
 
-pub(crate) static TELEMETRY_INTERVAL_MS: AtomicU64 = AtomicU64::new(200);
+pub(crate) static TELEMETRY_INTERVAL_MS: AtomicU64 =
+    AtomicU64::new(telemetry::DEFAULT_TELEMETRY_INTERVAL_MS);
 
 #[derive(Default)]
 struct TokioTaskSet {

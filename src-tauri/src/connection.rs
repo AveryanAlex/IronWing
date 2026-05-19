@@ -12,6 +12,7 @@ use crate::AppState;
 use crate::guided::emit_guided_reset;
 use crate::ipc::DomainProvenance;
 use crate::recording::auto_record_start_request;
+use ironwing_core::{bluetooth_profile, telemetry};
 
 /// Total time budget for the entire connect flow (TCP handshake + MAVLink
 /// heartbeat wait).  The underlying `mavlink::connect_async` call has no
@@ -144,20 +145,16 @@ where
 }
 
 async fn request_tcp_telemetry_streams(vehicle: Vehicle) {
-    let interval_requests = [
-        (33_u32, 200_000_i32),
-        (30_u32, 200_000_i32),
-        (24_u32, 500_000_i32),
-        (1_u32, 1_000_000_i32),
-    ];
-
-    for (message_id, interval_usec) in interval_requests {
+    for request in telemetry::DEFAULT_TELEMETRY_STREAM_REQUESTS {
         if let Err(err) = vehicle
             .raw()
-            .set_message_interval(message_id, interval_usec)
+            .set_message_interval(request.message_id, request.interval_usec)
             .await
         {
-            tracing::warn!("failed to request telemetry stream for message id {message_id}: {err}");
+            tracing::warn!(
+                "failed to request telemetry stream for message id {}: {err}",
+                request.message_id
+            );
         }
     }
 }
@@ -176,9 +173,6 @@ async fn store_connected_vehicle(
     tasks.extend(crate::bridges::spawn_event_bridges(app, &vehicle).await);
     *state.background_tasks.lock().await = tasks;
     *state.background_listeners.lock().await = listeners;
-    state
-        .live_runtime
-        .with_runtime(|runtime| runtime.seed_connected_vehicle(&vehicle));
     *state.active_link_target.lock().await = Some(active_target);
     Ok(())
 }
@@ -287,13 +281,12 @@ async fn connect_ble(address: &str) -> Result<ConnectedVehicle, String> {
     let handler =
         tauri_plugin_blec::get_handler().map_err(|e| format!("BLE plugin not initialized: {e}"))?;
 
-    // Standard NUS UUIDs
-    let _nus_service = uuid::Uuid::parse_str("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+    let _nus_service = uuid::Uuid::parse_str(bluetooth_profile::NORDIC_UART_SERVICE_UUID)
         .expect("valid NUS service UUID");
-    let nus_rx =
-        uuid::Uuid::parse_str("6E400002-B5A3-F393-E0A9-E50E24DCCA9E").expect("valid NUS RX UUID"); // write to this
-    let nus_tx =
-        uuid::Uuid::parse_str("6E400003-B5A3-F393-E0A9-E50E24DCCA9E").expect("valid NUS TX UUID"); // notify from this
+    let nus_rx = uuid::Uuid::parse_str(bluetooth_profile::NORDIC_UART_RX_CHARACTERISTIC_UUID)
+        .expect("valid NUS RX UUID");
+    let nus_tx = uuid::Uuid::parse_str(bluetooth_profile::NORDIC_UART_TX_CHARACTERISTIC_UUID)
+        .expect("valid NUS TX UUID");
 
     // Try connecting (device should be in blec's cache from prior scan).
     // On Android, blec has no auto-discover fallback, so if the cache is
@@ -337,9 +330,7 @@ async fn connect_ble(address: &str) -> Result<ConnectedVehicle, String> {
             Err(_) => return,
         };
         while let Some(data) = outgoing_rx.recv().await {
-            // Chunk to MTU-3 (default 20 bytes for BLE 4.0, larger for 4.2+)
-            let mtu = 20usize; // conservative default
-            for chunk in data.chunks(mtu) {
+            for chunk in data.chunks(bluetooth_profile::NORDIC_UART_DEFAULT_CHUNK_SIZE) {
                 if let Err(e) = handler
                     .send_data(
                         nus_rx,

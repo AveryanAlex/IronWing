@@ -2,10 +2,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use mavkit::{HomePosition, SensorHealthSummary, Vehicle};
+use mavkit::ardupilot::{MagCalProgress, MagCalReport};
+use mavkit::{HomePosition, ParamStore, SensorHealthSummary, Vehicle};
 use web_time::Instant;
 
 use crate::event_names;
+use crate::ipc::calibration::CalibrationSnapshot;
 use crate::ipc::{
     AckSessionSnapshotResult, CalibrationSources, DomainProvenance, DomainValue,
     OpenSessionSnapshot, ScopedEvent, SessionConnection, SessionEnvelope, SessionSnapshot,
@@ -356,6 +358,131 @@ where
     emit_scoped(handle, event_names::SESSION_STATE, snapshot);
 }
 
+fn initialize_live_event_bridges<H>(handle: &H, vehicle: &Vehicle)
+where
+    H: LiveRuntimeHandle,
+{
+    handle.with_runtime(|runtime| runtime.seed_connected_vehicle(vehicle));
+    emit_session_state(handle, DomainProvenance::Stream);
+}
+
+fn emit_telemetry_update<H>(handle: &H, vehicle: &Vehicle)
+where
+    H: LiveRuntimeHandle,
+{
+    let telemetry = telemetry_snapshot_from_vehicle(vehicle, DomainProvenance::Stream);
+    handle.with_runtime(|runtime| runtime.update_live_telemetry(telemetry.clone()));
+    emit_scoped(handle, event_names::TELEMETRY_STATE, telemetry);
+}
+
+fn emit_link_state_update<H>(handle: &H, link_state: &mavkit::LinkState)
+where
+    H: LiveRuntimeHandle,
+{
+    handle.with_runtime(|runtime| runtime.update_link_state(link_state));
+    emit_session_state(handle, DomainProvenance::Stream);
+}
+
+fn emit_armed_update<H>(handle: &H, armed: bool)
+where
+    H: LiveRuntimeHandle,
+{
+    handle.with_runtime(|runtime| runtime.update_armed(armed));
+    emit_session_state(handle, DomainProvenance::Stream);
+}
+
+fn emit_current_mode_update<H>(handle: &H, custom_mode: u32, mode_name: &str)
+where
+    H: LiveRuntimeHandle,
+{
+    handle.with_runtime(|runtime| runtime.update_current_mode(custom_mode, mode_name));
+    emit_session_state(handle, DomainProvenance::Stream);
+}
+
+fn emit_home_position_update<H>(handle: &H, latitude_deg: f64, longitude_deg: f64, altitude_m: f64)
+where
+    H: LiveRuntimeHandle,
+{
+    handle.with_runtime(|runtime| {
+        runtime.update_home_position(HomePosition {
+            latitude_deg,
+            longitude_deg,
+            altitude_m,
+        });
+    });
+    emit_session_state(handle, DomainProvenance::Stream);
+}
+
+fn emit_param_store_update<H>(handle: &H, store: &ParamStore)
+where
+    H: LiveRuntimeHandle,
+{
+    emit_scoped(handle, event_names::PARAM_STORE, store.clone());
+    emit_scoped(
+        handle,
+        event_names::CONFIGURATION_FACTS_STATE,
+        configuration_facts_snapshot_from_param_store(store, DomainProvenance::Stream),
+    );
+}
+
+fn emit_sensor_health_update<H>(handle: &H, value: &SensorHealthSummary)
+where
+    H: LiveRuntimeHandle,
+{
+    emit_scoped(
+        handle,
+        event_names::SUPPORT_STATE,
+        support_snapshot(DomainProvenance::Stream),
+    );
+    emit_scoped(
+        handle,
+        event_names::SENSOR_HEALTH_STATE,
+        sensor_health_snapshot_from_summary(value, DomainProvenance::Stream),
+    );
+}
+
+fn snapshot_after_mag_progress_update(
+    sources: &mut CalibrationSources,
+    value: Option<MagCalProgress>,
+) -> CalibrationSnapshot {
+    sources.update_mag_progress(value);
+    sources.snapshot(DomainProvenance::Stream)
+}
+
+fn snapshot_after_mag_report_update(
+    sources: &mut CalibrationSources,
+    value: Option<MagCalReport>,
+) -> CalibrationSnapshot {
+    sources.update_mag_report(value);
+    sources.snapshot(DomainProvenance::Stream)
+}
+
+fn emit_mag_progress_update<H>(
+    handle: &H,
+    value: Option<MagCalProgress>,
+    calibration: CalibrationSnapshot,
+) where
+    H: LiveRuntimeHandle,
+{
+    if let Some(value) = value {
+        emit_unscoped(handle, event_names::COMPASS_CAL_PROGRESS, value);
+    }
+    emit_scoped(handle, event_names::CALIBRATION_STATE, calibration);
+}
+
+fn emit_mag_report_update<H>(
+    handle: &H,
+    value: Option<MagCalReport>,
+    calibration: CalibrationSnapshot,
+) where
+    H: LiveRuntimeHandle,
+{
+    if let Some(value) = value {
+        emit_unscoped(handle, event_names::COMPASS_CAL_REPORT, value);
+    }
+    emit_scoped(handle, event_names::CALIBRATION_STATE, calibration);
+}
+
 pub fn spawn_local_event_bridges<H, S, T, I>(
     handle: H,
     spawner: &mut S,
@@ -368,8 +495,7 @@ pub fn spawn_local_event_bridges<H, S, T, I>(
     T: LocalTimer,
     I: TelemetryIntervalProvider,
 {
-    handle.with_runtime(|runtime| runtime.seed_connected_vehicle(vehicle));
-    emit_session_state(&handle, DomainProvenance::Stream);
+    initialize_live_event_bridges(&handle, vehicle);
 
     {
         let handle = handle.clone();
@@ -379,9 +505,7 @@ pub fn spawn_local_event_bridges<H, S, T, I>(
         spawner.spawn_local(async move {
             loop {
                 timer.sleep(interval.telemetry_interval()).await;
-                let telemetry = telemetry_snapshot_from_vehicle(&vehicle, DomainProvenance::Stream);
-                handle.with_runtime(|runtime| runtime.update_live_telemetry(telemetry.clone()));
-                emit_scoped(&handle, event_names::TELEMETRY_STATE, telemetry);
+                emit_telemetry_update(&handle, &vehicle);
             }
         });
     }
@@ -391,8 +515,7 @@ pub fn spawn_local_event_bridges<H, S, T, I>(
         let mut link_sub = vehicle.link().state().subscribe();
         spawner.spawn_local(async move {
             while let Some(link_state) = link_sub.recv().await {
-                handle.with_runtime(|runtime| runtime.update_link_state(&link_state));
-                emit_session_state(&handle, DomainProvenance::Stream);
+                emit_link_state_update(&handle, &link_state);
             }
         });
     }
@@ -402,8 +525,7 @@ pub fn spawn_local_event_bridges<H, S, T, I>(
         let mut armed_sub = vehicle.telemetry().armed().subscribe();
         spawner.spawn_local(async move {
             while let Some(sample) = armed_sub.recv().await {
-                handle.with_runtime(|runtime| runtime.update_armed(sample.value));
-                emit_session_state(&handle, DomainProvenance::Stream);
+                emit_armed_update(&handle, sample.value);
             }
         });
     }
@@ -413,10 +535,7 @@ pub fn spawn_local_event_bridges<H, S, T, I>(
         let mut mode_sub = vehicle.available_modes().current().subscribe();
         spawner.spawn_local(async move {
             while let Some(current_mode) = mode_sub.recv().await {
-                handle.with_runtime(|runtime| {
-                    runtime.update_current_mode(current_mode.custom_mode, &current_mode.name);
-                });
-                emit_session_state(&handle, DomainProvenance::Stream);
+                emit_current_mode_update(&handle, current_mode.custom_mode, &current_mode.name);
             }
         });
     }
@@ -427,14 +546,12 @@ pub fn spawn_local_event_bridges<H, S, T, I>(
         spawner.spawn_local(async move {
             while let Some(sample) = home_sub.recv().await {
                 let geo = sample.value;
-                handle.with_runtime(|runtime| {
-                    runtime.update_home_position(HomePosition {
-                        latitude_deg: geo.latitude_deg,
-                        longitude_deg: geo.longitude_deg,
-                        altitude_m: geo.altitude_msl_m,
-                    });
-                });
-                emit_session_state(&handle, DomainProvenance::Stream);
+                emit_home_position_update(
+                    &handle,
+                    geo.latitude_deg,
+                    geo.longitude_deg,
+                    geo.altitude_msl_m,
+                );
             }
         });
     }
@@ -464,15 +581,7 @@ where
         spawner.spawn_local(async move {
             while let Some(param_state) = param_sub.recv().await {
                 if let Some(store) = param_state.store.as_ref() {
-                    emit_scoped(&handle, event_names::PARAM_STORE, store.clone());
-                    emit_scoped(
-                        &handle,
-                        event_names::CONFIGURATION_FACTS_STATE,
-                        configuration_facts_snapshot_from_param_store(
-                            store,
-                            DomainProvenance::Stream,
-                        ),
-                    );
+                    emit_param_store_update(&handle, store);
                 }
             }
         });
@@ -484,16 +593,7 @@ where
         spawner.spawn_local(async move {
             while let Some(sample) = sensor_sub.recv().await {
                 let value: SensorHealthSummary = sample.value;
-                emit_scoped(
-                    &handle,
-                    event_names::SUPPORT_STATE,
-                    support_snapshot(DomainProvenance::Stream),
-                );
-                emit_scoped(
-                    &handle,
-                    event_names::SENSOR_HEALTH_STATE,
-                    sensor_health_snapshot_from_summary(&value, DomainProvenance::Stream),
-                );
+                emit_sensor_health_update(&handle, &value);
             }
         });
     }
@@ -536,15 +636,11 @@ where
         spawner.spawn_local(async move {
             while let Some(progress_list) = progress_sub.recv().await {
                 let value = progress_list.first().cloned();
-                if let Some(value) = value.as_ref() {
-                    emit_unscoped(&handle, event_names::COMPASS_CAL_PROGRESS, value.clone());
-                }
                 let calibration = {
                     let mut sources = calibration_sources.borrow_mut();
-                    sources.update_mag_progress(value);
-                    sources.snapshot(DomainProvenance::Stream)
+                    snapshot_after_mag_progress_update(&mut sources, value.clone())
                 };
-                emit_scoped(&handle, event_names::CALIBRATION_STATE, calibration);
+                emit_mag_progress_update(&handle, value, calibration);
             }
         });
     }
@@ -556,15 +652,11 @@ where
         spawner.spawn_local(async move {
             while let Some(report_list) = report_sub.recv().await {
                 let value = report_list.first().cloned();
-                if let Some(value) = value.as_ref() {
-                    emit_unscoped(&handle, event_names::COMPASS_CAL_REPORT, value.clone());
-                }
                 let calibration = {
                     let mut sources = calibration_sources.borrow_mut();
-                    sources.update_mag_report(value);
-                    sources.snapshot(DomainProvenance::Stream)
+                    snapshot_after_mag_report_update(&mut sources, value.clone())
                 };
-                emit_scoped(&handle, event_names::CALIBRATION_STATE, calibration);
+                emit_mag_report_update(&handle, value, calibration);
             }
         });
     }
@@ -583,8 +675,7 @@ pub fn spawn_send_event_bridges<H, S, T, I>(
     T: SendTimer,
     I: TelemetryIntervalProvider + Send + Sync,
 {
-    handle.with_runtime(|runtime| runtime.seed_connected_vehicle(vehicle));
-    emit_session_state(&handle, DomainProvenance::Stream);
+    initialize_live_event_bridges(&handle, vehicle);
 
     {
         let handle = handle.clone();
@@ -594,9 +685,7 @@ pub fn spawn_send_event_bridges<H, S, T, I>(
         spawner.spawn_send(async move {
             loop {
                 timer.sleep(interval.telemetry_interval()).await;
-                let telemetry = telemetry_snapshot_from_vehicle(&vehicle, DomainProvenance::Stream);
-                handle.with_runtime(|runtime| runtime.update_live_telemetry(telemetry.clone()));
-                emit_scoped(&handle, event_names::TELEMETRY_STATE, telemetry);
+                emit_telemetry_update(&handle, &vehicle);
             }
         });
     }
@@ -606,8 +695,7 @@ pub fn spawn_send_event_bridges<H, S, T, I>(
         let mut link_sub = vehicle.link().state().subscribe();
         spawner.spawn_send(async move {
             while let Some(link_state) = link_sub.recv().await {
-                handle.with_runtime(|runtime| runtime.update_link_state(&link_state));
-                emit_session_state(&handle, DomainProvenance::Stream);
+                emit_link_state_update(&handle, &link_state);
             }
         });
     }
@@ -617,8 +705,7 @@ pub fn spawn_send_event_bridges<H, S, T, I>(
         let mut armed_sub = vehicle.telemetry().armed().subscribe();
         spawner.spawn_send(async move {
             while let Some(sample) = armed_sub.recv().await {
-                handle.with_runtime(|runtime| runtime.update_armed(sample.value));
-                emit_session_state(&handle, DomainProvenance::Stream);
+                emit_armed_update(&handle, sample.value);
             }
         });
     }
@@ -628,10 +715,7 @@ pub fn spawn_send_event_bridges<H, S, T, I>(
         let mut mode_sub = vehicle.available_modes().current().subscribe();
         spawner.spawn_send(async move {
             while let Some(current_mode) = mode_sub.recv().await {
-                handle.with_runtime(|runtime| {
-                    runtime.update_current_mode(current_mode.custom_mode, &current_mode.name);
-                });
-                emit_session_state(&handle, DomainProvenance::Stream);
+                emit_current_mode_update(&handle, current_mode.custom_mode, &current_mode.name);
             }
         });
     }
@@ -642,14 +726,12 @@ pub fn spawn_send_event_bridges<H, S, T, I>(
         spawner.spawn_send(async move {
             while let Some(sample) = home_sub.recv().await {
                 let geo = sample.value;
-                handle.with_runtime(|runtime| {
-                    runtime.update_home_position(HomePosition {
-                        latitude_deg: geo.latitude_deg,
-                        longitude_deg: geo.longitude_deg,
-                        altitude_m: geo.altitude_msl_m,
-                    });
-                });
-                emit_session_state(&handle, DomainProvenance::Stream);
+                emit_home_position_update(
+                    &handle,
+                    geo.latitude_deg,
+                    geo.longitude_deg,
+                    geo.altitude_msl_m,
+                );
             }
         });
     }
@@ -679,15 +761,7 @@ where
         spawner.spawn_send(async move {
             while let Some(param_state) = param_sub.recv().await {
                 if let Some(store) = param_state.store.as_ref() {
-                    emit_scoped(&handle, event_names::PARAM_STORE, store.clone());
-                    emit_scoped(
-                        &handle,
-                        event_names::CONFIGURATION_FACTS_STATE,
-                        configuration_facts_snapshot_from_param_store(
-                            store,
-                            DomainProvenance::Stream,
-                        ),
-                    );
+                    emit_param_store_update(&handle, store);
                 }
             }
         });
@@ -699,16 +773,7 @@ where
         spawner.spawn_send(async move {
             while let Some(sample) = sensor_sub.recv().await {
                 let value: SensorHealthSummary = sample.value;
-                emit_scoped(
-                    &handle,
-                    event_names::SUPPORT_STATE,
-                    support_snapshot(DomainProvenance::Stream),
-                );
-                emit_scoped(
-                    &handle,
-                    event_names::SENSOR_HEALTH_STATE,
-                    sensor_health_snapshot_from_summary(&value, DomainProvenance::Stream),
-                );
+                emit_sensor_health_update(&handle, &value);
             }
         });
     }
@@ -754,17 +819,13 @@ where
         spawner.spawn_send(async move {
             while let Some(progress_list) = progress_sub.recv().await {
                 let value = progress_list.first().cloned();
-                if let Some(value) = value.as_ref() {
-                    emit_unscoped(&handle, event_names::COMPASS_CAL_PROGRESS, value.clone());
-                }
                 let calibration = {
                     let mut sources = calibration_sources
                         .lock()
                         .unwrap_or_else(|poisoned| poisoned.into_inner());
-                    sources.update_mag_progress(value);
-                    sources.snapshot(DomainProvenance::Stream)
+                    snapshot_after_mag_progress_update(&mut sources, value.clone())
                 };
-                emit_scoped(&handle, event_names::CALIBRATION_STATE, calibration);
+                emit_mag_progress_update(&handle, value, calibration);
             }
         });
     }
@@ -776,17 +837,13 @@ where
         spawner.spawn_send(async move {
             while let Some(report_list) = report_sub.recv().await {
                 let value = report_list.first().cloned();
-                if let Some(value) = value.as_ref() {
-                    emit_unscoped(&handle, event_names::COMPASS_CAL_REPORT, value.clone());
-                }
                 let calibration = {
                     let mut sources = calibration_sources
                         .lock()
                         .unwrap_or_else(|poisoned| poisoned.into_inner());
-                    sources.update_mag_report(value);
-                    sources.snapshot(DomainProvenance::Stream)
+                    snapshot_after_mag_report_update(&mut sources, value.clone())
                 };
-                emit_scoped(&handle, event_names::CALIBRATION_STATE, calibration);
+                emit_mag_report_update(&handle, value, calibration);
             }
         });
     }

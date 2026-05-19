@@ -4,5 +4,6 @@ pub mod ipc;
 pub mod live;
 pub mod live_runtime;
 pub mod runtime;
+pub mod telemetry;
 pub mod transport;
 pub mod vehicle_snapshot;

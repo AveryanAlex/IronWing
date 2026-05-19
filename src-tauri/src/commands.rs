@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::atomic::Ordering;
 
 use crate::bridges::TELEMETRY_INTERVAL_MS;
@@ -17,9 +18,8 @@ use crate::{
 use ironwing_core::event_names;
 use ironwing_core::live_runtime::RuntimeCapabilities;
 use ironwing_core::live_runtime::commands as live_commands;
-use ironwing_core::transport::{
-    AddressValidation, SerialValidation, TcpValidation, TransportDescriptor, UdpValidation,
-};
+use ironwing_core::telemetry::{self, MessageRateInfo};
+use ironwing_core::transport::{self, TransportDescriptor};
 use mavkit::dialect::MavCmd;
 use mavkit::{
     FencePlan, FlightMode, HomePosition, MissionIssue, MissionPlan, ParamStore, ParamWriteResult,
@@ -41,13 +41,6 @@ use ironwing_core::live::{LiveSnapshotInput, base_live_snapshot_from_caches};
 pub(crate) struct MissionDownload {
     pub plan: MissionPlan,
     pub home: Option<HomePosition>,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub(crate) struct MessageRateInfo {
-    id: u32,
-    name: String,
-    default_rate_hz: f32,
 }
 
 #[derive(Debug, Clone, Copy, serde::Deserialize)]
@@ -96,48 +89,7 @@ pub(crate) fn mission_validate(plan: MissionPlan) -> Vec<MissionIssue> {
 
 #[tauri::command]
 pub(crate) fn available_transports() -> Vec<TransportDescriptor> {
-    let mut transports = vec![
-        TransportDescriptor::Udp {
-            label: "UDP",
-            available: true,
-            validation: UdpValidation {
-                bind_addr_required: true,
-            },
-        },
-        TransportDescriptor::Tcp {
-            label: "TCP",
-            available: true,
-            validation: TcpValidation {
-                address_required: true,
-            },
-        },
-    ];
-    #[cfg(not(target_os = "android"))]
-    transports.push(TransportDescriptor::Serial {
-        label: "Serial",
-        available: true,
-        validation: SerialValidation {
-            port_required: true,
-            baud_required: true,
-        },
-        default_baud: 57600,
-    });
-    transports.push(TransportDescriptor::BluetoothBle {
-        label: "BLE",
-        available: true,
-        validation: AddressValidation {
-            address_required: true,
-        },
-    });
-    #[cfg(target_os = "android")]
-    transports.push(TransportDescriptor::BluetoothSpp {
-        label: "Classic BT",
-        available: true,
-        validation: AddressValidation {
-            address_required: true,
-        },
-    });
-    transports
+    transport::current_native_transport_descriptors()
 }
 
 #[tauri::command]
@@ -228,6 +180,25 @@ async fn build_live_snapshot(
         .await
         .snapshot_live(provenance, live_context_from_vehicle(vehicle));
     snapshot
+}
+
+async fn run_cancellable_plan_op<T, Start, Wait>(
+    state: &AppState,
+    operation_id: OperationId,
+    start: Start,
+) -> Result<T, String>
+where
+    Start: FnOnce(mavkit::Vehicle) -> Result<(crate::MissionCancelToken, Wait), String>,
+    Wait: Future<Output = Result<T, String>>,
+{
+    ensure_live_write_allowed(state, operation_id).await?;
+    let vehicle = with_vehicle(state).await?;
+    let (cancel_token, wait) = start(vehicle)?;
+
+    state.mission_op_cancel.lock().await.replace(cancel_token);
+    let result = wait.await;
+    state.mission_op_cancel.lock().await.take();
+    result
 }
 
 pub(crate) async fn emit_live_snapshot_restore(
@@ -511,56 +482,13 @@ pub(crate) async fn set_message_rate(
 /// balance bandwidth and UI responsiveness; actual firmware defaults may differ.
 #[tauri::command]
 pub(crate) fn get_available_message_rates() -> Vec<MessageRateInfo> {
-    vec![
-        MessageRateInfo {
-            id: 33,
-            name: "Global Position".into(),
-            default_rate_hz: 4.0,
-        },
-        MessageRateInfo {
-            id: 30,
-            name: "Attitude".into(),
-            default_rate_hz: 4.0,
-        },
-        MessageRateInfo {
-            id: 24,
-            name: "GPS Raw".into(),
-            default_rate_hz: 2.0,
-        },
-        MessageRateInfo {
-            id: 1,
-            name: "System Status".into(),
-            default_rate_hz: 1.0,
-        },
-        MessageRateInfo {
-            id: 65,
-            name: "RC Channels".into(),
-            default_rate_hz: 2.0,
-        },
-        MessageRateInfo {
-            id: 36,
-            name: "Servo Output".into(),
-            default_rate_hz: 2.0,
-        },
-        MessageRateInfo {
-            id: 74,
-            name: "VFR HUD".into(),
-            default_rate_hz: 4.0,
-        },
-        MessageRateInfo {
-            id: 62,
-            name: "Nav Controller".into(),
-            default_rate_hz: 2.0,
-        },
-    ]
+    telemetry::available_message_rates()
 }
 
 #[tauri::command]
 pub(crate) fn set_telemetry_rate(rate_hz: u32) -> Result<(), String> {
-    if rate_hz == 0 || rate_hz > 20 {
-        return Err("rate_hz must be between 1 and 20".into());
-    }
-    TELEMETRY_INTERVAL_MS.store(1000 / rate_hz as u64, Ordering::Relaxed);
+    let interval_ms = telemetry::telemetry_interval_ms_for_rate(rate_hz)?;
+    TELEMETRY_INTERVAL_MS.store(interval_ms, Ordering::Relaxed);
     Ok(())
 }
 
@@ -569,65 +497,47 @@ pub(crate) async fn mission_upload(
     state: tauri::State<'_, AppState>,
     plan: MissionPlan,
 ) -> Result<(), String> {
-    ensure_live_write_allowed(state.inner(), OperationId::MissionUpload).await?;
-    let op = with_vehicle(&state)
-        .await?
-        .mission()
-        .upload(plan)
-        .map_err(|e| e.to_string())?;
-    state
-        .mission_op_cancel
-        .lock()
-        .await
-        .replace(op.cancel_token());
-    let result = op.wait().await.map_err(|e| e.to_string());
-    state.mission_op_cancel.lock().await.take();
-    result
+    run_cancellable_plan_op(state.inner(), OperationId::MissionUpload, move |vehicle| {
+        let op = vehicle.mission().upload(plan).map_err(|e| e.to_string())?;
+        Ok((op.cancel_token(), async move {
+            op.wait().await.map_err(|e| e.to_string())
+        }))
+    })
+    .await
 }
 
 #[tauri::command]
 pub(crate) async fn mission_download(
     state: tauri::State<'_, AppState>,
 ) -> Result<MissionDownload, String> {
-    ensure_live_write_allowed(state.inner(), OperationId::MissionDownload).await?;
-    let vehicle = with_vehicle(&state).await?;
-    let op = vehicle.mission().download().map_err(|e| e.to_string())?;
-    state
-        .mission_op_cancel
-        .lock()
-        .await
-        .replace(op.cancel_token());
-    let plan = op.wait().await.map_err(|e| e.to_string());
-    state.mission_op_cancel.lock().await.take();
-    let plan = plan?;
-    let home = vehicle
-        .telemetry()
-        .home()
-        .latest()
-        .map(|sample| HomePosition {
-            latitude_deg: sample.value.latitude_deg,
-            longitude_deg: sample.value.longitude_deg,
-            altitude_m: sample.value.altitude_msl_m,
-        });
-    Ok(MissionDownload { plan, home })
+    run_cancellable_plan_op(state.inner(), OperationId::MissionDownload, |vehicle| {
+        let op = vehicle.mission().download().map_err(|e| e.to_string())?;
+        Ok((op.cancel_token(), async move {
+            let plan = op.wait().await.map_err(|e| e.to_string())?;
+            let home = vehicle
+                .telemetry()
+                .home()
+                .latest()
+                .map(|sample| HomePosition {
+                    latitude_deg: sample.value.latitude_deg,
+                    longitude_deg: sample.value.longitude_deg,
+                    altitude_m: sample.value.altitude_msl_m,
+                });
+            Ok(MissionDownload { plan, home })
+        }))
+    })
+    .await
 }
 
 #[tauri::command]
 pub(crate) async fn mission_clear(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    ensure_live_write_allowed(state.inner(), OperationId::MissionClear).await?;
-    let op = with_vehicle(&state)
-        .await?
-        .mission()
-        .clear()
-        .map_err(|e| e.to_string())?;
-    state
-        .mission_op_cancel
-        .lock()
-        .await
-        .replace(op.cancel_token());
-    let result = op.wait().await.map_err(|e| e.to_string());
-    state.mission_op_cancel.lock().await.take();
-    result
+    run_cancellable_plan_op(state.inner(), OperationId::MissionClear, |vehicle| {
+        let op = vehicle.mission().clear().map_err(|e| e.to_string())?;
+        Ok((op.cancel_token(), async move {
+            op.wait().await.map_err(|e| e.to_string())
+        }))
+    })
+    .await
 }
 
 #[tauri::command]
@@ -635,56 +545,35 @@ pub(crate) async fn fence_upload(
     state: tauri::State<'_, AppState>,
     plan: FencePlan,
 ) -> Result<(), String> {
-    ensure_live_write_allowed(state.inner(), OperationId::FenceUpload).await?;
-    let op = with_vehicle(&state)
-        .await?
-        .fence()
-        .upload(plan)
-        .map_err(|e| e.to_string())?;
-    state
-        .mission_op_cancel
-        .lock()
-        .await
-        .replace(op.cancel_token());
-    let result = op.wait().await.map_err(|e| e.to_string());
-    state.mission_op_cancel.lock().await.take();
-    result
+    run_cancellable_plan_op(state.inner(), OperationId::FenceUpload, move |vehicle| {
+        let op = vehicle.fence().upload(plan).map_err(|e| e.to_string())?;
+        Ok((op.cancel_token(), async move {
+            op.wait().await.map_err(|e| e.to_string())
+        }))
+    })
+    .await
 }
 
 #[tauri::command]
 pub(crate) async fn fence_download(state: tauri::State<'_, AppState>) -> Result<FencePlan, String> {
-    ensure_live_write_allowed(state.inner(), OperationId::FenceDownload).await?;
-    let op = with_vehicle(&state)
-        .await?
-        .fence()
-        .download()
-        .map_err(|e| e.to_string())?;
-    state
-        .mission_op_cancel
-        .lock()
-        .await
-        .replace(op.cancel_token());
-    let result = op.wait().await.map_err(|e| e.to_string());
-    state.mission_op_cancel.lock().await.take();
-    result
+    run_cancellable_plan_op(state.inner(), OperationId::FenceDownload, |vehicle| {
+        let op = vehicle.fence().download().map_err(|e| e.to_string())?;
+        Ok((op.cancel_token(), async move {
+            op.wait().await.map_err(|e| e.to_string())
+        }))
+    })
+    .await
 }
 
 #[tauri::command]
 pub(crate) async fn fence_clear(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    ensure_live_write_allowed(state.inner(), OperationId::FenceClear).await?;
-    let op = with_vehicle(&state)
-        .await?
-        .fence()
-        .clear()
-        .map_err(|e| e.to_string())?;
-    state
-        .mission_op_cancel
-        .lock()
-        .await
-        .replace(op.cancel_token());
-    let result = op.wait().await.map_err(|e| e.to_string());
-    state.mission_op_cancel.lock().await.take();
-    result
+    run_cancellable_plan_op(state.inner(), OperationId::FenceClear, |vehicle| {
+        let op = vehicle.fence().clear().map_err(|e| e.to_string())?;
+        Ok((op.cancel_token(), async move {
+            op.wait().await.map_err(|e| e.to_string())
+        }))
+    })
+    .await
 }
 
 #[tauri::command]
@@ -692,56 +581,35 @@ pub(crate) async fn rally_upload(
     state: tauri::State<'_, AppState>,
     plan: RallyPlan,
 ) -> Result<(), String> {
-    ensure_live_write_allowed(state.inner(), OperationId::RallyUpload).await?;
-    let op = with_vehicle(&state)
-        .await?
-        .rally()
-        .upload(plan)
-        .map_err(|e| e.to_string())?;
-    state
-        .mission_op_cancel
-        .lock()
-        .await
-        .replace(op.cancel_token());
-    let result = op.wait().await.map_err(|e| e.to_string());
-    state.mission_op_cancel.lock().await.take();
-    result
+    run_cancellable_plan_op(state.inner(), OperationId::RallyUpload, move |vehicle| {
+        let op = vehicle.rally().upload(plan).map_err(|e| e.to_string())?;
+        Ok((op.cancel_token(), async move {
+            op.wait().await.map_err(|e| e.to_string())
+        }))
+    })
+    .await
 }
 
 #[tauri::command]
 pub(crate) async fn rally_download(state: tauri::State<'_, AppState>) -> Result<RallyPlan, String> {
-    ensure_live_write_allowed(state.inner(), OperationId::RallyDownload).await?;
-    let op = with_vehicle(&state)
-        .await?
-        .rally()
-        .download()
-        .map_err(|e| e.to_string())?;
-    state
-        .mission_op_cancel
-        .lock()
-        .await
-        .replace(op.cancel_token());
-    let result = op.wait().await.map_err(|e| e.to_string());
-    state.mission_op_cancel.lock().await.take();
-    result
+    run_cancellable_plan_op(state.inner(), OperationId::RallyDownload, |vehicle| {
+        let op = vehicle.rally().download().map_err(|e| e.to_string())?;
+        Ok((op.cancel_token(), async move {
+            op.wait().await.map_err(|e| e.to_string())
+        }))
+    })
+    .await
 }
 
 #[tauri::command]
 pub(crate) async fn rally_clear(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    ensure_live_write_allowed(state.inner(), OperationId::RallyClear).await?;
-    let op = with_vehicle(&state)
-        .await?
-        .rally()
-        .clear()
-        .map_err(|e| e.to_string())?;
-    state
-        .mission_op_cancel
-        .lock()
-        .await
-        .replace(op.cancel_token());
-    let result = op.wait().await.map_err(|e| e.to_string());
-    state.mission_op_cancel.lock().await.take();
-    result
+    run_cancellable_plan_op(state.inner(), OperationId::RallyClear, |vehicle| {
+        let op = vehicle.rally().clear().map_err(|e| e.to_string())?;
+        Ok((op.cancel_token(), async move {
+            op.wait().await.map_err(|e| e.to_string())
+        }))
+    })
+    .await
 }
 
 #[tauri::command]
@@ -807,12 +675,12 @@ pub(crate) async fn param_download_all(
         .download_all()
         .map_err(|e| e.to_string())?;
 
-    // Spawn progress bridge: relay ParamOperationProgress → param://progress
+    // Spawn progress bridge: relay ParamOperationProgress to the shared progress event.
     let mut progress_sub = handle.subscribe();
     let app_for_bridge = app.clone();
     let bridge_task = tokio::spawn(async move {
         while let Some(p) = progress_sub.recv().await {
-            emit_scoped(&app_for_bridge, "param://progress", p).await;
+            emit_scoped(&app_for_bridge, event_names::PARAM_PROGRESS, p).await;
         }
     });
 
@@ -876,12 +744,12 @@ pub(crate) async fn param_write_batch(
         .write_batch(params)
         .map_err(|e| e.to_string())?;
 
-    // Spawn progress bridge: relay ParamOperationProgress → param://progress
+    // Spawn progress bridge: relay ParamOperationProgress to the shared progress event.
     let mut progress_sub = handle.subscribe();
     let app_for_bridge = app.clone();
     let bridge_task = tokio::spawn(async move {
         while let Some(p) = progress_sub.recv().await {
-            emit_scoped(&app_for_bridge, "param://progress", p).await;
+            emit_scoped(&app_for_bridge, event_names::PARAM_PROGRESS, p).await;
         }
     });
     // The bridge task self-terminates when the progress channel closes (i.e. when

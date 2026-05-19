@@ -2,6 +2,8 @@ use serde::Deserialize;
 use std::sync::atomic::Ordering;
 use tauri::Manager;
 
+use ironwing_core::event_names;
+
 use crate::AppState;
 use crate::FirmwareAbortHandle;
 use crate::connection;
@@ -69,7 +71,7 @@ fn emit_dfu_progress(
 
     emit_event(
         app,
-        "firmware://progress",
+        event_names::FIRMWARE_PROGRESS,
         &FirmwareProgress {
             phase_label: dfu_phase_label(phase).into(),
             bytes_written: bytes_written as u64,
@@ -268,7 +270,7 @@ pub(crate) async fn firmware_flash_serial(
                         };
                         emit_event(
                             &app,
-                            "firmware://progress",
+                            event_names::FIRMWARE_PROGRESS,
                             &FirmwareProgress {
                                 phase_label: phase.into(),
                                 bytes_written: written as u64,
