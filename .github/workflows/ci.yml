@@ -33,11 +33,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check frontend
-        run: pnpm run check:frontend
+      - name: Check frontend formatting
+        run: pnpm run check:frontend:format
+
+      - name: Check frontend TypeScript
+        run: pnpm run check:frontend:types
+
+      - name: Check Svelte components
+        run: pnpm run check:frontend:svelte
 
       - name: Build frontend
-        run: pnpm run build:frontend
+        run: pnpm run build:frontend:vite
 
       - name: Run frontend tests
         run: pnpm run test:frontend
