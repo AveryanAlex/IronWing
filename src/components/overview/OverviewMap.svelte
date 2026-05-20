@@ -86,6 +86,8 @@ type GuidedTargetSpec = {
 const DEFAULT_CENTER: [number, number] = [8.545594, 47.397742];
 const MAP_FOUNDATION_OPTIONS = { namespace: "overview" } as const;
 const LONG_PRESS_MS = 500;
+const MAP_CONTEXT_LONG_PRESS_MS = 650;
+const MAP_CONTEXT_MOVE_CANCEL_PX = 12;
 
 let {
   vehicleLat,
@@ -149,6 +151,8 @@ let deviceMarkerAttached = false;
 let guidedTargetMarkerAttached = false;
 let renderedVehicleHeadingDeg: number | null = null;
 const vehicleMotion = createMarkerMotion();
+let mapContextPressTimer: ReturnType<typeof setTimeout> | null = null;
+let mapContextPressStart: { pointerId: number; clientX: number; clientY: number } | null = null;
 
 const pressTimers: Record<FollowTarget, ReturnType<typeof setTimeout> | null> = {
   device: null,
@@ -213,6 +217,7 @@ onMount(() => {
     clearPressTimer("device");
     clearPressTimer("home");
     clearPressTimer("vehicle");
+    clearMapContextPressTimer();
     stopDeviceLocationWatch();
     vehicleMarker?.remove();
     homeMarker?.remove();
@@ -481,13 +486,83 @@ function handleMapContextMenu(event: MapMouseEvent & { originalEvent: MouseEvent
 
   event.preventDefault();
   event.originalEvent.preventDefault();
+  clearMapContextPressTimer();
+  openMapContextMenu(event.originalEvent.clientX, event.originalEvent.clientY, event.lngLat.lat, event.lngLat.lng);
+}
+
+function openMapContextMenu(clientX: number, clientY: number, lat: number, lon: number) {
+  if (!mapContainer) return;
+
   const rect = mapContainer.getBoundingClientRect();
+  followTarget = null;
+  pendingDeviceAction = null;
   contextMenu = {
-    x: event.originalEvent.clientX - rect.left,
-    y: event.originalEvent.clientY - rect.top,
-    lat: event.lngLat.lat,
-    lon: event.lngLat.lng,
+    x: clientX - rect.left,
+    y: clientY - rect.top,
+    lat,
+    lon,
   };
+}
+
+function handleMapSurfacePointerDown(event: PointerEvent) {
+  if (event.pointerType === "mouse" || event.button !== 0 || !map || !mapContainer) {
+    return;
+  }
+
+  // Some touch browsers synthesize a native contextmenu after long-press, but
+  // WebViews and MapLibre gesture handling are inconsistent. Keep the native
+  // contextmenu path above, and provide this deterministic touch fallback.
+  clearMapContextPressTimer();
+  mapContextPressStart = {
+    pointerId: event.pointerId,
+    clientX: event.clientX,
+    clientY: event.clientY,
+  };
+  mapContextPressTimer = setTimeout(() => {
+    if (!map || !mapContainer || !mapContextPressStart) return;
+
+    const lngLat = map.unproject(clientPointToMapPoint(mapContextPressStart.clientX, mapContextPressStart.clientY));
+    openMapContextMenu(mapContextPressStart.clientX, mapContextPressStart.clientY, lngLat.lat, lngLat.lng);
+    mapContextPressTimer = null;
+    mapContextPressStart = null;
+  }, MAP_CONTEXT_LONG_PRESS_MS);
+}
+
+function handleMapSurfacePointerMove(event: PointerEvent) {
+  if (!mapContextPressStart || event.pointerId !== mapContextPressStart.pointerId) {
+    return;
+  }
+
+  const dx = event.clientX - mapContextPressStart.clientX;
+  const dy = event.clientY - mapContextPressStart.clientY;
+  if (Math.hypot(dx, dy) > MAP_CONTEXT_MOVE_CANCEL_PX) {
+    clearMapContextPressTimer();
+  }
+}
+
+function handleMapSurfacePointerEnd(event: PointerEvent) {
+  if (!mapContextPressStart || event.pointerId !== mapContextPressStart.pointerId) {
+    return;
+  }
+
+  clearMapContextPressTimer();
+}
+
+function clearMapContextPressTimer() {
+  if (mapContextPressTimer !== null) {
+    clearTimeout(mapContextPressTimer);
+    mapContextPressTimer = null;
+  }
+  mapContextPressStart = null;
+}
+
+function clientPointToMapPoint(clientX: number, clientY: number): [number, number] {
+  if (!mapContainer) {
+    return [clientX, clientY];
+  }
+
+  const rect = mapContainer.getBoundingClientRect();
+  return [clientX - rect.left, clientY - rect.top];
 }
 
 function handleMapStyleImageMissing(event: MapStyleImageMissingEvent) {
@@ -849,7 +924,18 @@ function preventContextMenu(event: MouseEvent) {
 </script>
 
 <div class="overview-map" data-testid="overview-map-root">
-  <div bind:this={mapContainer} class="overview-map-container" data-testid="overview-map-surface"></div>
+  <div
+    bind:this={mapContainer}
+    aria-label="Interactive map"
+    class="overview-map-container"
+    data-testid="overview-map-surface"
+    onpointercancel={handleMapSurfacePointerEnd}
+    onpointerdown={handleMapSurfacePointerDown}
+    onpointerleave={handleMapSurfacePointerEnd}
+    onpointermove={handleMapSurfacePointerMove}
+    onpointerup={handleMapSurfacePointerEnd}
+    role="application"
+  ></div>
 
   {#if contextMenu}
     <MapContextMenu

@@ -34,6 +34,7 @@ const maplibreState = vi.hoisted(() => {
     setTerrain: vi.fn(),
     flyTo: vi.fn(),
     easeTo: vi.fn(),
+    unproject: vi.fn(([x, y]: [number, number]) => ({ lat: y / 10, lng: x / 10 })),
     getZoom: vi.fn(() => 12),
     on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       handlers.set(event, handler);
@@ -203,6 +204,8 @@ describe("OverviewMap", () => {
     maplibreState.mockMap.setTerrain.mockReset();
     maplibreState.mockMap.flyTo.mockReset();
     maplibreState.mockMap.easeTo.mockReset();
+    maplibreState.mockMap.unproject.mockReset();
+    maplibreState.mockMap.unproject.mockImplementation(([x, y]: [number, number]) => ({ lat: y / 10, lng: x / 10 }));
     maplibreState.mockMap.getZoom.mockReset();
     maplibreState.mockMap.getZoom.mockReturnValue(12);
     maplibreState.mockMap.on.mockClear();
@@ -385,6 +388,73 @@ describe("OverviewMap", () => {
     });
     expect(updateGuidedSession).not.toHaveBeenCalled();
     expect(screen.queryByTestId("overview-map-context-menu")).toBeNull();
+  });
+
+  it("stops following before opening the context menu", async () => {
+    setNavigatorGeolocation(createGeolocationMock());
+
+    render(OverviewMap, {
+      vehicleLat: 47.397742,
+      vehicleLon: 8.545594,
+      homeLat: 47.397742,
+      homeLon: 8.545594,
+    });
+
+    const vehicleButton = screen.getByTestId("overview-map-target-vehicle");
+    vehicleButton.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 550));
+    await tick();
+    expect(vehicleButton.getAttribute("aria-pressed")).toBe("true");
+
+    const preventDefault = vi.fn();
+    maplibreState.handlers.get("contextmenu")?.({
+      preventDefault,
+      originalEvent: { preventDefault, clientX: 120, clientY: 80 },
+      lngLat: { lat: 47.4, lng: 8.55 },
+    });
+    await tick();
+
+    expect(screen.getByTestId("overview-map-context-menu")).toBeTruthy();
+    expect(vehicleButton.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("opens the context menu from a touchscreen long hold", async () => {
+    setNavigatorGeolocation(createGeolocationMock());
+
+    render(OverviewMap, {
+      vehicleLat: 47.397742,
+      vehicleLon: 8.545594,
+      homeLat: 47.397742,
+      homeLon: 8.545594,
+    });
+
+    const surface = screen.getByTestId("overview-map-surface");
+    vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
+      x: 20,
+      y: 30,
+      width: 400,
+      height: 300,
+      top: 30,
+      right: 420,
+      bottom: 330,
+      left: 20,
+      toJSON: () => ({}),
+    });
+
+    surface.dispatchEvent(new PointerEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      clientX: 140,
+      clientY: 90,
+      pointerId: 7,
+      pointerType: "touch",
+    }));
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    await tick();
+
+    expect(maplibreState.mockMap.unproject).toHaveBeenCalledWith([120, 60]);
+    expect(screen.getByTestId("overview-map-context-menu")).toBeTruthy();
+    expect(screen.getByText("6.000000, 12.000000")).toBeTruthy();
   });
 
   it("updates an active guided goto from the context menu using fallback altitude", async () => {
