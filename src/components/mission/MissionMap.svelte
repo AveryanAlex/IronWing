@@ -363,67 +363,7 @@ let diagnostics = $derived.by(() => {
   }
   return [...new Set(warnings)];
 });
-let drawModeText = $derived.by(() => {
-  if (view.mode === "fence") {
-    return fencePlacementMode ? `place:${fencePlacementMode}` : "idle";
-  }
-
-  if (view.mode === "rally") {
-    return view.counts.rallyMarkers > 0 ? `rally:${view.counts.rallyMarkers}` : "idle";
-  }
-
-  if (!surveySession) {
-    return "idle";
-  }
-
-  return `${surveySession.mode}:${surveySession.patternType}:${activeSurveyPointCount}`;
-});
 let mapControlsPassive = $derived(surveySession !== null || fencePlacementMode !== null);
-let dragStateText = $derived.by(() => {
-  if (activeMarkerDrag) {
-    return `${activeMarkerDrag.kind}:${activeMarkerDrag.markerId}:${activeMarkerDrag.updateCount}`;
-  }
-
-  if (activeSurveyHandleDrag) {
-    return `survey-handle:${activeSurveyHandleDrag.handleId}:${activeSurveyHandleDrag.updateCount}`;
-  }
-
-  if (activeFenceDrag) {
-    return `fence-${activeFenceDrag.kind}:${activeFenceDrag.updateCount}`;
-  }
-
-  return localMessage?.text ?? "idle";
-});
-let selectionText = $derived.by(() => {
-  if (view.mode === "fence") {
-    const fenceSelection = view.fenceSelection;
-
-    if (fenceSelection.kind === "return-point") {
-      return "fence return point";
-    }
-
-    if (fenceSelection.kind === "region") {
-      const handle = view.fenceRegionHandles.find((candidate) => candidate.regionUiId === fenceSelection.regionUiId);
-      return handle ? `fence ${handle.label}` : `fence ${fenceSelection.regionUiId}`;
-    }
-
-    return "fence none";
-  }
-
-  if (view.selection.kind === "home") {
-    return "home";
-  }
-
-  if (view.selection.kind === "mission-item") {
-    return view.selection.uiId === null ? "mission item" : `mission item ${view.selection.uiId}`;
-  }
-
-  if (view.selection.kind === "rally-point") {
-    return view.selection.uiId === null ? "rally point" : `rally point ${view.selection.uiId}`;
-  }
-
-  return view.selection.regionId ? `survey ${view.selection.regionId}` : "survey block";
-});
 let debugPayload = $derived({
   mode: view.mode,
   state: view.state,
@@ -2169,30 +2109,6 @@ function preventContextMenu(event: MouseEvent) {
 <svelte:window onkeydown={handleKeydown} onpointercancel={handlePointerCancel} onpointermove={handlePointerMove} onpointerup={handlePointerUp} />
 
 <section class={["rounded-lg border border-border bg-bg-primary p-3", fillContainer && "mission-map--fill"]} data-testid={missionWorkspaceTestIds.map}>
-  <div class="flex flex-wrap items-start justify-end gap-3">
-    <div class="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-secondary">
-      <span
-        class={`rounded-full border px-3 py-1 ${view.state === "degraded"
-          ? "border-warning/40 bg-warning/10 text-warning"
-          : view.state === "ready"
-            ? "border-success/30 bg-success/10 text-success"
-            : "border-border bg-bg-secondary text-text-secondary"}`}
-        data-testid={missionWorkspaceTestIds.mapStatus}
-      >
-        {view.state}
-      </span>
-      <span class="rounded-full border border-border bg-bg-secondary px-3 py-1" data-testid={missionWorkspaceTestIds.mapSelection}>
-        {selectionText}
-      </span>
-      <span class="rounded-full border border-border bg-bg-secondary px-3 py-1" data-testid={missionWorkspaceTestIds.mapDrawMode}>
-        {drawModeText}
-      </span>
-      <span class="rounded-full border border-border bg-bg-secondary px-3 py-1" data-testid={missionWorkspaceTestIds.mapDragState}>
-        {dragStateText}
-      </span>
-    </div>
-  </div>
-
   {#if view.mode === "mission"}
     <div class="mt-4 flex flex-wrap gap-2">
       <button

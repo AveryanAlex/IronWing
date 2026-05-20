@@ -117,6 +117,11 @@ let batteryLevel = $derived(
           pitch_deg={pitch!}
           roll_deg={roll!}
           altitude_m={altitude!}
+          homeLatitude={homePosition?.latitude_deg}
+          homeLongitude={homePosition?.longitude_deg}
+          homeAltitude={homePosition?.altitude_m}
+          missionPlan={missionState?.plan}
+          currentMissionIndex={missionState?.current_index}
         />
       {/await}
     </div>
