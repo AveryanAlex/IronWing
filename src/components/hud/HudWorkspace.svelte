@@ -10,6 +10,7 @@ import {
   getSessionViewStoreContext,
   getMissionPlannerStoreContext,
 } from "../../app/shell/runtime-context";
+import type { SvsCameraMode } from "../../lib/map";
 
 const sessionView = fromStore(getSessionViewStoreContext());
 const missionPlanner = fromStore(getMissionPlannerStoreContext());
@@ -31,6 +32,9 @@ let targetBearing = $derived(telemetry.target_bearing_deg);
 let terrainHeight = $derived(telemetry.terrain_height_m);
 let heightAboveTerrain = $derived(telemetry.height_above_terrain_m);
 let throttle = $derived(telemetry.throttle_pct);
+let relativeHomeAltitude = $derived(
+  typeof altitude === "number" && homePosition?.altitude_m != null ? altitude - homePosition.altitude_m : null,
+);
 
 const hudSmoothers = {
   pitch: createNumberSmoother({ durationMs: 160, maxJump: 45 }),
@@ -73,7 +77,10 @@ let modeName = $derived(vehicleState?.mode_name ?? "--");
 
 // SVS setting from localStorage
 const SVS_STORAGE_KEY = "ironwing.hud.svs_enabled";
+const SVS_CAMERA_MODE_STORAGE_KEY = "ironwing.hud.svs_camera_mode";
 let svsEnabled = $state(loadSvsEnabled());
+let svsCameraMode = $state<SvsCameraMode>(loadSvsCameraMode());
+let svsCameraModeLabel = $derived(svsCameraMode === "ground_stabilized" ? "GND" : "NOSE");
 
 function loadSvsEnabled(): boolean {
   try {
@@ -85,14 +92,30 @@ function loadSvsEnabled(): boolean {
   }
 }
 
+function loadSvsCameraMode(): SvsCameraMode {
+  try {
+    return localStorage.getItem(SVS_CAMERA_MODE_STORAGE_KEY) === "ground_stabilized" ? "ground_stabilized" : "nose";
+  } catch {
+    return "nose";
+  }
+}
+
+function toggleSvsCameraMode() {
+  svsCameraMode = svsCameraMode === "ground_stabilized" ? "nose" : "ground_stabilized";
+  try {
+    localStorage.setItem(SVS_CAMERA_MODE_STORAGE_KEY, svsCameraMode);
+  } catch {
+    // Ignore storage errors; the in-memory toggle still works for this session.
+  }
+}
+
 let hasSvs = $derived(
   svsEnabled
     && vehiclePosition != null
     && vehiclePosition.latitude_deg !== 0
     && vehiclePosition.longitude_deg !== 0
     && pitch != null
-    && roll != null
-    && altitude != null,
+    && roll != null,
 );
 
 // ResizeObserver for center cell
@@ -230,12 +253,16 @@ let batteryLevel = $derived(
           heading_deg={vehiclePosition!.heading_deg}
           pitch_deg={displayPitch!}
           roll_deg={displayRoll!}
-          altitude_m={displayAltitude!}
+          altitude_m={displayAltitude}
+          terrain_height_m={displayTerrainHeight}
+          height_above_terrain_m={heightAboveTerrain}
+          relative_home_altitude_m={relativeHomeAltitude}
           homeLatitude={homePosition?.latitude_deg}
           homeLongitude={homePosition?.longitude_deg}
           homeAltitude={homePosition?.altitude_m}
           missionPlan={missionState?.plan}
           currentMissionIndex={missionState?.current_index}
+          cameraMode={svsCameraMode}
         />
       {/await}
     </div>
@@ -352,6 +379,18 @@ let batteryLevel = $derived(
           <span class="hud-strip-label">THR </span>
           <span class="hud-strip-value">{fmtInt(throttle)}%</span>
         </div>
+        {#if hasSvs}
+          <button
+            type="button"
+            class="hud-camera-mode-toggle"
+            title="Switch SVS camera mode"
+            aria-label={`Switch SVS camera mode. Current mode: ${svsCameraMode === "ground_stabilized" ? "ground stabilized" : "nose camera"}`}
+            onclick={toggleSvsCameraMode}
+          >
+            <span class="hud-strip-label">CAM </span>
+            <span class="hud-strip-value font-bold">{svsCameraModeLabel}</span>
+          </button>
+        {/if}
       </div>
       <div class="hud-font flex items-center gap-4">
         <div>

@@ -127,7 +127,6 @@ export const missionWorkspaceTestIds = {
   mapSurface: "mission-map-surface",
   mapBasemap: "mission-map-basemap",
   mapDrawSurface: "mission-map-draw-surface",
-  mapStatus: "mission-map-status",
   mapSelection: "mission-map-selection",
   mapDrawMode: "mission-map-draw-mode",
   mapDragState: "mission-map-drag-state",

@@ -2,11 +2,12 @@
 import { Home, Layers, LocateFixed, Map as MapIcon, Navigation, Satellite } from "lucide-svelte";
 import { onMount } from "svelte";
 import { toast } from "svelte-sonner";
-import maplibregl, {
-  type Map as MapLibreMap,
-  type MapMouseEvent,
-  type MapStyleImageMissingEvent,
-  type Marker,
+import * as maplibregl from "maplibre-gl";
+import type {
+  Map as MapLibreMap,
+  MapMouseEvent,
+  MapStyleImageMissingEvent,
+  Marker,
 } from "maplibre-gl";
 
 import { startGuidedSession, updateGuidedSession, type GuidedDomain } from "../../guided";
@@ -18,6 +19,7 @@ import {
 } from "../../lib/map-marker-motion";
 import {
   applyMapLayerMode,
+  configureMapLibreWorker,
   createDeviceMarkerElement,
   createGuidedTargetMarkerElement,
   createHomeMarkerElement,
@@ -164,6 +166,7 @@ onMount(() => {
     ?? guidedTargetLngLat(guidedTarget)
     ?? DEFAULT_CENTER;
 
+  configureMapLibreWorker();
   map = new maplibregl.Map({
     container: mapContainer,
     style: OPENFREEMAP_BRIGHT_STYLE_URL,

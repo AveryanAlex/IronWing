@@ -1,7 +1,8 @@
 <script lang="ts">
 import { Home, Layers, LocateFixed, Map as MapIcon, Navigation, Satellite } from "lucide-svelte";
 import { onDestroy, onMount } from "svelte";
-import maplibregl, { type Map as MapLibreMap, type Marker } from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
+import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 
 import {
   adaptMissionMapViewportToAspectRatio,
@@ -26,6 +27,7 @@ import { localXYToLatLon } from "../../lib/mission-coordinates";
 import type { ReplayMapOverlayState } from "../../lib/replay-map-overlay";
 import {
   applyMapLayerMode,
+  configureMapLibreWorker,
   createDeviceMarkerElement,
   createHomeMarkerElement,
   ensureMapFoundation,
@@ -495,6 +497,7 @@ onMount(() => {
   basemapWarning = null;
 
   try {
+    configureMapLibreWorker();
     basemap = new maplibregl.Map({
       container: basemapElement,
       style: OPENFREEMAP_BRIGHT_STYLE_URL,

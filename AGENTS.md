@@ -118,6 +118,7 @@ Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavk
 ## Tooling
 
 - Use `pnpm` only; the version is pinned in `package.json`.
+- Do not hand-edit or roll back `src/platform/web/generated/ironwing_wasm.d.ts`. Regenerate it by building the web WASM module, and commit the generated update when Rust-side WASM exports change.
 - Tailwind is v4 via `@tailwindcss/vite`; do not introduce `tailwind.config.js`.
 - There is no repo-wide ESLint/Biome/Prettier layer; match surrounding style.
 - Clippy warnings are CI failures.

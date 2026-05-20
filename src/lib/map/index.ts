@@ -5,3 +5,5 @@ export * from "./live-vehicle-overlay";
 export * from "./markers";
 export * from "./mission-plan-overlay";
 export * from "./mission-path-overlay";
+export * from "./svs-camera";
+export * from "./worker";

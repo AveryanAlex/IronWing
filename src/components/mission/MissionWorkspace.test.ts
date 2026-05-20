@@ -120,7 +120,22 @@ const {
 } = vi.hoisted(() => {
   const eventHandlers = new Map<string, Array<(payload?: unknown) => void>>();
   const maplibreMock = {
+    addControl: vi.fn(),
+    addLayer: vi.fn(),
+    addSource: vi.fn(),
+    easeTo: vi.fn(),
     fitBounds: vi.fn(),
+    getLayer: vi.fn(() => null),
+    getSource: vi.fn(() => null),
+    getStyle: vi.fn(() => ({
+      layers: [
+        { id: "background", type: "background" },
+        { id: "land", type: "fill" },
+        { id: "roads", type: "line" },
+        { id: "labels", type: "symbol" },
+      ],
+    })),
+    getZoom: vi.fn(() => 14),
     on: vi.fn((event: string, handler: (payload?: unknown) => void) => {
       const handlers = eventHandlers.get(event) ?? [];
       handlers.push(handler);
@@ -131,6 +146,9 @@ const {
     }),
     remove: vi.fn(),
     resize: vi.fn(),
+    setLayoutProperty: vi.fn(),
+    setTerrain: vi.fn(),
+    unproject: vi.fn(([x, y]: [number, number]) => ({ lat: y / 10, lng: x / 10 })),
   };
 
   let throwOnConstruct = false;
@@ -165,10 +183,26 @@ vi.mock("maplibre-gl", () => {
     return maplibreMapCtor();
   }
 
+  function MockMarker(options?: { element?: HTMLElement }) {
+    const element = options?.element ?? document.createElement("div");
+    return {
+      addTo: vi.fn().mockReturnThis(),
+      getElement: vi.fn(() => element),
+      remove: vi.fn(),
+      setLngLat: vi.fn().mockReturnThis(),
+      setRotation: vi.fn().mockReturnThis(),
+    };
+  }
+
+  function MockNavigationControl() {
+    return {};
+  }
+
   return {
-    default: {
-      Map: MockMap,
-    },
+    Map: MockMap,
+    Marker: MockMarker,
+    NavigationControl: MockNavigationControl,
+    setWorkerUrl: vi.fn(),
   };
 });
 
@@ -826,7 +860,6 @@ describe("MissionWorkspace", () => {
     expect(screen.queryByTestId(missionWorkspaceTestIds.mapPane)).toBeNull();
     expect(screen.queryByTestId(missionWorkspaceTestIds.planPane)).toBeNull();
     expect(screen.queryByTestId(missionWorkspaceTestIds.phoneSegmentBar)).toBeNull();
-    expect(screen.getByTestId(missionWorkspaceTestIds.mapStatus).textContent).toContain("empty");
     expect(screen.getByTestId(missionWorkspaceTestIds.mapEmpty)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.draftList)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.listEmpty)).toBeTruthy();

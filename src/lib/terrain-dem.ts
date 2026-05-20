@@ -1,13 +1,15 @@
 export const TERRARIUM_TILE_URL_TEMPLATE =
-  "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
+  "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp";
 
 export const DEFAULT_TERRAIN_ZOOM = 14;
+export const DEFAULT_TERRAIN_MIN_ZOOM = 12;
 export const DEFAULT_TILE_CACHE_SIZE = 64;
 export const TERRAIN_ELEVATION_MIN_M = -500;
 export const TERRAIN_ELEVATION_MAX_M = 9_000;
-export const TILE_SIZE = 256;
+export const TILE_SIZE = 512;
 const FETCH_TIMEOUT_MS = 10_000;
 const MAX_WEB_MERCATOR_LAT = 85.05112878;
+const MISSING_TILE_STATUS_CODES = new Set([404, 410]);
 
 export type TerrainPoint = {
   latitude_deg: number;
@@ -96,6 +98,10 @@ export async function fetchTerrainTileResult(
   try {
     const response = await fetchFn(url, controller ? { signal: controller.signal } : undefined);
     if (!response.ok) {
+      if (MISSING_TILE_STATUS_CODES.has(response.status)) {
+        return { outcome: "no_data", tile: null };
+      }
+
       return { outcome: "error", tile: null };
     }
 
@@ -190,14 +196,16 @@ export async function sampleElevations(
   points: TerrainPoint[],
   cache: TileCache,
   zoom = DEFAULT_TERRAIN_ZOOM,
+  minZoom = DEFAULT_TERRAIN_MIN_ZOOM,
 ): Promise<Array<number | null>> {
-  return (await sampleElevationsWithSummary(points, cache, zoom)).elevations;
+  return (await sampleElevationsWithSummary(points, cache, zoom, minZoom)).elevations;
 }
 
 export async function sampleElevationsWithSummary(
   points: TerrainPoint[],
   cache: TileCache,
   zoom = DEFAULT_TERRAIN_ZOOM,
+  minZoom = DEFAULT_TERRAIN_MIN_ZOOM,
 ): Promise<{ elevations: Array<number | null>; summary: TerrainSampleSummary }> {
   if (points.length === 0) {
     return {
@@ -206,49 +214,96 @@ export async function sampleElevationsWithSummary(
     };
   }
 
-  const samples = points.map((point) => ({
-    point,
-    sample: latLonToTile(point.latitude_deg, point.longitude_deg, zoom),
-  }));
-
-  const uniqueTiles = new Map<string, TileSamplePoint>();
-  for (const { sample } of samples) {
-    uniqueTiles.set(tileKey(zoom, sample.tileX, sample.tileY), sample);
-  }
-
-  const resolvedTiles = new Map<string, TileFetchResult>();
-  await Promise.all(
-    Array.from(uniqueTiles.entries()).map(async ([key, sample]) => {
-      resolvedTiles.set(key, await cache.getTileResult(zoom, sample.tileX, sample.tileY));
-    }),
-  );
-
   const summary: TerrainSampleSummary = {
     okTiles: 0,
     errorTiles: 0,
     noDataTiles: 0,
   };
 
-  for (const result of resolvedTiles.values()) {
-    if (result.outcome === "ok") {
-      summary.okTiles += 1;
-    } else if (result.outcome === "error") {
-      summary.errorTiles += 1;
-    } else {
-      summary.noDataTiles += 1;
+  const elevations = new Array<number | null>(points.length).fill(null);
+  let unresolvedIndices = points.map((_point, index) => index);
+
+  for (const sampleZoom of terrainZoomRange(zoom, minZoom)) {
+    if (unresolvedIndices.length === 0) break;
+
+    const uniqueTiles = new Map<string, TileSampleBatch>();
+    for (const index of unresolvedIndices) {
+      const point = points[index];
+      if (!point) continue;
+
+      const sample = latLonToTile(point.latitude_deg, point.longitude_deg, sampleZoom);
+      const key = tileKey(sampleZoom, sample.tileX, sample.tileY);
+      const existing = uniqueTiles.get(key);
+      if (existing) {
+        existing.samples.push({ index, sample });
+        continue;
+      }
+
+      uniqueTiles.set(key, {
+        tileX: sample.tileX,
+        tileY: sample.tileY,
+        samples: [{ index, sample }],
+      });
     }
+
+    const resolvedTiles = new Map<string, TileFetchResult>();
+    await Promise.all(
+      Array.from(uniqueTiles.entries()).map(async ([key, batch]) => {
+        resolvedTiles.set(key, await cache.getTileResult(sampleZoom, batch.tileX, batch.tileY));
+      }),
+    );
+
+    for (const result of resolvedTiles.values()) {
+      addTileOutcome(summary, result.outcome);
+    }
+
+    const nextUnresolvedIndices: number[] = [];
+    for (const [key, batch] of uniqueTiles.entries()) {
+      const tile = resolvedTiles.get(key)?.tile ?? null;
+      for (const { index, sample } of batch.samples) {
+        const elevation = readTileElevation(tile, sample.pixelX, sample.pixelY);
+        if (elevation === null) {
+          nextUnresolvedIndices.push(index);
+          continue;
+        }
+
+        elevations[index] = elevation;
+      }
+    }
+
+    unresolvedIndices = nextUnresolvedIndices;
   }
 
   return {
-    elevations: samples.map(({ sample }) =>
-      readTileElevation(
-        resolvedTiles.get(tileKey(zoom, sample.tileX, sample.tileY))?.tile ?? null,
-        sample.pixelX,
-        sample.pixelY,
-      ),
-    ),
+    elevations,
     summary,
   };
+}
+
+type TileSampleBatch = {
+  tileX: number;
+  tileY: number;
+  samples: Array<{ index: number; sample: TileSamplePoint }>;
+};
+
+function addTileOutcome(summary: TerrainSampleSummary, outcome: TileFetchOutcome): void {
+  if (outcome === "ok") {
+    summary.okTiles += 1;
+    return;
+  }
+
+  if (outcome === "error") {
+    summary.errorTiles += 1;
+    return;
+  }
+
+  summary.noDataTiles += 1;
+}
+
+function terrainZoomRange(maxZoom: number, minZoom: number): number[] {
+  const highestZoom = Math.max(0, Math.floor(maxZoom));
+  const lowestZoom = Math.max(0, Math.min(highestZoom, Math.floor(minZoom)));
+  return Array.from({ length: highestZoom - lowestZoom + 1 }, (_value, index) => highestZoom - index);
 }
 
 function tileUrl(zoom: number, tileX: number, tileY: number): string {

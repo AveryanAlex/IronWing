@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onMount } from "svelte";
-import maplibregl, { type Map as MapLibreMap, type Marker } from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
+import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 
 import type { HomePosition, MissionPlan } from "../../mission";
 import { buildMissionRenderFeatures } from "../../lib/mission-path-render";
@@ -9,6 +10,7 @@ import {
   type LngLatTuple,
 } from "../../lib/map-marker-motion";
 import {
+  configureMapLibreWorker,
   createHomeMarkerElement,
   ensureMissionPathLayers,
   OPENFREEMAP_BRIGHT_STYLE_URL,
@@ -67,6 +69,7 @@ const missionMarkerOverlay = createMissionMarkerOverlay(
 onMount(() => {
   if (!mapContainer) return;
 
+  configureMapLibreWorker();
   map = new maplibregl.Map({
     container: mapContainer,
     style: OPENFREEMAP_BRIGHT_STYLE_URL,

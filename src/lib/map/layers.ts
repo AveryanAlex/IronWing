@@ -7,9 +7,11 @@ import type {
 } from "maplibre-gl";
 
 import {
-  EOX_SATELLITE_TILE_URL,
   MAP_TILE_DEFAULTS,
+  MAPTERHORN_DEM_TILEJSON_URL,
   TERRARIUM_DEM_TILE_URL,
+  getDefaultSatelliteRasterSources,
+  type SatelliteRasterSourceConfig,
 } from "./constants";
 
 export type MapLayerMode = "normal" | "hybrid" | "satellite";
@@ -17,9 +19,11 @@ export type MapLayerVisibility = "visible" | "none";
 
 export type MapFoundationIds = {
   satelliteSourceId: string;
+  satelliteDetailSourceId: string;
   terrainSourceId: string;
   hillshadeSourceId: string;
   satelliteLayerId: string;
+  satelliteDetailLayerId: string;
   hillshadeLayerId: string;
 };
 
@@ -32,6 +36,7 @@ export type MapFoundationIdOptions = {
 export type EnsureMapFoundationOptions = MapFoundationIdOptions & {
   satelliteTileUrl?: string;
   demTileUrl?: string;
+  demTileJsonUrl?: string;
   satelliteTileSize?: number;
   demTileSize?: number;
   satelliteMaxZoom?: number;
@@ -56,9 +61,11 @@ export function resolveMapFoundationIds(options: MapFoundationIdOptions = {}): M
 
   return {
     satelliteSourceId: `${prefix}satellite-source`,
+    satelliteDetailSourceId: `${prefix}satellite-detail-source`,
     terrainSourceId: `${prefix}terrain-source`,
     hillshadeSourceId: `${prefix}hillshade-source`,
     satelliteLayerId: `${prefix}satellite`,
+    satelliteDetailLayerId: `${prefix}satellite-detail`,
     hillshadeLayerId: `${prefix}hills`,
     ...options.ids,
   };
@@ -85,32 +92,82 @@ export function ensureSatelliteLayer(
   options: EnsureMapFoundationOptions = {},
 ): MapFoundationIds {
   const ids = resolveMapFoundationIds(options);
+  const satelliteSources = getSatelliteRasterSources(options);
+  const beforeLayerId = options.satelliteBeforeLayerId === undefined
+    ? getFirstNonFillLayerId(map)
+    : options.satelliteBeforeLayerId;
 
-  if (!map.getSource(ids.satelliteSourceId)) {
-    const source: RasterSourceSpecification = {
-      type: "raster",
-      tiles: [options.satelliteTileUrl ?? EOX_SATELLITE_TILE_URL],
-      tileSize: options.satelliteTileSize ?? MAP_TILE_DEFAULTS.satelliteTileSize,
-      maxzoom: options.satelliteMaxZoom ?? MAP_TILE_DEFAULTS.satelliteMaxZoom,
-    };
-    map.addSource(ids.satelliteSourceId, source);
-  }
+  ensureSatelliteRasterLayer(map, {
+    sourceId: ids.satelliteSourceId,
+    layerId: ids.satelliteLayerId,
+    source: satelliteSources[0],
+    visible: options.satelliteVisible ?? false,
+    beforeLayerId,
+  });
 
-  if (!map.getLayer(ids.satelliteLayerId)) {
-    const layer: RasterLayerSpecification = {
-      id: ids.satelliteLayerId,
-      type: "raster",
-      source: ids.satelliteSourceId,
-      layout: { visibility: options.satelliteVisible ? "visible" : "none" },
-      paint: { "raster-opacity": 1 },
-    };
-    const beforeLayerId = options.satelliteBeforeLayerId === undefined
-      ? getFirstNonFillLayerId(map)
-      : options.satelliteBeforeLayerId;
-    addLayer(map, layer, beforeLayerId);
+  if (satelliteSources[1]) {
+    ensureSatelliteRasterLayer(map, {
+      sourceId: ids.satelliteDetailSourceId,
+      layerId: ids.satelliteDetailLayerId,
+      source: satelliteSources[1],
+      visible: options.satelliteVisible ?? false,
+      beforeLayerId,
+    });
   }
 
   return ids;
+}
+
+function getSatelliteRasterSources(options: EnsureMapFoundationOptions): [SatelliteRasterSourceConfig, ...SatelliteRasterSourceConfig[]] {
+  if (options.satelliteTileUrl) {
+    return [{
+      provider: "custom",
+      tileUrl: options.satelliteTileUrl,
+      tileSize: options.satelliteTileSize ?? MAP_TILE_DEFAULTS.satelliteTileSize,
+      sourceMinZoom: 0,
+      sourceMaxZoom: options.satelliteMaxZoom ?? MAP_TILE_DEFAULTS.satelliteMaxZoom,
+      layerMinZoom: 0,
+      layerMaxZoom: MAP_TILE_DEFAULTS.satelliteLayerMaxZoom,
+    }];
+  }
+
+  return getDefaultSatelliteRasterSources();
+}
+
+function ensureSatelliteRasterLayer(
+  map: MapLibreMap,
+  options: {
+    sourceId: string;
+    layerId: string;
+    source: SatelliteRasterSourceConfig;
+    visible: boolean;
+    beforeLayerId: string | null | undefined;
+  },
+): void {
+  if (!map.getSource(options.sourceId)) {
+    const source: RasterSourceSpecification = {
+      type: "raster",
+      tiles: [options.source.tileUrl],
+      tileSize: options.source.tileSize,
+      minzoom: options.source.sourceMinZoom,
+      maxzoom: options.source.sourceMaxZoom,
+      attribution: options.source.attribution,
+    };
+    map.addSource(options.sourceId, source);
+  }
+
+  if (!map.getLayer(options.layerId)) {
+    const layer: RasterLayerSpecification = {
+      id: options.layerId,
+      type: "raster",
+      source: options.sourceId,
+      minzoom: options.source.layerMinZoom,
+      maxzoom: options.source.layerMaxZoom,
+      layout: { visibility: options.visible ? "visible" : "none" },
+      paint: { "raster-opacity": 1, "raster-fade-duration": 200 },
+    };
+    addLayer(map, layer, options.beforeLayerId);
+  }
 }
 
 export function ensureTerrainSource(
@@ -120,7 +177,7 @@ export function ensureTerrainSource(
   const ids = resolveMapFoundationIds(options);
 
   if (!map.getSource(ids.terrainSourceId)) {
-    map.addSource(ids.terrainSourceId, createTerrariumDemSource(options));
+    map.addSource(ids.terrainSourceId, createDemSource(options));
   }
 
   return ids;
@@ -133,7 +190,7 @@ export function ensureHillshadeLayer(
   const ids = resolveMapFoundationIds(options);
 
   if (!map.getSource(ids.hillshadeSourceId)) {
-    map.addSource(ids.hillshadeSourceId, createTerrariumDemSource(options));
+    map.addSource(ids.hillshadeSourceId, createDemSource(options));
   }
 
   if (!map.getLayer(ids.hillshadeLayerId)) {
@@ -208,6 +265,7 @@ export function applyMapLayerMode(
   const showVector = mode !== "satellite";
 
   safeSetLayerVisibility(map, ids.satelliteLayerId, showSatellite ? "visible" : "none");
+  safeSetLayerVisibility(map, ids.satelliteDetailLayerId, showSatellite ? "visible" : "none");
 
   if (options.includeHillshade ?? true) {
     safeSetLayerVisibility(map, ids.hillshadeLayerId, showSatellite ? "visible" : "none");
@@ -218,7 +276,14 @@ export function applyMapLayerMode(
   }
 }
 
-function createTerrariumDemSource(options: EnsureMapFoundationOptions): RasterDEMSourceSpecification {
+function createDemSource(options: EnsureMapFoundationOptions): RasterDEMSourceSpecification {
+  if (!options.demTileUrl) {
+    return {
+      type: "raster-dem",
+      url: options.demTileJsonUrl ?? MAPTERHORN_DEM_TILEJSON_URL,
+    };
+  }
+
   return {
     type: "raster-dem",
     tiles: [options.demTileUrl ?? TERRARIUM_DEM_TILE_URL],

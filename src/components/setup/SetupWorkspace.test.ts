@@ -34,6 +34,12 @@ vi.mock("../../telemetry", async (importOriginal) => {
   };
 });
 
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 import type { DomainValue } from "../../lib/domain-status";
 import { missingDomainValue } from "../../lib/domain-status";
 import type { ParamsService, ParamsServiceEventHandlers } from "../../lib/platform/params";
@@ -1501,6 +1507,10 @@ async function renderSetupWorkspace(options: {
 
 describe("SetupWorkspace", () => {
   beforeEach(() => {
+    if (typeof globalThis.ResizeObserver === "undefined") {
+      globalThis.ResizeObserver = ResizeObserverMock as typeof ResizeObserver;
+    }
+
     calibrationMocks.calibrateCompassStart.mockClear();
     calibrationMocks.calibrateCompassAccept.mockClear();
     calibrationMocks.calibrateCompassCancel.mockClear();
