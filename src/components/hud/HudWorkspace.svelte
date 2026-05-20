@@ -7,14 +7,17 @@ import ArtificialHorizon from "./ArtificialHorizon.svelte";
 import TapeGauge from "./TapeGauge.svelte";
 import {
   getSessionViewStoreContext,
+  getMissionPlannerStoreContext,
 } from "../../app/shell/runtime-context";
 
 const sessionView = fromStore(getSessionViewStoreContext());
+const missionPlanner = fromStore(getMissionPlannerStoreContext());
 
 let telemetry = $derived(sessionView.current.telemetry);
 let vehicleState = $derived(sessionView.current.vehicleState);
 let vehiclePosition = $derived(sessionView.current.vehiclePosition);
 let homePosition = $derived(sessionView.current.homePosition);
+let missionState = $derived(missionPlanner.current.missionState);
 
 let pitch = $derived(telemetry.pitch_deg);
 let roll = $derived(telemetry.roll_deg);
@@ -278,6 +281,9 @@ let batteryLevel = $derived(
           heading={vehiclePosition.heading_deg}
           homeLatitude={homePosition?.latitude_deg}
           homeLongitude={homePosition?.longitude_deg}
+          homeAltitude={homePosition?.altitude_m}
+          missionPlan={missionState?.plan}
+          currentMissionIndex={missionState?.current_index}
         />
       {/await}
     </div>

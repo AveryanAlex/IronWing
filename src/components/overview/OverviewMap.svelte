@@ -10,14 +10,10 @@ import maplibregl, {
 } from "maplibre-gl";
 
 import { startGuidedSession, updateGuidedSession, type GuidedDomain } from "../../guided";
-import type { HomePosition, MissionItem, MissionPlan } from "../../mission";
-import { commandPosition, geoPoint3dLatLon } from "../../lib/mavkit-types";
-import type { TypedDraftItem, TypedDraftPreview } from "../../lib/mission-draft-typed";
+import type { HomePosition, MissionPlan } from "../../mission";
 import { buildMissionRenderFeatures } from "../../lib/mission-path-render";
 import { resolveVehicleIconKind, type VehicleIconKind } from "../../lib/overview/vehicle-icon";
 import {
-  createMarkerMotion,
-  unwrapAngleDeg,
   type LngLatTuple,
 } from "../../lib/map-marker-motion";
 import {
@@ -25,7 +21,6 @@ import {
   createDeviceMarkerElement,
   createGuidedTargetMarkerElement,
   createHomeMarkerElement,
-  createVehicleMarkerElement,
   ensureMapFoundation,
   ensureMissionPathLayers,
   getFirstNonFillLayerId,
@@ -33,12 +28,17 @@ import {
   OPENFREEMAP_BRIGHT_STYLE_URL,
   resolveMapFoundationIds,
   setMapTerrain,
-  setVehicleMarkerHeading,
-  setVehicleMarkerIcon,
   updateGuidedTargetMarkerElement,
   updateMissionPathSource,
   type MapLayerMode,
 } from "../../lib/map";
+import { createLiveVehicleOverlay } from "../../lib/map/live-vehicle-overlay";
+import {
+  createMissionMarkerOverlay,
+  missionPlanToDraftItems,
+  missionPlanToMarkerSpecs,
+  type MissionMarkerSpec,
+} from "../../lib/map/mission-plan-overlay";
 import { createUiStateStore } from "../../lib/ui-state/ui-state";
 import MapContextMenu from "../map/MapContextMenu.svelte";
 
@@ -72,11 +72,6 @@ type ContextMenuState = {
   lat: number;
   lon: number;
 } | null;
-type MissionMarkerSpec = {
-  index: number;
-  latitude_deg: number;
-  longitude_deg: number;
-};
 type GuidedTargetSpec = {
   latitude_deg: number;
   longitude_deg: number;
@@ -106,7 +101,7 @@ let {
 
 const iconKind = $derived<VehicleIconKind>(resolveVehicleIconKind(mavType));
 const missionHome = $derived.by<HomePosition | null>(() => toHomePosition(homeLat, homeLon, homeAltitude));
-const missionRenderItems = $derived.by<TypedDraftItem[]>(() => missionPlanToDraftItems(missionPlan, missionPath));
+const missionRenderItems = $derived.by(() => missionPlanToDraftItems(missionPlan, missionPath));
 const missionRenderFeatures = $derived.by(() =>
   buildMissionRenderFeatures(missionHome, missionRenderItems, { currentSeq: currentMissionIndex }),
 );
@@ -136,21 +131,22 @@ let guidedCommandPending = $state(false);
 // Held as plain variables rather than $state to avoid reactive proxy wrapping
 // of MapLibre's internal object graph, which would break its methods.
 let map: MapLibreMap | null = null;
-let vehicleMarker: Marker | null = null;
 let homeMarker: Marker | null = null;
 let deviceMarker: Marker | null = null;
 let guidedTargetMarker: Marker | null = null;
-let missionMarkers = new Map<number, Marker>();
 let baseLayerIds: string[] = [];
 let programmaticMovePending = false;
 let deviceWatchId: number | null = null;
 let appliedTerrainMode: boolean | null = null;
-let vehicleMarkerAttached = false;
 let homeMarkerAttached = false;
 let deviceMarkerAttached = false;
 let guidedTargetMarkerAttached = false;
-let renderedVehicleHeadingDeg: number | null = null;
-const vehicleMotion = createMarkerMotion();
+const vehicleOverlay = createLiveVehicleOverlay(
+  (element: HTMLElement) => new maplibregl.Marker({ element, anchor: "center" }),
+);
+const missionMarkerOverlay = createMissionMarkerOverlay(
+  (element: HTMLElement) => new maplibregl.Marker({ element, anchor: "center" }),
+);
 let mapContextPressTimer: ReturnType<typeof setTimeout> | null = null;
 let mapContextPressStart: { pointerId: number; clientX: number; clientY: number } | null = null;
 
@@ -182,9 +178,6 @@ onMount(() => {
     new maplibregl.NavigationControl({ showZoom: true, showCompass: true, visualizePitch: true }),
     "top-right",
   );
-
-  const vehicleElement = createVehicleMarkerElement({ iconKind });
-  vehicleMarker = new maplibregl.Marker({ element: vehicleElement, anchor: "center" });
 
   const homeElement = createHomeMarkerElement();
   homeMarker = new maplibregl.Marker({ element: homeElement, anchor: "center" });
@@ -219,22 +212,18 @@ onMount(() => {
     clearPressTimer("vehicle");
     clearMapContextPressTimer();
     stopDeviceLocationWatch();
-    vehicleMarker?.remove();
+    vehicleOverlay.remove();
     homeMarker?.remove();
     deviceMarker?.remove();
     guidedTargetMarker?.remove();
-    clearMissionMarkers();
+    missionMarkerOverlay.clear();
     map?.remove();
-    vehicleMotion.reset();
     map = null;
-    vehicleMarker = null;
     homeMarker = null;
     deviceMarker = null;
     guidedTargetMarker = null;
-    renderedVehicleHeadingDeg = null;
     styleLoaded = false;
     baseLayerIds = [];
-    vehicleMarkerAttached = false;
     homeMarkerAttached = false;
     deviceMarkerAttached = false;
     guidedTargetMarkerAttached = false;
@@ -257,7 +246,7 @@ $effect(() => {
 });
 
 $effect(() => {
-  syncMissionMarkers(missionMarkerSpecs, currentMissionIndex);
+  missionMarkerOverlay.sync(map, missionMarkerSpecs, currentMissionIndex);
 });
 
 $effect(() => {
@@ -265,46 +254,22 @@ $effect(() => {
 });
 
 $effect(() => {
-  if (!vehicleMarker) return;
-  const el = vehicleMarker.getElement();
-  if (!el) return;
-  setVehicleMarkerIcon(el, { iconKind });
-  if (renderedVehicleHeadingDeg != null) {
-    setVehicleMarkerHeading(el, renderedVehicleHeadingDeg);
-  }
-});
-
-$effect(() => {
   const lngLat = asLngLat(vehicleLat, vehicleLon);
-  if (!vehicleMarker || !lngLat) {
-    if (vehicleMarker && vehicleMarkerAttached && !lngLat) {
-      vehicleMotion.reset();
-      renderedVehicleHeadingDeg = null;
-      vehicleMarker.remove();
-      vehicleMarkerAttached = false;
-      if (followTarget === "vehicle") {
-        followTarget = null;
-      }
+  vehicleOverlay.sync({ map, lngLat, headingDeg: vehicleHeading, iconKind });
+  if (!lngLat) {
+    if (followTarget === "vehicle") {
+      followTarget = null;
     }
     return;
   }
 
-  if (vehicleMarkerAttached) {
-    vehicleMotion.animateTo(vehicleMarker, lngLat);
-  } else {
-    vehicleMotion.setInstant(vehicleMarker, lngLat);
-  }
-  if (map && !vehicleMarkerAttached) {
-    vehicleMarker.addTo(map);
-    vehicleMarkerAttached = true;
-  }
   if (followTarget === "vehicle") {
     easeToCoordinates(lngLat);
   }
 });
 
 $effect(() => {
-  applyVehicleHeading(vehicleHeading);
+  vehicleOverlay.applyHeading(vehicleHeading);
 });
 
 $effect(() => {
@@ -398,84 +363,6 @@ function toHomePosition(latitude?: number, longitude?: number, altitude?: number
     latitude_deg: Number(latitude),
     longitude_deg: Number(longitude),
     altitude_m: Number.isFinite(altitude) ? Number(altitude) : 0,
-  };
-}
-
-function missionPlanToDraftItems(
-  plan: MissionPlan | null,
-  fallbackPath: Array<{ lat: number; lon: number }>,
-): TypedDraftItem[] {
-  const items = plan?.items ?? fallbackPath.map(createMissionPathFallbackItem);
-  return items.map((item, index) => ({
-    uiId: index + 1,
-    index,
-    document: item,
-    readOnly: false,
-    preview: missionItemPreview(item),
-  }));
-}
-
-function missionPlanToMarkerSpecs(plan: MissionPlan | null): MissionMarkerSpec[] {
-  if (!plan) {
-    return [];
-  }
-
-  const specs: MissionMarkerSpec[] = [];
-  plan.items.forEach((item, index) => {
-    const coordinate = missionItemCoordinate(item);
-    if (!coordinate) {
-      return;
-    }
-
-    specs.push({ index, ...coordinate });
-  });
-  return specs;
-}
-
-function missionItemPreview(item: MissionItem): TypedDraftPreview {
-  const coordinate = missionItemCoordinate(item);
-  return {
-    latitude_deg: coordinate?.latitude_deg ?? null,
-    longitude_deg: coordinate?.longitude_deg ?? null,
-    altitude_m: null,
-  };
-}
-
-function missionItemCoordinate(item: MissionItem): Omit<MissionMarkerSpec, "index"> | null {
-  const position = commandPosition(item.command);
-  if (!position) {
-    return null;
-  }
-
-  const coordinate = geoPoint3dLatLon(position);
-  if (!Number.isFinite(coordinate.latitude_deg) || !Number.isFinite(coordinate.longitude_deg)) {
-    return null;
-  }
-
-  return coordinate;
-}
-
-function createMissionPathFallbackItem(point: { lat: number; lon: number }): MissionItem {
-  return {
-    command: {
-      Nav: {
-        Waypoint: {
-          position: {
-            RelHome: {
-              latitude_deg: point.lat,
-              longitude_deg: point.lon,
-              relative_alt_m: 25,
-            },
-          },
-          hold_time_s: 0,
-          acceptance_radius_m: 1,
-          pass_radius_m: 0,
-          yaw_deg: 0,
-        },
-      },
-    },
-    current: false,
-    autocontinue: true,
   };
 }
 
@@ -593,66 +480,6 @@ async function handleFlyHere(latitude_deg: number, longitude_deg: number) {
   }
 }
 
-function syncMissionMarkers(specs: MissionMarkerSpec[], currentIndex: number | null) {
-  if (!map) {
-    clearMissionMarkers();
-    return;
-  }
-
-  const expected = new Set(specs.map((spec) => spec.index));
-  for (const [index, marker] of missionMarkers) {
-    if (!expected.has(index)) {
-      marker.remove();
-      missionMarkers.delete(index);
-    }
-  }
-
-  for (const spec of specs) {
-    const lngLat = asLngLat(spec.latitude_deg, spec.longitude_deg);
-    if (!lngLat) {
-      const marker = missionMarkers.get(spec.index);
-      marker?.remove();
-      missionMarkers.delete(spec.index);
-      continue;
-    }
-
-    let marker = missionMarkers.get(spec.index);
-    if (!marker) {
-      const element = createMissionMarkerElement(spec.index);
-      marker = new maplibregl.Marker({ element, anchor: "center" });
-      missionMarkers.set(spec.index, marker);
-      marker.setLngLat(lngLat).addTo(map);
-    } else {
-      marker.setLngLat(lngLat);
-    }
-
-    updateMissionMarkerElement(marker.getElement(), spec.index, currentIndex);
-  }
-}
-
-function createMissionMarkerElement(index: number): HTMLButtonElement {
-  const element = document.createElement("button");
-  element.type = "button";
-  element.addEventListener("click", (event) => event.stopPropagation());
-  updateMissionMarkerElement(element, index, null);
-  return element;
-}
-
-function updateMissionMarkerElement(element: HTMLElement, index: number, currentIndex: number | null) {
-  const isCurrent = currentIndex !== null && index === currentIndex;
-  const isNext = currentIndex !== null && index === currentIndex + 1;
-  element.className = ["mission-pin", isCurrent && "is-current", isNext && "is-next"].filter(Boolean).join(" ");
-  element.textContent = String(index + 1);
-  element.setAttribute("aria-label", `Mission item ${index + 1}${isCurrent ? " current" : isNext ? " next" : ""}`);
-}
-
-function clearMissionMarkers() {
-  for (const marker of missionMarkers.values()) {
-    marker.remove();
-  }
-  missionMarkers.clear();
-}
-
 function syncGuidedTargetMarker(target: GuidedTargetSpec | null) {
   const lngLat = guidedTargetLngLat(target);
   if (!map || !target || !lngLat) {
@@ -679,13 +506,6 @@ function syncGuidedTargetMarker(target: GuidedTargetSpec | null) {
 
   guidedTargetMarker.setLngLat(lngLat).addTo(map);
   guidedTargetMarkerAttached = true;
-}
-
-function applyVehicleHeading(headingDeg: number) {
-  if (!vehicleMarker) return;
-
-  renderedVehicleHeadingDeg = unwrapAngleDeg(renderedVehicleHeadingDeg, headingDeg);
-  setVehicleMarkerHeading(vehicleMarker.getElement(), renderedVehicleHeadingDeg);
 }
 
 function ensureStyleExtensions(currentMap: MapLibreMap) {

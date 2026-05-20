@@ -173,7 +173,7 @@ describe("buildMissionRenderFeatures", () => {
     expect(features.labels[0]).toMatchObject({
       distanceText: "100 m",
       bearingText: "090°",
-      text: "100 m • 090°",
+      text: "100 m",
     });
   });
 
@@ -315,7 +315,7 @@ describe("buildMissionRenderFeatures", () => {
     expect(features.legs.map((leg) => leg.isLandingLeg)).toEqual([false, true, true]);
   });
 
-  it("formats distance and bearing labels for known straight legs", () => {
+  it("formats distance-only map labels while keeping bearing metadata", () => {
     const target = offsetPoint(home, 0, 1200);
     const features = buildMissionRenderFeatures(home, [waypoint(0, target.lat, target.lon)]);
 
@@ -323,7 +323,7 @@ describe("buildMissionRenderFeatures", () => {
     expect(features.labels[0]).toMatchObject({
       distanceText: "1.2 km",
       bearingText: "000°",
-      text: "1.2 km • 000°",
+      text: "1.2 km",
     });
   });
 

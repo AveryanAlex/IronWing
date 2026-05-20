@@ -257,7 +257,8 @@ describe("OverviewMap", () => {
     });
     await tick();
 
-    const vehicleSvg = maplibreState.markers[0]?.element.querySelector("svg") as SVGSVGElement | null;
+    const vehicleSvg = maplibreState.markers.find((marker) => marker.element.className.includes("vehicle-marker"))
+      ?.element.querySelector("svg") as SVGSVGElement | null;
     expect(vehicleSvg?.style.transform).toBe("rotate(359deg)");
 
     await rerender({

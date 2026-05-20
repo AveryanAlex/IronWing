@@ -28,16 +28,15 @@ import {
   applyMapLayerMode,
   createDeviceMarkerElement,
   createHomeMarkerElement,
-  createVehicleMarkerElement,
   ensureMapFoundation,
   getFirstNonFillLayerId,
   getMapLayerIds,
   OPENFREEMAP_BRIGHT_STYLE_URL,
   resolveMapFoundationIds,
   setMapTerrain,
-  setVehicleMarkerHeading,
   type MapLayerMode,
 } from "../../lib/map";
+import { createLiveVehicleOverlay } from "../../lib/map/live-vehicle-overlay";
 import {
   minimumSurveyPointCount,
   setSurveyGeometryPoints,
@@ -232,7 +231,6 @@ let basemapWarning = $state<string | null>(null);
 let mapCameraRevision = $state(0);
 
 let basemap: MapLibreMap | null = null;
-let vehicleMarker: Marker | null = null;
 let homeMarker: Marker | null = null;
 let deviceMarker: Marker | null = null;
 let baseLayerIds: string[] = [];
@@ -240,11 +238,13 @@ let basemapLoaded = $state(false);
 let basemapStyleReady = $state(false);
 let basemapInitAttempted = false;
 let initialFitApplied = false;
-let vehicleMarkerAttached = false;
 let homeMarkerAttached = false;
 let deviceMarkerAttached = false;
 let deviceWatchId: number | null = null;
 let appliedTerrainMode: boolean | null = null;
+const vehicleOverlay = createLiveVehicleOverlay(
+  (element: HTMLElement) => new maplibregl.Marker({ element, anchor: "center" }),
+);
 
 let fallbackViewport = $derived(buildMissionMapViewport(fallbackReference, [fallbackReference]));
 let replayOverlayCoordinates = $derived.by(() => {
@@ -578,7 +578,6 @@ onMount(() => {
   }
 
   if (typeof maplibregl.Marker === "function") {
-    vehicleMarker = new maplibregl.Marker({ element: createVehicleMarkerElement(), anchor: "center" });
     homeMarker = new maplibregl.Marker({ element: createHomeMarkerElement(), anchor: "center" });
     deviceMarker = new maplibregl.Marker({ element: createDeviceMarkerElement(), anchor: "center" });
   }
@@ -605,19 +604,17 @@ onMount(() => {
 
   return () => {
     stopDeviceLocationWatch();
-    vehicleMarker?.remove();
+    vehicleOverlay.remove();
     homeMarker?.remove();
     deviceMarker?.remove();
     basemap?.remove();
     basemap = null;
-    vehicleMarker = null;
     homeMarker = null;
     deviceMarker = null;
     basemapLoaded = false;
     basemapStyleReady = false;
     basemapInitAttempted = false;
     initialFitApplied = false;
-    vehicleMarkerAttached = false;
     homeMarkerAttached = false;
     deviceMarkerAttached = false;
     baseLayerIds = [];
@@ -769,9 +766,7 @@ $effect(() => {
 });
 
 $effect(() => {
-  if (vehicleMarker) {
-    setVehicleMarkerHeading(vehicleMarker.getElement(), liveVehicleHeadingDeg);
-  }
+  vehicleOverlay.applyHeading(liveVehicleHeadingDeg);
 });
 
 function applyTerrainMode(enabled: boolean) {
@@ -790,20 +785,7 @@ function applyTerrainMode(enabled: boolean) {
 }
 
 function syncVehicleMarker() {
-  if (!basemap || !vehicleMarker || !vehicleLngLat) {
-    if (vehicleMarker && vehicleMarkerAttached && !vehicleLngLat) {
-      vehicleMarker.remove();
-      vehicleMarkerAttached = false;
-    }
-    return;
-  }
-
-  vehicleMarker.setLngLat(vehicleLngLat);
-  setVehicleMarkerHeading(vehicleMarker.getElement(), liveVehicleHeadingDeg);
-  if (!vehicleMarkerAttached) {
-    vehicleMarker.addTo(basemap);
-    vehicleMarkerAttached = true;
-  }
+  vehicleOverlay.sync({ map: basemap, lngLat: vehicleLngLat, headingDeg: liveVehicleHeadingDeg });
 }
 
 function syncHomeMarker() {
@@ -2774,7 +2756,15 @@ function preventContextMenu(event: MouseEvent) {
   }
 
   .mission-map-basemap {
-    z-index: 0;
+    /* Keep the basemap itself below planner overlays, but do not create a
+       stacking context that traps MapLibre's live vehicle marker underneath
+       editable home/mission buttons. The vehicle marker has its own z-index
+       and must be able to rise above planner markers when positions overlap. */
+    z-index: auto;
+  }
+
+  .mission-map-basemap :global(.maplibregl-marker.vehicle-marker) {
+    z-index: 30;
   }
 
   .mission-map-basemap :global(.maplibregl-canvas-container),

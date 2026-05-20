@@ -16,6 +16,7 @@ const maplibreState = vi.hoisted(() => {
     getElement: ReturnType<typeof vi.fn>;
   }> = [];
   const mockMap = {
+    addControl: vi.fn(),
     easeTo: vi.fn(),
     remove: vi.fn(),
   };
@@ -43,10 +44,15 @@ vi.mock("maplibre-gl", () => {
     return marker;
   }
 
+  function MockNavigationControl(options?: unknown) {
+    return { options };
+  }
+
   return {
     default: {
       Map: MockMap,
       Marker: MockMarker,
+      NavigationControl: MockNavigationControl,
     },
   };
 });
@@ -54,6 +60,7 @@ vi.mock("maplibre-gl", () => {
 describe("HudMiniMap", () => {
   beforeEach(() => {
     maplibreState.markers.length = 0;
+    maplibreState.mockMap.addControl.mockReset();
     maplibreState.mockMap.easeTo.mockReset();
     maplibreState.mockMap.remove.mockReset();
     vi.useRealTimers();
@@ -87,5 +94,19 @@ describe("HudMiniMap", () => {
     const calls = maplibreState.mockMap.easeTo.mock.calls;
     const easing = calls[calls.length - 1]?.[0]?.easing as ((progress: number) => number) | undefined;
     expect(easing?.(0.42)).toBe(0.42);
+  });
+
+  it("adds compact zoom controls for direct minimap zooming", async () => {
+    render(HudMiniMap, {
+      latitude: 47.397742,
+      longitude: 8.545594,
+      heading: 0,
+    });
+    await tick();
+
+    expect(maplibreState.mockMap.addControl).toHaveBeenCalledWith(
+      { options: { showZoom: true, showCompass: false } },
+      "top-right",
+    );
   });
 });

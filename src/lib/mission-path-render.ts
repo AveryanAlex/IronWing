@@ -454,7 +454,7 @@ function buildLegLabel(leg: MissionRenderLeg): MissionRenderLabel | null {
     kind: "label",
     coordinate: toCoordinate(midpoint),
     itemIndex: leg.to.itemIndex,
-    text: `${distanceText} • ${bearingText}`,
+    text: distanceText,
     distanceText,
     bearingText,
     distance_m,
