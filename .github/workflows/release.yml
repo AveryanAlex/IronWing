@@ -27,6 +27,7 @@ jobs:
     env:
       IRONWING_APTABASE_KEY: ${{ vars.IRONWING_APTABASE_KEY }}
       IRONWING_APTABASE_HOST: ${{ vars.IRONWING_APTABASE_HOST }}
+      VITE_IRONWING_TOMTOM_API_KEY: ${{ vars.TOMTOM_API_KEY }}
 
     steps:
       - name: Checkout
@@ -107,6 +108,7 @@ jobs:
       ANDROID_NDK_VERSION: '27.2.12479018'
       IRONWING_APTABASE_KEY: ${{ vars.IRONWING_APTABASE_KEY }}
       IRONWING_APTABASE_HOST: ${{ vars.IRONWING_APTABASE_HOST }}
+      VITE_IRONWING_TOMTOM_API_KEY: ${{ vars.TOMTOM_API_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
