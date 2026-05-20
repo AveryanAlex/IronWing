@@ -2,6 +2,7 @@
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext } from "../../app/shell/runtime-context";
+import PwmChannelStrip from "../telemetry/PwmChannelStrip.svelte";
 import { resolveDocsUrl } from "../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../lib/params/parameter-item-model";
 import type { SetupWorkspaceStoreState } from "../../lib/stores/setup-workspace";
@@ -72,6 +73,11 @@ let currentPreset = $derived.by(() => {
     && currentValues.RCMAP_YAW === preset.values.RCMAP_YAW
   )) ?? null;
 });
+let rcChannelItems = $derived(view.rcReceiver.channels.map((channel) => ({
+  index: channel.channel,
+  value: channel.pwm,
+  stale: channel.stale,
+})));
 
 function resolveDraftNumber(value: string): number | null {
   if (value.trim().length === 0) {
@@ -192,25 +198,8 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
         {view.rcReceiver.detailText}
       </div>
     {:else}
-      <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {#each view.rcReceiver.channels as channel (channel.channel)}
-          <article
-            class={`rounded-lg border px-3 py-3 ${channel.stale ? "border-warning/40 bg-warning/10" : "border-border bg-bg-secondary/70"}`}
-            data-testid={`${setupWorkspaceTestIds.rcBarPrefix}-${channel.channel}`}
-          >
-            <div class="flex items-center justify-between gap-2">
-              <p class="font-mono text-xs font-semibold uppercase tracking-widest text-text-muted">CH{channel.channel}</p>
-              <p class="font-mono text-sm font-semibold text-text-primary">{channel.pwm}</p>
-            </div>
-            <div class="relative mt-3 h-2.5 overflow-hidden rounded-full bg-bg-primary/90">
-              <div class="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/80"></div>
-              <div class="absolute top-0 h-full w-1 rounded-full bg-accent" style:left={`calc(${channel.percent}% - 2px)`}></div>
-            </div>
-            {#if channel.stale}
-              <p class="mt-2 text-xs font-semibold uppercase tracking-widest text-warning">Stale sample</p>
-            {/if}
-          </article>
-        {/each}
+      <div class="mt-4">
+        <PwmChannelStrip items={rcChannelItems} labelPrefix="CH" testIdPrefix={setupWorkspaceTestIds.rcBarPrefix} />
       </div>
     {/if}
   </div>
