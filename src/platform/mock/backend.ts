@@ -88,7 +88,6 @@ import {
 } from "./backend/params";
 import {
   commandBehaviors,
-  clearDemoIntervals,
   deferredInvocations,
   invocations,
   mockState,
@@ -125,14 +124,6 @@ import {
   validateSetServoArgs,
   validateSetTelemetryRateArgs,
 } from "./backend/vehicle";
-import {
-  advanceDemoSimulator,
-  setDemoSimulatorMission,
-  setDemoSimulatorMissionCurrentIndex,
-  telemetryFromSimulator,
-  vehicleStateFromSimulator,
-} from "./backend/vehicle-sim/simulator";
-import { normalizeMissionPlan } from "./backend/vehicle-sim/mission";
 import type {
   CommandArgs,
   MockCommandBehavior,
@@ -247,43 +238,6 @@ function publishMissionProgress(missionProgress: MockMissionProgressState) {
   emitEvent("mission://progress", liveMissionProgressStreamEvent(missionProgress).payload);
 }
 
-function publishStatusTextState() {
-  if (!mockState.liveEnvelope) {
-    return;
-  }
-
-  emitEvent("status_text://state", {
-    envelope: requireLiveEnvelope(),
-    value: {
-      available: true,
-      complete: true,
-      provenance: "stream",
-      value: structuredClone(mockState.liveStatusText ?? { entries: [] }),
-    },
-  });
-}
-
-function appendSimulatorStatusNotes(notes: string[], nowMsec = Date.now()) {
-  if (notes.length === 0) {
-    return;
-  }
-
-  const existingEntries = mockState.liveStatusText?.entries ?? [];
-  let nextSequence = (existingEntries[existingEntries.length - 1]?.sequence ?? 0) + 1;
-  mockState.liveStatusText = {
-    entries: [
-      ...existingEntries,
-      ...notes.map((text) => ({
-        sequence: nextSequence++,
-        text,
-        severity: "warning",
-        timestamp_usec: nowMsec * 1_000,
-      })),
-    ],
-  };
-  publishStatusTextState();
-}
-
 function beginMissionOperation(
   kind: PendingMissionOperation["kind"],
   direction: PendingMissionOperation["direction"],
@@ -339,48 +293,6 @@ function liveDisconnectedSessionPayload(envelope: { session_id: string; source_k
       },
     },
   };
-}
-
-function isDemoConnectRequest(args: CommandArgs) {
-  return args?.request
-    && typeof args.request === "object"
-    && (args.request as { transport?: { kind?: string } }).transport?.kind === "demo";
-}
-
-function tickDemoSimulator(nowMsec = Date.now()) {
-  if (!mockState.liveSimulator || !mockState.liveEnvelope || !mockState.liveVehicleState) {
-    return;
-  }
-
-  const { simulator, mission_current_changed, status_notes } = advanceDemoSimulator(mockState.liveSimulator, nowMsec);
-  mockState.liveSimulator = simulator;
-  mockState.liveTelemetryDomain = telemetryFromSimulator(simulator, "stream");
-  mockState.liveVehicleState = vehicleStateFromSimulator(simulator, mockState.liveVehicleState);
-  if (mission_current_changed) {
-    publishMissionState({
-      ...currentMissionState(),
-      current_index: simulator.state.mission.current_index,
-    });
-  }
-  appendSimulatorStatusNotes(status_notes, nowMsec);
-  emitEvent("telemetry://state", liveTelemetryStreamPayload());
-}
-
-function startDemoTimers() {
-  clearDemoIntervals();
-
-  const { demoTelemetryIntervalMs, demoSessionIntervalMs } = mockProfileTiming();
-  mockState.demoTelemetryIntervalId = window.setInterval(() => {
-    tickDemoSimulator();
-  }, demoTelemetryIntervalMs);
-
-  mockState.demoStatusIntervalId = window.setInterval(() => {
-    if (!mockState.liveEnvelope || !mockState.liveVehicleState) {
-      return;
-    }
-
-    emitEvent("session://state", liveSessionStreamEvent(mockState.liveVehicleState).payload);
-  }, demoSessionIntervalMs);
 }
 
 async function runCompassCalibration() {
@@ -749,11 +661,6 @@ async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unk
     }
     case "connect_link":
       connectLink(args);
-      if (isDemoConnectRequest(args)) {
-        startDemoTimers();
-      } else {
-        clearDemoIntervals();
-      }
       return undefined;
     case "log_open":
       {
@@ -879,14 +786,6 @@ async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unk
         totalItems: plan.items.length,
         complete: () => {
           commitMockMissionPlan(plan);
-          if (mockState.liveSimulator) {
-            const missionState = currentMissionState();
-            mockState.liveSimulator = setDemoSimulatorMission(
-              mockState.liveSimulator,
-              normalizeMissionPlan(plan),
-              missionState.current_index,
-            );
-          }
           return undefined;
         },
       });
@@ -899,9 +798,6 @@ async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unk
         totalItems: currentMissionState().plan?.items.length ?? 0,
         complete: () => {
           clearMockMissionPlan();
-          if (mockState.liveSimulator) {
-            mockState.liveSimulator = setDemoSimulatorMission(mockState.liveSimulator, normalizeMissionPlan({ items: [] }), null);
-          }
           return undefined;
         },
       });
@@ -915,9 +811,6 @@ async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unk
       }
 
       setMockMissionCurrentIndex(seq);
-      if (mockState.liveSimulator) {
-        mockState.liveSimulator = setDemoSimulatorMissionCurrentIndex(mockState.liveSimulator, seq);
-      }
       publishMissionState(currentMissionState());
       return undefined;
     }

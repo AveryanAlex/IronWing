@@ -74,7 +74,6 @@ export type SessionConnectionEnv = {
   VITE_IRONWING_SITL_TCP_PORT?: string;
   VITE_IRONWING_SITL_WS_URL?: string;
   VITE_IRONWING_AUTO_CONNECT_SITL?: string;
-  VITE_IRONWING_MOCK_PROFILE?: string;
 };
 
 export const DEFAULT_TCP_ADDRESS = "127.0.0.1:5760";
@@ -213,7 +212,7 @@ export function resolveSessionConnectionDefaults(
   const mode = resolveSitlMode(env.VITE_IRONWING_SITL_MODE);
 
   return {
-    mode: resolveMockProfileMode(env) ?? mode,
+    mode,
     udpBind: "0.0.0.0:14550",
     tcpAddress: defaultTcpAddress(env),
     websocketUrl: defaultWebSocketUrl(env),
@@ -315,20 +314,7 @@ function normalizeConnectionForm(raw: unknown, defaults: SessionConnectionFormSt
     normalized.tcpAddress = defaults.tcpAddress;
   }
 
-  if (defaults.mode === "demo") {
-    normalized.mode = "demo";
-    normalized.demoVehiclePreset = isDemoVehiclePreset(normalized.demoVehiclePreset)
-      ? normalized.demoVehiclePreset
-      : defaults.demoVehiclePreset;
-  } else if (normalized.mode === "demo") {
-    normalized.mode = defaults.mode;
-  }
-
   return normalized;
-}
-
-function resolveMockProfileMode(env: SessionConnectionEnv): TransportType | null {
-  return env.VITE_IRONWING_MOCK_PROFILE === "demo" ? "demo" : null;
 }
 
 function isTransportType(value: unknown): value is TransportType {

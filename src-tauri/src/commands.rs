@@ -894,6 +894,7 @@ mod tests {
                 ),
             ),
             active_link_target: tokio::sync::Mutex::new(None),
+            demo_vehicle: tokio::sync::Mutex::new(None),
             connect_abort: tokio::sync::Mutex::new(None),
             background_tasks: tokio::sync::Mutex::new(Vec::new()),
             background_listeners: tokio::sync::Mutex::new(Vec::new()),

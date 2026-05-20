@@ -64,6 +64,7 @@ pub(crate) enum FirmwareAbortHandle {
 pub(crate) struct AppState {
     pub(crate) live_runtime: SharedLiveRuntime<TauriEventSink>,
     pub(crate) active_link_target: tokio::sync::Mutex<Option<ActiveLinkTarget>>,
+    pub(crate) demo_vehicle: tokio::sync::Mutex<Option<mavkit::sim::DemoVehicleHandle>>,
     pub(crate) connect_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
     pub(crate) background_tasks: tokio::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>,
     pub(crate) background_listeners: tokio::sync::Mutex<Vec<tauri::EventId>>,
@@ -94,6 +95,7 @@ pub fn run() {
     let state = AppState {
         live_runtime: SharedLiveRuntime::new(LiveVehicleRuntime::new(tauri_event_sink.clone())),
         active_link_target: tokio::sync::Mutex::new(None),
+        demo_vehicle: tokio::sync::Mutex::new(None),
         connect_abort: tokio::sync::Mutex::new(None),
         background_tasks: tokio::sync::Mutex::new(Vec::new()),
         background_listeners: tokio::sync::Mutex::new(Vec::new()),

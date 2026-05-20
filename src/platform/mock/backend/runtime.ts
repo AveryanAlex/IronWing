@@ -6,32 +6,19 @@ import type {
   SessionEnvelope,
 } from "./types";
 import type { OperationFailure, OperationId } from "../../../session";
-import { currentMockProfile } from "./profile";
 
 export const PENDING_SESSION_TTL_MS = 2_000;
 
-export type MockProfileTiming = {
+export type MockTiming = {
   missionStepDelayMs: number;
   paramStepDelayMs: number;
   compassStepDelayMs: number;
-  demoTelemetryIntervalMs: number;
-  demoSessionIntervalMs: number;
 };
 
-const TEST_PROFILE_TIMING: MockProfileTiming = {
+const MOCK_TIMING: MockTiming = {
   missionStepDelayMs: 20,
   paramStepDelayMs: 20,
   compassStepDelayMs: 20,
-  demoTelemetryIntervalMs: 250,
-  demoSessionIntervalMs: 500,
-};
-
-const DEMO_PROFILE_TIMING: MockProfileTiming = {
-  missionStepDelayMs: 120,
-  paramStepDelayMs: 120,
-  compassStepDelayMs: 120,
-  demoTelemetryIntervalMs: 250,
-  demoSessionIntervalMs: 500,
 };
 
 export const commandBehaviors = new Map<string, MockCommandBehavior>();
@@ -63,9 +50,6 @@ export const mockState: MockBackendState = {
   liveSupportDomain: null,
   liveSensorHealthDomain: null,
   liveConfigurationFactsDomain: null,
-  liveSimulator: null,
-  demoTelemetryIntervalId: null,
-  demoStatusIntervalId: null,
   liveVehicleArmed: false,
   liveVehicleModeName: "Stabilize",
   guidedTermination: null,
@@ -74,7 +58,6 @@ export const mockState: MockBackendState = {
 };
 
 export function resetMockState() {
-  clearDemoIntervals();
   mockState.liveEnvelope = null;
   mockState.playbackEnvelope = null;
   mockState.pendingLiveEnvelope = null;
@@ -99,9 +82,6 @@ export function resetMockState() {
   mockState.liveSupportDomain = null;
   mockState.liveSensorHealthDomain = null;
   mockState.liveConfigurationFactsDomain = null;
-  mockState.liveSimulator = null;
-  mockState.demoTelemetryIntervalId = null;
-  mockState.demoStatusIntervalId = null;
   mockState.liveVehicleArmed = false;
   mockState.liveVehicleModeName = "Stabilize";
   mockState.guidedTermination = null;
@@ -109,20 +89,8 @@ export function resetMockState() {
   mockState.guided = null;
 }
 
-export function clearDemoIntervals() {
-  if (mockState.demoTelemetryIntervalId != null) {
-    window.clearInterval(mockState.demoTelemetryIntervalId);
-    mockState.demoTelemetryIntervalId = null;
-  }
-
-  if (mockState.demoStatusIntervalId != null) {
-    window.clearInterval(mockState.demoStatusIntervalId);
-    mockState.demoStatusIntervalId = null;
-  }
-}
-
-export function mockProfileTiming(): MockProfileTiming {
-  return currentMockProfile() === "demo" ? DEMO_PROFILE_TIMING : TEST_PROFILE_TIMING;
+export function mockProfileTiming(): MockTiming {
+  return MOCK_TIMING;
 }
 
 export function currentGuidedSourceKind(): "live" | "playback" {

@@ -1,27 +1,8 @@
 export const DIST_DIRS = {
   tauri: "dist/tauri",
   web: "dist/web",
-  demo: "dist/demo",
   e2e: "dist/e2e",
 };
-
-export function demoFrontendEnv() {
-  return {
-    IRONWING_PLATFORM: "mock",
-    ...mockProfileEnv("demo"),
-  };
-}
-
-export function demoBuildEnv(env = process.env) {
-  return {
-    ...demoFrontendEnv(),
-    IRONWING_OUT_DIR: env.IRONWING_OUT_DIR ?? DIST_DIRS.demo,
-  };
-}
-
-export function mockProfileEnv(mockProfile) {
-  return mockProfile ? { VITE_IRONWING_MOCK_PROFILE: mockProfile } : {};
-}
 
 function analyticsCommonFrontendEnv(env = process.env) {
   return {

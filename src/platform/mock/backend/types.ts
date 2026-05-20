@@ -25,7 +25,6 @@ import type { SupportDomain } from "../../../support";
 import type { FlightModeEntry, TelemetryDomain } from "../../../telemetry";
 import type { ConfigurationFactsDomain } from "../../../configuration-facts";
 import type { MockLogSeedPreset } from "./logs";
-import type { DemoSimulatorRuntime } from "./vehicle-sim/types";
 
 export type CommandArgs = Record<string, unknown> | undefined;
 
@@ -68,12 +67,7 @@ export type TransportDescriptor =
     available: boolean;
     validation: { address_required: boolean };
   }
-  | {
-    kind: "demo";
-    label: string;
-    available: boolean;
-    validation: {};
-  };
+  ;
 
 export type MockLiveVehicleState = {
   armed: boolean;
@@ -144,9 +138,6 @@ export type MockBackendState = {
   liveSupportDomain: MockSupportDomain | null;
   liveSensorHealthDomain: MockSensorHealthDomain | null;
   liveConfigurationFactsDomain: MockConfigurationFactsDomain | null;
-  liveSimulator: DemoSimulatorRuntime | null;
-  demoTelemetryIntervalId: number | null;
-  demoStatusIntervalId: number | null;
   liveVehicleArmed: boolean;
   liveVehicleModeName: string;
   guidedTermination: null | { reason: "disconnect" | "mode_change" | "source_switch" | "vehicle_missing"; at_unix_msec: number; message: string };

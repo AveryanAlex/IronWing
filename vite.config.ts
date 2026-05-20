@@ -99,10 +99,8 @@ const serverHost =
       ? (process.env.IRONWING_REMOTE_UI_VITE_HOST ?? "127.0.0.1")
       : "localhost";
 
-const isDemoBuild = platformDir === "mock" && process.env.VITE_IRONWING_MOCK_PROFILE === "demo";
-
 export default defineConfig({
-  base: process.env.IRONWING_BASE ?? (platformDir === "web" || isDemoBuild ? "./" : undefined),
+  base: process.env.IRONWING_BASE ?? (platformDir === "web" ? "./" : undefined),
   plugins: [ironwingWebWasmPlugin(platformDir === "web"), svelte(), tailwindcss()],
   resolve: {
     alias: {
@@ -120,7 +118,7 @@ export default defineConfig({
   build: {
     target: "es2022",
     chunkSizeWarningLimit: 5120,
-    outDir: process.env.IRONWING_OUT_DIR ?? (isDemoBuild ? "dist/demo" : DEFAULT_OUT_DIRS[platformDir]),
+    outDir: process.env.IRONWING_OUT_DIR ?? DEFAULT_OUT_DIRS[platformDir],
   },
   server: {
     host: serverHost,

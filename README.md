@@ -40,7 +40,7 @@ Raw Vite commands default to the pure web platform: `pnpm exec vite` serves the 
 
 ## Use IronWing with ArduPilot SITL (development)
 
-Dev commands start ArduPilot SITL automatically, except for `pnpm run dev:demo`, which uses the mocked demo profile.
+Dev commands start ArduPilot SITL automatically for live vehicle workflows. For a no-SITL walkthrough, select the built-in **Demo vehicle** transport in the normal web or desktop app.
 
 `pnpm run dev:desktop` is the local desktop SITL workflow. It picks a free instance, starts ArduPilot SITL in Docker, launches Tauri dev, and tears the SITL container down automatically when the app exits or you press Ctrl+C.
 
@@ -56,13 +56,14 @@ After connecting to a vehicle, the sidebar shows vehicle status and flight contr
 
 ### Connect
 
-1. Select a transport: **UDP**, **Serial**, **BLE**, or **Classic SPP** (Android)
+1. Select a transport: **Demo vehicle**, **UDP**, **TCP**, **Serial**, **BLE**, or **Classic SPP** (Android)
 2. For UDP: enter bind address (default `0.0.0.0:14550`)
 3. For TCP: enter address (default `127.0.0.1:5760`)
 4. For BLE: scan and select your device
 5. For Serial: select port and baud rate
-6. Click **Connect**
-7. Wait for status to show "connected" and telemetry to appear
+6. For Demo vehicle: choose a vehicle preset
+7. Click **Connect**
+8. Wait for status to show "connected" and telemetry to appear
 
 ### Arm and Disarm
 
@@ -132,8 +133,7 @@ Other useful commands:
 
 ```bash
 pnpm run e2e:browser:headed   # Run tests with a visible browser window
-pnpm run e2e:browser:demo     # Run the demo-profile browser spec
-pnpm run e2e                  # Run all browser, demo, and native E2E lanes sequentially
+pnpm run e2e                  # Run all browser and native E2E lanes sequentially
 ```
 
 `pnpm run e2e:browser` uses Playwright's built-in `webServer` support to build the frontend, start a preview server, run the browser suite, and clean up afterward.
@@ -186,7 +186,6 @@ Frontend bundles are separated by target under `dist/`:
 | `pnpm run build:desktop` | `dist/tauri` |
 | `pnpm run build:android` | `dist/tauri` |
 | `pnpm run build:web` | `dist/web` |
-| `pnpm run build:demo` | `dist/demo` |
 | `pnpm run e2e:browser` | `dist/e2e` |
 
 Set `IRONWING_OUT_DIR` to override a specific build artifact directory.

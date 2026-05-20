@@ -9,6 +9,7 @@ const wasmRuntimeMock = vi.hoisted(() => ({
     nextOutbound: vi.fn(async () => null),
     pushInbound: vi.fn(async () => undefined),
   })),
+  connectDemo: vi.fn(async () => undefined),
   waitConnect: vi.fn(async () => undefined),
   disconnectLink: vi.fn(async () => undefined),
   getAvailableModes: vi.fn(() => [{ custom_mode: 4, name: "GUIDED" }]),
@@ -26,6 +27,12 @@ const wasmContractMock = vi.hoisted(() => ({
     webSerialAvailable: boolean;
     webBluetoothAvailable: boolean;
   }) => [
+    {
+      kind: "demo",
+      label: "Core Demo Vehicle",
+      available: true,
+      validation: {},
+    },
     {
       kind: "websocket",
       label: "Core WebSocket",
@@ -346,6 +353,7 @@ describe("web backend commands", () => {
     vi.mocked(isWebSerialAvailable).mockReturnValue(true);
 
     await expect(invokeWebCommand("available_transports")).resolves.toEqual([
+      expect.objectContaining({ kind: "demo", validation: {} }),
       expect.objectContaining({ kind: "websocket", validation: { url_required: true } }),
       expect.objectContaining({ kind: "web_serial", available: true, validation: { chooser_required: true, baud_required: true } }),
       expect.objectContaining({ kind: "web_bluetooth", available: false, profile: "nordic_uart" }),
@@ -400,6 +408,16 @@ describe("web backend commands", () => {
       expect.anything(),
       expect.any(AbortSignal),
     );
+  });
+
+  it("connects the built-in demo vehicle through the wasm runtime", async () => {
+    await invokeWebCommand("connect_link", {
+      request: { transport: { kind: "demo", vehicle_preset: "quadplane" } },
+    });
+
+    expect(wasmRuntimeMock.connectDemo).toHaveBeenCalledWith("quadplane");
+    expect(wasmRuntimeMock.beginConnect).not.toHaveBeenCalled();
+    expect(createWebSocketTransport).not.toHaveBeenCalled();
   });
 
   it("available modes command delegates to the shared wasm runtime after connect", async () => {

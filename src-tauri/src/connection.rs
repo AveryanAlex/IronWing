@@ -1,3 +1,4 @@
+use mavkit::sim::{DemoProfile, DemoVehicle, DemoVehicleHandle};
 use mavkit::stream::{ChannelBridge, StreamConnection};
 use mavkit::{Vehicle, VehicleConfig};
 use serde::Deserialize;
@@ -24,6 +25,7 @@ struct ConnectedVehicle {
     vehicle: Vehicle,
     tasks: Vec<JoinHandle<()>>,
     listeners: Vec<tauri::EventId>,
+    demo_handle: Option<DemoVehicleHandle>,
 }
 
 async fn abort_background_tasks(state: &AppState) {
@@ -44,6 +46,24 @@ async fn clear_background_listeners(state: &AppState, app: &tauri::AppHandle) {
 pub(crate) enum ActiveLinkTarget {
     Serial { port: String },
     Other,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum DemoVehiclePreset {
+    Quadcopter,
+    Airplane,
+    Quadplane,
+}
+
+impl DemoVehiclePreset {
+    fn profile(self) -> DemoProfile {
+        match self {
+            Self::Quadcopter => DemoProfile::ArduCopter,
+            Self::Airplane => DemoProfile::ArduPlane,
+            Self::Quadplane => DemoProfile::ArduQuadPlane,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -75,6 +95,9 @@ pub(crate) enum LinkEndpoint {
     },
     BluetoothBle {
         address: String,
+    },
+    Demo {
+        vehicle_preset: DemoVehiclePreset,
     },
     #[cfg(target_os = "android")]
     BluetoothSpp {
@@ -122,6 +145,7 @@ async fn connect_via_address(
         vehicle,
         tasks: Vec::new(),
         listeners: Vec::new(),
+        demo_handle: None,
     })
 }
 
@@ -159,6 +183,35 @@ async fn request_tcp_telemetry_streams(vehicle: Vehicle) {
     }
 }
 
+async fn connect_demo(vehicle_preset: DemoVehiclePreset) -> Result<ConnectedVehicle, String> {
+    let config = VehicleConfig {
+        connect_timeout: CONNECT_TIMEOUT,
+        command_timeout: Duration::from_secs(10),
+        command_completion_timeout: Duration::from_secs(20),
+        transfer_timeout: Duration::from_secs(20),
+        ..VehicleConfig::default()
+    };
+
+    let (vehicle, demo_handle) = DemoVehicle::builder()
+        .profile(vehicle_preset.profile())
+        .connect(config)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    Ok(ConnectedVehicle {
+        vehicle,
+        tasks: Vec::new(),
+        listeners: Vec::new(),
+        demo_handle: Some(demo_handle),
+    })
+}
+
+async fn shutdown_demo_vehicle(state: &AppState) {
+    if let Some(handle) = state.demo_vehicle.lock().await.take() {
+        let _ = handle.shutdown().await;
+    }
+}
+
 async fn store_connected_vehicle(
     state: &AppState,
     app: &tauri::AppHandle,
@@ -169,10 +222,12 @@ async fn store_connected_vehicle(
         vehicle,
         mut tasks,
         listeners,
+        demo_handle,
     } = connected_vehicle;
     tasks.extend(crate::bridges::spawn_event_bridges(app, &vehicle).await);
     *state.background_tasks.lock().await = tasks;
     *state.background_listeners.lock().await = listeners;
+    *state.demo_vehicle.lock().await = demo_handle;
     *state.active_link_target.lock().await = Some(active_target);
     Ok(())
 }
@@ -234,6 +289,7 @@ pub(crate) async fn connect_link(
         if let Some(v) = prev {
             let _ = v.disconnect().await;
         }
+        shutdown_demo_vehicle(&state).await;
     }
 
     match request.transport {
@@ -260,6 +316,12 @@ pub(crate) async fn connect_link(
         LinkEndpoint::BluetoothBle { address } => {
             let vehicle =
                 connect_with_abort(&state, async move { connect_ble(&address).await }).await?;
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await?;
+        }
+        LinkEndpoint::Demo { vehicle_preset } => {
+            let vehicle =
+                connect_with_abort(&state, async move { connect_demo(vehicle_preset).await })
+                    .await?;
             store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await?;
         }
         #[cfg(target_os = "android")]
@@ -364,6 +426,7 @@ async fn connect_ble(address: &str) -> Result<ConnectedVehicle, String> {
         vehicle,
         tasks: vec![writer_task],
         listeners: Vec::new(),
+        demo_handle: None,
     })
 }
 
@@ -427,6 +490,7 @@ async fn connect_spp(app: &tauri::AppHandle, address: &str) -> Result<ConnectedV
         vehicle,
         tasks: vec![writer_task],
         listeners: vec![listener_id],
+        demo_handle: None,
     })
 }
 
@@ -506,6 +570,7 @@ pub(crate) async fn force_disconnect(
     if let Some(v) = vehicle {
         v.disconnect().await.map_err(|e| e.to_string())?;
     }
+    shutdown_demo_vehicle(state).await;
     Ok(())
 }
 
@@ -532,6 +597,21 @@ mod tests {
 
         assert!(matches!(request.transport, LinkEndpoint::Tcp { .. }));
         assert!(!request.auto_record_on_connect);
+    }
+
+    #[test]
+    fn typed_connect_request_deserializes_demo_preset() {
+        let request: ConnectRequest = serde_json::from_value(serde_json::json!({
+            "transport": { "kind": "demo", "vehicle_preset": "quadplane" }
+        }))
+        .expect("deserialize demo connect request");
+
+        assert!(matches!(
+            request.transport,
+            LinkEndpoint::Demo {
+                vehicle_preset: DemoVehiclePreset::Quadplane,
+            }
+        ));
     }
 
     #[test]

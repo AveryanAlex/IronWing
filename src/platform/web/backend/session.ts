@@ -99,7 +99,7 @@ export async function tryHandleSessionCommand(cmd: string, args?: WebCommandArgs
 
 async function connectLink(cmd: string, args?: WebCommandArgs): Promise<void> {
   const request = args?.request as {
-    transport?: { kind?: string; url?: string; baud?: number; profile?: "nordic_uart" };
+    transport?: { kind?: string; url?: string; baud?: number; profile?: "nordic_uart"; vehicle_preset?: string };
     auto_record_on_connect?: boolean;
   } | undefined;
   if (!request?.transport) {
@@ -109,13 +109,19 @@ async function connectLink(cmd: string, args?: WebCommandArgs): Promise<void> {
     request.transport.kind !== "websocket"
     && request.transport.kind !== "web_serial"
     && request.transport.kind !== "web_bluetooth"
+    && request.transport.kind !== "demo"
   ) {
-    unsupported(cmd, "Use a browser-owned WebSocket, Web Serial, or Web Bluetooth transport.");
+    unsupported(cmd, "Use the built-in demo vehicle or a browser-owned WebSocket, Web Serial, or Web Bluetooth transport.");
   }
 
   const runtime = await ensureLoadedWasmRuntime();
   stopWebRecording({ saveToUserDestination: false });
   await resetActiveConnection();
+
+  if (request.transport.kind === "demo") {
+    await runtime.connectDemo(String(request.transport.vehicle_preset ?? "quadcopter"));
+    return;
+  }
 
   const bridge = observeRecordingInboundBridge(runtime.beginConnect());
   const connectAbort = new AbortController();
@@ -140,7 +146,7 @@ async function connectLink(cmd: string, args?: WebCommandArgs): Promise<void> {
           connectAbort.signal,
         );
       default:
-        unsupported(cmd, "Use a browser-owned WebSocket, Web Serial, or Web Bluetooth transport.");
+        unsupported(cmd, "Use the built-in demo vehicle or a browser-owned WebSocket, Web Serial, or Web Bluetooth transport.");
     }
   })();
 

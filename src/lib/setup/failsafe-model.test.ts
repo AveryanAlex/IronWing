@@ -16,7 +16,6 @@ import {
   buildRtlReturnModel,
   resolveSafetyVehicleFamily,
 } from "./failsafe-model";
-import { paramStoreForDemoPreset } from "../../platform/mock/backend/param-fixtures";
 
 function createParamStore(entries: Record<string, number>): ParamStore {
   const params: ParamStore["params"] = {};
@@ -203,10 +202,16 @@ describe("failsafe-model", () => {
     expect(roverModel.detailText).toContain("Rover return");
   });
 
-  it("keeps the copter demo SITL fixture RTL model open instead of failing closed", () => {
+  it("keeps a complete copter RTL parameter set open instead of failing closed", () => {
     const model = buildRtlReturnModel({
       vehicleType: "quadrotor",
-      paramStore: paramStoreForDemoPreset("quadcopter"),
+      paramStore: createParamStore({
+        RTL_ALT: 1500,
+        RTL_ALT_FINAL: 0,
+        RTL_CLIMB_MIN: 0,
+        RTL_SPEED: 500,
+        RTL_LOIT_TIME: 5000,
+      }),
       metadata: createMetadata(),
       stagedEdits: {},
     });
@@ -232,10 +237,13 @@ describe("failsafe-model", () => {
     expect(model.canConfirm).toBe(false);
   });
 
-  it("keeps the plane demo SITL fixture RTL model open instead of failing closed", () => {
+  it("keeps a complete plane RTL parameter set open instead of failing closed", () => {
     const model = buildRtlReturnModel({
       vehicleType: "fixed_wing",
-      paramStore: paramStoreForDemoPreset("airplane"),
+      paramStore: createParamStore({
+        ALT_HOLD_RTL: 10000,
+        RTL_AUTOLAND: 2,
+      }),
       metadata: createMetadata(),
       stagedEdits: {},
     });
@@ -244,10 +252,23 @@ describe("failsafe-model", () => {
     expect(model.canConfirm).toBe(true);
   });
 
-  it("keeps the copter demo SITL fixture failsafe model open instead of failing closed", () => {
+  it("keeps a complete copter failsafe parameter set open instead of failing closed", () => {
     const model = buildFailsafeSectionModel({
       vehicleType: "quadrotor",
-      paramStore: paramStoreForDemoPreset("quadcopter"),
+      paramStore: createParamStore({
+        FS_THR_ENABLE: 1,
+        FS_THR_VALUE: 975,
+        FS_GCS_ENABLE: 1,
+        BATT_FS_LOW_ACT: 2,
+        BATT_LOW_VOLT: 13.8,
+        BATT_LOW_MAH: 1000,
+        BATT_FS_CRT_ACT: 1,
+        BATT_CRT_VOLT: 13.2,
+        BATT_CRT_MAH: 500,
+        FS_EKF_ACTION: 1,
+        FS_EKF_THRESH: 0.8,
+        FS_CRASH_CHECK: 1,
+      }),
       metadata: createMetadata(),
       stagedEdits: {},
     });

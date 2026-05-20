@@ -16,6 +16,7 @@ use ironwing_core::live_runtime::{
     self, LiveVehicleRuntime, LocalLiveRuntime, LocalTimer, TelemetryIntervalProvider,
 };
 use ironwing_core::telemetry;
+use mavkit::sim::{DemoClock, DemoProfile, DemoVehicle, DemoVehicleHandle};
 use mavkit::{FencePlan, MissionPlan, ParamStore, RallyPlan};
 use wasm_bindgen::prelude::*;
 
@@ -53,6 +54,7 @@ struct RuntimeState {
     live_runtime: LocalLiveRuntime<EventSink>,
     guided_runtime: GuidedRuntime,
     bridge: Option<mavkit::byte_connection::ByteBridge>,
+    demo_handle: Option<DemoVehicleHandle>,
     connect_waiter: Option<oneshot::Receiver<Result<(), String>>>,
     next_operation_token: u64,
     mission_op_abort: Option<(u64, AbortHandle)>,
@@ -67,6 +69,7 @@ impl RuntimeState {
             live_runtime: LocalLiveRuntime::new(LiveVehicleRuntime::new(event_sink)),
             guided_runtime: GuidedRuntime::default(),
             bridge: None,
+            demo_handle: None,
             connect_waiter: None,
             next_operation_token: 1,
             mission_op_abort: None,
@@ -132,17 +135,21 @@ impl IronwingWasmRuntime {
         let wasm_bridge = WasmByteBridge::new(bridge.clone());
         let (connect_tx, connect_rx) = oneshot::channel();
 
-        let previous_vehicle = {
+        let (previous_vehicle, previous_demo_handle) = {
             let mut state = self.state.borrow_mut();
             let previous_vehicle = state
                 .live_runtime
                 .with_runtime(|runtime| runtime.take_vehicle());
+            let previous_demo_handle = state.demo_handle.take();
             state.reset_live_state();
-            previous_vehicle
+            (previous_vehicle, previous_demo_handle)
         };
-        if let Some(vehicle) = previous_vehicle {
+        if previous_vehicle.is_some() || previous_demo_handle.is_some() {
             wasm_bindgen_futures::spawn_local(async move {
-                let _ = vehicle.disconnect().await;
+                if let Some(vehicle) = previous_vehicle {
+                    let _ = vehicle.disconnect().await;
+                }
+                shutdown_demo(previous_demo_handle).await;
             });
         }
 
@@ -197,6 +204,67 @@ impl IronwingWasmRuntime {
         Ok(wasm_bridge)
     }
 
+    #[wasm_bindgen(js_name = connectDemo)]
+    pub async fn connect_demo(&self, vehicle_preset: String) -> Result<(), JsValue> {
+        let profile = demo_profile(&vehicle_preset)?;
+        let (previous_vehicle, previous_demo_handle) = {
+            let mut state = self.state.borrow_mut();
+            let previous_vehicle = state
+                .live_runtime
+                .with_runtime(|runtime| runtime.take_vehicle());
+            let previous_demo_handle = state.demo_handle.take();
+            state.reset_live_state();
+            state
+                .live_runtime
+                .with_runtime(|runtime| runtime.prepare_connecting());
+            (previous_vehicle, previous_demo_handle)
+        };
+        emit_session_state(&self.state, DomainProvenance::Stream);
+
+        if let Some(vehicle) = previous_vehicle {
+            let _ = vehicle.disconnect().await;
+        }
+        shutdown_demo(previous_demo_handle).await;
+
+        let (vehicle, demo_handle) = match DemoVehicle::builder()
+            .profile(profile)
+            .clock(DemoClock::Manual)
+            .connect(wasm_vehicle_config())
+            .await
+        {
+            Ok(connected) => connected,
+            Err(error) => {
+                let error = error.to_string();
+                self.state
+                    .borrow_mut()
+                    .live_runtime
+                    .with_runtime(|runtime| runtime.set_connection_error(error.clone()));
+                emit_session_state(&self.state, DomainProvenance::Stream);
+                return Err(JsValue::from_str(&error));
+            }
+        };
+
+        {
+            let mut runtime_state = self.state.borrow_mut();
+            runtime_state.demo_handle = Some(demo_handle);
+            let live_runtime = runtime_state.live_runtime.clone();
+            let telemetry_interval = WasmTelemetryInterval {
+                interval_ms: Rc::clone(&runtime_state.telemetry_interval_ms),
+            };
+            live_runtime::spawn_local_event_bridges(
+                live_runtime,
+                &mut runtime_state.tasks,
+                WasmTimer,
+                telemetry_interval,
+                &vehicle,
+            );
+        }
+        spawn_runtime_task(&self.state, request_telemetry_streams(vehicle));
+        spawn_demo_stepper(&self.state);
+
+        Ok(())
+    }
+
     #[wasm_bindgen(js_name = waitConnect)]
     pub async fn wait_connect(&self) -> Result<(), JsValue> {
         if self
@@ -224,13 +292,14 @@ impl IronwingWasmRuntime {
 
     #[wasm_bindgen(js_name = disconnectLink)]
     pub async fn disconnect_link(&self) -> Result<(), JsValue> {
-        let vehicle = {
+        let (vehicle, demo_handle) = {
             let mut state = self.state.borrow_mut();
             let vehicle = state
                 .live_runtime
                 .with_runtime(|runtime| runtime.take_vehicle());
+            let demo_handle = state.demo_handle.take();
             state.reset_live_state();
-            vehicle
+            (vehicle, demo_handle)
         };
 
         if let Some(vehicle) = vehicle {
@@ -239,6 +308,7 @@ impl IronwingWasmRuntime {
                 .await
                 .map_err(|error| JsValue::from_str(&error.to_string()))?;
         }
+        shutdown_demo(demo_handle).await;
 
         emit_session_state(&self.state, DomainProvenance::Stream);
 
@@ -892,6 +962,43 @@ fn guided_operation_failure(
             detail: None,
         },
     }
+}
+
+fn demo_profile(vehicle_preset: &str) -> Result<DemoProfile, JsValue> {
+    match vehicle_preset {
+        "quadcopter" => Ok(DemoProfile::ArduCopter),
+        "airplane" => Ok(DemoProfile::ArduPlane),
+        "quadplane" => Ok(DemoProfile::ArduQuadPlane),
+        _ => Err(WasmError::invalid_input(format!(
+            "unknown demo vehicle preset: {vehicle_preset}"
+        ))
+        .into()),
+    }
+}
+
+async fn shutdown_demo(demo_handle: Option<DemoVehicleHandle>) {
+    if let Some(handle) = demo_handle {
+        let _ = handle.shutdown().await;
+    }
+}
+
+fn spawn_demo_stepper(state: &Rc<RefCell<RuntimeState>>) {
+    let step_state = Rc::clone(state);
+    spawn_runtime_task(state, async move {
+        loop {
+            sleep_ms(100).await;
+            let handle = {
+                let state = step_state.borrow();
+                state.demo_handle.clone()
+            };
+            let Some(handle) = handle else {
+                break;
+            };
+            if handle.step().await.is_err() {
+                break;
+            }
+        }
+    });
 }
 
 fn wasm_vehicle_config() -> mavkit::VehicleConfig {

@@ -93,17 +93,6 @@ describe("resolveSessionConnectionDefaults", () => {
     });
   });
 
-  it("uses demo-mode defaults for the public mock profile", () => {
-    expect(
-      resolveSessionConnectionDefaults({
-        VITE_IRONWING_MOCK_PROFILE: "demo",
-      }),
-    ).toMatchObject({
-      mode: "demo",
-      demoVehiclePreset: "quadcopter",
-    });
-  });
-
   it("falls back predictably when the SITL mode or tcp port is malformed", () => {
     expect(
       resolveSessionConnectionDefaults({
@@ -173,14 +162,14 @@ describe("loadConnectionForm", () => {
     expect(loadConnectionForm(storage, defaults)).toEqual(defaults);
   });
 
-  it("pins demo profile storage back to demo mode and normalizes invalid presets", () => {
+  it("normalizes invalid demo presets while preserving persisted demo mode", () => {
     const demoDefaults = resolveSessionConnectionDefaults({
-      VITE_IRONWING_MOCK_PROFILE: "demo",
+      VITE_IRONWING_SITL_MODE: "udp",
     });
     const storage = {
       getItem: () =>
         JSON.stringify({
-          mode: "tcp",
+          mode: "demo",
           tcpAddress: "127.0.0.1:9999",
           demoVehiclePreset: "boat",
           takeoffAlt: "20",
@@ -196,7 +185,7 @@ describe("loadConnectionForm", () => {
     });
   });
 
-  it("normalizes persisted demo mode back to the current non-demo profile default", () => {
+  it("keeps persisted demo mode as a normal connection type", () => {
     const nonDemoDefaults = resolveSessionConnectionDefaults({
       VITE_IRONWING_SITL_MODE: "udp",
     });
@@ -211,7 +200,8 @@ describe("loadConnectionForm", () => {
     };
 
     expect(loadConnectionForm(storage, nonDemoDefaults)).toMatchObject({
-      mode: nonDemoDefaults.mode,
+      mode: "demo",
+      demoVehiclePreset: "quadplane",
       udpBind: "127.0.0.1:14551",
       followVehicle: false,
     });

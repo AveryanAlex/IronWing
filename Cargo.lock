@@ -945,7 +945,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1140,7 +1140,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2614,7 +2614,7 @@ checksum = "2532096657941c2fea9c289d370a250971c689d4f143798ff67113ec042024a5"
 [[package]]
 name = "mavkit"
 version = "0.5.0"
-source = "git+https://github.com/AveryanAlex/mavkit.git?rev=9ef60f03d8392cad6a3e07f0e79302228afd475f#9ef60f03d8392cad6a3e07f0e79302228afd475f"
+source = "git+https://github.com/AveryanAlex/mavkit.git?rev=d82883078d09d3d871182d25836fc87be10c85eb#d82883078d09d3d871182d25836fc87be10c85eb"
 dependencies = [
  "async-trait",
  "futures",
@@ -2623,6 +2623,7 @@ dependencies = [
  "mavlink",
  "num-traits",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
@@ -2635,7 +2636,7 @@ dependencies = [
 [[package]]
 name = "mavkit-macros"
 version = "0.5.0"
-source = "git+https://github.com/AveryanAlex/mavkit.git?rev=9ef60f03d8392cad6a3e07f0e79302228afd475f#9ef60f03d8392cad6a3e07f0e79302228afd475f"
+source = "git+https://github.com/AveryanAlex/mavkit.git?rev=d82883078d09d3d871182d25836fc87be10c85eb#d82883078d09d3d871182d25836fc87be10c85eb"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2862,7 +2863,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3781,7 +3782,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4133,7 +4134,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5314,7 +5315,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6283,7 +6284,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

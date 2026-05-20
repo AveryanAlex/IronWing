@@ -61,6 +61,13 @@ pub enum TransportDescriptor {
         validation: WebBluetoothValidation,
         profile: BluetoothProfile,
     },
+    Demo {
+        label: &'static str,
+        available: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        discovery_error: Option<&'static str>,
+        validation: DemoValidation,
+    },
 }
 
 pub const DEFAULT_SERIAL_BAUD: u32 = 57_600;
@@ -162,6 +169,9 @@ pub struct WebBluetoothValidation {
     pub chooser_required: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct DemoValidation {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BluetoothProfile {
@@ -259,12 +269,22 @@ impl TransportDescriptor {
             profile: BluetoothProfile::NordicUart,
         }
     }
+
+    pub fn demo(availability: TransportAvailability) -> Self {
+        Self::Demo {
+            label: "Demo vehicle",
+            available: availability.available,
+            discovery_error: availability.discovery_error,
+            validation: DemoValidation {},
+        }
+    }
 }
 
 pub fn native_transport_descriptors(options: NativeTransportOptions) -> Vec<TransportDescriptor> {
     let mut transports = vec![
         TransportDescriptor::udp(options.udp),
         TransportDescriptor::tcp(options.tcp),
+        TransportDescriptor::demo(TransportAvailability::available()),
     ];
 
     if let Some(serial) = options.serial {
@@ -294,6 +314,7 @@ pub fn current_native_transport_descriptors() -> Vec<TransportDescriptor> {
 
 pub fn web_transport_descriptors(options: WebTransportOptions) -> Vec<TransportDescriptor> {
     vec![
+        TransportDescriptor::demo(TransportAvailability::available()),
         TransportDescriptor::websocket(options.websocket),
         TransportDescriptor::web_serial(options.web_serial),
         TransportDescriptor::web_bluetooth(options.web_bluetooth),
@@ -313,9 +334,10 @@ mod tests {
 
         assert_eq!(value[0]["kind"], "udp");
         assert_eq!(value[1]["kind"], "tcp");
-        assert_eq!(value[2]["kind"], "serial");
-        assert_eq!(value[2]["default_baud"], DEFAULT_SERIAL_BAUD);
-        assert_eq!(value[3]["kind"], "bluetooth_ble");
+        assert_eq!(value[2]["kind"], "demo");
+        assert_eq!(value[3]["kind"], "serial");
+        assert_eq!(value[3]["default_baud"], DEFAULT_SERIAL_BAUD);
+        assert_eq!(value[4]["kind"], "bluetooth_ble");
         assert!(value[0].get("discovery_error").is_none());
     }
 
@@ -328,8 +350,9 @@ mod tests {
         }))
         .expect("serialize web transports");
 
-        assert_eq!(value[0]["kind"], "websocket");
-        assert_eq!(value[0]["available"], false);
-        assert_eq!(value[0]["discovery_error"], "WebSocket unavailable");
+        assert_eq!(value[0]["kind"], "demo");
+        assert_eq!(value[1]["kind"], "websocket");
+        assert_eq!(value[1]["available"], false);
+        assert_eq!(value[1]["discovery_error"], "WebSocket unavailable");
     }
 }

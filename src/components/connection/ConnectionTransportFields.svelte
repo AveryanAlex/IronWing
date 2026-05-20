@@ -181,7 +181,7 @@ const iconButtonClass =
       {@render primaryActionButton()}
     </div>
     <p class="text-xs text-text-secondary">
-      Connect to an in-browser demo vehicle that mirrors ArduPilot SITL defaults for quick telemetry and mission walkthroughs.
+      Connect to the built-in MAVKit demo vehicle for quick telemetry and mission walkthroughs.
     </p>
   </div>
 {/if}

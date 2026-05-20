@@ -47,7 +47,7 @@ pnpm run e2e:native
 ```
 
 Run commands from the repo root. Nix (`flake.nix` + `.envrc`) is the canonical reproducible environment.
-Dev commands start SITL automatically except `pnpm run dev:demo`.
+Dev commands start SITL automatically for live vehicle workflows; the built-in demo vehicle is available from the normal connection picker.
 Plain Vite defaults to the pure web/WASM platform and writes `dist/web`; Tauri commands opt into the Tauri platform and `dist/tauri`.
 
 ## Agent Remote UI

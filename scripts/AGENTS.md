@@ -4,7 +4,7 @@
 
 `scripts/` contains thin Node entrypoints for package scripts plus the shared `scripts/workflow/` orchestration library. Keep target-specific command shape in the entrypoints and put reusable process, environment, port, SITL, Tauri, and WASM behavior in `workflow/` modules.
 
-Plain Vite is now the web/WASM default: `pnpm exec vite` serves the pure web platform and `pnpm exec vite build` writes `dist/web`. Tauri, mock E2E, remote UI, and demo flows must opt into their platform explicitly through env helpers.
+Plain Vite is now the web/WASM default: `pnpm exec vite` serves the pure web platform and `pnpm exec vite build` writes `dist/web`. Tauri, mock E2E, and remote UI flows must opt into their platform explicitly through env helpers.
 
 ## Where To Look
 
@@ -16,22 +16,19 @@ Plain Vite is now the web/WASM default: `pnpm exec vite` serves the pure web pla
 | Agent remote UI | `remote-ui.mjs` | SITL + Tauri dev + browser bridge; local agent workflow only |
 | Android dev | `android-dev.mjs` | SITL + Tauri Android dev with emulator/physical-device TCP host handling |
 | Web dev | `web-dev.mjs` | SITL + TCP→WebSocket bridge + Vite web dev |
-| Demo dev | `demo-dev.mjs` | Mock demo Vite dev, no SITL |
 | Desktop build | `desktop-build.mjs` | Tauri build with explicit Tauri frontend env |
 | Android build | `android-build.mjs` | Tauri Android APK build with explicit Tauri frontend env |
 | Web build | `web-build.mjs` | Web build wrapper; Vite builds the WASM module |
-| Demo build | `demo-build.mjs` | Mock demo build to `dist/demo` |
 | Browser E2E launcher | `e2e-run.mjs` | Reserves a preview port, then runs Playwright |
 | Native E2E launcher | `e2e-native.mjs` | Debug Tauri build + SITL + WebDriverIO smoke lane |
 | Standalone SITL WS bridge | `sitl-ws.mjs` | Tool command for manual TCP→WebSocket bridging |
 | WASM build implementation | `wasm-web-build.mjs` | Internal `wasm-pack` build/cleanup command used by Vite |
-| Demo parameter fixtures | `generate-demo-param-fixtures.mjs` | Fixture generation tool |
 
 ### Shared workflow modules
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Environment composition | `workflow/env.mjs` | Frontend, Tauri, web, mock/demo, SITL, Android, and remote UI env snippets |
+| Environment composition | `workflow/env.mjs` | Frontend, Tauri, web, mock, SITL, Android, and remote UI env snippets |
 | Frontend runners | `workflow/frontend.mjs` | Shared Vite dev and frontend build runners |
 | Tauri runners | `workflow/tauri.mjs` | Shared Tauri desktop and Android dev runners |
 | Paths / forwarded args | `workflow/paths.mjs` | Repository root and CLI passthrough helpers |
@@ -54,7 +51,7 @@ Plain Vite is now the web/WASM default: `pnpm exec vite` serves the pure web pla
 - Tauri dev/build entrypoints must pass `tauriFrontendEnv()` so frontend aliases use `src/platform/tauri/*` and output goes to `dist/tauri`.
 - Remote UI must pass `IRONWING_PLATFORM=remote` through `remoteUiEnv()` and stay a local agent workflow, not an automated Playwright lane.
 - Browser E2E must use `IRONWING_PLATFORM=mock` and `dist/e2e`; broad UI coverage belongs there, while native real-stack coverage stays thin in `e2e-native.mjs`.
-- Demo commands use the mock demo profile and must not start SITL.
+- The demo vehicle is a normal connection type backed by MAVKit, not a separate mock build target.
 
 ## Core Rules
 
