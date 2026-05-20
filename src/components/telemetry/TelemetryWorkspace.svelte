@@ -7,6 +7,7 @@ import {
   getSessionViewStoreContext,
 } from "../../app/shell/runtime-context";
 import { WorkspaceShell } from "../ui";
+import AttitudeOrientationGauge from "./AttitudeOrientationGauge.svelte";
 import BatteryVoltageGauge from "./BatteryVoltageGauge.svelte";
 import PwmChannelStrip from "./PwmChannelStrip.svelte";
 
@@ -239,7 +240,7 @@ let sections = $derived.by<MetricSection[]>(() => {
 <WorkspaceShell mode="inset">
   <div class="grid gap-3 xl:grid-cols-2 2xl:grid-cols-3">
     {#each sections as section (section.key)}
-      <section class={`min-w-0 rounded-lg border border-border bg-surface-panel/70 p-2 shadow-sm ${section.key === "power" || section.key === "radio" ? "xl:col-span-2 2xl:col-span-1" : ""}`}>
+      <section class={`min-w-0 rounded-lg border border-border bg-surface-panel/70 p-2 shadow-sm ${section.key === "attitude" || section.key === "power" || section.key === "radio" ? "xl:col-span-2 2xl:col-span-1" : ""}`}>
         <button
           class="flex w-full cursor-pointer items-center justify-between rounded-md border-none bg-transparent px-2 py-1 transition-colors duration-150 hover:bg-bg-secondary"
           onclick={() => toggleSection(section.key)}
@@ -267,31 +268,40 @@ let sections = $derived.by<MetricSection[]>(() => {
                 timeRemainingS={telemetry.battery_time_remaining_s}
                 cellVoltages={telemetry.battery_voltage_cells}
               />
+            {:else if section.key === "attitude"}
+              <AttitudeOrientationGauge
+                rollDeg={telemetry.roll_deg}
+                pitchDeg={telemetry.pitch_deg}
+                yawDeg={telemetry.yaw_deg}
+                stale={!connected}
+              />
             {:else if section.key === "radio"}
               <PwmChannelStrip title="RC channels" values={telemetry.rc_channels} labelPrefix="CH" emptyText="No RC channel telemetry available." />
               <PwmChannelStrip title="Servo outputs" values={telemetry.servo_outputs} labelPrefix="S" maxVisible={16} emptyText="No servo output telemetry available." />
             {/if}
 
-            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-              {#each section.entries as entry (entry.key)}
-                <div
-                  class={`min-w-0 rounded-md border border-border/80 bg-surface-card px-2 py-1.5 data-[stale]:opacity-60 ${entry.wide ? "col-span-2 sm:col-span-3 xl:col-span-4" : ""}`}
-                  data-stale={entry.state === "unavailable" || undefined}
-                  data-testid={entry.testId}
-                  data-tone={metricTone(entry)}
-                >
-                  <div class="truncate text-[0.65rem] font-semibold uppercase tracking-wide text-text-muted">{entry.label}</div>
+            {#if section.key !== "attitude"}
+              <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                {#each section.entries as entry (entry.key)}
                   <div
-                    class="mt-0.5 truncate text-sm font-semibold text-text-primary [font-variant-numeric:tabular-nums] data-[tone=info]:text-accent data-[tone=success]:text-success data-[tone=warning]:text-warning data-[tone=danger]:text-danger data-[unavailable]:text-text-muted"
+                    class={`min-w-0 rounded-md border border-border/80 bg-surface-card px-2 py-1.5 data-[stale]:opacity-60 ${entry.wide ? "col-span-2 sm:col-span-3 xl:col-span-4" : ""}`}
+                    data-stale={entry.state === "unavailable" || undefined}
+                    data-testid={entry.testId}
                     data-tone={metricTone(entry)}
-                    data-unavailable={entry.state === "unavailable" || undefined}
-                    title={entry.value}
                   >
-                    {entry.value}
+                    <div class="truncate text-[0.65rem] font-semibold uppercase tracking-wide text-text-muted">{entry.label}</div>
+                    <div
+                      class="mt-0.5 truncate text-sm font-semibold text-text-primary [font-variant-numeric:tabular-nums] data-[tone=info]:text-accent data-[tone=success]:text-success data-[tone=warning]:text-warning data-[tone=danger]:text-danger data-[unavailable]:text-text-muted"
+                      data-tone={metricTone(entry)}
+                      data-unavailable={entry.state === "unavailable" || undefined}
+                      title={entry.value}
+                    >
+                      {entry.value}
+                    </div>
                   </div>
-                </div>
-              {/each}
-            </div>
+                {/each}
+              </div>
+            {/if}
           </div>
         {/if}
       </section>
