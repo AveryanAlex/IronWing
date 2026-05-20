@@ -2189,8 +2189,10 @@ dependencies = [
 name = "ironwing-core"
 version = "0.1.0"
 dependencies = [
+ "ardupilot-binlog",
  "ironwing-firmware",
  "mavkit",
+ "mavlink",
  "serde",
  "serde_json",
  "web-time",

@@ -105,7 +105,7 @@ export type DfuDeviceInfo = {
 
 export type DfuScanResult =
   | { kind: "available"; devices: DfuDeviceInfo[] }
-  | { kind: "unsupported" };
+  | { kind: "unsupported"; reason?: string };
 
 // ── Preflight (firmware install/update path) ──
 
@@ -188,7 +188,7 @@ export type BootloaderInstallationResult =
   | { result: "reset_unconfirmed" }
   | { result: "failed"; reason: string }
   | { result: "driver_guidance"; guidance: string }
-  | { result: "platform_unsupported" };
+  | { result: "platform_unsupported"; reason?: string };
 
 // ── Catalog ──
 

@@ -7,6 +7,7 @@ pub mod firmware;
 pub mod guided;
 #[allow(dead_code)]
 pub mod logs;
+pub mod mission;
 pub mod playback;
 pub mod sensor_health;
 pub mod session;
@@ -20,6 +21,7 @@ pub use configuration_facts::configuration_facts_snapshot_from_param_store;
 pub use domain::{DomainProvenance, DomainValue};
 pub use envelope::{
     OperationFailure, OperationId, Reason, ReasonKind, ScopedEvent, SessionEnvelope, SourceKind,
+    operation_failure_json,
 };
 pub use firmware::*;
 pub use guided::{
@@ -31,6 +33,7 @@ pub use logs::{
     LogDiagnostic, LogOperationPhase, LogOperationProgress, RecordingMode, RecordingSettings,
     RecordingSettingsResult, RecordingStartRequest, RecordingStatus, ReplayStatus,
 };
+pub use mission::{MissionDownload, RcOverrideChannelValueWire, RcOverrideChannelWire};
 pub use playback::PlaybackSnapshot;
 pub use sensor_health::sensor_health_snapshot_from_summary;
 pub use session::{

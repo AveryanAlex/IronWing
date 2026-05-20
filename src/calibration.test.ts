@@ -53,6 +53,40 @@ describe("calibration bridge actuation wrappers", () => {
     });
   });
 
+  it("invokes calibration actions with native command names", async () => {
+    invoke.mockResolvedValue(undefined);
+    const {
+      calibrateAccel,
+      calibrateGyro,
+      calibrateCompassStart,
+      calibrateCompassAccept,
+      calibrateCompassCancel,
+    } = await import("./calibration");
+
+    await calibrateAccel();
+    await calibrateGyro();
+    await calibrateCompassStart(5);
+    await calibrateCompassAccept(5);
+    await calibrateCompassCancel(5);
+
+    expect(invoke).toHaveBeenCalledWith("calibrate_accel");
+    expect(invoke).toHaveBeenCalledWith("calibrate_gyro");
+    expect(invoke).toHaveBeenCalledWith("calibrate_compass_start", { compassMask: 5 });
+    expect(invoke).toHaveBeenCalledWith("calibrate_compass_accept", { compassMask: 5 });
+    expect(invoke).toHaveBeenCalledWith("calibrate_compass_cancel", { compassMask: 5 });
+  });
+
+  it("invokes maintenance actions with native command names", async () => {
+    invoke.mockResolvedValue(undefined);
+    const { rebootVehicle, requestPrearmChecks } = await import("./calibration");
+
+    await rebootVehicle();
+    await requestPrearmChecks();
+
+    expect(invoke).toHaveBeenCalledWith("reboot_vehicle");
+    expect(invoke).toHaveBeenCalledWith("request_prearm_checks");
+  });
+
   it("surfaces invoke rejections for actuation commands", async () => {
     const { setServo, rcOverride } = await import("./calibration");
 

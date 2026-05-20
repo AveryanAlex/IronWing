@@ -6,6 +6,7 @@ mod error;
 mod event_sink;
 mod firmware;
 mod js_value;
+mod logs;
 mod task;
 
 use ironwing_core::telemetry;

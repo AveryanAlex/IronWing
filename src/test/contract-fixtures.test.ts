@@ -740,16 +740,31 @@ function expectLogLibraryCatalog(value: unknown, label: string): LogLibraryCatal
   expectExactKeys(object, label, ["schema_version", "storage", "migrated_from_schema_version", "entries"]);
   expect(object.schema_version).toBe(1);
   const storage = expectRecord(object.storage, `${label}.storage`);
-  expectExactKeys(storage, `${label}.storage`, ["kind", "catalog_path", "indexes_dir", "recordings_dir"]);
-  expect(storage.kind).toBe("app_data");
+  const storageKind = expectString(storage.kind, `${label}.storage.kind`);
+  const parsedStorage = storageKind === "browser_storage"
+    ? (() => {
+        expectExactKeys(storage, `${label}.storage`, ["kind", "catalog_id", "indexes_store", "blobs_store", "recordings_store"]);
+        return {
+          kind: "browser_storage" as const,
+          catalog_id: expectString(storage.catalog_id, `${label}.storage.catalog_id`),
+          indexes_store: expectString(storage.indexes_store, `${label}.storage.indexes_store`),
+          blobs_store: expectString(storage.blobs_store, `${label}.storage.blobs_store`),
+          recordings_store: expectString(storage.recordings_store, `${label}.storage.recordings_store`),
+        };
+      })()
+    : (() => {
+        expect(storageKind).toBe("app_data");
+        expectExactKeys(storage, `${label}.storage`, ["kind", "catalog_path", "indexes_dir", "recordings_dir"]);
+        return {
+          kind: "app_data" as const,
+          catalog_path: expectString(storage.catalog_path, `${label}.storage.catalog_path`),
+          indexes_dir: expectString(storage.indexes_dir, `${label}.storage.indexes_dir`),
+          recordings_dir: expectString(storage.recordings_dir, `${label}.storage.recordings_dir`),
+        };
+      })();
   return {
     schema_version: 1,
-    storage: {
-      kind: "app_data",
-      catalog_path: expectString(storage.catalog_path, `${label}.storage.catalog_path`),
-      indexes_dir: expectString(storage.indexes_dir, `${label}.storage.indexes_dir`),
-      recordings_dir: expectString(storage.recordings_dir, `${label}.storage.recordings_dir`),
-    },
+    storage: parsedStorage,
     migrated_from_schema_version: object.migrated_from_schema_version === null ? null : expectNumber(object.migrated_from_schema_version, `${label}.migrated_from_schema_version`),
     entries: (object.entries as unknown[]).map((entry, index) => expectLogLibraryEntry(entry, `${label}.entries[${index}]`)),
   };

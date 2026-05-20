@@ -132,6 +132,12 @@ pub enum LogLibraryStorageLocation {
         indexes_dir: String,
         recordings_dir: String,
     },
+    BrowserStorage {
+        catalog_id: String,
+        indexes_store: String,
+        blobs_store: String,
+        recordings_store: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

@@ -29,6 +29,7 @@ pub enum OperationId {
     MissionUpload,
     MissionDownload,
     MissionClear,
+    MissionCancel,
     FenceUpload,
     FenceDownload,
     FenceClear,
@@ -38,8 +39,10 @@ pub enum OperationId {
     MissionSetCurrent,
     CalibrateAccel,
     CalibrateGyro,
+    ParamDownloadAll,
     ParamWrite,
     ParamWriteBatch,
+    ParamCancel,
     RebootVehicle,
     MotorTest,
     SetServo,
@@ -90,6 +93,7 @@ impl OperationId {
             Self::MissionUpload => "mission_upload",
             Self::MissionDownload => "mission_download",
             Self::MissionClear => "mission_clear",
+            Self::MissionCancel => "mission_cancel",
             Self::FenceUpload => "fence_upload",
             Self::FenceDownload => "fence_download",
             Self::FenceClear => "fence_clear",
@@ -99,8 +103,10 @@ impl OperationId {
             Self::MissionSetCurrent => "mission_set_current",
             Self::CalibrateAccel => "calibrate_accel",
             Self::CalibrateGyro => "calibrate_gyro",
+            Self::ParamDownloadAll => "param_download_all",
             Self::ParamWrite => "param_write",
             Self::ParamWriteBatch => "param_write_batch",
+            Self::ParamCancel => "param_cancel",
             Self::RebootVehicle => "reboot_vehicle",
             Self::MotorTest => "motor_test",
             Self::SetServo => "set_servo",
@@ -159,6 +165,13 @@ pub struct Reason {
 pub struct OperationFailure {
     pub operation_id: OperationId,
     pub reason: Reason,
+}
+
+pub fn operation_failure_json(failure: OperationFailure) -> String {
+    match serde_json::to_string(&failure) {
+        Ok(json) => json,
+        Err(_) => failure.reason.message,
+    }
 }
 
 #[cfg_attr(test, allow(dead_code))]

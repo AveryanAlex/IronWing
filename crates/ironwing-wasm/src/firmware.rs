@@ -3,7 +3,9 @@ use std::pin::Pin;
 
 use ironwing_firmware::{
     AsyncSerialIo, FirmwareError, SerialFlashOptions, SerialFlashSource, SerialFlowResult,
-    SerialReadError, async_upload_with_options, parse_apj,
+    SerialReadError, async_upload_with_options, build_catalog_targets,
+    filter_by_board_and_platform, filter_catalog_targets_to_supported_official_bootloaders,
+    parse_apj, parse_manifest_gz, parse_supported_official_bootloader_targets,
 };
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
@@ -11,6 +13,39 @@ use wasm_bindgen_futures::JsFuture;
 
 use crate::error::WasmError;
 use crate::js_value::{from_js, to_js};
+
+#[wasm_bindgen(js_name = firmwareCatalogEntriesFromManifest)]
+pub fn firmware_catalog_entries_from_manifest(
+    manifest_gz: &[u8],
+    board_id: u32,
+    platform: Option<String>,
+) -> Result<JsValue, JsValue> {
+    let entries = parse_manifest_gz(manifest_gz).map_err(firmware_error_js)?;
+    to_js(&filter_by_board_and_platform(
+        &entries,
+        board_id,
+        platform.as_deref(),
+    ))
+}
+
+#[wasm_bindgen(js_name = firmwareCatalogTargetsFromManifest)]
+pub fn firmware_catalog_targets_from_manifest(manifest_gz: &[u8]) -> Result<JsValue, JsValue> {
+    let entries = parse_manifest_gz(manifest_gz).map_err(firmware_error_js)?;
+    to_js(&build_catalog_targets(&entries))
+}
+
+#[wasm_bindgen(js_name = firmwareBootloaderCatalogTargetsFromManifest)]
+pub fn firmware_bootloader_catalog_targets_from_manifest(
+    manifest_gz: &[u8],
+    bootloader_index_html: &str,
+) -> Result<JsValue, JsValue> {
+    let entries = parse_manifest_gz(manifest_gz).map_err(firmware_error_js)?;
+    let targets = build_catalog_targets(&entries);
+    let supported = parse_supported_official_bootloader_targets(bootloader_index_html);
+    to_js(&filter_catalog_targets_to_supported_official_bootloaders(
+        &targets, &supported,
+    ))
+}
 
 struct JsSerialIo {
     adapter: JsValue,
@@ -173,6 +208,10 @@ fn js_cancelled(is_cancelled: &js_sys::Function) -> bool {
         .ok()
         .and_then(|value| value.as_bool())
         .unwrap_or(false)
+}
+
+fn firmware_error_js(error: FirmwareError) -> JsValue {
+    JsValue::from_str(&error.to_string())
 }
 
 fn js_error(context: &str, error: JsValue) -> FirmwareError {

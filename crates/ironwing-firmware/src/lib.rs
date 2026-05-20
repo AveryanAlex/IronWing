@@ -1,10 +1,16 @@
 pub mod artifact;
+pub mod catalog;
 pub mod serial_uploader;
 pub mod types;
 
 pub use artifact::{
     ArtifactClassification, DfuRecoveryArtifact, ExternalFlashPayload, SerialArtifact,
     classify_artifact, parse_apj, validate_recovery_bin, validate_recovery_file_type,
+};
+pub use catalog::{
+    build_catalog_targets, filter_by_board, filter_by_board_and_platform,
+    filter_catalog_targets_to_supported_official_bootloaders, parse_manifest_gz,
+    parse_manifest_json, parse_supported_official_bootloader_targets,
 };
 pub use serial_uploader::{
     AsyncSerialIo, BootloaderInfo, SerialIo, SerialReadError, async_probe_with_cancel,
@@ -22,7 +28,10 @@ pub use types::*;
 mod tests {
     use super::*;
     use base64::prelude::*;
-    use flate2::{Compression, write::ZlibEncoder};
+    use flate2::{
+        Compression,
+        write::{GzEncoder, ZlibEncoder},
+    };
     use serde_json::json;
     use std::collections::VecDeque;
     use std::future::Future;
@@ -33,6 +42,82 @@ mod tests {
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(data).unwrap();
         BASE64_STANDARD.encode(encoder.finish().unwrap())
+    }
+
+    fn gzip_json(value: serde_json::Value) -> Vec<u8> {
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(value.to_string().as_bytes()).unwrap();
+        encoder.finish().unwrap()
+    }
+
+    #[test]
+    fn catalog_manifest_parsing_filters_to_apj_and_groups_targets() {
+        let manifest = gzip_json(json!({
+            "firmware": [
+                {
+                    "board_id": 140,
+                    "mav-type": "Copter",
+                    "mav-firmware-version": "4.5.0",
+                    "mav-firmware-version-type": "OFFICIAL",
+                    "format": "apj",
+                    "platform": "CubeOrange",
+                    "url": "https://firmware.example/CubeOrange.apj",
+                    "image_size": 42,
+                    "latest": 1,
+                    "git-sha": "abc",
+                    "brand_name": "Cube Orange",
+                    "manufacturer": "Hex"
+                },
+                {
+                    "board_id": 140,
+                    "mav-type": "Plane",
+                    "mav-firmware-version": "4.4.0",
+                    "mav-firmware-version-type": "OFFICIAL",
+                    "format": "bin",
+                    "platform": "CubeOrange",
+                    "url": "https://firmware.example/CubeOrange.bin"
+                }
+            ]
+        }));
+
+        let entries = parse_manifest_gz(&manifest).unwrap();
+        let targets = build_catalog_targets(&entries);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].url, "https://firmware.example/CubeOrange.apj");
+        assert_eq!(targets.len(), 1);
+        assert_eq!(targets[0].latest_version.as_deref(), Some("4.5.0"));
+    }
+
+    #[test]
+    fn bootloader_catalog_targets_use_supported_index_listing() {
+        let targets = vec![
+            CatalogTargetSummary {
+                board_id: 140,
+                platform: "CubeOrange".into(),
+                brand_name: Some("Cube Orange".into()),
+                manufacturer: Some("Hex".into()),
+                vehicle_types: vec!["Copter".into()],
+                latest_version: Some("4.5.0".into()),
+            },
+            CatalogTargetSummary {
+                board_id: 50,
+                platform: "UnsupportedBoard".into(),
+                brand_name: None,
+                manufacturer: None,
+                vehicle_types: vec!["Plane".into()],
+                latest_version: None,
+            },
+        ];
+        let supported = parse_supported_official_bootloader_targets(
+            r#"<a href="CubeOrange_bl.bin">CubeOrange_bl.bin</a>"#,
+        );
+
+        let filtered =
+            filter_catalog_targets_to_supported_official_bootloaders(&targets, &supported);
+
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].platform, "CubeOrange");
     }
 
     #[test]

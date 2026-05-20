@@ -8,8 +8,9 @@ use crate::e2e_emit::emit_event;
 use crate::guided::{emit_guided_snapshot, live_context_from_vehicle};
 use crate::ipc::{
     AckSessionSnapshotResult, DomainProvenance, DomainValue, GuidedCommandResult, GuidedFailure,
-    GuidedFatalityScope, GuidedLiveContext, OpenSessionSnapshot, OperationId, ScopedEvent,
-    SessionEnvelope, SourceKind, StartGuidedSessionRequest, UpdateGuidedSessionRequest,
+    GuidedFatalityScope, GuidedLiveContext, MissionDownload, OpenSessionSnapshot, OperationId,
+    RcOverrideChannelWire, ScopedEvent, SessionEnvelope, SourceKind, StartGuidedSessionRequest,
+    UpdateGuidedSessionRequest,
 };
 use crate::{
     AppState,
@@ -20,11 +21,9 @@ use ironwing_core::live_runtime::RuntimeCapabilities;
 use ironwing_core::live_runtime::commands as live_commands;
 use ironwing_core::telemetry::{self, MessageRateInfo};
 use ironwing_core::transport::{self, TransportDescriptor};
-use mavkit::dialect::MavCmd;
 use mavkit::{
     FencePlan, FlightMode, HomePosition, MissionIssue, MissionPlan, ParamStore, ParamWriteResult,
-    RallyPlan, RcOverride, RcOverrideChannelValue, format_param_file, parse_param_file,
-    validate_plan,
+    RallyPlan,
 };
 use tauri::Manager;
 
@@ -34,40 +33,6 @@ use crate::ipc::SessionConnection;
 use crate::ipc::StatusTextEntry;
 #[cfg(test)]
 use ironwing_core::live::{LiveSnapshotInput, base_live_snapshot_from_caches};
-
-/// Result of downloading a mission plan from a vehicle.
-/// Home position is extracted from the telemetry home, not from plan items.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub(crate) struct MissionDownload {
-    pub plan: MissionPlan,
-    pub home: Option<HomePosition>,
-}
-
-#[derive(Debug, Clone, Copy, serde::Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub(crate) enum RcOverrideChannelValueWire {
-    Ignore,
-    Release,
-    Pwm { pwm_us: u16 },
-}
-
-impl TryFrom<RcOverrideChannelValueWire> for RcOverrideChannelValue {
-    type Error = mavkit::VehicleError;
-
-    fn try_from(value: RcOverrideChannelValueWire) -> Result<Self, Self::Error> {
-        match value {
-            RcOverrideChannelValueWire::Ignore => Ok(RcOverrideChannelValue::Ignore),
-            RcOverrideChannelValueWire::Release => Ok(RcOverrideChannelValue::Release),
-            RcOverrideChannelValueWire::Pwm { pwm_us } => RcOverrideChannelValue::pwm(pwm_us),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, serde::Deserialize)]
-pub(crate) struct RcOverrideChannelWire {
-    channel: u8,
-    value: RcOverrideChannelValueWire,
-}
 
 #[cfg(not(target_os = "android"))]
 #[tauri::command]
@@ -84,7 +49,7 @@ pub(crate) fn list_serial_ports_cmd() -> Result<Vec<String>, String> {
 
 #[tauri::command]
 pub(crate) fn mission_validate(plan: MissionPlan) -> Vec<MissionIssue> {
-    validate_plan(&plan)
+    live_commands::mission_validate(&plan)
 }
 
 #[tauri::command]
@@ -292,35 +257,6 @@ pub(crate) async fn vehicle_takeoff(
         .map_err(|e| e.to_string())
 }
 
-/// Back-compat shim: sends DO_REPOSITION via raw COMMAND_LONG as a goto.
-/// The new mavkit API requires a typed guided session, but the IronWing
-/// frontend manages guided mode independently.
-async fn send_guided_goto(
-    vehicle: &mavkit::Vehicle,
-    latitude_deg: f64,
-    longitude_deg: f64,
-    altitude_m: f32,
-) -> Result<(), String> {
-    vehicle
-        .raw()
-        .command_long(
-            MavCmd::MAV_CMD_DO_REPOSITION as u16,
-            [
-                -1.0, // ground speed (unchanged)
-                0.0,  // bitmask
-                0.0,  // loiter radius
-                0.0,  // yaw heading
-                // COMMAND_LONG params are f32 on the wire; ~1 m precision loss is inherent to the protocol.
-                latitude_deg as f32,
-                longitude_deg as f32,
-                altitude_m,
-            ],
-        )
-        .await
-        .map(|_| ())
-        .map_err(|e| e.to_string())
-}
-
 #[tauri::command]
 pub(crate) async fn start_guided_session(
     state: tauri::State<'_, AppState>,
@@ -361,7 +297,9 @@ pub(crate) async fn start_guided_session(
         altitude_m,
     } = request.session;
 
-    if let Err(error) = send_guided_goto(&vehicle, latitude_deg, longitude_deg, altitude_m).await {
+    if let Err(error) =
+        live_commands::guided_goto(&vehicle, latitude_deg, longitude_deg, altitude_m).await
+    {
         return Ok(state.guided_runtime.lock().await.abort_reserved(
             crate::ipc::OperationId::StartGuidedSession,
             crate::ipc::ReasonKind::Failed,
@@ -420,7 +358,9 @@ pub(crate) async fn update_guided_session(
         altitude_m,
     } = request.session;
 
-    if let Err(error) = send_guided_goto(&vehicle, latitude_deg, longitude_deg, altitude_m).await {
+    if let Err(error) =
+        live_commands::guided_goto(&vehicle, latitude_deg, longitude_deg, altitude_m).await
+    {
         return Ok(state.guided_runtime.lock().await.abort_reserved(
             crate::ipc::OperationId::UpdateGuidedSession,
             crate::ipc::ReasonKind::Failed,
@@ -618,10 +558,8 @@ pub(crate) async fn mission_set_current(
     seq: u16,
 ) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::MissionSetCurrent).await?;
-    with_vehicle(&state)
-        .await?
-        .mission()
-        .set_current(seq)
+    let vehicle = with_vehicle(&state).await?;
+    live_commands::mission_set_current(&vehicle, seq)
         .await
         .map_err(|e| e.to_string())
 }
@@ -637,10 +575,8 @@ pub(crate) async fn mission_cancel(state: tauri::State<'_, AppState>) -> Result<
 #[tauri::command]
 pub(crate) async fn calibrate_accel(state: tauri::State<'_, AppState>) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::CalibrateAccel).await?;
-    with_vehicle(&state)
-        .await?
-        .ardupilot()
-        .preflight_calibration(false, true, false, false)
+    let vehicle = with_vehicle(&state).await?;
+    live_commands::calibrate_accel(&vehicle)
         .await
         .map_err(|e| e.to_string())
 }
@@ -648,10 +584,8 @@ pub(crate) async fn calibrate_accel(state: tauri::State<'_, AppState>) -> Result
 #[tauri::command]
 pub(crate) async fn calibrate_gyro(state: tauri::State<'_, AppState>) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::CalibrateGyro).await?;
-    with_vehicle(&state)
-        .await?
-        .ardupilot()
-        .preflight_calibration(true, false, false, false)
+    let vehicle = with_vehicle(&state).await?;
+    live_commands::calibrate_gyro(&vehicle)
         .await
         .map_err(|e| e.to_string())
 }
@@ -661,6 +595,8 @@ pub(crate) async fn param_download_all(
     state: tauri::State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
+    ensure_live_write_allowed(state.inner(), OperationId::ParamDownloadAll).await?;
+
     // Guard: reject concurrent download
     {
         let guard = state.param_download_abort.lock().await;
@@ -723,10 +659,8 @@ pub(crate) async fn param_write(
     value: f32,
 ) -> Result<ParamWriteResult, String> {
     ensure_live_write_allowed(state.inner(), OperationId::ParamWrite).await?;
-    with_vehicle(&state)
-        .await?
-        .params()
-        .write(&name, value)
+    let vehicle = with_vehicle(&state).await?;
+    live_commands::param_write(&vehicle, &name, value)
         .await
         .map_err(|e| e.to_string())
 }
@@ -762,14 +696,12 @@ pub(crate) async fn param_write_batch(
 
 #[tauri::command]
 pub(crate) fn param_parse_file(contents: String) -> Result<HashMap<String, f32>, String> {
-    parse_param_file(&contents)
-        .map(|pairs| pairs.into_iter().collect())
-        .map_err(|e| e.to_string())
+    live_commands::param_parse_file(&contents).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub(crate) fn param_format_file(store: ParamStore) -> String {
-    format_param_file(&store)
+    live_commands::param_format_file(&store)
 }
 
 #[tauri::command]
@@ -784,10 +716,8 @@ pub(crate) async fn param_cancel(state: tauri::State<'_, AppState>) -> Result<()
 #[tauri::command]
 pub(crate) async fn reboot_vehicle(state: tauri::State<'_, AppState>) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::RebootVehicle).await?;
-    with_vehicle(&state)
-        .await?
-        .ardupilot()
-        .reboot()
+    let vehicle = with_vehicle(&state).await?;
+    live_commands::reboot_vehicle(&vehicle)
         .await
         .map_err(|e| e.to_string())
 }
@@ -800,14 +730,8 @@ pub(crate) async fn motor_test(
     duration_s: f32,
 ) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::MotorTest).await?;
-    with_vehicle(&state)
-        .await?
-        .ardupilot()
-        .motor_test(
-            motor_instance,
-            throttle_pct,
-            duration_s.clamp(0.0, u16::MAX as f32) as u16,
-        )
+    let vehicle = with_vehicle(&state).await?;
+    live_commands::motor_test(&vehicle, motor_instance, throttle_pct, duration_s)
         .await
         .map_err(|e| e.to_string())
 }
@@ -819,10 +743,8 @@ pub(crate) async fn set_servo(
     pwm_us: u16,
 ) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::SetServo).await?;
-    with_vehicle(&state)
-        .await?
-        .ardupilot()
-        .set_servo(instance, pwm_us)
+    let vehicle = with_vehicle(&state).await?;
+    live_commands::set_servo(&vehicle, instance, pwm_us)
         .await
         .map_err(|e| e.to_string())
 }
@@ -833,17 +755,8 @@ pub(crate) async fn rc_override(
     channels: Vec<RcOverrideChannelWire>,
 ) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::RcOverride).await?;
-    let mut overrides = RcOverride::new();
-    for channel in channels {
-        let value = RcOverrideChannelValue::try_from(channel.value).map_err(|e| e.to_string())?;
-        overrides
-            .set(channel.channel, value)
-            .map_err(|e| e.to_string())?;
-    }
-
-    with_vehicle(&state)
-        .await?
-        .rc_override(overrides)
+    let vehicle = with_vehicle(&state).await?;
+    live_commands::rc_override(&vehicle, channels)
         .await
         .map_err(|e| e.to_string())
 }
@@ -854,10 +767,8 @@ pub(crate) async fn calibrate_compass_start(
     compass_mask: u8,
 ) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::CalibrateCompassStart).await?;
-    with_vehicle(&state)
-        .await?
-        .ardupilot()
-        .start_mag_cal(compass_mask)
+    let vehicle = with_vehicle(&state).await?;
+    live_commands::calibrate_compass_start(&vehicle, compass_mask)
         .await
         .map_err(|e| e.to_string())
 }
@@ -868,10 +779,8 @@ pub(crate) async fn calibrate_compass_accept(
     _compass_mask: u8,
 ) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::CalibrateCompassAccept).await?;
-    with_vehicle(&state)
-        .await?
-        .ardupilot()
-        .accept_mag_cal()
+    let vehicle = with_vehicle(&state).await?;
+    live_commands::calibrate_compass_accept(&vehicle)
         .await
         .map_err(|e| e.to_string())
 }
@@ -882,10 +791,8 @@ pub(crate) async fn calibrate_compass_cancel(
     _compass_mask: u8,
 ) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::CalibrateCompassCancel).await?;
-    with_vehicle(&state)
-        .await?
-        .ardupilot()
-        .cancel_mag_cal()
+    let vehicle = with_vehicle(&state).await?;
+    live_commands::calibrate_compass_cancel(&vehicle)
         .await
         .map_err(|e| e.to_string())
 }
@@ -893,10 +800,8 @@ pub(crate) async fn calibrate_compass_cancel(
 #[tauri::command]
 pub(crate) async fn request_prearm_checks(state: tauri::State<'_, AppState>) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::RequestPrearmChecks).await?;
-    with_vehicle(&state)
-        .await?
-        .ardupilot()
-        .request_prearm_checks()
+    let vehicle = with_vehicle(&state).await?;
+    live_commands::request_prearm_checks(&vehicle)
         .await
         .map_err(|e| e.to_string())
 }

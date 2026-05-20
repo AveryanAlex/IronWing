@@ -7,14 +7,45 @@ export class IronwingWasmRuntime {
     ackSessionSnapshot(session_id: string, seek_epoch: number, reset_revision: number): any;
     armVehicle(force: boolean): Promise<void>;
     beginConnect(): WasmByteBridge;
+    calibrateAccel(): Promise<void>;
+    calibrateCompassAccept(_compass_mask: number): Promise<void>;
+    calibrateCompassCancel(_compass_mask: number): Promise<void>;
+    calibrateCompassStart(compass_mask: number): Promise<void>;
+    calibrateGyro(): Promise<void>;
     disarmVehicle(force: boolean): Promise<void>;
     disconnectLink(): Promise<void>;
+    fenceClear(): Promise<void>;
+    fenceDownload(): Promise<any>;
+    fenceUpload(plan: any): Promise<void>;
     getAvailableModes(): any;
+    missionCancel(): void;
+    missionClear(): Promise<void>;
+    missionDownload(): Promise<any>;
+    missionSetCurrent(seq: number): Promise<void>;
+    missionUpload(plan: any): Promise<void>;
+    missionValidate(plan: any): any;
+    motorTest(motor_instance: number, throttle_pct: number, duration_s: number): Promise<void>;
     constructor(event_sink: Function);
     openSessionSnapshot(source_kind: string): any;
+    paramCancel(): void;
+    paramDownloadAll(): void;
+    paramFormatFile(store: any): string;
+    paramParseFile(contents: string): any;
+    paramWrite(name: string, value: number): Promise<any>;
+    paramWriteBatch(params: any): Promise<any>;
+    rallyClear(): Promise<void>;
+    rallyDownload(): Promise<any>;
+    rallyUpload(plan: any): Promise<void>;
+    rcOverride(channels: any): Promise<void>;
+    rebootVehicle(): Promise<void>;
+    requestPrearmChecks(): Promise<void>;
     setFlightMode(custom_mode: number): Promise<void>;
     setMessageRate(message_id: number, rate_hz: number): Promise<void>;
+    setServo(instance: number, pwm_us: number): Promise<void>;
     setTelemetryRate(rate_hz: number): void;
+    startGuidedSession(request: any): Promise<any>;
+    stopGuidedSession(): any;
+    updateGuidedSession(request: any): Promise<any>;
     vehicleTakeoff(altitude_m: number): Promise<void>;
     waitConnect(): Promise<void>;
 }
@@ -31,6 +62,30 @@ export class WasmByteBridge {
 
 export function availableMessageRates(): any;
 
+export function firmwareBootloaderCatalogTargetsFromManifest(manifest_gz: Uint8Array, bootloader_index_html: string): any;
+
+export function firmwareCatalogEntriesFromManifest(manifest_gz: Uint8Array, board_id: number, platform?: string | null): any;
+
+export function firmwareCatalogTargetsFromManifest(manifest_gz: Uint8Array): any;
+
+export function logChartSeriesQuery(path: string, format: string, bytes: Uint8Array, request: any): any;
+
+export function logExportCsvBytes(path: string, format: string, bytes: Uint8Array, request: any): any;
+
+export function logFlightPath(path: string, format: string, bytes: Uint8Array, start_usec?: bigint | null, end_usec?: bigint | null, max_points?: number | null): any;
+
+export function logFlightSummary(path: string, format: string, bytes: Uint8Array): any;
+
+export function logParseSummary(path: string, format: string, bytes: Uint8Array): any;
+
+export function logQueryMessages(path: string, format: string, bytes: Uint8Array, msg_type: string, start_usec?: bigint | null, end_usec?: bigint | null, max_points?: number | null): any;
+
+export function logRawMessagesQuery(path: string, format: string, bytes: Uint8Array, request: any): any;
+
+export function logTelemetryAt(path: string, format: string, bytes: Uint8Array, cursor_usec?: bigint | null): any;
+
+export function logTelemetryTrack(path: string, format: string, bytes: Uint8Array, max_points?: number | null): any;
+
 export function start(): void;
 
 export function webSerialFirmwareInstallUpdate(port_name: string, serial_adapter: any, source: any, options: any, progress_sink: Function, is_cancelled: Function): Promise<any>;
@@ -41,33 +96,75 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
-    readonly __wbg_ironwingwasmruntime_free: (a: number, b: number) => void;
-    readonly ironwingwasmruntime_ackSessionSnapshot: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-    readonly ironwingwasmruntime_armVehicle: (a: number, b: number) => any;
-    readonly ironwingwasmruntime_beginConnect: (a: number) => [number, number, number];
-    readonly ironwingwasmruntime_disarmVehicle: (a: number, b: number) => any;
-    readonly ironwingwasmruntime_disconnectLink: (a: number) => any;
-    readonly ironwingwasmruntime_getAvailableModes: (a: number) => [number, number, number];
-    readonly ironwingwasmruntime_new: (a: any) => number;
-    readonly ironwingwasmruntime_openSessionSnapshot: (a: number, b: number, c: number) => [number, number, number];
-    readonly ironwingwasmruntime_setFlightMode: (a: number, b: number) => any;
-    readonly ironwingwasmruntime_setMessageRate: (a: number, b: number, c: number) => any;
-    readonly ironwingwasmruntime_setTelemetryRate: (a: number, b: number) => [number, number];
-    readonly ironwingwasmruntime_vehicleTakeoff: (a: number, b: number) => any;
-    readonly ironwingwasmruntime_waitConnect: (a: number) => any;
     readonly __wbg_wasmbytebridge_free: (a: number, b: number) => void;
     readonly wasmbytebridge_close: (a: number) => void;
     readonly wasmbytebridge_isClosed: (a: number) => number;
     readonly wasmbytebridge_nextOutbound: (a: number) => any;
     readonly wasmbytebridge_pushInbound: (a: number, b: any) => any;
-    readonly webSerialFirmwareInstallUpdate: (a: number, b: number, c: any, d: any, e: any, f: any, g: any) => any;
+    readonly __wbg_ironwingwasmruntime_free: (a: number, b: number) => void;
     readonly availableMessageRates: () => [number, number, number];
-    readonly start: () => void;
+    readonly firmwareBootloaderCatalogTargetsFromManifest: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly firmwareCatalogEntriesFromManifest: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly firmwareCatalogTargetsFromManifest: (a: number, b: number) => [number, number, number];
+    readonly ironwingwasmruntime_ackSessionSnapshot: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly ironwingwasmruntime_armVehicle: (a: number, b: number) => any;
+    readonly ironwingwasmruntime_beginConnect: (a: number) => [number, number, number];
+    readonly ironwingwasmruntime_calibrateAccel: (a: number) => any;
+    readonly ironwingwasmruntime_calibrateCompassAccept: (a: number, b: number) => any;
+    readonly ironwingwasmruntime_calibrateCompassCancel: (a: number, b: number) => any;
+    readonly ironwingwasmruntime_calibrateCompassStart: (a: number, b: number) => any;
+    readonly ironwingwasmruntime_calibrateGyro: (a: number) => any;
+    readonly ironwingwasmruntime_disarmVehicle: (a: number, b: number) => any;
+    readonly ironwingwasmruntime_disconnectLink: (a: number) => any;
+    readonly ironwingwasmruntime_fenceClear: (a: number) => any;
+    readonly ironwingwasmruntime_fenceDownload: (a: number) => any;
+    readonly ironwingwasmruntime_fenceUpload: (a: number, b: any) => any;
+    readonly ironwingwasmruntime_getAvailableModes: (a: number) => [number, number, number];
+    readonly ironwingwasmruntime_missionCancel: (a: number) => [number, number];
+    readonly ironwingwasmruntime_missionClear: (a: number) => any;
+    readonly ironwingwasmruntime_missionDownload: (a: number) => any;
+    readonly ironwingwasmruntime_missionSetCurrent: (a: number, b: number) => any;
+    readonly ironwingwasmruntime_missionUpload: (a: number, b: any) => any;
+    readonly ironwingwasmruntime_missionValidate: (a: number, b: any) => [number, number, number];
+    readonly ironwingwasmruntime_motorTest: (a: number, b: number, c: number, d: number) => any;
+    readonly ironwingwasmruntime_new: (a: any) => number;
+    readonly ironwingwasmruntime_openSessionSnapshot: (a: number, b: number, c: number) => [number, number, number];
+    readonly ironwingwasmruntime_paramCancel: (a: number) => [number, number];
+    readonly ironwingwasmruntime_paramDownloadAll: (a: number) => [number, number];
+    readonly ironwingwasmruntime_paramFormatFile: (a: number, b: any) => [number, number, number, number];
+    readonly ironwingwasmruntime_paramParseFile: (a: number, b: number, c: number) => [number, number, number];
+    readonly ironwingwasmruntime_paramWrite: (a: number, b: number, c: number, d: number) => any;
+    readonly ironwingwasmruntime_paramWriteBatch: (a: number, b: any) => any;
+    readonly ironwingwasmruntime_rallyClear: (a: number) => any;
+    readonly ironwingwasmruntime_rallyDownload: (a: number) => any;
+    readonly ironwingwasmruntime_rallyUpload: (a: number, b: any) => any;
+    readonly ironwingwasmruntime_rcOverride: (a: number, b: any) => any;
+    readonly ironwingwasmruntime_rebootVehicle: (a: number) => any;
+    readonly ironwingwasmruntime_requestPrearmChecks: (a: number) => any;
+    readonly ironwingwasmruntime_setFlightMode: (a: number, b: number) => any;
+    readonly ironwingwasmruntime_setMessageRate: (a: number, b: number, c: number) => any;
+    readonly ironwingwasmruntime_setServo: (a: number, b: number, c: number) => any;
+    readonly ironwingwasmruntime_setTelemetryRate: (a: number, b: number) => [number, number];
+    readonly ironwingwasmruntime_startGuidedSession: (a: number, b: any) => any;
+    readonly ironwingwasmruntime_stopGuidedSession: (a: number) => [number, number, number];
+    readonly ironwingwasmruntime_updateGuidedSession: (a: number, b: any) => any;
+    readonly ironwingwasmruntime_vehicleTakeoff: (a: number, b: number) => any;
+    readonly ironwingwasmruntime_waitConnect: (a: number) => any;
+    readonly logChartSeriesQuery: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
+    readonly logExportCsvBytes: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
+    readonly logFlightPath: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: bigint, i: number, j: bigint, k: number) => [number, number, number];
+    readonly logFlightSummary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly logParseSummary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly logQueryMessages: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: bigint, k: number, l: bigint, m: number) => [number, number, number];
+    readonly logRawMessagesQuery: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
+    readonly logTelemetryAt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: bigint) => [number, number, number];
+    readonly logTelemetryTrack: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+    readonly webSerialFirmwareInstallUpdate: (a: number, b: number, c: any, d: any, e: any, f: any, g: any) => any;
     readonly webTransportDescriptors: (a: number, b: number, c: number) => [number, number, number];
-    readonly wasm_bindgen__convert__closures_____invoke__hdb519a66166eae10: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen__convert__closures_____invoke__h3c099da163a3c89b: (a: number, b: number, c: any, d: any) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__h50282636345e2517: (a: number, b: number) => number;
-    readonly wasm_bindgen__convert__closures_____invoke__h631c439813541c6b: (a: number, b: number) => void;
+    readonly start: () => void;
+    readonly wasm_bindgen__convert__closures_____invoke__h157532a21e05ac18: (a: number, b: number, c: any) => [number, number];
+    readonly wasm_bindgen__convert__closures_____invoke__h831f6e81e7b0bf6f: (a: number, b: number, c: any, d: any) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__hba32844d06b6d595: (a: number, b: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

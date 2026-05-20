@@ -26,7 +26,7 @@ mod raw_messages;
 use crate::{
     AppState,
     e2e_emit::emit_event,
-    helpers::{self, operation_failure_json},
+    helpers,
     ipc::{
         LogDiagnostic, LogOperationPhase, LogOperationProgress, OperationFailure, OperationId,
         Reason, ReasonKind, ReplayStatus, ScopedEvent, SessionEnvelope, VehicleState,
@@ -35,6 +35,7 @@ use crate::{
             LogDiagnosticSource, LogExportFormat, LogExportRequest, LogExportResult,
             RawMessageFieldFilter, RawMessagePage, RawMessageQuery,
         },
+        operation_failure_json,
         playback::{PlaybackSeekResult, PlaybackState},
     },
 };

@@ -105,12 +105,22 @@ export type LogLibraryEntry = {
  * The catalog records these paths so migrations and diagnostics can explain
  * where the catalog, indexes, and recordings live on disk.
  */
-export type LogLibraryStorageLocation = {
+export type AppDataLogLibraryStorageLocation = {
   kind: "app_data";
   catalog_path: string;
   indexes_dir: string;
   recordings_dir: string;
 };
+
+export type BrowserLogLibraryStorageLocation = {
+  kind: "browser_storage";
+  catalog_id: string;
+  indexes_store: string;
+  blobs_store: string;
+  recordings_store: string;
+};
+
+export type LogLibraryStorageLocation = AppDataLogLibraryStorageLocation | BrowserLogLibraryStorageLocation;
 
 /**
  * Top-level log library catalog persisted in app data.

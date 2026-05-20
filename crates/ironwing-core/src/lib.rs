@@ -3,6 +3,7 @@ pub mod event_names;
 pub mod ipc;
 pub mod live;
 pub mod live_runtime;
+pub mod log_engine;
 pub mod log_playback;
 pub mod runtime;
 pub mod telemetry;

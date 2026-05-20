@@ -1,5 +1,7 @@
 use crate::AppState;
-use crate::ipc::{OperationFailure, OperationId, Reason, ReasonKind, SourceKind};
+use crate::ipc::{
+    OperationFailure, OperationId, Reason, ReasonKind, SourceKind, operation_failure_json,
+};
 use tokio::sync::MappedMutexGuard;
 
 pub(crate) async fn with_vehicle(state: &AppState) -> Result<mavkit::Vehicle, String> {
@@ -37,13 +39,6 @@ pub(crate) async fn ensure_live_write_allowed(
     }
 
     Ok(())
-}
-
-pub(crate) fn operation_failure_json(failure: OperationFailure) -> String {
-    match serde_json::to_string(&failure) {
-        Ok(json) => json,
-        Err(_) => failure.reason.message,
-    }
 }
 
 pub(crate) fn downsample<T: Clone>(items: Vec<T>, max: usize) -> Vec<T> {
