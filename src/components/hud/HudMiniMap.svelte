@@ -5,6 +5,7 @@ import maplibregl, { type Map as MapLibreMap, type Marker } from "maplibre-gl";
 import {
   createMarkerMotion,
   unwrapAngleDeg,
+  VEHICLE_MARKER_MOTION_MS,
   type LngLatTuple,
 } from "../../lib/map-marker-motion";
 import {
@@ -68,7 +69,11 @@ $effect(() => {
   if (!vehicleMarker) return;
   const lngLat = currentLngLat();
   vehicleMotion.animateTo(vehicleMarker, lngLat);
-  map?.setCenter(lngLat);
+  map?.easeTo({
+    center: lngLat,
+    duration: VEHICLE_MARKER_MOTION_MS,
+    easing: linearEasing,
+  });
 });
 
 $effect(() => {
@@ -81,6 +86,10 @@ $effect(() => {
 
 function currentLngLat(): LngLatTuple {
   return [longitude, latitude];
+}
+
+function linearEasing(progress: number): number {
+  return progress;
 }
 
 function applyVehicleHeading(headingDeg: number) {
