@@ -1,3 +1,5 @@
+import { lerpNumber, unwrapCircularValue } from "./telemetry-smoothing";
+
 export type LngLatTuple = [number, number];
 
 export const VEHICLE_MARKER_MOTION_MS = 300;
@@ -13,10 +15,6 @@ type MarkerMotionOptions = {
   cancelFrame?: (handle: number) => void;
 };
 
-function positiveModulo(value: number, divisor: number): number {
-  return ((value % divisor) + divisor) % divisor;
-}
-
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
@@ -31,8 +29,8 @@ function sameLngLat(a: LngLatTuple, b: LngLatTuple): boolean {
 
 function interpolateLngLat(from: LngLatTuple, to: LngLatTuple, progress: number): LngLatTuple {
   return [
-    from[0] + (to[0] - from[0]) * progress,
-    from[1] + (to[1] - from[1]) * progress,
+    lerpNumber(from[0], to[0], progress),
+    lerpNumber(from[1], to[1], progress),
   ];
 }
 
@@ -60,17 +58,7 @@ function defaultCancelFrame(handle: number): void {
 }
 
 export function unwrapAngleDeg(previousRenderedAngleDeg: number | null, nextAngleDeg: number): number {
-  if (!Number.isFinite(nextAngleDeg)) {
-    return previousRenderedAngleDeg ?? 0;
-  }
-
-  if (previousRenderedAngleDeg == null || !Number.isFinite(previousRenderedAngleDeg)) {
-    return nextAngleDeg;
-  }
-
-  const previousNormalized = positiveModulo(previousRenderedAngleDeg, 360);
-  const shortestDelta = positiveModulo(nextAngleDeg - previousNormalized + 180, 360) - 180;
-  return previousRenderedAngleDeg + shortestDelta;
+  return unwrapCircularValue(previousRenderedAngleDeg, nextAngleDeg, 360);
 }
 
 export function createMarkerMotion(options: MarkerMotionOptions = {}) {

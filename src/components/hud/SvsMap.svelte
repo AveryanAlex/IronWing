@@ -14,6 +14,7 @@ import {
   missionPlanToMarkerSpecs,
 } from "../../lib/map/mission-plan-overlay";
 import { buildMissionRenderFeatures } from "../../lib/mission-path-render";
+import { createNumberSmoother } from "../../lib/telemetry-smoothing";
 
 type Props = {
   latitude_deg: number;
@@ -60,10 +61,20 @@ let mapContainer = $state<HTMLDivElement | null>(null);
 // Plain variables to avoid reactive proxy wrapping of MapLibre internals
 let map: MapLibreMap | null = null;
 let styleLoaded = $state(false);
+let cameraFrameHandle: number | null = null;
 const missionMarkerOverlay = createMissionMarkerOverlay(
   (element: HTMLElement) => new maplibregl.Marker({ element, anchor: "center" }),
   { className: "is-hud", interactive: false, markerScale: 0.72 },
 );
+
+const cameraSmoothers = {
+  latitude: createNumberSmoother({ durationMs: 420, maxJump: 0.01 }),
+  longitude: createNumberSmoother({ durationMs: 420, maxJump: 0.01 }),
+  heading: createNumberSmoother({ durationMs: 240, circularRange: 360 }),
+  pitch: createNumberSmoother({ durationMs: 180, maxJump: 45 }),
+  roll: createNumberSmoother({ durationMs: 180, circularRange: 360, maxJump: 90 }),
+  altitude: createNumberSmoother({ durationMs: 320, maxJump: 250 }),
+};
 
 function clamp(v: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, v));
@@ -90,9 +101,12 @@ onMount(() => {
     syncMissionOverlay();
 
     styleLoaded = true;
+    renderCamera(nowMs());
+    scheduleCameraFrame();
   });
 
   return () => {
+    cancelCameraFrame();
     missionMarkerOverlay.clear();
     map?.remove();
     map = null;
@@ -100,17 +114,15 @@ onMount(() => {
   };
 });
 
-// Camera tracking: update on every telemetry change
 $effect(() => {
-  if (!map || !styleLoaded) return;
-
-  map.jumpTo({
-    center: [longitude_deg, latitude_deg],
-    zoom: clamp(16.5 - Math.log2(Math.max(10, altitude_m) / 30), 11, 17),
-    bearing: heading_deg,
-    pitch: clamp(75 - pitch_deg, 20, 85),
-    roll: roll_deg,
-  });
+  const timestampMs = nowMs();
+  cameraSmoothers.latitude.setTarget(latitude_deg, timestampMs);
+  cameraSmoothers.longitude.setTarget(longitude_deg, timestampMs);
+  cameraSmoothers.heading.setTarget(heading_deg, timestampMs);
+  cameraSmoothers.pitch.setTarget(pitch_deg, timestampMs);
+  cameraSmoothers.roll.setTarget(roll_deg, timestampMs);
+  cameraSmoothers.altitude.setTarget(altitude_m, timestampMs);
+  scheduleCameraFrame();
 });
 
 $effect(() => {
@@ -129,6 +141,74 @@ function toHomePosition(latitude?: number | null, longitude?: number | null, alt
     longitude_deg: Number(longitude),
     altitude_m: Number.isFinite(altitude) ? Number(altitude) : 0,
   };
+}
+
+function nowMs(): number {
+  return typeof performance?.now === "function" ? performance.now() : Date.now();
+}
+
+function requestFrame(callback: FrameRequestCallback): number {
+  if (typeof requestAnimationFrame === "function") {
+    return requestAnimationFrame(callback);
+  }
+
+  return setTimeout(() => callback(nowMs()), 16) as unknown as number;
+}
+
+function cancelFrame(handle: number) {
+  if (typeof cancelAnimationFrame === "function") {
+    cancelAnimationFrame(handle);
+    return;
+  }
+
+  clearTimeout(handle as unknown as ReturnType<typeof setTimeout>);
+}
+
+function cancelCameraFrame() {
+  if (cameraFrameHandle == null) return;
+  cancelFrame(cameraFrameHandle);
+  cameraFrameHandle = null;
+}
+
+function scheduleCameraFrame() {
+  if (!map || !styleLoaded || cameraFrameHandle != null) return;
+  cameraFrameHandle = requestFrame(renderCameraFrame);
+}
+
+function renderCameraFrame(timestampMs: number) {
+  cameraFrameHandle = null;
+  renderCamera(timestampMs);
+
+  if (cameraIsAnimating(timestampMs)) {
+    scheduleCameraFrame();
+  }
+}
+
+function smoothedOrRaw(value: number | null, raw: number): number {
+  return value == null || !Number.isFinite(value) ? raw : value;
+}
+
+function renderCamera(timestampMs: number) {
+  if (!map || !styleLoaded) return;
+
+  const latitude = smoothedOrRaw(cameraSmoothers.latitude.valueAt(timestampMs), latitude_deg);
+  const longitude = smoothedOrRaw(cameraSmoothers.longitude.valueAt(timestampMs), longitude_deg);
+  const heading = smoothedOrRaw(cameraSmoothers.heading.valueAt(timestampMs), heading_deg);
+  const pitch = smoothedOrRaw(cameraSmoothers.pitch.valueAt(timestampMs), pitch_deg);
+  const roll = smoothedOrRaw(cameraSmoothers.roll.valueAt(timestampMs), roll_deg);
+  const altitude = smoothedOrRaw(cameraSmoothers.altitude.valueAt(timestampMs), altitude_m);
+
+  map.jumpTo({
+    center: [longitude, latitude],
+    zoom: clamp(16.5 - Math.log2(Math.max(10, altitude) / 30), 11, 17),
+    bearing: heading,
+    pitch: clamp(75 - pitch, 20, 85),
+    roll,
+  });
+}
+
+function cameraIsAnimating(timestampMs: number): boolean {
+  return Object.values(cameraSmoothers).some((smoother) => smoother.isAnimating(timestampMs));
 }
 
 function syncMissionOverlay() {

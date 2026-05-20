@@ -5,6 +5,7 @@ import { fromStore } from "svelte/store";
 import "./hud.css";
 import ArtificialHorizon from "./ArtificialHorizon.svelte";
 import TapeGauge from "./TapeGauge.svelte";
+import { createNumberSmoother } from "../../lib/telemetry-smoothing";
 import {
   getSessionViewStoreContext,
   getMissionPlannerStoreContext,
@@ -25,12 +26,47 @@ let heading = $derived(telemetry.heading_deg);
 let altitude = $derived(telemetry.altitude_m);
 let speed = $derived(telemetry.speed_mps);
 let climbRate = $derived(telemetry.climb_rate_mps);
-let groundSpeed = $derived(telemetry.speed_mps);
 let airspeed = $derived(telemetry.airspeed_mps);
 let targetBearing = $derived(telemetry.target_bearing_deg);
 let terrainHeight = $derived(telemetry.terrain_height_m);
 let heightAboveTerrain = $derived(telemetry.height_above_terrain_m);
 let throttle = $derived(telemetry.throttle_pct);
+
+const hudSmoothers = {
+  pitch: createNumberSmoother({ durationMs: 160, maxJump: 45 }),
+  roll: createNumberSmoother({ durationMs: 160, circularRange: 360, maxJump: 90 }),
+  heading: createNumberSmoother({ durationMs: 300, circularRange: 360 }),
+  altitude: createNumberSmoother({ durationMs: 300, maxJump: 250 }),
+  speed: createNumberSmoother({ durationMs: 240, maxJump: 25 }),
+  climbRate: createNumberSmoother({ durationMs: 220, maxJump: 20 }),
+  airspeed: createNumberSmoother({ durationMs: 240, maxJump: 25 }),
+  targetBearing: createNumberSmoother({ durationMs: 300, circularRange: 360 }),
+  terrainHeight: createNumberSmoother({ durationMs: 300, maxJump: 250 }),
+};
+
+let hudFrameHandle: number | null = null;
+
+let smoothedHud = $state<{
+  pitch?: number;
+  roll?: number;
+  heading?: number;
+  altitude?: number;
+  speed?: number;
+  climbRate?: number;
+  airspeed?: number;
+  targetBearing?: number;
+  terrainHeight?: number;
+}>({});
+
+let displayPitch = $derived(smoothedHud.pitch ?? pitch);
+let displayRoll = $derived(smoothedHud.roll ?? roll);
+let displayHeading = $derived(smoothedHud.heading ?? heading);
+let displayAltitude = $derived(smoothedHud.altitude ?? altitude);
+let displaySpeed = $derived(smoothedHud.speed ?? speed);
+let displayClimbRate = $derived(smoothedHud.climbRate ?? climbRate);
+let displayAirspeed = $derived(smoothedHud.airspeed ?? airspeed);
+let displayTargetBearing = $derived(smoothedHud.targetBearing ?? targetBearing);
+let displayTerrainHeight = $derived(smoothedHud.terrainHeight ?? terrainHeight);
 
 let armed = $derived(vehicleState?.armed ?? false);
 let modeName = $derived(vehicleState?.mode_name ?? "--");
@@ -78,6 +114,23 @@ onMount(() => {
   return () => obs.disconnect();
 });
 
+onMount(() => () => cancelHudFrame());
+
+$effect(() => {
+  const timestampMs = nowMs();
+  hudSmoothers.pitch.setTarget(pitch, timestampMs);
+  hudSmoothers.roll.setTarget(roll, timestampMs);
+  hudSmoothers.heading.setTarget(heading, timestampMs);
+  hudSmoothers.altitude.setTarget(altitude, timestampMs);
+  hudSmoothers.speed.setTarget(speed, timestampMs);
+  hudSmoothers.climbRate.setTarget(climbRate, timestampMs);
+  hudSmoothers.airspeed.setTarget(airspeed, timestampMs);
+  hudSmoothers.targetBearing.setTarget(targetBearing, timestampMs);
+  hudSmoothers.terrainHeight.setTarget(terrainHeight, timestampMs);
+  updateSmoothedHud(timestampMs);
+  scheduleHudFrame();
+});
+
 // Formatting helpers
 function fmt(value: number | undefined, decimals = 1): string {
   if (typeof value !== "number" || Number.isNaN(value)) return "--";
@@ -87,6 +140,67 @@ function fmt(value: number | undefined, decimals = 1): string {
 function fmtInt(value: number | undefined): string {
   if (typeof value !== "number" || Number.isNaN(value)) return "--";
   return Math.round(value).toString();
+}
+
+function nowMs(): number {
+  return typeof performance?.now === "function" ? performance.now() : Date.now();
+}
+
+function requestFrame(callback: FrameRequestCallback): number {
+  if (typeof requestAnimationFrame === "function") {
+    return requestAnimationFrame(callback);
+  }
+
+  return setTimeout(() => callback(nowMs()), 16) as unknown as number;
+}
+
+function cancelFrame(handle: number) {
+  if (typeof cancelAnimationFrame === "function") {
+    cancelAnimationFrame(handle);
+    return;
+  }
+
+  clearTimeout(handle as unknown as ReturnType<typeof setTimeout>);
+}
+
+function numberOrUndefined(value: number | null): number | undefined {
+  return value == null || !Number.isFinite(value) ? undefined : value;
+}
+
+function updateSmoothedHud(timestampMs: number) {
+  smoothedHud.pitch = numberOrUndefined(hudSmoothers.pitch.valueAt(timestampMs));
+  smoothedHud.roll = numberOrUndefined(hudSmoothers.roll.valueAt(timestampMs));
+  smoothedHud.heading = numberOrUndefined(hudSmoothers.heading.valueAt(timestampMs));
+  smoothedHud.altitude = numberOrUndefined(hudSmoothers.altitude.valueAt(timestampMs));
+  smoothedHud.speed = numberOrUndefined(hudSmoothers.speed.valueAt(timestampMs));
+  smoothedHud.climbRate = numberOrUndefined(hudSmoothers.climbRate.valueAt(timestampMs));
+  smoothedHud.airspeed = numberOrUndefined(hudSmoothers.airspeed.valueAt(timestampMs));
+  smoothedHud.targetBearing = numberOrUndefined(hudSmoothers.targetBearing.valueAt(timestampMs));
+  smoothedHud.terrainHeight = numberOrUndefined(hudSmoothers.terrainHeight.valueAt(timestampMs));
+}
+
+function cancelHudFrame() {
+  if (hudFrameHandle == null) return;
+  cancelFrame(hudFrameHandle);
+  hudFrameHandle = null;
+}
+
+function scheduleHudFrame() {
+  if (hudFrameHandle != null) return;
+  hudFrameHandle = requestFrame(renderHudFrame);
+}
+
+function renderHudFrame(timestampMs: number) {
+  hudFrameHandle = null;
+  updateSmoothedHud(timestampMs);
+
+  if (hudIsAnimating(timestampMs)) {
+    scheduleHudFrame();
+  }
+}
+
+function hudIsAnimating(timestampMs: number): boolean {
+  return Object.values(hudSmoothers).some((smoother) => smoother.isAnimating(timestampMs));
 }
 
 // Battery color
@@ -114,9 +228,9 @@ let batteryLevel = $derived(
           latitude_deg={vehiclePosition!.latitude_deg}
           longitude_deg={vehiclePosition!.longitude_deg}
           heading_deg={vehiclePosition!.heading_deg}
-          pitch_deg={pitch!}
-          roll_deg={roll!}
-          altitude_m={altitude!}
+          pitch_deg={displayPitch!}
+          roll_deg={displayRoll!}
+          altitude_m={displayAltitude!}
           homeLatitude={homePosition?.latitude_deg}
           homeLongitude={homePosition?.longitude_deg}
           homeAltitude={homePosition?.altitude_m}
@@ -147,7 +261,7 @@ let batteryLevel = $derived(
     <!-- Row 1, Col 2: Heading tape -->
     <div class="flex items-end justify-center overflow-hidden">
       <TapeGauge
-        value={heading}
+        value={displayHeading}
         orientation="horizontal"
         visibleRange={90}
         majorTickInterval={10}
@@ -155,7 +269,7 @@ let batteryLevel = $derived(
         size={{ width: Math.min(horizonSize.width, 600), height: 48 }}
         circular
         circularRange={360}
-        bugValue={targetBearing}
+        bugValue={displayTargetBearing}
       />
     </div>
 
@@ -176,7 +290,7 @@ let batteryLevel = $derived(
     <!-- Row 2, Col 1: Speed tape -->
     <div class="flex items-center justify-center overflow-hidden">
       <TapeGauge
-        value={speed}
+        value={displaySpeed}
         orientation="vertical"
         visibleRange={40}
         majorTickInterval={5}
@@ -184,25 +298,25 @@ let batteryLevel = $derived(
         size={{ width: 80, height: Math.min(horizonSize.height, 500) }}
         unit="m/s"
         label="GS"
-        bugValue={airspeed}
+        bugValue={displayAirspeed}
       />
     </div>
 
     <!-- Row 2, Col 2: Artificial horizon -->
     <div bind:this={horizonRef} class="relative overflow-hidden">
       <ArtificialHorizon
-        {pitch}
-        {roll}
+        pitch={displayPitch}
+        roll={displayRoll}
         size={horizonSize}
-        {climbRate}
-        {groundSpeed}
+        climbRate={displayClimbRate}
+        groundSpeed={displaySpeed}
       />
     </div>
 
     <!-- Row 2, Col 3: Altitude tape -->
     <div class="flex items-center justify-center overflow-hidden">
       <TapeGauge
-        value={altitude}
+        value={displayAltitude}
         orientation="vertical"
         visibleRange={200}
         majorTickInterval={20}
@@ -210,8 +324,8 @@ let batteryLevel = $derived(
         size={{ width: 80, height: Math.min(horizonSize.height, 500) }}
         unit="m"
         label="ALT"
-        trendValue={climbRate}
-        terrainValue={terrainHeight}
+        trendValue={displayClimbRate}
+        terrainValue={displayTerrainHeight}
       />
     </div>
 
@@ -283,7 +397,7 @@ let batteryLevel = $derived(
         <HudMiniMapModule.default
           latitude={vehiclePosition.latitude_deg}
           longitude={vehiclePosition.longitude_deg}
-          heading={vehiclePosition.heading_deg}
+          heading={displayHeading ?? vehiclePosition.heading_deg}
           homeLatitude={homePosition?.latitude_deg}
           homeLongitude={homePosition?.longitude_deg}
           homeAltitude={homePosition?.altitude_m}
