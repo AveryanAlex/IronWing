@@ -1,6 +1,5 @@
 <script lang="ts">
 import { Home, Layers, LocateFixed, Map as MapIcon, Navigation, Satellite } from "lucide-svelte";
-import { onMount } from "svelte";
 import { toast } from "svelte-sonner";
 import * as maplibregl from "maplibre-gl";
 import type {
@@ -19,10 +18,10 @@ import {
 } from "../../lib/map-marker-motion";
 import {
   applyMapLayerMode,
-  configureMapLibreWorker,
   createDeviceMarkerElement,
   createGuidedTargetMarkerElement,
   createHomeMarkerElement,
+  ensureBuildingExtrusionLayer,
   ensureMapFoundation,
   ensureMissionPathLayers,
   getFirstNonFillLayerId,
@@ -42,6 +41,7 @@ import {
   type MissionMarkerSpec,
 } from "../../lib/map/mission-plan-overlay";
 import { createUiStateStore } from "../../lib/ui-state/ui-state";
+import BaseMap from "../map/BaseMap.svelte";
 import MapContextMenu from "../map/MapContextMenu.svelte";
 
 type Props = {
@@ -114,7 +114,6 @@ const overviewUiState = createUiStateStore({
   storage: typeof localStorage === "undefined" ? null : localStorage,
 });
 
-let mapContainer = $state<HTMLDivElement | null>(null);
 let mapLayer = $state<MapLayerMode>("normal");
 let followTarget = $state<FollowTarget | null>(overviewUiState.getOverviewFollow());
 
@@ -133,6 +132,7 @@ let guidedCommandPending = $state(false);
 // Held as plain variables rather than $state to avoid reactive proxy wrapping
 // of MapLibre's internal object graph, which would break its methods.
 let map: MapLibreMap | null = null;
+let mapSurfaceElement: HTMLElement | null = null;
 let homeMarker: Marker | null = null;
 let deviceMarker: Marker | null = null;
 let guidedTargetMarker: Marker | null = null;
@@ -158,24 +158,26 @@ const pressTimers: Record<FollowTarget, ReturnType<typeof setTimeout> | null> = 
   vehicle: null,
 };
 
-onMount(() => {
-  if (!mapContainer) return;
-
+function createOverviewMapOptions() {
   const initialCenter = asLngLat(vehicleLat, vehicleLon)
     ?? asLngLat(homeLat, homeLon)
     ?? guidedTargetLngLat(guidedTarget)
     ?? DEFAULT_CENTER;
 
-  configureMapLibreWorker();
-  map = new maplibregl.Map({
-    container: mapContainer,
+  return {
     style: OPENFREEMAP_BRIGHT_STYLE_URL,
     center: initialCenter,
     zoom: 15,
     pitch: 0,
     maxPitch: 85,
     attributionControl: false,
-  });
+  };
+}
+
+function handleMapReady(createdMap: MapLibreMap, container: HTMLElement) {
+  map = createdMap;
+  mapSurfaceElement = container;
+  styleLoaded = false;
 
   map.addControl(
     new maplibregl.NavigationControl({ showZoom: true, showCompass: true, visualizePitch: true }),
@@ -220,8 +222,8 @@ onMount(() => {
     deviceMarker?.remove();
     guidedTargetMarker?.remove();
     missionMarkerOverlay.clear();
-    map?.remove();
     map = null;
+    mapSurfaceElement = null;
     homeMarker = null;
     deviceMarker = null;
     guidedTargetMarker = null;
@@ -231,7 +233,7 @@ onMount(() => {
     deviceMarkerAttached = false;
     guidedTargetMarkerAttached = false;
   };
-});
+}
 
 $effect(() => {
   if (!styleLoaded || !map) return;
@@ -370,7 +372,7 @@ function toHomePosition(latitude?: number, longitude?: number, altitude?: number
 }
 
 function handleMapContextMenu(event: MapMouseEvent & { originalEvent: MouseEvent }) {
-  if (!mapContainer) {
+  if (!map) {
     return;
   }
 
@@ -381,9 +383,10 @@ function handleMapContextMenu(event: MapMouseEvent & { originalEvent: MouseEvent
 }
 
 function openMapContextMenu(clientX: number, clientY: number, lat: number, lon: number) {
-  if (!mapContainer) return;
+  const container = mapSurfaceElement;
+  if (!container) return;
 
-  const rect = mapContainer.getBoundingClientRect();
+  const rect = container.getBoundingClientRect();
   followTarget = null;
   pendingDeviceAction = null;
   contextMenu = {
@@ -395,7 +398,7 @@ function openMapContextMenu(clientX: number, clientY: number, lat: number, lon: 
 }
 
 function handleMapSurfacePointerDown(event: PointerEvent) {
-  if (event.pointerType === "mouse" || event.button !== 0 || !map || !mapContainer) {
+  if (event.pointerType === "mouse" || event.button !== 0 || !map) {
     return;
   }
 
@@ -409,7 +412,7 @@ function handleMapSurfacePointerDown(event: PointerEvent) {
     clientY: event.clientY,
   };
   mapContextPressTimer = setTimeout(() => {
-    if (!map || !mapContainer || !mapContextPressStart) return;
+    if (!map || !mapContextPressStart) return;
 
     const lngLat = map.unproject(clientPointToMapPoint(mapContextPressStart.clientX, mapContextPressStart.clientY));
     openMapContextMenu(mapContextPressStart.clientX, mapContextPressStart.clientY, lngLat.lat, lngLat.lng);
@@ -447,11 +450,12 @@ function clearMapContextPressTimer() {
 }
 
 function clientPointToMapPoint(clientX: number, clientY: number): [number, number] {
-  if (!mapContainer) {
+  const container = mapSurfaceElement;
+  if (!container) {
     return [clientX, clientY];
   }
 
-  const rect = mapContainer.getBoundingClientRect();
+  const rect = container.getBoundingClientRect();
   return [clientX - rect.left, clientY - rect.top];
 }
 
@@ -513,12 +517,13 @@ function syncGuidedTargetMarker(target: GuidedTargetSpec | null) {
 
 function ensureStyleExtensions(currentMap: MapLibreMap) {
   const foundationIds = resolveMapFoundationIds(MAP_FOUNDATION_OPTIONS);
-  baseLayerIds = getMapLayerIds(currentMap, { excludeLayerIds: Object.values(foundationIds) });
 
   ensureMapFoundation(currentMap, {
     ...MAP_FOUNDATION_OPTIONS,
     satelliteBeforeLayerId: getFirstNonFillLayerId(currentMap),
   });
+  ensureBuildingExtrusionLayer(currentMap);
+  baseLayerIds = getMapLayerIds(currentMap, { excludeLayerIds: Object.values(foundationIds) });
   ensureMissionPathLayers(currentMap);
   updateMissionPathSource(currentMap, missionRenderFeatures);
 }
@@ -747,18 +752,19 @@ function preventContextMenu(event: MouseEvent) {
 </script>
 
 <div class="overview-map" data-testid="overview-map-root">
-  <div
-    bind:this={mapContainer}
+  <BaseMap
     aria-label="Interactive map"
     class="overview-map-container"
     data-testid="overview-map-surface"
+    options={createOverviewMapOptions()}
+    onMapReady={handleMapReady}
     onpointercancel={handleMapSurfacePointerEnd}
     onpointerdown={handleMapSurfacePointerDown}
     onpointerleave={handleMapSurfacePointerEnd}
     onpointermove={handleMapSurfacePointerMove}
     onpointerup={handleMapSurfacePointerEnd}
     role="application"
-  ></div>
+  />
 
   {#if contextMenu}
     <MapContextMenu
@@ -884,7 +890,7 @@ function preventContextMenu(event: MouseEvent) {
     height: 100%;
   }
 
-  .overview-map-container {
+  :global(.overview-map-container) {
     width: 100%;
     height: 100%;
   }

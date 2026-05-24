@@ -1,4 +1,5 @@
 export * from "./constants";
+export * from "./base-map";
 export * from "./geojson";
 export * from "./layers";
 export * from "./live-vehicle-overlay";
@@ -6,4 +7,6 @@ export * from "./markers";
 export * from "./mission-plan-overlay";
 export * from "./mission-path-overlay";
 export * from "./svs-camera";
+export * from "./svs-atmosphere";
+export * from "./svs-style";
 export * from "./worker";

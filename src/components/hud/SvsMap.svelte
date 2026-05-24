@@ -1,20 +1,18 @@
 <script lang="ts">
 import { fetch as platformFetch } from "@platform/http";
-import { onMount } from "svelte";
 import * as maplibregl from "maplibre-gl";
 import type { Map as MapLibreMap } from "maplibre-gl";
 
 import type { HomePosition, MissionPlan } from "../../mission";
+import { createSvsMapStyle } from "../../lib/map/svs-style";
 import {
-  configureMapLibreWorker,
   ensureMissionPathLayers,
-  ensureSatelliteLayer,
-  MAPTERHORN_DEM_TILEJSON_URL,
-  OPENFREEMAP_BRIGHT_STYLE_URL,
   SVS_CAMERA_FALLBACK_AGL_M,
   SVS_CAMERA_MOUNT,
   SVS_CAMERA_VERTICAL_FOV_DEG,
   applySvsAircraftCamera,
+  applySvsAtmosphere,
+  ensureBuildingExtrusionLayer,
   resolveSvsCameraAltitudeMsl,
   type SvsCameraMode,
   updateMissionPathSource,
@@ -24,9 +22,11 @@ import {
   missionPlanToDraftItems,
   missionPlanToMarkerSpecs,
 } from "../../lib/map/mission-plan-overlay";
+import { haversineM } from "../../lib/geo-utils";
 import { buildMissionRenderFeatures } from "../../lib/mission-path-render";
 import { createNumberSmoother } from "../../lib/telemetry-smoothing";
 import { createTileCache, sampleElevations, type TerrainPoint } from "../../lib/terrain-dem";
+import BaseMap from "../map/BaseMap.svelte";
 
 type Props = {
   latitude_deg: number;
@@ -71,7 +71,6 @@ const missionRenderFeatures = $derived.by(() =>
 );
 const missionMarkerSpecs = $derived.by(() => missionPlanToMarkerSpecs(missionPlan));
 
-let mapContainer = $state<HTMLDivElement | null>(null);
 let terrainSamples = $state<{ aircraftMsl: number | null; homeMsl: number | null }>({
   aircraftMsl: null,
   homeMsl: null,
@@ -92,6 +91,9 @@ const cameraAltitude = $derived.by(() =>
 let map: MapLibreMap | null = null;
 let styleLoaded = $state(false);
 let cameraFrameHandle: number | null = null;
+let lastCameraRenderTimestampMs = Number.NEGATIVE_INFINITY;
+let atmosphereTimer: ReturnType<typeof setInterval> | null = null;
+let lastAtmosphereUpdate: AtmosphereUpdate | null = null;
 let terrainSampleKey: string | null = null;
 let terrainSampleRequestId = 0;
 const terrainCache = createTileCache(platformFetch);
@@ -102,11 +104,20 @@ const missionMarkerOverlay = createMissionMarkerOverlay(
 
 const SVS_TERRAIN_EXAGGERATION = 1;
 const TERRAIN_SAMPLE_COORD_PRECISION = 5;
+const CAMERA_FRAME_INTERVAL_MS = 1000 / 30;
+const ATMOSPHERE_REFRESH_INTERVAL_MS = 10_000;
+const ATMOSPHERE_POSITION_REFRESH_M = 5_000;
 
 type TerrainSampleRequest = {
   key: string;
   aircraftPoint: TerrainPoint;
   homePoint: TerrainPoint | null;
+};
+
+type AtmosphereUpdate = {
+  latitudeDeg: number;
+  longitudeDeg: number;
+  timestampMs: number;
 };
 
 const cameraSmoothers = {
@@ -118,43 +129,51 @@ const cameraSmoothers = {
   altitude: createNumberSmoother({ durationMs: 320, maxJump: 250 }),
 };
 
-onMount(() => {
-  if (!mapContainer) return;
-
-  configureMapLibreWorker();
-  map = new maplibregl.Map({
-    container: mapContainer,
-    style: OPENFREEMAP_BRIGHT_STYLE_URL,
+function createSvsMapOptions() {
+  return {
+    style: createSvsMapStyle() as never,
     center: [longitude_deg, latitude_deg],
     zoom: 14,
     pitch: 90,
     maxPitch: 180,
+    anisotropicFilterPitch: 0,
+    canvasContextAttributes: {
+      powerPreference: "high-performance" as const,
+    },
     centerClampedToGround: false,
     rollEnabled: true,
     interactive: false,
     attributionControl: false,
-  });
+  };
+}
+
+function handleMapReady(createdMap: MapLibreMap) {
+  map = createdMap;
+  styleLoaded = false;
   map.setVerticalFieldOfView(SVS_CAMERA_VERTICAL_FOV_DEG);
 
   map.on("style.load", () => {
     if (!map) return;
 
-    ensureSvsStyleExtensions(map);
+    configureSvsScene(map);
     syncMissionOverlay();
 
     styleLoaded = true;
-    renderCamera(nowMs());
+    lastCameraRenderTimestampMs = nowMs();
+    renderCamera(lastCameraRenderTimestampMs);
     scheduleCameraFrame();
   });
 
   return () => {
     cancelCameraFrame();
+    cancelAtmosphereTimer();
     missionMarkerOverlay.clear();
-    map?.remove();
     map = null;
     styleLoaded = false;
+    lastCameraRenderTimestampMs = Number.NEGATIVE_INFINITY;
+    lastAtmosphereUpdate = null;
   };
-});
+}
 
 $effect(() => {
   const timestampMs = nowMs();
@@ -178,6 +197,12 @@ $effect(() => {
   if (!styleLoaded || !map) return;
 
   syncMissionOverlay();
+});
+
+$effect(() => {
+  if (!styleLoaded || !map) return;
+
+  refreshSvsAtmosphere(false, latitude_deg, longitude_deg);
 });
 
 function toHomePosition(latitude?: number | null, longitude?: number | null, altitude?: number | null): HomePosition | null {
@@ -219,6 +244,19 @@ function cancelCameraFrame() {
   cameraFrameHandle = null;
 }
 
+function cancelAtmosphereTimer() {
+  if (atmosphereTimer == null) return;
+  globalThis.clearInterval(atmosphereTimer);
+  atmosphereTimer = null;
+}
+
+function startAtmosphereTimer() {
+  cancelAtmosphereTimer();
+  atmosphereTimer = globalThis.setInterval(() => {
+    refreshSvsAtmosphere(false, latitude_deg, longitude_deg);
+  }, ATMOSPHERE_REFRESH_INTERVAL_MS);
+}
+
 function scheduleCameraFrame() {
   if (!map || !styleLoaded || cameraFrameHandle != null) return;
   cameraFrameHandle = requestFrame(renderCameraFrame);
@@ -226,7 +264,10 @@ function scheduleCameraFrame() {
 
 function renderCameraFrame(timestampMs: number) {
   cameraFrameHandle = null;
-  renderCamera(timestampMs);
+  if (timestampMs - lastCameraRenderTimestampMs >= CAMERA_FRAME_INTERVAL_MS) {
+    renderCamera(timestampMs);
+    lastCameraRenderTimestampMs = timestampMs;
+  }
 
   if (cameraIsAnimating(timestampMs)) {
     scheduleCameraFrame();
@@ -327,71 +368,42 @@ function cameraIsAnimating(timestampMs: number): boolean {
   return Object.values(cameraSmoothers).some((smoother) => smoother.isAnimating(timestampMs));
 }
 
+function refreshSvsAtmosphere(force: boolean, latitudeDeg: number, longitudeDeg: number) {
+  if (!map || !isFiniteNumber(latitudeDeg) || !isFiniteNumber(longitudeDeg)) return;
+
+  const timestampMs = nowMs();
+  if (!force && !shouldRefreshAtmosphere(latitudeDeg, longitudeDeg, timestampMs)) return;
+
+  applySvsAtmosphere(map, { latitudeDeg, longitudeDeg });
+  lastAtmosphereUpdate = { latitudeDeg, longitudeDeg, timestampMs };
+}
+
+function shouldRefreshAtmosphere(latitudeDeg: number, longitudeDeg: number, timestampMs: number): boolean {
+  if (!lastAtmosphereUpdate) return true;
+  if (timestampMs - lastAtmosphereUpdate.timestampMs >= ATMOSPHERE_REFRESH_INTERVAL_MS) return true;
+
+  return haversineM(
+    lastAtmosphereUpdate.latitudeDeg,
+    lastAtmosphereUpdate.longitudeDeg,
+    latitudeDeg,
+    longitudeDeg,
+  ) >= ATMOSPHERE_POSITION_REFRESH_M;
+}
+
 function syncMissionOverlay() {
   if (!map) return;
 
-  ensureMissionPathLayers(map, true);
-  updateMissionPathSource(map, missionRenderFeatures);
+  ensureMissionPathLayers(map, false);
+  updateMissionPathSource(map, missionRenderFeatures, false);
   missionMarkerOverlay.sync(map, missionMarkerSpecs, currentMissionIndex);
 }
 
-function ensureSvsStyleExtensions(currentMap: MapLibreMap) {
-  ensureSatelliteLayer(currentMap, {
-    ids: {
-      satelliteSourceId: "satelliteSource",
-      satelliteDetailSourceId: "satelliteDetailSource",
-      satelliteLayerId: "satellite",
-      satelliteDetailLayerId: "satelliteDetail",
-    },
-    satelliteBeforeLayerId: null,
-    satelliteVisible: true,
-  });
-
-  if (!currentMap.getSource("terrainSource")) {
-    currentMap.addSource("terrainSource", {
-      type: "raster-dem",
-      url: MAPTERHORN_DEM_TILEJSON_URL,
-    });
-  }
-
-  if (!currentMap.getSource("hillshadeSource")) {
-    currentMap.addSource("hillshadeSource", {
-      type: "raster-dem",
-      url: MAPTERHORN_DEM_TILEJSON_URL,
-    });
-  }
-
-  if (!currentMap.getLayer("satellite")) {
-    currentMap.addLayer({
-      id: "satellite",
-      type: "raster",
-      source: "satelliteSource",
-      paint: { "raster-opacity": 1.0 },
-    });
-  }
-
-  if (!currentMap.getLayer("hills")) {
-    currentMap.addLayer({
-      id: "hills",
-      type: "hillshade",
-      source: "hillshadeSource",
-      paint: {
-        "hillshade-exaggeration": 0.5,
-        "hillshade-shadow-color": "#000",
-      },
-    });
-  }
-
+function configureSvsScene(currentMap: MapLibreMap) {
   currentMap.setTerrain({ source: "terrainSource", exaggeration: SVS_TERRAIN_EXAGGERATION });
-  currentMap.setSky({
-    "sky-color": "#199EF3",
-    "sky-horizon-blend": 0.7,
-    "horizon-color": "#f0f8ff",
-    "fog-color": "#9ec7e8",
-    "fog-ground-blend": 0.6,
-    "atmosphere-blend": 0.8,
-  });
+  ensureBuildingExtrusionLayer(currentMap);
+  refreshSvsAtmosphere(true, latitude_deg, longitude_deg);
+  startAtmosphereTimer();
 }
 </script>
 
-<div bind:this={mapContainer} class="size-full"></div>
+<BaseMap class="size-full" options={createSvsMapOptions()} onMapReady={handleMapReady} />

@@ -1,5 +1,4 @@
 <script lang="ts">
-import { onMount } from "svelte";
 import * as maplibregl from "maplibre-gl";
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 
@@ -10,8 +9,8 @@ import {
   type LngLatTuple,
 } from "../../lib/map-marker-motion";
 import {
-  configureMapLibreWorker,
   createHomeMarkerElement,
+  ensureBuildingExtrusionLayer,
   ensureMissionPathLayers,
   OPENFREEMAP_BRIGHT_STYLE_URL,
   updateMissionPathSource,
@@ -22,6 +21,7 @@ import {
   missionPlanToDraftItems,
   missionPlanToMarkerSpecs,
 } from "../../lib/map/mission-plan-overlay";
+import BaseMap from "../map/BaseMap.svelte";
 
 type Props = {
   latitude: number;
@@ -52,7 +52,6 @@ const missionRenderFeatures = $derived.by(() =>
 );
 const missionMarkerSpecs = $derived.by(() => missionPlanToMarkerSpecs(missionPlan));
 
-let mapContainer = $state<HTMLDivElement | null>(null);
 let styleLoaded = $state(false);
 
 // Plain variables to avoid reactive proxy wrapping of MapLibre internals
@@ -66,19 +65,20 @@ const missionMarkerOverlay = createMissionMarkerOverlay(
   { className: "is-hud", interactive: false, markerScale: 0.68 },
 );
 
-onMount(() => {
-  if (!mapContainer) return;
-
-  configureMapLibreWorker();
-  map = new maplibregl.Map({
-    container: mapContainer,
+function createMiniMapOptions() {
+  return {
     style: OPENFREEMAP_BRIGHT_STYLE_URL,
     center: [longitude, latitude],
     zoom: 15,
     scrollZoom: true,
     touchZoomRotate: true,
     attributionControl: false,
-  });
+  };
+}
+
+function handleMapReady(createdMap: MapLibreMap) {
+  map = createdMap;
+  styleLoaded = false;
 
   map.addControl(
     new maplibregl.NavigationControl({ showZoom: true, showCompass: false }),
@@ -97,12 +97,11 @@ onMount(() => {
     vehicleOverlay.remove();
     missionMarkerOverlay.clear();
     homeMarker?.remove();
-    map?.remove();
     map = null;
     homeMarker = null;
     styleLoaded = false;
   };
-});
+}
 
 // Sync vehicle position and heading
 $effect(() => {
@@ -152,6 +151,7 @@ function toHomePosition(latitude?: number | null, longitude?: number | null, alt
 function syncMissionOverlay() {
   if (!map) return;
 
+  ensureBuildingExtrusionLayer(map);
   ensureMissionPathLayers(map, true);
   updateMissionPathSource(map, missionRenderFeatures);
   missionMarkerOverlay.sync(map, missionMarkerSpecs, currentMissionIndex);
@@ -190,7 +190,9 @@ function hasHomePosition(): boolean {
 }
 </script>
 
-<div bind:this={mapContainer} class="hud-minimap__map size-full"></div>
+<div class="hud-minimap__map size-full">
+  <BaseMap class="size-full" options={createMiniMapOptions()} onMapReady={handleMapReady} />
+</div>
 
 <style>
   .hud-minimap__map :global(.maplibregl-ctrl-top-right) {

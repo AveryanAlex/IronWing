@@ -31,10 +31,12 @@ const maplibreState = vi.hoisted(() => {
     })),
     getLayer: vi.fn((id: string) => layers.has(id) ? { id } : null),
     getSource: vi.fn((id: string) => id === "overview-mission-path" && sources.has(id) ? missionSource : sources.get(id) ?? null),
+    getStyle: vi.fn(() => ({ layers: [] })),
     jumpTo: vi.fn(),
     on: vi.fn((event: string, handler: () => void) => handlers.set(event, handler)),
     remove: vi.fn(),
     setLayoutProperty: vi.fn(),
+    setLight: vi.fn(),
     setSky: vi.fn(),
     setTerrain: vi.fn(),
     setVerticalFieldOfView: vi.fn(),
@@ -109,6 +111,7 @@ describe("SvsMap", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   it("builds SVS terrain and shared mission overlays", async () => {
@@ -128,7 +131,8 @@ describe("SvsMap", () => {
     maplibreState.handlers.get("style.load")?.();
     await tick();
 
-    expect(maplibreState.sources.get("satelliteSource")).toMatchObject({
+    const svsStyle = (maplibreState.mapOptions[0] as { style: { sources: Record<string, unknown> } }).style;
+    expect(svsStyle.sources.satelliteSource).toMatchObject({
       tiles: ["https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg"],
       tileSize: 256,
       maxzoom: 14,
@@ -152,6 +156,13 @@ describe("SvsMap", () => {
       roll: 2,
     }));
     expect(maplibreState.mockMap.setTerrain).toHaveBeenCalledWith({ source: "terrainSource", exaggeration: 1 });
+    expect(maplibreState.mockMap.setLight).toHaveBeenCalledWith(expect.objectContaining({ anchor: "map" }));
+    expect(maplibreState.mockMap.setSky).toHaveBeenCalledWith(expect.objectContaining({ "sky-color": expect.any(String) }));
+    expect(maplibreState.sources.get("openmaptiles")).toMatchObject({
+      type: "vector",
+      url: "https://tiles.openfreemap.org/planet",
+    });
+    expect(maplibreState.layers.has("map-building-extrusions")).toBe(true);
     expect(maplibreState.missionSource.setData).toHaveBeenCalled();
     expect(maplibreState.markers.some((marker) => marker.element.className.includes("mission-pin"))).toBe(true);
   });
@@ -181,5 +192,66 @@ describe("SvsMap", () => {
       pitch: 0,
       roll: 0,
     }));
+  });
+
+  it("refreshes SVS atmosphere every 10 seconds or after 5 km movement", async () => {
+    let nowMs = 0;
+    let intervalCallback: () => void = () => undefined;
+    const intervalHandle = 7 as unknown as ReturnType<typeof setInterval>;
+    const performanceNowSpy = vi.spyOn(globalThis.performance, "now").mockImplementation(() => nowMs);
+    const windowPerformanceNowSpy = window.performance === globalThis.performance
+      ? null
+      : vi.spyOn(window.performance, "now").mockImplementation(() => nowMs);
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval").mockImplementation((handler, timeout) => {
+      if (timeout === 10_000) {
+        intervalCallback = typeof handler === "function" ? handler : intervalCallback;
+      }
+      return intervalHandle;
+    });
+    const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval").mockImplementation(() => undefined);
+
+    const props = {
+      latitude_deg: 47.397742,
+      longitude_deg: 8.545594,
+      heading_deg: 90,
+      pitch_deg: 5,
+      roll_deg: 2,
+      altitude_m: 60,
+    };
+    const { rerender } = render(SvsMap, props);
+
+    maplibreState.handlers.get("style.load")?.();
+    await tick();
+
+    expect(maplibreState.mockMap.setSky).toHaveBeenCalledTimes(1);
+    expect(maplibreState.mockMap.setLight).toHaveBeenCalledTimes(1);
+
+    await rerender({ ...props, latitude_deg: 47.3982, longitude_deg: 8.5461 });
+    await tick();
+
+    expect(maplibreState.mockMap.setSky).toHaveBeenCalledTimes(1);
+    expect(maplibreState.mockMap.setLight).toHaveBeenCalledTimes(1);
+
+    await rerender({ ...props, latitude_deg: 47.4482, longitude_deg: 8.5461 });
+    await tick();
+
+    expect(maplibreState.mockMap.setSky).toHaveBeenCalledTimes(2);
+    expect(maplibreState.mockMap.setLight).toHaveBeenCalledTimes(2);
+
+    nowMs = 9_999;
+    intervalCallback();
+    expect(maplibreState.mockMap.setSky).toHaveBeenCalledTimes(2);
+
+    nowMs = 10_000;
+    intervalCallback();
+    expect(maplibreState.mockMap.setSky).toHaveBeenCalledTimes(3);
+    expect(maplibreState.mockMap.setLight).toHaveBeenCalledTimes(3);
+
+    cleanup();
+    expect(clearIntervalSpy).toHaveBeenCalledWith(intervalHandle);
+    windowPerformanceNowSpy?.mockRestore();
+    performanceNowSpy.mockRestore();
+    setIntervalSpy.mockRestore();
+    clearIntervalSpy.mockRestore();
   });
 });

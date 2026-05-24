@@ -1,6 +1,6 @@
 <script lang="ts">
 import { Home, Layers, LocateFixed, Map as MapIcon, Navigation, Satellite } from "lucide-svelte";
-import { onDestroy, onMount } from "svelte";
+import { onDestroy } from "svelte";
 import * as maplibregl from "maplibre-gl";
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 
@@ -27,9 +27,9 @@ import { localXYToLatLon } from "../../lib/mission-coordinates";
 import type { ReplayMapOverlayState } from "../../lib/replay-map-overlay";
 import {
   applyMapLayerMode,
-  configureMapLibreWorker,
   createDeviceMarkerElement,
   createHomeMarkerElement,
+  ensureBuildingExtrusionLayer,
   ensureMapFoundation,
   getFirstNonFillLayerId,
   getMapLayerIds,
@@ -58,6 +58,7 @@ import {
   clearMissionMapDebugSnapshot,
   publishMissionMapDebugSnapshot,
 } from "./mission-map-debug";
+import BaseMap from "../map/BaseMap.svelte";
 import { ContextMenu, type ContextMenuItem } from "../ui";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
@@ -214,7 +215,6 @@ let {
 }: Props = $props();
 
 let surfaceElement = $state<HTMLDivElement | null>(null);
-let basemapElement = $state<HTMLDivElement | null>(null);
 let activeMarkerDrag = $state<ActiveMarkerDrag | null>(null);
 let activeSurveyHandleDrag = $state<ActiveSurveyHandleDrag | null>(null);
 let activeFenceDrag = $state<ActiveFenceDrag | null>(null);
@@ -238,7 +238,6 @@ let deviceMarker: Marker | null = null;
 let baseLayerIds: string[] = [];
 let basemapLoaded = $state(false);
 let basemapStyleReady = $state(false);
-let basemapInitAttempted = false;
 let initialFitApplied = false;
 let homeMarkerAttached = false;
 let deviceMarkerAttached = false;
@@ -487,31 +486,23 @@ $effect(() => {
   };
 });
 
-onMount(() => {
-  if (!basemapElement || basemapInitAttempted) {
-    return;
-  }
+function createBasemapOptions() {
+  return {
+    style: OPENFREEMAP_BRIGHT_STYLE_URL,
+    center: DEFAULT_CENTER,
+    zoom: 14,
+    pitch: 0,
+    maxPitch: 85,
+    attributionControl: false,
+  };
+}
 
-  basemapInitAttempted = true;
+function handleBasemapReady(createdBasemap: MapLibreMap) {
+  basemap = createdBasemap;
   basemapLoaded = false;
+  basemapStyleReady = false;
   basemapWarning = null;
-
-  try {
-    configureMapLibreWorker();
-    basemap = new maplibregl.Map({
-      container: basemapElement,
-      style: OPENFREEMAP_BRIGHT_STYLE_URL,
-      center: DEFAULT_CENTER,
-      zoom: 14,
-      pitch: 0,
-      maxPitch: 85,
-      attributionControl: false,
-    });
-  } catch {
-    basemap = null;
-    basemapWarning = "Basemap initialization failed. Planner overlays remain available without the map background.";
-    return;
-  }
+  initialFitApplied = false;
 
   if (typeof basemap.addControl === "function" && typeof maplibregl.NavigationControl === "function") {
     basemap.addControl(
@@ -550,20 +541,25 @@ onMount(() => {
     vehicleOverlay.remove();
     homeMarker?.remove();
     deviceMarker?.remove();
-    basemap?.remove();
     basemap = null;
     homeMarker = null;
     deviceMarker = null;
     basemapLoaded = false;
     basemapStyleReady = false;
-    basemapInitAttempted = false;
     initialFitApplied = false;
     homeMarkerAttached = false;
     deviceMarkerAttached = false;
     baseLayerIds = [];
     appliedTerrainMode = null;
   };
-});
+}
+
+function handleBasemapError() {
+  basemap = null;
+  basemapLoaded = false;
+  basemapStyleReady = false;
+  basemapWarning = "Basemap initialization failed. Planner overlays remain available without the map background.";
+}
 
 $effect(() => {
   if (!basemapLoaded) {
@@ -670,6 +666,7 @@ function ensureBasemapStyleExtensions() {
       ...MAP_FOUNDATION_OPTIONS,
       satelliteBeforeLayerId: getFirstNonFillLayerId(basemap),
     });
+    ensureBuildingExtrusionLayer(basemap);
     baseLayerIds = getMapLayerIds(basemap, { excludeLayerIds: Object.values(resolveMapFoundationIds(MAP_FOUNDATION_OPTIONS)) });
     applyMapLayerMode(basemap, mapLayerMode, { ...MAP_FOUNDATION_OPTIONS, baseLayerIds });
   } catch {
@@ -2308,7 +2305,14 @@ function preventContextMenu(event: MouseEvent) {
         oncontextmenu={handleContextMenu}
         role="application"
       >
-        <div bind:this={basemapElement} class="mission-map-basemap" data-testid={missionWorkspaceTestIds.mapBasemap}></div>
+        <div class="mission-map-basemap" data-testid={missionWorkspaceTestIds.mapBasemap}>
+          <BaseMap
+            class="size-full"
+            options={createBasemapOptions()}
+            onMapReady={handleBasemapReady}
+            onMapError={handleBasemapError}
+          />
+        </div>
         <div class="mission-map-basemap-scrim"></div>
         <svg aria-hidden="true" class="mission-map-overlay absolute inset-0 h-full w-full" preserveAspectRatio="none" viewBox={`0 0 ${overlayViewBox.width} ${overlayViewBox.height}`}>
 

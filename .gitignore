@@ -45,6 +45,8 @@ __pycache__/
 .venv/
 venv/
 vendor/
+!src/vendor/
+!src/vendor/**
 coverage/
 .cache/
 tmp/

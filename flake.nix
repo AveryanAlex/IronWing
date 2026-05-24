@@ -111,7 +111,7 @@
             (with pkgs; [
               android-studio
               cargo-tauri
-              nodejs_latest
+              nodejs_24
               pnpm
               pkg-config
               nixfmt

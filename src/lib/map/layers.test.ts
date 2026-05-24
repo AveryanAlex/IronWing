@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { applyMapLayerMode, ensureSatelliteLayer } from "./layers";
+import { applyMapLayerMode, ensureBuildingExtrusionLayer, ensureSatelliteLayer } from "./layers";
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function createMapMock() {
+function createMapMock(styleLayers: Array<{ id: string; type: string }> = []) {
   const sources = new Map<string, unknown>();
   const layers = new Map<string, { id: string } & Record<string, unknown>>();
   const map = {
@@ -14,7 +14,7 @@ function createMapMock() {
     addSource: vi.fn((id: string, source: unknown) => sources.set(id, source)),
     getLayer: vi.fn((id: string) => layers.get(id) ?? null),
     getSource: vi.fn((id: string) => sources.get(id) ?? null),
-    getStyle: vi.fn(() => ({ layers: [] })),
+    getStyle: vi.fn(() => ({ layers: styleLayers })),
     setLayoutProperty: vi.fn(),
   };
 
@@ -78,5 +78,32 @@ describe("map satellite layers", () => {
 
     expect(map.setLayoutProperty).toHaveBeenCalledWith("test-satellite", "visibility", "none");
     expect(map.setLayoutProperty).toHaveBeenCalledWith("test-satellite-detail", "visibility", "none");
+  });
+});
+
+describe("map building extrusion layer", () => {
+  it("adds OpenMapTiles building extrusions below labels", () => {
+    const { layers, map, sources } = createMapMock([
+      { id: "background", type: "background" },
+      { id: "roads", type: "line" },
+      { id: "labels", type: "symbol" },
+    ]);
+
+    ensureBuildingExtrusionLayer(map as never);
+
+    expect(sources.get("openmaptiles")).toMatchObject({
+      type: "vector",
+      url: "https://tiles.openfreemap.org/planet",
+    });
+    expect(layers.get("map-building-extrusions")).toMatchObject({
+      type: "fill-extrusion",
+      source: "openmaptiles",
+      "source-layer": "building",
+      minzoom: 13,
+    });
+    expect(map.addLayer).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "map-building-extrusions" }),
+      "labels",
+    );
   });
 });

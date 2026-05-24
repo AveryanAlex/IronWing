@@ -1,14 +1,17 @@
 import type {
   HillshadeLayerSpecification,
+  LayerSpecification,
   Map as MapLibreMap,
   RasterDEMSourceSpecification,
   RasterLayerSpecification,
   RasterSourceSpecification,
+  VectorSourceSpecification,
 } from "maplibre-gl";
 
 import {
   MAP_TILE_DEFAULTS,
   MAPTERHORN_DEM_TILEJSON_URL,
+  OPENFREEMAP_VECTOR_TILEJSON_URL,
   TERRARIUM_DEM_TILE_URL,
   getDefaultSatelliteRasterSources,
   type SatelliteRasterSourceConfig,
@@ -55,6 +58,19 @@ export type ApplyMapLayerModeOptions = MapFoundationIdOptions & {
   baseLayerIds: readonly string[];
   includeHillshade?: boolean;
 };
+
+export type BuildingExtrusionOptions = {
+  sourceId?: string;
+  sourceLayer?: string;
+  sourceUrl?: string;
+  layerId?: string;
+  beforeLayerId?: string | null;
+  visible?: boolean;
+};
+
+export const BUILDING_EXTRUSION_LAYER_ID = "map-building-extrusions";
+export const OPENMAPTILES_SOURCE_ID = "openmaptiles";
+const OPENMAPTILES_BUILDING_SOURCE_LAYER = "building";
 
 export function resolveMapFoundationIds(options: MapFoundationIdOptions = {}): MapFoundationIds {
   const prefix = options.prefix ?? `${options.namespace ?? "map"}-`;
@@ -225,6 +241,76 @@ export function ensureMapFoundation(
   return ids;
 }
 
+export function ensureBuildingExtrusionLayer(
+  map: MapLibreMap,
+  options: BuildingExtrusionOptions = {},
+): string {
+  const sourceId = options.sourceId ?? OPENMAPTILES_SOURCE_ID;
+  const sourceLayer = options.sourceLayer ?? OPENMAPTILES_BUILDING_SOURCE_LAYER;
+  const layerId = options.layerId ?? BUILDING_EXTRUSION_LAYER_ID;
+  const beforeLayerId = options.beforeLayerId === undefined
+    ? getFirstSymbolLayerId(map)
+    : options.beforeLayerId;
+
+  if (!map.getSource(sourceId)) {
+    const source: VectorSourceSpecification = {
+      type: "vector",
+      url: options.sourceUrl ?? OPENFREEMAP_VECTOR_TILEJSON_URL,
+    };
+    map.addSource(sourceId, source);
+  }
+
+  if (!map.getLayer(layerId)) {
+    const layer: LayerSpecification = {
+      id: layerId,
+      type: "fill-extrusion",
+      source: sourceId,
+      "source-layer": sourceLayer,
+      minzoom: 13,
+      filter: ["!=", ["get", "hide_3d"], true],
+      layout: { visibility: options.visible === false ? "none" : "visible" },
+      paint: {
+        "fill-extrusion-color": [
+          "interpolate",
+          ["linear"],
+          ["coalesce", ["get", "render_height"], 0],
+          0,
+          "#d9dde6",
+          40,
+          "#b5bfd4",
+          120,
+          "#8192b9",
+          240,
+          "#4f6aa7",
+        ],
+        "fill-extrusion-height": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          13,
+          0,
+          15,
+          ["coalesce", ["get", "render_height"], 8],
+        ],
+        "fill-extrusion-base": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          13,
+          0,
+          15,
+          ["coalesce", ["get", "render_min_height"], 0],
+        ],
+        "fill-extrusion-opacity": 0.88,
+        "fill-extrusion-vertical-gradient": true,
+      },
+    } as LayerSpecification;
+    addLayer(map, layer, beforeLayerId);
+  }
+
+  return layerId;
+}
+
 export function setMapTerrain(
   map: MapLibreMap,
   enabled: boolean,
@@ -295,7 +381,7 @@ function createDemSource(options: EnsureMapFoundationOptions): RasterDEMSourceSp
 
 function addLayer(
   map: MapLibreMap,
-  layer: RasterLayerSpecification | HillshadeLayerSpecification,
+  layer: LayerSpecification,
   beforeLayerId: string | null | undefined,
 ): void {
   if (beforeLayerId) {
@@ -304,4 +390,8 @@ function addLayer(
   }
 
   map.addLayer(layer);
+}
+
+function getFirstSymbolLayerId(map: MapLibreMap): string | undefined {
+  return (map.getStyle().layers ?? []).find((layer) => layer.type === "symbol")?.id;
 }

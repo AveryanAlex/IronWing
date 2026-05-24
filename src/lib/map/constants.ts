@@ -1,4 +1,5 @@
 export const OPENFREEMAP_BRIGHT_STYLE_URL = "https://tiles.openfreemap.org/styles/bright";
+export const OPENFREEMAP_VECTOR_TILEJSON_URL = "https://tiles.openfreemap.org/planet";
 
 export const DEFAULT_EOX_SATELLITE_YEAR = 2024;
 export const EOX_SATELLITE_YEARS = [2024, 2023, 2022, 2021, 2020, 2019, 2018, 2016] as const;

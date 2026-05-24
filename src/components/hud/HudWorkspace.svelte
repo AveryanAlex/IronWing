@@ -3,6 +3,7 @@ import { onMount } from "svelte";
 import { fromStore } from "svelte/store";
 
 import "./hud.css";
+import AttitudeBackground from "./AttitudeBackground.svelte";
 import ArtificialHorizon from "./ArtificialHorizon.svelte";
 import TapeGauge from "./TapeGauge.svelte";
 import { createNumberSmoother } from "../../lib/telemetry-smoothing";
@@ -10,7 +11,7 @@ import {
   getSessionViewStoreContext,
   getMissionPlannerStoreContext,
 } from "../../app/shell/runtime-context";
-import type { SvsCameraMode } from "../../lib/map";
+import { SVS_CAMERA_VERTICAL_FOV_DEG, type SvsCameraMode } from "../../lib/map";
 
 const sessionView = fromStore(getSessionViewStoreContext());
 const missionPlanner = fromStore(getMissionPlannerStoreContext());
@@ -117,23 +118,37 @@ let hasSvs = $derived(
     && pitch != null
     && roll != null,
 );
+let visualHorizonPitch = $derived(hasSvs && svsCameraMode === "ground_stabilized" ? 0 : displayPitch);
+let visualHorizonRoll = $derived(hasSvs && svsCameraMode === "ground_stabilized" ? 0 : displayRoll);
 
 // ResizeObserver for center cell
+let panelRef = $state<HTMLDivElement | null>(null);
 let horizonRef = $state<HTMLDivElement | null>(null);
 let horizonSize = $state({ width: 400, height: 300 });
+let horizonProjectionViewport = $state({
+  width: 400,
+  height: 300,
+  offsetLeft: 0,
+  offsetTop: 0,
+});
+let horizonPanelSize = $derived({
+  width: Math.max(1, Math.floor(horizonProjectionViewport.width)),
+  height: Math.max(1, Math.floor(horizonProjectionViewport.height)),
+});
 
 onMount(() => {
   if (!horizonRef) return;
-  const obs = new ResizeObserver((entries) => {
-    const entry = entries[0];
-    if (entry) {
-      horizonSize = {
-        width: Math.floor(entry.contentRect.width),
-        height: Math.floor(entry.contentRect.height),
-      };
-    }
+
+  const obs = new ResizeObserver(() => {
+    measureHorizonProjectionViewport();
   });
   obs.observe(horizonRef);
+
+  if (panelRef) {
+    obs.observe(panelRef);
+  }
+
+  measureHorizonProjectionViewport();
   return () => obs.disconnect();
 });
 
@@ -163,6 +178,38 @@ function fmt(value: number | undefined, decimals = 1): string {
 function fmtInt(value: number | undefined): string {
   if (typeof value !== "number" || Number.isNaN(value)) return "--";
   return Math.round(value).toString();
+}
+
+function measureHorizonProjectionViewport() {
+  if (!horizonRef) return;
+
+  const horizonRect = horizonRef.getBoundingClientRect();
+  const panelRect = panelRef?.getBoundingClientRect();
+  const horizonWidth = positiveDimension(horizonRect.width) ?? horizonSize.width;
+  const horizonHeight = positiveDimension(horizonRect.height) ?? horizonSize.height;
+  const panelWidth = positiveDimension(panelRect?.width) ?? horizonWidth;
+  const panelHeight = positiveDimension(panelRect?.height) ?? horizonHeight;
+  const panelLeft = finiteNumber(panelRect?.left) ?? horizonRect.left;
+  const panelTop = finiteNumber(panelRect?.top) ?? horizonRect.top;
+
+  horizonSize = {
+    width: Math.max(1, Math.floor(horizonWidth)),
+    height: Math.max(1, Math.floor(horizonHeight)),
+  };
+  horizonProjectionViewport = {
+    width: panelWidth,
+    height: panelHeight,
+    offsetLeft: horizonRect.left - panelLeft,
+    offsetTop: horizonRect.top - panelTop,
+  };
+}
+
+function positiveDimension(value: number | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function finiteNumber(value: number | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function nowMs(): number {
@@ -242,7 +289,7 @@ let batteryLevel = $derived(
 );
 </script>
 
-<div class="hud-panel h-full w-full {hasSvs ? 'hud-svs-active' : ''}">
+<div bind:this={panelRef} class="hud-panel h-full w-full {hasSvs ? 'hud-svs-active' : ''}">
   <!-- Background layers -->
   {#if hasSvs}
     <div class="hud-svs-bg">
@@ -267,7 +314,14 @@ let batteryLevel = $derived(
       {/await}
     </div>
   {:else}
-    <div class="hud-grid-bg"></div>
+    <div class="pointer-events-none absolute inset-0 z-[1] overflow-hidden">
+      <AttitudeBackground
+        pitch={visualHorizonPitch}
+        roll={visualHorizonRoll}
+        size={horizonPanelSize}
+        verticalFovDeg={SVS_CAMERA_VERTICAL_FOV_DEG}
+      />
+    </div>
   {/if}
   <div class="hud-scanlines"></div>
 
@@ -334,9 +388,13 @@ let batteryLevel = $derived(
       <ArtificialHorizon
         pitch={displayPitch}
         roll={displayRoll}
+        visualPitch={visualHorizonPitch}
+        visualRoll={visualHorizonRoll}
         size={horizonSize}
         climbRate={displayClimbRate}
         groundSpeed={displaySpeed}
+        verticalFovDeg={SVS_CAMERA_VERTICAL_FOV_DEG}
+        projectionViewport={horizonProjectionViewport}
       />
     </div>
 
