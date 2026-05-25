@@ -34,6 +34,11 @@ function logEntryLocator(page: Page, entryId: string) {
     return page.locator(`[data-testid="logs-entry-${entryId}"]`);
 }
 
+async function selectMissionMode(page: Page, label: "Fence" | "Mission" | "Rally") {
+    await page.getByRole("button", { name: "Select mission editing mode" }).click();
+    await page.getByRole("menuitem", { name: label, exact: true }).click();
+}
+
 async function dragChartRange(plot: Locator) {
     const box = await plot.boundingBox();
     if (!box) {
@@ -234,7 +239,7 @@ test.describe("mocked logs workspace workflow", () => {
         await expect(page.locator(missionWorkspaceSelectors.mapReplayMarker)).toHaveCount(0);
         await expect(missionWorkspaceLocator(page, "homeReadOnly")).toContainText("Playback keeps the planner mounted");
 
-        await page.locator(missionWorkspaceSelectors.modeFence).click();
+        await selectMissionMode(page, "Fence");
         await expect(page.locator(missionWorkspaceSelectors.fenceAddInclusionPolygon)).toBeDisabled();
 
         await openLogsWorkspace(page);
@@ -246,7 +251,7 @@ test.describe("mocked logs workspace workflow", () => {
         await page.getByRole("button", { name: "Mission" }).click();
         await expect(page.getByTestId(appShellTestIds.sessionSource)).toContainText("live");
         await expect(page.getByTestId(appShellTestIds.activeWorkspace)).toContainText("mission");
-        await page.locator(missionWorkspaceSelectors.modeFence).click();
+        await selectMissionMode(page, "Fence");
         await expect(page.locator(missionWorkspaceSelectors.fenceAddInclusionPolygon)).toBeEnabled();
     });
 

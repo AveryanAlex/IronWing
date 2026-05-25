@@ -720,6 +720,30 @@ async function clickMissionToolbarMenuItem(testId: string): Promise<void> {
   await fireEvent.click(node);
 }
 
+const missionModeLabels = {
+  mission: { label: "Mission", testId: missionWorkspaceTestIds.modeMission },
+  fence: { label: "Fence", testId: missionWorkspaceTestIds.modeFence },
+  rally: { label: "Rally", testId: missionWorkspaceTestIds.modeRally },
+} as const;
+
+async function selectMissionMode(mode: keyof typeof missionModeLabels): Promise<void> {
+  const trigger = screen.getByRole("button", { name: "Select mission editing mode" });
+  if (trigger.getAttribute("aria-expanded") !== "true") {
+    trigger.focus();
+    await fireEvent.keyDown(trigger, { key: "Enter" });
+  }
+
+  const target = missionModeLabels[mode];
+  await waitFor(() => {
+    expect(document.querySelector(`[role="menuitem"][data-testid="${target.testId}"]`)).toBeTruthy();
+  });
+  const item = document.querySelector<HTMLElement>(`[role="menuitem"][data-testid="${target.testId}"]`);
+  if (!item) {
+    throw new Error(`Mission mode menu item "${target.label}" was not found while the mode dropdown was open.`);
+  }
+  await fireEvent.click(item);
+}
+
 function setMissionMapSurfaceRect() {
   const surface = screen.getByTestId(missionWorkspaceTestIds.mapSurface);
   Object.defineProperty(surface, "getBoundingClientRect", {
@@ -1163,7 +1187,7 @@ describe("MissionWorkspace", () => {
     expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsFenceCard)).toBeNull();
     expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsRallyCard)).toBeNull();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await selectMissionMode("fence");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
@@ -1173,7 +1197,7 @@ describe("MissionWorkspace", () => {
     expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsMissionCard)).toBeNull();
     expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsRallyCard)).toBeNull();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    await selectMissionMode("rally");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
@@ -1801,14 +1825,14 @@ describe("MissionWorkspace", () => {
     plannerStore.replaceWorkspace(makeWorkspace());
     await flush();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeMission));
+    await selectMissionMode("mission");
     await plannerStore.validateCurrentMission();
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.warningValidation).textContent).toContain("Survey path drifts outside the lane.");
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await selectMissionMode("fence");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceInspectorSelectionKind).textContent).toContain("none");
@@ -1823,7 +1847,7 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await selectMissionMode("fence");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.mapFenceCount).textContent).toContain("3");
@@ -1889,7 +1913,7 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await selectMissionMode("fence");
     const firstFenceUiId = get(plannerStore).draftState.active.fence.draftItems[0]?.uiId;
     expect(firstFenceUiId).toBeTypeOf("number");
 
@@ -1911,7 +1935,7 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(`${missionWorkspaceTestIds.warningItemPrefix}-0`).textContent).toContain("Blocked action");
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeMission));
+    await selectMissionMode("mission");
     await fireEvent.click(screen.getByRole("button", { name: /open fence mode/i }));
 
     await waitFor(() => {
@@ -1938,7 +1962,7 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await selectMissionMode("fence");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
       expect((screen.getByTestId(missionWorkspaceTestIds.fenceAddInclusionPolygon) as HTMLButtonElement).disabled).toBe(true);
@@ -1961,7 +1985,7 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    await selectMissionMode("rally");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.mapRallyCount).textContent).toContain("2");
@@ -2033,7 +2057,7 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    await selectMissionMode("rally");
     const firstRallyUiId = get(plannerStore).draftState.active.rally.draftItems[0]?.uiId;
     expect(firstRallyUiId).toBeTypeOf("number");
 
@@ -2045,7 +2069,7 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(`${missionWorkspaceTestIds.warningItemPrefix}-0`).textContent).toContain("Blocked action");
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeMission));
+    await selectMissionMode("mission");
     await fireEvent.click(screen.getByRole("button", { name: /open rally mode/i }));
 
     await waitFor(() => {
@@ -2077,7 +2101,7 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    await selectMissionMode("rally");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
       expect((screen.getByTestId(missionWorkspaceTestIds.rallyAdd) as HTMLButtonElement).disabled).toBe(true);
@@ -2672,7 +2696,7 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await selectMissionMode("fence");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
     });
@@ -2690,7 +2714,7 @@ describe("MissionWorkspace", () => {
       expect(region && "exclusion_circle" in region ? region.exclusion_circle.radius_m : 0).toBe(120);
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    await selectMissionMode("rally");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
     });
@@ -2720,7 +2744,7 @@ describe("MissionWorkspace", () => {
     const fenceAfterRallyUndo = get(plannerStore).draftState.active.fence.draftItems.find((item) => item.uiId === circleUiId)?.document;
     expect(fenceAfterRallyUndo && "exclusion_circle" in fenceAfterRallyUndo ? fenceAfterRallyUndo.exclusion_circle.radius_m : 0).toBe(120);
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await selectMissionMode("fence");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
       expect(getHistoryCount("undo")).toBeGreaterThan(0);

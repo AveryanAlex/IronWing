@@ -90,6 +90,7 @@ let modeItems = $derived<MenuItem[]>(
   modeButtons.map((item) => ({
     id: `mode-${item.mode}`,
     label: item.label,
+    testId: item.testId,
     disabled: item.mode === mode,
     onSelect: () => onSelectMode(item.mode),
   })),
@@ -167,29 +168,14 @@ let secondaryItems = $derived<MenuItem[]>([
   {/if}
 
   <Toolbar ariaLabel="Mission actions" density="compact" overflow="scroll">
-    <div class="mission-mode-switcher">
-      <div class="@max-[640px]:hidden">
-        <ToolbarGroup>
-          {#each modeButtons as item (item.mode)}
-            <Button
-              onclick={() => onSelectMode(item.mode)}
-              size="sm"
-              testId={item.testId}
-              tone={item.mode === mode ? "accent" : "neutral"}
-            >
-              {item.label}
-            </Button>
-          {/each}
-        </ToolbarGroup>
-      </div>
-      <div class="hidden @max-[640px]:block">
-        <Menu
-          items={modeItems}
-          triggerAriaLabel="Select mission editing mode"
-          triggerLabel={activeModeLabel}
-        />
-      </div>
-    </div>
+    <ToolbarGroup>
+      <Menu
+        items={modeItems}
+        triggerAriaLabel="Select mission editing mode"
+        triggerClass="h-[var(--control-h-sm)] min-w-24 justify-between"
+        triggerLabel={activeModeLabel}
+      />
+    </ToolbarGroup>
 
     <ToolbarGroup>
       <Tooltip label={undoLabel}>
@@ -244,7 +230,7 @@ let secondaryItems = $derived<MenuItem[]>([
       {/if}
     </ToolbarGroup>
 
-    <div>
+    <ToolbarGroup>
       <Menu
         items={secondaryItems}
         testId={missionWorkspaceTestIds.toolbarMoreButton}
@@ -254,6 +240,6 @@ let secondaryItems = $derived<MenuItem[]>([
         triggerLabelClass="@max-[520px]:hidden"
         triggerLabel="More"
       />
-    </div>
+    </ToolbarGroup>
   </Toolbar>
 </div>
