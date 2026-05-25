@@ -9,7 +9,6 @@ import { shouldDropEvent } from "../../session";
 import { parseLatitude, parseLongitude } from "../mission-coordinates";
 import {
   createMissionKmlFileIo,
-  detectKmlSource,
   parseMissionKmlImportSelection,
   type MissionKmlFileImportData,
   type MissionKmlFileImportResult,
@@ -97,6 +96,18 @@ import {
   createMissionPlannerViewStore,
   type MissionPlannerViewStore,
 } from "./mission-planner-view";
+import {
+  isCoordinatePairValid,
+  validateFenceRegion,
+} from "./mission-planner-validation";
+import {
+  sameFence,
+  sameHome,
+  samePlan,
+  sameRally,
+  sameSurvey,
+} from "./mission-planner-compare";
+import { openToolbarImportPicker } from "./mission-planner-import-picker";
 
 export type MissionPlannerDomainPhase =
   | "bootstrapping"
@@ -377,190 +388,6 @@ const ACTION_TIMEOUT_MS = 15_000;
 const HISTORY_LIMIT = 50;
 const ALL_IMPORT_DOMAINS = ["mission", "fence", "rally"] as const satisfies readonly MissionPlannerImportDomain[];
 const ALL_HISTORY_DOMAINS = ["mission", "fence", "rally"] as const satisfies readonly MissionPlannerHistoryDomain[];
-const SUPPORTED_TOOLBAR_IMPORT_ACCEPT = {
-  "application/json": [".plan", ".json"],
-  "text/plain": [".plan", ".json", ".kml"],
-  "application/vnd.google-earth.kml+xml": [".kml"],
-  "application/vnd.google-earth.kmz": [".kmz"],
-  "application/xml": [".kml"],
-  "text/xml": [".kml"],
-  "application/octet-stream": [".kmz"],
-} satisfies Record<string, string[]>;
-const TOOLBAR_IMPORT_INPUT_ACCEPT = ".plan,.json,.kml,.kmz,application/json,text/plain,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,text/xml,application/xml,application/octet-stream";
-
-type BrowserOpenFileHandle = {
-  getFile(): Promise<File>;
-};
-
-type BrowserMissionImportPickerWindow = Window & {
-  showOpenFilePicker?: (options?: {
-    multiple?: boolean;
-    excludeAcceptAllOption?: boolean;
-    types?: Array<{ description?: string; accept: Record<string, string[]> }>;
-  }) => Promise<BrowserOpenFileHandle[]>;
-};
-
-type ToolbarImportSelection =
-  | {
-    source: "plan";
-    name: string | null;
-    contents: string;
-  }
-  | {
-    source: "kml" | "kmz";
-    name: string | null;
-    text?: string;
-    bytes?: Uint8Array | ArrayBuffer;
-  };
-
-function detectToolbarImportSource(name: string | null | undefined, mimeType: string | null | undefined): ToolbarImportSelection["source"] {
-  const loweredName = name?.toLowerCase() ?? "";
-  if (loweredName.endsWith(".plan") || loweredName.endsWith(".json") || mimeType === "application/json") {
-    return "plan";
-  }
-
-  return detectKmlSource(name, mimeType);
-}
-
-async function readToolbarImportSelection(file: File): Promise<ToolbarImportSelection> {
-  const source = detectToolbarImportSource(file.name, file.type);
-  if (source === "plan") {
-    return {
-      source,
-      name: file.name,
-      contents: await file.text(),
-    };
-  }
-
-  if (source === "kmz") {
-    return {
-      source,
-      name: file.name,
-      bytes: await file.arrayBuffer(),
-    };
-  }
-
-  return {
-    source,
-    name: file.name,
-    text: await file.text(),
-  };
-}
-
-async function openToolbarImportPicker(
-  formatError: (error: unknown) => string = formatUnknownError,
-): Promise<ToolbarImportSelection | null> {
-  const browserWindow = window as BrowserMissionImportPickerWindow;
-
-  if (typeof browserWindow.showOpenFilePicker === "function") {
-    return openToolbarImportPickerWithHandle(browserWindow.showOpenFilePicker, formatError);
-  }
-
-  return openToolbarImportPickerWithInput(formatError);
-}
-
-async function openToolbarImportPickerWithHandle(
-  showOpenFilePicker: NonNullable<BrowserMissionImportPickerWindow["showOpenFilePicker"]>,
-  formatError: (error: unknown) => string,
-): Promise<ToolbarImportSelection | null> {
-  try {
-    const handles = await showOpenFilePicker({
-      multiple: false,
-      types: [
-        {
-          description: "Mission plan, KML, and KMZ files",
-          accept: SUPPORTED_TOOLBAR_IMPORT_ACCEPT,
-        },
-      ],
-    });
-    const handle = handles[0];
-    if (!handle) {
-      return null;
-    }
-
-    return readToolbarImportSelection(await handle.getFile());
-  } catch (error) {
-    if (isAbortError(error)) {
-      return null;
-    }
-
-    throw new Error(formatError(error));
-  }
-}
-
-function openToolbarImportPickerWithInput(
-  formatError: (error: unknown) => string,
-): Promise<ToolbarImportSelection | null> {
-  if (typeof document === "undefined") {
-    return Promise.reject(new Error("This browser cannot open mission import files right now."));
-  }
-
-  return new Promise((resolve, reject) => {
-    const input = document.createElement("input");
-    let settled = false;
-
-    const cleanup = () => {
-      input.removeEventListener("change", onChange);
-      window.removeEventListener("focus", onWindowFocus);
-      input.remove();
-    };
-
-    const settle = (value: ToolbarImportSelection | null) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      cleanup();
-      resolve(value);
-    };
-
-    const onWindowFocus = () => {
-      window.setTimeout(() => {
-        if (!settled && (!input.files || input.files.length === 0)) {
-          settle(null);
-        }
-      }, 0);
-    };
-
-    const onChange = async () => {
-      const file = input.files?.[0];
-      if (!file) {
-        settle(null);
-        return;
-      }
-
-      try {
-        settle(await readToolbarImportSelection(file));
-      } catch (error) {
-        cleanup();
-        reject(new Error(formatError(error)));
-      }
-    };
-
-    input.type = "file";
-    input.accept = TOOLBAR_IMPORT_INPUT_ACCEPT;
-    input.style.display = "none";
-    input.addEventListener("change", onChange, { once: true });
-    window.addEventListener("focus", onWindowFocus, { once: true });
-    document.body.appendChild(input);
-    input.click();
-  });
-}
-
-function isAbortError(error: unknown): boolean {
-  if (typeof DOMException !== "undefined" && error instanceof DOMException) {
-    return error.name === "AbortError";
-  }
-
-  return Boolean(
-    error
-      && typeof error === "object"
-      && "name" in error
-      && (error as { name?: string }).name === "AbortError",
-  );
-}
-
 function createEmptyHistoryState(): MissionPlannerHistoryState {
   return {
     mission: { past: [], future: [] },
@@ -3446,65 +3273,6 @@ function exportSurveyRegions(extension: SurveyDraftExtension) {
     });
 }
 
-function sameHome(left: HomePosition | null, right: HomePosition | null): boolean {
-  if (left === right) {
-    return true;
-  }
-
-  if (!left || !right) {
-    return left === right;
-  }
-
-  return left.latitude_deg === right.latitude_deg
-    && left.longitude_deg === right.longitude_deg
-    && left.altitude_m === right.altitude_m;
-}
-
-function sameSurvey(left: SurveyDraftExtension, right: SurveyDraftExtension): boolean {
-  return JSON.stringify(serializeSurvey(left)) === JSON.stringify(serializeSurvey(right));
-}
-
-function serializeSurvey(extension: SurveyDraftExtension) {
-  return extension.surveyRegionOrder
-    .map((block, index) => ({ block, index }))
-    .sort((left, right) => left.block.position - right.block.position || left.index - right.index)
-    .map(({ block }) => {
-      const region = extension.surveyRegions.get(block.regionId);
-      let exportable: ReturnType<typeof toExportableSurveyRegion> | null = null;
-      let exportError: string | null = null;
-
-      if (region) {
-        try {
-          exportable = toExportableSurveyRegion(region, block.position);
-        } catch (error) {
-          exportError = error instanceof Error ? error.message : String(error);
-        }
-      }
-
-      return {
-        position: block.position,
-        regionId: block.regionId,
-        importWarnings: region?.importWarnings ?? [],
-        generationState: region?.generationState ?? "idle",
-        generationMessage: region?.generationMessage ?? null,
-        exportable,
-        exportError,
-      };
-    });
-}
-
-function samePlan(left: MissionPlan, right: MissionPlan): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function sameFence(left: FencePlan, right: FencePlan): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function sameRally(left: RallyPlan, right: RallyPlan): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
 function scopeFromEnvelope(envelope: SessionEnvelope | null): SessionScope {
   if (!envelope) {
     return EMPTY_SCOPE;
@@ -3904,66 +3672,6 @@ function resolveRallyAnchorPoint(state: MissionPlannerStoreState): GeoPoint2d {
   };
 }
 
-function validateFenceRegion(region: FenceRegion): { ok: true } | { ok: false; message: string } {
-  if ("inclusion_polygon" in region) {
-    return validateFencePolygon(region.inclusion_polygon.vertices, "Fence inclusion polygons");
-  }
-
-  if ("exclusion_polygon" in region) {
-    return validateFencePolygon(region.exclusion_polygon.vertices, "Fence exclusion polygons");
-  }
-
-  if ("inclusion_circle" in region) {
-    return validateFenceCircle(region.inclusion_circle.center, region.inclusion_circle.radius_m, "Fence inclusion circles");
-  }
-
-  return validateFenceCircle(region.exclusion_circle.center, region.exclusion_circle.radius_m, "Fence exclusion circles");
-}
-
-function validateFencePolygon(
-  vertices: GeoPoint2d[],
-  label: string,
-): { ok: true } | { ok: false; message: string } {
-  if (vertices.length < 3) {
-    return {
-      ok: false,
-      message: `${label} need at least three valid vertices before IronWing will update the active fence region.`,
-    };
-  }
-
-  const invalidVertex = vertices.find((vertex) => !isCoordinatePairValid(vertex.latitude_deg, vertex.longitude_deg));
-  if (invalidVertex) {
-    return {
-      ok: false,
-      message: `${label} rejected malformed coordinates, so the previous fence geometry stayed visible and unchanged.`,
-    };
-  }
-
-  return { ok: true };
-}
-
-function validateFenceCircle(
-  center: GeoPoint2d,
-  radiusM: number,
-  label: string,
-): { ok: true } | { ok: false; message: string } {
-  if (!isCoordinatePairValid(center.latitude_deg, center.longitude_deg)) {
-    return {
-      ok: false,
-      message: `${label} rejected malformed center coordinates, so the previous fence geometry stayed visible and unchanged.`,
-    };
-  }
-
-  if (!Number.isFinite(radiusM) || radiusM <= 0) {
-    return {
-      ok: false,
-      message: `${label} need a radius greater than zero before IronWing will update the active fence region.`,
-    };
-  }
-
-  return { ok: true };
-}
-
 function rejectedFenceMutation(
   reason: MissionPlannerFenceMutationRejectReason,
   message: string,
@@ -3984,10 +3692,6 @@ function rejectedRallyMutation(
     reason,
     message,
   };
-}
-
-function isCoordinatePairValid(latitudeDeg: number, longitudeDeg: number): boolean {
-  return parseLatitude(latitudeDeg).ok && parseLongitude(longitudeDeg).ok;
 }
 
 function rejectedMapMove(
