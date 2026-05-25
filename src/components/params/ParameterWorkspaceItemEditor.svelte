@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { ParameterWorkspaceItemView } from "../../lib/stores/params";
+import RebootRequiredBadge from "../ui/RebootRequiredBadge.svelte";
 import StagedBadge from "../ui/StagedBadge.svelte";
 import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
 
@@ -75,11 +76,8 @@ function stageDraft(value: string) {
     <div class="text-right">
       <p class="text-lg font-semibold text-text-primary">{props.item.valueText}{props.item.units ? ` ${props.item.units}` : ""}</p>
       {#if props.item.rebootRequired}
-        <p
-          class="mt-1 text-xs font-semibold uppercase tracking-wide text-warning"
-          data-testid={`${parameterWorkspaceTestIds.rebootBadgePrefix}-${props.item.name}`}
-        >
-          Reboot required
+        <p class="mt-1 flex justify-end">
+          <RebootRequiredBadge label="requires reboot" testId={`${parameterWorkspaceTestIds.rebootBadgePrefix}-${props.item.name}`} />
         </p>
       {/if}
     </div>

@@ -414,6 +414,7 @@ describe("ParameterWorkspace", () => {
         const armingEditor = screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`);
         expect(armingEditor.tagName).toBe("BUTTON");
         expect(armingEditor.getAttribute("aria-haspopup")).toBe("listbox");
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.rebootBadgePrefix}-ARMING_CHECK`).textContent).toContain("reboot");
         expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeNull();
 
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));

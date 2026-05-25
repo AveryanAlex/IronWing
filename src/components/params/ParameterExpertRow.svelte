@@ -5,6 +5,7 @@ import type {
   ParameterExpertRow,
 } from "../../lib/params/parameter-expert-view";
 import { Select } from "../ui";
+import RebootRequiredBadge from "../ui/RebootRequiredBadge.svelte";
 import StagedBadge from "../ui/StagedBadge.svelte";
 import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
 import ParameterExpertBitmaskEditor from "./ParameterExpertBitmaskEditor.svelte";
@@ -133,12 +134,7 @@ let displayValueText = $derived(
         <span class="param-row__badge param-row__badge--readonly">read only</span>
       {/if}
       {#if props.row.rebootRequired}
-        <span
-          class="param-row__badge param-row__badge--reboot"
-          data-testid={`${parameterWorkspaceTestIds.rebootBadgePrefix}-${props.row.name}`}
-        >
-          reboot
-        </span>
+        <RebootRequiredBadge testId={`${parameterWorkspaceTestIds.rebootBadgePrefix}-${props.row.name}`} />
       {/if}
       {#if props.row.isStaged}
         <StagedBadge
@@ -326,11 +322,6 @@ let displayValueText = $derived(
   color: var(--color-accent);
 }
 .param-row__badge--readonly {
-  border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
-  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
-  color: var(--color-warning);
-}
-.param-row__badge--reboot {
   border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
   background: color-mix(in srgb, var(--color-warning) 10%, transparent);
   color: var(--color-warning);

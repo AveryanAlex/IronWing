@@ -521,6 +521,7 @@ function buildFrameBanners(input: {
           disabled={checkpoint.blocksActions}
           stagedName={params.stagedEdits.Q_ENABLE ? "Q_ENABLE" : undefined}
           stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-Q_ENABLE`}
+          rebootRequired={qEnableItem?.rebootRequired === true}
           onChange={(value) => stage(qEnableItem, value)}
           onUnstage={unstage}
         />
@@ -545,6 +546,7 @@ function buildFrameBanners(input: {
               disabled={checkpoint.blocksActions}
               stagedName={params.stagedEdits[frameClassItem.name] ? frameClassItem.name : undefined}
               stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-${frameClassItem.name}`}
+              rebootRequired={frameClassItem.rebootRequired}
               onChange={(value) => stage(frameClassItem, value)}
               onUnstage={unstage}
             />
@@ -563,6 +565,7 @@ function buildFrameBanners(input: {
               disabled={checkpoint.blocksActions}
               stagedName={params.stagedEdits[frameTypeItem.name] ? frameTypeItem.name : undefined}
               stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-${frameTypeItem.name}`}
+              rebootRequired={frameTypeItem.rebootRequired}
               onChange={(value) => stage(frameTypeItem, value)}
               onUnstage={unstage}
             />
@@ -595,6 +598,7 @@ function buildFrameBanners(input: {
           disabled={checkpoint.blocksActions}
           stagedName={params.stagedEdits.AHRS_ORIENTATION ? "AHRS_ORIENTATION" : undefined}
           stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-AHRS_ORIENTATION`}
+          rebootRequired={orientationItem.rebootRequired}
           onChange={(value) => stage(orientationItem, value)}
           onUnstage={unstage}
         />

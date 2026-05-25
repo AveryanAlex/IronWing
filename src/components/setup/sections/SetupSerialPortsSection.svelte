@@ -204,6 +204,7 @@ function rebootTone(): string {
                 testId={`${setupWorkspaceTestIds.serialPortsInputPrefix}-${row.protocolParamName}`}
                 stagedName={params.stagedEdits[row.protocolParamName] ? row.protocolParamName : undefined}
                 stagedTestId={`${setupWorkspaceTestIds.serialPortsStagedPrefix}-${row.protocolParamName}`}
+                rebootRequired={item(row.protocolParamName)?.rebootRequired === true}
                 onChange={(value) => stage(row.protocolParamName, value, row.protocolValue, row.protocolMetadataReady)}
                 onUnstage={unstage}
               />
@@ -219,6 +220,7 @@ function rebootTone(): string {
                 testId={`${setupWorkspaceTestIds.serialPortsInputPrefix}-${row.baudParamName}`}
                 stagedName={params.stagedEdits[row.baudParamName] ? row.baudParamName : undefined}
                 stagedTestId={`${setupWorkspaceTestIds.serialPortsStagedPrefix}-${row.baudParamName}`}
+                rebootRequired={item(row.baudParamName)?.rebootRequired === true}
                 onChange={(value) => stage(row.baudParamName, value, row.baudValue, row.baudMetadataReady)}
                 onUnstage={unstage}
               />

@@ -1,4 +1,5 @@
 <script lang="ts">
+import RebootRequiredBadge from "../../ui/RebootRequiredBadge.svelte";
 import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 
 type Option = {
@@ -17,6 +18,8 @@ type Props = {
   testId?: string;
   stagedName?: string;
   stagedTestId?: string;
+  rebootRequired?: boolean;
+  rebootTestId?: string;
   onChange: (value: string) => void;
   onUnstage?: (name: string) => void;
 };
@@ -32,6 +35,8 @@ let {
   testId,
   stagedName,
   stagedTestId,
+  rebootRequired = false,
+  rebootTestId,
   onChange,
   onUnstage,
 }: Props = $props();
@@ -42,18 +47,19 @@ let selectClass = $derived([
 ].join(" "));
 </script>
 
-<div>
-  {#if label}
-    <div class="flex flex-wrap items-center gap-2">
-      <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={id}>{label}</label>
-      {#if stagedName && onUnstage}
-        <SetupStagedBadge name={stagedName} onUnstage={onUnstage} testId={stagedTestId} />
-      {/if}
-    </div>
+{#snippet badges()}
+  {#if stagedName && onUnstage}
+    <SetupStagedBadge name={stagedName} onUnstage={onUnstage} testId={stagedTestId} />
   {/if}
+  {#if rebootRequired}
+    <RebootRequiredBadge testId={rebootTestId} />
+  {/if}
+{/snippet}
+
+{#snippet selectControl(className: string)}
   <select
     {id}
-    class={label ? `${selectClass} mt-2` : selectClass}
+    class={className}
     data-testid={testId}
     {disabled}
     onchange={(event) => onChange((event.currentTarget as HTMLSelectElement).value)}
@@ -63,9 +69,30 @@ let selectClass = $derived([
       <option value={String(option.code)}>{option.label}</option>
     {/each}
   </select>
-  {#if !label && stagedName && onUnstage}
-    <p class="mt-2">
-      <SetupStagedBadge name={stagedName} onUnstage={onUnstage} testId={stagedTestId} />
+{/snippet}
+
+<div>
+  {#if label}
+    <div class="flex flex-wrap items-center gap-2">
+      <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={id}>{label}</label>
+      {@render badges()}
+    </div>
+  {/if}
+
+  {#if compact && !label}
+    <div class="flex min-w-0 items-center gap-2">
+      <div class="min-w-0 flex-1">
+        {@render selectControl(selectClass)}
+      </div>
+      {@render badges()}
+    </div>
+  {:else}
+    {@render selectControl(label ? `${selectClass} mt-2` : selectClass)}
+  {/if}
+
+  {#if !compact && !label && ((stagedName && onUnstage) || rebootRequired)}
+    <p class="mt-2 flex flex-wrap gap-2">
+      {@render badges()}
     </p>
   {/if}
   {#if description}
