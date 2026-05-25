@@ -1,4 +1,5 @@
 <script lang="ts">
+import { AlertTriangle, ExternalLink, Info, Settings2 } from "lucide-svelte";
 import type { HomePosition } from "../../mission";
 import {
   commandDisplayName,
@@ -13,6 +14,7 @@ import {
   rawFallbackParams,
   resolveCommandMetadata,
   variantToCommandId,
+  type CommandMetadata,
   type ParamSlot,
   type TypedFieldDescriptor,
 } from "../../lib/mission-command-metadata";
@@ -31,8 +33,10 @@ type EditableField = {
   value: number | boolean | string;
   units?: string;
   description?: string;
+  required?: boolean;
   supported?: boolean;
   enumOptions?: { value: string; label: string }[];
+  displayOffset?: number;
 };
 
 type Props = {
@@ -57,6 +61,7 @@ type Props = {
 };
 
 const RAW_FIELD_ORDER: ParamSlot[] = ["param1", "param2", "param3", "param4", "x", "y", "z"];
+const ONE_INDEXED_FIELDS = new Set(["target_index"]);
 
 let {
   selection,
@@ -78,6 +83,8 @@ let {
   onDismissSurveyPrompt,
   onMarkSurveyRegionItemAsEdited,
 }: Props = $props();
+
+let expandedFieldKey = $state<string | null>(null);
 
 function titleCase(value: string) {
   return value
@@ -111,45 +118,59 @@ function commandVariant(command: MissionCommand): { category: "Nav" | "Do" | "Co
 }
 
 function commandPayload(command: MissionCommand): Record<string, unknown> | null {
-	if ("Nav" in command) {
-		const variant = commandVariant(command);
-		if (!variant) {
-			return null;
-		}
+  if ("Nav" in command) {
+    const variant = commandVariant(command);
+    if (!variant) {
+      return null;
+    }
 
-		if (typeof command.Nav === "string") {
-			return null;
-		}
-		return (command.Nav as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
-	}
+    if (typeof command.Nav === "string") {
+      return null;
+    }
+    return (command.Nav as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
+  }
 
-	if ("Do" in command) {
-		const variant = commandVariant(command);
-		if (!variant) {
-			return null;
-		}
+  if ("Do" in command) {
+    const variant = commandVariant(command);
+    if (!variant) {
+      return null;
+    }
 
-		if (typeof command.Do === "string") {
-			return null;
-		}
-		return (command.Do as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
-	}
+    if (typeof command.Do === "string") {
+      return null;
+    }
+    return (command.Do as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
+  }
 
-	if (!("Condition" in command)) {
-		return null;
-	}
+  if (!("Condition" in command)) {
+    return null;
+  }
 
-	const variant = commandVariant(command);
-	if (!variant) {
-		return null;
-	}
+  const variant = commandVariant(command);
+  if (!variant) {
+    return null;
+  }
 
-	return (command.Condition as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
+  return (command.Condition as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
 }
 
 function commandSelectValue(command: MissionCommand): string {
   const variant = commandVariant(command);
   return variant ? `${variant.category}:${variant.variant}` : "";
+}
+
+function commandMetadata(command: MissionCommand): CommandMetadata | null {
+  if ("Other" in command) {
+    return rawFallbackParams(command.Other.command);
+  }
+
+  const variant = commandVariant(command);
+  if (!variant) {
+    return null;
+  }
+
+  const commandId = variantToCommandId(variant.category, variant.variant);
+  return commandId === undefined ? null : resolveCommandMetadata(commandId);
 }
 
 function typedDescriptor(command: MissionCommand, fieldKey: string): TypedFieldDescriptor | undefined {
@@ -183,6 +204,7 @@ function rawFields(command: MissionCommand) {
     value: command.Other[slot],
     units: metadata.params[slot]?.units,
     description: metadata.params[slot]?.description,
+    required: metadata.params[slot]?.required,
     supported: metadata.params[slot]?.supported ?? true,
   }));
 }
@@ -199,7 +221,7 @@ function editableFields(command: MissionCommand): EditableField[] {
 
   return Object.entries(payload)
     .filter(([fieldKey]) => fieldKey !== "position")
-		.flatMap<EditableField>(([fieldKey, value]) => {
+    .flatMap<EditableField>(([fieldKey, value]) => {
       const descriptor = typedDescriptor(command, fieldKey);
       if (descriptor?.hidden) {
         return [];
@@ -210,7 +232,9 @@ function editableFields(command: MissionCommand): EditableField[] {
         label: descriptor?.label ?? titleCase(fieldKey),
         units: descriptor?.units,
         description: descriptor?.description,
+        required: descriptor?.required,
         supported: descriptor?.supported ?? true,
+        displayOffset: ONE_INDEXED_FIELDS.has(fieldKey) ? 1 : undefined,
       };
 
       if (typeof value === "number") {
@@ -246,6 +270,7 @@ let missionItem = $derived(selectedMissionItem(item));
 let position = $derived(missionItem ? commandPosition(missionItem.command) : null);
 let selectedCommandVariant = $derived(missionItem ? commandVariant(missionItem.command) : null);
 let selectedCommandValue = $derived(missionItem ? commandSelectValue(missionItem.command) : "");
+let selectedCommandMetadata = $derived(missionItem ? commandMetadata(missionItem.command) : null);
 let fields = $derived(missionItem ? editableFields(missionItem.command) : []);
 let previousCoordinates = $derived.by(() => {
   if (!previousItem || previousItem.preview.latitude_deg === null || previousItem.preview.longitude_deg === null) {
@@ -255,6 +280,30 @@ let previousCoordinates = $derived.by(() => {
   return `${previousItem.preview.latitude_deg.toFixed(5)}, ${previousItem.preview.longitude_deg.toFixed(5)}`;
 });
 
+function fieldInputId(fieldKey: string) {
+  return `mission-inspector-${item?.uiId ?? "none"}-${fieldKey}`;
+}
+
+function fieldHelpId(fieldKey: string) {
+  return `${missionWorkspaceTestIds.inspectorFieldHelpPrefix}-${fieldKey}`;
+}
+
+function numericFieldValue(field: EditableField) {
+  return typeof field.value === "number" ? field.value + (field.displayOffset ?? 0) : field.value;
+}
+
+function toggleFieldInfo(fieldKey: string) {
+  expandedFieldKey = expandedFieldKey === fieldKey ? null : fieldKey;
+}
+
+function inputValue(event: Event): string {
+  return event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : "";
+}
+
+function selectValue(event: Event): string {
+  return event.currentTarget instanceof HTMLSelectElement ? event.currentTarget.value : "";
+}
+
 function updateField(fieldKey: string, value: unknown) {
   if (!missionItem || !item || item.readOnly) {
     return;
@@ -262,26 +311,83 @@ function updateField(fieldKey: string, value: unknown) {
 
   onUpdateCommand(item.index, withCommandField(missionItem.command, fieldKey, value));
 }
+
+function updateNumberField(field: EditableField, rawValue: string) {
+  if (rawValue.trim().length === 0) {
+    return;
+  }
+
+  const nextValue = Number(rawValue);
+  if (Number.isFinite(nextValue)) {
+    updateField(field.key, nextValue - (field.displayOffset ?? 0));
+  }
+}
+
+function updateLatitudeInput(event: Event) {
+  if (!item) {
+    return;
+  }
+
+  const rawValue = inputValue(event);
+  if (rawValue.trim().length === 0) {
+    return;
+  }
+
+  const nextValue = Number(rawValue);
+  if (Number.isFinite(nextValue)) {
+    onUpdateLatitude(item.index, nextValue);
+  }
+}
+
+function updateLongitudeInput(event: Event) {
+  if (!item) {
+    return;
+  }
+
+  const rawValue = inputValue(event);
+  if (rawValue.trim().length === 0) {
+    return;
+  }
+
+  const nextValue = Number(rawValue);
+  if (Number.isFinite(nextValue)) {
+    onUpdateLongitude(item.index, nextValue);
+  }
+}
+
+function updateAltitudeInput(event: Event) {
+  if (!item) {
+    return;
+  }
+
+  const rawValue = inputValue(event);
+  if (rawValue.trim().length === 0) {
+    return;
+  }
+
+  const nextValue = Number(rawValue);
+  if (Number.isFinite(nextValue)) {
+    onUpdateAltitude(item.index, nextValue);
+  }
+}
 </script>
 
 <section class="rounded-lg border border-border bg-bg-primary p-3" data-testid={missionWorkspaceTestIds.inspector}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Inspector</p>
-      <h3 class="mt-1 text-sm font-semibold text-text-primary">Selected mission detail</h3>
-    </div>
+  <div class="flex items-center gap-2">
+    <Settings2 aria-hidden="true" class="shrink-0 text-accent" size={16} />
+    <h3 class="text-xs font-semibold uppercase tracking-wider text-text-muted">Inspector</h3>
 
     <span
-      class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-wide text-text-secondary"
+      class="ml-auto text-xs tabular-nums text-text-muted"
       data-testid={missionWorkspaceTestIds.inspectorSelectionKind}
     >
-      {selection.kind}
+      {selection.kind === "mission-item" && item ? `mission-item · #${item.index + 1}` : selection.kind}
     </span>
   </div>
 
   {#if selection.kind === "home"}
     <div class="mt-4 rounded-lg border border-dashed border-border bg-bg-secondary/60 px-4 py-5 text-sm text-text-secondary" data-testid={missionWorkspaceTestIds.inspectorEmpty}>
-      Home is selected. Edit the Home card to set or clear mission origin data, or select a manual mission item or survey region to edit it inside the shared workspace.
+      Home is selected. Edit the Home card to set mission origin data, or select a manual mission item or survey region to edit it inside the shared workspace.
       {#if home}
         <p class="mt-2 text-xs text-text-muted">Current Home · {home.latitude_deg.toFixed(5)}, {home.longitude_deg.toFixed(5)} · {home.altitude_m.toFixed(1)} m</p>
       {/if}
@@ -313,22 +419,14 @@ function updateField(fieldKey: string, value: unknown) {
       Select a manual mission item from the list to edit coordinates and typed command fields.
     </div>
   {:else}
-    <div class="mt-4 space-y-4">
-      <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
-        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Manual item {item.index + 1}</p>
-        <h4 class="mt-1 text-base font-semibold text-text-primary">{commandDisplayName(missionItem.command)}</h4>
-        {#if previousCoordinates}
-          <p class="mt-1 text-xs text-text-secondary">Previous manual item · {previousCoordinates}</p>
-        {/if}
-      </div>
-
+    <div class="mt-4 space-y-3">
       {#if item.readOnly}
         <div class="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning" data-testid={missionWorkspaceTestIds.inspectorReadonly}>
           <p class="font-semibold">Unsupported/raw mission item</p>
           <p class="mt-1 text-xs text-warning/90">This preserved command stays read-only. Its raw parameters remain visible so imported content is not flattened away.</p>
           <dl class="mt-3 grid gap-2 sm:grid-cols-2">
             {#each fields as field (field.key)}
-              <div class="rounded-lg border border-warning/30 bg-bg-primary px-3 py-2 text-xs">
+              <div class="rounded-md border border-warning/30 bg-bg-primary px-3 py-2 text-xs">
                 <dt class="text-warning/80">{field.label}</dt>
                 <dd class="mt-1 font-medium text-text-primary">{field.value}{field.units ? ` ${field.units}` : ""}</dd>
               </div>
@@ -337,55 +435,125 @@ function updateField(fieldKey: string, value: unknown) {
         </div>
       {:else}
         {#if selectedCommandVariant}
-          <div data-testid={missionWorkspaceTestIds.inspectorCommandPicker}>
-            <label class="space-y-1">
-              <span class="text-xs font-medium text-text-muted">Command</span>
-              <MissionCommandPicker
-                disabled={false}
-                value={selectedCommandValue}
-                onSelect={(category, variant) => {
-                  onUpdateCommand(item.index, defaultCommand(category, variant, position ?? undefined));
-                }}
-              />
-            </label>
+          <div class="space-y-1" data-testid={missionWorkspaceTestIds.inspectorCommandPicker}>
+            <label class="text-[10px] font-medium text-text-muted" for="mission-command-select">Command</label>
+            <MissionCommandPicker
+              disabled={false}
+              value={selectedCommandValue}
+              onSelect={(category, variant) => {
+                onUpdateCommand(item.index, defaultCommand(category, variant, position ?? undefined));
+              }}
+            />
+            {#if previousCoordinates}
+              <p class="text-[10px] text-text-muted">Previous manual item · {previousCoordinates}</p>
+            {/if}
+          </div>
+        {/if}
+
+        {#if selectedCommandMetadata}
+          <div
+            class="rounded-md border border-border bg-bg-secondary/60 p-2.5 text-[10px] leading-relaxed text-text-muted"
+            data-testid={missionWorkspaceTestIds.inspectorCommandHelp}
+          >
+            <div class="flex items-start gap-1.5">
+              <Info aria-hidden="true" class="mt-0.5 shrink-0 text-accent/70" size={12} />
+              <span class="text-text-secondary">{selectedCommandMetadata.summary}</span>
+            </div>
+
+            {#if selectedCommandMetadata.notes?.length}
+              <ul class="mt-1.5 space-y-1">
+                {#each selectedCommandMetadata.notes as note, index (`${note}-${index}`)}
+                  <li class="flex items-start gap-1.5">
+                    <AlertTriangle aria-hidden="true" class="mt-0.5 shrink-0 text-warning/70" size={11} />
+                    <span>{note}</span>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+
+            {#if selectedCommandMetadata.docsUrl}
+              <a
+                class="mt-1.5 inline-flex items-center gap-1 text-accent transition hover:underline"
+                data-testid={missionWorkspaceTestIds.inspectorCommandDocs}
+                href={selectedCommandMetadata.docsUrl}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                ArduPilot Docs
+                <ExternalLink aria-hidden="true" size={11} />
+              </a>
+            {/if}
           </div>
         {/if}
 
         {#if fields.length > 0}
-          <div class="grid gap-3 md:grid-cols-2">
+          <div class="space-y-1.5">
+            <p class="text-[10px] font-medium text-text-muted">Parameters</p>
             {#each fields as field (field.key)}
-              <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
-                <span class="text-xs font-medium text-text-muted">{field.label}</span>
+              <div class={`space-y-0.5 ${field.supported === false ? "opacity-60" : ""}`}>
+                <div class="flex items-center gap-1">
+                  <label class="text-[10px] text-text-muted" for={fieldInputId(field.key)}>
+                    {field.label}
+                  </label>
+                  {#if field.required}
+                    <span aria-label="required" class="text-warning">*</span>
+                    <span class="text-[9px] text-warning/80">required</span>
+                  {/if}
+                  {#if field.description}
+                    <span class="group relative inline-flex">
+                      <button
+                        aria-controls={fieldHelpId(field.key)}
+                        aria-expanded={expandedFieldKey === field.key}
+                        aria-label={`Show ${field.label} help`}
+                        class="rounded-full p-0.5 text-text-muted transition hover:bg-bg-tertiary hover:text-accent"
+                        data-testid={`${missionWorkspaceTestIds.inspectorFieldInfoPrefix}-${field.key}`}
+                        onclick={() => toggleFieldInfo(field.key)}
+                        type="button"
+                      >
+                        <Info aria-hidden="true" size={11} />
+                      </button>
+                      <span
+                        class={`absolute left-0 top-full z-30 mt-1 w-64 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-bg-secondary p-2 text-[10px] leading-relaxed text-text-secondary shadow-lg ${expandedFieldKey === field.key ? "block" : "hidden group-hover:block group-focus-within:block"}`}
+                        data-testid={`${missionWorkspaceTestIds.inspectorFieldHelpPrefix}-${field.key}`}
+                        id={fieldHelpId(field.key)}
+                        role="tooltip"
+                      >
+                        {field.description}
+                      </span>
+                    </span>
+                  {/if}
+                </div>
+
+                {#if field.supported === false && !field.description}
+                  <p class="text-[10px] leading-relaxed text-warning/80">Not supported by ArduPilot for this command.</p>
+                {/if}
 
                 {#if field.type === "number"}
                   <div class="relative">
                     <input
-                       class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 pr-12 text-sm text-text-primary"
+                      aria-describedby={field.description ? fieldHelpId(field.key) : undefined}
+                      class="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 pr-12 text-sm tabular-nums text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
                       data-testid={`${missionWorkspaceTestIds.inspectorFieldPrefix}-${field.key}`}
+                      disabled={field.supported === false}
+                      id={fieldInputId(field.key)}
                       inputmode="decimal"
-                      onchange={(event) => {
-                        const rawValue = (event.currentTarget as HTMLInputElement).value;
-                        if (rawValue.trim().length === 0) {
-                          return;
-                        }
-                        const nextValue = Number(rawValue);
-                        if (Number.isFinite(nextValue)) {
-                          updateField(field.key, nextValue);
-                        }
-                      }}
+                      onchange={(event) => updateNumberField(field, inputValue(event))}
                       type="number"
-                      value={field.value}
+                      value={numericFieldValue(field)}
                     />
                     {#if field.units}
-                      <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-text-muted">{field.units}</span>
+                      <span class="pointer-events-none absolute inset-y-0 right-2 flex items-center text-[10px] text-text-muted/70">{field.units}</span>
                     {/if}
                   </div>
                 {:else if field.type === "boolean"}
                   <button
-                    class={`rounded-md px-3 py-2 text-xs font-semibold transition ${field.value
-                      ? "border border-accent/40 bg-accent/10 text-accent"
-                      : "border border-border bg-bg-primary text-text-primary"}`}
+                    aria-describedby={field.description ? fieldHelpId(field.key) : undefined}
+                    class={`rounded-md border px-2 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${field.value
+                      ? "border-accent/40 bg-accent/10 text-accent"
+                      : "border-border bg-bg-input text-text-primary"}`}
                     data-testid={`${missionWorkspaceTestIds.inspectorFieldPrefix}-${field.key}`}
+                    disabled={field.supported === false}
+                    id={fieldInputId(field.key)}
                     onclick={() => updateField(field.key, !field.value)}
                     type="button"
                   >
@@ -393,9 +561,12 @@ function updateField(fieldKey: string, value: unknown) {
                   </button>
                 {:else}
                   <select
-                    class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
+                    aria-describedby={field.description ? fieldHelpId(field.key) : undefined}
+                    class="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
                     data-testid={`${missionWorkspaceTestIds.inspectorFieldPrefix}-${field.key}`}
-                    onchange={(event) => updateField(field.key, (event.currentTarget as HTMLSelectElement).value)}
+                    disabled={field.supported === false}
+                    id={fieldInputId(field.key)}
+                    onchange={(event) => updateField(field.key, selectValue(event))}
                     value={field.value}
                   >
                     {#each field.enumOptions ?? [] as option (option.value)}
@@ -403,75 +574,50 @@ function updateField(fieldKey: string, value: unknown) {
                     {/each}
                   </select>
                 {/if}
-
-                {#if field.description}
-                  <span class="text-xs text-text-secondary">{field.description}</span>
-                {/if}
-              </label>
+              </div>
             {/each}
           </div>
         {/if}
 
         {#if position}
-          <div class="grid gap-3 md:grid-cols-3">
-            <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
-              <span class="text-xs font-medium text-text-muted">Latitude</span>
-              <input
-                class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
-                data-testid={missionWorkspaceTestIds.inspectorLatitude}
-                inputmode="decimal"
-                onchange={(event) => {
-                  const rawValue = (event.currentTarget as HTMLInputElement).value;
-                  if (rawValue.trim().length === 0) {
-                    return;
-                  }
-                  const nextValue = Number(rawValue);
-                  if (Number.isFinite(nextValue)) {
-                    onUpdateLatitude(item.index, nextValue);
-                  }
-                }}
-                type="number"
-                value={geoPoint3dLatLon(position).latitude_deg}
-              />
-            </label>
+          <div class="space-y-2 border-t border-border/60 pt-3">
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-[10px] font-medium text-text-muted">Coordinates</p>
+              <span class="text-[10px] text-text-muted">Relative Alt</span>
+            </div>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <label class="space-y-0.5">
+                <span class="text-[10px] text-text-muted">Latitude (deg)</span>
+                <input
+                  class="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm tabular-nums text-text-primary"
+                  data-testid={missionWorkspaceTestIds.inspectorLatitude}
+                  inputmode="decimal"
+                  onchange={updateLatitudeInput}
+                  type="number"
+                  value={geoPoint3dLatLon(position).latitude_deg}
+                />
+              </label>
 
-            <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
-              <span class="text-xs font-medium text-text-muted">Longitude</span>
-              <input
-                class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
-                data-testid={missionWorkspaceTestIds.inspectorLongitude}
-                inputmode="decimal"
-                onchange={(event) => {
-                  const rawValue = (event.currentTarget as HTMLInputElement).value;
-                  if (rawValue.trim().length === 0) {
-                    return;
-                  }
-                  const nextValue = Number(rawValue);
-                  if (Number.isFinite(nextValue)) {
-                    onUpdateLongitude(item.index, nextValue);
-                  }
-                }}
-                type="number"
-                value={geoPoint3dLatLon(position).longitude_deg}
-              />
-            </label>
+              <label class="space-y-0.5">
+                <span class="text-[10px] text-text-muted">Longitude (deg)</span>
+                <input
+                  class="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm tabular-nums text-text-primary"
+                  data-testid={missionWorkspaceTestIds.inspectorLongitude}
+                  inputmode="decimal"
+                  onchange={updateLongitudeInput}
+                  type="number"
+                  value={geoPoint3dLatLon(position).longitude_deg}
+                />
+              </label>
+            </div>
 
-            <label class="space-y-1 rounded-lg border border-border bg-bg-secondary/60 p-3">
-              <span class="text-xs font-medium text-text-muted">Altitude</span>
+            <label class="block space-y-0.5">
+              <span class="text-[10px] text-text-muted">Altitude (m)</span>
               <input
-                class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
+                class="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm tabular-nums text-text-primary"
                 data-testid={missionWorkspaceTestIds.inspectorAltitude}
                 inputmode="decimal"
-                onchange={(event) => {
-                  const rawValue = (event.currentTarget as HTMLInputElement).value;
-                  if (rawValue.trim().length === 0) {
-                    return;
-                  }
-                  const nextValue = Number(rawValue);
-                  if (Number.isFinite(nextValue)) {
-                    onUpdateAltitude(item.index, nextValue);
-                  }
-                }}
+                onchange={updateAltitudeInput}
                 type="number"
                 value={item.preview.altitude_m ?? 0}
               />

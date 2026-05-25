@@ -278,4 +278,40 @@ describe("computeTerrainProfile", () => {
     const altitudes = loiterPoints.map((p) => p.flightMsl);
     expect(new Set(altitudes).size).toBe(1);
   });
+
+  it("keeps survey source metadata on profile samples for chart grouping", () => {
+    const points: PathPoint[] = [
+      { latitude_deg: 0, longitude_deg: 0, altitude_m: 100, frame: "rel_home", index: 0, isHome: false },
+      {
+        latitude_deg: 0.001,
+        longitude_deg: 0,
+        altitude_m: 50,
+        frame: "rel_home",
+        index: null,
+        isHome: false,
+        source: "survey",
+        surveyRegionId: "survey-region-1",
+        surveyLabel: "Grid survey 1",
+        surveyLocalIndex: 0,
+      },
+      {
+        latitude_deg: 0.002,
+        longitude_deg: 0,
+        altitude_m: 50,
+        frame: "rel_home",
+        index: null,
+        isHome: false,
+        source: "survey",
+        surveyRegionId: "survey-region-1",
+        surveyLabel: "Grid survey 1",
+        surveyLocalIndex: 1,
+      },
+    ];
+
+    const result = computeTerrainProfile(points, () => 50, 100);
+    const surveySamples = result.points.filter((sample) => sample.source === "survey" && sample.isWaypoint);
+
+    expect(surveySamples.map((sample) => sample.surveyRegionId)).toEqual(["survey-region-1", "survey-region-1"]);
+    expect(surveySamples.map((sample) => sample.surveyLocalIndex)).toEqual([0, 1]);
+  });
 });

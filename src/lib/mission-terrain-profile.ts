@@ -26,6 +26,11 @@ export type ProfilePoint = {
   index: number | null;
   isHome: boolean;
   isWaypoint: boolean;
+  source?: PathPoint["source"];
+  surveyRegionId?: PathPoint["surveyRegionId"];
+  surveyPatternType?: PathPoint["surveyPatternType"];
+  surveyLabel?: PathPoint["surveyLabel"];
+  surveyLocalIndex?: PathPoint["surveyLocalIndex"];
 };
 
 export type ProfileResult = {
@@ -102,6 +107,11 @@ export function densifyPath(points: PathPoint[], maxSpacing_m: number): Densifie
         frame: null,
         index: null,
         isHome: false,
+        source: end.source,
+        surveyRegionId: end.surveyRegionId,
+        surveyPatternType: end.surveyPatternType,
+        surveyLabel: end.surveyLabel,
+        surveyLocalIndex: end.surveyLocalIndex,
         distance_m: startDistance + segmentDistance * t,
         segmentStartIndex: index - 1,
         segmentEndIndex: index,
@@ -209,6 +219,11 @@ export function computeTerrainProfile(
       index: point.index,
       isHome: point.isHome,
       isWaypoint: point.isWaypoint,
+      source: point.source,
+      surveyRegionId: point.surveyRegionId,
+      surveyPatternType: point.surveyPatternType,
+      surveyLabel: point.surveyLabel,
+      surveyLocalIndex: point.surveyLocalIndex,
     };
   });
 

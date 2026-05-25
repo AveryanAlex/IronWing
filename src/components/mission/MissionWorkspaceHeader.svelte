@@ -1,5 +1,6 @@
 <script lang="ts">
 import {
+  Check,
   Download,
   FileDown,
   FilePlus,
@@ -24,6 +25,8 @@ type Props = {
   hasContent: boolean;
   canUseVehicleActions: boolean;
   busy: boolean;
+  uploading: boolean;
+  uploaded: boolean;
   canCancel: boolean;
   canUndo: boolean;
   undoCount: number;
@@ -46,6 +49,8 @@ let {
   hasContent,
   canUseVehicleActions,
   busy,
+  uploading,
+  uploaded,
   canCancel,
   canUndo,
   undoCount,
@@ -79,9 +84,16 @@ let redoAvailable = $derived(attachment.canEdit && canRedo && normalizedRedoCoun
 let undoLabel = $derived(`Undo (${normalizedUndoCount} available)`);
 let redoLabel = $derived(`Redo (${normalizedRedoCount} available)`);
 let replayReadonly = $derived(attachment.kind === "playback-readonly");
+let uploadedIdle = $derived(uploaded && !busy);
+let vehicleDisconnected = $derived(!canUseVehicleActions);
 let uploadDisabled = $derived(
-  busy || !attachment.canUseVehicleActions || !canUseVehicleActions || !hasContent,
+  !uploading && !uploadedIdle && (busy || vehicleDisconnected),
 );
+let uploadTone = $derived<"warning" | "success" | "accent">(uploading ? "warning" : uploadedIdle ? "success" : "accent");
+let uploadAriaLabel = $derived(uploading ? "Cancel upload" : uploadedIdle ? "Uploaded to vehicle" : "Upload to vehicle");
+let uploadLabel = $derived(uploading ? "Cancel" : uploadedIdle ? "Uploaded" : "Upload");
+let uploadTooltipLabel = $derived(vehicleDisconnected ? "Connect a vehicle to upload the mission." : uploadAriaLabel);
+let readVehicleTitle = $derived(vehicleDisconnected ? "Connect a vehicle to read planning state." : undefined);
 let clearLabel = $derived(
   mode === "fence" ? "Clear fence" : mode === "rally" ? "Clear rally" : "Clear mission",
 );
@@ -90,6 +102,7 @@ let modeItems = $derived<MenuItem[]>(
   modeButtons.map((item) => ({
     id: `mode-${item.mode}`,
     label: item.label,
+    testId: item.testId,
     disabled: item.mode === mode,
     onSelect: () => onSelectMode(item.mode),
   })),
@@ -99,7 +112,8 @@ let secondaryItems = $derived<MenuItem[]>([
     id: "read",
     label: "Read from vehicle",
     testId: missionWorkspaceTestIds.toolbarRead,
-    disabled: busy || !attachment.canUseVehicleActions || !canUseVehicleActions,
+    disabled: busy || vehicleDisconnected,
+    title: readVehicleTitle,
     icon: readIcon,
     onSelect: onReadFromVehicle,
   },
@@ -145,6 +159,9 @@ let secondaryItems = $derived<MenuItem[]>([
 {#snippet uploadIcon()}
   <Upload aria-hidden="true" size={16} />
 {/snippet}
+{#snippet uploadedIcon()}
+  <Check aria-hidden="true" size={16} />
+{/snippet}
 {#snippet cancelIcon()}
   <X aria-hidden="true" size={16} />
 {/snippet}
@@ -167,29 +184,14 @@ let secondaryItems = $derived<MenuItem[]>([
   {/if}
 
   <Toolbar ariaLabel="Mission actions" density="compact" overflow="scroll">
-    <div class="mission-mode-switcher">
-      <div class="@max-[640px]:hidden">
-        <ToolbarGroup>
-          {#each modeButtons as item (item.mode)}
-            <Button
-              onclick={() => onSelectMode(item.mode)}
-              size="sm"
-              testId={item.testId}
-              tone={item.mode === mode ? "accent" : "neutral"}
-            >
-              {item.label}
-            </Button>
-          {/each}
-        </ToolbarGroup>
-      </div>
-      <div class="hidden @max-[640px]:block">
-        <Menu
-          items={modeItems}
-          triggerAriaLabel="Select mission editing mode"
-          triggerLabel={activeModeLabel}
-        />
-      </div>
-    </div>
+    <ToolbarGroup>
+      <Menu
+        items={modeItems}
+        triggerAriaLabel="Select mission editing mode"
+        triggerClass="h-[var(--control-h-sm)] min-w-24 justify-between"
+        triggerLabel={activeModeLabel}
+      />
+    </ToolbarGroup>
 
     <ToolbarGroup>
       <Tooltip label={undoLabel}>
@@ -219,18 +221,29 @@ let secondaryItems = $derived<MenuItem[]>([
     </ToolbarGroup>
 
     <ToolbarGroup>
-      <Button
-        ariaLabel="Upload to vehicle"
-        disabled={uploadDisabled}
-        onclick={onUploadToVehicle}
-        size="sm"
-        testId={missionWorkspaceTestIds.toolbarUpload}
-        tone="accent"
-      >
-        <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">{@render uploadIcon()}</span>
-        <span class="@max-[520px]:hidden">Upload</span>
-      </Button>
-      {#if canCancel}
+      <Tooltip label={uploadTooltipLabel}>
+        <Button
+          ariaLabel={uploadAriaLabel}
+          disabled={uploadDisabled}
+          onclick={uploading ? onCancelTransfer : uploadedIdle ? undefined : onUploadToVehicle}
+          size="sm"
+          testId={missionWorkspaceTestIds.toolbarUpload}
+          title={vehicleDisconnected ? uploadTooltipLabel : undefined}
+          tone={uploadTone}
+        >
+          <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">
+            {#if uploading}
+              {@render cancelIcon()}
+            {:else if uploadedIdle}
+              {@render uploadedIcon()}
+            {:else}
+              {@render uploadIcon()}
+            {/if}
+          </span>
+          <span class="@max-[520px]:hidden">{uploadLabel}</span>
+        </Button>
+      </Tooltip>
+      {#if canCancel && !uploading}
         <Button
           ariaLabel="Cancel transfer"
           onclick={onCancelTransfer}
@@ -244,7 +257,7 @@ let secondaryItems = $derived<MenuItem[]>([
       {/if}
     </ToolbarGroup>
 
-    <div>
+    <ToolbarGroup>
       <Menu
         items={secondaryItems}
         testId={missionWorkspaceTestIds.toolbarMoreButton}
@@ -254,6 +267,6 @@ let secondaryItems = $derived<MenuItem[]>([
         triggerLabelClass="@max-[520px]:hidden"
         triggerLabel="More"
       />
-    </div>
+    </ToolbarGroup>
   </Toolbar>
 </div>

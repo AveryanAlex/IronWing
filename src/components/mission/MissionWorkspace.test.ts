@@ -4,6 +4,52 @@ import { get, writable, type Writable } from "svelte/store";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.hoisted(() => {
+  if (typeof globalThis.ResizeObserver === "undefined") {
+    globalThis.ResizeObserver = class ResizeObserverMock {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as typeof ResizeObserver;
+  }
+
+  if (typeof globalThis.IntersectionObserver === "undefined") {
+    globalThis.IntersectionObserver = class IntersectionObserverMock {
+      root = null;
+      rootMargin = "0px";
+      thresholds = [];
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    } as typeof IntersectionObserver;
+  }
+
+  const elementPrototype = globalThis.Element?.prototype as (Element & {
+    setPointerCapture?: (pointerId: number) => void;
+    releasePointerCapture?: (pointerId: number) => void;
+    hasPointerCapture?: (pointerId: number) => boolean;
+    getAnimations?: () => Animation[];
+    animate?: Element["animate"];
+  }) | undefined;
+  if (elementPrototype && typeof elementPrototype.setPointerCapture !== "function") {
+    elementPrototype.setPointerCapture = () => {};
+    elementPrototype.releasePointerCapture = () => {};
+    elementPrototype.hasPointerCapture = () => false;
+  }
+  if (elementPrototype && typeof elementPrototype.getAnimations !== "function") {
+    elementPrototype.getAnimations = () => [];
+  }
+  if (elementPrototype && typeof elementPrototype.animate !== "function") {
+    elementPrototype.animate = () => ({
+      cancel() {},
+      finished: Promise.resolve(),
+    }) as Animation;
+  }
+});
+
 const {
   resetTerrainStateMock,
   setTerrainStateMock,
@@ -720,6 +766,30 @@ async function clickMissionToolbarMenuItem(testId: string): Promise<void> {
   await fireEvent.click(node);
 }
 
+const missionModeLabels = {
+  mission: { label: "Mission", testId: missionWorkspaceTestIds.modeMission },
+  fence: { label: "Fence", testId: missionWorkspaceTestIds.modeFence },
+  rally: { label: "Rally", testId: missionWorkspaceTestIds.modeRally },
+} as const;
+
+async function selectMissionMode(mode: keyof typeof missionModeLabels): Promise<void> {
+  const trigger = screen.getByRole("button", { name: "Select mission editing mode" });
+  if (trigger.getAttribute("aria-expanded") !== "true") {
+    trigger.focus();
+    await fireEvent.keyDown(trigger, { key: "Enter" });
+  }
+
+  const target = missionModeLabels[mode];
+  await waitFor(() => {
+    expect(document.querySelector(`[role="menuitem"][data-testid="${target.testId}"]`)).toBeTruthy();
+  });
+  const item = document.querySelector<HTMLElement>(`[role="menuitem"][data-testid="${target.testId}"]`);
+  if (!item) {
+    throw new Error(`Mission mode menu item "${target.label}" was not found while the mode dropdown was open.`);
+  }
+  await fireEvent.click(item);
+}
+
 function setMissionMapSurfaceRect() {
   const surface = screen.getByTestId(missionWorkspaceTestIds.mapSurface);
   Object.defineProperty(surface, "getBoundingClientRect", {
@@ -743,11 +813,48 @@ function readMissionMapDebug() {
   return JSON.parse(screen.getByTestId(missionWorkspaceTestIds.mapDebug).textContent ?? "{}");
 }
 
-async function openHomeInfo() {
-  await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.homeInfoButton));
-  await waitFor(() => {
-    expect(screen.getByTestId(missionWorkspaceTestIds.homeInfoPopup)).toBeTruthy();
-  });
+function createTestDataTransfer(): DataTransfer {
+  const data = new Map<string, string>();
+  return {
+    dropEffect: "move",
+    effectAllowed: "move",
+    setData: (format: string, value: string) => data.set(format, value),
+    getData: (format: string) => data.get(format) ?? "",
+    clearData: (format?: string) => {
+      if (format) {
+        data.delete(format);
+        return;
+      }
+      data.clear();
+    },
+  } as unknown as DataTransfer;
+}
+
+async function dragMissionItem(sourceUiId: number | undefined, targetUiId: number | undefined) {
+  expect(sourceUiId).toBeTypeOf("number");
+  expect(targetUiId).toBeTypeOf("number");
+
+  const dataTransfer = createTestDataTransfer();
+  const sourceHandle = screen.getByTestId(`${missionWorkspaceTestIds.itemDragPrefix}-${sourceUiId}`);
+  const targetRow = screen.getByTestId(`${missionWorkspaceTestIds.itemPrefix}-${targetUiId}`);
+
+  await fireEvent.dragStart(sourceHandle, { dataTransfer });
+  await fireEvent.dragOver(targetRow, { dataTransfer });
+  await fireEvent.drop(targetRow, { dataTransfer });
+  await fireEvent.dragEnd(sourceHandle, { dataTransfer });
+}
+
+async function dragSurveyBlock(sourceRegionId: string, targetTestId: string) {
+  expect(sourceRegionId).not.toBe("");
+
+  const dataTransfer = createTestDataTransfer();
+  const sourceHandle = screen.getByTestId(`${missionWorkspaceTestIds.surveyDragPrefix}-${sourceRegionId}`);
+  const targetRow = screen.getByTestId(targetTestId);
+
+  await fireEvent.dragStart(sourceHandle, { dataTransfer });
+  await fireEvent.dragOver(targetRow, { dataTransfer });
+  await fireEvent.drop(targetRow, { dataTransfer });
+  await fireEvent.dragEnd(sourceHandle, { dataTransfer });
 }
 
 function getHistoryButton(kind: "undo" | "redo") {
@@ -781,6 +888,7 @@ async function renderWorkspace(options: {
   fileIoOverrides?: Partial<MissionPlanFileIo>;
   chromeStore?: ReturnType<typeof createStaticShellChromeStore> | Writable<ReturnType<typeof createShellChromeState>>;
   includeShellChromeContext?: boolean;
+  deferSessionInitialize?: boolean;
   componentProps?: Record<string, unknown>;
   setup?: (context: {
     plannerStore: ReturnType<typeof createMissionPlannerStore>;
@@ -794,7 +902,9 @@ async function renderWorkspace(options: {
   const sessionStore = createSessionStore(sessionHarness.service);
   const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo);
 
-  await sessionStore.initialize();
+  if (!options.deferSessionInitialize) {
+    await sessionStore.initialize();
+  }
   await plannerStore.initialize();
 
   if (options.setup) {
@@ -835,32 +945,38 @@ describe("MissionWorkspace", () => {
     cleanup();
   });
 
-  it("shows entry actions first and mounts the real editor after starting a blank mission", async () => {
+  it("opens directly into an empty editor and keeps load actions in the toolbar menu", async () => {
     const { plannerStore } = await renderWorkspace();
 
     expect(screen.getByTestId(missionWorkspaceTestIds.root)).toBeTruthy();
-    expect(screen.getByTestId(missionWorkspaceTestIds.empty)).toBeTruthy();
-    expect(screen.getByTestId(missionWorkspaceTestIds.entryRead)).toBeTruthy();
-    expect(screen.getByTestId(missionWorkspaceTestIds.entryImport)).toBeTruthy();
-    expect(screen.getByTestId(missionWorkspaceTestIds.entryImportKml)).toBeTruthy();
-    expect(screen.getByTestId(missionWorkspaceTestIds.entryNew)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.state).textContent).toContain("empty");
+    expect(screen.queryByText("Planner entry")).toBeNull();
+    expect(screen.queryByText("Start this scope with a real planner entry action")).toBeNull();
     expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("wide");
     expect(screen.getByTestId(missionWorkspaceTestIds.layoutTier).textContent).toContain("wide");
     expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentState).textContent).toContain("all-visible");
-
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
     });
 
+    expect(await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarRead)).toBeTruthy();
+    expect(await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarImport)).toBeTruthy();
+    expect(await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarNew)).toBeTruthy();
+
     expect(screen.getByTestId(missionWorkspaceTestIds.homeCard)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "HOME POSITION" })).toBeTruthy();
+    const homeDocsLink = screen.getByTestId(missionWorkspaceTestIds.homeDocsLink) as HTMLAnchorElement;
+    expect(homeDocsLink.textContent).toContain("ArduPilot docs");
+    expect(homeDocsLink.href).toContain("ardupilot.org");
+    expect(screen.queryByRole("button", { name: /^Clear$/i })).toBeNull();
+    expect(screen.queryByText("Set a Home position for this mission draft.")).toBeNull();
     expect(screen.getByTestId(missionWorkspaceTestIds.map)).toBeTruthy();
     // Wide mode uses SplitPane — no map/plan pane wrappers, both panels always visible
     expect(screen.queryByTestId(missionWorkspaceTestIds.mapPane)).toBeNull();
     expect(screen.queryByTestId(missionWorkspaceTestIds.planPane)).toBeNull();
     expect(screen.queryByTestId(missionWorkspaceTestIds.phoneSegmentBar)).toBeNull();
-    expect(screen.getByTestId(missionWorkspaceTestIds.mapEmpty)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.draftList)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.listEmpty)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("home");
@@ -869,8 +985,6 @@ describe("MissionWorkspace", () => {
 
   it("renders a real basemap under the planner surface", async () => {
     await renderWorkspace();
-
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
@@ -881,8 +995,6 @@ describe("MissionWorkspace", () => {
 
   it("keeps the basemap instance stable while planner state updates", async () => {
     const { plannerStore } = await renderWorkspace();
-
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.mapBasemap)).toBeTruthy();
@@ -899,7 +1011,6 @@ describe("MissionWorkspace", () => {
     setMaplibreCtorFailure(true);
 
     await renderWorkspace();
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
@@ -911,7 +1022,9 @@ describe("MissionWorkspace", () => {
   it("surfaces async basemap load failures without unmounting the planner", async () => {
     await renderWorkspace();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
+    });
     emitMaplibreEvent("error", { error: new Error("style load failed") });
 
     await waitFor(() => {
@@ -1118,7 +1231,7 @@ describe("MissionWorkspace", () => {
     });
     await flush();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
+    await clickMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarNew);
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
@@ -1166,7 +1279,7 @@ describe("MissionWorkspace", () => {
     expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsFenceCard)).toBeNull();
     expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsRallyCard)).toBeNull();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await selectMissionMode("fence");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
@@ -1176,7 +1289,7 @@ describe("MissionWorkspace", () => {
     expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsMissionCard)).toBeNull();
     expect(screen.queryByTestId(missionWorkspaceTestIds.planningStatsRallyCard)).toBeNull();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    await selectMissionMode("rally");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.planningStatsPanel)).toBeTruthy();
@@ -1393,7 +1506,9 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
     });
 
+    const firstUiId = get(plannerStore).draftState.active.mission.draftItems[0]?.uiId;
     const secondUiId = get(plannerStore).draftState.active.mission.draftItems[1]?.uiId;
+    expect(firstUiId).toBeTypeOf("number");
     expect(secondUiId).toBeTypeOf("number");
 
     await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.mapMarkerPrefix}-${secondUiId}`));
@@ -1401,7 +1516,7 @@ describe("MissionWorkspace", () => {
       expect(get(plannerStore).draftState.active.mission.primarySelectedUiId).toBe(secondUiId);
     });
 
-    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.itemMoveUpPrefix}-${secondUiId}`));
+    await dragMissionItem(secondUiId, firstUiId);
 
     await waitFor(() => {
       expect(get(plannerStore).draftState.active.mission.draftItems[0]?.uiId).toBe(secondUiId);
@@ -1413,7 +1528,6 @@ describe("MissionWorkspace", () => {
   it("adds, edits, reorders, and deletes manual mission items through the mounted workspace", async () => {
     const { plannerStore } = await renderWorkspace();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
     });
@@ -1422,6 +1536,15 @@ describe("MissionWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("mission-item");
     });
+
+    expect(screen.getByTestId(missionWorkspaceTestIds.inspectorCommandHelp).textContent).toContain("Fly to a waypoint");
+    const inspectorDocsLink = screen.getByTestId(missionWorkspaceTestIds.inspectorCommandDocs) as HTMLAnchorElement;
+    expect(inspectorDocsLink.href).toContain("ardupilot.org");
+    const holdInfoButton = screen.getByTestId(`${missionWorkspaceTestIds.inspectorFieldInfoPrefix}-hold_time_s`);
+    expect(holdInfoButton.getAttribute("aria-expanded")).toBe("false");
+    await fireEvent.click(holdInfoButton);
+    expect(holdInfoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId(`${missionWorkspaceTestIds.inspectorFieldHelpPrefix}-hold_time_s`).textContent).toContain("Time to hold");
 
     await fireEvent.change(screen.getByTestId(`${missionWorkspaceTestIds.inspectorFieldPrefix}-hold_time_s`), {
       target: { value: "12" },
@@ -1471,7 +1594,7 @@ describe("MissionWorkspace", () => {
     expect(firstUiId).toBeTypeOf("number");
     expect(secondUiId).toBeTypeOf("number");
 
-    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.itemMoveUpPrefix}-${secondUiId}`));
+    await dragMissionItem(secondUiId, firstUiId);
     await waitFor(() => {
       expect(get(plannerStore).draftState.active.mission.draftItems[0]?.uiId).toBe(secondUiId);
     });
@@ -1518,25 +1641,40 @@ describe("MissionWorkspace", () => {
       expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(2);
       expect(get(plannerStore).survey.surveyRegionOrder[1]?.position).toBe(1);
     });
+    const manualAnchorRegionId = get(plannerStore).survey.surveyRegionOrder[1]?.regionId ?? "";
 
     await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.surveyPrefix}-${firstRegionId}`));
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyStructure));
 
+    let surveyAnchorRegionId = "";
     await waitFor(() => {
       const state = get(plannerStore);
       expect(state.survey.surveyRegionOrder).toHaveLength(3);
       expect(state.survey.surveyRegionOrder[0]?.position).toBe(0);
       expect(state.survey.surveyRegionOrder[1]?.position).toBe(0);
       expect(state.survey.surveyRegionOrder[2]?.position).toBe(1);
+      surveyAnchorRegionId = state.survey.surveyRegionOrder[1]?.regionId ?? "";
 
       const orderedPatterns = state.survey.surveyRegionOrder.map((block) => state.survey.surveyRegions.get(block.regionId)?.patternType);
       expect(orderedPatterns).toEqual(["grid", "structure", "corridor"]);
     });
 
     expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("survey-block");
+
+    await dragSurveyBlock(manualAnchorRegionId, `${missionWorkspaceTestIds.surveyPrefix}-${firstRegionId}`);
+
+    await waitFor(() => {
+      const state = get(plannerStore);
+      expect(state.survey.surveyRegionOrder.map((block) => block.regionId)).toEqual([
+        manualAnchorRegionId,
+        firstRegionId,
+        surveyAnchorRegionId,
+      ]);
+      expect(state.survey.surveyRegionOrder.map((block) => block.position)).toEqual([0, 0, 0]);
+    });
   });
 
-  it("draws survey regions directly on the blank planner surface and cancels unfinished map sessions safely", async () => {
+  it("creates surveys from the waypoint panel and keeps map geometry edit sessions scoped", async () => {
     const { plannerStore } = await renderWorkspace({
       setup: ({ plannerStore }) => {
         plannerStore.replaceWorkspace(makeWorkspace({
@@ -1552,7 +1690,7 @@ describe("MissionWorkspace", () => {
 
     setMissionMapSurfaceRect();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawStartGrid));
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyGrid));
     await waitFor(() => {
       expect(get(plannerStore).selection.kind).toBe("survey-block");
       expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(1);
@@ -1561,16 +1699,15 @@ describe("MissionWorkspace", () => {
     const gridRegionId = get(plannerStore).survey.surveyRegionOrder[0]?.regionId ?? "";
     expect(gridRegionId).not.toBe("");
 
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawEdit));
     let drawSurface = screen.getByRole("button", { name: /add survey point on planner map/i });
     await fireEvent.click(drawSurface, { clientX: 160, clientY: 440 });
-    await fireEvent.click(drawSurface, { clientX: 700, clientY: 420 });
-    await fireEvent.click(drawSurface, { clientX: 620, clientY: 180 });
 
     await waitFor(() => {
       const region = get(plannerStore).survey.surveyRegions.get(gridRegionId);
-      expect(region?.polygon).toHaveLength(3);
-      expect(readMissionMapDebug().drawMode).toBe("draw");
-      expect(readMissionMapDebug().drawPointCount).toBe(3);
+      expect(region?.polygon).toHaveLength(5);
+      expect(readMissionMapDebug().drawMode).toBe("edit");
+      expect(readMissionMapDebug().drawPointCount).toBe(5);
     });
 
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawFinish));
@@ -1580,19 +1717,21 @@ describe("MissionWorkspace", () => {
       expect(get(plannerStore).selection).toEqual({ kind: "survey-block", regionId: gridRegionId });
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawStartCorridor));
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyCorridor));
     await waitFor(() => {
       expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(2);
     });
 
     const corridorRegionId = get(plannerStore).survey.surveyRegionOrder[1]?.regionId ?? "";
+    const originalCorridorPointCount = get(plannerStore).survey.surveyRegions.get(corridorRegionId)?.polyline.length ?? 0;
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawEdit));
     drawSurface = screen.getByRole("button", { name: /add survey point on planner map/i });
     await fireEvent.click(drawSurface, { clientX: 280, clientY: 260 });
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawCancel));
 
     await waitFor(() => {
-      expect(get(plannerStore).survey.surveyRegions.has(corridorRegionId)).toBe(false);
-      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(1);
+      expect(get(plannerStore).survey.surveyRegions.get(corridorRegionId)?.polyline).toHaveLength(originalCorridorPointCount);
+      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(2);
       expect(readMissionMapDebug().drawMode).toBe("idle");
     });
   });
@@ -1744,7 +1883,6 @@ describe("MissionWorkspace", () => {
   it("keeps incomplete home edits local until all three values are valid", async () => {
     const { plannerStore } = await renderWorkspace();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.homeCard)).toBeTruthy();
     });
@@ -1806,14 +1944,14 @@ describe("MissionWorkspace", () => {
     plannerStore.replaceWorkspace(makeWorkspace());
     await flush();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeMission));
+    await selectMissionMode("mission");
     await plannerStore.validateCurrentMission();
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.warningValidation).textContent).toContain("Survey path drifts outside the lane.");
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await selectMissionMode("fence");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceInspectorSelectionKind).textContent).toContain("none");
@@ -1828,10 +1966,10 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await selectMissionMode("fence");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
-      expect(screen.getByTestId(missionWorkspaceTestIds.mapFenceCount).textContent).toContain("3");
+      expect(readMissionMapDebug().counts.fenceFeatures).toBe(3);
     });
 
     setMissionMapSurfaceRect();
@@ -1894,7 +2032,7 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await selectMissionMode("fence");
     const firstFenceUiId = get(plannerStore).draftState.active.fence.draftItems[0]?.uiId;
     expect(firstFenceUiId).toBeTypeOf("number");
 
@@ -1916,7 +2054,7 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(`${missionWorkspaceTestIds.warningItemPrefix}-0`).textContent).toContain("Blocked action");
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeMission));
+    await selectMissionMode("mission");
     await fireEvent.click(screen.getByRole("button", { name: /open fence mode/i }));
 
     await waitFor(() => {
@@ -1943,7 +2081,7 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await selectMissionMode("fence");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
       expect((screen.getByTestId(missionWorkspaceTestIds.fenceAddInclusionPolygon) as HTMLButtonElement).disabled).toBe(true);
@@ -1966,13 +2104,12 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    await selectMissionMode("rally");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
-      expect(screen.getByTestId(missionWorkspaceTestIds.mapRallyCount).textContent).toContain("2");
+      expect(readMissionMapDebug().rallyMarkerCount).toBe(2);
     });
-    await openHomeInfo();
-    expect(screen.getByTestId(missionWorkspaceTestIds.homeSync).textContent).toContain("Live mission reads can refresh Home");
+    expect(screen.getByTestId(missionWorkspaceTestIds.homeDocsLink)).toBeTruthy();
 
     const firstRallyUiId = get(plannerStore).draftState.active.rally.draftItems[0]?.uiId;
     expect(firstRallyUiId).toBeTypeOf("number");
@@ -2038,7 +2175,7 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    await selectMissionMode("rally");
     const firstRallyUiId = get(plannerStore).draftState.active.rally.draftItems[0]?.uiId;
     expect(firstRallyUiId).toBeTypeOf("number");
 
@@ -2050,7 +2187,7 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(`${missionWorkspaceTestIds.warningItemPrefix}-0`).textContent).toContain("Blocked action");
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeMission));
+    await selectMissionMode("mission");
     await fireEvent.click(screen.getByRole("button", { name: /open rally mode/i }));
 
     await waitFor(() => {
@@ -2082,13 +2219,13 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    await selectMissionMode("rally");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
       expect((screen.getByTestId(missionWorkspaceTestIds.rallyAdd) as HTMLButtonElement).disabled).toBe(true);
     });
-    await openHomeInfo();
-    expect(screen.getByTestId(missionWorkspaceTestIds.homeSync).textContent).toContain("Playback keeps the last known Home visible");
+    expect(screen.queryByRole("button", { name: /^Clear$/i })).toBeNull();
+    expect(screen.getByTestId(missionWorkspaceTestIds.homeReadOnly).textContent).toContain("Playback keeps the planner mounted");
 
     const playbackRallyUiId = get(plannerStore).draftState.active.rally.draftItems[0]?.uiId;
     await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.rallyPointPrefix}-${playbackRallyUiId}`));
@@ -2323,16 +2460,16 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    const readButton = screen.getByTestId(missionWorkspaceTestIds.entryRead) as HTMLButtonElement;
-    await fireEvent.click(readButton);
+    await clickMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarRead);
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.inlineStatusMessage).textContent).toContain("Reading planning state");
     });
-    expect(readButton.disabled).toBe(true);
+    const busyReadItem = await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarRead);
+    expect(busyReadItem.getAttribute("data-disabled")).not.toBeNull();
     expect(plannerHarness.service.downloadWorkspace).toHaveBeenCalledTimes(1);
 
-    readButton.click();
+    await fireEvent.click(busyReadItem);
     expect(plannerHarness.service.downloadWorkspace).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId(missionWorkspaceTestIds.toolbarCancel)).toBeTruthy();
 
@@ -2341,6 +2478,98 @@ describe("MissionWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.error).textContent).toContain("mission download failed");
     });
+  });
+
+  it("turns the upload button into cancel while uploading and marks the uploaded state until the draft changes", async () => {
+    const pendingUpload = deferred<void>();
+    const { plannerStore, plannerHarness } = await renderWorkspace({
+      plannerServiceOverrides: {
+        uploadWorkspace: vi.fn(() => pendingUpload.promise),
+      },
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({
+          home: { latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 },
+        }));
+      },
+    });
+
+    const uploadButton = screen.getByTestId(missionWorkspaceTestIds.toolbarUpload) as HTMLButtonElement;
+    await fireEvent.click(uploadButton);
+
+    await waitFor(() => {
+      expect(plannerHarness.service.uploadWorkspace).toHaveBeenCalledTimes(1);
+      expect(uploadButton.textContent).toContain("Cancel");
+      expect(uploadButton.getAttribute("aria-label")).toBe("Cancel upload");
+      expect(uploadButton.getAttribute("data-tone")).toBe("warning");
+      expect(screen.queryByTestId(missionWorkspaceTestIds.inlineStatus)).toBeNull();
+      expect(screen.queryByTestId(missionWorkspaceTestIds.toolbarCancel)).toBeNull();
+    });
+
+    await fireEvent.click(uploadButton);
+    expect(plannerHarness.service.cancelTransfer).toHaveBeenCalledTimes(1);
+    pendingUpload.resolve();
+    await flush();
+
+    await fireEvent.click(uploadButton);
+
+    await waitFor(() => {
+      expect(uploadButton.textContent).toContain("Uploaded");
+      expect(uploadButton.getAttribute("aria-label")).toBe("Uploaded to vehicle");
+      expect(uploadButton.getAttribute("data-tone")).toBe("success");
+    });
+
+    plannerStore.addMissionItem();
+
+    await waitFor(() => {
+      expect(uploadButton.textContent).toContain("Upload");
+      expect(uploadButton.getAttribute("aria-label")).toBe("Upload to vehicle");
+      expect(uploadButton.getAttribute("data-tone")).toBe("accent");
+    });
+  });
+
+  it("enables read and upload for locally-authored drafts after a live vehicle connects", async () => {
+    const { plannerHarness, sessionStore } = await renderWorkspace({
+      snapshots: [
+        createSnapshot({
+          session: {
+            available: true,
+            complete: true,
+            provenance: "bootstrap",
+            value: {
+              status: "active",
+              connection: { kind: "disconnected" },
+              vehicle_state: null,
+              home_position: null,
+            },
+          },
+        }),
+        createSnapshot(),
+      ],
+      setup: ({ plannerStore }) => {
+        plannerStore.addMissionItem();
+      },
+    });
+
+    const uploadButton = screen.getByTestId(missionWorkspaceTestIds.toolbarUpload) as HTMLButtonElement;
+    expect(uploadButton.disabled).toBe(true);
+    expect(uploadButton.getAttribute("title")).toContain("Connect a vehicle");
+
+    let readItem = await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarRead);
+    expect(readItem.getAttribute("data-disabled")).not.toBeNull();
+    expect(readItem.getAttribute("title")).toContain("Connect a vehicle");
+
+    await sessionStore.bootstrapSource("live");
+    await flush();
+
+    await waitFor(() => {
+      expect(uploadButton.disabled).toBe(false);
+      expect(uploadButton.getAttribute("title") ?? "").not.toContain("Connect a vehicle");
+    });
+    readItem = await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarRead);
+    expect(readItem.getAttribute("data-disabled")).toBeNull();
+
+    await fireEvent.click(uploadButton);
+    expect(plannerHarness.service.uploadWorkspace).toHaveBeenCalledTimes(1);
   });
 
   it("shows a same-scope recoverable-draft prompt when returning to a scope and restores it explicitly", async () => {
@@ -2416,7 +2645,6 @@ describe("MissionWorkspace", () => {
   it("routes mission undo and redo through workspace shortcuts but leaves focused editors alone", async () => {
     const { plannerStore } = await renderWorkspace();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
     });
@@ -2476,26 +2704,28 @@ describe("MissionWorkspace", () => {
 
     setMissionMapSurfaceRect();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawStartGrid));
-    await waitFor(() => {
-      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(1);
-      expect(readMissionMapDebug().drawMode).toBe("draw");
-    });
-
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyGrid));
     const regionId = get(plannerStore).survey.surveyRegionOrder[0]?.regionId ?? "";
     expect(regionId).not.toBe("");
+    const originalPointCount = get(plannerStore).survey.surveyRegions.get(regionId)?.polygon.length ?? 0;
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawEdit));
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(1);
+      expect(readMissionMapDebug().drawMode).toBe("edit");
+    });
 
     const drawSurface = screen.getByRole("button", { name: /add survey point on planner map/i });
     await fireEvent.click(drawSurface, { clientX: 160, clientY: 440 });
 
     await waitFor(() => {
-      expect(readMissionMapDebug().drawPointCount).toBe(1);
+      expect(readMissionMapDebug().drawPointCount).toBe(originalPointCount + 1);
     });
 
     await fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => {
       expect(readMissionMapDebug().drawMode).toBe("idle");
-      expect(get(plannerStore).survey.surveyRegions.has(regionId)).toBe(false);
+      expect(get(plannerStore).survey.surveyRegions.get(regionId)?.polygon).toHaveLength(originalPointCount);
     });
   });
 
@@ -2678,7 +2908,7 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await selectMissionMode("fence");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
     });
@@ -2696,7 +2926,7 @@ describe("MissionWorkspace", () => {
       expect(region && "exclusion_circle" in region ? region.exclusion_circle.radius_m : 0).toBe(120);
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeRally));
+    await selectMissionMode("rally");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
     });
@@ -2726,7 +2956,7 @@ describe("MissionWorkspace", () => {
     const fenceAfterRallyUndo = get(plannerStore).draftState.active.fence.draftItems.find((item) => item.uiId === circleUiId)?.document;
     expect(fenceAfterRallyUndo && "exclusion_circle" in fenceAfterRallyUndo ? fenceAfterRallyUndo.exclusion_circle.radius_m : 0).toBe(120);
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.modeFence));
+    await selectMissionMode("fence");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
       expect(getHistoryCount("undo")).toBeGreaterThan(0);

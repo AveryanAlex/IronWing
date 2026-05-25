@@ -93,7 +93,9 @@ test.describe("mocked mission planner workflow", () => {
 
         await openMissionWorkspace(page);
         await expectMissionWorkspace(page);
-        await expect(missionWorkspaceLocator(page, "empty")).toBeVisible();
+        await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
+        await expect(missionWorkspaceLocator(page, "state")).toContainText("empty");
+        await expect(missionWorkspaceLocator(page, "mapSurface")).toBeVisible();
         await expectMissionHistoryState(
             page,
             {
@@ -104,8 +106,9 @@ test.describe("mocked mission planner workflow", () => {
         );
 
         await mockPlatform.cancelOpenFile();
-        await missionWorkspaceLocator(page, "entryImport").click();
-        await expect(missionWorkspaceLocator(page, "empty")).toBeVisible();
+        await clickMissionToolbarSecondary(page, "toolbarImport");
+        await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
+        await expect(missionWorkspaceLocator(page, "state")).toContainText("empty");
         await expectMissionHistoryState(
             page,
             {
@@ -115,14 +118,17 @@ test.describe("mocked mission planner workflow", () => {
             "Cancelling import should leave history unchanged instead of inventing a recoverable step.",
         );
 
-        await missionWorkspaceLocator(page, "entryRead").click();
+        await clickMissionToolbarSecondary(page, "toolbarRead");
         await expect(missionWorkspaceLocator(page, "inlineStatusMessage")).toContainText("Reading planning state");
         await expect(missionWorkspaceLocator(page, "inlineStatusDetail")).toContainText("download mission");
         await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
         await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("2");
         await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
         await expect(missionWorkspaceLocator(page, "homeSummary")).toContainText("47.39774");
-        await expect(missionWorkspaceLocator(page, "mapMarkerCount")).toContainText("3");
+        await expect.poll(async () => {
+            const snapshot = await readMissionMapDebugSnapshot(page) as { counts?: { markers?: number } } | null;
+            return snapshot?.counts?.markers ?? 0;
+        }).toBe(3);
         await expectMissionHistoryState(
             page,
             {
@@ -133,7 +139,9 @@ test.describe("mocked mission planner workflow", () => {
         );
 
         await missionHistoryButtonLocator(page, "undo").click();
-        await expect(missionWorkspaceLocator(page, "empty")).toBeVisible();
+        await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
+        await expect(missionWorkspaceLocator(page, "state")).toContainText("empty");
+        await expect(missionWorkspaceLocator(page, "mapSurface")).toBeVisible();
         await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("0 / 0");
         await expectMissionHistoryState(
             page,

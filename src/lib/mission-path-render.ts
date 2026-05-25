@@ -14,10 +14,12 @@ import {
   type GeoRef,
 } from "./mission-coordinates";
 import { sampleArcPoints, sampleSplinePoints } from "./mission-path-interpolation";
+import { dissolveRegion, type SurveyDraftExtension } from "./survey-region";
 
 export type MissionRenderCoordinate = [longitude_deg: number, latitude_deg: number];
 
 export type MissionRenderEndpoint = {
+  routeKey: string;
   itemIndex: number | null;
   latitude_deg: number;
   longitude_deg: number;
@@ -25,6 +27,7 @@ export type MissionRenderEndpoint = {
 };
 
 export type MissionRenderLeg = {
+  id: string;
   kind: "straight" | "spline" | "arc";
   coordinates: MissionRenderCoordinate[];
   from: MissionRenderEndpoint;
@@ -37,9 +40,10 @@ export type MissionRenderLeg = {
 };
 
 export type MissionRenderLoiterCircle = {
+  id: string;
   kind: "loiter";
   coordinates: MissionRenderCoordinate[][];
-  itemIndex: number;
+  itemIndex: number | null;
   center: MissionRenderCoordinate;
   radius_m: number;
   direction: LoiterDirection;
@@ -47,6 +51,7 @@ export type MissionRenderLoiterCircle = {
 };
 
 export type MissionRenderLabel = {
+  id: string;
   kind: "label";
   coordinate: MissionRenderCoordinate;
   itemIndex: number | null;
@@ -99,10 +104,19 @@ type ClassifiedRenderCommand =
   };
 
 type RenderNode = {
+  routeKey: string;
   itemIndex: number | null;
+  surveyRegionId?: string;
   position: GeoRef;
   isHome: boolean;
   classified: ClassifiedRenderCommand | null;
+};
+
+type MissionRenderCommandInput = {
+  routeKey: string;
+  itemIndex: number | null;
+  surveyRegionId?: string;
+  command: MissionCommand;
 };
 
 const DEFAULT_LOITER_TIME_RADIUS_M = 30;
@@ -228,6 +242,23 @@ export function buildMissionRenderFeatures(
   items: TypedDraftItem[],
   options?: { currentSeq?: number | null },
 ): MissionRenderFeatures {
+  return buildMissionRenderFeaturesFromCommands(homePosition, manualMissionRenderInputs(items), options);
+}
+
+export function buildMissionRenderFeaturesWithSurveys(
+  homePosition: HomePosition | null,
+  items: TypedDraftItem[],
+  survey: SurveyDraftExtension,
+  options?: { currentSeq?: number | null },
+): MissionRenderFeatures {
+  return buildMissionRenderFeaturesFromCommands(homePosition, missionRenderInputsWithSurveys(items, survey), options);
+}
+
+function buildMissionRenderFeaturesFromCommands(
+  homePosition: HomePosition | null,
+  items: MissionRenderCommandInput[],
+  options?: { currentSeq?: number | null },
+): MissionRenderFeatures {
   const features: MissionRenderFeatures = {
     legs: [],
     loiterCircles: [],
@@ -239,6 +270,7 @@ export function buildMissionRenderFeatures(
 
   if (homePosition) {
     nodes.push({
+      routeKey: "home",
       itemIndex: null,
       position: {
         latitude_deg: homePosition.latitude_deg,
@@ -250,30 +282,26 @@ export function buildMissionRenderFeatures(
   }
 
   for (const item of items) {
-    const document = item.document as Partial<MissionItem>;
-    const command = document?.command;
-    if (!command || typeof command !== "object") {
-      continue;
-    }
-
-    const classified = classifyMissionRenderCommand(command as MissionCommand);
+    const classified = classifyMissionRenderCommand(item.command);
     if (!classified) {
       continue;
     }
 
-    if (classified.kind === "land_start" && features.landingStartIndex === null) {
-      features.landingStartIndex = item.index;
+    if (classified.kind === "land_start" && features.landingStartIndex === null && item.itemIndex !== null) {
+      features.landingStartIndex = item.itemIndex;
     }
 
     nodes.push({
-      itemIndex: item.index,
+      routeKey: item.routeKey,
+      itemIndex: item.itemIndex,
+      surveyRegionId: item.surveyRegionId,
       position: classified.position,
       isHome: false,
       classified,
     });
 
     if (classified.kind === "loiter" && classified.radius_m > 0) {
-      features.loiterCircles.push(buildLoiterCircleFeature(classified, item.index));
+      features.loiterCircles.push(buildLoiterCircleFeature(classified, item.itemIndex, item.routeKey));
     }
   }
 
@@ -281,6 +309,9 @@ export function buildMissionRenderFeatures(
     const previous = nodes[index - 1];
     const current = nodes[index];
     if (!previous || !current) {
+      continue;
+    }
+    if (previous.surveyRegionId && previous.surveyRegionId === current.surveyRegionId) {
       continue;
     }
 
@@ -320,6 +351,7 @@ export function buildMissionRenderFeatures(
     const toEndpoint = buildEndpoint(current);
 
     const leg: MissionRenderLeg = {
+      id: `mission-leg-${previous.routeKey}-to-${current.routeKey}`,
       kind,
       coordinates,
       from: fromEndpoint,
@@ -341,8 +373,83 @@ export function buildMissionRenderFeatures(
   return features;
 }
 
+function manualMissionRenderInputs(items: TypedDraftItem[]): MissionRenderCommandInput[] {
+  return items.flatMap((item) => {
+    const command = commandFromMissionItemDocument(item.document);
+    return command
+      ? [{ routeKey: `mission-${item.uiId}`, itemIndex: item.index, command }]
+      : [];
+  });
+}
+
+function missionRenderInputsWithSurveys(
+  items: TypedDraftItem[],
+  survey: SurveyDraftExtension,
+): MissionRenderCommandInput[] {
+  const inputs: MissionRenderCommandInput[] = [];
+  const orderedBlocks = survey.surveyRegionOrder
+    .map((block, orderIndex) => ({ block, orderIndex }))
+    .sort((left, right) => left.block.position - right.block.position || left.orderIndex - right.orderIndex);
+  let blockIndex = 0;
+
+  const appendSurveysAtPosition = (position: number) => {
+    while (blockIndex < orderedBlocks.length && orderedBlocks[blockIndex]?.block.position === position) {
+      const regionId = orderedBlocks[blockIndex]?.block.regionId;
+      const region = regionId ? survey.surveyRegions.get(regionId) ?? null : null;
+      if (region) {
+        inputs.push(...surveyEndpointRenderInputs(region.id, dissolveRegion(region)));
+      }
+      blockIndex += 1;
+    }
+  };
+
+  appendSurveysAtPosition(0);
+
+  items.forEach((item, itemIndex) => {
+    const command = commandFromMissionItemDocument(item.document);
+    if (command) {
+      inputs.push({ routeKey: `mission-${item.uiId}`, itemIndex: item.index, command });
+    }
+    appendSurveysAtPosition(itemIndex + 1);
+  });
+
+  while (blockIndex < orderedBlocks.length) {
+    appendSurveysAtPosition(orderedBlocks[blockIndex]?.block.position ?? 0);
+  }
+
+  return inputs;
+}
+
+function commandFromMissionItemDocument(document: TypedDraftItem["document"] | MissionItem): MissionCommand | null {
+  const missionItem = document as Partial<MissionItem>;
+  const command = missionItem?.command;
+  return command && typeof command === "object" ? command as MissionCommand : null;
+}
+
+function surveyEndpointRenderInputs(regionId: string, missionItems: MissionItem[]): MissionRenderCommandInput[] {
+  const positionalInputs = missionItems.flatMap((missionItem, localIndex) => {
+    const command = commandFromMissionItemDocument(missionItem);
+    return command && classifyMissionRenderCommand(command)
+      ? [{ routeKey: `survey-${regionId}-${localIndex}`, itemIndex: null, surveyRegionId: regionId, command }]
+      : [];
+  });
+
+  const first = positionalInputs[0];
+  const last = positionalInputs[positionalInputs.length - 1];
+  if (!first) {
+    return [];
+  }
+
+  if (!last || last.routeKey === first.routeKey) {
+    return [first];
+  }
+
+  return [first, last];
+}
+
 function buildEndpoint(node: RenderNode): MissionRenderEndpoint {
   return {
+    routeKey: node.routeKey,
     itemIndex: node.itemIndex,
     latitude_deg: node.position.latitude_deg,
     longitude_deg: node.position.longitude_deg,
@@ -407,7 +514,8 @@ function sampleArcSegment(
 
 function buildLoiterCircleFeature(
   loiter: Extract<ClassifiedRenderCommand, { kind: "loiter" }>,
-  itemIndex: number,
+  itemIndex: number | null,
+  routeKey: string,
 ): MissionRenderLoiterCircle {
   const ring: MissionRenderCoordinate[] = [];
   for (let vertex = 0; vertex < LOITER_CIRCLE_VERTICES; vertex += 1) {
@@ -422,6 +530,7 @@ function buildLoiterCircleFeature(
   ring.push(ring[0]!);
 
   return {
+    id: `mission-loiter-${routeKey}`,
     kind: "loiter",
     coordinates: [ring],
     itemIndex,
@@ -451,6 +560,7 @@ function buildLegLabel(leg: MissionRenderLeg): MissionRenderLabel | null {
   const bearingText = formatBearingLabel(bearing_deg);
 
   return {
+    id: `mission-label-${leg.id}`,
     kind: "label",
     coordinate: toCoordinate(midpoint),
     itemIndex: leg.to.itemIndex,

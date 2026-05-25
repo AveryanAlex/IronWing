@@ -187,15 +187,10 @@ async function expectMissionHeaderValidateButtonAbsent(page: Page) {
     await expect(missionWorkspaceLocator(page, "header").getByRole("button", { name: /validate mission/i })).toHaveCount(0);
 }
 
-async function expectHomeSyncCopy(page: Page, text: string) {
-    const popup = page.locator(`[data-testid="${missionWorkspaceTestIds.homeInfoPopup}"]`);
-
-    if (!await popup.isVisible().catch(() => false)) {
-        await page.locator(`[data-testid="${missionWorkspaceTestIds.homeInfoButton}"]`).click();
-        await expect(popup).toBeVisible();
-    }
-
-    await expect(missionWorkspaceLocator(page, "homeSync")).toContainText(text);
+async function expectHomeDocsLink(page: Page) {
+    const docsLink = missionWorkspaceLocator(page, "homeDocsLink");
+    await expect(docsLink).toContainText("ArduPilot docs");
+    await expect(docsLink).toHaveAttribute("href", /ardupilot\.org/);
 }
 
 async function pressMissionHistoryShortcut(page: Page, kind: "undo" | "redo") {
@@ -255,11 +250,10 @@ async function connectAndOpenMissionWorkspace(
 }
 
 async function startBlankMission(page: Page, history: string[]) {
-    note(history, "Start a blank planner draft so continuity stays inside one mounted workspace.");
-    await clickMissionControl(page, "entryNew");
+    note(history, "Use the already-mounted blank planner draft so continuity stays inside one workspace.");
     await expect(
         missionWorkspaceLocator(page, "ready"),
-        historyMessage(history, "The Mission workspace never mounted the ready state after starting a blank draft."),
+        historyMessage(history, "The Mission workspace never opened directly into the ready blank draft state."),
     ).toBeVisible();
 }
 
@@ -282,7 +276,7 @@ async function addAndEditRallyPoint(page: Page, history: string[]) {
     await expect(missionWorkspaceLocator(page, "rallyList")).toBeVisible();
     await clickMissionControl(page, "rallyAdd");
     await expect(missionWorkspaceLocator(page, "countsRally")).toContainText("1");
-    await expect(missionWorkspaceLocator(page, "mapRallyCount")).toContainText("1");
+    await expect.poll(async () => (await requireMissionMapDebugSnapshot(page, "confirming the active rally marker count")).rallyMarkerCount).toBe(1);
 
     const firstRallyPoint = firstRallyPointLocator(page);
     await expect(firstRallyPoint, historyMessage(history, "Rally mode never rendered the newly added rally point card.")).toBeVisible();
@@ -303,7 +297,7 @@ async function addAndEditRallyPoint(page: Page, history: string[]) {
     expect(rallySnapshot.mode, historyMessage(history, "Mission-map diagnostics drifted away from Rally mode while editing a rally point.")).toBe("rally");
     expect(rallySnapshot.selectedRallyPointUiId, historyMessage(history, "Mission-map diagnostics lost the selected rally point id.")).not.toBeNull();
     expect(rallySnapshot.rallyMarkerCount, historyMessage(history, "Mission-map diagnostics lost the rally marker count.")).toBe(1);
-    await expectHomeSyncCopy(page, "Live mission reads can refresh Home");
+    await expectHomeDocsLink(page);
 
     return {
         baselineAltitude,
@@ -378,7 +372,7 @@ async function proveFenceContinuity(page: Page, history: string[]) {
     note(history, "Enter Fence mode, recast the imported polygon into a circle, force one blocked radius edit, then settle on a valid radius so recovery can stay on one undo step.");
     await clickMissionControl(page, "modeFence");
     await expect(missionWorkspaceLocator(page, "fenceList")).toBeVisible();
-    await expect(missionWorkspaceLocator(page, "mapFenceCount")).toContainText("1");
+    await expect.poll(async () => (await requireMissionMapDebugSnapshot(page, "confirming the active fence feature count")).counts.fenceFeatures).toBe(1);
 
     const firstFenceRegion = firstFenceRegionLocator(page);
     await expect(firstFenceRegion, historyMessage(history, "Fence mode never rendered the imported KML fence region card.")).toBeVisible();
@@ -614,7 +608,7 @@ async function provePlaybackAndDetachedLocalStates(
     await expect(missionWorkspaceLocator(page, "fenceAddInclusionPolygon")).toBeDisabled();
     await clickMissionControl(page, "modeRally");
     await expect(missionWorkspaceLocator(page, "rallyAdd")).toBeDisabled();
-    await expectHomeSyncCopy(page, "Playback keeps the last known Home visible");
+    await expectHomeDocsLink(page);
     await expect(missionWorkspaceLocator(page, "homeReadOnly")).toContainText("Playback keeps the planner mounted");
 
     note(history, "Advance the active live scope revision so the mounted draft becomes detached-local instead of being falsely treated as attached.");
@@ -757,7 +751,7 @@ test.describe("mocked mission planning continuity", () => {
             note(history, "Return to Rally mode once more so the final diagnostics prove the kept current rally point survived both textual and binary continuity imports.");
             await clickMissionControl(page, "modeRally");
             await expect(missionWorkspaceLocator(page, "rallyList")).toBeVisible();
-            await expect(missionWorkspaceLocator(page, "mapRallyCount")).toContainText("1");
+            await expect.poll(async () => (await requireMissionMapDebugSnapshot(page, `${preset} final rally marker count`)).rallyMarkerCount).toBe(1);
             const finalSnapshot = await requireMissionMapDebugSnapshot(page, `${preset} final continuity snapshot`);
             expect(finalSnapshot.mode, historyMessage(history, `The ${preset} flow lost Rally mode before the final diagnostic snapshot.`)).toBe("rally");
             expect(finalSnapshot.rallyMarkerCount, historyMessage(history, `The ${preset} flow lost the preserved rally marker count after the KMZ reattach.`)).toBe(1);

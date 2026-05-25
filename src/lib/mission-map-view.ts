@@ -17,7 +17,7 @@ import {
 } from "./mission-coordinates";
 import { haversineM } from "./geo-utils";
 import {
-  buildMissionRenderFeatures,
+  buildMissionRenderFeaturesWithSurveys,
   type MissionRenderCoordinate,
   type MissionRenderFeatures,
 } from "./mission-path-render";
@@ -294,7 +294,7 @@ export function buildMissionMapView(input: MissionMapViewInput): MissionMapView 
   const warnings: string[] = [];
   const mode = input.mode ?? "mission";
   const currentSeq = input.currentSeq ?? input.missionItems.find((item) => (item.document as MissionItem).current)?.index ?? null;
-  const renderFeatures = buildMissionRenderFeatures(input.home, input.missionItems, {
+  const renderFeatures = buildMissionRenderFeaturesWithSurveys(input.home, input.missionItems, input.survey, {
     currentSeq: currentSeq ?? undefined,
   });
   const missionGeoJson = missionRenderFeaturesToGeoJson(renderFeatures);
@@ -959,7 +959,7 @@ function projectMissionLines(viewport: MissionMapViewport, features: MissionRend
   return features.legs
     .filter((leg) => leg.coordinates.length >= 2)
     .map((leg, index) => ({
-      id: `mission-leg-${leg.to.itemIndex ?? `home-${index}`}`,
+      id: leg.id || `mission-leg-${leg.to.itemIndex ?? `home-${index}`}`,
       kind: leg.kind,
       points: leg.coordinates.map((coordinate) => projectRenderCoordinate(viewport, coordinate)),
       selected: false,
@@ -973,7 +973,7 @@ function projectMissionPolygons(viewport: MissionMapViewport, features: MissionR
   return features.loiterCircles
     .filter((circle) => circle.coordinates[0]?.length >= 4)
     .map((circle) => ({
-      id: `mission-loiter-${circle.itemIndex}`,
+      id: circle.id,
       kind: circle.kind,
       rings: circle.coordinates.map((ring) => ring.map((coordinate) => projectRenderCoordinate(viewport, coordinate))),
       selected: false,
@@ -985,7 +985,7 @@ function projectMissionPolygons(viewport: MissionMapViewport, features: MissionR
 
 function projectMissionLabels(viewport: MissionMapViewport, features: MissionRenderFeatures): MissionMapLabelFeature[] {
   return features.labels.map((label) => ({
-    id: `mission-label-${label.itemIndex ?? "home"}`,
+    id: label.id,
     text: label.text,
     point: projectRenderCoordinate(viewport, label.coordinate),
     itemIndex: label.itemIndex,

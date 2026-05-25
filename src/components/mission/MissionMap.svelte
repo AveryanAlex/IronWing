@@ -1,5 +1,4 @@
 <script lang="ts">
-import { Home, Layers, LocateFixed, Map as MapIcon, Navigation, Satellite } from "lucide-svelte";
 import { onDestroy } from "svelte";
 import * as maplibregl from "maplibre-gl";
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
@@ -13,11 +12,8 @@ import {
   type MissionMapFenceRadiusHandle,
   type MissionMapFenceRegionHandle,
   type MissionMapFenceVertexHandle,
-  type MissionMapLineFeature,
   type MissionMapMarker,
   type MissionMapPoint,
-  type MissionMapPolygonFeature,
-  type MissionMapSurveyHandle,
   type MissionMapSurveyVertexHandle,
   type MissionMapView,
   type MissionMapViewport,
@@ -58,6 +54,34 @@ import {
   clearMissionMapDebugSnapshot,
   publishMissionMapDebugSnapshot,
 } from "./mission-map-debug";
+import {
+  cloneSurveyRegionSnapshot,
+  positionStyle,
+} from "./mission-map-render-helpers";
+import {
+  coordinateFromMapCenter as resolveCoordinateFromMapCenter,
+  coordinateFromPointer as resolveCoordinateFromPointer,
+  pointerOffset as resolvePointerOffset,
+  readSurfaceDrawableBox as readElementDrawableBox,
+} from "./mission-map-pointer";
+import {
+  remapFenceRadiusHandles,
+  remapFenceRegionHandles,
+  remapFenceReturnPoint,
+  remapFenceVertexHandles,
+  remapLabelFeatures,
+  remapLineFeatures,
+  remapMarkers,
+  remapPolygonFeatures,
+  remapSurveyHandles,
+  remapSurveyVertexHandles,
+} from "./mission-map-remap";
+import MissionMapActionBar from "./MissionMapActionBar.svelte";
+import MissionMapInteractiveLayer from "./MissionMapInteractiveLayer.svelte";
+import MissionMapOverlaySvg from "./MissionMapOverlaySvg.svelte";
+import MissionMapStateNotice from "./MissionMapStateNotice.svelte";
+import MissionMapStatusPanel from "./MissionMapStatusPanel.svelte";
+import MissionMapSurfaceControls from "./MissionMapSurfaceControls.svelte";
 import BaseMap from "../map/BaseMap.svelte";
 import { ContextMenu, type ContextMenuItem } from "../ui";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
@@ -77,7 +101,6 @@ type Props = {
   onSelectMissionItem: (uiId: number) => void;
   onSelectRallyPoint?: (uiId: number) => MissionPlannerRallyMutationResult | unknown;
   onSelectSurveyRegion: (regionId: string) => void;
-  onCreateSurveyRegion: (patternType: SurveyPatternType) => string;
   onUpdateSurveyRegion: (regionId: string, updater: (region: SurveyRegion) => SurveyRegion) => void;
   onDeleteSurveyRegion: (regionId: string) => void;
   onMoveHome: (latitudeDeg: number, longitudeDeg: number) => MissionPlannerMapMoveResult;
@@ -163,13 +186,6 @@ type MissionMapLivePosition = GeoPoint2d & {
   heading_deg?: number | null;
 };
 
-type PointerMapCoordinate = {
-  point: MissionMapPoint;
-  latitude_deg: number;
-  longitude_deg: number;
-  projectedByBasemap: boolean;
-};
-
 type CameraTarget = "device" | "home" | "vehicle";
 type DeviceLocation = {
   latitude_deg: number;
@@ -195,7 +211,6 @@ let {
   onSelectMissionItem,
   onSelectRallyPoint,
   onSelectSurveyRegion,
-  onCreateSurveyRegion,
   onUpdateSurveyRegion,
   onDeleteSurveyRegion,
   onMoveHome,
@@ -302,20 +317,20 @@ let vehicleLngLat = $derived(asLngLat(vehiclePosition?.latitude_deg, vehiclePosi
 let homeMarkerLngLat = $derived(plannerHomePosition ? null : asLngLat(homePosition?.latitude_deg, homePosition?.longitude_deg));
 let deviceLngLat = $derived(asLngLat(deviceLocation?.latitude_deg, deviceLocation?.longitude_deg));
 let liveVehicleHeadingDeg = $derived(vehiclePosition?.heading_deg ?? vehicleHeadingDeg ?? 0);
-let renderMissionLines = $derived(remapLineFeatures(view.missionLines));
-let renderMissionPolygons = $derived(remapPolygonFeatures(view.missionPolygons));
-let renderMissionLabels = $derived(remapLabelFeatures(view.missionLabels));
-let renderSurveyLines = $derived(remapLineFeatures(view.surveyLines));
-let renderSurveyPolygons = $derived(remapPolygonFeatures(view.surveyPolygons));
-let renderFenceLines = $derived(remapLineFeatures(view.fenceLines));
-let renderFencePolygons = $derived(remapPolygonFeatures(view.fencePolygons));
-let renderMarkers = $derived(remapMarkers(view.markers));
-let renderSurveyHandles = $derived(remapSurveyHandles(view.surveyHandles));
-let renderSurveyVertexHandles = $derived(remapSurveyVertexHandles(view.surveyVertexHandles));
-let renderFenceRegionHandles = $derived(remapFenceRegionHandles(view.fenceRegionHandles));
-let renderFenceVertexHandles = $derived(remapFenceVertexHandles(view.fenceVertexHandles));
-let renderFenceRadiusHandles = $derived(remapFenceRadiusHandles(view.fenceRadiusHandles));
-let renderFenceReturnPoint = $derived(remapFenceReturnPoint(view.fenceReturnPoint));
+let renderMissionLines = $derived(remapLineFeatures(view.missionLines, remapPoint));
+let renderMissionPolygons = $derived(remapPolygonFeatures(view.missionPolygons, remapPoint));
+let renderMissionLabels = $derived(remapLabelFeatures(view.missionLabels, remapPoint));
+let renderSurveyLines = $derived(remapLineFeatures(view.surveyLines, remapPoint));
+let renderSurveyPolygons = $derived(remapPolygonFeatures(view.surveyPolygons, remapPoint));
+let renderFenceLines = $derived(remapLineFeatures(view.fenceLines, remapPoint));
+let renderFencePolygons = $derived(remapPolygonFeatures(view.fencePolygons, remapPoint));
+let renderMarkers = $derived(remapMarkers(view.markers, remapPoint));
+let renderSurveyHandles = $derived(remapSurveyHandles(view.surveyHandles, remapPoint));
+let renderSurveyVertexHandles = $derived(remapSurveyVertexHandles(view.surveyVertexHandles, remapPoint));
+let renderFenceRegionHandles = $derived(remapFenceRegionHandles(view.fenceRegionHandles, remapPoint));
+let renderFenceVertexHandles = $derived(remapFenceVertexHandles(view.fenceVertexHandles, remapPoint));
+let renderFenceRadiusHandles = $derived(remapFenceRadiusHandles(view.fenceRadiusHandles, remapPoint));
+let renderFenceReturnPoint = $derived(remapFenceReturnPoint(view.fenceReturnPoint, remapPoint));
 let renderReplayOverlayPath = $derived.by(() => {
   if (!renderViewport || !replayMapOverlay || replayMapOverlay.path.length === 0) {
     return [];
@@ -431,27 +446,6 @@ onDestroy(() => {
   clearMissionMapDebugSnapshot();
 });
 
-function readSurfaceDrawableBox() {
-  if (!surfaceElement) {
-    return null;
-  }
-
-  const rect = surfaceElement.getBoundingClientRect();
-  const width = surfaceElement.clientWidth > 0 ? surfaceElement.clientWidth : rect.width;
-  const height = surfaceElement.clientHeight > 0 ? surfaceElement.clientHeight : rect.height;
-
-  if (width <= 0 || height <= 0) {
-    return null;
-  }
-
-  return {
-    left: rect.left + surfaceElement.clientLeft,
-    top: rect.top + surfaceElement.clientTop,
-    width,
-    height,
-  };
-}
-
 $effect(() => {
   if (!surfaceElement) {
     surfaceSize = { width: 0, height: 0 };
@@ -459,7 +453,7 @@ $effect(() => {
   }
 
   const syncSurfaceSize = () => {
-    const rect = readSurfaceDrawableBox();
+    const rect = readElementDrawableBox(surfaceElement);
     surfaceSize = {
       width: rect?.width ?? 0,
       height: rect?.height ?? 0,
@@ -772,247 +766,12 @@ function remapPoint(point: MissionMapPoint): MissionMapPoint {
   return reprojectMissionMapPoint(point, interactiveViewport, renderViewport);
 }
 
-function remapLineFeatures(features: MissionMapLineFeature[]): MissionMapLineFeature[] {
-  return features.map((feature) => ({
-    ...feature,
-    points: feature.points.map((point) => remapPoint(point)),
-  }));
-}
-
-function remapPolygonFeatures(features: MissionMapPolygonFeature[]): MissionMapPolygonFeature[] {
-  return features.map((feature) => ({
-    ...feature,
-    rings: feature.rings.map((ring) => ring.map((point) => remapPoint(point))),
-  }));
-}
-
-function remapLabelFeatures(features: typeof view.missionLabels): typeof view.missionLabels {
-  return features.map((feature) => ({
-    ...feature,
-    point: remapPoint(feature.point),
-  }));
-}
-
-function remapMarkers(markers: MissionMapMarker[]): MissionMapMarker[] {
-  return markers.map((marker) => ({
-    ...marker,
-    point: remapPoint(marker.point),
-  }));
-}
-
-function remapSurveyHandles(handles: MissionMapSurveyHandle[]): MissionMapSurveyHandle[] {
-  return handles.map((handle) => ({
-    ...handle,
-    point: remapPoint(handle.point),
-  }));
-}
-
-function remapSurveyVertexHandles(handles: MissionMapSurveyVertexHandle[]): MissionMapSurveyVertexHandle[] {
-  return handles.map((handle) => ({
-    ...handle,
-    point: remapPoint(handle.point),
-  }));
-}
-
-function remapFenceRegionHandles(handles: MissionMapFenceRegionHandle[]): MissionMapFenceRegionHandle[] {
-  return handles.map((handle) => ({
-    ...handle,
-    point: remapPoint(handle.point),
-  }));
-}
-
-function remapFenceVertexHandles(handles: MissionMapFenceVertexHandle[]): MissionMapFenceVertexHandle[] {
-  return handles.map((handle) => ({
-    ...handle,
-    point: remapPoint(handle.point),
-  }));
-}
-
-function remapFenceRadiusHandles(handles: MissionMapFenceRadiusHandle[]): MissionMapFenceRadiusHandle[] {
-  return handles.map((handle) => ({
-    ...handle,
-    point: remapPoint(handle.point),
-  }));
-}
-
-function remapFenceReturnPoint(
-  fenceReturnPoint: typeof view.fenceReturnPoint,
-): typeof view.fenceReturnPoint {
-  if (!fenceReturnPoint) {
-    return null;
-  }
-
-  return {
-    ...fenceReturnPoint,
-    point: remapPoint(fenceReturnPoint.point),
-  };
-}
-
-function cloneSurveyRegionSnapshot(region: SurveyRegion): SurveyRegion {
-  if (typeof structuredClone === "function") {
-    return structuredClone(region);
-  }
-
-  return {
-    ...region,
-    polygon: region.polygon.map((point) => ({ ...point })),
-    polyline: region.polyline.map((point) => ({ ...point })),
-    corridorPolygon: region.corridorPolygon.map((point) => ({ ...point })),
-    params: { ...region.params },
-    generatedItems: region.generatedItems.map((item) => ({ ...item })),
-    generatedTransects: region.generatedTransects.map((transect) => transect.map((point) => ({ ...point }))),
-    generatedCrosshatch: region.generatedCrosshatch.map((transect) => transect.map((point) => ({ ...point }))),
-    generatedLayers: region.generatedLayers.map((layer) => ({
-      ...layer,
-      orbitPoints: layer.orbitPoints.map((point) => ({ ...point })),
-    })),
-    generatedStats: region.generatedStats ? { ...region.generatedStats } : null,
-    errors: region.errors.map((error) => ({ ...error })),
-    manualEdits: new Map(region.manualEdits),
-    camera: region.camera ? { ...region.camera } : null,
-    qgcPassthrough: region.qgcPassthrough ? JSON.parse(JSON.stringify(region.qgcPassthrough)) as Record<string, unknown> : undefined,
-    importWarnings: region.importWarnings ? [...region.importWarnings] : undefined,
-  };
-}
-
-function markerTestId(marker: MissionMapMarker): string {
-  return `${missionWorkspaceTestIds.mapMarkerPrefix}-${marker.kind === "home" ? "home" : marker.uiId}`;
-}
-
-function surveyHandleTestId(handle: MissionMapSurveyHandle): string {
-  return `${missionWorkspaceTestIds.mapSurveyPrefix}-${handle.regionId}`;
-}
-
-function surveyVertexHandleTestId(handle: MissionMapSurveyVertexHandle): string {
-  return `${missionWorkspaceTestIds.mapVertexPrefix}-${handle.regionId}-${handle.geometryKind}-${handle.index}`;
-}
-
-function fenceRegionHandleTestId(handle: MissionMapFenceRegionHandle): string {
-  return `${missionWorkspaceTestIds.mapFenceRegionPrefix}-${handle.regionUiId}`;
-}
-
-function fenceVertexHandleTestId(handle: MissionMapFenceVertexHandle): string {
-  return `${missionWorkspaceTestIds.mapFenceVertexPrefix}-${handle.regionUiId}-${handle.index}`;
-}
-
-function fenceRadiusHandleTestId(handle: MissionMapFenceRadiusHandle): string {
-  return `${missionWorkspaceTestIds.mapFenceRadiusPrefix}-${handle.regionUiId}`;
-}
-
-function toPolylinePoints(points: MissionMapPoint[]): string {
-  return points.map((point) => `${point.x},${point.y}`).join(" ");
-}
-
-function toPolygonPoints(polygon: MissionMapPolygonFeature): string {
-  return polygon.rings[0] ? toPolylinePoints(polygon.rings[0]) : "";
-}
-
-function positionStyle(point: MissionMapPoint): string {
-  if (overlayUsesBasemapProjection) {
-    return `left:${point.x}px;top:${point.y}px;`;
-  }
-
-  const viewBoxSize = renderViewport?.viewBoxSize ?? interactiveViewport?.viewBoxSize ?? 1000;
-  return `left:${(point.x / viewBoxSize) * 100}%;top:${(point.y / viewBoxSize) * 100}%;`;
-}
-
-function missionLineColor(feature: MissionMapLineFeature): string {
-  switch (feature.kind) {
-    case "arc":
-      return "#fbbf24";
-    case "spline":
-      return "#78d6ff";
-    default:
-      return "rgba(241, 245, 249, 0.82)";
-  }
-}
-
-function surveyPolygonFill(feature: MissionMapPolygonFeature): string {
-  switch (feature.kind) {
-    case "survey_footprint":
-      return feature.selected ? "rgba(120, 214, 255, 0.14)" : "rgba(120, 214, 255, 0.08)";
-    case "survey_swath_band":
-      return feature.selected ? "rgba(34, 197, 94, 0.16)" : "rgba(34, 197, 94, 0.1)";
-    case "survey_corridor":
-      return feature.selected ? "rgba(120, 214, 255, 0.16)" : "rgba(16, 185, 129, 0.1)";
-    default:
-      return feature.selected ? "rgba(120, 214, 255, 0.18)" : "rgba(34, 197, 94, 0.12)";
-  }
-}
-
-function surveyPolygonStroke(feature: MissionMapPolygonFeature): string {
-  switch (feature.kind) {
-    case "survey_footprint":
-      return feature.selected ? "rgba(186, 230, 253, 0.72)" : "rgba(120, 214, 255, 0.4)";
-    case "survey_swath_band":
-      return feature.selected ? "rgba(110, 231, 183, 0.8)" : "rgba(34, 197, 94, 0.48)";
-    default:
-      return feature.selected ? "#78d6ff" : "rgba(34, 197, 94, 0.72)";
-  }
-}
-
-function surveyPolygonStrokeWidth(feature: MissionMapPolygonFeature): number {
-  return feature.kind === "survey_footprint" ? 1 : feature.selected ? 4 : 2;
-}
-
-function surveyLineColor(feature: MissionMapLineFeature): string {
-  switch (feature.kind) {
-    case "survey_crosshatch":
-      return "rgba(251, 191, 36, 0.9)";
-    case "survey_orbit":
-      return "rgba(216, 180, 254, 0.92)";
-    case "survey_polygon_draft":
-      return "rgba(120, 214, 255, 0.78)";
-    case "survey_transect":
-      return "rgba(74, 222, 128, 0.92)";
-    default:
-      return feature.selected ? "#78d6ff" : "rgba(34, 197, 94, 0.86)";
-  }
-}
-
-function surveyLineDash(feature: MissionMapLineFeature): string | null {
-  switch (feature.kind) {
-    case "survey_crosshatch":
-      return "10 6";
-    case "survey_orbit":
-      return "12 8";
-    case "survey_polygon_draft":
-      return "12 6";
-    default:
-      return null;
-  }
-}
-
-function surveyLineWidth(feature: MissionMapLineFeature): number {
-  switch (feature.kind) {
-    case "survey_transect":
-    case "survey_crosshatch":
-      return feature.selected ? 4 : 2.5;
-    case "survey_orbit":
-      return feature.selected ? 4 : 3;
-    default:
-      return feature.selected ? 5 : 3;
-  }
-}
-
-function fencePolygonFill(feature: MissionMapPolygonFeature): string {
-  if (/exclusion/i.test(feature.kind)) {
-    return feature.selected ? "rgba(248, 113, 113, 0.2)" : "rgba(248, 113, 113, 0.12)";
-  }
-
-  return feature.selected ? "rgba(96, 165, 250, 0.18)" : "rgba(96, 165, 250, 0.1)";
-}
-
-function fencePolygonStroke(feature: MissionMapPolygonFeature): string {
-  if (/exclusion/i.test(feature.kind)) {
-    return feature.selected ? "rgba(254, 202, 202, 0.92)" : "rgba(248, 113, 113, 0.78)";
-  }
-
-  return feature.selected ? "rgba(191, 219, 254, 0.92)" : "rgba(96, 165, 250, 0.82)";
-}
-
-function fenceLineColor(feature: MissionMapLineFeature): string {
-  return /exclusion/i.test(feature.kind) ? "rgba(248, 113, 113, 0.88)" : "rgba(96, 165, 250, 0.88)";
+function pointStyle(point: MissionMapPoint): string {
+  return positionStyle(
+    point,
+    overlayUsesBasemapProjection,
+    renderViewport?.viewBoxSize ?? interactiveViewport?.viewBoxSize ?? 1000,
+  );
 }
 
 function handleMarkerSelection(marker: MissionMapMarker) {
@@ -1071,23 +830,15 @@ function applyRallyMutationResult(result: unknown): boolean {
   return true;
 }
 
-function startSurveyDraw(patternType: SurveyPatternType) {
-  const regionId = onCreateSurveyRegion(patternType);
-  surveySession = {
-    mode: "draw",
-    regionId,
-    patternType,
-    pointCountMinimum: minimumSurveyPointCount(patternType),
-    created: true,
-    restoreRegion: null,
-  };
-  localMessage = {
-    tone: "info",
-    text: `Drawing ${patternType} survey geometry. Click the planner map to add ${patternType === "corridor" ? "centerline points" : "polygon vertices"}.`,
-  };
-}
-
 function startSurveyEdit() {
+  if (readOnly) {
+    localMessage = {
+      tone: "warning",
+      text: "Survey geometry editing is read-only in the current planner attachment state.",
+    };
+    return;
+  }
+
   if (!selectedSurveyRegion) {
     localMessage = {
       tone: "warning",
@@ -1483,92 +1234,26 @@ function applyFenceMutationResult(result: unknown): boolean {
 }
 
 function pointerOffset(event: Pick<MouseEvent, "clientX" | "clientY">): MissionMapPoint | null {
-  if (!surfaceElement) {
-    return null;
-  }
-
-  const rect = readSurfaceDrawableBox();
-  if (!rect) {
-    return null;
-  }
-
-  return {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top,
-  };
+  return resolvePointerOffset(event, surfaceElement);
 }
 
-function projectedPointFromPointer(event: Pick<MouseEvent, "clientX" | "clientY">): MissionMapPoint | null {
-  const viewport = renderViewport;
-  if (!surfaceElement || !viewport) {
-    return null;
-  }
-
-  const rect = readSurfaceDrawableBox();
-  if (!rect) {
-    return null;
-  }
-
-  return {
-    x: ((event.clientX - rect.left) / rect.width) * viewport.viewBoxSize,
-    y: ((event.clientY - rect.top) / rect.height) * viewport.viewBoxSize,
-  };
+function coordinateFromPointer(event: Pick<MouseEvent, "clientX" | "clientY">) {
+  return resolveCoordinateFromPointer({
+    event,
+    surfaceElement,
+    viewport: renderViewport,
+    basemap,
+    overlayUsesBasemapProjection,
+  });
 }
 
-function coordinateFromPointer(event: Pick<MouseEvent, "clientX" | "clientY">): PointerMapCoordinate | null {
-  const offset = pointerOffset(event);
-  if (offset && basemap && overlayUsesBasemapProjection && typeof basemap.unproject === "function") {
-    const lngLat = basemap.unproject([offset.x, offset.y]);
-    return {
-      point: offset,
-      latitude_deg: lngLat.lat,
-      longitude_deg: lngLat.lng,
-      projectedByBasemap: true,
-    };
-  }
-
-  const point = projectedPointFromPointer(event);
-  const viewport = renderViewport;
-  if (!point || !viewport) {
-    return null;
-  }
-
-  const coordinate = unprojectMissionMapPoint(viewport, point);
-  return {
-    point,
-    ...coordinate,
-    projectedByBasemap: false,
-  };
-}
-
-function coordinateFromMapCenter(): PointerMapCoordinate | null {
-  if (basemap && overlayUsesBasemapProjection && typeof basemap.getCenter === "function") {
-    const center = basemap.getCenter();
-    return {
-      point: {
-        x: overlayViewBox.width / 2,
-        y: overlayViewBox.height / 2,
-      },
-      latitude_deg: center.lat,
-      longitude_deg: center.lng,
-      projectedByBasemap: true,
-    };
-  }
-
-  const viewport = renderViewport;
-  if (!viewport) {
-    return null;
-  }
-
-  const point = {
-    x: viewport.viewBoxSize / 2,
-    y: viewport.viewBoxSize / 2,
-  };
-  return {
-    point,
-    ...unprojectMissionMapPoint(viewport, point),
-    projectedByBasemap: false,
-  };
+function coordinateFromMapCenter() {
+  return resolveCoordinateFromMapCenter({
+    basemap,
+    overlayUsesBasemapProjection,
+    overlayViewBox,
+    viewport: renderViewport,
+  });
 }
 
 function appendSurveyCoordinate(latitude_deg: number, longitude_deg: number) {
@@ -2101,550 +1786,147 @@ function stopDeviceLocationWatch() {
   deviceWatchId = null;
 }
 
-function preventContextMenu(event: MouseEvent) {
-  event.preventDefault();
-}
 </script>
 
 <svelte:window onkeydown={handleKeydown} onpointercancel={handlePointerCancel} onpointermove={handlePointerMove} onpointerup={handlePointerUp} />
 
-<section class={["rounded-lg border border-border bg-bg-primary p-3", fillContainer && "mission-map--fill"]} data-testid={missionWorkspaceTestIds.map}>
-  {#if view.mode === "mission"}
-    <div class="mt-4 flex flex-wrap gap-2">
-      <button
-        class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={missionWorkspaceTestIds.mapDrawStartGrid}
-        disabled={surveySession !== null}
-        onclick={() => startSurveyDraw("grid")}
-        type="button"
-      >
-        Draw grid
-      </button>
-      <button
-        class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={missionWorkspaceTestIds.mapDrawStartCorridor}
-        disabled={surveySession !== null}
-        onclick={() => startSurveyDraw("corridor")}
-        type="button"
-      >
-        Draw corridor
-      </button>
-      <button
-        class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={missionWorkspaceTestIds.mapDrawStartStructure}
-        disabled={surveySession !== null}
-        onclick={() => startSurveyDraw("structure")}
-        type="button"
-      >
-        Draw structure
-      </button>
-      <button
-        class="rounded-md border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={missionWorkspaceTestIds.mapDrawEdit}
-        disabled={surveySession !== null || !selectedSurveyRegion}
-        onclick={startSurveyEdit}
-        type="button"
-      >
-        Edit selected region
-      </button>
-      <button
-        class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={missionWorkspaceTestIds.mapDrawFinish}
-        disabled={surveySession === null}
-        onclick={finishSurveySession}
-        type="button"
-      >
-        Finish
-      </button>
-      <button
-        class="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={missionWorkspaceTestIds.mapDrawCancel}
-        disabled={surveySession === null}
-        onclick={cancelSurveySession}
-        type="button"
-      >
-        Cancel
-      </button>
-    </div>
-  {:else if view.mode === "fence"}
-    <div class="mt-4 flex flex-wrap gap-2">
-      <button
-        class="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-bg-primary transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={missionWorkspaceTestIds.mapFencePlaceInclusionPolygon}
-        disabled={readOnly}
-        onclick={() => startFencePlacement("inclusion_polygon")}
-        type="button"
-      >
-        Place inclusion polygon
-      </button>
-      <button
-        class="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={missionWorkspaceTestIds.mapFencePlaceExclusionPolygon}
-        disabled={readOnly}
-        onclick={() => startFencePlacement("exclusion_polygon")}
-        type="button"
-      >
-        Place exclusion polygon
-      </button>
-      <button
-        class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={missionWorkspaceTestIds.mapFencePlaceInclusionCircle}
-        disabled={readOnly}
-        onclick={() => startFencePlacement("inclusion_circle")}
-        type="button"
-      >
-        Place inclusion circle
-      </button>
-      <button
-        class="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={missionWorkspaceTestIds.mapFencePlaceExclusionCircle}
-        disabled={readOnly}
-        onclick={() => startFencePlacement("exclusion_circle")}
-        type="button"
-      >
-        Place exclusion circle
-      </button>
-      <button
-        class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={missionWorkspaceTestIds.mapFencePlaceReturnPoint}
-        disabled={readOnly}
-        onclick={() => startFencePlacement("return-point")}
-        type="button"
-      >
-        Place return point
-      </button>
-      <button
-        class="rounded-md border border-danger/40 bg-danger/10 px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={missionWorkspaceTestIds.mapFenceClearReturnPoint}
-        disabled={readOnly || view.fenceReturnPoint === null}
-        onclick={() => applyFenceMutationResult(onClearFenceReturnPoint?.())}
-        type="button"
-      >
-        Clear return point
-      </button>
-      <button
-        class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={missionWorkspaceTestIds.mapFencePlacementCancel}
-        disabled={fencePlacementMode === null}
-        onclick={cancelFencePlacement}
-        type="button"
-      >
-        Cancel placement
-      </button>
-    </div>
-  {/if}
+<section class={["mission-map", fillContainer && "mission-map--fill"]} data-testid={missionWorkspaceTestIds.map}>
+  <MissionMapActionBar
+    mode={view.mode}
+    surveySessionActive={surveySession !== null}
+    {selectedSurveyRegion}
+    {readOnly}
+    fenceHasReturnPoint={view.fenceReturnPoint !== null}
+    fencePlacementActive={fencePlacementMode !== null}
+    onStartSurveyEdit={startSurveyEdit}
+    onFinishSurveySession={finishSurveySession}
+    onCancelSurveySession={cancelSurveySession}
+    onStartFencePlacement={startFencePlacement}
+    onClearFenceReturnPoint={() => applyFenceMutationResult(onClearFenceReturnPoint?.())}
+    onCancelFencePlacement={cancelFencePlacement}
+  />
 
-  {#if localMessage && localMessage.tone === "info"}
-    <div class="mt-3 rounded-lg border border-accent/30 bg-accent/10 px-4 py-3 text-sm text-text-primary">
-      {localMessage.text}
-    </div>
-  {/if}
-
-  <div class="mission-map__stats-grid mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
-    <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-      <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Markers</p>
-      <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapMarkerCount}>{view.counts.markers}</p>
-    </div>
-    <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-      <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Path features</p>
-      <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapPathCount}>{view.counts.missionFeatures}</p>
-    </div>
-    <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-      <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Survey features</p>
-      <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapSurveyCount}>{view.counts.surveyFeatures}</p>
-    </div>
-    {#if view.mode === "fence"}
-      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Fence features</p>
-        <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapFenceCount}>{view.counts.fenceFeatures}</p>
-      </div>
-      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Fence vertices</p>
-        <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapFenceVertexCount}>{view.counts.fenceVertexHandles}</p>
-      </div>
-      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Return point</p>
-        <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapFenceReturnPointState}>{view.counts.fenceHasReturnPoint ? "set" : "none"}</p>
-      </div>
-    {:else if view.mode === "rally"}
-      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Rally markers</p>
-        <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapRallyCount}>{view.counts.rallyMarkers}</p>
-      </div>
-      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Rally features</p>
-        <p class="mt-1 text-sm font-semibold text-text-primary">{view.counts.rallyFeatures}</p>
-      </div>
-      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Read-only truth</p>
-        <p class="mt-1 text-sm font-semibold text-text-primary">{readOnly ? "blocked" : "editable"}</p>
-      </div>
-    {:else}
-      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Preview features</p>
-        <p class="mt-1 text-sm font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.mapPreviewCount}>{view.counts.surveyPreviewFeatures}</p>
-      </div>
-      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Survey handles</p>
-        <p class="mt-1 text-sm font-semibold text-text-primary">{view.counts.surveyHandles}</p>
-      </div>
-      <div class="rounded-xl border border-border bg-bg-secondary/60 px-3 py-2 text-xs text-text-secondary">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Editable vertices</p>
-        <p class="mt-1 text-sm font-semibold text-text-primary">{view.counts.surveyVertexHandles}</p>
-      </div>
-    {/if}
-  </div>
+  <MissionMapStatusPanel
+    {localMessage}
+    {diagnostics}
+    {debugPayload}
+  />
 
   {#if renderViewport}
-    <div class={["rounded-lg border border-border bg-bg-secondary/40 p-3", fillContainer ? "mission-map__surface-wrap--fill" : "mt-4"]}>
-      <div
-        bind:this={surfaceElement}
-        aria-label="Mission planner map"
-        class={["mission-map-surface relative overflow-hidden rounded-[20px] border border-border/70 bg-bg-primary", fillContainer ? "h-full" : "aspect-[5/4]"]}
-        data-testid={missionWorkspaceTestIds.mapSurface}
-        oncontextmenu={handleContextMenu}
-        role="application"
-      >
-        <div class="mission-map-basemap" data-testid={missionWorkspaceTestIds.mapBasemap}>
-          <BaseMap
-            class="size-full"
-            options={createBasemapOptions()}
-            onMapReady={handleBasemapReady}
-            onMapError={handleBasemapError}
-          />
-        </div>
-        <div class="mission-map-basemap-scrim"></div>
-        <svg aria-hidden="true" class="mission-map-overlay absolute inset-0 h-full w-full" preserveAspectRatio="none" viewBox={`0 0 ${overlayViewBox.width} ${overlayViewBox.height}`}>
-
-          {#each renderSurveyPolygons as polygon (polygon.id)}
-            <polygon
-              fill={surveyPolygonFill(polygon)}
-              points={toPolygonPoints(polygon)}
-              stroke={surveyPolygonStroke(polygon)}
-              stroke-width={surveyPolygonStrokeWidth(polygon)}
-            />
-          {/each}
-
-          {#each renderSurveyLines as line (line.id)}
-            <polyline
-              fill="none"
-              points={toPolylinePoints(line.points)}
-              stroke={surveyLineColor(line)}
-              stroke-dasharray={surveyLineDash(line) ?? undefined}
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width={surveyLineWidth(line)}
-            />
-          {/each}
-
-          {#each renderFencePolygons as polygon (polygon.id)}
-            <polygon
-              fill={fencePolygonFill(polygon)}
-              points={toPolygonPoints(polygon)}
-              stroke={fencePolygonStroke(polygon)}
-              stroke-dasharray={/inclusion/i.test(polygon.kind) ? "8 6" : undefined}
-              stroke-width={polygon.selected ? 4 : 2}
-            />
-          {/each}
-
-          {#each renderFenceLines as line (line.id)}
-            <polyline
-              fill="none"
-              points={toPolylinePoints(line.points)}
-              stroke={fenceLineColor(line)}
-              stroke-dasharray={/inclusion/i.test(line.kind) ? "8 6" : undefined}
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width={line.selected ? 4 : 2.5}
-            />
-          {/each}
-
-          {#each renderMissionPolygons as polygon (polygon.id)}
-            <polygon
-              fill="rgba(120, 214, 255, 0.1)"
-              points={toPolygonPoints(polygon)}
-              stroke="rgba(120, 214, 255, 0.8)"
-              stroke-dasharray="8 6"
-              stroke-width="2"
-            />
-          {/each}
-
-          {#each renderMissionLines as line (line.id)}
-            <polyline
-              fill="none"
-              points={toPolylinePoints(line.points)}
-              stroke={missionLineColor(line)}
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width={line.kind === "arc" ? 4 : line.kind === "spline" ? 4 : 3}
-            />
-          {/each}
-
-          {#if renderReplayOverlayPath.length > 1}
-            <polyline
-              data-testid={missionWorkspaceTestIds.mapReplayPath}
-              fill="none"
-              points={toPolylinePoints(renderReplayOverlayPath)}
-              stroke="rgba(245, 158, 11, 0.92)"
-              stroke-dasharray="10 8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="4"
-            />
-          {/if}
-
-          {#each renderMissionLabels as label (label.id)}
-            <text
-              fill="rgba(241, 245, 249, 0.88)"
-              font-size="22"
-              font-weight="600"
-              text-anchor="middle"
-              x={label.point.x}
-              y={label.point.y - 12}
-            >
-              {label.text}
-            </text>
-          {/each}
-        </svg>
-
-        {#if surveySession || fencePlacementMode}
-          <button
-            aria-label={view.mode === "fence" ? "Place fence feature on planner map" : "Add survey point on planner map"}
-            class="mission-map-draw-surface"
-            data-testid={view.mode === "fence" ? missionWorkspaceTestIds.mapFencePlacementSurface : missionWorkspaceTestIds.mapDrawSurface}
-            onclick={view.mode === "fence" ? placeFenceFeatureFromSurface : appendSurveyPointFromSurface}
-            onkeydown={handleSurfaceKeydown}
-            type="button"
-          ></button>
-        {/if}
-
-        <div class={["map-locate-group mission-map__control-group mission-map__control-group--layers", mapControlsPassive && "is-passive"]}>
-          <button aria-label="Normal map mode" aria-pressed={mapLayerMode === "normal"} class={["map-locate-btn", mapLayerMode === "normal" && "is-active"]} onclick={() => { mapLayerMode = "normal"; }} title="Normal" type="button">
-            <MapIcon aria-hidden="true" size={16} />
-          </button>
-          <button aria-label="Hybrid map mode" aria-pressed={mapLayerMode === "hybrid"} class={["map-locate-btn", mapLayerMode === "hybrid" && "is-active"]} onclick={() => { mapLayerMode = "hybrid"; }} title="Hybrid" type="button">
-            <Layers aria-hidden="true" size={16} />
-          </button>
-          <button aria-label="Satellite map mode" aria-pressed={mapLayerMode === "satellite"} class={["map-locate-btn", mapLayerMode === "satellite" && "is-active"]} onclick={() => { mapLayerMode = "satellite"; }} title="Satellite" type="button">
-            <Satellite aria-hidden="true" size={16} />
-          </button>
-          <button aria-label="Toggle 3D terrain" aria-pressed={terrainModeEnabled} class={["map-locate-btn", terrainModeEnabled && "is-active"]} onclick={() => { terrainModeEnabled = !terrainModeEnabled; }} title="3D terrain" type="button">
-            <span class="mission-map__button-text">3D</span>
-          </button>
-        </div>
-
-        <div class={["map-locate-group mission-map__control-group mission-map__control-group--targets", mapControlsPassive && "is-passive"]}>
-          {#if deviceLocationSupported || devicePermissionDenied}
-            <button aria-label="My location" class="map-locate-btn" oncontextmenu={preventContextMenu} onclick={() => activateCameraTarget("device")} title="My location" type="button">
-              <LocateFixed aria-hidden="true" size={16} />
-            </button>
-          {/if}
-          <button aria-label="Home location" class="map-locate-btn" oncontextmenu={preventContextMenu} onclick={() => activateCameraTarget("home")} title="Home location" type="button">
-            <Home aria-hidden="true" size={16} />
-          </button>
-          <button aria-label="Vehicle location" class="map-locate-btn" oncontextmenu={preventContextMenu} onclick={() => activateCameraTarget("vehicle")} title="Vehicle location" type="button">
-            <Navigation aria-hidden="true" size={16} />
-          </button>
-        </div>
-
-        {#if view.state === "empty"}
-          <div
-            class="pointer-events-none absolute inset-x-6 bottom-6 rounded-lg border border-border/80 bg-bg-primary/88 px-4 py-3 text-sm text-text-secondary"
-            data-testid={missionWorkspaceTestIds.mapEmpty}
-          >
-            {view.mode === "fence"
-              ? "Blank fence surface ready. Place an inclusion or exclusion shape, then refine vertices, circle radius, and the return point directly on the planner map."
-              : view.mode === "rally"
-                ? "Blank rally surface ready. Add a rally point from the list, then drag it on the map or refine its coordinates and altitude frame from the inspector."
-                : "Blank planner surface ready. Draw a grid, corridor, or structure survey here, or add Home and manual mission items to project existing geometry."}
-          </div>
-        {:else if view.state === "degraded"}
-          <div
-            class="pointer-events-none absolute inset-x-6 bottom-6 rounded-lg border border-warning/40 bg-bg-primary/88 px-4 py-3 text-sm text-warning"
-            data-testid={missionWorkspaceTestIds.mapUnavailable}
-          >
-            {view.mode === "fence"
-              ? "Some fence geometry degraded, but the planner surface stayed interactive so you can recover selection, fix malformed regions, or keep editing the return point safely."
-              : view.mode === "rally"
-                ? "Some rally geometry degraded, but the planner surface stayed interactive so you can keep the last valid rally markers, recover selection, and avoid moving the wrong point."
-                : "Some survey geometry degraded, but the planner surface stayed interactive so you can finish drawing, recover selection, or edit the region safely."}
-          </div>
-        {/if}
-
-        {#each renderSurveyHandles as handle (handle.regionId)}
-          <button
-            class={`mission-map-survey-handle ${handle.selected ? "is-selected" : ""}`}
-            data-testid={surveyHandleTestId(handle)}
-            onclick={(event) => {
-              event.stopPropagation();
-              handleSurveySelection(handle.regionId);
-            }}
-            style={positionStyle(handle.point)}
-            type="button"
-          >
-            {handle.label}
-          </button>
-        {/each}
-
-        {#each renderSurveyVertexHandles as handle (handle.id)}
-          <button
-            class={`mission-map-vertex-handle ${handle.selected ? "is-selected" : ""} ${surveySession?.regionId === handle.regionId ? "is-draggable" : ""}`}
-            data-testid={surveyVertexHandleTestId(handle)}
-            onclick={(event) => {
-              event.stopPropagation();
-              handleSurveySelection(handle.regionId);
-            }}
-            onpointerdown={(event) => startSurveyHandleDrag(event, handle)}
-            style={positionStyle(handle.point)}
-            type="button"
-          >
-            {handle.index + 1}
-          </button>
-        {/each}
-
-        {#each renderFenceRegionHandles as handle (handle.id)}
-          <button
-            class={`mission-map-fence-handle ${handle.selected ? "is-selected" : ""} ${handle.draggable ? "is-draggable" : ""} ${handle.inclusion ? "is-inclusion" : "is-exclusion"}`}
-            data-testid={fenceRegionHandleTestId(handle)}
-            onclick={(event) => {
-              event.stopPropagation();
-              handleFenceRegionSelection(handle.regionUiId);
-            }}
-            onpointerdown={(event) => startFenceRegionDrag(event, handle)}
-            style={positionStyle(handle.point)}
-            type="button"
-          >
-            {handle.label}
-          </button>
-        {/each}
-
-        {#each renderFenceVertexHandles as handle (handle.id)}
-          <button
-            class={`mission-map-fence-vertex ${handle.selected ? "is-selected" : ""}`}
-            data-testid={fenceVertexHandleTestId(handle)}
-            onclick={(event) => {
-              event.stopPropagation();
-              handleFenceRegionSelection(handle.regionUiId);
-            }}
-            onpointerdown={(event) => startFenceVertexDrag(event, handle)}
-            style={positionStyle(handle.point)}
-            type="button"
-          >
-            {handle.index + 1}
-          </button>
-        {/each}
-
-        {#each renderFenceRadiusHandles as handle (handle.id)}
-          <button
-            class={`mission-map-fence-radius ${handle.selected ? "is-selected" : ""}`}
-            data-testid={fenceRadiusHandleTestId(handle)}
-            onclick={(event) => {
-              event.stopPropagation();
-              handleFenceRegionSelection(handle.regionUiId);
-            }}
-            onpointerdown={(event) => startFenceRadiusDrag(event, handle)}
-            style={positionStyle(handle.point)}
-            type="button"
-          >
-            R
-          </button>
-        {/each}
-
-        {#if renderFenceReturnPoint}
-          <button
-            class={`mission-map-fence-return ${renderFenceReturnPoint.selected ? "is-selected" : ""}`}
-            data-testid={missionWorkspaceTestIds.mapFenceReturnPointHandle}
-            onclick={(event) => {
-              event.stopPropagation();
-              handleFenceReturnPointSelection();
-            }}
-            onpointerdown={startFenceReturnPointDrag}
-            style={positionStyle(renderFenceReturnPoint.point)}
-            type="button"
-          >
-            R
-          </button>
-        {/if}
-
-        {#each renderMarkers as marker (marker.id)}
-          <button
-            class={`mission-map-marker ${marker.kind === "home" ? "is-home" : ""} ${marker.kind === "rally-point" ? "is-rally" : ""} ${marker.selected ? "is-selected" : ""} ${marker.current ? "is-current" : ""} ${marker.readOnly ? "is-readonly" : ""}`}
-            data-dragging={activeMarkerDrag?.markerId === marker.id ? "true" : "false"}
-            data-selected={marker.selected ? "true" : "false"}
-            data-testid={markerTestId(marker)}
-            onclick={(event) => {
-              event.stopPropagation();
-              handleMarkerSelection(marker);
-            }}
-            onpointerdown={(event) => startMarkerDrag(event, marker)}
-            style={positionStyle(marker.point)}
-            type="button"
-          >
-            {marker.label}
-          </button>
-        {/each}
-
-        {#if renderReplayOverlayMarker}
-          <div
-            class="mission-map-replay-marker"
-            data-testid={missionWorkspaceTestIds.mapReplayMarker}
-            style={positionStyle(renderReplayOverlayMarker)}
-          >
-            ▶
-          </div>
-        {/if}
-
-        {#if contextMenu}
-          {@const menuItems = buildContextMenuItems()}
-          {#if menuItems.length > 0}
-            <ContextMenu
-              items={menuItems}
-              controlled={{
-                open: true,
-                x: contextMenu.x,
-                y: contextMenu.y,
-                onOpenChange: (value) => { if (!value) contextMenu = null; },
-              }}
-            />
-          {/if}
-        {/if}
+    <div
+      bind:this={surfaceElement}
+      aria-label="Mission planner map"
+      class={["mission-map-surface relative overflow-hidden rounded-lg border border-border/70 bg-bg-primary", fillContainer ? "mission-map-surface--fill" : "aspect-[5/4]"]}
+      data-testid={missionWorkspaceTestIds.mapSurface}
+      oncontextmenu={handleContextMenu}
+      role="application"
+    >
+      <div class="mission-map-basemap" data-testid={missionWorkspaceTestIds.mapBasemap}>
+        <BaseMap
+          class="size-full"
+          options={createBasemapOptions()}
+          onMapReady={handleBasemapReady}
+          onMapError={handleBasemapError}
+        />
       </div>
+      <div class="mission-map-basemap-scrim"></div>
+      <MissionMapOverlaySvg
+        {overlayViewBox}
+        {renderFenceLines}
+        {renderFencePolygons}
+        {renderMissionLabels}
+        {renderMissionLines}
+        {renderMissionPolygons}
+        {renderReplayOverlayPath}
+        {renderSurveyLines}
+        {renderSurveyPolygons}
+      />
+
+      {#if surveySession || fencePlacementMode}
+        <button
+          aria-label={view.mode === "fence" ? "Place fence feature on planner map" : "Add survey point on planner map"}
+          class="mission-map-draw-surface"
+          data-testid={view.mode === "fence" ? missionWorkspaceTestIds.mapFencePlacementSurface : missionWorkspaceTestIds.mapDrawSurface}
+          onclick={view.mode === "fence" ? placeFenceFeatureFromSurface : appendSurveyPointFromSurface}
+          onkeydown={handleSurfaceKeydown}
+          type="button"
+        ></button>
+      {/if}
+
+      <MissionMapSurfaceControls
+        {mapLayerMode}
+        {terrainModeEnabled}
+        deviceLocationVisible={deviceLocationSupported || devicePermissionDenied}
+        passive={mapControlsPassive}
+        onSelectLayerMode={(mode) => { mapLayerMode = mode; }}
+        onToggleTerrainMode={() => { terrainModeEnabled = !terrainModeEnabled; }}
+        onActivateCameraTarget={activateCameraTarget}
+      />
+
+      <MissionMapStateNotice mode={view.mode} state={view.state} />
+
+      <MissionMapInteractiveLayer
+        activeMarkerId={activeMarkerDrag?.markerId ?? null}
+        {pointStyle}
+        {renderFenceRadiusHandles}
+        {renderFenceRegionHandles}
+        {renderFenceReturnPoint}
+        {renderFenceVertexHandles}
+        {renderMarkers}
+        {renderReplayOverlayMarker}
+        {renderSurveyHandles}
+        {renderSurveyVertexHandles}
+        surveySessionRegionId={surveySession?.regionId ?? null}
+        onSelectFenceRegion={handleFenceRegionSelection}
+        onSelectFenceReturnPoint={handleFenceReturnPointSelection}
+        onSelectMarker={handleMarkerSelection}
+        onSelectSurveyRegion={handleSurveySelection}
+        onStartFenceRadiusDrag={startFenceRadiusDrag}
+        onStartFenceRegionDrag={startFenceRegionDrag}
+        onStartFenceReturnPointDrag={startFenceReturnPointDrag}
+        onStartFenceVertexDrag={startFenceVertexDrag}
+        onStartMarkerDrag={startMarkerDrag}
+        onStartSurveyHandleDrag={startSurveyHandleDrag}
+      />
+
+      {#if contextMenu}
+        {@const menuItems = buildContextMenuItems()}
+        {#if menuItems.length > 0}
+          <ContextMenu
+            items={menuItems}
+            controlled={{
+              open: true,
+              x: contextMenu.x,
+              y: contextMenu.y,
+              onOpenChange: (value) => { if (!value) contextMenu = null; },
+            }}
+          />
+        {/if}
+      {/if}
     </div>
   {/if}
 
-  {#if diagnostics.length > 0}
-    <div class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
-      <p class="font-semibold">Map diagnostics</p>
-      <ul class="mt-2 list-inside list-disc space-y-1 text-xs">
-        {#each diagnostics as warning (`${warning}`)}
-          <li>{warning}</li>
-        {/each}
-      </ul>
-    </div>
-  {/if}
-
-  <pre class="sr-only" data-testid={missionWorkspaceTestIds.mapDebug}>{JSON.stringify(debugPayload)}</pre>
 </section>
 
 <style>
-  .mission-map--fill {
-    height: 100%;
+  .mission-map {
     display: flex;
     flex-direction: column;
+    gap: var(--space-3);
     min-height: 0;
+  }
+
+  .mission-map--fill {
+    height: 100%;
     overflow: hidden;
   }
 
-  .mission-map__surface-wrap--fill {
-    flex: 1 0 220px;
+  .mission-map-surface--fill {
+    flex: 1 1 auto;
     min-height: 220px;
-    margin-top: 1rem;
   }
 
-  /* Inside .mission-map--fill (flex column with overflow:hidden), default
-     flex-shrink lets non-flex children get squashed by the flex:1 surface
-     wrap. Keep header rows, draw buttons, and stats grids fully visible. */
-  .mission-map--fill > :not(.mission-map__surface-wrap--fill) {
+  .mission-map--fill > :not(.mission-map-surface--fill) {
     flex-shrink: 0;
   }
 
@@ -2652,28 +1934,8 @@ function preventContextMenu(event: MouseEvent) {
     touch-action: none;
   }
 
-  .mission-map-replay-marker {
-    position: absolute;
-    width: 1.8rem;
-    height: 1.8rem;
-    margin-left: -0.9rem;
-    margin-top: -0.9rem;
-    border-radius: 9999px;
-    border: 1px solid color-mix(in srgb, var(--color-warning) 55%, white);
-    background: color-mix(in srgb, var(--color-warning) 28%, var(--color-bg-primary));
-    color: var(--color-warning);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.8rem;
-    font-weight: 700;
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-bg-primary) 82%, transparent);
-    pointer-events: none;
-  }
-
   .mission-map-basemap,
-  .mission-map-basemap-scrim,
-  .mission-map-overlay {
+  .mission-map-basemap-scrim {
     position: absolute;
     inset: 0;
   }
@@ -2705,34 +1967,6 @@ function preventContextMenu(event: MouseEvent) {
       radial-gradient(circle at top, rgba(120, 214, 255, 0.06), transparent 55%);
   }
 
-  .mission-map-overlay {
-    z-index: 0;
-    pointer-events: none;
-  }
-
-  .mission-map__control-group--layers {
-    top: 12px;
-    left: 12px;
-    right: auto;
-    bottom: auto;
-  }
-
-  .mission-map__control-group--targets {
-    right: 12px;
-    bottom: 12px;
-  }
-
-  .mission-map__control-group.is-passive {
-    opacity: 0.55;
-    pointer-events: none;
-  }
-
-  .mission-map__button-text {
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-  }
-
   .mission-map-draw-surface {
     position: absolute;
     inset: 0;
@@ -2740,146 +1974,6 @@ function preventContextMenu(event: MouseEvent) {
     border: 0;
     background: transparent;
     cursor: crosshair;
-  }
-
-  .mission-map-marker,
-  .mission-map-survey-handle,
-  .mission-map-vertex-handle,
-  .mission-map-fence-handle,
-  .mission-map-fence-vertex,
-  .mission-map-fence-radius,
-  .mission-map-fence-return {
-    position: absolute;
-    z-index: 2;
-    transform: translate(-50%, -50%);
-    border-radius: 999px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    line-height: 1;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
-  }
-
-  .mission-map-marker {
-    width: 2rem;
-    height: 2rem;
-    border: 2px solid rgba(7, 32, 53, 0.94);
-    background: var(--color-accent);
-    color: #03101a;
-    cursor: grab;
-  }
-
-  .mission-map-marker[data-dragging="true"] {
-    cursor: grabbing;
-  }
-
-  .mission-map-marker.is-selected {
-    background: var(--color-warning);
-    transform: translate(-50%, -50%) scale(1.08);
-  }
-
-  .mission-map-marker.is-home {
-    background: var(--color-success);
-  }
-
-  .mission-map-marker.is-rally {
-    background: rgb(251, 191, 36);
-    color: #1f2937;
-  }
-
-  .mission-map-marker.is-current {
-    background: var(--color-danger);
-    color: white;
-  }
-
-  .mission-map-marker.is-readonly {
-    cursor: default;
-    opacity: 0.72;
-  }
-
-  .mission-map-survey-handle {
-    min-width: 1.9rem;
-    height: 1.9rem;
-    border: 1px solid rgba(34, 197, 94, 0.45);
-    background: rgba(34, 197, 94, 0.2);
-    color: rgb(134, 239, 172);
-    padding: 0 0.5rem;
-  }
-
-  .mission-map-survey-handle.is-selected {
-    border-color: rgba(120, 214, 255, 0.72);
-    background: rgba(120, 214, 255, 0.18);
-    color: rgb(186, 230, 253);
-  }
-
-  .mission-map-vertex-handle {
-    min-width: 1.4rem;
-    height: 1.4rem;
-    border: 1px solid rgba(120, 214, 255, 0.6);
-    background: rgba(12, 74, 110, 0.92);
-    color: rgb(186, 230, 253);
-    cursor: default;
-  }
-
-  .mission-map-vertex-handle.is-selected {
-    border-color: rgba(191, 219, 254, 0.92);
-    background: rgba(30, 64, 175, 0.92);
-  }
-
-  .mission-map-vertex-handle.is-draggable {
-    cursor: grab;
-  }
-
-  .mission-map-fence-handle {
-    min-width: 2rem;
-    height: 2rem;
-    border: 1px solid rgba(96, 165, 250, 0.6);
-    background: rgba(30, 41, 59, 0.92);
-    color: rgb(219, 234, 254);
-    padding: 0 0.45rem;
-    cursor: pointer;
-  }
-
-  .mission-map-fence-handle.is-inclusion {
-    border-color: rgba(96, 165, 250, 0.72);
-    color: rgb(191, 219, 254);
-  }
-
-  .mission-map-fence-handle.is-exclusion {
-    border-color: rgba(248, 113, 113, 0.72);
-    color: rgb(254, 202, 202);
-  }
-
-  .mission-map-fence-handle.is-selected {
-    transform: translate(-50%, -50%) scale(1.08);
-  }
-
-  .mission-map-fence-handle.is-draggable {
-    cursor: grab;
-  }
-
-  .mission-map-fence-vertex,
-  .mission-map-fence-radius,
-  .mission-map-fence-return {
-    width: 1.55rem;
-    height: 1.55rem;
-    border: 1px solid rgba(191, 219, 254, 0.82);
-    background: rgba(15, 23, 42, 0.94);
-    color: rgb(219, 234, 254);
-    cursor: grab;
-  }
-
-  .mission-map-fence-vertex.is-selected,
-  .mission-map-fence-radius.is-selected,
-  .mission-map-fence-return.is-selected {
-    border-color: rgba(250, 204, 21, 0.92);
-    color: rgb(254, 240, 138);
-    transform: translate(-50%, -50%) scale(1.08);
-  }
-
-  .mission-map-fence-return {
-    border-color: rgba(52, 211, 153, 0.82);
-    color: rgb(167, 243, 208);
-    background: rgba(6, 78, 59, 0.92);
   }
 
 </style>

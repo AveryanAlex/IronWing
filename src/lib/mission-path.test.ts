@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { TypedDraftItem } from "./mission-draft-typed";
 import type { MissionCommand, MissionItem } from "./mavkit-types";
-import { missionPathLineCoordinates, missionPathPoints } from "./mission-path";
+import { missionPathLineCoordinates, missionPathPoints, missionPathPointsWithSurveys } from "./mission-path";
+import { createSurveyRegion, type SurveyDraftExtension } from "./survey-region";
 
 function makeMissionItem(command: MissionCommand): MissionItem {
   return {
@@ -213,6 +214,76 @@ describe("missionPathPoints", () => {
       ["rel_home", 40],
       ["terrain", 25],
     ]);
+  });
+
+  it("interleaves generated survey mission items with manual route points for terrain profiles", () => {
+    const manualItems = [
+      makeDraftItem(0, {
+        Nav: {
+          Waypoint: {
+            position: {
+              RelHome: {
+                latitude_deg: 47.4,
+                longitude_deg: 8.55,
+                relative_alt_m: 30,
+              },
+            },
+            hold_time_s: 0,
+            acceptance_radius_m: 1,
+            pass_radius_m: 0,
+            yaw_deg: 0,
+          },
+        },
+      }),
+    ];
+    const surveyRegion = createSurveyRegion([{ latitude_deg: 47.401, longitude_deg: 8.551 }]);
+    surveyRegion.generatedItems = [
+      makeMissionItem({
+        Nav: {
+          Waypoint: {
+            position: {
+              RelHome: {
+                latitude_deg: 47.41,
+                longitude_deg: 8.56,
+                relative_alt_m: 60,
+              },
+            },
+            hold_time_s: 0,
+            acceptance_radius_m: 1,
+            pass_radius_m: 0,
+            yaw_deg: 0,
+          },
+        },
+      }),
+      makeMissionItem({
+        Nav: {
+          Waypoint: {
+            position: {
+              RelHome: {
+                latitude_deg: 47.42,
+                longitude_deg: 8.57,
+                relative_alt_m: 60,
+              },
+            },
+            hold_time_s: 0,
+            acceptance_radius_m: 1,
+            pass_radius_m: 0,
+            yaw_deg: 0,
+          },
+        },
+      }),
+    ];
+    const survey: SurveyDraftExtension = {
+      surveyRegions: new Map([[surveyRegion.id, surveyRegion]]),
+      surveyRegionOrder: [{ regionId: surveyRegion.id, position: 1 }],
+    };
+
+    const points = missionPathPointsWithSurveys(null, manualItems, survey);
+
+    expect(points.map((point) => point.latitude_deg)).toEqual([47.4, 47.41, 47.42]);
+    expect(points.map((point) => point.source ?? "manual")).toEqual(["manual", "survey", "survey"]);
+    expect(points.slice(1).map((point) => point.surveyRegionId)).toEqual([surveyRegion.id, surveyRegion.id]);
+    expect(points.slice(1).map((point) => point.surveyLocalIndex)).toEqual([0, 1]);
   });
 });
 

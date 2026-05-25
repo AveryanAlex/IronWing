@@ -17,6 +17,7 @@ import {
   activeTransferMissionPlan,
   plannerHasContent,
   plannerIsDirty,
+  plannerUploadSynced,
   plannerScopeLabel,
   resolveMissionPlannerAttachment,
 } from "./mission-planner";
@@ -90,6 +91,7 @@ export type MissionPlannerView = {
   activeEnvelopeText: string;
   phase: MissionPlannerDomainPhase;
   dirty: boolean;
+  uploaded: boolean;
   missionItemCount: number;
   effectiveMissionItemCount: number;
   surveyRegionCount: number;
@@ -146,6 +148,7 @@ export function createMissionPlannerViewStore(store: Readable<MissionPlannerStor
       activeEnvelopeText: plannerScopeLabel($planner),
       phase: $planner.phase,
       dirty: plannerIsDirty($planner),
+      uploaded: plannerUploadSynced($planner),
       missionItemCount: $planner.draftState.active.mission.document.items.length,
       effectiveMissionItemCount: effectiveMission.items.length,
       surveyRegionCount: $planner.survey.surveyRegionOrder.length,

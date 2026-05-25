@@ -9,7 +9,6 @@ import { shouldDropEvent } from "../../session";
 import { parseLatitude, parseLongitude } from "../mission-coordinates";
 import {
   createMissionKmlFileIo,
-  detectKmlSource,
   parseMissionKmlImportSelection,
   type MissionKmlFileImportData,
   type MissionKmlFileImportResult,
@@ -28,6 +27,7 @@ import {
   moveTypedDown,
   moveTypedUp,
   moveTypedWaypointOnMap,
+  reorderTypedItemsByUiIds,
   replaceTypedDraftFromDownload,
   selectTypedDraftIndex,
   setFenceReturnPoint as setTypedFenceReturnPoint,
@@ -44,6 +44,7 @@ import {
   updateTypedLongitude,
   type FenceRegionType,
   type SessionScope,
+  type TypedDraftItem,
   type TypedDraftState,
 } from "../mission-draft-typed";
 import {
@@ -97,6 +98,18 @@ import {
   createMissionPlannerViewStore,
   type MissionPlannerViewStore,
 } from "./mission-planner-view";
+import {
+  isCoordinatePairValid,
+  validateFenceRegion,
+} from "./mission-planner-validation";
+import {
+  sameFence,
+  sameHome,
+  samePlan,
+  sameRally,
+  sameSurvey,
+} from "./mission-planner-compare";
+import { openToolbarImportPicker } from "./mission-planner-import-picker";
 
 export type MissionPlannerDomainPhase =
   | "bootstrapping"
@@ -260,6 +273,10 @@ export type MissionPlannerSelection =
   | { kind: "mission-item" }
   | { kind: "survey-block"; regionId: string };
 
+export type MissionPlannerListOrderEntry =
+  | { kind: "mission-item"; uiId: number }
+  | { kind: "survey-block"; regionId: string };
+
 export type MissionPlannerReplacePrompt =
   | {
     kind: "replace-active";
@@ -323,6 +340,7 @@ export type MissionPlannerStoreState = {
   streamError: string | null;
   sessionHydrated: boolean;
   sessionPhase: SessionStorePhase;
+  sessionConnected: boolean;
   activeEnvelope: SessionEnvelope | null;
   activeSource: SessionEnvelope["source_kind"] | null;
   missionState: MissionState | null;
@@ -349,6 +367,8 @@ export type MissionPlannerStoreState = {
   validationIssues: MissionIssue[];
   fileWarnings: string[];
   lastError: string | null;
+  lastUploadedWorkspace: MissionPlannerWorkspace | null;
+  lastUploadedScopeKey: string | null;
 };
 
 export type MissionPlannerStoreOptions = {
@@ -377,190 +397,6 @@ const ACTION_TIMEOUT_MS = 15_000;
 const HISTORY_LIMIT = 50;
 const ALL_IMPORT_DOMAINS = ["mission", "fence", "rally"] as const satisfies readonly MissionPlannerImportDomain[];
 const ALL_HISTORY_DOMAINS = ["mission", "fence", "rally"] as const satisfies readonly MissionPlannerHistoryDomain[];
-const SUPPORTED_TOOLBAR_IMPORT_ACCEPT = {
-  "application/json": [".plan", ".json"],
-  "text/plain": [".plan", ".json", ".kml"],
-  "application/vnd.google-earth.kml+xml": [".kml"],
-  "application/vnd.google-earth.kmz": [".kmz"],
-  "application/xml": [".kml"],
-  "text/xml": [".kml"],
-  "application/octet-stream": [".kmz"],
-} satisfies Record<string, string[]>;
-const TOOLBAR_IMPORT_INPUT_ACCEPT = ".plan,.json,.kml,.kmz,application/json,text/plain,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,text/xml,application/xml,application/octet-stream";
-
-type BrowserOpenFileHandle = {
-  getFile(): Promise<File>;
-};
-
-type BrowserMissionImportPickerWindow = Window & {
-  showOpenFilePicker?: (options?: {
-    multiple?: boolean;
-    excludeAcceptAllOption?: boolean;
-    types?: Array<{ description?: string; accept: Record<string, string[]> }>;
-  }) => Promise<BrowserOpenFileHandle[]>;
-};
-
-type ToolbarImportSelection =
-  | {
-    source: "plan";
-    name: string | null;
-    contents: string;
-  }
-  | {
-    source: "kml" | "kmz";
-    name: string | null;
-    text?: string;
-    bytes?: Uint8Array | ArrayBuffer;
-  };
-
-function detectToolbarImportSource(name: string | null | undefined, mimeType: string | null | undefined): ToolbarImportSelection["source"] {
-  const loweredName = name?.toLowerCase() ?? "";
-  if (loweredName.endsWith(".plan") || loweredName.endsWith(".json") || mimeType === "application/json") {
-    return "plan";
-  }
-
-  return detectKmlSource(name, mimeType);
-}
-
-async function readToolbarImportSelection(file: File): Promise<ToolbarImportSelection> {
-  const source = detectToolbarImportSource(file.name, file.type);
-  if (source === "plan") {
-    return {
-      source,
-      name: file.name,
-      contents: await file.text(),
-    };
-  }
-
-  if (source === "kmz") {
-    return {
-      source,
-      name: file.name,
-      bytes: await file.arrayBuffer(),
-    };
-  }
-
-  return {
-    source,
-    name: file.name,
-    text: await file.text(),
-  };
-}
-
-async function openToolbarImportPicker(
-  formatError: (error: unknown) => string = formatUnknownError,
-): Promise<ToolbarImportSelection | null> {
-  const browserWindow = window as BrowserMissionImportPickerWindow;
-
-  if (typeof browserWindow.showOpenFilePicker === "function") {
-    return openToolbarImportPickerWithHandle(browserWindow.showOpenFilePicker, formatError);
-  }
-
-  return openToolbarImportPickerWithInput(formatError);
-}
-
-async function openToolbarImportPickerWithHandle(
-  showOpenFilePicker: NonNullable<BrowserMissionImportPickerWindow["showOpenFilePicker"]>,
-  formatError: (error: unknown) => string,
-): Promise<ToolbarImportSelection | null> {
-  try {
-    const handles = await showOpenFilePicker({
-      multiple: false,
-      types: [
-        {
-          description: "Mission plan, KML, and KMZ files",
-          accept: SUPPORTED_TOOLBAR_IMPORT_ACCEPT,
-        },
-      ],
-    });
-    const handle = handles[0];
-    if (!handle) {
-      return null;
-    }
-
-    return readToolbarImportSelection(await handle.getFile());
-  } catch (error) {
-    if (isAbortError(error)) {
-      return null;
-    }
-
-    throw new Error(formatError(error));
-  }
-}
-
-function openToolbarImportPickerWithInput(
-  formatError: (error: unknown) => string,
-): Promise<ToolbarImportSelection | null> {
-  if (typeof document === "undefined") {
-    return Promise.reject(new Error("This browser cannot open mission import files right now."));
-  }
-
-  return new Promise((resolve, reject) => {
-    const input = document.createElement("input");
-    let settled = false;
-
-    const cleanup = () => {
-      input.removeEventListener("change", onChange);
-      window.removeEventListener("focus", onWindowFocus);
-      input.remove();
-    };
-
-    const settle = (value: ToolbarImportSelection | null) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      cleanup();
-      resolve(value);
-    };
-
-    const onWindowFocus = () => {
-      window.setTimeout(() => {
-        if (!settled && (!input.files || input.files.length === 0)) {
-          settle(null);
-        }
-      }, 0);
-    };
-
-    const onChange = async () => {
-      const file = input.files?.[0];
-      if (!file) {
-        settle(null);
-        return;
-      }
-
-      try {
-        settle(await readToolbarImportSelection(file));
-      } catch (error) {
-        cleanup();
-        reject(new Error(formatError(error)));
-      }
-    };
-
-    input.type = "file";
-    input.accept = TOOLBAR_IMPORT_INPUT_ACCEPT;
-    input.style.display = "none";
-    input.addEventListener("change", onChange, { once: true });
-    window.addEventListener("focus", onWindowFocus, { once: true });
-    document.body.appendChild(input);
-    input.click();
-  });
-}
-
-function isAbortError(error: unknown): boolean {
-  if (typeof DOMException !== "undefined" && error instanceof DOMException) {
-    return error.name === "AbortError";
-  }
-
-  return Boolean(
-    error
-      && typeof error === "object"
-      && "name" in error
-      && (error as { name?: string }).name === "AbortError",
-  );
-}
-
 function createEmptyHistoryState(): MissionPlannerHistoryState {
   return {
     mission: { past: [], future: [] },
@@ -572,7 +408,7 @@ function createEmptyHistoryState(): MissionPlannerHistoryState {
 function createInitialState(initialMode: MissionPlannerMode = "mission"): MissionPlannerStoreState {
   return {
     hydrated: false,
-    workspaceMounted: false,
+    workspaceMounted: true,
     mode: initialMode,
     selection: { kind: "home" },
     fenceSelection: { kind: "none" },
@@ -583,6 +419,7 @@ function createInitialState(initialMode: MissionPlannerMode = "mission"): Missio
     streamError: null,
     sessionHydrated: false,
     sessionPhase: "idle",
+    sessionConnected: false,
     activeEnvelope: null,
     activeSource: null,
     missionState: null,
@@ -609,6 +446,8 @@ function createInitialState(initialMode: MissionPlannerMode = "mission"): Missio
     validationIssues: [],
     fileWarnings: [],
     lastError: null,
+    lastUploadedWorkspace: null,
+    lastUploadedScopeKey: null,
   };
 }
 
@@ -1048,6 +887,7 @@ export function createMissionPlannerStore(
         ...state,
         sessionHydrated: sessionState.hydrated,
         sessionPhase: sessionState.lastPhase,
+        sessionConnected: sessionState.sessionDomain.value?.connection.kind === "connected",
       } satisfies MissionPlannerStoreState;
 
       if (!envelopeChanged) {
@@ -1061,7 +901,8 @@ export function createMissionPlannerStore(
 
       const nextScope = scopeFromEnvelope(nextEnvelope);
       const currentDraftScope = attachedDraftScope(state);
-      const nextRecoverable = state.workspaceMounted && plannerHasContent(state)
+      const hasPlannerContent = plannerHasContent(state);
+      const nextRecoverable = state.workspaceMounted && hasPlannerContent
         ? captureRecoverableWorkspace(state)
         : state.recoverableWorkspace;
       const recoverablePrompt = nextRecoverable
@@ -1070,7 +911,7 @@ export function createMissionPlannerStore(
         ? ({ kind: "recoverable" } satisfies MissionPlannerReplacePrompt)
         : null;
 
-      return withResolvedPhase({
+      const nextState = {
         ...base,
         activeEnvelope: nextEnvelope,
         activeSource: nextEnvelope?.source_kind ?? null,
@@ -1080,7 +921,16 @@ export function createMissionPlannerStore(
         replacePrompt: recoverablePrompt,
         recoverableWorkspace: nextRecoverable,
         dismissedWarningIds: clearDismissedWarningIds(state.dismissedWarningIds, ["attachment:"]),
-      });
+      } satisfies MissionPlannerStoreState;
+
+      const attachedState = state.workspaceMounted && !hasPlannerContent
+        ? applyWorkspacePair(nextState, {
+          active: captureActiveWorkspace(state),
+          snapshot: captureSnapshotWorkspace(state),
+        }, nextScope)
+        : nextState;
+
+      return withResolvedPhase(attachedState);
     });
   }
 
@@ -1499,6 +1349,38 @@ export function createMissionPlannerStore(
 
   function moveMissionItemDownByIndex(index: number) {
     updateMissionDraft((draftState) => moveTypedDown(draftState, "mission", index));
+  }
+
+  function reorderMissionItemsByUiIds(orderedUiIds: readonly number[]) {
+    updateMissionDraft((draftState) => reorderTypedItemsByUiIds(draftState, "mission", orderedUiIds));
+  }
+
+  function reorderMissionListEntries(orderedEntries: readonly MissionPlannerListOrderEntry[]) {
+    store.update((state) => {
+      if (!canEditWorkspace(state)) {
+        return withBlockedReason(state, readOnlyMutationMessage(state, "Mission draft edits"));
+      }
+
+      const normalizedOrder = normalizeMissionListOrder(state, orderedEntries);
+      if (!normalizedOrder || sameMissionListOrder(normalizedOrder.currentOrder, normalizedOrder.nextOrder)) {
+        return state;
+      }
+
+      const draftState = reorderTypedItemsByUiIds(state.draftState, "mission", normalizedOrder.orderedMissionUiIds);
+      const survey = normalizeSurveyAuthoringExtension({
+        surveyRegions: new Map(state.survey.surveyRegions),
+        surveyRegionOrder: normalizedOrder.surveyRegionOrder,
+      });
+
+      return withResolvedPhase(commitHistoryChange(state, {
+        ...state,
+        draftState,
+        survey,
+        selection: nextSurveySelection(state.selection, survey),
+        surveyPrompt: null,
+        validationIssues: [],
+      }, ["mission"]));
+    });
   }
 
   function updateMissionItemCommand(index: number, command: MissionCommand) {
@@ -2635,6 +2517,8 @@ export function createMissionPlannerStore(
 
     try {
       const latestState = get(store);
+      const uploadedWorkspace = captureActiveWorkspace(latestState);
+      const uploadedScopeKey = latestState.activeEnvelope ? scopedEnvelopeKey(latestState.activeEnvelope) : null;
       await withTimeout(
         service.uploadWorkspace({
           mission: activeTransferMissionPlan(latestState),
@@ -2649,13 +2533,13 @@ export function createMissionPlannerStore(
         return { status: "stale" as const };
       }
 
-      store.update((current) => withResolvedPhase({
+      store.update((current) => withResolvedPhase(markWorkspaceUploaded({
         ...current,
         activeAction: null,
         blockedReason: null,
         blockedMode: null,
         blockedWarningTarget: null,
-      }));
+      }, uploadedWorkspace, uploadedScopeKey)));
       return { status: "success" as const };
     } catch (error) {
       handleActionFailure("upload", pending, error, true);
@@ -2971,6 +2855,8 @@ export function createMissionPlannerStore(
     deleteRallyPointByUiId,
     moveMissionItemUpByIndex,
     moveMissionItemDownByIndex,
+    reorderMissionItemsByUiIds,
+    reorderMissionListEntries,
     moveRallyPointUpByUiId,
     moveRallyPointDownByUiId,
     updateMissionItemCommand,
@@ -3089,6 +2975,66 @@ export function plannerIsDirty(state: MissionPlannerStoreState): boolean {
     || state.hoverSpeed !== state.hoverSpeedSnapshot;
 }
 
+export function sameMissionPlannerWorkspace(
+  left: MissionPlannerWorkspace,
+  right: MissionPlannerWorkspace,
+): boolean {
+  return samePlan(left.mission, right.mission)
+    && sameFence(left.fence, right.fence)
+    && sameRally(left.rally, right.rally)
+    && sameHome(left.home, right.home)
+    && sameSurvey(left.survey, right.survey)
+    && left.cruiseSpeed === right.cruiseSpeed
+    && left.hoverSpeed === right.hoverSpeed;
+}
+
+export function plannerUploadSynced(state: MissionPlannerStoreState): boolean {
+  if (!state.lastUploadedWorkspace || !state.lastUploadedScopeKey || !state.activeEnvelope) {
+    return false;
+  }
+
+  return state.lastUploadedScopeKey === scopedEnvelopeKey(state.activeEnvelope)
+    && sameMissionPlannerWorkspace(captureActiveWorkspace(state), state.lastUploadedWorkspace);
+}
+
+function markWorkspaceUploaded(
+  state: MissionPlannerStoreState,
+  uploadedWorkspace: MissionPlannerWorkspace,
+  uploadedScopeKey: string | null,
+): MissionPlannerStoreState {
+  const currentWorkspace = captureActiveWorkspace(state);
+  const currentMatchesUploaded = sameMissionPlannerWorkspace(currentWorkspace, uploadedWorkspace);
+
+  return {
+    ...state,
+    draftState: currentMatchesUploaded
+      ? {
+        ...state.draftState,
+        active: {
+          mission: {
+            ...state.draftState.active.mission,
+            snapshot: cloneValue(state.draftState.active.mission.document),
+          },
+          fence: {
+            ...state.draftState.active.fence,
+            snapshot: cloneValue(state.draftState.active.fence.document),
+          },
+          rally: {
+            ...state.draftState.active.rally,
+            snapshot: cloneValue(state.draftState.active.rally.document),
+          },
+        },
+      }
+      : state.draftState,
+    homeSnapshot: currentMatchesUploaded ? cloneValue(state.home) : state.homeSnapshot,
+    surveySnapshot: currentMatchesUploaded ? cloneValue(state.survey) : state.surveySnapshot,
+    cruiseSpeedSnapshot: currentMatchesUploaded ? state.cruiseSpeed : state.cruiseSpeedSnapshot,
+    hoverSpeedSnapshot: currentMatchesUploaded ? state.hoverSpeed : state.hoverSpeedSnapshot,
+    lastUploadedWorkspace: cloneValue(uploadedWorkspace),
+    lastUploadedScopeKey: uploadedScopeKey,
+  };
+}
+
 export function plannerScopeLabel(state: Pick<MissionPlannerStoreState, "activeEnvelope">): string {
   const envelope = state.activeEnvelope;
   if (!envelope) {
@@ -3100,6 +3046,7 @@ export function plannerScopeLabel(state: Pick<MissionPlannerStoreState, "activeE
 
 export function resolveMissionPlannerAttachment(state: MissionPlannerStoreState): MissionPlannerAttachmentState {
   const draftScope = attachedDraftScope(state);
+  const liveVehicleConnected = state.activeEnvelope?.source_kind === "live" && state.sessionConnected;
 
   if (state.activeEnvelope?.source_kind === "playback") {
     return {
@@ -3116,10 +3063,12 @@ export function resolveMissionPlannerAttachment(state: MissionPlannerStoreState)
     return {
       kind: "live-attached",
       label: "Live attached",
-      detail: "A live session is available. Read from the vehicle, import a file, or start a new draft to mount the workspace in this scope.",
+      detail: liveVehicleConnected
+        ? "A live session is available. Read from the vehicle, import a file, or start a new draft to mount the workspace in this scope."
+        : "A vehicle scope is known, but the vehicle is currently disconnected. Reconnect to read from the vehicle or upload this workspace.",
       readOnly: false,
       canEdit: true,
-      canUseVehicleActions: true,
+      canUseVehicleActions: liveVehicleConnected,
     };
   }
 
@@ -3127,10 +3076,12 @@ export function resolveMissionPlannerAttachment(state: MissionPlannerStoreState)
     return {
       kind: "live-attached",
       label: "Live attached",
-      detail: "This draft belongs to the active live scope, so validation, upload, and clear actions stay available.",
+      detail: liveVehicleConnected
+        ? "This draft belongs to the active live scope, so validation, upload, and clear actions stay available."
+        : "This draft belongs to the current scope, but the vehicle is disconnected. Reconnect to read from the vehicle or upload this workspace.",
       readOnly: false,
       canEdit: true,
-      canUseVehicleActions: true,
+      canUseVehicleActions: liveVehicleConnected,
     };
   }
 
@@ -3159,10 +3110,12 @@ export function resolveMissionPlannerAttachment(state: MissionPlannerStoreState)
   return {
     kind: "detached-local",
     label: "Detached local",
-    detail: `The planner kept the previous draft mounted instead of pretending it matches ${plannerScopeLabel({ activeEnvelope: state.activeEnvelope })}. Keep planning locally and use undo/redo as normal here, but validation, upload, and clear stay blocked until you return to a matching live scope or start a new scope-local draft.`,
+    detail: liveVehicleConnected
+      ? `The planner kept the previous draft mounted instead of pretending it matches ${plannerScopeLabel({ activeEnvelope: state.activeEnvelope })}. Keep planning locally and use undo/redo as normal here; the connected live vehicle is still available for read, validation, upload, and clear actions.`
+      : `The planner kept the previous draft mounted instead of pretending it matches ${plannerScopeLabel({ activeEnvelope: state.activeEnvelope })}. Keep planning locally and use undo/redo as normal here, then reconnect the vehicle when you need read, validation, upload, or clear actions.`,
     readOnly: false,
     canEdit: true,
-    canUseVehicleActions: false,
+    canUseVehicleActions: liveVehicleConnected,
   };
 }
 
@@ -3182,6 +3135,10 @@ function readOnlyMutationMessage(state: MissionPlannerStoreState, noun: string):
 }
 
 function blockedVehicleActionMessage(state: MissionPlannerStoreState, noun: string): string {
+  if (!state.sessionConnected) {
+    return `${noun} needs a connected live vehicle. Reconnect first, then try again.`;
+  }
+
   const attachment = resolveMissionPlannerAttachment(state);
   switch (attachment.kind) {
     case "playback-readonly":
@@ -3446,63 +3403,117 @@ function exportSurveyRegions(extension: SurveyDraftExtension) {
     });
 }
 
-function sameHome(left: HomePosition | null, right: HomePosition | null): boolean {
-  if (left === right) {
-    return true;
+function normalizeMissionListOrder(
+  state: MissionPlannerStoreState,
+  orderedEntries: readonly MissionPlannerListOrderEntry[],
+): {
+  currentOrder: MissionPlannerListOrderEntry[];
+  nextOrder: MissionPlannerListOrderEntry[];
+  orderedMissionUiIds: number[];
+  surveyRegionOrder: SurveyDraftExtension["surveyRegionOrder"];
+} | null {
+  const missionItems = state.draftState.active.mission.draftItems;
+  const currentOrder = missionListOrderEntries(missionItems, state.survey);
+
+  if (orderedEntries.length !== currentOrder.length) {
+    return null;
   }
 
-  if (!left || !right) {
-    return left === right;
-  }
+  const missionUiIds = new Set(missionItems.map((item) => item.uiId));
+  const surveyRegionIds = new Set(state.survey.surveyRegionOrder.map((block) => block.regionId));
+  const seenMissionUiIds = new Set<number>();
+  const seenSurveyRegionIds = new Set<string>();
+  const nextOrder: MissionPlannerListOrderEntry[] = [];
+  const orderedMissionUiIds: number[] = [];
+  const surveyRegionOrder: SurveyDraftExtension["surveyRegionOrder"] = [];
+  let manualCount = 0;
 
-  return left.latitude_deg === right.latitude_deg
-    && left.longitude_deg === right.longitude_deg
-    && left.altitude_m === right.altitude_m;
-}
-
-function sameSurvey(left: SurveyDraftExtension, right: SurveyDraftExtension): boolean {
-  return JSON.stringify(serializeSurvey(left)) === JSON.stringify(serializeSurvey(right));
-}
-
-function serializeSurvey(extension: SurveyDraftExtension) {
-  return extension.surveyRegionOrder
-    .map((block, index) => ({ block, index }))
-    .sort((left, right) => left.block.position - right.block.position || left.index - right.index)
-    .map(({ block }) => {
-      const region = extension.surveyRegions.get(block.regionId);
-      let exportable: ReturnType<typeof toExportableSurveyRegion> | null = null;
-      let exportError: string | null = null;
-
-      if (region) {
-        try {
-          exportable = toExportableSurveyRegion(region, block.position);
-        } catch (error) {
-          exportError = error instanceof Error ? error.message : String(error);
-        }
+  for (const entry of orderedEntries) {
+    if (entry.kind === "mission-item") {
+      if (!missionUiIds.has(entry.uiId) || seenMissionUiIds.has(entry.uiId)) {
+        return null;
       }
 
-      return {
-        position: block.position,
-        regionId: block.regionId,
-        importWarnings: region?.importWarnings ?? [],
-        generationState: region?.generationState ?? "idle",
-        generationMessage: region?.generationMessage ?? null,
-        exportable,
-        exportError,
-      };
-    });
+      seenMissionUiIds.add(entry.uiId);
+      orderedMissionUiIds.push(entry.uiId);
+      nextOrder.push({ kind: "mission-item", uiId: entry.uiId });
+      manualCount += 1;
+      continue;
+    }
+
+    if (!surveyRegionIds.has(entry.regionId) || seenSurveyRegionIds.has(entry.regionId)) {
+      return null;
+    }
+
+    seenSurveyRegionIds.add(entry.regionId);
+    surveyRegionOrder.push({ regionId: entry.regionId, position: manualCount });
+    nextOrder.push({ kind: "survey-block", regionId: entry.regionId });
+  }
+
+  if (seenMissionUiIds.size !== missionUiIds.size || seenSurveyRegionIds.size !== surveyRegionIds.size) {
+    return null;
+  }
+
+  return {
+    currentOrder,
+    nextOrder,
+    orderedMissionUiIds,
+    surveyRegionOrder,
+  };
 }
 
-function samePlan(left: MissionPlan, right: MissionPlan): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+function missionListOrderEntries(
+  missionItems: readonly TypedDraftItem[],
+  survey: SurveyDraftExtension,
+): MissionPlannerListOrderEntry[] {
+  const orderedBlocks = survey.surveyRegionOrder
+    .map((block, index) => ({ block, index }))
+    .sort((left, right) => left.block.position - right.block.position || left.index - right.index)
+    .map(({ block }) => block);
+  const entries: MissionPlannerListOrderEntry[] = [];
+  let blockIndex = 0;
+
+  const appendBlocksAt = (position: number) => {
+    while (blockIndex < orderedBlocks.length && orderedBlocks[blockIndex]?.position === position) {
+      const block = orderedBlocks[blockIndex];
+      if (block) {
+        entries.push({ kind: "survey-block", regionId: block.regionId });
+      }
+      blockIndex += 1;
+    }
+  };
+
+  appendBlocksAt(0);
+
+  missionItems.forEach((item, index) => {
+    entries.push({ kind: "mission-item", uiId: item.uiId });
+    appendBlocksAt(index + 1);
+  });
+
+  while (blockIndex < orderedBlocks.length) {
+    const block = orderedBlocks[blockIndex];
+    if (block) {
+      entries.push({ kind: "survey-block", regionId: block.regionId });
+    }
+    blockIndex += 1;
+  }
+
+  return entries;
 }
 
-function sameFence(left: FencePlan, right: FencePlan): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
+function sameMissionListOrder(left: readonly MissionPlannerListOrderEntry[], right: readonly MissionPlannerListOrderEntry[]): boolean {
+  return left.length === right.length && left.every((entry, index) => {
+    const other = right[index];
+    if (!other || other.kind !== entry.kind) {
+      return false;
+    }
 
-function sameRally(left: RallyPlan, right: RallyPlan): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+    if (entry.kind === "mission-item" && other.kind === "mission-item") {
+      return entry.uiId === other.uiId;
+    }
+
+    return entry.kind === "survey-block" && other.kind === "survey-block" && entry.regionId === other.regionId;
+  });
 }
 
 function scopeFromEnvelope(envelope: SessionEnvelope | null): SessionScope {
@@ -3904,66 +3915,6 @@ function resolveRallyAnchorPoint(state: MissionPlannerStoreState): GeoPoint2d {
   };
 }
 
-function validateFenceRegion(region: FenceRegion): { ok: true } | { ok: false; message: string } {
-  if ("inclusion_polygon" in region) {
-    return validateFencePolygon(region.inclusion_polygon.vertices, "Fence inclusion polygons");
-  }
-
-  if ("exclusion_polygon" in region) {
-    return validateFencePolygon(region.exclusion_polygon.vertices, "Fence exclusion polygons");
-  }
-
-  if ("inclusion_circle" in region) {
-    return validateFenceCircle(region.inclusion_circle.center, region.inclusion_circle.radius_m, "Fence inclusion circles");
-  }
-
-  return validateFenceCircle(region.exclusion_circle.center, region.exclusion_circle.radius_m, "Fence exclusion circles");
-}
-
-function validateFencePolygon(
-  vertices: GeoPoint2d[],
-  label: string,
-): { ok: true } | { ok: false; message: string } {
-  if (vertices.length < 3) {
-    return {
-      ok: false,
-      message: `${label} need at least three valid vertices before IronWing will update the active fence region.`,
-    };
-  }
-
-  const invalidVertex = vertices.find((vertex) => !isCoordinatePairValid(vertex.latitude_deg, vertex.longitude_deg));
-  if (invalidVertex) {
-    return {
-      ok: false,
-      message: `${label} rejected malformed coordinates, so the previous fence geometry stayed visible and unchanged.`,
-    };
-  }
-
-  return { ok: true };
-}
-
-function validateFenceCircle(
-  center: GeoPoint2d,
-  radiusM: number,
-  label: string,
-): { ok: true } | { ok: false; message: string } {
-  if (!isCoordinatePairValid(center.latitude_deg, center.longitude_deg)) {
-    return {
-      ok: false,
-      message: `${label} rejected malformed center coordinates, so the previous fence geometry stayed visible and unchanged.`,
-    };
-  }
-
-  if (!Number.isFinite(radiusM) || radiusM <= 0) {
-    return {
-      ok: false,
-      message: `${label} need a radius greater than zero before IronWing will update the active fence region.`,
-    };
-  }
-
-  return { ok: true };
-}
-
 function rejectedFenceMutation(
   reason: MissionPlannerFenceMutationRejectReason,
   message: string,
@@ -3984,10 +3935,6 @@ function rejectedRallyMutation(
     reason,
     message,
   };
-}
-
-function isCoordinatePairValid(latitudeDeg: number, longitudeDeg: number): boolean {
-  return parseLatitude(latitudeDeg).ok && parseLongitude(longitudeDeg).ok;
 }
 
 function rejectedMapMove(

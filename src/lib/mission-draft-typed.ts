@@ -24,6 +24,7 @@ export {
     moveTypedDown,
     moveTypedUp,
     reorderTypedItems,
+    reorderTypedItemsByUiIds,
     replaceAllTypedItems,
     setFenceReturnPoint,
 } from "./mission-draft-typed/collection";
