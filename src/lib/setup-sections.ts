@@ -97,7 +97,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   },
   {
     id: "beginner_wizard",
-    title: "Beginner wizard",
+    title: "Beginner Wizard",
     description: "Guided setup for frame, calibration, RC, arming, plus recommended safety basics.",
     kind: "guided",
     groupId: "workspace",
@@ -105,7 +105,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   },
   {
     id: "frame_orientation",
-    title: "Frame & orientation",
+    title: "Frame & Orientation",
     description: "Vehicle layout, VTOL ownership, and board orientation truth.",
     kind: "guided",
     groupId: "hardware",
@@ -129,7 +129,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   },
   {
     id: "battery_monitor",
-    title: "Battery monitor",
+    title: "Battery Monitor",
     description: "Battery sensor presets, live power truth, and staged monitor configuration.",
     kind: "guided",
     groupId: "hardware",
@@ -145,7 +145,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   },
   {
     id: "servo_outputs",
-    title: "Servo outputs",
+    title: "Servo Outputs",
     description: "Function-aware output inspection, reversal staging, and live readback truth.",
     kind: "guided",
     groupId: "hardware",
@@ -153,7 +153,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   },
   {
     id: "serial_ports",
-    title: "Serial ports",
+    title: "Serial Ports",
     description: "Protocol ownership, baud choices, and reboot-required port changes.",
     kind: "guided",
     groupId: "hardware",
@@ -161,7 +161,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   },
   {
     id: "rc_receiver",
-    title: "RC receiver",
+    title: "RC / Receiver",
     description: "Live channel mapping, preset order, and receiver truth.",
     kind: "guided",
     groupId: "safety",
@@ -169,7 +169,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   },
   {
     id: "flight_modes",
-    title: "Flight modes",
+    title: "Flight Modes",
     description: "Available-mode slots, defaults, and vehicle-aware mode readiness.",
     kind: "guided",
     groupId: "safety",
@@ -209,7 +209,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   },
   {
     id: "initial_params",
-    title: "Initial params",
+    title: "Initial Parameters",
     description: "Calculator-style startup batches and recommended baseline settings.",
     kind: "guided",
     groupId: "tuning",
@@ -217,7 +217,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   },
   {
     id: "pid_tuning",
-    title: "PID tuning",
+    title: "PID Tuning",
     description: "Vehicle-aware tuning surfaces without dropping straight into raw parameters.",
     kind: "guided",
     groupId: "tuning",

@@ -129,7 +129,7 @@ function clearCheckpoint() {
 </script>
 
 {#snippet sectionNav()}
-  <div class="flex h-full min-h-0 flex-col border-r border-border bg-bg-secondary">
+  <div class="flex h-full min-h-0 flex-col overflow-hidden border-r border-border bg-bg-primary px-1.5 py-2">
     <SetupWorkspaceSectionNav
       onSelect={selectSection}
       sectionGroups={view.sectionGroups}
@@ -278,7 +278,7 @@ function clearCheckpoint() {
       </div>
     {:else}
       <div class="min-h-0 flex-1 overflow-hidden" data-shell-tier={chromeStore.current.tier}>
-        <SplitWorkspace primaryMax="320px">
+        <SplitWorkspace primaryMax="224px">
           {#snippet primary()}
             {@render sectionNav()}
           {/snippet}
@@ -303,10 +303,10 @@ function clearCheckpoint() {
         tabindex="-1"
       ></div>
       <aside
-        class="fixed inset-y-0 left-0 z-50 w-[88vw] max-w-[22rem] overflow-y-auto bg-bg-primary p-4 shadow-2xl"
+        class="fixed inset-y-0 left-0 z-50 w-[88vw] max-w-64 overflow-y-auto bg-bg-primary px-1.5 py-2 shadow-2xl"
         data-testid={setupWorkspaceTestIds.sectionDrawer}
       >
-        <div class="mb-3 flex items-center justify-between">
+        <div class="mb-3 flex items-center justify-between px-2">
           <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Setup sections</p>
           <button
             class="rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary hover:border-accent hover:text-accent"
