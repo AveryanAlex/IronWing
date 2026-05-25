@@ -26,6 +26,7 @@ import { armVehicle, disarmVehicle } from "../../../telemetry";
 import { Banner } from "../../ui";
 import SetupBitmaskChecklist from "../shared/SetupBitmaskChecklist.svelte";
 import SetupSectionShell from "../SetupSectionShell.svelte";
+import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let {
@@ -163,24 +164,17 @@ function resolveDraftNumber(name: string, fallback: number | null): number | nul
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function isQueued(name: string, fallback: number | null): boolean {
-  const nextValue = resolveDraftNumber(name, fallback);
-  return nextValue !== null && params.stagedEdits[name]?.nextValue === nextValue;
-}
-
-function canStageRequire(): boolean {
+function canAutostageRequire(): boolean {
   if (actionsBlocked || !armingRequireItem || armingRequireItem.readOnly === true || armingRequireOptions.length === 0) {
     return false;
   }
 
-  const nextValue = resolveDraftNumber("ARMING_REQUIRE", armingRequireItem.value);
-  return nextValue !== null
-    && armingRequireItem.value !== nextValue
-    && params.stagedEdits.ARMING_REQUIRE?.nextValue !== nextValue;
+  return true;
 }
 
-function stageRequire() {
-  if (!canStageRequire() || !armingRequireItem) {
+function stageRequire(value: string) {
+  setDraft("ARMING_REQUIRE", value);
+  if (!canAutostageRequire() || !armingRequireItem) {
     return;
   }
 
@@ -190,6 +184,13 @@ function stageRequire() {
   }
 
   paramsStore.stageParameterEdit(armingRequireItem, nextValue);
+}
+
+function unstage(name: string) {
+  const nextDrafts = { ...draftValues };
+  delete nextDrafts[name];
+  draftValues = nextDrafts;
+  paramsStore.discardStagedEdit(name);
 }
 
 function toggleArmingCheck(bit: number) {
@@ -431,8 +432,8 @@ async function handleDisarm() {
             Current · {currentValueText(armingCheckItem)}
           </p>
           {#if params.stagedEdits.ARMING_CHECK}
-            <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_CHECK`}>
-              Queued · {params.stagedEdits.ARMING_CHECK.nextValueText}
+            <p class="mt-2">
+              <SetupStagedBadge name="ARMING_CHECK" onUnstage={unstage} testId={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_CHECK`} />
             </p>
           {/if}
 
@@ -459,17 +460,17 @@ async function handleDisarm() {
             Current · {currentValueText(armingRequireItem)}
           </p>
           {#if params.stagedEdits.ARMING_REQUIRE}
-            <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_REQUIRE`}>
-              Queued · {params.stagedEdits.ARMING_REQUIRE.nextValueText}
+            <p class="mt-2">
+              <SetupStagedBadge name="ARMING_REQUIRE" onUnstage={unstage} testId={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_REQUIRE`} />
             </p>
           {/if}
 
-          <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+          <div class="mt-4">
             <select
               class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
               data-testid={`${setupWorkspaceTestIds.armingInputPrefix}-ARMING_REQUIRE`}
               disabled={actionsBlocked || armingRequireOptions.length === 0 || !armingRequireItem}
-              onchange={(event) => setDraft("ARMING_REQUIRE", (event.currentTarget as HTMLSelectElement).value)}
+              onchange={(event) => stageRequire((event.currentTarget as HTMLSelectElement).value)}
               value={armingRequireDraft}
             >
               {#each armingRequireRenderedOptions as option (option.code)}
@@ -477,15 +478,6 @@ async function handleDisarm() {
               {/each}
             </select>
 
-            <button
-              class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-              data-testid={`${setupWorkspaceTestIds.armingStageButtonPrefix}-ARMING_REQUIRE`}
-              disabled={!canStageRequire()}
-              onclick={stageRequire}
-              type="button"
-            >
-              {isQueued("ARMING_REQUIRE", armingRequireItem?.value ?? null) ? "Queued" : "Stage"}
-            </button>
           </div>
         </article>
       </div>

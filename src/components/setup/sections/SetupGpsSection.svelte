@@ -19,6 +19,7 @@ import { selectTelemetryView } from "../../../lib/telemetry-selectors";
 import type { ParamMeta } from "../../../param-metadata";
 import SetupBitmaskChecklist from "../shared/SetupBitmaskChecklist.svelte";
 import SetupSectionShell from "../SetupSectionShell.svelte";
+import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 type EnumOption = { code: number; label: string };
@@ -213,30 +214,6 @@ function currentValueText(item: ParameterItemModel | null): string {
   return item?.valueLabel ?? item?.valueText ?? "Unavailable";
 }
 
-function isQueued(name: string | null, draftValue: string): boolean {
-  if (!name) {
-    return false;
-  }
-
-  const nextValue = resolveDraftNumber(draftValue);
-  return nextValue !== null && params.stagedEdits[name]?.nextValue === nextValue;
-}
-
-function canStage(item: ParameterItemModel | null, draftValue: string, optionsReady: boolean): boolean {
-  if (actionsBlocked || !optionsReady) {
-    return false;
-  }
-
-  const nextValue = resolveDraftNumber(draftValue);
-  return Boolean(
-    item
-      && nextValue !== null
-      && item.readOnly !== true
-      && item.value !== nextValue
-      && params.stagedEdits[item.name]?.nextValue !== nextValue,
-  );
-}
-
 function stage(item: ParameterItemModel | null, draftValue: string, optionsReady: boolean) {
   const nextValue = resolveDraftNumber(draftValue);
   if (!item || nextValue === null || actionsBlocked || !optionsReady) {
@@ -244,6 +221,10 @@ function stage(item: ParameterItemModel | null, draftValue: string, optionsReady
   }
 
   paramsStore.stageParameterEdit(item, nextValue);
+}
+
+function unstage(name: string) {
+  paramsStore.discardStagedEdit(name);
 }
 
 function buildGnssItems(meta: ParamMeta | undefined, currentMask: number | null) {
@@ -450,8 +431,8 @@ function formatHdop(value: number | null): string {
           Current · {currentValueText(primaryTypeItem)}
         </p>
         {#if params.stagedEdits[primaryTypeItem.name]}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.gpsStagedPrefix}-${primaryTypeItem.name}`}>
-            Queued · {params.stagedEdits[primaryTypeItem.name]?.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name={primaryTypeItem.name} onUnstage={unstage} testId={`${setupWorkspaceTestIds.gpsStagedPrefix}-${primaryTypeItem.name}`} />
           </p>
         {/if}
         <select
@@ -459,20 +440,12 @@ function formatHdop(value: number | null): string {
           class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.gpsInputPrefix}-${primaryTypeItem.name}`}
           disabled={actionsBlocked || primaryTypeOptions.length === 0}
+          onchange={(event) => stage(primaryTypeItem, (event.currentTarget as HTMLSelectElement).value, primaryTypeOptions.length > 0)}
         >
           {#each primaryTypeOptions as option (option.code)}
             <option value={String(option.code)}>{option.label}</option>
           {/each}
         </select>
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.gpsStageButtonPrefix}-${primaryTypeItem.name}`}
-          disabled={!canStage(primaryTypeItem, primaryTypeDraft, primaryTypeOptions.length > 0)}
-          onclick={() => stage(primaryTypeItem, primaryTypeDraft, primaryTypeOptions.length > 0)}
-          type="button"
-        >
-          {isQueued(primaryTypeItem.name, primaryTypeDraft) ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
     {/if}
 
@@ -487,8 +460,8 @@ function formatHdop(value: number | null): string {
           Current · {currentValueText(autoConfigItem)}
         </p>
         {#if params.stagedEdits.GPS_AUTO_CONFIG}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.gpsStagedPrefix}-GPS_AUTO_CONFIG`}>
-            Queued · {params.stagedEdits.GPS_AUTO_CONFIG.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name="GPS_AUTO_CONFIG" onUnstage={unstage} testId={`${setupWorkspaceTestIds.gpsStagedPrefix}-GPS_AUTO_CONFIG`} />
           </p>
         {/if}
         <select
@@ -496,20 +469,12 @@ function formatHdop(value: number | null): string {
           class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.gpsInputPrefix}-GPS_AUTO_CONFIG`}
           disabled={actionsBlocked || autoConfigOptions.length === 0}
+          onchange={(event) => stage(autoConfigItem, (event.currentTarget as HTMLSelectElement).value, autoConfigOptions.length > 0)}
         >
           {#each autoConfigOptions as option (option.code)}
             <option value={String(option.code)}>{option.label}</option>
           {/each}
         </select>
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.gpsStageButtonPrefix}-GPS_AUTO_CONFIG`}
-          disabled={!canStage(autoConfigItem, autoConfigDraft, autoConfigOptions.length > 0)}
-          onclick={() => stage(autoConfigItem, autoConfigDraft, autoConfigOptions.length > 0)}
-          type="button"
-        >
-          {isQueued("GPS_AUTO_CONFIG", autoConfigDraft) ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
     {/if}
   </div>
@@ -527,8 +492,8 @@ function formatHdop(value: number | null): string {
             Current · {currentValueText(secondaryTypeItem)}
           </p>
           {#if params.stagedEdits.GPS2_TYPE}
-            <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.gpsStagedPrefix}-GPS2_TYPE`}>
-              Queued · {params.stagedEdits.GPS2_TYPE.nextValueText}
+            <p class="mt-2">
+              <SetupStagedBadge name="GPS2_TYPE" onUnstage={unstage} testId={`${setupWorkspaceTestIds.gpsStagedPrefix}-GPS2_TYPE`} />
             </p>
           {/if}
           <select
@@ -536,20 +501,12 @@ function formatHdop(value: number | null): string {
             class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
             data-testid={`${setupWorkspaceTestIds.gpsInputPrefix}-GPS2_TYPE`}
             disabled={actionsBlocked || secondaryTypeOptions.length === 0}
+            onchange={(event) => stage(secondaryTypeItem, (event.currentTarget as HTMLSelectElement).value, secondaryTypeOptions.length > 0)}
           >
             {#each secondaryTypeOptions as option (option.code)}
               <option value={String(option.code)}>{option.label}</option>
             {/each}
           </select>
-          <button
-            class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-            data-testid={`${setupWorkspaceTestIds.gpsStageButtonPrefix}-GPS2_TYPE`}
-            disabled={!canStage(secondaryTypeItem, secondaryTypeDraft, secondaryTypeOptions.length > 0)}
-            onclick={() => stage(secondaryTypeItem, secondaryTypeDraft, secondaryTypeOptions.length > 0)}
-            type="button"
-          >
-            {isQueued("GPS2_TYPE", secondaryTypeDraft) ? "Queued in review tray" : "Stage in review tray"}
-          </button>
         </article>
       {/if}
 
@@ -564,8 +521,8 @@ function formatHdop(value: number | null): string {
             Current · {currentValueText(autoSwitchItem)}
           </p>
           {#if params.stagedEdits.GPS_AUTO_SWITCH}
-            <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.gpsStagedPrefix}-GPS_AUTO_SWITCH`}>
-              Queued · {params.stagedEdits.GPS_AUTO_SWITCH.nextValueText}
+            <p class="mt-2">
+              <SetupStagedBadge name="GPS_AUTO_SWITCH" onUnstage={unstage} testId={`${setupWorkspaceTestIds.gpsStagedPrefix}-GPS_AUTO_SWITCH`} />
             </p>
           {/if}
           <select
@@ -573,20 +530,12 @@ function formatHdop(value: number | null): string {
             class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
             data-testid={`${setupWorkspaceTestIds.gpsInputPrefix}-GPS_AUTO_SWITCH`}
             disabled={actionsBlocked || autoSwitchOptions.length === 0}
+            onchange={(event) => stage(autoSwitchItem, (event.currentTarget as HTMLSelectElement).value, autoSwitchOptions.length > 0)}
           >
             {#each autoSwitchOptions as option (option.code)}
               <option value={String(option.code)}>{option.label}</option>
             {/each}
           </select>
-          <button
-            class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-            data-testid={`${setupWorkspaceTestIds.gpsStageButtonPrefix}-GPS_AUTO_SWITCH`}
-            disabled={!canStage(autoSwitchItem, autoSwitchDraft, autoSwitchOptions.length > 0)}
-            onclick={() => stage(autoSwitchItem, autoSwitchDraft, autoSwitchOptions.length > 0)}
-            type="button"
-          >
-            {isQueued("GPS_AUTO_SWITCH", autoSwitchDraft) ? "Queued in review tray" : "Stage in review tray"}
-          </button>
         </article>
       {/if}
     </div>

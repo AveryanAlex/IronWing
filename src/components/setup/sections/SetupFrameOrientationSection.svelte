@@ -27,6 +27,7 @@ import type {
 import SetupSectionShell from "../SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 import MotorDiagram from "../shared/MotorDiagram.svelte";
+import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 
 type EnumOption = { code: number; label: string };
 type Tone = "info" | "warning" | "danger";
@@ -224,26 +225,6 @@ function currentValueText(item: ParameterItemModel | null): string {
   return item?.valueLabel ?? item?.valueText ?? "Unavailable";
 }
 
-function isQueued(name: string, draftValue: string): boolean {
-  const nextValue = resolveDraftNumber(draftValue);
-  return nextValue !== null && params.stagedEdits[name]?.nextValue === nextValue;
-}
-
-function canStage(item: ParameterItemModel | null, draftValue: string): boolean {
-  if (checkpoint.blocksActions) {
-    return false;
-  }
-
-  const nextValue = resolveDraftNumber(draftValue);
-  return Boolean(
-    item
-      && nextValue !== null
-      && item.readOnly !== true
-      && item.value !== nextValue
-      && params.stagedEdits[item.name]?.nextValue !== nextValue,
-  );
-}
-
 function stage(item: ParameterItemModel | null, draftValue: string) {
   const nextValue = resolveDraftNumber(draftValue);
   if (!item || nextValue === null || checkpoint.blocksActions) {
@@ -251,6 +232,10 @@ function stage(item: ParameterItemModel | null, draftValue: string) {
   }
 
   paramsStore.stageParameterEdit(item, nextValue);
+}
+
+function unstage(name: string) {
+  paramsStore.discardStagedEdit(name);
 }
 
 function bannerClass(tone: Tone): string {
@@ -553,8 +538,8 @@ function buildFrameBanners(input: {
           Current · {currentValueText(qEnableItem)}
         </p>
         {#if params.stagedEdits.Q_ENABLE}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.frameStagedPrefix}-Q_ENABLE`}>
-            Queued · {params.stagedEdits.Q_ENABLE.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name="Q_ENABLE" onUnstage={unstage} testId={`${setupWorkspaceTestIds.frameStagedPrefix}-Q_ENABLE`} />
           </p>
         {/if}
         <select
@@ -562,20 +547,12 @@ function buildFrameBanners(input: {
           class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.frameInputPrefix}-Q_ENABLE`}
           disabled={checkpoint.blocksActions}
+          onchange={(event) => stage(qEnableItem, (event.currentTarget as HTMLSelectElement).value)}
         >
           {#each qEnableOptions as option (option.code)}
             <option value={String(option.code)}>{option.label}</option>
           {/each}
         </select>
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.frameStageButtonPrefix}-Q_ENABLE`}
-          disabled={!canStage(qEnableItem, qEnableDraft)}
-          onclick={() => stage(qEnableItem, qEnableDraft)}
-          type="button"
-        >
-          {isQueued("Q_ENABLE", qEnableDraft) ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
     {/if}
 
@@ -595,8 +572,8 @@ function buildFrameBanners(input: {
           Current · {currentValueText(frameClassItem)}
         </p>
         {#if params.stagedEdits[frameClassItem.name]}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.frameStagedPrefix}-${frameClassItem.name}`}>
-            Queued · {params.stagedEdits[frameClassItem.name]?.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name={frameClassItem.name} onUnstage={unstage} testId={`${setupWorkspaceTestIds.frameStagedPrefix}-${frameClassItem.name}`} />
           </p>
         {/if}
         <select
@@ -604,20 +581,12 @@ function buildFrameBanners(input: {
           class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.frameInputPrefix}-${frameClassItem.name}`}
           disabled={checkpoint.blocksActions}
+          onchange={(event) => stage(frameClassItem, (event.currentTarget as HTMLSelectElement).value)}
         >
           {#each frameClassOptions as option (option.code)}
             <option value={String(option.code)}>{option.label}</option>
           {/each}
         </select>
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.frameStageButtonPrefix}-${frameClassItem.name}`}
-          disabled={!canStage(frameClassItem, frameClassDraft)}
-          onclick={() => stage(frameClassItem, frameClassDraft)}
-          type="button"
-        >
-          {isQueued(frameClassItem.name, frameClassDraft) ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
 
       <article
@@ -635,8 +604,8 @@ function buildFrameBanners(input: {
           Current · {currentValueText(frameTypeItem)}
         </p>
         {#if params.stagedEdits[frameTypeItem.name]}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.frameStagedPrefix}-${frameTypeItem.name}`}>
-            Queued · {params.stagedEdits[frameTypeItem.name]?.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name={frameTypeItem.name} onUnstage={unstage} testId={`${setupWorkspaceTestIds.frameStagedPrefix}-${frameTypeItem.name}`} />
           </p>
         {/if}
         <select
@@ -644,20 +613,12 @@ function buildFrameBanners(input: {
           class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.frameInputPrefix}-${frameTypeItem.name}`}
           disabled={checkpoint.blocksActions}
+          onchange={(event) => stage(frameTypeItem, (event.currentTarget as HTMLSelectElement).value)}
         >
           {#each frameTypeOptions as option (option.code)}
             <option value={String(option.code)}>{option.label}</option>
           {/each}
         </select>
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.frameStageButtonPrefix}-${frameTypeItem.name}`}
-          disabled={!canStage(frameTypeItem, frameTypeDraft)}
-          onclick={() => stage(frameTypeItem, frameTypeDraft)}
-          type="button"
-        >
-          {isQueued(frameTypeItem.name, frameTypeDraft) ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
     {/if}
 
@@ -675,8 +636,8 @@ function buildFrameBanners(input: {
           Current · {currentValueText(orientationItem)}
         </p>
         {#if params.stagedEdits.AHRS_ORIENTATION}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.frameStagedPrefix}-AHRS_ORIENTATION`}>
-            Queued · {params.stagedEdits.AHRS_ORIENTATION.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name="AHRS_ORIENTATION" onUnstage={unstage} testId={`${setupWorkspaceTestIds.frameStagedPrefix}-AHRS_ORIENTATION`} />
           </p>
         {/if}
         <select
@@ -684,20 +645,12 @@ function buildFrameBanners(input: {
           class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.frameInputPrefix}-AHRS_ORIENTATION`}
           disabled={checkpoint.blocksActions}
+          onchange={(event) => stage(orientationItem, (event.currentTarget as HTMLSelectElement).value)}
         >
           {#each orientationOptions as option (option.code)}
             <option value={String(option.code)}>{option.label}</option>
           {/each}
         </select>
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.frameStageButtonPrefix}-AHRS_ORIENTATION`}
-          disabled={!canStage(orientationItem, orientationDraft)}
-          onclick={() => stage(orientationItem, orientationDraft)}
-          type="button"
-        >
-          {isQueued("AHRS_ORIENTATION", orientationDraft) ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
     {/if}
   </div>

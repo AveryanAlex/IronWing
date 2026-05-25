@@ -25,6 +25,7 @@ import type {
 import { selectTelemetryView } from "../../../lib/telemetry-selectors";
 import SetupSectionShell from "../SetupSectionShell.svelte";
 import SetupPreviewStagePanel from "../shared/SetupPreviewStagePanel.svelte";
+import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 type EnumOption = { code: number; label: string };
@@ -240,26 +241,6 @@ function currentValueText(item: ParameterItemModel | null): string {
   return item?.valueLabel ?? item?.valueText ?? "Unavailable";
 }
 
-function isQueued(name: string, draftValue: string): boolean {
-  const nextValue = resolveDraftNumber(draftValue);
-  return nextValue !== null && params.stagedEdits[name]?.nextValue === nextValue;
-}
-
-function canStage(item: ParameterItemModel | null, draftValue: string, requireOptions = false, optionsCount = 0): boolean {
-  if (actionsBlocked || (requireOptions && optionsCount === 0)) {
-    return false;
-  }
-
-  const nextValue = resolveDraftNumber(draftValue);
-  return Boolean(
-    item
-      && nextValue !== null
-      && item.readOnly !== true
-      && item.value !== nextValue
-      && params.stagedEdits[item.name]?.nextValue !== nextValue,
-  );
-}
-
 function stage(item: ParameterItemModel | null, draftValue: string, requireOptions = false, optionsCount = 0) {
   const nextValue = resolveDraftNumber(draftValue);
   if (!item || nextValue === null || actionsBlocked || (requireOptions && optionsCount === 0)) {
@@ -267,6 +248,10 @@ function stage(item: ParameterItemModel | null, draftValue: string, requireOptio
   }
 
   paramsStore.stageParameterEdit(item, nextValue);
+}
+
+function unstage(name: string) {
+  paramsStore.discardStagedEdit(name);
 }
 
 function byPrefixExists(
@@ -591,8 +576,8 @@ function round3(value: number): number {
           Current · {currentValueText(monitorItem)}
         </p>
         {#if params.stagedEdits.BATT_MONITOR}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_MONITOR`}>
-            Queued · {params.stagedEdits.BATT_MONITOR.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name="BATT_MONITOR" onUnstage={unstage} testId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_MONITOR`} />
           </p>
         {/if}
         <select
@@ -600,20 +585,12 @@ function round3(value: number): number {
           class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_MONITOR`}
           disabled={actionsBlocked || monitorOptions.length === 0}
+          onchange={(event) => stage(monitorItem, (event.currentTarget as HTMLSelectElement).value, true, monitorOptions.length)}
         >
           {#each monitorOptions as option (option.code)}
             <option value={String(option.code)}>{option.label}</option>
           {/each}
         </select>
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT_MONITOR`}
-          disabled={!canStage(monitorItem, monitorDraft, true, monitorOptions.length)}
-          onclick={() => stage(monitorItem, monitorDraft, true, monitorOptions.length)}
-          type="button"
-        >
-          {isQueued("BATT_MONITOR", monitorDraft) ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
     {/if}
 
@@ -626,8 +603,8 @@ function round3(value: number): number {
           Current · {currentValueText(voltPinItem)}
         </p>
         {#if params.stagedEdits.BATT_VOLT_PIN}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_VOLT_PIN`}>
-            Queued · {params.stagedEdits.BATT_VOLT_PIN.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name="BATT_VOLT_PIN" onUnstage={unstage} testId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_VOLT_PIN`} />
           </p>
         {/if}
         <input
@@ -635,18 +612,11 @@ function round3(value: number): number {
           class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_VOLT_PIN`}
           inputmode="numeric"
+          onchange={(event) => stage(voltPinItem, (event.currentTarget as HTMLInputElement).value)}
+          oninput={(event) => stage(voltPinItem, (event.currentTarget as HTMLInputElement).value)}
           step="1"
           type="number"
         />
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT_VOLT_PIN`}
-          disabled={!canStage(voltPinItem, voltPinDraft)}
-          onclick={() => stage(voltPinItem, voltPinDraft)}
-          type="button"
-        >
-          {isQueued("BATT_VOLT_PIN", voltPinDraft) ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
     {/if}
 
@@ -659,8 +629,8 @@ function round3(value: number): number {
           Current · {currentValueText(voltMultItem)}
         </p>
         {#if params.stagedEdits.BATT_VOLT_MULT}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_VOLT_MULT`}>
-            Queued · {params.stagedEdits.BATT_VOLT_MULT.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name="BATT_VOLT_MULT" onUnstage={unstage} testId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_VOLT_MULT`} />
           </p>
         {/if}
         <input
@@ -668,18 +638,11 @@ function round3(value: number): number {
           class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_VOLT_MULT`}
           inputmode="decimal"
+          onchange={(event) => stage(voltMultItem, (event.currentTarget as HTMLInputElement).value)}
+          oninput={(event) => stage(voltMultItem, (event.currentTarget as HTMLInputElement).value)}
           step="0.01"
           type="number"
         />
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT_VOLT_MULT`}
-          disabled={!canStage(voltMultItem, voltMultDraft)}
-          onclick={() => stage(voltMultItem, voltMultDraft)}
-          type="button"
-        >
-          {isQueued("BATT_VOLT_MULT", voltMultDraft) ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
     {/if}
   </div>
@@ -694,8 +657,8 @@ function round3(value: number): number {
           Current · {currentValueText(ampPerVoltItem)}
         </p>
         {#if params.stagedEdits.BATT_AMP_PERVLT}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_AMP_PERVLT`}>
-            Queued · {params.stagedEdits.BATT_AMP_PERVLT.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name="BATT_AMP_PERVLT" onUnstage={unstage} testId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_AMP_PERVLT`} />
           </p>
         {/if}
         <input
@@ -703,18 +666,11 @@ function round3(value: number): number {
           class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_AMP_PERVLT`}
           inputmode="decimal"
+          onchange={(event) => stage(ampPerVoltItem, (event.currentTarget as HTMLInputElement).value)}
+          oninput={(event) => stage(ampPerVoltItem, (event.currentTarget as HTMLInputElement).value)}
           step="0.01"
           type="number"
         />
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT_AMP_PERVLT`}
-          disabled={!canStage(ampPerVoltItem, ampPerVoltDraft)}
-          onclick={() => stage(ampPerVoltItem, ampPerVoltDraft)}
-          type="button"
-        >
-          {isQueued("BATT_AMP_PERVLT", ampPerVoltDraft) ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
     {/if}
 
@@ -727,8 +683,8 @@ function round3(value: number): number {
           Current · {currentValueText(capacityItem)}
         </p>
         {#if params.stagedEdits.BATT_CAPACITY}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_CAPACITY`}>
-            Queued · {params.stagedEdits.BATT_CAPACITY.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name="BATT_CAPACITY" onUnstage={unstage} testId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_CAPACITY`} />
           </p>
         {/if}
         <input
@@ -736,18 +692,11 @@ function round3(value: number): number {
           class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_CAPACITY`}
           inputmode="decimal"
+          onchange={(event) => stage(capacityItem, (event.currentTarget as HTMLInputElement).value)}
+          oninput={(event) => stage(capacityItem, (event.currentTarget as HTMLInputElement).value)}
           step="100"
           type="number"
         />
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT_CAPACITY`}
-          disabled={!canStage(capacityItem, capacityDraft)}
-          onclick={() => stage(capacityItem, capacityDraft)}
-          type="button"
-        >
-          {isQueued("BATT_CAPACITY", capacityDraft) ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
     {/if}
 
@@ -760,8 +709,8 @@ function round3(value: number): number {
           Current · {currentValueText(lowVoltItem)}
         </p>
         {#if params.stagedEdits.BATT_LOW_VOLT}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_LOW_VOLT`}>
-            Queued · {params.stagedEdits.BATT_LOW_VOLT.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name="BATT_LOW_VOLT" onUnstage={unstage} testId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_LOW_VOLT`} />
           </p>
         {/if}
         <input
@@ -769,18 +718,11 @@ function round3(value: number): number {
           class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_LOW_VOLT`}
           inputmode="decimal"
+          onchange={(event) => stage(lowVoltItem, (event.currentTarget as HTMLInputElement).value)}
+          oninput={(event) => stage(lowVoltItem, (event.currentTarget as HTMLInputElement).value)}
           step="0.1"
           type="number"
         />
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT_LOW_VOLT`}
-          disabled={!canStage(lowVoltItem, lowVoltDraft)}
-          onclick={() => stage(lowVoltItem, lowVoltDraft)}
-          type="button"
-        >
-          {isQueued("BATT_LOW_VOLT", lowVoltDraft) ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
     {/if}
   </div>
@@ -801,20 +743,12 @@ function round3(value: number): number {
           class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT2_MONITOR`}
           disabled={actionsBlocked || secondMonitorOptions.length === 0}
+          onchange={(event) => stage(secondMonitorItem, (event.currentTarget as HTMLSelectElement).value, true, secondMonitorOptions.length)}
         >
           {#each secondMonitorOptions as option (option.code)}
             <option value={String(option.code)}>{option.label}</option>
           {/each}
         </select>
-        <button
-          class="mt-3 rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT2_MONITOR`}
-          disabled={!canStage(secondMonitorItem, secondMonitorDraft, true, secondMonitorOptions.length)}
-          onclick={() => stage(secondMonitorItem, secondMonitorDraft, true, secondMonitorOptions.length)}
-          type="button"
-        >
-          {isQueued("BATT2_MONITOR", secondMonitorDraft) ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       {:else}
         <p class="mt-3 text-sm text-warning">Battery 2 is only partially modeled on this scope, so the secondary rows stay summary-only until the missing parameters return.</p>
       {/if}

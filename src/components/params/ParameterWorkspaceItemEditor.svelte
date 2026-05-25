@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { ParameterWorkspaceItemView } from "../../lib/stores/params";
+import StagedBadge from "../ui/StagedBadge.svelte";
 import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
 
 let props = $props<{
@@ -32,24 +33,11 @@ function isEditingDisabled() {
   return props.readiness !== "ready" || props.item.readOnly;
 }
 
-function canStage() {
-  return !isEditingDisabled();
-}
-
-function stageLabel() {
-  if (props.item.readOnly) {
-    return "Read only";
-  }
-
-  return props.item.isStaged ? "Update staged" : "Stage edit";
-}
-
-function submitStage(event: SubmitEvent) {
-  event.preventDefault();
-
-  const raw = draft.trim();
+function stageDraft(value: string) {
+  draft = value;
+  const raw = value.trim();
   if (raw.length === 0) {
-    validationMessage = "Enter a value before staging.";
+    validationMessage = "Enter a value before staging locally.";
     return;
   }
 
@@ -68,12 +56,21 @@ function submitStage(event: SubmitEvent) {
   class="rounded-lg border border-border bg-bg-secondary/70 p-3"
   data-param-name={props.item.name}
   data-testid={`${parameterWorkspaceTestIds.itemPrefix}-${props.item.name}`}
-  onsubmit={submitStage}
+  onsubmit={(event) => event.preventDefault()}
 >
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
       <p class="text-sm font-semibold text-text-primary">{props.item.label}</p>
       <p class="mt-1 font-mono text-xs text-text-muted">{props.item.rawName}</p>
+      {#if props.item.isStaged}
+        <p class="mt-2">
+          <StagedBadge
+            name={props.item.name}
+            onUnstage={props.onDiscard}
+            testId={`${parameterWorkspaceTestIds.discardButtonPrefix}-${props.item.name}`}
+          />
+        </p>
+      {/if}
     </div>
     <div class="text-right">
       <p class="text-lg font-semibold text-text-primary">{props.item.valueText}{props.item.units ? ` ${props.item.units}` : ""}</p>
@@ -108,9 +105,9 @@ function submitStage(event: SubmitEvent) {
     </div>
   {/if}
 
-  <div class="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end">
+  <div class="mt-4">
     <label class="block">
-      <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Stage a local edit</span>
+      <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Local staged value</span>
       <input
         class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={`${parameterWorkspaceTestIds.inputPrefix}-${props.item.name}`}
@@ -118,36 +115,13 @@ function submitStage(event: SubmitEvent) {
         max={props.item.range?.max}
         min={props.item.range?.min}
         name={`param-${props.item.name}`}
-        oninput={(event) => {
-          draft = (event.currentTarget as HTMLInputElement).value;
-          validationMessage = null;
-        }}
+        oninput={(event) => stageDraft((event.currentTarget as HTMLInputElement).value)}
         placeholder={props.item.valueText}
         step={props.item.increment ?? "any"}
         type="number"
         value={draft}
       />
     </label>
-
-    <button
-      class="rounded-md border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
-      data-testid={`${parameterWorkspaceTestIds.stageButtonPrefix}-${props.item.name}`}
-      disabled={!canStage()}
-      type="submit"
-    >
-      {stageLabel()}
-    </button>
-
-    {#if props.item.isStaged}
-      <button
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-danger/40 hover:text-danger"
-        data-testid={`${parameterWorkspaceTestIds.discardButtonPrefix}-${props.item.name}`}
-        onclick={() => props.onDiscard(props.item.name)}
-        type="button"
-      >
-        Discard
-      </button>
-    {/if}
   </div>
 
   {#if validationMessage}

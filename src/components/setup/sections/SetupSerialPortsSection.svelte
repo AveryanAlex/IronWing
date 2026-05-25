@@ -19,6 +19,7 @@ import type {
   SetupWorkspaceStoreState,
 } from "../../../lib/stores/setup-workspace";
 import SetupSectionShell from "../SetupSectionShell.svelte";
+import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let {
@@ -93,28 +94,8 @@ function resolveDraftNumber(name: string, fallback: number | null): number | nul
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function isQueued(name: string, fallback: number | null): boolean {
-  const nextValue = resolveDraftNumber(name, fallback);
-  return nextValue !== null && params.stagedEdits[name]?.nextValue === nextValue;
-}
-
-function canStage(name: string, fallback: number | null, rowMetadataReady: boolean): boolean {
-  if (actionsBlocked || !rowMetadataReady) {
-    return false;
-  }
-
-  const target = item(name);
-  const nextValue = resolveDraftNumber(name, fallback);
-  return Boolean(
-    target
-      && nextValue !== null
-      && target.readOnly !== true
-      && target.value !== nextValue
-      && params.stagedEdits[name]?.nextValue !== nextValue,
-  );
-}
-
-function stage(name: string, fallback: number | null, rowMetadataReady: boolean) {
+function stage(name: string, value: string, fallback: number | null, rowMetadataReady: boolean) {
+  setDraft(name, value);
   if (actionsBlocked || !rowMetadataReady) {
     return;
   }
@@ -126,6 +107,13 @@ function stage(name: string, fallback: number | null, rowMetadataReady: boolean)
   }
 
   paramsStore.stageParameterEdit(target, nextValue);
+}
+
+function unstage(name: string) {
+  const nextDrafts = { ...draftValues };
+  delete nextDrafts[name];
+  draftValues = nextDrafts;
+  paramsStore.discardStagedEdit(name);
 }
 
 function currentValueText(name: string): string {
@@ -254,7 +242,7 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
             </div>
           </div>
 
-          <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto]">
+          <div class="mt-4 grid gap-3 xl:grid-cols-2">
             <div>
               <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`${row.prefix}-protocol-select`}>
                 Protocol
@@ -264,7 +252,7 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
                 data-testid={`${setupWorkspaceTestIds.serialPortsInputPrefix}-${row.protocolParamName}`}
                 disabled={actionsBlocked || !row.protocolMetadataReady}
                 id={`${row.prefix}-protocol-select`}
-                onchange={(event) => setDraft(row.protocolParamName, (event.currentTarget as HTMLSelectElement).value)}
+                onchange={(event) => stage(row.protocolParamName, (event.currentTarget as HTMLSelectElement).value, row.protocolValue, row.protocolMetadataReady)}
                 value={draftValue(row.protocolParamName, row.protocolValue)}
               >
                 {#each row.protocolOptions as option (option.code)}
@@ -272,21 +260,11 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
                 {/each}
               </select>
               {#if params.stagedEdits[row.protocolParamName]}
-                <p class="mt-2 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.serialPortsStagedPrefix}-${row.protocolParamName}`}>
-                  Queued · {params.stagedEdits[row.protocolParamName]?.nextValueText}
+                <p class="mt-2">
+                  <SetupStagedBadge name={row.protocolParamName} onUnstage={unstage} testId={`${setupWorkspaceTestIds.serialPortsStagedPrefix}-${row.protocolParamName}`} />
                 </p>
               {/if}
             </div>
-
-            <button
-              class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-              data-testid={`${setupWorkspaceTestIds.serialPortsStageButtonPrefix}-${row.protocolParamName}`}
-              disabled={!canStage(row.protocolParamName, row.protocolValue, row.protocolMetadataReady)}
-              onclick={() => stage(row.protocolParamName, row.protocolValue, row.protocolMetadataReady)}
-              type="button"
-            >
-              {isQueued(row.protocolParamName, row.protocolValue) ? "Queued" : "Stage"}
-            </button>
 
             <div>
               <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`${row.prefix}-baud-select`}>
@@ -297,7 +275,7 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
                 data-testid={`${setupWorkspaceTestIds.serialPortsInputPrefix}-${row.baudParamName}`}
                 disabled={actionsBlocked || !row.baudMetadataReady}
                 id={`${row.prefix}-baud-select`}
-                onchange={(event) => setDraft(row.baudParamName, (event.currentTarget as HTMLSelectElement).value)}
+                onchange={(event) => stage(row.baudParamName, (event.currentTarget as HTMLSelectElement).value, row.baudValue, row.baudMetadataReady)}
                 value={draftValue(row.baudParamName, row.baudValue)}
               >
                 {#each row.baudOptions as option (option.code)}
@@ -305,21 +283,11 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
                 {/each}
               </select>
               {#if params.stagedEdits[row.baudParamName]}
-                <p class="mt-2 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.serialPortsStagedPrefix}-${row.baudParamName}`}>
-                  Queued · {params.stagedEdits[row.baudParamName]?.nextValueText}
+                <p class="mt-2">
+                  <SetupStagedBadge name={row.baudParamName} onUnstage={unstage} testId={`${setupWorkspaceTestIds.serialPortsStagedPrefix}-${row.baudParamName}`} />
                 </p>
               {/if}
             </div>
-
-            <button
-              class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-              data-testid={`${setupWorkspaceTestIds.serialPortsStageButtonPrefix}-${row.baudParamName}`}
-              disabled={!canStage(row.baudParamName, row.baudValue, row.baudMetadataReady)}
-              onclick={() => stage(row.baudParamName, row.baudValue, row.baudMetadataReady)}
-              type="button"
-            >
-              {isQueued(row.baudParamName, row.baudValue) ? "Queued" : "Stage"}
-            </button>
           </div>
 
           {#if rowRecoveryVisible(row)}

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Download, X } from "lucide-svelte";
+import { Download, Plug, X } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext } from "../../../app/shell/runtime-context";
@@ -262,10 +262,14 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
 
 <section class="space-y-4" data-testid={setupWorkspaceTestIds.overviewSection}>
   {#if overviewMode === "disconnected"}
-    <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-text-secondary" data-testid={setupWorkspaceTestIds.overviewBanner}>
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Overview</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Connect to a vehicle to begin setup</h3>
-      <p class="mt-2 text-sm leading-6">Setup editors stay locked until a live vehicle session is connected.</p>
+    <div class="rounded-xl border border-accent/30 bg-accent/5 px-6 py-10 text-center text-text-secondary" data-testid={setupWorkspaceTestIds.overviewBanner}>
+      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-accent/30 bg-accent/15 text-accent shadow-lg shadow-accent/10">
+        <Plug aria-hidden="true" size={30} />
+      </div>
+      <h3 class="mt-6 text-2xl font-semibold text-text-primary">Connect vehicle to get started</h3>
+      <p class="mx-auto mt-3 max-w-xl text-sm leading-7 text-text-secondary">
+        Setup editors unlock after IronWing connects to a live vehicle session.
+      </p>
     </div>
   {:else if overviewMode === "needs_params"}
     <div class="space-y-4">
@@ -326,15 +330,6 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
             </p>
           </div>
         {/if}
-      </div>
-
-      <div class="rounded-lg border border-border bg-bg-primary/80 px-5 py-4">
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">What happens next</p>
-        <ol class="mt-4 space-y-3 text-sm text-text-secondary">
-          <li class="flex items-start gap-3"><span class="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent/15 text-xs font-bold text-accent">1</span><span>Parameters are read from your flight controller</span></li>
-          <li class="flex items-start gap-3"><span class="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent/15 text-xs font-bold text-accent">2</span><span>Setup sections unlock after parameter descriptions finish loading</span></li>
-          <li class="flex items-start gap-3"><span class="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent/15 text-xs font-bold text-accent">3</span><span>Edit parameters in context, review staged changes, then apply</span></li>
-        </ol>
       </div>
     </div>
   {:else if overviewMode === "needs_metadata"}

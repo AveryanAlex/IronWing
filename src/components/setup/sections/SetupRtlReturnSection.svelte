@@ -20,6 +20,7 @@ import type {
   SetupWorkspaceStoreState,
 } from "../../../lib/stores/setup-workspace";
 import SetupSectionShell from "../SetupSectionShell.svelte";
+import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let {
@@ -298,52 +299,37 @@ function currentFallback(name: string): number | null {
   return item(name)?.value ?? null;
 }
 
-function isQueued(field: RtlFieldConfig): boolean {
-  if (field.kind === "enum") {
-    const nextValue = Number(draftValue(field.name, currentFallback(field.name), 1, 0, field.sentinel));
-    return Number.isFinite(nextValue) && params.stagedEdits[field.name]?.nextValue === nextValue;
-  }
-
-  const nextValue = resolveDraftRawValue(field.name, currentFallback(field.name), field.factor, field.decimals, field.sentinel);
-  return nextValue !== null && params.stagedEdits[field.name]?.nextValue === nextValue;
-}
-
-function canStage(field: RtlFieldConfig): boolean {
-  const target = item(field.name);
-  if (!target || target.readOnly === true || actionsBlocked) {
+function canAutostage(field: RtlFieldConfig, target: ParameterItemModel | null, nextValue: number | null): target is ParameterItemModel {
+  if (!target || target.readOnly === true || actionsBlocked || nextValue === null || !Number.isFinite(nextValue)) {
     return false;
   }
 
-  if (field.kind === "enum") {
-    const nextValue = Number(draftValue(field.name, target.value, 1, 0, field.sentinel));
-    return Number.isFinite(nextValue)
-      && enumOptions(field.name).length > 0
-      && target.value !== nextValue
-      && params.stagedEdits[field.name]?.nextValue !== nextValue;
+  if (field.kind === "enum" && enumOptions(field.name).length === 0) {
+    return false;
   }
 
-	const nextValue = resolveDraftRawValue(field.name, target.value, field.factor, field.decimals, field.sentinel);
-  return nextValue !== null && target.value !== nextValue && params.stagedEdits[field.name]?.nextValue !== nextValue;
+  return true;
 }
 
-function stage(field: RtlFieldConfig) {
-  if (!canStage(field)) {
-    return;
-  }
-
+function stageDraftValue(field: RtlFieldConfig, value: string) {
+  setDraft(field.name, value);
   const target = item(field.name);
-  if (!target) {
-    return;
-  }
-
   const nextValue = field.kind === "enum"
-    ? Number(draftValue(field.name, target.value, 1, 0, field.sentinel))
-    : resolveDraftRawValue(field.name, target.value, field.factor, field.decimals, field.sentinel);
-  if (nextValue === null || !Number.isFinite(nextValue)) {
+    ? Number(value)
+    : resolveDraftRawValue(field.name, target?.value ?? null, field.factor, field.decimals, field.sentinel);
+
+  if (!canAutostage(field, target, nextValue)) {
     return;
   }
 
-  paramsStore.stageParameterEdit(target, nextValue);
+  paramsStore.stageParameterEdit(target, nextValue as number);
+}
+
+function unstage(name: string) {
+  const rest = { ...draftValues };
+  delete rest[name];
+  draftValues = rest;
+  paramsStore.discardStagedEdit(name);
 }
 </script>
 
@@ -424,27 +410,31 @@ function stage(field: RtlFieldConfig) {
         <div class="mt-4 grid gap-3 xl:grid-cols-2">
           {#each card.fields as field (field.name)}
             <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
-              <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`${card.id}-${field.name}`}>
-                {field.label}
-              </label>
+              <div class="flex items-center gap-2">
+                <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`${card.id}-${field.name}`}>
+                  {field.label}
+                </label>
+                {#if params.stagedEdits[field.name]}
+                  <SetupStagedBadge
+                    name={field.name}
+                    onUnstage={unstage}
+                    testId={`${setupWorkspaceTestIds.rtlReturnStagedPrefix}-${field.name}`}
+                  />
+                {/if}
+              </div>
               <p class="mt-2 text-sm text-text-secondary">{field.description}</p>
               <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.rtlReturnCurrentPrefix}-${field.name}`}>
                 Current · {#if field.kind === "enum"}{item(field.name)?.valueLabel ?? item(field.name)?.valueText ?? "Unavailable"}{:else}{currentDisplayText(field.name, field.factor, field.decimals, field.unit, field.sentinel)}{/if}
               </p>
-              {#if params.stagedEdits[field.name]}
-                <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.rtlReturnStagedPrefix}-${field.name}`}>
-                  Queued · {params.stagedEdits[field.name]?.nextValueText}
-                </p>
-              {/if}
 
-              <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+              <div class="mt-4">
                 {#if field.kind === "enum"}
                   <select
                     class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
                     data-testid={`${setupWorkspaceTestIds.rtlReturnInputPrefix}-${field.name}`}
                     disabled={actionsBlocked || enumOptions(field.name).length === 0 || !item(field.name)}
                     id={`${card.id}-${field.name}`}
-                    onchange={(event) => setDraft(field.name, (event.currentTarget as HTMLSelectElement).value)}
+                    onchange={(event) => stageDraftValue(field, (event.currentTarget as HTMLSelectElement).value)}
                     value={draftValue(field.name, item(field.name)?.value ?? null, 1, 0, field.sentinel)}
                   >
                     {#each enumOptions(field.name) as option (option.code)}
@@ -459,7 +449,8 @@ function stage(field: RtlFieldConfig) {
                       disabled={actionsBlocked || !item(field.name)}
                       id={`${card.id}-${field.name}`}
                       min={field.min}
-                      onchange={(event) => setDraft(field.name, (event.currentTarget as HTMLInputElement).value)}
+                      onchange={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
+                      oninput={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
                       step={field.step}
                       type="number"
                       value={draftValue(field.name, item(field.name)?.value ?? null, field.factor, field.decimals, field.sentinel)}
@@ -468,15 +459,6 @@ function stage(field: RtlFieldConfig) {
                   </div>
                 {/if}
 
-                <button
-                  class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-                  data-testid={`${setupWorkspaceTestIds.rtlReturnStageButtonPrefix}-${field.name}`}
-                  disabled={!canStage(field)}
-                  onclick={() => stage(field)}
-                  type="button"
-                >
-                  {isQueued(field) ? "Queued" : "Stage"}
-                </button>
               </div>
             </div>
           {/each}

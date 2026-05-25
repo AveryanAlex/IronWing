@@ -725,7 +725,7 @@ describe("AppShell", () => {
         expect(screen.queryByTestId(parameterWorkspaceTestIds.root)).toBeNull();
         expect(screen.getByTestId(setupWorkspaceTestIds.state).textContent).toContain("Setup ready");
         expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`)).toBeTruthy();
-        expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain("Connect to a vehicle to begin setup");
+        expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain("Connect vehicle to get started");
         expect(screen.queryByTestId(setupWorkspaceTestIds.detailRecovery)).toBeNull();
     });
 

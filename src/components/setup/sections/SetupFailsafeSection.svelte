@@ -21,6 +21,7 @@ import type {
 } from "../../../lib/stores/setup-workspace";
 import SetupPreviewStagePanel from "../shared/SetupPreviewStagePanel.svelte";
 import SetupSectionShell from "../SetupSectionShell.svelte";
+import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let {
@@ -247,14 +248,8 @@ function resolveDraftNumber(name: string, fallback: number | null): number | nul
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function isQueued(name: string, fallback: number | null): boolean {
-  const nextValue = resolveDraftNumber(name, fallback);
-  return nextValue !== null && params.stagedEdits[name]?.nextValue === nextValue;
-}
-
-function canStage(name: string, fallback: number | null, requireOptions = false): boolean {
+function canAutostage(name: string, nextValue: number | null, requireOptions = false): boolean {
   const target = item(name);
-  const nextValue = resolveDraftNumber(name, fallback);
   const options = resolveEnumOptions(name);
   if (!target || nextValue === null || target.readOnly === true || actionsBlocked) {
     return false;
@@ -263,21 +258,26 @@ function canStage(name: string, fallback: number | null, requireOptions = false)
     return false;
   }
 
-  return target.value !== nextValue && params.stagedEdits[name]?.nextValue !== nextValue;
+  return true;
 }
 
-function stage(name: string, fallback: number | null, requireOptions = false) {
-  if (!canStage(name, fallback, requireOptions)) {
-    return;
-  }
-
+function stage(name: string, value: string, fallback: number | null, requireOptions = false) {
+  setDraft(name, value);
   const target = item(name);
   const nextValue = resolveDraftNumber(name, fallback);
-  if (!target || nextValue === null) {
+
+  if (!canAutostage(name, nextValue, requireOptions) || !target || nextValue === null) {
     return;
   }
 
   paramsStore.stageParameterEdit(target, nextValue);
+}
+
+function unstage(name: string) {
+  const nextDrafts = { ...draftValues };
+  delete nextDrafts[name];
+  draftValues = nextDrafts;
+  paramsStore.discardStagedEdit(name);
 }
 
 function stageDefaults() {
@@ -431,19 +431,19 @@ function stageDefaults() {
                 Current · {currentValueText(item(field.name))}
               </p>
               {#if params.stagedEdits[field.name]}
-                <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.failsafeStagedPrefix}-${field.name}`}>
-                  Queued · {params.stagedEdits[field.name]?.nextValueText}
+                <p class="mt-2">
+                  <SetupStagedBadge name={field.name} onUnstage={unstage} testId={`${setupWorkspaceTestIds.failsafeStagedPrefix}-${field.name}`} />
                 </p>
               {/if}
 
-              <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+              <div class="mt-4">
                 {#if field.kind === "enum"}
                   <select
                     class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
                     data-testid={`${setupWorkspaceTestIds.failsafeInputPrefix}-${field.name}`}
                     disabled={actionsBlocked || resolveEnumOptions(field.name).length === 0 || !item(field.name)}
                     id={`${card.id}-${field.name}`}
-                    onchange={(event) => setDraft(field.name, (event.currentTarget as HTMLSelectElement).value)}
+                    onchange={(event) => stage(field.name, (event.currentTarget as HTMLSelectElement).value, item(field.name)?.value ?? null, true)}
                     value={draftValue(field.name, item(field.name)?.value ?? null)}
                   >
                     {#each resolveEnumOptions(field.name) as option (option.code)}
@@ -458,7 +458,8 @@ function stageDefaults() {
                       disabled={actionsBlocked || !item(field.name)}
                       id={`${card.id}-${field.name}`}
                       min={field.min}
-                      onchange={(event) => setDraft(field.name, (event.currentTarget as HTMLInputElement).value)}
+                      onchange={(event) => stage(field.name, (event.currentTarget as HTMLInputElement).value, item(field.name)?.value ?? null)}
+                      oninput={(event) => stage(field.name, (event.currentTarget as HTMLInputElement).value, item(field.name)?.value ?? null)}
                       step={field.step}
                       type="number"
                       value={draftValue(field.name, item(field.name)?.value ?? null)}
@@ -469,15 +470,6 @@ function stageDefaults() {
                   </div>
                 {/if}
 
-                <button
-                  class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-                  data-testid={`${setupWorkspaceTestIds.failsafeStageButtonPrefix}-${field.name}`}
-                  disabled={!canStage(field.name, item(field.name)?.value ?? null, field.kind === "enum")}
-                  onclick={() => stage(field.name, item(field.name)?.value ?? null, field.kind === "enum")}
-                  type="button"
-                >
-                  {isQueued(field.name, item(field.name)?.value ?? null) ? "Queued" : "Stage"}
-                </button>
               </div>
             </div>
           {/each}

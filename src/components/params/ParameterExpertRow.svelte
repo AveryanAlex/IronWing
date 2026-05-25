@@ -5,6 +5,7 @@ import type {
   ParameterExpertRow,
 } from "../../lib/params/parameter-expert-view";
 import { Select } from "../ui";
+import StagedBadge from "../ui/StagedBadge.svelte";
 import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
 import ParameterExpertBitmaskEditor from "./ParameterExpertBitmaskEditor.svelte";
 
@@ -39,25 +40,16 @@ function isEditingDisabled() {
   return props.readiness !== "ready" || props.row.readOnly || props.replayReadonly === true;
 }
 
-function stageLabel() {
-  if (props.row.readOnly || props.replayReadonly) {
-    return "Read only";
-  }
-
-  return props.row.isStaged ? "Update staged" : "Stage edit";
-}
-
 function displayValue(valueText: string, valueLabel: string | null, units: string | null) {
   const suffix = units ? ` ${units}` : "";
   return valueLabel ? `${valueText}${suffix} · ${valueLabel}` : `${valueText}${suffix}`;
 }
 
-function submitStage(event: SubmitEvent) {
-  event.preventDefault();
-
-  const raw = draft.trim();
+function stageNumericValue(value: string) {
+  draft = value;
+  const raw = value.trim();
   if (raw.length === 0) {
-    validationMessage = "Enter a value before staging.";
+    validationMessage = "Enter a value before staging locally.";
     return;
   }
 
@@ -123,7 +115,7 @@ let displayValueText = $derived(
   data-readonly={props.row.readOnly ? "" : undefined}
   data-staged={props.row.isStaged ? "" : undefined}
   data-testid={`${parameterWorkspaceTestIds.itemPrefix}-${props.row.name}`}
-  onsubmit={submitStage}
+  onsubmit={(event) => event.preventDefault()}
 >
   <div class="param-row__main">
     <span class="param-row__name">{props.row.rawName}</span>
@@ -147,6 +139,13 @@ let displayValueText = $derived(
         >
           reboot
         </span>
+      {/if}
+      {#if props.row.isStaged}
+        <StagedBadge
+          name={props.row.name}
+          onUnstage={props.onDiscard}
+          testId={`${parameterWorkspaceTestIds.discardButtonPrefix}-${props.row.name}`}
+        />
       {/if}
     </span>
     <span class="param-row__value" title={displayValueText}>
@@ -172,34 +171,13 @@ let displayValueText = $derived(
           min={props.row.range?.min}
           name={`param-${props.row.name}`}
           oninput={(event) => {
-            draft = (event.currentTarget as HTMLInputElement).value;
-            validationMessage = null;
+            stageNumericValue((event.currentTarget as HTMLInputElement).value);
           }}
           placeholder={props.row.valueText}
           step={props.row.editorKind === "bitmask" ? 1 : props.row.increment ?? "any"}
           type="number"
           value={draft}
         />
-      {/if}
-      {#if props.row.editorKind !== "enum"}
-        <button
-          class="param-row__stage"
-          data-testid={`${parameterWorkspaceTestIds.stageButtonPrefix}-${props.row.name}`}
-          disabled={isEditingDisabled()}
-          type="submit"
-        >
-          {stageLabel()}
-        </button>
-      {/if}
-      {#if props.row.isStaged}
-        <button
-          class="param-row__discard"
-          data-testid={`${parameterWorkspaceTestIds.discardButtonPrefix}-${props.row.name}`}
-          onclick={() => props.onDiscard(props.row.name)}
-          type="button"
-        >
-          Unstage
-        </button>
       {/if}
     </div>
   </div>
@@ -215,6 +193,7 @@ let displayValueText = $derived(
         onToggle={(nextValue) => {
           draft = String(nextValue);
           validationMessage = null;
+          props.onStage(props.row, nextValue);
         }}
         options={bitmaskDraftOptions}
         value={bitmaskDraftValue}
@@ -327,31 +306,6 @@ let displayValueText = $derived(
 }
 .param-row__input:focus { outline: none; border-color: var(--color-accent); }
 .param-row__input:disabled { opacity: 0.6; cursor: not-allowed; }
-.param-row__stage {
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
-  color: var(--color-accent);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.param-row__stage:hover { border-color: var(--color-accent); }
-.param-row__stage:disabled { opacity: 0.5; cursor: not-allowed; }
-.param-row__discard {
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: color-mix(in srgb, var(--color-bg-primary) 80%, transparent);
-  color: var(--color-text-secondary);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.param-row__discard:hover { border-color: color-mix(in srgb, var(--color-danger) 40%, transparent); color: var(--color-danger); }
 .param-row__badge {
   display: inline-flex;
   align-items: center;

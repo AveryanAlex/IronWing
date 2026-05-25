@@ -415,14 +415,13 @@ describe("ParameterWorkspace", () => {
 
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.expertGroupPrefix}-LOG`)).toBeTruthy();
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-LOG_BITMASK`).tagName).toBe("INPUT");
-        expect((screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-FORMAT_VERSION`) as HTMLButtonElement).disabled).toBe(
+        expect((screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-FORMAT_VERSION`) as HTMLInputElement).disabled).toBe(
             true,
         );
 
         await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-LOG_BITMASK`), {
             target: { value: "1" },
         });
-        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-LOG_BITMASK`));
 
         expect(screen.getByTestId(parameterWorkspaceTestIds.pendingCount).textContent).toContain("1 pending");
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-LOG_BITMASK`).textContent).toContain("5");
@@ -457,7 +456,6 @@ describe("ParameterWorkspace", () => {
         expect(fastAttitudeToggle).toBeTruthy();
 
         await fireEvent.click(fastAttitudeToggle);
-        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-LOG_BITMASK`));
 
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-LOG_BITMASK`).textContent).toContain("1");
     });
@@ -469,7 +467,6 @@ describe("ParameterWorkspace", () => {
 
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));
         await fireEvent.click(screen.getByLabelText("Bit 31 - High rate telemetry"));
-        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-LOG_BITMASK`));
 
         const diffText = screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-LOG_BITMASK`).textContent ?? "";
         expect(diffText).toContain("2147483653");
@@ -502,7 +499,6 @@ describe("ParameterWorkspace", () => {
         await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`), {
             target: { value: "1" },
         });
-        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-ARMING_CHECK`));
 
         expect(screen.getByTestId(parameterWorkspaceTestIds.pendingCount).textContent).toContain("1 pending");
     });
@@ -622,7 +618,6 @@ describe("ParameterWorkspace", () => {
         await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-LOG_BITMASK`), {
             target: { value: "1" },
         });
-        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-LOG_BITMASK`));
 
         expect(screen.getByTestId(parameterWorkspaceTestIds.pendingCount).textContent).toContain("1 pending");
 
@@ -649,7 +644,6 @@ describe("ParameterWorkspace", () => {
         await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-LOG_BITMASK`), {
             target: { value: "1" },
         });
-        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.stageButtonPrefix}-LOG_BITMASK`));
 
         expect(screen.getByTestId(parameterWorkspaceTestIds.pendingCount).textContent).toContain("1 pending");
 

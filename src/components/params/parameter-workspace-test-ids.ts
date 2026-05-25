@@ -44,7 +44,6 @@ export const parameterWorkspaceTestIds = {
     itemPrefix: "parameter-workspace-item",
     diffPrefix: "parameter-workspace-diff",
     inputPrefix: "parameter-workspace-input",
-    stageButtonPrefix: "parameter-workspace-stage-btn",
     discardButtonPrefix: "parameter-workspace-discard-btn",
     rebootBadgePrefix: "parameter-workspace-reboot-badge",
     highlightPrefix: "parameter-workspace-highlight",

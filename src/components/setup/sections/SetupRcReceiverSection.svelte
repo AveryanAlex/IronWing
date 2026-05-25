@@ -7,6 +7,7 @@ import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../lib/params/parameter-item-model";
 import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
 import SetupSectionShell from "../SetupSectionShell.svelte";
+import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 const PRESETS = [
@@ -88,21 +89,6 @@ function resolveDraftNumber(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function canStage(item: ParameterItemModel | null, draftValue: string): boolean {
-  if (view.checkpoint.blocksActions) {
-    return false;
-  }
-
-  const nextValue = resolveDraftNumber(draftValue);
-  return Boolean(
-    item
-      && nextValue !== null
-      && item.readOnly !== true
-      && item.value !== nextValue
-      && params.stagedEdits[item.name]?.nextValue !== nextValue,
-  );
-}
-
 function stage(item: ParameterItemModel | null, draftValue: string) {
   const nextValue = resolveDraftNumber(draftValue);
   if (!item || nextValue === null || view.checkpoint.blocksActions) {
@@ -110,6 +96,10 @@ function stage(item: ParameterItemModel | null, draftValue: string) {
   }
 
   paramsStore.stageParameterEdit(item, nextValue);
+}
+
+function unstage(name: string) {
+  paramsStore.discardStagedEdit(name);
 }
 
 function stagePreset(preset: (typeof PRESETS)[number]) {
@@ -233,8 +223,8 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
           Current · {rollItem?.valueText ?? "Unavailable"}
         </p>
         {#if params.stagedEdits.RCMAP_ROLL}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.rcStagedPrefix}-RCMAP_ROLL`}>
-            Queued · {params.stagedEdits.RCMAP_ROLL.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name="RCMAP_ROLL" onUnstage={unstage} testId={`${setupWorkspaceTestIds.rcStagedPrefix}-RCMAP_ROLL`} />
           </p>
         {/if}
         <select
@@ -242,20 +232,12 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
           class="mt-4 w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.rcInputPrefix}-RCMAP_ROLL`}
           disabled={view.checkpoint.blocksActions}
+          onchange={(event) => stage(rollItem, (event.currentTarget as HTMLSelectElement).value)}
         >
           {#each CHANNEL_OPTIONS as option (option.value)}
             <option value={option.value}>{option.label}</option>
           {/each}
         </select>
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.rcStageButtonPrefix}-RCMAP_ROLL`}
-          disabled={!canStage(rollItem, rollDraft)}
-          onclick={() => stage(rollItem, rollDraft)}
-          type="button"
-        >
-          {params.stagedEdits.RCMAP_ROLL ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
 
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
@@ -266,8 +248,8 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
           Current · {pitchItem?.valueText ?? "Unavailable"}
         </p>
         {#if params.stagedEdits.RCMAP_PITCH}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.rcStagedPrefix}-RCMAP_PITCH`}>
-            Queued · {params.stagedEdits.RCMAP_PITCH.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name="RCMAP_PITCH" onUnstage={unstage} testId={`${setupWorkspaceTestIds.rcStagedPrefix}-RCMAP_PITCH`} />
           </p>
         {/if}
         <select
@@ -275,20 +257,12 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
           class="mt-4 w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.rcInputPrefix}-RCMAP_PITCH`}
           disabled={view.checkpoint.blocksActions}
+          onchange={(event) => stage(pitchItem, (event.currentTarget as HTMLSelectElement).value)}
         >
           {#each CHANNEL_OPTIONS as option (option.value)}
             <option value={option.value}>{option.label}</option>
           {/each}
         </select>
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.rcStageButtonPrefix}-RCMAP_PITCH`}
-          disabled={!canStage(pitchItem, pitchDraft)}
-          onclick={() => stage(pitchItem, pitchDraft)}
-          type="button"
-        >
-          {params.stagedEdits.RCMAP_PITCH ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
 
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
@@ -299,8 +273,8 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
           Current · {throttleItem?.valueText ?? "Unavailable"}
         </p>
         {#if params.stagedEdits.RCMAP_THROTTLE}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.rcStagedPrefix}-RCMAP_THROTTLE`}>
-            Queued · {params.stagedEdits.RCMAP_THROTTLE.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name="RCMAP_THROTTLE" onUnstage={unstage} testId={`${setupWorkspaceTestIds.rcStagedPrefix}-RCMAP_THROTTLE`} />
           </p>
         {/if}
         <select
@@ -308,20 +282,12 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
           class="mt-4 w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.rcInputPrefix}-RCMAP_THROTTLE`}
           disabled={view.checkpoint.blocksActions}
+          onchange={(event) => stage(throttleItem, (event.currentTarget as HTMLSelectElement).value)}
         >
           {#each CHANNEL_OPTIONS as option (option.value)}
             <option value={option.value}>{option.label}</option>
           {/each}
         </select>
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.rcStageButtonPrefix}-RCMAP_THROTTLE`}
-          disabled={!canStage(throttleItem, throttleDraft)}
-          onclick={() => stage(throttleItem, throttleDraft)}
-          type="button"
-        >
-          {params.stagedEdits.RCMAP_THROTTLE ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
 
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
@@ -332,8 +298,8 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
           Current · {yawItem?.valueText ?? "Unavailable"}
         </p>
         {#if params.stagedEdits.RCMAP_YAW}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.rcStagedPrefix}-RCMAP_YAW`}>
-            Queued · {params.stagedEdits.RCMAP_YAW.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name="RCMAP_YAW" onUnstage={unstage} testId={`${setupWorkspaceTestIds.rcStagedPrefix}-RCMAP_YAW`} />
           </p>
         {/if}
         <select
@@ -341,20 +307,12 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
           class="mt-4 w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
           data-testid={`${setupWorkspaceTestIds.rcInputPrefix}-RCMAP_YAW`}
           disabled={view.checkpoint.blocksActions}
+          onchange={(event) => stage(yawItem, (event.currentTarget as HTMLSelectElement).value)}
         >
           {#each CHANNEL_OPTIONS as option (option.value)}
             <option value={option.value}>{option.label}</option>
           {/each}
         </select>
-        <button
-          class="mt-3 w-full rounded-md border border-border bg-bg-primary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          data-testid={`${setupWorkspaceTestIds.rcStageButtonPrefix}-RCMAP_YAW`}
-          disabled={!canStage(yawItem, yawDraft)}
-          onclick={() => stage(yawItem, yawDraft)}
-          type="button"
-        >
-          {params.stagedEdits.RCMAP_YAW ? "Queued in review tray" : "Stage in review tray"}
-        </button>
       </article>
     </div>
   </div>

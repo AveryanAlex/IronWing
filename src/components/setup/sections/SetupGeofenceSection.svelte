@@ -21,6 +21,7 @@ import type {
 } from "../../../lib/stores/setup-workspace";
 import SetupBitmaskChecklist from "../shared/SetupBitmaskChecklist.svelte";
 import SetupSectionShell from "../SetupSectionShell.svelte";
+import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let {
@@ -206,14 +207,7 @@ function resolveDraftNumber(name: string, fallback: number | null): number | nul
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function isQueued(field: FenceFieldConfig): boolean {
-  const nextValue = resolveDraftNumber(field.name, item(field.name)?.value ?? null);
-  return nextValue !== null && params.stagedEdits[field.name]?.nextValue === nextValue;
-}
-
-function canStage(field: FenceFieldConfig): boolean {
-  const target = item(field.name);
-  const nextValue = resolveDraftNumber(field.name, target?.value ?? null);
+function canAutostage(field: FenceFieldConfig, target: ParameterItemModel | null, nextValue: number | null): target is ParameterItemModel {
   if (!target || target.readOnly === true || actionsBlocked || nextValue === null) {
     return false;
   }
@@ -221,21 +215,26 @@ function canStage(field: FenceFieldConfig): boolean {
     return false;
   }
 
-  return target.value !== nextValue && params.stagedEdits[field.name]?.nextValue !== nextValue;
+  return true;
 }
 
-function stage(field: FenceFieldConfig) {
-  if (!canStage(field)) {
-    return;
-  }
-
+function stageDraftValue(field: FenceFieldConfig, value: string) {
+  setDraft(field.name, value);
   const target = item(field.name);
   const nextValue = resolveDraftNumber(field.name, target?.value ?? null);
-  if (!target || nextValue === null) {
+
+  if (!canAutostage(field, target, nextValue)) {
     return;
   }
 
-  paramsStore.stageParameterEdit(target, nextValue);
+  paramsStore.stageParameterEdit(target, nextValue as number);
+}
+
+function unstage(name: string) {
+  const rest = { ...draftValues };
+  delete rest[name];
+  draftValues = rest;
+  paramsStore.discardStagedEdit(name);
 }
 
 function toggleFenceType(bit: number) {
@@ -359,27 +358,31 @@ function toggleFenceType(bit: number) {
         <div class="mt-4 grid gap-3 xl:grid-cols-2">
           {#each card.fields as field (field.name)}
             <div class="rounded-lg border border-border bg-bg-secondary/60 p-3">
-              <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`${card.id}-${field.name}`}>
-                {field.label}
-              </label>
+              <div class="flex items-center gap-2">
+                <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`${card.id}-${field.name}`}>
+                  {field.label}
+                </label>
+                {#if params.stagedEdits[field.name]}
+                  <SetupStagedBadge
+                    name={field.name}
+                    onUnstage={unstage}
+                    testId={`${setupWorkspaceTestIds.geofenceStagedPrefix}-${field.name}`}
+                  />
+                {/if}
+              </div>
               <p class="mt-2 text-sm text-text-secondary">{field.description}</p>
               <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.geofenceCurrentPrefix}-${field.name}`}>
                 Current · {currentValueText(item(field.name))}
               </p>
-              {#if params.stagedEdits[field.name]}
-                <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.geofenceStagedPrefix}-${field.name}`}>
-                  Queued · {params.stagedEdits[field.name]?.nextValueText}
-                </p>
-              {/if}
 
-              <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+              <div class="mt-4">
                 {#if field.kind === "enum"}
                   <select
                     class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
                     data-testid={`${setupWorkspaceTestIds.geofenceInputPrefix}-${field.name}`}
                     disabled={actionsBlocked || enumOptions(field.name).length === 0 || !item(field.name)}
                     id={`${card.id}-${field.name}`}
-                    onchange={(event) => setDraft(field.name, (event.currentTarget as HTMLSelectElement).value)}
+                    onchange={(event) => stageDraftValue(field, (event.currentTarget as HTMLSelectElement).value)}
                     value={draftValue(field.name, item(field.name)?.value ?? null)}
                   >
                     {#each enumOptions(field.name) as option (option.code)}
@@ -394,7 +397,8 @@ function toggleFenceType(bit: number) {
                       disabled={actionsBlocked || !item(field.name)}
                       id={`${card.id}-${field.name}`}
                       min={field.min}
-                      onchange={(event) => setDraft(field.name, (event.currentTarget as HTMLInputElement).value)}
+                      onchange={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
+                      oninput={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
                       step={field.step}
                       type="number"
                       value={draftValue(field.name, item(field.name)?.value ?? null)}
@@ -405,15 +409,6 @@ function toggleFenceType(bit: number) {
                   </div>
                 {/if}
 
-                <button
-                  class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-                  data-testid={`${setupWorkspaceTestIds.geofenceStageButtonPrefix}-${field.name}`}
-                  disabled={!canStage(field)}
-                  onclick={() => stage(field)}
-                  type="button"
-                >
-                  {isQueued(field) ? "Queued" : "Stage"}
-                </button>
               </div>
             </div>
           {/each}

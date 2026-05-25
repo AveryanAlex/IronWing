@@ -28,6 +28,7 @@ import { selectTelemetryView } from "../../../lib/telemetry-selectors";
 import SetupBitmaskChecklist from "../shared/SetupBitmaskChecklist.svelte";
 import SetupPreviewStagePanel from "../shared/SetupPreviewStagePanel.svelte";
 import SetupSectionShell from "../SetupSectionShell.svelte";
+import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let {
@@ -152,14 +153,8 @@ function currentValueText(item: ParameterItemModel | null): string {
   return item?.valueLabel ?? item?.valueText ?? "Unavailable";
 }
 
-function isQueued(name: string, fallback: number | null): boolean {
-  const nextValue = resolveDraftNumber(name, fallback);
-  return nextValue !== null && params.stagedEdits[name]?.nextValue === nextValue;
-}
-
-function canStage(name: string, fallback: number | null, allowWithoutModes = false): boolean {
+function canAutostage(name: string, nextValue: number | null, allowWithoutModes = false): boolean {
   const target = item(name);
-  const nextValue = resolveDraftNumber(name, fallback);
   if (!target || nextValue === null || target.readOnly === true || actionsBlocked) {
     return false;
   }
@@ -169,21 +164,25 @@ function canStage(name: string, fallback: number | null, allowWithoutModes = fal
     return false;
   }
 
-  return target.value !== nextValue && params.stagedEdits[name]?.nextValue !== nextValue;
+  return true;
 }
 
-function stage(name: string, fallback: number | null, allowWithoutModes = false) {
-  if (!canStage(name, fallback, allowWithoutModes)) {
-    return;
-  }
-
+function stage(name: string, value: string, fallback: number | null, allowWithoutModes = false) {
+  setDraft(name, value);
   const target = item(name);
   const nextValue = resolveDraftNumber(name, fallback);
-  if (!target || nextValue === null) {
+  if (!canAutostage(name, nextValue, allowWithoutModes) || !target || nextValue === null) {
     return;
   }
 
   paramsStore.stageParameterEdit(target, nextValue);
+}
+
+function unstage(name: string) {
+  const nextDrafts = { ...draftValues };
+  delete nextDrafts[name];
+  draftValues = nextDrafts;
+  paramsStore.discardStagedEdit(name);
 }
 
 function toggleBitmask(paramName: "SIMPLE" | "SUPER_SIMPLE", slot: number) {
@@ -352,34 +351,25 @@ function stagePreset() {
           Current · {currentValueText(flightModeChannelItem)}
         </p>
         {#if params.stagedEdits[FLIGHT_MODE_CHANNEL_PARAM]}
-          <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.flightModesStagedPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`}>
-            Queued · {params.stagedEdits[FLIGHT_MODE_CHANNEL_PARAM]?.nextValueText}
+          <p class="mt-2">
+            <SetupStagedBadge name={FLIGHT_MODE_CHANNEL_PARAM} onUnstage={unstage} testId={`${setupWorkspaceTestIds.flightModesStagedPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`} />
           </p>
         {/if}
       </div>
     </div>
 
-    <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+    <div class="mt-4">
       <select
         class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
         data-testid={`${setupWorkspaceTestIds.flightModesInputPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`}
         disabled={actionsBlocked || !flightModeChannelItem}
-        onchange={(event) => setDraft(FLIGHT_MODE_CHANNEL_PARAM, (event.currentTarget as HTMLSelectElement).value)}
+        onchange={(event) => stage(FLIGHT_MODE_CHANNEL_PARAM, (event.currentTarget as HTMLSelectElement).value, flightModeChannelItem?.value ?? null, true)}
         value={flightModeChannelDraft}
       >
         {#each fixedChannelOptions() as option (option.code)}
           <option value={String(option.code)}>{option.label}</option>
         {/each}
       </select>
-      <button
-        class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-        data-testid={`${setupWorkspaceTestIds.flightModesStageButtonPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`}
-        disabled={!canStage(FLIGHT_MODE_CHANNEL_PARAM, flightModeChannelItem?.value ?? null, true)}
-        onclick={() => stage(FLIGHT_MODE_CHANNEL_PARAM, flightModeChannelItem?.value ?? null, true)}
-        type="button"
-      >
-        {isQueued(FLIGHT_MODE_CHANNEL_PARAM, flightModeChannelItem?.value ?? null) ? "Queued" : "Stage"}
-      </button>
     </div>
   </article>
 
@@ -403,34 +393,25 @@ function stagePreset() {
               Current · {slot.currentName}
             </p>
             {#if params.stagedEdits[slot.paramName]}
-              <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.flightModesStagedPrefix}-${slot.paramName}`}>
-                Queued · {params.stagedEdits[slot.paramName]?.nextValueText}
+              <p class="mt-2">
+                <SetupStagedBadge name={slot.paramName} onUnstage={unstage} testId={`${setupWorkspaceTestIds.flightModesStagedPrefix}-${slot.paramName}`} />
               </p>
             {/if}
           </div>
         </div>
 
-        <div class="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+        <div class="mt-4">
           <select
             class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
             data-testid={`${setupWorkspaceTestIds.flightModesInputPrefix}-${slot.paramName}`}
             disabled={actionsBlocked || model.availabilityState !== "live" || model.options.length === 0 || !item(slot.paramName)}
-            onchange={(event) => setDraft(slot.paramName, (event.currentTarget as HTMLSelectElement).value)}
+            onchange={(event) => stage(slot.paramName, (event.currentTarget as HTMLSelectElement).value, slot.effectiveValue)}
             value={draftValue(slot.paramName, slot.effectiveValue)}
           >
             {#each model.options as option (option.customMode)}
               <option value={String(option.customMode)}>{option.name}</option>
             {/each}
           </select>
-          <button
-            class="self-end rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-            data-testid={`${setupWorkspaceTestIds.flightModesStageButtonPrefix}-${slot.paramName}`}
-            disabled={!canStage(slot.paramName, slot.effectiveValue)}
-            onclick={() => stage(slot.paramName, slot.effectiveValue)}
-            type="button"
-          >
-            {isQueued(slot.paramName, slot.effectiveValue) ? "Queued" : "Stage"}
-          </button>
         </div>
 
         {#if slot.unresolved}

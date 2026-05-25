@@ -1847,7 +1847,6 @@ describe("SetupWorkspace", () => {
     await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.gpsInputPrefix}-GPS_TYPE`), {
       target: { value: "5" },
     });
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.gpsStageButtonPrefix}-GPS_TYPE`));
     await fireEvent.click(screen.getByText("SBAS"));
 
     await waitFor(() => {
@@ -1930,7 +1929,6 @@ describe("SetupWorkspace", () => {
     await fireEvent.input(screen.getByTestId(`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_LOW_VOLT`), {
       target: { value: "14.8" },
     });
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.batteryStageButtonPrefix}-BATT_LOW_VOLT`));
 
     await waitFor(() => {
       expect(get(parameterStore).stagedEdits.BATT_LOW_VOLT?.nextValue).toBe(14.8);
@@ -1971,7 +1969,6 @@ describe("SetupWorkspace", () => {
     await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.serialPortsInputPrefix}-SERIAL2_PROTOCOL`), {
       target: { value: "5" },
     });
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.serialPortsStageButtonPrefix}-SERIAL2_PROTOCOL`));
 
     await waitFor(() => {
       expect(get(parameterStore).stagedEdits.SERIAL2_PROTOCOL?.nextValue).toBe(5);
@@ -2019,18 +2016,16 @@ describe("SetupWorkspace", () => {
     await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-FRAME_CLASS`), {
       target: { value: "2" },
     });
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.frameStageButtonPrefix}-FRAME_CLASS`));
 
     await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-AHRS_ORIENTATION`), {
       target: { value: "1" },
     });
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.frameStageButtonPrefix}-AHRS_ORIENTATION`));
 
     const state = get(parameterStore);
     expect(state.stagedEdits.FRAME_CLASS?.nextValue).toBe(2);
     expect(state.stagedEdits.AHRS_ORIENTATION?.nextValue).toBe(1);
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.frameStagedPrefix}-FRAME_CLASS`).textContent).toContain("Queued");
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.frameStagedPrefix}-AHRS_ORIENTATION`).textContent).toContain("Queued");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.frameStagedPrefix}-FRAME_CLASS`).textContent).toContain("staged");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.frameStagedPrefix}-AHRS_ORIENTATION`).textContent).toContain("staged");
   });
 
   it("shows a Plane-to-QuadPlane enable path and stages Q_ENABLE through the shared review tray", async () => {
@@ -2058,7 +2053,6 @@ describe("SetupWorkspace", () => {
     await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-Q_ENABLE`), {
       target: { value: "1" },
     });
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.frameStageButtonPrefix}-Q_ENABLE`));
 
     await waitFor(() => {
       expect(get(parameterStore).stagedEdits.Q_ENABLE?.nextValue).toBe(1);
@@ -2119,7 +2113,6 @@ describe("SetupWorkspace", () => {
     await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-Q_FRAME_TYPE`), {
       target: { value: "0" },
     });
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.frameStageButtonPrefix}-Q_FRAME_TYPE`));
 
     await waitFor(() => {
       expect(get(parameterStore).stagedEdits.Q_FRAME_TYPE?.nextValue).toBe(0);
@@ -2510,10 +2503,9 @@ describe("SetupWorkspace", () => {
     await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.rcInputPrefix}-RCMAP_YAW`), {
       target: { value: "1" },
     });
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.rcStageButtonPrefix}-RCMAP_YAW`));
 
     expect(get(parameterStore).stagedEdits.RCMAP_YAW?.nextValue).toBe(1);
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.rcStagedPrefix}-RCMAP_YAW`).textContent).toContain("Queued");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.rcStagedPrefix}-RCMAP_YAW`).textContent).toContain("staged");
   });
 
   it("keeps calibration cards honest, surfaces status text, and wires compass lifecycle actions", async () => {
@@ -2729,7 +2721,6 @@ describe("SetupWorkspace", () => {
     await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.flightModesInputPrefix}-FLTMODE1`), {
       target: { value: "6" },
     });
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.flightModesStageButtonPrefix}-FLTMODE1`));
     await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.flightModesSimpleChecklist).querySelectorAll("button")[0] as HTMLButtonElement);
 
     await waitFor(() => {
@@ -2756,7 +2747,7 @@ describe("SetupWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.flightModesAvailabilityState).textContent).toContain("Stale");
     });
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.flightModesStageButtonPrefix}-FLTMODE2`).getAttribute("disabled")).not.toBeNull();
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.flightModesInputPrefix}-FLTMODE2`).getAttribute("disabled")).not.toBeNull();
   });
 
   it("stages failsafe defaults, RTL changes, and geofence bitmask edits through the shared review tray", async () => {
@@ -2804,8 +2795,18 @@ describe("SetupWorkspace", () => {
     await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.rtlReturnInputPrefix}-RTL_ALT`), {
       target: { value: "15" },
     });
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.rtlReturnStageButtonPrefix}-RTL_ALT`));
 
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.RTL_ALT?.nextValue).toBe(1500);
+    });
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.rtlReturnStagedPrefix}-RTL_ALT`).textContent).toContain("staged");
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.rtlReturnStagedPrefix}-RTL_ALT`));
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.RTL_ALT).toBeUndefined();
+    });
+    await fireEvent.input(screen.getByTestId(`${setupWorkspaceTestIds.rtlReturnInputPrefix}-RTL_ALT`), {
+      target: { value: "15" },
+    });
     await waitFor(() => {
       expect(get(parameterStore).stagedEdits.RTL_ALT?.nextValue).toBe(1500);
     });
