@@ -11,8 +11,8 @@ import {
   validateConnectionForm,
   type ConnectionFieldErrors,
 } from "../../lib/connection/connection-form";
-import { selectConnectionPanelPresentation, type ViewTone } from "../../lib/session-selectors";
-import { Panel, StatusPill } from "../ui";
+import { selectConnectionPanelPresentation } from "../../lib/session-selectors";
+import { Panel } from "../ui";
 import ConnectionDiagnostics from "./ConnectionDiagnostics.svelte";
 import ConnectionTransportFields from "./ConnectionTransportFields.svelte";
 
@@ -24,19 +24,6 @@ onMount(() => {
     void store.refreshSerialPorts();
   }
 });
-
-function pillTone(tone: ViewTone): "neutral" | "info" | "success" | "warning" | "danger" {
-  switch (tone) {
-    case "positive":
-      return "success";
-    case "caution":
-      return "warning";
-    case "critical":
-      return "danger";
-    default:
-      return "neutral";
-  }
-}
 
 let lastToastedError: string | null = null;
 let showValidation = $state(false);
@@ -113,11 +100,8 @@ async function onSubmit(event: SubmitEvent) {
 </script>
 
 <Panel padded>
-  <div class="flex flex-wrap items-center justify-between gap-2">
+  <div class="flex flex-wrap items-center gap-2">
     <p class="m-0 flex min-w-0 items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-muted"><Radio aria-hidden="true" size={14} />Connection</p>
-    <span data-testid="connection-status-text">
-      <StatusPill tone={pillTone(panelView.statusTone)}>{panelView.statusLabel}</StatusPill>
-    </span>
   </div>
 
   <form class="mt-3 flex flex-col gap-3" onsubmit={onSubmit}>

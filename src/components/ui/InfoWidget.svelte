@@ -72,7 +72,7 @@ function handleDocumentKeydown(event: KeyboardEvent) {
 
   {#if open}
     <div
-      class={`absolute top-full z-20 mt-2 w-72 rounded-lg border border-border bg-bg-primary p-3 text-left shadow-2xl ${align === "right" ? "right-0" : "left-0"}`}
+      class={`absolute top-full z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-bg-primary p-3 text-left shadow-2xl ${align === "right" ? "right-0" : "left-0"}`}
       data-testid={panelTestId}
       role="dialog"
     >

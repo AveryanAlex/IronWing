@@ -127,7 +127,10 @@ function createMockService(overrides: Partial<SessionService> = {}) {
     mode: "udp",
     udpBind: "0.0.0.0:14550",
     tcpAddress: "127.0.0.1:5760",
+    websocketUrl: "ws://127.0.0.1:14560",
     serialPort: "",
+    webSerialPortId: "",
+    webBluetoothDeviceId: "",
     baud: 57600,
     selectedBtDevice: "",
     demoVehiclePreset: "quadcopter",
@@ -236,7 +239,7 @@ describe("ConnectionPanel", () => {
     await store.initialize();
     renderSeedSurface(store);
 
-    expect(screen.getByTestId("connection-status-text").textContent).toContain("Idle");
+    expect(screen.queryByTestId("connection-status-text")).toBeNull();
     expect(screen.getByTestId("telemetry-state-value").textContent).toContain("--");
     expect(screen.getByTestId("telemetry-alt-value").textContent).toContain("-- m");
 
@@ -281,10 +284,8 @@ describe("ConnectionPanel", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("connection-status-text").textContent).toContain("Connected");
+      expect(screen.getByTestId("telemetry-state-value").textContent).toContain("DISARMED");
     });
-
-    expect(screen.getByTestId("telemetry-state-value").textContent).toContain("DISARMED");
     expect(screen.getByTestId("telemetry-mode-value").textContent).toContain("LOITER");
     expect(screen.getByTestId("telemetry-alt-value").textContent).toContain("12.4 m");
     expect(screen.getByTestId("telemetry-speed-value").textContent).toContain("4.8 m/s");
@@ -329,11 +330,17 @@ describe("ConnectionPanel", () => {
     await fireEvent.change(transportSelect, { target: { value: "tcp" } });
 
     expect(screen.queryByText("TCP available")).toBeNull();
+    expect(screen.queryByText("Connect to a MAVLink TCP endpoint")).toBeNull();
+
+    await fireEvent.click(screen.getByTestId("connection-transport-help-btn"));
+    expect(screen.getByTestId("connection-transport-help-popover").textContent).toContain("TCP connection");
+    expect(screen.getByTestId("connection-transport-help-content").textContent).toContain("Connect to a MAVLink TCP endpoint");
+    await fireEvent.click(screen.getByTestId("connection-transport-help-btn"));
 
     await fireEvent.change(transportSelect, { target: { value: "serial" } });
 
     expect(screen.queryByText("Serial available")).toBeNull();
-    const advancedSummary = screen.getByText("Advanced");
+    const advancedSummary = screen.getByText("Advanced · Baud 57600");
     const advancedDetails = advancedSummary.closest("details") as HTMLDetailsElement | null;
     expect(advancedDetails?.open).toBe(false);
     expect(screen.getByTestId("connection-serial-baud")).toBeTruthy();
@@ -341,18 +348,21 @@ describe("ConnectionPanel", () => {
 
   it("renders an actionable demo transport form and submits a demo connect request", async () => {
     const { service } = createMockService({
-      loadConnectionForm: vi.fn(() => ({
+      loadConnectionForm: vi.fn<() => SessionConnectionFormState>(() => ({
         mode: "demo",
         udpBind: "0.0.0.0:14550",
         tcpAddress: "127.0.0.1:5760",
+        websocketUrl: "ws://127.0.0.1:14560",
         serialPort: "",
+        webSerialPortId: "",
+        webBluetoothDeviceId: "",
         baud: 57600,
         selectedBtDevice: "",
         demoVehiclePreset: "quadcopter",
         takeoffAlt: "10",
         followVehicle: true,
       })),
-      availableTransportDescriptors: vi.fn(async () => [
+      availableTransportDescriptors: vi.fn(async (): Promise<TransportDescriptor[]> => [
         {
           kind: "demo",
           label: "Demo vehicle",
@@ -407,7 +417,6 @@ describe("ConnectionPanel", () => {
     await waitFor(() => {
       expect(screen.getByTestId("connection-error-message").textContent).toContain("address is required");
     });
-    expect(screen.getByTestId("connection-status-text").textContent).toContain("Error");
 
     expect(service.connectSession).not.toHaveBeenCalled();
     expect(toastError).not.toHaveBeenCalled();
@@ -470,7 +479,10 @@ describe("ConnectionPanel", () => {
         mode: "serial",
         udpBind: "0.0.0.0:14550",
         tcpAddress: "127.0.0.1:5760",
+        websocketUrl: "ws://127.0.0.1:14560",
         serialPort: "",
+        webSerialPortId: "",
+        webBluetoothDeviceId: "",
         baud: 57600,
         selectedBtDevice: "",
         takeoffAlt: "10",
@@ -480,7 +492,10 @@ describe("ConnectionPanel", () => {
         mode: "udp",
         udpBind: "0.0.0.0:14550",
         tcpAddress: "127.0.0.1:5760",
+        websocketUrl: "ws://127.0.0.1:14560",
         serialPort: "",
+        webSerialPortId: "",
+        webBluetoothDeviceId: "",
         baud: 57600,
         selectedBtDevice: "",
         takeoffAlt: "10",

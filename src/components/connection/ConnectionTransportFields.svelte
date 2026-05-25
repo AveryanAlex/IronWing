@@ -4,6 +4,7 @@ import { type DemoVehiclePreset, type TransportDescriptor, type TransportType } 
 import type { BluetoothDevice } from "../../telemetry";
 import type { SessionConnectionFormState } from "../../lib/platform/session";
 import type { ConnectionFieldErrors } from "../../lib/connection/connection-form";
+import { InfoWidget } from "../ui";
 
 type Field = keyof Pick<
   SessionConnectionFormState,
@@ -22,6 +23,45 @@ const demoVehiclePresetOptions: Array<{ value: DemoVehiclePreset; label: string 
   { value: "airplane", label: "Airplane" },
   { value: "quadplane", label: "QuadPlane" },
 ];
+
+const transportHelpCopy: Record<TransportType, { title: string; description: string }> = {
+  udp: {
+    title: "UDP connection",
+    description: "Bind a local UDP endpoint that listens for MAVLink packets, such as 0.0.0.0:14550 for local SITL or telemetry radios.",
+  },
+  tcp: {
+    title: "TCP connection",
+    description: "Connect to a MAVLink TCP endpoint, such as SITL on 127.0.0.1:5760.",
+  },
+  serial: {
+    title: "Serial connection",
+    description: "Pick the detected autopilot serial port. Refresh after plugging in hardware. Baud defaults to 57600; change it under Advanced only if your adapter or vehicle uses another rate.",
+  },
+  bluetooth_ble: {
+    title: "BLE connection",
+    description: "Scan for nearby BLE devices and choose the MAVLink-capable peripheral before connecting.",
+  },
+  bluetooth_spp: {
+    title: "Classic Bluetooth connection",
+    description: "Choose an already paired Classic Bluetooth SPP device. Refresh if the OS pairing changed.",
+  },
+  websocket: {
+    title: "WebSocket connection",
+    description: "Connect through a raw MAVLink WebSocket bridge. For local SITL, run pnpm run sitl:ws and use the shown ws:// URL.",
+  },
+  web_serial: {
+    title: "Web Serial connection",
+    description: "The browser asks you to choose the serial port when you connect. Set baud first if the default does not match your device.",
+  },
+  web_bluetooth: {
+    title: "Web Bluetooth connection",
+    description: "The browser asks you to choose a Nordic UART BLE device when you connect.",
+  },
+  demo: {
+    title: "Demo vehicle",
+    description: "Connect to the built-in MAVKit demo vehicle for quick telemetry and mission walkthroughs.",
+  },
+};
 
 let {
   form,
@@ -62,6 +102,7 @@ let {
 let bluetoothDevices = $derived(
   btDevices.filter((device) => (form.mode === "bluetooth_ble" ? device.device_type === "ble" : device.device_type === "classic")),
 );
+let activeTransportHelp = $derived(transportHelpCopy[form.mode]);
 
 let serialAdvancedOpen = $state(false);
 
@@ -115,9 +156,21 @@ const iconButtonClass =
   {/if}
 {/snippet}
 
-<label class="block space-y-1.5">
-  <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Transport</span>
+<div class="block space-y-1.5">
+  <div class="flex items-center justify-between gap-2">
+    <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Transport</span>
+    <InfoWidget
+      align="right"
+      contentTestId="connection-transport-help-content"
+      description={activeTransportHelp.description}
+      label="Show transport help"
+      panelTestId="connection-transport-help-popover"
+      testId="connection-transport-help-btn"
+      title={activeTransportHelp.title}
+    />
+  </div>
   <select
+    aria-label="Transport"
     class={inputClass}
     data-testid="connection-transport-select"
     disabled={formLocked}
@@ -134,7 +187,7 @@ const iconButtonClass =
       </option>
     {/each}
   </select>
-</label>
+</div>
 
 {#if form.mode === "udp"}
   <div class="space-y-1.5">
@@ -180,9 +233,6 @@ const iconButtonClass =
       </label>
       {@render primaryActionButton()}
     </div>
-    <p class="text-xs text-text-secondary">
-      Connect to the built-in MAVKit demo vehicle for quick telemetry and mission walkthroughs.
-    </p>
   </div>
 {/if}
 
@@ -226,9 +276,6 @@ const iconButtonClass =
       </label>
       {@render primaryActionButton()}
     </div>
-    <p class="text-xs text-text-secondary">
-      Connect through a raw MAVLink WebSocket bridge such as the local <code>pnpm run sitl:ws</code> helper.
-    </p>
     {#if errors.websocketUrl}
       <p class="text-xs text-danger">{errors.websocketUrl}</p>
     {/if}
@@ -275,7 +322,7 @@ const iconButtonClass =
   </div>
 
   <details class="rounded-lg border border-border/80 bg-bg-input/30 px-3 py-2" bind:open={serialAdvancedOpen}>
-    <summary class="cursor-pointer text-xs font-semibold uppercase tracking-wider text-text-muted">Advanced</summary>
+    <summary class="cursor-pointer text-xs font-semibold uppercase tracking-wider text-text-muted">Advanced · Baud {form.baud}</summary>
     <label class="mt-2 block space-y-1.5">
       <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Baud</span>
       <input
@@ -303,9 +350,6 @@ const iconButtonClass =
     <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
       <div class="min-w-0 space-y-1.5">
         <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Web Serial</span>
-        <p class="text-xs text-text-secondary">
-          Your browser will ask you to choose a serial port when you connect.
-        </p>
       </div>
       {@render primaryActionButton()}
     </div>
@@ -378,9 +422,6 @@ const iconButtonClass =
     <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
       <div class="min-w-0 space-y-1.5">
         <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Web Bluetooth</span>
-        <p class="text-xs text-text-secondary">
-          Your browser will ask you to choose a Nordic UART BLE device when you connect.
-        </p>
       </div>
       {@render primaryActionButton()}
     </div>
