@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import { writable } from "svelte/store";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -41,7 +41,10 @@ function createSessionState(): SessionStoreState {
       mode: "udp",
       udpBind: "0.0.0.0:14550",
       tcpAddress: "127.0.0.1:5760",
+      websocketUrl: "ws://127.0.0.1:14550",
       serialPort: "",
+      webSerialPortId: "",
+      webBluetoothDeviceId: "",
       baud: 57600,
       selectedBtDevice: "",
       takeoffAlt: "10",
@@ -74,14 +77,26 @@ function createParamsState(): ParamsStoreState {
     liveSessionConnected: false,
     vehicleType: "quadrotor",
     paramStore: {
-      expected_count: 1,
+      expected_count: 2,
       params: {
         BATT_LOW_VOLT: { name: "BATT_LOW_VOLT", value: 12.1, param_type: "real32", index: 0 },
+        FS_THR_ENABLE: { name: "FS_THR_ENABLE", value: 0, param_type: "uint8", index: 1 },
       },
     },
     paramProgress: "completed",
     metadata: new Map([
       ["BATT_LOW_VOLT", { humanName: "Low voltage", description: "Battery warning threshold.", unitText: "V" }],
+      [
+        "FS_THR_ENABLE",
+        {
+          humanName: "Throttle failsafe",
+          description: "Throttle failsafe behavior.",
+          values: [
+            { code: 0, label: "Disabled" },
+            { code: 1, label: "Enabled always RTL" },
+          ],
+        },
+      ],
     ]),
     metadataState: "ready",
     metadataError: null,
@@ -98,6 +113,19 @@ function createParamsState(): ParamsStoreState {
         units: "V",
         rebootRequired: false,
         order: 0,
+      },
+      FS_THR_ENABLE: {
+        name: "FS_THR_ENABLE",
+        label: "Throttle failsafe",
+        rawName: "FS_THR_ENABLE",
+        description: "Throttle failsafe behavior.",
+        currentValue: 0,
+        currentValueText: "0",
+        nextValue: 1,
+        nextValueText: "1",
+        units: null,
+        rebootRequired: false,
+        order: 1,
       },
     },
     retainedFailures: {},
@@ -129,16 +157,25 @@ afterEach(() => {
 });
 
 describe("ParameterReviewTray", () => {
-  it("disables apply surfaces and shows replay read-only guidance during playback", () => {
+  it("disables apply surfaces and shows replay read-only guidance during playback", async () => {
     const sessionStore = { subscribe: writable(createSessionState()).subscribe } as any;
     const paramsStore = createParamsStore(createParamsState());
 
-    render(withShellContexts(sessionStore, paramsStore, ParameterReviewTray), {
-      open: true,
-      onToggle: () => {},
-    });
+    render(withShellContexts(sessionStore, paramsStore, ParameterReviewTray));
+
+    await fireEvent.click(screen.getByTestId(appShellTestIds.parameterReviewToggle));
 
     expect(screen.getByTestId(appShellTestIds.parameterReviewReplayReadonly).textContent).toContain("Replay is read-only");
     expect((screen.getByTestId(appShellTestIds.parameterReviewApply) as HTMLButtonElement).disabled).toBe(true);
+    const row = screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-BATT_LOW_VOLT`);
+    expect(row.textContent).toContain("Low voltage");
+    expect(row.textContent).toContain("BATT_LOW_VOLT");
+    expect(row.textContent).toContain("12.1 V");
+    expect(row.textContent).toContain("14.4 V");
+    const enumRow = screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-FS_THR_ENABLE`);
+    expect(enumRow.textContent).toContain("Throttle failsafe");
+    expect(enumRow.textContent).toContain("FS_THR_ENABLE");
+    expect(enumRow.textContent).toContain("Disabled");
+    expect(enumRow.textContent).toContain("Enabled always RTL");
   });
 });

@@ -6,7 +6,7 @@ import {
   type ParameterWorkspaceItem,
   type ParameterWorkspaceSection,
 } from "../params/workspace-sections";
-import { formatParamValue } from "../params/parameter-item-model";
+import { formatParamDisplayValue, formatParamValue } from "../params/parameter-item-model";
 import type { StagedParameterEdit } from "./params-staged-edits";
 import type {
   ParameterWorkspaceStatus,
@@ -28,6 +28,8 @@ export type ParameterWorkspaceSectionView = Omit<ParameterWorkspaceSection, "ite
 };
 
 export type ParameterWorkspaceStagedEditView = StagedParameterEdit & {
+  currentDisplayText: string;
+  nextDisplayText: string;
   failureMessage: string | null;
   confirmedValueText: string | null;
   isApplying: boolean;
@@ -219,12 +221,15 @@ function mergeStagedEdit(
   const activeName = state.applyProgress?.activeName ?? null;
   const isApplying = state.applyPhase === "applying";
   const isWriting = isApplying && activeName === edit.name;
+  const meta = state.metadata?.get(edit.name);
 
   if (!currentItem) {
     return {
       ...edit,
       nextValueText: formatParamValue(edit.nextValue),
       currentValueText: formatParamValue(edit.currentValue),
+      currentDisplayText: formatParamDisplayValue(edit.currentValue, meta, edit.units),
+      nextDisplayText: formatParamDisplayValue(edit.nextValue, meta, edit.units),
       failureMessage: retainedFailure?.message ?? null,
       confirmedValueText: retainedFailure ? formatConfirmedValueText(retainedFailure.confirmedValue) : null,
       isApplying,
@@ -242,6 +247,8 @@ function mergeStagedEdit(
     currentValueText: currentItem.valueText,
     nextValue: currentItem.stagedValue ?? edit.nextValue,
     nextValueText: currentItem.stagedValueText ?? formatParamValue(edit.nextValue),
+    currentDisplayText: formatParamDisplayValue(currentItem.value, meta, currentItem.units),
+    nextDisplayText: formatParamDisplayValue(currentItem.stagedValue ?? edit.nextValue, meta, currentItem.units),
     units: currentItem.units,
     rebootRequired: currentItem.rebootRequired,
     order: currentItem.order,

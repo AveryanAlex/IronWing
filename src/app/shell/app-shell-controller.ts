@@ -1,6 +1,6 @@
 import { derived, get, writable, type Readable } from "svelte/store";
 
-import type { ParameterWorkspaceViewStore, ParamsStore } from "../../lib/stores/params";
+import type { ParamsStore } from "../../lib/stores/params";
 import type { SessionStore } from "../../lib/stores/session";
 import type { ShellChromeStore } from "./runtime-context";
 import { isAutoConnectSitlEnabled } from "../../lib/platform/session";
@@ -36,18 +36,15 @@ export function createAppShellController(stores: {
   sessionStore: SessionStore;
   parameterStore: ParamsStore;
   chromeStore: ShellChromeStore;
-  parameterViewStore: ParameterWorkspaceViewStore;
 }) {
-  const { sessionStore, parameterStore, chromeStore, parameterViewStore } = stores;
+  const { sessionStore, parameterStore, chromeStore } = stores;
 
   const uiState = createUiStateStore({ storage: typeof localStorage === "undefined" ? null : localStorage });
 
   const activeWorkspace = writable<AppShellWorkspace>(uiState.getActiveWorkspace());
   const stopPersistActiveWorkspace = activeWorkspace.subscribe((value) => uiState.setActiveWorkspace(value));
   const vehiclePanelOpen = writable(false);
-  const parameterReviewOpen = writable(false);
 
-  const stagedCount = derived(parameterViewStore, ($parameterViewStore) => $parameterViewStore.stagedCount);
   const activeEnvelopeText = derived(sessionStore, ($sessionStore) =>
     $sessionStore.activeEnvelope
       ? `${$sessionStore.activeEnvelope.session_id} · rev ${$sessionStore.activeEnvelope.reset_revision}`
@@ -67,12 +64,6 @@ export function createAppShellController(stores: {
       vehiclePanelOpen.set(false);
     }
   });
-  const stopCloseReviewWhenNoStagedEdits = stagedCount.subscribe((nextStagedCount) => {
-    if (nextStagedCount === 0) {
-      parameterReviewOpen.set(false);
-    }
-  });
-
   async function initialize() {
     await Promise.all([sessionStore.initialize(), parameterStore.initialize()]);
 
@@ -109,21 +100,14 @@ export function createAppShellController(stores: {
     vehiclePanelOpen.set(false);
   }
 
-  function toggleParameterReview() {
-    parameterReviewOpen.update((open) => !open);
-  }
-
   function destroy() {
     stopCloseDrawerWhenDocked();
-    stopCloseReviewWhenNoStagedEdits();
     stopPersistActiveWorkspace();
   }
 
   return {
     activeWorkspace,
     vehiclePanelOpen,
-    parameterReviewOpen,
-    stagedCount,
     activeEnvelopeText,
     drawerState,
     showVehiclePanelButton,
@@ -137,13 +121,10 @@ export function createAppShellController(stores: {
     showParameterWorkspace,
     toggleVehiclePanel,
     closeVehiclePanel,
-    toggleParameterReview,
     destroy,
   } satisfies {
     activeWorkspace: Readable<AppShellWorkspace>;
     vehiclePanelOpen: Readable<boolean>;
-    parameterReviewOpen: Readable<boolean>;
-    stagedCount: Readable<number>;
     activeEnvelopeText: Readable<string>;
     drawerState: Readable<"open" | "closed" | "docked">;
     showVehiclePanelButton: Readable<boolean>;
@@ -157,7 +138,6 @@ export function createAppShellController(stores: {
     showParameterWorkspace: () => void;
     toggleVehiclePanel: () => void;
     closeVehiclePanel: () => void;
-    toggleParameterReview: () => void;
     destroy: () => void;
   };
 }

@@ -72,6 +72,21 @@ export function formatParamValue(value: number): string {
   return value.toFixed(3).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
 }
 
+export function formatParamDisplayValue(
+  value: number,
+  meta: ParamMeta | undefined,
+  fallbackUnits: string | null = null,
+): string {
+  const valueLabel = resolveValueLabel(value, meta);
+  if (valueLabel) {
+    return valueLabel;
+  }
+
+  const valueText = formatParamValue(value);
+  const units = normalizeOptionalText(meta?.unitText) ?? normalizeOptionalText(meta?.units) ?? fallbackUnits;
+  return units ? `${valueText} ${units}` : valueText;
+}
+
 function normalizeLabel(value: string | undefined, fallback: string): string {
   return normalizeOptionalText(value) ?? fallback;
 }

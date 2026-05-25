@@ -57,7 +57,6 @@ import { createStaticShellChromeStore, withShellContexts } from "../../test/cont
 import type { ShellChromeStore } from "../../app/shell/runtime-context";
 import type { TelemetryState, VehicleState } from "../../telemetry";
 import { appShellTestIds } from "../../app/shell/chrome-state";
-import ParameterReviewTray from "../../app/shell/ParameterReviewTray.svelte";
 import { parameterWorkspaceTestIds } from "../params/parameter-workspace-test-ids";
 import SetupOverviewSection from "./sections/SetupOverviewSection.svelte";
 import SetupWorkspace from "./SetupWorkspace.svelte";
@@ -1480,19 +1479,6 @@ async function renderSetupWorkspace(options: {
       chromeStore: options.chromeStore,
     }),
   );
-
-  if (options.includeReviewTray) {
-    render(
-      withShellContexts(sessionReadable, parameterStore, ParameterReviewTray, {
-        setupWorkspaceStore,
-        setupWorkspaceViewStore,
-      }),
-      {
-        open: options.reviewTrayOpen ?? true,
-        onToggle: () => {},
-      },
-    );
-  }
 
   await waitFor(() => {
     expect(screen.getByTestId(setupWorkspaceTestIds.root)).toBeTruthy();

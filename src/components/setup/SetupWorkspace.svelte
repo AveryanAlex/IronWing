@@ -31,6 +31,7 @@ import SetupSectionIcon from "./SetupSectionIcon.svelte";
 import SetupServoOutputsSection from "./sections/SetupServoOutputsSection.svelte";
 import SetupWorkspaceSectionNav from "./SetupWorkspaceSectionNav.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+import ParameterReviewTray from "../../app/shell/ParameterReviewTray.svelte";
 
 const store = getSetupWorkspaceStoreContext();
 const viewStore = fromStore(getSetupWorkspaceViewStoreContext());
@@ -288,6 +289,8 @@ function clearCheckpoint() {
         </SplitWorkspace>
       </div>
     {/if}
+
+    <ParameterReviewTray />
 
     {#if isPhoneTier && sectionDrawerOpen}
       <div

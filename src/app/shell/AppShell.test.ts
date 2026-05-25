@@ -724,8 +724,7 @@ describe("AppShell", () => {
         expect(screen.queryByTestId("telemetry-state-value")).toBeNull();
         expect(screen.queryByTestId(parameterWorkspaceTestIds.root)).toBeNull();
         expect(screen.getByTestId(setupWorkspaceTestIds.state).textContent).toContain("Setup ready");
-        // The compact nav only renders a status badge for complete / in_progress / failed — not for "unknown".
-        expect(screen.queryByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`)).toBeNull();
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`)).toBeTruthy();
         expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain("Connect to a vehicle to begin setup");
         expect(screen.queryByTestId(setupWorkspaceTestIds.detailRecovery)).toBeNull();
     });
@@ -840,8 +839,8 @@ describe("AppShell", () => {
 
         await waitFor(() => {
             expect(screen.getByTestId(appShellTestIds.parameterReviewTray)).toBeTruthy();
-            expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("1 queued");
-            expect(screen.getByTestId(appShellTestIds.parameterWorkspacePendingCount).textContent?.trim()).toBe("1");
+            expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("1 parameter staged");
+            expect(screen.queryByTestId(appShellTestIds.parameterWorkspacePendingCount)).toBeNull();
         });
     });
 
@@ -879,7 +878,7 @@ describe("AppShell", () => {
         });
     });
 
-    it("mounts one shared review tray, keeps staged edits across workspace toggles, and preserves the queue across shell tiers", async () => {
+    it("shows the staged-parameter bottom menu only in setup while preserving the queue across workspace toggles", async () => {
         const { viewport } = await renderShellAt(1440, {
             snapshot: createConnectedLiveSnapshot({
                 param_store: {
@@ -918,8 +917,8 @@ describe("AppShell", () => {
 
         expect(screen.getByTestId(appShellTestIds.parameterReviewTray)).toBeTruthy();
         expect(screen.getByTestId(appShellTestIds.parameterReviewState).textContent?.trim()).toBe("closed");
-        expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 queued");
-        expect(screen.getByTestId(appShellTestIds.parameterWorkspacePendingCount).textContent?.trim()).toBe("2");
+        expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 parameters staged");
+        expect(screen.queryByTestId(appShellTestIds.parameterWorkspacePendingCount)).toBeNull();
 
         await fireEvent.click(screen.getByTestId(appShellTestIds.parameterReviewToggle));
         await waitFor(() => {
@@ -935,14 +934,8 @@ describe("AppShell", () => {
         });
 
         expect(screen.getByTestId(appShellTestIds.operatorWorkspace)).toBeTruthy();
-        expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 queued");
+        expect(screen.queryByTestId(appShellTestIds.parameterReviewTray)).toBeNull();
         expect(screen.queryByTestId(parameterWorkspaceTestIds.root)).toBeNull();
-        expect(
-            screen
-                .getByTestId(appShellTestIds.mainViewport)
-                .closest("[data-has-staged-edits]")
-                ?.getAttribute("data-has-staged-edits"),
-        ).toBe("true");
 
         await openSetupFullParameters();
 
@@ -960,9 +953,9 @@ describe("AppShell", () => {
         });
 
         expect(screen.getAllByTestId(appShellTestIds.parameterReviewTray)).toHaveLength(1);
-        expect(screen.getByTestId(appShellTestIds.parameterReviewTray).getAttribute("data-surface-kind")).toBe("sheet");
-        expect(screen.getByTestId(appShellTestIds.parameterReviewState).textContent?.trim()).toBe("open");
-        expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 queued");
+        expect(screen.getByTestId(appShellTestIds.parameterReviewTray).getAttribute("data-surface-kind")).toBe("setup-bottom-menu");
+        expect(screen.getByTestId(appShellTestIds.parameterReviewState).textContent?.trim()).toBe("closed");
+        expect(screen.getByTestId(appShellTestIds.parameterReviewCount).textContent).toContain("2 parameters staged");
     });
 
     it("closes the review tray when staged edits drop to zero", async () => {

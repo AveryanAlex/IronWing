@@ -11,16 +11,13 @@ type ConnectionTone = "neutral" | "positive" | "caution" | "critical";
 type ShellTabItem = {
   key: AppShellWorkspace;
   label: string;
-  badge?: string;
   testId?: string;
-  badgeTestId?: string;
   icon?: Snippet;
 };
 
 type Props = {
   workspaces?: ReadonlyArray<{ key: AppShellWorkspace; label: string }>;
   activeWorkspace?: AppShellWorkspace;
-  stagedCount?: number;
   onSelectWorkspace?: (workspace: AppShellWorkspace) => void;
   framework?: string;
   bootstrapState?: "booting" | "ready" | "failed";
@@ -40,7 +37,6 @@ type Props = {
 let {
   workspaces = [],
   activeWorkspace = "overview",
-  stagedCount = 0,
   onSelectWorkspace = () => {},
   framework = "Svelte 5",
   bootstrapState = "booting",
@@ -99,10 +95,6 @@ let tabItems = $derived(
       item.testId = appShellTestIds.overviewWorkspaceButton;
     } else if (workspace.key === "setup") {
       item.testId = appShellTestIds.parameterWorkspaceButton;
-      if (stagedCount > 0) {
-        item.badge = String(stagedCount);
-        item.badgeTestId = appShellTestIds.parameterWorkspacePendingCount;
-      }
     }
 
     return item;
@@ -222,9 +214,6 @@ function mobileWorkspaceLabel(tab: ShellTabItem): string {
             <span class="app-shell-phone-nav__icon" aria-hidden="true">{@render tab.icon()}</span>
           {/if}
           <span class="app-shell-phone-nav__label">{mobileWorkspaceLabel(tab)}</span>
-          {#if tab.badge}
-            <span class="app-shell-phone-nav__badge" data-testid={tab.badgeTestId}>{tab.badge}</span>
-          {/if}
         </button>
       {/each}
     </nav>

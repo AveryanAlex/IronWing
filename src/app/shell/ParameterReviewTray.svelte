@@ -1,208 +1,185 @@
 <script lang="ts">
+import { ChevronDown, RotateCw, Trash2, Upload, X } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../lib/replay-readonly";
 import { appShellTestIds } from "./chrome-state";
-import {
-  getParamsStoreContext,
-  getParameterWorkspaceViewStoreContext,
-  getShellChromeStoreContext,
-} from "./runtime-context";
-
-type Props = {
-  open?: boolean;
-  onToggle?: () => void;
-};
+import { getParamsStoreContext, getParameterWorkspaceViewStoreContext } from "./runtime-context";
 
 const store = getParamsStoreContext();
-const chrome = fromStore(getShellChromeStoreContext());
 const parameterView = fromStore(getParameterWorkspaceViewStoreContext());
 
-let { open = false, onToggle = () => {} }: Props = $props();
+let expanded = $state(false);
 
 let view = $derived(parameterView.current);
-let surface = $derived(chrome.current.tier === "phone" ? "sheet" : "tray");
 let hasRebootFlaggedEdit = $derived(view.stagedEdits.some((edit) => edit.rebootRequired));
 let isApplying = $derived(view.applyPhase === "applying");
 let replayReadonly = $derived(isReplayReadonly(view.activeEnvelope?.source_kind ?? null));
 
-function applyQueuedEdits() {
-  if (!open) {
-    onToggle();
+async function applyQueuedEdits() {
+  await store.applyStagedEdits();
+  if (parameterView.current.stagedCount === 0) {
+    expanded = false;
   }
-
-  void store.applyStagedEdits();
 }
 
 function retryEdit(name: string) {
   void store.applyStagedEdits([name]);
 }
+
+function discardQueuedEdit(name: string) {
+  if (view.stagedCount <= 1) {
+    expanded = false;
+  }
+
+  store.discardStagedEdit(name);
+}
+
+function discardAllQueuedEdits() {
+  expanded = false;
+  store.clearStagedEdits();
+}
 </script>
 
 {#if view.stagedCount > 0}
   <section
-    class={`pointer-events-auto fixed inset-x-0 bottom-0 z-30 px-3 pb-3 sm:px-4 ${surface === "sheet" ? "" : "md:left-auto md:right-6 md:max-w-2xl"}`}
-    data-surface-kind={surface}
+    class="shrink-0 border-t border-warning/30 bg-warning/5"
+    data-surface-kind="setup-bottom-menu"
     data-testid={appShellTestIds.parameterReviewTray}
   >
-    <div class="mx-auto max-w-5xl rounded-lg border border-border bg-bg-secondary/95 shadow-xl backdrop-blur">
-      <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
-        <div class="min-w-0">
-          <p class="runtime-eyebrow">Parameter changes</p>
-          <div class="mt-1 flex flex-wrap items-center gap-2">
-            <h2 class="text-base font-semibold text-text-primary sm:text-lg">
-              {view.stagedCount} pending change{view.stagedCount === 1 ? "" : "s"}
-            </h2>
-            <span
-              class="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-accent"
-              data-testid={appShellTestIds.parameterReviewCount}
-            >
-              {view.stagedCount} queued
-            </span>
-            {#if hasRebootFlaggedEdit}
-              <span class="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-warning">
-                reboot needed
-              </span>
-            {/if}
-            {#if view.hasRetainedFailures}
-              <span class="rounded-full border border-danger/40 bg-danger/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-danger">
-                retained failures
-              </span>
-            {/if}
-          </div>
-          <p class="mt-1 text-sm text-text-secondary" data-testid={appShellTestIds.parameterReviewSummary}>
-            {view.applySummaryText ?? "Review your staged parameter edits before applying them."}
-          </p>
-          {#if view.applyProgressText}
-            <p class="mt-1 text-xs font-semibold uppercase tracking-wide text-text-muted" data-testid={appShellTestIds.parameterReviewProgress}>
-              {view.applyProgressText}
-            </p>
+    <button
+      aria-expanded={expanded}
+      class="flex w-full items-center gap-2 border-none bg-transparent px-3 py-2 text-left text-xs text-warning transition-colors hover:bg-warning/10"
+      data-testid={appShellTestIds.parameterReviewToggle}
+      onclick={() => (expanded = !expanded)}
+      type="button"
+    >
+      <ChevronDown
+        aria-hidden="true"
+        class={`shrink-0 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+        size={12}
+      />
+      <span class="font-medium" data-testid={appShellTestIds.parameterReviewCount}>
+        {view.stagedCount} parameter{view.stagedCount === 1 ? "" : "s"} staged
+      </span>
+      {#if hasRebootFlaggedEdit}
+        <RotateCw aria-hidden="true" class="shrink-0 text-warning/70" size={10} />
+      {/if}
+      <span class="ml-auto text-[11px] text-text-muted">{expanded ? "Collapse" : "Expand"}</span>
+    </button>
+
+    <span class="sr-only" data-testid={appShellTestIds.parameterReviewState}>{expanded ? "open" : "closed"}</span>
+
+    <div
+      aria-hidden={!expanded}
+      class={`grid transition-[grid-template-rows] duration-200 ease-out ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+      data-testid={appShellTestIds.parameterReviewSurface}
+    >
+      <div class="min-h-0 overflow-hidden">
+        <div class="px-3 pb-3 pt-1">
+          {#if hasRebootFlaggedEdit}
+            <div class="mb-2 flex items-center gap-1.5 rounded bg-warning/10 px-2 py-1 text-[10px] text-warning">
+              <RotateCw aria-hidden="true" class="shrink-0" size={10} />
+              Some changes require a vehicle reboot to take effect
+            </div>
           {/if}
           {#if view.noticeText}
-            <p class="mt-2 text-sm text-warning" data-testid={appShellTestIds.parameterReviewWarning}>
+            <p class="mb-2 text-xs text-warning" data-testid={appShellTestIds.parameterReviewWarning}>
               {view.noticeText}
             </p>
           {/if}
           {#if replayReadonly}
-            <p class="mt-2 text-sm text-warning" data-testid={appShellTestIds.parameterReviewReplayReadonly}>
+            <p class="mb-2 text-xs text-warning" data-testid={appShellTestIds.parameterReviewReplayReadonly}>
               <span class="font-semibold">{REPLAY_READONLY_TITLE}</span> · {REPLAY_READONLY_COPY}
             </p>
           {/if}
-        </div>
+          {#if view.applyProgressText}
+            <p class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted" data-testid={appShellTestIds.parameterReviewProgress}>
+              {view.applyProgressText}
+            </p>
+          {/if}
 
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="text-xs font-semibold uppercase tracking-wide text-text-muted" data-testid={appShellTestIds.parameterReviewState}>
-            {open ? "open" : "closed"}
-          </span>
-          <button
-            class="rounded-md border border-accent/30 bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            data-testid={appShellTestIds.parameterReviewApply}
-            disabled={isApplying || replayReadonly}
-            onclick={applyQueuedEdits}
-            type="button"
-          >
-            {view.applyButtonText}
-          </button>
-          <button
-            class="rounded-md border border-border bg-bg-primary/70 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-border-light"
-            data-testid={appShellTestIds.parameterReviewToggle}
-            onclick={onToggle}
-            type="button"
-          >
-            {open ? "Hide changes" : "Review changes"}
-          </button>
-          <button
-            class="rounded-md border border-border bg-bg-primary/70 px-4 py-2 text-sm font-semibold text-text-secondary transition hover:border-danger/40 hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
-            data-testid={appShellTestIds.parameterReviewClear}
-            disabled={isApplying}
-            onclick={() => store.clearStagedEdits()}
-            type="button"
-          >
-            Clear all
-          </button>
-        </div>
-      </div>
-
-      {#if open}
-        <div
-          class={`border-t border-border/80 px-4 py-3 sm:px-5 ${surface === "sheet" ? "max-h-[60vh] overflow-y-auto" : "max-h-[22rem] overflow-y-auto"}`}
-          data-testid={appShellTestIds.parameterReviewSurface}
-        >
-          <div class="space-y-3">
+          <div class="mb-2 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
             {#each view.stagedEdits as edit (edit.name)}
-              <article
-                class={`flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border px-4 py-2 ${edit.failureMessage ? "border-danger/50 bg-danger/10" : "border-border bg-bg-primary/80"}`}
+              <div
+                class="flex items-center gap-2 text-[11px] font-mono"
                 data-param-name={edit.name}
                 data-testid={`${appShellTestIds.parameterReviewRowPrefix}-${edit.name}`}
               >
-                <div class="flex flex-wrap items-center gap-4">
-                  <div class="min-w-0 max-w-52 truncate">
-                    <p class="truncate text-sm font-semibold text-text-primary" title={edit.label}>{edit.label}</p>
-                    <p class="truncate font-mono text-xs text-text-muted" title={edit.rawName}>{edit.rawName}</p>
-                  </div>
-
-                  <div class="flex items-center gap-2 text-sm text-text-secondary">
-                    <span class="rounded bg-bg-secondary/70 px-2 py-0.5 font-mono text-xs text-text-muted">
-                      {edit.currentValueText}{edit.units ? ` ${edit.units}` : ""}
-                    </span>
-                    <span class="text-text-muted">→</span>
-                    <span class="rounded bg-accent/10 px-2 py-0.5 font-mono text-xs font-semibold text-accent">
-                      {edit.nextValueText}{edit.units ? ` ${edit.units}` : ""}
-                    </span>
-                  </div>
-                </div>
-
-                <div class="flex items-center gap-2 ml-auto">
-                  {#if edit.rebootRequired}
-                    <span class="rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-warning">
-                      reboot required
-                    </span>
+                <span class="w-56 truncate text-text-primary sm:w-72" title={`${edit.label} (${edit.rawName})`}>
+                  {edit.label}
+                  {#if edit.label !== edit.rawName}
+                    <span class="font-mono text-text-muted">({edit.rawName})</span>
                   {/if}
-                  {#if edit.isWriting}
-                    <span class="rounded-md border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-accent">
-                      writing
-                    </span>
-                  {/if}
-                  {#if edit.failureMessage}
-                    <button
-                      class="rounded-md border border-accent/30 bg-accent/10 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-accent transition hover:bg-accent/20 disabled:opacity-60"
-                      data-testid={`${appShellTestIds.parameterReviewRetryPrefix}-${edit.name}`}
-                      disabled={isApplying || replayReadonly}
-                      onclick={() => retryEdit(edit.name)}
-                      type="button"
-                    >
-                      Retry
-                    </button>
-                  {/if}
+                </span>
+                <span class="text-text-muted">{edit.currentDisplayText}</span>
+                <span class="text-text-muted">→</span>
+                <span class="font-semibold text-warning">{edit.nextDisplayText}</span>
+                {#if edit.rebootRequired}
+                  <RotateCw aria-label="reboot required" class="shrink-0 text-warning" size={8} />
+                  <span class="sr-only">reboot required</span>
+                {/if}
+                {#if edit.isWriting}
+                  <span class="text-accent">writing</span>
+                {/if}
+                {#if edit.failureMessage}
                   <button
-                    class="rounded-md border border-border bg-bg-secondary/80 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-text-secondary transition hover:border-danger/40 hover:text-danger disabled:opacity-60"
-                    data-testid={`${appShellTestIds.parameterReviewDiscardPrefix}-${edit.name}`}
-                    disabled={isApplying}
-                    onclick={() => store.discardStagedEdit(edit.name)}
+                    class="ml-auto rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent transition hover:bg-accent/10 disabled:opacity-60"
+                    data-testid={`${appShellTestIds.parameterReviewRetryPrefix}-${edit.name}`}
+                    disabled={isApplying || replayReadonly}
+                    onclick={() => retryEdit(edit.name)}
                     type="button"
                   >
-                    Discard
+                    Retry
                   </button>
-                </div>
-
+                {/if}
+                <button
+                  aria-label={`Discard ${edit.rawName}`}
+                  class={edit.failureMessage ? "p-0.5 text-text-muted transition hover:text-danger disabled:opacity-60" : "ml-auto p-0.5 text-text-muted transition hover:text-danger disabled:opacity-60"}
+                  data-testid={`${appShellTestIds.parameterReviewDiscardPrefix}-${edit.name}`}
+                  disabled={isApplying}
+                  onclick={() => discardQueuedEdit(edit.name)}
+                  title="Discard"
+                  type="button"
+                >
+                  <X aria-hidden="true" size={10} />
+                </button>
                 {#if edit.failureMessage}
-                  <div
-                    class="w-full mt-1 text-xs text-danger"
+                  <span
+                    class="text-danger"
                     data-testid={`${appShellTestIds.parameterReviewFailurePrefix}-${edit.name}`}
                   >
-                    <span class="font-semibold">{edit.failureMessage}</span>
-                    {#if edit.confirmedValueText}
-                      <span class="ml-2 uppercase tracking-wide opacity-80">
-                        confirmed: {edit.confirmedValueText}{edit.units ? ` ${edit.units}` : ""}
-                      </span>
-                    {/if}
-                  </div>
+                    {edit.failureMessage}{edit.confirmedValueText ? ` · confirmed: ${edit.confirmedValueText}${edit.units ? ` ${edit.units}` : ""}` : ""}
+                  </span>
                 {/if}
-              </article>
+              </div>
             {/each}
           </div>
+
+          <div class="flex items-center gap-2">
+            <button
+              class="flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-xs font-medium text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              data-testid={appShellTestIds.parameterReviewApply}
+              disabled={isApplying || replayReadonly}
+              onclick={applyQueuedEdits}
+              type="button"
+            >
+              <Upload aria-hidden="true" class={isApplying ? "animate-pulse" : ""} size={12} />
+              {isApplying ? "Applying..." : "Apply all"}
+            </button>
+            <button
+              class="flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-xs font-medium text-text-primary transition hover:border-border-light disabled:cursor-not-allowed disabled:opacity-40"
+              data-testid={appShellTestIds.parameterReviewClear}
+              disabled={isApplying}
+              onclick={discardAllQueuedEdits}
+              type="button"
+            >
+              <Trash2 aria-hidden="true" size={12} />
+              Discard all
+            </button>
+          </div>
         </div>
-      {/if}
+      </div>
     </div>
   </section>
 {/if}

@@ -24,13 +24,11 @@ import AppShellHeader from "./AppShellHeader.svelte";
 import { appShellWorkspaces, createAppShellController } from "./app-shell-controller";
 import { appShellTestIds } from "./chrome-state";
 import OperatorWorkspace from "./OperatorWorkspace.svelte";
-import ParameterReviewTray from "./ParameterReviewTray.svelte";
 import TelemetrySettingsDialog from "./TelemetrySettingsDialog.svelte";
 import {
   getFirmwareWorkspaceContext,
   getLiveSettingsStoreContext,
   getMissionPlannerStoreContext,
-  getParameterWorkspaceViewStoreContext,
   getParamsStoreContext,
   getRuntimeStoreContext,
   getSessionStoreContext,
@@ -48,20 +46,16 @@ const missionPlannerStore = getMissionPlannerStoreContext();
 const runtimeStore = getRuntimeStoreContext();
 const chromeStore = getShellChromeStoreContext();
 const sessionViewStore = getSessionViewStoreContext();
-const parameterViewStore = getParameterWorkspaceViewStoreContext();
 const firmwareWorkspace = getFirmwareWorkspaceContext();
 
 const controller = createAppShellController({
   sessionStore,
   parameterStore,
   chromeStore,
-  parameterViewStore,
 });
 
 const activeWorkspaceStore = fromStore(controller.activeWorkspace);
 const vehiclePanelOpenStore = fromStore(controller.vehiclePanelOpen);
-const parameterReviewOpenStore = fromStore(controller.parameterReviewOpen);
-const stagedCountStore = fromStore(controller.stagedCount);
 const activeEnvelopeTextStore = fromStore(controller.activeEnvelopeText);
 const drawerStateStore = fromStore(controller.drawerState);
 const showVehiclePanelButtonStore = fromStore(controller.showVehiclePanelButton);
@@ -82,8 +76,6 @@ setTelemetrySettingsDialogLauncherContext({
 
 let activeWorkspace = $derived(activeWorkspaceStore.current);
 let vehiclePanelOpen = $derived(vehiclePanelOpenStore.current);
-let parameterReviewOpen = $derived(parameterReviewOpenStore.current);
-let stagedCount = $derived(stagedCountStore.current);
 let activeEnvelopeText = $derived(activeEnvelopeTextStore.current);
 let drawerState: "open" | "closed" | "docked" = $derived(drawerStateStore.current as "open" | "closed" | "docked");
 let showVehiclePanelButton = $derived(showVehiclePanelButtonStore.current);
@@ -238,8 +230,7 @@ async function handleLogsMapHandoff(
   data-testid={runtimeTestIds.shell}
 >
   <section
-    class={`runtime-shell__content app-shell-frame ${stagedCount > 0 ? "pb-36 sm:pb-40" : ""}`}
-    data-has-staged-edits={stagedCount > 0 ? "true" : "false"}
+    class="runtime-shell__content app-shell-frame"
     data-shell-tier={$chromeStore.tier}
   >
     <AppShellHeader
@@ -256,7 +247,6 @@ async function handleLogsMapHandoff(
       onSelectWorkspace={controller.showWorkspace}
       connectionTone={connectionTone}
       showVehiclePanelButton={showVehiclePanelButton}
-      stagedCount={stagedCount}
       tier={$chromeStore.tier}
       vehiclePanelOpen={vehiclePanelOpen}
       workspaces={appShellWorkspaces}
@@ -318,8 +308,6 @@ async function handleLogsMapHandoff(
       </section>
     </div>
   </section>
-
-  <ParameterReviewTray onToggle={controller.toggleParameterReview} open={parameterReviewOpen} />
 
   <VehiclePanelDrawer
     onClose={controller.closeVehiclePanel}
