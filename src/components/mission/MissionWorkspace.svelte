@@ -668,6 +668,8 @@ function dismissPrompt() {
   <MissionWorkspaceHeader
     attachment={view.attachment}
     busy={view.inlineStatus.busy}
+    uploaded={view.uploaded}
+    uploading={view.phase === "uploading"}
     canCancel={view.inlineStatus.canCancel}
     canRedo={view.canRedo}
     canUndo={view.canUndo}

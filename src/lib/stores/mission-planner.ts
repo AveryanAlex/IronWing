@@ -366,6 +366,8 @@ export type MissionPlannerStoreState = {
   validationIssues: MissionIssue[];
   fileWarnings: string[];
   lastError: string | null;
+  lastUploadedWorkspace: MissionPlannerWorkspace | null;
+  lastUploadedScopeKey: string | null;
 };
 
 export type MissionPlannerStoreOptions = {
@@ -442,6 +444,8 @@ function createInitialState(initialMode: MissionPlannerMode = "mission"): Missio
     validationIssues: [],
     fileWarnings: [],
     lastError: null,
+    lastUploadedWorkspace: null,
+    lastUploadedScopeKey: null,
   };
 }
 
@@ -2510,6 +2514,8 @@ export function createMissionPlannerStore(
 
     try {
       const latestState = get(store);
+      const uploadedWorkspace = captureActiveWorkspace(latestState);
+      const uploadedScopeKey = latestState.activeEnvelope ? scopedEnvelopeKey(latestState.activeEnvelope) : null;
       await withTimeout(
         service.uploadWorkspace({
           mission: activeTransferMissionPlan(latestState),
@@ -2524,13 +2530,13 @@ export function createMissionPlannerStore(
         return { status: "stale" as const };
       }
 
-      store.update((current) => withResolvedPhase({
+      store.update((current) => withResolvedPhase(markWorkspaceUploaded({
         ...current,
         activeAction: null,
         blockedReason: null,
         blockedMode: null,
         blockedWarningTarget: null,
-      }));
+      }, uploadedWorkspace, uploadedScopeKey)));
       return { status: "success" as const };
     } catch (error) {
       handleActionFailure("upload", pending, error, true);
@@ -2964,6 +2970,66 @@ export function plannerIsDirty(state: MissionPlannerStoreState): boolean {
     || !sameSurvey(state.survey, state.surveySnapshot)
     || state.cruiseSpeed !== state.cruiseSpeedSnapshot
     || state.hoverSpeed !== state.hoverSpeedSnapshot;
+}
+
+export function sameMissionPlannerWorkspace(
+  left: MissionPlannerWorkspace,
+  right: MissionPlannerWorkspace,
+): boolean {
+  return samePlan(left.mission, right.mission)
+    && sameFence(left.fence, right.fence)
+    && sameRally(left.rally, right.rally)
+    && sameHome(left.home, right.home)
+    && sameSurvey(left.survey, right.survey)
+    && left.cruiseSpeed === right.cruiseSpeed
+    && left.hoverSpeed === right.hoverSpeed;
+}
+
+export function plannerUploadSynced(state: MissionPlannerStoreState): boolean {
+  if (!state.lastUploadedWorkspace || !state.lastUploadedScopeKey || !state.activeEnvelope) {
+    return false;
+  }
+
+  return state.lastUploadedScopeKey === scopedEnvelopeKey(state.activeEnvelope)
+    && sameMissionPlannerWorkspace(captureActiveWorkspace(state), state.lastUploadedWorkspace);
+}
+
+function markWorkspaceUploaded(
+  state: MissionPlannerStoreState,
+  uploadedWorkspace: MissionPlannerWorkspace,
+  uploadedScopeKey: string | null,
+): MissionPlannerStoreState {
+  const currentWorkspace = captureActiveWorkspace(state);
+  const currentMatchesUploaded = sameMissionPlannerWorkspace(currentWorkspace, uploadedWorkspace);
+
+  return {
+    ...state,
+    draftState: currentMatchesUploaded
+      ? {
+        ...state.draftState,
+        active: {
+          mission: {
+            ...state.draftState.active.mission,
+            snapshot: cloneValue(state.draftState.active.mission.document),
+          },
+          fence: {
+            ...state.draftState.active.fence,
+            snapshot: cloneValue(state.draftState.active.fence.document),
+          },
+          rally: {
+            ...state.draftState.active.rally,
+            snapshot: cloneValue(state.draftState.active.rally.document),
+          },
+        },
+      }
+      : state.draftState,
+    homeSnapshot: currentMatchesUploaded ? cloneValue(state.home) : state.homeSnapshot,
+    surveySnapshot: currentMatchesUploaded ? cloneValue(state.survey) : state.surveySnapshot,
+    cruiseSpeedSnapshot: currentMatchesUploaded ? state.cruiseSpeed : state.cruiseSpeedSnapshot,
+    hoverSpeedSnapshot: currentMatchesUploaded ? state.hoverSpeed : state.hoverSpeedSnapshot,
+    lastUploadedWorkspace: cloneValue(uploadedWorkspace),
+    lastUploadedScopeKey: uploadedScopeKey,
+  };
 }
 
 export function plannerScopeLabel(state: Pick<MissionPlannerStoreState, "activeEnvelope">): string {

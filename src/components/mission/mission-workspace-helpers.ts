@@ -230,11 +230,7 @@ function busyStatusCopy(
         detail: transferDetail ?? "The current workspace stays mounted while the download completes.",
       };
     case "uploading":
-      return {
-        tone: "info",
-        title: "Uploading planning state to the vehicle",
-        detail: transferDetail ?? "The planner keeps the draft visible while the upload completes.",
-      };
+      return null;
     case "validating":
       return {
         tone: "info",

@@ -2477,6 +2477,53 @@ describe("MissionWorkspace", () => {
     });
   });
 
+  it("turns the upload button into cancel while uploading and marks the uploaded state until the draft changes", async () => {
+    const pendingUpload = deferred<void>();
+    const { plannerStore, plannerHarness } = await renderWorkspace({
+      plannerServiceOverrides: {
+        uploadWorkspace: vi.fn(() => pendingUpload.promise),
+      },
+      setup: ({ plannerStore }) => {
+        plannerStore.replaceWorkspace(makeWorkspace({
+          home: { latitude_deg: 47.5, longitude_deg: 8.6, altitude_m: 500 },
+        }));
+      },
+    });
+
+    const uploadButton = screen.getByTestId(missionWorkspaceTestIds.toolbarUpload) as HTMLButtonElement;
+    await fireEvent.click(uploadButton);
+
+    await waitFor(() => {
+      expect(plannerHarness.service.uploadWorkspace).toHaveBeenCalledTimes(1);
+      expect(uploadButton.textContent).toContain("Cancel");
+      expect(uploadButton.getAttribute("aria-label")).toBe("Cancel upload");
+      expect(uploadButton.getAttribute("data-tone")).toBe("warning");
+      expect(screen.queryByTestId(missionWorkspaceTestIds.inlineStatus)).toBeNull();
+      expect(screen.queryByTestId(missionWorkspaceTestIds.toolbarCancel)).toBeNull();
+    });
+
+    await fireEvent.click(uploadButton);
+    expect(plannerHarness.service.cancelTransfer).toHaveBeenCalledTimes(1);
+    pendingUpload.resolve();
+    await flush();
+
+    await fireEvent.click(uploadButton);
+
+    await waitFor(() => {
+      expect(uploadButton.textContent).toContain("Uploaded");
+      expect(uploadButton.getAttribute("aria-label")).toBe("Uploaded to vehicle");
+      expect(uploadButton.getAttribute("data-tone")).toBe("success");
+    });
+
+    plannerStore.addMissionItem();
+
+    await waitFor(() => {
+      expect(uploadButton.textContent).toContain("Upload");
+      expect(uploadButton.getAttribute("aria-label")).toBe("Upload to vehicle");
+      expect(uploadButton.getAttribute("data-tone")).toBe("accent");
+    });
+  });
+
   it("shows a same-scope recoverable-draft prompt when returning to a scope and restores it explicitly", async () => {
     const { plannerStore, sessionStore } = await renderWorkspace({
       snapshots: [
