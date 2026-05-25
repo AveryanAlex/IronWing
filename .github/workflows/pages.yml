@@ -39,6 +39,12 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+
       - name: Install wasm-pack
         run: cargo install wasm-pack --locked
 
