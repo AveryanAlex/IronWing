@@ -1671,7 +1671,7 @@ describe("MissionWorkspace", () => {
     });
   });
 
-  it("draws survey regions directly on the blank planner surface and cancels unfinished map sessions safely", async () => {
+  it("creates surveys from the waypoint panel and keeps map geometry edit sessions scoped", async () => {
     const { plannerStore } = await renderWorkspace({
       setup: ({ plannerStore }) => {
         plannerStore.replaceWorkspace(makeWorkspace({
@@ -1687,7 +1687,7 @@ describe("MissionWorkspace", () => {
 
     setMissionMapSurfaceRect();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawStartGrid));
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyGrid));
     await waitFor(() => {
       expect(get(plannerStore).selection.kind).toBe("survey-block");
       expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(1);
@@ -1696,16 +1696,15 @@ describe("MissionWorkspace", () => {
     const gridRegionId = get(plannerStore).survey.surveyRegionOrder[0]?.regionId ?? "";
     expect(gridRegionId).not.toBe("");
 
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawEdit));
     let drawSurface = screen.getByRole("button", { name: /add survey point on planner map/i });
     await fireEvent.click(drawSurface, { clientX: 160, clientY: 440 });
-    await fireEvent.click(drawSurface, { clientX: 700, clientY: 420 });
-    await fireEvent.click(drawSurface, { clientX: 620, clientY: 180 });
 
     await waitFor(() => {
       const region = get(plannerStore).survey.surveyRegions.get(gridRegionId);
-      expect(region?.polygon).toHaveLength(3);
-      expect(readMissionMapDebug().drawMode).toBe("draw");
-      expect(readMissionMapDebug().drawPointCount).toBe(3);
+      expect(region?.polygon).toHaveLength(5);
+      expect(readMissionMapDebug().drawMode).toBe("edit");
+      expect(readMissionMapDebug().drawPointCount).toBe(5);
     });
 
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawFinish));
@@ -1715,19 +1714,21 @@ describe("MissionWorkspace", () => {
       expect(get(plannerStore).selection).toEqual({ kind: "survey-block", regionId: gridRegionId });
     });
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawStartCorridor));
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyCorridor));
     await waitFor(() => {
       expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(2);
     });
 
     const corridorRegionId = get(plannerStore).survey.surveyRegionOrder[1]?.regionId ?? "";
+    const originalCorridorPointCount = get(plannerStore).survey.surveyRegions.get(corridorRegionId)?.polyline.length ?? 0;
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawEdit));
     drawSurface = screen.getByRole("button", { name: /add survey point on planner map/i });
     await fireEvent.click(drawSurface, { clientX: 280, clientY: 260 });
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawCancel));
 
     await waitFor(() => {
-      expect(get(plannerStore).survey.surveyRegions.has(corridorRegionId)).toBe(false);
-      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(1);
+      expect(get(plannerStore).survey.surveyRegions.get(corridorRegionId)?.polyline).toHaveLength(originalCorridorPointCount);
+      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(2);
       expect(readMissionMapDebug().drawMode).toBe("idle");
     });
   });
@@ -1965,7 +1966,7 @@ describe("MissionWorkspace", () => {
     await selectMissionMode("fence");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.fenceList)).toBeTruthy();
-      expect(screen.getByTestId(missionWorkspaceTestIds.mapFenceCount).textContent).toContain("3");
+      expect(readMissionMapDebug().counts.fenceFeatures).toBe(3);
     });
 
     setMissionMapSurfaceRect();
@@ -2103,7 +2104,7 @@ describe("MissionWorkspace", () => {
     await selectMissionMode("rally");
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
-      expect(screen.getByTestId(missionWorkspaceTestIds.mapRallyCount).textContent).toContain("2");
+      expect(readMissionMapDebug().rallyMarkerCount).toBe(2);
     });
     expect(screen.getByTestId(missionWorkspaceTestIds.homeDocsLink)).toBeTruthy();
 
@@ -2608,26 +2609,28 @@ describe("MissionWorkspace", () => {
 
     setMissionMapSurfaceRect();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawStartGrid));
-    await waitFor(() => {
-      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(1);
-      expect(readMissionMapDebug().drawMode).toBe("draw");
-    });
-
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyGrid));
     const regionId = get(plannerStore).survey.surveyRegionOrder[0]?.regionId ?? "";
     expect(regionId).not.toBe("");
+    const originalPointCount = get(plannerStore).survey.surveyRegions.get(regionId)?.polygon.length ?? 0;
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.mapDrawEdit));
+    await waitFor(() => {
+      expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(1);
+      expect(readMissionMapDebug().drawMode).toBe("edit");
+    });
 
     const drawSurface = screen.getByRole("button", { name: /add survey point on planner map/i });
     await fireEvent.click(drawSurface, { clientX: 160, clientY: 440 });
 
     await waitFor(() => {
-      expect(readMissionMapDebug().drawPointCount).toBe(1);
+      expect(readMissionMapDebug().drawPointCount).toBe(originalPointCount + 1);
     });
 
     await fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => {
       expect(readMissionMapDebug().drawMode).toBe("idle");
-      expect(get(plannerStore).survey.surveyRegions.has(regionId)).toBe(false);
+      expect(get(plannerStore).survey.surveyRegions.get(regionId)?.polygon).toHaveLength(originalPointCount);
     });
   });
 

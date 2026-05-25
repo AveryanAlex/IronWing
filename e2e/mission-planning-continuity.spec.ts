@@ -276,7 +276,7 @@ async function addAndEditRallyPoint(page: Page, history: string[]) {
     await expect(missionWorkspaceLocator(page, "rallyList")).toBeVisible();
     await clickMissionControl(page, "rallyAdd");
     await expect(missionWorkspaceLocator(page, "countsRally")).toContainText("1");
-    await expect(missionWorkspaceLocator(page, "mapRallyCount")).toContainText("1");
+    await expect.poll(async () => (await requireMissionMapDebugSnapshot(page, "confirming the active rally marker count")).rallyMarkerCount).toBe(1);
 
     const firstRallyPoint = firstRallyPointLocator(page);
     await expect(firstRallyPoint, historyMessage(history, "Rally mode never rendered the newly added rally point card.")).toBeVisible();
@@ -372,7 +372,7 @@ async function proveFenceContinuity(page: Page, history: string[]) {
     note(history, "Enter Fence mode, recast the imported polygon into a circle, force one blocked radius edit, then settle on a valid radius so recovery can stay on one undo step.");
     await clickMissionControl(page, "modeFence");
     await expect(missionWorkspaceLocator(page, "fenceList")).toBeVisible();
-    await expect(missionWorkspaceLocator(page, "mapFenceCount")).toContainText("1");
+    await expect.poll(async () => (await requireMissionMapDebugSnapshot(page, "confirming the active fence feature count")).counts.fenceFeatures).toBe(1);
 
     const firstFenceRegion = firstFenceRegionLocator(page);
     await expect(firstFenceRegion, historyMessage(history, "Fence mode never rendered the imported KML fence region card.")).toBeVisible();
@@ -751,7 +751,7 @@ test.describe("mocked mission planning continuity", () => {
             note(history, "Return to Rally mode once more so the final diagnostics prove the kept current rally point survived both textual and binary continuity imports.");
             await clickMissionControl(page, "modeRally");
             await expect(missionWorkspaceLocator(page, "rallyList")).toBeVisible();
-            await expect(missionWorkspaceLocator(page, "mapRallyCount")).toContainText("1");
+            await expect.poll(async () => (await requireMissionMapDebugSnapshot(page, `${preset} final rally marker count`)).rallyMarkerCount).toBe(1);
             const finalSnapshot = await requireMissionMapDebugSnapshot(page, `${preset} final continuity snapshot`);
             expect(finalSnapshot.mode, historyMessage(history, `The ${preset} flow lost Rally mode before the final diagnostic snapshot.`)).toBe("rally");
             expect(finalSnapshot.rallyMarkerCount, historyMessage(history, `The ${preset} flow lost the preserved rally marker count after the KMZ reattach.`)).toBe(1);

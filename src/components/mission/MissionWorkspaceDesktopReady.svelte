@@ -39,7 +39,6 @@ let showRallyEditor = $derived(context.view.mode === "rally");
               fillContainer
               homePosition={context.sessionHomePosition}
               onAddWaypointAt={actions.onAddWaypointAt}
-              onCreateSurveyRegion={actions.onStartSurveyDraw}
               onDeleteSurveyRegion={actions.onDeleteSurveyRegion}
               onMoveHome={actions.onMoveHomeFromMap}
               onMoveMissionItem={actions.onMoveMissionItemFromMap}
@@ -71,7 +70,6 @@ let showRallyEditor = $derived(context.view.mode === "rally");
               homePosition={context.sessionHomePosition}
               onAddFenceRegion={actions.onAddFenceRegion}
               onClearFenceReturnPoint={() => actions.onSetFenceReturnPoint(null)}
-              onCreateSurveyRegion={actions.onStartSurveyDraw}
               onDeleteSurveyRegion={actions.onDeleteSurveyRegion}
               onMoveFenceCircleCenter={actions.onMoveFenceCircleCenterFromMap}
               onMoveFenceVertex={actions.onMoveFenceVertexFromMap}
@@ -102,7 +100,6 @@ let showRallyEditor = $derived(context.view.mode === "rally");
               fallbackReference={resolveSurveyCreationAnchor(context.planner)}
               fillContainer
               homePosition={context.sessionHomePosition}
-              onCreateSurveyRegion={actions.onStartSurveyDraw}
               onDeleteSurveyRegion={actions.onDeleteSurveyRegion}
               onMoveHome={actions.onMoveHomeFromMap}
               onMoveMissionItem={actions.onMoveMissionItemFromMap}

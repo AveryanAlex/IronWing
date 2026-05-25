@@ -14,7 +14,13 @@ import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
 export function cloneSurveyRegionSnapshot(region: SurveyRegion): SurveyRegion {
   if (typeof structuredClone === "function") {
-    return structuredClone(region);
+    try {
+      return structuredClone(region);
+    } catch {
+      // Svelte can hand this helper proxied survey regions during component-side
+      // edit sessions. Fall back to the explicit clone below so cancelling a map
+      // edit never fails just because the browser clone algorithm rejects a proxy.
+    }
   }
 
   return {

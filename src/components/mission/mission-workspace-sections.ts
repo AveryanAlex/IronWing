@@ -72,7 +72,6 @@ export type MissionWorkspaceActions = {
   onSetHomeAt: (latitudeDeg: number, longitudeDeg: number) => void;
   onMoveHomeFromMap: (latitudeDeg: number, longitudeDeg: number) => MissionPlannerMapMoveResult;
   onCreateSurveyBlock: (patternType: SurveyPatternType) => string;
-  onStartSurveyDraw: (patternType: SurveyPatternType) => string;
   onDeleteSurveyRegion: (regionId: string) => void;
   onGenerateSurveyRegion: (regionId: string) => Promise<unknown> | unknown;
   onPromptDissolveSurveyRegion: (regionId: string) => void;

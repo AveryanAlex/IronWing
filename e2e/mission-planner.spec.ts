@@ -125,7 +125,10 @@ test.describe("mocked mission planner workflow", () => {
         await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("2");
         await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
         await expect(missionWorkspaceLocator(page, "homeSummary")).toContainText("47.39774");
-        await expect(missionWorkspaceLocator(page, "mapMarkerCount")).toContainText("3");
+        await expect.poll(async () => {
+            const snapshot = await readMissionMapDebugSnapshot(page) as { counts?: { markers?: number } } | null;
+            return snapshot?.counts?.markers ?? 0;
+        }).toBe(3);
         await expectMissionHistoryState(
             page,
             {

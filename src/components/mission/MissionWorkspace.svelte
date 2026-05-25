@@ -314,7 +314,6 @@ const workspaceActions: MissionWorkspaceActions = {
   onSetHomeAt: handleSetHomeAt,
   onMoveHomeFromMap: handleMoveHomeFromMap,
   onCreateSurveyBlock: handleCreateSurveyBlock,
-  onStartSurveyDraw: handleStartSurveyDraw,
   onDeleteSurveyRegion: handleDeleteSurveyRegion,
   onGenerateSurveyRegion: missionPlannerStore.generateSurveyRegion,
   onPromptDissolveSurveyRegion: missionPlannerStore.promptDissolveSurveyRegion,
@@ -484,10 +483,6 @@ function handlePersistPlanningSpeeds(args: { cruiseSpeed?: number; hoverSpeed?: 
 
 function handleCreateSurveyBlock(patternType: SurveyPatternType) {
   return missionPlannerStore.createSurveyBlock(patternType, buildSurveySeedGeometry(patternType, planner));
-}
-
-function handleStartSurveyDraw(patternType: SurveyPatternType) {
-  return missionPlannerStore.createSurveyBlock(patternType, []);
 }
 
 function handleDeleteSurveyRegion(regionId: string) {

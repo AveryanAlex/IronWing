@@ -101,7 +101,6 @@ type Props = {
   onSelectMissionItem: (uiId: number) => void;
   onSelectRallyPoint?: (uiId: number) => MissionPlannerRallyMutationResult | unknown;
   onSelectSurveyRegion: (regionId: string) => void;
-  onCreateSurveyRegion: (patternType: SurveyPatternType) => string;
   onUpdateSurveyRegion: (regionId: string, updater: (region: SurveyRegion) => SurveyRegion) => void;
   onDeleteSurveyRegion: (regionId: string) => void;
   onMoveHome: (latitudeDeg: number, longitudeDeg: number) => MissionPlannerMapMoveResult;
@@ -212,7 +211,6 @@ let {
   onSelectMissionItem,
   onSelectRallyPoint,
   onSelectSurveyRegion,
-  onCreateSurveyRegion,
   onUpdateSurveyRegion,
   onDeleteSurveyRegion,
   onMoveHome,
@@ -832,23 +830,15 @@ function applyRallyMutationResult(result: unknown): boolean {
   return true;
 }
 
-function startSurveyDraw(patternType: SurveyPatternType) {
-  const regionId = onCreateSurveyRegion(patternType);
-  surveySession = {
-    mode: "draw",
-    regionId,
-    patternType,
-    pointCountMinimum: minimumSurveyPointCount(patternType),
-    created: true,
-    restoreRegion: null,
-  };
-  localMessage = {
-    tone: "info",
-    text: `Drawing ${patternType} survey geometry. Click the planner map to add ${patternType === "corridor" ? "centerline points" : "polygon vertices"}.`,
-  };
-}
-
 function startSurveyEdit() {
+  if (readOnly) {
+    localMessage = {
+      tone: "warning",
+      text: "Survey geometry editing is read-only in the current planner attachment state.",
+    };
+    return;
+  }
+
   if (!selectedSurveyRegion) {
     localMessage = {
       tone: "warning",
@@ -1808,7 +1798,6 @@ function stopDeviceLocationWatch() {
     {readOnly}
     fenceHasReturnPoint={view.fenceReturnPoint !== null}
     fencePlacementActive={fencePlacementMode !== null}
-    onStartSurveyDraw={startSurveyDraw}
     onStartSurveyEdit={startSurveyEdit}
     onFinishSurveySession={finishSurveySession}
     onCancelSurveySession={cancelSurveySession}
@@ -1818,9 +1807,6 @@ function stopDeviceLocationWatch() {
   />
 
   <MissionMapStatusPanel
-    mode={view.mode}
-    counts={view.counts}
-    {readOnly}
     {localMessage}
     {diagnostics}
     {debugPayload}

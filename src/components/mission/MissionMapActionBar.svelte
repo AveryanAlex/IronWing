@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { MissionMapView } from "../../lib/mission-map-view";
 import type { FenceRegionType } from "../../lib/mission-draft-typed";
-import type { SurveyPatternType, SurveyRegion } from "../../lib/survey-region";
+import type { SurveyRegion } from "../../lib/survey-region";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
 type FencePlacementMode = FenceRegionType | "return-point";
@@ -13,7 +13,6 @@ type Props = {
   readOnly: boolean;
   fenceHasReturnPoint: boolean;
   fencePlacementActive: boolean;
-  onStartSurveyDraw: (patternType: SurveyPatternType) => void;
   onStartSurveyEdit: () => void;
   onFinishSurveySession: () => void;
   onCancelSurveySession: () => void;
@@ -29,7 +28,6 @@ let {
   readOnly,
   fenceHasReturnPoint,
   fencePlacementActive,
-  onStartSurveyDraw,
   onStartSurveyEdit,
   onFinishSurveySession,
   onCancelSurveySession,
@@ -40,62 +38,39 @@ let {
 </script>
 
 {#if mode === "mission"}
-  <div class="mt-4 flex flex-wrap gap-2">
-    <button
-      class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.mapDrawStartGrid}
-      disabled={surveySessionActive}
-      onclick={() => onStartSurveyDraw("grid")}
-      type="button"
-    >
-      Draw grid
-    </button>
-    <button
-      class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.mapDrawStartCorridor}
-      disabled={surveySessionActive}
-      onclick={() => onStartSurveyDraw("corridor")}
-      type="button"
-    >
-      Draw corridor
-    </button>
-    <button
-      class="rounded-md border border-success/30 bg-success/10 px-4 py-2 text-sm font-semibold text-success transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.mapDrawStartStructure}
-      disabled={surveySessionActive}
-      onclick={() => onStartSurveyDraw("structure")}
-      type="button"
-    >
-      Draw structure
-    </button>
-    <button
-      class="rounded-md border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.mapDrawEdit}
-      disabled={surveySessionActive || !selectedSurveyRegion}
-      onclick={onStartSurveyEdit}
-      type="button"
-    >
-      Edit selected region
-    </button>
-    <button
-      class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.mapDrawFinish}
-      disabled={!surveySessionActive}
-      onclick={onFinishSurveySession}
-      type="button"
-    >
-      Finish
-    </button>
-    <button
-      class="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
-      data-testid={missionWorkspaceTestIds.mapDrawCancel}
-      disabled={!surveySessionActive}
-      onclick={onCancelSurveySession}
-      type="button"
-    >
-      Cancel
-    </button>
-  </div>
+  {#if surveySessionActive || selectedSurveyRegion}
+    <div class="mt-4 flex flex-wrap gap-2">
+      {#if !surveySessionActive && selectedSurveyRegion}
+        <button
+          class="rounded-md border border-accent/40 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+          data-testid={missionWorkspaceTestIds.mapDrawEdit}
+          disabled={readOnly}
+          onclick={onStartSurveyEdit}
+          type="button"
+        >
+          Edit geometry on map
+        </button>
+      {/if}
+      {#if surveySessionActive}
+        <button
+          class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+          data-testid={missionWorkspaceTestIds.mapDrawFinish}
+          onclick={onFinishSurveySession}
+          type="button"
+        >
+          Finish editing
+        </button>
+        <button
+          class="rounded-md border border-warning/40 bg-warning/10 px-4 py-2 text-sm font-semibold text-warning transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+          data-testid={missionWorkspaceTestIds.mapDrawCancel}
+          onclick={onCancelSurveySession}
+          type="button"
+        >
+          Cancel editing
+        </button>
+      {/if}
+    </div>
+  {/if}
 {:else if mode === "fence"}
   <div class="mt-4 flex flex-wrap gap-2">
     <button

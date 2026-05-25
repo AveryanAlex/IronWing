@@ -111,9 +111,9 @@ const surveyCardSelector = [
 ].join("");
 
 const patternButtons: Record<AuthoringPattern, keyof typeof missionWorkspaceSelectors> = {
-    grid: "mapDrawStartGrid",
-    corridor: "mapDrawStartCorridor",
-    structure: "mapDrawStartStructure",
+    grid: "listAddSurveyGrid",
+    corridor: "listAddSurveyCorridor",
+    structure: "listAddSurveyStructure",
 };
 
 const drawPoints: Record<AuthoringPattern, Array<{ x: number; y: number }>> = {
@@ -321,23 +321,37 @@ async function drawSurveyRegion(
 ): Promise<string> {
     const hasPhoneSegments = (await page.locator(`[data-testid="${missionWorkspaceTestIds.phoneSegmentBar}"]`).count()) > 0;
     if (hasPhoneSegments) {
-        note(history, `Switch the phone Mission shell to the map segment before starting ${pattern} drawing.`);
+        note(history, `Keep the phone Mission shell on the plan segment before creating the ${pattern} survey block.`);
+        await selectMissionPhoneSegment(page, "plan");
+    }
+
+    note(history, `Create a seeded ${pattern} survey block from the Waypoints panel, then edit its geometry on the shared map surface.`);
+    const addSurveyBlock = missionWorkspaceLocator(page, patternButtons[pattern]);
+    await addSurveyBlock.scrollIntoViewIfNeeded();
+    await addSurveyBlock.click();
+
+    if (hasPhoneSegments) {
+        note(history, `Switch the phone Mission shell to the map segment before editing ${pattern} geometry.`);
         await selectMissionPhoneSegment(page, "map");
     }
 
-    note(history, `Start ${pattern} drawing on the shared map surface.`);
-    const drawStart = missionWorkspaceLocator(page, patternButtons[pattern]);
-    await drawStart.scrollIntoViewIfNeeded();
-    await drawStart.click();
-    await expect(
-        missionWorkspaceLocator(page, "mapDrawMode"),
-        historyMessage(history, `The planner map never entered ${pattern} draw mode.`),
-    ).toContainText(`draw:${pattern}`);
+    await missionWorkspaceLocator(page, "mapDrawEdit").click();
+    let initialPointCount = 0;
+    await expect.poll(
+        async () => {
+            const snapshot = await requireMissionMapDebugSnapshot(page, `${pattern} edit session readiness`);
+            initialPointCount = snapshot.drawMode === "edit" && snapshot.drawPatternType === pattern ? snapshot.drawPointCount : 0;
+            return initialPointCount;
+        },
+        {
+            message: historyMessage(history, `The planner map never entered ${pattern} edit mode.`),
+        },
+    ).toBeGreaterThan(0);
 
     const drawSurface = missionWorkspaceLocator(page, "mapDrawSurface");
     await expect(
         drawSurface,
-        historyMessage(history, `The ${pattern} draw surface never became visible after entering draw mode.`),
+        historyMessage(history, `The ${pattern} edit surface never became visible after entering map geometry edit mode.`),
     ).toBeVisible();
     await drawSurface.scrollIntoViewIfNeeded();
 
@@ -348,7 +362,7 @@ async function drawSurveyRegion(
             async () => {
                 const drawSurfaceBox = await drawSurface.boundingBox();
                 const snapshot = await requireMissionMapDebugSnapshot(page, `${pattern} draw readiness before point ${index + 1}`);
-                if (!drawSurfaceBox || snapshot.drawMode !== "draw" || snapshot.drawPatternType !== pattern || snapshot.drawRegionId === null) {
+                if (!drawSurfaceBox || snapshot.drawMode !== "edit" || snapshot.drawPatternType !== pattern || snapshot.drawRegionId === null) {
                     previousSignature = null;
                     stableSampleCount = 0;
                     return 0;
@@ -383,7 +397,7 @@ async function drawSurveyRegion(
             {
                 message: historyMessage(history, `The ${pattern} draw session never acknowledged point ${index + 1}.`),
             },
-        ).toBe(index + 1);
+        ).toBe(initialPointCount + index + 1);
     }
 
     await expect.poll(
@@ -391,14 +405,14 @@ async function drawSurveyRegion(
         {
             message: historyMessage(history, `The ${pattern} draw session never reported the expected point count.`),
         },
-    ).toBe(drawPoints[pattern].length);
+    ).toBe(initialPointCount + drawPoints[pattern].length);
 
     note(history, `Finish ${pattern} drawing.`);
     await missionWorkspaceLocator(page, "mapDrawFinish").click();
     await expect(
-        missionWorkspaceLocator(page, "mapDrawMode"),
-        historyMessage(history, `The planner map never returned to idle after finishing ${pattern} drawing.`),
-    ).toContainText("idle");
+        async () => (await requireMissionMapDebugSnapshot(page, `${pattern} finish geometry editing`)).drawMode,
+        { message: historyMessage(history, `The planner map never returned to idle after finishing ${pattern} geometry editing.`) },
+    ).toBe("idle");
     await expect(drawSurface).toHaveCount(0);
 
     const snapshot = await requireMissionMapDebugSnapshot(page, `${pattern} selection after draw`);
