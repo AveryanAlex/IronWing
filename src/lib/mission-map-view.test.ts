@@ -22,7 +22,7 @@ import {
   type MissionItem,
 } from "./mavkit-types";
 import { latLonFromBearingDistance } from "./mission-coordinates";
-import { createSurveyDraftExtension, hydrateSurveyRegion } from "./survey-region";
+import { createSurveyDraftExtension, createSurveyRegion, hydrateSurveyRegion } from "./survey-region";
 
 function makeMissionItem(command: MissionCommand, current = false): MissionItem {
   return {
@@ -225,6 +225,87 @@ describe("buildMissionMapView", () => {
       current: true,
       draggable: true,
     });
+  });
+
+  it("connects manual mission legs to survey entry and exit points without drawing inside surveys", () => {
+    const survey = createSurveyDraftExtension();
+    const region = createSurveyRegion([{ latitude_deg: 47.401, longitude_deg: 8.551 }]);
+    region.generatedItems = [
+      makeMissionItem({
+        Nav: {
+          Waypoint: {
+            position: defaultGeoPoint3d(47.401, 8.551, 50),
+            hold_time_s: 0,
+            acceptance_radius_m: 1,
+            pass_radius_m: 0,
+            yaw_deg: 0,
+          },
+        },
+      }),
+      makeMissionItem({
+        Nav: {
+          Waypoint: {
+            position: defaultGeoPoint3d(47.402, 8.552, 50),
+            hold_time_s: 0,
+            acceptance_radius_m: 1,
+            pass_radius_m: 0,
+            yaw_deg: 0,
+          },
+        },
+      }),
+    ];
+    survey.surveyRegions.set(region.id, region);
+    survey.surveyRegionOrder.push({ regionId: region.id, position: 1 });
+    const secondRegion = createSurveyRegion([{ latitude_deg: 47.405, longitude_deg: 8.555 }]);
+    secondRegion.generatedItems = [
+      makeMissionItem({
+        Nav: {
+          Waypoint: {
+            position: defaultGeoPoint3d(47.405, 8.555, 50),
+            hold_time_s: 0,
+            acceptance_radius_m: 1,
+            pass_radius_m: 0,
+            yaw_deg: 0,
+          },
+        },
+      }),
+      makeMissionItem({
+        Nav: {
+          Waypoint: {
+            position: defaultGeoPoint3d(47.406, 8.556, 50),
+            hold_time_s: 0,
+            acceptance_radius_m: 1,
+            pass_radius_m: 0,
+            yaw_deg: 0,
+          },
+        },
+      }),
+    ];
+    survey.surveyRegions.set(secondRegion.id, secondRegion);
+    survey.surveyRegionOrder.push({ regionId: secondRegion.id, position: 1 });
+
+    const view = buildMissionMapView({
+      home: null,
+      missionItems: [
+        waypoint(0, 11, 47.4, 8.55),
+        waypoint(1, 12, 47.403, 8.553),
+      ],
+      survey,
+      selection: selection(),
+    });
+
+    const routeLines = view.missionGeoJson.features
+      .filter((feature): feature is GeoJSON.Feature<GeoJSON.LineString> => feature.geometry.type === "LineString")
+      .map((feature) => feature.geometry.coordinates);
+
+    expect(routeLines).toEqual([
+      [[8.55, 47.4], [8.551, 47.401]],
+      [[8.552, 47.402], [8.555, 47.405]],
+      [[8.556, 47.406], [8.553, 47.403]],
+    ]);
+    expect(routeLines).not.toContainEqual([[8.55, 47.4], [8.553, 47.403]]);
+    expect(routeLines).not.toContainEqual([[8.551, 47.401], [8.552, 47.402]]);
+    expect(routeLines).not.toContainEqual([[8.555, 47.405], [8.556, 47.406]]);
   });
 
   it("renders survey-only drafts and keeps missing cameras non-fatal", () => {
