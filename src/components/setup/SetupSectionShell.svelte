@@ -36,7 +36,7 @@ let { eyebrow, title, sectionId, description, status, testId, body, actions, doc
 let introTitle = $derived(eyebrow ?? title);
 </script>
 
-<section class="flex flex-col gap-3 p-3 md:gap-4 md:p-5" data-testid={testId}>
+<section class="flex flex-col gap-3 md:gap-4" data-testid={testId}>
   <SetupIntroCard {sectionId} title={introTitle} {description} {actions} {docs} />
   {#if status}
     <Banner severity={status.severity} title={status.title} message={status.message} />

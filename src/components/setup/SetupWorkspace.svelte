@@ -140,7 +140,7 @@ function clearCheckpoint() {
 {/snippet}
 
 {#snippet selectedSectionDetail()}
-  <div class="min-h-0 min-w-0 flex-1 overflow-y-auto p-2" data-testid={setupWorkspaceTestIds.detail}>
+  <div class="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 md:p-5" data-testid={setupWorkspaceTestIds.detail}>
     <span aria-hidden="true" class="sr-only" data-testid={setupWorkspaceTestIds.selectedSection}>
       {view.selectedSectionId}
     </span>
@@ -279,7 +279,7 @@ function clearCheckpoint() {
       </div>
     {:else}
       <div class="min-h-0 flex-1 overflow-hidden" data-shell-tier={chromeStore.current.tier}>
-        <SplitWorkspace primaryMax="224px">
+        <SplitWorkspace primaryMax="224px" gutter="0px">
           {#snippet primary()}
             {@render sectionNav()}
           {/snippet}

@@ -48,7 +48,7 @@ function resolveVehicleSlug(vehicleType: string | null): VehicleSlug | null {
   />
 
   {#if canOpen}
-    <ParameterWorkspace defaultMode="expert" />
+    <ParameterWorkspace defaultMode="expert" embedded />
   {:else}
     <div
       class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"

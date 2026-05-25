@@ -48,10 +48,12 @@ type ResolvedFlightWorkflowInputs = {
 let {
   fileIo = createParameterFileIo(),
   defaultMode = "workflow",
+  embedded = false,
   onReviewStaged,
 }: {
   fileIo?: ParameterFileIo;
   defaultMode?: "workflow" | "expert";
+  embedded?: boolean;
   onReviewStaged?: () => void;
 } = $props();
 
@@ -304,7 +306,7 @@ function parsePositiveNumber(value: string): number | null {
 }
 </script>
 
-<WorkspaceShell mode="inset">
+{#snippet workspaceContent()}
 <section
   class="rounded-lg border border-border bg-bg-primary p-3"
   data-domain-readiness={view.readiness}
@@ -533,4 +535,12 @@ function parsePositiveNumber(value: string): number | null {
     {@render workflowHelpers()}
   {/if}
 </section>
-</WorkspaceShell>
+{/snippet}
+
+{#if embedded}
+  {@render workspaceContent()}
+{:else}
+  <WorkspaceShell mode="inset">
+    {@render workspaceContent()}
+  </WorkspaceShell>
+{/if}
