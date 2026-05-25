@@ -1,4 +1,5 @@
 <script lang="ts">
+import { ChevronDown, ChevronRight } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import {
@@ -27,6 +28,7 @@ type PeripheralGroupDef = {
 type PeripheralSubgroup = {
   id: string;
   label: string;
+  stagedCount: number;
   rows: ParameterExpertRow[];
 };
 
@@ -36,6 +38,7 @@ type PeripheralGroupModel = {
   configured: boolean | null;
   rowCount: number;
   lockedCount: number;
+  stagedCount: number;
   stateText: string;
   subgroups: PeripheralSubgroup[];
 };
@@ -152,6 +155,8 @@ const paramsStore = getParamsStoreContext();
 const paramsState = fromStore(paramsStore);
 
 let showConfiguredOnly = $state(false);
+let expandedGroupIds = $state<string[]>([]);
+let collapsedSubgroupIds = $state<string[]>([]);
 let params = $derived(paramsState.current);
 let actionsBlocked = $derived(view.checkpoint.blocksActions || section.availability === "blocked");
 let rowReadiness = $derived(actionsBlocked ? "degraded" : view.readiness);
@@ -173,8 +178,12 @@ let rowIndex = $derived.by(() => {
   }
   return index;
 });
-let allGroups = $derived(buildAllGroups());
-let visibleGroups = $derived(showConfiguredOnly ? allGroups.filter((group) => group.configured === true) : allGroups);
+let knownGroups = $derived(KNOWN_GROUPS.map((group) => buildKnownGroup(group)).filter((group): group is PeripheralGroupModel => group !== null));
+let extraGroups = $derived(buildExtraGroups());
+let allGroups = $derived([...knownGroups, ...extraGroups]);
+let visibleKnownGroups = $derived(showConfiguredOnly ? knownGroups.filter((group) => group.configured === true) : knownGroups);
+let visibleExtraGroups = $derived(showConfiguredOnly ? extraGroups.filter((group) => group.configured === true) : extraGroups);
+let visibleGroups = $derived([...visibleKnownGroups, ...visibleExtraGroups]);
 let metadataFallbackCount = $derived(allGroups.reduce((count, group) => count + group.lockedCount, 0));
 
 function envelopeKey() {
@@ -268,6 +277,7 @@ function buildSubgroups(names: string[]): PeripheralSubgroup[] {
     .map(([id, rows]) => ({
       id,
       label: id,
+      stagedCount: rows.filter((row) => row.isStaged || row.failureMessage !== null).length,
       rows: rows.sort((left, right) => left.order - right.order || left.name.localeCompare(right.name)),
     }))
     .sort((left, right) => left.label.localeCompare(right.label));
@@ -282,6 +292,7 @@ function buildKnownGroup(group: PeripheralGroupDef): PeripheralGroupModel | null
   const subgroups = buildSubgroups(names);
   const configured = groupConfigured(group.enableParams);
   const lockedCount = subgroups.flatMap((entry) => entry.rows).filter((row) => row.readOnly === true).length;
+  const stagedCount = subgroups.reduce((count, entry) => count + entry.stagedCount, 0);
 
   return {
     id: group.id,
@@ -289,6 +300,7 @@ function buildKnownGroup(group: PeripheralGroupDef): PeripheralGroupModel | null
     configured,
     rowCount: subgroups.reduce((count, subgroup) => count + subgroup.rows.length, 0),
     lockedCount,
+    stagedCount,
     stateText: configured === true ? "Configured" : configured === false ? "Disabled" : "Inspectable",
     subgroups,
   };
@@ -325,6 +337,7 @@ function buildExtraGroups(): PeripheralGroupModel[] {
       const subgroups = buildSubgroups(groupNames);
       const configured = groupConfigured(enableParams);
       const lockedCount = subgroups.flatMap((entry) => entry.rows).filter((row) => row.readOnly === true).length;
+      const stagedCount = subgroups.reduce((count, entry) => count + entry.stagedCount, 0);
 
       return {
         id: prefix,
@@ -332,18 +345,12 @@ function buildExtraGroups(): PeripheralGroupModel[] {
         configured,
         rowCount: subgroups.reduce((count, subgroup) => count + subgroup.rows.length, 0),
         lockedCount,
+        stagedCount,
         stateText: configured === true ? "Configured" : configured === false ? "Disabled" : "Inspectable",
         subgroups,
       } satisfies PeripheralGroupModel;
     })
     .sort((left, right) => left.label.localeCompare(right.label));
-}
-
-function buildAllGroups(): PeripheralGroupModel[] {
-  return [
-    ...KNOWN_GROUPS.map((group) => buildKnownGroup(group)).filter((group): group is PeripheralGroupModel => group !== null),
-    ...buildExtraGroups(),
-  ];
 }
 
 function stageItem(row: ParameterExpertRow, nextValue: number) {
@@ -352,6 +359,35 @@ function stageItem(row: ParameterExpertRow, nextValue: number) {
 
 function discardItem(name: string) {
   paramsStore.discardStagedEdit(name);
+}
+
+function isGroupExpanded(group: PeripheralGroupModel) {
+  return expandedGroupIds.includes(group.id) || group.stagedCount > 0;
+}
+
+function toggleGroup(groupId: string) {
+  if (expandedGroupIds.includes(groupId)) {
+    expandedGroupIds = expandedGroupIds.filter((id) => id !== groupId);
+  } else {
+    expandedGroupIds = [...expandedGroupIds, groupId];
+  }
+}
+
+function subgroupKey(groupId: string, subgroupId: string) {
+  return `${groupId}:${subgroupId}`;
+}
+
+function isSubgroupExpanded(groupId: string, subgroup: PeripheralSubgroup) {
+  return subgroup.stagedCount > 0 || !collapsedSubgroupIds.includes(subgroupKey(groupId, subgroup.id));
+}
+
+function toggleSubgroup(groupId: string, subgroupId: string) {
+  const key = subgroupKey(groupId, subgroupId);
+  if (collapsedSubgroupIds.includes(key)) {
+    collapsedSubgroupIds = collapsedSubgroupIds.filter((id) => id !== key);
+  } else {
+    collapsedSubgroupIds = [...collapsedSubgroupIds, key];
+  }
 }
 </script>
 
@@ -415,58 +451,116 @@ function discardItem(name: string) {
       </p>
     </div>
   {:else}
-    <div class="space-y-4">
-      {#each visibleGroups as group (group.id)}
-        <section
-          class="rounded-lg border border-border bg-bg-primary/70 p-3"
-          data-testid={`${setupWorkspaceTestIds.peripheralsGroupPrefix}-${group.id}`}
-        >
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Inventory group</p>
-              <h4 class="mt-2 text-lg font-semibold text-text-primary">{group.label}</h4>
-              <p class="mt-2 text-sm text-text-secondary">
-                {group.stateText} · {group.rowCount} row{group.rowCount === 1 ? "" : "s"}
-                {#if group.lockedCount > 0}
-                  · {group.lockedCount} read-only fallback row{group.lockedCount === 1 ? "" : "s"}
-                {/if}
-              </p>
-            </div>
-            <span class={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-widest ${group.configured === true ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-secondary text-text-secondary"}`}>
-              {group.stateText}
-            </span>
-          </div>
-
-          <div class="mt-4 space-y-4">
-            {#each group.subgroups as subgroup (subgroup.id)}
-              <div class="rounded-lg border border-border bg-bg-primary/70 p-3">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Subgroup</p>
-                    <h5 class="mt-2 text-base font-semibold text-text-primary">{subgroup.label}</h5>
-                  </div>
-                  <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
-                    {subgroup.rows.length} row{subgroup.rows.length === 1 ? "" : "s"}
-                  </span>
-                </div>
-
-                <div class="mt-4 space-y-3">
-                  {#each subgroup.rows as row (row.renderId)}
-                    <ParameterExpertRowComponent
-                      envelopeKey={envelopeKey()}
-                      onDiscard={discardItem}
-                      onStage={stageItem}
-                      readiness={rowReadiness}
-                      {row}
-                    />
-                  {/each}
-                </div>
-              </div>
-            {/each}
-          </div>
-        </section>
+    <div class="space-y-3">
+      {#each visibleKnownGroups as group (group.id)}
+        {@render groupCard(group)}
       {/each}
+
+      {#if visibleExtraGroups.length > 0}
+        {#if visibleKnownGroups.length > 0}
+          <div class="flex items-center gap-3 py-2">
+            <div class="h-px flex-1 bg-border"></div>
+            <span class="text-xs font-semibold uppercase tracking-widest text-text-muted">Additional peripherals</span>
+            <div class="h-px flex-1 bg-border"></div>
+          </div>
+        {/if}
+
+        {#each visibleExtraGroups as group (group.id)}
+          {@render groupCard(group)}
+        {/each}
+      {/if}
     </div>
   {/if}
   {/snippet}
 </SetupSectionShell>
+
+{#snippet groupCard(group: PeripheralGroupModel)}
+  <section class="overflow-hidden rounded-lg border border-border bg-bg-primary/70">
+    <button
+      aria-expanded={isGroupExpanded(group)}
+      class="flex w-full items-center gap-2 px-4 py-3 text-left transition hover:bg-bg-tertiary/50"
+      data-testid={`${setupWorkspaceTestIds.peripheralsGroupPrefix}-${group.id}`}
+      onclick={() => toggleGroup(group.id)}
+      type="button"
+    >
+      {#if isGroupExpanded(group)}
+        <ChevronDown aria-hidden="true" class="shrink-0 text-text-muted" size={14} />
+      {:else}
+        <ChevronRight aria-hidden="true" class="shrink-0 text-text-muted" size={14} />
+      {/if}
+      <span class="min-w-0 flex-1">
+        <span class="text-xs font-semibold uppercase tracking-widest text-text-muted">{group.label}</span>
+        <span class="ml-2 text-xs text-text-muted">({group.rowCount})</span>
+        {#if group.lockedCount > 0}
+          <span class="ml-2 text-xs text-warning">{group.lockedCount} read-only</span>
+        {/if}
+      </span>
+      {#if group.stagedCount > 0}
+        <span class="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning">
+          {group.stagedCount} staged
+        </span>
+      {/if}
+      <span class={`rounded-md px-2 py-0.5 text-xs font-medium ${group.configured === true ? "bg-success/10 text-success" : "bg-bg-tertiary text-text-muted"}`}>
+        {group.stateText.toLowerCase()}
+      </span>
+    </button>
+
+    {#if isGroupExpanded(group)}
+      <div class="border-t border-border px-4 py-3">
+        {#if group.subgroups.length > 1}
+          <div class="space-y-3">
+            {#each group.subgroups as subgroup (subgroup.id)}
+              <div>
+                <button
+                  aria-expanded={isSubgroupExpanded(group.id, subgroup)}
+                  class="mb-2 flex items-center gap-1.5 text-left"
+                  onclick={() => toggleSubgroup(group.id, subgroup.id)}
+                  type="button"
+                >
+                  {#if isSubgroupExpanded(group.id, subgroup)}
+                    <ChevronDown aria-hidden="true" class="text-text-muted" size={12} />
+                  {:else}
+                    <ChevronRight aria-hidden="true" class="text-text-muted" size={12} />
+                  {/if}
+                  <span class="text-xs font-semibold uppercase tracking-widest text-text-muted">{subgroup.label}</span>
+                  <span class="text-xs text-text-muted">({subgroup.rows.length})</span>
+                  {#if subgroup.stagedCount > 0}
+                    <span class="rounded-full border border-warning/30 bg-warning/10 px-1.5 text-xs font-semibold text-warning">
+                      {subgroup.stagedCount}
+                    </span>
+                  {/if}
+                </button>
+
+                {#if isSubgroupExpanded(group.id, subgroup)}
+                  <div class="ml-3 flex flex-col border-l border-border pl-3">
+                    {#each subgroup.rows as row (row.renderId)}
+                      <ParameterExpertRowComponent
+                        envelopeKey={envelopeKey()}
+                        onDiscard={discardItem}
+                        onStage={stageItem}
+                        readiness={rowReadiness}
+                        {row}
+                      />
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {:else if group.subgroups[0]}
+          <div class="flex flex-col">
+            {#each group.subgroups[0].rows as row (row.renderId)}
+              <ParameterExpertRowComponent
+                envelopeKey={envelopeKey()}
+                onDiscard={discardItem}
+                onStage={stageItem}
+                readiness={rowReadiness}
+                {row}
+              />
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
+  </section>
+{/snippet}

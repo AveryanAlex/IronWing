@@ -1,6 +1,9 @@
 <script lang="ts">
+import { ChevronDown, ChevronRight, Search } from "lucide-svelte";
+
 import type {
   ParameterExpertFilter,
+  ParameterExpertGroup,
   ParameterExpertRow,
   ParameterExpertView,
 } from "../../lib/params/parameter-expert-view";
@@ -33,6 +36,8 @@ let {
   onDiscard: (name: string) => void;
 } = $props();
 
+let expandedGroupIds = $state<string[]>([]);
+
 const filterOptions: Array<{ value: ParameterExpertFilter; label: string }> = [
   { value: "standard", label: "Standard" },
   { value: "all", label: "All" },
@@ -59,36 +64,62 @@ function highlightSummaryText() {
     : "";
   return `${source} highlighting ${view.highlightedCount} parameter${view.highlightedCount === 1 ? "" : "s"} for review.${forced}`;
 }
+
+function shouldForceExpanded(group: ParameterExpertGroup) {
+  return searchText.trim().length > 0
+    || filter === "modified"
+    || group.rows.some((row) => row.isHighlighted || row.isStaged || row.failureMessage !== null);
+}
+
+function isGroupExpanded(group: ParameterExpertGroup) {
+  return expandedGroupIds.includes(group.key) || shouldForceExpanded(group);
+}
+
+function toggleGroup(group: ParameterExpertGroup) {
+  if (shouldForceExpanded(group)) {
+    return;
+  }
+
+  if (expandedGroupIds.includes(group.key)) {
+    expandedGroupIds = expandedGroupIds.filter((key) => key !== group.key);
+  } else {
+    expandedGroupIds = [...expandedGroupIds, group.key];
+  }
+}
 </script>
 
 <div class="space-y-4" data-testid={parameterWorkspaceTestIds.expertRoot}>
-  <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-    <label class="block">
-      <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Search raw parameters</span>
-        <input
-          class="mt-2 w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
-          data-testid={parameterWorkspaceTestIds.expertSearch}
-          disabled={replayReadonly}
-          oninput={(event) => onSearchText((event.currentTarget as HTMLInputElement).value)}
-        placeholder="Search by raw name, label, or description"
-        type="search"
-        value={searchText}
-      />
-    </label>
-
+  <div class="flex flex-wrap items-center gap-3">
     <div class="flex flex-wrap items-center gap-2">
       {#each filterOptions as option (option.value)}
         <button
-          class={`rounded-md border px-3 py-2 text-sm font-semibold transition ${filter === option.value ? "border-accent/30 bg-accent/10 text-accent" : "border-border bg-bg-primary/80 text-text-secondary hover:border-accent hover:text-accent"}`}
+          class={`rounded-full px-3 py-1 text-sm font-semibold transition ${filter === option.value ? "bg-accent/10 text-accent" : "bg-bg-tertiary text-text-muted hover:text-text-primary"}`}
           data-testid={`${parameterWorkspaceTestIds.expertFilterPrefix}-${option.value}`}
           disabled={replayReadonly}
           onclick={() => onFilterChange(option.value)}
           type="button"
         >
           {option.label}
+          {#if option.value === "modified" && view.stagedCount > 0}
+            <span class="ml-1">({view.stagedCount})</span>
+          {/if}
         </button>
       {/each}
     </div>
+
+    <label class="ml-auto flex min-w-0 flex-1 items-center gap-2 sm:max-w-sm">
+      <Search aria-hidden="true" class="shrink-0 text-text-muted" size={14} />
+      <span class="sr-only">Search raw parameters</span>
+      <input
+        class="w-full rounded-lg border border-border bg-bg-primary/80 px-3 py-2 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent"
+        data-testid={parameterWorkspaceTestIds.expertSearch}
+        disabled={replayReadonly}
+        oninput={(event) => onSearchText((event.currentTarget as HTMLInputElement).value)}
+        placeholder="Search parameters..."
+        type="search"
+        value={searchText}
+      />
+    </label>
   </div>
 
   <div
@@ -142,42 +173,54 @@ function highlightSummaryText() {
       No parameters match the current expert search and filter state.
     </div>
   {:else}
-    <div class="space-y-4">
+    <div class="space-y-2">
       {#each view.groups as group (group.key)}
-        <section
-          class="rounded-lg border border-border bg-bg-primary/55 p-3"
-          data-testid={`${parameterWorkspaceTestIds.expertGroupPrefix}-${group.key}`}
-        >
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Parameter prefix</p>
-              <h4 class="mt-2 text-lg font-semibold text-text-primary">{group.label}</h4>
-            </div>
-            <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-              {group.rows.length} row{group.rows.length === 1 ? "" : "s"}
-            </span>
-          </div>
+        <section class="overflow-hidden rounded-lg border border-border bg-bg-primary/55">
+          <button
+            aria-expanded={isGroupExpanded(group)}
+            class="flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-bg-tertiary/50"
+            data-testid={`${parameterWorkspaceTestIds.expertGroupPrefix}-${group.key}`}
+            onclick={() => toggleGroup(group)}
+            type="button"
+          >
+            {#if isGroupExpanded(group)}
+              <ChevronDown aria-hidden="true" class="shrink-0 text-text-muted" size={14} />
+            {:else}
+              <ChevronRight aria-hidden="true" class="shrink-0 text-text-muted" size={14} />
+            {/if}
+            <span class="text-base font-semibold uppercase tracking-wide text-text-primary">{group.label}</span>
+            <span class="text-sm text-text-muted">({group.rows.length})</span>
+            {#if group.rows.some((row) => row.isStaged || row.failureMessage !== null)}
+              <span class="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning">
+                {group.rows.filter((row) => row.isStaged || row.failureMessage !== null).length} modified
+              </span>
+            {/if}
+          </button>
 
-          <div class="param-table mt-4">
-            <div class="param-table__header" aria-hidden="true">
-              <span>Name</span>
-              <span>Label</span>
-              <span>Value</span>
-              <span>Editor</span>
+          {#if isGroupExpanded(group)}
+            <div class="border-t border-border px-3 py-3">
+              <div class="param-table">
+                <div class="param-table__header" aria-hidden="true">
+                  <span>Name</span>
+                  <span>Label</span>
+                  <span>Value</span>
+                  <span>Editor</span>
+                </div>
+                <div class="param-table__body">
+                  {#each group.rows as row (row.renderId)}
+                    <ParameterExpertRowComponent
+                      {envelopeKey}
+                      onDiscard={onDiscard}
+                      onStage={onStage}
+                      {replayReadonly}
+                      {readiness}
+                      {row}
+                    />
+                  {/each}
+                </div>
+              </div>
             </div>
-            <div class="param-table__body">
-              {#each group.rows as row (row.renderId)}
-                <ParameterExpertRowComponent
-                  {envelopeKey}
-                  onDiscard={onDiscard}
-                  onStage={onStage}
-                  {replayReadonly}
-                  {readiness}
-                  {row}
-                />
-              {/each}
-            </div>
-          </div>
+          {/if}
         </section>
       {/each}
     </div>

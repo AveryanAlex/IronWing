@@ -326,6 +326,10 @@ afterEach(() => {
     cleanup();
 });
 
+async function expandExpertGroup(groupKey: string) {
+    await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertGroupPrefix}-${groupKey}`));
+}
+
 describe("ParameterWorkspace", () => {
     it("renders the workflow-first default surface and keeps raw editors out of the default mode", () => {
         render(withParameterWorkspaceContext(createHarnessStore(createState()), ParameterWorkspace));
@@ -404,6 +408,7 @@ describe("ParameterWorkspace", () => {
         render(withParameterWorkspaceContext(createHarnessStore(createState()), ParameterWorkspace));
 
         await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
+        await expandExpertGroup("ARMING");
 
         expect(screen.getByTestId(parameterWorkspaceTestIds.expertRoot)).toBeTruthy();
         const armingEditor = screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`);
@@ -412,6 +417,8 @@ describe("ParameterWorkspace", () => {
         expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeNull();
 
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));
+        await expandExpertGroup("LOG");
+        await expandExpertGroup("FORMAT");
 
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.expertGroupPrefix}-LOG`)).toBeTruthy();
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-LOG_BITMASK`).tagName).toBe("INPUT");
@@ -449,6 +456,7 @@ describe("ParameterWorkspace", () => {
         });
 
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));
+        await expandExpertGroup("LOG");
 
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`).textContent).toContain("LOG_BITMASK");
 
@@ -466,6 +474,7 @@ describe("ParameterWorkspace", () => {
         });
 
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));
+        await expandExpertGroup("LOG");
         await fireEvent.click(screen.getByLabelText("Bit 31 - High rate telemetry"));
 
         const diffText = screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-LOG_BITMASK`).textContent ?? "";
@@ -488,6 +497,7 @@ describe("ParameterWorkspace", () => {
         );
 
         await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
+        await expandExpertGroup("ARMING");
 
         expect(screen.getByTestId(parameterWorkspaceTestIds.advancedPanel)).toBeTruthy();
         expect(screen.getByTestId(parameterWorkspaceTestIds.expertMetadataFallback).textContent).toContain(
@@ -615,6 +625,7 @@ describe("ParameterWorkspace", () => {
 
         await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));
+        await expandExpertGroup("LOG");
         await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-LOG_BITMASK`), {
             target: { value: "1" },
         });
@@ -641,6 +652,7 @@ describe("ParameterWorkspace", () => {
 
         await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));
+        await expandExpertGroup("LOG");
         await fireEvent.input(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-LOG_BITMASK`), {
             target: { value: "1" },
         });
