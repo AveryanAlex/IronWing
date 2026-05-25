@@ -297,11 +297,10 @@ async function connectAndOpenMissionWorkspace(
 }
 
 async function startBlankMission(page: Page, history: string[]) {
-    note(history, "Start a blank mission draft.");
-    await missionWorkspaceLocator(page, "entryNew").click();
+    note(history, "Use the already-mounted blank mission draft.");
     await expect(
         missionWorkspaceLocator(page, "ready"),
-        historyMessage(history, "The Mission workspace never mounted the ready state after creating a blank draft."),
+        historyMessage(history, "The Mission workspace never opened directly into the ready blank draft state."),
     ).toBeVisible();
 }
 
@@ -633,7 +632,7 @@ async function importFixturePlan(
 ) {
     note(history, `Import ${fileName} through the Mission workspace picker.`);
     await mockPlatform.setOpenFile(contents, fileName);
-    await missionWorkspaceLocator(page, "entryImport").click();
+    await clickMissionToolbarSecondary(page, "toolbarImport");
 
     const importReview = missionWorkspaceLocator(page, "importReview");
     const readyState = missionWorkspaceLocator(page, "ready");

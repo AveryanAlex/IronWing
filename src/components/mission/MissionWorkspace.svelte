@@ -30,31 +30,15 @@ import type { FenceRegionType } from "../../lib/mission-draft-typed";
 import { settings, type Settings } from "../../lib/stores/settings";
 import { createUiStateStore } from "../../lib/ui-state/ui-state";
 import type { SurveyPatternType } from "../../lib/survey-region";
-import MissionDraftList from "./MissionDraftList.svelte";
-import MissionFenceDraftList from "./MissionFenceDraftList.svelte";
-import MissionFenceInspector from "./MissionFenceInspector.svelte";
-import MissionHomeCard from "./MissionHomeCard.svelte";
-import MissionInspector from "./MissionInspector.svelte";
-import MissionMap from "./MissionMap.svelte";
-import MissionPlanningStatsPanel from "./MissionPlanningStatsPanel.svelte";
-import MissionRallyDraftList from "./MissionRallyDraftList.svelte";
-import MissionRallyInspector from "./MissionRallyInspector.svelte";
-import MissionTerrainProfilePanel from "./MissionTerrainProfilePanel.svelte";
 import MissionWorkspaceDesktopReady from "./MissionWorkspaceDesktopReady.svelte";
-import MissionWorkspaceEntryState from "./MissionWorkspaceEntryState.svelte";
 import MissionWorkspacePhoneReady from "./MissionWorkspacePhoneReady.svelte";
 import MissionWorkspaceStatusPanels from "./MissionWorkspaceStatusPanels.svelte";
 import MissionWorkspaceHeader from "./MissionWorkspaceHeader.svelte";
 import { WorkspaceShell } from "../ui";
 import {
-  buildEntryActionCards,
   buildSurveySeedGeometry,
-  modeShellBody,
-  modeShellTitle,
   resolveInlineStatusCopy,
-  resolveSurveyCreationAnchor,
   toSharedWarning,
-  type MissionWorkspaceEntryActionCard,
 } from "./mission-workspace-helpers";
 import {
   missionWorkspaceFallbackChromeState,
@@ -287,13 +271,6 @@ let mapView = $derived(buildMissionMapView({
   rallySelection: planner.rallySelection,
   currentSeq: mapCurrentSeq,
 }));
-let showMissionEditor = $derived(view.mode === "mission");
-let showFenceEditor = $derived(view.mode === "fence");
-let showRallyEditor = $derived(view.mode === "rally");
-let replayOverlayHasGeometry = $derived(
-  replayMapOverlay !== null
-  && (replayMapOverlay.path.length > 0 || replayMapOverlay.marker !== null),
-);
 let workspaceContext = $derived<MissionWorkspaceContext>({
   planner,
   view,
@@ -465,18 +442,10 @@ async function handleReadFromVehicle() {
   await missionPlannerStore.downloadFromVehicle();
 }
 
-async function handleImportPlan() {
-  await missionPlannerStore.importFromPicker();
-}
-
 async function handleToolbarImport() {
   await (missionPlannerStore as MissionPlannerStore & {
     importAnyFromPicker: () => Promise<unknown>;
   }).importAnyFromPicker();
-}
-
-async function handleImportKml() {
-  await missionPlannerStore.importKmlFromPicker();
 }
 
 function handleNewMission() {
@@ -692,17 +661,6 @@ function dismissPrompt() {
   missionPlannerStore.dismissReplacePrompt();
 }
 
-let entryCards = $derived<MissionWorkspaceEntryActionCard[]>(
-  buildEntryActionCards({
-    status: view.status,
-    vehicleReady: canUseVehicleActions,
-    busy: view.inlineStatus.busy,
-    onReadFromVehicle: handleReadFromVehicle,
-    onImportPlan: handleImportPlan,
-    onImportKml: handleImportKml,
-    onNewMission: handleNewMission,
-  })
-);
 </script>
 
 <svelte:window onkeydown={handleWorkspaceKeydown} />
@@ -775,25 +733,16 @@ let entryCards = $derived<MissionWorkspaceEntryActionCard[]>(
     <span data-testid={missionWorkspaceTestIds.phoneSegmentState}>{missionSegmentState}</span>
   </div>
 
-  {#if !view.workspaceMounted}
-    <MissionWorkspaceEntryState
+  {#if useHorizontalSplit}
+    <MissionWorkspaceDesktopReady actions={workspaceActions} context={workspaceContext} />
+  {:else}
+    <MissionWorkspacePhoneReady
       actions={workspaceActions}
       context={workspaceContext}
-      {entryCards}
-      {replayOverlayHasGeometry}
+      {phoneState}
+      showPhoneSegments={workspaceLayout.showPhoneSegments}
+      onSelectMissionPhoneSegment={handleSelectMissionPhoneSegment}
     />
-  {:else}
-    {#if useHorizontalSplit}
-      <MissionWorkspaceDesktopReady actions={workspaceActions} context={workspaceContext} />
-    {:else}
-      <MissionWorkspacePhoneReady
-        actions={workspaceActions}
-        context={workspaceContext}
-        {phoneState}
-        showPhoneSegments={workspaceLayout.showPhoneSegments}
-        onSelectMissionPhoneSegment={handleSelectMissionPhoneSegment}
-      />
-    {/if}
   {/if}
 </div>
 </WorkspaceShell>

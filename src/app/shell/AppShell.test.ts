@@ -623,10 +623,12 @@ describe("AppShell", () => {
 
         expect(screen.getByTestId(missionWorkspaceTestIds.root)).toBeTruthy();
         expect(screen.queryByTestId("app-shell-placeholder-mission")).toBeNull();
-        expect(screen.getByTestId(missionWorkspaceTestIds.empty)).toBeTruthy();
-        expect(screen.getByTestId(missionWorkspaceTestIds.entryRead)).toBeTruthy();
-        expect(screen.getByTestId(missionWorkspaceTestIds.entryImport)).toBeTruthy();
-        expect(screen.getByTestId(missionWorkspaceTestIds.entryNew)).toBeTruthy();
+        expect(screen.getByTestId(missionWorkspaceTestIds.state).textContent).toContain("empty");
+        expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
+        expect(screen.getByTestId(missionWorkspaceTestIds.mapEmpty)).toBeTruthy();
+        expect(screen.getByTestId(missionWorkspaceTestIds.toolbarMoreButton)).toBeTruthy();
+        expect(screen.queryByText("Planner entry")).toBeNull();
+        expect(screen.queryByText("Start this scope with a real planner entry action")).toBeNull();
     });
 
     it("mounts the real firmware workspace and preserves shell-scoped firmware state across tab switches", async () => {

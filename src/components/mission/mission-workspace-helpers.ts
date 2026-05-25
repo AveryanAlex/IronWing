@@ -20,16 +20,6 @@ export type MissionWorkspaceInlineCopy = {
   detail: string;
 };
 
-export type MissionWorkspaceEntryActionCard = {
-  key: string;
-  title: string;
-  description: string;
-  disabled: boolean;
-  testId: string;
-  onclick: () => void | Promise<unknown>;
-  tone: "primary" | "secondary";
-};
-
 const DEFAULT_SURVEY_ANCHOR: GeoPoint2d = {
   latitude_deg: 47.397742,
   longitude_deg: 8.545594,
@@ -334,67 +324,4 @@ export function modeShellBody(mode: MissionPlannerMode, currentView: MissionPlan
   return mode === "fence"
     ? `Fence mode now exposes ${currentView.fenceRegionCount} region${currentView.fenceRegionCount === 1 ? "" : "s"} plus return-point truth inside the mounted planner workspace.`
     : `Rally data is already part of the mounted workspace (${currentView.rallyPointCount} point${currentView.rallyPointCount === 1 ? "" : "s"}), and sticky warnings / import review stay visible here. Dedicated rally editing lands in the next task.`;
-}
-
-export function buildEntryActionCards(args: {
-  status: MissionPlannerView["status"];
-  vehicleReady: boolean;
-  busy: boolean;
-  onReadFromVehicle: () => void | Promise<unknown>;
-  onImportPlan: () => void | Promise<unknown>;
-  onImportKml: () => void | Promise<unknown>;
-  onNewMission: () => void | Promise<unknown>;
-}): MissionWorkspaceEntryActionCard[] {
-  const {
-    status,
-    vehicleReady,
-    busy,
-    onReadFromVehicle,
-    onImportPlan,
-    onImportKml,
-    onNewMission,
-  } = args;
-
-  return [
-    {
-      key: "read",
-      title: "Read from Vehicle",
-      description: vehicleReady
-        ? "Pull the live mission, fence, rally, and Home state into this workspace."
-        : "Reconnect to enable live reads; local import and blank-draft entry stay available now.",
-      disabled: busy || !vehicleReady,
-      testId: missionWorkspaceTestIds.entryRead,
-      onclick: onReadFromVehicle,
-      tone: vehicleReady ? "primary" : "secondary",
-    },
-    {
-      key: "import-plan",
-      title: "Import .plan",
-      description: "Open a QGroundControl plan file with the browser-safe picker and review mission, fence, and rally domains explicitly.",
-      disabled: busy,
-      testId: missionWorkspaceTestIds.entryImport,
-      onclick: onImportPlan,
-      tone: "secondary",
-    },
-    {
-      key: "import-kml",
-      title: "Import .kml / .kmz",
-      description: "Bring KML or KMZ mission/fence geometry through the browser-safe picker and review supported domains before applying.",
-      disabled: busy,
-      testId: missionWorkspaceTestIds.entryImportKml,
-      onclick: onImportKml,
-      tone: "secondary",
-    },
-    {
-      key: "new",
-      title: "New draft",
-      description: status === "unavailable"
-        ? "Start a disconnected local draft now, then reconnect later for validation and transfer flows."
-        : "Start a blank local draft with Home, mission, fence, rally, and review surfaces mounted immediately.",
-      disabled: busy,
-      testId: missionWorkspaceTestIds.entryNew,
-      onclick: onNewMission,
-      tone: "secondary",
-    },
-  ];
 }

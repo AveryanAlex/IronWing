@@ -835,24 +835,24 @@ describe("MissionWorkspace", () => {
     cleanup();
   });
 
-  it("shows entry actions first and mounts the real editor after starting a blank mission", async () => {
+  it("opens directly into an empty editor and keeps load actions in the toolbar menu", async () => {
     const { plannerStore } = await renderWorkspace();
 
     expect(screen.getByTestId(missionWorkspaceTestIds.root)).toBeTruthy();
-    expect(screen.getByTestId(missionWorkspaceTestIds.empty)).toBeTruthy();
-    expect(screen.getByTestId(missionWorkspaceTestIds.entryRead)).toBeTruthy();
-    expect(screen.getByTestId(missionWorkspaceTestIds.entryImport)).toBeTruthy();
-    expect(screen.getByTestId(missionWorkspaceTestIds.entryImportKml)).toBeTruthy();
-    expect(screen.getByTestId(missionWorkspaceTestIds.entryNew)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.state).textContent).toContain("empty");
+    expect(screen.queryByText("Planner entry")).toBeNull();
+    expect(screen.queryByText("Start this scope with a real planner entry action")).toBeNull();
     expect(screen.getByTestId(missionWorkspaceTestIds.layoutMode).textContent).toContain("wide");
     expect(screen.getByTestId(missionWorkspaceTestIds.layoutTier).textContent).toContain("wide");
     expect(screen.getByTestId(missionWorkspaceTestIds.phoneSegmentState).textContent).toContain("all-visible");
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
-
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
     });
+
+    expect(await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarRead)).toBeTruthy();
+    expect(await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarImport)).toBeTruthy();
+    expect(await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarNew)).toBeTruthy();
 
     expect(screen.getByTestId(missionWorkspaceTestIds.homeCard)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.map)).toBeTruthy();
@@ -870,8 +870,6 @@ describe("MissionWorkspace", () => {
   it("renders a real basemap under the planner surface", async () => {
     await renderWorkspace();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
-
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.mapBasemap)).toBeTruthy();
@@ -881,8 +879,6 @@ describe("MissionWorkspace", () => {
 
   it("keeps the basemap instance stable while planner state updates", async () => {
     const { plannerStore } = await renderWorkspace();
-
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.mapBasemap)).toBeTruthy();
@@ -899,7 +895,6 @@ describe("MissionWorkspace", () => {
     setMaplibreCtorFailure(true);
 
     await renderWorkspace();
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
@@ -911,7 +906,9 @@ describe("MissionWorkspace", () => {
   it("surfaces async basemap load failures without unmounting the planner", async () => {
     await renderWorkspace();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
+    await waitFor(() => {
+      expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
+    });
     emitMaplibreEvent("error", { error: new Error("style load failed") });
 
     await waitFor(() => {
@@ -1118,7 +1115,7 @@ describe("MissionWorkspace", () => {
     });
     await flush();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
+    await clickMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarNew);
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
@@ -1413,7 +1410,6 @@ describe("MissionWorkspace", () => {
   it("adds, edits, reorders, and deletes manual mission items through the mounted workspace", async () => {
     const { plannerStore } = await renderWorkspace();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
     });
@@ -1744,7 +1740,6 @@ describe("MissionWorkspace", () => {
   it("keeps incomplete home edits local until all three values are valid", async () => {
     const { plannerStore } = await renderWorkspace();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.homeCard)).toBeTruthy();
     });
@@ -2323,16 +2318,16 @@ describe("MissionWorkspace", () => {
       },
     });
 
-    const readButton = screen.getByTestId(missionWorkspaceTestIds.entryRead) as HTMLButtonElement;
-    await fireEvent.click(readButton);
+    await clickMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarRead);
 
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.inlineStatusMessage).textContent).toContain("Reading planning state");
     });
-    expect(readButton.disabled).toBe(true);
+    const busyReadItem = await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarRead);
+    expect(busyReadItem.getAttribute("data-disabled")).not.toBeNull();
     expect(plannerHarness.service.downloadWorkspace).toHaveBeenCalledTimes(1);
 
-    readButton.click();
+    await fireEvent.click(busyReadItem);
     expect(plannerHarness.service.downloadWorkspace).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId(missionWorkspaceTestIds.toolbarCancel)).toBeTruthy();
 
@@ -2416,7 +2411,6 @@ describe("MissionWorkspace", () => {
   it("routes mission undo and redo through workspace shortcuts but leaves focused editors alone", async () => {
     const { plannerStore } = await renderWorkspace();
 
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.entryNew));
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
     });

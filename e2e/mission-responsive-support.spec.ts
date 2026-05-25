@@ -171,7 +171,6 @@ async function addWaypoint(
 }
 
 async function seedMissionSupportState(page: Page) {
-    await missionWorkspaceLocator(page, "entryNew").click();
     await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
 
     await missionWorkspaceLocator(page, "homeLatitude").fill("47.397742");

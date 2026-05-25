@@ -183,7 +183,6 @@ test.describe("mocked logs workspace workflow", () => {
         await expect(page.locator(connectionSelectors.disconnectButton)).toBeVisible();
 
         await openMissionWorkspace(page);
-        await page.locator(missionWorkspaceSelectors.entryNew).click();
         await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
 
         await openLogsWorkspace(page);
@@ -322,7 +321,6 @@ test.describe("mocked logs workspace workflow", () => {
         });
 
         await openMissionWorkspace(page);
-        await page.locator(missionWorkspaceSelectors.entryNew).click();
         await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
 
         await openLogsWorkspace(page);

@@ -255,11 +255,10 @@ async function connectAndOpenMissionWorkspace(
 }
 
 async function startBlankMission(page: Page, history: string[]) {
-    note(history, "Start a blank planner draft so continuity stays inside one mounted workspace.");
-    await clickMissionControl(page, "entryNew");
+    note(history, "Use the already-mounted blank planner draft so continuity stays inside one workspace.");
     await expect(
         missionWorkspaceLocator(page, "ready"),
-        historyMessage(history, "The Mission workspace never mounted the ready state after starting a blank draft."),
+        historyMessage(history, "The Mission workspace never opened directly into the ready blank draft state."),
     ).toBeVisible();
 }
 

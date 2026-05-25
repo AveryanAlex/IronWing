@@ -399,7 +399,7 @@ function createEmptyHistoryState(): MissionPlannerHistoryState {
 function createInitialState(initialMode: MissionPlannerMode = "mission"): MissionPlannerStoreState {
   return {
     hydrated: false,
-    workspaceMounted: false,
+    workspaceMounted: true,
     mode: initialMode,
     selection: { kind: "home" },
     fenceSelection: { kind: "none" },
@@ -888,7 +888,8 @@ export function createMissionPlannerStore(
 
       const nextScope = scopeFromEnvelope(nextEnvelope);
       const currentDraftScope = attachedDraftScope(state);
-      const nextRecoverable = state.workspaceMounted && plannerHasContent(state)
+      const hasPlannerContent = plannerHasContent(state);
+      const nextRecoverable = state.workspaceMounted && hasPlannerContent
         ? captureRecoverableWorkspace(state)
         : state.recoverableWorkspace;
       const recoverablePrompt = nextRecoverable
@@ -897,7 +898,7 @@ export function createMissionPlannerStore(
         ? ({ kind: "recoverable" } satisfies MissionPlannerReplacePrompt)
         : null;
 
-      return withResolvedPhase({
+      const nextState = {
         ...base,
         activeEnvelope: nextEnvelope,
         activeSource: nextEnvelope?.source_kind ?? null,
@@ -907,7 +908,16 @@ export function createMissionPlannerStore(
         replacePrompt: recoverablePrompt,
         recoverableWorkspace: nextRecoverable,
         dismissedWarningIds: clearDismissedWarningIds(state.dismissedWarningIds, ["attachment:"]),
-      });
+      } satisfies MissionPlannerStoreState;
+
+      const attachedState = state.workspaceMounted && !hasPlannerContent
+        ? applyWorkspacePair(nextState, {
+          active: captureActiveWorkspace(state),
+          snapshot: captureSnapshotWorkspace(state),
+        }, nextScope)
+        : nextState;
+
+      return withResolvedPhase(attachedState);
     });
   }
 
