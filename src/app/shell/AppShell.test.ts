@@ -13,6 +13,14 @@ vi.hoisted(() => {
     }
 });
 
+const analyticsMocks = vi.hoisted(() => ({
+    trackAnalytics: vi.fn(),
+}));
+
+vi.mock("../../lib/analytics/client", () => ({
+    trackAnalytics: analyticsMocks.trackAnalytics,
+}));
+
 vi.mock("svelte-sonner", () => ({
     Toaster: () => null,
     toast: {
@@ -217,7 +225,10 @@ function createMockService(overrides: Partial<SessionService> = {}) {
         mode: "udp",
         udpBind: "0.0.0.0:14550",
         tcpAddress: "127.0.0.1:5760",
+        websocketUrl: "ws://127.0.0.1:14560",
         serialPort: "",
+        webSerialPortId: "",
+        webBluetoothDeviceId: "",
         baud: 57600,
         selectedBtDevice: "",
         takeoffAlt: "10",
@@ -558,6 +569,7 @@ async function openSetupFullParameters() {
 
 describe("AppShell", () => {
     beforeEach(() => {
+        analyticsMocks.trackAnalytics.mockClear();
         resetRuntimeState();
         if (typeof localStorage.clear === "function") {
             localStorage.clear();
@@ -621,6 +633,7 @@ describe("AppShell", () => {
         await waitFor(() => {
             expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("telemetry");
         });
+        expect(analyticsMocks.trackAnalytics).toHaveBeenCalledWith("workspace_viewed", { workspace: "telemetry" });
 
         // Telemetry now has a real workspace (TelemetryWorkspace) rather than a placeholder.
         expect(screen.queryByTestId("app-shell-placeholder-telemetry")).toBeNull();
@@ -631,6 +644,7 @@ describe("AppShell", () => {
         await waitFor(() => {
             expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("mission");
         });
+        expect(analyticsMocks.trackAnalytics).toHaveBeenCalledWith("workspace_viewed", { workspace: "mission" });
 
         expect(screen.getByTestId(missionWorkspaceTestIds.root)).toBeTruthy();
         expect(screen.queryByTestId("app-shell-placeholder-mission")).toBeNull();

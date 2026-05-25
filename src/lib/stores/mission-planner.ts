@@ -1,5 +1,7 @@
 import { get, writable } from "svelte/store";
 
+import { trackAnalytics } from "../analytics/client";
+import { countBucket } from "../analytics/properties";
 import type { FencePlan } from "../../fence";
 import type { HomePosition, MissionIssue, MissionPlan, MissionState, TransferProgress } from "../../mission";
 import type { RallyPlan } from "../../rally";
@@ -1140,6 +1142,11 @@ export function createMissionPlannerStore(
       },
     );
 
+    trackAnalytics("mission_survey_created", {
+      pattern: patternType,
+      region_count_bucket: countBucket(state.survey.surveyRegions.size + 1),
+    });
+
     return region.id;
   }
 
@@ -2223,6 +2230,7 @@ export function createMissionPlannerStore(
 
       if (result.status === "cancelled") {
         clearAction(pending);
+        trackAnalytics("mission_exported", missionExportAnalyticsProps(state, selectedDomains, "cancelled"));
         return { status: "cancelled" as const };
       }
 
@@ -2237,6 +2245,8 @@ export function createMissionPlannerStore(
         blockedWarningTarget: null,
       }));
 
+      trackAnalytics("mission_exported", missionExportAnalyticsProps(state, selectedDomains, "success"));
+
       return {
         status: "success" as const,
         fileName: result.fileName,
@@ -2244,6 +2254,7 @@ export function createMissionPlannerStore(
       };
     } catch (error) {
       handleActionFailure("export", pending, error, false);
+      trackAnalytics("mission_exported", missionExportAnalyticsProps(get(store), selectedDomains, "error"));
       return { status: "error" as const };
     }
   }
@@ -2312,9 +2323,11 @@ export function createMissionPlannerStore(
         blockedMode: null,
         blockedWarningTarget: null,
       }, ALL_HISTORY_DOMAINS)));
+      trackAnalytics("mission_downloaded", missionModeAnalyticsProps(incomingWorkspace, state.mode, "success"));
       return { status: "success" as const };
     } catch (error) {
       handleActionFailure("download", pending, error, true);
+      trackAnalytics("mission_downloaded", missionModeAnalyticsProps(captureActiveWorkspace(get(store)), state.mode, "error"));
       return { status: "error" as const };
     }
   }
@@ -2335,6 +2348,7 @@ export function createMissionPlannerStore(
 
     if (requiresReview) {
       beginImportReview("plan", imported.fileName, imported.warnings, incomingWorkspace);
+      trackAnalytics("mission_imported", missionImportAnalyticsProps(incomingWorkspace, "plan", state.mode, imported.warningCount, "prompted"));
       return {
         status: "prompted" as const,
         action: "import" as const,
@@ -2360,6 +2374,8 @@ export function createMissionPlannerStore(
       blockedWarningTarget: null,
     }, importDomains)));
 
+    trackAnalytics("mission_imported", missionImportAnalyticsProps(incomingWorkspace, "plan", state.mode, imported.warningCount, "success"));
+
     return {
       status: "success" as const,
       fileName: imported.fileName,
@@ -2378,6 +2394,7 @@ export function createMissionPlannerStore(
 
     const incomingWorkspace = workspaceFromKmlImport(imported.data);
     beginImportReview(imported.source, imported.fileName, imported.warnings, incomingWorkspace);
+    trackAnalytics("mission_imported", missionImportAnalyticsProps(incomingWorkspace, imported.source, get(store).mode, imported.warningCount, "prompted"));
 
     return {
       status: "prompted" as const,
@@ -2395,12 +2412,14 @@ export function createMissionPlannerStore(
       const imported = await fileIo.importFromPicker();
       if (imported.status === "cancelled") {
         clearAction(pending);
+        trackAnalytics("mission_imported", missionImportAnalyticsProps(captureActiveWorkspace(get(store)), "plan", get(store).mode, 0, "cancelled"));
         return { status: "cancelled" as const };
       }
 
       return finishPlanImport(pending, imported);
     } catch (error) {
       handleActionFailure("import", pending, error, false);
+      trackAnalytics("mission_imported", missionImportAnalyticsProps(captureActiveWorkspace(get(store)), "plan", get(store).mode, 0, "error"));
       return { status: "error" as const };
     }
   }
@@ -2412,12 +2431,14 @@ export function createMissionPlannerStore(
       const imported = await kmlFileIo.importFromPicker();
       if (imported.status === "cancelled") {
         clearAction(pending);
+        trackAnalytics("mission_imported", missionImportAnalyticsProps(captureActiveWorkspace(get(store)), "kml", get(store).mode, 0, "cancelled"));
         return { status: "cancelled" as const };
       }
 
       return finishKmlImport(pending, imported);
     } catch (error) {
       handleActionFailure("import", pending, error, false);
+      trackAnalytics("mission_imported", missionImportAnalyticsProps(captureActiveWorkspace(get(store)), "kml", get(store).mode, 0, "error"));
       return { status: "error" as const };
     }
   }
@@ -2433,6 +2454,7 @@ export function createMissionPlannerStore(
 
       if (!selected) {
         clearAction(pending);
+        trackAnalytics("mission_imported", missionImportAnalyticsProps(captureActiveWorkspace(get(store)), "any", get(store).mode, 0, "cancelled"));
         return { status: "cancelled" as const };
       }
 
@@ -2443,6 +2465,7 @@ export function createMissionPlannerStore(
       return finishKmlImport(pending, parseMissionKmlImportSelection(selected));
     } catch (error) {
       handleActionFailure("import", pending, error, false);
+      trackAnalytics("mission_imported", missionImportAnalyticsProps(captureActiveWorkspace(get(store)), "any", get(store).mode, 0, "error"));
       return { status: "error" as const };
     }
   }
@@ -2540,9 +2563,11 @@ export function createMissionPlannerStore(
         blockedMode: null,
         blockedWarningTarget: null,
       }, uploadedWorkspace, uploadedScopeKey)));
+      trackAnalytics("mission_uploaded", missionModeAnalyticsProps(uploadedWorkspace, state.mode, "success"));
       return { status: "success" as const };
     } catch (error) {
       handleActionFailure("upload", pending, error, true);
+      trackAnalytics("mission_uploaded", missionModeAnalyticsProps(captureActiveWorkspace(get(store)), state.mode, "error"));
       return { status: "error" as const };
     }
   }
@@ -2592,9 +2617,11 @@ export function createMissionPlannerStore(
         blockedMode: null,
         blockedWarningTarget: null,
       }, ALL_HISTORY_DOMAINS)));
+      trackAnalytics("mission_cleared", { mode: state.mode, result: "success" });
       return { status: "cleared" as const };
     } catch (error) {
       handleActionFailure("clear", pending, error, true);
+      trackAnalytics("mission_cleared", { mode: state.mode, result: "error" });
       return { status: "error" as const };
     }
   }
@@ -2924,6 +2951,57 @@ export function createEmptyMissionPlannerWorkspace(): MissionPlannerWorkspace {
     survey: createSurveyDraftExtension(),
     cruiseSpeed: DEFAULT_CRUISE_SPEED_MPS,
     hoverSpeed: DEFAULT_HOVER_SPEED_MPS,
+  };
+}
+
+function missionWorkspaceItemCount(workspace: MissionPlannerWorkspace, mode: MissionPlannerMode): number {
+  switch (mode) {
+    case "fence":
+      return workspace.fence.regions.length;
+    case "rally":
+      return workspace.rally.points.length;
+    case "mission":
+    default:
+      return workspace.mission.items.length;
+  }
+}
+
+function missionModeAnalyticsProps(workspace: MissionPlannerWorkspace, mode: MissionPlannerMode, result: string) {
+  return {
+    mode,
+    item_count_bucket: countBucket(missionWorkspaceItemCount(workspace, mode)),
+    result,
+  };
+}
+
+function missionImportAnalyticsProps(
+  workspace: MissionPlannerWorkspace,
+  source: string,
+  mode: MissionPlannerMode,
+  warningCount: number,
+  result: string,
+) {
+  return {
+    source,
+    mode,
+    item_count_bucket: countBucket(missionWorkspaceItemCount(workspace, mode)),
+    warning_count: warningCount,
+    result,
+  };
+}
+
+function missionExportAnalyticsProps(
+  state: MissionPlannerStoreState,
+  selectedDomains: MissionPlannerImportDomain[],
+  result: string,
+) {
+  const workspace = captureActiveWorkspace(state);
+  const itemCount = selectedDomains.reduce((total, domain) => total + missionWorkspaceItemCount(workspace, domain), 0);
+  return {
+    mode: selectedDomains.length === 1 ? selectedDomains[0]! : "multiple",
+    format: "plan",
+    item_count_bucket: countBucket(itemCount),
+    result,
   };
 }
 

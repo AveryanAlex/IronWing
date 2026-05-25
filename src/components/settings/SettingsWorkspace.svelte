@@ -2,6 +2,7 @@
 import { fromStore } from "svelte/store";
 
 import { TELEMETRY_RATE_HZ_LIMITS } from "../../lib/stores/settings";
+import { trackAnalytics } from "../../lib/analytics/client";
 import { getLiveSettingsStoreContext } from "../../app/shell/runtime-context";
 import {
   FieldRow,
@@ -35,11 +36,15 @@ function handleRateChange(event: Event) {
   if (Number.isNaN(value)) return;
 
   liveSettingsStore.stageTelemetryRate(value);
+  trackAnalytics("telemetry_rate_changed", { rate_hz: value });
+  trackAnalytics("settings_changed", { setting: "telemetry_rate_hz", value_bucket: `${value}_hz` });
   void liveSettingsStore.applyDrafts();
 }
 
 function handleSvsToggle() {
   svsEnabled = !svsEnabled;
+  trackAnalytics("hud_svs_toggled", { enabled: svsEnabled ? 1 : 0 });
+  trackAnalytics("settings_changed", { setting: "hud_svs", value_bucket: svsEnabled ? "enabled" : "disabled" });
   try {
     localStorage.setItem(SVS_STORAGE_KEY, String(svsEnabled));
   } catch {

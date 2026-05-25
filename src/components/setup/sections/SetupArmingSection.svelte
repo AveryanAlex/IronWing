@@ -6,6 +6,7 @@ import {
   getSessionStoreContext,
 } from "../../../app/shell/runtime-context";
 import { requestPrearmChecks } from "../../../calibration";
+import { trackAnalytics } from "../../../lib/analytics/client";
 import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import {
   buildParameterItemIndex,
@@ -217,6 +218,9 @@ async function handleRequestChecks() {
 
   commandError = null;
   requestPhase = "running";
+  trackAnalytics("prearm_checks_requested", {
+    connected: session.sessionDomain.value?.connection.kind === "connected" ? 1 : 0,
+  });
   try {
     await requestPrearmChecks();
   } catch (error) {
@@ -238,6 +242,7 @@ async function handleArm() {
 
   commandError = null;
   actionPhase = "arming";
+  trackAnalytics("arming_command_requested", { action: "arm", force: 0 });
   try {
     await armVehicle(false);
     confirmArm = false;
@@ -255,6 +260,7 @@ async function handleDisarm() {
 
   commandError = null;
   actionPhase = "disarming";
+  trackAnalytics("arming_command_requested", { action: "disarm", force: 0 });
   try {
     await disarmVehicle(false);
   } catch (error) {

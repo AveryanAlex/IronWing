@@ -3,6 +3,7 @@ import { derived, get, writable, type Readable } from "svelte/store";
 import type { ParamsStore } from "../../lib/stores/params";
 import type { SessionStore } from "../../lib/stores/session";
 import type { ShellChromeStore } from "./runtime-context";
+import { trackAnalytics } from "../../lib/analytics/client";
 import { isAutoConnectSitlEnabled } from "../../lib/platform/session";
 import { createUiStateStore } from "../../lib/ui-state/ui-state";
 
@@ -43,6 +44,9 @@ export function createAppShellController(stores: {
 
   const activeWorkspace = writable<AppShellWorkspace>(uiState.getActiveWorkspace());
   const stopPersistActiveWorkspace = activeWorkspace.subscribe((value) => uiState.setActiveWorkspace(value));
+  const stopTrackActiveWorkspace = activeWorkspace.subscribe((workspace) => {
+    trackAnalytics("workspace_viewed", { workspace });
+  });
   const vehiclePanelOpen = writable(false);
 
   const activeEnvelopeText = derived(sessionStore, ($sessionStore) =>
@@ -93,7 +97,13 @@ export function createAppShellController(stores: {
   const showParameterWorkspace = showSetupWorkspace;
 
   function toggleVehiclePanel() {
-    vehiclePanelOpen.update((open) => !open);
+    const nextOpen = !get(vehiclePanelOpen);
+    const layout = get(chromeStore).vehiclePanelMode;
+    vehiclePanelOpen.set(nextOpen);
+    trackAnalytics("vehicle_panel_toggled", {
+      state: nextOpen ? "open" : "closed",
+      layout,
+    });
   }
 
   function closeVehiclePanel() {
@@ -102,6 +112,7 @@ export function createAppShellController(stores: {
 
   function destroy() {
     stopCloseDrawerWhenDocked();
+    stopTrackActiveWorkspace();
     stopPersistActiveWorkspace();
   }
 

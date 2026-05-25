@@ -4,6 +4,7 @@ import {
   calibrateCompassCancel,
   calibrateCompassStart,
 } from "../../../calibration";
+import { trackAnalytics } from "../../../lib/analytics/client";
 import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../../lib/replay-readonly";
 import type { SetupWorkspaceStoreState, SetupWorkspaceCalibrationCard } from "../../../lib/stores/setup-workspace";
 import { Banner } from "../../ui";
@@ -27,13 +28,17 @@ async function runCompassAction(card: SetupWorkspaceCalibrationCard) {
   try {
     if (card.lifecycle === "running") {
       await calibrateCompassCancel();
+      trackAnalytics("calibration_completed", { kind: "compass", result: "cancelled" });
     } else if (card.lifecycle === "complete") {
       await calibrateCompassAccept();
+      trackAnalytics("calibration_completed", { kind: "compass", result: "accepted" });
     } else {
+      trackAnalytics("calibration_started", { kind: "compass" });
       await calibrateCompassStart();
     }
   } catch (error) {
     actionError = error instanceof Error ? error.message : String(error);
+    trackAnalytics("calibration_completed", { kind: "compass", result: "error" });
   } finally {
     pendingCardId = null;
   }

@@ -7,6 +7,7 @@ import type {
   WizardStepSnapshot,
   WizardStoreState,
 } from "../../../lib/stores/setup-wizard";
+import { trackAnalytics } from "../../../lib/analytics/client";
 import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
 import SetupCard from "../shared/SetupCard.svelte";
 import SetupCardHeader from "../shared/SetupCardHeader.svelte";
@@ -51,32 +52,48 @@ const currentStep = $derived(
 const blocksActions = $derived(view.checkpoint.blocksActions || view.readiness !== "ready");
 
 function handleStart() {
+  trackWizardAction("start");
   store.start();
 }
 function handleAdvance() {
+  trackWizardAction("advance");
   store.advance();
 }
 function handleSkip() {
+  trackWizardAction("skip");
   store.skip();
 }
 function handleDetour() {
   if (!currentStep) return;
+  trackWizardAction("detour");
   store.pause("detour");
   onSelectSection(currentStep.sectionId);
 }
 function handleResume() {
+  trackWizardAction("resume");
   store.resume();
 }
 function handleRestart() {
+  trackWizardAction("restart");
   store.restart();
 }
 function handleAcknowledge() {
+  trackWizardAction("acknowledge");
   store.acknowledgeHandoff();
   onClose();
 }
 function handleHandoffJump(sectionId: string) {
+  trackAnalytics("setup_wizard_step", { action: "handoff_jump", step: currentStep?.id ?? "handoff", section: sectionId });
   onSelectSection(sectionId);
   onClose();
+}
+
+function trackWizardAction(action: string) {
+  trackAnalytics("setup_wizard_step", {
+    action,
+    step: currentStep?.id ?? "none",
+    section: currentStep?.sectionId ?? "none",
+  });
 }
 
 // Resolves a wizard step id to its catalog title + sectionId so the handoff

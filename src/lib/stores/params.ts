@@ -1,5 +1,7 @@
 import { get, writable } from "svelte/store";
 
+import { trackAnalytics } from "../analytics/client";
+import { countBucket } from "../analytics/properties";
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamProgress, ParamStore, ParamWriteResult } from "../../params";
 import type { SessionEnvelope } from "../../session";
@@ -432,6 +434,10 @@ export function createParamsStore(
 
       const stagedEdits = stageParameterEditMap(state.stagedEdits, item, currentValue, nextValue);
       const retainedFailures = discardRetainedFailureMap(state.retainedFailures, item.name);
+      trackAnalytics("params_edit_staged", {
+        source: "parameter_workspace",
+        staged_count_bucket: countBucket(Object.keys(stagedEdits).length),
+      });
 
       return {
         ...state,
@@ -522,6 +528,11 @@ export function createParamsStore(
       }
 
       const outcome = reconcileBatchWriteResults(requestedEdits, results);
+      trackAnalytics("params_applied", {
+        changed_count: requestedEdits.length,
+        result: outcome.failures.length === 0 ? "success" : "partial_failure",
+        failed_count: outcome.failures.length,
+      });
       store.update((current) => {
         if (!current.activeEnvelope || !isSameEnvelope(current.activeEnvelope, requestEnvelope)) {
           return current;
@@ -565,6 +576,11 @@ export function createParamsStore(
       }
 
       const message = service.formatError(error);
+      trackAnalytics("params_applied", {
+        changed_count: requestedEdits.length,
+        result: "error",
+        failed_count: requestedEdits.length,
+      });
       store.update((current) => {
         if (!current.activeEnvelope || !isSameEnvelope(current.activeEnvelope, requestEnvelope)) {
           return current;
@@ -617,7 +633,19 @@ export function createParamsStore(
   }
 
   async function downloadAll() {
-    await service.downloadAll();
+    try {
+      await service.downloadAll();
+      trackAnalytics("params_downloaded", {
+        result: "success",
+        param_count_bucket: countBucket(Object.keys(get(store).paramStore?.params ?? {}).length),
+      });
+    } catch (error) {
+      trackAnalytics("params_downloaded", {
+        result: "error",
+        param_count_bucket: countBucket(Object.keys(get(store).paramStore?.params ?? {}).length),
+      });
+      throw error;
+    }
   }
 
   async function cancelDownload() {

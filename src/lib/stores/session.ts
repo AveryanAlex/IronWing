@@ -5,6 +5,8 @@ import {
   type SessionConnectionFormState,
   type SessionService,
 } from "../platform/session";
+import { trackAnalytics } from "../analytics/client";
+import { durationBucket } from "../analytics/properties";
 import { isNewerScopedEnvelope, isSameEnvelope } from "../scoped-session-events";
 import type { CalibrationDomain } from "../../calibration";
 import type { ConfigurationFactsDomain } from "../../configuration-facts";
@@ -45,6 +47,7 @@ export function createSessionStore(service: SessionService = createSessionServic
   let initializePromise: Promise<void> | null = null;
   const bootstrap = createSessionBootstrapController();
   let availableModesRequestId = 0;
+  let connectedAtUnixMsec: number | null = null;
 
   function completeActionError(error: unknown, patch: Partial<SessionStoreState> = {}) {
     store.update((state) => ({
@@ -58,6 +61,13 @@ export function createSessionStore(service: SessionService = createSessionServic
   function updateConnectionForm(patch: Partial<SessionConnectionFormState>) {
     store.update((state) => {
       const connectionForm = { ...state.connectionForm, ...patch };
+      if (patch.mode && patch.mode !== state.connectionForm.mode) {
+        const descriptor = state.transportDescriptors.find((item) => item.kind === patch.mode);
+        trackAnalytics("transport_selected", {
+          transport: patch.mode,
+          available: descriptor?.available === true ? 1 : 0,
+        });
+      }
       service.persistConnectionForm(connectionForm);
       return { ...state, connectionForm };
     });
@@ -413,6 +423,7 @@ export function createSessionStore(service: SessionService = createSessionServic
     }
 
     const formValue = toConnectFormValue(state.connectionForm);
+    const transport = descriptor.kind;
 
     const validationErrors = service.validateTransportDescriptor(descriptor, formValue);
     if (validationErrors.length > 0) {
@@ -425,6 +436,8 @@ export function createSessionStore(service: SessionService = createSessionServic
       return;
     }
 
+    trackAnalytics("connection_started", { transport });
+
     try {
       await bootstrapSource("live");
       if (state.connectionForm.mode === "bluetooth_ble" || state.connectionForm.mode === "bluetooth_spp") {
@@ -432,12 +445,17 @@ export function createSessionStore(service: SessionService = createSessionServic
       }
       await service.connectSession(service.buildConnectRequest(descriptor, formValue));
       await bootstrapSource("live");
+      connectedAtUnixMsec = Date.now();
+      trackAnalytics("connection_succeeded", { transport });
     } catch (error) {
-      completeActionError(error, { optimisticConnection: null });
+      const reason = service.formatError(error);
+      trackAnalytics("connection_failed", { transport, reason });
+      completeActionError(reason, { optimisticConnection: null });
     }
   }
 
   async function cancelConnect() {
+    const transport = get(store).connectionForm.mode;
     store.update((state) => ({
       ...state,
       lastPhase: "disconnect-requested",
@@ -448,12 +466,16 @@ export function createSessionStore(service: SessionService = createSessionServic
     try {
       await service.disconnectSession();
       await bootstrapSource("live");
+      trackAnalytics("connection_cancelled", { transport });
     } catch (error) {
       completeActionError(error);
     }
   }
 
   async function disconnect() {
+    const previous = get(store);
+    const transport = previous.connectionForm.mode;
+    const connectedSecs = connectedAtUnixMsec === null ? null : (Date.now() - connectedAtUnixMsec) / 1000;
     store.update((state) => ({
       ...state,
       lastPhase: "disconnect-requested",
@@ -465,6 +487,11 @@ export function createSessionStore(service: SessionService = createSessionServic
       const current = get(store);
       await service.disconnectSession({ session_id: current.activeEnvelope?.session_id });
       await bootstrapSource("live");
+      trackAnalytics("connection_disconnected", {
+        transport,
+        was_connected_secs_bucket: durationBucket(connectedSecs),
+      });
+      connectedAtUnixMsec = null;
     } catch (error) {
       completeActionError(error);
     }
@@ -572,6 +599,7 @@ export function createSessionStore(service: SessionService = createSessionServic
     subscriptions = null;
     initializePromise = null;
     availableModesRequestId += 1;
+    connectedAtUnixMsec = null;
     bootstrap.reset();
     store.set(createInitialSessionState(service));
   }

@@ -1,5 +1,7 @@
 import { get, writable } from "svelte/store";
 
+import { trackAnalytics } from "../analytics/client";
+import { durationBucket } from "../analytics/properties";
 import type {
   CatalogTargetSummary,
   DfuDeviceInfo,
@@ -669,6 +671,12 @@ export function createFirmwareWorkspaceStore(
 
     pendingCancelPath = null;
     pendingStartPath = "firmware_install_update";
+    const startedAt = Date.now();
+    trackAnalytics("firmware_install_started", {
+      source: source.kind,
+      target_kind: state.serial.target ? "catalog_target" : "unknown",
+      full_chip_erase: state.serial.fullChipErase ? 1 : 0,
+    });
 
     updateState((current) => ({
       ...current,
@@ -694,6 +702,11 @@ export function createFirmwareWorkspaceStore(
         ...current,
         progress: null,
       }));
+      trackAnalytics("firmware_install_completed", {
+        result: result.result,
+        path: "firmware_install_update",
+        duration_secs_bucket: durationBucket((Date.now() - startedAt) / 1000),
+      });
       return result;
     } catch (error) {
       pendingStartPath = null;
@@ -704,6 +717,11 @@ export function createFirmwareWorkspaceStore(
         lastError: message,
         progress: null,
       }));
+      trackAnalytics("firmware_install_completed", {
+        result: "error",
+        path: "firmware_install_update",
+        duration_secs_bucket: durationBucket((Date.now() - startedAt) / 1000),
+      });
       return null;
     }
   }
@@ -728,6 +746,11 @@ export function createFirmwareWorkspaceStore(
 
     pendingCancelPath = null;
     pendingStartPath = "bootloader_installation";
+    const startedAt = Date.now();
+    trackAnalytics("bootloader_install_started", {
+      source: state.recovery.source.kind,
+      target_kind: state.recovery.target ? "catalog_target" : "unknown",
+    });
 
     updateState((current) => ({
       ...current,
@@ -748,6 +771,10 @@ export function createFirmwareWorkspaceStore(
         ...current,
         progress: null,
       }));
+      trackAnalytics("bootloader_install_completed", {
+        result: result.result,
+        duration_secs_bucket: durationBucket((Date.now() - startedAt) / 1000),
+      });
       return result;
     } catch (error) {
       pendingStartPath = null;
@@ -758,6 +785,10 @@ export function createFirmwareWorkspaceStore(
         lastError: message,
         progress: null,
       }));
+      trackAnalytics("bootloader_install_completed", {
+        result: "error",
+        duration_secs_bucket: durationBucket((Date.now() - startedAt) / 1000),
+      });
       return null;
     }
   }

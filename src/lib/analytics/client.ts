@@ -38,6 +38,14 @@ export async function trackAnalyticsAsync<K extends AnalyticsEventName>(
 }
 
 async function initializeAnalyticsPlatform(): Promise<AnalyticsStatus> {
+  if (import.meta.env.MODE === "test") {
+    currentStatus = {
+      enabled: false,
+      edition: platformAnalyticsEdition,
+    };
+    return currentStatus;
+  }
+
   try {
     currentStatus = await initPlatformAnalytics();
 

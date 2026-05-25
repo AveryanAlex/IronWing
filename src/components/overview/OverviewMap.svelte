@@ -11,6 +11,7 @@ import type {
 
 import { startGuidedSession, updateGuidedSession, type GuidedDomain } from "../../guided";
 import type { HomePosition, MissionPlan } from "../../mission";
+import { trackAnalytics } from "../../lib/analytics/client";
 import { buildMissionRenderFeatures } from "../../lib/mission-path-render";
 import { resolveVehicleIconKind, type VehicleIconKind } from "../../lib/overview/vehicle-icon";
 import {
@@ -471,6 +472,7 @@ async function handleFlyHere(latitude_deg: number, longitude_deg: number) {
   const command = guided?.value?.session?.kind === "goto" ? updateGuidedSession : startGuidedSession;
 
   guidedCommandPending = true;
+  trackAnalytics("guided_command_requested", { command: "goto", source: "overview_map" });
   try {
     const result = await command({ session });
     if (result.result === "rejected") {
@@ -687,6 +689,7 @@ function activateTarget(target: FollowTarget, follow: boolean) {
     }
 
     followTarget = follow ? "vehicle" : null;
+    trackAnalytics("map_follow_changed", { target: follow ? "vehicle" : "none" });
     if (follow) {
       toast.success("Following vehicle");
       return;
@@ -705,6 +708,7 @@ function activateTarget(target: FollowTarget, follow: boolean) {
     }
 
     followTarget = follow ? "home" : null;
+    trackAnalytics("map_follow_changed", { target: follow ? "home" : "none" });
     if (follow) {
       toast.success("Following home location");
       return;
@@ -732,6 +736,7 @@ function activateTarget(target: FollowTarget, follow: boolean) {
 
   if (deviceLocation) {
     followTarget = follow ? "device" : null;
+    trackAnalytics("map_follow_changed", { target: follow ? "device" : "none" });
     const lngLat: [number, number] = [deviceLocation.longitude_deg, deviceLocation.latitude_deg];
     if (follow) {
       toast.success("Following my location");
@@ -743,6 +748,7 @@ function activateTarget(target: FollowTarget, follow: boolean) {
   }
 
   followTarget = null;
+  trackAnalytics("map_follow_changed", { target: follow ? "device_pending" : "none" });
   pendingDeviceAction = { follow };
 }
 

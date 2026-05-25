@@ -10,6 +10,14 @@ import { selectTelemetryView } from "../telemetry-selectors";
 import type { OpenSessionSnapshot } from "../../session";
 import type { TransportDescriptor } from "../../transport";
 
+const analyticsMocks = vi.hoisted(() => ({
+  trackAnalytics: vi.fn(),
+}));
+
+vi.mock("../analytics/client", () => ({
+  trackAnalytics: analyticsMocks.trackAnalytics,
+}));
+
 function deferred<T>() {
   let resolve: (value: T) => void;
   let reject: (reason?: unknown) => void;
@@ -162,7 +170,10 @@ function createMockService(overrides: Partial<SessionService> = {}) {
     mode: "udp",
     udpBind: "0.0.0.0:14550",
     tcpAddress: "127.0.0.1:5760",
+    websocketUrl: "ws://127.0.0.1:14560",
     serialPort: "",
+    webSerialPortId: "",
+    webBluetoothDeviceId: "",
     baud: 57600,
     selectedBtDevice: "",
     takeoffAlt: "10",
@@ -224,6 +235,7 @@ function createMockService(overrides: Partial<SessionService> = {}) {
 
 describe("session store", () => {
   beforeEach(() => {
+    analyticsMocks.trackAnalytics.mockClear();
     if (typeof localStorage.clear === "function") {
       localStorage.clear();
     }
@@ -532,6 +544,7 @@ describe("session store", () => {
 
     await store.initialize();
     store.updateConnectionForm({ mode: "tcp", tcpAddress: "" });
+    analyticsMocks.trackAnalytics.mockClear();
 
     await store.connect();
 
@@ -541,6 +554,7 @@ describe("session store", () => {
     expect(state.optimisticConnection).toBeNull();
     expect(state.activeSource).toBe("live");
     expect(service.connectSession).not.toHaveBeenCalled();
+    expect(analyticsMocks.trackAnalytics).not.toHaveBeenCalled();
   });
 
   it("refreshes the live bootstrap snapshot after connect so seeded mission and params replace the stale pre-connect snapshot", async () => {
@@ -620,6 +634,28 @@ describe("session store", () => {
     expect(state.bootstrap.missionState?.current_index).toBe(5);
     expect(state.bootstrap.paramStore?.params.RTL_ALT?.value).toBe(1500);
     expect(state.bootstrap.paramProgress).toBe("completed");
+    expect(analyticsMocks.trackAnalytics).toHaveBeenCalledWith("connection_started", { transport: "udp" });
+    expect(analyticsMocks.trackAnalytics).toHaveBeenCalledWith("connection_succeeded", { transport: "udp" });
+  });
+
+  it("tracks connection failures with transport and formatted reason", async () => {
+    const { service } = createMockService({
+      connectSession: vi.fn(async () => {
+        throw new Error("link refused");
+      }),
+    });
+    const store = createSessionStore(service);
+
+    await store.initialize();
+    await store.connect();
+
+    expect(get(store).lastError).toBe("link refused");
+    expect(analyticsMocks.trackAnalytics).toHaveBeenCalledWith("connection_started", { transport: "udp" });
+    expect(analyticsMocks.trackAnalytics).toHaveBeenCalledWith("connection_failed", {
+      transport: "udp",
+      reason: "link refused",
+    });
+    expect(analyticsMocks.trackAnalytics).not.toHaveBeenCalledWith("connection_succeeded", expect.anything());
   });
 
   it("ignores late available-modes responses after disconnect", async () => {
@@ -673,7 +709,10 @@ describe("session store", () => {
         mode: "tcp",
         udpBind: "0.0.0.0:14550",
         tcpAddress: "127.0.0.1:5760",
+        websocketUrl: "ws://127.0.0.1:14560",
         serialPort: "",
+        webSerialPortId: "",
+        webBluetoothDeviceId: "",
         baud: 57600,
         selectedBtDevice: "",
         takeoffAlt: "10",

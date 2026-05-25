@@ -1,5 +1,7 @@
 import { get, writable } from "svelte/store";
 
+import { trackAnalytics } from "../analytics/client";
+import { countBucket, durationBucket, sizeBucket } from "../analytics/properties";
 import {
   cancelLogLibraryOperation,
   closeLog,
@@ -183,6 +185,14 @@ function buildIdlePlaybackState(): PlaybackStateSnapshot {
     barrier_ready: false,
     readonly: true,
     diagnostic: null,
+  };
+}
+
+function logImportAnalyticsProps(entry: LogLibraryEntry, result: string) {
+  return {
+    format: entry.metadata.format,
+    size_bucket: sizeBucket(entry.source.fingerprint.size_bytes),
+    result,
   };
 }
 
@@ -922,6 +932,8 @@ export function createLogsWorkspaceStore(
         };
       });
 
+      trackAnalytics("log_imported", logImportAnalyticsProps(entry, "success"));
+
       return entry;
     } catch (error) {
       if (libraryRequestId !== requestId) {
@@ -937,6 +949,7 @@ export function createLogsWorkspaceStore(
           error: service.formatError(error),
         },
       }));
+      trackAnalytics("log_imported", { format: "unknown", size_bucket: "unknown", result: "error" });
       return null;
     }
   }
@@ -970,6 +983,7 @@ export function createLogsWorkspaceStore(
             error: null,
           },
         }));
+        trackAnalytics("log_imported", { format: "unknown", size_bucket: "unknown", result: "cancelled" });
         return null;
       }
 
@@ -987,6 +1001,8 @@ export function createLogsWorkspaceStore(
         };
       });
 
+      trackAnalytics("log_imported", logImportAnalyticsProps(entry, "success"));
+
       return entry;
     } catch (error) {
       if (libraryRequestId !== requestId) {
@@ -1002,6 +1018,7 @@ export function createLogsWorkspaceStore(
           error: service.formatError(error),
         },
       }));
+      trackAnalytics("log_imported", { format: "unknown", size_bucket: "unknown", result: "error" });
       return null;
     }
   }
@@ -1323,6 +1340,11 @@ export function createLogsWorkspaceStore(
         },
       }));
 
+      trackAnalytics("log_replay_started", {
+        source: "library",
+        duration_secs_bucket: durationBucket(entry.metadata.duration_secs),
+      });
+
       return nextPlaybackState;
     } catch (error) {
       updateState((state) => ({
@@ -1569,6 +1591,11 @@ export function createLogsWorkspaceStore(
         },
       }));
 
+      trackAnalytics("log_raw_query", {
+        limit: nextRequest.limit,
+        result_count_bucket: countBucket(page.items.length),
+      });
+
       return page;
     } catch (error) {
       if (rawRequestId !== requestId) {
@@ -1635,6 +1662,10 @@ export function createLogsWorkspaceStore(
           page,
         },
       }));
+
+      trackAnalytics("log_chart_query", {
+        series_count_bucket: countBucket(page.series.length),
+      });
 
       return page;
     } catch (error) {
@@ -1713,6 +1744,11 @@ export function createLogsWorkspaceStore(
         },
       }));
 
+      trackAnalytics("log_exported", {
+        origin: exportOrigin,
+        result: "success",
+      });
+
       return result;
     } catch (error) {
       if (exportRequestId !== requestId) {
@@ -1730,6 +1766,10 @@ export function createLogsWorkspaceStore(
           request: nextRequest,
         },
       }));
+      trackAnalytics("log_exported", {
+        origin: exportOrigin,
+        result: "error",
+      });
       return null;
     }
   }
@@ -1785,6 +1825,7 @@ export function createLogsWorkspaceStore(
     try {
       await service.startRecording(path);
       await refreshRecordingStatus();
+      trackAnalytics("log_recording_started", { auto: 0, source: "manual" });
       return get(store).recording.status;
     } catch (error) {
       updateState((state) => ({
@@ -1796,14 +1837,21 @@ export function createLogsWorkspaceStore(
           error: service.formatError(error),
         },
       }));
+      trackAnalytics("log_recording_started", { auto: 0, source: "manual_error" });
       return null;
     }
   }
 
   async function stopActiveRecording() {
+    const previousStatus = get(store).recording.status;
+    const startedAt = previousStatus.kind === "recording" ? previousStatus.started_at_unix_msec : null;
     try {
       await service.stopRecording();
       await refreshRecordingStatus();
+      trackAnalytics("log_recording_stopped", {
+        duration_secs_bucket: durationBucket(startedAt === null ? null : (Date.now() - startedAt) / 1000),
+        result: "success",
+      });
       return get(store).recording.status;
     } catch (error) {
       updateState((state) => ({
@@ -1815,6 +1863,10 @@ export function createLogsWorkspaceStore(
           error: service.formatError(error),
         },
       }));
+      trackAnalytics("log_recording_stopped", {
+        duration_secs_bucket: durationBucket(startedAt === null ? null : (Date.now() - startedAt) / 1000),
+        result: "error",
+      });
       return null;
     }
   }

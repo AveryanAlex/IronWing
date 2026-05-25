@@ -6,6 +6,7 @@ import {
   getSetupWorkspaceViewStoreContext,
   getShellChromeStoreContext,
 } from "../../app/shell/runtime-context";
+import { trackAnalytics } from "../../lib/analytics/client";
 import { createSetupWizardStore } from "../../lib/stores/setup-wizard";
 import { SplitWorkspace, WorkspaceShell } from "../ui";
 import SetupBeginnerWizardSection from "./sections/SetupBeginnerWizardSection.svelte";
@@ -71,6 +72,19 @@ const wizardView = fromStore(wizardStore);
 
 let view = $derived(viewStore.current);
 let selectedSection = $derived(view.sections.find((section) => section.id === view.selectedSectionId) ?? null);
+let lastTrackedSectionId: string | null = null;
+
+$effect(() => {
+  if (view.selectedSectionId === lastTrackedSectionId) {
+    return;
+  }
+
+  lastTrackedSectionId = view.selectedSectionId;
+  trackAnalytics("setup_section_viewed", {
+    section: view.selectedSectionId,
+    connected: view.liveSessionConnected ? 1 : 0,
+  });
+});
 
 $effect(() => {
   const gpsStatus = view.sectionStatuses.gps;

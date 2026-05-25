@@ -1,5 +1,6 @@
 import { get, writable } from "svelte/store";
 
+import { trackAnalytics } from "../analytics/client";
 import type { MessageRateInfo } from "../../telemetry";
 import type { SessionEnvelope, SourceKind } from "../../session";
 import { scopedEnvelopeKey } from "../scoped-session-events";
@@ -392,6 +393,12 @@ export function createLiveSettingsStore(
     const lastApplyError = summarizeApplyErrors(telemetryRateError, messageRateErrors);
     const hadConfirmedChanges = !settingsEqual(nextConfirmedSettings, state.confirmedSettings);
     const nextApplyPhase = resolveApplyPhase(telemetryRateError, messageRateErrors, hadConfirmedChanges);
+    if (changedMessageIds.length > 0) {
+      trackAnalytics("message_rate_changed", {
+        changed_count: changedMessageIds.length,
+        result: messageRateErrors.length === 0 ? "success" : hadConfirmedChanges ? "partial_failure" : "error",
+      });
+    }
 
     store.update((current) => ({
       ...current,
