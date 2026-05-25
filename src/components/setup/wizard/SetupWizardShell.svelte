@@ -8,6 +8,10 @@ import type {
   WizardStoreState,
 } from "../../../lib/stores/setup-wizard";
 import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
+import SetupCard from "../shared/SetupCard.svelte";
+import SetupCardHeader from "../shared/SetupCardHeader.svelte";
+import SetupNotice from "../shared/SetupNotice.svelte";
+import SetupStatusPill from "../shared/SetupStatusPill.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 import { phaseLabel, progressSummary } from "./setup-wizard-view";
 
@@ -106,43 +110,26 @@ function stepById(id: string): WizardStepSnapshot | null {
   </li>
 {/snippet}
 
-<section
-  class="rounded-lg border border-border bg-bg-secondary/60 p-3"
-  data-testid={setupWorkspaceTestIds.wizardRoot}
-  data-phase={wizardState.phase}
->
-  <header
-    class="flex flex-wrap items-start justify-between gap-3"
-    data-testid={setupWorkspaceTestIds.wizardHeader}
-  >
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">
-        Beginner setup wizard
-      </p>
-      <p class="mt-1 text-sm text-text-secondary">
-        Guided path through the critical setup steps. Expert sections stay available on the left.
-      </p>
-    </div>
-    <div class="flex items-center gap-2">
-      <span
-        class="rounded-full border border-border bg-bg-primary/80 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary"
-        data-testid={setupWorkspaceTestIds.wizardPhase}
-      >
-        {phaseLabel(wizardState)}
-      </span>
-      <button
-        class="rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.wizardClose}
-        onclick={onClose}
-        type="button"
-      >
-        Close
-      </button>
-    </div>
-  </header>
+<section class="space-y-4" data-testid={setupWorkspaceTestIds.wizardRoot} data-phase={wizardState.phase}>
+  <SetupCard testId={setupWorkspaceTestIds.wizardHeader}>
+    <SetupCardHeader title="Wizard progress">
+      {#snippet actions()}
+        <div class="flex items-center gap-2">
+          <SetupStatusPill tone="muted" testId={setupWorkspaceTestIds.wizardPhase}>{phaseLabel(wizardState)}</SetupStatusPill>
+          <button
+            class="rounded-full border border-border bg-bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary hover:border-accent hover:text-accent"
+            data-testid={setupWorkspaceTestIds.wizardClose}
+            onclick={onClose}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+      {/snippet}
+    </SetupCardHeader>
 
   <p
-    class="mt-3 text-xs text-text-muted"
+    class="text-xs text-text-muted"
     data-testid={setupWorkspaceTestIds.wizardProgress}
   >
     {progressSummary(wizardState)}
@@ -154,7 +141,7 @@ function stepById(id: string): WizardStepSnapshot | null {
   >
     {#each wizardState.steps as step (step.id)}
       <li
-        class="rounded-full border border-border bg-bg-primary/80 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary"
+        class="rounded-full bg-bg-secondary px-2 py-1 text-xs font-medium text-text-secondary"
         data-testid={`${setupWorkspaceTestIds.wizardStepItemPrefix}-${step.id}`}
         data-status={step.status}
         data-tier={step.tier}
@@ -163,11 +150,10 @@ function stepById(id: string): WizardStepSnapshot | null {
       </li>
     {/each}
   </ol>
+  </SetupCard>
 
   {#if wizardState.phase === "idle"}
-    <div
-      class="mt-4 rounded-lg border border-dashed border-border bg-bg-primary/60 px-4 py-4 text-sm text-text-secondary"
-    >
+    <SetupCard variant="primary" class="border-dashed text-sm text-text-secondary">
       <p>
         Run the beginner path when you want a guided setup for a new vehicle. Expert sections stay
         available any time.
@@ -180,12 +166,13 @@ function stepById(id: string): WizardStepSnapshot | null {
       >
         Start wizard
       </button>
-    </div>
+    </SetupCard>
   {:else if wizardState.phase === "active" && currentStep}
-    <section
-      class="mt-4 rounded-lg border border-border bg-bg-primary/60 p-3"
-      data-testid={setupWorkspaceTestIds.wizardStepFrame}
-      data-step={currentStep.id}
+    <SetupCard
+      variant="primary"
+      class="p-3"
+      testId={setupWorkspaceTestIds.wizardStepFrame}
+      dataStep={currentStep.id}
     >
       <header class="flex flex-wrap items-start justify-between gap-2">
         <div>
@@ -231,12 +218,9 @@ function stepById(id: string): WizardStepSnapshot | null {
           </button>
         {/if}
       </footer>
-    </section>
+    </SetupCard>
   {:else if wizardState.phase === "paused_detour"}
-    <div
-      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-text-secondary"
-      data-testid={setupWorkspaceTestIds.wizardPausedDetour}
-    >
+    <SetupNotice tone="warning" testId={setupWorkspaceTestIds.wizardPausedDetour}>
       <p>
         {#if currentStep}
           Your next step is <strong class="text-text-primary">{currentStep.title}</strong>. Open the
@@ -257,22 +241,16 @@ function stepById(id: string): WizardStepSnapshot | null {
           Resume wizard
         </button>
       </div>
-    </div>
+    </SetupNotice>
   {:else if wizardState.phase === "paused_checkpoint"}
-    <div
-      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-text-secondary"
-      data-testid={setupWorkspaceTestIds.wizardPausedCheckpoint}
-    >
+    <SetupNotice tone="warning" testId={setupWorkspaceTestIds.wizardPausedCheckpoint}>
       <p>
         Waiting for vehicle reboot to finish. The wizard will automatically continue once the
         vehicle is back.
       </p>
-    </div>
+    </SetupNotice>
   {:else if wizardState.phase === "paused_scope_change"}
-    <div
-      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-text-secondary"
-      data-testid={setupWorkspaceTestIds.wizardPausedScope}
-    >
+    <SetupNotice tone="warning" testId={setupWorkspaceTestIds.wizardPausedScope}>
       <p>
         A different vehicle connected. The current wizard progress applies to the previous vehicle.
       </p>
@@ -286,12 +264,9 @@ function stepById(id: string): WizardStepSnapshot | null {
           Restart for new vehicle
         </button>
       </div>
-    </div>
+    </SetupNotice>
   {:else if wizardState.phase === "complete"}
-    <section
-      class="mt-4 space-y-3 rounded-lg border border-success/40 bg-success/5 p-3"
-      data-testid={setupWorkspaceTestIds.wizardHandoff}
-    >
+    <SetupCard class="space-y-3 border-success/40 bg-success/5 p-3" testId={setupWorkspaceTestIds.wizardHandoff}>
       <header>
         <p class="text-xs font-semibold uppercase tracking-widest text-success">Wizard complete</p>
         <h4 class="mt-1 text-sm font-semibold text-text-primary">Here's what we configured</h4>
@@ -351,6 +326,6 @@ function stepById(id: string): WizardStepSnapshot | null {
       >
         Acknowledge and close
       </button>
-    </section>
+    </SetupCard>
   {/if}
 </section>

@@ -227,21 +227,8 @@ function stagePreset() {
   title="Six-slot mode editing with truthful live availability"
   description="Flight-mode slots stay mapped to the live available-mode list for the current vehicle family. Presets, mode-switch channel changes, and Simple/Super Simple toggles all queue through the shared review tray instead of applying directly."
   testId={setupWorkspaceTestIds.flightModesSection}
+  docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.flightModesDocsLink }]}
 >
-  {#snippet actions()}
-    {#if docsUrl}
-      <a
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.flightModesDocsLink}
-        href={docsUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        Flight-mode docs
-      </a>
-    {/if}
-  {/snippet}
-
   {#snippet body()}
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"

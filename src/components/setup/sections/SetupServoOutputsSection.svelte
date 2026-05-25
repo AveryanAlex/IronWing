@@ -574,21 +574,8 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
   title="Grouped servo proof up front, raw PWM escape hatch below"
   description="Function-oriented testers stay grouped by the configured surface, raw per-servo PWM sends stay available as the escape hatch, and every configured output stays visible even when current metadata is partial or above the live actuation bridge window."
   testId={setupWorkspaceTestIds.servoOutputsSection}
+  docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.servoOutputsDocsLink }]}
 >
-  {#snippet actions()}
-    {#if docsUrl}
-      <a
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.servoOutputsDocsLink}
-        href={docsUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        Servo output docs
-      </a>
-    {/if}
-  {/snippet}
-
   {#snippet body()}
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 xl:grid-cols-4"

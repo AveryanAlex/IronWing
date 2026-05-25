@@ -8,6 +8,14 @@ import { createParameterFileIo } from "../../../lib/params/parameter-file-io";
 import { paramProgressCounts, paramProgressPhase } from "../../../params";
 import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import SetupCard from "../shared/SetupCard.svelte";
+import SetupCardHeader from "../shared/SetupCardHeader.svelte";
+import SetupContentPanel from "../shared/SetupContentPanel.svelte";
+import SetupIntroCard from "../shared/SetupIntroCard.svelte";
+import SetupNotice from "../shared/SetupNotice.svelte";
+import SetupStatusPill from "../shared/SetupStatusPill.svelte";
+
+type NoticeTone = "info" | "warning" | "danger" | "success";
 
 let {
   view,
@@ -155,16 +163,16 @@ let blockedCount = $derived(guidedSections.filter((section) => section.availabil
 let implementedCount = $derived(guidedSections.filter((section) => section.implemented).length);
 let availableCount = $derived(guidedSections.filter((section) => section.availability === "available").length);
 let inProgressCount = $derived(guidedSections.filter((section) => section.status === "in_progress").length);
-let bannerTone = $derived.by(() => {
+let bannerTone = $derived.by<NoticeTone>(() => {
   if (view.metadataState === "unavailable" || view.readiness === "degraded") {
-    return "border-warning/40 bg-warning/10 text-warning";
+    return "warning";
   }
 
   if (unknownCount > 0 || blockedCount > 0) {
-    return "border-border bg-bg-primary/80 text-text-secondary";
+    return "info";
   }
 
-  return "border-success/30 bg-success/10 text-success";
+  return "success";
 });
 let bannerTitle = $derived.by(() => {
   if (view.metadataState === "unavailable") {
@@ -261,8 +269,15 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
 </script>
 
 <section class="space-y-4" data-testid={setupWorkspaceTestIds.overviewSection}>
+  <SetupIntroCard
+    sectionId="overview"
+    title="Overview"
+    description="Review setup readiness, download vehicle parameters, and open guided setup sections from one place."
+  />
+
+  <SetupContentPanel>
   {#if overviewMode === "disconnected"}
-    <div class="rounded-xl border border-accent/30 bg-accent/5 px-6 py-10 text-center text-text-secondary" data-testid={setupWorkspaceTestIds.overviewBanner}>
+    <SetupCard class="px-6 py-10 text-center text-text-secondary" testId={setupWorkspaceTestIds.overviewBanner}>
       <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-accent/30 bg-accent/15 text-accent shadow-lg shadow-accent/10">
         <Plug aria-hidden="true" size={30} />
       </div>
@@ -270,10 +285,10 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
       <p class="mx-auto mt-3 max-w-xl text-sm leading-7 text-text-secondary">
         Setup editors unlock after IronWing connects to a live vehicle session.
       </p>
-    </div>
+    </SetupCard>
   {:else if overviewMode === "needs_params"}
     <div class="space-y-4">
-      <div class="grid gap-3 sm:grid-cols-3 rounded-lg border border-border bg-bg-primary/80 p-4">
+      <SetupCard variant="primary" class="grid gap-3 sm:grid-cols-3">
         <div>
           <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Type</p>
           <p class="mt-2 text-lg font-semibold text-text-primary">{view.activeEnvelope ? "Connected vehicle" : "Waiting"}</p>
@@ -286,9 +301,9 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
           <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Setup access</p>
           <p class="mt-2 text-lg font-semibold text-text-primary">Overview only</p>
         </div>
-      </div>
+      </SetupCard>
 
-      <div class="rounded-lg border border-accent/30 bg-accent/5 px-6 py-8 text-center" data-testid={setupWorkspaceTestIds.overviewBanner}>
+      <SetupCard class="border-accent/30 bg-accent/5 px-6 py-8 text-center" testId={setupWorkspaceTestIds.overviewBanner}>
         <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent/15 text-accent">
           <Download aria-hidden="true" size={24} />
         </div>
@@ -330,18 +345,18 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
             </p>
           </div>
         {/if}
-      </div>
+      </SetupCard>
     </div>
   {:else if overviewMode === "needs_metadata"}
     <div class="space-y-4">
-      <div class="rounded-lg border border-success/30 bg-success/10 px-4 py-4 text-text-secondary">
+      <SetupNotice tone="success">
         <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Overview</p>
         <p class="mt-2 text-sm font-semibold text-text-primary">
           Parameters downloaded — {Object.keys(paramsState.current.paramStore?.params ?? {}).length} parameters
         </p>
-      </div>
+      </SetupNotice>
 
-      <div class="rounded-lg border border-border bg-bg-primary/80 px-6 py-6 text-center" data-testid={setupWorkspaceTestIds.overviewBanner}>
+      <SetupCard variant="primary" class="px-6 py-6 text-center" testId={setupWorkspaceTestIds.overviewBanner}>
         <h3 class="text-xl font-semibold text-text-primary">
           {view.metadataState === "unavailable" ? "Parameter descriptions are unavailable" : "Loading parameter descriptions"}
         </h3>
@@ -362,25 +377,22 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
             Open Full Parameters
           </button>
         </div>
-      </div>
+      </SetupCard>
     </div>
   {:else}
-    <div class={`rounded-lg border px-4 py-4 ${bannerTone}`} data-testid={setupWorkspaceTestIds.overviewBanner}>
+    <SetupNotice tone={bannerTone} testId={setupWorkspaceTestIds.overviewBanner}>
       <p class="text-xs font-semibold uppercase tracking-widest">Overview</p>
       <h3 class="mt-2 text-lg font-semibold text-text-primary">{bannerTitle}</h3>
       <p class="mt-2 text-sm leading-6">{bannerBody}</p>
-    </div>
+    </SetupNotice>
 
     <div class="grid gap-3 xl:grid-cols-3">
       {#each overviewMetrics as metric (metric.id)}
-        <article
-          class="rounded-lg border border-border bg-bg-primary/80 p-3"
-          data-testid={`${setupWorkspaceTestIds.overviewMetricPrefix}-${metric.id}`}
-        >
+        <SetupCard variant="primary" class="p-3" testId={`${setupWorkspaceTestIds.overviewMetricPrefix}-${metric.id}`}>
           <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{metric.label}</p>
           <p class="mt-2 text-base font-semibold text-text-primary">{metric.value}</p>
           <p class="mt-2 text-sm leading-6 text-text-secondary">{metric.detail}</p>
-        </article>
+        </SetupCard>
       {/each}
     </div>
 
@@ -388,7 +400,7 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
       {#each overviewDocs as doc (doc.id)}
         {#if doc.url}
           <a
-            class="rounded-lg border border-border bg-bg-primary/80 p-3 transition hover:border-accent hover:text-accent"
+            class="rounded-lg border border-border bg-bg-tertiary/50 p-3 transition hover:border-accent hover:text-accent"
             data-testid={`${setupWorkspaceTestIds.overviewDocLinkPrefix}-${doc.id}`}
             href={doc.url}
             rel="noreferrer"
@@ -402,8 +414,8 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
       {/each}
     </div>
 
-    <div class="rounded-lg border border-border bg-bg-primary/80 p-4">
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Parameter actions</p>
+    <SetupCard variant="primary">
+      <SetupCardHeader title="Parameter actions" />
       <p class="mt-2 text-sm text-text-secondary">Refresh all values from the vehicle, or save/load a parameter file snapshot. File imports stage changes in the review tray.</p>
       <div class="mt-4 flex flex-wrap gap-2">
         <button
@@ -432,15 +444,12 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
         </button>
       </div>
       <p class="mt-3 text-xs text-text-muted">{fileActionMessage}</p>
-    </div>
+    </SetupCard>
   {/if}
 
   {#if view.statusNotices.length > 0}
-    <div
-      class="rounded-lg border border-border bg-bg-secondary/60 p-4"
-      data-testid={setupWorkspaceTestIds.notices}
-    >
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Status text</p>
+    <SetupCard testId={setupWorkspaceTestIds.notices}>
+      <SetupCardHeader title="Status text" />
       <ul class="mt-3 space-y-2">
         {#each view.statusNotices as notice (notice.id)}
           <li
@@ -451,7 +460,7 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
           </li>
         {/each}
       </ul>
-    </div>
+    </SetupCard>
   {/if}
 
   {#if overviewMode === "ready"}
@@ -487,10 +496,7 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
 
     <div class="space-y-4">
       {#each guidedGroups as group (group.id)}
-        <article
-          class={`rounded-lg border p-3 ${groupTone(group.blockedCount, group.progressText)}`}
-          data-testid={`${setupWorkspaceTestIds.overviewGroupPrefix}-${group.id}`}
-        >
+        <SetupCard class={`p-3 ${groupTone(group.blockedCount, group.progressText)}`} testId={`${setupWorkspaceTestIds.overviewGroupPrefix}-${group.id}`}>
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{group.title}</p>
@@ -503,12 +509,9 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
               </p>
             </div>
             <div class="text-right">
-              <p
-                class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary"
-                data-testid={`${setupWorkspaceTestIds.overviewGroupProgressPrefix}-${group.id}`}
-              >
-                {group.progressText}
-              </p>
+                <SetupStatusPill tone="muted" testId={`${setupWorkspaceTestIds.overviewGroupProgressPrefix}-${group.id}`}>
+                  {group.progressText}
+                </SetupStatusPill>
               <p class="mt-2 text-xs text-text-muted">
                 {group.blockedCount} blocked · {group.unconfirmedCount} unconfirmed
               </p>
@@ -517,18 +520,15 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
 
           <div class="mt-4 grid gap-3 xl:grid-cols-2">
             {#each group.sections as section (section.id)}
-              <div
-                class="rounded-lg border border-border bg-bg-secondary/60 p-3"
-                data-testid={`${setupWorkspaceTestIds.overviewCardPrefix}-${section.id}`}
-              >
+              <SetupCard class="p-3" testId={`${setupWorkspaceTestIds.overviewCardPrefix}-${section.id}`}>
                 <div class="flex items-start justify-between gap-3">
                   <div>
                     <p class="text-sm font-semibold text-text-primary">{section.title}</p>
                     <p class="mt-1 text-xs text-text-secondary">{section.description}</p>
                   </div>
-                  <span class="rounded-full border border-border bg-bg-primary/80 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
+                  <SetupStatusPill tone="muted">
                     {section.statusText}
-                  </span>
+                  </SetupStatusPill>
                 </div>
 
                 {#if section.confidenceText}
@@ -561,17 +561,14 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
                     {`Open ${section.title}`}
                   </button>
                 {/if}
-              </div>
+              </SetupCard>
             {/each}
           </div>
-        </article>
+        </SetupCard>
       {/each}
     </div>
 
-    <div
-      class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary"
-      data-testid={setupWorkspaceTestIds.detailRecovery}
-    >
+    <SetupCard variant="primary" class="text-sm leading-6 text-text-secondary" testId={setupWorkspaceTestIds.detailRecovery}>
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="max-w-3xl">
           <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Recovery path</p>
@@ -599,6 +596,7 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
           </button>
         </div>
       </div>
-    </div>
+    </SetupCard>
   {/if}
+  </SetupContentPanel>
 </section>

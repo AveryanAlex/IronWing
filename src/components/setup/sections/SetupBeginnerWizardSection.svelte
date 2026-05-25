@@ -12,6 +12,8 @@ import SetupWizardInitialParamsStep from "../wizard/SetupWizardInitialParamsStep
 import SetupWizardRcStep from "../wizard/SetupWizardRcStep.svelte";
 import SetupWizardShell from "../wizard/SetupWizardShell.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import SetupContentPanel from "../shared/SetupContentPanel.svelte";
+import SetupIntroCard from "../shared/SetupIntroCard.svelte";
 
 let {
   view,
@@ -31,7 +33,14 @@ function handleClose() {
 }
 </script>
 
-<div data-testid={setupWorkspaceTestIds.beginnerWizardSection}>
+<section class="space-y-4" data-testid={setupWorkspaceTestIds.beginnerWizardSection}>
+  <SetupIntroCard
+    sectionId="beginner_wizard"
+    title="Beginner Wizard"
+    description="Follow a guided path through the critical setup steps. Expert sections stay available whenever you need to inspect or adjust details directly."
+  />
+
+  <SetupContentPanel>
   <SetupWizardShell
     store={wizardStore}
     {view}
@@ -62,4 +71,5 @@ function handleClose() {
       </div>
     {/snippet}
   </SetupWizardShell>
-</div>
+  </SetupContentPanel>
+</section>

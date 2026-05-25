@@ -124,21 +124,8 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
   title="Check live channel bars and queue receiver mapping changes"
   description="Watch live PWM movement here, then queue channel-order changes in the review tray. This section shows receiver motion and mapping without applying changes on its own."
   testId={setupWorkspaceTestIds.rcSection}
+  docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.rcDocsLink }]}
 >
-  {#snippet actions()}
-    {#if docsUrl}
-      <a
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.rcDocsLink}
-        href={docsUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        RC calibration docs
-      </a>
-    {/if}
-  {/snippet}
-
   {#snippet body()}
       <div class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-[minmax(0,1fr)_auto]">
     <div>

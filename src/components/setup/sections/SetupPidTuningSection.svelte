@@ -411,21 +411,8 @@ function discardItem(name: string) {
   title="Vehicle-aware PID surfaces without a raw-parameter fallback"
   description="PID tuning stays shaped around the current vehicle family. Copter, fixed-wing, and fully refreshed QuadPlane scopes each get a purposeful expert-row surface, while partial VTOL truth stays explicit and fail-closed."
   testId={setupWorkspaceTestIds.pidTuningSection}
+  docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.pidTuningDocsLink }]}
 >
-  {#snippet actions()}
-    {#if docsUrl}
-      <a
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.pidTuningDocsLink}
-        href={docsUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        Tuning docs
-      </a>
-    {/if}
-  {/snippet}
-
   {#snippet body()}
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"

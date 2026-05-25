@@ -339,21 +339,8 @@ function unstage(name: string) {
   title="Return-home behavior in operator-facing units"
   description="RTL / Return keeps altitude, speed, timing, and landing behavior in purpose-built cards for the active vehicle family. The UI speaks in meters, meters per second, and seconds while the shared review tray still carries the raw parameter writes underneath."
   testId={setupWorkspaceTestIds.rtlReturnSection}
+  docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.rtlReturnDocsLink }]}
 >
-  {#snippet actions()}
-    {#if docsUrl}
-      <a
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.rtlReturnDocsLink}
-        href={docsUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        RTL docs
-      </a>
-    {/if}
-  {/snippet}
-
   {#snippet body()}
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"

@@ -361,6 +361,7 @@ function discardItem(name: string) {
   title="Curated peripheral inventory with configured-only filtering"
   description="Peripheral setup stays inventory-first here: known hardware families and discovered extras remain grouped, visible, and staged through the shared review tray without dropping into a generic raw-parameter browser."
   testId={setupWorkspaceTestIds.peripheralsSection}
+  docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.peripheralsDocsLink }]}
 >
   {#snippet actions()}
     <button
@@ -371,17 +372,6 @@ function discardItem(name: string) {
     >
       {showConfiguredOnly ? "Configured only" : "Show all groups"}
     </button>
-    {#if docsUrl}
-      <a
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.peripheralsDocsLink}
-        href={docsUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        Optional-hardware docs
-      </a>
-    {/if}
   {/snippet}
 
   {#snippet body()}

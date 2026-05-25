@@ -28,7 +28,10 @@ import type {
 import SetupSectionShell from "../SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 import MotorDiagram from "../shared/MotorDiagram.svelte";
-import SetupStagedBadge from "../../ui/StagedBadge.svelte";
+import SetupCard from "../shared/SetupCard.svelte";
+import SetupCardHeader from "../shared/SetupCardHeader.svelte";
+import SetupNotice from "../shared/SetupNotice.svelte";
+import SetupParamSelect from "../shared/SetupParamSelect.svelte";
 
 type EnumOption = { code: number; label: string };
 type Tone = "info" | "warning" | "danger";
@@ -240,18 +243,6 @@ function stage(item: ParameterItemModel | null, draftValue: string) {
 
 function unstage(name: string) {
   paramsStore.discardStagedEdit(name);
-}
-
-function bannerClass(tone: Tone): string {
-  switch (tone) {
-    case "warning":
-      return "border-warning/40 bg-warning/10 text-warning";
-    case "danger":
-      return "border-danger/40 bg-danger/10 text-danger";
-    case "info":
-    default:
-      return "border-border bg-bg-primary/80 text-text-secondary";
-  }
 }
 
 function frameStateLabel(profile: VehicleProfile): string {
@@ -467,25 +458,13 @@ function buildFrameBanners(input: {
   title="Plane vs QuadPlane truth stays explicit here"
   description="Frame, VTOL enable, and board orientation stay separate from apply ownership: every parameter-backed change stages into the shared review tray, while stale or partial Q-frame truth fails closed instead of bluffing actuator safety."
   testId={setupWorkspaceTestIds.frameSection}
+  docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.frameDocsLink }]}
 >
-  {#snippet actions()}
-    {#if docsUrl}
-      <a
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.frameDocsLink}
-        href={docsUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        ArduPilot frame docs
-      </a>
-    {/if}
-  {/snippet}
-
   {#snippet body()}
-      <div
-        class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
-        data-testid={setupWorkspaceTestIds.frameSummary}
+      <SetupCard
+        variant="primary"
+        class="grid gap-3 md:grid-cols-3"
+        testId={setupWorkspaceTestIds.frameSummary}
       >
     <div>
       <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Vehicle state</p>
@@ -508,128 +487,85 @@ function buildFrameBanners(input: {
       </p>
       <p class="mt-1 text-sm text-text-secondary">Vehicle type · {vehicleType ?? "Unknown"}</p>
     </div>
-  </div>
+  </SetupCard>
 
   {#if retainedFailures.length > 0}
-    <div
-      class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
-      data-testid={setupWorkspaceTestIds.frameFailure}
-    >
+    <SetupNotice tone="danger" testId={setupWorkspaceTestIds.frameFailure}>
       <p class="font-semibold text-text-primary">The shared review tray is still retaining frame or orientation failures.</p>
       <ul class="mt-2 list-disc space-y-1 pl-5">
         {#each retainedFailures as failure (failure.name)}
           <li>{failure.name} · {failure.message}</li>
         {/each}
       </ul>
-    </div>
+    </SetupNotice>
   {/if}
 
   {#each frameBanners as banner (banner.id)}
-    <div
-      class={`rounded-lg border px-4 py-4 text-sm leading-6 ${bannerClass(banner.tone)}`}
-      data-testid={`${setupWorkspaceTestIds.frameBannerPrefix}-${banner.id}`}
-    >
-      {banner.text}
-    </div>
+    <SetupNotice tone={banner.tone} testId={`${setupWorkspaceTestIds.frameBannerPrefix}-${banner.id}`}>
+      <p>{banner.text}</p>
+    </SetupNotice>
   {/each}
 
   <div class="space-y-4">
     {#if showQEnableCard}
-      <article
-        class="rounded-lg border border-border bg-bg-tertiary/50 p-4"
-        data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-Q_ENABLE`}
-      >
-        <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-text-muted">
-          <Box size={14} class="text-accent" aria-hidden="true" />
-          <span>QuadPlane Configuration</span>
-        </div>
+      <SetupCard testId={`${setupWorkspaceTestIds.frameCardPrefix}-Q_ENABLE`}>
+        <SetupCardHeader icon={Box} title="QuadPlane Configuration" />
 
-        <div class="mt-4">
-          <div class="flex flex-wrap items-center gap-2">
-            <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for="setup-frame-q-enable">VTOL / QuadPlane</label>
-            {#if params.stagedEdits.Q_ENABLE}
-              <SetupStagedBadge name="Q_ENABLE" onUnstage={unstage} testId={`${setupWorkspaceTestIds.frameStagedPrefix}-Q_ENABLE`} />
-            {/if}
-          </div>
-        <select
+        <SetupParamSelect
           id="setup-frame-q-enable"
-          bind:value={qEnableDraft}
-          class="mt-2 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-          data-testid={`${setupWorkspaceTestIds.frameInputPrefix}-Q_ENABLE`}
+          value={qEnableDraft}
+          options={qEnableOptions}
+          label="VTOL / QuadPlane"
+          description={qEnableItem?.description ?? "Enable QuadPlane to expose VTOL frame, motor, and tuning parameters on Plane firmware."}
+          testId={`${setupWorkspaceTestIds.frameInputPrefix}-Q_ENABLE`}
           disabled={checkpoint.blocksActions}
-          onchange={(event) => stage(qEnableItem, (event.currentTarget as HTMLSelectElement).value)}
-        >
-          {#each qEnableOptions as option (option.code)}
-            <option value={String(option.code)}>{option.label}</option>
-          {/each}
-        </select>
-          <p class="mt-2 text-xs leading-relaxed text-text-muted">
-            {qEnableItem?.description ?? "Enable QuadPlane to expose VTOL frame, motor, and tuning parameters on Plane firmware."}
-          </p>
-        </div>
-      </article>
+          stagedName={params.stagedEdits.Q_ENABLE ? "Q_ENABLE" : undefined}
+          stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-Q_ENABLE`}
+          onChange={(value) => stage(qEnableItem, value)}
+          onUnstage={unstage}
+        />
+      </SetupCard>
     {/if}
 
     {#if showFrameCards && frameClassItem && frameTypeItem}
-      <article
-        class="rounded-lg border border-border bg-bg-tertiary/50 p-4"
-      >
-        <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-text-muted">
-          <Box size={14} class="text-accent" aria-hidden="true" />
-          <span>{framePanelTitle(profile)}</span>
-        </div>
+      <SetupCard>
+        <SetupCardHeader icon={Box} title={framePanelTitle(profile)} />
 
         <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-${frameClassItem.name}`}>
-            <div class="flex flex-wrap items-center gap-2">
-              <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`setup-frame-${frameClassItem.name}`}>{frameClassItem.label}</label>
-              {#if params.stagedEdits[frameClassItem.name]}
-                <SetupStagedBadge name={frameClassItem.name} onUnstage={unstage} testId={`${setupWorkspaceTestIds.frameStagedPrefix}-${frameClassItem.name}`} />
-              {/if}
-            </div>
-            <select
+            <SetupParamSelect
               id={`setup-frame-${frameClassItem.name}`}
-              bind:value={frameClassDraft}
-              class="mt-2 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-              data-testid={`${setupWorkspaceTestIds.frameInputPrefix}-${frameClassItem.name}`}
-              disabled={checkpoint.blocksActions}
-              onchange={(event) => stage(frameClassItem, (event.currentTarget as HTMLSelectElement).value)}
-            >
-              {#each frameClassOptions as option (option.code)}
-                <option value={String(option.code)}>{option.label}</option>
-              {/each}
-            </select>
-            <p class="mt-2 text-xs leading-relaxed text-text-muted">
-              {frameClassItem.description ?? (profile.frameParamFamily === "quadplane"
+              value={frameClassDraft}
+              options={frameClassOptions}
+              label={frameClassItem.label}
+              description={frameClassItem.description ?? (profile.frameParamFamily === "quadplane"
                 ? "Choose the authoritative QuadPlane lift-motor frame family after the VTOL params refresh."
                 : "Choose the current frame family reported by ArduPilot metadata.")}
-            </p>
+              testId={`${setupWorkspaceTestIds.frameInputPrefix}-${frameClassItem.name}`}
+              disabled={checkpoint.blocksActions}
+              stagedName={params.stagedEdits[frameClassItem.name] ? frameClassItem.name : undefined}
+              stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-${frameClassItem.name}`}
+              onChange={(value) => stage(frameClassItem, value)}
+              onUnstage={unstage}
+            />
           </div>
 
           <div data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-${frameTypeItem.name}`}>
-            <div class="flex flex-wrap items-center gap-2">
-              <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`setup-frame-${frameTypeItem.name}`}>{frameTypeItem.label}</label>
-              {#if params.stagedEdits[frameTypeItem.name]}
-                <SetupStagedBadge name={frameTypeItem.name} onUnstage={unstage} testId={`${setupWorkspaceTestIds.frameStagedPrefix}-${frameTypeItem.name}`} />
-              {/if}
-            </div>
-            <select
+            <SetupParamSelect
               id={`setup-frame-${frameTypeItem.name}`}
-              bind:value={frameTypeDraft}
-              class="mt-2 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-              data-testid={`${setupWorkspaceTestIds.frameInputPrefix}-${frameTypeItem.name}`}
-              disabled={checkpoint.blocksActions}
-              onchange={(event) => stage(frameTypeItem, (event.currentTarget as HTMLSelectElement).value)}
-            >
-              {#each frameTypeOptions as option (option.code)}
-                <option value={String(option.code)}>{option.label}</option>
-              {/each}
-            </select>
-            <p class="mt-2 text-xs leading-relaxed text-text-muted">
-              {frameTypeItem.description ?? (profile.frameParamFamily === "quadplane"
+              value={frameTypeDraft}
+              options={frameTypeOptions}
+              label={frameTypeItem.label}
+              description={frameTypeItem.description ?? (profile.frameParamFamily === "quadplane"
                 ? "Choose the authoritative QuadPlane layout inside the refreshed VTOL frame family."
                 : "Choose the layout inside the current frame family.")}
-            </p>
+              testId={`${setupWorkspaceTestIds.frameInputPrefix}-${frameTypeItem.name}`}
+              disabled={checkpoint.blocksActions}
+              stagedName={params.stagedEdits[frameTypeItem.name] ? frameTypeItem.name : undefined}
+              stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-${frameTypeItem.name}`}
+              onChange={(value) => stage(frameTypeItem, value)}
+              onUnstage={unstage}
+            />
           </div>
         </div>
 
@@ -642,51 +578,32 @@ function buildFrameBanners(input: {
           />
           <span class="text-[10px] text-text-muted">{motorPreviewLabel}</span>
         </div>
-      </article>
+      </SetupCard>
     {/if}
 
     {#if showOrientationCard && orientationItem}
-      <article
-        class="rounded-lg border border-border bg-bg-tertiary/50 p-4"
-        data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-AHRS_ORIENTATION`}
-      >
-        <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-text-muted">
-          <Compass size={14} class="text-accent" aria-hidden="true" />
-          <span>Board Orientation</span>
-        </div>
+      <SetupCard testId={`${setupWorkspaceTestIds.frameCardPrefix}-AHRS_ORIENTATION`}>
+        <SetupCardHeader icon={Compass} title="Board Orientation" />
 
-        <div class="mt-4">
-          <div class="flex flex-wrap items-center gap-2">
-            <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for="setup-frame-ahrs-orientation">Orientation</label>
-            {#if params.stagedEdits.AHRS_ORIENTATION}
-              <SetupStagedBadge name="AHRS_ORIENTATION" onUnstage={unstage} testId={`${setupWorkspaceTestIds.frameStagedPrefix}-AHRS_ORIENTATION`} />
-            {/if}
-          </div>
-        <select
+        <SetupParamSelect
           id="setup-frame-ahrs-orientation"
-          bind:value={orientationDraft}
-          class="mt-2 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-          data-testid={`${setupWorkspaceTestIds.frameInputPrefix}-AHRS_ORIENTATION`}
+          value={orientationDraft}
+          options={orientationOptions}
+          label="Orientation"
+          description="Set the physical orientation of the flight controller on your frame. The arrow on the FC should point forward. If mounted differently, select the rotation that matches."
+          testId={`${setupWorkspaceTestIds.frameInputPrefix}-AHRS_ORIENTATION`}
           disabled={checkpoint.blocksActions}
-          onchange={(event) => stage(orientationItem, (event.currentTarget as HTMLSelectElement).value)}
-        >
-          {#each orientationOptions as option (option.code)}
-            <option value={String(option.code)}>{option.label}</option>
-          {/each}
-        </select>
-          <p class="mt-2 text-xs leading-relaxed text-text-muted">
-            Set the physical orientation of the flight controller on your frame. The arrow on the FC should point forward. If mounted differently, select the rotation that matches.
-          </p>
-        </div>
-      </article>
+          stagedName={params.stagedEdits.AHRS_ORIENTATION ? "AHRS_ORIENTATION" : undefined}
+          stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-AHRS_ORIENTATION`}
+          onChange={(value) => stage(orientationItem, value)}
+          onUnstage={unstage}
+        />
+      </SetupCard>
     {/if}
   </div>
 
   {#if frameRecoveryReasons.length > 0 || orientationRecoveryReason}
-    <div
-      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
-      data-testid={setupWorkspaceTestIds.frameRecovery}
-    >
+    <SetupNotice tone="warning" testId={setupWorkspaceTestIds.frameRecovery}>
       <p class="font-semibold text-text-primary">This section is staying in recovery mode instead of guessing hidden frame or orientation truth.</p>
       <ul class="mt-2 list-disc space-y-1 pl-5">
         {#each frameRecoveryReasons as reason (reason)}
@@ -696,7 +613,7 @@ function buildFrameBanners(input: {
           <li>{orientationRecoveryReason}</li>
         {/if}
       </ul>
-    </div>
+    </SetupNotice>
   {/if}
   {/snippet}
 </SetupSectionShell>

@@ -5,6 +5,7 @@ import { getParamsStoreContext } from "../../../app/shell/runtime-context";
 import ParameterWorkspace from "../../params/ParameterWorkspace.svelte";
 import { resolveDocsUrl, type VehicleSlug } from "../../../data/ardupilot-docs";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import SetupIntroCard from "../shared/SetupIntroCard.svelte";
 
 let {
   canOpen,
@@ -39,27 +40,12 @@ function resolveVehicleSlug(vehicleType: string | null): VehicleSlug | null {
 </script>
 
 <section class="space-y-4" data-testid={setupWorkspaceTestIds.fullParameters}>
-  <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Full Parameters</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Inspect and edit the raw parameter list</h3>
-      <p class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-        Use this page to inspect, search, and queue raw parameter changes. Open the raw list below to inspect settings or queue changes for review.
-      </p>
-    </div>
-
-    {#if docsUrl}
-      <a
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.fullParametersDocsLink}
-        href={docsUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        Full parameter docs
-      </a>
-    {/if}
-  </div>
+  <SetupIntroCard
+    sectionId="full_parameters"
+    title="Full Parameters"
+    description="Use this page to inspect, search, and queue raw parameter changes. Open the raw list below to inspect settings or queue changes for review."
+    docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.fullParametersDocsLink }]}
+  />
 
   {#if canOpen}
     <ParameterWorkspace defaultMode="expert" />

@@ -400,21 +400,8 @@ function round3(value: number): number {
   title="Preset-first battery monitor staging with truthful live power state"
   description="Board pins, sensor scaling, and voltage-threshold presets stay explicit here, but they still queue through the shared review tray. Manual numeric staging remains available whenever the scoped parameter family is complete enough to prove the affected rows."
   testId={setupWorkspaceTestIds.batterySection}
+  docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.batteryDocsLink }]}
 >
-  {#snippet actions()}
-    {#if docsUrl}
-      <a
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.batteryDocsLink}
-        href={docsUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        Power-module docs
-      </a>
-    {/if}
-  {/snippet}
-
   {#snippet body()}
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"

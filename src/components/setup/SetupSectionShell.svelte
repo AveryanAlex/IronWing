@@ -1,8 +1,9 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
-import { Panel, SectionHeader, Banner } from "../ui";
+import { Banner } from "../ui";
 import type { SetupSectionId } from "../../lib/setup-sections";
-import SetupSectionIcon from "./SetupSectionIcon.svelte";
+import SetupContentPanel from "./shared/SetupContentPanel.svelte";
+import SetupIntroCard from "./shared/SetupIntroCard.svelte";
 
 type Severity = "info" | "warning" | "danger" | "blocking" | "success";
 
@@ -10,6 +11,12 @@ type StatusBanner = {
   severity: Severity;
   title: string;
   message?: string;
+};
+
+type SetupDocLink = {
+  url: string | null | undefined;
+  label?: string;
+  testId?: string;
 };
 
 type Props = {
@@ -21,23 +28,18 @@ type Props = {
   testId?: string;
   body: Snippet;
   actions?: Snippet;
+  docs?: SetupDocLink[];
 };
 
-let { eyebrow, title, sectionId, description, status, testId, body, actions }: Props = $props();
+let { eyebrow, title, sectionId, description, status, testId, body, actions, docs = [] }: Props = $props();
+
+let introTitle = $derived(eyebrow ?? title);
 </script>
 
-{#snippet sectionIcon()}
-  {#if sectionId}
-    <SetupSectionIcon {sectionId} size={16} />
-  {/if}
-{/snippet}
-
 <section class="flex flex-col gap-3 p-3 md:gap-4 md:p-5" data-testid={testId}>
-  <SectionHeader {eyebrow} {title} {description} icon={sectionId ? sectionIcon : undefined} {actions} />
+  <SetupIntroCard {sectionId} title={introTitle} {description} {actions} {docs} />
   {#if status}
     <Banner severity={status.severity} title={status.title} message={status.message} />
   {/if}
-  <Panel>
-    <div class="flex flex-col gap-3">{@render body()}</div>
-  </Panel>
+  <SetupContentPanel>{@render body()}</SetupContentPanel>
 </section>

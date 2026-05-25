@@ -304,21 +304,8 @@ function stageDefaults() {
   title="Vehicle-aware protective defaults and loss-of-link actions"
   description="Failsafe actions stay split by the active vehicle family so copter, plane, and rover operators can stage protective defaults without dropping straight into raw parameters. Every change still queues through the shared review tray."
   testId={setupWorkspaceTestIds.failsafeSection}
+  docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.failsafeDocsLink }]}
 >
-  {#snippet actions()}
-    {#if docsUrl}
-      <a
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.failsafeDocsLink}
-        href={docsUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        Failsafe docs
-      </a>
-    {/if}
-  {/snippet}
-
   {#snippet body()}
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"

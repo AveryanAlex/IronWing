@@ -555,21 +555,8 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
   title="Fail-closed motor direction proof with one shared unlock"
   description="Motor order, expected direction, and reversal staging only appear when this scope can prove the active layout. Unlock once at the section level, test rows directly, and queue any reversal fix through the shared review tray instead of a local apply path."
   testId={setupWorkspaceTestIds.motorsEscSection}
+  docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.motorsEscDocsLink }]}
 >
-  {#snippet actions()}
-    {#if docsUrl}
-      <a
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.motorsEscDocsLink}
-        href={docsUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        Motor & ESC docs
-      </a>
-    {/if}
-  {/snippet}
-
   {#snippet body()}
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"

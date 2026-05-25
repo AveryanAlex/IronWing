@@ -271,16 +271,11 @@ async function handleDisarm() {
   title="Review pre-arm blockers and live arm controls"
   description="Review live support, sensor health, and status text here before you arm. If a check is blocked, request fresh checks here; parameter edits still queue in the review tray."
   testId={setupWorkspaceTestIds.armingSection}
+  docs={[
+    { url: prearmDocsUrl, label: "Pre-arm docs", testId: setupWorkspaceTestIds.prearmDocsLink },
+    { url: armingDocsUrl, label: "Arming docs", testId: setupWorkspaceTestIds.armingDocsLink },
+  ]}
 >
-  {#snippet actions()}
-    {#if prearmDocsUrl}
-      <a class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent" data-testid={setupWorkspaceTestIds.prearmDocsLink} href={prearmDocsUrl} rel="noreferrer" target="_blank">Pre-arm docs</a>
-    {/if}
-    {#if armingDocsUrl}
-      <a class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent" data-testid={setupWorkspaceTestIds.armingDocsLink} href={armingDocsUrl} rel="noreferrer" target="_blank">Arming docs</a>
-    {/if}
-  {/snippet}
-
   {#snippet body()}
       <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
     <div

@@ -1,4 +1,5 @@
 <script lang="ts">
+import { Cable, Lightbulb, RotateCw } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import {
@@ -19,8 +20,15 @@ import type {
   SetupWorkspaceStoreState,
 } from "../../../lib/stores/setup-workspace";
 import SetupSectionShell from "../SetupSectionShell.svelte";
-import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import SetupCard from "../shared/SetupCard.svelte";
+import SetupCardHeader from "../shared/SetupCardHeader.svelte";
+import SetupHint from "../shared/SetupHint.svelte";
+import SetupHintList from "../shared/SetupHintList.svelte";
+import SetupNotice from "../shared/SetupNotice.svelte";
+import SetupParamSelect from "../shared/SetupParamSelect.svelte";
+import SetupParamTable from "../shared/SetupParamTable.svelte";
+import SetupStatusPill from "../shared/SetupStatusPill.svelte";
 
 let {
   section,
@@ -116,8 +124,8 @@ function unstage(name: string) {
   paramsStore.discardStagedEdit(name);
 }
 
-function currentValueText(name: string): string {
-  return item(name)?.valueLabel ?? item(name)?.valueText ?? "Unavailable";
+function rowRecoveryVisible(row: SerialPortRow): boolean {
+  return row.recoveryText !== null;
 }
 
 function conflictTone(): string {
@@ -135,62 +143,91 @@ function rebootTone(): string {
 
   return "Reboot required after apply";
 }
-
-function rowRecoveryVisible(row: SerialPortRow): boolean {
-  return row.recoveryText !== null;
-}
 </script>
 
 <SetupSectionShell
   sectionId={section.id}
   eyebrow={section.title}
-  title="Protocol ownership and reboot-required port truth"
-  description="Serial protocol and baud assignments stay inspectable even when metadata is degraded. Each row stages through the shared review tray, conflict detection uses staged values before apply, and completion only advances when the current scope is conflict-free without pending serial edits."
+  title="Serial Ports"
+  description="Assign protocols and baud rates to each serial port. GPS, telemetry, and RC receiver connections are configured here."
   testId={setupWorkspaceTestIds.serialPortsSection}
+  docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.serialPortsDocsLink }]}
 >
-  {#snippet actions()}
-    {#if docsUrl}
-      <a
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.serialPortsDocsLink}
-        href={docsUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        Serial-port docs
-      </a>
-    {/if}
-  {/snippet}
-
   {#snippet body()}
+  <SetupNotice tone="danger" icon={RotateCw}>
+    <p>
+      Serial port changes require a <span class="font-semibold">reboot</span> to take effect.
+      Apply your changes, then reboot the flight controller.
+    </p>
+  </SetupNotice>
+
+  <SetupCard testId={setupWorkspaceTestIds.serialPortsSummary}>
+    <SetupCardHeader icon={Cable} title="Serial Port Assignment" class="mb-2.5">
+      {#snippet actions()}
+      {#if model.ports.length > 0}
+        <SetupStatusPill>
+          {model.ports.length} {model.ports.length === 1 ? "port" : "ports"}
+        </SetupStatusPill>
+      {/if}
+      <span class="sr-only" data-testid={setupWorkspaceTestIds.serialPortsConflictState}>{conflictTone()}</span>
+      <span class="sr-only" data-testid={setupWorkspaceTestIds.serialPortsRebootState}>{rebootTone()}</span>
+      {/snippet}
+    </SetupCardHeader>
+
+    {#if model.ports.length === 0}
       <div
-        class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
-        data-testid={setupWorkspaceTestIds.serialPortsSummary}
+        class="flex flex-col items-center gap-2 py-8 text-center text-text-muted"
       >
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Port summary</p>
-      <p class="mt-2 text-sm font-semibold text-text-primary">{model.summaryText}</p>
-      <p class="mt-1 text-sm text-text-secondary">Visible rows stay scoped to detected SERIALn_* families instead of a hardcoded port list.</p>
-    </div>
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Conflict state</p>
-      <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.serialPortsConflictState}>
-        {conflictTone()}
-      </p>
-      <p class="mt-1 text-sm text-text-secondary">
-        {model.conflicts.length > 0
-          ? "Exclusive protocols are staged on more than one port. Resolve conflicts before trusting this section as complete."
-          : "Exclusive protocols are currently unique across the detected port set."}
-      </p>
-    </div>
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Reboot state</p>
-      <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.serialPortsRebootState}>
-        {rebootTone()}
-      </p>
-      <p class="mt-1 text-sm text-text-secondary">{model.rebootWarningText}</p>
-    </div>
-  </div>
+        <Cable size={24} class="opacity-30" aria-hidden="true" />
+        <p class="text-xs">No serial ports detected. Connect a vehicle and download parameters.</p>
+      </div>
+    {:else}
+      <SetupParamTable columns={["Port", "Protocol", "Baud Rate"]}>
+        {#each model.ports as row (row.prefix)}
+          <tr class="border-b border-border/50 last:border-b-0" data-testid={`${setupWorkspaceTestIds.serialPortsRowPrefix}-${row.index}`}>
+            <td class="py-2.5 pl-4 pr-3 align-middle">
+              <div class="flex flex-col gap-0.5">
+                <span class="font-mono text-xs font-medium text-text-primary">{row.prefix}</span>
+                {#if row.boardLabel}
+                  <span class="text-[10px] text-text-muted">{row.boardLabel}</span>
+                {/if}
+              </div>
+            </td>
+
+            <td class="px-2 py-2.5 align-middle">
+              <SetupParamSelect
+                id={`${row.prefix}-protocol-select`}
+                value={draftValue(row.protocolParamName, row.protocolValue)}
+                options={row.protocolOptions}
+                compact
+                disabled={actionsBlocked || !row.protocolMetadataReady}
+                testId={`${setupWorkspaceTestIds.serialPortsInputPrefix}-${row.protocolParamName}`}
+                stagedName={params.stagedEdits[row.protocolParamName] ? row.protocolParamName : undefined}
+                stagedTestId={`${setupWorkspaceTestIds.serialPortsStagedPrefix}-${row.protocolParamName}`}
+                onChange={(value) => stage(row.protocolParamName, value, row.protocolValue, row.protocolMetadataReady)}
+                onUnstage={unstage}
+              />
+            </td>
+
+            <td class="py-2.5 pl-2 pr-4 align-middle">
+              <SetupParamSelect
+                id={`${row.prefix}-baud-select`}
+                value={draftValue(row.baudParamName, row.baudValue)}
+                options={row.baudOptions}
+                compact
+                disabled={actionsBlocked || !row.baudMetadataReady}
+                testId={`${setupWorkspaceTestIds.serialPortsInputPrefix}-${row.baudParamName}`}
+                stagedName={params.stagedEdits[row.baudParamName] ? row.baudParamName : undefined}
+                stagedTestId={`${setupWorkspaceTestIds.serialPortsStagedPrefix}-${row.baudParamName}`}
+                onChange={(value) => stage(row.baudParamName, value, row.baudValue, row.baudMetadataReady)}
+                onUnstage={unstage}
+              />
+            </td>
+          </tr>
+        {/each}
+      </SetupParamTable>
+    {/if}
+  </SetupCard>
 
   {#if model.recoveryText}
     <div
@@ -203,104 +240,48 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
   {/if}
 
   {#each model.conflicts as conflict (conflict.protocol)}
+    <SetupNotice tone="warning" testId={`${setupWorkspaceTestIds.serialPortsBannerPrefix}-conflict-${conflict.protocol}`}>
+      <p>
+        <span class="font-medium">{conflict.protocolLabel}</span> (protocol {conflict.protocol}) is assigned to multiple ports:
+        <span class="font-mono font-medium"> {conflict.ports.join(", ")}</span>.
+        This protocol does not support sharing and may cause conflicts.
+      </p>
+    </SetupNotice>
+  {/each}
+
+  {#each model.ports.filter(rowRecoveryVisible) as row (row.prefix)}
     <div
-      class="rounded-lg border border-danger/40 bg-danger/10 px-4 py-4 text-sm leading-6 text-danger"
-      data-testid={`${setupWorkspaceTestIds.serialPortsBannerPrefix}-conflict-${conflict.protocol}`}
+      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+      data-testid={`${setupWorkspaceTestIds.serialPortsBannerPrefix}-recovery-${row.index}`}
     >
-      {conflict.message}
+      {row.recoveryText}
     </div>
   {/each}
 
-  {#if model.ports.length === 0}
-    <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary">
-      No serial rows are available for this scope yet. Connect a vehicle with SERIALn_* parameters.
-    </div>
-  {:else}
-    <div class="space-y-3">
-      {#each model.ports as row (row.prefix)}
-        <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={`${setupWorkspaceTestIds.serialPortsRowPrefix}-${row.index}`}>
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div class="flex flex-wrap items-center gap-2">
-                <p class="text-sm font-semibold text-text-primary">{row.prefix}</p>
-                {#if row.boardLabel}
-                  <span class="rounded-full border border-border bg-bg-secondary px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
-                    {row.boardLabel}
-                  </span>
-                {/if}
-                {#if row.hasPendingChange}
-                  <span class="rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-accent">
-                    {row.pendingChangeCount} queued
-                  </span>
-                {/if}
-              </div>
-              <p class="mt-2 text-sm text-text-secondary">{row.summaryText}</p>
-            </div>
-            <div class="text-right text-xs text-text-muted" data-testid={`${setupWorkspaceTestIds.serialPortsCurrentPrefix}-${row.index}`}>
-              Protocol · {currentValueText(row.protocolParamName)}<br />
-              Baud · {currentValueText(row.baudParamName)}
-            </div>
-          </div>
+  <SetupHintList icon={Lightbulb} title="Common Configurations">
+      <SetupHint>
+        <p>
+          <span class="font-medium text-text-primary">GPS</span> — typically on SERIAL3 or SERIAL4.
+          Set protocol to <span class="font-mono text-text-primary">GPS (5)</span> with baud
+          <span class="font-mono text-text-primary"> 115200</span>.
+        </p>
+      </SetupHint>
 
-          <div class="mt-4 grid gap-3 xl:grid-cols-2">
-            <div>
-              <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`${row.prefix}-protocol-select`}>
-                Protocol
-              </label>
-              <select
-                class="mt-2 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-                data-testid={`${setupWorkspaceTestIds.serialPortsInputPrefix}-${row.protocolParamName}`}
-                disabled={actionsBlocked || !row.protocolMetadataReady}
-                id={`${row.prefix}-protocol-select`}
-                onchange={(event) => stage(row.protocolParamName, (event.currentTarget as HTMLSelectElement).value, row.protocolValue, row.protocolMetadataReady)}
-                value={draftValue(row.protocolParamName, row.protocolValue)}
-              >
-                {#each row.protocolOptions as option (option.code)}
-                  <option value={String(option.code)}>{option.label}</option>
-                {/each}
-              </select>
-              {#if params.stagedEdits[row.protocolParamName]}
-                <p class="mt-2">
-                  <SetupStagedBadge name={row.protocolParamName} onUnstage={unstage} testId={`${setupWorkspaceTestIds.serialPortsStagedPrefix}-${row.protocolParamName}`} />
-                </p>
-              {/if}
-            </div>
+      <SetupHint>
+        <p>
+          <span class="font-medium text-text-primary">CRSF / ELRS receiver</span> — set protocol to
+          <span class="font-mono text-text-primary"> RCInput (23)</span> on the connected UART.
+          Baud rate is auto-negotiated.
+        </p>
+      </SetupHint>
 
-            <div>
-              <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`${row.prefix}-baud-select`}>
-                Baud
-              </label>
-              <select
-                class="mt-2 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-                data-testid={`${setupWorkspaceTestIds.serialPortsInputPrefix}-${row.baudParamName}`}
-                disabled={actionsBlocked || !row.baudMetadataReady}
-                id={`${row.prefix}-baud-select`}
-                onchange={(event) => stage(row.baudParamName, (event.currentTarget as HTMLSelectElement).value, row.baudValue, row.baudMetadataReady)}
-                value={draftValue(row.baudParamName, row.baudValue)}
-              >
-                {#each row.baudOptions as option (option.code)}
-                  <option value={String(option.code)}>{option.label}</option>
-                {/each}
-              </select>
-              {#if params.stagedEdits[row.baudParamName]}
-                <p class="mt-2">
-                  <SetupStagedBadge name={row.baudParamName} onUnstage={unstage} testId={`${setupWorkspaceTestIds.serialPortsStagedPrefix}-${row.baudParamName}`} />
-                </p>
-              {/if}
-            </div>
-          </div>
-
-          {#if rowRecoveryVisible(row)}
-            <div
-              class="mt-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
-              data-testid={`${setupWorkspaceTestIds.serialPortsBannerPrefix}-recovery-${row.index}`}
-            >
-              {row.recoveryText}
-            </div>
-          {/if}
-        </article>
-      {/each}
-    </div>
-  {/if}
+      <SetupHint>
+        <p>
+          <span class="font-medium text-text-primary">Telemetry</span> — MAVLink2 on SERIAL1/SERIAL2 with baud
+          <span class="font-mono text-text-primary"> 57600</span> or
+          <span class="font-mono text-text-primary"> 921600</span> for high-bandwidth links.
+        </p>
+      </SetupHint>
+  </SetupHintList>
   {/snippet}
 </SetupSectionShell>

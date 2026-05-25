@@ -176,21 +176,8 @@ function resolvedInputText(): string {
   title="Preview starter settings from your vehicle inputs"
   description="Enter prop size, battery chemistry, and cell count to preview starter settings for this vehicle family. Review the suggested batches here, then queue any changes through the review tray."
   testId={setupWorkspaceTestIds.initialParamsSection}
+  docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.initialParamsDocsLink }]}
 >
-  {#snippet actions()}
-    {#if docsUrl}
-      <a
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.initialParamsDocsLink}
-        href={docsUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        Tuning docs
-      </a>
-    {/if}
-  {/snippet}
-
   {#snippet body()}
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"

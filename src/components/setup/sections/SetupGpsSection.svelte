@@ -350,21 +350,8 @@ function formatHdop(value: number | null): string {
   title="Review GPS receivers, GNSS options, and lock status"
   description="Check receiver type, optional second-receiver settings, GNSS selections, and live fix quality here. If metadata is missing or a port is unassigned, this section shows what is blocked and where to go next."
   testId={setupWorkspaceTestIds.gpsSection}
+  docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.gpsDocsLink }]}
 >
-  {#snippet actions()}
-    {#if docsUrl}
-      <a
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.gpsDocsLink}
-        href={docsUrl}
-        rel="noreferrer"
-        target="_blank"
-      >
-        GPS &amp; compass docs
-      </a>
-    {/if}
-  {/snippet}
-
   {#snippet body()}
       <div
         class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
