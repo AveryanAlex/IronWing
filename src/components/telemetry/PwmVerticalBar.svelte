@@ -48,16 +48,16 @@ let visualState = $derived(valid ? state : "unavailable");
   <div class="font-mono text-[0.6rem] font-semibold uppercase tracking-wide text-text-muted">{label}</div>
   <div class="font-mono text-xs font-semibold text-text-primary [font-variant-numeric:tabular-nums]">{displayValue}</div>
 
-  <div class="relative mt-1 h-36 w-5 rounded-full border border-border bg-bg-primary/90 shadow-inner">
+  <div class="pwm-track relative mt-1 h-36 border border-border bg-bg-primary/90 shadow-inner">
     <div class="absolute inset-x-0 bottom-2 top-2">
       <div
-        class="absolute left-1/2 w-1.5 -translate-x-1/2 rounded-full bg-bg-secondary/80"
+        class="pwm-fill-width absolute left-1/2 -translate-x-1/2 bg-bg-secondary/80"
         style:top={`${normalMaxTopPct}%`}
         style:height={`${Math.max(normalMinTopPct - normalMaxTopPct, 1)}%`}
       ></div>
       {#if valid}
         <div
-          class="absolute left-1/2 w-2 -translate-x-1/2 rounded-full bg-accent data-[neutral]:bg-text-muted data-[state=stale]:bg-warning data-[state=malformed]:bg-danger"
+          class="pwm-fill-width absolute left-1/2 -translate-x-1/2 bg-accent data-[neutral]:bg-text-muted data-[state=stale]:bg-warning data-[state=malformed]:bg-danger"
           data-neutral={isNeutral || undefined}
           data-state={visualState}
           style:height={`calc(${Math.max(fillHeightPct, 1)}% + 4px)`}
@@ -66,16 +66,53 @@ let visualState = $derived(valid ? state : "unavailable");
       {/if}
       <div class="absolute left-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-text-muted/70" style:top={`${normalMaxTopPct}%`}></div>
       <div class="absolute left-0 right-0 h-px bg-border/90" style:top={`${centerTopPct}%`}></div>
-      <div class="absolute left-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-text-muted/80 bg-bg-primary" style:top={`${centerTopPct}%`}></div>
+      <div class="pwm-center-marker absolute left-1/2 -translate-x-1/2 -translate-y-1/2 border border-text-muted/80 bg-bg-primary" style:top={`${centerTopPct}%`}></div>
       <div class="absolute left-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-text-muted/70" style:top={`${normalMinTopPct}%`}></div>
-    {#if valid}
-      <div
-        class="absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-bg-primary bg-accent shadow data-[state=stale]:bg-warning data-[state=malformed]:bg-danger"
-        data-neutral={isNeutral || undefined}
-        data-state={visualState}
-        style:top={`${valueTopPct}%`}
-      ></div>
-    {/if}
+      {#if valid}
+        <div
+          class="pwm-value-marker absolute left-1/2 -translate-x-1/2 -translate-y-1/2 border border-bg-primary bg-accent shadow data-[state=stale]:bg-warning data-[state=malformed]:bg-danger"
+          data-neutral={isNeutral || undefined}
+          data-state={visualState}
+          style:top={`${valueTopPct}%`}
+        ></div>
+      {/if}
     </div>
   </div>
 </article>
+
+<style>
+  .pwm-track {
+    --pwm-track-min-width: 1.25rem;
+    --pwm-track-max-width: 4.5rem;
+    --pwm-track-radius: calc(var(--pwm-track-min-width) / 2);
+    --pwm-fill-min-width: 0.5rem;
+    --pwm-fill-inset: calc((var(--pwm-track-min-width) - var(--pwm-fill-min-width)) / 2);
+    --pwm-fill-radius: calc(var(--pwm-fill-min-width) / 2);
+    --pwm-center-min-width: 0.75rem;
+    --pwm-center-inset: calc((var(--pwm-track-min-width) - var(--pwm-center-min-width)) / 2);
+    --pwm-center-radius: calc(var(--pwm-center-min-width) / 2);
+    --pwm-value-min-width: 0.625rem;
+    --pwm-value-inset: calc((var(--pwm-track-min-width) - var(--pwm-value-min-width)) / 2);
+    --pwm-value-radius: calc(var(--pwm-value-min-width) / 2);
+
+    width: clamp(var(--pwm-track-min-width), 52%, var(--pwm-track-max-width));
+    border-radius: var(--pwm-track-radius);
+  }
+
+  .pwm-fill-width {
+    width: calc(100% - (var(--pwm-fill-inset) * 2));
+    border-radius: var(--pwm-fill-radius);
+  }
+
+  .pwm-center-marker {
+    width: calc(100% - (var(--pwm-center-inset) * 2));
+    height: var(--pwm-center-min-width);
+    border-radius: var(--pwm-center-radius);
+  }
+
+  .pwm-value-marker {
+    width: calc(100% - (var(--pwm-value-inset) * 2));
+    height: var(--pwm-value-min-width);
+    border-radius: var(--pwm-value-radius);
+  }
+</style>
