@@ -22,7 +22,7 @@ import type {
   MissionPlannerWarningView,
 } from "../../lib/stores/mission-planner-view";
 import { buildMissionMapView, type MissionMapSelection } from "../../lib/mission-map-view";
-import { missionPathPoints } from "../../lib/mission-path";
+import { missionPathPointsWithSurveys } from "../../lib/mission-path";
 import type { ReplayMapOverlayState } from "../../lib/replay-map-overlay";
 import { createMissionTerrainState } from "../../lib/mission-terrain-state";
 import type { FenceRegion, GeoPoint2d, GeoPoint3d } from "../../lib/mavkit-types";
@@ -167,7 +167,7 @@ let sharedWarnings = $derived.by(() =>
 let missionItems = $derived(planner.draftState.active.mission.draftItems);
 let terrain = $derived(terrainState.current);
 let appSettings = $derived(settingsStore.current);
-let terrainPathPoints = $derived(missionPathPoints(planner.home, missionItems));
+let terrainPathPoints = $derived(missionPathPointsWithSurveys(planner.home, missionItems, planner.survey));
 let fenceItems = $derived(planner.draftState.active.fence.draftItems);
 let rallyItems = $derived(planner.draftState.active.rally.draftItems);
 let fenceRegions = $derived.by(() => fenceItems.map((item) => item.document as FenceRegion));

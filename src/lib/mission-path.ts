@@ -1,6 +1,7 @@
 import type { TypedDraftItem } from "./mission-draft-typed";
 import type { HomePosition, LoiterDirection, MissionItem } from "./mavkit-types";
 import { commandPosition, geoPoint3dAltitude, geoPoint3dLatLon } from "./mavkit-types";
+import { dissolveRegion, type SurveyDraftExtension, type SurveyPatternType } from "./survey-region";
 
 export type PathPoint = {
   latitude_deg: number;
@@ -21,6 +22,12 @@ export type PathPoint = {
   arcAngleDeg?: number;
   /** Arc direction, present only when isArc is true. */
   arcDirection?: LoiterDirection;
+  /** Source of this route point when it belongs to generated/non-manual mission geometry. */
+  source?: "survey";
+  surveyRegionId?: string;
+  surveyPatternType?: SurveyPatternType;
+  surveyLabel?: string;
+  surveyLocalIndex?: number;
 };
 
 export function missionPathPoints(
@@ -41,33 +48,124 @@ export function missionPathPoints(
   }
 
   for (const item of items) {
-    const document = item.document as Partial<MissionItem>;
-    const command = document?.command;
-    if (!command || typeof command !== "object") continue;
-
-    const typedCommand = command as MissionItem["command"];
-    const position = commandPosition(typedCommand);
-    if (!position) continue;
-
-    const { latitude_deg, longitude_deg } = geoPoint3dLatLon(position);
-    const { value: altitude_m, frame } = geoPoint3dAltitude(position);
-
-    const loiterInfo = extractLoiterInfo(typedCommand);
-    const curveInfo = extractCurveInfo(typedCommand);
-
-    points.push({
-      latitude_deg,
-      longitude_deg,
-      altitude_m,
-      frame,
-      index: item.index,
-      isHome: false,
-      ...loiterInfo,
-      ...curveInfo,
-    });
+    const point = missionItemPathPoint(item.document, item.index);
+    if (point) {
+      points.push(point);
+    }
   }
 
   return points;
+}
+
+export function missionPathPointsWithSurveys(
+  homePosition: HomePosition | null,
+  items: TypedDraftItem[],
+  survey: SurveyDraftExtension,
+): PathPoint[] {
+  const points: PathPoint[] = [];
+
+  if (homePosition) {
+    points.push({
+      latitude_deg: homePosition.latitude_deg,
+      longitude_deg: homePosition.longitude_deg,
+      altitude_m: homePosition.altitude_m,
+      frame: "msl",
+      index: null,
+      isHome: true,
+    });
+  }
+
+  const orderedBlocks = survey.surveyRegionOrder
+    .map((block, orderIndex) => ({ block, orderIndex }))
+    .sort((left, right) => left.block.position - right.block.position || left.orderIndex - right.orderIndex);
+  let blockIndex = 0;
+
+  const appendSurveysAtPosition = (position: number) => {
+    while (blockIndex < orderedBlocks.length && orderedBlocks[blockIndex]?.block.position === position) {
+      const regionId = orderedBlocks[blockIndex]?.block.regionId;
+      const region = regionId ? survey.surveyRegions.get(regionId) ?? null : null;
+      if (region) {
+        const surveyLabel = `${surveyPatternLabel(region.patternType)} survey ${blockIndex + 1}`;
+        dissolveRegion(region).forEach((missionItem, surveyLocalIndex) => {
+          const point = missionItemPathPoint(missionItem, null, {
+            source: "survey",
+            surveyRegionId: region.id,
+            surveyPatternType: region.patternType,
+            surveyLabel,
+            surveyLocalIndex,
+          });
+          if (point) {
+            points.push(point);
+          }
+        });
+      }
+      blockIndex += 1;
+    }
+  };
+
+  appendSurveysAtPosition(0);
+
+  items.forEach((item, itemIndex) => {
+    const point = missionItemPathPoint(item.document, item.index);
+    if (point) {
+      points.push(point);
+    }
+    appendSurveysAtPosition(itemIndex + 1);
+  });
+
+  while (blockIndex < orderedBlocks.length) {
+    appendSurveysAtPosition(orderedBlocks[blockIndex]?.block.position ?? 0);
+  }
+
+  return points;
+}
+
+type PathPointSourceMetadata = Pick<
+  PathPoint,
+  "source" | "surveyRegionId" | "surveyPatternType" | "surveyLabel" | "surveyLocalIndex"
+>;
+
+function missionItemPathPoint(
+  item: TypedDraftItem["document"] | MissionItem,
+  index: number | null,
+  sourceMetadata?: PathPointSourceMetadata,
+): PathPoint | null {
+  const document = item as Partial<MissionItem>;
+  const command = document?.command;
+  if (!command || typeof command !== "object") return null;
+
+  const typedCommand = command as MissionItem["command"];
+  const position = commandPosition(typedCommand);
+  if (!position) return null;
+
+  const { latitude_deg, longitude_deg } = geoPoint3dLatLon(position);
+  const { value: altitude_m, frame } = geoPoint3dAltitude(position);
+  const loiterInfo = extractLoiterInfo(typedCommand);
+  const curveInfo = extractCurveInfo(typedCommand);
+
+  return {
+    latitude_deg,
+    longitude_deg,
+    altitude_m,
+    frame,
+    index,
+    isHome: false,
+    ...loiterInfo,
+    ...curveInfo,
+    ...sourceMetadata,
+  };
+}
+
+function surveyPatternLabel(patternType: SurveyPatternType): string {
+  switch (patternType) {
+    case "corridor":
+      return "Corridor";
+    case "structure":
+      return "Structure";
+    case "grid":
+    default:
+      return "Grid";
+  }
 }
 
 /** Extract loiter metadata from a mission command, if it is a loiter variant. */

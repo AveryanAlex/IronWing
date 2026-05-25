@@ -307,6 +307,11 @@ function serializePathPoints(points: PathPoint[]): string {
     point.isArc ? "arc" : "no-arc",
     point.arcAngleDeg ?? "null",
     point.arcDirection ?? "null",
+    point.source ?? "manual",
+    point.surveyRegionId ?? "null",
+    point.surveyPatternType ?? "null",
+    point.surveyLabel ?? "null",
+    point.surveyLocalIndex ?? "null",
   ].join(":"))
     .join(";");
 }
