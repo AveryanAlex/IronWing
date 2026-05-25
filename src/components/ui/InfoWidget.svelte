@@ -21,10 +21,39 @@ let {
 
 let open = $state(false);
 let container = $state<HTMLSpanElement | null>(null);
+let trigger = $state<HTMLButtonElement | null>(null);
+let panelTop = $state(0);
+let panelLeft = $state(0);
+let panelWidth = $state(288);
+
+let panelStyle = $derived(`top: ${panelTop}px; left: ${panelLeft}px; width: ${panelWidth}px;`);
+
+function updatePanelPosition() {
+  if (!trigger) {
+    return;
+  }
+
+  const margin = 16;
+  const gap = 8;
+  const rect = trigger.getBoundingClientRect();
+  const width = Math.min(288, Math.max(160, window.innerWidth - margin * 2));
+  const preferredLeft = align === "right" ? rect.right - width : rect.left;
+  const maxLeft = Math.max(margin, window.innerWidth - margin - width);
+
+  panelTop = rect.bottom + gap;
+  panelLeft = Math.min(Math.max(preferredLeft, margin), maxLeft);
+  panelWidth = width;
+}
 
 function toggle(event?: MouseEvent) {
   event?.stopPropagation();
-  open = !open;
+  if (open) {
+    close();
+    return;
+  }
+
+  updatePanelPosition();
+  open = true;
 }
 
 function close() {
@@ -52,15 +81,23 @@ function handleDocumentKeydown(event: KeyboardEvent) {
     close();
   }
 }
+
+function handleViewportChange() {
+  if (open) {
+    updatePanelPosition();
+  }
+}
 </script>
 
 <svelte:document onclick={handleDocumentClick} onkeydown={handleDocumentKeydown} />
+<svelte:window onresize={handleViewportChange} onscroll={handleViewportChange} />
 
 <span bind:this={container} class="relative inline-flex">
   <button
     aria-expanded={open}
     aria-haspopup="dialog"
     aria-label={label}
+    bind:this={trigger}
     class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border bg-bg-secondary text-xs font-semibold text-text-muted transition hover:border-accent hover:text-accent"
     data-testid={testId}
     onclick={toggle}
@@ -72,9 +109,10 @@ function handleDocumentKeydown(event: KeyboardEvent) {
 
   {#if open}
     <div
-      class={`absolute top-full z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-bg-primary p-3 text-left shadow-2xl ${align === "right" ? "right-0" : "left-0"}`}
+      class="fixed z-[70] max-h-[calc(100vh-2rem)] overflow-auto rounded-lg border border-border bg-bg-primary p-3 text-left shadow-2xl"
       data-testid={panelTestId}
       role="dialog"
+      style={panelStyle}
     >
       {#if title}
         <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">{title}</p>
