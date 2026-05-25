@@ -148,9 +148,12 @@ describe("buildParameterExpertView", () => {
     expect(view.groups.map((group) => group.key)).toEqual(["ARMING", "FS", "LOG", "FORMAT"]);
 
     const logRow = view.groups.find((group) => group.key === "LOG")?.rows[0];
+    const fsRow = view.groups.find((group) => group.key === "FS")?.rows[0];
     expect(logRow?.isHighlighted).toBe(true);
     expect(logRow?.editorKind).toBe("bitmask");
     expect(logRow?.bitmaskOptions.map((option) => option.label)).toEqual(["Fast attitude", "PID"]);
+    expect(fsRow?.editorKind).toBe("boolean");
+    expect(fsRow?.booleanOptions?.on.label).toBe("Enabled always");
   });
 
   it("reports staged rows hidden by the active filter or search", () => {
@@ -210,6 +213,7 @@ describe("buildParameterExpertView", () => {
       description: null,
       editorKind: "number",
       enumOptions: [],
+      booleanOptions: null,
       bitmaskOptions: [],
     });
     expect(formatRow?.readOnly).toBe(true);

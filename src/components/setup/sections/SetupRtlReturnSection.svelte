@@ -19,6 +19,7 @@ import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
 } from "../../../lib/stores/setup-workspace";
+import SetupParamEnumControl from "../shared/SetupParamEnumControl.svelte";
 import SetupSectionShell from "../SetupSectionShell.svelte";
 import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
@@ -416,18 +417,14 @@ function unstage(name: string) {
 
               <div class="mt-4">
                 {#if field.kind === "enum"}
-                  <select
-                    class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-                    data-testid={`${setupWorkspaceTestIds.rtlReturnInputPrefix}-${field.name}`}
+                  <SetupParamEnumControl
                     disabled={actionsBlocked || enumOptions(field.name).length === 0 || !item(field.name)}
                     id={`${card.id}-${field.name}`}
-                    onchange={(event) => stageDraftValue(field, (event.currentTarget as HTMLSelectElement).value)}
+                    onChange={(value) => stageDraftValue(field, value)}
+                    options={enumOptions(field.name)}
+                    testId={`${setupWorkspaceTestIds.rtlReturnInputPrefix}-${field.name}`}
                     value={draftValue(field.name, item(field.name)?.value ?? null, 1, 0, field.sentinel)}
-                  >
-                    {#each enumOptions(field.name) as option (option.code)}
-                      <option value={String(option.code)}>{option.label}</option>
-                    {/each}
-                  </select>
+                  />
                 {:else}
                   <div class="flex items-center gap-2">
                     <input

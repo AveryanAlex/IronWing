@@ -2050,9 +2050,9 @@ describe("SetupWorkspace", () => {
     );
     expect(screen.queryByText(/fixed-wing aircraft do not use frame class or type configuration/i)).toBeNull();
 
-    await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-Q_ENABLE`), {
-      target: { value: "1" },
-    });
+    const qEnableControl = screen.getByTestId(`${setupWorkspaceTestIds.frameInputPrefix}-Q_ENABLE`);
+    expect(qEnableControl.getAttribute("role")).toBe("switch");
+    await fireEvent.click(qEnableControl);
 
     await waitFor(() => {
       expect(get(parameterStore).stagedEdits.Q_ENABLE?.nextValue).toBe(1);
@@ -2757,6 +2757,7 @@ describe("SetupWorkspace", () => {
       FS_EKF_ACTION: 0,
       FS_GCS_ENABLE: 0,
       RTL_ALT: 0,
+      FENCE_ENABLE: 0,
       FENCE_TYPE: 0,
     });
     const { parameterStore, setupWorkspaceStore } = await renderSetupWorkspace({
@@ -2816,14 +2817,19 @@ describe("SetupWorkspace", () => {
       expect(screen.getByTestId(setupWorkspaceTestIds.geofenceSection)).toBeTruthy();
     });
 
+    const fenceEnable = screen.getByTestId(`${setupWorkspaceTestIds.geofenceInputPrefix}-FENCE_ENABLE`);
+    expect(fenceEnable.getAttribute("role")).toBe("switch");
+    await fireEvent.click(fenceEnable);
     await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.geofenceTypeChecklist).querySelectorAll("button")[0] as HTMLButtonElement);
 
     await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.FENCE_ENABLE?.nextValue).toBe(1);
       expect(get(parameterStore).stagedEdits.FENCE_TYPE?.nextValue).toBe(1);
     });
 
     expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-FS_THR_ENABLE`)).toBeTruthy();
     expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-RTL_ALT`)).toBeTruthy();
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-FENCE_ENABLE`)).toBeTruthy();
     expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-FENCE_TYPE`)).toBeTruthy();
   });
 

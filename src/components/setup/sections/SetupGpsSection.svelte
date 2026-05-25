@@ -18,6 +18,7 @@ import type {
 import { selectTelemetryView } from "../../../lib/telemetry-selectors";
 import type { ParamMeta } from "../../../param-metadata";
 import SetupBitmaskChecklist from "../shared/SetupBitmaskChecklist.svelte";
+import SetupParamEnumControl from "../shared/SetupParamEnumControl.svelte";
 import SetupSectionShell from "../SetupSectionShell.svelte";
 import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
@@ -421,17 +422,16 @@ function formatHdop(value: number | null): string {
             <SetupStagedBadge name={primaryTypeItem.name} onUnstage={unstage} testId={`${setupWorkspaceTestIds.gpsStagedPrefix}-${primaryTypeItem.name}`} />
           </p>
         {/if}
-        <select
-          bind:value={primaryTypeDraft}
-          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-          data-testid={`${setupWorkspaceTestIds.gpsInputPrefix}-${primaryTypeItem.name}`}
-          disabled={actionsBlocked || primaryTypeOptions.length === 0}
-          onchange={(event) => stage(primaryTypeItem, (event.currentTarget as HTMLSelectElement).value, primaryTypeOptions.length > 0)}
-        >
-          {#each primaryTypeOptions as option (option.code)}
-            <option value={String(option.code)}>{option.label}</option>
-          {/each}
-        </select>
+        <div class="mt-4">
+          <SetupParamEnumControl
+            disabled={actionsBlocked || primaryTypeOptions.length === 0}
+            id={`setup-gps-${primaryTypeItem.name}`}
+            onChange={(value) => stage(primaryTypeItem, value, primaryTypeOptions.length > 0)}
+            options={primaryTypeOptions}
+            testId={`${setupWorkspaceTestIds.gpsInputPrefix}-${primaryTypeItem.name}`}
+            value={primaryTypeDraft}
+          />
+        </div>
       </article>
     {/if}
 
@@ -449,17 +449,16 @@ function formatHdop(value: number | null): string {
             <SetupStagedBadge name="GPS_AUTO_CONFIG" onUnstage={unstage} testId={`${setupWorkspaceTestIds.gpsStagedPrefix}-GPS_AUTO_CONFIG`} />
           </p>
         {/if}
-        <select
-          bind:value={autoConfigDraft}
-          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-          data-testid={`${setupWorkspaceTestIds.gpsInputPrefix}-GPS_AUTO_CONFIG`}
-          disabled={actionsBlocked || autoConfigOptions.length === 0}
-          onchange={(event) => stage(autoConfigItem, (event.currentTarget as HTMLSelectElement).value, autoConfigOptions.length > 0)}
-        >
-          {#each autoConfigOptions as option (option.code)}
-            <option value={String(option.code)}>{option.label}</option>
-          {/each}
-        </select>
+        <div class="mt-4">
+          <SetupParamEnumControl
+            disabled={actionsBlocked || autoConfigOptions.length === 0}
+            id="setup-gps-auto-config"
+            onChange={(value) => stage(autoConfigItem, value, autoConfigOptions.length > 0)}
+            options={autoConfigOptions}
+            testId={`${setupWorkspaceTestIds.gpsInputPrefix}-GPS_AUTO_CONFIG`}
+            value={autoConfigDraft}
+          />
+        </div>
       </article>
     {/if}
   </div>
@@ -480,17 +479,16 @@ function formatHdop(value: number | null): string {
               <SetupStagedBadge name="GPS2_TYPE" onUnstage={unstage} testId={`${setupWorkspaceTestIds.gpsStagedPrefix}-GPS2_TYPE`} />
             </p>
           {/if}
-          <select
-            bind:value={secondaryTypeDraft}
-            class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-            data-testid={`${setupWorkspaceTestIds.gpsInputPrefix}-GPS2_TYPE`}
-            disabled={actionsBlocked || secondaryTypeOptions.length === 0}
-            onchange={(event) => stage(secondaryTypeItem, (event.currentTarget as HTMLSelectElement).value, secondaryTypeOptions.length > 0)}
-          >
-            {#each secondaryTypeOptions as option (option.code)}
-              <option value={String(option.code)}>{option.label}</option>
-            {/each}
-          </select>
+          <div class="mt-4">
+            <SetupParamEnumControl
+              disabled={actionsBlocked || secondaryTypeOptions.length === 0}
+              id="setup-gps-secondary-type"
+              onChange={(value) => stage(secondaryTypeItem, value, secondaryTypeOptions.length > 0)}
+              options={secondaryTypeOptions}
+              testId={`${setupWorkspaceTestIds.gpsInputPrefix}-GPS2_TYPE`}
+              value={secondaryTypeDraft}
+            />
+          </div>
         </article>
       {/if}
 
@@ -508,17 +506,16 @@ function formatHdop(value: number | null): string {
               <SetupStagedBadge name="GPS_AUTO_SWITCH" onUnstage={unstage} testId={`${setupWorkspaceTestIds.gpsStagedPrefix}-GPS_AUTO_SWITCH`} />
             </p>
           {/if}
-          <select
-            bind:value={autoSwitchDraft}
-            class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-            data-testid={`${setupWorkspaceTestIds.gpsInputPrefix}-GPS_AUTO_SWITCH`}
-            disabled={actionsBlocked || autoSwitchOptions.length === 0}
-            onchange={(event) => stage(autoSwitchItem, (event.currentTarget as HTMLSelectElement).value, autoSwitchOptions.length > 0)}
-          >
-            {#each autoSwitchOptions as option (option.code)}
-              <option value={String(option.code)}>{option.label}</option>
-            {/each}
-          </select>
+          <div class="mt-4">
+            <SetupParamEnumControl
+              disabled={actionsBlocked || autoSwitchOptions.length === 0}
+              id="setup-gps-auto-switch"
+              onChange={(value) => stage(autoSwitchItem, value, autoSwitchOptions.length > 0)}
+              options={autoSwitchOptions}
+              testId={`${setupWorkspaceTestIds.gpsInputPrefix}-GPS_AUTO_SWITCH`}
+              value={autoSwitchDraft}
+            />
+          </div>
         </article>
       {/if}
     </div>

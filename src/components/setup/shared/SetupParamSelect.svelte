@@ -1,4 +1,6 @@
 <script lang="ts">
+import { detectBooleanEnumOptions } from "../../../lib/params/boolean-enum";
+import ParameterBooleanSwitch from "../../ui/ParameterBooleanSwitch.svelte";
 import RebootRequiredBadge from "../../ui/RebootRequiredBadge.svelte";
 import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 
@@ -45,6 +47,7 @@ let selectClass = $derived([
   "w-full rounded-lg border border-border bg-bg-secondary px-3 text-sm text-text-primary",
   compact ? "py-2" : "py-2",
 ].join(" "));
+let booleanOptions = $derived(detectBooleanEnumOptions(options));
 </script>
 
 {#snippet badges()}
@@ -71,6 +74,22 @@ let selectClass = $derived([
   </select>
 {/snippet}
 
+{#snippet paramControl(className: string)}
+  {#if booleanOptions}
+    <ParameterBooleanSwitch
+      checked={Number(value) === booleanOptions.on.code}
+      {disabled}
+      {id}
+      offLabel={booleanOptions.off.label}
+      onLabel={booleanOptions.on.label}
+      onToggle={(checked) => onChange(String(checked ? booleanOptions.on.code : booleanOptions.off.code))}
+      testId={testId}
+    />
+  {:else}
+    {@render selectControl(className)}
+  {/if}
+{/snippet}
+
 <div>
   {#if label}
     <div class="flex flex-wrap items-center gap-2">
@@ -82,12 +101,12 @@ let selectClass = $derived([
   {#if compact && !label}
     <div class="flex min-w-0 items-center gap-2">
       <div class="min-w-0 flex-1">
-        {@render selectControl(selectClass)}
+        {@render paramControl(selectClass)}
       </div>
       {@render badges()}
     </div>
   {:else}
-    {@render selectControl(label ? `${selectClass} mt-2` : selectClass)}
+    {@render paramControl(label ? `${selectClass} mt-2` : selectClass)}
   {/if}
 
   {#if !compact && !label && ((stagedName && onUnstage) || rebootRequired)}

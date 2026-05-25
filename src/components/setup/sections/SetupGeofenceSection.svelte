@@ -20,6 +20,7 @@ import type {
   SetupWorkspaceStoreState,
 } from "../../../lib/stores/setup-workspace";
 import SetupBitmaskChecklist from "../shared/SetupBitmaskChecklist.svelte";
+import SetupParamEnumControl from "../shared/SetupParamEnumControl.svelte";
 import SetupSectionShell from "../SetupSectionShell.svelte";
 import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
@@ -364,18 +365,14 @@ function toggleFenceType(bit: number) {
 
               <div class="mt-4">
                 {#if field.kind === "enum"}
-                  <select
-                    class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-                    data-testid={`${setupWorkspaceTestIds.geofenceInputPrefix}-${field.name}`}
+                  <SetupParamEnumControl
                     disabled={actionsBlocked || enumOptions(field.name).length === 0 || !item(field.name)}
                     id={`${card.id}-${field.name}`}
-                    onchange={(event) => stageDraftValue(field, (event.currentTarget as HTMLSelectElement).value)}
+                    onChange={(value) => stageDraftValue(field, value)}
+                    options={enumOptions(field.name)}
+                    testId={`${setupWorkspaceTestIds.geofenceInputPrefix}-${field.name}`}
                     value={draftValue(field.name, item(field.name)?.value ?? null)}
-                  >
-                    {#each enumOptions(field.name) as option (option.code)}
-                      <option value={String(option.code)}>{option.label}</option>
-                    {/each}
-                  </select>
+                  />
                 {:else}
                   <div class="flex items-center gap-2">
                     <input

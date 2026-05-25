@@ -417,6 +417,13 @@ describe("ParameterWorkspace", () => {
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.rebootBadgePrefix}-ARMING_CHECK`).textContent).toContain("reboot");
         expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeNull();
 
+        await expandExpertGroup("FS");
+        const failsafeEditor = screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-FS_THR_ENABLE`);
+        expect(failsafeEditor.getAttribute("role")).toBe("switch");
+        await fireEvent.click(failsafeEditor);
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-FS_THR_ENABLE`).textContent).toContain("Enabled always");
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.discardButtonPrefix}-FS_THR_ENABLE`));
+
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));
         await expandExpertGroup("LOG");
         await expandExpertGroup("FORMAT");

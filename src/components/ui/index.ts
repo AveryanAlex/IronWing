@@ -5,6 +5,7 @@ export { default as IconButton } from "./IconButton.svelte";
 export { default as Card } from "./Card.svelte";
 export { default as Panel } from "./Panel.svelte";
 export { default as Badge } from "./Badge.svelte";
+export { default as ParameterBooleanSwitch } from "./ParameterBooleanSwitch.svelte";
 export { default as RebootRequiredBadge } from "./RebootRequiredBadge.svelte";
 export { default as StatusPill } from "./StatusPill.svelte";
 export { default as Banner } from "./Banner.svelte";

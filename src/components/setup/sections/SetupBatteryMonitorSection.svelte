@@ -24,6 +24,7 @@ import type {
 } from "../../../lib/stores/setup-workspace";
 import { selectTelemetryView } from "../../../lib/telemetry-selectors";
 import SetupSectionShell from "../SetupSectionShell.svelte";
+import SetupParamEnumControl from "../shared/SetupParamEnumControl.svelte";
 import SetupPreviewStagePanel from "../shared/SetupPreviewStagePanel.svelte";
 import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
@@ -566,17 +567,16 @@ function round3(value: number): number {
             <SetupStagedBadge name="BATT_MONITOR" onUnstage={unstage} testId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_MONITOR`} />
           </p>
         {/if}
-        <select
-          bind:value={monitorDraft}
-          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-          data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_MONITOR`}
-          disabled={actionsBlocked || monitorOptions.length === 0}
-          onchange={(event) => stage(monitorItem, (event.currentTarget as HTMLSelectElement).value, true, monitorOptions.length)}
-        >
-          {#each monitorOptions as option (option.code)}
-            <option value={String(option.code)}>{option.label}</option>
-          {/each}
-        </select>
+        <div class="mt-4">
+          <SetupParamEnumControl
+            disabled={actionsBlocked || monitorOptions.length === 0}
+            id="setup-battery-monitor"
+            onChange={(value) => stage(monitorItem, value, true, monitorOptions.length)}
+            options={monitorOptions}
+            testId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_MONITOR`}
+            value={monitorDraft}
+          />
+        </div>
       </article>
     {/if}
 
@@ -719,17 +719,16 @@ function round3(value: number): number {
         <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT2_MONITOR`}>
           Current · {currentValueText(secondMonitorItem)}
         </p>
-        <select
-          bind:value={secondMonitorDraft}
-          class="mt-4 w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-          data-testid={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT2_MONITOR`}
-          disabled={actionsBlocked || secondMonitorOptions.length === 0}
-          onchange={(event) => stage(secondMonitorItem, (event.currentTarget as HTMLSelectElement).value, true, secondMonitorOptions.length)}
-        >
-          {#each secondMonitorOptions as option (option.code)}
-            <option value={String(option.code)}>{option.label}</option>
-          {/each}
-        </select>
+        <div class="mt-4">
+          <SetupParamEnumControl
+            disabled={actionsBlocked || secondMonitorOptions.length === 0}
+            id="setup-battery-secondary-monitor"
+            onChange={(value) => stage(secondMonitorItem, value, true, secondMonitorOptions.length)}
+            options={secondMonitorOptions}
+            testId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT2_MONITOR`}
+            value={secondMonitorDraft}
+          />
+        </div>
       {:else}
         <p class="mt-3 text-sm text-warning">Battery 2 is only partially modeled on this scope, so the secondary rows stay summary-only until the missing parameters return.</p>
       {/if}

@@ -2,6 +2,10 @@ import type { ParamMeta, ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
 import type { StagedParameterEdit } from "../stores/params-staged-edits";
 import {
+  detectBooleanEnumOptions,
+  type BooleanEnumDescriptor,
+} from "./boolean-enum";
+import {
   buildParameterItemModels,
   formatParamValue,
   type ParameterItemModel,
@@ -32,8 +36,9 @@ export type ParameterExpertRow = ParameterItemModel & {
   stagedValueLabel: string | null;
   diffText: string | null;
   failureMessage: string | null;
-  editorKind: "number" | "enum" | "bitmask";
+  editorKind: "number" | "enum" | "boolean" | "bitmask";
   enumOptions: ParameterExpertEnumOption[];
+  booleanOptions: BooleanEnumDescriptor | null;
   bitmaskOptions: ParameterExpertBitmaskOption[];
   isHighlighted: boolean;
 };
@@ -124,6 +129,7 @@ function buildExpertRow(
   retainedFailure: ParameterExpertRetainedFailure | undefined,
 ): ParameterExpertRow {
   const enumOptions = normalizeEnumOptions(meta?.values);
+  const booleanOptions = detectBooleanEnumOptions(enumOptions);
   const bitmaskOptions = normalizeBitmaskOptions(meta?.bitmask, item.value);
   const isStaged = Boolean(stagedEdit && stagedEdit.nextValue !== item.value);
   const stagedValue = isStaged ? stagedEdit?.nextValue ?? null : null;
@@ -145,8 +151,9 @@ function buildExpertRow(
     stagedValueLabel,
     diffText: stagedValueText === null ? null : `${item.valueText} → ${stagedValueText}`,
     failureMessage: normalizeOptionalText(retainedFailure?.message) ?? null,
-    editorKind: enumOptions.length > 0 ? "enum" : bitmaskOptions.length > 0 ? "bitmask" : "number",
+    editorKind: booleanOptions ? "boolean" : enumOptions.length > 0 ? "enum" : bitmaskOptions.length > 0 ? "bitmask" : "number",
     enumOptions,
+    booleanOptions,
     bitmaskOptions,
     isHighlighted: false,
   };

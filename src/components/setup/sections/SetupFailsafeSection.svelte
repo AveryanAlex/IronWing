@@ -20,6 +20,7 @@ import type {
   SetupWorkspaceStoreState,
 } from "../../../lib/stores/setup-workspace";
 import SetupPreviewStagePanel from "../shared/SetupPreviewStagePanel.svelte";
+import SetupParamEnumControl from "../shared/SetupParamEnumControl.svelte";
 import SetupSectionShell from "../SetupSectionShell.svelte";
 import SetupStagedBadge from "../../ui/StagedBadge.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
@@ -425,18 +426,14 @@ function stageDefaults() {
 
               <div class="mt-4">
                 {#if field.kind === "enum"}
-                  <select
-                    class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-                    data-testid={`${setupWorkspaceTestIds.failsafeInputPrefix}-${field.name}`}
+                  <SetupParamEnumControl
                     disabled={actionsBlocked || resolveEnumOptions(field.name).length === 0 || !item(field.name)}
                     id={`${card.id}-${field.name}`}
-                    onchange={(event) => stage(field.name, (event.currentTarget as HTMLSelectElement).value, item(field.name)?.value ?? null, true)}
+                    onChange={(value) => stage(field.name, value, item(field.name)?.value ?? null, true)}
+                    options={resolveEnumOptions(field.name)}
+                    testId={`${setupWorkspaceTestIds.failsafeInputPrefix}-${field.name}`}
                     value={draftValue(field.name, item(field.name)?.value ?? null)}
-                  >
-                    {#each resolveEnumOptions(field.name) as option (option.code)}
-                      <option value={String(option.code)}>{option.label}</option>
-                    {/each}
-                  </select>
+                  />
                 {:else}
                   <div class="flex items-center gap-2">
                     <input

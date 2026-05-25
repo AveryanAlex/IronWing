@@ -4,7 +4,7 @@ import type {
   ParameterExpertEnumOption,
   ParameterExpertRow,
 } from "../../lib/params/parameter-expert-view";
-import { Select } from "../ui";
+import { ParameterBooleanSwitch, Select } from "../ui";
 import RebootRequiredBadge from "../ui/RebootRequiredBadge.svelte";
 import StagedBadge from "../ui/StagedBadge.svelte";
 import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
@@ -80,6 +80,12 @@ function stageEnumValue(next: string) {
   props.onStage(props.row, parsed);
 }
 
+function stageBooleanValue(checked: boolean) {
+  draft = checked ? "1" : "0";
+  validationMessage = null;
+  props.onStage(props.row, checked ? 1 : 0);
+}
+
 let bitmaskDraftValue = $derived.by(() => {
   const nextValue = Number(draft.trim());
   if (Number.isFinite(nextValue) && Number.isInteger(nextValue)) {
@@ -148,7 +154,18 @@ let displayValueText = $derived(
       {displayValueText}
     </span>
     <div class="param-row__actions">
-      {#if props.row.editorKind === "enum"}
+      {#if props.row.editorKind === "boolean" && props.row.booleanOptions}
+        <div class="param-row__editor param-row__editor--boolean">
+          <ParameterBooleanSwitch
+            checked={Number(draft) === 1}
+            disabled={isEditingDisabled()}
+            offLabel={props.row.booleanOptions.off.label}
+            onLabel={props.row.booleanOptions.on.label}
+            onToggle={stageBooleanValue}
+            testId={`${parameterWorkspaceTestIds.inputPrefix}-${props.row.name}`}
+          />
+        </div>
+      {:else if props.row.editorKind === "enum"}
         <div class="param-row__editor param-row__editor--enum">
           <Select
             disabled={isEditingDisabled()}
@@ -288,6 +305,9 @@ let displayValueText = $derived(
 .param-row__editor--enum :global(.ui-select__trigger) {
   min-width: 0;
   width: 100%;
+}
+.param-row__editor--boolean :global(button) {
+  min-width: 0;
 }
 .param-row__input {
   width: 100%;

@@ -81,6 +81,7 @@ let drawerState: "open" | "closed" | "docked" = $derived(drawerStateStore.curren
 let showVehiclePanelButton = $derived(showVehiclePanelButtonStore.current);
 let showDockedVehiclePanel = $derived(showDockedVehiclePanelStore.current);
 let vehiclePanelDrawerOpen = $derived(vehiclePanelDrawerOpenStore.current);
+let useMobileToasterPosition = $derived($chromeStore.tier === "phone" || $chromeStore.tier === "tablet");
 let connectionTone = $derived.by<"neutral" | "positive" | "caution" | "critical">(() => {
   if (sessionView.current.isConnecting) {
     return "caution";
@@ -221,7 +222,13 @@ async function handleLogsMapHandoff(
 }
 </script>
 
-<Toaster closeButton richColors />
+<Toaster
+  closeButton
+  position={useMobileToasterPosition ? "top-center" : "bottom-right"}
+  richColors
+  style={useMobileToasterPosition ? "top: var(--safe-area-top, 0px)" : undefined}
+  theme="dark"
+/>
 
 <main
   class="runtime-shell"
