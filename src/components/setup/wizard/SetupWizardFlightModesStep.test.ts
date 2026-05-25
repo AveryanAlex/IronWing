@@ -233,6 +233,7 @@ function createMockParamsService(
     }),
     fetchMetadata: vi.fn(async () => metadata),
     downloadAll: vi.fn(async () => undefined),
+    cancelDownload: vi.fn(async () => undefined),
     writeBatch: writeBatchSpy,
     parseFile: vi.fn(async () => ({})),
     formatFile: vi.fn(async (_store: ParamStore) => ""),

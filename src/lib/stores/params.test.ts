@@ -237,6 +237,7 @@ function createParamsService(
     }),
     fetchMetadata: vi.fn(async () => metadata),
     downloadAll: vi.fn(async () => undefined),
+    cancelDownload: vi.fn(async () => undefined),
     writeBatch: vi.fn(async (params: [string, number][]) => params.map(([name, value]) => ({
       name,
       requested_value: value,
@@ -293,7 +294,7 @@ describe("createParamsStore", () => {
     }
   });
 
-  it("starts one live parameter download when the connected session has no bootstrap param snapshot yet", async () => {
+  it("does not auto-start a live parameter download when the connected session has no bootstrap param snapshot", async () => {
     const snapshot = createSnapshot({
       param_store: null,
       param_progress: null,
@@ -307,8 +308,22 @@ describe("createParamsStore", () => {
     await paramStore.initialize();
     await flush();
 
+    expect(paramsHarness.service.downloadAll).not.toHaveBeenCalled();
+    expect(get(paramStore).lastNotice).toBe("This session has not provided parameter values yet.");
+  });
+
+  it("delegates manual parameter downloads to the params service", async () => {
+    const { service: sessionService } = createSessionService([createSnapshot()]);
+    const paramsHarness = createParamsService(null);
+    const sessionStore = createSessionStore(sessionService);
+    const paramStore = createParamsStore(sessionStore, paramsHarness.service);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+
+    await paramStore.downloadAll();
+
     expect(paramsHarness.service.downloadAll).toHaveBeenCalledTimes(1);
-    expect(get(paramStore).lastNotice).toContain("Requesting live parameter data");
   });
 
   it("hydrates from the scoped session bootstrap and enriches the starter workspace when metadata is available", async () => {

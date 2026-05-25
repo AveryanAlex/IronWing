@@ -1432,6 +1432,7 @@ function createMockParamsService(
     }),
     fetchMetadata: vi.fn(async () => metadata),
     downloadAll: vi.fn(async () => undefined),
+    cancelDownload: vi.fn(async () => undefined),
     writeBatch: vi.fn(async (params: [string, number][]) => params.map(([name, value]) => ({
       name,
       requested_value: value,
@@ -1627,25 +1628,18 @@ describe("SetupWorkspace", () => {
     });
   });
 
-  it("keeps blocked sections inspectable while metadata recovery is active", async () => {
+  it("keeps guided sections locked while Full Parameters stays available during metadata recovery", async () => {
     await renderSetupWorkspace({ metadata: null });
 
     expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain("Parameter descriptions are unavailable");
     expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain(
-      "Metadata missing — recovery mode is active",
+      "Parameter descriptions are unavailable",
     );
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).getAttribute("data-availability")).toBe("blocked");
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`)).toBeTruthy();
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`).hasAttribute("disabled")).toBe(false);
 
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`));
-
-    await waitFor(() => {
-      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("gps");
-      expect(screen.getByTestId(setupWorkspaceTestIds.gpsSection)).toBeTruthy();
-      expect(screen.getByTestId(setupWorkspaceTestIds.gpsRecovery).textContent).toContain("Metadata recovery is active");
-    });
-
-    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.gpsRecovery).querySelector("button") as HTMLButtonElement);
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.overviewRecoveryAction));
 
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("full_parameters");
@@ -1753,10 +1747,27 @@ describe("SetupWorkspace", () => {
     });
 
     expect(screen.getByTestId(setupWorkspaceTestIds.overviewSection).textContent).toContain(
-      "Download parameters to continue",
+      "Download Parameters to Get Started",
     );
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`).getAttribute("data-availability")).toBe("blocked");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("shows the description-loading gate while allowing only Full Parameters", async () => {
+    const pendingMetadata = new Promise<ParamMetadataMap | null>(() => undefined);
+
+    await renderSetupWorkspace({
+      metadata: null,
+      paramsService: {
+        fetchMetadata: vi.fn(() => pendingMetadata),
+      },
+    });
+
+    expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain(
+      "Loading parameter descriptions",
+    );
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`).hasAttribute("disabled")).toBe(false);
   });
 
   it("keeps unimplemented sections visible but disabled with neutral copy", async () => {
@@ -2441,7 +2452,7 @@ describe("SetupWorkspace", () => {
     expect(screen.getByTestId(`${setupWorkspaceTestIds.motorsEscRowTestPrefix}-9`).getAttribute("disabled")).not.toBeNull();
   });
 
-  it("fails closed to the recovery path when frame editor metadata is incomplete", async () => {
+  it("fails closed inside the frame editor when metadata is incomplete", async () => {
     await renderSetupWorkspace({
       metadata: createSetupMetadata({ omitFrameType: true }),
     });
@@ -2451,13 +2462,6 @@ describe("SetupWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("frame_orientation");
       expect(screen.getByTestId(setupWorkspaceTestIds.frameRecovery).textContent).toContain("Frame type metadata is missing");
-    });
-
-    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.frameRecovery).querySelector("button") as HTMLButtonElement);
-
-    await waitFor(() => {
-      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("full_parameters");
-      expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
     });
   });
 
@@ -3015,7 +3019,7 @@ describe("SetupWorkspace", () => {
     expect(screen.queryByTestId(`${setupWorkspaceTestIds.peripheralsGroupPrefix}-optical-flow`)).toBeNull();
   });
 
-  it("routes unsupported initial-parameter families to the Full Parameters recovery handoff", async () => {
+  it("keeps unsupported initial-parameter families fail-closed inside the section", async () => {
     await renderSetupWorkspace({
       metadata: createSetupTuningMetadata(),
       sessionOverrides: createPlaneSessionOverrides(createPlaneSetupParamStore({ Q_ENABLE: 0 })),
@@ -3024,13 +3028,6 @@ describe("SetupWorkspace", () => {
     await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-initial_params`));
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.initialParamsRecovery).textContent).toContain("Fixed-wing");
-    });
-
-    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.initialParamsRecovery).querySelector("button") as HTMLButtonElement);
-
-    await waitFor(() => {
-      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("full_parameters");
-      expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
     });
   });
 
@@ -3083,7 +3080,7 @@ describe("SetupWorkspace", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.checkpointDetail).textContent).toContain("Resumed");
-      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("rc_receiver");
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("overview");
     });
 
     await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.checkpointDismiss));
@@ -3212,7 +3209,7 @@ describe("SetupWorkspace", () => {
     expect(screen.queryByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeNull();
   });
 
-  it("pauses the wizard into the scope banner when the session envelope changes family", async () => {
+  it("returns to overview when the wizard scope changes family", async () => {
     const { sessionStore } = await renderSetupWorkspace({
       metadata: createSetupMetadata(),
     });
@@ -3234,7 +3231,7 @@ describe("SetupWorkspace", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId(setupWorkspaceTestIds.wizardPausedScope)).toBeTruthy();
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("overview");
     });
     expect(screen.queryByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeNull();
   });

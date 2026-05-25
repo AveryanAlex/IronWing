@@ -44,11 +44,9 @@ type ReadbackView = {
 let {
   section,
   view,
-  onSelectRecovery,
 }: {
   section: SetupWorkspaceSection;
   view: SetupWorkspaceStoreState;
-  onSelectRecovery: () => void;
 } = $props();
 
 const paramsStore = getParamsStoreContext();
@@ -680,14 +678,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 
   {#if configuredOutputs.length === 0}
     <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary">
-      No configured SERVOx_FUNCTION rows are available for this scope yet. Download parameters first or open Full Parameters recovery to inspect raw output state.
-      <button
-        class="ml-3 rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        onclick={onSelectRecovery}
-        type="button"
-      >
-        Open Full Parameters recovery
-      </button>
+      No configured SERVOx_FUNCTION rows are available for this scope yet. Download parameters first to inspect output state here.
     </div>
   {:else}
     <div class="space-y-4">

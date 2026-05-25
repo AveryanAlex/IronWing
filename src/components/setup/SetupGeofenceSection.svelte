@@ -26,11 +26,9 @@ import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 let {
   section,
   view,
-  onSelectRecovery,
 }: {
   section: SetupWorkspaceSection;
   view: SetupWorkspaceStoreState;
-  onSelectRecovery: () => void;
 } = $props();
 
 const paramsStore = getParamsStoreContext();
@@ -308,13 +306,6 @@ function toggleFenceType(bit: number) {
           <li>{reason}</li>
         {/each}
       </ul>
-      <button
-        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        onclick={onSelectRecovery}
-        type="button"
-      >
-        Open Full Parameters recovery
-      </button>
     </div>
   {/if}
 
@@ -331,7 +322,7 @@ function toggleFenceType(bit: number) {
     <div>
       <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Fence boundary types</p>
       <p class="mt-2 text-sm text-text-secondary">
-        Circle, polygon, and altitude fence selections stay visible here. When the bitmask metadata is malformed, the checklist stays read-only and recovery moves to the raw parameter workspace.
+        Circle, polygon, and altitude fence selections stay visible here. When the bitmask metadata is malformed, the checklist stays read-only.
       </p>
       <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.geofenceCurrentPrefix}-FENCE_TYPE`}>
         Current · {fenceTypeItem?.valueLabel ?? fenceTypeItem?.valueText ?? "Unavailable"}

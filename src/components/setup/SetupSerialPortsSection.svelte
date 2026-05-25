@@ -24,11 +24,9 @@ import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 let {
   section,
   view,
-  onSelectRecovery,
 }: {
   section: SetupWorkspaceSection;
   view: SetupWorkspaceStoreState;
-  onSelectRecovery: () => void;
 } = $props();
 
 const paramsStore = getParamsStoreContext();
@@ -213,13 +211,6 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
     >
       <p class="font-semibold text-text-primary">Metadata recovery is active for Serial Ports.</p>
       <p class="mt-2">{model.recoveryText}</p>
-      <button
-        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        onclick={onSelectRecovery}
-        type="button"
-      >
-        Open Full Parameters recovery
-      </button>
     </div>
   {/if}
 
@@ -234,7 +225,7 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
 
   {#if model.ports.length === 0}
     <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary">
-      No serial rows are available for this scope yet. Connect a vehicle with SERIALn_* parameters or recover through Full Parameters.
+      No serial rows are available for this scope yet. Connect a vehicle with SERIALn_* parameters.
     </div>
   {:else}
     <div class="space-y-3">

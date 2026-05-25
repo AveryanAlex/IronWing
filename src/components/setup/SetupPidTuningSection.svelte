@@ -227,11 +227,9 @@ const QUADPLANE_GROUP_DEFINITIONS: ReadonlyArray<{
 let {
   section,
   view,
-  onSelectRecovery,
 }: {
   section: SetupWorkspaceSection;
   view: SetupWorkspaceStoreState;
-  onSelectRecovery: () => void;
 } = $props();
 
 const paramsStore = getParamsStoreContext();
@@ -329,7 +327,7 @@ function buildCuratedView(): CuratedPidView {
       banners: [
         {
           id: "quadplane-refresh",
-          text: "Awaiting truthful Q_A_* and Q_M_* VTOL tuning rows after the QuadPlane refresh. Use Full Parameters only as an explicit recovery path.",
+          text: "Awaiting truthful Q_A_* and Q_M_* VTOL tuning rows after the QuadPlane refresh.",
           tone: "warning",
         },
       ],
@@ -510,13 +508,6 @@ function discardItem(name: string) {
           <li>{reason}</li>
         {/each}
       </ul>
-      <button
-        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        onclick={onSelectRecovery}
-        type="button"
-      >
-        Open Full Parameters recovery
-      </button>
     </div>
   {/if}
   {/snippet}

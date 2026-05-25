@@ -120,6 +120,7 @@ function createParamsStore(state: ParamsStoreState): ParamsStore {
     clearStagedEdits: () => undefined,
     applyStagedEdits: async () => undefined,
     downloadAll: async () => undefined,
+    cancelDownload: async () => undefined,
   } as unknown as ParamsStore;
 }
 

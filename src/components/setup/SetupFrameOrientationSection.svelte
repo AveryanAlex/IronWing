@@ -52,11 +52,9 @@ const VTOL_RECOVERY_NAMES = [
 let {
   section,
   checkpoint,
-  onSelectRecovery,
 }: {
   section: SetupWorkspaceSection;
   checkpoint: SetupWorkspaceCheckpointState;
-  onSelectRecovery: () => void;
 } = $props();
 
 const paramsStore = getParamsStoreContext();
@@ -718,13 +716,6 @@ function buildFrameBanners(input: {
           <li>{orientationRecoveryReason}</li>
         {/if}
       </ul>
-      <button
-        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        onclick={onSelectRecovery}
-        type="button"
-      >
-        Open Full Parameters recovery
-      </button>
     </div>
   {/if}
   {/snippet}

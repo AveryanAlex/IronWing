@@ -83,6 +83,7 @@ function createParamsHarness(state: ParamsStoreState): ParamsStore {
     clearStagedEdits: vi.fn(),
     applyStagedEdits: vi.fn(async () => undefined),
     downloadAll: vi.fn(async () => undefined),
+    cancelDownload: vi.fn(async () => undefined),
   } as unknown as ParamsStore;
 }
 

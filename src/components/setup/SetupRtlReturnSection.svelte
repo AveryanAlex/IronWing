@@ -25,11 +25,9 @@ import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 let {
   section,
   view,
-  onSelectRecovery,
 }: {
   section: SetupWorkspaceSection;
   view: SetupWorkspaceStoreState;
-  onSelectRecovery: () => void;
 } = $props();
 
 const paramsStore = getParamsStoreContext();
@@ -403,13 +401,6 @@ function stage(field: RtlFieldConfig) {
           <li>{reason}</li>
         {/each}
       </ul>
-      <button
-        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        onclick={onSelectRecovery}
-        type="button"
-      >
-        Open Full Parameters recovery
-      </button>
     </div>
   {/if}
 

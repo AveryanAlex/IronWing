@@ -26,9 +26,27 @@ function isComingLater(section: SetupWorkspaceSection): boolean {
   return section.kind === "guided" && !section.implemented;
 }
 
+function isSetupAccessGateText(value: string | null): boolean {
+  return value === "Connect to a vehicle to access setup."
+    || value === "Download parameters to continue."
+    || value === "Loading parameter descriptions."
+    || value === "Parameter descriptions are unavailable. Open Full Parameters to continue.";
+}
+
 function isDisabled(section: SetupWorkspaceSection): boolean {
-  return isComingLater(section)
-    || (section.id === "full_parameters" && section.availability === "blocked");
+  if (isComingLater(section)) {
+    return true;
+  }
+
+  if (section.availability !== "blocked") {
+    return false;
+  }
+
+  if (section.id === "full_parameters") {
+    return true;
+  }
+
+  return isSetupAccessGateText(section.gateText);
 }
 
 function statusLabel(section: SetupWorkspaceSection): { text: string; className: string } | null {

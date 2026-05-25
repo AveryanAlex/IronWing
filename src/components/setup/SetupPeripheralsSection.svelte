@@ -143,11 +143,9 @@ const KNOWN_GROUPS: ReadonlyArray<PeripheralGroupDef> = [
 let {
   section,
   view,
-  onSelectRecovery,
 }: {
   section: SetupWorkspaceSection;
   view: SetupWorkspaceStoreState;
-  onSelectRecovery: () => void;
 } = $props();
 
 const paramsStore = getParamsStoreContext();
@@ -422,17 +420,9 @@ function discardItem(name: string) {
       </p>
       <p class="mt-2">
         {showConfiguredOnly
-          ? "Disable the filter to inspect all discovered peripheral families, or recover through Full Parameters if you need raw access."
-          : "This snapshot did not expose enough peripheral rows for a curated inventory. Recover through Full Parameters if you need direct access."}
+          ? "Disable the filter to inspect all discovered peripheral families."
+          : "This snapshot did not expose enough peripheral rows for a curated inventory."}
       </p>
-      <button
-        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        data-testid={setupWorkspaceTestIds.peripheralsRecovery}
-        onclick={onSelectRecovery}
-        type="button"
-      >
-        Open Full Parameters recovery
-      </button>
     </div>
   {:else}
     <div class="space-y-4">

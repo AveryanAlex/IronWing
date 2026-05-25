@@ -172,84 +172,70 @@ function clearCheckpoint() {
       {:else if view.selectedSectionId === "frame_orientation" && selectedSection}
         <SetupFrameOrientationSection
           checkpoint={view.checkpoint}
-          onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
         />
       {:else if view.selectedSectionId === "gps" && selectedSection}
         <SetupGpsSection
-          onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
         />
       {:else if view.selectedSectionId === "battery_monitor" && selectedSection}
         <SetupBatteryMonitorSection
-          onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
         />
       {:else if view.selectedSectionId === "motors_esc" && selectedSection}
         <SetupMotorsEscSection
-          onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
         />
       {:else if view.selectedSectionId === "servo_outputs" && selectedSection}
         <SetupServoOutputsSection
-          onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
         />
       {:else if view.selectedSectionId === "serial_ports" && selectedSection}
         <SetupSerialPortsSection
-          onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
         />
       {:else if view.selectedSectionId === "flight_modes" && selectedSection}
         <SetupFlightModesSection
-          onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
         />
       {:else if view.selectedSectionId === "failsafe" && selectedSection}
         <SetupFailsafeSection
-          onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
         />
       {:else if view.selectedSectionId === "rtl_return" && selectedSection}
         <SetupRtlReturnSection
-          onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
         />
       {:else if view.selectedSectionId === "geofence" && selectedSection}
         <SetupGeofenceSection
-          onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
         />
       {:else if view.selectedSectionId === "arming" && selectedSection}
         <SetupArmingSection
-          onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
         />
       {:else if view.selectedSectionId === "initial_params" && selectedSection}
         <SetupInitialParamsSection
-          onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
         />
       {:else if view.selectedSectionId === "pid_tuning" && selectedSection}
         <SetupPidTuningSection
-          onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
         />
       {:else if view.selectedSectionId === "peripherals" && selectedSection}
         <SetupPeripheralsSection
-          onSelectRecovery={() => selectSection("full_parameters")}
           section={selectedSection}
           {view}
         />

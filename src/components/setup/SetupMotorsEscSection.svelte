@@ -50,11 +50,9 @@ const MOTOR_TEST_DURATION_S = 2;
 let {
   section,
   view,
-  onSelectRecovery,
 }: {
   section: SetupWorkspaceSection;
   view: SetupWorkspaceStoreState;
-  onSelectRecovery: () => void;
 } = $props();
 
 const paramsStore = getParamsStoreContext();
@@ -660,14 +658,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
 
   {#if rows.length === 0}
     <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-sm leading-6 text-text-secondary">
-      Motor rows are hidden until the section can prove a real layout. Use Frame & Orientation or Full Parameters to recover missing truth before testing.
-      <button
-        class="ml-3 rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        onclick={onSelectRecovery}
-        type="button"
-      >
-        Open Full Parameters recovery
-      </button>
+      Motor rows are hidden until the section can prove a real layout. Use Frame & Orientation to recover missing truth before testing.
     </div>
   {:else}
     <div class="space-y-3">

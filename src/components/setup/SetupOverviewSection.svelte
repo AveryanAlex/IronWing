@@ -1,9 +1,11 @@
 <script lang="ts">
+import { Download, X } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext } from "../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../data/ardupilot-docs";
 import { createParameterFileIo } from "../../lib/params/parameter-file-io";
+import { paramProgressCounts, paramProgressPhase } from "../../params";
 import type { SetupWorkspaceStoreState } from "../../lib/stores/setup-workspace";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 
@@ -25,7 +27,20 @@ let paramsReady = $derived(paramsState.current.paramStore !== null);
 let refreshDisabled = $derived(fileActionBusy !== null || !paramsState.current.liveSessionConnected);
 let fileDisabled = $derived(fileActionBusy !== null || !paramsReady);
 let fullParametersSection = $derived(view.sections.find((section) => section.id === "full_parameters") ?? null);
+let flightModesSection = $derived(view.sections.find((section) => section.id === "flight_modes") ?? null);
 let fullParametersDisabled = $derived(fullParametersSection?.availability === "blocked");
+let flightModesDisabled = $derived(flightModesSection?.availability === "blocked");
+let paramProgress = $derived(paramsState.current.paramProgress);
+let paramProgressPhaseValue = $derived(paramProgress ? paramProgressPhase(paramProgress) : null);
+let paramProgressCountsValue = $derived(paramProgress ? paramProgressCounts(paramProgress) : null);
+let downloadInFlight = $derived(paramProgressPhaseValue === "downloading");
+let downloadProgressPct = $derived.by(() => {
+  if (!downloadInFlight || !paramProgressCountsValue?.expected || paramProgressCountsValue.expected <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round((paramProgressCountsValue.received / paramProgressCountsValue.expected) * 100)));
+});
 
 async function handleRefresh() {
   if (refreshDisabled) {
@@ -41,6 +56,14 @@ async function handleRefresh() {
     fileActionMessage = `Refresh failed: ${formatActionError(error)}`;
   } finally {
     fileActionBusy = null;
+  }
+}
+
+async function handleCancelDownload() {
+  try {
+    await paramsStore.cancelDownload();
+  } catch (error) {
+    fileActionMessage = `Cancel failed: ${formatActionError(error)}`;
   }
 }
 
@@ -219,16 +242,16 @@ function sectionIsComingLater(section: SetupWorkspaceStoreState["sections"][numb
 }
 
 let overviewMode = $derived.by(() => {
+  if (!view.liveSessionConnected) {
+    return "disconnected";
+  }
+
   if (!paramsReady) {
-    return view.liveSessionConnected ? "needs_params" : "disconnected";
+    return "needs_params";
   }
 
-  if (view.metadataState === "idle" || view.metadataState === "loading") {
-    return "loading_metadata";
-  }
-
-  if (view.metadataState === "unavailable") {
-    return "metadata_failed";
+  if (view.metadataState !== "ready") {
+    return "needs_metadata";
   }
 
   return "ready";
@@ -245,27 +268,106 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
       <p class="mt-2 text-sm leading-6">Setup editors stay locked until a live vehicle session is connected.</p>
     </div>
   {:else if overviewMode === "needs_params"}
-    <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-text-secondary" data-testid={setupWorkspaceTestIds.overviewBanner}>
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Overview</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Download parameters to continue</h3>
-      <p class="mt-2 text-sm leading-6">Setup editors stay locked until the vehicle parameter list has been downloaded.</p>
-      <div class="mt-4 flex flex-wrap gap-2">
-        <button
-          class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={refreshDisabled}
-          onclick={handleRefresh}
-          type="button"
-        >
-          {refreshCopy}
-        </button>
+    <div class="space-y-4">
+      <div class="grid gap-3 sm:grid-cols-3 rounded-lg border border-border bg-bg-primary/80 p-4">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Type</p>
+          <p class="mt-2 text-lg font-semibold text-text-primary">{view.activeEnvelope ? "Connected vehicle" : "Waiting"}</p>
+        </div>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Autopilot</p>
+          <p class="mt-2 text-lg font-semibold text-text-primary">Live session</p>
+        </div>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Setup access</p>
+          <p class="mt-2 text-lg font-semibold text-text-primary">Overview only</p>
+        </div>
       </div>
-      <p class="mt-3 text-xs text-text-muted">{fileActionMessage}</p>
+
+      <div class="rounded-lg border border-accent/30 bg-accent/5 px-6 py-8 text-center" data-testid={setupWorkspaceTestIds.overviewBanner}>
+        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent/15 text-accent">
+          <Download aria-hidden="true" size={24} />
+        </div>
+        <h3 class="mt-6 text-2xl font-semibold text-text-primary">Download Parameters to Get Started</h3>
+        <p class="mx-auto mt-4 max-w-2xl text-sm leading-7 text-text-secondary">
+          Vehicle parameters define your aircraft's configuration — frame type, sensor calibration, flight modes, safety limits, and more. Download them to unlock setup sections.
+        </p>
+
+        <div class="mt-6 flex justify-center">
+          {#if downloadInFlight}
+            <button
+              class="inline-flex items-center gap-2 rounded-md border border-danger/40 bg-danger/10 px-5 py-2.5 text-sm font-semibold text-danger transition hover:bg-danger/15"
+              onclick={handleCancelDownload}
+              type="button"
+            >
+              <X aria-hidden="true" size={16} />
+              Cancel
+            </button>
+          {:else}
+            <button
+              class="inline-flex items-center gap-2 rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-bg-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={refreshDisabled}
+              onclick={handleRefresh}
+              type="button"
+            >
+              <Download aria-hidden="true" size={16} />
+              Download Parameters
+            </button>
+          {/if}
+        </div>
+
+        {#if downloadInFlight}
+          <div class="mx-auto mt-5 max-w-sm">
+            <div class="h-2 overflow-hidden rounded-full bg-bg-secondary">
+              <div class="h-full rounded-full bg-accent transition-all duration-300" style={`width: ${downloadProgressPct}%`}></div>
+            </div>
+            <p class="mt-2 text-sm text-text-muted">
+              {paramProgressCountsValue?.received ?? 0} / {paramProgressCountsValue?.expected ?? "?"} parameters
+            </p>
+          </div>
+        {/if}
+      </div>
+
+      <div class="rounded-lg border border-border bg-bg-primary/80 px-5 py-4">
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">What happens next</p>
+        <ol class="mt-4 space-y-3 text-sm text-text-secondary">
+          <li class="flex items-start gap-3"><span class="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent/15 text-xs font-bold text-accent">1</span><span>Parameters are read from your flight controller</span></li>
+          <li class="flex items-start gap-3"><span class="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent/15 text-xs font-bold text-accent">2</span><span>Setup sections unlock after parameter descriptions finish loading</span></li>
+          <li class="flex items-start gap-3"><span class="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent/15 text-xs font-bold text-accent">3</span><span>Edit parameters in context, review staged changes, then apply</span></li>
+        </ol>
+      </div>
     </div>
-  {:else if overviewMode === "loading_metadata"}
-    <div class="rounded-lg border border-border bg-bg-primary/80 px-4 py-4 text-text-secondary" data-testid={setupWorkspaceTestIds.overviewBanner}>
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Overview</p>
-      <h3 class="mt-2 text-lg font-semibold text-text-primary">Loading parameter descriptions</h3>
-      <p class="mt-2 text-sm leading-6">Setup editors stay locked until parameter descriptions finish loading.</p>
+  {:else if overviewMode === "needs_metadata"}
+    <div class="space-y-4">
+      <div class="rounded-lg border border-success/30 bg-success/10 px-4 py-4 text-text-secondary">
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Overview</p>
+        <p class="mt-2 text-sm font-semibold text-text-primary">
+          Parameters downloaded — {Object.keys(paramsState.current.paramStore?.params ?? {}).length} parameters
+        </p>
+      </div>
+
+      <div class="rounded-lg border border-border bg-bg-primary/80 px-6 py-6 text-center" data-testid={setupWorkspaceTestIds.overviewBanner}>
+        <h3 class="text-xl font-semibold text-text-primary">
+          {view.metadataState === "unavailable" ? "Parameter descriptions are unavailable" : "Loading parameter descriptions"}
+        </h3>
+        <p class="mx-auto mt-3 max-w-2xl text-sm leading-7 text-text-secondary">
+          {view.metadataState === "unavailable"
+            ? "Guided setup sections stay locked because labels, ranges, and option lists are unavailable for this vehicle. Full Parameters remains available as the only editor until descriptions are restored."
+            : "Guided setup sections stay locked until parameter descriptions finish loading. Full Parameters is available if you need raw access while descriptions settle."}
+        </p>
+
+        <div class="mt-6 flex flex-wrap justify-center gap-3">
+          <button
+            class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+            data-testid={setupWorkspaceTestIds.overviewRecoveryAction}
+            disabled={fullParametersDisabled}
+            onclick={() => onSelect("full_parameters")}
+            type="button"
+          >
+            Open Full Parameters
+          </button>
+        </div>
+      </div>
     </div>
   {:else}
     <div class={`rounded-lg border px-4 py-4 ${bannerTone}`} data-testid={setupWorkspaceTestIds.overviewBanner}>
@@ -357,19 +459,21 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
     </div>
   {/if}
 
-  {#if overviewMode === "ready" || overviewMode === "metadata_failed"}
+  {#if overviewMode === "ready"}
     <div class="flex flex-wrap gap-2">
       <button
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-frame_orientation`}
+        disabled={view.sections.find((section) => section.id === "frame_orientation")?.availability === "blocked"}
         onclick={() => onSelect("frame_orientation")}
         type="button"
       >
         Open Frame &amp; orientation
       </button>
       <button
-        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
+        class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
         data-testid={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-flight_modes`}
+        disabled={flightModesDisabled}
         onclick={() => onSelect("flight_modes")}
         type="button"
       >
@@ -449,13 +553,17 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
 
                 {#if sectionIsComingLater(section)}
                   <p class="mt-4 text-xs font-semibold uppercase tracking-widest text-text-muted">Coming later</p>
+                {:else if section.availability === "blocked"}
+                  <p class="mt-4 text-xs font-semibold uppercase tracking-widest text-text-muted">
+                    {section.gateText ?? "Locked until setup is ready"}
+                  </p>
                 {:else}
                   <button
                     class="mt-4 rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
                     onclick={() => onSelect(section.id)}
                     type="button"
                   >
-                    {section.availability === "available" ? `Open ${section.title}` : `Inspect ${section.title}`}
+                    {`Open ${section.title}`}
                   </button>
                 {/if}
               </div>

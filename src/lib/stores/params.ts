@@ -139,66 +139,11 @@ export function createParamsStore(
   let lastSessionEnvelope: SessionEnvelope | null = null;
   let lastBootstrapStoreRef: ParamStore | null = null;
   let lastBootstrapProgressRef: ParamProgress | null = null;
-  let lastDownloadRequestScopeKey: string | null = null;
   let metadataRequestId = 0;
   let applyRequestId = 0;
 
   function invalidateInFlightApply() {
     applyRequestId += 1;
-  }
-
-  function resolveDownloadRequestScopeKey(state: Pick<ParamsStoreState, "activeEnvelope">) {
-    const envelope = state.activeEnvelope;
-    if (!envelope || envelope.source_kind !== "live") {
-      return null;
-    }
-
-    return `${envelope.session_id}:${envelope.seek_epoch}:${envelope.reset_revision}`;
-  }
-
-  async function maybeStartLiveParamDownload() {
-    const state = get(store);
-    const scopeKey = resolveDownloadRequestScopeKey(state);
-
-    if (!scopeKey) {
-      lastDownloadRequestScopeKey = null;
-      return;
-    }
-
-    if (!state.streamReady || !state.liveSessionConnected) {
-      return;
-    }
-
-    if (state.paramStore || state.paramProgress || lastDownloadRequestScopeKey === scopeKey) {
-      return;
-    }
-
-    lastDownloadRequestScopeKey = scopeKey;
-
-    try {
-      await service.downloadAll();
-      store.update((current) => {
-        if (resolveDownloadRequestScopeKey(current) !== scopeKey || current.paramStore || current.paramProgress) {
-          return current;
-        }
-
-        return {
-          ...current,
-          lastNotice: "Requesting live parameter data from the vehicle.",
-        };
-      });
-    } catch (error) {
-      store.update((current) => {
-        if (resolveDownloadRequestScopeKey(current) !== scopeKey) {
-          return current;
-        }
-
-        return {
-          ...current,
-          lastNotice: `Failed to start parameter download: ${service.formatError(error)}`,
-        };
-      });
-    }
   }
 
   function applyBootstrapState(
@@ -377,7 +322,6 @@ export function createParamsStore(
     }
 
     applyBootstrapState(sessionState, envelopeChanged, metadataReload);
-    void maybeStartLiveParamDownload();
   }
 
   function applyStoreEvent(event: { envelope: SessionEnvelope; value: ParamStore }) {
@@ -458,7 +402,6 @@ export function createParamsStore(
           streamError: null,
           phase: resolveReadyPhase(state),
         }));
-        void maybeStartLiveParamDownload();
       } catch (error) {
         store.update((state) => ({
           ...state,
@@ -663,7 +606,6 @@ export function createParamsStore(
     lastSessionEnvelope = null;
     lastBootstrapStoreRef = null;
     lastBootstrapProgressRef = null;
-    lastDownloadRequestScopeKey = null;
     store.set(createInitialState());
   }
 
@@ -678,6 +620,10 @@ export function createParamsStore(
     await service.downloadAll();
   }
 
+  async function cancelDownload() {
+    await service.cancelDownload();
+  }
+
   return {
     subscribe: store.subscribe,
     initialize,
@@ -686,6 +632,7 @@ export function createParamsStore(
     clearStagedEdits,
     applyStagedEdits,
     downloadAll,
+    cancelDownload,
     reset,
   };
 }

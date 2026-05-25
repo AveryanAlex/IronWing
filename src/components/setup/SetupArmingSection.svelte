@@ -31,11 +31,9 @@ import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 let {
   section,
   view,
-  onSelectRecovery,
 }: {
   section: SetupWorkspaceSection;
   view: SetupWorkspaceStoreState;
-  onSelectRecovery: () => void;
 } = $props();
 
 const paramsStore = getParamsStoreContext();
@@ -270,7 +268,7 @@ async function handleDisarm() {
   sectionId={section.id}
   eyebrow={section.title}
   title="Review pre-arm blockers and live arm controls"
-  description="Review live support, sensor health, and status text here before you arm. If a check is blocked, request fresh checks or open Full Parameters for deeper inspection; parameter edits still queue in the review tray."
+  description="Review live support, sensor health, and status text here before you arm. If a check is blocked, request fresh checks here; parameter edits still queue in the review tray."
   testId={setupWorkspaceTestIds.armingSection}
 >
   {#snippet actions()}
@@ -398,13 +396,6 @@ async function handleDisarm() {
               <li>{reason}</li>
             {/each}
           </ul>
-          <button
-            class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-            onclick={onSelectRecovery}
-            type="button"
-          >
-            Open Full Parameters recovery
-          </button>
         </div>
       {/if}
 

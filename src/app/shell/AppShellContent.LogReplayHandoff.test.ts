@@ -126,6 +126,7 @@ function createParamsService(): ParamsService {
     }),
     fetchMetadata: vi.fn(async () => null),
     downloadAll: vi.fn(async () => undefined),
+    cancelDownload: vi.fn(async () => undefined),
     writeBatch: vi.fn(async () => []),
     parseFile: vi.fn(async () => ({})),
     formatFile: vi.fn(async () => ""),

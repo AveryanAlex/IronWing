@@ -285,6 +285,7 @@ function createMockParamsService(
         }),
         fetchMetadata: vi.fn(async () => metadata),
         downloadAll: vi.fn(async () => undefined),
+        cancelDownload: vi.fn(async () => undefined),
         writeBatch: vi.fn(async (params: [string, number][]) => params.map(([name, value]) => ({
             name,
             requested_value: value,
@@ -725,8 +726,8 @@ describe("AppShell", () => {
         expect(screen.getByTestId(setupWorkspaceTestIds.state).textContent).toContain("Setup ready");
         // The compact nav only renders a status badge for complete / in_progress / failed — not for "unknown".
         expect(screen.queryByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`)).toBeNull();
-        expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionConfidencePrefix}-frame_orientation`).textContent?.trim()).toBe("Unconfirmed");
-        expect(screen.getByTestId(setupWorkspaceTestIds.detailRecovery).textContent).toContain("Full Parameters stays separate");
+        expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain("Connect to a vehicle to begin setup");
+        expect(screen.queryByTestId(setupWorkspaceTestIds.detailRecovery)).toBeNull();
     });
 
     it("opens the expert browser from a workflow handoff inside the shell and stages raw edits into the shared tray", async () => {
@@ -863,13 +864,14 @@ describe("AppShell", () => {
         expect(screen.getByTestId(setupWorkspaceTestIds.metadata).textContent).toContain("Parameter metadata is unavailable");
         expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain("Parameter descriptions are unavailable");
         expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain(
-            "Metadata missing — recovery mode is active",
+            "Parameter descriptions are unavailable",
         );
         expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-overview`)).toBeTruthy();
         expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`)).toBeTruthy();
         expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).getAttribute("data-availability")).toBe("blocked");
         expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-rc_receiver`).getAttribute("data-availability")).toBe("blocked");
         expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-calibration`).getAttribute("data-availability")).toBe("blocked");
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).hasAttribute("disabled")).toBe(true);
 
         await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`));
         await waitFor(() => {

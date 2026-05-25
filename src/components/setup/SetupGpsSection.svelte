@@ -35,11 +35,9 @@ type GpsLiveObservation = {
 let {
   section,
   view,
-  onSelectRecovery,
 }: {
   section: SetupWorkspaceSection;
   view: SetupWorkspaceStoreState;
-  onSelectRecovery: () => void;
 } = $props();
 
 const paramsStore = getParamsStoreContext();
@@ -167,7 +165,7 @@ let portDetailText = $derived.by(() => {
   }
 
   if (serialModel.gpsPorts.length === 0) {
-    return "No SERIALn port is currently assigned to GPS (protocol 5). Fix the port assignment in Serial Ports or recover through Full Parameters before claiming navigation readiness.";
+    return "No SERIALn port is currently assigned to GPS (protocol 5). Fix the port assignment in Serial Ports before claiming navigation readiness.";
   }
 
   return `The current scope assigns GPS protocol ownership to ${serialModel.gpsPorts.join(", ")}.`;
@@ -435,7 +433,7 @@ function formatHdop(value: number | null): string {
           {/each}
         </ul>
       {:else}
-        No GPS serial port is configured yet. Use Serial Ports or Full Parameters recovery before claiming navigation readiness.
+        No GPS serial port is configured yet. Use Serial Ports before claiming navigation readiness.
       {/if}
     </div>
   {/if}
@@ -629,7 +627,7 @@ function formatHdop(value: number | null): string {
       />
     {:else}
       <div class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning">
-        GNSS metadata is incomplete for this scope, so the checklist stays read-only and Setup routes recovery through Full Parameters instead of inventing a bitmask editor.
+        GNSS metadata is incomplete for this scope, so the checklist stays read-only instead of inventing a bitmask editor.
       </div>
     {/if}
   </div>
@@ -641,13 +639,6 @@ function formatHdop(value: number | null): string {
     >
       <p class="font-semibold text-text-primary">Metadata recovery is active for GPS.</p>
       <p class="mt-2">Purpose-built editors stay visible but read-only until the missing parameter metadata is restored for this scope.</p>
-      <button
-        class="mt-4 rounded-md border border-warning/50 bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent"
-        onclick={onSelectRecovery}
-        type="button"
-      >
-        Open Full Parameters recovery
-      </button>
     </div>
   {/if}
   {/snippet}

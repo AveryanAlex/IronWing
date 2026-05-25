@@ -645,7 +645,11 @@ function resolveFullParametersAvailability(input: {
     };
   }
 
-  if (input.metadataState === "unavailable" && input.liveSessionConnected && input.paramStoreReady) {
+  if (
+    input.liveSessionConnected
+    && input.paramStoreReady
+    && (input.metadataState === "idle" || input.metadataState === "loading" || input.metadataState === "unavailable")
+  ) {
     return {
       availability: "available",
       gateText: null,
@@ -1273,11 +1277,31 @@ function normalizeCheckpointInput(input: SetupWorkspaceCheckpointInput): SetupWo
   };
 }
 
+function isSetupAccessGateText(value: string | null): boolean {
+  return value === "Connect to a vehicle to access setup."
+    || value === "Download parameters to continue."
+    || value === "Loading parameter descriptions."
+    || value === "Parameter descriptions are unavailable. Open Full Parameters to continue.";
+}
+
+function blocksSectionSelection(section: SetupWorkspaceSection): boolean {
+  if (section.availability !== "blocked") {
+    return false;
+  }
+
+  if (section.id === "full_parameters") {
+    return true;
+  }
+
+  return isSetupAccessGateText(section.gateText);
+}
+
 function resolveSelectedSectionId(
   requested: SetupSectionId,
   sections: SetupWorkspaceSection[],
 ): SetupSectionId {
-  return sections.some((section) => section.id === requested) ? requested : "overview";
+  const section = sections.find((entry) => entry.id === requested);
+  return section && !blocksSectionSelection(section) ? requested : "overview";
 }
 
 function createInitialWorkspaceState(): SetupWorkspaceStoreState {
@@ -1619,6 +1643,12 @@ export function createSetupWorkspaceStore(
     subscribe: state.subscribe,
     selectSection(nextSectionId: string) {
       if (!isSetupSectionId(nextSectionId)) {
+        return;
+      }
+
+      const candidate = previous?.sections.find((section) => section.id === nextSectionId) ?? null;
+      if (candidate && blocksSectionSelection(candidate)) {
+        recompute();
         return;
       }
 
