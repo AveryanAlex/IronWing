@@ -6,6 +6,7 @@ export type MenuItem = {
   destructive?: boolean;
   disabled?: boolean;
   testId?: string;
+  title?: string;
   icon?: Snippet;
   onSelect: () => void;
 };

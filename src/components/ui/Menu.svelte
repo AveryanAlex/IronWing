@@ -47,6 +47,7 @@ let triggerClasses = $derived([
           data-destructive={item.destructive || undefined}
           data-testid={item.testId}
           disabled={item.disabled}
+          title={item.title}
           onSelect={() => item.onSelect()}
         >
           {#if item.icon}

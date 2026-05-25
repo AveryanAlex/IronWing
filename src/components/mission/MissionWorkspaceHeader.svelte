@@ -85,12 +85,15 @@ let undoLabel = $derived(`Undo (${normalizedUndoCount} available)`);
 let redoLabel = $derived(`Redo (${normalizedRedoCount} available)`);
 let replayReadonly = $derived(attachment.kind === "playback-readonly");
 let uploadedIdle = $derived(uploaded && !busy);
+let vehicleDisconnected = $derived(!canUseVehicleActions);
 let uploadDisabled = $derived(
-  !uploading && !uploadedIdle && (busy || !attachment.canUseVehicleActions || !canUseVehicleActions || !hasContent),
+  !uploading && !uploadedIdle && (busy || vehicleDisconnected),
 );
 let uploadTone = $derived<"warning" | "success" | "accent">(uploading ? "warning" : uploadedIdle ? "success" : "accent");
 let uploadAriaLabel = $derived(uploading ? "Cancel upload" : uploadedIdle ? "Uploaded to vehicle" : "Upload to vehicle");
 let uploadLabel = $derived(uploading ? "Cancel" : uploadedIdle ? "Uploaded" : "Upload");
+let uploadTooltipLabel = $derived(vehicleDisconnected ? "Connect a vehicle to upload the mission." : uploadAriaLabel);
+let readVehicleTitle = $derived(vehicleDisconnected ? "Connect a vehicle to read planning state." : undefined);
 let clearLabel = $derived(
   mode === "fence" ? "Clear fence" : mode === "rally" ? "Clear rally" : "Clear mission",
 );
@@ -109,7 +112,8 @@ let secondaryItems = $derived<MenuItem[]>([
     id: "read",
     label: "Read from vehicle",
     testId: missionWorkspaceTestIds.toolbarRead,
-    disabled: busy || !attachment.canUseVehicleActions || !canUseVehicleActions,
+    disabled: busy || vehicleDisconnected,
+    title: readVehicleTitle,
     icon: readIcon,
     onSelect: onReadFromVehicle,
   },
@@ -217,25 +221,28 @@ let secondaryItems = $derived<MenuItem[]>([
     </ToolbarGroup>
 
     <ToolbarGroup>
-      <Button
-        ariaLabel={uploadAriaLabel}
-        disabled={uploadDisabled}
-        onclick={uploading ? onCancelTransfer : uploadedIdle ? undefined : onUploadToVehicle}
-        size="sm"
-        testId={missionWorkspaceTestIds.toolbarUpload}
-        tone={uploadTone}
-      >
-        <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">
-          {#if uploading}
-            {@render cancelIcon()}
-          {:else if uploadedIdle}
-            {@render uploadedIcon()}
-          {:else}
-            {@render uploadIcon()}
-          {/if}
-        </span>
-        <span class="@max-[520px]:hidden">{uploadLabel}</span>
-      </Button>
+      <Tooltip label={uploadTooltipLabel}>
+        <Button
+          ariaLabel={uploadAriaLabel}
+          disabled={uploadDisabled}
+          onclick={uploading ? onCancelTransfer : uploadedIdle ? undefined : onUploadToVehicle}
+          size="sm"
+          testId={missionWorkspaceTestIds.toolbarUpload}
+          title={vehicleDisconnected ? uploadTooltipLabel : undefined}
+          tone={uploadTone}
+        >
+          <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">
+            {#if uploading}
+              {@render cancelIcon()}
+            {:else if uploadedIdle}
+              {@render uploadedIcon()}
+            {:else}
+              {@render uploadIcon()}
+            {/if}
+          </span>
+          <span class="@max-[520px]:hidden">{uploadLabel}</span>
+        </Button>
+      </Tooltip>
       {#if canCancel && !uploading}
         <Button
           ariaLabel="Cancel transfer"

@@ -467,7 +467,7 @@ describe("createMissionPlannerStore", () => {
     expect(state.recoverableWorkspace?.active.survey.surveyRegionOrder).toHaveLength(1);
     expect(view.attachment.kind).toBe("detached-local");
     expect(view.canEdit).toBe(true);
-    expect(view.canUseVehicleActions).toBe(false);
+    expect(view.canUseVehicleActions).toBe(true);
 
     plannerStore.addMissionItem();
     state = get(plannerStore);
@@ -497,7 +497,7 @@ describe("createMissionPlannerStore", () => {
     view = get(createMissionPlannerViewStore(plannerStore));
     expect(view.attachment.kind).toBe("detached-local");
     expect(view.canEdit).toBe(true);
-    expect(view.canUseVehicleActions).toBe(false);
+    expect(view.canUseVehicleActions).toBe(true);
     expect(state.draftState.active.mission.document.items).toHaveLength(2);
 
     plannerStore.redo("mission");
@@ -788,6 +788,41 @@ describe("createMissionPlannerStore", () => {
     expect(view.canUseVehicleActions).toBe(false);
     expect(state.home).toEqual(before);
     expect(state.blockedReason).toContain("playback");
+  });
+
+  it("keeps vehicle actions blocked until the live session is actually connected", async () => {
+    const sessionHarness = createSessionHarness([
+      createSnapshot({
+        session: {
+          available: true,
+          complete: true,
+          provenance: "bootstrap",
+          value: {
+            status: "active",
+            connection: { kind: "disconnected" },
+            vehicle_state: null,
+            home_position: null,
+          },
+        },
+      }),
+      createSnapshot(),
+    ]);
+    const plannerHarness = createPlannerServiceHarness();
+    const fileHarness = createFileIoHarness();
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo);
+
+    await sessionStore.initialize();
+    await plannerStore.initialize();
+
+    plannerStore.addMissionItem();
+
+    let view = get(createMissionPlannerViewStore(plannerStore));
+    expect(view.canUseVehicleActions).toBe(false);
+
+    await sessionStore.bootstrapSource("live");
+    view = get(createMissionPlannerViewStore(plannerStore));
+    expect(view.canUseVehicleActions).toBe(true);
   });
 
   it("creates survey blocks after home, manual items, and survey blocks with deterministic ordering", async () => {

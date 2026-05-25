@@ -888,6 +888,7 @@ async function renderWorkspace(options: {
   fileIoOverrides?: Partial<MissionPlanFileIo>;
   chromeStore?: ReturnType<typeof createStaticShellChromeStore> | Writable<ReturnType<typeof createShellChromeState>>;
   includeShellChromeContext?: boolean;
+  deferSessionInitialize?: boolean;
   componentProps?: Record<string, unknown>;
   setup?: (context: {
     plannerStore: ReturnType<typeof createMissionPlannerStore>;
@@ -901,7 +902,9 @@ async function renderWorkspace(options: {
   const sessionStore = createSessionStore(sessionHarness.service);
   const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo);
 
-  await sessionStore.initialize();
+  if (!options.deferSessionInitialize) {
+    await sessionStore.initialize();
+  }
   await plannerStore.initialize();
 
   if (options.setup) {
@@ -2522,6 +2525,51 @@ describe("MissionWorkspace", () => {
       expect(uploadButton.getAttribute("aria-label")).toBe("Upload to vehicle");
       expect(uploadButton.getAttribute("data-tone")).toBe("accent");
     });
+  });
+
+  it("enables read and upload for locally-authored drafts after a live vehicle connects", async () => {
+    const { plannerHarness, sessionStore } = await renderWorkspace({
+      snapshots: [
+        createSnapshot({
+          session: {
+            available: true,
+            complete: true,
+            provenance: "bootstrap",
+            value: {
+              status: "active",
+              connection: { kind: "disconnected" },
+              vehicle_state: null,
+              home_position: null,
+            },
+          },
+        }),
+        createSnapshot(),
+      ],
+      setup: ({ plannerStore }) => {
+        plannerStore.addMissionItem();
+      },
+    });
+
+    const uploadButton = screen.getByTestId(missionWorkspaceTestIds.toolbarUpload) as HTMLButtonElement;
+    expect(uploadButton.disabled).toBe(true);
+    expect(uploadButton.getAttribute("title")).toContain("Connect a vehicle");
+
+    let readItem = await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarRead);
+    expect(readItem.getAttribute("data-disabled")).not.toBeNull();
+    expect(readItem.getAttribute("title")).toContain("Connect a vehicle");
+
+    await sessionStore.bootstrapSource("live");
+    await flush();
+
+    await waitFor(() => {
+      expect(uploadButton.disabled).toBe(false);
+      expect(uploadButton.getAttribute("title") ?? "").not.toContain("Connect a vehicle");
+    });
+    readItem = await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarRead);
+    expect(readItem.getAttribute("data-disabled")).toBeNull();
+
+    await fireEvent.click(uploadButton);
+    expect(plannerHarness.service.uploadWorkspace).toHaveBeenCalledTimes(1);
   });
 
   it("shows a same-scope recoverable-draft prompt when returning to a scope and restores it explicitly", async () => {

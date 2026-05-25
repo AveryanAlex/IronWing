@@ -340,6 +340,7 @@ export type MissionPlannerStoreState = {
   streamError: string | null;
   sessionHydrated: boolean;
   sessionPhase: SessionStorePhase;
+  sessionConnected: boolean;
   activeEnvelope: SessionEnvelope | null;
   activeSource: SessionEnvelope["source_kind"] | null;
   missionState: MissionState | null;
@@ -418,6 +419,7 @@ function createInitialState(initialMode: MissionPlannerMode = "mission"): Missio
     streamError: null,
     sessionHydrated: false,
     sessionPhase: "idle",
+    sessionConnected: false,
     activeEnvelope: null,
     activeSource: null,
     missionState: null,
@@ -885,6 +887,7 @@ export function createMissionPlannerStore(
         ...state,
         sessionHydrated: sessionState.hydrated,
         sessionPhase: sessionState.lastPhase,
+        sessionConnected: sessionState.sessionDomain.value?.connection.kind === "connected",
       } satisfies MissionPlannerStoreState;
 
       if (!envelopeChanged) {
@@ -3043,6 +3046,7 @@ export function plannerScopeLabel(state: Pick<MissionPlannerStoreState, "activeE
 
 export function resolveMissionPlannerAttachment(state: MissionPlannerStoreState): MissionPlannerAttachmentState {
   const draftScope = attachedDraftScope(state);
+  const liveVehicleConnected = state.activeEnvelope?.source_kind === "live" && state.sessionConnected;
 
   if (state.activeEnvelope?.source_kind === "playback") {
     return {
@@ -3059,10 +3063,12 @@ export function resolveMissionPlannerAttachment(state: MissionPlannerStoreState)
     return {
       kind: "live-attached",
       label: "Live attached",
-      detail: "A live session is available. Read from the vehicle, import a file, or start a new draft to mount the workspace in this scope.",
+      detail: liveVehicleConnected
+        ? "A live session is available. Read from the vehicle, import a file, or start a new draft to mount the workspace in this scope."
+        : "A vehicle scope is known, but the vehicle is currently disconnected. Reconnect to read from the vehicle or upload this workspace.",
       readOnly: false,
       canEdit: true,
-      canUseVehicleActions: true,
+      canUseVehicleActions: liveVehicleConnected,
     };
   }
 
@@ -3070,10 +3076,12 @@ export function resolveMissionPlannerAttachment(state: MissionPlannerStoreState)
     return {
       kind: "live-attached",
       label: "Live attached",
-      detail: "This draft belongs to the active live scope, so validation, upload, and clear actions stay available.",
+      detail: liveVehicleConnected
+        ? "This draft belongs to the active live scope, so validation, upload, and clear actions stay available."
+        : "This draft belongs to the current scope, but the vehicle is disconnected. Reconnect to read from the vehicle or upload this workspace.",
       readOnly: false,
       canEdit: true,
-      canUseVehicleActions: true,
+      canUseVehicleActions: liveVehicleConnected,
     };
   }
 
@@ -3102,10 +3110,12 @@ export function resolveMissionPlannerAttachment(state: MissionPlannerStoreState)
   return {
     kind: "detached-local",
     label: "Detached local",
-    detail: `The planner kept the previous draft mounted instead of pretending it matches ${plannerScopeLabel({ activeEnvelope: state.activeEnvelope })}. Keep planning locally and use undo/redo as normal here, but validation, upload, and clear stay blocked until you return to a matching live scope or start a new scope-local draft.`,
+    detail: liveVehicleConnected
+      ? `The planner kept the previous draft mounted instead of pretending it matches ${plannerScopeLabel({ activeEnvelope: state.activeEnvelope })}. Keep planning locally and use undo/redo as normal here; the connected live vehicle is still available for read, validation, upload, and clear actions.`
+      : `The planner kept the previous draft mounted instead of pretending it matches ${plannerScopeLabel({ activeEnvelope: state.activeEnvelope })}. Keep planning locally and use undo/redo as normal here, then reconnect the vehicle when you need read, validation, upload, or clear actions.`,
     readOnly: false,
     canEdit: true,
-    canUseVehicleActions: false,
+    canUseVehicleActions: liveVehicleConnected,
   };
 }
 
@@ -3125,6 +3135,10 @@ function readOnlyMutationMessage(state: MissionPlannerStoreState, noun: string):
 }
 
 function blockedVehicleActionMessage(state: MissionPlannerStoreState, noun: string): string {
+  if (!state.sessionConnected) {
+    return `${noun} needs a connected live vehicle. Reconnect first, then try again.`;
+  }
+
   const attachment = resolveMissionPlannerAttachment(state);
   switch (attachment.kind) {
     case "playback-readonly":

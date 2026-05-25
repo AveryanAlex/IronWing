@@ -11,6 +11,7 @@ type Props = {
   disabled?: boolean;
   loading?: boolean;
   ariaLabel?: string;
+  title?: string;
   testId?: string;
   onclick?: (event: MouseEvent) => void;
   children?: Snippet;
@@ -37,6 +38,7 @@ let {
   disabled = false,
   loading = false,
   ariaLabel,
+  title,
   testId,
   onclick,
   children,
@@ -64,6 +66,7 @@ let buttonClass = $derived(
   data-size={size}
   data-testid={testId}
   aria-label={ariaLabel}
+  title={title}
   aria-busy={loading || undefined}
   disabled={disabled || loading}
   {type}
