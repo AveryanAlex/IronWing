@@ -68,8 +68,8 @@
     <div class="relative flex h-9 rounded-full bg-bg-tertiary p-[3px]">
       <div
         class={[
-          "absolute top-[3px] left-[3px] h-[calc(100%_-_6px)] w-[calc(50%_-_3px)] rounded-full bg-bg-secondary transition-[left,background] duration-200 ease-in-out",
-          armed && "left-1/2 bg-danger/45",
+          "absolute top-[3px] h-[calc(100%_-_6px)] w-[calc(50%_-_3px)] rounded-full transition-[left,background] duration-200 ease-in-out",
+          armed ? "left-1/2 bg-danger/45" : "left-[3px] bg-bg-secondary",
         ]}
       ></div>
       <button
