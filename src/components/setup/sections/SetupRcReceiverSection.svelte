@@ -216,8 +216,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
 
     <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">RCMAP_ROLL</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">Roll</h4>
+        <h4 class="text-base font-semibold text-text-primary">Roll</h4>
         <p class="mt-2 text-sm text-text-secondary">Map the primary roll axis to the receiver channel that is moving for roll.</p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_ROLL`}>
           Current · {rollItem?.valueText ?? "Unavailable"}
@@ -241,8 +240,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
       </article>
 
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">RCMAP_PITCH</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">Pitch</h4>
+        <h4 class="text-base font-semibold text-text-primary">Pitch</h4>
         <p class="mt-2 text-sm text-text-secondary">Map the primary pitch axis to the receiver channel that is moving for pitch.</p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_PITCH`}>
           Current · {pitchItem?.valueText ?? "Unavailable"}
@@ -266,8 +264,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
       </article>
 
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">RCMAP_THROTTLE</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">Throttle</h4>
+        <h4 class="text-base font-semibold text-text-primary">Throttle</h4>
         <p class="mt-2 text-sm text-text-secondary">Map the primary throttle axis to the receiver channel that is moving for throttle.</p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_THROTTLE`}>
           Current · {throttleItem?.valueText ?? "Unavailable"}
@@ -291,8 +288,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
       </article>
 
       <article class="rounded-lg border border-border bg-bg-secondary/70 p-3">
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">RCMAP_YAW</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">Yaw</h4>
+        <h4 class="text-base font-semibold text-text-primary">Yaw</h4>
         <p class="mt-2 text-sm text-text-secondary">Map the primary yaw axis to the receiver channel that is moving for yaw.</p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.rcCurrentPrefix}-RCMAP_YAW`}>
           Current · {yawItem?.valueText ?? "Unavailable"}

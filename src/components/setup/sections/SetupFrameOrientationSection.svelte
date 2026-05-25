@@ -529,8 +529,7 @@ function buildFrameBanners(input: {
         class="rounded-lg border border-border bg-bg-primary/80 p-3"
         data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-Q_ENABLE`}
       >
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Q_ENABLE</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">{qEnableItem?.label ?? "QuadPlane enable"}</h4>
+        <h4 class="text-base font-semibold text-text-primary">{qEnableItem?.label ?? "QuadPlane enable"}</h4>
         <p class="mt-2 text-sm text-text-secondary">
           {qEnableItem?.description ?? "Enable QuadPlane on Plane firmware before expecting VTOL frame, motor, or actuator truth."}
         </p>
@@ -561,8 +560,7 @@ function buildFrameBanners(input: {
         class="rounded-lg border border-border bg-bg-primary/80 p-3"
         data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-${frameClassItem.name}`}
       >
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{frameClassItem.name}</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">{frameClassItem.label}</h4>
+        <h4 class="text-base font-semibold text-text-primary">{frameClassItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">
           {frameClassItem.description ?? (profile.frameParamFamily === "quadplane"
             ? "Choose the authoritative QuadPlane lift-motor frame family after the VTOL params refresh."
@@ -593,8 +591,7 @@ function buildFrameBanners(input: {
         class="rounded-lg border border-border bg-bg-primary/80 p-3"
         data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-${frameTypeItem.name}`}
       >
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{frameTypeItem.name}</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">{frameTypeItem.label}</h4>
+        <h4 class="text-base font-semibold text-text-primary">{frameTypeItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">
           {frameTypeItem.description ?? (profile.frameParamFamily === "quadplane"
             ? "Choose the authoritative QuadPlane layout inside the refreshed VTOL frame family."
@@ -627,8 +624,7 @@ function buildFrameBanners(input: {
         class="rounded-lg border border-border bg-bg-primary/80 p-3"
         data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-AHRS_ORIENTATION`}
       >
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">AHRS_ORIENTATION</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">{orientationItem.label}</h4>
+        <h4 class="text-base font-semibold text-text-primary">{orientationItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">
           {orientationItem.description ?? "Confirm the board orientation before continuing with calibration or actuator work."}
         </p>

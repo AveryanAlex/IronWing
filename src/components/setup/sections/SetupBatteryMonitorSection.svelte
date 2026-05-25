@@ -569,8 +569,7 @@ function round3(value: number): number {
   <div class="grid gap-3 xl:grid-cols-3">
     {#if monitorItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">BATT_MONITOR</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">{monitorItem.label}</h4>
+        <h4 class="text-base font-semibold text-text-primary">{monitorItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">{monitorItem.description ?? "Choose the primary battery-monitor backend without bypassing the shared review tray."}</p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_MONITOR`}>
           Current · {currentValueText(monitorItem)}
@@ -596,8 +595,7 @@ function round3(value: number): number {
 
     {#if voltPinItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">BATT_VOLT_PIN</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">{voltPinItem.label}</h4>
+        <h4 class="text-base font-semibold text-text-primary">{voltPinItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Manual voltage-pin staging remains available when board presets do not fit the current wiring.</p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_VOLT_PIN`}>
           Current · {currentValueText(voltPinItem)}
@@ -622,8 +620,7 @@ function round3(value: number): number {
 
     {#if voltMultItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">BATT_VOLT_MULT</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">{voltMultItem.label}</h4>
+        <h4 class="text-base font-semibold text-text-primary">{voltMultItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Manual scaling remains available if the current sensor is not covered by the validated preset list.</p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_VOLT_MULT`}>
           Current · {currentValueText(voltMultItem)}
@@ -650,8 +647,7 @@ function round3(value: number): number {
   <div class="grid gap-3 xl:grid-cols-3">
     {#if ampPerVoltItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">BATT_AMP_PERVLT</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">{ampPerVoltItem.label}</h4>
+        <h4 class="text-base font-semibold text-text-primary">{ampPerVoltItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Manual current scaling remains staged through the shared review tray.</p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_AMP_PERVLT`}>
           Current · {currentValueText(ampPerVoltItem)}
@@ -676,8 +672,7 @@ function round3(value: number): number {
 
     {#if capacityItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">BATT_CAPACITY</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">{capacityItem.label}</h4>
+        <h4 class="text-base font-semibold text-text-primary">{capacityItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Set the truthful pack capacity when the current installation differs from defaults.</p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_CAPACITY`}>
           Current · {currentValueText(capacityItem)}
@@ -702,8 +697,7 @@ function round3(value: number): number {
 
     {#if lowVoltItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">BATT_LOW_VOLT</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">{lowVoltItem.label}</h4>
+        <h4 class="text-base font-semibold text-text-primary">{lowVoltItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">Manual low-voltage staging remains available alongside chemistry presets.</p>
         <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.batteryCurrentPrefix}-BATT_LOW_VOLT`}>
           Current · {currentValueText(lowVoltItem)}

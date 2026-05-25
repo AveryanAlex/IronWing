@@ -340,8 +340,7 @@ function stagePreset() {
   <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{FLIGHT_MODE_CHANNEL_PARAM}</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">Mode switch channel</h4>
+        <h4 class="text-base font-semibold text-text-primary">Mode switch channel</h4>
         <p class="mt-2 text-sm text-text-secondary">
           Select which RC channel feeds the six-slot mode PWM ranges. This stays editable even if the live mode list is currently stale.
         </p>

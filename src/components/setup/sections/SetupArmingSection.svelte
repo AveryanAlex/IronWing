@@ -424,7 +424,7 @@ async function handleDisarm() {
 
       <div class="grid gap-3 xl:grid-cols-2">
         <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.armingCheckChecklist}>
-          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">ARMING_CHECK</p>
+          <h4 class="text-base font-semibold text-text-primary">{armingCheckItem?.label ?? "Arming checks"}</h4>
           <p class="mt-2 text-sm text-text-secondary">
             Review the active pre-arm check mask here. Toggling a bit stages the updated mask in the shared review tray instead of applying it directly.
           </p>
@@ -452,7 +452,7 @@ async function handleDisarm() {
         </article>
 
         <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">ARMING_REQUIRE</p>
+          <h4 class="text-base font-semibold text-text-primary">{armingRequireItem?.label ?? "Arming method"}</h4>
           <p class="mt-2 text-sm text-text-secondary">
             Choose how the vehicle can be armed. This selector stays read-only when the current scope is missing the required option list.
           </p>

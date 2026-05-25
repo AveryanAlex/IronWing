@@ -422,8 +422,7 @@ function formatHdop(value: number | null): string {
   <div class="grid gap-3 xl:grid-cols-2">
     {#if primaryTypeItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">{primaryTypeItem.name}</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">{primaryTypeItem.label}</h4>
+        <h4 class="text-base font-semibold text-text-primary">{primaryTypeItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">
           {primaryTypeItem.description ?? "Choose the primary GPS receiver type without bypassing the shared review tray."}
         </p>
@@ -451,8 +450,7 @@ function formatHdop(value: number | null): string {
 
     {#if autoConfigItem}
       <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">GPS_AUTO_CONFIG</p>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">{autoConfigItem.label}</h4>
+        <h4 class="text-base font-semibold text-text-primary">{autoConfigItem.label}</h4>
         <p class="mt-2 text-sm text-text-secondary">
           {autoConfigItem.description ?? "Review module auto-configuration here and queue changes through the review tray."}
         </p>
@@ -483,8 +481,7 @@ function formatHdop(value: number | null): string {
     <div class="grid gap-3 xl:grid-cols-2">
       {#if secondaryTypeItem}
         <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">GPS2_TYPE</p>
-          <h4 class="mt-2 text-base font-semibold text-text-primary">{secondaryTypeItem.label}</h4>
+          <h4 class="text-base font-semibold text-text-primary">{secondaryTypeItem.label}</h4>
           <p class="mt-2 text-sm text-text-secondary">
             {secondaryTypeItem.description ?? "Inspect the optional second GPS receiver here when the firmware exposes it."}
           </p>
@@ -512,8 +509,7 @@ function formatHdop(value: number | null): string {
 
       {#if autoSwitchItem}
         <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">GPS_AUTO_SWITCH</p>
-          <h4 class="mt-2 text-base font-semibold text-text-primary">{autoSwitchItem.label}</h4>
+          <h4 class="text-base font-semibold text-text-primary">{autoSwitchItem.label}</h4>
           <p class="mt-2 text-sm text-text-secondary">
             {autoSwitchItem.description ?? "Review primary/secondary GPS switching here and queue changes through the review tray."}
           </p>
