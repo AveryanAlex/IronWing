@@ -3267,6 +3267,21 @@ describe("SetupWorkspace", () => {
     expect(screen.queryByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeNull();
   });
 
+  it("bounds the desktop section detail pane so section content can scroll", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      chromeStore: createStaticShellChromeStore("wide"),
+    });
+
+    const detailPane = screen.getByTestId(setupWorkspaceTestIds.detail);
+    expect(detailPane.classList.contains("overflow-y-auto")).toBe(true);
+
+    const splitSlot = detailPane.parentElement;
+    expect(splitSlot?.classList.contains("flex")).toBe(true);
+    expect(splitSlot?.classList.contains("min-h-0")).toBe(true);
+    expect(splitSlot?.classList.contains("overflow-hidden")).toBe(true);
+  });
+
   it("hides the inline section nav rail on phone tier and exposes a drawer toggle", async () => {
     await renderSetupWorkspace({
       metadata: createSetupMetadata(),

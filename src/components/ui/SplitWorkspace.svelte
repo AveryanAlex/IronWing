@@ -17,6 +17,6 @@ let { primaryMin = "0", primaryMax = "1fr", testId, primary, secondary }: Props 
   data-testid={testId}
   style="--split-primary-min: {primaryMin}; --split-primary-max: {primaryMax};"
 >
-  <div class="min-h-0 min-w-0">{@render primary()}</div>
-  <div class="min-h-0 min-w-0">{@render secondary()}</div>
+  <div class="flex min-h-0 min-w-0 flex-col overflow-hidden">{@render primary()}</div>
+  <div class="flex min-h-0 min-w-0 flex-col overflow-hidden">{@render secondary()}</div>
 </div>
