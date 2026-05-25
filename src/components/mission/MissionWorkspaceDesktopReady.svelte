@@ -145,7 +145,7 @@ let showRallyEditor = $derived(context.view.mode === "rally");
             onDeleteSurveyRegion={actions.onDeleteSurveyRegion}
             onGenerateSurveyRegion={actions.onGenerateSurveyRegion}
             onPromptDissolveSurveyRegion={actions.onPromptDissolveSurveyRegion}
-            onReorderMissionItems={actions.onReorderMissionItems}
+            onReorderMissionEntries={actions.onReorderMissionEntries}
             onSelectMissionItem={actions.onSelectMissionItem}
             onSelectSurveyBlock={actions.onSelectSurveyRegion}
             onSetSurveyRegionCollapsed={actions.onSetSurveyRegionCollapsed}

@@ -306,7 +306,7 @@ const workspaceActions: MissionWorkspaceActions = {
   onUpdateMissionItemCommand: missionPlannerStore.updateMissionItemCommand,
   onUpdateMissionItemLatitude: missionPlannerStore.updateMissionItemLatitude,
   onUpdateMissionItemLongitude: missionPlannerStore.updateMissionItemLongitude,
-  onReorderMissionItems: missionPlannerStore.reorderMissionItemsByUiIds,
+  onReorderMissionEntries: missionPlannerStore.reorderMissionListEntries,
   onSelectMissionItem: missionPlannerStore.selectMissionItem,
   onSelectMissionItemByUiId: handleSelectMissionItemFromMap,
   onAddWaypointAt: handleAddWaypointAt,

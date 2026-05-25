@@ -829,6 +829,43 @@ describe("createMissionPlannerStore", () => {
     });
   });
 
+  it("reorders manual mission items and survey blocks as one mixed mission list", async () => {
+    const sessionHarness = createSessionHarness([createSnapshot({ envelope: createEnvelope("session-1") })]);
+    const plannerHarness = createPlannerServiceHarness();
+    const fileHarness = createFileIoHarness();
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const plannerStore = createMissionPlannerStore(sessionStore, plannerHarness.service, fileHarness.fileIo);
+
+    await sessionStore.initialize();
+    await plannerStore.initialize();
+
+    plannerStore.replaceWorkspace(makeWorkspace());
+    plannerStore.addMissionItem();
+    let state = get(plannerStore);
+    const firstUiId = state.draftState.active.mission.draftItems[0]?.uiId ?? 0;
+    const secondUiId = state.draftState.active.mission.draftItems[1]?.uiId ?? 0;
+
+    plannerStore.selectMissionItem(0);
+    const firstRegionId = plannerStore.createSurveyBlock("grid", SURVEY_POLYGON);
+    plannerStore.selectMissionItem(1);
+    const secondRegionId = plannerStore.createSurveyBlock("corridor", SURVEY_POLYLINE);
+
+    plannerStore.reorderMissionListEntries([
+      { kind: "survey-block", regionId: secondRegionId },
+      { kind: "mission-item", uiId: secondUiId },
+      { kind: "survey-block", regionId: firstRegionId },
+      { kind: "mission-item", uiId: firstUiId },
+    ]);
+
+    state = get(plannerStore);
+    expect(state.draftState.active.mission.draftItems.map((item) => item.uiId)).toEqual([secondUiId, firstUiId]);
+    expect(state.survey.surveyRegionOrder).toEqual([
+      { regionId: secondRegionId, position: 0 },
+      { regionId: firstRegionId, position: 1 },
+    ]);
+    expect(get(createMissionPlannerViewStore(plannerStore))).toMatchObject({ canUndo: true });
+  });
+
   it("blocks generation for imported camera-less survey regions while preserving their embedded items", async () => {
     const sessionHarness = createSessionHarness([createSnapshot({ envelope: createEnvelope("session-1") })]);
     const plannerHarness = createPlannerServiceHarness();

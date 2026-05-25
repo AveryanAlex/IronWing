@@ -13,7 +13,7 @@ import {
 } from "../../lib/mavkit-types";
 import type { TypedDraftItem } from "../../lib/mission-draft-typed";
 import type { SurveyRegion, SurveyRegionBlock, SurveyPatternType } from "../../lib/survey-region";
-import type { MissionPlannerSelection } from "../../lib/stores/mission-planner";
+import type { MissionPlannerListOrderEntry, MissionPlannerSelection } from "../../lib/stores/mission-planner";
 import MissionSurveyBlockCard from "./MissionSurveyBlockCard.svelte";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 
@@ -30,7 +30,7 @@ type Props = {
   onAddMissionItem: () => void;
   onAddSurveyBlock: (patternType: SurveyPatternType) => void;
   onSelectMissionItem: (index: number) => void;
-  onReorderMissionItems: (orderedUiIds: readonly number[]) => void;
+  onReorderMissionEntries: (orderedEntries: readonly MissionPlannerListOrderEntry[]) => void;
   onDeleteMissionItem: (index: number) => void;
   onSelectSurveyBlock: (regionId: string) => void;
   onSetSurveyRegionCollapsed: (regionId: string, collapsed: boolean) => void;
@@ -40,7 +40,11 @@ type Props = {
 };
 
 type ListEntry =
-  | { kind: "mission-item"; item: TypedDraftItem; sortableIndex: number }
+  | { kind: "mission-item"; item: TypedDraftItem; missionOrdinal: number; dragIndex: number }
+  | { kind: "survey-block"; block: SurveyListEntry; ordinal: number; dragIndex: number };
+
+type ListEntryWithoutDrag =
+  | { kind: "mission-item"; item: TypedDraftItem; missionOrdinal: number }
   | { kind: "survey-block"; block: SurveyListEntry; ordinal: number };
 
 type JumpArc = {
@@ -79,7 +83,7 @@ let {
   onAddMissionItem,
   onAddSurveyBlock,
   onSelectMissionItem,
-  onReorderMissionItems,
+  onReorderMissionEntries,
   onDeleteMissionItem,
   onSelectSurveyBlock,
   onSetSurveyRegionCollapsed,
@@ -91,19 +95,16 @@ let {
 let listElement: HTMLDivElement | null = $state(null);
 let rowCenters = $state<number[]>([]);
 let listHeight = $state(0);
-let draggingMissionUiId = $state<number | null>(null);
-let visualMissionOrder = $state<number[]>([]);
-let fallbackDraggedMissionUiId: number | null = null;
+let draggingEntryId = $state<string | null>(null);
+let visualEntryOrder = $state<string[]>([]);
+let fallbackDraggedEntryId: string | null = null;
 
-let itemOrder = $derived(items.map((item) => item.uiId));
-let visualMissionItems = $derived.by(() => draggingMissionUiId === null ? items : orderMissionItems(items, visualMissionOrder));
-
-let orderedEntries = $derived.by<ListEntry[]>(() => {
+let baseOrderedEntries = $derived.by<ListEntry[]>(() => {
   const orderedBlocks = surveyBlocks
     .map((block, index) => ({ block, index }))
     .sort((left, right) => left.block.position - right.block.position || left.index - right.index)
     .map(({ block }) => block);
-  const entries: ListEntry[] = [];
+  const entries: ListEntryWithoutDrag[] = [];
   let blockIndex = 0;
 
   const appendBlocksAt = (position: number) => {
@@ -118,8 +119,8 @@ let orderedEntries = $derived.by<ListEntry[]>(() => {
 
   appendBlocksAt(0);
 
-  visualMissionItems.forEach((item, index) => {
-    entries.push({ kind: "mission-item", item, sortableIndex: index });
+  items.forEach((item, index) => {
+    entries.push({ kind: "mission-item", item, missionOrdinal: index });
     appendBlocksAt(index + 1);
   });
 
@@ -131,8 +132,11 @@ let orderedEntries = $derived.by<ListEntry[]>(() => {
     blockIndex += 1;
   }
 
-  return entries;
+  return entries.map((entry, dragIndex) => ({ ...entry, dragIndex }));
 });
+
+let entryOrder = $derived(baseOrderedEntries.map(entryId));
+let orderedEntries = $derived.by<ListEntry[]>(() => draggingEntryId === null ? baseOrderedEntries : orderListEntries(baseOrderedEntries, visualEntryOrder));
 
 let referenceArcs = $derived(assignLanes(extractReferenceArcs(items)));
 let jumpGutterWidth = $derived.by(() => {
@@ -320,37 +324,47 @@ function altitudeSummary(item: TypedDraftItem): string {
   return item.preview.altitude_m === null ? "—" : `${compactNumber(item.preview.altitude_m)}m`;
 }
 
-function sameNumberOrder(left: readonly number[], right: readonly number[]): boolean {
+function sameEntryOrder(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-function orderMissionItems(draftItems: TypedDraftItem[], orderedUiIds: readonly number[]): TypedDraftItem[] {
-  if (orderedUiIds.length !== draftItems.length) {
-    return draftItems;
+function entryId(entry: ListEntry): string {
+  return entry.kind === "mission-item" ? `mission:${entry.item.uiId}` : `survey:${entry.block.regionId}`;
+}
+
+function entryOrderValue(entry: ListEntry): MissionPlannerListOrderEntry {
+  return entry.kind === "mission-item"
+    ? { kind: "mission-item", uiId: entry.item.uiId }
+    : { kind: "survey-block", regionId: entry.block.regionId };
+}
+
+function orderListEntries(entries: ListEntry[], orderedEntryIds: readonly string[]): ListEntry[] {
+  if (orderedEntryIds.length !== entries.length) {
+    return entries;
   }
 
-  const itemsByUiId = new Map(draftItems.map((item) => [item.uiId, item]));
-  const seenUiIds = new Set<number>();
-  const orderedItems = orderedUiIds.flatMap((uiId) => {
-    const item = itemsByUiId.get(uiId);
-    if (!item || seenUiIds.has(uiId)) {
+  const entriesById = new Map(entries.map((entry) => [entryId(entry), entry]));
+  const seenIds = new Set<string>();
+  const ordered = orderedEntryIds.flatMap((id, dragIndex) => {
+    const entry = entriesById.get(id);
+    if (!entry || seenIds.has(id)) {
       return [];
     }
 
-    seenUiIds.add(uiId);
-    return [item];
+    seenIds.add(id);
+    return [{ ...entry, dragIndex }];
   });
 
-  return orderedItems.length === draftItems.length ? orderedItems : draftItems;
+  return ordered.length === entries.length ? ordered : entries;
 }
 
-function normalizeVisualOrder(): number[] {
-  const order = draggingMissionUiId !== null && visualMissionOrder.length === items.length ? visualMissionOrder : itemOrder;
-  const validUiIds = new Set(itemOrder);
-  return order.filter((uiId) => validUiIds.has(uiId));
+function normalizeVisualOrder(): string[] {
+  const order = draggingEntryId !== null && visualEntryOrder.length === baseOrderedEntries.length ? visualEntryOrder : entryOrder;
+  const validIds = new Set(entryOrder);
+  return order.filter((id) => validIds.has(id));
 }
 
-function moveOrderItem(order: readonly number[], fromIndex: number, toIndex: number): number[] {
+function moveOrderItem(order: readonly string[], fromIndex: number, toIndex: number): string[] {
   if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= order.length || toIndex >= order.length) {
     return [...order];
   }
@@ -365,27 +379,25 @@ function moveOrderItem(order: readonly number[], fromIndex: number, toIndex: num
   return nextOrder;
 }
 
-function sortableUiId(id: string | number): number | null {
-  if (typeof id === "number") {
-    return Number.isFinite(id) ? id : null;
-  }
-
-  const parsed = Number(id);
-  return Number.isFinite(parsed) ? parsed : null;
+function sortableEntryId(id: string | number): string | null {
+  return typeof id === "string" && /^(mission|survey):/.test(id) ? id : null;
 }
 
-function createMissionSortable(getItem: () => TypedDraftItem, getIndex: () => number) {
+function createEntrySortable(getEntry: () => ListEntry) {
   return createSortable({
     get id() {
-      return getItem().uiId;
+      return entryId(getEntry());
     },
     group: MISSION_SORTABLE_GROUP,
-    type: "mission-item",
+    get type() {
+      return getEntry().kind;
+    },
     get disabled() {
-      return getItem().readOnly;
+      const entry = getEntry();
+      return entry.kind === "mission-item" ? entry.item.readOnly : false;
     },
     get index() {
-      return getIndex();
+      return getEntry().dragIndex;
     },
     // Use Svelte's transform-based FLIP animation on the keyed row wrappers.
     // Keeping dnd-kit's sortable transition here would compose translate on the
@@ -502,14 +514,13 @@ function handleSortableDragStart(event: DragStartEvent) {
     return;
   }
 
-  const sourceUiId = sortableUiId(source.id);
-  if (sourceUiId === null) {
+  const sourceEntryId = sortableEntryId(source.id);
+  if (sourceEntryId === null) {
     return;
   }
 
-  const order = visualMissionItems.map((item) => item.uiId);
-  visualMissionOrder = order;
-  draggingMissionUiId = sourceUiId;
+  visualEntryOrder = orderedEntries.map(entryId);
+  draggingEntryId = sourceEntryId;
 }
 
 function handleSortableDragOver(event: DragOverEvent) {
@@ -525,41 +536,43 @@ function handleSortableDragOver(event: DragOverEvent) {
   }
 
   const order = normalizeVisualOrder();
-  if (order.length !== items.length) {
+  if (order.length !== baseOrderedEntries.length) {
     return;
   }
 
-  visualMissionOrder = moveOrderItem(order, fromIndex, toIndex);
+  visualEntryOrder = moveOrderItem(order, fromIndex, toIndex);
 }
 
 function handleSortableDragEnd(event: DragEndEvent) {
   const finalOrder = normalizeVisualOrder();
 
-  if (!event.canceled && finalOrder.length === items.length && !sameNumberOrder(finalOrder, itemOrder)) {
-    onReorderMissionItems(finalOrder);
+  if (!event.canceled && finalOrder.length === baseOrderedEntries.length && !sameEntryOrder(finalOrder, entryOrder)) {
+    onReorderMissionEntries(orderListEntries(baseOrderedEntries, finalOrder).map(entryOrderValue));
   }
 
-  draggingMissionUiId = null;
-  visualMissionOrder = [];
+  draggingEntryId = null;
+  visualEntryOrder = [];
 }
 
 // The real interaction path is @dnd-kit pointer/keyboard sorting. These native
 // DragEvent handlers keep synthetic jsdom drag/drop tests on the same atomic
 // reorder path without marking the handle as a browser-native draggable element.
-function handleFallbackDragStart(event: DragEvent, item: TypedDraftItem) {
-  if (item.readOnly) {
+function handleFallbackDragStart(event: DragEvent, entry: ListEntry) {
+  if (entry.kind === "mission-item" && entry.item.readOnly) {
     return;
   }
 
-  fallbackDraggedMissionUiId = item.uiId;
-  event.dataTransfer?.setData("text/plain", String(item.uiId));
+  const id = entryId(entry);
+  fallbackDraggedEntryId = id;
+  event.dataTransfer?.setData("text/plain", id);
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = "move";
   }
 }
 
-function handleFallbackDragOver(event: DragEvent, item: TypedDraftItem) {
-  if (fallbackDraggedMissionUiId === null || fallbackDraggedMissionUiId === item.uiId) {
+function handleFallbackDragOver(event: DragEvent, entry: ListEntry) {
+  const id = entryId(entry);
+  if (fallbackDraggedEntryId === null || fallbackDraggedEntryId === id) {
     return;
   }
 
@@ -569,22 +582,23 @@ function handleFallbackDragOver(event: DragEvent, item: TypedDraftItem) {
   }
 }
 
-function handleFallbackDrop(event: DragEvent, target: TypedDraftItem) {
+function handleFallbackDrop(event: DragEvent, target: ListEntry) {
   event.preventDefault();
-  const dataTransferId = Number(event.dataTransfer?.getData("text/plain"));
-  const sourceUiId = Number.isFinite(dataTransferId) ? dataTransferId : fallbackDraggedMissionUiId;
-  const sourceIndex = itemOrder.findIndex((uiId) => uiId === sourceUiId);
-  const targetIndex = itemOrder.findIndex((uiId) => uiId === target.uiId);
+  const sourceEntryId = sortableEntryId(event.dataTransfer?.getData("text/plain") ?? "") ?? fallbackDraggedEntryId;
+  const targetEntryId = entryId(target);
+  const sourceIndex = entryOrder.findIndex((id) => id === sourceEntryId);
+  const targetIndex = entryOrder.findIndex((id) => id === targetEntryId);
 
   if (sourceIndex !== -1 && targetIndex !== -1 && sourceIndex !== targetIndex) {
-    onReorderMissionItems(moveOrderItem(itemOrder, sourceIndex, targetIndex));
+    const finalOrder = moveOrderItem(entryOrder, sourceIndex, targetIndex);
+    onReorderMissionEntries(orderListEntries(baseOrderedEntries, finalOrder).map(entryOrderValue));
   }
 
-  fallbackDraggedMissionUiId = null;
+  fallbackDraggedEntryId = null;
 }
 
 function handleFallbackDragEnd() {
-  fallbackDraggedMissionUiId = null;
+  fallbackDraggedEntryId = null;
 }
 </script>
 
@@ -653,9 +667,12 @@ function handleFallbackDragEnd() {
         {#each orderedEntries as entry (
           entry.kind === "mission-item" ? `mission-${entry.item.uiId}` : `survey-${entry.block.regionId}`
         )}
+          {@const sortable = createEntrySortable(() => entry)}
+          {@const attachSortable = sortable.attach}
+          {@const attachSortableHandle = sortable.attachHandle}
           <div
             animate:missionRowFlip={REORDER_FLIP}
-            data-mission-dragging-source={entry.kind === "mission-item" && draggingMissionUiId === entry.item.uiId ? "true" : undefined}
+            data-mission-dragging-source={draggingEntryId === entryId(entry) ? "true" : undefined}
           >
             {#if entry.kind === "mission-item"}
               {@const missionItem = missionDocument(entry.item)}
@@ -663,21 +680,18 @@ function handleFallbackDragEnd() {
               {@const badge = CATEGORY_BADGES[commandCategory(command)]}
               {@const selected = selectedSurface.kind === "mission-item" && selectedMissionUiId === entry.item.uiId}
               {@const coordinates = coordinateSummary(entry.item)}
-              {@const sortable = createMissionSortable(() => entry.item, () => entry.sortableIndex)}
-              {@const attachSortable = sortable.attach}
-              {@const attachSortableHandle = sortable.attachHandle}
               <div
                 class={`group relative flex min-h-11 items-stretch rounded-md border text-xs transition-colors ${selected
                   ? "border-accent bg-accent/12 shadow-[inset_0_0_0_1px_rgba(18,185,255,0.22)]"
                   : missionItem.current
                     ? "border-success/40 bg-success/5 hover:bg-success/10"
                     : "border-border bg-bg-primary hover:border-border-light hover:bg-bg-tertiary/50"} ${sortable.isDropTarget ? "ring-1 ring-accent/50" : ""} ${sortable.isDragSource ? "z-10 opacity-60 shadow-lg" : ""}`}
-                data-mission-row-index={entry.sortableIndex}
+                data-mission-row-index={entry.missionOrdinal}
                 data-mission-waypoint-card
                 data-selected={selected ? "true" : "false"}
                 data-testid={`${missionWorkspaceTestIds.itemPrefix}-${entry.item.uiId}`}
-                ondragover={(event) => handleFallbackDragOver(event, entry.item)}
-                ondrop={(event) => handleFallbackDrop(event, entry.item)}
+                ondragover={(event) => handleFallbackDragOver(event, entry)}
+                ondrop={(event) => handleFallbackDrop(event, entry)}
                 onclick={() => onSelectMissionItem(entry.item.index)}
                 onkeydown={(event) => selectFromKeyboard(event, entry.item)}
                 role="button"
@@ -686,14 +700,14 @@ function handleFallbackDragEnd() {
               >
                 <div class="flex w-8 shrink-0 flex-col items-center justify-center gap-0.5 border-r border-border/50 text-text-muted/50">
                   <button
-                    aria-label={`Drag to reorder item ${entry.sortableIndex + 1}`}
+                    aria-label={`Drag to reorder item ${entry.missionOrdinal + 1}`}
                     class="cursor-grab rounded p-0.5 transition hover:bg-bg-tertiary hover:text-text-muted active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-40"
                     data-mission-drag-handle
                     data-testid={`${missionWorkspaceTestIds.itemDragPrefix}-${entry.item.uiId}`}
                     disabled={entry.item.readOnly}
                     onclick={(event) => event.stopPropagation()}
                     ondragend={handleFallbackDragEnd}
-                    ondragstart={(event) => handleFallbackDragStart(event, entry.item)}
+                    ondragstart={(event) => handleFallbackDragStart(event, entry)}
                     onkeydown={(event) => event.stopPropagation()}
                     title="Drag to reorder"
                     type="button"
@@ -709,7 +723,7 @@ function handleFallbackDragEnd() {
                     : missionItem.current
                       ? "bg-success/20 text-success"
                       : "bg-bg-tertiary text-text-muted"}`}>
-                    {entry.sortableIndex + 1}
+                    {entry.missionOrdinal + 1}
                   </span>
                   <span class={`shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide ${badge.className}`}>
                     {badge.label}
@@ -751,24 +765,51 @@ function handleFallbackDragEnd() {
                 </div>
               </div>
             {:else}
-              <MissionSurveyBlockCard
-                cruiseSpeed={cruiseSpeed}
-                onDelete={() => onDeleteSurveyRegion(entry.block.regionId)}
-                onGenerate={() => onGenerateSurveyRegion(entry.block.regionId)}
-                onPromptDissolve={() => onPromptDissolveSurveyRegion(entry.block.regionId)}
-                onSelect={() => onSelectSurveyBlock(entry.block.regionId)}
-                onToggleCollapsed={(collapsed) => onSetSurveyRegionCollapsed(entry.block.regionId, collapsed)}
-                ordinal={entry.ordinal}
-                region={entry.block.region}
-                selected={selectedSurface.kind === "survey-block" && selectedSurface.regionId === entry.block.regionId}
-                testId={`${missionWorkspaceTestIds.surveyPrefix}-${entry.block.regionId}`}
-              />
+              <div
+                class={["group relative flex items-stretch gap-1 rounded-lg", sortable.isDropTarget && "ring-1 ring-accent/50", sortable.isDragSource && "z-10 opacity-60 shadow-lg"]}
+                ondragover={(event) => handleFallbackDragOver(event, entry)}
+                ondrop={(event) => handleFallbackDrop(event, entry)}
+                role="group"
+                {@attach attachSortable}
+              >
+                <div class="flex w-8 shrink-0 flex-col items-center justify-center rounded-lg border border-border/70 bg-bg-secondary/50 text-text-muted/50">
+                  <button
+                    aria-label={`Drag to reorder survey region ${entry.ordinal + 1}`}
+                    class="cursor-grab rounded p-0.5 transition hover:bg-bg-tertiary hover:text-text-muted active:cursor-grabbing"
+                    data-mission-drag-handle
+                    data-testid={`${missionWorkspaceTestIds.surveyDragPrefix}-${entry.block.regionId}`}
+                    onclick={(event) => event.stopPropagation()}
+                    ondragend={handleFallbackDragEnd}
+                    ondragstart={(event) => handleFallbackDragStart(event, entry)}
+                    onkeydown={(event) => event.stopPropagation()}
+                    title="Drag to reorder survey"
+                    type="button"
+                    {@attach attachSortableHandle}
+                  >
+                    <GripVertical aria-hidden="true" size={14} />
+                  </button>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <MissionSurveyBlockCard
+                    cruiseSpeed={cruiseSpeed}
+                    onDelete={() => onDeleteSurveyRegion(entry.block.regionId)}
+                    onGenerate={() => onGenerateSurveyRegion(entry.block.regionId)}
+                    onPromptDissolve={() => onPromptDissolveSurveyRegion(entry.block.regionId)}
+                    onSelect={() => onSelectSurveyBlock(entry.block.regionId)}
+                    onToggleCollapsed={(collapsed) => onSetSurveyRegionCollapsed(entry.block.regionId, collapsed)}
+                    ordinal={entry.ordinal}
+                    region={entry.block.region}
+                    selected={selectedSurface.kind === "survey-block" && selectedSurface.regionId === entry.block.regionId}
+                    testId={`${missionWorkspaceTestIds.surveyPrefix}-${entry.block.regionId}`}
+                  />
+                </div>
+              </div>
             {/if}
           </div>
         {/each}
       </div>
 
-      {#if draggingMissionUiId === null && referenceArcs.length > 0 && jumpGutterWidth > 0}
+      {#if draggingEntryId === null && referenceArcs.length > 0 && jumpGutterWidth > 0}
         <svg
           aria-hidden="true"
           class="pointer-events-none absolute right-0 top-0"

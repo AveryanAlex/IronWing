@@ -181,6 +181,7 @@ export const missionWorkspaceTestIds = {
   itemDragPrefix: "mission-draft-item-drag",
   itemDeletePrefix: "mission-draft-item-delete",
   surveyPrefix: "mission-survey-block",
+  surveyDragPrefix: "mission-survey-block-drag",
   surveyCollapsePrefix: "mission-survey-block-collapse",
   surveyGeneratePrefix: "mission-survey-block-generate",
   surveyDissolvePrefix: "mission-survey-block-dissolve",

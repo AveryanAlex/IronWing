@@ -844,6 +844,19 @@ async function dragMissionItem(sourceUiId: number | undefined, targetUiId: numbe
   await fireEvent.dragEnd(sourceHandle, { dataTransfer });
 }
 
+async function dragSurveyBlock(sourceRegionId: string, targetTestId: string) {
+  expect(sourceRegionId).not.toBe("");
+
+  const dataTransfer = createTestDataTransfer();
+  const sourceHandle = screen.getByTestId(`${missionWorkspaceTestIds.surveyDragPrefix}-${sourceRegionId}`);
+  const targetRow = screen.getByTestId(targetTestId);
+
+  await fireEvent.dragStart(sourceHandle, { dataTransfer });
+  await fireEvent.dragOver(targetRow, { dataTransfer });
+  await fireEvent.drop(targetRow, { dataTransfer });
+  await fireEvent.dragEnd(sourceHandle, { dataTransfer });
+}
+
 function getHistoryButton(kind: "undo" | "redo") {
   return screen.getByTestId(
     kind === "undo" ? missionWorkspaceTestIds.toolbarUndo : missionWorkspaceTestIds.toolbarRedo,
@@ -1625,22 +1638,37 @@ describe("MissionWorkspace", () => {
       expect(get(plannerStore).survey.surveyRegionOrder).toHaveLength(2);
       expect(get(plannerStore).survey.surveyRegionOrder[1]?.position).toBe(1);
     });
+    const manualAnchorRegionId = get(plannerStore).survey.surveyRegionOrder[1]?.regionId ?? "";
 
     await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.surveyPrefix}-${firstRegionId}`));
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.listAddSurveyStructure));
 
+    let surveyAnchorRegionId = "";
     await waitFor(() => {
       const state = get(plannerStore);
       expect(state.survey.surveyRegionOrder).toHaveLength(3);
       expect(state.survey.surveyRegionOrder[0]?.position).toBe(0);
       expect(state.survey.surveyRegionOrder[1]?.position).toBe(0);
       expect(state.survey.surveyRegionOrder[2]?.position).toBe(1);
+      surveyAnchorRegionId = state.survey.surveyRegionOrder[1]?.regionId ?? "";
 
       const orderedPatterns = state.survey.surveyRegionOrder.map((block) => state.survey.surveyRegions.get(block.regionId)?.patternType);
       expect(orderedPatterns).toEqual(["grid", "structure", "corridor"]);
     });
 
     expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("survey-block");
+
+    await dragSurveyBlock(manualAnchorRegionId, `${missionWorkspaceTestIds.surveyPrefix}-${firstRegionId}`);
+
+    await waitFor(() => {
+      const state = get(plannerStore);
+      expect(state.survey.surveyRegionOrder.map((block) => block.regionId)).toEqual([
+        manualAnchorRegionId,
+        firstRegionId,
+        surveyAnchorRegionId,
+      ]);
+      expect(state.survey.surveyRegionOrder.map((block) => block.position)).toEqual([0, 0, 0]);
+    });
   });
 
   it("draws survey regions directly on the blank planner surface and cancels unfinished map sessions safely", async () => {

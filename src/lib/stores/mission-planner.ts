@@ -44,6 +44,7 @@ import {
   updateTypedLongitude,
   type FenceRegionType,
   type SessionScope,
+  type TypedDraftItem,
   type TypedDraftState,
 } from "../mission-draft-typed";
 import {
@@ -270,6 +271,10 @@ export type RecoverableMissionPlannerWorkspace = {
 export type MissionPlannerSelection =
   | { kind: "home" }
   | { kind: "mission-item" }
+  | { kind: "survey-block"; regionId: string };
+
+export type MissionPlannerListOrderEntry =
+  | { kind: "mission-item"; uiId: number }
   | { kind: "survey-block"; regionId: string };
 
 export type MissionPlannerReplacePrompt =
@@ -1341,6 +1346,34 @@ export function createMissionPlannerStore(
 
   function reorderMissionItemsByUiIds(orderedUiIds: readonly number[]) {
     updateMissionDraft((draftState) => reorderTypedItemsByUiIds(draftState, "mission", orderedUiIds));
+  }
+
+  function reorderMissionListEntries(orderedEntries: readonly MissionPlannerListOrderEntry[]) {
+    store.update((state) => {
+      if (!canEditWorkspace(state)) {
+        return withBlockedReason(state, readOnlyMutationMessage(state, "Mission draft edits"));
+      }
+
+      const normalizedOrder = normalizeMissionListOrder(state, orderedEntries);
+      if (!normalizedOrder || sameMissionListOrder(normalizedOrder.currentOrder, normalizedOrder.nextOrder)) {
+        return state;
+      }
+
+      const draftState = reorderTypedItemsByUiIds(state.draftState, "mission", normalizedOrder.orderedMissionUiIds);
+      const survey = normalizeSurveyAuthoringExtension({
+        surveyRegions: new Map(state.survey.surveyRegions),
+        surveyRegionOrder: normalizedOrder.surveyRegionOrder,
+      });
+
+      return withResolvedPhase(commitHistoryChange(state, {
+        ...state,
+        draftState,
+        survey,
+        selection: nextSurveySelection(state.selection, survey),
+        surveyPrompt: null,
+        validationIssues: [],
+      }, ["mission"]));
+    });
   }
 
   function updateMissionItemCommand(index: number, command: MissionCommand) {
@@ -2814,6 +2847,7 @@ export function createMissionPlannerStore(
     moveMissionItemUpByIndex,
     moveMissionItemDownByIndex,
     reorderMissionItemsByUiIds,
+    reorderMissionListEntries,
     moveRallyPointUpByUiId,
     moveRallyPointDownByUiId,
     updateMissionItemCommand,
@@ -3287,6 +3321,119 @@ function exportSurveyRegions(extension: SurveyDraftExtension) {
       const region = extension.surveyRegions.get(block.regionId);
       return region ? [toExportableSurveyRegion(region, block.position)] : [];
     });
+}
+
+function normalizeMissionListOrder(
+  state: MissionPlannerStoreState,
+  orderedEntries: readonly MissionPlannerListOrderEntry[],
+): {
+  currentOrder: MissionPlannerListOrderEntry[];
+  nextOrder: MissionPlannerListOrderEntry[];
+  orderedMissionUiIds: number[];
+  surveyRegionOrder: SurveyDraftExtension["surveyRegionOrder"];
+} | null {
+  const missionItems = state.draftState.active.mission.draftItems;
+  const currentOrder = missionListOrderEntries(missionItems, state.survey);
+
+  if (orderedEntries.length !== currentOrder.length) {
+    return null;
+  }
+
+  const missionUiIds = new Set(missionItems.map((item) => item.uiId));
+  const surveyRegionIds = new Set(state.survey.surveyRegionOrder.map((block) => block.regionId));
+  const seenMissionUiIds = new Set<number>();
+  const seenSurveyRegionIds = new Set<string>();
+  const nextOrder: MissionPlannerListOrderEntry[] = [];
+  const orderedMissionUiIds: number[] = [];
+  const surveyRegionOrder: SurveyDraftExtension["surveyRegionOrder"] = [];
+  let manualCount = 0;
+
+  for (const entry of orderedEntries) {
+    if (entry.kind === "mission-item") {
+      if (!missionUiIds.has(entry.uiId) || seenMissionUiIds.has(entry.uiId)) {
+        return null;
+      }
+
+      seenMissionUiIds.add(entry.uiId);
+      orderedMissionUiIds.push(entry.uiId);
+      nextOrder.push({ kind: "mission-item", uiId: entry.uiId });
+      manualCount += 1;
+      continue;
+    }
+
+    if (!surveyRegionIds.has(entry.regionId) || seenSurveyRegionIds.has(entry.regionId)) {
+      return null;
+    }
+
+    seenSurveyRegionIds.add(entry.regionId);
+    surveyRegionOrder.push({ regionId: entry.regionId, position: manualCount });
+    nextOrder.push({ kind: "survey-block", regionId: entry.regionId });
+  }
+
+  if (seenMissionUiIds.size !== missionUiIds.size || seenSurveyRegionIds.size !== surveyRegionIds.size) {
+    return null;
+  }
+
+  return {
+    currentOrder,
+    nextOrder,
+    orderedMissionUiIds,
+    surveyRegionOrder,
+  };
+}
+
+function missionListOrderEntries(
+  missionItems: readonly TypedDraftItem[],
+  survey: SurveyDraftExtension,
+): MissionPlannerListOrderEntry[] {
+  const orderedBlocks = survey.surveyRegionOrder
+    .map((block, index) => ({ block, index }))
+    .sort((left, right) => left.block.position - right.block.position || left.index - right.index)
+    .map(({ block }) => block);
+  const entries: MissionPlannerListOrderEntry[] = [];
+  let blockIndex = 0;
+
+  const appendBlocksAt = (position: number) => {
+    while (blockIndex < orderedBlocks.length && orderedBlocks[blockIndex]?.position === position) {
+      const block = orderedBlocks[blockIndex];
+      if (block) {
+        entries.push({ kind: "survey-block", regionId: block.regionId });
+      }
+      blockIndex += 1;
+    }
+  };
+
+  appendBlocksAt(0);
+
+  missionItems.forEach((item, index) => {
+    entries.push({ kind: "mission-item", uiId: item.uiId });
+    appendBlocksAt(index + 1);
+  });
+
+  while (blockIndex < orderedBlocks.length) {
+    const block = orderedBlocks[blockIndex];
+    if (block) {
+      entries.push({ kind: "survey-block", regionId: block.regionId });
+    }
+    blockIndex += 1;
+  }
+
+  return entries;
+}
+
+function sameMissionListOrder(left: readonly MissionPlannerListOrderEntry[], right: readonly MissionPlannerListOrderEntry[]): boolean {
+  return left.length === right.length && left.every((entry, index) => {
+    const other = right[index];
+    if (!other || other.kind !== entry.kind) {
+      return false;
+    }
+
+    if (entry.kind === "mission-item" && other.kind === "mission-item") {
+      return entry.uiId === other.uiId;
+    }
+
+    return entry.kind === "survey-block" && other.kind === "survey-block" && entry.regionId === other.regionId;
+  });
 }
 
 function scopeFromEnvelope(envelope: SessionEnvelope | null): SessionScope {

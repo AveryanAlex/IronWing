@@ -5,6 +5,7 @@ import type {
   MissionPlannerAttachmentState,
   MissionPlannerFenceSelection,
   MissionPlannerFenceMutationResult,
+  MissionPlannerListOrderEntry,
   MissionPlannerMapMoveResult,
   MissionPlannerRallySelection,
   MissionPlannerRallyMutationResult,
@@ -63,7 +64,7 @@ export type MissionWorkspaceActions = {
   onUpdateMissionItemCommand: (index: number, command: MissionCommand) => void;
   onUpdateMissionItemLatitude: (index: number, latitudeDeg: number) => void;
   onUpdateMissionItemLongitude: (index: number, longitudeDeg: number) => void;
-  onReorderMissionItems: (orderedUiIds: readonly number[]) => void;
+  onReorderMissionEntries: (orderedEntries: readonly MissionPlannerListOrderEntry[]) => void;
   onSelectMissionItem: (index: number) => void;
   onSelectMissionItemByUiId: (uiId: number) => void;
   onAddWaypointAt: (latitudeDeg: number, longitudeDeg: number) => void;
