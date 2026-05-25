@@ -95,7 +95,7 @@ test.describe("mocked mission planner workflow", () => {
         await expectMissionWorkspace(page);
         await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
         await expect(missionWorkspaceLocator(page, "state")).toContainText("empty");
-        await expect(missionWorkspaceLocator(page, "mapEmpty")).toBeVisible();
+        await expect(missionWorkspaceLocator(page, "mapSurface")).toBeVisible();
         await expectMissionHistoryState(
             page,
             {
@@ -141,7 +141,7 @@ test.describe("mocked mission planner workflow", () => {
         await missionHistoryButtonLocator(page, "undo").click();
         await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
         await expect(missionWorkspaceLocator(page, "state")).toContainText("empty");
-        await expect(missionWorkspaceLocator(page, "mapEmpty")).toBeVisible();
+        await expect(missionWorkspaceLocator(page, "mapSurface")).toBeVisible();
         await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("0 / 0");
         await expectMissionHistoryState(
             page,

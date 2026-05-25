@@ -123,7 +123,6 @@ export const missionWorkspaceTestIds = {
   mapReplayPath: "mission-map-replay-path",
   mapReplayMarker: "mission-map-replay-marker",
   mapDebug: "mission-map-debug",
-  mapEmpty: "mission-map-empty",
   mapUnavailable: "mission-map-unavailable",
   mapMarkerPrefix: "mission-map-marker",
   mapSurveyPrefix: "mission-map-survey",

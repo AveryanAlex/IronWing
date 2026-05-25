@@ -1790,7 +1790,7 @@ function stopDeviceLocationWatch() {
 
 <svelte:window onkeydown={handleKeydown} onpointercancel={handlePointerCancel} onpointermove={handlePointerMove} onpointerup={handlePointerUp} />
 
-<section class={["rounded-lg border border-border bg-bg-primary p-3", fillContainer && "mission-map--fill"]} data-testid={missionWorkspaceTestIds.map}>
+<section class={["mission-map", fillContainer && "mission-map--fill"]} data-testid={missionWorkspaceTestIds.map}>
   <MissionMapActionBar
     mode={view.mode}
     surveySessionActive={surveySession !== null}
@@ -1813,122 +1813,120 @@ function stopDeviceLocationWatch() {
   />
 
   {#if renderViewport}
-    <div class={["rounded-lg border border-border bg-bg-secondary/40 p-3", fillContainer ? "mission-map__surface-wrap--fill" : "mt-4"]}>
-      <div
-        bind:this={surfaceElement}
-        aria-label="Mission planner map"
-        class={["mission-map-surface relative overflow-hidden rounded-[20px] border border-border/70 bg-bg-primary", fillContainer ? "h-full" : "aspect-[5/4]"]}
-        data-testid={missionWorkspaceTestIds.mapSurface}
-        oncontextmenu={handleContextMenu}
-        role="application"
-      >
-        <div class="mission-map-basemap" data-testid={missionWorkspaceTestIds.mapBasemap}>
-          <BaseMap
-            class="size-full"
-            options={createBasemapOptions()}
-            onMapReady={handleBasemapReady}
-            onMapError={handleBasemapError}
-          />
-        </div>
-        <div class="mission-map-basemap-scrim"></div>
-        <MissionMapOverlaySvg
-          {overlayViewBox}
-          {renderFenceLines}
-          {renderFencePolygons}
-          {renderMissionLabels}
-          {renderMissionLines}
-          {renderMissionPolygons}
-          {renderReplayOverlayPath}
-          {renderSurveyLines}
-          {renderSurveyPolygons}
+    <div
+      bind:this={surfaceElement}
+      aria-label="Mission planner map"
+      class={["mission-map-surface relative overflow-hidden rounded-lg border border-border/70 bg-bg-primary", fillContainer ? "mission-map-surface--fill" : "aspect-[5/4]"]}
+      data-testid={missionWorkspaceTestIds.mapSurface}
+      oncontextmenu={handleContextMenu}
+      role="application"
+    >
+      <div class="mission-map-basemap" data-testid={missionWorkspaceTestIds.mapBasemap}>
+        <BaseMap
+          class="size-full"
+          options={createBasemapOptions()}
+          onMapReady={handleBasemapReady}
+          onMapError={handleBasemapError}
         />
-
-        {#if surveySession || fencePlacementMode}
-          <button
-            aria-label={view.mode === "fence" ? "Place fence feature on planner map" : "Add survey point on planner map"}
-            class="mission-map-draw-surface"
-            data-testid={view.mode === "fence" ? missionWorkspaceTestIds.mapFencePlacementSurface : missionWorkspaceTestIds.mapDrawSurface}
-            onclick={view.mode === "fence" ? placeFenceFeatureFromSurface : appendSurveyPointFromSurface}
-            onkeydown={handleSurfaceKeydown}
-            type="button"
-          ></button>
-        {/if}
-
-        <MissionMapSurfaceControls
-          {mapLayerMode}
-          {terrainModeEnabled}
-          deviceLocationVisible={deviceLocationSupported || devicePermissionDenied}
-          passive={mapControlsPassive}
-          onSelectLayerMode={(mode) => { mapLayerMode = mode; }}
-          onToggleTerrainMode={() => { terrainModeEnabled = !terrainModeEnabled; }}
-          onActivateCameraTarget={activateCameraTarget}
-        />
-
-        <MissionMapStateNotice mode={view.mode} state={view.state} />
-
-        <MissionMapInteractiveLayer
-          activeMarkerId={activeMarkerDrag?.markerId ?? null}
-          {pointStyle}
-          {renderFenceRadiusHandles}
-          {renderFenceRegionHandles}
-          {renderFenceReturnPoint}
-          {renderFenceVertexHandles}
-          {renderMarkers}
-          {renderReplayOverlayMarker}
-          {renderSurveyHandles}
-          {renderSurveyVertexHandles}
-          surveySessionRegionId={surveySession?.regionId ?? null}
-          onSelectFenceRegion={handleFenceRegionSelection}
-          onSelectFenceReturnPoint={handleFenceReturnPointSelection}
-          onSelectMarker={handleMarkerSelection}
-          onSelectSurveyRegion={handleSurveySelection}
-          onStartFenceRadiusDrag={startFenceRadiusDrag}
-          onStartFenceRegionDrag={startFenceRegionDrag}
-          onStartFenceReturnPointDrag={startFenceReturnPointDrag}
-          onStartFenceVertexDrag={startFenceVertexDrag}
-          onStartMarkerDrag={startMarkerDrag}
-          onStartSurveyHandleDrag={startSurveyHandleDrag}
-        />
-
-        {#if contextMenu}
-          {@const menuItems = buildContextMenuItems()}
-          {#if menuItems.length > 0}
-            <ContextMenu
-              items={menuItems}
-              controlled={{
-                open: true,
-                x: contextMenu.x,
-                y: contextMenu.y,
-                onOpenChange: (value) => { if (!value) contextMenu = null; },
-              }}
-            />
-          {/if}
-        {/if}
       </div>
+      <div class="mission-map-basemap-scrim"></div>
+      <MissionMapOverlaySvg
+        {overlayViewBox}
+        {renderFenceLines}
+        {renderFencePolygons}
+        {renderMissionLabels}
+        {renderMissionLines}
+        {renderMissionPolygons}
+        {renderReplayOverlayPath}
+        {renderSurveyLines}
+        {renderSurveyPolygons}
+      />
+
+      {#if surveySession || fencePlacementMode}
+        <button
+          aria-label={view.mode === "fence" ? "Place fence feature on planner map" : "Add survey point on planner map"}
+          class="mission-map-draw-surface"
+          data-testid={view.mode === "fence" ? missionWorkspaceTestIds.mapFencePlacementSurface : missionWorkspaceTestIds.mapDrawSurface}
+          onclick={view.mode === "fence" ? placeFenceFeatureFromSurface : appendSurveyPointFromSurface}
+          onkeydown={handleSurfaceKeydown}
+          type="button"
+        ></button>
+      {/if}
+
+      <MissionMapSurfaceControls
+        {mapLayerMode}
+        {terrainModeEnabled}
+        deviceLocationVisible={deviceLocationSupported || devicePermissionDenied}
+        passive={mapControlsPassive}
+        onSelectLayerMode={(mode) => { mapLayerMode = mode; }}
+        onToggleTerrainMode={() => { terrainModeEnabled = !terrainModeEnabled; }}
+        onActivateCameraTarget={activateCameraTarget}
+      />
+
+      <MissionMapStateNotice mode={view.mode} state={view.state} />
+
+      <MissionMapInteractiveLayer
+        activeMarkerId={activeMarkerDrag?.markerId ?? null}
+        {pointStyle}
+        {renderFenceRadiusHandles}
+        {renderFenceRegionHandles}
+        {renderFenceReturnPoint}
+        {renderFenceVertexHandles}
+        {renderMarkers}
+        {renderReplayOverlayMarker}
+        {renderSurveyHandles}
+        {renderSurveyVertexHandles}
+        surveySessionRegionId={surveySession?.regionId ?? null}
+        onSelectFenceRegion={handleFenceRegionSelection}
+        onSelectFenceReturnPoint={handleFenceReturnPointSelection}
+        onSelectMarker={handleMarkerSelection}
+        onSelectSurveyRegion={handleSurveySelection}
+        onStartFenceRadiusDrag={startFenceRadiusDrag}
+        onStartFenceRegionDrag={startFenceRegionDrag}
+        onStartFenceReturnPointDrag={startFenceReturnPointDrag}
+        onStartFenceVertexDrag={startFenceVertexDrag}
+        onStartMarkerDrag={startMarkerDrag}
+        onStartSurveyHandleDrag={startSurveyHandleDrag}
+      />
+
+      {#if contextMenu}
+        {@const menuItems = buildContextMenuItems()}
+        {#if menuItems.length > 0}
+          <ContextMenu
+            items={menuItems}
+            controlled={{
+              open: true,
+              x: contextMenu.x,
+              y: contextMenu.y,
+              onOpenChange: (value) => { if (!value) contextMenu = null; },
+            }}
+          />
+        {/if}
+      {/if}
     </div>
   {/if}
 
 </section>
 
 <style>
-  .mission-map--fill {
-    height: 100%;
+  .mission-map {
     display: flex;
     flex-direction: column;
+    gap: var(--space-3);
     min-height: 0;
+  }
+
+  .mission-map--fill {
+    height: 100%;
     overflow: hidden;
   }
 
-  .mission-map__surface-wrap--fill {
-    flex: 1 0 220px;
+  .mission-map-surface--fill {
+    flex: 1 1 auto;
     min-height: 220px;
-    margin-top: 1rem;
   }
 
-  /* Inside .mission-map--fill (flex column with overflow:hidden), default
-     flex-shrink lets non-flex children get squashed by the flex:1 surface
-     wrap. Keep header rows, draw buttons, and stats grids fully visible. */
-  .mission-map--fill > :not(.mission-map__surface-wrap--fill) {
+  .mission-map--fill > :not(.mission-map-surface--fill) {
     flex-shrink: 0;
   }
 

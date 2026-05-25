@@ -973,7 +973,7 @@ describe("MissionWorkspace", () => {
     expect(screen.queryByTestId(missionWorkspaceTestIds.mapPane)).toBeNull();
     expect(screen.queryByTestId(missionWorkspaceTestIds.planPane)).toBeNull();
     expect(screen.queryByTestId(missionWorkspaceTestIds.phoneSegmentBar)).toBeNull();
-    expect(screen.getByTestId(missionWorkspaceTestIds.mapEmpty)).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.draftList)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.listEmpty)).toBeTruthy();
     expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("home");

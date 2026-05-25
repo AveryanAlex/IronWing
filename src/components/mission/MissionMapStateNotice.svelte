@@ -10,18 +10,7 @@ type Props = {
 let { mode, state }: Props = $props();
 </script>
 
-{#if state === "empty"}
-  <div
-    class="pointer-events-none absolute inset-x-6 bottom-6 rounded-lg border border-border/80 bg-bg-primary/88 px-4 py-3 text-sm text-text-secondary"
-    data-testid={missionWorkspaceTestIds.mapEmpty}
-  >
-    {mode === "fence"
-      ? "Blank fence surface ready. Place an inclusion or exclusion shape, then refine vertices, circle radius, and the return point directly on the planner map."
-      : mode === "rally"
-        ? "Blank rally surface ready. Add a rally point from the list, then drag it on the map or refine its coordinates and altitude frame from the inspector."
-        : "Blank planner surface ready. Draw a grid, corridor, or structure survey here, or add Home and manual mission items to project existing geometry."}
-  </div>
-{:else if state === "degraded"}
+{#if state === "degraded"}
   <div
     class="pointer-events-none absolute inset-x-6 bottom-6 rounded-lg border border-warning/40 bg-bg-primary/88 px-4 py-3 text-sm text-warning"
     data-testid={missionWorkspaceTestIds.mapUnavailable}

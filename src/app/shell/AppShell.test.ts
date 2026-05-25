@@ -3,6 +3,16 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.hoisted(() => {
+    if (typeof globalThis.ResizeObserver === "undefined") {
+        globalThis.ResizeObserver = class ResizeObserverMock {
+            observe() {}
+            unobserve() {}
+            disconnect() {}
+        } as typeof ResizeObserver;
+    }
+});
+
 vi.mock("svelte-sonner", () => ({
     Toaster: () => null,
     toast: {
@@ -625,7 +635,7 @@ describe("AppShell", () => {
         expect(screen.queryByTestId("app-shell-placeholder-mission")).toBeNull();
         expect(screen.getByTestId(missionWorkspaceTestIds.state).textContent).toContain("empty");
         expect(screen.getByTestId(missionWorkspaceTestIds.ready)).toBeTruthy();
-        expect(screen.getByTestId(missionWorkspaceTestIds.mapEmpty)).toBeTruthy();
+        expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
         expect(screen.getByTestId(missionWorkspaceTestIds.toolbarMoreButton)).toBeTruthy();
         expect(screen.queryByText("Planner entry")).toBeNull();
         expect(screen.queryByText("Start this scope with a real planner entry action")).toBeNull();
