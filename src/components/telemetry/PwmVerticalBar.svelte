@@ -49,7 +49,7 @@ let visualState = $derived(valid ? state : "unavailable");
   <div class="font-mono text-xs font-semibold text-text-primary [font-variant-numeric:tabular-nums]">{displayValue}</div>
 
   <div class="pwm-track relative mt-1 h-36 border border-border bg-bg-primary/90 shadow-inner">
-    <div class="absolute inset-x-0 bottom-2 top-2">
+    <div class="absolute inset-2">
       <div
         class="pwm-fill-width absolute left-1/2 -translate-x-1/2 bg-bg-secondary/80"
         style:top={`${normalMaxTopPct}%`}
@@ -83,35 +83,31 @@ let visualState = $derived(valid ? state : "unavailable");
 <style>
   .pwm-track {
     --pwm-track-min-width: 1.25rem;
-    --pwm-track-max-width: 4.5rem;
     --pwm-track-radius: calc(var(--pwm-track-min-width) / 2);
     --pwm-fill-min-width: 0.5rem;
-    --pwm-fill-inset: calc((var(--pwm-track-min-width) - var(--pwm-fill-min-width)) / 2);
     --pwm-fill-radius: calc(var(--pwm-fill-min-width) / 2);
     --pwm-center-min-width: 0.75rem;
-    --pwm-center-inset: calc((var(--pwm-track-min-width) - var(--pwm-center-min-width)) / 2);
     --pwm-center-radius: calc(var(--pwm-center-min-width) / 2);
     --pwm-value-min-width: 0.625rem;
-    --pwm-value-inset: calc((var(--pwm-track-min-width) - var(--pwm-value-min-width)) / 2);
     --pwm-value-radius: calc(var(--pwm-value-min-width) / 2);
 
-    width: clamp(var(--pwm-track-min-width), 52%, var(--pwm-track-max-width));
+    width: 100%;
     border-radius: var(--pwm-track-radius);
   }
 
   .pwm-fill-width {
-    width: calc(100% - (var(--pwm-fill-inset) * 2));
+    width: 100%;
     border-radius: var(--pwm-fill-radius);
   }
 
   .pwm-center-marker {
-    width: calc(100% - (var(--pwm-center-inset) * 2));
+    width: 100%;
     height: var(--pwm-center-min-width);
     border-radius: var(--pwm-center-radius);
   }
 
   .pwm-value-marker {
-    width: calc(100% - (var(--pwm-value-inset) * 2));
+    width: 100%;
     height: var(--pwm-value-min-width);
     border-radius: var(--pwm-value-radius);
   }
