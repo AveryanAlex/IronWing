@@ -130,7 +130,6 @@ let showRallyEditor = $derived(context.view.mode === "rally");
         <MissionHomeCard
           attachment={context.view.attachment}
           home={context.planner.home}
-          mode={context.view.mode}
           onChange={actions.onSetHome}
           onSelect={actions.onSelectHome}
           selected={context.homeSelected}
@@ -145,9 +144,8 @@ let showRallyEditor = $derived(context.view.mode === "rally");
             onDeleteMissionItem={actions.onDeleteMissionItem}
             onDeleteSurveyRegion={actions.onDeleteSurveyRegion}
             onGenerateSurveyRegion={actions.onGenerateSurveyRegion}
-            onMoveMissionItemDown={actions.onMoveMissionItemDown}
-            onMoveMissionItemUp={actions.onMoveMissionItemUp}
             onPromptDissolveSurveyRegion={actions.onPromptDissolveSurveyRegion}
+            onReorderMissionItems={actions.onReorderMissionItems}
             onSelectMissionItem={actions.onSelectMissionItem}
             onSelectSurveyBlock={actions.onSelectSurveyRegion}
             onSetSurveyRegionCollapsed={actions.onSetSurveyRegionCollapsed}

@@ -27,6 +27,7 @@ import {
   moveTypedDown,
   moveTypedUp,
   moveTypedWaypointOnMap,
+  reorderTypedItemsByUiIds,
   replaceTypedDraftFromDownload,
   selectTypedDraftIndex,
   setFenceReturnPoint as setTypedFenceReturnPoint,
@@ -1336,6 +1337,10 @@ export function createMissionPlannerStore(
 
   function moveMissionItemDownByIndex(index: number) {
     updateMissionDraft((draftState) => moveTypedDown(draftState, "mission", index));
+  }
+
+  function reorderMissionItemsByUiIds(orderedUiIds: readonly number[]) {
+    updateMissionDraft((draftState) => reorderTypedItemsByUiIds(draftState, "mission", orderedUiIds));
   }
 
   function updateMissionItemCommand(index: number, command: MissionCommand) {
@@ -2808,6 +2813,7 @@ export function createMissionPlannerStore(
     deleteRallyPointByUiId,
     moveMissionItemUpByIndex,
     moveMissionItemDownByIndex,
+    reorderMissionItemsByUiIds,
     moveRallyPointUpByUiId,
     moveRallyPointDownByUiId,
     updateMissionItemCommand,

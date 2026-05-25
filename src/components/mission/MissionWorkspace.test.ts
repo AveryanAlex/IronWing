@@ -4,6 +4,52 @@ import { get, writable, type Writable } from "svelte/store";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.hoisted(() => {
+  if (typeof globalThis.ResizeObserver === "undefined") {
+    globalThis.ResizeObserver = class ResizeObserverMock {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as typeof ResizeObserver;
+  }
+
+  if (typeof globalThis.IntersectionObserver === "undefined") {
+    globalThis.IntersectionObserver = class IntersectionObserverMock {
+      root = null;
+      rootMargin = "0px";
+      thresholds = [];
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    } as typeof IntersectionObserver;
+  }
+
+  const elementPrototype = globalThis.Element?.prototype as (Element & {
+    setPointerCapture?: (pointerId: number) => void;
+    releasePointerCapture?: (pointerId: number) => void;
+    hasPointerCapture?: (pointerId: number) => boolean;
+    getAnimations?: () => Animation[];
+    animate?: Element["animate"];
+  }) | undefined;
+  if (elementPrototype && typeof elementPrototype.setPointerCapture !== "function") {
+    elementPrototype.setPointerCapture = () => {};
+    elementPrototype.releasePointerCapture = () => {};
+    elementPrototype.hasPointerCapture = () => false;
+  }
+  if (elementPrototype && typeof elementPrototype.getAnimations !== "function") {
+    elementPrototype.getAnimations = () => [];
+  }
+  if (elementPrototype && typeof elementPrototype.animate !== "function") {
+    elementPrototype.animate = () => ({
+      cancel() {},
+      finished: Promise.resolve(),
+    }) as Animation;
+  }
+});
+
 const {
   resetTerrainStateMock,
   setTerrainStateMock,
@@ -767,11 +813,35 @@ function readMissionMapDebug() {
   return JSON.parse(screen.getByTestId(missionWorkspaceTestIds.mapDebug).textContent ?? "{}");
 }
 
-async function openHomeInfo() {
-  await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.homeInfoButton));
-  await waitFor(() => {
-    expect(screen.getByTestId(missionWorkspaceTestIds.homeInfoPopup)).toBeTruthy();
-  });
+function createTestDataTransfer(): DataTransfer {
+  const data = new Map<string, string>();
+  return {
+    dropEffect: "move",
+    effectAllowed: "move",
+    setData: (format: string, value: string) => data.set(format, value),
+    getData: (format: string) => data.get(format) ?? "",
+    clearData: (format?: string) => {
+      if (format) {
+        data.delete(format);
+        return;
+      }
+      data.clear();
+    },
+  } as unknown as DataTransfer;
+}
+
+async function dragMissionItem(sourceUiId: number | undefined, targetUiId: number | undefined) {
+  expect(sourceUiId).toBeTypeOf("number");
+  expect(targetUiId).toBeTypeOf("number");
+
+  const dataTransfer = createTestDataTransfer();
+  const sourceHandle = screen.getByTestId(`${missionWorkspaceTestIds.itemDragPrefix}-${sourceUiId}`);
+  const targetRow = screen.getByTestId(`${missionWorkspaceTestIds.itemPrefix}-${targetUiId}`);
+
+  await fireEvent.dragStart(sourceHandle, { dataTransfer });
+  await fireEvent.dragOver(targetRow, { dataTransfer });
+  await fireEvent.drop(targetRow, { dataTransfer });
+  await fireEvent.dragEnd(sourceHandle, { dataTransfer });
 }
 
 function getHistoryButton(kind: "undo" | "redo") {
@@ -879,6 +949,12 @@ describe("MissionWorkspace", () => {
     expect(await getMissionToolbarMenuItem(missionWorkspaceTestIds.toolbarNew)).toBeTruthy();
 
     expect(screen.getByTestId(missionWorkspaceTestIds.homeCard)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "HOME POSITION" })).toBeTruthy();
+    const homeDocsLink = screen.getByTestId(missionWorkspaceTestIds.homeDocsLink) as HTMLAnchorElement;
+    expect(homeDocsLink.textContent).toContain("ArduPilot docs");
+    expect(homeDocsLink.href).toContain("ardupilot.org");
+    expect(screen.queryByRole("button", { name: /^Clear$/i })).toBeNull();
+    expect(screen.queryByText("Set a Home position for this mission draft.")).toBeNull();
     expect(screen.getByTestId(missionWorkspaceTestIds.map)).toBeTruthy();
     // Wide mode uses SplitPane — no map/plan pane wrappers, both panels always visible
     expect(screen.queryByTestId(missionWorkspaceTestIds.mapPane)).toBeNull();
@@ -1414,7 +1490,9 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
     });
 
+    const firstUiId = get(plannerStore).draftState.active.mission.draftItems[0]?.uiId;
     const secondUiId = get(plannerStore).draftState.active.mission.draftItems[1]?.uiId;
+    expect(firstUiId).toBeTypeOf("number");
     expect(secondUiId).toBeTypeOf("number");
 
     await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.mapMarkerPrefix}-${secondUiId}`));
@@ -1422,7 +1500,7 @@ describe("MissionWorkspace", () => {
       expect(get(plannerStore).draftState.active.mission.primarySelectedUiId).toBe(secondUiId);
     });
 
-    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.itemMoveUpPrefix}-${secondUiId}`));
+    await dragMissionItem(secondUiId, firstUiId);
 
     await waitFor(() => {
       expect(get(plannerStore).draftState.active.mission.draftItems[0]?.uiId).toBe(secondUiId);
@@ -1442,6 +1520,15 @@ describe("MissionWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(missionWorkspaceTestIds.inspectorSelectionKind).textContent).toContain("mission-item");
     });
+
+    expect(screen.getByTestId(missionWorkspaceTestIds.inspectorCommandHelp).textContent).toContain("Fly to a waypoint");
+    const inspectorDocsLink = screen.getByTestId(missionWorkspaceTestIds.inspectorCommandDocs) as HTMLAnchorElement;
+    expect(inspectorDocsLink.href).toContain("ardupilot.org");
+    const holdInfoButton = screen.getByTestId(`${missionWorkspaceTestIds.inspectorFieldInfoPrefix}-hold_time_s`);
+    expect(holdInfoButton.getAttribute("aria-expanded")).toBe("false");
+    await fireEvent.click(holdInfoButton);
+    expect(holdInfoButton.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId(`${missionWorkspaceTestIds.inspectorFieldHelpPrefix}-hold_time_s`).textContent).toContain("Time to hold");
 
     await fireEvent.change(screen.getByTestId(`${missionWorkspaceTestIds.inspectorFieldPrefix}-hold_time_s`), {
       target: { value: "12" },
@@ -1491,7 +1578,7 @@ describe("MissionWorkspace", () => {
     expect(firstUiId).toBeTypeOf("number");
     expect(secondUiId).toBeTypeOf("number");
 
-    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.itemMoveUpPrefix}-${secondUiId}`));
+    await dragMissionItem(secondUiId, firstUiId);
     await waitFor(() => {
       expect(get(plannerStore).draftState.active.mission.draftItems[0]?.uiId).toBe(secondUiId);
     });
@@ -1990,8 +2077,7 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
       expect(screen.getByTestId(missionWorkspaceTestIds.mapRallyCount).textContent).toContain("2");
     });
-    await openHomeInfo();
-    expect(screen.getByTestId(missionWorkspaceTestIds.homeSync).textContent).toContain("Live mission reads can refresh Home");
+    expect(screen.getByTestId(missionWorkspaceTestIds.homeDocsLink)).toBeTruthy();
 
     const firstRallyUiId = get(plannerStore).draftState.active.rally.draftItems[0]?.uiId;
     expect(firstRallyUiId).toBeTypeOf("number");
@@ -2106,8 +2192,8 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.rallyList)).toBeTruthy();
       expect((screen.getByTestId(missionWorkspaceTestIds.rallyAdd) as HTMLButtonElement).disabled).toBe(true);
     });
-    await openHomeInfo();
-    expect(screen.getByTestId(missionWorkspaceTestIds.homeSync).textContent).toContain("Playback keeps the last known Home visible");
+    expect(screen.queryByRole("button", { name: /^Clear$/i })).toBeNull();
+    expect(screen.getByTestId(missionWorkspaceTestIds.homeReadOnly).textContent).toContain("Playback keeps the planner mounted");
 
     const playbackRallyUiId = get(plannerStore).draftState.active.rally.draftItems[0]?.uiId;
     await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.rallyPointPrefix}-${playbackRallyUiId}`));

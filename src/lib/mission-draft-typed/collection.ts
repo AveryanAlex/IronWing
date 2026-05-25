@@ -223,6 +223,33 @@ export function reorderTypedItems(state: TypedDraftState, domain: MissionDomain,
     });
 }
 
+export function reorderTypedItemsByUiIds(state: TypedDraftState, domain: MissionDomain, orderedUiIds: readonly number[]): TypedDraftState {
+    return withActiveItems(state, domain, (items, selection) => {
+        if (orderedUiIds.length !== items.length) {
+            return { items, selection };
+        }
+
+        const itemsByUiId = new Map(items.map((item) => [item.uiId, item]));
+        const seenUiIds = new Set<number>();
+        const nextItems = orderedUiIds.flatMap((uiId) => {
+            const item = itemsByUiId.get(uiId);
+            if (!item || seenUiIds.has(uiId)) {
+                return [];
+            }
+
+            seenUiIds.add(uiId);
+            return [item];
+        });
+
+        if (nextItems.length !== items.length) {
+            return { items, selection };
+        }
+
+        const unchanged = nextItems.every((item, index) => item.uiId === items[index]?.uiId);
+        return unchanged ? { items, selection } : { items: nextItems, selection };
+    });
+}
+
 /** Insert typed items after the given index. Accepts domain-specific items directly. */
 export function insertTypedItemsAfter(
     state: TypedDraftState,

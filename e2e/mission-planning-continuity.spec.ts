@@ -187,15 +187,10 @@ async function expectMissionHeaderValidateButtonAbsent(page: Page) {
     await expect(missionWorkspaceLocator(page, "header").getByRole("button", { name: /validate mission/i })).toHaveCount(0);
 }
 
-async function expectHomeSyncCopy(page: Page, text: string) {
-    const popup = page.locator(`[data-testid="${missionWorkspaceTestIds.homeInfoPopup}"]`);
-
-    if (!await popup.isVisible().catch(() => false)) {
-        await page.locator(`[data-testid="${missionWorkspaceTestIds.homeInfoButton}"]`).click();
-        await expect(popup).toBeVisible();
-    }
-
-    await expect(missionWorkspaceLocator(page, "homeSync")).toContainText(text);
+async function expectHomeDocsLink(page: Page) {
+    const docsLink = missionWorkspaceLocator(page, "homeDocsLink");
+    await expect(docsLink).toContainText("ArduPilot docs");
+    await expect(docsLink).toHaveAttribute("href", /ardupilot\.org/);
 }
 
 async function pressMissionHistoryShortcut(page: Page, kind: "undo" | "redo") {
@@ -302,7 +297,7 @@ async function addAndEditRallyPoint(page: Page, history: string[]) {
     expect(rallySnapshot.mode, historyMessage(history, "Mission-map diagnostics drifted away from Rally mode while editing a rally point.")).toBe("rally");
     expect(rallySnapshot.selectedRallyPointUiId, historyMessage(history, "Mission-map diagnostics lost the selected rally point id.")).not.toBeNull();
     expect(rallySnapshot.rallyMarkerCount, historyMessage(history, "Mission-map diagnostics lost the rally marker count.")).toBe(1);
-    await expectHomeSyncCopy(page, "Live mission reads can refresh Home");
+    await expectHomeDocsLink(page);
 
     return {
         baselineAltitude,
@@ -613,7 +608,7 @@ async function provePlaybackAndDetachedLocalStates(
     await expect(missionWorkspaceLocator(page, "fenceAddInclusionPolygon")).toBeDisabled();
     await clickMissionControl(page, "modeRally");
     await expect(missionWorkspaceLocator(page, "rallyAdd")).toBeDisabled();
-    await expectHomeSyncCopy(page, "Playback keeps the last known Home visible");
+    await expectHomeDocsLink(page);
     await expect(missionWorkspaceLocator(page, "homeReadOnly")).toContainText("Playback keeps the planner mounted");
 
     note(history, "Advance the active live scope revision so the mounted draft becomes detached-local instead of being falsely treated as attached.");

@@ -29,9 +29,10 @@ function handleChange(event: Event) {
 </script>
 
 <select
-  class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+  class="w-full rounded-md border border-border bg-bg-input px-2 py-1.5 text-sm text-text-primary"
   data-testid={missionWorkspaceTestIds.inspectorCommandSelect}
   disabled={disabled}
+  id="mission-command-select"
   onchange={handleChange}
   value={value}
 >

@@ -1,19 +1,21 @@
 <script lang="ts">
+import { ExternalLink, Home as HomeIcon } from "lucide-svelte";
 import type { HomePosition } from "../../mission";
-import type { MissionPlannerAttachmentState, MissionPlannerMode } from "../../lib/stores/mission-planner";
-import { Badge, Button, InfoWidget, Panel } from "../ui";
+import type { MissionPlannerAttachmentState } from "../../lib/stores/mission-planner";
+import { Badge, Panel } from "../ui";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
+
+const ARDUPILOT_HOME_POSITION_DOCS_URL = "https://ardupilot.org/copter/docs/common-mavlink-mission-command-messages-mav_cmd.html#mav-cmd-do-set-home";
 
 type Props = {
   home: HomePosition | null;
   selected: boolean;
-  mode: MissionPlannerMode;
   attachment: MissionPlannerAttachmentState;
   onSelect: () => void;
   onChange: (home: HomePosition | null) => void;
 };
 
-let { home, selected, mode, attachment, onSelect, onChange }: Props = $props();
+let { home, selected, attachment, onSelect, onChange }: Props = $props();
 
 let validationMessage = $state<string | null>(null);
 let draftSourceKey = $state<string | null>(null);
@@ -24,23 +26,6 @@ let altitudeDraft = $state<string | null>(null);
 let syncKey = $derived(home ? `${home.latitude_deg}:${home.longitude_deg}:${home.altitude_m}` : "no-home");
 let readOnly = $derived(!attachment.canEdit);
 let readOnlyMessage = $derived(readOnly ? attachment.detail : null);
-let modeLabel = $derived(mode === "mission" ? "mission" : mode === "fence" ? "fence" : "rally");
-let homeSyncCopy = $derived.by(() => {
-  switch (attachment.kind) {
-    case "live-attached":
-      return "Live mission reads can refresh Home from the vehicle in this scope, but mission / fence / rally upload and clear flows still do not sync Home automatically. Treat Home as shared planning context, not an exportable domain of its own.";
-    case "local-draft":
-      return "This Home exists only in the current local draft until you explicitly read from the vehicle. Mission / fence / rally upload and clear flows still do not sync Home automatically.";
-    case "playback-readonly":
-      return "Playback keeps the last known Home visible for inspection only. Reads and edits stay blocked here, and mission / fence / rally upload or clear flows do not sync Home automatically.";
-    case "detached-local":
-    default:
-      return "This preserved Home came from another scope. IronWing keeps it visible as truthful planning context, but it is detached from the active scope and will not sync through mission / fence / rally upload or clear actions.";
-  }
-});
-let homeInfoDescription = $derived(
-  `Home stays shared planning context across mission, fence, and rally. ${homeSyncCopy}`,
-);
 let baseLatitude = $derived(home ? String(home.latitude_deg) : "");
 let baseLongitude = $derived(home ? String(home.longitude_deg) : "");
 let baseAltitude = $derived(home ? String(home.altitude_m) : "");
@@ -48,11 +33,7 @@ let latitude = $derived(draftSourceKey === syncKey && latitudeDraft !== null ? l
 let longitude = $derived(draftSourceKey === syncKey && longitudeDraft !== null ? longitudeDraft : baseLongitude);
 let altitude = $derived(draftSourceKey === syncKey && altitudeDraft !== null ? altitudeDraft : baseAltitude);
 let visibleValidationMessage = $derived(draftSourceKey === syncKey ? validationMessage : null);
-let shortDescription = $derived(
-  home
-    ? `${home.latitude_deg.toFixed(5)}, ${home.longitude_deg.toFixed(5)} · ${home.altitude_m.toFixed(1)} m`
-    : `Set a Home position for this ${modeLabel} draft.`,
-);
+let homeSummary = $derived(home ? `${home.latitude_deg.toFixed(5)}, ${home.longitude_deg.toFixed(5)} · ${home.altitude_m.toFixed(1)} m` : null);
 
 function beginDraft() {
   if (draftSourceKey === syncKey) {
@@ -114,16 +95,6 @@ function commitHome() {
   });
 }
 
-function clearHome() {
-  if (readOnly) {
-    validationMessage = attachment.detail;
-    return;
-  }
-
-  resetDraft();
-  onChange(null);
-}
-
 function handleEnter(event: KeyboardEvent) {
   if (event.key === "Enter") {
     (event.currentTarget as HTMLInputElement).blur();
@@ -137,36 +108,32 @@ function handleEnter(event: KeyboardEvent) {
 >
   <Panel testId={missionWorkspaceTestIds.homeCard}>
     <header class="flex flex-wrap items-center justify-between gap-2">
-      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        <span class="text-xs font-bold uppercase tracking-wide text-text-muted">Home</span>
-        <InfoWidget
-          align="right"
-          contentTestId={missionWorkspaceTestIds.homeSync}
-          description={homeInfoDescription}
-          panelTestId={missionWorkspaceTestIds.homeInfoPopup}
-          testId={missionWorkspaceTestIds.homeInfoButton}
-          title="Shared planning context"
-        />
-        <p
-          class="m-0 text-sm leading-snug text-text-secondary"
-          data-testid={missionWorkspaceTestIds.homeSummary}
-        >
-          {shortDescription}
-        </p>
+      <div class="flex min-w-0 items-center gap-2">
+        <span class="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent" aria-hidden="true">
+          <HomeIcon size={16} />
+        </span>
+        <h3 class="m-0 text-xs font-bold uppercase tracking-wide text-text-muted">HOME POSITION</h3>
       </div>
-      <Button
-        disabled={readOnly}
-        onclick={() => {
-          onSelect();
-          clearHome();
-        }}
-        size="sm"
-        testId={missionWorkspaceTestIds.homeClear}
-        tone="neutral"
+      <a
+        class="inline-flex items-center gap-1 text-xs font-semibold text-accent transition-colors hover:text-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+        data-testid={missionWorkspaceTestIds.homeDocsLink}
+        href={ARDUPILOT_HOME_POSITION_DOCS_URL}
+        rel="noopener noreferrer"
+        target="_blank"
       >
-        Clear
-      </Button>
+        ArduPilot docs
+        <ExternalLink aria-hidden="true" size={14} />
+      </a>
     </header>
+
+    {#if homeSummary}
+      <p
+        class="mt-2 mb-0 text-sm leading-snug text-text-secondary"
+        data-testid={missionWorkspaceTestIds.homeSummary}
+      >
+        {homeSummary}
+      </p>
+    {/if}
 
     {#if readOnlyMessage}
       <Badge testId={missionWorkspaceTestIds.homeReadOnly} tone="warning">{readOnlyMessage}</Badge>
