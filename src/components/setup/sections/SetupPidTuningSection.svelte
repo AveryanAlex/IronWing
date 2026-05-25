@@ -4,20 +4,20 @@ import { fromStore } from "svelte/store";
 import {
   getParamsStoreContext,
   getSessionStoreContext,
-} from "../../app/shell/runtime-context";
-import { resolveDocsUrl } from "../../data/ardupilot-docs";
+} from "../../../app/shell/runtime-context";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import {
   buildParameterExpertView,
   type ParameterExpertRow,
-} from "../../lib/params/parameter-expert-view";
-import { deriveVehicleProfile } from "../../lib/setup/vehicle-profile";
+} from "../../../lib/params/parameter-expert-view";
+import { deriveVehicleProfile } from "../../../lib/setup/vehicle-profile";
 import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
-} from "../../lib/stores/setup-workspace";
-import ParameterExpertRowComponent from "../params/ParameterExpertRow.svelte";
-import SetupSectionShell from "./SetupSectionShell.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+} from "../../../lib/stores/setup-workspace";
+import ParameterExpertRowComponent from "../../params/ParameterExpertRow.svelte";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 type CuratedPidGroup = {
   id: string;

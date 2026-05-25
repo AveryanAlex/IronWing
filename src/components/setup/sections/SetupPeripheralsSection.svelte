@@ -3,19 +3,19 @@ import { fromStore } from "svelte/store";
 
 import {
   getParamsStoreContext,
-} from "../../app/shell/runtime-context";
-import { resolveDocsUrl } from "../../data/ardupilot-docs";
+} from "../../../app/shell/runtime-context";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import {
   buildParameterExpertView,
   type ParameterExpertRow,
-} from "../../lib/params/parameter-expert-view";
+} from "../../../lib/params/parameter-expert-view";
 import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
-} from "../../lib/stores/setup-workspace";
-import ParameterExpertRowComponent from "../params/ParameterExpertRow.svelte";
-import SetupSectionShell from "./SetupSectionShell.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+} from "../../../lib/stores/setup-workspace";
+import ParameterExpertRowComponent from "../../params/ParameterExpertRow.svelte";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 type PeripheralGroupDef = {
   id: string;

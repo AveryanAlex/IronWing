@@ -1,17 +1,17 @@
 <script lang="ts">
-import type { SetupWizardStore } from "../../lib/stores/setup-wizard";
-import type { SetupWorkspaceStoreState } from "../../lib/stores/setup-workspace";
-import SetupWizardArmingStep from "./wizard/SetupWizardArmingStep.svelte";
-import SetupWizardBatteryStep from "./wizard/SetupWizardBatteryStep.svelte";
-import SetupWizardCalibrationStep from "./wizard/SetupWizardCalibrationStep.svelte";
-import SetupWizardFailsafeStep from "./wizard/SetupWizardFailsafeStep.svelte";
-import SetupWizardFlightModesStep from "./wizard/SetupWizardFlightModesStep.svelte";
-import SetupWizardFrameStep from "./wizard/SetupWizardFrameStep.svelte";
-import SetupWizardGpsStep from "./wizard/SetupWizardGpsStep.svelte";
-import SetupWizardInitialParamsStep from "./wizard/SetupWizardInitialParamsStep.svelte";
-import SetupWizardRcStep from "./wizard/SetupWizardRcStep.svelte";
-import SetupWizardShell from "./wizard/SetupWizardShell.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+import type { SetupWizardStore } from "../../../lib/stores/setup-wizard";
+import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
+import SetupWizardArmingStep from "../wizard/SetupWizardArmingStep.svelte";
+import SetupWizardBatteryStep from "../wizard/SetupWizardBatteryStep.svelte";
+import SetupWizardCalibrationStep from "../wizard/SetupWizardCalibrationStep.svelte";
+import SetupWizardFailsafeStep from "../wizard/SetupWizardFailsafeStep.svelte";
+import SetupWizardFlightModesStep from "../wizard/SetupWizardFlightModesStep.svelte";
+import SetupWizardFrameStep from "../wizard/SetupWizardFrameStep.svelte";
+import SetupWizardGpsStep from "../wizard/SetupWizardGpsStep.svelte";
+import SetupWizardInitialParamsStep from "../wizard/SetupWizardInitialParamsStep.svelte";
+import SetupWizardRcStep from "../wizard/SetupWizardRcStep.svelte";
+import SetupWizardShell from "../wizard/SetupWizardShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let {
   view,

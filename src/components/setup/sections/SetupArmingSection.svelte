@@ -4,29 +4,29 @@ import { fromStore } from "svelte/store";
 import {
   getParamsStoreContext,
   getSessionStoreContext,
-} from "../../app/shell/runtime-context";
-import { requestPrearmChecks } from "../../calibration";
-import { resolveDocsUrl } from "../../data/ardupilot-docs";
+} from "../../../app/shell/runtime-context";
+import { requestPrearmChecks } from "../../../calibration";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import {
   buildParameterItemIndex,
   type ParameterItemModel,
-} from "../../lib/params/parameter-item-model";
+} from "../../../lib/params/parameter-item-model";
 import {
   ARMING_REQUIRE_OPTIONS,
   buildArmingRecoveryReasons,
   derivePrearmModel,
   type PrearmSnapshot,
-} from "../../lib/setup/prearm-model";
-import { getVehicleSlug } from "../../lib/setup/vehicle-profile";
+} from "../../../lib/setup/prearm-model";
+import { getVehicleSlug } from "../../../lib/setup/vehicle-profile";
 import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
-} from "../../lib/stores/setup-workspace";
-import { armVehicle, disarmVehicle } from "../../telemetry";
-import { Banner } from "../ui";
-import SetupBitmaskChecklist from "./shared/SetupBitmaskChecklist.svelte";
-import SetupSectionShell from "./SetupSectionShell.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+} from "../../../lib/stores/setup-workspace";
+import { armVehicle, disarmVehicle } from "../../../telemetry";
+import { Banner } from "../../ui";
+import SetupBitmaskChecklist from "../shared/SetupBitmaskChecklist.svelte";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let {
   section,

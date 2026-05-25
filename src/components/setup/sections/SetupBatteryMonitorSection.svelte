@@ -4,8 +4,8 @@ import { fromStore } from "svelte/store";
 import {
   getParamsStoreContext,
   getSessionStoreContext,
-} from "../../app/shell/runtime-context";
-import { resolveDocsUrl } from "../../data/ardupilot-docs";
+} from "../../../app/shell/runtime-context";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import {
   BATTERY_CHEMISTRIES,
   BOARD_PRESETS,
@@ -13,19 +13,19 @@ import {
   calcBattArmVolt,
   calcBattCrtVolt,
   calcBattLowVolt,
-} from "../../data/battery-presets";
+} from "../../../data/battery-presets";
 import {
   buildParameterItemIndex,
   type ParameterItemModel,
-} from "../../lib/params/parameter-item-model";
+} from "../../../lib/params/parameter-item-model";
 import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
-} from "../../lib/stores/setup-workspace";
-import { selectTelemetryView } from "../../lib/telemetry-selectors";
-import SetupSectionShell from "./SetupSectionShell.svelte";
-import SetupPreviewStagePanel from "./shared/SetupPreviewStagePanel.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+} from "../../../lib/stores/setup-workspace";
+import { selectTelemetryView } from "../../../lib/telemetry-selectors";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import SetupPreviewStagePanel from "../shared/SetupPreviewStagePanel.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 type EnumOption = { code: number; label: string };
 type BatteryLiveObservation = {

@@ -5,23 +5,23 @@ import {
   getParamsStoreContext,
   getSessionStoreContext,
   getSetupWorkspaceStoreContext,
-} from "../../app/shell/runtime-context";
-import { resolveDocsUrl } from "../../data/ardupilot-docs";
+} from "../../../app/shell/runtime-context";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import {
   buildParameterItemIndex,
   type ParameterItemModel,
-} from "../../lib/params/parameter-item-model";
+} from "../../../lib/params/parameter-item-model";
 import {
   buildFailsafeSectionModel,
   type SafetyVehicleFamily,
-} from "../../lib/setup/failsafe-model";
+} from "../../../lib/setup/failsafe-model";
 import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
-} from "../../lib/stores/setup-workspace";
-import SetupPreviewStagePanel from "./shared/SetupPreviewStagePanel.svelte";
-import SetupSectionShell from "./SetupSectionShell.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+} from "../../../lib/stores/setup-workspace";
+import SetupPreviewStagePanel from "../shared/SetupPreviewStagePanel.svelte";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let {
   section,

@@ -5,21 +5,21 @@ import {
   getParamsStoreContext,
   getSessionStoreContext,
   getSetupWorkspaceStoreContext,
-} from "../../app/shell/runtime-context";
-import { resolveDocsUrl } from "../../data/ardupilot-docs";
-import { BATTERY_CHEMISTRIES } from "../../data/battery-presets";
+} from "../../../app/shell/runtime-context";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
+import { BATTERY_CHEMISTRIES } from "../../../data/battery-presets";
 import {
   buildInitialParamsModel,
   createResolvedInitialParamsInputs,
   type InitialParamsPreviewBatch,
-} from "../../lib/setup/initial-params-model";
+} from "../../../lib/setup/initial-params-model";
 import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
-} from "../../lib/stores/setup-workspace";
-import SetupPreviewStagePanel from "./shared/SetupPreviewStagePanel.svelte";
-import SetupSectionShell from "./SetupSectionShell.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+} from "../../../lib/stores/setup-workspace";
+import SetupPreviewStagePanel from "../shared/SetupPreviewStagePanel.svelte";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let {
   section,

@@ -1,10 +1,10 @@
 <script lang="ts">
 import { fromStore } from "svelte/store";
 
-import { getParamsStoreContext } from "../../app/shell/runtime-context";
-import ParameterWorkspace from "../params/ParameterWorkspace.svelte";
-import { resolveDocsUrl, type VehicleSlug } from "../../data/ardupilot-docs";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+import { getParamsStoreContext } from "../../../app/shell/runtime-context";
+import ParameterWorkspace from "../../params/ParameterWorkspace.svelte";
+import { resolveDocsUrl, type VehicleSlug } from "../../../data/ardupilot-docs";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let {
   canOpen,

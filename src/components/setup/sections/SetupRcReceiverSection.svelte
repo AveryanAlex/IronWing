@@ -1,13 +1,13 @@
 <script lang="ts">
 import { fromStore } from "svelte/store";
 
-import { getParamsStoreContext } from "../../app/shell/runtime-context";
-import PwmChannelStrip from "../telemetry/PwmChannelStrip.svelte";
-import { resolveDocsUrl } from "../../data/ardupilot-docs";
-import { buildParameterItemIndex, type ParameterItemModel } from "../../lib/params/parameter-item-model";
-import type { SetupWorkspaceStoreState } from "../../lib/stores/setup-workspace";
-import SetupSectionShell from "./SetupSectionShell.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+import { getParamsStoreContext } from "../../../app/shell/runtime-context";
+import PwmChannelStrip from "../../telemetry/PwmChannelStrip.svelte";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
+import { buildParameterItemIndex, type ParameterItemModel } from "../../../lib/params/parameter-item-model";
+import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 const PRESETS = [
   {

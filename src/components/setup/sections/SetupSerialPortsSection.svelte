@@ -4,22 +4,22 @@ import { fromStore } from "svelte/store";
 import {
   getParamsStoreContext,
   getSetupWorkspaceStoreContext,
-} from "../../app/shell/runtime-context";
-import { resolveDocsUrl } from "../../data/ardupilot-docs";
+} from "../../../app/shell/runtime-context";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import {
   buildParameterItemIndex,
   type ParameterItemModel,
-} from "../../lib/params/parameter-item-model";
+} from "../../../lib/params/parameter-item-model";
 import {
   buildSerialPortModel,
   type SerialPortRow,
-} from "../../lib/setup/serial-port-model";
+} from "../../../lib/setup/serial-port-model";
 import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
-} from "../../lib/stores/setup-workspace";
-import SetupSectionShell from "./SetupSectionShell.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+} from "../../../lib/stores/setup-workspace";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let {
   section,

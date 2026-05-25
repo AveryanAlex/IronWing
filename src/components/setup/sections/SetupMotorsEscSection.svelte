@@ -4,36 +4,36 @@ import { fromStore } from "svelte/store";
 import {
   getParamsStoreContext,
   getSessionStoreContext,
-} from "../../app/shell/runtime-context";
-import { motorTest } from "../../calibration";
-import { resolveDocsUrl } from "../../data/ardupilot-docs";
+} from "../../../app/shell/runtime-context";
+import { motorTest } from "../../../calibration";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import {
   buildParameterItemIndex,
   type ParameterItemModel,
-} from "../../lib/params/parameter-item-model";
+} from "../../../lib/params/parameter-item-model";
 import {
   MOTOR_TEST_BRIDGE_LIMIT,
   buildMotorTestRows,
   type MotorDirection,
   type MotorTestRow,
-} from "../../lib/setup/motor-test-model";
+} from "../../../lib/setup/motor-test-model";
 import {
   deriveVehicleProfile,
   getVehicleSlug,
   type VehicleProfile,
-} from "../../lib/setup/vehicle-profile";
+} from "../../../lib/setup/vehicle-profile";
 import {
   getApMotorDiagramModel,
   getVtolLayoutModel,
   type MotorDiagramModel,
-} from "../../lib/setup/vtol-layout-model";
+} from "../../../lib/setup/vtol-layout-model";
 import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
-} from "../../lib/stores/setup-workspace";
-import SetupSectionShell from "./SetupSectionShell.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
-import MotorDiagram from "./shared/MotorDiagram.svelte";
+} from "../../../lib/stores/setup-workspace";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import MotorDiagram from "../shared/MotorDiagram.svelte";
 
 type DirectionResult = "correct" | "reversed";
 type Tone = "info" | "warning" | "danger";

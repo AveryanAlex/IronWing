@@ -3,12 +3,12 @@ import {
   calibrateCompassAccept,
   calibrateCompassCancel,
   calibrateCompassStart,
-} from "../../calibration";
-import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../lib/replay-readonly";
-import type { SetupWorkspaceStoreState, SetupWorkspaceCalibrationCard } from "../../lib/stores/setup-workspace";
-import { Banner } from "../ui";
-import SetupSectionShell from "./SetupSectionShell.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+} from "../../../calibration";
+import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../../lib/replay-readonly";
+import type { SetupWorkspaceStoreState, SetupWorkspaceCalibrationCard } from "../../../lib/stores/setup-workspace";
+import { Banner } from "../../ui";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let { view }: { view: SetupWorkspaceStoreState } = $props();
 

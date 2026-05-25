@@ -4,22 +4,22 @@ import { fromStore } from "svelte/store";
 import {
   getParamsStoreContext,
   getSessionStoreContext,
-} from "../../app/shell/runtime-context";
-import { resolveDocsUrl } from "../../data/ardupilot-docs";
+} from "../../../app/shell/runtime-context";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import {
   buildParameterItemIndex,
   type ParameterItemModel,
-} from "../../lib/params/parameter-item-model";
-import { buildSerialPortModel } from "../../lib/setup/serial-port-model";
+} from "../../../lib/params/parameter-item-model";
+import { buildSerialPortModel } from "../../../lib/setup/serial-port-model";
 import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
-} from "../../lib/stores/setup-workspace";
-import { selectTelemetryView } from "../../lib/telemetry-selectors";
-import type { ParamMeta } from "../../param-metadata";
-import SetupBitmaskChecklist from "./shared/SetupBitmaskChecklist.svelte";
-import SetupSectionShell from "./SetupSectionShell.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+} from "../../../lib/stores/setup-workspace";
+import { selectTelemetryView } from "../../../lib/telemetry-selectors";
+import type { ParamMeta } from "../../../param-metadata";
+import SetupBitmaskChecklist from "../shared/SetupBitmaskChecklist.svelte";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 type EnumOption = { code: number; label: string };
 type GpsLiveObservation = {

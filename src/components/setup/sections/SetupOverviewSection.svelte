@@ -2,12 +2,12 @@
 import { Download, X } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
-import { getParamsStoreContext } from "../../app/shell/runtime-context";
-import { resolveDocsUrl } from "../../data/ardupilot-docs";
-import { createParameterFileIo } from "../../lib/params/parameter-file-io";
-import { paramProgressCounts, paramProgressPhase } from "../../params";
-import type { SetupWorkspaceStoreState } from "../../lib/stores/setup-workspace";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+import { getParamsStoreContext } from "../../../app/shell/runtime-context";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
+import { createParameterFileIo } from "../../../lib/params/parameter-file-io";
+import { paramProgressCounts, paramProgressPhase } from "../../../params";
+import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let {
   view,

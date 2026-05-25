@@ -59,7 +59,7 @@ import type { TelemetryState, VehicleState } from "../../telemetry";
 import { appShellTestIds } from "../../app/shell/chrome-state";
 import ParameterReviewTray from "../../app/shell/ParameterReviewTray.svelte";
 import { parameterWorkspaceTestIds } from "../params/parameter-workspace-test-ids";
-import SetupOverviewSection from "./SetupOverviewSection.svelte";
+import SetupOverviewSection from "./sections/SetupOverviewSection.svelte";
 import SetupWorkspace from "./SetupWorkspace.svelte";
 import SetupWorkspaceSectionNav from "./SetupWorkspaceSectionNav.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";

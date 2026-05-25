@@ -4,14 +4,14 @@ import { fromStore } from "svelte/store";
 import {
   getParamsStoreContext,
   getSessionStoreContext,
-} from "../../app/shell/runtime-context";
-import { setServo } from "../../calibration";
-import { resolveDocsUrl } from "../../data/ardupilot-docs";
+} from "../../../app/shell/runtime-context";
+import { setServo } from "../../../calibration";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import {
   buildParameterItemIndex,
   type ParameterItemModel,
-} from "../../lib/params/parameter-item-model";
-import { getDirectionGuidance } from "../../lib/setup/servo-direction-guidance";
+} from "../../../lib/params/parameter-item-model";
+import { getDirectionGuidance } from "../../../lib/setup/servo-direction-guidance";
 import {
   SERVO_LIVE_TEST_LIMIT,
   clampServoCommandPwm,
@@ -21,15 +21,15 @@ import {
   groupServoTestTargetsByFunction,
   type ServoConfiguredOutput,
   type ServoTestTarget,
-} from "../../lib/setup/servo-test-model";
-import { deriveVehicleProfile } from "../../lib/setup/vehicle-profile";
+} from "../../../lib/setup/servo-test-model";
+import { deriveVehicleProfile } from "../../../lib/setup/vehicle-profile";
 import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
-} from "../../lib/stores/setup-workspace";
-import { selectTelemetryView } from "../../lib/telemetry-selectors";
-import SetupSectionShell from "./SetupSectionShell.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+} from "../../../lib/stores/setup-workspace";
+import { selectTelemetryView } from "../../../lib/telemetry-selectors";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 type Tone = "info" | "warning" | "danger";
 type Banner = { id: string; tone: Tone; text: string };

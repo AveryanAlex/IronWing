@@ -4,29 +4,29 @@ import { fromStore } from "svelte/store";
 import {
   getParamsStoreContext,
   getSessionStoreContext,
-} from "../../app/shell/runtime-context";
-import { resolveDocsUrl } from "../../data/ardupilot-docs";
-import { getMotorLayout } from "../../data/motor-layouts";
+} from "../../../app/shell/runtime-context";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
+import { getMotorLayout } from "../../../data/motor-layouts";
 import {
   buildParameterItemIndex,
   type ParameterItemModel,
-} from "../../lib/params/parameter-item-model";
+} from "../../../lib/params/parameter-item-model";
 import {
   deriveVehicleProfile,
   getVehicleSlug,
   type VehicleProfile,
-} from "../../lib/setup/vehicle-profile";
+} from "../../../lib/setup/vehicle-profile";
 import {
   getVtolLayoutModel,
   type MotorDiagramModel,
-} from "../../lib/setup/vtol-layout-model";
+} from "../../../lib/setup/vtol-layout-model";
 import type {
   SetupWorkspaceCheckpointState,
   SetupWorkspaceSection,
-} from "../../lib/stores/setup-workspace";
-import SetupSectionShell from "./SetupSectionShell.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
-import MotorDiagram from "./shared/MotorDiagram.svelte";
+} from "../../../lib/stores/setup-workspace";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import MotorDiagram from "../shared/MotorDiagram.svelte";
 
 type EnumOption = { code: number; label: string };
 type Tone = "info" | "warning" | "danger";

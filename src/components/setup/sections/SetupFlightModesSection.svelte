@@ -5,30 +5,30 @@ import {
   getParamsStoreContext,
   getSessionStoreContext,
   getSetupWorkspaceStoreContext,
-} from "../../app/shell/runtime-context";
-import { resolveDocsUrl } from "../../data/ardupilot-docs";
+} from "../../../app/shell/runtime-context";
+import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import {
   buildParameterItemIndex,
   type ParameterItemModel,
-} from "../../lib/params/parameter-item-model";
+} from "../../../lib/params/parameter-item-model";
 import {
   FLIGHT_MODE_CHANNEL_PARAM,
   RECOMMENDED_FLIGHT_MODE_PRESETS,
   buildFlightModeModel,
   buildFlightModePresetPreviewRows,
   toggleFlightModeBitmaskValue,
-} from "../../lib/setup/flight-mode-model";
-import { getVehicleSlug } from "../../lib/setup/vehicle-profile";
-import type { FlightModeEntry } from "../../telemetry";
+} from "../../../lib/setup/flight-mode-model";
+import { getVehicleSlug } from "../../../lib/setup/vehicle-profile";
+import type { FlightModeEntry } from "../../../telemetry";
 import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
-} from "../../lib/stores/setup-workspace";
-import { selectTelemetryView } from "../../lib/telemetry-selectors";
-import SetupBitmaskChecklist from "./shared/SetupBitmaskChecklist.svelte";
-import SetupPreviewStagePanel from "./shared/SetupPreviewStagePanel.svelte";
-import SetupSectionShell from "./SetupSectionShell.svelte";
-import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+} from "../../../lib/stores/setup-workspace";
+import { selectTelemetryView } from "../../../lib/telemetry-selectors";
+import SetupBitmaskChecklist from "../shared/SetupBitmaskChecklist.svelte";
+import SetupPreviewStagePanel from "../shared/SetupPreviewStagePanel.svelte";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 let {
   section,
