@@ -5,9 +5,13 @@ import type { FlightModeEntry } from "../../telemetry";
 import {
   FLIGHT_MODE_CHANNEL_PARAM,
   FLIGHT_MODE_PARAM_NAMES,
+  FLIGHT_MODE_PWM_DISPLAY_MAX,
+  FLIGHT_MODE_PWM_DISPLAY_MIN,
+  MODE_SLOT_PWM_RANGES,
   buildFlightModeModel,
   buildFlightModePresetPreviewRows,
   getActiveFlightModeSlotIndex,
+  getFlightModePwmDisplayBounds,
   modeNameForValue,
   normalizeAvailableModes,
   toggleFlightModeBitmaskValue,
@@ -71,6 +75,21 @@ describe("flight-mode-model", () => {
     expect(getActiveFlightModeSlotIndex([0, 0, 0, 0, 1495], 5)).toBe(3);
     expect(getActiveFlightModeSlotIndex([0, 0, 0, 0, 1800], 5)).toBe(5);
     expect(getActiveFlightModeSlotIndex([0, 0, 0, 0, 0], 5)).toBeNull();
+  });
+
+  it("keeps ArduPilot six-position PWM thresholds in one display model", () => {
+    expect(FLIGHT_MODE_PWM_DISPLAY_MIN).toBe(800);
+    expect(FLIGHT_MODE_PWM_DISPLAY_MAX).toBe(2200);
+    expect(MODE_SLOT_PWM_RANGES.map(({ min, max, displayMin, displayMax }) => ({ min, max, displayMin, displayMax }))).toEqual([
+      { min: 0, max: 1230, displayMin: 800, displayMax: 1230 },
+      { min: 1231, max: 1360, displayMin: 1231, displayMax: 1360 },
+      { min: 1361, max: 1490, displayMin: 1361, displayMax: 1490 },
+      { min: 1491, max: 1620, displayMin: 1491, displayMax: 1620 },
+      { min: 1621, max: 1749, displayMin: 1621, displayMax: 1749 },
+      { min: 1750, max: 65535, displayMin: 1750, displayMax: 2200 },
+    ]);
+    expect(getFlightModePwmDisplayBounds(1)).toEqual({ low: 800, high: 1230 });
+    expect(getFlightModePwmDisplayBounds(6)).toEqual({ low: 1750, high: 2200 });
   });
 
   it("builds a live copter model with preset support and simple-mode slots", () => {

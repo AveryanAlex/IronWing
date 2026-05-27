@@ -1,4 +1,8 @@
 <script lang="ts">
+import { DragDropProvider, type DragDropEventHandlers } from "@dnd-kit/svelte";
+import { createSortable, isSortable } from "@dnd-kit/svelte/sortable";
+import { GripVertical } from "lucide-svelte";
+import { tick } from "svelte";
 import { fromStore } from "svelte/store";
 
 import {
@@ -13,23 +17,53 @@ import {
 } from "../../../lib/params/parameter-item-model";
 import {
   FLIGHT_MODE_CHANNEL_PARAM,
+  FLIGHT_MODE_PARAM_NAMES,
+  FLIGHT_MODE_PWM_DISPLAY_MAX,
+  FLIGHT_MODE_PWM_DISPLAY_MIN,
   RECOMMENDED_FLIGHT_MODE_PRESETS,
   buildFlightModeModel,
   buildFlightModePresetPreviewRows,
+  getFlightModePwmDisplayBounds,
   toggleFlightModeBitmaskValue,
+  type FlightModeSlotModel,
 } from "../../../lib/setup/flight-mode-model";
 import { getVehicleSlug } from "../../../lib/setup/vehicle-profile";
-import type { FlightModeEntry } from "../../../telemetry";
 import type {
   SetupWorkspaceSection,
   SetupWorkspaceStoreState,
 } from "../../../lib/stores/setup-workspace";
 import { selectTelemetryView } from "../../../lib/telemetry-selectors";
+import type { FlightModeEntry } from "../../../telemetry";
+import SetupStagedBadge from "../../ui/StagedBadge.svelte";
+import SetupSectionShell from "../SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 import SetupBitmaskChecklist from "../shared/SetupBitmaskChecklist.svelte";
 import SetupPreviewStagePanel from "../shared/SetupPreviewStagePanel.svelte";
-import SetupSectionShell from "../SetupSectionShell.svelte";
-import SetupStagedBadge from "../../ui/StagedBadge.svelte";
-import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+
+type SortableFlightModeSlot = FlightModeSlotModel & {
+  dragIndex: number;
+};
+
+type FlightModePwmLayoutRow = {
+  paramName: string;
+  slot: number;
+  active: boolean;
+  low: number;
+  high: number;
+  top: number;
+  bottom: number;
+  segmentTop: number;
+  segmentBottom: number;
+};
+
+type FlightModePwmLayout = {
+  height: number;
+  rows: FlightModePwmLayoutRow[];
+};
+
+type DragStartEvent = Parameters<NonNullable<DragDropEventHandlers["onDragStart"]>>[0];
+type DragOverEvent = Parameters<NonNullable<DragDropEventHandlers["onDragOver"]>>[0];
+type DragEndEvent = Parameters<NonNullable<DragDropEventHandlers["onDragEnd"]>>[0];
 
 let {
   section,
@@ -38,6 +72,8 @@ let {
   section: SetupWorkspaceSection;
   view: SetupWorkspaceStoreState;
 } = $props();
+
+const FLIGHT_MODE_SORTABLE_GROUP = "setup-flight-mode-slots";
 
 const paramsStore = getParamsStoreContext();
 const sessionStore = getSessionStoreContext();
@@ -48,6 +84,11 @@ const sessionState = fromStore(sessionStore);
 let draftValues = $state<Record<string, string>>({});
 let presetPreviewOpen = $state(false);
 let lastScopedModeSnapshot = $state<{ scopeKey: string; modes: FlightModeEntry[] } | null>(null);
+let draggingSlotParamName = $state<string | null>(null);
+let visualSlotOrder = $state<string[]>([]);
+let slotListElement = $state<HTMLDivElement | null>(null);
+let pwmLayout = $state<FlightModePwmLayout>({ height: 0, rows: [] });
+let fallbackDraggedSlotParamName: string | null = null;
 
 let params = $derived(paramsState.current);
 let session = $derived(sessionState.current);
@@ -87,9 +128,84 @@ let presetRows = $derived(
 );
 let flightModeChannelItem = $derived(itemIndex.get(FLIGHT_MODE_CHANNEL_PARAM) ?? null);
 let flightModeChannelDraft = $derived.by(() => draftValue(FLIGHT_MODE_CHANNEL_PARAM, flightModeChannelItem?.value ?? null));
+let selectedChannelNumber = $derived(resolveDraftNumber(FLIGHT_MODE_CHANNEL_PARAM, flightModeChannelItem?.value ?? null));
+let selectedChannelValue = $derived(selectedChannelNumber !== null ? rcChannelValue(selectedChannelNumber) : null);
+let selectedChannelLabel = $derived(selectedChannelNumber !== null ? `Channel ${selectedChannelNumber}` : "Channel --");
+let selectedChannelState = $derived.by<"live" | "stale" | "unavailable">(() => {
+  if (selectedChannelValue === null) {
+    return "unavailable";
+  }
+
+  return session.telemetryDomain.complete === false ? "stale" : "live";
+});
 let simpleItem = $derived(itemIndex.get("SIMPLE") ?? null);
 let superSimpleItem = $derived(itemIndex.get("SUPER_SIMPLE") ?? null);
 let sectionCanConfirm = $derived(!actionsBlocked && model.canConfirm);
+let slotSelectsDisabled = $derived(actionsBlocked || model.availabilityState !== "live" || model.options.length === 0);
+let canReorderFlightModes = $derived.by(() => {
+  if (slotSelectsDisabled) {
+    return false;
+  }
+
+  return model.slots.every((slot) => {
+    const target = item(slot.paramName);
+    return target && target.readOnly !== true && slot.effectiveValue !== null;
+  });
+});
+let baseSlotOrder = $derived(model.slots.map((slot) => slot.paramName));
+let orderedSlots = $derived.by<SortableFlightModeSlot[]>(() => {
+  const base = model.slots.map((slot, index) => ({ ...slot, dragIndex: index }));
+  const byParamName = new Map(base.map((slot) => [slot.paramName, slot]));
+  const order = draggingSlotParamName !== null && visualSlotOrder.length === base.length ? visualSlotOrder : baseSlotOrder;
+  const normalized = order.filter((paramName) => byParamName.has(paramName));
+
+  if (normalized.length !== base.length) {
+    return base;
+  }
+
+  return normalized.map((paramName, index) => ({
+    ...byParamName.get(paramName)!,
+    dragIndex: index,
+  }));
+});
+let pwmRows = $derived(pwmLayout.rows.length === orderedSlots.length ? pwmLayout.rows : buildFallbackPwmRows(orderedSlots));
+let lastPwmRow = $derived(pwmRows[pwmRows.length - 1] ?? null);
+let pwmLayoutHeight = $derived(Math.max(pwmLayout.height, lastPwmRow?.segmentBottom ?? 0));
+let pwmTrackTop = $derived(pwmRows[0]?.segmentTop ?? 0);
+let pwmTrackBottom = $derived(lastPwmRow?.segmentBottom ?? pwmLayoutHeight);
+let pwmTrackHeight = $derived(Math.max(pwmTrackBottom - pwmTrackTop, 1));
+let activePwmRow = $derived(pwmRows.find((row) => row.active) ?? null);
+let liveMarkerTop = $derived(activePwmRow && selectedChannelValue !== null ? activePwmRow.segmentTop + slotMarkerFraction(activePwmRow.slot) * (activePwmRow.segmentBottom - activePwmRow.segmentTop) : null);
+
+$effect(() => {
+  const element = slotListElement;
+  const slots = orderedSlots;
+  if (!element) {
+    pwmLayout = { height: 0, rows: [] };
+    return;
+  }
+
+  let disposed = false;
+  const measure = () => {
+    if (!disposed) {
+      measurePwmLayout(element, slots);
+    }
+  };
+
+  tick().then(measure);
+  const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+  observer?.observe(element);
+  for (const row of element.querySelectorAll<HTMLElement>("[data-flight-mode-slot-row]")) {
+    observer?.observe(row);
+  }
+  const timeout = globalThis.setTimeout(measure, 0);
+
+  return () => {
+    disposed = true;
+    observer?.disconnect();
+    globalThis.clearTimeout(timeout);
+  };
+});
 
 $effect(() => {
   if (view.activeScopeKey && Array.isArray(session.availableModes) && session.availableModes.length > 0) {
@@ -112,11 +228,86 @@ function item(name: string): ParameterItemModel | null {
   return itemIndex.get(name) ?? null;
 }
 
-function fixedChannelOptions() {
-  return Array.from({ length: 16 }, (_, index) => ({
-    code: index + 1,
-    label: `Channel ${index + 1}`,
+function formatPwmValue(value: number | null): string {
+  return value === null ? "-- µs" : `${Math.round(value)} µs`;
+}
+
+function rcChannelValue(channel: number): number | null {
+  const value = telemetry.rc_channels?.[channel - 1];
+  return typeof value === "number" && Number.isFinite(value) && value !== 0 && value !== 65535 ? value : null;
+}
+
+function slotMarkerFraction(slot: number): number {
+  if (selectedChannelValue === null) {
+    return 0.5;
+  }
+
+  const { low, high } = getFlightModePwmDisplayBounds(slot);
+  const clamped = Math.max(low, Math.min(high, selectedChannelValue));
+  return (clamped - low) / (high - low);
+}
+
+function layoutRowFromSlot(slot: SortableFlightModeSlot, top: number, bottom: number): FlightModePwmLayoutRow {
+  const { low, high } = getFlightModePwmDisplayBounds(slot.slot);
+  return {
+    paramName: slot.paramName,
+    slot: slot.slot,
+    active: slot.active,
+    low,
+    high,
+    top,
+    bottom,
+    segmentTop: top,
+    segmentBottom: bottom,
+  };
+}
+
+function withSegmentBounds(rows: FlightModePwmLayoutRow[]): FlightModePwmLayoutRow[] {
+  return rows.map((row, index) => ({
+    ...row,
+    segmentTop: index === 0 ? row.top : ((rows[index - 1]?.bottom ?? row.top) + row.top) / 2,
+    segmentBottom: index === rows.length - 1 ? row.bottom : (row.bottom + (rows[index + 1]?.top ?? row.bottom)) / 2,
   }));
+}
+
+function buildFallbackPwmRows(slots: readonly SortableFlightModeSlot[]): FlightModePwmLayoutRow[] {
+  const rowHeight = 64;
+  const rowGap = 8;
+  return withSegmentBounds(slots.map((slot, index) => {
+    const top = index * (rowHeight + rowGap);
+    return layoutRowFromSlot(slot, top, top + rowHeight);
+  }));
+}
+
+function measurePwmLayout(element: HTMLDivElement, slots: readonly SortableFlightModeSlot[]) {
+  const containerRect = element.getBoundingClientRect();
+  const rows = slots.flatMap((slot) => {
+    const rowElement = element.querySelector<HTMLElement>(`[data-flight-mode-slot-row="${slot.paramName}"]`);
+    if (!rowElement) {
+      return [];
+    }
+
+    const rect = rowElement.getBoundingClientRect();
+    const top = rect.top - containerRect.top;
+    return [layoutRowFromSlot(slot, top, top + rect.height)];
+  });
+
+  const layoutRows = withSegmentBounds(rows);
+  const lastRow = layoutRows[layoutRows.length - 1];
+  pwmLayout = {
+    height: Math.max(element.scrollHeight, lastRow?.segmentBottom ?? 0),
+    rows: layoutRows,
+  };
+}
+
+function fixedChannelOptions() {
+  return Array.from({ length: 16 }, (_, index) => {
+    const code = index + 1;
+    return {
+      code,
+      label: `Channel ${code} (${formatPwmValue(rcChannelValue(code))})`,
+    };
+  });
 }
 
 function draftValue(name: string, fallback: number | null): string {
@@ -219,235 +410,469 @@ function stagePreset() {
 
   presetPreviewOpen = false;
 }
+
+function sameSlotOrder(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function moveOrderItem(order: readonly string[], fromIndex: number, toIndex: number): string[] {
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= order.length || toIndex >= order.length) {
+    return [...order];
+  }
+
+  const nextOrder = [...order];
+  const [moved] = nextOrder.splice(fromIndex, 1);
+  if (moved === undefined) {
+    return [...order];
+  }
+
+  nextOrder.splice(toIndex, 0, moved);
+  return nextOrder;
+}
+
+function normalizeVisualOrder(): string[] {
+  const order = draggingSlotParamName !== null && visualSlotOrder.length === baseSlotOrder.length ? visualSlotOrder : baseSlotOrder;
+  const validIds = new Set(baseSlotOrder);
+  return order.filter((id) => validIds.has(id));
+}
+
+function sortableSlotId(id: string | number): string | null {
+  return typeof id === "string" && /^FLTMODE[1-6]$/.test(id) ? id : null;
+}
+
+function createSlotSortable(getSlot: () => SortableFlightModeSlot) {
+  return createSortable({
+    get id() {
+      return getSlot().paramName;
+    },
+    group: FLIGHT_MODE_SORTABLE_GROUP,
+    type: "flight-mode-slot",
+    get disabled() {
+      return !canReorderFlightModes;
+    },
+    get index() {
+      return getSlot().dragIndex;
+    },
+    transition: null,
+  });
+}
+
+function stageReorderedSlots(finalOrder: readonly string[]) {
+  if (!canReorderFlightModes || finalOrder.length !== model.slots.length) {
+    return;
+  }
+
+  const sourceByParam = new Map(model.slots.map((slot) => [slot.paramName, slot]));
+  const nextDrafts = { ...draftValues };
+
+  finalOrder.forEach((sourceParamName, targetIndex) => {
+    const sourceSlot = sourceByParam.get(sourceParamName);
+    const targetParamName = FLIGHT_MODE_PARAM_NAMES[targetIndex];
+    const target = targetParamName ? item(targetParamName) : null;
+    const nextValue = sourceSlot?.effectiveValue ?? null;
+
+    if (!targetParamName || !target || target.readOnly === true || nextValue === null) {
+      return;
+    }
+
+    paramsStore.stageParameterEdit(target, nextValue);
+    nextDrafts[targetParamName] = String(nextValue);
+  });
+
+  draftValues = nextDrafts;
+}
+
+function handleSortableDragStart(event: DragStartEvent) {
+  const { source } = event.operation;
+  if (!isSortable(source)) {
+    return;
+  }
+
+  const sourceParamName = sortableSlotId(source.id);
+  if (sourceParamName === null) {
+    return;
+  }
+
+  visualSlotOrder = orderedSlots.map((slot) => slot.paramName);
+  draggingSlotParamName = sourceParamName;
+}
+
+function handleSortableDragOver(event: DragOverEvent) {
+  const { source, target } = event.operation;
+  if (!isSortable(source) || !isSortable(target) || source.group !== FLIGHT_MODE_SORTABLE_GROUP || target.group !== FLIGHT_MODE_SORTABLE_GROUP) {
+    return;
+  }
+
+  const fromIndex = source.index;
+  const toIndex = target.index;
+  if (fromIndex === toIndex) {
+    return;
+  }
+
+  const order = normalizeVisualOrder();
+  if (order.length !== baseSlotOrder.length) {
+    return;
+  }
+
+  visualSlotOrder = moveOrderItem(order, fromIndex, toIndex);
+}
+
+function handleSortableDragEnd(event: DragEndEvent) {
+  const finalOrder = normalizeVisualOrder();
+
+  if (!event.canceled && finalOrder.length === baseSlotOrder.length && !sameSlotOrder(finalOrder, baseSlotOrder)) {
+    stageReorderedSlots(finalOrder);
+  }
+
+  draggingSlotParamName = null;
+  visualSlotOrder = [];
+}
+
+function handleFallbackDragStart(event: DragEvent, slot: SortableFlightModeSlot) {
+  if (!canReorderFlightModes) {
+    return;
+  }
+
+  fallbackDraggedSlotParamName = slot.paramName;
+  event.dataTransfer?.setData("text/plain", slot.paramName);
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+  }
+}
+
+function handleFallbackDragOver(event: DragEvent, slot: SortableFlightModeSlot) {
+  if (!canReorderFlightModes || fallbackDraggedSlotParamName === null || fallbackDraggedSlotParamName === slot.paramName) {
+    return;
+  }
+
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = "move";
+  }
+}
+
+function handleFallbackDrop(event: DragEvent, target: SortableFlightModeSlot) {
+  event.preventDefault();
+  const sourceParamName = sortableSlotId(event.dataTransfer?.getData("text/plain") ?? "") ?? fallbackDraggedSlotParamName;
+  const sourceIndex = baseSlotOrder.findIndex((paramName) => paramName === sourceParamName);
+  const targetIndex = baseSlotOrder.findIndex((paramName) => paramName === target.paramName);
+
+  if (sourceIndex >= 0 && targetIndex >= 0 && sourceIndex !== targetIndex) {
+    stageReorderedSlots(moveOrderItem(baseSlotOrder, sourceIndex, targetIndex));
+  }
+
+  fallbackDraggedSlotParamName = null;
+}
+
+function handleFallbackDragEnd() {
+  fallbackDraggedSlotParamName = null;
+}
 </script>
 
 <SetupSectionShell
   sectionId={section.id}
   eyebrow={section.title}
-  title="Six-slot mode editing with truthful live availability"
-  description="Flight-mode slots stay mapped to the live available-mode list for the current vehicle family. Presets, mode-switch channel changes, and Simple/Super Simple toggles all queue through the shared review tray instead of applying directly."
+  title="Flight mode switch, live PWM ranges, and reorderable slots"
+  description="Pick the RC channel that drives ArduPilot's six flight-mode PWM windows, then stage mode assignments with dropdowns or by dragging tiles into a new order. Changes still queue through the shared review tray."
   testId={setupWorkspaceTestIds.flightModesSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.flightModesDocsLink }]}
 >
   {#snippet body()}
-      <div
-        class="grid gap-3 rounded-lg border border-border bg-bg-primary/80 p-3 md:grid-cols-3"
-        data-testid={setupWorkspaceTestIds.flightModesSummary}
-      >
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Available modes</p>
-      <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.flightModesAvailabilityState}>
-        {model.availabilityText}
-      </p>
-      <p class="mt-1 text-sm text-text-secondary" data-testid={setupWorkspaceTestIds.flightModesAvailabilityDetail}>
-        {model.availabilityDetail}
-      </p>
-    </div>
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Current mode</p>
-      <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.flightModesCurrentMode}>
-        {model.currentModeName ?? "Unknown"}
-      </p>
-      <p class="mt-1 text-sm text-text-secondary" data-testid={setupWorkspaceTestIds.flightModesActiveSlot}>
-        {#if model.activeSlotIndex !== null}
-          Active slot · {model.activeSlotIndex + 1}
-        {:else}
-          Active slot unavailable until RC mode-channel telemetry settles.
-        {/if}
-      </p>
-    </div>
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Mode switch channel</p>
-      <p class="mt-2 text-sm font-semibold text-text-primary">
-        {#if flightModeChannelItem}
-          {currentValueText(flightModeChannelItem)}
-        {:else}
-          {FLIGHT_MODE_CHANNEL_PARAM} unavailable
-        {/if}
-      </p>
-      <p class="mt-1 text-sm text-text-secondary">
-        Current RC channel selects which of the six slot ranges is active in flight.
-      </p>
-    </div>
-  </div>
-
-  {#if model.recoveryReasons.length > 0}
-    <div
-      class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
-      data-testid={`${setupWorkspaceTestIds.flightModesBannerPrefix}-recovery`}
-    >
-      <p class="font-semibold text-text-primary">Flight-mode staging is staying fail-closed while live truth is partial.</p>
-      <ul class="mt-2 list-disc space-y-1 pl-5">
-        {#each model.recoveryReasons as reason (reason)}
-          <li>{reason}</li>
-        {/each}
-      </ul>
-    </div>
-  {/if}
-
-  {#if model.preset}
-    <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.flightModesPresetPreview}>
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Recommended preset</p>
-          <h4 class="mt-2 text-base font-semibold text-text-primary">{presetTitle}</h4>
-          <p class="mt-2 text-sm text-text-secondary">
-            Use the vehicle-family default slot order when you want a conservative audited starting point. The preview stays visible even if the live mode list is currently stale.
-          </p>
-        </div>
-        <button
-          class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={presetRows.length === 0}
-          onclick={() => (presetPreviewOpen = !presetPreviewOpen)}
-          type="button"
-        >
-          {presetPreviewOpen ? "Hide preview" : "Preview defaults"}
-        </button>
+    <article class="rounded-lg border border-border bg-bg-primary/80 p-4">
+      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">How the switch works</p>
+      <div class="mt-3 grid gap-3 text-sm leading-6 text-text-secondary lg:grid-cols-3">
+        <p>
+          ArduPilot reads one RC input channel and splits its PWM value into six fixed ranges. Each range selects one
+          <span class="font-semibold text-text-primary"> FLTMODEx</span> slot.
+        </p>
+        <p>
+          Move your transmitter switch while watching the channel values. Choose the channel whose live µs value changes
+          across the expected positions.
+        </p>
+        <p>
+          Reorder tiles to move mode assignments between PWM ranges, or keep the order and edit individual dropdowns.
+          Nothing is applied until review is confirmed.
+        </p>
       </div>
-
-      {#if presetPreviewOpen}
-        <div class="mt-4">
-          <SetupPreviewStagePanel
-            headerLabel={`Preview · ${presetTitle}`}
-            onCancel={() => (presetPreviewOpen = false)}
-            onStage={stagePreset}
-            rows={presetRows}
-            stageLabel={model.canStagePreset ? "Stage these modes" : "Live mode list required"}
-          />
-          {#if !model.canStagePreset}
-            <p class="mt-3 text-xs leading-5 text-warning">
-              Preset staging is blocked until the current scope has a live available-mode list for validation.
-            </p>
-          {/if}
-        </div>
-      {/if}
     </article>
-  {/if}
 
-  <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
-    <div class="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h4 class="text-base font-semibold text-text-primary">Mode switch channel</h4>
-        <p class="mt-2 text-sm text-text-secondary">
-          Select which RC channel feeds the six-slot mode PWM ranges. This stays editable even if the live mode list is currently stale.
-        </p>
-      </div>
-      <div class="text-right">
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.flightModesCurrentPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`}>
-          Current · {currentValueText(flightModeChannelItem)}
-        </p>
-        {#if params.stagedEdits[FLIGHT_MODE_CHANNEL_PARAM]}
-          <p class="mt-2">
-            <SetupStagedBadge name={FLIGHT_MODE_CHANNEL_PARAM} onUnstage={unstage} testId={`${setupWorkspaceTestIds.flightModesStagedPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`} />
-          </p>
-        {/if}
-      </div>
-    </div>
-
-    <div class="mt-4">
-      <select
-        class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-        data-testid={`${setupWorkspaceTestIds.flightModesInputPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`}
-        disabled={actionsBlocked || !flightModeChannelItem}
-        onchange={(event) => stage(FLIGHT_MODE_CHANNEL_PARAM, (event.currentTarget as HTMLSelectElement).value, flightModeChannelItem?.value ?? null, true)}
-        value={flightModeChannelDraft}
+    {#if model.recoveryReasons.length > 0}
+      <div
+        class="rounded-lg border border-warning/40 bg-warning/10 px-4 py-4 text-sm leading-6 text-warning"
+        data-testid={`${setupWorkspaceTestIds.flightModesBannerPrefix}-recovery`}
       >
-        {#each fixedChannelOptions() as option (option.code)}
-          <option value={String(option.code)}>{option.label}</option>
-        {/each}
-      </select>
-    </div>
-  </article>
+        <p class="font-semibold text-text-primary">Flight-mode staging is staying fail-closed while live truth is partial.</p>
+        <ul class="mt-2 list-disc space-y-1 pl-5">
+          {#each model.recoveryReasons as reason (reason)}
+            <li>{reason}</li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
 
-  <div class="grid gap-3 xl:grid-cols-2">
-    {#each model.slots as slot (slot.paramName)}
-      <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={`${setupWorkspaceTestIds.flightModesSlotPrefix}-${slot.slot}`}>
+    {#if model.preset}
+      <article class="rounded-lg border border-border bg-bg-primary/80 p-3" data-testid={setupWorkspaceTestIds.flightModesPresetPreview}>
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div class="flex items-center gap-2">
-              <p class="text-sm font-semibold text-text-primary">Slot {slot.slot}</p>
-              {#if slot.active}
-                <span class="rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-accent">
-                  active
-                </span>
-              {/if}
-            </div>
-            <p class="mt-2 text-sm text-text-secondary">PWM range {slot.pwmLabel}</p>
-          </div>
-          <div class="text-right">
-            <p class="text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.flightModesCurrentPrefix}-${slot.paramName}`}>
-              Current · {slot.currentName}
+            <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Recommended preset</p>
+            <h4 class="mt-2 text-base font-semibold text-text-primary">{presetTitle}</h4>
+            <p class="mt-2 text-sm text-text-secondary">
+              Use the vehicle-family default slot order when you want a conservative audited starting point. The preview stays visible even if the live mode list is currently stale.
             </p>
-            {#if params.stagedEdits[slot.paramName]}
-              <p class="mt-2">
-                <SetupStagedBadge name={slot.paramName} onUnstage={unstage} testId={`${setupWorkspaceTestIds.flightModesStagedPrefix}-${slot.paramName}`} />
+          </div>
+          <button
+            class="rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={presetRows.length === 0}
+            onclick={() => (presetPreviewOpen = !presetPreviewOpen)}
+            type="button"
+          >
+            {presetPreviewOpen ? "Hide preview" : "Preview defaults"}
+          </button>
+        </div>
+
+        {#if presetPreviewOpen}
+          <div class="mt-4">
+            <SetupPreviewStagePanel
+              headerLabel={`Preview · ${presetTitle}`}
+              onCancel={() => (presetPreviewOpen = false)}
+              onStage={stagePreset}
+              rows={presetRows}
+              stageLabel={model.canStagePreset ? "Stage these modes" : "Live mode list required"}
+            />
+            {#if !model.canStagePreset}
+              <p class="mt-3 text-xs leading-5 text-warning">
+                Preset staging is blocked until the current scope has a live available-mode list for validation.
               </p>
             {/if}
           </div>
-        </div>
-
-        <div class="mt-4">
-          <select
-            class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
-            data-testid={`${setupWorkspaceTestIds.flightModesInputPrefix}-${slot.paramName}`}
-            disabled={actionsBlocked || model.availabilityState !== "live" || model.options.length === 0 || !item(slot.paramName)}
-            onchange={(event) => stage(slot.paramName, (event.currentTarget as HTMLSelectElement).value, slot.effectiveValue)}
-            value={draftValue(slot.paramName, slot.effectiveValue)}
-          >
-            {#each model.options as option (option.customMode)}
-              <option value={String(option.customMode)}>{option.name}</option>
-            {/each}
-          </select>
-        </div>
-
-        {#if slot.unresolved}
-          <p class="mt-3 text-xs leading-5 text-warning">
-            The current slot value is not in the live available-mode list, so the section falls back to the raw numeric mode id until the vehicle reports a supported label again.
-          </p>
         {/if}
       </article>
-    {/each}
-  </div>
-
-  {#if model.simpleModeSupported}
-    <div class="grid gap-3 xl:grid-cols-2">
-      {#if simpleItem && model.simpleModeSlots.length > 0}
-        <div data-testid={setupWorkspaceTestIds.flightModesSimpleChecklist}>
-          <SetupBitmaskChecklist
-            disabled={actionsBlocked || simpleItem.readOnly === true}
-            items={model.simpleModeSlots.map((slot) => ({
-              key: slot.key,
-              label: slot.label,
-              checked: slot.checked,
-            }))}
-            onToggle={(entry) => toggleBitmask("SIMPLE", Number(entry.key))}
-            title="Simple mode slots"
-          />
-        </div>
-      {/if}
-
-      {#if superSimpleItem && model.superSimpleSlots.length > 0}
-        <div data-testid={setupWorkspaceTestIds.flightModesSuperChecklist}>
-          <SetupBitmaskChecklist
-            disabled={actionsBlocked || superSimpleItem.readOnly === true}
-            items={model.superSimpleSlots.map((slot) => ({
-              key: slot.key,
-              label: slot.label,
-              checked: slot.checked,
-            }))}
-            onToggle={(entry) => toggleBitmask("SUPER_SIMPLE", Number(entry.key))}
-            title="Super Simple slots"
-          />
-        </div>
-      {/if}
-    </div>
-
-    {#if simpleDocsUrl}
-      <p class="text-xs leading-5 text-text-muted">
-        Simple and Super Simple remain copter-only because they depend on compass/home orientation.
-        <a class="font-semibold text-accent hover:underline" href={simpleDocsUrl} rel="noreferrer" target="_blank">Read the ArduPilot guidance</a>.
-      </p>
     {/if}
-  {/if}
+
+    <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h4 class="text-base font-semibold text-text-primary">Mode switch channel</h4>
+          <p class="mt-2 text-sm text-text-secondary">
+            Select which RC channel feeds the six-slot mode PWM ranges. Live values in parentheses update from telemetry so you can identify the transmitter switch channel.
+          </p>
+        </div>
+        <div class="text-right">
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.flightModesCurrentPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`}>
+            Current · {currentValueText(flightModeChannelItem)} · {formatPwmValue(selectedChannelValue)}
+          </p>
+          {#if params.stagedEdits[FLIGHT_MODE_CHANNEL_PARAM]}
+            <p class="mt-2">
+              <SetupStagedBadge name={FLIGHT_MODE_CHANNEL_PARAM} onUnstage={unstage} testId={`${setupWorkspaceTestIds.flightModesStagedPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`} />
+            </p>
+          {/if}
+        </div>
+      </div>
+
+      <div class="mt-4">
+        <select
+          class="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary"
+          data-testid={`${setupWorkspaceTestIds.flightModesInputPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`}
+          disabled={actionsBlocked || !flightModeChannelItem}
+          onchange={(event) => stage(FLIGHT_MODE_CHANNEL_PARAM, (event.currentTarget as HTMLSelectElement).value, flightModeChannelItem?.value ?? null, true)}
+          value={flightModeChannelDraft}
+        >
+          {#each fixedChannelOptions() as option (option.code)}
+            <option value={String(option.code)}>{option.label}</option>
+          {/each}
+        </select>
+      </div>
+    </article>
+
+    <article class="rounded-lg border border-border bg-bg-primary/80 p-3">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Flight mode order · PWM ranges</p>
+          <h4 class="mt-2 text-base font-semibold text-text-primary">Drag tiles or edit a slot directly</h4>
+          <p class="mt-2 text-sm text-text-secondary">
+            The PWM ranges stay fixed and the range column is row-aligned with each slot. Reordering moves mode values into the target FLTMODEx slots and stages the affected parameters.
+          </p>
+        </div>
+        {#if !canReorderFlightModes}
+          <p class="max-w-xs text-xs leading-5 text-warning">
+            Reordering is enabled when the live mode list is available and all six slot parameters are writable.
+          </p>
+        {:else}
+          <p class="text-right text-xs font-semibold uppercase tracking-widest text-text-muted">
+            PWM · <span class="font-mono text-text-primary tabular-nums">{selectedChannelLabel} · {formatPwmValue(selectedChannelValue)}</span>
+          </p>
+        {/if}
+      </div>
+
+      <DragDropProvider
+        onDragEnd={handleSortableDragEnd}
+        onDragOver={handleSortableDragOver}
+        onDragStart={handleSortableDragStart}
+      >
+        <div class="mt-4">
+          <div class="grid min-w-0 grid-cols-[minmax(0,1fr)_4.75rem] gap-3 sm:grid-cols-[minmax(0,1fr)_5.25rem]">
+            <div bind:this={slotListElement} class="grid gap-2">
+            {#each orderedSlots as slot (slot.paramName)}
+              {@const sortable = createSlotSortable(() => slot)}
+              {@const attachSortable = sortable.attach}
+              {@const attachSortableHandle = sortable.attachHandle}
+              <div
+                data-flight-mode-dragging-source={draggingSlotParamName === slot.paramName ? "true" : undefined}
+                data-flight-mode-slot-row={slot.paramName}
+              >
+                <article
+                  class={["group flex min-h-16 min-w-0 items-stretch rounded-lg border bg-bg-secondary/60 text-sm transition", slot.active ? "border-accent/60 shadow-[inset_0_0_0_1px_rgba(18,185,255,0.22)]" : "border-border hover:border-border-light", sortable.isDropTarget && "ring-1 ring-accent/50", sortable.isDragSource && "z-10 opacity-60 shadow-lg"]}
+                  data-testid={`${setupWorkspaceTestIds.flightModesSlotPrefix}-${slot.slot}`}
+                  ondragover={(event) => handleFallbackDragOver(event, slot)}
+                  ondrop={(event) => handleFallbackDrop(event, slot)}
+                  {@attach attachSortable}
+                >
+                  <div class="flex w-10 shrink-0 items-center justify-center border-r border-border/60 text-text-muted/60">
+                    <button
+                      aria-label={`Drag to reorder flight mode slot ${slot.slot}`}
+                      class="cursor-grab rounded p-1.5 transition hover:bg-bg-tertiary hover:text-text-muted active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-40"
+                      data-testid={`${setupWorkspaceTestIds.flightModesSlotDragPrefix}-${slot.paramName}`}
+                      disabled={!canReorderFlightModes}
+                      onclick={(event) => event.stopPropagation()}
+                      ondragend={handleFallbackDragEnd}
+                      ondragstart={(event) => handleFallbackDragStart(event, slot)}
+                      onkeydown={(event) => event.stopPropagation()}
+                      title="Drag to reorder"
+                      type="button"
+                      {@attach attachSortableHandle}
+                    >
+                      <GripVertical aria-hidden="true" size={16} />
+                    </button>
+                  </div>
+
+                  <div class="flex min-w-0 flex-1 flex-col gap-2 p-2 sm:flex-row sm:items-center">
+                    <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                      <p class="font-semibold text-text-primary">Slot {slot.slot}</p>
+                      {#if slot.active}
+                        <span class="rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-accent">
+                          active
+                        </span>
+                      {/if}
+                      {#if params.stagedEdits[slot.paramName]}
+                        <SetupStagedBadge name={slot.paramName} onUnstage={unstage} testId={`${setupWorkspaceTestIds.flightModesStagedPrefix}-${slot.paramName}`} />
+                      {/if}
+                    </div>
+
+                    <div class="min-w-0 sm:w-64">
+                      <select
+                        class="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary"
+                        data-testid={`${setupWorkspaceTestIds.flightModesInputPrefix}-${slot.paramName}`}
+                        disabled={slotSelectsDisabled || !item(slot.paramName)}
+                        onchange={(event) => stage(slot.paramName, (event.currentTarget as HTMLSelectElement).value, slot.effectiveValue)}
+                        value={draftValue(slot.paramName, slot.effectiveValue)}
+                      >
+                        {#each model.options as option (option.customMode)}
+                          <option value={String(option.customMode)}>{option.name}</option>
+                        {/each}
+                      </select>
+                    </div>
+
+                    {#if slot.unresolved}
+                      <p class="basis-full text-xs leading-5 text-warning">
+                        The current slot value is not in the live available-mode list, so the section falls back to the raw numeric mode id until the vehicle reports a supported label again.
+                      </p>
+                    {/if}
+                  </div>
+                </article>
+              </div>
+            {/each}
+            </div>
+
+            <div
+              class="relative min-w-0 data-[state=unavailable]:opacity-60"
+              data-state={selectedChannelState}
+              data-testid={setupWorkspaceTestIds.flightModesPwmBar}
+              style:height={`${pwmLayoutHeight}px`}
+            >
+              <span class="sr-only">PWM {selectedChannelLabel} · {formatPwmValue(selectedChannelValue)}</span>
+
+              <div class="absolute left-0 top-0 w-8 font-mono text-[10px] text-text-muted tabular-nums">
+                {#if pwmRows.length > 0}
+                  <span class="absolute right-0" style:top={`${pwmTrackTop + 1}px`}>{FLIGHT_MODE_PWM_DISPLAY_MIN}</span>
+                  {#each pwmRows.slice(0, -1) as row (row.paramName)}
+                    <span class="absolute right-0 -translate-y-1/2" style:top={`${row.segmentBottom}px`}>{row.high}</span>
+                  {/each}
+                  <span class="absolute right-0 -translate-y-full" style:top={`${pwmTrackBottom - 1}px`}>{FLIGHT_MODE_PWM_DISPLAY_MAX}</span>
+                {/if}
+              </div>
+
+              <div
+                class="absolute left-10 w-7 overflow-hidden rounded-full border border-border bg-bg-primary/90 shadow-inner"
+                style:top={`${pwmTrackTop}px`}
+                style:height={`${pwmTrackHeight}px`}
+              >
+                {#if activePwmRow}
+                  <div
+                    class="absolute inset-x-0 bg-accent/20 data-[state=stale]:bg-warning/20 data-[state=unavailable]:bg-text-muted/10"
+                    data-state={selectedChannelState}
+                    style:top={`${activePwmRow.segmentTop - pwmTrackTop}px`}
+                    style:height={`${activePwmRow.segmentBottom - activePwmRow.segmentTop}px`}
+                  ></div>
+                {/if}
+
+                {#each pwmRows.slice(0, -1) as row (row.paramName)}
+                  <div class="absolute left-0 right-0 border-t border-dashed border-border/90" style:top={`${row.segmentBottom - pwmTrackTop}px`}></div>
+                {/each}
+
+                {#if liveMarkerTop !== null}
+                  <div
+                    class="absolute left-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-bg-primary bg-accent shadow data-[state=stale]:bg-warning"
+                    data-state={selectedChannelState}
+                    style:top={`${liveMarkerTop - pwmTrackTop}px`}
+                    title={`Live ${formatPwmValue(selectedChannelValue)}`}
+                  ></div>
+                {/if}
+              </div>
+            </div>
+          </div>
+        </div>
+      </DragDropProvider>
+    </article>
+
+    {#if model.simpleModeSupported}
+      <div class="grid gap-3 xl:grid-cols-2">
+        {#if simpleItem && model.simpleModeSlots.length > 0}
+          <div data-testid={setupWorkspaceTestIds.flightModesSimpleChecklist}>
+            <SetupBitmaskChecklist
+              disabled={actionsBlocked || simpleItem.readOnly === true}
+              items={model.simpleModeSlots.map((slot) => ({
+                key: slot.key,
+                label: slot.label,
+                checked: slot.checked,
+              }))}
+              onToggle={(entry) => toggleBitmask("SIMPLE", Number(entry.key))}
+              title="Simple mode slots"
+            />
+          </div>
+        {/if}
+
+        {#if superSimpleItem && model.superSimpleSlots.length > 0}
+          <div data-testid={setupWorkspaceTestIds.flightModesSuperChecklist}>
+            <SetupBitmaskChecklist
+              disabled={actionsBlocked || superSimpleItem.readOnly === true}
+              items={model.superSimpleSlots.map((slot) => ({
+                key: slot.key,
+                label: slot.label,
+                checked: slot.checked,
+              }))}
+              onToggle={(entry) => toggleBitmask("SUPER_SIMPLE", Number(entry.key))}
+              title="Super Simple slots"
+            />
+          </div>
+        {/if}
+      </div>
+
+      {#if simpleDocsUrl}
+        <p class="text-xs leading-5 text-text-muted">
+          Simple and Super Simple remain copter-only because they depend on compass/home orientation.
+          <a class="font-semibold text-accent hover:underline" href={simpleDocsUrl} rel="noreferrer" target="_blank">Read the ArduPilot guidance</a>.
+        </p>
+      {/if}
+    {/if}
   {/snippet}
 </SetupSectionShell>

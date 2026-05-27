@@ -18,6 +18,30 @@ const telemetryMocks = vi.hoisted(() => ({
   disarmVehicle: vi.fn(async () => undefined),
 }));
 
+vi.hoisted(() => {
+  if (typeof globalThis.ResizeObserver === "undefined") {
+    globalThis.ResizeObserver = class ResizeObserverMock {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as typeof ResizeObserver;
+  }
+
+  const elementPrototype = globalThis.Element?.prototype as (Element & {
+    getAnimations?: () => Animation[];
+    animate?: Element["animate"];
+  }) | undefined;
+  if (elementPrototype && typeof elementPrototype.getAnimations !== "function") {
+    elementPrototype.getAnimations = () => [];
+  }
+  if (elementPrototype && typeof elementPrototype.animate !== "function") {
+    elementPrototype.animate = () => ({
+      cancel() {},
+      finished: Promise.resolve(),
+    }) as unknown as Animation;
+  }
+});
+
 vi.mock("../../calibration", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../calibration")>();
   return {
@@ -38,6 +62,24 @@ class ResizeObserverMock {
   observe() {}
   unobserve() {}
   disconnect() {}
+}
+
+function createTestDataTransfer(): DataTransfer {
+  const data = new Map<string, string>();
+  return {
+    dropEffect: "move",
+    effectAllowed: "move",
+    setData: (format: string, value: string) => data.set(format, value),
+    getData: (format: string) => data.get(format) ?? "",
+    clearData: (format?: string) => {
+      if (format) {
+        data.delete(format);
+        return;
+      }
+
+      data.clear();
+    },
+  } as unknown as DataTransfer;
 }
 
 import type { DomainValue } from "../../lib/domain-status";
@@ -2715,8 +2757,31 @@ describe("SetupWorkspace", () => {
       expect(get(setupWorkspaceStore).sectionConfirmations.flight_modes).toBe(true);
     });
 
-    expect(screen.getByTestId(setupWorkspaceTestIds.flightModesAvailabilityState).textContent).toContain("Live");
-    expect(screen.getByTestId(setupWorkspaceTestIds.flightModesActiveSlot).textContent).toContain("3");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.flightModesInputPrefix}-FLTMODE_CH`).textContent).toContain("Channel 5 (1450 µs)");
+    expect(screen.getByTestId(setupWorkspaceTestIds.flightModesPwmBar).textContent).toContain("Channel 5");
+    expect(screen.getByTestId(setupWorkspaceTestIds.flightModesPwmBar).textContent).toContain("1450 µs");
+
+    const reorderDataTransfer = createTestDataTransfer();
+    await fireEvent.dragStart(screen.getByTestId(`${setupWorkspaceTestIds.flightModesSlotDragPrefix}-FLTMODE6`), {
+      dataTransfer: reorderDataTransfer,
+    });
+    await fireEvent.dragOver(screen.getByTestId(`${setupWorkspaceTestIds.flightModesSlotPrefix}-2`), {
+      dataTransfer: reorderDataTransfer,
+    });
+    await fireEvent.drop(screen.getByTestId(`${setupWorkspaceTestIds.flightModesSlotPrefix}-2`), {
+      dataTransfer: reorderDataTransfer,
+    });
+    await fireEvent.dragEnd(screen.getByTestId(`${setupWorkspaceTestIds.flightModesSlotDragPrefix}-FLTMODE6`), {
+      dataTransfer: reorderDataTransfer,
+    });
+
+    await waitFor(() => {
+      expect(get(parameterStore).stagedEdits.FLTMODE2?.nextValue).toBe(3);
+      expect(get(parameterStore).stagedEdits.FLTMODE3?.nextValue).toBe(2);
+      expect(get(parameterStore).stagedEdits.FLTMODE4?.nextValue).toBe(5);
+      expect(get(parameterStore).stagedEdits.FLTMODE5?.nextValue).toBe(6);
+      expect(get(parameterStore).stagedEdits.FLTMODE6?.nextValue).toBe(9);
+    });
 
     await fireEvent.change(screen.getByTestId(`${setupWorkspaceTestIds.flightModesInputPrefix}-FLTMODE1`), {
       target: { value: "6" },
@@ -2745,9 +2810,8 @@ describe("SetupWorkspace", () => {
     }));
 
     await waitFor(() => {
-      expect(screen.getByTestId(setupWorkspaceTestIds.flightModesAvailabilityState).textContent).toContain("Stale");
+      expect(screen.getByTestId(`${setupWorkspaceTestIds.flightModesInputPrefix}-FLTMODE2`).getAttribute("disabled")).not.toBeNull();
     });
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.flightModesInputPrefix}-FLTMODE2`).getAttribute("disabled")).not.toBeNull();
   });
 
   it("stages failsafe defaults, RTL changes, and geofence bitmask edits through the shared review tray", async () => {

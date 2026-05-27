@@ -93,6 +93,8 @@ export const setupWorkspaceTestIds = {
   flightModesPresetPreview: "setup-workspace-flight-modes-preview",
   flightModesBannerPrefix: "setup-workspace-flight-modes-banner",
   flightModesSlotPrefix: "setup-workspace-flight-modes-slot",
+  flightModesSlotDragPrefix: "setup-workspace-flight-modes-slot-drag",
+  flightModesPwmBar: "setup-workspace-flight-modes-pwm-bar",
   flightModesInputPrefix: "setup-workspace-flight-modes-input",
   flightModesCurrentPrefix: "setup-workspace-flight-modes-current",
   flightModesStagedPrefix: "setup-workspace-flight-modes-staged",

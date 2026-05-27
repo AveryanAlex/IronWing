@@ -12,15 +12,32 @@ export const FLIGHT_MODE_PARAM_NAMES = Array.from(
   (_, index) => `FLTMODE${index + 1}`,
 );
 export const FLIGHT_MODE_CHANNEL_PARAM = "FLTMODE_CH";
+export const FLIGHT_MODE_PWM_DISPLAY_MIN = 800;
+export const FLIGHT_MODE_PWM_DISPLAY_MAX = 2200;
 
-export const MODE_SLOT_PWM_RANGES: { label: string; min: number; max: number }[] = [
-  { label: "≤ 1230", min: 0, max: 1230 },
-  { label: "1231–1360", min: 1231, max: 1360 },
-  { label: "1361–1490", min: 1361, max: 1490 },
-  { label: "1491–1620", min: 1491, max: 1620 },
-  { label: "1621–1749", min: 1621, max: 1749 },
-  { label: "≥ 1750", min: 1750, max: 65535 },
+export type FlightModePwmRange = {
+  label: string;
+  min: number;
+  max: number;
+  displayMin: number;
+  displayMax: number;
+};
+
+export const MODE_SLOT_PWM_RANGES: FlightModePwmRange[] = [
+  { label: "≤ 1230", min: 0, max: 1230, displayMin: FLIGHT_MODE_PWM_DISPLAY_MIN, displayMax: 1230 },
+  { label: "1231–1360", min: 1231, max: 1360, displayMin: 1231, displayMax: 1360 },
+  { label: "1361–1490", min: 1361, max: 1490, displayMin: 1361, displayMax: 1490 },
+  { label: "1491–1620", min: 1491, max: 1620, displayMin: 1491, displayMax: 1620 },
+  { label: "1621–1749", min: 1621, max: 1749, displayMin: 1621, displayMax: 1749 },
+  { label: "≥ 1750", min: 1750, max: 65535, displayMin: 1750, displayMax: FLIGHT_MODE_PWM_DISPLAY_MAX },
 ];
+
+export function getFlightModePwmDisplayBounds(slot: number): { low: number; high: number } {
+  const range = MODE_SLOT_PWM_RANGES[slot - 1];
+  return range
+    ? { low: range.displayMin, high: range.displayMax }
+    : { low: FLIGHT_MODE_PWM_DISPLAY_MIN, high: FLIGHT_MODE_PWM_DISPLAY_MAX };
+}
 
 export type FlightModePreset = "copter" | "plane" | "rover";
 export type FlightModeAvailabilityState = "live" | "stale" | "unavailable";
