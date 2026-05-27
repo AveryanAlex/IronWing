@@ -191,7 +191,7 @@ function hasHomePosition(): boolean {
 </script>
 
 <div class="hud-minimap__map size-full">
-  <BaseMap class="size-full" options={createMiniMapOptions()} onMapReady={handleMapReady} />
+  <BaseMap options={createMiniMapOptions()} onMapReady={handleMapReady} />
 </div>
 
 <style>

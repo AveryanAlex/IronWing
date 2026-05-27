@@ -6,7 +6,6 @@ type Tone = "accent" | "muted" | "success" | "warning" | "danger";
 type Props = {
   tone?: Tone;
   testId?: string;
-  class?: string;
   children: Snippet;
 };
 
@@ -18,13 +17,12 @@ const toneClasses: Record<Tone, string> = {
   danger: "bg-danger/10 text-danger",
 };
 
-let { tone = "accent", testId, class: className = "", children }: Props = $props();
+let { tone = "accent", testId, children }: Props = $props();
 
 let pillClass = $derived([
   "rounded-full px-2 py-0.5 text-[10px] font-medium",
   toneClasses[tone],
-  className,
-].filter(Boolean).join(" "));
+].join(" "));
 </script>
 
 <span class={pillClass} data-tone={tone} data-testid={testId}>{@render children()}</span>

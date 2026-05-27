@@ -7,7 +7,7 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import { createSharedBaseMapOptions, type SharedBaseMapOptions } from "../../lib/map/base-map";
 import { configureMapLibreWorker } from "../../lib/map/worker";
 
-type DivAttributes = Omit<SvelteHTMLElements["div"], "children">;
+type DivAttributes = Omit<SvelteHTMLElements["div"], "children" | "class">;
 type MapReadyCleanup = () => void;
 
 type Props = DivAttributes & {
@@ -20,7 +20,6 @@ let {
   options,
   onMapReady,
   onMapError,
-  class: className,
   ...rest
 }: Props = $props();
 
@@ -60,4 +59,4 @@ onMount(() => {
 });
 </script>
 
-<div {...rest} bind:this={mapContainer} class={className}></div>
+<div {...rest} bind:this={mapContainer} class="size-full"></div>

@@ -406,4 +406,4 @@ function configureSvsScene(currentMap: MapLibreMap) {
 }
 </script>
 
-<BaseMap class="size-full" options={createSvsMapOptions()} onMapReady={handleMapReady} />
+<BaseMap options={createSvsMapOptions()} onMapReady={handleMapReady} />

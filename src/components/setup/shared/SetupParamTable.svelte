@@ -3,17 +3,14 @@ import type { Snippet } from "svelte";
 
 type Props = {
   columns: string[];
-  minWidthClass?: string;
   children: Snippet;
 };
 
-let { columns, minWidthClass = "min-w-[560px]", children }: Props = $props();
-
-let tableClass = $derived(["w-full text-left", minWidthClass].join(" "));
+let { columns, children }: Props = $props();
 </script>
 
 <div class="-mx-4 overflow-x-auto">
-  <table class={tableClass}>
+  <table class="w-full min-w-[560px] text-left">
     <thead>
       <tr class="border-b border-border">
         {#each columns as column, index (column)}

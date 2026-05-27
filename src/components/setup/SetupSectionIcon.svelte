@@ -26,50 +26,47 @@ import type { SetupSectionId } from "../../lib/setup-sections";
 type Props = {
   sectionId: SetupSectionId;
   size?: number;
-  class?: string;
 };
 
-let { sectionId, size = 14, class: className = "" }: Props = $props();
-
-const iconClass = $derived(["shrink-0", className].filter(Boolean).join(" "));
+let { sectionId, size = 14 }: Props = $props();
 </script>
 
 {#if sectionId === "overview"}
-  <LayoutDashboard {size} class={iconClass} aria-hidden="true" />
+  <LayoutDashboard {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "beginner_wizard"}
-  <Sparkles {size} class={iconClass} aria-hidden="true" />
+  <Sparkles {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "frame_orientation"}
-  <Box {size} class={iconClass} aria-hidden="true" />
+  <Box {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "calibration"}
-  <Compass {size} class={iconClass} aria-hidden="true" />
+  <Compass {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "rc_receiver"}
-  <Radio {size} class={iconClass} aria-hidden="true" />
+  <Radio {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "gps"}
-  <Satellite {size} class={iconClass} aria-hidden="true" />
+  <Satellite {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "battery_monitor"}
-  <Battery {size} class={iconClass} aria-hidden="true" />
+  <Battery {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "motors_esc"}
-  <Cog {size} class={iconClass} aria-hidden="true" />
+  <Cog {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "servo_outputs"}
-  <SlidersHorizontal {size} class={iconClass} aria-hidden="true" />
+  <SlidersHorizontal {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "serial_ports"}
-  <Cable {size} class={iconClass} aria-hidden="true" />
+  <Cable {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "flight_modes"}
-  <Plane {size} class={iconClass} aria-hidden="true" />
+  <Plane {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "failsafe"}
-  <ShieldAlert {size} class={iconClass} aria-hidden="true" />
+  <ShieldAlert {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "rtl_return"}
-  <Home {size} class={iconClass} aria-hidden="true" />
+  <Home {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "geofence"}
-  <Fence {size} class={iconClass} aria-hidden="true" />
+  <Fence {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "arming"}
-  <Lock {size} class={iconClass} aria-hidden="true" />
+  <Lock {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "initial_params"}
-  <Calculator {size} class={iconClass} aria-hidden="true" />
+  <Calculator {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "pid_tuning"}
-  <Activity {size} class={iconClass} aria-hidden="true" />
+  <Activity {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "peripherals"}
-  <Puzzle {size} class={iconClass} aria-hidden="true" />
+  <Puzzle {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "full_parameters"}
-  <SlidersVertical {size} class={iconClass} aria-hidden="true" />
+  <SlidersVertical {size} class="shrink-0" aria-hidden="true" />
 {/if}

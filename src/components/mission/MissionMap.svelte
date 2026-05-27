@@ -1823,7 +1823,6 @@ function stopDeviceLocationWatch() {
     >
       <div class="mission-map-basemap" data-testid={missionWorkspaceTestIds.mapBasemap}>
         <BaseMap
-          class="size-full"
           options={createBasemapOptions()}
           onMapReady={handleBasemapReady}
           onMapError={handleBasemapError}

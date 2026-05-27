@@ -5,7 +5,6 @@ type Props = {
   docsUrl: string | null | undefined;
   docsLabel?: string;
   variant?: "inline" | "header";
-  class?: string;
   testId?: string;
 };
 
@@ -13,7 +12,6 @@ let {
   docsUrl,
   docsLabel = "ArduPilot Docs",
   variant = "header",
-  class: className = "",
   testId,
 }: Props = $props();
 
@@ -22,8 +20,7 @@ let linkClass = $derived([
   variant === "inline"
     ? "text-xs text-accent hover:underline"
     : "text-xs text-text-muted hover:text-text-secondary",
-  className,
-].filter(Boolean).join(" "));
+].join(" "));
 </script>
 
 {#if docsUrl}

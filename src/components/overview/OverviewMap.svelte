@@ -760,7 +760,6 @@ function preventContextMenu(event: MouseEvent) {
 <div class="overview-map" data-testid="overview-map-root">
   <BaseMap
     aria-label="Interactive map"
-    class="overview-map-container"
     data-testid="overview-map-surface"
     options={createOverviewMapOptions()}
     onMapReady={handleMapReady}
@@ -892,11 +891,6 @@ function preventContextMenu(event: MouseEvent) {
 <style>
   .overview-map {
     position: relative;
-    width: 100%;
-    height: 100%;
-  }
-
-  :global(.overview-map-container) {
     width: 100%;
     height: 100%;
   }

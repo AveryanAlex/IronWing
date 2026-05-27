@@ -6,16 +6,16 @@ type IconComponent = new (...args: any[]) => SvelteComponent;
 type Props = {
   icon?: IconComponent;
   title: string;
-  class?: string;
+  compact?: boolean;
   actions?: Snippet;
 };
 
-let { icon: Icon, title, class: className = "", actions }: Props = $props();
+let { icon: Icon, title, compact = false, actions }: Props = $props();
 
 let headerClass = $derived([
-  "mb-4 flex items-center justify-between gap-3",
-  className,
-].filter(Boolean).join(" "));
+  compact ? "mb-2.5" : "mb-4",
+  "flex items-center justify-between gap-3",
+].join(" "));
 </script>
 
 <div class={headerClass}>

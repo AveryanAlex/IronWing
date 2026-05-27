@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Cable, Lightbulb, RotateCw } from "lucide-svelte";
+import { Cable, RotateCw } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import {
@@ -162,7 +162,7 @@ function rebootTone(): string {
   </SetupNotice>
 
   <SetupCard testId={setupWorkspaceTestIds.serialPortsSummary}>
-    <SetupCardHeader icon={Cable} title="Serial Port Assignment" class="mb-2.5">
+    <SetupCardHeader icon={Cable} title="Serial Port Assignment" compact>
       {#snippet actions()}
       {#if model.ports.length > 0}
         <SetupStatusPill>
@@ -260,7 +260,7 @@ function rebootTone(): string {
     </div>
   {/each}
 
-  <SetupHintList icon={Lightbulb} title="Common Configurations">
+  <SetupHintList title="Common Configurations">
       <SetupHint>
         <p>
           <span class="font-medium text-text-primary">GPS</span> — typically on SERIAL3 or SERIAL4.

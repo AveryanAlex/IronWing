@@ -137,7 +137,7 @@ function showStatusIcon(section: SetupWorkspaceSection): boolean {
             onclick={() => onSelect(section.id)}
             type="button"
           >
-            <SetupSectionIcon sectionId={section.id} class="shrink-0" />
+            <SetupSectionIcon sectionId={section.id} />
             <span class="truncate font-medium">{section.title}</span>
 
             {#if disabled}

@@ -9,7 +9,6 @@ type Tone = "info" | "warning" | "danger" | "success";
 type Props = {
   tone?: Tone;
   icon?: IconComponent;
-  class?: string;
   testId?: string;
   children: Snippet;
 };
@@ -28,14 +27,13 @@ const defaultIcons: Record<Tone, IconComponent> = {
   success: CheckCircle2,
 };
 
-let { tone = "info", icon, class: className = "", testId, children }: Props = $props();
+let { tone = "info", icon, testId, children }: Props = $props();
 
 let Icon = $derived(icon ?? defaultIcons[tone]);
 let noticeClass = $derived([
   "flex items-start gap-2 rounded-md border px-3 py-2.5",
   toneClasses[tone],
-  className,
-].filter(Boolean).join(" "));
+].join(" "));
 </script>
 
 <div class={noticeClass} data-tone={tone} data-testid={testId}>

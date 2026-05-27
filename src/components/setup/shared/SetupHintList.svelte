@@ -1,4 +1,5 @@
 <script lang="ts">
+import { Lightbulb } from "lucide-svelte";
 import type { Snippet, SvelteComponent } from "svelte";
 
 type IconComponent = new (...args: any[]) => SvelteComponent;
@@ -9,14 +10,13 @@ import SetupCardHeader from "./SetupCardHeader.svelte";
 type Props = {
   icon?: IconComponent;
   title: string;
-  class?: string;
   children: Snippet;
 };
 
-let { icon, title, class: className = "", children }: Props = $props();
+let { icon = Lightbulb, title, children }: Props = $props();
 </script>
 
-<SetupCard class={className}>
+<SetupCard>
   <SetupCardHeader {icon} {title} />
   <div class="flex flex-col gap-2.5">
     {@render children()}
