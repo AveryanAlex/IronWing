@@ -3324,6 +3324,21 @@ describe("SetupWorkspace", () => {
     expect(screen.queryByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeNull();
   });
 
+  it("keeps the section nav pinned left on desktop tier instead of stacking it above content", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      chromeStore: createStaticShellChromeStore("desktop"),
+    });
+
+    const nav = screen.getByTestId(setupWorkspaceTestIds.nav);
+    const navLayout = nav.closest("[data-setup-section-nav-mode]");
+
+    expect(screen.queryByTestId(setupWorkspaceTestIds.sectionDrawerToggle)).toBeNull();
+    expect(navLayout?.getAttribute("data-setup-section-nav-mode")).toBe("rail");
+    expect(navLayout?.classList.contains("grid-cols-[224px_minmax(0,1fr)]")).toBe(true);
+    expect(navLayout?.classList.contains("max-[1024px]:grid-cols-1")).toBe(false);
+  });
+
   it("bounds the desktop section detail pane so section content can scroll", async () => {
     await renderSetupWorkspace({
       metadata: createSetupMetadata(),
@@ -3346,8 +3361,25 @@ describe("SetupWorkspace", () => {
     });
 
     expect(screen.queryByTestId(setupWorkspaceTestIds.nav)).toBeNull();
-    expect(screen.getByTestId(setupWorkspaceTestIds.sectionDrawerToggle)).toBeTruthy();
+    const toggle = screen.getByTestId(setupWorkspaceTestIds.sectionDrawerToggle);
+    expect(toggle).toBeTruthy();
+    expect(toggle.getAttribute("aria-label")).toBe("Open setup sections");
+    expect(toggle.querySelector("svg")).toBeTruthy();
     expect(screen.queryByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeNull();
+  });
+
+  it("uses the section drawer on tablet tier so the nav does not consume the upper half", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      chromeStore: createStaticShellChromeStore("tablet"),
+    });
+
+    const detailPane = screen.getByTestId(setupWorkspaceTestIds.detail);
+    const navLayout = detailPane.closest("[data-setup-section-nav-mode]");
+
+    expect(screen.queryByTestId(setupWorkspaceTestIds.nav)).toBeNull();
+    expect(screen.getByTestId(setupWorkspaceTestIds.sectionDrawerToggle)).toBeTruthy();
+    expect(navLayout?.getAttribute("data-setup-section-nav-mode")).toBe("drawer");
   });
 
   it("opens the section drawer and mounts the nav rail inside it on phone tier", async () => {
@@ -3361,6 +3393,9 @@ describe("SetupWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeTruthy();
     });
+    expect(screen.getByTestId(setupWorkspaceTestIds.root).firstElementChild?.classList.contains("relative")).toBe(true);
+    expect(screen.getByTestId(setupWorkspaceTestIds.sectionDrawer).classList.contains("absolute")).toBe(true);
+    expect(screen.getByTestId(setupWorkspaceTestIds.sectionDrawerBackdrop).classList.contains("absolute")).toBe(true);
     const navs = screen.queryAllByTestId(setupWorkspaceTestIds.nav);
     expect(navs).toHaveLength(1);
     expect(screen.getByTestId(setupWorkspaceTestIds.sectionDrawer).contains(navs[0])).toBe(true);
