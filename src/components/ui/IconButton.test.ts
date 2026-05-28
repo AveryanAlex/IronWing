@@ -24,4 +24,16 @@ describe("IconButton", () => {
     await fireEvent.click(btn);
     expect(onClick).toHaveBeenCalledOnce();
   });
+
+  it("supports bare auto-sized tonal icon buttons", () => {
+    const { getByRole } = render(IconButton, {
+      props: { ariaLabel: "Info", variant: "bare", size: "auto", tone: "accent", children: iconSnippet() },
+    });
+    const btn = getByRole("button", { name: "Info" });
+    expect(btn.getAttribute("data-variant")).toBe("bare");
+    expect(btn.getAttribute("data-size")).toBe("auto");
+    expect(btn.getAttribute("data-tone")).toBe("accent");
+    expect(btn.className).toContain("size-auto");
+    expect(btn.className).toContain("bg-transparent");
+  });
 });

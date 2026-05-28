@@ -1,5 +1,5 @@
 import type { SensorHealthState } from "../src/sensor-health";
-import { setupWorkspaceTestIds } from "../src/components/setup/setup-workspace-test-ids";
+import { setupWorkspaceTestIds } from "../src/features/setup/setup-workspace-test-ids";
 import {
   applyShellViewport,
   connectionSelectors,
@@ -23,6 +23,7 @@ import {
   openConnectedSetupWorkspace,
   primeSetupMetadata,
   setupConnectedVehicleState,
+  setupNavLocator,
   simulateSetupReconnectSameScope,
 } from "./helpers/setup-workspace";
 
@@ -232,6 +233,7 @@ test.describe("setup wizard proof", () => {
     });
 
     await expect(wizardBannerLocator(page, "checkpoint")).toHaveCount(0);
+    await setupNavLocator(page, "beginner_wizard").click();
     await expect(wizardStepBodyLocator(page, "frame_orientation")).toBeVisible();
   });
 
@@ -269,6 +271,24 @@ test.describe("setup wizard proof", () => {
     await page.locator(connectionSelectors.disconnectButton).click();
     await expect(page.locator(connectionSelectors.connectButton)).toBeVisible();
 
+    await connectSetupSession(page, mockPlatform, {
+      vehicleState: setupConnectedVehicleState,
+      paramStore: createFullExpertSetupParamStore(),
+      telemetry: createSetupTelemetryDomain({
+        rc_channels: [1100, 1500, 1900, 1300, 1450],
+        rc_rssi: 84,
+      }),
+      support: createSetupSupportDomain(),
+      configurationFacts: createSetupConfigurationFactsDomain(),
+      calibration: createSetupCalibrationDomain(),
+      statusText: createSetupStatusTextDomain([]),
+    });
+
+    // Reconnect lands the setup workspace back on Overview, but the wizard
+    // section status remains in-progress. Re-open the wizard section to prove
+    // the persisted scope-change pause rather than depending on section
+    // selection surviving the reconnect.
+    await setupNavLocator(page, "beginner_wizard").click();
     await expect(wizardBannerLocator(page, "scope")).toBeVisible();
     await expect(wizardStepBodyLocator(page, "frame_orientation")).toHaveCount(0);
 

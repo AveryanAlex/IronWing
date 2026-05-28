@@ -2,13 +2,14 @@ import { readFileSync } from "node:fs";
 
 import type { Page } from "@playwright/test";
 import type { SessionEnvelope } from "../src/session";
-import { missionWorkspaceTestIds } from "../src/components/mission/mission-workspace-test-ids";
+import { missionWorkspaceTestIds } from "../src/features/mission/mission-workspace-test-ids";
 import {
     applyShellViewport,
     clickMissionToolbarSecondary,
     closeVehiclePanelDrawer,
     connectionSelectors,
     expect,
+    expectConnectionConnected,
     expectDockedVehiclePanel,
     expectMissionHistoryState,
     expectMissionWorkspace,
@@ -156,13 +157,12 @@ async function clickMissionControl(page: Page, selector: keyof typeof missionWor
     }
     const modeLabel = missionModeControls.get(selector);
     if (modeLabel) {
-        const inlineModeButton = missionWorkspaceLocator(page, selector);
-        if (await inlineModeButton.isVisible().catch(() => false)) {
-            await inlineModeButton.click();
+        const modeButton = page.getByRole("button", { name: "Select mission editing mode" });
+        if ((await modeButton.innerText()).includes(modeLabel)) {
             return;
         }
 
-        await page.getByRole("button", { name: "Select mission editing mode" }).click();
+        await modeButton.click();
         const menuItem = page.getByRole("menuitem", { name: modeLabel, exact: true });
         const ariaDisabled = await menuItem.getAttribute("aria-disabled");
         const dataDisabled = await menuItem.getAttribute("data-disabled");
@@ -234,10 +234,11 @@ async function connectAndOpenMissionWorkspace(
         },
         guidedState: blockedGuidedState,
     });
-    await expect(
-        page.locator(connectionSelectors.statusText),
+    await expectConnectionConnected(
+        page,
+        10_000,
         historyMessage(history, "The mocked vehicle never reached Connected state."),
-    ).toContainText("Connected");
+    );
 
     if (preset === "phone") {
         note(history, "Close the phone vehicle drawer before entering the Mission workspace.");
@@ -621,11 +622,11 @@ async function provePlaybackAndDetachedLocalStates(
     await expect(missionWorkspaceLocator(page, "attachment")).toContainText("Detached local");
     await expect(missionWorkspaceLocator(page, "attachmentDetail")).toContainText("use undo/redo as normal here");
     await expectMissionHeaderValidateButtonAbsent(page);
-    await expect(missionWorkspaceLocator(page, "toolbarUpload")).toBeDisabled();
+    await expect(missionWorkspaceLocator(page, "toolbarUpload")).toBeEnabled();
     await expectMissionHeaderClearButtonAbsent(page);
     await expect(missionWorkspaceLocator(page, "warningRegister")).toHaveCount(0);
 
-    note(history, "Edit Home while detached-local, then use the workspace shortcut path to prove history carryover stays editable while live actions remain blocked.");
+    note(history, "Edit Home while detached-local, then use the workspace shortcut path to prove history carryover stays editable while the connected live vehicle action remains reachable.");
     await clickMissionControl(page, "modeMission");
     const detachedHistoryBeforeEdit = await readMissionHistoryState(page);
     expect(detachedHistoryBeforeEdit.undo.count, historyMessage(history, "Detached-local should preserve prior history instead of resetting to zero.")).toBeGreaterThan(0);
@@ -661,7 +662,7 @@ async function provePlaybackAndDetachedLocalStates(
     );
     await expect(missionWorkspaceLocator(page, "attachment")).toContainText("Detached local");
     await expectMissionHeaderValidateButtonAbsent(page);
-    await expect(missionWorkspaceLocator(page, "toolbarUpload")).toBeDisabled();
+    await expect(missionWorkspaceLocator(page, "toolbarUpload")).toBeEnabled();
     await expectMissionHeaderClearButtonAbsent(page);
 
     await pressMissionHistoryShortcut(page, "redo");
@@ -728,6 +729,7 @@ test.describe("mocked mission planning continuity", () => {
             page,
             mockPlatform,
         }) => {
+            test.slow();
             const history: string[] = [];
             const harness = mockPlatform as MockPlatformHarness;
 

@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 ironwing-firmware = { path = "../ironwing-firmware" }
-mavkit = { git = "https://github.com/AveryanAlex/mavkit.git", rev = "d82883078d09d3d871182d25836fc87be10c85eb", default-features = false, features = ["ardupilot"] }
+mavkit = { git = "https://github.com/AveryanAlex/mavkit.git", branch = "main", default-features = false, features = ["ardupilot"] }
 mavlink = { git = "https://github.com/AveryanAlex/rust-mavlink.git", rev = "a35d19c2708806f623406b5bfcd13a633416795a", package = "mavlink", default-features = false, features = ["std", "serde", "format-generated-code", "mav2-message-extensions", "dialect-all"] }
 ardupilot-binlog = { git = "https://github.com/AveryanAlex/ardupilot-binlog.git", branch = "main" }
 serde = { version = "1", features = ["derive"] }

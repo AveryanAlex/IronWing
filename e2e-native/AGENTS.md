@@ -10,7 +10,7 @@
 |------|----------|-------|
 | Top-level orchestrator | `../scripts/e2e-native.mjs` | Reuses `scripts/workflow/*` for build, SITL lifecycle, cleanup |
 | WDIO config | `wdio.conf.mjs` | Spawns `tauri-driver`, points at the built debug binary |
-| First smoke test | `smoke.spec.mjs` | Idle → connect → telemetry → disconnect |
+| Real-stack workflow spec | `smoke.spec.mjs` | Boot → connect → telemetry/settings → mission transfer → disconnect |
 | Shared runtime helpers | `../scripts/workflow/native-e2e.mjs` | Build env + native app path helpers |
 
 ## Workflow
@@ -23,7 +23,9 @@
 ## Spec Conventions
 
 - Use stable `data-testid` selectors that already exist in the active Svelte frontend.
-- Assert only the thinnest real-stack behavior needed: window loads, TCP defaults are injected, connect succeeds, live telemetry arrives, disconnect returns to Idle.
+- Cover high-value real-stack behavior that mocked browser E2E cannot prove: window loads, TCP defaults are injected, connect succeeds, live telemetry arrives, live settings invokes reach Rust, mission upload/readback works against SITL, and disconnect returns to Idle.
+- Treat connection state as current app behavior: idle = `connection-connect-btn` visible/enabled with no cancel/disconnect controls, connecting = `connection-cancel-btn`, connected = `connection-disconnect-btn`. Do not use the removed `connection-status-text` selector.
+- Keep native assertions focused on real backend boundaries and stable app-visible outcomes. It is acceptable to include a small connected mission/settings flow here; keep broad layout, mocked edge cases, and exhaustive UI matrix coverage in browser E2E.
 - Keep selectors and assertions anchored to the shipped shell/runtime cards; do not resurrect removed legacy proof helpers.
 - Keep `maxInstances: 1`; do not parallelize native sessions.
 - Prefer expanding coverage by adding a few high-value flows, not by mirroring the browser-only Playwright suite.

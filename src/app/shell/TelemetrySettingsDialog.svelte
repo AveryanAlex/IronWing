@@ -9,9 +9,22 @@ import type {
 } from "../../lib/stores/live-settings";
 import { hasUnsavedLiveSettings, resolveMessageRateAvailabilityReason } from "../../lib/stores/live-settings";
 import { MESSAGE_RATE_HZ_LIMITS, TELEMETRY_RATE_HZ_LIMITS } from "../../lib/stores/settings";
-import { Dialog } from "../../components/ui";
+import {
+  ActionRow,
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  Eyebrow,
+  Field,
+  HelperText,
+  MonoValue,
+  NumberInput,
+  Sheet,
+} from "../../components/ui";
 import { appShellTestIds } from "./chrome-state";
-import { getLiveSettingsStoreContext } from "./runtime-context";
+import { getLiveSettingsStoreContext, getShellChromeStoreContext } from "./runtime-context";
 
 type Props = {
   open?: boolean;
@@ -42,6 +55,13 @@ type MessageRateRowView = {
 
 const liveSettingsStore = getLiveSettingsStoreContext();
 const liveSettings = fromStore(liveSettingsStore);
+let chromeStore: ReturnType<typeof getShellChromeStoreContext> | null = null;
+try {
+  chromeStore = getShellChromeStoreContext();
+} catch {
+  chromeStore = null;
+}
+const chrome = chromeStore ? fromStore(chromeStore) : null;
 
 let { open = false, onClose = () => {} }: Props = $props();
 
@@ -412,17 +432,39 @@ function discardChanges() {
   lastDraftApplySummary = null;
 }
 
-function statusClass(kind: DialogStatusKind) {
+function alertVariant(kind: DialogStatusKind) {
   switch (kind) {
     case "success":
-      return "border-success/30 bg-success/10 text-success";
+      return "success";
     case "pending":
-      return "border-accent/30 bg-accent/10 text-accent";
+      return "info";
     case "error":
-      return "border-danger/30 bg-danger/10 text-danger";
+      return "danger";
     default:
-      return "border-border bg-bg-primary/70 text-text-secondary";
+      return "info";
   }
+}
+
+function badgeVariant(kind: DialogStatusKind) {
+  switch (kind) {
+    case "success":
+      return "success";
+    case "pending":
+      return "accent";
+    case "error":
+      return "destructive";
+    default:
+      return "muted";
+  }
+}
+
+function numberInputValue(value: string): number | undefined {
+  if (value.trim().length === 0) {
+    return undefined;
+  }
+
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : undefined;
 }
 
 let liveSettingsView = $derived(liveSettings.current);
@@ -461,6 +503,7 @@ let dialogStatus = $derived.by(() =>
 );
 let canApply = $derived(!isApplying && (hasUnsavedSettings || hasLocalInputProblems));
 let canDiscard = $derived(!isApplying && (hasUnsavedSettings || hasLocalInputProblems));
+let surfaceKind = $derived(chrome?.current?.tier === "phone" ? "sheet" : "dialog");
 
 $effect(() => {
   const signature = buildStoreSyncSignature(liveSettingsView);
@@ -505,186 +548,216 @@ $effect(() => {
 {#snippet body()}
   <div class="space-y-5">
     <div
-      class={`rounded-lg border px-4 py-3 ${statusClass(dialogStatus.kind)}`}
       data-status-kind={dialogStatus.kind}
       data-testid={appShellTestIds.telemetrySettingsStatus}
     >
-      <p class="text-sm font-semibold">{dialogStatus.title}</p>
-      <p class="mt-1 text-sm leading-6">{dialogStatus.description}</p>
+      <Alert
+        description={dialogStatus.description}
+        title={dialogStatus.title}
+        variant={alertVariant(dialogStatus.kind)}
+      />
     </div>
 
-    <section class="rounded-lg border border-border bg-bg-primary/70 p-3 sm:p-5">
+    <Card.Root as="section" surface="primary" density="default" padding="comfortable">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p class="runtime-eyebrow">Shell cadence</p>
+          <Eyebrow>Shell cadence</Eyebrow>
           <h3 class="mt-1 text-base font-semibold text-text-primary">Telemetry cadence</h3>
-          <p class="mt-1 text-sm leading-6 text-text-secondary">
+          <HelperText class="mt-1">
             Adjust the shell telemetry cadence without waiting for a live vehicle connection.
-          </p>
+          </HelperText>
         </div>
 
-        <span class="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-accent">
+        <Badge variant="accent" size="sm" case="normal">
           {formatHz(liveSettingsView.confirmedSettings.telemetryRateHz)} confirmed
-        </span>
+        </Badge>
       </div>
 
-      <div class="mt-4 grid gap-2 sm:max-w-xs">
-        <label class="text-sm font-semibold text-text-primary" for="telemetry-rate-hz">Cadence (Hz)</label>
-        <input
-          class="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition focus:border-accent/50"
-          data-testid={appShellTestIds.telemetrySettingsTelemetryInput}
+      <Field.Root class="mt-4 sm:max-w-xs" invalid={Boolean(telemetryFieldError)}>
+        <Field.Label for="telemetry-rate-hz">Cadence</Field.Label>
+        <NumberInput
           id="telemetry-rate-hz"
+          inputTestId={appShellTestIds.telemetrySettingsTelemetryInput}
           inputmode="numeric"
+          invalid={Boolean(telemetryFieldError)}
           max={TELEMETRY_RATE_HZ_LIMITS.max}
           min={TELEMETRY_RATE_HZ_LIMITS.min}
           oninput={(event) => handleTelemetryInput((event.currentTarget as HTMLInputElement).value)}
           step="1"
-          type="number"
-          value={telemetryRateInput}
+          unit="Hz"
+          value={numberInputValue(telemetryRateInput)}
         />
-        <p class="text-xs uppercase tracking-wider text-text-muted">
+        <HelperText size="xs" tone="muted" class="uppercase tracking-wider">
           Allowed range · {TELEMETRY_RATE_HZ_LIMITS.min}–{TELEMETRY_RATE_HZ_LIMITS.max} Hz
-        </p>
+        </HelperText>
         {#if telemetryFieldError}
-          <p
-            class="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"
-            data-testid={appShellTestIds.telemetrySettingsTelemetryError}
-          >
-            {telemetryFieldError}
-          </p>
+          <Field.Error data-testid={appShellTestIds.telemetrySettingsTelemetryError} message={telemetryFieldError} />
         {/if}
-      </div>
-    </section>
+      </Field.Root>
+    </Card.Root>
 
-    <section class="rounded-lg border border-border bg-bg-primary/70 p-3 sm:p-5">
+    <Card.Root as="section" surface="primary" density="default" padding="comfortable">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p class="runtime-eyebrow">Live vehicle overrides</p>
+          <Eyebrow>Live vehicle overrides</Eyebrow>
           <h3 class="mt-1 text-base font-semibold text-text-primary">Message-rate controls</h3>
-          <p class="mt-1 text-sm leading-6 text-text-secondary">
+          <HelperText class="mt-1">
             Blank restores the backend default. Confirmed overrides reapply on the next live connection.
-          </p>
+          </HelperText>
         </div>
 
-        <span class="rounded-full border border-border bg-bg-secondary px-3 py-1 text-xs font-semibold uppercase tracking-wider text-text-secondary">
+        <Badge variant="muted" size="sm" case="normal">
           {messageRateRows.length} row{messageRateRows.length === 1 ? "" : "s"}
-        </span>
+        </Badge>
       </div>
 
       {#if unknownMessageRateIds.length > 0}
-        <div class="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
-          Stored message-rate overrides could not be mapped to the current catalog.
-        </div>
+        <Alert
+          class="mt-4"
+          description="Stored message-rate overrides could not be mapped to the current catalog."
+          variant="danger"
+        />
       {/if}
 
       {#if liveSettingsView.catalogPhase === "loading"}
-        <div class="mt-4 rounded-lg border border-border bg-bg-secondary px-4 py-3 text-sm text-text-secondary">
-          Loading the available message-rate rows…
-        </div>
+        <Alert class="mt-4" description="Loading the available message-rate rows…" variant="info" />
       {/if}
 
       {#if liveSettingsView.catalogPhase !== "loading" && messageRateRows.length === 0}
-        <div class="mt-4 rounded-lg border border-border bg-bg-secondary px-4 py-3 text-sm text-text-secondary">
-          No message-rate rows are available for this shell yet.
-        </div>
+        <Alert class="mt-4" description="No message-rate rows are available for this shell yet." variant="info" />
       {/if}
 
       <div class="mt-4 space-y-3">
         {#each messageRateRows as row (row.id)}
-          <article
-            class="rounded-lg border border-border bg-bg-secondary/90 p-3"
+          <Card.Root
+            as="article"
+            surface="secondary"
+            density="compact"
             data-row-state={row.stateKind}
-            data-testid={`${appShellTestIds.telemetrySettingsRowPrefix}-${row.id}`}
+            testId={`${appShellTestIds.telemetrySettingsRowPrefix}-${row.id}`}
           >
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p class="text-sm font-semibold text-text-primary">{row.name}</p>
-                <p class="mt-1 text-xs uppercase tracking-wider text-text-muted">
-                  MAVLink #{row.id} · default {formatHz(row.defaultRateHz)}
-                </p>
+                <HelperText size="xs" tone="muted" class="mt-1 uppercase tracking-wider">
+                  MAVLink #<MonoValue value={row.id} size="xs" tone="muted" /> · default {formatHz(row.defaultRateHz)}
+                </HelperText>
               </div>
 
-              <span class={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wider ${statusClass(row.stateKind)}`}>
-                {row.stateLabel}
-              </span>
+              <Badge variant={badgeVariant(row.stateKind)} size="sm" shape="rounded">{row.stateLabel}</Badge>
             </div>
 
-            <div class="mt-4 grid gap-2 sm:max-w-xs">
-              <label class="text-sm font-semibold text-text-primary" for={`message-rate-${row.id}`}>
-                Rate (Hz)
-              </label>
-              <input
-                class="rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none transition focus:border-accent/50 disabled:cursor-not-allowed disabled:opacity-60"
-                data-testid={`${appShellTestIds.telemetrySettingsRowInputPrefix}-${row.id}`}
+            <Field.Root class="mt-4 sm:max-w-xs" invalid={Boolean(row.error)}>
+              <Field.Label for={`message-rate-${row.id}`}>Rate</Field.Label>
+              <NumberInput
                 disabled={row.disabled || isApplying}
                 id={`message-rate-${row.id}`}
+                inputTestId={`${appShellTestIds.telemetrySettingsRowInputPrefix}-${row.id}`}
                 inputmode="decimal"
+                invalid={Boolean(row.error)}
                 max={MESSAGE_RATE_HZ_LIMITS.max}
                 min={MESSAGE_RATE_HZ_LIMITS.min}
                 oninput={(event) => handleMessageRateInput(row.id, (event.currentTarget as HTMLInputElement).value)}
                 placeholder={`default ${row.defaultRateHz}`}
                 step="0.1"
-                type="number"
-                value={row.inputValue}
+                unit="Hz"
+                value={numberInputValue(row.inputValue)}
               />
-            </div>
+            </Field.Root>
 
-            <p class="mt-2 text-xs leading-5 text-text-muted">
+            <HelperText size="xs" tone="muted" class="mt-2">
               Confirmed · {row.confirmedRateHz === null ? `default ${formatHz(row.defaultRateHz)}` : formatHz(row.confirmedRateHz)}
               {#if row.draftRateHz !== row.confirmedRateHz}
                 · draft {row.draftRateHz === null ? `default ${formatHz(row.defaultRateHz)}` : formatHz(row.draftRateHz)}
               {/if}
-            </p>
+            </HelperText>
 
             {#if row.disabledReason}
-              <p class="mt-2 text-xs leading-5 text-text-muted">{row.disabledReason}</p>
+              <HelperText size="xs" tone="muted" class="mt-2">{row.disabledReason}</HelperText>
             {/if}
 
             {#if row.error}
-              <p
-                class="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger"
-                data-testid={`${appShellTestIds.telemetrySettingsRowErrorPrefix}-${row.id}`}
-              >
-                {row.error}
-              </p>
+              <Alert
+                class="mt-3"
+                density="compact"
+                description={row.error}
+                testId={`${appShellTestIds.telemetrySettingsRowErrorPrefix}-${row.id}`}
+                variant="danger"
+              />
             {/if}
-          </article>
+          </Card.Root>
         {/each}
       </div>
-    </section>
+    </Card.Root>
   </div>
 {/snippet}
 
 {#snippet footer()}
-  <button
-    class="rounded-md border border-border bg-bg-primary/80 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-danger/40 hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
-    data-testid={appShellTestIds.telemetrySettingsDiscard}
-    disabled={!canDiscard}
-    onclick={discardChanges}
-    type="button"
-  >
-    Discard changes
-  </button>
+  <ActionRow align="end" class="w-full">
+    <Button
+      disabled={!canDiscard}
+      onclick={discardChanges}
+      testId={appShellTestIds.telemetrySettingsDiscard}
+      variant="outline"
+    >
+      Discard changes
+    </Button>
 
-  <button
-    class="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-    data-testid={appShellTestIds.telemetrySettingsApply}
-    disabled={!canApply}
-    onclick={() => void applyChanges()}
-    type="button"
-  >
-    {isApplying ? "Applying…" : "Apply settings"}
-  </button>
+    <Button
+      disabled={!canApply}
+      loading={isApplying}
+      onclick={() => void applyChanges()}
+      testId={appShellTestIds.telemetrySettingsApply}
+    >
+      {isApplying ? "Applying…" : "Apply settings"}
+    </Button>
+  </ActionRow>
 {/snippet}
 
-<Dialog
-  ariaLabel="Telemetry settings"
-  body={body}
-  closeTestId={appShellTestIds.telemetrySettingsClose}
-  description="Stage telemetry cadence and live message-rate edits here, then explicitly apply or discard them."
-  footer={footer}
-  onClose={onClose}
-  open={open}
-  testId={appShellTestIds.telemetrySettingsDialog}
-  title="Telemetry controls"
-/>
+<Dialog.Root {open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+  {#if surfaceKind === "sheet"}
+    <Sheet.Content
+      aria-label="Telemetry settings"
+      class="gap-4"
+      data-surface-kind="sheet"
+      data-testid={appShellTestIds.telemetrySettingsDialog}
+      showClose={false}
+      side="bottom"
+    >
+      <Sheet.Header>
+        <Eyebrow>Telemetry controls</Eyebrow>
+        <Sheet.Title>Telemetry controls</Sheet.Title>
+        <Sheet.Description>Stage telemetry cadence and live message-rate edits here, then explicitly apply or discard them.</Sheet.Description>
+        <Sheet.Close
+          ariaLabel="Close"
+          class="absolute right-3 top-3 w-8 px-0"
+          data-testid={appShellTestIds.telemetrySettingsClose}
+        />
+      </Sheet.Header>
+      <div class="overflow-auto">{@render body()}</div>
+      <Sheet.Footer>{@render footer()}</Sheet.Footer>
+    </Sheet.Content>
+  {:else}
+    <Dialog.Content
+      aria-label="Telemetry settings"
+      class="gap-4"
+      data-surface-kind="dialog"
+      data-testid={appShellTestIds.telemetrySettingsDialog}
+      showClose={false}
+      size="lg"
+    >
+      <Dialog.Header>
+        <Eyebrow>Telemetry controls</Eyebrow>
+        <Dialog.Title>Telemetry controls</Dialog.Title>
+        <Dialog.Description>Stage telemetry cadence and live message-rate edits here, then explicitly apply or discard them.</Dialog.Description>
+        <Dialog.Close
+          ariaLabel="Close"
+          class="absolute right-3 top-3 w-8 px-0"
+          data-testid={appShellTestIds.telemetrySettingsClose}
+        />
+      </Dialog.Header>
+      <div class="overflow-auto">{@render body()}</div>
+      <Dialog.Footer>{@render footer()}</Dialog.Footer>
+    </Dialog.Content>
+  {/if}
+</Dialog.Root>

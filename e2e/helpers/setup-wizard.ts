@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { setupWorkspaceTestIds } from "../../src/components/setup/setup-workspace-test-ids";
+import { setupWorkspaceTestIds } from "../../src/features/setup/setup-workspace-test-ids";
 
 /**
  * Opens the beginner setup wizard from the connected overview section.
@@ -18,7 +18,7 @@ export async function openSetupWizard(page: Page): Promise<void> {
 
 export function wizardStepBodyLocator(page: Page, stepId: string): Locator {
   return page.locator(
-    `[data-testid="${setupWorkspaceTestIds.wizardStepBodyPrefix}-${stepId}"]`,
+    `[data-testid="${setupWorkspaceTestIds.wizardStepFrame}"][data-step="${stepId}"]`,
   );
 }
 

@@ -119,7 +119,7 @@ const wasmContractMock = vi.hoisted(() => ({
     state: {
       value: {
         status: "active",
-        session: { kind: "goto", latitude_deg: 47.1, longitude_deg: 8.2, altitude_m: 120 },
+        session: { kind: "goto", latitude_deg: 47.1, longitude_deg: 8.2, altitude_msl_m: 120 },
         entered_at_unix_msec: 1,
         blocking_reason: null,
         termination: null,
@@ -138,7 +138,7 @@ const wasmContractMock = vi.hoisted(() => ({
     state: {
       value: {
         status: "active",
-        session: { kind: "goto", latitude_deg: 47.3, longitude_deg: 8.4, altitude_m: 130 },
+        session: { kind: "goto", latitude_deg: 47.3, longitude_deg: 8.4, altitude_msl_m: 130 },
         entered_at_unix_msec: 1,
         blocking_reason: null,
         termination: null,
@@ -500,8 +500,8 @@ describe("web backend commands", () => {
   });
 
   it("delegates guided session commands to the wasm runtime", async () => {
-    const startRequest = { session: { kind: "goto", latitude_deg: 47.1, longitude_deg: 8.2, altitude_m: 120 } };
-    const updateRequest = { session: { kind: "goto", latitude_deg: 47.3, longitude_deg: 8.4, altitude_m: 130 } };
+    const startRequest = { session: { kind: "goto", latitude_deg: 47.1, longitude_deg: 8.2, altitude_msl_m: 120 } };
+    const updateRequest = { session: { kind: "goto", latitude_deg: 47.3, longitude_deg: 8.4, altitude_msl_m: 130 } };
 
     await expect(invokeWebCommand("start_guided_session", { request: startRequest })).resolves.toEqual(expect.objectContaining({
       result: "accepted",

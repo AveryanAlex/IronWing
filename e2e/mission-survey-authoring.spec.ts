@@ -1,13 +1,14 @@
 import { readFileSync } from "node:fs";
 
 import type { Page } from "@playwright/test";
-import { missionWorkspaceTestIds } from "../src/components/mission/mission-workspace-test-ids";
+import { missionWorkspaceTestIds } from "../src/features/mission/mission-workspace-test-ids";
 import {
     applyShellViewport,
     clickMissionToolbarSecondary,
     closeVehiclePanelDrawer,
     connectionSelectors,
     expect,
+    expectConnectionConnected,
     expectDockedVehiclePanel,
     expectMissionHistoryState,
     expectMissionWorkspace,
@@ -104,6 +105,7 @@ const authoredViewportScenarios = ["desktop", "radiomaster", "phone"] as const s
 
 const surveyCardSelector = [
     `[data-testid^="${missionWorkspaceTestIds.surveyPrefix}-"]`,
+    `:not([data-testid^="${missionWorkspaceTestIds.surveyDragPrefix}-"])`,
     `:not([data-testid^="${missionWorkspaceTestIds.surveyCollapsePrefix}-"])`,
     `:not([data-testid^="${missionWorkspaceTestIds.surveyGeneratePrefix}-"])`,
     `:not([data-testid^="${missionWorkspaceTestIds.surveyDissolvePrefix}-"])`,
@@ -281,10 +283,11 @@ async function connectAndOpenMissionWorkspace(
         },
         guidedState: blockedGuidedState,
     });
-    await expect(
-        page.locator(connectionSelectors.statusText),
+    await expectConnectionConnected(
+        page,
+        10_000,
         historyMessage(history, "The vehicle connection never reached Connected state."),
-    ).toContainText("Connected");
+    );
 
     if (preset === "phone") {
         note(history, "Close the phone vehicle drawer before working in the main Mission viewport.");
@@ -409,7 +412,7 @@ async function drawSurveyRegion(
 
     note(history, `Finish ${pattern} drawing.`);
     await missionWorkspaceLocator(page, "mapDrawFinish").click();
-    await expect(
+    await expect.poll(
         async () => (await requireMissionMapDebugSnapshot(page, `${pattern} finish geometry editing`)).drawMode,
         { message: historyMessage(history, `The planner map never returned to idle after finishing ${pattern} geometry editing.`) },
     ).toBe("idle");
@@ -447,36 +450,62 @@ async function selectBuiltinCamera(page: Page, history: string[]) {
     ).toContainText(BUILTIN_CAMERA);
 }
 
-async function stabilizeCorridorGeometry(page: Page, history: string[]) {
-    note(history, "Refine the corridor centerline through the inspector so generate runs against a compact local route.");
+async function fillSurveyGeometryCoordinates(
+    page: Page,
+    history: string[],
+    label: string,
+    latitudes: string[],
+    longitudes: string[],
+) {
     const inspector = page.locator(missionWorkspaceSelectors.inspectorSurvey);
-    const latitudes = ["47.5298", "47.5303", "47.5308"];
-    const longitudes = ["8.6297", "8.6302", "8.6307"];
-    const latitudeInputs = inspector.getByRole("spinbutton", { name: "Latitude" });
-    const longitudeInputs = inspector.getByRole("spinbutton", { name: "Longitude" });
+    const latitudeInputs = inspector.locator(`[data-testid^="${missionWorkspaceTestIds.surveyPointPrefix}-"][data-testid$="-latitude"]`);
+    const longitudeInputs = inspector.locator(`[data-testid^="${missionWorkspaceTestIds.surveyPointPrefix}-"][data-testid$="-longitude"]`);
+
+    await expect.poll(
+        async () => await latitudeInputs.count(),
+        { message: historyMessage(history, `The ${label} survey inspector never exposed editable latitude rows.`) },
+    ).toBeGreaterThanOrEqual(latitudes.length);
+    await expect.poll(
+        async () => await longitudeInputs.count(),
+        { message: historyMessage(history, `The ${label} survey inspector never exposed editable longitude rows.`) },
+    ).toBeGreaterThanOrEqual(longitudes.length);
 
     for (const [index, latitude] of latitudes.entries()) {
-        await latitudeInputs.nth(index).fill(latitude);
-        await latitudeInputs.nth(index).press("Tab");
-        await longitudeInputs.nth(index).fill(longitudes[index]!);
-        await longitudeInputs.nth(index).press("Tab");
+        const latitudeInput = inspector.locator(`[data-testid="${missionWorkspaceTestIds.surveyPointPrefix}-${index}-latitude"]`);
+        const longitudeInput = inspector.locator(`[data-testid="${missionWorkspaceTestIds.surveyPointPrefix}-${index}-longitude"]`);
+        await latitudeInput.fill(latitude);
+        await latitudeInput.press("Tab");
+        await longitudeInput.fill(longitudes[index]!);
+        await longitudeInput.press("Tab");
     }
+}
+
+async function stabilizeGridGeometry(page: Page, history: string[]) {
+    note(history, "Refine the grid polygon through the inspector so generate runs against a compact local footprint.");
+    const latitudes = ["47.5297", "47.5297", "47.5300", "47.5304", "47.5307", "47.5307", "47.5302"];
+    const longitudes = ["8.6296", "8.6304", "8.6308", "8.6308", "8.6304", "8.6296", "8.6294"];
+    await fillSurveyGeometryCoordinates(page, history, "grid", latitudes, longitudes);
+}
+
+async function stabilizeCorridorGeometry(page: Page, history: string[]) {
+    note(history, "Refine the corridor centerline through the inspector so generate runs against a compact local route.");
+    const latitudes = ["47.5298", "47.5300", "47.5302", "47.5304", "47.5306", "47.5308"];
+    const longitudes = ["8.6297", "8.6299", "8.6301", "8.6303", "8.6305", "8.6307"];
+    await fillSurveyGeometryCoordinates(page, history, "corridor", latitudes, longitudes);
 }
 
 async function stabilizeStructureGeometry(page: Page, history: string[]) {
     note(history, "Refine the structure footprint through the inspector so generate runs against a compact local polygon.");
-    const inspector = page.locator(missionWorkspaceSelectors.inspectorSurvey);
-    const latitudes = ["47.5297", "47.5307", "47.5302"];
-    const longitudes = ["8.6297", "8.6301", "8.6308"];
-    const latitudeInputs = inspector.getByRole("spinbutton", { name: "Latitude" });
-    const longitudeInputs = inspector.getByRole("spinbutton", { name: "Longitude" });
+    const latitudes = ["47.52985", "47.52960", "47.52975", "47.53015", "47.53055", "47.53070", "47.53030"];
+    const longitudes = ["8.62955", "8.62985", "8.63035", "8.63065", "8.63045", "8.62995", "8.62950"];
+    await fillSurveyGeometryCoordinates(page, history, "structure", latitudes, longitudes);
 
-    for (const [index, latitude] of latitudes.entries()) {
-        await latitudeInputs.nth(index).fill(latitude);
-        await latitudeInputs.nth(index).press("Tab");
-        await longitudeInputs.nth(index).fill(longitudes[index]!);
-        await longitudeInputs.nth(index).press("Tab");
-    }
+    const layerCount = page.locator(`[data-testid="${missionWorkspaceTestIds.surveyParamPrefix}-layerCount"]`);
+    const scanDistance = page.locator(`[data-testid="${missionWorkspaceTestIds.surveyParamPrefix}-scanDistance_m"]`);
+    await layerCount.fill("1");
+    await layerCount.press("Tab");
+    await scanDistance.fill("80");
+    await scanDistance.press("Tab");
 }
 
 async function generateSelectedSurvey(page: Page, history: string[], pattern: AuthoringPattern) {
@@ -683,6 +712,7 @@ test.describe("mocked survey authoring workflow", () => {
             await addManualWaypoint(page, history);
 
             const gridRegionId = await drawSurveyRegion(page, history, "grid");
+            await stabilizeGridGeometry(page, history);
             await selectBuiltinCamera(page, history);
             await generateSelectedSurvey(page, history, "grid");
             await verifyCancelledRegenerateAndDissolve(page, history, gridRegionId);

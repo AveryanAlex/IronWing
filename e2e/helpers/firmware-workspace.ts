@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
-import type { DfuRecoveryResult, FirmwareProgress, SerialFlowResult } from "../../src/firmware";
+import type { BootloaderInstallationResult, FirmwareInstallResult, FirmwareProgress } from "../../src/firmware";
 import type { MockPlatformEvent } from "../../src/platform/mock/backend";
 import {
     expect,
@@ -138,7 +138,7 @@ export function firmwareProgressEvent(progress: Partial<FirmwareProgress> = {}):
 
 export async function resolveDeferredSerialFlash(
     mockPlatform: FirmwareMockPlatform,
-    result: SerialFlowResult,
+    result: FirmwareInstallResult,
     emit: MockPlatformEvent[] = [],
 ): Promise<void> {
     const resolved = await mockPlatform.resolveDeferred("firmware_install_update", result, emit);
@@ -162,7 +162,7 @@ export async function rejectDeferredSerialFlash(
 
 export async function resolveDeferredRecovery(
     mockPlatform: FirmwareMockPlatform,
-    result: DfuRecoveryResult,
+    result: BootloaderInstallationResult,
     emit: MockPlatformEvent[] = [],
 ): Promise<void> {
     const resolved = await mockPlatform.resolveDeferred("firmware_bootloader_installation", result, emit);

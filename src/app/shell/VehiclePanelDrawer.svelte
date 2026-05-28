@@ -1,4 +1,5 @@
 <script lang="ts">
+import { Eyebrow, Sheet } from "../../components/ui";
 import { appShellTestIds } from "./chrome-state";
 import VehiclePanelContent from "./VehiclePanelContent.svelte";
 
@@ -10,40 +11,49 @@ type Props = {
 let { open = false, onClose = () => {} }: Props = $props();
 </script>
 
-<div
-  aria-hidden={!open}
-  class="app-shell-drawer-backdrop"
-  data-state={open ? "open" : "closed"}
-  data-testid={appShellTestIds.vehiclePanelBackdrop}
-  onclick={onClose}
-></div>
+{#if !open}
+  <div
+    aria-hidden="true"
+    class="hidden"
+    data-state="closed"
+    data-testid={appShellTestIds.vehiclePanelBackdrop}
+  ></div>
+  <aside
+    aria-hidden="true"
+    class="hidden"
+    data-state="closed"
+    data-testid={appShellTestIds.vehiclePanelDrawer}
+    id="vehicle-panel-drawer"
+  ></aside>
+{/if}
 
-<aside
-  aria-hidden={!open}
-  class="app-shell-drawer"
-  data-state={open ? "open" : "closed"}
-  data-testid={appShellTestIds.vehiclePanelDrawer}
-  id="vehicle-panel-drawer"
->
-  <div class="app-shell-drawer__sheet">
-    <div class="app-shell-drawer__header">
-      <div>
-        <p class="text-xs font-semibold uppercase tracking-wide text-text-muted">Vehicle panel</p>
-        <h2 class="mt-1 text-base font-semibold text-text-primary">Connection & telemetry</h2>
-      </div>
+<Sheet.Root {open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+  {#if open}
+    <Sheet.Content
+      aria-label="Vehicle panel"
+      class="w-[min(100vw,26rem)] gap-4 p-4"
+      data-state="open"
+      data-testid={appShellTestIds.vehiclePanelDrawer}
+      id="vehicle-panel-drawer"
+      showClose={false}
+      side="right"
+    >
+      <Sheet.Header class="flex-row items-start justify-between gap-3 pr-0">
+        <div>
+          <Eyebrow>Vehicle panel</Eyebrow>
+          <Sheet.Title class="mt-1">Connection & telemetry</Sheet.Title>
+        </div>
 
-      <button
-        class="app-shell-drawer__close"
-        data-testid={appShellTestIds.vehiclePanelClose}
-        onclick={onClose}
-        type="button"
-      >
-        Close
-      </button>
-    </div>
+        <Sheet.Close
+          ariaLabel="Close"
+          class="shrink-0"
+          data-testid={appShellTestIds.vehiclePanelClose}
+        >
+          Close
+        </Sheet.Close>
+      </Sheet.Header>
 
-    {#if open}
       <VehiclePanelContent />
-    {/if}
-  </div>
-</aside>
+    </Sheet.Content>
+  {/if}
+</Sheet.Root>

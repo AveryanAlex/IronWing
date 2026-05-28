@@ -1,5 +1,5 @@
 <script lang="ts">
-import { DropdownMenu as Bits } from "bits-ui";
+import { DropdownMenu as Bits, Toolbar as BitsToolbar } from "bits-ui";
 import type { Snippet } from "svelte";
 import type { MenuItem } from "./menu-types";
 
@@ -8,7 +8,9 @@ type Props = {
   triggerAriaLabel?: string;
   triggerIcon?: Snippet;
   triggerClass?: string;
+  triggerDisabled?: boolean;
   triggerLabelClass?: string;
+  triggerToolbar?: boolean;
   triggerTone?: "neutral" | "accent";
   items: ReadonlyArray<MenuItem>;
   testId?: string;
@@ -19,26 +21,49 @@ let {
   triggerAriaLabel,
   triggerIcon,
   triggerClass = "",
+  triggerDisabled = false,
   triggerLabelClass = "",
+  triggerToolbar = false,
   triggerTone = "neutral",
   items,
   testId,
 }: Props = $props();
 
 let triggerClasses = $derived([
-  "ui-menu__trigger inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border-light bg-bg-secondary px-2.5 py-1.5 text-sm font-medium text-text-primary",
+  "ui-menu__trigger inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border-light bg-bg-secondary px-2.5 py-1.5 text-sm font-medium text-text-primary disabled:cursor-not-allowed disabled:opacity-50",
   triggerTone === "accent" ? "border-accent/30 bg-accent/10 text-accent" : "",
   triggerClass,
 ].filter(Boolean).join(" "));
 </script>
 
+{#snippet triggerContent()}
+  {#if triggerIcon}
+    <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">{@render triggerIcon()}</span>
+  {/if}
+  <span class={`ui-menu__trigger-label min-w-0 overflow-hidden text-ellipsis ${triggerLabelClass}`}>{triggerLabel}</span>
+{/snippet}
+
 <Bits.Root>
-  <Bits.Trigger class={triggerClasses} aria-label={triggerAriaLabel ?? triggerLabel} data-tone={triggerTone} data-testid={testId}>
-    {#if triggerIcon}
-      <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">{@render triggerIcon()}</span>
-    {/if}
-    <span class={`ui-menu__trigger-label min-w-0 overflow-hidden text-ellipsis ${triggerLabelClass}`}>{triggerLabel}</span>
-  </Bits.Trigger>
+  {#if triggerToolbar}
+    <BitsToolbar.Button disabled={triggerDisabled}>
+      {#snippet child({ props })}
+        <Bits.Trigger
+          {...props}
+          class={triggerClasses}
+          aria-label={triggerAriaLabel ?? triggerLabel}
+          data-tone={triggerTone}
+          data-testid={testId}
+          disabled={triggerDisabled}
+        >
+          {@render triggerContent()}
+        </Bits.Trigger>
+      {/snippet}
+    </BitsToolbar.Button>
+  {:else}
+    <Bits.Trigger class={triggerClasses} aria-label={triggerAriaLabel ?? triggerLabel} data-tone={triggerTone} data-testid={testId} disabled={triggerDisabled}>
+      {@render triggerContent()}
+    </Bits.Trigger>
+  {/if}
   <Bits.Portal>
     <Bits.Content class="z-[60] min-w-40 rounded-md border border-border bg-bg-secondary p-1 shadow-lg shadow-black/30" sideOffset={6}>
       {#each items as item (item.id)}

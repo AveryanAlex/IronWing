@@ -3,13 +3,13 @@ import { onDestroy, onMount } from "svelte";
 import { fromStore } from "svelte/store";
 import { Toaster } from "svelte-sonner";
 
-import FirmwareWorkspace from "../../components/firmware/FirmwareWorkspace.svelte";
-import HudWorkspace from "../../components/hud/HudWorkspace.svelte";
-import LogsWorkspace from "../../components/logs/LogsWorkspace.svelte";
-import MissionWorkspace from "../../components/mission/MissionWorkspace.svelte";
-import SetupWorkspace from "../../components/setup/SetupWorkspace.svelte";
-import SettingsWorkspace from "../../components/settings/SettingsWorkspace.svelte";
-import TelemetryWorkspace from "../../components/telemetry/TelemetryWorkspace.svelte";
+import FirmwareWorkspace from "../../features/firmware/components/FirmwareWorkspace.svelte";
+import HudWorkspace from "../../features/hud/components/HudWorkspace.svelte";
+import LogsWorkspace from "../../features/logs/components/LogsWorkspace.svelte";
+import MissionWorkspace from "../../features/mission/components/MissionWorkspace.svelte";
+import SetupWorkspace from "../../features/setup/components/SetupWorkspace.svelte";
+import SettingsWorkspace from "../../features/settings/components/SettingsWorkspace.svelte";
+import TelemetryWorkspace from "../../features/telemetry/components/TelemetryWorkspace.svelte";
 import { queryFlightPath } from "../../logs";
 import {
   buildReplayMarkerFlightPathQuery,

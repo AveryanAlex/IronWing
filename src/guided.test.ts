@@ -20,8 +20,8 @@ describe("guided bridge command wrappers", () => {
     invoke.mockResolvedValue(accepted);
     const { startGuidedSession, updateGuidedSession, stopGuidedSession } = await import("./guided");
 
-    const startRequest = { session: { kind: "goto" as const, latitude_deg: 47.1, longitude_deg: 8.2, altitude_m: 120 } };
-    const updateRequest = { session: { kind: "goto" as const, latitude_deg: 47.3, longitude_deg: 8.4, altitude_m: 130 } };
+    const startRequest = { session: { kind: "goto" as const, latitude_deg: 47.1, longitude_deg: 8.2, altitude_msl_m: 120 } };
+    const updateRequest = { session: { kind: "goto" as const, latitude_deg: 47.3, longitude_deg: 8.4, altitude_msl_m: 130 } };
 
     await expect(startGuidedSession(startRequest)).resolves.toBe(accepted);
     await expect(updateGuidedSession(updateRequest)).resolves.toBe(accepted);
@@ -38,7 +38,7 @@ describe("guided bridge command wrappers", () => {
     invoke.mockRejectedValueOnce(new Error("guided unavailable"));
 
     await expect(startGuidedSession({
-      session: { kind: "goto", latitude_deg: 47.1, longitude_deg: 8.2, altitude_m: 120 },
+      session: { kind: "goto", latitude_deg: 47.1, longitude_deg: 8.2, altitude_msl_m: 120 },
     })).rejects.toThrow("guided unavailable");
   });
 });

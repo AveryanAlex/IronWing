@@ -7,7 +7,8 @@ export type GuidedSession = {
   kind: "goto";
   latitude_deg: number;
   longitude_deg: number;
-  altitude_m: number;
+  /** Target altitude above mean sea level. */
+  altitude_msl_m: number;
 };
 
 export type GuidedStatus = "idle" | "active" | "blocked" | "unavailable";

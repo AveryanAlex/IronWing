@@ -1,8 +1,8 @@
 import type { Page } from "@playwright/test";
 
-import { firmwareWorkspaceTestIds } from "../src/components/firmware/firmware-workspace-test-ids";
-import { missionWorkspaceTestIds } from "../src/components/mission/mission-workspace-test-ids";
-import { setupWorkspaceTestIds } from "../src/components/setup/setup-workspace-test-ids";
+import { firmwareWorkspaceTestIds } from "../src/features/firmware/firmware-workspace-test-ids";
+import { missionWorkspaceTestIds } from "../src/features/mission/mission-workspace-test-ids";
+import { setupWorkspaceTestIds } from "../src/features/setup/setup-workspace-test-ids";
 import {
   closeVehiclePanelDrawer,
   expect,

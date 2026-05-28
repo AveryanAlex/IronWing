@@ -2,8 +2,9 @@ use std::fmt;
 
 use mavkit::dialect::MavCmd;
 use mavkit::{
-    FencePlan, FlightMode, HomePosition, MissionIssue, MissionPlan, ParamStore, ParamWriteResult,
-    RallyPlan, RcOverride, format_param_file, parse_param_file, validate_plan,
+    FencePlan, FlightMode, GeoPoint2d, GeoPoint3dMsl, GuidedSpecific, HomePosition, MissionIssue,
+    MissionPlan, ParamStore, ParamWriteResult, RallyPlan, RcOverride, format_param_file,
+    parse_param_file, validate_plan,
 };
 
 use crate::ipc::{GuidedLiveContext, MissionDownload, RcOverrideChannelWire};
@@ -113,24 +114,38 @@ pub async fn guided_goto(
     vehicle: &mavkit::Vehicle,
     latitude_deg: f64,
     longitude_deg: f64,
-    altitude_m: f32,
+    altitude_msl_m: f32,
 ) -> LiveCommandResult<()> {
-    vehicle
-        .raw()
-        .command_long(
-            MavCmd::MAV_CMD_DO_REPOSITION as u16,
-            [
-                -1.0,
-                0.0,
-                0.0,
-                0.0,
-                latitude_deg as f32,
-                longitude_deg as f32,
-                altitude_m,
-            ],
-        )
+    let session = vehicle
+        .ardupilot()
+        .guided()
         .await
-        .map(|_| ())
+        .map_err(LiveCommandError::vehicle)?;
+    let msl_target = GeoPoint3dMsl {
+        latitude_deg,
+        longitude_deg,
+        altitude_msl_m: f64::from(altitude_msl_m),
+    };
+
+    let command_result = match session.specific() {
+        GuidedSpecific::Copter(copter) => copter.goto_msl(msl_target).await,
+        GuidedSpecific::Plane(plane) => plane.reposition(msl_target).await,
+        GuidedSpecific::Rover(rover) => {
+            rover
+                .drive_to(GeoPoint2d {
+                    latitude_deg,
+                    longitude_deg,
+                })
+                .await
+        }
+        GuidedSpecific::Sub(_) => Err(mavkit::VehicleError::Unsupported(
+            "guided goto with MSL altitude is not supported for submarine vehicles".to_string(),
+        )),
+    };
+    let close_result = session.close().await;
+
+    command_result
+        .and(close_result)
         .map_err(LiveCommandError::vehicle)
 }
 

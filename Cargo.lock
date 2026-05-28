@@ -2614,7 +2614,7 @@ checksum = "2532096657941c2fea9c289d370a250971c689d4f143798ff67113ec042024a5"
 [[package]]
 name = "mavkit"
 version = "0.5.0"
-source = "git+https://github.com/AveryanAlex/mavkit.git?rev=d82883078d09d3d871182d25836fc87be10c85eb#d82883078d09d3d871182d25836fc87be10c85eb"
+source = "git+https://github.com/AveryanAlex/mavkit.git?branch=main#76f0a64bc1bc9392c24e4e550e457b088fed5f7a"
 dependencies = [
  "async-trait",
  "futures",
@@ -2636,7 +2636,7 @@ dependencies = [
 [[package]]
 name = "mavkit-macros"
 version = "0.5.0"
-source = "git+https://github.com/AveryanAlex/mavkit.git?rev=d82883078d09d3d871182d25836fc87be10c85eb#d82883078d09d3d871182d25836fc87be10c85eb"
+source = "git+https://github.com/AveryanAlex/mavkit.git?branch=main#76f0a64bc1bc9392c24e4e550e457b088fed5f7a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2929,7 +2929,7 @@ dependencies = [
  "once_cell",
  "rustix",
  "slab",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4643,7 +4643,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5785,7 +5785,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]

@@ -1,5 +1,6 @@
 <script lang="ts">
-import type { LogsWorkspaceMapHandoff } from "../../components/logs/logs-workspace-types";
+import type { LogsWorkspaceMapHandoff } from "../../features/logs/logs-workspace-types";
+import { Button } from "../../components/ui";
 
 type Props = {
   onMapHandoff?: (handoff: LogsWorkspaceMapHandoff) => void;
@@ -11,11 +12,10 @@ let {
 </script>
 
 <section data-testid="mock-logs-workspace">
-  <button
-    data-testid="mock-logs-path-handoff"
+  <Button
+    testId="mock-logs-path-handoff"
     onclick={() => onMapHandoff({ kind: "path", entryId: "entry-1", startUsec: 100, endUsec: 200 })}
-    type="button"
   >
     handoff
-  </button>
+  </Button>
 </section>

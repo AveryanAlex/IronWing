@@ -6,6 +6,7 @@ import {
     closeVehiclePanelDrawer,
     connectionSelectors,
     expect,
+    expectConnectionConnected,
     expectMissionHistoryState,
     expectMissionLayoutState,
     expectMissionSupportPanels,
@@ -148,7 +149,7 @@ async function connectAndOpenMissionWorkspace(
         },
         guidedState: blockedGuidedState,
     });
-    await expect(page.locator(connectionSelectors.statusText)).toContainText("Connected");
+    await expectConnectionConnected(page);
 
     if (preset === "phone") {
         await closeVehiclePanelDrawer(page);

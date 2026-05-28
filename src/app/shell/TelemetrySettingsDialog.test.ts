@@ -171,8 +171,9 @@ describe("TelemetrySettingsDialog", () => {
     vi.restoreAllMocks();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     cleanup();
+    await new Promise((resolve) => setTimeout(resolve, 30));
   });
 
   it("keeps telemetry cadence editable while disconnected and disables message-rate rows", async () => {

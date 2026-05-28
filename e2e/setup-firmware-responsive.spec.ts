@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
-import { firmwareWorkspaceTestIds } from "../src/components/firmware/firmware-workspace-test-ids";
-import { setupWorkspaceTestIds } from "../src/components/setup/setup-workspace-test-ids";
+import { firmwareWorkspaceTestIds } from "../src/features/firmware/firmware-workspace-test-ids";
+import { setupWorkspaceTestIds } from "../src/features/setup/setup-workspace-test-ids";
 import {
   applyShellViewport,
   closeVehiclePanelDrawer,
@@ -123,15 +123,15 @@ async function runAssembledJourney(
   await selectSetupSectionForTier(page, "overview", preset);
   await expect(page.getByTestId(setupWorkspaceTestIds.overviewSection)).toBeVisible();
 
-  // The wizard pauses into `paused_detour` on nav-away, which maps to the
-  // `in_progress` section status. The status badge lives inside the nav, so
-  // the phone tier needs the drawer re-opened to read it.
+  // The wizard pauses into `paused_detour` on nav-away. The nav now represents
+  // section status iconographically, so keep the assertion tied to the stable
+  // status mount point rather than old status copy.
   if (preset === "phone") {
     await openSetupSectionDrawer(page);
   }
   await expect(
     page.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-beginner_wizard`),
-  ).toContainText(/in progress/i);
+  ).toBeVisible();
   if (preset === "phone") {
     await page
       .getByTestId(setupWorkspaceTestIds.sectionDrawerClose)

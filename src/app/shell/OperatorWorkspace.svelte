@@ -2,8 +2,8 @@
 import { fromStore } from "svelte/store";
 
 import type { OperatorMetricView } from "../../lib/telemetry-selectors";
-import { SplitPane } from "../../components/ui";
-import OverviewMap from "../../components/overview/OverviewMap.svelte";
+import { Alert, Badge, Card, Eyebrow, HelperText, MetricTile, MonoValue, SplitPane } from "../../components/ui";
+import OverviewMap from "../../features/overview/components/OverviewMap.svelte";
 import { appShellTestIds } from "./chrome-state";
 import {
   getMissionPlannerStoreContext,
@@ -139,20 +139,23 @@ let metricGroups = $derived.by<MetricGroup[]>(() => [
   },
 ]);
 
-function metricColorVar(metric: OperatorMetricView): string {
-  if (metric.state === "stale" || metric.state === "unavailable") {
-    return "var(--color-text-muted)";
-  }
+type MetricTileTone = "neutral" | "success" | "warning" | "danger";
+
+function metricTileTone(metric: OperatorMetricView): MetricTileTone {
   switch (metric.tone) {
     case "positive":
-      return "var(--color-success)";
+      return "success";
     case "caution":
-      return "var(--color-warning)";
+      return "warning";
     case "critical":
-      return "var(--color-danger)";
+      return "danger";
     default:
-      return "var(--color-text-primary)";
+      return "neutral";
   }
+}
+
+function metricDimmed(metric: OperatorMetricView) {
+  return metric.state === "stale" || metric.state === "unavailable";
 }
 </script>
 
@@ -185,95 +188,81 @@ function metricColorVar(metric: OperatorMetricView): string {
     {/snippet}
     {#snippet second()}
       <div class="flex h-full flex-col gap-2 overflow-y-auto p-2">
-        <!-- Quality state indicators -->
         {#if view.quality.stale}
-          <div
-            class="rounded-md bg-warning px-2 py-1 text-xs font-semibold text-bg-primary"
-            data-testid="operator-workspace-stale"
-          >
-            <span>Telemetry stale</span>
-          </div>
+          <Alert
+            density="compact"
+            description="Telemetry stale"
+            testId="operator-workspace-stale"
+            variant="warning"
+          />
         {/if}
         {#if view.quality.disconnected}
-          <div
-            class="rounded-md bg-border px-2 py-1 text-xs font-semibold text-text-muted"
-            data-testid="operator-workspace-disconnected"
-          >
-            <span>Disconnected</span>
-          </div>
+          <Alert
+            density="compact"
+            description="Disconnected"
+            testId="operator-workspace-disconnected"
+            variant="info"
+          />
         {/if}
 
-        <!-- Degraded data source badges -->
-        {#if view.quality.telemetry.degraded}
-          <span
-            class="inline-block rounded-md bg-warning px-2 py-1 text-xs font-medium text-bg-primary"
-            data-testid="operator-workspace-degraded-telemetry"
-          >degraded</span>
-        {/if}
-        {#if view.quality.support.degraded}
-          <span
-            class="inline-block rounded-md bg-warning px-2 py-1 text-xs font-medium text-bg-primary"
-            data-testid="operator-workspace-degraded-support"
-          >degraded</span>
-        {/if}
-        {#if view.quality.notices.degraded}
-          <span
-            class="inline-block rounded-md bg-warning px-2 py-1 text-xs font-medium text-bg-primary"
-            data-testid="operator-workspace-degraded-notices"
-          >degraded</span>
-        {/if}
-
-        <!-- Readiness strip -->
-        <div class="py-1 text-xs font-medium text-text-muted" data-testid="operator-workspace-readiness">
-          {view.readiness.label}
+        <div class="flex flex-wrap gap-2">
+          {#if view.quality.telemetry.degraded}
+            <Badge variant="warning" size="sm" shape="rounded" testId="operator-workspace-degraded-telemetry">degraded</Badge>
+          {/if}
+          {#if view.quality.support.degraded}
+            <Badge variant="warning" size="sm" shape="rounded" testId="operator-workspace-degraded-support">degraded</Badge>
+          {/if}
+          {#if view.quality.notices.degraded}
+            <Badge variant="warning" size="sm" shape="rounded" testId="operator-workspace-degraded-notices">degraded</Badge>
+          {/if}
         </div>
 
-        <!-- Metric groups -->
+        <HelperText size="xs" tone="muted" class="py-1" testId="operator-workspace-readiness">
+          {view.readiness.label}
+        </HelperText>
+
         {#each metricGroups as group (group.title)}
           <div>
-            <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-text-muted">{group.title}</h3>
+            <Eyebrow as="div" class="mb-1">{group.title}</Eyebrow>
             <div class="grid grid-cols-2 gap-2">
               {#each group.entries as entry (entry.key)}
-                <div
-                  class="flex min-w-0 flex-col gap-1 rounded-md border border-border bg-bg-secondary px-2 py-2"
-                  data-testid={entry.testId}
-                >
-                  <span class="min-w-0 truncate text-xs font-medium tracking-wide text-text-muted">{entry.label}</span>
-                  <span
-                    class="min-w-0 break-words font-mono text-sm font-medium leading-tight tabular-nums"
-                    style:color={metricColorVar(entry.metric)}
-                  >
-                    {entry.metric.text}
-                  </span>
-                </div>
+                <MetricTile
+                  label={entry.label}
+                  value={entry.metric.text}
+                  density="compact"
+                  mono
+                  stale={metricDimmed(entry.metric)}
+                  tone={metricTileTone(entry.metric)}
+                  testId={entry.testId}
+                />
               {/each}
             </div>
           </div>
         {/each}
 
-        <!-- Status notice strip -->
         <div class="mt-1">
           <div class="mb-1 flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Notices</span>
+            <Eyebrow as="span">Notices</Eyebrow>
             {#if view.notices.length > 0}
-              <span class="text-xs text-text-muted" data-testid="operator-workspace-notice-count">{view.notices.length} shown</span>
+              <HelperText as="span" size="xs" tone="muted" testId="operator-workspace-notice-count">{view.notices.length} shown</HelperText>
             {/if}
           </div>
           {#if view.notices.length === 0}
-            <div class="py-1 text-xs text-text-muted" data-testid="operator-workspace-notices-empty">
+            <HelperText size="xs" tone="muted" class="py-1" testId="operator-workspace-notices-empty">
               No active notices
-            </div>
+            </HelperText>
           {:else}
             <ul class="m-0 flex list-none flex-col gap-1 p-0">
               {#each view.notices as notice (notice.id)}
-                <li
-                  class={[
-                    "rounded-md border border-border bg-bg-secondary px-2 py-1 text-sm text-text-primary",
-                    notice.tone === "critical" && "border-danger text-danger",
-                    notice.tone === "caution" && "border-warning text-warning",
-                  ]}
-                >
-                  {notice.text}
+                <li>
+                  <Card.Root
+                    density="compact"
+                    surface="secondary"
+                    tone={notice.tone === "critical" ? "danger" : notice.tone === "caution" ? "warning" : "neutral"}
+                    class="py-1"
+                  >
+                    <MonoValue as="span" size="sm" tone={notice.tone === "critical" ? "danger" : notice.tone === "caution" ? "warning" : "primary"} wrap>{notice.text}</MonoValue>
+                  </Card.Root>
                 </li>
               {/each}
             </ul>

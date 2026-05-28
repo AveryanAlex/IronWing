@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures/mock-platform";
+import { connectionSelectors, expect, expectConnectionConnecting, expectConnectionIdle, test } from "./fixtures/mock-platform";
 
 test.describe("Negative path: wrong-port connect then cancel", () => {
   test("connecting to wrong port shows Connecting, cancel returns to idle", async ({
@@ -9,32 +9,25 @@ test.describe("Negative path: wrong-port connect then cancel", () => {
     await mockPlatform.reset();
     await mockPlatform.setCommandBehavior("connect_link", { type: "defer" });
 
-    const connectBtn = page.locator('[data-testid="connection-connect-btn"]');
-    const cancelBtn = page.locator('[data-testid="connection-cancel-btn"]');
-    const disconnectBtn = page.locator(
-      '[data-testid="connection-disconnect-btn"]',
-    );
-    const statusText = page.locator('[data-testid="connection-status-text"]');
-    const transportSelect = page.locator(
-      '[data-testid="connection-transport-select"]',
-    );
+    const connectBtn = page.locator(connectionSelectors.connectButton);
+    const cancelBtn = page.locator(connectionSelectors.cancelButton);
+    const transportSelect = page.locator(connectionSelectors.transportSelect);
     const udpBind = page.locator('[data-testid="connection-udp-bind"]');
 
-    await expect(connectBtn).toBeVisible({ timeout: 15_000 });
-    await expect(statusText).toContainText("Idle");
+    await expectConnectionIdle(page, 15_000);
 
     await transportSelect.selectOption("udp");
     await udpBind.fill("0.0.0.0:14551");
 
     await connectBtn.click();
 
-    await expect(statusText).toContainText("Connecting", { timeout: 5_000 });
+    await expectConnectionConnecting(page, 5_000);
     await expect(cancelBtn).toBeVisible();
     await expect(udpBind).toBeDisabled();
 
     await cancelBtn.click();
 
-    await expect(statusText).toContainText("Idle", { timeout: 10_000 });
+    await expectConnectionIdle(page);
     await expect(connectBtn).toBeVisible();
     await expect(cancelBtn).not.toBeVisible();
 

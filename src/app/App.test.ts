@@ -3,6 +3,16 @@
 import { cleanup, render } from "@testing-library/svelte";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
+vi.hoisted(() => {
+  if (typeof globalThis.ResizeObserver === "undefined") {
+    globalThis.ResizeObserver = class ResizeObserverMock {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as typeof ResizeObserver;
+  }
+});
+
 // maplibre-gl requires WebGL which is unavailable in jsdom. Stub the entire
 // module so OverviewMap (mounted inside the full App) does not crash.
 vi.mock("maplibre-gl", () => {

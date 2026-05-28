@@ -35,11 +35,19 @@ function logEntryLocator(page: Page, entryId: string) {
 }
 
 async function selectMissionMode(page: Page, label: "Fence" | "Mission" | "Rally") {
-    await page.getByRole("button", { name: "Select mission editing mode" }).click();
+    const modeButton = page.getByRole("button", { name: "Select mission editing mode" });
+    if ((await modeButton.innerText()).includes(label)) {
+        return;
+    }
+
+    await modeButton.click();
     await page.getByRole("menuitem", { name: label, exact: true }).click();
 }
 
 async function dragChartRange(plot: Locator) {
+    await plot.scrollIntoViewIfNeeded();
+    await expect(plot).toBeVisible();
+
     const box = await plot.boundingBox();
     if (!box) {
         throw new Error("Unable to drag chart range; the chart plot was not laid out.");

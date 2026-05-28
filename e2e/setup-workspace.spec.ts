@@ -1,4 +1,4 @@
-import { setupWorkspaceTestIds } from "../src/components/setup/setup-workspace-test-ids";
+import { setupWorkspaceTestIds } from "../src/features/setup/setup-workspace-test-ids";
 import {
   applyShellViewport,
   expect,
@@ -23,7 +23,7 @@ import {
   setupConnectedVehicleState,
   setupFrameBannerLocator,
   setupFrameInputLocator,
-  setupFrameStageButtonLocator,
+  setupFrameStagedBadgeLocator,
   setupMetadataUnavailableVehicleState,
   setupMotorsEscBannerLocator,
   setupMotorsEscRowAvailabilityLocator,
@@ -89,14 +89,11 @@ test.describe("setup workspace proof", () => {
 
     await expect(page.locator(setupWorkspaceSelectors.notice)).toContainText("Parameter descriptions are unavailable");
     await expect(page.locator(setupWorkspaceSelectors.overviewBanner)).toContainText(
-      "Metadata missing — recovery mode is active",
+      "Parameter descriptions are unavailable",
     );
     await expect(setupNavLocator(page, "frame_orientation")).toHaveAttribute("data-availability", "blocked");
     await expect(setupNavLocator(page, "rc_receiver")).toHaveAttribute("data-availability", "blocked");
     await expect(setupNavLocator(page, "calibration")).toHaveAttribute("data-availability", "blocked");
-    await expect(page.locator(setupWorkspaceSelectors.detailRecovery)).toContainText(
-      "Full Parameters stays separate",
-    );
 
     await setupNavLocator(page, "full_parameters").click();
 
@@ -165,15 +162,14 @@ test.describe("setup workspace proof", () => {
 
     await setupOverviewQuickActionLocator(page, "flight_modes").click();
     await expect(page.locator(setupWorkspaceSelectors.flightModesSection)).toBeVisible();
-    await expect(page.locator(setupWorkspaceSelectors.flightModesAvailabilityState)).toContainText("Live");
-    await expect(page.locator(setupWorkspaceSelectors.flightModesCurrentMode)).toContainText("LOITER");
+    await expect(page.locator(`[data-testid="${setupWorkspaceTestIds.flightModesInputPrefix}-FLTMODE1"]`)).toBeEnabled();
     await expect(page.locator(setupWorkspaceSelectors.flightModesDocsLink)).toHaveAttribute(
       "href",
       /flight-mode-configuration/,
     );
 
     await page.locator(`[data-testid="${setupWorkspaceTestIds.flightModesInputPrefix}-FLTMODE1"]`).selectOption("6");
-    await page.locator(`[data-testid="${setupWorkspaceTestIds.flightModesStageButtonPrefix}-FLTMODE1"]`).click();
+    await expect(page.locator(`[data-testid="${setupWorkspaceTestIds.flightModesStagedPrefix}-FLTMODE1"]`)).toBeVisible();
     if (!await page.locator(parameterWorkspaceSelectors.reviewSurface).isVisible()) {
       await page.locator(parameterWorkspaceSelectors.reviewToggle).click();
     }
@@ -253,17 +249,13 @@ test.describe("setup workspace proof", () => {
     await setupNavLocator(page, "flight_modes").click();
 
     await expect(page.locator(setupWorkspaceSelectors.flightModesSection)).toBeVisible();
-    await expect(page.locator(setupWorkspaceSelectors.flightModesAvailabilityState)).toContainText("Mode list unavailable");
-    await expect(page.locator(setupWorkspaceSelectors.flightModesAvailabilityDetail)).toContainText(
-      "Available flight modes have not been confirmed",
-    );
     await expect(page.locator(`[data-testid="${setupWorkspaceTestIds.flightModesBannerPrefix}-recovery"]`)).toContainText(
       "fail-closed",
     );
-    await expect(page.locator(`[data-testid="${setupWorkspaceTestIds.flightModesStageButtonPrefix}-FLTMODE1"]`)).toBeDisabled();
+    await expect(page.locator(`[data-testid="${setupWorkspaceTestIds.flightModesInputPrefix}-FLTMODE1"]`)).toBeDisabled();
 
     await setupNavLocator(page, "overview").click();
-    await expect(setupOverviewCardLocator(page, "flight_modes")).toContainText("Flight modes");
+    await expect(setupOverviewCardLocator(page, "flight_modes")).toContainText("Flight Modes");
     await expect(setupOverviewMetricLocator(page, "status")).toContainText("unconfirmed");
   });
 
@@ -305,8 +297,8 @@ test.describe("setup workspace proof", () => {
     );
     await expect(setupFrameInputLocator(page, "Q_ENABLE")).toBeVisible();
 
-    await setupFrameInputLocator(page, "Q_ENABLE").selectOption("1");
-    await setupFrameStageButtonLocator(page, "Q_ENABLE").click();
+    await setupFrameInputLocator(page, "Q_ENABLE").click();
+    await expect(setupFrameStagedBadgeLocator(page, "Q_ENABLE")).toBeVisible();
 
     await expect(page.locator(parameterWorkspaceSelectors.reviewTray)).toBeVisible();
     await page.locator(parameterWorkspaceSelectors.reviewToggle).click();

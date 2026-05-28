@@ -52,7 +52,7 @@ pub enum GuidedSession {
     Goto {
         latitude_deg: f64,
         longitude_deg: f64,
-        altitude_m: f32,
+        altitude_msl_m: f32,
     },
 }
 

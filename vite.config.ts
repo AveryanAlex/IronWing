@@ -104,6 +104,12 @@ export default defineConfig({
   plugins: [ironwingWebWasmPlugin(platformDir === "web"), svelte(), tailwindcss()],
   resolve: {
     alias: {
+      "@app": fileURLToPath(new URL("src/app", import.meta.url)),
+      "@components": fileURLToPath(new URL("src/components", import.meta.url)),
+      "@features": fileURLToPath(new URL("src/features", import.meta.url)),
+      "@ui": fileURLToPath(new URL("src/components/ui", import.meta.url)),
+      "@lib": fileURLToPath(new URL("src/lib", import.meta.url)),
+      "@data": fileURLToPath(new URL("src/data", import.meta.url)),
       "@platform/core": fileURLToPath(new URL(`src/platform/${platformDir}/core.ts`, import.meta.url)),
       "@platform/event": fileURLToPath(new URL(`src/platform/${platformDir}/event.ts`, import.meta.url)),
       "@platform/http": fileURLToPath(new URL(`src/platform/${platformDir}/http.ts`, import.meta.url)),

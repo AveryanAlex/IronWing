@@ -3,6 +3,9 @@ import {
     applyShellViewport,
     connectionSelectors,
     expect,
+    expectConnectionConnected,
+    expectConnectionConnecting,
+    expectConnectionIdle,
     expectDockedVehiclePanel,
     expectOperatorWorkspace,
     expectRuntimeDiagnostics,
@@ -92,7 +95,6 @@ test.describe("mocked connect and operator telemetry workspace", () => {
         await mockPlatform.waitForOperatorWorkspace();
         await mockPlatform.setCommandBehavior("connect_link", { type: "defer" });
 
-        const statusText = page.locator(connectionSelectors.statusText);
         const connectBtn = page.locator(connectionSelectors.connectButton);
         const cancelBtn = page.locator(connectionSelectors.cancelButton);
         const disconnectBtn = page.locator(connectionSelectors.disconnectButton);
@@ -107,8 +109,7 @@ test.describe("mocked connect and operator telemetry workspace", () => {
         await expectRuntimeDiagnostics(page);
         await expectOperatorWorkspace(page);
         await expectDockedVehiclePanel(page, "desktop");
-        await expect(connectBtn).toBeVisible({ timeout: 15_000 });
-        await expect(statusText).toContainText("Idle");
+        await expectConnectionIdle(page, 15_000);
         await expect(bootstrapDiagnostics).toContainText("ready");
         await expect(lastPhaseDiagnostics).toContainText("ready");
         await expect(activeSourceDiagnostics).toContainText("live");
@@ -121,7 +122,7 @@ test.describe("mocked connect and operator telemetry workspace", () => {
         await tcpAddress.fill("127.0.0.1:5760");
         await connectBtn.click();
 
-        await expect(statusText).toContainText("Connecting", { timeout: 10_000 });
+        await expectConnectionConnecting(page);
         await expect(cancelBtn).toBeVisible();
         await expect(tcpAddress).toBeDisabled();
         await expect.poll(() => mockPlatform.getLiveEnvelope()).not.toBeNull();
@@ -146,7 +147,7 @@ test.describe("mocked connect and operator telemetry workspace", () => {
         await mockPlatform.emitLiveTelemetryDomain(partialBootstrapTelemetry);
         await mockPlatform.emitLiveSupportDomain(bootstrapSupport);
 
-        await expect(statusText).toContainText("Connected", { timeout: 10_000 });
+        await expectConnectionConnected(page);
         await expect(disconnectBtn).toBeVisible();
         await expect(cancelBtn).toHaveCount(0);
         await expect(lastPhaseDiagnostics).toContainText("ready");
@@ -169,7 +170,7 @@ test.describe("mocked connect and operator telemetry workspace", () => {
 
         await disconnectBtn.click();
 
-        await expect(statusText).toContainText("Idle", { timeout: 10_000 });
+        await expectConnectionIdle(page);
         await expect(connectBtn).toBeVisible();
         await expect(tcpAddress).toBeEnabled();
         await expect(lastPhaseDiagnostics).toContainText("ready");

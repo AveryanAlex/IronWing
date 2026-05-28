@@ -69,10 +69,10 @@ import {
     createShellChromeState,
     resolveShellTier,
 } from "./chrome-state";
-import { parameterWorkspaceTestIds } from "../../components/params/parameter-workspace-test-ids";
-import { setupWorkspaceTestIds } from "../../components/setup/setup-workspace-test-ids";
-import { missionWorkspaceTestIds } from "../../components/mission/mission-workspace-test-ids";
-import { firmwareWorkspaceTestIds } from "../../components/firmware/firmware-workspace-test-ids";
+import { parameterWorkspaceTestIds } from "../../features/params/parameter-workspace-test-ids";
+import { setupWorkspaceTestIds } from "../../features/setup/setup-workspace-test-ids";
+import { missionWorkspaceTestIds } from "../../features/mission/mission-workspace-test-ids";
+import { firmwareWorkspaceTestIds } from "../../features/firmware/firmware-workspace-test-ids";
 import { createParamsStore } from "../../lib/stores/params";
 import { markRuntimeReady, resetRuntimeState } from "../../lib/stores/runtime";
 import {

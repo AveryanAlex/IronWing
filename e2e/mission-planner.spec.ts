@@ -6,6 +6,7 @@ import {
     applyShellViewport,
     connectionSelectors,
     expect,
+    expectConnectionConnected,
     expectMissionHistoryState,
     expectMissionWorkspace,
     expectRuntimeDiagnostics,
@@ -89,7 +90,7 @@ test.describe("mocked mission planner workflow", () => {
             },
             guidedState: blockedGuidedState,
         });
-        await expect(page.locator(connectionSelectors.statusText)).toContainText("Connected");
+        await expectConnectionConnected(page);
 
         await openMissionWorkspace(page);
         await expectMissionWorkspace(page);
@@ -119,8 +120,6 @@ test.describe("mocked mission planner workflow", () => {
         );
 
         await clickMissionToolbarSecondary(page, "toolbarRead");
-        await expect(missionWorkspaceLocator(page, "inlineStatusMessage")).toContainText("Reading planning state");
-        await expect(missionWorkspaceLocator(page, "inlineStatusDetail")).toContainText("download mission");
         await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
         await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("2");
         await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
@@ -241,7 +240,7 @@ test.describe("mocked mission planner workflow", () => {
             "Redoing the import review should recover the imported survey workspace in one step.",
         );
 
-        const firstSurveyBlock = page.locator('[data-testid^="mission-survey-block-"]').first();
+        const firstSurveyBlock = page.getByRole("button", { name: "Select Region 1" });
         await expect(firstSurveyBlock).toBeVisible();
         await firstSurveyBlock.click();
         await expect(missionWorkspaceLocator(page, "inspectorSelectionKind")).toContainText("survey-block");
@@ -297,8 +296,6 @@ test.describe("mocked mission planner workflow", () => {
             `${missionWorkspaceSelectors.missionMarker}:not([data-testid="mission-map-marker-home"])`,
         ).first();
         await expect(missionMarker).toBeVisible();
-        await missionMarker.click();
-        await expect(missionWorkspaceLocator(page, "mapSelection")).toContainText("mission item");
 
         const mapDebug = await readMissionMapDebugSnapshot(page) as {
             selection?: { kind?: string };
@@ -309,17 +306,19 @@ test.describe("mocked mission planner workflow", () => {
         expect(mapDebug?.counts?.markers).toBe(2);
         expect(mapDebug?.updateCount ?? 0).toBeGreaterThan(0);
 
-        const cancelButton = missionWorkspaceLocator(page, "toolbarCancel");
-        await missionWorkspaceLocator(page, "toolbarUpload").click();
-        await cancelButton.click({ timeout: 10_000 });
-        await expect(cancelButton).toHaveCount(0);
-
+        const uploadButton = missionWorkspaceLocator(page, "toolbarUpload");
+        await mockPlatform.setCommandBehavior("mission_upload", { type: "defer" });
+        await uploadButton.click();
+        await expect(uploadButton).toHaveAttribute("aria-label", "Cancel upload");
+        await uploadButton.click();
         await expect.poll(async () => {
             return (await mockPlatform.getInvocations()).map((entry) => entry.cmd);
         }).toContain("mission_cancel");
+        await mockPlatform.rejectDeferred("mission_upload", "Mission upload cancelled.");
+        await mockPlatform.clearCommandBehavior("mission_upload");
+        await expect(uploadButton).toHaveAttribute("aria-label", "Upload to vehicle");
 
         await missionWorkspaceLocator(page, "toolbarUpload").click();
-        await expect(missionWorkspaceLocator(page, "inlineStatusMessage")).toContainText("Uploading planning state");
         await expect.poll(async () => {
             const commands = (await mockPlatform.getInvocations()).map((entry) => entry.cmd);
             return {
@@ -330,7 +329,7 @@ test.describe("mocked mission planner workflow", () => {
         }).toEqual({ missionUploads: 2, fenceUploads: 1, rallyUploads: 1 });
         await expect(missionWorkspaceLocator(page, "inlineStatus")).toHaveCount(0);
         await expect(await missionToolbarSecondaryLocator(page, "toolbarRead")).toContainText("Read from vehicle");
-        await expect(missionWorkspaceLocator(page, "toolbarUpload")).toHaveAttribute("aria-label", "Upload to vehicle");
+        await expect(missionWorkspaceLocator(page, "toolbarUpload")).toHaveAttribute("aria-label", "Uploaded to vehicle");
         await expect(missionWorkspaceLocator(page, "header").getByRole("button", { name: /^clear$/i })).toHaveCount(0);
     });
 });

@@ -1,8 +1,8 @@
-import { firmwareWorkspaceTestIds } from "../../src/components/firmware/firmware-workspace-test-ids";
-import { missionWorkspaceTestIds } from "../../src/components/mission/mission-workspace-test-ids";
-import type { MissionMapDebugSnapshot } from "../../src/components/mission/mission-map-debug";
-import { setupWorkspaceTestIds } from "../../src/components/setup/setup-workspace-test-ids";
-import { test as base, expect, type Locator, type Page } from "@playwright/test";
+import { firmwareWorkspaceTestIds } from "../../src/features/firmware/firmware-workspace-test-ids";
+import { missionWorkspaceTestIds } from "../../src/features/mission/mission-workspace-test-ids";
+import type { MissionMapDebugSnapshot } from "../../src/features/mission/mission-map-debug";
+import { setupWorkspaceTestIds } from "../../src/features/setup/setup-workspace-test-ids";
+import { test as base, expect, type Locator, type Page, type Route } from "@playwright/test";
 import type { OpenSessionSnapshot } from "../../src/session";
 import type { LogLibraryCatalog, LogProgress } from "../../src/logs";
 import type { PlaybackStateSnapshot } from "../../src/playback";
@@ -39,7 +39,6 @@ export const runtimeSelectors = {
 } as const;
 
 export const connectionSelectors = {
-    statusText: '[data-testid="connection-status-text"]',
     transportSelect: '[data-testid="connection-transport-select"]',
     demoPreset: '[data-testid="connection-demo-preset"]',
     tcpAddress: '[data-testid="connection-tcp-address"]',
@@ -52,6 +51,24 @@ export const connectionSelectors = {
     diagnosticsEnvelope: '[data-testid="connection-diagnostics-envelope"]',
     diagnosticsBootstrap: '[data-testid="connection-diagnostics-bootstrap"]',
 } as const;
+
+export async function expectConnectionIdle(page: Page, timeout = 10_000, message?: string): Promise<void> {
+    await expect(page.locator(connectionSelectors.connectButton), message).toBeVisible({ timeout });
+    await expect(page.locator(connectionSelectors.cancelButton)).toHaveCount(0);
+    await expect(page.locator(connectionSelectors.disconnectButton)).toHaveCount(0);
+}
+
+export async function expectConnectionConnecting(page: Page, timeout = 10_000, message?: string): Promise<void> {
+    await expect(page.locator(connectionSelectors.cancelButton), message).toBeVisible({ timeout });
+    await expect(page.locator(connectionSelectors.connectButton)).toHaveCount(0);
+    await expect(page.locator(connectionSelectors.disconnectButton)).toHaveCount(0);
+}
+
+export async function expectConnectionConnected(page: Page, timeout = 10_000, message?: string): Promise<void> {
+    await expect(page.locator(connectionSelectors.disconnectButton), message).toBeVisible({ timeout });
+    await expect(page.locator(connectionSelectors.connectButton)).toHaveCount(0);
+    await expect(page.locator(connectionSelectors.cancelButton)).toHaveCount(0);
+}
 
 export const liveSurfaceSelectors = {
     stateValue: '[data-testid="telemetry-state-value"]',
@@ -322,7 +339,6 @@ export const missionWorkspaceSelectors = {
     map: `[data-testid="${missionWorkspaceTestIds.map}"]`,
     mapSurface: `[data-testid="${missionWorkspaceTestIds.mapSurface}"]`,
     mapDrawSurface: `[data-testid="${missionWorkspaceTestIds.mapDrawSurface}"]`,
-    mapStatus: `[data-testid="${missionWorkspaceTestIds.mapStatus}"]`,
     mapSelection: `[data-testid="${missionWorkspaceTestIds.mapSelection}"]`,
     mapDrawMode: `[data-testid="${missionWorkspaceTestIds.mapDrawMode}"]`,
     mapDragState: `[data-testid="${missionWorkspaceTestIds.mapDragState}"]`,
@@ -1205,7 +1221,7 @@ export async function requireMissionMapDebugSnapshot(page: Page, context: string
     const snapshot = await readMissionMapDebugSnapshot(page);
     if (!isMissionMapDebugSnapshot(snapshot)) {
         throw new Error(
-            `Mission map debug snapshot was missing or malformed while ${context}. Keep mock-only map diagnostics aligned with src/components/mission/mission-map-debug.ts instead of guessing from the DOM.`,
+            `Mission map debug snapshot was missing or malformed while ${context}. Keep mock-only map diagnostics aligned with src/features/mission/mission-map-debug.ts instead of guessing from the DOM.`,
         );
     }
 
@@ -1297,8 +1313,8 @@ export function setupRcInputLocator(page: Page, name: string): Locator {
     return page.locator(`[data-testid="${setupWorkspaceTestIds.rcInputPrefix}-${name}"]`);
 }
 
-export function setupRcStageButtonLocator(page: Page, name: string): Locator {
-    return page.locator(`[data-testid="${setupWorkspaceTestIds.rcStageButtonPrefix}-${name}"]`);
+export function setupRcStagedBadgeLocator(page: Page, name: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.rcStagedPrefix}-${name}"]`);
 }
 
 export function setupFrameBannerLocator(page: Page, bannerId: string): Locator {
@@ -1309,8 +1325,8 @@ export function setupFrameInputLocator(page: Page, name: string): Locator {
     return page.locator(`[data-testid="${setupWorkspaceTestIds.frameInputPrefix}-${name}"]`);
 }
 
-export function setupFrameStageButtonLocator(page: Page, name: string): Locator {
-    return page.locator(`[data-testid="${setupWorkspaceTestIds.frameStageButtonPrefix}-${name}"]`);
+export function setupFrameStagedBadgeLocator(page: Page, name: string): Locator {
+    return page.locator(`[data-testid="${setupWorkspaceTestIds.frameStagedPrefix}-${name}"]`);
 }
 
 export function setupMotorsEscBannerLocator(page: Page, bannerId: string): Locator {
@@ -1610,13 +1626,16 @@ const NO_DATA_TERRAIN_TILE_PNG = Buffer.from(
 );
 
 export async function mockTerrainNoData(page: Page): Promise<void> {
-    await page.route("**/elevation-tiles-prod/terrarium/**/*.png", async (route) => {
+    const fulfillNoDataTile = async (route: Route) => {
         await route.fulfill({
             status: 200,
             contentType: "image/png",
             body: NO_DATA_TERRAIN_TILE_PNG,
         });
-    });
+    };
+
+    await page.route("**/elevation-tiles-prod/terrarium/**/*.png", fulfillNoDataTile);
+    await page.route("**/tiles.mapterhorn.com/**/*.webp", fulfillNoDataTile);
 }
 
 export async function expectMissionLayoutState(page: Page, expected: MissionLayoutExpectations): Promise<void> {

@@ -1,76 +1,156 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
+import type { HTMLButtonAttributes } from "svelte/elements";
+import { cn } from "../../lib/utils";
 
-type Tone = "neutral" | "accent" | "success" | "warning" | "danger";
-type Size = "sm" | "md" | "lg";
+type ButtonVariant = "default" | "secondary" | "outline" | "ghost" | "destructive" | "warning" | "link" | "soft" | "solid" | "bare";
+type ButtonSize = "sm" | "default" | "lg" | "icon-sm" | "icon" | "icon-lg";
+type ButtonTone = "neutral" | "accent" | "success" | "warning" | "danger";
+type ButtonShape = "default" | "pill";
+type LegacyTone = ButtonTone;
+type LegacySize = "md";
 
-type Props = {
-  tone?: Tone;
-  size?: Size;
-  type?: "button" | "submit" | "reset";
+type Props = Omit<HTMLButtonAttributes, "class" | "children" | "disabled" | "size"> & {
+  variant?: ButtonVariant;
+  tone?: ButtonTone;
+  shape?: ButtonShape;
+  selected?: boolean;
+  size?: ButtonSize | LegacySize;
   disabled?: boolean;
   loading?: boolean;
   ariaLabel?: string;
-  title?: string;
   testId?: string;
-  onclick?: (event: MouseEvent) => void;
+  class?: string;
   children?: Snippet;
 };
 
-const sizeClasses: Record<Size, string> = {
-  sm: "h-7 px-2.5 text-xs",
-  md: "h-8 px-3 text-sm",
-  lg: "h-10 px-4 text-sm",
+const sizeClasses: Record<ButtonSize, string> = {
+  sm: "h-8 px-3 text-xs",
+  default: "h-9 px-4 text-sm",
+  lg: "h-10 px-5 text-sm",
+  "icon-sm": "size-8 p-0",
+  icon: "size-9 p-0",
+  "icon-lg": "size-10 p-0",
 };
 
-const toneClasses: Record<Tone, string> = {
-  neutral: "border-border-light bg-bg-secondary text-text-primary enabled:hover:bg-bg-tertiary",
-  accent: "border-transparent bg-accent text-bg-primary enabled:hover:bg-accent-hover",
+const variantClasses: Record<ButtonVariant, string> = {
+  default: "border-transparent bg-accent text-bg-primary shadow-sm enabled:hover:bg-accent-hover",
+  secondary: "border-border-light bg-bg-secondary text-text-primary shadow-sm enabled:hover:bg-bg-tertiary",
+  outline: "border-border-light bg-transparent text-text-primary enabled:hover:bg-bg-secondary",
+  ghost: "border-transparent bg-transparent text-text-primary enabled:hover:bg-bg-secondary",
+  destructive: "border-transparent bg-danger text-bg-primary shadow-sm enabled:hover:bg-danger/90",
+  warning: "border-transparent bg-warning text-bg-primary shadow-sm enabled:hover:brightness-105",
+  link: "h-auto border-transparent bg-transparent px-0 text-accent underline-offset-4 enabled:hover:underline",
+  soft: "border-border-light bg-bg-secondary text-text-primary shadow-sm enabled:hover:bg-bg-tertiary",
+  solid: "border-transparent bg-accent text-bg-primary shadow-sm enabled:hover:bg-accent-hover",
+  bare: "border-transparent bg-transparent shadow-none enabled:hover:bg-transparent",
+};
+
+const solidToneClasses: Record<ButtonTone, string> = {
+  neutral: "border-border-light bg-bg-secondary text-text-primary shadow-sm enabled:hover:bg-bg-tertiary",
+  accent: "border-transparent bg-accent text-bg-primary shadow-sm enabled:hover:bg-accent-hover",
+  success: "border-transparent bg-success text-black shadow-sm enabled:hover:opacity-90",
+  warning: "border-transparent bg-warning text-bg-primary shadow-sm enabled:hover:brightness-105",
+  danger: "border-transparent bg-danger text-bg-primary shadow-sm enabled:hover:bg-danger/90",
+};
+
+const softToneClasses: Record<ButtonTone, string> = {
+  neutral: "border-border-light bg-bg-secondary text-text-primary shadow-sm enabled:hover:bg-bg-tertiary",
+  accent: "border-accent/40 bg-accent/10 text-accent enabled:hover:bg-accent/15",
   success: "border-success/30 bg-success/10 text-success enabled:hover:bg-success/15",
-  warning: "border-warning/30 bg-warning/10 text-warning enabled:hover:bg-warning/15",
-  danger: "border-danger/30 bg-danger/10 text-danger enabled:hover:bg-danger/15",
+  warning: "border-warning/40 bg-warning/10 text-warning enabled:hover:bg-warning/15",
+  danger: "border-danger/40 bg-danger/10 text-danger enabled:hover:bg-danger/15",
+};
+
+const quietToneClasses: Record<ButtonTone, string> = {
+  neutral: "text-text-muted enabled:hover:text-text-secondary",
+  accent: "text-accent enabled:hover:text-accent",
+  success: "text-success enabled:hover:text-success",
+  warning: "text-warning enabled:hover:text-warning",
+  danger: "text-danger enabled:hover:text-danger",
+};
+
+const shapeClasses: Record<ButtonShape, string> = {
+  default: "rounded-md",
+  pill: "rounded-full",
+};
+
+const toneVariant: Record<LegacyTone, ButtonVariant> = {
+  neutral: "secondary",
+  accent: "default",
+  success: "outline",
+  warning: "warning",
+  danger: "destructive",
 };
 
 let {
-  tone = "neutral",
-  size = "md",
+  variant,
+  tone,
+  shape = "default",
+  selected = false,
+  size = "default",
   type = "button",
   disabled = false,
   loading = false,
   ariaLabel,
-  title,
   testId,
   onclick,
+  class: className,
   children,
+  ...restProps
 }: Props = $props();
 
-function handleClick(event: MouseEvent) {
-  if (disabled || loading) {
-    return;
+let resolvedVariant = $derived(variant ?? (tone ? toneVariant[tone] : "default"));
+let resolvedSize = $derived(size === "md" ? "default" : size);
+let resolvedTone = $derived<ButtonTone>(tone ?? (resolvedVariant === "destructive" ? "danger" : resolvedVariant === "warning" ? "warning" : "accent"));
+let resolvedVariantClass = $derived.by(() => {
+  if (resolvedVariant === "soft") return softToneClasses[resolvedTone];
+  if (resolvedVariant === "solid") return solidToneClasses[resolvedTone];
+  if ((resolvedVariant === "outline" || resolvedVariant === "ghost" || resolvedVariant === "bare") && tone) {
+    return cn(variantClasses[resolvedVariant], quietToneClasses[tone]);
   }
-  onclick?.(event);
-}
+  return variantClasses[resolvedVariant];
+});
 
 let buttonClass = $derived(
-  [
-    "inline-flex items-center justify-center gap-1.5 rounded-md border font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 disabled:cursor-not-allowed disabled:opacity-50",
-    sizeClasses[size],
-    toneClasses[tone],
-  ].join(" "),
+  cn(
+    "inline-flex items-center justify-center gap-2 border font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+    shapeClasses[shape],
+    sizeClasses[resolvedSize],
+    resolvedVariantClass,
+    selected && resolvedVariant !== "soft" && resolvedVariant !== "solid" && softToneClasses[resolvedTone],
+    className,
+  ),
 );
+
+function handleClick(event: MouseEvent & { currentTarget: EventTarget & HTMLButtonElement }) {
+  if (disabled || loading) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+
+  onclick?.(event);
+}
 </script>
 
 <button
+  {...restProps}
   class={buttonClass}
-  data-tone={tone}
-  data-size={size}
-  data-testid={testId}
   aria-label={ariaLabel}
-  title={title}
+  data-size={resolvedSize}
+  data-shape={shape}
+  data-selected={selected || undefined}
+  data-tone={tone}
+  data-testid={testId}
+  data-variant={resolvedVariant}
   aria-busy={loading || undefined}
   disabled={disabled || loading}
   {type}
   onclick={handleClick}
 >
+  {#if loading}
+    <span aria-hidden="true" class="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+  {/if}
   {@render children?.()}
 </button>

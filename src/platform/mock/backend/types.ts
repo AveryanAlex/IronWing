@@ -101,7 +101,7 @@ export type MockGuidedBlockingReason =
 
 export type MockGuidedStateValue = {
   status: "idle" | "active" | "blocked" | "unavailable";
-  session: null | { kind: "goto"; latitude_deg: number; longitude_deg: number; altitude_m: number };
+  session: null | { kind: "goto"; latitude_deg: number; longitude_deg: number; altitude_msl_m: number };
   entered_at_unix_msec: number | null;
   blocking_reason: MockGuidedBlockingReason | null;
   termination: null | { reason: "disconnect" | "mode_change" | "source_switch" | "vehicle_missing"; at_unix_msec: number; message: string };
@@ -143,7 +143,7 @@ export type MockBackendState = {
   guidedTermination: null | { reason: "disconnect" | "mode_change" | "source_switch" | "vehicle_missing"; at_unix_msec: number; message: string };
   guidedLastCommand: MockGuidedStateValue["last_command"];
   guided: null | {
-    session: { kind: "goto"; latitude_deg: number; longitude_deg: number; altitude_m: number };
+    session: { kind: "goto"; latitude_deg: number; longitude_deg: number; altitude_msl_m: number };
     entered_at_unix_msec: number;
   };
 };

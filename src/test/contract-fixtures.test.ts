@@ -116,13 +116,13 @@ type ContractOpenSessionSnapshot = {
 
 function expectGuidedSession(value: unknown, label: string): GuidedSession {
   const object = expectRecord(value, label);
-  expectExactKeys(object, label, ["kind", "latitude_deg", "longitude_deg", "altitude_m"]);
+  expectExactKeys(object, label, ["kind", "latitude_deg", "longitude_deg", "altitude_msl_m"]);
   expect(object.kind).toBe("goto");
   return {
     kind: "goto",
     latitude_deg: expectNumber(object.latitude_deg, `${label}.latitude_deg`),
     longitude_deg: expectNumber(object.longitude_deg, `${label}.longitude_deg`),
-    altitude_m: expectNumber(object.altitude_m, `${label}.altitude_m`),
+    altitude_msl_m: expectNumber(object.altitude_msl_m, `${label}.altitude_msl_m`),
   };
 }
 

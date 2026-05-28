@@ -3,6 +3,8 @@ import {
     applyShellViewport,
     connectionSelectors,
     expect,
+    expectConnectionConnected,
+    expectConnectionConnecting,
     expectDockedVehiclePanel,
     openTelemetrySettings,
     openVehiclePanelDrawer,
@@ -54,18 +56,14 @@ async function connectLiveSession(
     await page.locator(connectionSelectors.tcpAddress).fill("127.0.0.1:5760");
     await page.locator(connectionSelectors.connectButton).click();
 
-    await expect(page.locator(connectionSelectors.statusText)).toContainText("Connecting", {
-        timeout: 10_000,
-    });
+    await expectConnectionConnecting(page);
 
     await mockPlatform.resolveDeferredConnectLink({
         vehicleState: connectedVehicleState,
         guidedState,
     });
 
-    await expect(page.locator(connectionSelectors.statusText)).toContainText("Connected", {
-        timeout: 10_000,
-    });
+    await expectConnectionConnected(page);
 }
 
 test.describe("telemetry settings actions", () => {
@@ -97,7 +95,8 @@ test.describe("telemetry settings actions", () => {
         await expect.poll(async () => (await mockPlatform.getInvocations()).filter((entry) => entry.cmd === "set_message_rate").length).toBe(1);
         await expect.poll(async () => {
             const invocations = await mockPlatform.getInvocations();
-            return invocations.filter((entry) => entry.cmd === "set_message_rate").at(-1)?.args ?? null;
+            const rateInvocations = invocations.filter((entry) => entry.cmd === "set_message_rate");
+            return rateInvocations[rateInvocations.length - 1]?.args ?? null;
         }).toEqual({ messageId: 33, rateHz: 6 });
 
         await mockPlatform.rejectDeferred("set_message_rate", "row rejected");

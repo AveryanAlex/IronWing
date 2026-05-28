@@ -8,10 +8,10 @@ import type { ParamsStore, ParamsStoreState } from "../lib/stores/params";
 import type { SessionStoreState } from "../lib/stores/session-state";
 import { missingDomainValue } from "../lib/domain-status";
 import { withParameterWorkspaceContext, withSessionContext } from "../test/context-harnesses";
-import ParameterWorkspace from "./params/ParameterWorkspace.svelte";
-import { parameterWorkspaceTestIds } from "./params/parameter-workspace-test-ids";
-import FlightControlsPanel from "./flight/FlightControlsPanel.svelte";
-import ArmSlider from "./flight/ArmSlider.svelte";
+import ParameterWorkspace from "../features/params/components/ParameterWorkspace.svelte";
+import { parameterWorkspaceTestIds } from "../features/params/parameter-workspace-test-ids";
+import FlightControlsPanel from "../features/flight/components/FlightControlsPanel.svelte";
+import ArmSlider from "../features/flight/components/ArmSlider.svelte";
 import { guidedTakeoff } from "../guided";
 import { setFlightMode } from "../telemetry";
 
@@ -138,7 +138,10 @@ function createSessionState(activeSource: "live" | "playback"): SessionStoreStat
       mode: "udp",
       udpBind: "0.0.0.0:14550",
       tcpAddress: "127.0.0.1:5760",
+      websocketUrl: "ws://127.0.0.1:14560",
       serialPort: "",
+      webSerialPortId: "",
+      webBluetoothDeviceId: "",
       baud: 57600,
       selectedBtDevice: "",
       takeoffAlt: "10",
@@ -179,6 +182,7 @@ describe("replay-readonly active command surfaces", () => {
     expect(screen.getByLabelText("Flight mode")).toHaveProperty("disabled", true);
     expect(screen.getByText("Takeoff")).toHaveProperty("disabled", true);
     expect(screen.getByText("Arm")).toHaveProperty("disabled", true);
+    expect(screen.queryByRole("group", { name: "Quick flight modes" })).toBeNull();
     expect(screen.getByTestId("arm-replay-readonly-banner").textContent).toContain("Replay is read-only");
   });
 
@@ -210,5 +214,9 @@ describe("replay-readonly active command surfaces", () => {
 
     await fireEvent.change(modeSelect, { target: { value: "5" } });
     expect(vi.mocked(setFlightMode)).toHaveBeenCalledWith(5);
+    expect(screen.queryByRole("group", { name: "Quick flight modes" })).toBeNull();
+    expect(screen.getByTestId("arm-state-slider-thumb").className).toContain("left-1/2");
+    expect(screen.getByTestId("arm-state-slider-thumb").className).toContain("bg-danger/45");
+    expect(screen.getByRole("button", { name: "Arm" }).getAttribute("data-tone")).toBe("danger");
   });
 });

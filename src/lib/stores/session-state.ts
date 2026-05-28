@@ -31,6 +31,8 @@ export type SessionBootstrapState = {
   playbackCursorUsec: number | null;
 };
 
+export type ConnectionRequestPhase = "idle" | "connecting" | "cancelling" | "disconnecting";
+
 export type SessionStoreState = {
   hydrated: boolean;
   lastPhase: SessionStorePhase;
@@ -53,6 +55,7 @@ export type SessionStoreState = {
   btDevices: BluetoothDevice[];
   btScanning: boolean;
   optimisticConnection: SessionState["connection"] | null;
+  connectionRequestPhase?: ConnectionRequestPhase;
 };
 
 export function createInitialSessionState(service: SessionService): SessionStoreState {
@@ -83,5 +86,6 @@ export function createInitialSessionState(service: SessionService): SessionStore
     btDevices: [],
     btScanning: false,
     optimisticConnection: null,
+    connectionRequestPhase: "idle",
   };
 }

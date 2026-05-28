@@ -14,10 +14,12 @@ import type { SessionEnvelope } from "../../src/session";
 import type { StatusTextDomain } from "../../src/statustext";
 import type { SupportDomain } from "../../src/support";
 import type { TelemetryDomain, TelemetryState } from "../../src/telemetry";
-import { setupWorkspaceTestIds } from "../../src/components/setup/setup-workspace-test-ids";
+import { setupWorkspaceTestIds } from "../../src/features/setup/setup-workspace-test-ids";
 import {
   connectionSelectors,
   expect,
+  expectConnectionConnected,
+  expectConnectionConnecting,
   openSetupWorkspace,
   parameterReviewRowLocator,
   parameterWorkspaceSelectors,
@@ -25,7 +27,7 @@ import {
   setupCalibrationCardLocator,
   setupFrameBannerLocator,
   setupFrameInputLocator,
-  setupFrameStageButtonLocator,
+  setupFrameStagedBadgeLocator,
   setupMotorsEscBannerLocator,
   setupMotorsEscRowAvailabilityLocator,
   setupMotorsEscRowLocator,
@@ -44,7 +46,7 @@ import {
   setupRcBarLocator,
   setupRcInputLocator,
   setupRcPresetLocator,
-  setupRcStageButtonLocator,
+  setupRcStagedBadgeLocator,
   setupServoOutputsBannerLocator,
   setupServoOutputsFunctionGroupLocator,
   setupServoOutputsRawAvailabilityLocator,
@@ -1101,7 +1103,7 @@ export async function connectSetupSession(
   });
   await mockPlatform.setCommandBehavior("connect_link", { type: "defer" });
   await page.locator(connectionSelectors.connectButton).click();
-  await expect(page.locator(connectionSelectors.statusText)).toContainText("Connecting", { timeout: 10_000 });
+  await expectConnectionConnecting(page);
 
   await mockPlatform.resolveDeferredConnectLink({
     vehicleState,
@@ -1110,7 +1112,7 @@ export async function connectSetupSession(
     guidedState: setupGuidedState,
   });
 
-  await expect(page.locator(connectionSelectors.statusText)).toContainText("Connected", { timeout: 10_000 });
+  await expectConnectionConnected(page);
 
   await mockPlatform.emitParamStore(paramStore);
   await mockPlatform.emitParamProgress(paramProgress);
@@ -1267,7 +1269,7 @@ export {
   setupCalibrationCardLocator,
   setupFrameBannerLocator,
   setupFrameInputLocator,
-  setupFrameStageButtonLocator,
+  setupFrameStagedBadgeLocator,
   setupMotorsEscBannerLocator,
   setupMotorsEscRowAvailabilityLocator,
   setupMotorsEscRowLocator,
@@ -1286,7 +1288,7 @@ export {
   setupRcBarLocator,
   setupRcInputLocator,
   setupRcPresetLocator,
-  setupRcStageButtonLocator,
+  setupRcStagedBadgeLocator,
   setupServoOutputsBannerLocator,
   setupServoOutputsFunctionGroupLocator,
   setupServoOutputsRawAvailabilityLocator,

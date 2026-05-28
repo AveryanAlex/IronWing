@@ -53,6 +53,7 @@ const defaultIgnoredSelectors = [
 
 const defaultAllowedHorizontalOverflowSelectors = [
   "[data-layout-allow-overflow-x='true']",
+  "[data-overflow='scroll']",
   "[data-density='scroll']",
   "[data-testid='overview-map-root']",
   "[data-testid='overview-map-surface']",
@@ -247,7 +248,7 @@ export async function collectLayoutFitViolations(
       let current: Element | null = element;
       while (current && current !== document.documentElement && path.length < 4) {
         const currentTag = current.localName.toLowerCase();
-        const parent = current.parentElement;
+        const parent: Element | null = current.parentElement;
         if (!parent) {
           path.unshift(currentTag);
           break;

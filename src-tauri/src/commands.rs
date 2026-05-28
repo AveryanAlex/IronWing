@@ -294,11 +294,11 @@ pub(crate) async fn start_guided_session(
     let crate::ipc::GuidedSession::Goto {
         latitude_deg,
         longitude_deg,
-        altitude_m,
+        altitude_msl_m,
     } = request.session;
 
     if let Err(error) =
-        live_commands::guided_goto(&vehicle, latitude_deg, longitude_deg, altitude_m).await
+        live_commands::guided_goto(&vehicle, latitude_deg, longitude_deg, altitude_msl_m).await
     {
         return Ok(state.guided_runtime.lock().await.abort_reserved(
             crate::ipc::OperationId::StartGuidedSession,
@@ -355,11 +355,11 @@ pub(crate) async fn update_guided_session(
     let crate::ipc::GuidedSession::Goto {
         latitude_deg,
         longitude_deg,
-        altitude_m,
+        altitude_msl_m,
     } = request.session;
 
     if let Err(error) =
-        live_commands::guided_goto(&vehicle, latitude_deg, longitude_deg, altitude_m).await
+        live_commands::guided_goto(&vehicle, latitude_deg, longitude_deg, altitude_msl_m).await
     {
         return Ok(state.guided_runtime.lock().await.abort_reserved(
             crate::ipc::OperationId::UpdateGuidedSession,
@@ -1095,7 +1095,7 @@ mod tests {
                 crate::ipc::GuidedSession::Goto {
                     latitude_deg: 47.1,
                     longitude_deg: 8.5,
-                    altitude_m: 25.0,
+                    altitude_msl_m: 25.0,
                 },
             )
             .expect_err("guided start should be blocked");

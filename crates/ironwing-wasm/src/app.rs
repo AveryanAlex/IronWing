@@ -919,11 +919,11 @@ async fn run_guided_goto(
     let ironwing_core::ipc::GuidedSession::Goto {
         latitude_deg,
         longitude_deg,
-        altitude_m,
+        altitude_msl_m,
     } = session;
 
     if let Err(error) =
-        live_commands::guided_goto(&vehicle, latitude_deg, longitude_deg, altitude_m).await
+        live_commands::guided_goto(&vehicle, latitude_deg, longitude_deg, altitude_msl_m).await
     {
         return state.borrow_mut().guided_runtime.abort_reserved(
             operation_id,

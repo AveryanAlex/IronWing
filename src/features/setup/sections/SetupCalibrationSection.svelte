@@ -1,0 +1,136 @@
+<script lang="ts">
+import {
+  calibrateCompassAccept,
+  calibrateCompassCancel,
+  calibrateCompassStart,
+} from "../../../calibration";
+import { trackAnalytics } from "../../../lib/analytics/client";
+import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../../lib/replay-readonly";
+import type { SetupWorkspaceStoreState, SetupWorkspaceCalibrationCard } from "../../../lib/stores/setup-workspace";
+import { Banner, Button } from "../../../components/ui";
+import SetupSectionShell from "../components/SetupSectionShell.svelte";
+import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+
+let { view }: { view: SetupWorkspaceStoreState } = $props();
+
+let actionError = $state<string | null>(null);
+let pendingCardId = $state<SetupWorkspaceCalibrationCard["id"] | null>(null);
+let replayReadonly = $derived(isReplayReadonly(view.activeSource));
+
+async function runCompassAction(card: SetupWorkspaceCalibrationCard) {
+  if (replayReadonly || card.id !== "compass" || card.actionAvailability !== "available" || !card.actionLabel) {
+    return;
+  }
+
+  actionError = null;
+  pendingCardId = card.id;
+
+  try {
+    if (card.lifecycle === "running") {
+      await calibrateCompassCancel();
+      trackAnalytics("calibration_completed", { kind: "compass", result: "cancelled" });
+    } else if (card.lifecycle === "complete") {
+      await calibrateCompassAccept();
+      trackAnalytics("calibration_completed", { kind: "compass", result: "accepted" });
+    } else {
+      trackAnalytics("calibration_started", { kind: "compass" });
+      await calibrateCompassStart();
+    }
+  } catch (error) {
+    actionError = error instanceof Error ? error.message : String(error);
+    trackAnalytics("calibration_completed", { kind: "compass", result: "error" });
+  } finally {
+    pendingCardId = null;
+  }
+}
+
+function cardTone(card: SetupWorkspaceCalibrationCard): string {
+  switch (card.lifecycle) {
+    case "complete":
+      return "border-success/30 bg-success/10";
+    case "running":
+      return "border-accent/30 bg-accent/10";
+    case "failed":
+    case "unavailable":
+      return "border-warning/40 bg-warning/10";
+    case "not_started":
+    default:
+      return "border-border bg-bg-primary/80";
+  }
+}
+</script>
+
+<SetupSectionShell
+  sectionId="calibration"
+  eyebrow="Calibration"
+  title="Broad cards, honest lifecycle truth"
+  description="Accelerometer, gyroscope, compass, and radio remain visible together, but this slice only treats the compass lifecycle as a fully actionable setup path."
+  testId={setupWorkspaceTestIds.calibrationSection}
+>
+  {#snippet body()}
+      {#if actionError}
+        <Banner severity="danger" title={actionError} />
+      {/if}
+
+      {#if replayReadonly}
+        <Banner
+          severity="warning"
+          title={REPLAY_READONLY_TITLE}
+          message={REPLAY_READONLY_COPY}
+          testId={setupWorkspaceTestIds.calibrationReplayReadonly}
+        />
+      {/if}
+
+      {#if view.statusNotices.length > 0}
+        <div
+          class="rounded-lg border border-border bg-bg-primary/80 p-3"
+          data-testid={setupWorkspaceTestIds.calibrationNotices}
+        >
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Lifecycle status text</p>
+          <ul class="mt-3 space-y-2">
+            {#each view.statusNotices as notice (notice.id)}
+              <li class="rounded-lg border border-border bg-bg-secondary/70 px-3 py-2 text-sm text-text-secondary">
+                {notice.text}
+              </li>
+            {/each}
+          </ul>
+        </div>
+      {/if}
+
+      <div class="grid gap-3 xl:grid-cols-2">
+        {#each view.calibrationSummary.cards as card (card.id)}
+          <article
+            class={`rounded-lg border p-3 ${cardTone(card)}`}
+            data-testid={`${setupWorkspaceTestIds.calibrationCardPrefix}-${card.id}`}
+          >
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-text-primary">{card.title}</p>
+                <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={`${setupWorkspaceTestIds.calibrationStatusPrefix}-${card.id}`}>
+                  {card.statusText}
+                </p>
+              </div>
+
+              <span class="rounded-full border border-border bg-bg-primary/80 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
+                {card.lifecycle}
+              </span>
+            </div>
+
+            <p class="mt-3 text-sm leading-6 text-text-secondary">{card.detailText}</p>
+
+            {#if card.actionLabel}
+              <Button
+                class="mt-4 rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={replayReadonly || card.actionAvailability !== "available" || pendingCardId === card.id}
+                onclick={() => runCompassAction(card)}
+                testId={`${setupWorkspaceTestIds.calibrationActionPrefix}-${card.id}`}
+                variant="secondary"
+              >
+                {pendingCardId === card.id ? "Working…" : card.actionLabel}
+              </Button>
+            {/if}
+          </article>
+        {/each}
+      </div>
+  {/snippet}
+</SetupSectionShell>

@@ -164,10 +164,10 @@ describe("mock guided backend parity", () => {
 
     it("rejects guided commands while disconnected live with live-session-required semantics", async () => {
         const start = await invokeMockCommand<any>("start_guided_session", {
-            request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_m: 3 } },
+            request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_msl_m: 3 } },
         });
         const update = await invokeMockCommand<any>("update_guided_session", {
-            request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_m: 3 } },
+            request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_msl_m: 3 } },
         });
         const stop = await invokeMockCommand<any>("stop_guided_session");
 
@@ -253,8 +253,8 @@ describe("mock guided backend parity", () => {
     it("rejects guided commands with armed-vehicle conflict while live is disarmed", async () => {
         await invokeMockCommand("connect_link", { request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" }, mockVehicleState: { armed: false, modeName: "GUIDED" } } });
 
-        const start = await invokeMockCommand<any>("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_m: 3 } } });
-        const update = await invokeMockCommand<any>("update_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_m: 3 } } });
+        const start = await invokeMockCommand<any>("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_msl_m: 3 } } });
+        const update = await invokeMockCommand<any>("update_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_msl_m: 3 } } });
         const stop = await invokeMockCommand<any>("stop_guided_session");
 
         for (const result of [start, update]) {
@@ -277,8 +277,8 @@ describe("mock guided backend parity", () => {
     it("rejects guided commands with guided-mode conflict while live is armed in wrong mode", async () => {
         await invokeMockCommand("connect_link", { request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" }, mockVehicleState: { armed: true, modeName: "Loiter" } } });
 
-        const start = await invokeMockCommand<any>("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_m: 3 } } });
-        const update = await invokeMockCommand<any>("update_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_m: 3 } } });
+        const start = await invokeMockCommand<any>("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_msl_m: 3 } } });
+        const update = await invokeMockCommand<any>("update_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_msl_m: 3 } } });
         const stop = await invokeMockCommand<any>("stop_guided_session");
 
         for (const result of [start, update, stop]) {
@@ -671,7 +671,7 @@ describe("mock guided backend parity", () => {
 
     it("playback open terminates existing live guided state before returning to live", async () => {
         await invokeMockCommand("connect_link", { request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" }, mockVehicleState: { armed: true, modeName: "GUIDED" } } });
-        await invokeMockCommand("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_m: 3 } } });
+        await invokeMockCommand("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_msl_m: 3 } } });
 
         await invokeMockCommand("log_open", { path: "/tmp/mock.tlog" });
         const playback = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "playback" });
@@ -692,7 +692,7 @@ describe("mock guided backend parity", () => {
 
     it("playback seek terminates existing live guided state before returning to live", async () => {
         await invokeMockCommand("connect_link", { request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" }, mockVehicleState: { armed: true, modeName: "GUIDED" } } });
-        await invokeMockCommand("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_m: 3 } } });
+        await invokeMockCommand("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_msl_m: 3 } } });
         await invokeMockCommand("log_open", { path: "/tmp/mock.tlog" });
         const playback = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "playback" });
         await invokeMockCommand("ack_session_snapshot", {
@@ -717,7 +717,7 @@ describe("mock guided backend parity", () => {
             seekEpoch: live.envelope.seek_epoch,
             resetRevision: live.envelope.reset_revision,
         });
-        await invokeMockCommand("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_m: 3 } } });
+        await invokeMockCommand("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_msl_m: 3 } } });
 
         await invokeMockCommand("connect_link", { request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" }, mockVehicleState: { armed: true, modeName: "GUIDED" } } });
 
@@ -747,7 +747,7 @@ describe("mock guided backend parity", () => {
             seekEpoch: live.envelope.seek_epoch,
             resetRevision: live.envelope.reset_revision,
         });
-        await invokeMockCommand("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_m: 3 } } });
+        await invokeMockCommand("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_msl_m: 3 } } });
 
         await invokeMockCommand("disconnect_link", { request: { session_id: live.envelope.session_id } });
 
@@ -778,7 +778,7 @@ describe("mock guided backend parity", () => {
             seekEpoch: live.envelope.seek_epoch,
             resetRevision: live.envelope.reset_revision,
         });
-        await invokeMockCommand("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_m: 3 } } });
+        await invokeMockCommand("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_msl_m: 3 } } });
         await invokeMockCommand("disconnect_link", { request: { session_id: live.envelope.session_id } });
 
         getMockPlatformController().reset();
@@ -857,7 +857,7 @@ describe("mock guided backend parity", () => {
             seekEpoch: live.envelope.seek_epoch,
             resetRevision: live.envelope.reset_revision,
         });
-        await invokeMockCommand("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_m: 3 } } });
+        await invokeMockCommand("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_msl_m: 3 } } });
 
         let guidedPayload: any = null;
         const unlisten = listenMockEvent("guided://state", (payload) => {
@@ -893,7 +893,7 @@ describe("mock guided backend parity", () => {
             seen.push(payload);
         });
 
-        await invokeMockCommand("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_m: 3 } } });
+        await invokeMockCommand("start_guided_session", { request: { session: { kind: "goto", latitude_deg: 1, longitude_deg: 2, altitude_msl_m: 3 } } });
         unlisten();
 
         expect(seen).toEqual([]);

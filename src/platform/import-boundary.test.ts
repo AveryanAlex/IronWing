@@ -30,6 +30,13 @@ type FileRule = {
   guidance: string;
 };
 
+type ContentScanRule = {
+  label: string;
+  pattern: RegExp;
+  allowlist?: Set<string>;
+  guidance: string;
+};
+
 const SRC_DIR = resolve(__dirname, "..");
 const REPO_ROOT = resolve(SRC_DIR, "..");
 const PLATFORM_DIR_PREFIX = "src/platform/";
@@ -52,6 +59,7 @@ const IMPORT_SPECIFIER_PATTERNS = [
 const SOURCE_FILE_RE = /(?:\.svelte(?:\.(?:ts|js))?|\.(?:ts|tsx))$/;
 const IMPORT_SCAN_FILE_RE = /(?:\.svelte(?:\.(?:ts|js))?|\.(?:ts|tsx|js|jsx|mjs|cjs|mts|cts))$/;
 const TEST_FILE_RE = /\.(?:test|spec)\.(?:svelte(?:\.(?:ts|js))?|ts|tsx|js|jsx|mjs|cjs|mts|cts)$/;
+const SVELTE_FILE_RE = /\.svelte$/;
 const REACT_PACKAGE_RE = /^(?:react|react-dom|@testing-library\/react)(?:\/|$)/;
 const LUCIDE_REACT_PACKAGE_RE = /^(?:lucide-react)(?:\/|$)/;
 const ARCHIVED_REACT_SOURCE_RE = /(^|\/)src-old\/(?:legacy|runtime)(?:\/|$)/;
@@ -98,6 +106,42 @@ const DIRECT_ANALYTICS_ADAPTER_IMPORT_RULES: ImportRule[] = [
 
 const UI_PRIMITIVE_DIR_PREFIX = "src/components/ui/";
 
+const RAW_BUTTON_ALLOWLIST = new Set([
+  "src/app/shell/AppShellHeader.svelte",
+  "src/features/hud/components/HudWorkspace.svelte",
+  "src/features/mission/components/MissionMap.svelte",
+  "src/features/mission/components/MissionMapInteractiveLayer.svelte",
+  "src/features/setup/sections/SetupPeripheralsSection.svelte",
+  "src/features/setup/components/SetupWorkspace.svelte",
+]);
+
+const RAW_FORM_CONTROL_ALLOWLIST = new Set([
+  "src/features/logs/components/LogsReplayPanel.svelte",
+]);
+
+const RAW_COMPONENT_MARKUP_RULES: ContentScanRule[] = [
+  {
+    label: "raw external anchors outside shared UI",
+    pattern: /<a\b/,
+    guidance:
+      "Use the shared ExternalLink component for external links. If a plain anchor is truly required, add a narrowly-scoped allowlist entry with justification.",
+  },
+  {
+    label: "raw buttons outside shared UI",
+    pattern: /<button\b/,
+    allowlist: RAW_BUTTON_ALLOWLIST,
+    guidance:
+      "Use shared Button, IconButton, ButtonGroup, SelectableCard, Dialog/Sheet triggers, or another UI primitive. Only dense map/HUD/dnd/shell exceptions should stay allowlisted.",
+  },
+  {
+    label: "raw form controls outside shared UI",
+    pattern: /<(?:input|select|textarea)\b|type=\"range\"/,
+    allowlist: RAW_FORM_CONTROL_ALLOWLIST,
+    guidance:
+      "Use shared Field, Input, NumberInput, NativeSelect, Select, Checkbox, Switch, Slider, or a thin feature wrapper. Only dense behavior-driven exceptions should stay allowlisted.",
+  },
+];
+
 const DIRECT_BITS_UI_IMPORT_RULE: {
   label: string;
   predicate: (specifier: string) => boolean;
@@ -109,6 +153,19 @@ const DIRECT_BITS_UI_IMPORT_RULE: {
   allowedDirPrefix: UI_PRIMITIVE_DIR_PREFIX,
   guidance:
     "Only wrappers under src/components/ui/ may import bits-ui directly. Feature components must consume the @/components/ui barrel (e.g. ContextMenu, Dialog, Menu, Select, Tooltip).",
+};
+
+const DIRECT_SHARED_UI_SUBFILE_IMPORT_RULE: {
+  label: string;
+  predicate: (specifier: string) => boolean;
+  allowedDirPrefix: string;
+  guidance: string;
+} = {
+  label: "shared UI subfiles",
+  predicate: (specifier) => /(?:^|\/)ui\/.+\.svelte$/.test(specifier),
+  allowedDirPrefix: UI_PRIMITIVE_DIR_PREFIX,
+  guidance:
+    "Feature components must import from the src/components/ui barrel instead of reaching into individual UI .svelte files. Re-export needed primitives from src/components/ui/index.ts first.",
 };
 
 const ACTIVE_TREE_FILE_RULES: FileRule[] = [
@@ -238,6 +295,10 @@ function walkSourceFiles(dir: string): string[] {
   return walkFiles(dir, SOURCE_FILE_RE, { includeTests: false });
 }
 
+function walkSvelteSourceFiles(dir: string): string[] {
+  return walkFiles(dir, SVELTE_FILE_RE, { includeTests: false });
+}
+
 function walkImportScanFiles(dir: string): string[] {
   return walkFiles(dir, IMPORT_SCAN_FILE_RE, { includeTests: true });
 }
@@ -268,6 +329,24 @@ function scanFiles(rule: ImportRule, options?: { skipPlatformFiles?: boolean }):
     const matches = extractImportSpecifiers(content).filter(rule.predicate);
     if (matches.length > 0) {
       violations.push(`${projectRel} -> ${matches.join(", ")}`);
+    }
+  }
+
+  return violations.sort();
+}
+
+function scanSvelteMarkup(rule: ContentScanRule): string[] {
+  const violations: string[] = [];
+
+  for (const file of walkSvelteSourceFiles(SRC_DIR)) {
+    const projectRel = normalizeProjectPath(file);
+    if (projectRel.startsWith(UI_PRIMITIVE_DIR_PREFIX)) continue;
+    if (projectRel.startsWith("src/test/")) continue;
+    if (rule.allowlist?.has(projectRel)) continue;
+
+    const content = readFileSync(file, "utf-8");
+    if (rule.pattern.test(content)) {
+      violations.push(projectRel);
     }
   }
 
@@ -455,6 +534,32 @@ describe("platform import boundary", () => {
     },
   );
 
+  it(
+    `only ${DIRECT_SHARED_UI_SUBFILE_IMPORT_RULE.allowedDirPrefix} files import ${DIRECT_SHARED_UI_SUBFILE_IMPORT_RULE.label}`,
+    {
+      timeout: ACTIVE_RUNTIME_TIMEOUT_MS,
+    },
+    () => {
+      const violations: string[] = [];
+
+      for (const file of walkSourceFiles(SRC_DIR)) {
+        const projectRel = normalizeProjectPath(file);
+        if (projectRel.startsWith(DIRECT_SHARED_UI_SUBFILE_IMPORT_RULE.allowedDirPrefix)) continue;
+
+        const content = readFileSync(file, "utf-8");
+        const matches = extractImportSpecifiers(content).filter(DIRECT_SHARED_UI_SUBFILE_IMPORT_RULE.predicate);
+        if (matches.length > 0) {
+          violations.push(`${projectRel} -> ${matches.join(", ")}`);
+        }
+      }
+
+      expect(
+        violations.sort(),
+        `Unexpected direct ${DIRECT_SHARED_UI_SUBFILE_IMPORT_RULE.label} imports in:\n  ${violations.join("\n  ")}\n\n${DIRECT_SHARED_UI_SUBFILE_IMPORT_RULE.guidance}`,
+      ).toEqual([]);
+    },
+  );
+
   for (const rule of ACTIVE_RUNTIME_RULES) {
     it(
       `the active runtime graph does not use ${rule.label}`,
@@ -471,6 +576,28 @@ describe("platform import boundary", () => {
             ? `Active runtime violation [${rule.classLabel}]: ${formatImportEdge(violation)}\n\n${rule.guidance}`
             : `Checked ${graph.length} active-runtime imports from ${ACTIVE_RUNTIME_ROOTS.join(", ")} with no ${rule.label} violations.`,
         ).toBeNull();
+      },
+    );
+  }
+});
+
+describe("shared UI markup guardrails", () => {
+  for (const rule of RAW_COMPONENT_MARKUP_RULES) {
+    it(
+      `active Svelte components do not use ${rule.label}`,
+      {
+        timeout: ACTIVE_RUNTIME_TIMEOUT_MS,
+      },
+      () => {
+        const violations = scanSvelteMarkup(rule);
+        expect(
+          violations,
+          `Unexpected ${rule.label} in:\n  ${violations.join("\n  ")}\n\n${rule.guidance}${
+            rule.allowlist && rule.allowlist.size > 0
+              ? ` Current allowlist: ${[...rule.allowlist].join(", ")}.`
+              : ""
+          }`,
+        ).toEqual([]);
       },
     );
   }

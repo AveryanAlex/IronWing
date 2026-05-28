@@ -14,6 +14,7 @@ import type { GuidedDomain } from "../../guided";
 import type { PlaybackStateSnapshot } from "../../playback";
 import type { SensorHealthDomain } from "../../sensor-health";
 import type {
+  SessionConnection,
   SessionDomain,
   SessionEnvelope,
   SourceKind,
@@ -29,6 +30,7 @@ import {
 } from "./session-bootstrap";
 import {
   createInitialSessionState,
+  type ConnectionRequestPhase,
   type SessionStoreState,
 } from "./session-state";
 import { createSessionViewStore } from "./session-view";
@@ -48,6 +50,32 @@ export function createSessionStore(service: SessionService = createSessionServic
   const bootstrap = createSessionBootstrapController();
   let availableModesRequestId = 0;
   let connectedAtUnixMsec: number | null = null;
+
+  function resolveConnectionRequestPhase(
+    currentPhase: ConnectionRequestPhase | undefined,
+    connection: SessionConnection | undefined,
+  ): ConnectionRequestPhase {
+    const phase = currentPhase ?? "idle";
+    const connectionKind = connection?.kind;
+
+    if (phase === "connecting") {
+      if (connectionKind === "connected" || connectionKind === "error") {
+        return "idle";
+      }
+
+      return "connecting";
+    }
+
+    if (phase === "cancelling" || phase === "disconnecting") {
+      if (connectionKind === "disconnected" || connectionKind === "error") {
+        return "idle";
+      }
+
+      return phase;
+    }
+
+    return connectionKind === "connecting" ? "connecting" : "idle";
+  }
 
   function completeActionError(error: unknown, patch: Partial<SessionStoreState> = {}) {
     store.update((state) => ({
@@ -106,6 +134,10 @@ export function createSessionStore(service: SessionService = createSessionServic
       applyScopedDomainEvent(state, event, (current, value) => ({
         sessionDomain: value,
         optimisticConnection: null,
+        connectionRequestPhase: resolveConnectionRequestPhase(
+          current.connectionRequestPhase,
+          value.value?.connection,
+        ),
         lastPhase: value.value?.connection.kind === "connecting" ? current.lastPhase : "ready",
       })),
     );
@@ -408,6 +440,7 @@ export function createSessionStore(service: SessionService = createSessionServic
       lastPhase: "connect-requested",
       lastError: null,
       optimisticConnection: { kind: "connecting" },
+      connectionRequestPhase: "connecting",
     }));
 
     const state = get(store);
@@ -417,6 +450,7 @@ export function createSessionStore(service: SessionService = createSessionServic
         ...current,
         lastPhase: "ready",
         optimisticConnection: null,
+        connectionRequestPhase: "idle",
         lastError: `Unsupported transport: ${current.connectionForm.mode}`,
       }));
       return;
@@ -431,6 +465,7 @@ export function createSessionStore(service: SessionService = createSessionServic
         ...current,
         lastPhase: "ready",
         optimisticConnection: null,
+        connectionRequestPhase: "idle",
         lastError: validationErrors[0],
       }));
       return;
@@ -445,12 +480,22 @@ export function createSessionStore(service: SessionService = createSessionServic
       }
       await service.connectSession(service.buildConnectRequest(descriptor, formValue));
       await bootstrapSource("live");
+      store.update((current) => {
+        if (current.sessionDomain.value?.connection.kind !== "connected") {
+          return current;
+        }
+
+        return {
+          ...current,
+          connectionRequestPhase: "idle",
+        };
+      });
       connectedAtUnixMsec = Date.now();
       trackAnalytics("connection_succeeded", { transport });
     } catch (error) {
       const reason = service.formatError(error);
       trackAnalytics("connection_failed", { transport, reason });
-      completeActionError(reason, { optimisticConnection: null });
+      completeActionError(reason, { optimisticConnection: null, connectionRequestPhase: "idle" });
     }
   }
 
@@ -461,14 +506,19 @@ export function createSessionStore(service: SessionService = createSessionServic
       lastPhase: "disconnect-requested",
       lastError: null,
       optimisticConnection: null,
+      connectionRequestPhase: "cancelling",
     }));
 
     try {
       await service.disconnectSession();
       await bootstrapSource("live");
+      store.update((state) => ({
+        ...state,
+        connectionRequestPhase: "idle",
+      }));
       trackAnalytics("connection_cancelled", { transport });
     } catch (error) {
-      completeActionError(error);
+      completeActionError(error, { connectionRequestPhase: "idle" });
     }
   }
 
@@ -481,19 +531,24 @@ export function createSessionStore(service: SessionService = createSessionServic
       lastPhase: "disconnect-requested",
       lastError: null,
       optimisticConnection: null,
+      connectionRequestPhase: "disconnecting",
     }));
 
     try {
       const current = get(store);
       await service.disconnectSession({ session_id: current.activeEnvelope?.session_id });
       await bootstrapSource("live");
+      store.update((state) => ({
+        ...state,
+        connectionRequestPhase: "idle",
+      }));
       trackAnalytics("connection_disconnected", {
         transport,
         was_connected_secs_bucket: durationBucket(connectedSecs),
       });
       connectedAtUnixMsec = null;
     } catch (error) {
-      completeActionError(error);
+      completeActionError(error, { connectionRequestPhase: "idle" });
     }
   }
 

@@ -3,6 +3,16 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.hoisted(() => {
+  if (typeof globalThis.ResizeObserver === "undefined") {
+    globalThis.ResizeObserver = class ResizeObserverMock {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as typeof ResizeObserver;
+  }
+});
+
 const { queryFlightPathMock } = vi.hoisted(() => ({
   queryFlightPathMock: vi.fn(),
 }));
@@ -47,9 +57,9 @@ vi.mock("../../logs", async (importActual) => ({
   queryFlightPath: queryFlightPathMock,
 }));
 
-vi.mock("../../components/logs/LogsWorkspace.svelte", async () => await import("../../test/mocks/LogsWorkspaceHandoffMock.svelte"));
+vi.mock("../../features/logs/components/LogsWorkspace.svelte", async () => await import("../../test/mocks/LogsWorkspaceHandoffMock.svelte"));
 
-vi.mock("../../components/mission/MissionWorkspace.svelte", async () => await import("../../test/mocks/MissionWorkspaceReplayOverlayMock.svelte"));
+vi.mock("../../features/mission/components/MissionWorkspace.svelte", async () => await import("../../test/mocks/MissionWorkspaceReplayOverlayMock.svelte"));
 
 import AppShellContent from "./AppShellContent.svelte";
 import { appShellTestIds } from "./chrome-state";

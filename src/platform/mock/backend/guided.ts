@@ -1,6 +1,8 @@
 import { currentGuidedSourceKind, mockState, requireLiveEnvelope } from "./runtime";
 import type { CommandArgs, MockGuidedBlockingReason, MockGuidedStateValue, MockPlatformEvent } from "./types";
 
+type MockGuidedGotoSession = { kind: "goto"; latitude_deg: number; longitude_deg: number; altitude_msl_m: number };
+
 export function applyMockGuidedState(guidedState: MockGuidedStateValue) {
   mockState.guidedTermination = guidedState.termination;
   mockState.guidedLastCommand = guidedState.last_command;
@@ -260,10 +262,27 @@ export function liveGuidedStreamEvent(guidedState: MockGuidedStateValue): MockPl
   };
 }
 
-function guidedSessionArg(args: CommandArgs): { kind: "goto"; latitude_deg: number; longitude_deg: number; altitude_m: number } | null {
-  return args?.request && typeof args.request === "object"
-    ? (args.request as { session: { kind: "goto"; latitude_deg: number; longitude_deg: number; altitude_m: number } }).session
-    : null;
+function guidedSessionArg(args: CommandArgs): MockGuidedGotoSession | null {
+  if (!args?.request || typeof args.request !== "object") {
+    return null;
+  }
+
+  const session = (args.request as { session?: Partial<MockGuidedGotoSession> }).session;
+  if (
+    session?.kind !== "goto"
+    || !Number.isFinite(session.latitude_deg)
+    || !Number.isFinite(session.longitude_deg)
+    || !Number.isFinite(session.altitude_msl_m)
+  ) {
+    return null;
+  }
+
+  return {
+    kind: "goto",
+    latitude_deg: Number(session.latitude_deg),
+    longitude_deg: Number(session.longitude_deg),
+    altitude_msl_m: Number(session.altitude_msl_m),
+  };
 }
 
 export function startGuidedSession(args: CommandArgs, emitEvent: (event: string, payload: unknown) => void) {
