@@ -5,11 +5,11 @@ import { page } from "$app/state";
 import type { Snippet } from "svelte";
 
 import AppShell from "../../app/shell/AppShell.svelte";
-import { workspaceForPath, workspacePath, type AppShellWorkspace } from "../../app/shell/workspace-routes";
+import { workspaceForRouteId, workspacePath, type AppShellWorkspace } from "../../app/shell/workspace-routes";
 
 let { children }: { children: Snippet } = $props();
 
-let activeWorkspace = $derived(workspaceForPath(page.url.pathname));
+let activeWorkspace = $derived(workspaceForRouteId(page.route.id));
 
 function navigateWorkspace(workspace: AppShellWorkspace) {
   return goto(resolve(workspacePath(workspace)));

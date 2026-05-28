@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   SECTION_IDS,
   setupSectionForPath,
+  setupSectionForRouteId,
   setupSectionIdFromSlug,
   setupSectionPath,
   setupSectionSlug,
@@ -41,5 +42,12 @@ describe("setup section routes", () => {
     expect(setupSectionForPath("/setup/overview")).toBeNull();
     expect(setupSectionForPath("/setup/unknown")).toBeNull();
     expect(setupSectionForPath("/mission")).toBeNull();
+  });
+
+  it("resolves SvelteKit route IDs without deployment base path coupling", () => {
+    expect(setupSectionForRouteId("/(app)/setup/frame-orientation")).toBe("frame_orientation");
+    expect(setupSectionForRouteId("/(app)/setup")).toBe("overview");
+    expect(setupSectionForRouteId("/(app)/telemetry")).toBeNull();
+    expect(setupSectionForRouteId(null)).toBeNull();
   });
 });

@@ -1,3 +1,5 @@
+import { pathFromSvelteKitRouteId } from "./sveltekit-route-path";
+
 export type SetupSectionId =
   | "overview"
   | "beginner_wizard"
@@ -325,6 +327,11 @@ export function setupSectionForPath(pathname: string): SetupSectionId | null {
 
   const sectionId = setupSectionIdFromSlug(slug);
   return sectionId === "overview" ? null : sectionId;
+}
+
+export function setupSectionForRouteId(routeId: string | null | undefined): SetupSectionId | null {
+  const pathname = pathFromSvelteKitRouteId(routeId);
+  return pathname ? setupSectionForPath(pathname) : null;
 }
 
 export const TRACKABLE_SECTIONS: ReadonlySet<SetupSectionId> = new Set(

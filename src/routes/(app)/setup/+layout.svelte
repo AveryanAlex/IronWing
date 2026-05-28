@@ -12,7 +12,7 @@ import SetupWorkspaceShell from "../../../features/setup/components/SetupWorkspa
 import { setupWorkspaceTestIds } from "../../../features/setup/setup-workspace-test-ids";
 import SetupCard from "../../../features/setup/shared/SetupCard.svelte";
 import SetupContentPanel from "../../../features/setup/shared/SetupContentPanel.svelte";
-import { setupSectionForPath, setupSectionPath, type SetupSectionId } from "../../../lib/setup-sections";
+import { setupSectionForRouteId, setupSectionPath, type SetupSectionId } from "../../../lib/setup-sections";
 import { paramProgressCounts, paramProgressPhase } from "../../../params";
 
 let { children }: { children: Snippet } = $props();
@@ -21,7 +21,7 @@ const paramsStore = getParamsStoreContext();
 const paramsState = fromStore(paramsStore);
 const setupWorkspaceViewStore = fromStore(getSetupWorkspaceViewStoreContext());
 
-let requestedSectionId = $derived(setupSectionForPath(page.url.pathname) ?? "overview");
+let requestedSectionId = $derived(setupSectionForRouteId(page.route.id) ?? "overview");
 let view = $derived(setupWorkspaceViewStore.current);
 let paramsReady = $derived(paramsState.current.paramStore !== null);
 let setupGateMode = $derived(

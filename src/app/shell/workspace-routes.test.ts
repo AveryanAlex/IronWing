@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { appShellWorkspaces, workspaceForPath, workspacePath } from "./workspace-routes";
+import { appShellWorkspaces, workspaceForPath, workspaceForRouteId, workspacePath } from "./workspace-routes";
 
 describe("workspace route metadata", () => {
   it("maps every workspace key to a stable route path", () => {
@@ -22,6 +22,13 @@ describe("workspace route metadata", () => {
     expect(workspaceForPath("/setup/gps")).toBe("setup");
     expect(workspaceForPath("/setup/gps/")).toBe("setup");
     expect(workspaceForPath("/unknown")).toBe("overview");
+  });
+
+  it("resolves SvelteKit route IDs without deployment base path coupling", () => {
+    expect(workspaceForRouteId("/(app)/telemetry")).toBe("telemetry");
+    expect(workspaceForRouteId("/(app)/setup/gps")).toBe("setup");
+    expect(workspaceForRouteId("/(app)")).toBe("overview");
+    expect(workspaceForRouteId(null)).toBe("overview");
   });
 
   it("resolves workspace keys to paths", () => {

@@ -1,3 +1,5 @@
+import { pathFromSvelteKitRouteId } from "../../lib/sveltekit-route-path";
+
 type WorkspaceRouteDefinition = {
   key: string;
   label: string;
@@ -33,6 +35,11 @@ export function workspaceForPath(pathname: string): AppShellWorkspace {
   }
 
   return isWorkspacePath(normalizedPath) ? WORKSPACE_BY_PATH.get(normalizedPath) ?? "overview" : "overview";
+}
+
+export function workspaceForRouteId(routeId: string | null | undefined): AppShellWorkspace {
+  const pathname = pathFromSvelteKitRouteId(routeId);
+  return pathname ? workspaceForPath(pathname) : "overview";
 }
 
 export function workspacePath(workspace: AppShellWorkspace): AppShellWorkspacePath {
