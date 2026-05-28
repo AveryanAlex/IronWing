@@ -1,20 +1,14 @@
 <script lang="ts">
-import type { LogsWorkspaceMapHandoff } from "../../features/logs/logs-workspace-types";
+import { getLogsWorkspaceRouteContext } from "../../app/shell/runtime-context";
 import { Button } from "../../components/ui";
 
-type Props = {
-  onMapHandoff?: (handoff: LogsWorkspaceMapHandoff) => void;
-};
-
-let {
-  onMapHandoff = () => {},
-}: Props = $props();
+const route = getLogsWorkspaceRouteContext();
 </script>
 
 <section data-testid="mock-logs-workspace">
   <Button
     testId="mock-logs-path-handoff"
-    onclick={() => onMapHandoff({ kind: "path", entryId: "entry-1", startUsec: 100, endUsec: 200 })}
+    onclick={() => route.handleLogsMapHandoff({ kind: "path", entryId: "entry-1", startUsec: 100, endUsec: 200 })}
   >
     handoff
   </Button>

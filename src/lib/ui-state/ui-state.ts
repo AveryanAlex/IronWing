@@ -1,21 +1,5 @@
 import { readIronwingJson, writeIronwingJson } from "./ironwing-storage";
 import type { LocalStorageLike } from "../local-storage";
-import type { AppShellWorkspace } from "../../app/shell/app-shell-controller";
-
-// Workspaces are inlined here (rather than imported from app-shell-controller)
-// to keep ui-state free of cycles: app-shell-controller imports createUiStateStore
-// during AppShell bootstrap, so any import edge back from ui-state would create
-// a circular module graph that triggers undefined-at-init failures.
-const VALID_WORKSPACES: ReadonlySet<AppShellWorkspace> = new Set<AppShellWorkspace>([
-  "overview",
-  "telemetry",
-  "hud",
-  "mission",
-  "logs",
-  "firmware",
-  "setup",
-  "settings",
-]);
 
 export type MissionMode = "mission" | "fence" | "rally";
 export type MissionSegment = "map" | "plan";
@@ -26,18 +10,7 @@ export type UiStateStore = ReturnType<typeof createUiStateStore>;
 export function createUiStateStore(opts: { storage?: LocalStorageLike | null } = {}) {
   const storage = opts.storage;
 
-  function isWorkspace(value: unknown): value is AppShellWorkspace {
-    return typeof value === "string" && VALID_WORKSPACES.has(value as AppShellWorkspace);
-  }
-
   return {
-    getActiveWorkspace(): AppShellWorkspace {
-      const stored = readIronwingJson("ui.workspace", storage);
-      return isWorkspace(stored) ? stored : "overview";
-    },
-    setActiveWorkspace(workspace: AppShellWorkspace): void {
-      writeIronwingJson("ui.workspace", workspace, storage);
-    },
     getOverviewFollow(): OverviewFollow {
       const stored = readIronwingJson("ui.overview.follow", storage);
       if (stored === "vehicle" || stored === "home" || stored === "device") return stored;

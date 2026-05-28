@@ -14,6 +14,7 @@ import {
   getSetupSectionDefinition,
   getSetupSectionGroupDefinition,
   groupSetupSections,
+  isSetupSectionId,
   type OverallProgress,
   type SectionStatus,
   type SetupSectionId,
@@ -262,10 +263,6 @@ function createUnknownSectionStatusRecord(): Record<SetupSectionId, SectionStatu
 
 function createEmptySectionConfirmationRecord(): Record<SetupSectionId, boolean> {
   return Object.fromEntries(SECTION_IDS.map((id) => [id, false])) as Record<SetupSectionId, boolean>;
-}
-
-function isSetupSectionId(value: string): value is SetupSectionId {
-  return SECTION_IDS.includes(value as SetupSectionId);
 }
 
 function normalizeScopedSectionConfirmations(input: unknown): ScopedSectionConfirmations {
@@ -1423,7 +1420,7 @@ export function createSetupWorkspaceStore(
   let previousApplyPhase: ParamsStoreState["applyPhase"] = "idle";
   let currentActiveScopeKey: string | null = null;
   // The beginner wizard section's truth comes from the wizard store phase, not
-  // from configuration facts. SetupWorkspace.svelte pushes this via
+  // from configuration facts. SetupWorkspaceShell.svelte pushes this via
   // `setWizardPhase(...)` whenever the wizard store state changes, and the
   // overlay below keeps the grouped dashboard in sync with live wizard
   // progress without bypassing the shared recompute path.

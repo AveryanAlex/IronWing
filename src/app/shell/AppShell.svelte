@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onDestroy } from "svelte";
+import type { Snippet } from "svelte";
 
 import { createFirmwareFileIo } from "../../lib/firmware-file-io";
 import { createFirmwareService } from "../../lib/platform/firmware";
@@ -13,6 +14,7 @@ import { createFirmwareWorkspaceStore } from "../../lib/stores/firmware-workspac
 import { createSetupWorkspaceStore, createSetupWorkspaceViewStore } from "../../lib/stores/setup-workspace";
 import AppShellContent from "./AppShellContent.svelte";
 import { createShellChromeStore } from "./chrome-state";
+import type { AppShellWorkspace } from "./workspace-routes";
 import {
   setFirmwareWorkspaceContext,
   setLiveSettingsStoreContext,
@@ -28,6 +30,14 @@ import {
   setSetupWorkspaceViewStoreContext,
   setShellChromeStoreContext,
 } from "./runtime-context";
+
+type Props = {
+  activeWorkspace: AppShellWorkspace;
+  navigateToWorkspace: (workspace: AppShellWorkspace) => void | Promise<void>;
+  children: Snippet;
+};
+
+let { activeWorkspace, navigateToWorkspace, children }: Props = $props();
 
 const chrome = createShellChromeStore();
 const liveSettings = createLiveSettingsStore(session);
@@ -65,4 +75,6 @@ onDestroy(() => {
 });
 </script>
 
-<AppShellContent />
+<AppShellContent {activeWorkspace} {navigateToWorkspace}>
+  {@render children()}
+</AppShellContent>

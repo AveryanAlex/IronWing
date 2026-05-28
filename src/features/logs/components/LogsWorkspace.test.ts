@@ -9,7 +9,7 @@ import type { LogsWorkspaceState, LogsWorkspaceStore } from "../../../lib/stores
 import type { RecordingSettings, RecordingStatus } from "../../../recording";
 import type { LogRecordingFileIo } from "../log-recording-file-io";
 import type { LogsWorkspaceMapHandoff } from "../logs-workspace-types";
-import LogsWorkspace from "./LogsWorkspace.svelte";
+import LogsWorkspace from "../../../routes/(app)/logs/+page.svelte";
 
 function createEntry(entryId: string, status: LogLibraryEntry["status"], path = `/logs/${entryId}.tlog`): LogLibraryEntry {
   const available = status !== "missing";

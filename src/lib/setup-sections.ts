@@ -28,6 +28,26 @@ export type OverallProgress = {
 };
 
 export type SetupSectionKind = "overview" | "guided" | "recovery";
+export type SetupSectionPath =
+  | "/setup"
+  | "/setup/beginner-wizard"
+  | "/setup/frame-orientation"
+  | "/setup/calibration"
+  | "/setup/rc-receiver"
+  | "/setup/gps"
+  | "/setup/battery-monitor"
+  | "/setup/motors-esc"
+  | "/setup/servo-outputs"
+  | "/setup/serial-ports"
+  | "/setup/flight-modes"
+  | "/setup/failsafe"
+  | "/setup/rtl-return"
+  | "/setup/geofence"
+  | "/setup/arming"
+  | "/setup/initial-params"
+  | "/setup/pid-tuning"
+  | "/setup/peripherals"
+  | "/setup/full-parameters";
 
 export type SetupSectionGroupId =
   | "workspace"
@@ -243,9 +263,77 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
 
 export const SECTION_IDS: SetupSectionId[] = SETUP_SECTION_CATALOG.map((section) => section.id);
 
+const SETUP_SECTION_PATHS: Record<SetupSectionId, SetupSectionPath> = {
+  overview: "/setup",
+  beginner_wizard: "/setup/beginner-wizard",
+  frame_orientation: "/setup/frame-orientation",
+  calibration: "/setup/calibration",
+  rc_receiver: "/setup/rc-receiver",
+  gps: "/setup/gps",
+  battery_monitor: "/setup/battery-monitor",
+  motors_esc: "/setup/motors-esc",
+  servo_outputs: "/setup/servo-outputs",
+  serial_ports: "/setup/serial-ports",
+  flight_modes: "/setup/flight-modes",
+  failsafe: "/setup/failsafe",
+  rtl_return: "/setup/rtl-return",
+  geofence: "/setup/geofence",
+  arming: "/setup/arming",
+  initial_params: "/setup/initial-params",
+  pid_tuning: "/setup/pid-tuning",
+  peripherals: "/setup/peripherals",
+  full_parameters: "/setup/full-parameters",
+};
+
+export function isSetupSectionId(value: string): value is SetupSectionId {
+  return SECTION_IDS.includes(value as SetupSectionId);
+}
+
+export function setupSectionSlug(sectionId: SetupSectionId): string {
+  return sectionId.replace(/_/g, "-");
+}
+
+export function setupSectionIdFromSlug(slug: string): SetupSectionId | null {
+  const normalizedSlug = slug.trim().toLowerCase();
+  if (normalizedSlug.length === 0) {
+    return null;
+  }
+
+  const candidate = normalizedSlug.replace(/-/g, "_");
+  return isSetupSectionId(candidate) ? candidate : null;
+}
+
+export function setupSectionPath(sectionId: SetupSectionId): SetupSectionPath {
+  return SETUP_SECTION_PATHS[sectionId];
+}
+
+export function setupSectionForPath(pathname: string): SetupSectionId | null {
+  const normalizedPath = normalizeSetupPath(pathname);
+  if (normalizedPath === "/setup") {
+    return "overview";
+  }
+
+  const prefix = "/setup/";
+  if (!normalizedPath.startsWith(prefix)) {
+    return null;
+  }
+
+  const slug = normalizedPath.slice(prefix.length);
+  if (slug.includes("/")) {
+    return null;
+  }
+
+  const sectionId = setupSectionIdFromSlug(slug);
+  return sectionId === "overview" ? null : sectionId;
+}
+
 export const TRACKABLE_SECTIONS: ReadonlySet<SetupSectionId> = new Set(
   SETUP_SECTION_CATALOG.filter((section) => section.trackable).map((section) => section.id),
 );
+
+function normalizeSetupPath(pathname: string): string {
+  return pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+}
 
 const SECTION_DEFINITION_MAP = new Map(SETUP_SECTION_CATALOG.map((section) => [section.id, section]));
 const SECTION_GROUP_MAP = new Map(SETUP_SECTION_GROUPS.map((group) => [group.id, group]));

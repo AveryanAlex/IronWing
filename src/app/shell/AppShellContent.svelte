@@ -1,16 +1,11 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
-import { fromStore } from "svelte/store";
+import type { Snippet } from "svelte";
+import { fromStore, get, writable } from "svelte/store";
 import { Toaster } from "svelte-sonner";
 
-import FirmwareWorkspace from "../../features/firmware/components/FirmwareWorkspace.svelte";
-import HudWorkspace from "../../features/hud/components/HudWorkspace.svelte";
-import LogsWorkspace from "../../features/logs/components/LogsWorkspace.svelte";
-import MissionWorkspace from "../../features/mission/components/MissionWorkspace.svelte";
-import SetupWorkspace from "../../features/setup/components/SetupWorkspace.svelte";
-import SettingsWorkspace from "../../features/settings/components/SettingsWorkspace.svelte";
-import TelemetryWorkspace from "../../features/telemetry/components/TelemetryWorkspace.svelte";
 import { queryFlightPath } from "../../logs";
+import { trackAnalytics } from "../../lib/analytics/client";
 import {
   buildReplayMarkerFlightPathQuery,
   createReplayPathOverlay,
@@ -19,25 +14,33 @@ import {
 } from "../../lib/replay-map-overlay";
 import { runtimeTestIds } from "../../lib/stores/runtime";
 import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../lib/replay-readonly";
-import AppShellPlaceholderWorkspace from "./AppShellPlaceholderWorkspace.svelte";
 import AppShellHeader from "./AppShellHeader.svelte";
-import { appShellWorkspaces, createAppShellController } from "./app-shell-controller";
+import { createAppShellController } from "./app-shell-controller";
 import { appShellTestIds } from "./chrome-state";
-import OperatorWorkspace from "./OperatorWorkspace.svelte";
 import TelemetrySettingsDialog from "./TelemetrySettingsDialog.svelte";
+import { appShellWorkspaces, type AppShellWorkspace } from "./workspace-routes";
 import {
-  getFirmwareWorkspaceContext,
   getLiveSettingsStoreContext,
+  setLogsWorkspaceRouteContext,
   getMissionPlannerStoreContext,
   getParamsStoreContext,
   getRuntimeStoreContext,
   getSessionStoreContext,
   getSessionViewStoreContext,
   getShellChromeStoreContext,
+  setMissionWorkspaceRouteContext,
   setTelemetrySettingsDialogLauncherContext,
 } from "./runtime-context";
 import VehiclePanelDrawer from "./VehiclePanelDrawer.svelte";
 import VehiclePanelContent from "./VehiclePanelContent.svelte";
+
+type Props = {
+  activeWorkspace: AppShellWorkspace;
+  navigateToWorkspace: (workspace: AppShellWorkspace) => void | Promise<void>;
+  children: Snippet;
+};
+
+let { activeWorkspace, navigateToWorkspace, children }: Props = $props();
 
 const sessionStore = getSessionStoreContext();
 const parameterStore = getParamsStoreContext();
@@ -46,7 +49,6 @@ const missionPlannerStore = getMissionPlannerStoreContext();
 const runtimeStore = getRuntimeStoreContext();
 const chromeStore = getShellChromeStoreContext();
 const sessionViewStore = getSessionViewStoreContext();
-const firmwareWorkspace = getFirmwareWorkspaceContext();
 
 const controller = createAppShellController({
   sessionStore,
@@ -54,7 +56,6 @@ const controller = createAppShellController({
   chromeStore,
 });
 
-const activeWorkspaceStore = fromStore(controller.activeWorkspace);
 const vehiclePanelOpenStore = fromStore(controller.vehiclePanelOpen);
 const activeEnvelopeTextStore = fromStore(controller.activeEnvelopeText);
 const drawerStateStore = fromStore(controller.drawerState);
@@ -65,16 +66,23 @@ const sessionView = fromStore(sessionViewStore);
 const REPLAY_MAP_HANDOFF_MAX_POINTS = 2000;
 
 let telemetrySettingsOpen = $state(false);
-let replayMapOverlay = $state<ReplayMapOverlayState | null>(null);
+const replayMapOverlayStore = writable<ReplayMapOverlayState | null>(null);
 let replayMapOverlayRequest = 0;
+let lastTrackedWorkspace: AppShellWorkspace | null = null;
 
 setTelemetrySettingsDialogLauncherContext({
   open() {
     telemetrySettingsOpen = true;
   },
 });
+setMissionWorkspaceRouteContext({
+  replayMapOverlay: replayMapOverlayStore,
+  dismissReplayMapOverlay,
+});
+setLogsWorkspaceRouteContext({
+  handleLogsMapHandoff,
+});
 
-let activeWorkspace = $derived(activeWorkspaceStore.current);
 let vehiclePanelOpen = $derived(vehiclePanelOpenStore.current);
 let activeEnvelopeText = $derived(activeEnvelopeTextStore.current);
 let drawerState: "open" | "closed" | "docked" = $derived(drawerStateStore.current as "open" | "closed" | "docked");
@@ -99,6 +107,15 @@ let connectionTone = $derived.by<"neutral" | "positive" | "caution" | "critical"
 });
 let replayReadonly = $derived(isReplayReadonly($sessionStore.activeSource));
 
+$effect(() => {
+  if (activeWorkspace === lastTrackedWorkspace) {
+    return;
+  }
+
+  lastTrackedWorkspace = activeWorkspace;
+  trackAnalytics("workspace_viewed", { workspace: activeWorkspace });
+});
+
 onMount(() => {
   void Promise.all([controller.initialize(), liveSettingsStore.initialize(), missionPlannerStore.initialize()]);
 });
@@ -109,7 +126,11 @@ onDestroy(() => {
 });
 
 function dismissReplayMapOverlay() {
-  replayMapOverlay = null;
+  replayMapOverlayStore.set(null);
+}
+
+function handleWorkspaceSelect(workspace: AppShellWorkspace) {
+  void navigateToWorkspace(workspace);
 }
 
 function formatReplayMapOverlayError(error: unknown): string {
@@ -135,12 +156,13 @@ async function handleLogsMapHandoff(
       },
 ) {
   const requestId = ++replayMapOverlayRequest;
-  const currentOverlay = replayMapOverlay?.entryId === handoff.entryId ? replayMapOverlay : null;
+  const currentReplayOverlay = get(replayMapOverlayStore);
+  const currentOverlay = currentReplayOverlay?.entryId === handoff.entryId ? currentReplayOverlay : null;
 
-  controller.showWorkspace("mission");
+  await navigateToWorkspace("mission");
 
   if (handoff.kind === "path") {
-    replayMapOverlay = createReplayPathOverlay(handoff.entryId, "loading", currentOverlay?.path ?? [], null);
+    replayMapOverlayStore.set(createReplayPathOverlay(handoff.entryId, "loading", currentOverlay?.path ?? [], null));
 
     try {
       const path = await queryFlightPath({
@@ -154,17 +176,19 @@ async function handleLogsMapHandoff(
         return;
       }
 
-      replayMapOverlay = createReplayPathOverlay(handoff.entryId, "ready", path, null);
+      replayMapOverlayStore.set(createReplayPathOverlay(handoff.entryId, "ready", path, null));
     } catch (error) {
       if (requestId !== replayMapOverlayRequest) {
         return;
       }
 
-      replayMapOverlay = createReplayPathOverlay(
-        handoff.entryId,
-        "failed",
-        currentOverlay?.path ?? [],
-        formatReplayMapOverlayError(error),
+      replayMapOverlayStore.set(
+        createReplayPathOverlay(
+          handoff.entryId,
+          "failed",
+          currentOverlay?.path ?? [],
+          formatReplayMapOverlayError(error),
+        ),
       );
     }
 
@@ -173,23 +197,23 @@ async function handleLogsMapHandoff(
 
   const existingPath = currentOverlay?.path ?? [];
   if (existingPath.length > 0) {
-    replayMapOverlay = {
+    replayMapOverlayStore.set({
       phase: "ready",
       entryId: handoff.entryId,
       path: existingPath,
       marker: resolveReplayMapOverlayMarker(existingPath, handoff.cursorUsec),
       error: null,
-    };
+    });
     return;
   }
 
-  replayMapOverlay = {
+  replayMapOverlayStore.set({
     phase: "loading",
     entryId: handoff.entryId,
     path: [],
     marker: null,
     error: null,
-  };
+  });
 
   try {
     const markerQuery = buildReplayMarkerFlightPathQuery(handoff.entryId, handoff.cursorUsec);
@@ -199,25 +223,25 @@ async function handleLogsMapHandoff(
       return;
     }
 
-    replayMapOverlay = {
+    replayMapOverlayStore.set({
       phase: "ready",
       entryId: handoff.entryId,
       path: markerPath,
       marker: resolveReplayMapOverlayMarker(markerPath, handoff.cursorUsec),
       error: null,
-    };
+    });
   } catch (error) {
     if (requestId !== replayMapOverlayRequest) {
       return;
     }
 
-    replayMapOverlay = {
+    replayMapOverlayStore.set({
       phase: "failed",
       entryId: handoff.entryId,
       path: [],
       marker: null,
       error: formatReplayMapOverlayError(error),
-    };
+    });
   }
 }
 </script>
@@ -251,7 +275,7 @@ async function handleLogsMapHandoff(
       framework={$runtimeStore.framework}
       handleVehiclePanelToggle={controller.toggleVehiclePanel}
       lastPhase={$sessionStore.lastPhase}
-      onSelectWorkspace={controller.showWorkspace}
+      onSelectWorkspace={handleWorkspaceSelect}
       connectionTone={connectionTone}
       showVehiclePanelButton={showVehiclePanelButton}
       tier={$chromeStore.tier}
@@ -285,33 +309,7 @@ async function handleLogsMapHandoff(
           {activeWorkspace}
         </span>
 
-        {#if activeWorkspace === "overview"}
-          <OperatorWorkspace />
-        {:else if activeWorkspace === "setup"}
-          <SetupWorkspace />
-        {:else if activeWorkspace === "hud"}
-          <HudWorkspace />
-        {:else if activeWorkspace === "telemetry"}
-          <TelemetryWorkspace />
-        {:else if activeWorkspace === "mission"}
-          <MissionWorkspace onDismissReplayMapOverlay={dismissReplayMapOverlay} replayMapOverlay={replayMapOverlay} />
-        {:else if activeWorkspace === "logs"}
-          <LogsWorkspace onMapHandoff={handleLogsMapHandoff} />
-        {:else if activeWorkspace === "firmware"}
-          <FirmwareWorkspace
-            chromeStore={chromeStore}
-            fileIo={firmwareWorkspace.fileIo}
-            service={firmwareWorkspace.service}
-            store={firmwareWorkspace.store}
-          />
-        {:else if activeWorkspace === "settings"}
-          <SettingsWorkspace />
-        {:else}
-          <AppShellPlaceholderWorkspace
-            description="Setup workflows and calibration entry points will live here."
-            title="Setup"
-          />
-        {/if}
+        {@render children()}
       </section>
     </div>
   </section>

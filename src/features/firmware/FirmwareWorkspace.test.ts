@@ -24,7 +24,7 @@ import {
 } from "../../lib/platform/firmware";
 import { createFirmwareWorkspaceStore } from "../../lib/stores/firmware-workspace";
 import { withSessionContext } from "../../test/context-harnesses";
-import FirmwareWorkspace from "./components/FirmwareWorkspace.svelte";
+import FirmwareWorkspace from "../../routes/(app)/firmware/+page.svelte";
 import { firmwareWorkspaceTestIds } from "./firmware-workspace-test-ids";
 
 const DEFAULT_PORTS: PortInfo[] = [

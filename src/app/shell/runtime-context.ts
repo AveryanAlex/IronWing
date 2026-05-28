@@ -20,6 +20,8 @@ import type {
   SetupWorkspaceViewStore,
 } from "../../lib/stores/setup-workspace";
 import type { FirmwareWorkspaceStore } from "../../lib/stores/firmware-workspace";
+import type { ReplayMapOverlayState } from "../../lib/replay-map-overlay";
+import type { LogsWorkspaceMapHandoff } from "../../features/logs/logs-workspace-types";
 import type { ShellChromeState } from "./chrome-state";
 
 export type RuntimeStore = Readable<RuntimeState>;
@@ -31,6 +33,13 @@ export type FirmwareWorkspaceContext = {
   store: FirmwareWorkspaceStore;
   service: FirmwareService;
   fileIo: FirmwareFileIo;
+};
+export type MissionWorkspaceRouteContext = {
+  replayMapOverlay: Readable<ReplayMapOverlayState | null>;
+  dismissReplayMapOverlay(): void;
+};
+export type LogsWorkspaceRouteContext = {
+  handleLogsMapHandoff(handoff: LogsWorkspaceMapHandoff): Promise<void>;
 };
 
 export const [getSessionStoreContext, setSessionStoreContext] = createContext<SessionStore>();
@@ -47,3 +56,5 @@ export const [getShellChromeStoreContext, setShellChromeStoreContext] = createCo
 export const [getLiveSettingsStoreContext, setLiveSettingsStoreContext] = createContext<LiveSettingsStore>();
 export const [getTelemetrySettingsDialogLauncherContext, setTelemetrySettingsDialogLauncherContext] = createContext<TelemetrySettingsDialogLauncher>();
 export const [getFirmwareWorkspaceContext, setFirmwareWorkspaceContext] = createContext<FirmwareWorkspaceContext>();
+export const [getMissionWorkspaceRouteContext, setMissionWorkspaceRouteContext] = createContext<MissionWorkspaceRouteContext>();
+export const [getLogsWorkspaceRouteContext, setLogsWorkspaceRouteContext] = createContext<LogsWorkspaceRouteContext>();

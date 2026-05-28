@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { createUiStateStore } from "./ui-state";
-import type { AppShellWorkspace } from "../../app/shell/app-shell-controller";
 
 function fakeStorage(): Storage {
   const data = new Map<string, string>();
@@ -27,21 +26,21 @@ function fakeStorage(): Storage {
 }
 
 describe("createUiStateStore", () => {
-  it("persists and reads workspace selection", () => {
+  it("persists and reads overview follow selection", () => {
     const storage = fakeStorage();
     const store = createUiStateStore({ storage });
 
-    store.setActiveWorkspace("mission");
-    expect(store.getActiveWorkspace()).toBe("mission");
+    store.setOverviewFollow("vehicle");
+    expect(store.getOverviewFollow()).toBe("vehicle");
 
     const reloaded = createUiStateStore({ storage });
-    expect(reloaded.getActiveWorkspace()).toBe("mission");
+    expect(reloaded.getOverviewFollow()).toBe("vehicle");
   });
 
-  it("falls back to overview when stored workspace is invalid", () => {
+  it("falls back to no overview follow mode when the stored value is invalid", () => {
     const storage = fakeStorage();
-    storage.setItem("ironwing.ui.workspace", JSON.stringify("garbage" as AppShellWorkspace));
+    storage.setItem("ironwing.ui.overview.follow", JSON.stringify("garbage"));
     const store = createUiStateStore({ storage });
-    expect(store.getActiveWorkspace()).toBe("overview");
+    expect(store.getOverviewFollow()).toBeNull();
   });
 });

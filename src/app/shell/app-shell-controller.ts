@@ -5,31 +5,6 @@ import type { SessionStore } from "../../lib/stores/session";
 import type { ShellChromeStore } from "./runtime-context";
 import { trackAnalytics } from "../../lib/analytics/client";
 import { isAutoConnectSitlEnabled } from "../../lib/platform/session";
-import { createUiStateStore } from "../../lib/ui-state/ui-state";
-
-export type AppShellWorkspace =
-  | "overview"
-  | "telemetry"
-  | "hud"
-  | "mission"
-  | "logs"
-  | "firmware"
-  | "settings"
-  | "setup";
-
-export const appShellWorkspaces: ReadonlyArray<{
-  key: AppShellWorkspace;
-  label: string;
-}> = [
-  { key: "overview", label: "Overview" },
-  { key: "telemetry", label: "Telemetry" },
-  { key: "hud", label: "HUD" },
-  { key: "mission", label: "Mission" },
-  { key: "logs", label: "Logs" },
-  { key: "firmware", label: "Firmware" },
-  { key: "setup", label: "Setup" },
-  { key: "settings", label: "App settings" },
-];
 
 export type AppShellController = ReturnType<typeof createAppShellController>;
 
@@ -40,13 +15,6 @@ export function createAppShellController(stores: {
 }) {
   const { sessionStore, parameterStore, chromeStore } = stores;
 
-  const uiState = createUiStateStore({ storage: typeof localStorage === "undefined" ? null : localStorage });
-
-  const activeWorkspace = writable<AppShellWorkspace>(uiState.getActiveWorkspace());
-  const stopPersistActiveWorkspace = activeWorkspace.subscribe((value) => uiState.setActiveWorkspace(value));
-  const stopTrackActiveWorkspace = activeWorkspace.subscribe((workspace) => {
-    trackAnalytics("workspace_viewed", { workspace });
-  });
   const vehiclePanelOpen = writable(false);
 
   const activeEnvelopeText = derived(sessionStore, ($sessionStore) =>
@@ -86,16 +54,6 @@ export function createAppShellController(stores: {
     }
   }
 
-  function showWorkspace(workspace: AppShellWorkspace) {
-    activeWorkspace.set(workspace);
-  }
-
-  const showOverviewWorkspace = () => showWorkspace("overview");
-  const showSetupWorkspace = () => showWorkspace("setup");
-  const showSettingsWorkspace = () => showWorkspace("settings");
-  // Compatibility shim while tests/components still reference the previous helper name.
-  const showParameterWorkspace = showSetupWorkspace;
-
   function toggleVehiclePanel() {
     const nextOpen = !get(vehiclePanelOpen);
     const layout = get(chromeStore).vehiclePanelMode;
@@ -112,41 +70,27 @@ export function createAppShellController(stores: {
 
   function destroy() {
     stopCloseDrawerWhenDocked();
-    stopTrackActiveWorkspace();
-    stopPersistActiveWorkspace();
   }
 
   return {
-    activeWorkspace,
     vehiclePanelOpen,
     activeEnvelopeText,
     drawerState,
     showVehiclePanelButton,
     showDockedVehiclePanel,
     vehiclePanelDrawerOpen,
-    showWorkspace,
     initialize,
-    showOverviewWorkspace,
-    showSetupWorkspace,
-    showSettingsWorkspace,
-    showParameterWorkspace,
     toggleVehiclePanel,
     closeVehiclePanel,
     destroy,
   } satisfies {
-    activeWorkspace: Readable<AppShellWorkspace>;
     vehiclePanelOpen: Readable<boolean>;
     activeEnvelopeText: Readable<string>;
     drawerState: Readable<"open" | "closed" | "docked">;
     showVehiclePanelButton: Readable<boolean>;
     showDockedVehiclePanel: Readable<boolean>;
     vehiclePanelDrawerOpen: Readable<boolean>;
-    showWorkspace: (workspace: AppShellWorkspace) => void;
     initialize: () => Promise<void>;
-    showOverviewWorkspace: () => void;
-    showSetupWorkspace: () => void;
-    showSettingsWorkspace: () => void;
-    showParameterWorkspace: () => void;
     toggleVehiclePanel: () => void;
     closeVehiclePanel: () => void;
     destroy: () => void;

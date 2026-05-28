@@ -29,7 +29,7 @@ function handleBootstrapFailure(error: unknown) {
 {#if bootstrapFailureMessage}
   <section
     class="bootstrap-failure-surface"
-    data-app-entrypoint="src/routes/+page.svelte"
+    data-app-entrypoint="src/routes/+layout.svelte"
     data-mount-target="#app"
     data-runtime-phase="failed"
     data-testid={runtimeTestIds.bootstrapFailure}

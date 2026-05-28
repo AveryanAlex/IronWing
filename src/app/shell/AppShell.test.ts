@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
@@ -63,16 +63,26 @@ vi.mock("maplibre-gl", () => {
     };
 });
 
-import AppShellContent from "./AppShellContent.svelte";
+import type { Component } from "svelte";
+
 import {
     appShellTestIds,
     createShellChromeState,
     resolveShellTier,
 } from "./chrome-state";
+import type { AppShellWorkspace } from "./workspace-routes";
+import AppShellRouteHost from "../../test/AppShellRouteHost.svelte";
+import OverviewRoutePage from "../../routes/(app)/+page.svelte";
+import TelemetryRoutePage from "../../routes/(app)/telemetry/+page.svelte";
+import MissionRoutePage from "../../routes/(app)/mission/+page.svelte";
+import FirmwareRoutePage from "../../routes/(app)/firmware/+page.svelte";
+import SetupOverviewRoutePage from "../../routes/(app)/setup/+page.svelte";
+import SetupFullParametersRoutePage from "../../routes/(app)/setup/full-parameters/+page.svelte";
 import { parameterWorkspaceTestIds } from "../../features/params/parameter-workspace-test-ids";
 import { setupWorkspaceTestIds } from "../../features/setup/setup-workspace-test-ids";
 import { missionWorkspaceTestIds } from "../../features/mission/mission-workspace-test-ids";
 import { firmwareWorkspaceTestIds } from "../../features/firmware/firmware-workspace-test-ids";
+import type { SetupSectionId } from "../../lib/setup-sections";
 import { createParamsStore } from "../../lib/stores/params";
 import { markRuntimeReady, resetRuntimeState } from "../../lib/stores/runtime";
 import {
@@ -516,6 +526,9 @@ async function renderShellAt(
         snapshot?: OpenSessionSnapshot;
         metadata?: ParamMetadataMap | null;
         firmwareWorkspaceContext?: ReturnType<typeof createHarnessFirmwareWorkspaceContext>;
+        activeWorkspace?: AppShellWorkspace;
+        route?: Component;
+        setupSectionId?: SetupSectionId;
     } = {},
 ) {
     const viewport = installViewportController(width);
@@ -529,9 +542,27 @@ async function renderShellAt(
     await parameterStore.initialize();
     markRuntimeReady("2026-04-03T12:34:56.000Z");
 
-    render(withShellContexts(store, parameterStore, AppShellContent, {
+    const navigateToWorkspace = vi.fn(async () => undefined);
+    const navigateToSetupSection = vi.fn(async () => undefined);
+    let routeProps = {
+        activeWorkspace: options.activeWorkspace ?? "overview",
+        navigateToWorkspace,
+        route: options.route ?? OverviewRoutePage,
+        setupSectionId: options.setupSectionId,
+        navigateToSetupSection,
+    } satisfies {
+        activeWorkspace: AppShellWorkspace;
+        navigateToWorkspace: (workspace: AppShellWorkspace) => Promise<void>;
+        route: Component;
+        setupSectionId?: SetupSectionId;
+        navigateToSetupSection: (sectionId: SetupSectionId) => Promise<void>;
+    };
+
+    const renderResult = render(withShellContexts(store, parameterStore, AppShellRouteHost, {
         firmwareWorkspaceContext: options.firmwareWorkspaceContext,
-    }));
+    }), {
+        props: routeProps,
+    });
 
     await waitFor(() => {
         expect(screen.getByTestId(appShellTestIds.tier)).toBeTruthy();
@@ -541,30 +572,23 @@ async function renderShellAt(
         viewport,
         store,
         parameterStore,
+        navigateToWorkspace,
+        navigateToSetupSection,
+        async rerenderRoute(nextRoute: Partial<Pick<typeof routeProps, "activeWorkspace" | "route" | "setupSectionId">>) {
+            routeProps = {
+                ...routeProps,
+                ...nextRoute,
+            };
+            await renderResult.rerender(routeProps);
+        },
     } satisfies {
         viewport: ReturnType<typeof installViewportController>;
         store: SessionStore;
         parameterStore: ReturnType<typeof createParamsStore>;
+        navigateToWorkspace: typeof navigateToWorkspace;
+        navigateToSetupSection: typeof navigateToSetupSection;
+        rerenderRoute(nextRoute: Partial<Pick<typeof routeProps, "activeWorkspace" | "route" | "setupSectionId">>): Promise<void>;
     };
-}
-
-async function openSetupWorkspace() {
-    await fireEvent.click(screen.getByTestId(appShellTestIds.parameterWorkspaceButton));
-
-    await waitFor(() => {
-        expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("setup");
-        expect(screen.getByTestId(setupWorkspaceTestIds.root)).toBeTruthy();
-    });
-}
-
-async function openSetupFullParameters() {
-    await openSetupWorkspace();
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`));
-
-    await waitFor(() => {
-        expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("full_parameters");
-        expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
-    });
 }
 
 describe("AppShell", () => {
@@ -615,7 +639,7 @@ describe("AppShell", () => {
     });
 
     it("renders the archived tab shape, keeps placeholder tabs where expected, and mounts the real mission workspace", async () => {
-        await renderShellAt(1440);
+        const shell = await renderShellAt(1440);
 
         expect(screen.getByRole("button", { name: "Overview" })).toBeTruthy();
         expect(screen.getByRole("button", { name: "Telemetry" })).toBeTruthy();
@@ -630,6 +654,9 @@ describe("AppShell", () => {
         expect(Boolean(setupTab.compareDocumentPosition(appSettingsTab) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
 
         await fireEvent.click(screen.getByRole("button", { name: "Telemetry" }));
+        expect(shell.navigateToWorkspace).toHaveBeenCalledWith("telemetry");
+
+        await shell.rerenderRoute({ activeWorkspace: "telemetry", route: TelemetryRoutePage });
         await waitFor(() => {
             expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("telemetry");
         });
@@ -638,9 +665,12 @@ describe("AppShell", () => {
         // Telemetry now has a real workspace (TelemetryWorkspace) rather than a placeholder.
         expect(screen.queryByTestId("app-shell-placeholder-telemetry")).toBeNull();
         // The sidebar telemetry panel is not visible in the main workspace area.
-        expect(screen.queryByTestId("telemetry-state-value")).toBeNull();
+        expect(within(screen.getByTestId(appShellTestIds.mainViewport)).queryByTestId("telemetry-state-value")).toBeNull();
 
         await fireEvent.click(screen.getByRole("button", { name: "Mission" }));
+        expect(shell.navigateToWorkspace).toHaveBeenCalledWith("mission");
+
+        await shell.rerenderRoute({ activeWorkspace: "mission", route: MissionRoutePage });
         await waitFor(() => {
             expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("mission");
         });
@@ -663,9 +693,12 @@ describe("AppShell", () => {
             store: createFirmwareWorkspaceStore(firmwareService, { sessionPollMs: 0 }),
         });
 
-        await renderShellAt(1440, { firmwareWorkspaceContext });
+        const shell = await renderShellAt(1440, {
+            firmwareWorkspaceContext,
+            activeWorkspace: "firmware",
+            route: FirmwareRoutePage,
+        });
 
-        await fireEvent.click(screen.getByRole("button", { name: "Firmware" }));
         await waitFor(() => {
             expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("firmware");
             expect(screen.getByTestId(firmwareWorkspaceTestIds.root)).toBeTruthy();
@@ -686,13 +719,13 @@ describe("AppShell", () => {
             expect(screen.getByTestId(firmwareWorkspaceTestIds.catalogEntrySelect)).toBeTruthy();
         });
 
-        await fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+        await shell.rerenderRoute({ activeWorkspace: "overview", route: OverviewRoutePage });
         await waitFor(() => {
             expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("overview");
             expect(screen.getByTestId(appShellTestIds.operatorWorkspace)).toBeTruthy();
         });
 
-        await fireEvent.click(screen.getByRole("button", { name: "Firmware" }));
+        await shell.rerenderRoute({ activeWorkspace: "firmware", route: FirmwareRoutePage });
         await waitFor(() => {
             expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("firmware");
             expect(screen.getByTestId(firmwareWorkspaceTestIds.root)).toBeTruthy();
@@ -703,6 +736,9 @@ describe("AppShell", () => {
 
     it("mounts the dedicated setup workspace root and keeps partial facts explicit", async () => {
         await renderShellAt(1440, {
+            activeWorkspace: "setup",
+            route: SetupOverviewRoutePage,
+            setupSectionId: "overview",
             snapshot: createSnapshot({
                 configuration_facts: {
                     available: true,
@@ -745,9 +781,6 @@ describe("AppShell", () => {
             ]),
         });
 
-        await openSetupWorkspace();
-
-        expect(screen.queryByTestId("telemetry-state-value")).toBeNull();
         expect(screen.queryByTestId(parameterWorkspaceTestIds.root)).toBeNull();
         expect(screen.getByTestId(setupWorkspaceTestIds.state).textContent).toContain("Setup ready");
         expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`)).toBeTruthy();
@@ -757,6 +790,9 @@ describe("AppShell", () => {
 
     it("opens the expert browser from a workflow handoff inside the shell and stages raw edits into the shared tray", async () => {
         await renderShellAt(1440, {
+            activeWorkspace: "setup",
+            route: SetupFullParametersRoutePage,
+            setupSectionId: "full_parameters",
             snapshot: createConnectedLiveSnapshot({
                 param_store: {
                     expected_count: 5,
@@ -833,8 +869,6 @@ describe("AppShell", () => {
             ]),
         });
 
-        await openSetupFullParameters();
-
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.workflowOpenAdvancedPrefix}-safety`));
 
         expect(screen.getByTestId(parameterWorkspaceTestIds.advancedPanel)).toBeTruthy();
@@ -871,7 +905,10 @@ describe("AppShell", () => {
     });
 
     it("keeps overview mounted and gates guided setup sections when metadata is unavailable", async () => {
-        await renderShellAt(1440, {
+        const shell = await renderShellAt(1440, {
+            activeWorkspace: "setup",
+            route: SetupOverviewRoutePage,
+            setupSectionId: "overview",
             snapshot: createConnectedLiveSnapshot({
                 param_store: {
                     expected_count: 2,
@@ -883,8 +920,6 @@ describe("AppShell", () => {
                 param_progress: "completed",
             }),
         });
-
-        await openSetupWorkspace();
 
         expect(screen.getByTestId(setupWorkspaceTestIds.metadata).textContent).toContain("Parameter metadata is unavailable");
         expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain("Parameter descriptions are unavailable");
@@ -899,13 +934,19 @@ describe("AppShell", () => {
         expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).hasAttribute("disabled")).toBe(true);
 
         await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`));
+        expect(shell.navigateToSetupSection).toHaveBeenCalledWith("full_parameters");
+
+        await shell.rerenderRoute({ route: SetupFullParametersRoutePage, setupSectionId: "full_parameters" });
         await waitFor(() => {
             expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
         });
     });
 
     it("shows the staged-parameter bottom menu only in setup while preserving the queue across workspace toggles", async () => {
-        const { viewport } = await renderShellAt(1440, {
+        const { viewport, rerenderRoute } = await renderShellAt(1440, {
+            activeWorkspace: "setup",
+            route: SetupFullParametersRoutePage,
+            setupSectionId: "full_parameters",
             snapshot: createConnectedLiveSnapshot({
                 param_store: {
                     expected_count: 2,
@@ -937,8 +978,6 @@ describe("AppShell", () => {
 
         expect(screen.queryByTestId(appShellTestIds.parameterReviewTray)).toBeNull();
 
-        await openSetupFullParameters();
-
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.workflowStageButtonPrefix}-safety`));
 
         expect(screen.getByTestId(appShellTestIds.parameterReviewTray)).toBeTruthy();
@@ -955,6 +994,7 @@ describe("AppShell", () => {
         expect(screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-FS_THR_ENABLE`).textContent).toContain("1");
 
         await fireEvent.click(screen.getByTestId(appShellTestIds.overviewWorkspaceButton));
+        await rerenderRoute({ activeWorkspace: "overview", route: OverviewRoutePage });
         await waitFor(() => {
             expect(screen.getByTestId(appShellTestIds.activeWorkspace).textContent?.trim()).toBe("overview");
         });
@@ -963,7 +1003,7 @@ describe("AppShell", () => {
         expect(screen.queryByTestId(appShellTestIds.parameterReviewTray)).toBeNull();
         expect(screen.queryByTestId(parameterWorkspaceTestIds.root)).toBeNull();
 
-        await openSetupFullParameters();
+        await rerenderRoute({ activeWorkspace: "setup", route: SetupFullParametersRoutePage, setupSectionId: "full_parameters" });
 
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.workflowRowStatePrefix}-safety-ARMING_CHECK`).textContent).toContain(
             "Queued",
@@ -986,6 +1026,9 @@ describe("AppShell", () => {
 
     it("closes the review tray when staged edits drop to zero", async () => {
         await renderShellAt(1440, {
+            activeWorkspace: "setup",
+            route: SetupFullParametersRoutePage,
+            setupSectionId: "full_parameters",
             snapshot: createConnectedLiveSnapshot({
                 param_store: {
                     expected_count: 1,
@@ -1005,8 +1048,6 @@ describe("AppShell", () => {
                 ],
             ]),
         });
-
-        await openSetupFullParameters();
 
         await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.workflowStageButtonPrefix}-safety`));
         await fireEvent.click(screen.getByTestId(appShellTestIds.parameterReviewToggle));
@@ -1135,7 +1176,13 @@ describe("AppShell", () => {
             value: undefined,
         });
 
-        render(withShellContexts(store, parameterStore, AppShellContent));
+        render(withShellContexts(store, parameterStore, AppShellRouteHost), {
+            props: {
+                activeWorkspace: "overview",
+                navigateToWorkspace: vi.fn(async () => undefined),
+                route: OverviewRoutePage,
+            },
+        });
 
         await waitFor(() => {
             expect(screen.getByTestId(appShellTestIds.tier).textContent?.trim()).toBe("desktop");

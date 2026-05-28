@@ -161,6 +161,7 @@ test.describe("setup workspace proof", () => {
     await expect(setupOverviewGroupCountLocator(page, "hardware")).toContainText("7 sections · 7 ready here");
 
     await setupOverviewQuickActionLocator(page, "flight_modes").click();
+    await expect(page).toHaveURL(/\/setup\/flight-modes$/);
     await expect(page.locator(setupWorkspaceSelectors.flightModesSection)).toBeVisible();
     await expect(page.locator(`[data-testid="${setupWorkspaceTestIds.flightModesInputPrefix}-FLTMODE1"]`)).toBeEnabled();
     await expect(page.locator(setupWorkspaceSelectors.flightModesDocsLink)).toHaveAttribute(
@@ -177,6 +178,7 @@ test.describe("setup workspace proof", () => {
     await expect(parameterReviewRowLocator(page, "FLTMODE1")).toContainText("FLTMODE1");
 
     await setupNavLocator(page, "gps").click();
+    await expect(page).toHaveURL(/\/setup\/gps$/);
     await expect(page.locator(setupWorkspaceSelectors.gpsSection)).toBeVisible();
     await expect(page.locator(setupWorkspaceSelectors.gpsLiveState)).toContainText("Live");
     await expect(page.locator(setupWorkspaceSelectors.gpsPortState)).toContainText("SERIAL3");

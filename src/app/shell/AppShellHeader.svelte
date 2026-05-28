@@ -5,18 +5,19 @@ import type { Snippet } from "svelte";
 import { AdaptiveRail, ResponsiveTabs } from "../../components/ui";
 import { runtimeTestIds } from "../../lib/stores/runtime";
 import { appShellTestIds, type ShellTier } from "./chrome-state";
-import type { AppShellWorkspace } from "./app-shell-controller";
+import type { AppShellWorkspace, AppShellWorkspaceRoute } from "./workspace-routes";
 
 type ConnectionTone = "neutral" | "positive" | "caution" | "critical";
 type ShellTabItem = {
   key: AppShellWorkspace;
   label: string;
+  path: string;
   testId?: string;
   icon?: Snippet;
 };
 
 type Props = {
-  workspaces?: ReadonlyArray<{ key: AppShellWorkspace; label: string }>;
+  workspaces?: ReadonlyArray<AppShellWorkspaceRoute>;
   activeWorkspace?: AppShellWorkspace;
   onSelectWorkspace?: (workspace: AppShellWorkspace) => void;
   framework?: string;
@@ -41,7 +42,7 @@ let {
   framework = "Svelte 5",
   bootstrapState = "booting",
   bootedAt = null,
-  entrypoint = "src/routes/+page.svelte",
+  entrypoint = "src/routes/(app)/+layout.svelte",
   tier = "wide",
   drawerState = "docked",
   showVehiclePanelButton = false,
@@ -88,6 +89,7 @@ let tabItems = $derived(
     const item: ShellTabItem = {
       key: workspace.key,
       label: workspace.label,
+      path: workspace.path,
       icon: workspaceIcon(workspace.key),
     };
 

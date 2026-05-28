@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import type { Component } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
@@ -57,12 +58,11 @@ vi.mock("../../logs", async (importActual) => ({
   queryFlightPath: queryFlightPathMock,
 }));
 
-vi.mock("../../features/logs/components/LogsWorkspace.svelte", async () => await import("../../test/mocks/LogsWorkspaceHandoffMock.svelte"));
-
-vi.mock("../../features/mission/components/MissionWorkspace.svelte", async () => await import("../../test/mocks/MissionWorkspaceReplayOverlayMock.svelte"));
-
-import AppShellContent from "./AppShellContent.svelte";
+import AppShellRouteHost from "../../test/AppShellRouteHost.svelte";
+import LogsWorkspaceHandoffMock from "../../test/mocks/LogsWorkspaceHandoffMock.svelte";
+import MissionWorkspaceReplayOverlayMock from "../../test/mocks/MissionWorkspaceReplayOverlayMock.svelte";
 import { appShellTestIds } from "./chrome-state";
+import type { AppShellWorkspace } from "./workspace-routes";
 import { createParamsStore } from "../../lib/stores/params";
 import { markRuntimeReady, resetRuntimeState } from "../../lib/stores/runtime";
 import { createSessionStore } from "../../lib/stores/session";
@@ -96,7 +96,19 @@ function createSnapshot(): OpenSessionSnapshot {
 
 function createSessionService(): SessionService {
   let handlers: SessionServiceEventHandlers | null = null;
-  const connectionForm: SessionConnectionFormState = { mode: "udp", udpBind: "0.0.0.0:14550", tcpAddress: "127.0.0.1:5760", serialPort: "", baud: 57600, selectedBtDevice: "", takeoffAlt: "10", followVehicle: true };
+  const connectionForm: SessionConnectionFormState = {
+    mode: "udp",
+    udpBind: "0.0.0.0:14550",
+    tcpAddress: "127.0.0.1:5760",
+    websocketUrl: "ws://127.0.0.1:14560",
+    serialPort: "",
+    webSerialPortId: "",
+    webBluetoothDeviceId: "",
+    baud: 57600,
+    selectedBtDevice: "",
+    takeoffAlt: "10",
+    followVehicle: true,
+  };
 
   return {
     loadConnectionForm: vi.fn(() => ({ ...connectionForm })),
@@ -166,9 +178,29 @@ describe("AppShellContent log replay handoff", () => {
     await paramsStore.initialize();
     markRuntimeReady("2026-04-03T12:34:56.000Z");
 
-    render(withShellContexts(sessionStore, paramsStore, AppShellContent));
+    type RouteProps = {
+      activeWorkspace: AppShellWorkspace;
+      navigateToWorkspace: (workspace: AppShellWorkspace) => Promise<void>;
+      route: Component;
+    };
+    let rerenderRoute: ((props: RouteProps) => Promise<void>) | null = null;
+    let routeProps: RouteProps = {
+      activeWorkspace: "logs",
+      navigateToWorkspace: vi.fn(async (workspace: AppShellWorkspace) => {
+        routeProps = {
+          ...routeProps,
+          activeWorkspace: workspace,
+          route: workspace === "mission" ? MissionWorkspaceReplayOverlayMock : LogsWorkspaceHandoffMock,
+        };
+        await rerenderRoute?.(routeProps);
+      }),
+      route: LogsWorkspaceHandoffMock,
+    };
+    const rendered = render(withShellContexts(sessionStore, paramsStore, AppShellRouteHost), {
+      props: routeProps,
+    });
+    rerenderRoute = (props) => rendered.rerender(props);
 
-    await fireEvent.click(screen.getByRole("button", { name: "Logs" }));
     await fireEvent.click(screen.getByTestId("mock-logs-path-handoff"));
 
     await waitFor(() => {

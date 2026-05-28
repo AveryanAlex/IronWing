@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
+import { cleanup as cleanupTestingLibrary, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import { get, writable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -85,14 +85,15 @@ function createTestDataTransfer(): DataTransfer {
 import type { DomainValue } from "../../lib/domain-status";
 import { missingDomainValue } from "../../lib/domain-status";
 import type { ParamsService, ParamsServiceEventHandlers } from "../../lib/platform/params";
-import {
-  createParamsStore,
-} from "../../lib/stores/params";
+import { createParamsStore } from "../../lib/stores/params";
 import type { SessionStore, SessionStoreState } from "../../lib/stores/session";
 import {
   createSetupWorkspaceStore,
   createSetupWorkspaceViewStore,
+  type SetupWorkspaceViewStore,
 } from "../../lib/stores/setup-workspace";
+import { createSetupWizardStore, type SetupWizardStore } from "../../lib/stores/setup-wizard";
+import { isSetupSectionId, type SetupSectionId } from "../../lib/setup-sections";
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
 import { createStaticShellChromeStore, withShellContexts } from "../../test/context-harnesses";
@@ -100,10 +101,68 @@ import type { ShellChromeStore } from "../../app/shell/runtime-context";
 import type { TelemetryState, VehicleState } from "../../telemetry";
 import { appShellTestIds } from "../../app/shell/chrome-state";
 import { parameterWorkspaceTestIds } from "../params/parameter-workspace-test-ids";
-import SetupOverviewSection from "./sections/SetupOverviewSection.svelte";
-import SetupWorkspace from "./components/SetupWorkspace.svelte";
+import SetupArmingSection from "../../routes/(app)/setup/arming/+page.svelte";
+import SetupBatteryMonitorSection from "../../routes/(app)/setup/battery-monitor/+page.svelte";
+import SetupBeginnerWizardSection from "../../routes/(app)/setup/beginner-wizard/+page.svelte";
+import SetupCalibrationSection from "../../routes/(app)/setup/calibration/+page.svelte";
+import SetupFailsafeSection from "../../routes/(app)/setup/failsafe/+page.svelte";
+import SetupFlightModesSection from "../../routes/(app)/setup/flight-modes/+page.svelte";
+import SetupFrameOrientationSection from "../../routes/(app)/setup/frame-orientation/+page.svelte";
+import SetupFullParametersSection from "../../routes/(app)/setup/full-parameters/+page.svelte";
+import SetupGeofenceSection from "../../routes/(app)/setup/geofence/+page.svelte";
+import SetupGpsSection from "../../routes/(app)/setup/gps/+page.svelte";
+import SetupInitialParamsSection from "../../routes/(app)/setup/initial-params/+page.svelte";
+import SetupMotorsEscSection from "../../routes/(app)/setup/motors-esc/+page.svelte";
+import SetupOverviewSection from "../../routes/(app)/setup/+page.svelte";
+import SetupPeripheralsSection from "../../routes/(app)/setup/peripherals/+page.svelte";
+import SetupPidTuningSection from "../../routes/(app)/setup/pid-tuning/+page.svelte";
+import SetupRcReceiverSection from "../../routes/(app)/setup/rc-receiver/+page.svelte";
+import SetupRtlReturnSection from "../../routes/(app)/setup/rtl-return/+page.svelte";
+import SetupSerialPortsSection from "../../routes/(app)/setup/serial-ports/+page.svelte";
+import SetupServoOutputsSection from "../../routes/(app)/setup/servo-outputs/+page.svelte";
+import SetupWorkspace from "./components/SetupWorkspaceShell.svelte";
 import SetupWorkspaceSectionNav from "./components/SetupWorkspaceSectionNav.svelte";
+import { setSetupWorkspaceRouteContext } from "./components/setup-workspace-route-context";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+
+type RenderedSetupRoute = {
+  unmount(): void;
+};
+
+const SETUP_ROUTE_PAGES = {
+  overview: SetupOverviewSection,
+  beginner_wizard: SetupBeginnerWizardSection,
+  frame_orientation: SetupFrameOrientationSection,
+  calibration: SetupCalibrationSection,
+  rc_receiver: SetupRcReceiverSection,
+  gps: SetupGpsSection,
+  battery_monitor: SetupBatteryMonitorSection,
+  motors_esc: SetupMotorsEscSection,
+  servo_outputs: SetupServoOutputsSection,
+  serial_ports: SetupSerialPortsSection,
+  flight_modes: SetupFlightModesSection,
+  failsafe: SetupFailsafeSection,
+  rtl_return: SetupRtlReturnSection,
+  geofence: SetupGeofenceSection,
+  arming: SetupArmingSection,
+  initial_params: SetupInitialParamsSection,
+  pid_tuning: SetupPidTuningSection,
+  peripherals: SetupPeripheralsSection,
+  full_parameters: SetupFullParametersSection,
+} satisfies Record<SetupSectionId, unknown>;
+
+const setupRouteCleanups: Array<() => void> = [];
+
+function cleanupRenderedSetupRoutes() {
+  for (const cleanupRoute of setupRouteCleanups.splice(0)) {
+    cleanupRoute();
+  }
+}
+
+function cleanup() {
+  cleanupRenderedSetupRoutes();
+  cleanupTestingLibrary();
+}
 
 function createTelemetryDomain(
   value: TelemetryState["radio"] | null,
@@ -1262,7 +1321,10 @@ function createSessionState(overrides: Partial<SessionStoreState> = {}): Session
       mode: "udp",
       udpBind: "0.0.0.0:14550",
       tcpAddress: "127.0.0.1:5760",
+      websocketUrl: "ws://127.0.0.1:14560",
       serialPort: "",
+      webSerialPortId: "",
+      webBluetoothDeviceId: "",
       baud: 57600,
       selectedBtDevice: "",
       takeoffAlt: "10",
@@ -1501,6 +1563,8 @@ async function renderSetupWorkspace(options: {
   paramsService?: Partial<ParamsService>;
   reviewTrayOpen?: boolean;
   chromeStore?: ShellChromeStore;
+  requestedSectionId?: SetupSectionId | null;
+  navigateToSetupSection?: (sectionId: SetupSectionId) => void | Promise<void>;
 } = {}) {
   const sessionStore = writable(createSessionState(options.sessionOverrides));
   const metadata = Object.prototype.hasOwnProperty.call(options, "metadata")
@@ -1512,7 +1576,79 @@ async function renderSetupWorkspace(options: {
 
   const setupWorkspaceStore = createSetupWorkspaceStore(sessionStore, parameterStore);
   const setupWorkspaceViewStore = createSetupWorkspaceViewStore(setupWorkspaceStore);
+  const wizardStore = createSetupWizardStore({
+    storage: typeof localStorage !== "undefined" && typeof localStorage.getItem === "function" ? localStorage : undefined,
+  });
   const sessionReadable = sessionStore as unknown as SessionStore;
+
+  function selectRouteSection(sectionId: string) {
+    if (!isSetupSectionId(sectionId)) {
+      return;
+    }
+
+    const setupView = get(setupWorkspaceViewStore);
+    if (
+      setupView.selectedSectionId === "beginner_wizard" &&
+      sectionId !== "beginner_wizard" &&
+      get(wizardStore).phase === "active"
+    ) {
+      wizardStore.pause("detour");
+    }
+
+    setupWorkspaceStore.selectSection(sectionId);
+  }
+
+  function withSetupRouteContexts(component: unknown) {
+    const renderable = component as (...args: any[]) => unknown;
+
+    return withShellContexts(
+      sessionReadable,
+      parameterStore,
+      function SetupRoutePageHarness(...args: any[]) {
+        setSetupWorkspaceRouteContext({
+          viewStore: setupWorkspaceViewStore,
+          wizardStore,
+          selectSection: selectRouteSection,
+        });
+
+        return renderable(...args);
+      },
+      {
+        setupWorkspaceStore,
+        setupWorkspaceViewStore,
+        chromeStore: options.chromeStore,
+      },
+    );
+  }
+
+  let renderedRoute: RenderedSetupRoute | null = null;
+  let renderedSectionId: SetupSectionId | null = null;
+
+  function renderSelectedRoute(sectionId: SetupSectionId) {
+    if (sectionId === renderedSectionId) {
+      return;
+    }
+
+    renderedRoute?.unmount();
+    renderedSectionId = sectionId;
+    renderedRoute = render(withSetupRouteContexts(SETUP_ROUTE_PAGES[sectionId]));
+  }
+
+  const unsubscribeRoute = setupWorkspaceViewStore.subscribe((view) => {
+    renderSelectedRoute(view.selectedSectionId);
+  });
+
+  setupRouteCleanups.push(() => {
+    unsubscribeRoute();
+    try {
+      renderedRoute?.unmount();
+    } catch {
+      // Some tests intentionally call Testing Library cleanup mid-case before
+      // rendering a smaller focused surface; avoid double-unmount noise there.
+    }
+    renderedRoute = null;
+    renderedSectionId = null;
+  });
 
   render(
     withShellContexts(sessionReadable, parameterStore, SetupWorkspace, {
@@ -1520,6 +1656,13 @@ async function renderSetupWorkspace(options: {
       setupWorkspaceViewStore,
       chromeStore: options.chromeStore,
     }),
+    {
+      props: {
+        requestedSectionId: options.requestedSectionId,
+        navigateToSetupSection: options.navigateToSetupSection,
+        wizardStore,
+      },
+    },
   );
 
   await waitFor(() => {
@@ -1613,6 +1756,29 @@ describe("SetupWorkspace", () => {
       expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("full_parameters");
       expect(screen.getByTestId(setupWorkspaceTestIds.fullParameters)).toBeTruthy();
     });
+  });
+
+  it("honors setup section routes and delegates section navigation to the router", async () => {
+    const navigateToSetupSection = vi.fn();
+
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      requestedSectionId: "gps",
+      navigateToSetupSection,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("gps");
+      expect(screen.getByTestId(setupWorkspaceTestIds.gpsSection)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-flight_modes`));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("flight_modes");
+      expect(screen.getByTestId(setupWorkspaceTestIds.flightModesSection)).toBeTruthy();
+    });
+    expect(navigateToSetupSection).toHaveBeenLastCalledWith("flight_modes");
   });
 
   it("opens Full Parameters directly into the raw parameter browser", async () => {
@@ -1750,10 +1916,23 @@ describe("SetupWorkspace", () => {
     };
 
     cleanup();
-    render(withShellContexts(sessionStore as unknown as SessionStore, parameterStore, SetupOverviewSection), {
-      view,
-      onSelect: vi.fn(),
-    });
+    const overviewViewStore = writable(view) as unknown as SetupWorkspaceViewStore;
+    const wizardStore = createSetupWizardStore();
+    render(
+      withShellContexts(
+        sessionStore as unknown as SessionStore,
+        parameterStore,
+        function SetupOverviewRouteHarness(...args: any[]) {
+          setSetupWorkspaceRouteContext({
+            viewStore: overviewViewStore,
+            wizardStore,
+            selectSection: vi.fn(),
+          });
+
+          return (SetupOverviewSection as (...args: any[]) => unknown)(...args);
+        },
+      ),
+    );
 
     expect(screen.queryByRole("button", { name: "Open PID Tuning" })).toBeNull();
     expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewCardPrefix}-pid_tuning`).textContent).toContain("Coming later");

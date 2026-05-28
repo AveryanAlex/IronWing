@@ -1,13 +1,12 @@
 <script lang="ts">
-import type { ReplayMapOverlayState } from "../../lib/replay-map-overlay";
+import { fromStore } from "svelte/store";
 
-type Props = {
-  replayMapOverlay?: ReplayMapOverlayState | null;
-};
+import { getMissionWorkspaceRouteContext } from "../../app/shell/runtime-context";
 
-let {
-  replayMapOverlay = null,
-}: Props = $props();
+const route = getMissionWorkspaceRouteContext();
+const replayMapOverlayStore = fromStore(route.replayMapOverlay);
+
+let replayMapOverlay = $derived(replayMapOverlayStore.current);
 </script>
 
 <section data-testid="mock-mission-workspace">

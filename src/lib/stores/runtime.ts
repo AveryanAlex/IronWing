@@ -19,7 +19,7 @@ export type RuntimeState = {
   framework: "Svelte 5";
   bootstrapState: RuntimeBootstrapState;
   mountTarget: "#app";
-  entrypoint: "src/routes/+page.svelte";
+  entrypoint: "src/routes/(app)/+layout.svelte";
   bootedAt: string | null;
   failureMessage: string | null;
 };
@@ -29,7 +29,7 @@ const initialRuntimeState: RuntimeState = {
   framework: "Svelte 5",
   bootstrapState: "booting",
   mountTarget: "#app",
-  entrypoint: "src/routes/+page.svelte",
+  entrypoint: "src/routes/(app)/+layout.svelte",
   bootedAt: null,
   failureMessage: null,
 };

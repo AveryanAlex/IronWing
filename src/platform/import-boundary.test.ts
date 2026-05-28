@@ -40,7 +40,37 @@ type ContentScanRule = {
 const SRC_DIR = resolve(__dirname, "..");
 const REPO_ROOT = resolve(SRC_DIR, "..");
 const PLATFORM_DIR_PREFIX = "src/platform/";
-const ACTIVE_RUNTIME_ROOTS = ["src/routes/+layout.svelte", "src/routes/+page.svelte"] as const;
+const ACTIVE_RUNTIME_ROOTS = [
+  "src/routes/+layout.svelte",
+  "src/routes/(app)/+layout.svelte",
+  "src/routes/(app)/+page.svelte",
+  "src/routes/(app)/telemetry/+page.svelte",
+  "src/routes/(app)/hud/+page.svelte",
+  "src/routes/(app)/mission/+page.svelte",
+  "src/routes/(app)/logs/+page.svelte",
+  "src/routes/(app)/firmware/+page.svelte",
+  "src/routes/(app)/setup/+layout.svelte",
+  "src/routes/(app)/setup/+page.svelte",
+  "src/routes/(app)/setup/beginner-wizard/+page.svelte",
+  "src/routes/(app)/setup/frame-orientation/+page.svelte",
+  "src/routes/(app)/setup/calibration/+page.svelte",
+  "src/routes/(app)/setup/rc-receiver/+page.svelte",
+  "src/routes/(app)/setup/gps/+page.svelte",
+  "src/routes/(app)/setup/battery-monitor/+page.svelte",
+  "src/routes/(app)/setup/motors-esc/+page.svelte",
+  "src/routes/(app)/setup/servo-outputs/+page.svelte",
+  "src/routes/(app)/setup/serial-ports/+page.svelte",
+  "src/routes/(app)/setup/flight-modes/+page.svelte",
+  "src/routes/(app)/setup/failsafe/+page.svelte",
+  "src/routes/(app)/setup/rtl-return/+page.svelte",
+  "src/routes/(app)/setup/geofence/+page.svelte",
+  "src/routes/(app)/setup/arming/+page.svelte",
+  "src/routes/(app)/setup/initial-params/+page.svelte",
+  "src/routes/(app)/setup/pid-tuning/+page.svelte",
+  "src/routes/(app)/setup/peripherals/+page.svelte",
+  "src/routes/(app)/setup/full-parameters/+page.svelte",
+  "src/routes/(app)/settings/+page.svelte",
+] as const;
 const ACTIVE_SCAN_ROOTS = [
   { label: "src", dir: SRC_DIR },
   { label: "e2e", dir: resolve(REPO_ROOT, "e2e") },
@@ -108,11 +138,11 @@ const UI_PRIMITIVE_DIR_PREFIX = "src/components/ui/";
 
 const RAW_BUTTON_ALLOWLIST = new Set([
   "src/app/shell/AppShellHeader.svelte",
-  "src/features/hud/components/HudWorkspace.svelte",
+  "src/routes/(app)/hud/+page.svelte",
   "src/features/mission/components/MissionMap.svelte",
   "src/features/mission/components/MissionMapInteractiveLayer.svelte",
-  "src/features/setup/sections/SetupPeripheralsSection.svelte",
-  "src/features/setup/components/SetupWorkspace.svelte",
+  "src/routes/(app)/setup/peripherals/+page.svelte",
+  "src/features/setup/components/SetupWorkspaceShell.svelte",
 ]);
 
 const RAW_FORM_CONTROL_ALLOWLIST = new Set([
@@ -646,7 +676,7 @@ describe("active tree archive guardrails", () => {
 });
 
 describe("active runtime boundary helper rules", () => {
-  const fixtureSource = "src/routes/+page.svelte";
+  const fixtureSource = "src/routes/(app)/+page.svelte";
 
   it.each([
     {

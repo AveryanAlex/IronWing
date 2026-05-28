@@ -15,7 +15,7 @@ import {
   type SessionStore,
   type SessionStoreState,
 } from "../../../lib/stores/session";
-import TelemetryWorkspace from "./TelemetryWorkspace.svelte";
+import TelemetryWorkspace from "../../../routes/(app)/telemetry/+page.svelte";
 
 const envelope = {
   session_id: "telemetry-workspace",

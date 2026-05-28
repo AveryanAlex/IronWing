@@ -252,7 +252,7 @@ vi.mock("maplibre-gl", () => {
   };
 });
 
-import MissionWorkspace from "./components/MissionWorkspace.svelte";
+import MissionWorkspace from "../../routes/(app)/mission/+page.svelte";
 import { missionWorkspaceTestIds } from "./mission-workspace-test-ids";
 import {
   setMissionPlannerStoreContext,

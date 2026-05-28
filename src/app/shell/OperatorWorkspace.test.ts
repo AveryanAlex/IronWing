@@ -37,7 +37,7 @@ vi.mock("maplibre-gl", () => {
   };
 });
 
-import OperatorWorkspace from "./OperatorWorkspace.svelte";
+import OperatorWorkspace from "../../routes/(app)/+page.svelte";
 import { appShellTestIds } from "./chrome-state";
 import { createParamsStore } from "../../lib/stores/params";
 import { missingDomainValue } from "../../lib/domain-status";
