@@ -9,7 +9,7 @@
 | Task | Location | Notes |
 |------|----------|-------|
 | Native IPC surface | `tauri/core.ts`, `tauri/event.ts`, `tauri/http.ts` | Thin re-exports of Tauri APIs |
-| Pure web IPC surface | `web/core.ts`, `web/event.ts`, `web/http.ts` | Browser/WASM runtime for raw Vite builds |
+| Pure web IPC surface | `web/core.ts`, `web/event.ts`, `web/http.ts` | Browser/WASM runtime for SvelteKit/Vite builds |
 | Agent remote UI IPC surface | `remote/core.ts`, `remote/event.ts`, `remote/http.ts` | Browser-facing bridge to a running Tauri app |
 | Mocked browser IPC surface | `mock/core.ts`, `mock/event.ts`, `mock/http.ts` | Browser-only invoke/event/fetch stubs |
 | Analytics surface | `<platform>/analytics.ts` | Same app analytics facade, platform-specific Aptabase backend/no-op |
@@ -27,7 +27,7 @@
 
 ## Web Platform Notes
 
-- Raw Vite commands (`pnpm exec vite`, `pnpm exec vite build`) use `web/` and build the Rust WASM bridge through the Vite config.
+- SvelteKit/Vite commands (`pnpm exec vite`, `pnpm exec vite build`) use `web/` and build the Rust WASM bridge through the Vite config.
 - The generated `ironwing_wasm.js` and `.wasm` files are transient and ignored; keep `ironwing_wasm.d.ts` checked in unless intentionally regenerating bindings.
 
 ## Analytics Notes

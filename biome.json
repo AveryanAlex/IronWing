@@ -9,11 +9,12 @@
     "includes": [
       "package.json",
       "biome.json",
-      "src/App.svelte",
+      "src/app.html",
       "src/app/**/*.svelte",
+      "src/routes/**/*.svelte",
+      "src/routes/**/*.ts",
       "src/app.css",
       "src/lib/stores/runtime.ts",
-      "src/main.ts",
       "svelte.config.js",
       "vite.config.ts",
       "vitest.config.ts"

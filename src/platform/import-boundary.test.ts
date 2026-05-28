@@ -40,7 +40,7 @@ type ContentScanRule = {
 const SRC_DIR = resolve(__dirname, "..");
 const REPO_ROOT = resolve(SRC_DIR, "..");
 const PLATFORM_DIR_PREFIX = "src/platform/";
-const ACTIVE_RUNTIME_ROOTS = ["src/main.ts"] as const;
+const ACTIVE_RUNTIME_ROOTS = ["src/routes/+layout.svelte", "src/routes/+page.svelte"] as const;
 const ACTIVE_SCAN_ROOTS = [
   { label: "src", dir: SRC_DIR },
   { label: "e2e", dir: resolve(REPO_ROOT, "e2e") },
@@ -215,7 +215,7 @@ const ACTIVE_RUNTIME_RULES: ResolvedImportRule[] = [
     classLabel: "active-path reach-through",
     matches: (edge) => /^(?:react|react-dom)(?:\/|$)/.test(edge.specifier),
     guidance:
-      "The active runtime graph reachable from src/main.ts must stay on the shipped Svelte path. Replace React package usage with Svelte components, stores, or helpers.",
+      "The active runtime graph reachable from the SvelteKit route/layout roots must stay on the shipped Svelte path. Replace React package usage with Svelte components, stores, or helpers.",
   },
   {
     label: "lucide-react package imports",
@@ -646,7 +646,7 @@ describe("active tree archive guardrails", () => {
 });
 
 describe("active runtime boundary helper rules", () => {
-  const fixtureSource = "src/app/App.svelte";
+  const fixtureSource = "src/routes/+page.svelte";
 
   it.each([
     {

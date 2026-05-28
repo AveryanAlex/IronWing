@@ -931,7 +931,7 @@ export async function expectRuntimeDiagnostics(page: Page): Promise<void> {
     await expect(page.locator(runtimeSelectors.framework)).toContainText("Svelte 5");
     await expect(page.locator(runtimeSelectors.bootstrapState)).toContainText("ready");
     await expect(page.locator(runtimeSelectors.bootedAt)).not.toContainText("Starting up");
-    await expect(page.locator(runtimeSelectors.entrypoint)).toContainText("src/app/App.svelte");
+    await expect(page.locator(runtimeSelectors.entrypoint)).toContainText("src/routes/+page.svelte");
 }
 
 export async function expectShellChrome(page: Page, presetName: ShellViewportPresetName): Promise<ShellViewportPreset> {

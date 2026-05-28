@@ -36,7 +36,7 @@ pnpm run build:frontend
 pnpm run dev:web
 ```
 
-Raw Vite commands default to the pure web platform: `pnpm exec vite` serves the browser/WASM frontend, and `pnpm exec vite build` writes `dist/web`. Use `pnpm run dev:web` when you also want SITL and the WebSocket bridge managed for you.
+SvelteKit's Vite commands default to the pure web platform: `pnpm exec vite` serves the browser/WASM frontend, and `pnpm exec vite build` writes `dist/web`. Use `pnpm run dev:web` when you also want SITL and the WebSocket bridge managed for you.
 
 ## Use IronWing with ArduPilot SITL (development)
 

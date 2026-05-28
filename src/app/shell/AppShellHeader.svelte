@@ -41,7 +41,7 @@ let {
   framework = "Svelte 5",
   bootstrapState = "booting",
   bootedAt = null,
-  entrypoint = "src/app/App.svelte",
+  entrypoint = "src/routes/+page.svelte",
   tier = "wide",
   drawerState = "docked",
   showVehiclePanelButton = false,

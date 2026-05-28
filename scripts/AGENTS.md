@@ -4,7 +4,7 @@
 
 `scripts/` contains thin Node entrypoints for package scripts plus the shared `scripts/workflow/` orchestration library. Keep target-specific command shape in the entrypoints and put reusable process, environment, port, SITL, Tauri, and WASM behavior in `workflow/` modules.
 
-Plain Vite is now the web/WASM default: `pnpm exec vite` serves the pure web platform and `pnpm exec vite build` writes `dist/web`. Tauri, mock E2E, and remote UI flows must opt into their platform explicitly through env helpers.
+SvelteKit's Vite CLI is now the web/WASM default: `pnpm exec vite` serves the pure web platform and `pnpm exec vite build` writes `dist/web`. Tauri, mock E2E, and remote UI flows must opt into their platform explicitly through env helpers.
 
 ## Where To Look
 
@@ -45,7 +45,7 @@ Plain Vite is now the web/WASM default: `pnpm exec vite` serves the pure web pla
 
 ## Target Rules
 
-- Raw Vite defaults to the pure web platform and `dist/web`; `vite.config.ts` triggers `internal:wasm:web:*` for web builds/dev.
+- SvelteKit/Vite defaults to the pure web platform and `dist/web`; `vite.config.ts` triggers `internal:wasm:web:*` for web builds/dev.
 - Do not add a second explicit `wasm-pack` call to `dev:web` or `build:web`; keep Rust WASM compilation centralized in Vite + `wasm-web-build.mjs`.
 - Keep `src/platform/web/generated/ironwing_wasm.d.ts` checked in and do not modify it unless intentionally regenerating bindings. Generated JS/WASM runtime files remain transient and ignored.
 - Tauri dev/build entrypoints must pass `tauriFrontendEnv()` so frontend aliases use `src/platform/tauri/*` and output goes to `dist/tauri`.

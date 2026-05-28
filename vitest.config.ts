@@ -1,12 +1,15 @@
 import { defineConfig } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { fileURLToPath, URL } from "url";
-import svelteConfig from "./svelte.config";
+import svelteConfig from "./svelte.config.js";
 
 // Vitest 4 ships newer Vite plugin typings than the active Vite 5 app toolchain.
 // Keep the cast local so targeted Svelte tests can use the real transform without
 // dragging this config back into the shipped frontend typecheck surface.
-const svelteVitestPlugin = svelte(svelteConfig) as never;
+const svelteVitestPlugin = svelte({
+  compilerOptions: svelteConfig.compilerOptions,
+  preprocess: svelteConfig.preprocess,
+}) as never;
 
 export default defineConfig({
   plugins: [svelteVitestPlugin],

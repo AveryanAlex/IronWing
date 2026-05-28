@@ -9,6 +9,7 @@ export const parameterWorkspaceTestIds = {
     empty: "parameter-workspace-empty",
     pendingCount: "parameter-workspace-pending-count",
     pendingHint: "parameter-workspace-pending-hint",
+    sectionPrefix: "parameter-workspace-section",
     workflowSectionPrefix: "parameter-workflow-section",
     workflowCardPrefix: "parameter-workflow-card",
     workflowSummaryPrefix: "parameter-workflow-summary",

@@ -91,7 +91,7 @@ test("renders the product shell with stable runtime hooks", () => {
   expect(getByTestId(appShellTestIds.tier).textContent?.trim()).toBe("phone");
   expect(getByTestId(appShellTestIds.drawerState).textContent?.trim()).toBe("closed");
   expect(getByTestId(runtimeTestIds.bootedAt).textContent).toBe("2026-04-03T12:34:56.000Z");
-  expect(getByTestId(runtimeTestIds.entrypoint).textContent).toBe("src/app/App.svelte");
+  expect(getByTestId(runtimeTestIds.entrypoint).textContent).toBe("src/routes/+page.svelte");
 });
 
 test("surfaces booting runtime hooks before the bootstrap harness marks the runtime ready", () => {

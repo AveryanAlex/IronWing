@@ -18,8 +18,8 @@ export type RuntimeState = {
   appName: "IronWing";
   framework: "Svelte 5";
   bootstrapState: RuntimeBootstrapState;
-  mountTarget: "#root";
-  entrypoint: "src/app/App.svelte";
+  mountTarget: "#app";
+  entrypoint: "src/routes/+page.svelte";
   bootedAt: string | null;
   failureMessage: string | null;
 };
@@ -28,8 +28,8 @@ const initialRuntimeState: RuntimeState = {
   appName: "IronWing",
   framework: "Svelte 5",
   bootstrapState: "booting",
-  mountTarget: "#root",
-  entrypoint: "src/app/App.svelte",
+  mountTarget: "#app",
+  entrypoint: "src/routes/+page.svelte",
   bootedAt: null,
   failureMessage: null,
 };

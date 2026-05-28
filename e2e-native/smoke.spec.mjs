@@ -283,7 +283,7 @@ describe("native real-stack workflows", () => {
     await waitForCheckpoint("runtime framework marker proves Svelte", async () => {
       const framework = await readTextContent(selectors.runtimeFramework);
       const entrypoint = await readTextContent(selectors.runtimeEntrypoint);
-      return framework === "Svelte 5" && entrypoint === "src/app/App.svelte";
+      return framework === "Svelte 5" && entrypoint === "src/routes/+page.svelte";
     }, {
       timeout: 30_000,
       timeoutMsg: "Timed out waiting for the hidden runtime markers that distinguish the active Svelte shell from archived runtime surfaces.",

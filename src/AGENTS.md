@@ -2,7 +2,7 @@
 
 ## Overview
 
-- `src/` is the shipped Svelte runtime mounted from `src/main.ts`.
+- `src/` is the shipped SvelteKit runtime rooted at `src/routes/+layout.svelte` and `src/routes/+page.svelte`.
 
 ## Required Skills
 
@@ -48,7 +48,7 @@
 
 ## Where To Look
 
-- Bootstrap and shell: `main.ts`, `App.svelte`, `app/shell/*`
+- Bootstrap and shell: `routes/+layout.svelte`, `routes/+page.svelte`, `app/App.svelte`, `app/shell/*`
 - Reusable view primitives: `components/ui/*`
 - Feature UI: `components/<feature>/*`
 - Shared stores, helpers, and domain glue: `lib/*` plus top-level bridge/domain files like `session.ts`, `telemetry.ts`, `mission.ts`, `params.ts`, `logs.ts`, and `firmware.ts`

@@ -1,20 +1,19 @@
 import { spawn } from "node:child_process";
 import { defineConfig, type Plugin } from "vite";
-import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath, URL } from "url";
 
 type PlatformDir = "mock" | "remote" | "tauri" | "web";
+type WasmBuildScript = "internal:wasm:web:debug" | "internal:wasm:web:release";
+type IronwingWebWasmState = {
+  scriptPromises: Partial<Record<WasmBuildScript, Promise<void>>>;
+};
 
 const SUPPORTED_PLATFORMS: readonly PlatformDir[] = ["mock", "remote", "tauri", "web"];
-const DEFAULT_OUT_DIRS: Record<PlatformDir, string> = {
-  mock: "dist/e2e",
-  remote: "dist/tauri",
-  tauri: "dist/tauri",
-  web: "dist/web",
-};
 const PNPM_COMMAND = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
+const IRONWING_WEB_WASM_STATE_KEY = Symbol.for("dev.averylex.ironwing.webWasmBuildState");
 
 function isPlatformDir(value: string): value is PlatformDir {
   return SUPPORTED_PLATFORMS.includes(value as PlatformDir);
@@ -61,10 +60,26 @@ function runPnpmScript(script: string): Promise<void> {
   });
 }
 
+function ironwingWebWasmState(): IronwingWebWasmState {
+  const globals = globalThis as typeof globalThis & {
+    [IRONWING_WEB_WASM_STATE_KEY]?: IronwingWebWasmState;
+  };
+
+  globals[IRONWING_WEB_WASM_STATE_KEY] ??= {
+    scriptPromises: {},
+  };
+
+  return globals[IRONWING_WEB_WASM_STATE_KEY];
+}
+
+function runWebWasmScriptOnce(script: WasmBuildScript): Promise<void> {
+  const state = ironwingWebWasmState();
+  state.scriptPromises[script] ??= runPnpmScript(script);
+  return state.scriptPromises[script];
+}
+
 function ironwingWebWasmPlugin(enabled: boolean): Plugin {
   let command: "build" | "serve" = "serve";
-  let built = false;
-  let cleaned = false;
 
   return {
     name: "ironwing-web-wasm",
@@ -72,20 +87,12 @@ function ironwingWebWasmPlugin(enabled: boolean): Plugin {
       command = config.command;
     },
     async buildStart() {
-      if (!enabled || built) {
+      if (!enabled) {
         return;
       }
 
-      built = true;
-      await runPnpmScript(command === "serve" ? "internal:wasm:web:debug" : "internal:wasm:web:release");
-    },
-    async closeBundle() {
-      if (!enabled || command !== "build" || cleaned || process.env.IRONWING_KEEP_WASM_GENERATED === "1") {
-        return;
-      }
-
-      cleaned = true;
-      await runPnpmScript("internal:wasm:web:cleanup");
+      const script = command === "serve" ? "internal:wasm:web:debug" : "internal:wasm:web:release";
+      await runWebWasmScriptOnce(script);
     },
   };
 }
@@ -100,8 +107,7 @@ const serverHost =
       : "localhost";
 
 export default defineConfig({
-  base: process.env.IRONWING_BASE ?? (platformDir === "web" ? "./" : undefined),
-  plugins: [ironwingWebWasmPlugin(platformDir === "web"), svelte(), tailwindcss()],
+  plugins: [ironwingWebWasmPlugin(platformDir === "web"), tailwindcss(), sveltekit()],
   resolve: {
     alias: {
       "@app": fileURLToPath(new URL("src/app", import.meta.url)),
@@ -124,12 +130,11 @@ export default defineConfig({
   build: {
     target: "es2022",
     chunkSizeWarningLimit: 5120,
-    outDir: process.env.IRONWING_OUT_DIR ?? DEFAULT_OUT_DIRS[platformDir],
   },
   server: {
     host: serverHost,
     watch: {
-      ignored: ["**/.direnv/**"],
+      ignored: ["**/.direnv/**", "**/.svelte-kit/**", "**/src/platform/web/generated/**"],
     },
   },
 });

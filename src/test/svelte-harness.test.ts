@@ -47,7 +47,7 @@ vi.mock("maplibre-gl", () => {
   };
 });
 
-import App from "../App.svelte";
+import App from "../app/App.svelte";
 import { runtimeTestIds } from "../lib/stores/runtime";
 
 beforeEach(() => {

@@ -17,7 +17,7 @@ if (cleanupOnly) {
     await removeTransientWasmWebFiles();
   }
 } else {
-  await removeTransientWasmWebFiles();
+  await removeWasmWebMetadataFiles();
 
   await runCommand("wasm-pack", [
     "build",
