@@ -9,13 +9,19 @@ import { sessionConnectionDefaults } from "../../lib/platform/session";
 import type { ParamsService } from "../../lib/platform/params";
 import { createParamsStore } from "../../lib/stores/params";
 import { createSessionStore } from "../../lib/stores/session";
-import {
-  createSetupWorkspaceStore,
-  createSetupWorkspaceViewStore,
-} from "../../lib/stores/setup-workspace";
+import { createSetupWorkspaceStore } from "../../lib/stores/setup-workspace";
+import type { SetupSectionId } from "../../lib/setup-sections";
 import { createStaticShellChromeStore, withShellContexts } from "../../test/context-harnesses";
 import SetupWorkspace from "./components/SetupWorkspaceShell.svelte";
 import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
+
+const analyticsMocks = vi.hoisted(() => ({
+  trackAnalytics: vi.fn(),
+}));
+
+vi.mock("../../lib/analytics/client", () => ({
+  trackAnalytics: analyticsMocks.trackAnalytics,
+}));
 
 function createSessionService(): SessionService {
   return {
@@ -59,23 +65,23 @@ function createParamsService(): ParamsService {
 }
 
 function renderSetupWorkspace(options: {
+  requestedSectionId?: SetupSectionId;
   tier?: Parameters<typeof createStaticShellChromeStore>[0];
 } = {}) {
   const sessionStore = createSessionStore(createSessionService());
   const parameterStore = createParamsStore(sessionStore, createParamsService());
   const setupWorkspaceStore = createSetupWorkspaceStore(sessionStore, parameterStore, { uiState: null });
-  const setupWorkspaceViewStore = createSetupWorkspaceViewStore(setupWorkspaceStore);
   const navigateToSetupSection = vi.fn(async () => undefined);
 
   render(
     withShellContexts(sessionStore, parameterStore, SetupWorkspace, {
       setupWorkspaceStore,
-      setupWorkspaceViewStore,
       chromeStore: createStaticShellChromeStore(options.tier ?? "wide"),
     }),
     {
       props: {
         navigateToSetupSection,
+        requestedSectionId: options.requestedSectionId,
       },
     },
   );
@@ -119,5 +125,23 @@ describe("SetupWorkspace", () => {
     });
     expect(get(setupWorkspaceStore).selectedSectionId).toBe("gps");
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("tracks a route-selected setup section without an intermediate overview view", async () => {
+    const { setupWorkspaceStore } = renderSetupWorkspace({ requestedSectionId: "gps" });
+
+    await waitFor(() => {
+      expect(get(setupWorkspaceStore).selectedSectionId).toBe("gps");
+    });
+    await waitFor(() => {
+      expect(analyticsMocks.trackAnalytics).toHaveBeenCalledWith("setup_section_viewed", {
+        connected: 0,
+        section: "gps",
+      });
+    });
+    expect(analyticsMocks.trackAnalytics).not.toHaveBeenCalledWith(
+      "setup_section_viewed",
+      expect.objectContaining({ section: "overview" }),
+    );
   });
 });

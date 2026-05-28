@@ -118,9 +118,19 @@ setSetupWorkspaceRouteContext({
 
 let view = $derived(viewStore.current);
 let selectedSection = $derived(view.sections.find((section) => section.id === view.selectedSectionId) ?? null);
+let routeSectionSelectionPending = $derived(
+  requestedSectionId !== undefined &&
+    requestedSectionId !== null &&
+    requestedSectionId !== view.selectedSectionId &&
+    requestedSectionId !== suppressedRouteSectionId,
+);
 let lastTrackedSectionId: string | null = null;
 
 $effect(() => {
+  if (routeSectionSelectionPending) {
+    return;
+  }
+
   if (view.selectedSectionId === lastTrackedSectionId) {
     return;
   }
