@@ -1820,15 +1820,14 @@ describe("SetupWorkspace", () => {
     });
   });
 
-  it("keeps guided sections locked while Full Parameters stays available during metadata recovery", async () => {
+  it("keeps guided sections and Full Parameters reachable during metadata recovery", async () => {
     await renderSetupWorkspace({ metadata: null });
 
-    expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain("Parameter descriptions are unavailable");
     expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain(
-      "Parameter descriptions are unavailable",
+      "Metadata missing",
     );
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).getAttribute("data-availability")).toBe("blocked");
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).hasAttribute("disabled")).toBe(false);
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`).hasAttribute("disabled")).toBe(false);
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`).hasAttribute("disabled")).toBe(false);
 
     await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.overviewRecoveryAction));
@@ -1871,7 +1870,7 @@ describe("SetupWorkspace", () => {
     expect(inactiveItem.classList.contains("bg-transparent")).toBe(true);
   });
 
-  it("keeps unimplemented sections like pid_tuning disabled with Coming later", async () => {
+  it("keeps unimplemented sections like pid_tuning enabled in nav", async () => {
     const { setupWorkspaceStore } = await renderSetupWorkspace({
       metadata: createSetupMetadata(),
     });
@@ -1894,8 +1893,7 @@ describe("SetupWorkspace", () => {
     });
 
     const pidTuningItem = screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-pid_tuning`);
-    expect(pidTuningItem.hasAttribute("disabled")).toBe(true);
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-pid_tuning`)).toBeTruthy();
+    expect(pidTuningItem.hasAttribute("disabled")).toBe(false);
     expect(sections.find((section) => section.id === "pid_tuning")?.implemented).toBe(false);
   });
 
@@ -1938,17 +1936,11 @@ describe("SetupWorkspace", () => {
     expect(screen.getByTestId(`${setupWorkspaceTestIds.overviewCardPrefix}-pid_tuning`).textContent).toContain("Coming later");
   });
 
-  it("drives Full Parameters disabled behavior from availability state instead of gate copy", async () => {
+  it("keeps Full Parameters enabled in section navigation", async () => {
     const { setupWorkspaceStore } = await renderSetupWorkspace({
       metadata: createSetupMetadata(),
     });
-    const baseView = get(setupWorkspaceStore);
-    const sectionGroups = baseView.sectionGroups.map((group) => ({
-      ...group,
-      sections: group.sections.map((section) => section.id === "full_parameters"
-        ? { ...section, availability: "blocked", gateText: "Custom blocked reason." }
-        : section),
-    }));
+    const { sectionGroups } = get(setupWorkspaceStore);
 
     cleanup();
     render(SetupWorkspaceSectionNav, {
@@ -1957,10 +1949,10 @@ describe("SetupWorkspace", () => {
       onSelect: vi.fn(),
     });
 
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`).hasAttribute("disabled")).toBe(false);
   });
 
-  it("shows an explicit parameter download state before setup unlocks", async () => {
+  it("keeps section navigation enabled while parameter download is globally gated", async () => {
     await renderSetupWorkspace({
       metadata: null,
       sessionOverrides: {
@@ -1973,14 +1965,12 @@ describe("SetupWorkspace", () => {
       },
     });
 
-    expect(screen.getByTestId(setupWorkspaceTestIds.overviewSection).textContent).toContain(
-      "Download Parameters to Get Started",
-    );
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`).getAttribute("data-availability")).toBe("blocked");
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain("Preparing setup workspace");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`).hasAttribute("disabled")).toBe(false);
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`).hasAttribute("disabled")).toBe(false);
   });
 
-  it("shows the description-loading gate while allowing only Full Parameters", async () => {
+  it("keeps section navigation enabled while descriptions load", async () => {
     const pendingMetadata = new Promise<ParamMetadataMap | null>(() => undefined);
 
     await renderSetupWorkspace({
@@ -1990,14 +1980,11 @@ describe("SetupWorkspace", () => {
       },
     });
 
-    expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain(
-      "Loading parameter descriptions",
-    );
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`).hasAttribute("disabled")).toBe(false);
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`).hasAttribute("disabled")).toBe(false);
   });
 
-  it("keeps unimplemented sections visible but disabled with neutral copy", async () => {
+  it("keeps unimplemented sections visible and enabled with neutral copy", async () => {
     const { setupWorkspaceStore } = await renderSetupWorkspace({
       metadata: createSetupMetadata(),
     });
@@ -2017,9 +2004,7 @@ describe("SetupWorkspace", () => {
     });
 
     const pidTuningItem = screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-pid_tuning`);
-    expect(pidTuningItem.hasAttribute("disabled")).toBe(true);
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-pid_tuning`)).toBeTruthy();
-    expect(screen.queryByTestId(setupWorkspaceTestIds.plannedSection)).toBeNull();
+    expect(pidTuningItem.hasAttribute("disabled")).toBe(false);
   });
 
   it("mounts GPS with GPS_TYPE fallback, optional GPS2 truth, GNSS staging, and same-scope stale live facts", async () => {
@@ -3339,7 +3324,7 @@ describe("SetupWorkspace", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.checkpointDetail).textContent).toContain("Resumed");
-      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("overview");
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("rc_receiver");
     });
 
     await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.checkpointDismiss));
@@ -3468,7 +3453,7 @@ describe("SetupWorkspace", () => {
     expect(screen.queryByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeNull();
   });
 
-  it("returns to overview when the wizard scope changes family", async () => {
+  it("keeps the wizard route selected when the wizard scope changes family", async () => {
     const { sessionStore } = await renderSetupWorkspace({
       metadata: createSetupMetadata(),
     });
@@ -3490,9 +3475,9 @@ describe("SetupWorkspace", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("overview");
+      expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("beginner_wizard");
     });
-    expect(screen.queryByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeNull();
+    expect(screen.getByTestId(setupWorkspaceTestIds.wizardRoot)).toBeTruthy();
   });
 
   it("keeps the inline section nav rail visible on wide tier without the drawer toggle", async () => {

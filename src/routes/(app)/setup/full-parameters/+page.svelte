@@ -6,14 +6,6 @@ import ParameterWorkspace from "../../../../features/params/components/Parameter
 import { resolveDocsUrl, type VehicleSlug } from "../../../../data/ardupilot-docs";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import SetupIntroCard from "../../../../features/setup/shared/SetupIntroCard.svelte";
-import { Alert } from "../../../../components/ui";
-import { getSetupWorkspaceRouteContext } from "../../../../features/setup/components/setup-workspace-route-context";
-
-const route = getSetupWorkspaceRouteContext();
-const viewStore = fromStore(route.viewStore);
-
-let view = $derived(viewStore.current);
-let canOpen = $derived(view.canOpenFullParameters);
 
 const paramsStore = getParamsStoreContext();
 const paramsState = fromStore(paramsStore);
@@ -49,14 +41,5 @@ function resolveVehicleSlug(vehicleType: string | null): VehicleSlug | null {
     docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.fullParametersDocsLink }]}
   />
 
-  {#if canOpen}
-    <ParameterWorkspace defaultMode="expert" embedded />
-  {:else}
-    <Alert
-      variant="warning"
-      testId={setupWorkspaceTestIds.fullParametersRecovery}
-    >
-      Full Parameters is blocked for the current scope. Reconnect the vehicle or finish loading parameters, then return here to inspect the raw list.
-    </Alert>
-  {/if}
+  <ParameterWorkspace defaultMode="expert" embedded />
 </section>

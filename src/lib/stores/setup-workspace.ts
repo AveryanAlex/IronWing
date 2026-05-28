@@ -67,7 +67,6 @@ const IMPLEMENTED_SECTION_ID_SET = new Set<SetupSectionId>([
 ]);
 
 export type SetupWorkspaceReadiness = "bootstrapping" | "unavailable" | "ready" | "degraded";
-export type SetupWorkspaceSectionAvailability = "available" | "blocked";
 export type SetupWorkspaceCheckpointPhase = "idle" | "resume_pending" | "resume_complete" | "scope_changed";
 
 export type SetupWorkspaceCheckpointState = {
@@ -89,11 +88,9 @@ export type SetupWorkspaceSection = {
   kind: "overview" | "guided" | "recovery";
   groupId: string;
   groupTitle: string;
-  availability: SetupWorkspaceSectionAvailability;
   status: SectionStatus | null;
   statusText: string;
   confidenceText: string | null;
-  gateText: string | null;
   detailText: string;
   trackable: boolean;
   implemented: boolean;
@@ -106,7 +103,6 @@ export type SetupWorkspaceSectionGroup = {
   sections: SetupWorkspaceSection[];
   progress: OverallProgress;
   progressText: string;
-  blockedCount: number;
   unconfirmedCount: number;
   implementedCount: number;
 };
@@ -156,8 +152,6 @@ export type SetupWorkspaceStoreState = {
   scopeText: string;
   metadataState: ParamsMetadataState;
   metadataText: string;
-  metadataGateActive: boolean;
-  metadataGateText: string | null;
   noticeText: string | null;
   progress: OverallProgress;
   progressText: string;
@@ -171,7 +165,6 @@ export type SetupWorkspaceStoreState = {
   statusNotices: CompactStatusNotice[];
   rcReceiver: SetupWorkspaceRcReceiverState;
   calibrationSummary: SetupWorkspaceCalibrationSummary;
-  canOpenFullParameters: boolean;
 };
 
 export type SetupWorkspaceCheckpointInput = {
@@ -380,30 +373,6 @@ function hasReadyParamStore(paramsState: Pick<ParamsStoreState, "paramStore">): 
   return paramsState.paramStore !== null;
 }
 
-function resolveSetupAccessGateText(input: {
-  liveSessionConnected: boolean;
-  paramStoreReady: boolean;
-  metadataState: ParamsMetadataState;
-}): string | null {
-  if (!input.liveSessionConnected) {
-    return "Connect to a vehicle to access setup.";
-  }
-
-  if (!input.paramStoreReady) {
-    return "Download parameters to continue.";
-  }
-
-  if (input.metadataState === "idle" || input.metadataState === "loading") {
-    return "Loading parameter descriptions.";
-  }
-
-  if (input.metadataState === "unavailable") {
-    return "Parameter descriptions are unavailable. Open Full Parameters to continue.";
-  }
-
-  return null;
-}
-
 function resolveSetupReadiness(
   sessionState: SessionStoreState,
   paramsState: ParamsStoreState,
@@ -441,7 +410,6 @@ function resolveNoticeText(input: {
   sessionState: SessionStoreState;
   paramsState: ParamsStoreState;
   readiness: SetupWorkspaceReadiness;
-  metadataGateText: string | null;
 }): string | null {
   if (input.paramsState.scopeClearWarning) {
     return input.paramsState.scopeClearWarning;
@@ -451,25 +419,8 @@ function resolveNoticeText(input: {
     return "Setup is read-only during playback.";
   }
 
-  const accessGateText = resolveSetupAccessGateText({
-    liveSessionConnected: input.sessionState.sessionDomain.value?.connection.kind === "connected",
-    paramStoreReady: hasReadyParamStore(input.paramsState),
-    metadataState: input.paramsState.metadataState,
-  });
-
-  if (
-    accessGateText === "Connect to a vehicle to access setup."
-    || accessGateText === "Download parameters to continue."
-  ) {
-    return accessGateText;
-  }
-
   if (input.paramsState.streamError) {
     return "Live parameter updates are unavailable right now.";
-  }
-
-  if (accessGateText) {
-    return accessGateText;
   }
 
   if (input.readiness === "bootstrapping") {
@@ -587,87 +538,6 @@ function describeGuidedSectionStatus(status: SectionStatus, sectionId: SetupSect
   }
 }
 
-function resolveGuidedSectionGateText(input: {
-  activeSource: SourceKind | null;
-  liveSessionConnected: boolean;
-  paramStoreReady: boolean;
-  metadataState: ParamsMetadataState;
-  streamError: string | null;
-}): string | null {
-  if (input.activeSource === "playback") {
-    return "Setup is read-only during playback.";
-  }
-
-  const accessGateText = resolveSetupAccessGateText(input);
-  if (accessGateText === "Connect to a vehicle to access setup." || accessGateText === "Download parameters to continue.") {
-    return accessGateText;
-  }
-
-  if (input.streamError) {
-    return "Live parameter updates are unavailable right now.";
-  }
-
-  return accessGateText;
-}
-
-function resolveFullParametersAvailability(input: {
-  activeSource: SourceKind | null;
-  liveSessionConnected: boolean;
-  paramStoreReady: boolean;
-  metadataState: ParamsMetadataState;
-  streamError: string | null;
-}): {
-  availability: SetupWorkspaceSectionAvailability;
-  gateText: string | null;
-} {
-  if (input.activeSource === "playback") {
-    return {
-      availability: "blocked",
-      gateText: "Setup is read-only during playback.",
-    };
-  }
-
-  const accessGateText = resolveSetupAccessGateText(input);
-  if (accessGateText === "Connect to a vehicle to access setup." || accessGateText === "Download parameters to continue.") {
-    return {
-      availability: "blocked",
-      gateText: accessGateText,
-    };
-  }
-
-  if (input.streamError) {
-    return {
-      availability: "blocked",
-      gateText: "Live parameter updates are unavailable right now.",
-    };
-  }
-
-  if (
-    input.liveSessionConnected
-    && input.paramStoreReady
-    && (input.metadataState === "idle" || input.metadataState === "loading" || input.metadataState === "unavailable")
-  ) {
-    return {
-      availability: "available",
-      gateText: null,
-    };
-  }
-
-  const gateText = accessGateText;
-
-  if (gateText) {
-    return {
-      availability: "blocked",
-      gateText,
-    };
-  }
-
-  return {
-    availability: "available",
-    gateText: null,
-  };
-}
-
 function describePlannedSectionStatus(status: SectionStatus, sectionId: SetupSectionId): string {
   const definition = getSetupSectionDefinition(sectionId);
 
@@ -687,28 +557,8 @@ function describePlannedSectionStatus(status: SectionStatus, sectionId: SetupSec
 }
 
 function buildCatalogSections(input: {
-  activeSource: SourceKind | null;
   sectionStatuses: Record<SetupSectionId, SectionStatus>;
-  liveSessionConnected: boolean;
-  paramStoreReady: boolean;
-  metadataState: ParamsMetadataState;
-  streamError: string | null;
 }): SetupWorkspaceSection[] {
-  const guidedGateText = resolveGuidedSectionGateText({
-    activeSource: input.activeSource,
-    liveSessionConnected: input.liveSessionConnected,
-    paramStoreReady: input.paramStoreReady,
-    metadataState: input.metadataState,
-    streamError: input.streamError,
-  });
-  const fullParametersState = resolveFullParametersAvailability({
-    activeSource: input.activeSource,
-    liveSessionConnected: input.liveSessionConnected,
-    paramStoreReady: input.paramStoreReady,
-    metadataState: input.metadataState,
-    streamError: input.streamError,
-  });
-
   return SETUP_SECTION_CATALOG.map((definition) => {
     const group = getSetupSectionGroupDefinition(definition.groupId);
     const implemented = IMPLEMENTED_SECTION_ID_SET.has(definition.id);
@@ -721,11 +571,9 @@ function buildCatalogSections(input: {
         kind: definition.kind,
         groupId: group.id,
         groupTitle: group.title,
-        availability: "available",
         status: null,
         statusText: "Dashboard",
         confidenceText: null,
-        gateText: null,
         detailText: "Use the grouped dashboard to review setup status before opening a section.",
         trackable: definition.trackable,
         implemented,
@@ -740,19 +588,16 @@ function buildCatalogSections(input: {
         kind: definition.kind,
         groupId: group.id,
         groupTitle: group.title,
-        availability: fullParametersState.availability,
         status: null,
         statusText: "Recovery",
         confidenceText: null,
-        gateText: fullParametersState.gateText,
-        detailText: fullParametersState.gateText ?? "Open Full Parameters to review and edit raw parameter values.",
+        detailText: "Open Full Parameters to review and edit raw parameter values.",
         trackable: definition.trackable,
         implemented,
       } satisfies SetupWorkspaceSection;
     }
 
     const status = input.sectionStatuses[definition.id];
-    const gateText = guidedGateText;
 
     return {
       id: definition.id,
@@ -761,16 +606,12 @@ function buildCatalogSections(input: {
       kind: definition.kind,
       groupId: group.id,
       groupTitle: group.title,
-      availability: gateText ? "blocked" : "available",
       status,
       statusText: formatSectionStatusText(status),
       confidenceText: status === "unknown" ? "Unconfirmed" : null,
-      gateText,
-      detailText: gateText
-        ? gateText
-        : implemented
-          ? describeGuidedSectionStatus(status, definition.id)
-          : describePlannedSectionStatus(status, definition.id),
+      detailText: implemented
+        ? describeGuidedSectionStatus(status, definition.id)
+        : describePlannedSectionStatus(status, definition.id),
       trackable: definition.trackable,
       implemented,
     } satisfies SetupWorkspaceSection;
@@ -801,7 +642,6 @@ function buildSectionGroups(sections: SetupWorkspaceSection[]): SetupWorkspaceSe
       sections: groupedSections,
       progress,
       progressText,
-      blockedCount: groupedSections.filter((section) => section.availability === "blocked").length,
       unconfirmedCount: groupedSections.filter((section) => section.status === "unknown" || section.status === "not_started").length,
       implementedCount: groupedSections.filter((section) => section.implemented).length,
     } satisfies SetupWorkspaceSectionGroup;
@@ -1274,33 +1114,6 @@ function normalizeCheckpointInput(input: SetupWorkspaceCheckpointInput): SetupWo
   };
 }
 
-function isSetupAccessGateText(value: string | null): boolean {
-  return value === "Connect to a vehicle to access setup."
-    || value === "Download parameters to continue."
-    || value === "Loading parameter descriptions."
-    || value === "Parameter descriptions are unavailable. Open Full Parameters to continue.";
-}
-
-function blocksSectionSelection(section: SetupWorkspaceSection): boolean {
-  if (section.availability !== "blocked") {
-    return false;
-  }
-
-  if (section.id === "full_parameters") {
-    return true;
-  }
-
-  return isSetupAccessGateText(section.gateText);
-}
-
-function resolveSelectedSectionId(
-  requested: SetupSectionId,
-  sections: SetupWorkspaceSection[],
-): SetupSectionId {
-  const section = sections.find((entry) => entry.id === requested);
-  return section && !blocksSectionSelection(section) ? requested : "overview";
-}
-
 function createInitialWorkspaceState(): SetupWorkspaceStoreState {
   const sectionStatuses = createUnknownSectionStatusRecord();
   const sections = SETUP_SECTION_CATALOG.map((definition) => {
@@ -1315,11 +1128,9 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
         kind: definition.kind,
         groupId: group.id,
         groupTitle: group.title,
-        availability: "available",
         status: null,
         statusText: "Dashboard",
         confidenceText: null,
-        gateText: null,
         detailText: "Use the grouped dashboard to review setup status before opening a section.",
         trackable: definition.trackable,
         implemented,
@@ -1334,12 +1145,10 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
         kind: definition.kind,
         groupId: group.id,
         groupTitle: group.title,
-        availability: "blocked",
         status: null,
         statusText: "Recovery",
         confidenceText: null,
-        gateText: "Connect to a vehicle to access setup.",
-        detailText: "Connect to a vehicle to access setup.",
+        detailText: "Open Full Parameters to review and edit raw parameter values.",
         trackable: definition.trackable,
         implemented,
       } satisfies SetupWorkspaceSection;
@@ -1352,12 +1161,12 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
       kind: definition.kind,
       groupId: group.id,
       groupTitle: group.title,
-      availability: "blocked",
       status: sectionStatuses[definition.id],
       statusText: "Unknown",
       confidenceText: "Unconfirmed",
-      gateText: "Connect to a vehicle to access setup.",
-      detailText: "Connect to a vehicle to access setup.",
+      detailText: implemented
+        ? describeGuidedSectionStatus(sectionStatuses[definition.id], definition.id)
+        : describePlannedSectionStatus(sectionStatuses[definition.id], definition.id),
       trackable: definition.trackable,
       implemented,
     } satisfies SetupWorkspaceSection;
@@ -1376,9 +1185,7 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
     scopeText: "No active setup scope",
     metadataState: "idle",
     metadataText: "Metadata idle",
-    metadataGateActive: true,
-    metadataGateText: "Connect to a vehicle to access setup.",
-    noticeText: "Connect to a vehicle to access setup.",
+    noticeText: "Preparing setup workspace.",
     progress,
     progressText: formatProgressText(progress),
     selectedSectionId: "overview",
@@ -1391,7 +1198,6 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
     statusNotices: [],
     rcReceiver: createInitialRcReceiverState(),
     calibrationSummary: createInitialCalibrationSummary(),
-    canOpenFullParameters: false,
   };
 }
 
@@ -1432,8 +1238,7 @@ export function createSetupWorkspaceStore(
       return false;
     }
 
-    const section = previous?.sections.find((entry) => entry.id === sectionId) ?? null;
-    return section?.availability === "available";
+    return previous?.sections.some((entry) => entry.id === sectionId && entry.kind === "guided") === true;
   }
 
   function canMutateActiveScopeConfirmations(): boolean {
@@ -1441,7 +1246,7 @@ export function createSetupWorkspaceStore(
       return false;
     }
 
-    return previous?.sections.some((section) => section.kind === "guided" && section.availability === "available") === true;
+    return previous?.sections.some((section) => section.kind === "guided") === true;
   }
 
   function recompute() {
@@ -1458,11 +1263,6 @@ export function createSetupWorkspaceStore(
     const readiness = resolveSetupReadiness(sessionState, paramsState);
     const liveSessionConnected = sessionState.sessionDomain.value?.connection.kind === "connected";
     const paramStoreReady = hasReadyParamStore(paramsState);
-    const metadataGateText = resolveSetupAccessGateText({
-      liveSessionConnected,
-      paramStoreReady,
-      metadataState: paramsState.metadataState,
-    });
     const sectionStatuses = deriveSectionStatuses(
       sessionState,
       previous?.sectionStatuses ?? null,
@@ -1544,24 +1344,18 @@ export function createSetupWorkspaceStore(
     }
 
     const sections = buildCatalogSections({
-      activeSource: sessionState.activeSource,
       sectionStatuses,
-      liveSessionConnected,
-      paramStoreReady,
-      metadataState: paramsState.metadataState,
-      streamError: paramsState.streamError,
     });
     if (uiState && activeFamily && activeFamily !== previousFamilyForRestore) {
       const storedSectionId = uiState.getSetupSection(activeFamily);
-      if (storedSectionId && isSetupSectionId(storedSectionId)) {
-        const candidate = sections.find((section) => section.id === storedSectionId);
-        if (candidate && candidate.availability === "available") {
-          selectedSectionId = storedSectionId;
-        }
+      if (storedSectionId && isSetupSectionId(storedSectionId) && sections.some((section) => section.id === storedSectionId)) {
+        selectedSectionId = storedSectionId;
       }
     }
     previousFamilyForRestore = activeFamily;
-    selectedSectionId = resolveSelectedSectionId(selectedSectionId, sections);
+    if (!sections.some((section) => section.id === selectedSectionId)) {
+      selectedSectionId = "overview";
+    }
 
     const progress = computeOverallProgress(new Map(SECTION_IDS.map((id) => [id, sectionStatuses[id]])));
     const statusNotices = resolveStatusNotices(
@@ -1595,13 +1389,10 @@ export function createSetupWorkspaceStore(
       scopeText: formatScopeText(sessionState.activeEnvelope),
       metadataState: paramsState.metadataState,
       metadataText: formatMetadataText(paramsState.metadataState, paramsState.metadataError),
-      metadataGateActive: metadataGateText !== null,
-      metadataGateText,
       noticeText: resolveNoticeText({
         sessionState,
         paramsState,
         readiness,
-        metadataGateText,
       }),
       progress,
       progressText: formatProgressText(progress),
@@ -1615,9 +1406,6 @@ export function createSetupWorkspaceStore(
       statusNotices,
       rcReceiver,
       calibrationSummary,
-      canOpenFullParameters: sections.some(
-        (section) => section.id === "full_parameters" && section.availability === "available",
-      ),
     };
 
     state.set(next);
@@ -1640,12 +1428,6 @@ export function createSetupWorkspaceStore(
     subscribe: state.subscribe,
     selectSection(nextSectionId: string) {
       if (!isSetupSectionId(nextSectionId)) {
-        return;
-      }
-
-      const candidate = previous?.sections.find((section) => section.id === nextSectionId) ?? null;
-      if (candidate && blocksSectionSelection(candidate)) {
-        recompute();
         return;
       }
 

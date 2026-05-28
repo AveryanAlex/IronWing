@@ -53,7 +53,7 @@ let commandError = $state<string | null>(null);
 let params = $derived(paramsState.current);
 let session = $derived(sessionState.current);
 let itemIndex = $derived(buildParameterItemIndex(params.paramStore, params.metadata));
-let actionsBlocked = $derived(view.checkpoint.blocksActions || section.availability === "blocked");
+let actionsBlocked = $derived(view.checkpoint.blocksActions);
 let vehicleSlug = $derived(getVehicleSlug(session.sessionDomain.value?.vehicle_state?.vehicle_type ?? null));
 let armed = $derived(session.sessionDomain.value?.vehicle_state?.armed === true);
 let armingRecoveryReasons = $derived(

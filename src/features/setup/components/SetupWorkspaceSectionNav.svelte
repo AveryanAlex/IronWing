@@ -1,5 +1,5 @@
 <script lang="ts">
-import { ChevronDown, ChevronRight, Lock } from "lucide-svelte";
+import { ChevronDown, ChevronRight } from "lucide-svelte";
 
 import type { SetupWorkspaceSection, SetupWorkspaceSectionGroup } from "../../../lib/stores/setup-workspace";
 import { Button } from "../../../components/ui";
@@ -64,33 +64,6 @@ function toggleGroup(groupId: string) {
   collapsedGroups[groupId] = !collapsedGroups[groupId];
 }
 
-function isComingLater(section: SetupWorkspaceSection): boolean {
-  return section.kind === "guided" && !section.implemented;
-}
-
-function isSetupAccessGateText(value: string | null): boolean {
-  return value === "Connect to a vehicle to access setup."
-    || value === "Download parameters to continue."
-    || value === "Loading parameter descriptions."
-    || value === "Parameter descriptions are unavailable. Open Full Parameters to continue.";
-}
-
-function isDisabled(section: SetupWorkspaceSection): boolean {
-  if (isComingLater(section)) {
-    return true;
-  }
-
-  if (section.availability !== "blocked") {
-    return false;
-  }
-
-  if (section.id === "full_parameters") {
-    return true;
-  }
-
-  return isSetupAccessGateText(section.gateText);
-}
-
 function showStatusIcon(section: SetupWorkspaceSection): boolean {
   return section.status === "complete"
     || section.status === "in_progress"
@@ -122,32 +95,22 @@ function showStatusIcon(section: SetupWorkspaceSection): boolean {
       {#if !collapsedGroups[group.id]}
         <div class="flex flex-col gap-0.5 px-0.5">
           {#each group.sections as section (section.id)}
-            {@const disabled = isDisabled(section)}
           <Button
             aria-current={selectedSectionId === section.id ? "page" : undefined}
             class={[
-              "h-auto w-full justify-start gap-2.5 rounded-md border-none px-2.5 py-2 text-left text-xs disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40",
+              "h-auto w-full justify-start gap-2.5 rounded-md border-none px-2.5 py-2 text-left text-xs",
               selectedSectionId === section.id
                 ? "bg-accent/20 text-text-primary hover:bg-accent/20"
                 : "bg-transparent text-text-secondary hover:bg-bg-tertiary/60",
             ].join(" ")}
-            data-availability={section.availability}
             data-implemented={section.implemented ? "true" : "false"}
             testId={`${setupWorkspaceTestIds.navPrefix}-${section.id}`}
-            disabled={disabled}
             onclick={() => onSelect(section.id)}
           >
             <SetupSectionIcon sectionId={section.id} />
             <span class="truncate font-medium">{section.title}</span>
 
-            {#if disabled}
-              <span
-                class="ml-auto inline-flex items-center justify-center text-text-muted/50"
-                data-testid={`${setupWorkspaceTestIds.sectionStatusPrefix}-${section.id}`}
-              >
-                <Lock size={10} aria-hidden="true" />
-              </span>
-            {:else if showStatusIcon(section)}
+            {#if showStatusIcon(section)}
               <span
                 class="ml-auto inline-flex items-center justify-center"
                 data-testid={`${setupWorkspaceTestIds.sectionStatusPrefix}-${section.id}`}

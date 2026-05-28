@@ -92,8 +92,6 @@ function makeView(
     scopeText: "session-1 · live · rev 0",
     metadataState: "ready",
     metadataText: "Metadata ready",
-    metadataGateActive: false,
-    metadataGateText: null,
     noticeText: null,
     progress: { completed: 0, total: 0, percentage: 0 },
     progressText: "0 of 0 complete",
@@ -120,7 +118,6 @@ function makeView(
         makeCalibrationCard("compass", { statusText: "Compass waiting" }),
       ],
     },
-    canOpenFullParameters: true,
   };
 
   return { ...base, ...overrides };

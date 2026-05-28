@@ -87,13 +87,12 @@ test.describe("setup workspace proof", () => {
 
     await openConnectedSetupWorkspace(page);
 
-    await expect(page.locator(setupWorkspaceSelectors.notice)).toContainText("Parameter descriptions are unavailable");
     await expect(page.locator(setupWorkspaceSelectors.overviewBanner)).toContainText(
-      "Parameter descriptions are unavailable",
+      "Metadata missing",
     );
-    await expect(setupNavLocator(page, "frame_orientation")).toHaveAttribute("data-availability", "blocked");
-    await expect(setupNavLocator(page, "rc_receiver")).toHaveAttribute("data-availability", "blocked");
-    await expect(setupNavLocator(page, "calibration")).toHaveAttribute("data-availability", "blocked");
+    await expect(setupNavLocator(page, "frame_orientation")).toBeEnabled();
+    await expect(setupNavLocator(page, "rc_receiver")).toBeEnabled();
+    await expect(setupNavLocator(page, "calibration")).toBeEnabled();
 
     await setupNavLocator(page, "full_parameters").click();
 

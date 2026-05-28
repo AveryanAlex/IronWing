@@ -44,7 +44,7 @@ let model = $derived(
   }),
 );
 let docsUrl = $derived(resolveDocsUrl("serial_ports"));
-let actionsBlocked = $derived(view.checkpoint.blocksActions || section.availability === "blocked");
+let actionsBlocked = $derived(view.checkpoint.blocksActions);
 let canConfirm = $derived(
   !actionsBlocked &&
     model.ports.length > 0 &&

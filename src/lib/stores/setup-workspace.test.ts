@@ -9,6 +9,7 @@ import {
   type SetupWorkspaceSectionGroup,
   type SetupWorkspaceStoreState,
 } from "./setup-workspace";
+import { SECTION_IDS } from "../setup-sections";
 import type { ParamsStoreState } from "./params";
 import type { SessionStoreState } from "./session";
 
@@ -312,7 +313,7 @@ describe("setup workspace store", () => {
     expect(tuningGroup?.progressText).toBe("0/1 confirmed");
   });
 
-  it("blocks the entire workspace until parameter values load", () => {
+  it("keeps catalog sections routable while the global gate waits for parameter values", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState({
       paramStore: null,
@@ -323,16 +324,11 @@ describe("setup workspace store", () => {
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
     const state = get(store);
-    const blockedSections = state.sections.filter((section) => section.id !== "overview");
+    const catalogSections = state.sections.filter((section) => section.id !== "overview");
 
-    expect(state.noticeText).toBe("Download parameters to continue.");
-    expect(state.metadataGateText).toBe("Download parameters to continue.");
-    expect(state.metadataGateActive).toBe(true);
-    expect(blockedSections).toHaveLength(state.sections.length - 1);
-    for (const section of blockedSections) {
-      expect(section.availability).toBe("blocked");
-      expect(section.gateText).toBe("Download parameters to continue.");
-    }
+    expect(state.noticeText).toBe("Preparing setup workspace.");
+    expect(catalogSections).toHaveLength(state.sections.length - 1);
+    expect(catalogSections.map((section) => section.id)).toEqual(SECTION_IDS.filter((id) => id !== "overview"));
   });
 
   it("keeps the global gate active when parameter values are missing even if metadata is ready", () => {
@@ -345,12 +341,10 @@ describe("setup workspace store", () => {
 
     const state = get(store);
 
-    expect(state.noticeText).toBe("Download parameters to continue.");
-    expect(state.metadataGateText).toBe("Download parameters to continue.");
-    expect(state.metadataGateActive).toBe(true);
+    expect(state.noticeText).toBe("Preparing setup workspace.");
   });
 
-  it("allows only Overview and Full Parameters when metadata is unavailable", () => {
+  it("keeps all sections routable when metadata is unavailable", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState({
       metadata: null,
@@ -360,19 +354,11 @@ describe("setup workspace store", () => {
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
     const state = get(store);
-    const availableSections = state.sections.filter((section) => section.availability === "available");
-    const blockedSections = state.sections.filter((section) => section.availability === "blocked");
-
-    expect(availableSections.map((section) => section.id)).toEqual(["overview", "full_parameters"]);
-    expect(state.noticeText).toBe("Parameter descriptions are unavailable. Open Full Parameters to continue.");
-    expect(state.metadataGateText).toBe("Parameter descriptions are unavailable. Open Full Parameters to continue.");
-    expect(blockedSections).toHaveLength(state.sections.length - 2);
-    for (const section of blockedSections) {
-      expect(section.gateText).toBe("Parameter descriptions are unavailable. Open Full Parameters to continue.");
-    }
+    expect(state.sections.map((section) => section.id)).toEqual(SECTION_IDS);
+    expect(state.noticeText).toBeNull();
   });
 
-  it("keeps full parameters blocked until the vehicle is connected and parameter values are ready", () => {
+  it("reports the global connect gate without blocking individual sections", () => {
     const sessionStore = writable(createSessionState({
       sessionDomain: {
         available: true,
@@ -406,18 +392,11 @@ describe("setup workspace store", () => {
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
     const state = get(store);
-    const fullParametersSection = readSection(state, "full_parameters");
-    const gpsSection = readSection(state, "gps");
-
     expect(state.readiness).toBe("bootstrapping");
-    expect(state.noticeText).toBe("Connect to a vehicle to access setup.");
-    expect(state.metadataGateText).toBe("Connect to a vehicle to access setup.");
-    expect(fullParametersSection?.availability).toBe("blocked");
-    expect(fullParametersSection?.gateText).toBe("Connect to a vehicle to access setup.");
-    expect(gpsSection?.detailText).toBe("Connect to a vehicle to access setup.");
+    expect(state.noticeText).toBe("Preparing setup workspace.");
   });
 
-  it("blocks full parameters when parameter updates are degraded even if metadata is ready", () => {
+  it("reports degraded parameter updates without blocking individual sections", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState({
       streamError: "Live parameter updates are unavailable right now.",
@@ -426,19 +405,11 @@ describe("setup workspace store", () => {
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
     const state = get(store);
-    const fullParametersSection = readSection(state, "full_parameters");
-    const gpsSection = readSection(state, "gps");
-
     expect(state.readiness).toBe("degraded");
     expect(state.noticeText).toBe("Live parameter updates are unavailable right now.");
-    expect(fullParametersSection?.availability).toBe("blocked");
-    expect(fullParametersSection?.gateText).toBe("Live parameter updates are unavailable right now.");
-    expect(gpsSection?.availability).toBe("blocked");
-    expect(gpsSection?.gateText).toBe("Live parameter updates are unavailable right now.");
-    expect(gpsSection?.detailText).toBe("Live parameter updates are unavailable right now.");
   });
 
-  it("prefers the connect notice over stream errors when the vehicle is disconnected", () => {
+  it("reports stream errors without restoring the connect access gate", () => {
     const sessionStore = writable(createSessionState({
       sessionDomain: {
         available: true,
@@ -470,15 +441,10 @@ describe("setup workspace store", () => {
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
     const state = get(store);
-    const gpsSection = readSection(state, "gps");
-    const fullParametersSection = readSection(state, "full_parameters");
-
-    expect(state.noticeText).toBe("Connect to a vehicle to access setup.");
-    expect(gpsSection?.gateText).toBe("Connect to a vehicle to access setup.");
-    expect(fullParametersSection?.gateText).toBe("Connect to a vehicle to access setup.");
+    expect(state.noticeText).toBe("Live parameter updates are unavailable right now.");
   });
 
-  it("prefers the parameter-download notice over stream errors when parameter values are missing", () => {
+  it("reports stream errors without restoring the parameter-download access gate", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState({
       paramStore: null,
@@ -489,15 +455,10 @@ describe("setup workspace store", () => {
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
     const state = get(store);
-    const gpsSection = readSection(state, "gps");
-    const fullParametersSection = readSection(state, "full_parameters");
-
-    expect(state.noticeText).toBe("Download parameters to continue.");
-    expect(gpsSection?.gateText).toBe("Download parameters to continue.");
-    expect(fullParametersSection?.gateText).toBe("Download parameters to continue.");
+    expect(state.noticeText).toBe("Live parameter updates are unavailable right now.");
   });
 
-  it("keeps full parameters blocked during playback even when parameter data is otherwise ready", () => {
+  it("reports playback read-only state without blocking individual sections", () => {
     const sessionStore = writable(createSessionState({
       activeEnvelope: {
         session_id: "session-1",
@@ -543,19 +504,11 @@ describe("setup workspace store", () => {
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
     const state = get(store);
-    const fullParametersSection = readSection(state, "full_parameters");
-    const gpsSection = readSection(state, "gps");
-
     expect(state.readiness).toBe("degraded");
     expect(state.noticeText).toBe("Setup is read-only during playback.");
-    expect(fullParametersSection?.availability).toBe("blocked");
-    expect(fullParametersSection?.gateText).toBe("Setup is read-only during playback.");
-    expect(gpsSection?.availability).toBe("blocked");
-    expect(gpsSection?.gateText).toBe("Setup is read-only during playback.");
-    expect(gpsSection?.detailText).toBe("Setup is read-only during playback.");
   });
 
-  it("prefers the stricter stream-error notice when metadata is unavailable but full parameters is blocked", () => {
+  it("prefers the stricter stream-error notice when metadata is unavailable", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState({
       streamError: "Live parameter updates are unavailable right now.",
@@ -566,16 +519,8 @@ describe("setup workspace store", () => {
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
     const state = get(store);
-    const fullParametersSection = readSection(state, "full_parameters");
-    const gpsSection = readSection(state, "gps");
-
     expect(state.readiness).toBe("degraded");
     expect(state.noticeText).toBe("Live parameter updates are unavailable right now.");
-    expect(state.metadataGateText).toBe("Parameter descriptions are unavailable. Open Full Parameters to continue.");
-    expect(fullParametersSection?.availability).toBe("blocked");
-    expect(fullParametersSection?.gateText).toBe("Live parameter updates are unavailable right now.");
-    expect(gpsSection?.availability).toBe("blocked");
-    expect(gpsSection?.gateText).toBe("Live parameter updates are unavailable right now.");
   });
 
   it("uses plain operational section detail text", () => {
@@ -686,7 +631,7 @@ describe("setup workspace store", () => {
     }
   });
 
-  it("only changes guided confirmations when the section is available", () => {
+  it("changes guided confirmations whenever an active scope is present", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState());
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
@@ -725,7 +670,7 @@ describe("setup workspace store", () => {
 
     store.confirmSection("gps");
     state = get(store);
-    expect(state.sectionConfirmations.gps).toBe(false);
+    expect(state.sectionConfirmations.gps).toBe(true);
 
     sessionStore.set(createSessionState());
     store.confirmSection("gps");
@@ -758,10 +703,10 @@ describe("setup workspace store", () => {
 
     store.clearSectionConfirmation("gps");
     state = get(store);
-    expect(state.sectionConfirmations.gps).toBe(true);
+    expect(state.sectionConfirmations.gps).toBe(false);
   });
 
-  it("does not apply replaced guided confirmations for a blocked active scope", () => {
+  it("applies replaced guided confirmations for the active scope", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState());
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
@@ -802,10 +747,10 @@ describe("setup workspace store", () => {
     });
 
     state = get(store);
-    expect(state.sectionConfirmations.gps).toBe(true);
+    expect(state.sectionConfirmations.gps).toBe(false);
   });
 
-  it("does not clear active-scope guided confirmations without scopeKey while blocked", () => {
+  it("clears active-scope guided confirmations without scopeKey", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState());
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
@@ -845,7 +790,7 @@ describe("setup workspace store", () => {
     });
 
     state = get(store);
-    expect(state.sectionConfirmations.gps).toBe(true);
+    expect(state.sectionConfirmations.gps).toBe(false);
   });
 
   it("still replaces confirmations for the active scope when guided sections are available", () => {

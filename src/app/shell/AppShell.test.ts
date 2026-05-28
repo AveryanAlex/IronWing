@@ -784,8 +784,8 @@ describe("AppShell", () => {
         expect(screen.queryByTestId(parameterWorkspaceTestIds.root)).toBeNull();
         expect(screen.getByTestId(setupWorkspaceTestIds.state).textContent).toContain("Setup ready");
         expect(screen.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-frame_orientation`)).toBeTruthy();
-        expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain("Connect vehicle to get started");
-        expect(screen.queryByTestId(setupWorkspaceTestIds.detailRecovery)).toBeNull();
+        expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain("Review setup progress before opening a section");
+        expect(screen.getByTestId(setupWorkspaceTestIds.detailRecovery)).toBeTruthy();
     });
 
     it("opens the expert browser from a workflow handoff inside the shell and stages raw edits into the shared tray", async () => {
@@ -904,7 +904,7 @@ describe("AppShell", () => {
         });
     });
 
-    it("keeps overview mounted and gates guided setup sections when metadata is unavailable", async () => {
+    it("keeps overview mounted and setup sections reachable when metadata is unavailable", async () => {
         const shell = await renderShellAt(1440, {
             activeWorkspace: "setup",
             route: SetupOverviewRoutePage,
@@ -922,16 +922,14 @@ describe("AppShell", () => {
         });
 
         expect(screen.getByTestId(setupWorkspaceTestIds.metadata).textContent).toContain("Parameter metadata is unavailable");
-        expect(screen.getByTestId(setupWorkspaceTestIds.notice).textContent).toContain("Parameter descriptions are unavailable");
         expect(screen.getByTestId(setupWorkspaceTestIds.overviewBanner).textContent).toContain(
-            "Parameter descriptions are unavailable",
+            "Metadata missing",
         );
         expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-overview`)).toBeTruthy();
         expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`)).toBeTruthy();
-        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).getAttribute("data-availability")).toBe("blocked");
-        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-rc_receiver`).getAttribute("data-availability")).toBe("blocked");
-        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-calibration`).getAttribute("data-availability")).toBe("blocked");
-        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).hasAttribute("disabled")).toBe(true);
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-frame_orientation`).hasAttribute("disabled")).toBe(false);
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-rc_receiver`).hasAttribute("disabled")).toBe(false);
+        expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-calibration`).hasAttribute("disabled")).toBe(false);
 
         await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`));
         expect(shell.navigateToSetupSection).toHaveBeenCalledWith("full_parameters");

@@ -167,34 +167,6 @@ $effect(() => {
   }
 });
 
-function isSetupAccessGateText(value: string | null): boolean {
-  return value === "Connect to a vehicle to access setup."
-    || value === "Download parameters to continue."
-    || value === "Loading parameter descriptions."
-    || value === "Parameter descriptions are unavailable. Open Full Parameters to continue.";
-}
-
-function canSelectRequestedSection(sectionId: SetupSectionId): boolean {
-  if (sectionId === "overview") {
-    return true;
-  }
-
-  const section = view.sections.find((entry) => entry.id === sectionId);
-  if (!section || (section.kind === "guided" && !section.implemented)) {
-    return false;
-  }
-
-  if (section.availability !== "blocked") {
-    return true;
-  }
-
-  if (section.id === "full_parameters") {
-    return false;
-  }
-
-  return !isSetupAccessGateText(section.gateText);
-}
-
 function applySectionSelection(sectionId: SetupSectionId) {
   if (
     view.selectedSectionId === "beginner_wizard" &&
@@ -223,8 +195,7 @@ $effect(() => {
   if (
     requestedSectionId === undefined ||
     requestedSectionId === null ||
-    requestedSectionId === view.selectedSectionId ||
-    !canSelectRequestedSection(requestedSectionId)
+    requestedSectionId === view.selectedSectionId
   ) {
     return;
   }

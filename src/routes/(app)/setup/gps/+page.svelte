@@ -61,7 +61,7 @@ let serialModel = $derived(
   }),
 );
 let docsUrl = $derived(resolveDocsUrl("positioning_gps_compass"));
-let actionsBlocked = $derived(view.checkpoint.blocksActions || section.availability === "blocked");
+let actionsBlocked = $derived(view.checkpoint.blocksActions);
 let liveConnected = $derived(session.sessionDomain.value?.connection.kind === "connected");
 let primaryTypeParamName = $derived(resolvePrimaryGpsTypeParam(params.paramStore, params.stagedEdits));
 let primaryTypeItem = $derived(primaryTypeParamName ? (itemIndex.get(primaryTypeParamName) ?? null) : null);
@@ -109,11 +109,8 @@ let liveSummary = $derived.by(() => {
   }
 
   return {
-    stateText: section.availability === "blocked" ? "Blocked / unknown" : "Waiting for GPS facts",
-    detailText:
-      section.availability === "blocked"
-        ? "The section stays inspectable, but GPS editors are blocked until metadata and the live scope are trustworthy again."
-        : "Connect a live vehicle and wait for GPS telemetry to inspect fix quality.",
+    stateText: "Waiting for GPS facts",
+    detailText: "Connect a live vehicle and wait for GPS telemetry to inspect fix quality.",
     observation: null,
   };
 });

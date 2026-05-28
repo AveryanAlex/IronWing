@@ -228,7 +228,7 @@ const sessionState = fromStore(sessionStore);
 
 let params = $derived(paramsState.current);
 let session = $derived(sessionState.current);
-let actionsBlocked = $derived(view.checkpoint.blocksActions || section.availability === "blocked");
+let actionsBlocked = $derived(view.checkpoint.blocksActions);
 let rowReadiness = $derived(actionsBlocked ? "degraded" : view.readiness);
 let docsUrl = $derived(resolveDocsUrl("tuning"));
 let vehicleType = $derived(session.sessionDomain.value?.vehicle_state?.vehicle_type ?? null);

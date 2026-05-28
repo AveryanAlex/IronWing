@@ -70,7 +70,7 @@ let session = $derived(sessionState.current);
 let telemetry = $derived(selectTelemetryView(session.telemetryDomain));
 let itemIndex = $derived(buildParameterItemIndex(params.paramStore, params.metadata));
 let docsUrl = $derived(resolveDocsUrl("power_module_config"));
-let actionsBlocked = $derived(view.checkpoint.blocksActions || section.availability === "blocked");
+let actionsBlocked = $derived(view.checkpoint.blocksActions);
 let liveConnected = $derived(session.sessionDomain.value?.connection.kind === "connected");
 let validBoardPresets = $derived(
   BOARD_PRESETS.filter(
@@ -161,11 +161,8 @@ let liveSummary = $derived.by(() => {
   }
 
   return {
-    stateText: section.availability === "blocked" ? "Blocked / unknown" : "Waiting for battery telemetry",
-    detailText:
-      section.availability === "blocked"
-        ? "The section stays inspectable, but battery editors are blocked until the live scope and metadata recover."
-        : "Connect a live vehicle to inspect truthful power telemetry before finalizing monitor settings.",
+    stateText: "Waiting for battery telemetry",
+    detailText: "Connect a live vehicle to inspect truthful power telemetry before finalizing monitor settings.",
     observation: null,
   };
 });

@@ -103,7 +103,7 @@ let itemIndex = $derived(buildParameterItemIndex(params.paramStore, params.metad
 let vehicleSlug = $derived(getVehicleSlug(session.sessionDomain.value?.vehicle_state?.vehicle_type ?? null));
 let docsUrl = $derived(resolveDocsUrl("flight_mode_configuration"));
 let simpleDocsUrl = $derived(vehicleSlug === "copter" ? resolveDocsUrl("simple_super_simple_modes", "copter") : null);
-let actionsBlocked = $derived(view.checkpoint.blocksActions || section.availability === "blocked");
+let actionsBlocked = $derived(view.checkpoint.blocksActions);
 let liveConnected = $derived(session.sessionDomain.value?.connection.kind === "connected");
 let previousModes = $derived(
   view.activeScopeKey && lastScopedModeSnapshot?.scopeKey === view.activeScopeKey ? lastScopedModeSnapshot.modes : [],

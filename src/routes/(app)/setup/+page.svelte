@@ -1,25 +1,12 @@
 <script lang="ts">
-import { Download, Plug, X } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext } from "../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import { createParameterFileIo } from "../../../lib/params/parameter-file-io";
-import { paramProgressCounts, paramProgressPhase } from "../../../params";
 import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
 import { setupWorkspaceTestIds } from "../../../features/setup/setup-workspace-test-ids";
-import {
-  ActionRow,
-  Button,
-  Card,
-  EmptyState,
-  ExternalLink,
-  Eyebrow,
-  FactTile,
-  HelperText,
-  MetricTile,
-  Progress,
-} from "../../../components/ui";
+import { ActionRow, Button, Card, ExternalLink, Eyebrow, FactTile, HelperText } from "../../../components/ui";
 import SetupCard from "../../../features/setup/shared/SetupCard.svelte";
 import SetupCardHeader from "../../../features/setup/shared/SetupCardHeader.svelte";
 import SetupContentPanel from "../../../features/setup/shared/SetupContentPanel.svelte";
@@ -45,24 +32,6 @@ let fileActionBusy = $state<"refresh" | "save" | "load" | null>(null);
 let paramsReady = $derived(paramsState.current.paramStore !== null);
 let refreshDisabled = $derived(fileActionBusy !== null || !paramsState.current.liveSessionConnected);
 let fileDisabled = $derived(fileActionBusy !== null || !paramsReady);
-let fullParametersSection = $derived(view.sections.find((section) => section.id === "full_parameters") ?? null);
-let flightModesSection = $derived(view.sections.find((section) => section.id === "flight_modes") ?? null);
-let fullParametersDisabled = $derived(fullParametersSection?.availability === "blocked");
-let flightModesDisabled = $derived(flightModesSection?.availability === "blocked");
-let paramProgress = $derived(paramsState.current.paramProgress);
-let paramProgressPhaseValue = $derived(paramProgress ? paramProgressPhase(paramProgress) : null);
-let paramProgressCountsValue = $derived(paramProgress ? paramProgressCounts(paramProgress) : null);
-let downloadInFlight = $derived(paramProgressPhaseValue === "downloading");
-let downloadProgressPct = $derived.by(() => {
-  if (!downloadInFlight || !paramProgressCountsValue?.expected || paramProgressCountsValue.expected <= 0) {
-    return 0;
-  }
-
-  return Math.max(
-    0,
-    Math.min(100, Math.round((paramProgressCountsValue.received / paramProgressCountsValue.expected) * 100)),
-  );
-});
 
 async function handleRefresh() {
   if (refreshDisabled) {
@@ -78,14 +47,6 @@ async function handleRefresh() {
     fileActionMessage = `Refresh failed: ${formatActionError(error)}`;
   } finally {
     fileActionBusy = null;
-  }
-}
-
-async function handleCancelDownload() {
-  try {
-    await paramsStore.cancelDownload();
-  } catch (error) {
-    fileActionMessage = `Cancel failed: ${formatActionError(error)}`;
   }
 }
 
@@ -174,16 +135,14 @@ let guidedGroups = $derived(
 );
 let guidedSections = $derived(guidedGroups.flatMap((group) => group.sections));
 let unknownCount = $derived(guidedSections.filter((section) => section.status === "unknown").length);
-let blockedCount = $derived(guidedSections.filter((section) => section.availability === "blocked").length);
 let implementedCount = $derived(guidedSections.filter((section) => section.implemented).length);
-let availableCount = $derived(guidedSections.filter((section) => section.availability === "available").length);
 let inProgressCount = $derived(guidedSections.filter((section) => section.status === "in_progress").length);
 let bannerTone = $derived.by<NoticeTone>(() => {
   if (view.metadataState === "unavailable" || view.readiness === "degraded") {
     return "warning";
   }
 
-  if (unknownCount > 0 || blockedCount > 0) {
+  if (unknownCount > 0) {
     return "info";
   }
 
@@ -199,10 +158,10 @@ let bannerTitle = $derived.by(() => {
   }
 
   if (view.readiness === "degraded") {
-    return "Overview is live, but expert sections are limited";
+    return "Overview is live, with degraded setup data";
   }
 
-  if (unknownCount > 0 || blockedCount > 0) {
+  if (unknownCount > 0) {
     return "Review setup progress before opening a section";
   }
 
@@ -210,7 +169,7 @@ let bannerTitle = $derived.by(() => {
 });
 let bannerBody = $derived.by(() => {
   if (view.metadataState === "unavailable") {
-    return "Guided editors are blocked because parameter labels and option lists are unavailable. You can still review setup status here and use Full Parameters to inspect the raw list.";
+    return "Guided editors remain reachable, but parameter labels, ranges, and option lists may be incomplete. Use Full Parameters when a guided section cannot show enough detail.";
   }
 
   if (view.readiness === "bootstrapping") {
@@ -218,11 +177,11 @@ let bannerBody = $derived.by(() => {
   }
 
   if (view.readiness === "degraded") {
-    return "Some setup details are limited right now. Use this dashboard to see what is ready, then open Full Parameters when a guided section cannot show enough detail.";
+    return "Some setup details are limited right now. Use this dashboard to see what is ready, then open any section or Full Parameters for deeper inspection.";
   }
 
-  if (unknownCount > 0 || blockedCount > 0) {
-    return `${blockedCount} blocked and ${unknownCount} unconfirmed sections remain visible instead of disappearing from the expert path.`;
+  if (unknownCount > 0) {
+    return `${unknownCount} unconfirmed sections remain visible while live setup facts settle.`;
   }
 
   return "Open a section below to inspect settings and queue changes in the review tray.";
@@ -238,7 +197,7 @@ let overviewMetrics = $derived([
     id: "progress",
     label: "Setup progress",
     value: view.progressText,
-    detail: `${availableCount} available · ${blockedCount} blocked`,
+    detail: `${implementedCount} ready here · ${unknownCount} unconfirmed`,
   },
   {
     id: "status",
@@ -248,11 +207,7 @@ let overviewMetrics = $derived([
   },
 ]);
 
-function groupTone(blocked: number, progressText: string): string {
-  if (blocked > 0) {
-    return "border-warning/30 bg-warning/5";
-  }
-
+function groupTone(progressText: string): string {
   if (/^\d+\/\d+ confirmed$/.test(progressText) && !progressText.startsWith("0/")) {
     return "border-border bg-bg-primary/80";
   }
@@ -263,24 +218,6 @@ function groupTone(blocked: number, progressText: string): string {
 function sectionIsComingLater(section: SetupWorkspaceStoreState["sections"][number]): boolean {
   return section.kind === "guided" && !section.implemented;
 }
-
-let overviewMode = $derived.by(() => {
-  if (!view.liveSessionConnected) {
-    return "disconnected";
-  }
-
-  if (!paramsReady) {
-    return "needs_params";
-  }
-
-  if (view.metadataState !== "ready") {
-    return "needs_metadata";
-  }
-
-  return "ready";
-});
-
-let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Download parameters");
 </script>
 
 <section class="space-y-4" data-testid={setupWorkspaceTestIds.overviewSection}>
@@ -291,96 +228,6 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
   />
 
   <SetupContentPanel>
-  {#if overviewMode === "disconnected"}
-    {#snippet disconnectedIcon()}
-      <Plug aria-hidden="true" size={30} />
-    {/snippet}
-    <EmptyState
-      icon={disconnectedIcon}
-      title="Connect vehicle to get started"
-      description="Setup editors unlock after IronWing connects to a live vehicle session."
-      testId={setupWorkspaceTestIds.overviewBanner}
-    />
-  {:else if overviewMode === "needs_params"}
-    <div class="space-y-4">
-      <SetupCard variant="primary" gap="compact" class="grid sm:grid-cols-3">
-        <MetricTile label="Type" value={view.activeEnvelope ? "Connected vehicle" : "Waiting"} />
-        <MetricTile label="Autopilot" value="Live session" />
-        <MetricTile label="Setup access" value="Overview only" />
-      </SetupCard>
-
-      <SetupCard class="border-accent/30 bg-accent/5 px-6 py-8 text-center" testId={setupWorkspaceTestIds.overviewBanner}>
-        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent/15 text-accent">
-          <Download aria-hidden="true" size={24} />
-        </div>
-        <h3 class="mt-6 text-2xl font-semibold text-text-primary">Download Parameters to Get Started</h3>
-        <p class="mx-auto mt-4 max-w-2xl text-sm leading-7 text-text-secondary">
-          Vehicle parameters define your aircraft's configuration — frame type, sensor calibration, flight modes, safety limits, and more. Download them to unlock setup sections.
-        </p>
-
-        <div class="mt-6 flex justify-center">
-          {#if downloadInFlight}
-            <Button
-              tone="danger"
-              variant="soft"
-              onclick={handleCancelDownload}
-            >
-              <X aria-hidden="true" size={16} />
-              Cancel
-            </Button>
-          {:else}
-            <Button
-              disabled={refreshDisabled}
-              onclick={handleRefresh}
-            >
-              <Download aria-hidden="true" size={16} />
-              Download Parameters
-            </Button>
-          {/if}
-        </div>
-
-        {#if downloadInFlight}
-          <div class="mx-auto mt-5 max-w-sm">
-            <Progress value={downloadProgressPct} ariaLabel="Parameter download progress" />
-            <HelperText class="mt-2" tone="muted">
-              {paramProgressCountsValue?.received ?? 0} / {paramProgressCountsValue?.expected ?? "?"} parameters
-            </HelperText>
-          </div>
-        {/if}
-      </SetupCard>
-    </div>
-  {:else if overviewMode === "needs_metadata"}
-    <div class="space-y-4">
-      <SetupNotice tone="success">
-        <Eyebrow tracking="widest">Overview</Eyebrow>
-        <p class="mt-2 text-sm font-semibold text-text-primary">
-          Parameters downloaded — {Object.keys(paramsState.current.paramStore?.params ?? {}).length} parameters
-        </p>
-      </SetupNotice>
-
-      <SetupCard variant="primary" class="px-6 py-6 text-center" testId={setupWorkspaceTestIds.overviewBanner}>
-        <h3 class="text-xl font-semibold text-text-primary">
-          {view.metadataState === "unavailable" ? "Parameter descriptions are unavailable" : "Loading parameter descriptions"}
-        </h3>
-        <p class="mx-auto mt-3 max-w-2xl text-sm leading-7 text-text-secondary">
-          {view.metadataState === "unavailable"
-            ? "Guided setup sections stay locked because labels, ranges, and option lists are unavailable for this vehicle. Full Parameters remains available as the only editor until descriptions are restored."
-            : "Guided setup sections stay locked until parameter descriptions finish loading. Full Parameters is available if you need raw access while descriptions settle."}
-        </p>
-
-        <div class="mt-6 flex flex-wrap justify-center gap-3">
-          <Button
-            variant="secondary"
-            testId={setupWorkspaceTestIds.overviewRecoveryAction}
-            disabled={fullParametersDisabled}
-            onclick={() => onSelect("full_parameters")}
-          >
-            Open Full Parameters
-          </Button>
-        </div>
-      </SetupCard>
-    </div>
-  {:else}
     <SetupNotice tone={bannerTone} testId={setupWorkspaceTestIds.overviewBanner}>
       <Eyebrow tracking="widest">Overview</Eyebrow>
       <h3 class="mt-2 text-lg font-semibold text-text-primary">{bannerTitle}</h3>
@@ -440,7 +287,6 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
       </ActionRow>
       <HelperText class="mt-3" size="xs" tone="muted">{fileActionMessage}</HelperText>
     </SetupCard>
-  {/if}
 
   {#if view.statusNotices.length > 0}
     <SetupCard testId={setupWorkspaceTestIds.notices}>
@@ -457,37 +303,33 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
     </SetupCard>
   {/if}
 
-  {#if overviewMode === "ready"}
-    <ActionRow align="start">
-      <Button
-        variant="outline"
-        testId={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-frame_orientation`}
-        disabled={view.sections.find((section) => section.id === "frame_orientation")?.availability === "blocked"}
-        onclick={() => onSelect("frame_orientation")}
-      >
-        Open Frame &amp; orientation
-      </Button>
-      <Button
-        variant="outline"
-        testId={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-flight_modes`}
-        disabled={flightModesDisabled}
-        onclick={() => onSelect("flight_modes")}
-      >
-        Open Flight modes
-      </Button>
-      <Button
-        variant="outline"
-        testId={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-full_parameters`}
-        disabled={fullParametersDisabled}
-        onclick={() => onSelect("full_parameters")}
-      >
-        Open Full Parameters
-      </Button>
-    </ActionRow>
+  <ActionRow align="start">
+    <Button
+      variant="outline"
+      testId={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-frame_orientation`}
+      onclick={() => onSelect("frame_orientation")}
+    >
+      Open Frame &amp; orientation
+    </Button>
+    <Button
+      variant="outline"
+      testId={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-flight_modes`}
+      onclick={() => onSelect("flight_modes")}
+    >
+      Open Flight modes
+    </Button>
+    <Button
+      variant="outline"
+      testId={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-full_parameters`}
+      onclick={() => onSelect("full_parameters")}
+    >
+      Open Full Parameters
+    </Button>
+  </ActionRow>
 
     <div class="space-y-4">
       {#each guidedGroups as group (group.id)}
-        <SetupCard class={`p-3 ${groupTone(group.blockedCount, group.progressText)}`} testId={`${setupWorkspaceTestIds.overviewGroupPrefix}-${group.id}`}>
+        <SetupCard class={`p-3 ${groupTone(group.progressText)}`} testId={`${setupWorkspaceTestIds.overviewGroupPrefix}-${group.id}`}>
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <Eyebrow tracking="widest">{group.title}</Eyebrow>
@@ -504,7 +346,7 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
                   {group.progressText}
                 </SetupStatusPill>
               <HelperText class="mt-2" size="xs" tone="muted">
-                {group.blockedCount} blocked · {group.unconfirmedCount} unconfirmed
+                {group.unconfirmedCount} unconfirmed
               </HelperText>
             </div>
           </div>
@@ -534,16 +376,8 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
 
                 <HelperText class="mt-3">{section.detailText}</HelperText>
 
-                {#if section.gateText}
-                  <HelperText class="mt-3" tone="warning">{section.gateText}</HelperText>
-                {/if}
-
                 {#if sectionIsComingLater(section)}
                   <Eyebrow class="mt-4" tracking="widest">Coming later</Eyebrow>
-                {:else if section.availability === "blocked"}
-                  <Eyebrow class="mt-4" tracking="widest">
-                    {section.gateText ?? "Locked until setup is ready"}
-                  </Eyebrow>
                 {:else}
                   <Button
                     variant="outline"
@@ -565,7 +399,7 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
         <div class="max-w-3xl">
           <Eyebrow tracking="widest">Recovery path</Eyebrow>
           <HelperText class="mt-2">
-            Full Parameters stays separate from the guided sections. Open Full Parameters to inspect settings not covered above, check blocked items, and queue raw changes in the review tray.
+            Full Parameters stays separate from the guided sections. Open Full Parameters to inspect settings not covered above and queue raw changes in the review tray.
           </HelperText>
         </div>
         <ActionRow align="start">
@@ -576,17 +410,15 @@ let refreshCopy = $derived(fileActionBusy === "refresh" ? "Downloading..." : "Do
           >
             Start beginner wizard
           </Button>
-          <Button
-            variant="secondary"
-            testId={setupWorkspaceTestIds.overviewRecoveryAction}
-            disabled={fullParametersDisabled}
-            onclick={() => onSelect("full_parameters")}
-          >
+            <Button
+              variant="secondary"
+              testId={setupWorkspaceTestIds.overviewRecoveryAction}
+              onclick={() => onSelect("full_parameters")}
+            >
             Open Full Parameters
           </Button>
         </ActionRow>
       </div>
     </SetupCard>
-  {/if}
   </SetupContentPanel>
 </section>

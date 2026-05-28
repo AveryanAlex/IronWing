@@ -153,7 +153,7 @@ let showConfiguredOnly = $state(false);
 let expandedGroupIds = $state<string[]>([]);
 let collapsedSubgroupIds = $state<string[]>([]);
 let params = $derived(paramsState.current);
-let actionsBlocked = $derived(view.checkpoint.blocksActions || section.availability === "blocked");
+let actionsBlocked = $derived(view.checkpoint.blocksActions);
 let rowReadiness = $derived(actionsBlocked ? "degraded" : view.readiness);
 let docsUrl = $derived(resolveDocsUrl("optional_hardware"));
 let expertView = $derived(
