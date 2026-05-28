@@ -64,7 +64,7 @@ const svelteConfig = {
     adapter: adapter({
       pages: outDir,
       assets: outDir,
-      fallback: "index.html",
+      fallback: platformDir === "web" ? undefined : "index.html",
     }),
     paths: resolvePaths(),
   },

@@ -15,3 +15,5 @@ interface ImportMetaEnv {
   readonly VITE_IRONWING_APP_VERSION?: string;
   readonly VITE_IRONWING_TOMTOM_API_KEY?: string;
 }
+
+declare const __IRONWING_PRERENDER_STATIC_ROUTES__: boolean;

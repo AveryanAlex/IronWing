@@ -108,6 +108,9 @@ const serverHost =
 
 export default defineConfig({
   plugins: [ironwingWebWasmPlugin(platformDir === "web"), tailwindcss(), sveltekit()],
+  define: {
+    __IRONWING_PRERENDER_STATIC_ROUTES__: JSON.stringify(platformDir === "web"),
+  },
   resolve: {
     alias: {
       "@app": fileURLToPath(new URL("src/app", import.meta.url)),
