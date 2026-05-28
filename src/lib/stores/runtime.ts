@@ -2,8 +2,6 @@ import { writable } from "svelte/store";
 
 export const runtimeTestIds = {
   shell: "app-shell",
-  heading: "app-shell-heading",
-  runtimeMarker: "app-runtime-marker",
   framework: "app-runtime-framework",
   bootstrapState: "app-bootstrap-state",
   bootedAt: "app-runtime-booted-at",

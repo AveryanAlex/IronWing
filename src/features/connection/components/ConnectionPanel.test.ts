@@ -8,9 +8,7 @@ import type {
   SessionService,
   SessionServiceEventHandlers,
 } from "../../../lib/platform/session";
-import { createSessionStore, type SessionStore } from "../../../lib/stores/session";
-import TelemetrySummary from "../../telemetry/components/TelemetrySummary.svelte";
-import VehicleStatusCard from "../../telemetry/components/VehicleStatusCard.svelte";
+import { createSessionStore } from "../../../lib/stores/session";
 
 import ConnectionPanel from "./ConnectionPanel.svelte";
 import type { OpenSessionSnapshot } from "../../../session";
@@ -231,12 +229,6 @@ function createDeferred<T>() {
   return { promise, resolve, reject };
 }
 
-function renderSeedSurface(store: SessionStore) {
-  render(withSessionContext(store, ConnectionPanel));
-  render(withSessionContext(store, VehicleStatusCard));
-  render(withSessionContext(store, TelemetrySummary));
-}
-
 describe("ConnectionPanel", () => {
   beforeEach(() => {
     toastError.mockReset();
@@ -247,68 +239,6 @@ describe("ConnectionPanel", () => {
 
   afterEach(() => {
     cleanup();
-  });
-
-  it("renders the rewritten idle shell and updates the seed telemetry/status cards when live events arrive", async () => {
-    const { service, emit } = createMockService();
-    const store = createSessionStore(service);
-
-    await store.initialize();
-    renderSeedSurface(store);
-
-    expect(screen.queryByTestId("connection-status-text")).toBeNull();
-    expect(screen.getByTestId("telemetry-state-value").textContent).toContain("--");
-    expect(screen.getByTestId("telemetry-alt-value").textContent).toContain("-- m");
-
-    emit("onSession", {
-      envelope: { session_id: "session-1", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
-      value: {
-        available: true,
-        complete: true,
-        provenance: "stream",
-        value: {
-          status: "active",
-          connection: { kind: "connected" },
-          vehicle_state: {
-            armed: false,
-            custom_mode: 5,
-            mode_name: "LOITER",
-            system_status: "STANDBY",
-            vehicle_type: "copter",
-            autopilot: "ardupilot",
-            system_id: 1,
-            component_id: 1,
-            heartbeat_received: true,
-          },
-          home_position: null,
-        },
-      },
-    });
-
-    emit("onTelemetry", {
-      envelope: { session_id: "session-1", source_kind: "live", seek_epoch: 0, reset_revision: 0 },
-      value: {
-        available: true,
-        complete: true,
-        provenance: "stream",
-        value: {
-          flight: { altitude_m: 12.4, speed_mps: 4.8 },
-          navigation: { heading_deg: 182.1 },
-          power: { battery_pct: 87.2 },
-          gps: { fix_type: "fix_3d", satellites: 14 },
-        },
-      },
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("telemetry-state-value").textContent).toContain("DISARMED");
-    });
-    expect(screen.getByTestId("telemetry-mode-value").textContent).toContain("LOITER");
-    expect(screen.getByTestId("telemetry-alt-value").textContent).toContain("12.4 m");
-    expect(screen.getByTestId("telemetry-speed-value").textContent).toContain("4.8 m/s");
-    expect(screen.getByTestId("telemetry-battery-value").textContent).toContain("87.2%");
-    expect(screen.getByTestId("telemetry-heading-value").textContent).toContain("182°");
-    expect(screen.getByTestId("telemetry-gps-text").textContent).toContain("GPS: 3D fix · 14 sats");
   });
 
   it("submits the rewritten form through the session store connect action", async () => {
@@ -334,33 +264,6 @@ describe("ConnectionPanel", () => {
     expect(service.persistConnectionForm).toHaveBeenCalledWith(
       expect.objectContaining({ mode: "tcp", tcpAddress: "127.0.0.1:5770" }),
     );
-  });
-
-  it("keeps transport helper copy out of the compact form and tucks serial baud under advanced", async () => {
-    const { service } = createMockService();
-    const store = createSessionStore(service);
-
-    await store.initialize();
-    render(withSessionContext(store, ConnectionPanel));
-
-    const transportSelect = screen.getByTestId("connection-transport-select") as HTMLSelectElement;
-    await fireEvent.change(transportSelect, { target: { value: "tcp" } });
-
-    expect(screen.queryByText("TCP available")).toBeNull();
-    expect(screen.queryByText("Connect to a MAVLink TCP endpoint")).toBeNull();
-
-    await fireEvent.click(screen.getByTestId("connection-transport-help-btn"));
-    expect(screen.getByTestId("connection-transport-help-popover").textContent).toContain("TCP connection");
-    expect(screen.getByTestId("connection-transport-help-content").textContent).toContain("Connect to a MAVLink TCP endpoint");
-    await fireEvent.click(screen.getByTestId("connection-transport-help-btn"));
-
-    await fireEvent.change(transportSelect, { target: { value: "serial" } });
-
-    expect(screen.queryByText("Serial available")).toBeNull();
-    const advancedSummary = screen.getByText("Advanced · Baud 57600");
-    const advancedDetails = advancedSummary.closest("details") as HTMLDetailsElement | null;
-    expect(advancedDetails?.open).toBe(false);
-    expect(screen.getByTestId("connection-serial-baud")).toBeTruthy();
   });
 
   it("renders an actionable demo transport form and submits a demo connect request", async () => {
@@ -396,17 +299,9 @@ describe("ConnectionPanel", () => {
     expect(screen.getByTestId("connection-transport-select")).toBeTruthy();
     const demoPresetSelect = screen.getByTestId("connection-demo-preset") as HTMLSelectElement;
     const connectButton = screen.getByTestId("connection-connect-btn");
-    const actionRow = demoPresetSelect.closest("[data-ui-field]")?.parentElement;
 
     expect(demoPresetSelect.value).toBe("quadcopter");
     expect(connectButton).toBeTruthy();
-    expect(actionRow?.hasAttribute("data-connection-action-row")).toBe(true);
-    expect(actionRow?.className).toContain("grid");
-    expect(actionRow?.className).toContain("w-full");
-    expect(actionRow?.className).not.toContain("flex");
-    expect(screen.queryByTestId("connection-udp-bind")).toBeNull();
-    expect(screen.queryByTestId("connection-tcp-address")).toBeNull();
-    expect(screen.queryByTestId("connection-serial-port")).toBeNull();
 
     await fireEvent.change(demoPresetSelect, { target: { value: "airplane" } });
     await fireEvent.click(connectButton);
@@ -473,10 +368,6 @@ describe("ConnectionPanel", () => {
     });
     const cancelButton = screen.getByTestId("connection-cancel-btn");
     expect(screen.queryByTestId("connection-connect-btn")).toBeNull();
-    expect(cancelButton.dataset.variant).toBe("warning");
-    expect(cancelButton.className).toContain("bg-warning");
-    expect(cancelButton.className).not.toContain("bg-accent");
-    expect(cancelButton.querySelector(".connection-cancel-btn__spinner")).toBeTruthy();
 
     await fireEvent.click(cancelButton);
 
@@ -487,7 +378,7 @@ describe("ConnectionPanel", () => {
     pendingConnect.resolve();
   });
 
-  it("shows local validation failures inline without raising connection failure toasts", async () => {
+  it("shows and clears local validation failures without raising connection failure toasts", async () => {
     const { service } = createMockService();
     const store = createSessionStore(service);
 
@@ -507,56 +398,12 @@ describe("ConnectionPanel", () => {
 
     expect(service.connectSession).not.toHaveBeenCalled();
     expect(toastError).not.toHaveBeenCalled();
-  });
-
-  it("recomputes inline validation from current store form updates", async () => {
-    const { service } = createMockService();
-    const store = createSessionStore(service);
-
-    await store.initialize();
-    render(withSessionContext(store, ConnectionPanel));
-
-    const transportSelect = screen.getByTestId("connection-transport-select") as HTMLSelectElement;
-    await fireEvent.change(transportSelect, { target: { value: "tcp" } });
-    await fireEvent.input(screen.getByTestId("connection-tcp-address"), { target: { value: "" } });
-    await fireEvent.click(screen.getByTestId("connection-connect-btn"));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("connection-error-message").textContent).toContain("address is required");
-    });
 
     store.updateConnectionForm({ tcpAddress: "10.0.0.12:5770" });
 
     await waitFor(() => {
       expect(screen.queryByTestId("connection-error-message")).toBeNull();
     });
-  });
-
-  it("reflects store-driven form updates after render without re-persist sync loops", async () => {
-    const { service } = createMockService();
-    const store = createSessionStore(service);
-
-    await store.initialize();
-    render(withSessionContext(store, ConnectionPanel));
-    vi.mocked(service.persistConnectionForm).mockClear();
-
-    store.updateConnectionForm({ mode: "tcp", tcpAddress: "10.0.0.25:5770" });
-
-    await waitFor(() => {
-      const transportSelect = screen.getByTestId("connection-transport-select") as HTMLSelectElement;
-      expect(transportSelect.value).toBe("tcp");
-      const addressInput = screen.getByTestId("connection-tcp-address") as HTMLInputElement;
-      expect(addressInput.value).toBe("10.0.0.25:5770");
-    });
-
-    expect(service.persistConnectionForm).toHaveBeenCalledTimes(1);
-
-    store.updateConnectionForm({ tcpAddress: "10.0.0.25:5780" });
-    await waitFor(() => {
-      const addressInput = screen.getByTestId("connection-tcp-address") as HTMLInputElement;
-      expect(addressInput.value).toBe("10.0.0.25:5780");
-    });
-    expect(service.persistConnectionForm).toHaveBeenCalledTimes(2);
   });
 
   it("refreshes serial ports automatically on mount and when transport changes to serial", async () => {

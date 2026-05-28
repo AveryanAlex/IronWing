@@ -127,6 +127,12 @@ Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavk
 
 - Prefer behavior/contract tests over implementation-detail tests.
 - Use Vitest for unit and focused jsdom component behavior; use Playwright for mocked browser flows and WebDriverIO for the thin native desktop smoke lane.
+- Keep Vitest fast and unit-shaped. Prefer pure Node tests for domain helpers, stores, IPC/platform adapters, and wire-contract fixtures. Do not grow Vitest into a browser-flow acceptance suite.
+- Vitest component tests must stay focused on one leaf component or small panel with explicit props/context. They should not click through multi-step app workflows, switch workspaces, simulate routing, or assert broad shell behavior.
+- Do not import `src/routes/(app)/**` pages from Vitest tests unless the test is an explicit architectural guardrail. Route/page behavior, navigation, responsive shell flows, file-picker flows, map interactions, and cross-workspace handoffs belong in Playwright under `e2e/`.
+- Avoid custom test-only `.svelte` route hosts, fake workspace components, and broad context harnesses. If a component needs a special harness, keep it local, minimal, and justify why the behavior cannot be tested through a pure helper/store or Playwright.
+- Do not add hidden diagnostic DOM or `data-testid` surfaces only to satisfy Vitest implementation checks. Prefer accessible queries for component tests, pure tests for derived layout/state helpers, and stable `data-testid` selectors for Playwright flows.
+- When a Vitest test needs browser APIs, keep the shim small and local to the focused component. If the test needs maplibre/uPlot mocks, viewport controllers, fake routing, repeated `waitFor`/`fireEvent` workflow steps, or jsdom navigation workarounds, it is probably an E2E test and should move to Playwright.
 - Do not add source-grep tests against active Svelte or React-era source except for intentional architectural guardrails.
 - `src/platform/import-boundary.test.ts` is the quarantine guardrail: active `src/`, `e2e/`, and `e2e-native/` must stay free of React-era source imports, archived test imports, and React-era file re-entry.
 - Layer-specific test guidance lives in `src/AGENTS.md`, `src-tauri/src/AGENTS.md`, `e2e/AGENTS.md`, and `e2e-native/AGENTS.md`.

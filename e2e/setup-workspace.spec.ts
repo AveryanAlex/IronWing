@@ -3,6 +3,7 @@ import {
   applyShellViewport,
   expect,
   parameterWorkspaceSelectors,
+  setupWorkspaceStateLocator,
   test,
 } from "./fixtures/mock-platform";
 import {
@@ -96,7 +97,7 @@ test.describe("setup workspace proof", () => {
 
     await setupNavLocator(page, "full_parameters").click();
 
-    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("full_parameters");
+    await expect(setupWorkspaceStateLocator(page)).toHaveAttribute("data-selected-section", "full_parameters");
     await expect(page.locator(setupWorkspaceSelectors.fullParameters)).toBeVisible();
     await expect(page.locator(parameterWorkspaceSelectors.root)).toBeVisible();
   });
@@ -285,10 +286,10 @@ test.describe("setup workspace proof", () => {
     });
 
     await openConnectedSetupWorkspace(page);
-    await expect(page.locator(setupWorkspaceSelectors.metadata)).toContainText("Metadata ready");
+    await expect(setupWorkspaceStateLocator(page)).toHaveAttribute("data-setup-metadata", /Metadata ready/);
 
     await setupNavLocator(page, "frame_orientation").click();
-    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("frame_orientation");
+    await expect(setupWorkspaceStateLocator(page)).toHaveAttribute("data-selected-section", "frame_orientation");
     await expect(page.locator(setupWorkspaceSelectors.frameVehicleState)).toContainText("Plain Plane");
     await expect(page.locator(setupWorkspaceSelectors.frameLayoutState)).toContainText("Preview blocked");
     await expect(setupFrameBannerLocator(page, "plain-plane")).toContainText("Enable Q_ENABLE");
@@ -315,7 +316,7 @@ test.describe("setup workspace proof", () => {
     );
 
     await setupNavLocator(page, "motors_esc").click();
-    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("motors_esc");
+    await expect(setupWorkspaceStateLocator(page)).toHaveAttribute("data-selected-section", "motors_esc");
     await expect(page.locator(setupWorkspaceSelectors.motorsEscSafetyState)).toContainText("Blocked by checkpoint");
     await expect(page.locator(setupWorkspaceSelectors.motorsEscUnlock)).toBeDisabled();
 
@@ -335,7 +336,7 @@ test.describe("setup workspace proof", () => {
     await expect(page.locator(setupWorkspaceSelectors.checkpointTitle)).toContainText("Setup resumed");
 
     await setupNavLocator(page, "frame_orientation").click();
-    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("frame_orientation");
+    await expect(setupWorkspaceStateLocator(page)).toHaveAttribute("data-selected-section", "frame_orientation");
     await expect(page.locator(setupWorkspaceSelectors.frameVehicleState)).toContainText("QuadPlane ready");
     await expect(page.locator(setupWorkspaceSelectors.frameLayoutState)).toContainText("Supported");
     await expect(setupFrameInputLocator(page, "Q_FRAME_CLASS")).toBeVisible();
@@ -367,7 +368,7 @@ test.describe("setup workspace proof", () => {
     await openConnectedSetupWorkspace(page);
     await setupNavLocator(page, "motors_esc").click();
 
-    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("motors_esc");
+    await expect(setupWorkspaceStateLocator(page)).toHaveAttribute("data-selected-section", "motors_esc");
     await expect(page.locator(setupWorkspaceSelectors.motorsEscSummary)).toBeVisible();
     await expect(page.locator(setupWorkspaceSelectors.motorsEscSafetyState)).toContainText("Locked");
     await expect(setupMotorsEscBannerLocator(page, "bridge-limit")).toContainText("bridge window");
@@ -434,7 +435,7 @@ test.describe("setup workspace proof", () => {
     await openConnectedSetupWorkspace(page);
     await setupNavLocator(page, "servo_outputs").click();
 
-    await expect(page.locator(setupWorkspaceSelectors.selectedSection)).toContainText("servo_outputs");
+    await expect(setupWorkspaceStateLocator(page)).toHaveAttribute("data-selected-section", "servo_outputs");
     await expect(page.locator(setupWorkspaceSelectors.servoOutputsSummary)).toBeVisible();
     await expect(setupServoOutputsFunctionGroupLocator(page, 4)).toBeVisible();
     await expect(setupServoOutputsBannerLocator(page, "generic-fallback")).toContainText(

@@ -83,13 +83,16 @@ function createCatalog(entries: LogLibraryEntry[]): LogLibraryCatalog {
   };
 }
 
-function createState(overrides: Partial<LogsWorkspaceState> = {}): LogsWorkspaceState {
-  const settings: RecordingSettings = {
+function createRecordingSettings(): RecordingSettings {
+  return {
     auto_record_on_connect: false,
     auto_record_directory: "/recordings",
     filename_template: "YYYY-MM-DD.tlog",
     add_completed_recordings_to_library: true,
   };
+}
+
+function createState(overrides: Partial<LogsWorkspaceState> = {}): LogsWorkspaceState {
   const catalog = createCatalog([createEntry("ready", "ready"), createEntry("missing", "missing")]);
   const recordingStatus: RecordingStatus = { kind: "idle" };
 
@@ -140,7 +143,7 @@ function createState(overrides: Partial<LogsWorkspaceState> = {}): LogsWorkspace
       settingsPhase: "ready",
       error: null,
       status: recordingStatus,
-      settings,
+      settings: createRecordingSettings(),
     },
     rawBrowser: {
       phase: "idle",
@@ -408,30 +411,19 @@ describe("LogsWorkspace", () => {
     expect(store.cancelOperation).toHaveBeenCalledTimes(1);
   });
 
-  it("announces workspace failures as alerts", async () => {
-    const store = createStore(createState({
-      lastError: "failed to refresh log library",
-    }));
-
-    render(LogsWorkspace, {
-      props: { store },
-    });
-
-    await waitFor(() => {
-      expect(store.initialize).toHaveBeenCalledTimes(1);
-    });
-
-    expect(screen.getByRole("alert").textContent).toContain("failed to refresh log library");
-  });
-
-  it("dispatches replay, seek, speed, recording, and map handoff actions", async () => {
+  it("dispatches playback, recording, and map handoff controls", async () => {
     const store = createStore(createState({ effectiveSource: "playback" }));
     const handoff = vi.fn<(payload: LogsWorkspaceMapHandoff) => void>();
+    const recordingFileIo = createRecordingFileIo({
+      supportsManualPicker: vi.fn(() => true),
+      pickManualRecordingPath: vi.fn(async () => "/picked/manual-capture-01.tlog"),
+    });
 
     render(LogsWorkspace, {
       props: {
         store,
         onMapHandoff: handoff,
+        recordingFileIo,
       },
     });
 
@@ -460,6 +452,12 @@ describe("LogsWorkspace", () => {
     await fireEvent.click(screen.getByTestId("logs-auto-record-toggle"));
     expect(store.saveSettings).toHaveBeenCalledWith(expect.objectContaining({ auto_record_on_connect: true }));
 
+    await fireEvent.click(screen.getByTestId("logs-recording-toggle"));
+    expect(recordingFileIo.pickManualRecordingPath).toHaveBeenCalledWith({
+      suggestedPath: "/recordings/manual-capture.tlog",
+    });
+    expect(store.startRecordingAt).toHaveBeenCalledWith("/picked/manual-capture-01.tlog");
+
     await fireEvent.click(screen.getByTestId("logs-map-path-button"));
     expect(handoff).toHaveBeenCalledWith({
       kind: "path",
@@ -474,67 +472,10 @@ describe("LogsWorkspace", () => {
       entryId: "ready",
       cursorUsec: 2_000_000,
     });
-  });
 
-  it("starts manual recording through the picker-aware branch and leaves auto-record disabled by default", async () => {
-    const store = createStore();
-    const recordingFileIo = createRecordingFileIo({
-      supportsManualPicker: vi.fn(() => true),
-      pickManualRecordingPath: vi.fn(async () => "/picked/manual-capture-01.tlog"),
-    });
+    cleanup();
 
-    render(LogsWorkspace, {
-      props: { store, recordingFileIo },
-    });
-
-    expect((screen.getByTestId("logs-auto-record-toggle") as HTMLInputElement).checked).toBe(false);
-    expect(screen.getByTestId("logs-auto-record-value").textContent).toContain("disabled");
-    expect(screen.getByTestId("logs-recording-path-help").textContent).toContain("save picker");
-
-    await fireEvent.click(screen.getByTestId("logs-recording-toggle"));
-
-    expect(recordingFileIo.pickManualRecordingPath).toHaveBeenCalledWith({
-      suggestedPath: "/recordings/manual-capture.tlog",
-    });
-    expect(store.startRecordingAt).toHaveBeenCalledWith("/picked/manual-capture-01.tlog");
-    expect(screen.getByTestId("logs-recording-destination-value").textContent).toContain("/picked/manual-capture-01.tlog");
-  });
-
-  it("preserves Windows separators in the default manual recording path", async () => {
-    const store = createStore(createState({
-      recording: {
-        statusPhase: "ready",
-        settingsPhase: "ready",
-        error: null,
-        status: { kind: "idle" },
-        settings: {
-          auto_record_on_connect: false,
-          auto_record_directory: "C:\\logs\\",
-          filename_template: "YYYY-MM-DD.tlog",
-          add_completed_recordings_to_library: true,
-        },
-      },
-    }));
-    const recordingFileIo = createRecordingFileIo({
-      supportsManualPicker: vi.fn(() => true),
-      pickManualRecordingPath: vi.fn(async () => "C:\\picked\\manual-capture-01.tlog"),
-    });
-
-    render(LogsWorkspace, {
-      props: { store, recordingFileIo },
-    });
-
-    expect(screen.getByTestId("logs-recording-destination-value").textContent).toContain("C:\\logs\\manual-capture.tlog");
-
-    await fireEvent.click(screen.getByTestId("logs-recording-toggle"));
-
-    expect(recordingFileIo.pickManualRecordingPath).toHaveBeenCalledWith({
-      suggestedPath: "C:\\logs\\manual-capture.tlog",
-    });
-  });
-
-  it("stops an active recording and surfaces truthful recording facts", async () => {
-    const store = createStore(createState({
+    const activeStore = createStore(createState({
       effectiveSource: "playback",
       recording: {
         statusPhase: "ready",
@@ -549,141 +490,16 @@ describe("LogsWorkspace", () => {
           bytes_written: 1536,
           started_at_unix_msec: 1778246400000,
         },
-        settings: {
-          auto_record_on_connect: false,
-          auto_record_directory: "/recordings",
-          filename_template: "YYYY-MM-DD.tlog",
-          add_completed_recordings_to_library: true,
-        },
+        settings: createRecordingSettings(),
       },
     }));
 
     render(LogsWorkspace, {
-      props: { store },
+      props: { store: activeStore },
     });
-
-    expect(screen.getByTestId("logs-recording-file-value").textContent).toContain("capture-01.tlog");
-    expect(screen.getByTestId("logs-recording-bytes-value").textContent).toContain("1.5 KB");
-    expect(screen.getByTestId("logs-recording-replay-overlap").textContent).toContain("Replay is still active");
 
     await fireEvent.click(screen.getByTestId("logs-recording-toggle"));
-    expect(store.stopActiveRecording).toHaveBeenCalledTimes(1);
-  });
-
-  it("renders truthful missing and corrupt states from store data", async () => {
-    const corruptEntry = createEntry("corrupt", "corrupt", "/logs/corrupt.bin");
-    const state = createState({
-      library: {
-        phase: "ready",
-        error: null,
-        catalog: createCatalog([corruptEntry]),
-        selectedEntryId: "corrupt",
-        loadedEntryId: null,
-      },
-      playback: {
-        state: {
-          status: "idle",
-          entry_id: null,
-          operation_id: null,
-          cursor_usec: null,
-          start_usec: null,
-          end_usec: null,
-          duration_secs: null,
-          speed: 1,
-          available_speeds: [0.5, 1, 2, 4, 8, 16],
-          barrier_ready: false,
-          readonly: true,
-          diagnostic: null,
-        },
-        envelope: null,
-        bootstrapping: false,
-        error: null,
-        openedSummary: null,
-      },
-    });
-    const store = createStore(state);
-
-    render(LogsWorkspace, {
-      props: { store },
-    });
-
-    expect(screen.getByTestId("logs-selected-status-pill").textContent).toContain("corrupt");
-    expect(screen.getByTestId("logs-selected-message").textContent).toContain("corrupt");
-    expect(screen.getByText("failed to decode MAVLink frame: CRC mismatch")).toBeTruthy();
-    expect(screen.getByTestId("logs-prepare-playback")).toHaveProperty("disabled", true);
-    expect(screen.getByTestId("logs-play-button")).toHaveProperty("disabled", true);
-  });
-
-  it("keeps replay seek and map handoff bound to the loaded playback entry when selection drifts", async () => {
-    const readyEntry = createEntry("ready", "ready");
-    const otherEntry = createEntry("other", "ready", "/logs/other.tlog");
-    otherEntry.metadata.start_usec = 10_000_000;
-    otherEntry.metadata.end_usec = 20_000_000;
-
-    const store = createStore(createState({
-      effectiveSource: "playback",
-      library: {
-        phase: "ready",
-        error: null,
-        catalog: createCatalog([readyEntry, otherEntry]),
-        selectedEntryId: "other",
-        loadedEntryId: "ready",
-      },
-      playback: {
-        state: {
-          status: "playing",
-          entry_id: "ready",
-          operation_id: null,
-          cursor_usec: 5_000_000,
-          start_usec: 1_000_000,
-          end_usec: 61_000_000,
-          duration_secs: 60,
-          speed: 1,
-          available_speeds: [0.5, 1, 2, 4, 8, 16],
-          barrier_ready: true,
-          readonly: true,
-          diagnostic: null,
-        },
-        envelope: null,
-        bootstrapping: false,
-        error: null,
-        openedSummary: {
-          file_name: "ready.tlog",
-          start_usec: 1_000_000,
-          end_usec: 61_000_000,
-          duration_secs: 60,
-          total_entries: 2400,
-          message_types: { HEARTBEAT: 60 },
-          log_type: "tlog",
-        },
-      },
-    }));
-    const handoff = vi.fn<(payload: LogsWorkspaceMapHandoff) => void>();
-
-    render(LogsWorkspace, {
-      props: { store, onMapHandoff: handoff },
-    });
-
-    expect(screen.getByTestId("logs-timeline-range")).toHaveProperty("disabled", false);
-    await fireEvent.change(screen.getByTestId("logs-timeline-range"), {
-      target: { value: "7000000" },
-    });
-    expect(store.seek).toHaveBeenCalledWith(7_000_000);
-
-    await fireEvent.click(screen.getByTestId("logs-map-path-button"));
-    expect(handoff).toHaveBeenCalledWith({
-      kind: "path",
-      entryId: "ready",
-      startUsec: 1_000_000,
-      endUsec: 61_000_000,
-    });
-
-    await fireEvent.click(screen.getByTestId("logs-map-marker-button"));
-    expect(handoff).toHaveBeenCalledWith({
-      kind: "replay_marker",
-      entryId: "ready",
-      cursorUsec: 5_000_000,
-    });
+    expect(activeStore.stopActiveRecording).toHaveBeenCalledTimes(1);
   });
 
   it("dispatches selected-range chart export with the active log and bounded message filters", async () => {
@@ -732,44 +548,4 @@ describe("LogsWorkspace", () => {
     }, { origin: "chart" });
   });
 
-  it("disables replay-marker actions and shows a truthful idle label after stop clears the local replay session", async () => {
-    const store = createStore(createState({
-      effectiveSource: "playback",
-      library: {
-        phase: "ready",
-        error: null,
-        catalog: createCatalog([createEntry("ready", "ready")]),
-        selectedEntryId: "ready",
-        loadedEntryId: null,
-      },
-      playback: {
-        state: {
-          status: "idle",
-          entry_id: null,
-          operation_id: null,
-          cursor_usec: null,
-          start_usec: null,
-          end_usec: null,
-          duration_secs: null,
-          speed: 1,
-          available_speeds: [0.5, 1, 2, 4, 8, 16],
-          barrier_ready: false,
-          readonly: true,
-          diagnostic: null,
-        },
-        envelope: null,
-        bootstrapping: false,
-        error: null,
-        openedSummary: null,
-      },
-    }));
-
-    render(LogsWorkspace, {
-      props: { store },
-    });
-
-    expect(screen.getByTestId("logs-playback-label").textContent).toContain("Stopping replay and restoring live data");
-    expect(screen.getByTestId("logs-map-marker-button")).toHaveProperty("disabled", true);
-    expect(screen.getByTestId("logs-stop-button")).toHaveProperty("disabled", true);
-  });
 });

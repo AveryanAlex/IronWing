@@ -15,6 +15,7 @@ import {
     missionToolbarSecondaryLocator,
     missionWorkspaceLocator,
     missionWorkspaceSelectors,
+    missionWorkspaceStateLocator,
     openMissionWorkspace,
     readMissionHistoryState,
     readMissionMapDebugSnapshot,
@@ -95,7 +96,7 @@ test.describe("mocked mission planner workflow", () => {
         await openMissionWorkspace(page);
         await expectMissionWorkspace(page);
         await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
-        await expect(missionWorkspaceLocator(page, "state")).toContainText("empty");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-state", "empty");
         await expect(missionWorkspaceLocator(page, "mapSurface")).toBeVisible();
         await expectMissionHistoryState(
             page,
@@ -109,7 +110,7 @@ test.describe("mocked mission planner workflow", () => {
         await mockPlatform.cancelOpenFile();
         await clickMissionToolbarSecondary(page, "toolbarImport");
         await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
-        await expect(missionWorkspaceLocator(page, "state")).toContainText("empty");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-state", "empty");
         await expectMissionHistoryState(
             page,
             {
@@ -121,8 +122,8 @@ test.describe("mocked mission planner workflow", () => {
 
         await clickMissionToolbarSecondary(page, "toolbarRead");
         await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
-        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("2");
-        await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-mission", "2");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-survey", "0");
         await expect(missionWorkspaceLocator(page, "homeSummary")).toContainText("47.39774");
         await expect.poll(async () => {
             const snapshot = await readMissionMapDebugSnapshot(page) as { counts?: { markers?: number } } | null;
@@ -139,9 +140,9 @@ test.describe("mocked mission planner workflow", () => {
 
         await missionHistoryButtonLocator(page, "undo").click();
         await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
-        await expect(missionWorkspaceLocator(page, "state")).toContainText("empty");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-state", "empty");
         await expect(missionWorkspaceLocator(page, "mapSurface")).toBeVisible();
-        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("0 / 0");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-mission-summary", "0 / 0");
         await expectMissionHistoryState(
             page,
             {
@@ -153,7 +154,7 @@ test.describe("mocked mission planner workflow", () => {
 
         await missionHistoryButtonLocator(page, "redo").click();
         await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
-        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("2");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-mission", "2");
         await expect(missionWorkspaceLocator(page, "homeSummary")).toContainText("47.39774");
         await expectMissionHistoryState(
             page,
@@ -167,14 +168,14 @@ test.describe("mocked mission planner workflow", () => {
         await mockPlatform.cancelSaveFile();
         await clickMissionToolbarSecondary(page, "toolbarExport");
         await confirmExportReviewIfVisible(page);
-        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("2");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-mission", "2");
         await expect.poll(() => mockPlatform.getSavedFiles()).toEqual([]);
 
         await mockPlatform.setSaveFileName("vehicle-read.plan");
         await clickMissionToolbarSecondary(page, "toolbarExport");
         await confirmExportReviewIfVisible(page);
         await expect(missionWorkspaceLocator(page, "warningFile")).toContainText("omitted");
-        await expect(missionWorkspaceLocator(page, "countsWarnings")).not.toContainText("0");
+        await expect(missionWorkspaceStateLocator(page)).not.toHaveAttribute("data-mission-count-warnings", "0");
 
         const savedFiles = await mockPlatform.getSavedFiles();
         expect(savedFiles).toHaveLength(1);
@@ -183,9 +184,9 @@ test.describe("mocked mission planner workflow", () => {
 
         await clickMissionToolbarSecondary(page, "toolbarNew");
         await expect(missionWorkspaceLocator(page, "ready")).toBeVisible();
-        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("0 / 0");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-mission-summary", "0 / 0");
         await missionWorkspaceLocator(page, "listAdd").click();
-        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("1");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-mission", "1");
 
         const historyBeforeImport = await readMissionHistoryState(page);
         await mockPlatform.setOpenFile(surveyPlanContents, "survey-complex.plan");
@@ -193,7 +194,7 @@ test.describe("mocked mission planner workflow", () => {
         await expect(missionWorkspaceLocator(page, "importReviewTitle")).toContainText("survey-complex.plan");
         await missionWorkspaceLocator(page, "importReviewDismiss").click();
         await expect(missionWorkspaceLocator(page, "importReview")).toHaveCount(0);
-        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("1");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-mission", "1");
         await expectMissionHistoryState(
             page,
             {
@@ -207,7 +208,7 @@ test.describe("mocked mission planner workflow", () => {
         await clickMissionToolbarSecondary(page, "toolbarImport");
         await expect(missionWorkspaceLocator(page, "importReview")).toBeVisible();
         await missionWorkspaceLocator(page, "importReviewConfirm").click();
-        await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("2");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-survey", "2");
         expect(await page.locator(missionWorkspaceSelectors.warningFile).filter({ hasText: "survey" }).count()).toBeGreaterThan(0);
 
         const historyAfterImport = await readMissionHistoryState(page);
@@ -217,8 +218,8 @@ test.describe("mocked mission planner workflow", () => {
         expect(historyAfterImport.redo.disabled).toBe(true);
 
         await missionHistoryButtonLocator(page, "undo").click();
-        await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("1 / 0");
-        await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-mission-summary", "1 / 0");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-survey", "0");
         await expect(page.locator('[data-testid^="mission-survey-block-"]')).toHaveCount(0);
         await expectMissionHistoryState(
             page,
@@ -230,7 +231,7 @@ test.describe("mocked mission planner workflow", () => {
         );
 
         await missionHistoryButtonLocator(page, "redo").click();
-        await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("2");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-survey", "2");
         await expectMissionHistoryState(
             page,
             {
@@ -250,7 +251,7 @@ test.describe("mocked mission planner workflow", () => {
 
         const historyBeforeNewDraft = await readMissionHistoryState(page);
         await clickMissionToolbarSecondary(page, "toolbarNew");
-        await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-survey", "0");
         expect(await page.locator(missionWorkspaceSelectors.warningFile).count()).toBeGreaterThan(0);
 
         const historyAfterNewDraft = await readMissionHistoryState(page);
@@ -260,7 +261,7 @@ test.describe("mocked mission planner workflow", () => {
         expect(historyAfterNewDraft.redo.disabled).toBe(true);
 
         await pressMissionHistoryShortcut(page, "undo");
-        await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("2");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-survey", "2");
         await expectMissionHistoryState(
             page,
             {
@@ -271,7 +272,7 @@ test.describe("mocked mission planner workflow", () => {
         );
 
         await pressMissionHistoryShortcut(page, "redo");
-        await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("0");
+        await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-survey", "0");
         await expectMissionHistoryState(
             page,
             {

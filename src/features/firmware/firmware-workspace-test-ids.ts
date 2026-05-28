@@ -5,8 +5,6 @@ export const firmwareWorkspaceTestIds = {
   modeRecovery: "firmware-workspace-mode-recovery",
   returnGuidance: "firmware-workspace-return-guidance",
   layoutMode: "firmware-workspace-layout-mode",
-  layoutTier: "firmware-workspace-layout-tier",
-  layoutTierMismatch: "firmware-workspace-layout-tier-mismatch",
   blockedReason: "firmware-workspace-blocked-reason",
   blockedCopy: "firmware-workspace-blocked-copy",
   serialPanel: "firmware-workspace-serial-panel",
@@ -24,7 +22,6 @@ export const firmwareWorkspaceTestIds = {
   manualTargetEmpty: "firmware-workspace-manual-target-empty",
   manualTargetNoMatches: "firmware-workspace-manual-target-no-matches",
   manualTargetSelected: "firmware-workspace-manual-target-selected",
-  manualTargetHidden: "firmware-workspace-manual-target-hidden",
   targetListError: "firmware-workspace-target-list-error",
   targetListRetry: "firmware-workspace-target-list-retry",
   catalogEntryState: "firmware-workspace-catalog-entry-state",
@@ -78,5 +75,4 @@ export const firmwareWorkspaceTestIds = {
   outcomeSummary: "firmware-workspace-outcome-summary",
   outcomeEmpty: "firmware-workspace-outcome-empty",
   outcomeDismiss: "firmware-workspace-outcome-dismiss",
-  outcomeDetailPrefix: "firmware-workspace-outcome-detail",
 } as const;

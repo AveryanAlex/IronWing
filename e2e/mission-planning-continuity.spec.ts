@@ -17,6 +17,7 @@ import {
     type MissionToolbarSecondaryControl,
     missionWorkspaceLocator,
     missionWorkspaceSelectors,
+    missionWorkspaceStateLocator,
     openMissionWorkspace,
     openVehiclePanelDrawer,
     readMissionHistoryState,
@@ -276,7 +277,7 @@ async function addAndEditRallyPoint(page: Page, history: string[]) {
     await clickMissionControl(page, "modeRally");
     await expect(missionWorkspaceLocator(page, "rallyList")).toBeVisible();
     await clickMissionControl(page, "rallyAdd");
-    await expect(missionWorkspaceLocator(page, "countsRally")).toContainText("1");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-rally", "1");
     await expect.poll(async () => (await requireMissionMapDebugSnapshot(page, "confirming the active rally marker count")).rallyMarkerCount).toBe(1);
 
     const firstRallyPoint = firstRallyPointLocator(page);
@@ -310,7 +311,7 @@ async function importContinuityKmlAndDismiss(page: Page, mockPlatform: MockPlatf
     note(history, "Cancel one KML/KMZ picker request so the continuity flow proves the explicit cancelled-file note.");
     await mockPlatform.cancelOpenFile();
     await clickMissionControl(page, "toolbarImport");
-    await expect(missionWorkspaceLocator(page, "countsRally")).toContainText("1");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-rally", "1");
 
     note(history, "Open the textual KML fixture and dismiss the review so the current draft stays unchanged.");
     await mockPlatform.setOpenFile(
@@ -343,9 +344,9 @@ async function importContinuityKmlAndDismiss(page: Page, mockPlatform: MockPlatf
         missionWorkspaceLocator(page, "importReview"),
         historyMessage(history, "Dismissing the import review should leave the current planner workspace untouched."),
     ).toHaveCount(0);
-    await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("0");
-    await expect(missionWorkspaceLocator(page, "countsFence")).toContainText("0");
-    await expect(missionWorkspaceLocator(page, "countsRally")).toContainText("1");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-mission", "0");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-fence", "0");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-rally", "1");
 }
 
 async function applyContinuityKmlImport(page: Page, mockPlatform: MockPlatformHarness, history: string[]) {
@@ -363,9 +364,9 @@ async function applyContinuityKmlImport(page: Page, mockPlatform: MockPlatformHa
     await importReviewReplaceButton(page, "fence").click();
     await clickMissionControl(page, "importReviewConfirm");
 
-    await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("3");
-    await expect(missionWorkspaceLocator(page, "countsFence")).toContainText("1");
-    await expect(missionWorkspaceLocator(page, "countsRally")).toContainText("1");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-mission", "3");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-fence", "1");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-rally", "1");
     await expect(missionWorkspaceLocator(page, "warningFile")).toContainText("unsupported Point geometry");
 }
 
@@ -593,8 +594,8 @@ async function provePlaybackAndDetachedLocalStates(
         source_kind: "playback",
     };
     await emitSessionEnvelope(mockPlatform, playbackEnvelope, "disconnected", null);
-    await expect(missionWorkspaceLocator(page, "attachment")).toContainText("Playback read-only");
-    await expect(missionWorkspaceLocator(page, "attachmentDetail")).toContainText("Playback keeps the planner mounted");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-attachment", /Playback read-only/);
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-attachment-detail", /Playback keeps the planner mounted/);
     await expect(missionWorkspaceLocator(page, "warningRegister")).toContainText("Playback read-only");
     await expectMissionHistoryState(
         page,
@@ -619,8 +620,8 @@ async function provePlaybackAndDetachedLocalStates(
         reset_revision: liveEnvelope.reset_revision + 1,
     };
     await emitSessionEnvelope(mockPlatform, detachedEnvelope, "connected", connectedVehicleState);
-    await expect(missionWorkspaceLocator(page, "attachment")).toContainText("Detached local");
-    await expect(missionWorkspaceLocator(page, "attachmentDetail")).toContainText("use undo/redo as normal here");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-attachment", /Detached local/);
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-attachment-detail", /use undo\/redo as normal here/);
     await expectMissionHeaderValidateButtonAbsent(page);
     await expect(missionWorkspaceLocator(page, "toolbarUpload")).toBeEnabled();
     await expectMissionHeaderClearButtonAbsent(page);
@@ -660,7 +661,7 @@ async function provePlaybackAndDetachedLocalStates(
         },
         historyMessage(history, "Detached-local undo should restore the previous Home edit in one step while keeping vehicle actions blocked."),
     );
-    await expect(missionWorkspaceLocator(page, "attachment")).toContainText("Detached local");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-attachment", /Detached local/);
     await expectMissionHeaderValidateButtonAbsent(page);
     await expect(missionWorkspaceLocator(page, "toolbarUpload")).toBeEnabled();
     await expectMissionHeaderClearButtonAbsent(page);
@@ -715,11 +716,11 @@ async function importContinuityKmzWhileDetached(
     await importReviewReplaceButton(page, "fence").click();
     await clickMissionControl(page, "importReviewConfirm");
 
-    await expect(missionWorkspaceLocator(page, "attachment")).toContainText("Live attached");
-    await expect(missionWorkspaceLocator(page, "attachmentDetail")).toContainText("belongs to the active live scope");
-    await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("3");
-    await expect(missionWorkspaceLocator(page, "countsFence")).toContainText("1");
-    await expect(missionWorkspaceLocator(page, "countsRally")).toContainText("1");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-attachment", /Live attached/);
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-attachment-detail", /belongs to the active live scope/);
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-mission", "3");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-fence", "1");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-rally", "1");
     await expect(missionWorkspaceLocator(page, "warningFile")).toContainText("unsupported Point geometry");
 }
 

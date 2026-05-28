@@ -277,7 +277,6 @@ let bannerSeverity = $derived<BannerSeverity>(outcomeCopy?.tone ?? "warning");
             density="default"
             label={row.label}
             mono={false}
-            testId={`${firmwareWorkspaceTestIds.outcomeDetailPrefix}-${index}`}
             value={row.value}
           />
         {/each}

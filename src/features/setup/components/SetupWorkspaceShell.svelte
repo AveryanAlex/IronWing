@@ -260,10 +260,6 @@ function clearCheckpoint() {
 
 {#snippet selectedSectionDetail()}
   <div class="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 md:p-5" data-testid={setupWorkspaceTestIds.detail}>
-    <span aria-hidden="true" class="sr-only" data-testid={setupWorkspaceTestIds.selectedSection}>
-      {view.selectedSectionId}
-    </span>
-
     {#if useSectionDrawer}
       <div class="mb-3 flex items-center gap-3">
         <IconButton
@@ -297,18 +293,11 @@ function clearCheckpoint() {
 <WorkspaceShell mode="split" testId={setupWorkspaceTestIds.root}>
   <div
     class="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden"
+    data-setup-metadata={view.metadataText}
     data-selected-section={view.selectedSectionId}
     data-setup-readiness={view.readiness}
   >
     <SetupCheckpointBanner checkpoint={view.checkpoint} onClear={clearCheckpoint} />
-
-    <div aria-hidden="true" class="hidden">
-      <span data-testid={setupWorkspaceTestIds.state}>{view.stateText}</span>
-      <span data-testid={setupWorkspaceTestIds.scope}>{view.scopeText}</span>
-      <span data-testid={setupWorkspaceTestIds.metadata}>{view.metadataText}</span>
-      <span data-testid={setupWorkspaceTestIds.progress}>{view.progressText}</span>
-      <span data-testid={setupWorkspaceTestIds.notice}>{view.noticeText ?? ""}</span>
-    </div>
 
     {#if useSectionDrawer}
       <div

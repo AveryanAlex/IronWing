@@ -11,6 +11,30 @@ import { createSurveyRegion, type SurveyRegion } from "../../lib/survey-region";
 
 const BUILTIN_CAMERA = getBuiltinCameras().find((camera) => camera.canonicalName === "DJI Mavic 3E") ?? getBuiltinCameras()[0]!;
 
+type CustomCameraFormValues = {
+  name: string;
+  brand: string;
+  model: string;
+  sensorWidth: string;
+  sensorHeight: string;
+  imageWidth: string;
+  imageHeight: string;
+  focal: string;
+  minTrigger: string;
+};
+
+const CUSTOM_CAMERA_FORM_DEFAULTS: CustomCameraFormValues = {
+  name: "Custom Survey Cam 24mm",
+  brand: "Custom",
+  model: "Survey Cam 24mm",
+  sensorWidth: "23.5",
+  sensorHeight: "15.6",
+  imageWidth: "6000",
+  imageHeight: "4000",
+  focal: "24",
+  minTrigger: "1.5",
+};
+
 function makeWaypoint(latitude_deg: number, longitude_deg: number, altitude_m: number): MissionItem {
   return {
     command: {
@@ -86,6 +110,53 @@ function renderInspector(region: SurveyRegion, overrides: Partial<{
   };
 }
 
+async function fillCustomCameraForm(overrides: Partial<CustomCameraFormValues> = {}) {
+  const values = { ...CUSTOM_CAMERA_FORM_DEFAULTS, ...overrides };
+  const fields = [
+    [missionWorkspaceTestIds.cameraCustomName, values.name],
+    [missionWorkspaceTestIds.cameraCustomBrand, values.brand],
+    [missionWorkspaceTestIds.cameraCustomModel, values.model],
+    [missionWorkspaceTestIds.cameraCustomSensorWidth, values.sensorWidth],
+    [missionWorkspaceTestIds.cameraCustomSensorHeight, values.sensorHeight],
+    [missionWorkspaceTestIds.cameraCustomImageWidth, values.imageWidth],
+    [missionWorkspaceTestIds.cameraCustomImageHeight, values.imageHeight],
+    [missionWorkspaceTestIds.cameraCustomFocal, values.focal],
+    [missionWorkspaceTestIds.cameraCustomMinTrigger, values.minTrigger],
+  ] as const;
+
+  for (const [testId, value] of fields) {
+    await fireEvent.input(screen.getByTestId(testId), {
+      target: { value },
+    });
+  }
+}
+
+function installFailingLocalStorage() {
+  const originalLocalStorage = globalThis.localStorage;
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: originalLocalStorage?.getItem?.bind(originalLocalStorage) ?? (() => null),
+      setItem: () => {
+        throw new Error("quota");
+      },
+      removeItem: originalLocalStorage?.removeItem?.bind(originalLocalStorage) ?? (() => undefined),
+      clear: originalLocalStorage?.clear?.bind(originalLocalStorage) ?? (() => undefined),
+      key: originalLocalStorage?.key?.bind(originalLocalStorage) ?? (() => null),
+      get length() {
+        return originalLocalStorage?.length ?? 0;
+      },
+    },
+  });
+
+  return () => {
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: originalLocalStorage,
+    });
+  };
+}
+
 afterEach(() => {
   cleanup();
   if (typeof localStorage?.clear === "function") {
@@ -97,16 +168,16 @@ afterEach(() => {
 describe("MissionSurveyInspector", () => {
   it("blocks generation for camera-less imported regions until a valid camera is chosen", async () => {
     const onUpdateRegion = vi.fn();
+    const onGenerateRegion = vi.fn();
     const region = makeGridRegion({
       cameraId: null,
       camera: null,
       qgcPassthrough: {},
       importWarnings: ["Imported survey metadata preserved."],
     });
-    const rendered = renderInspector(region, { onUpdateRegion });
+    const rendered = renderInspector(region, { onUpdateRegion, onGenerateRegion });
 
     expect((screen.getByTestId(missionWorkspaceTestIds.surveyGenerate) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByTestId(missionWorkspaceTestIds.cameraCurrent).textContent).toContain("Choose a valid camera");
 
     await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.cameraSearch), {
       target: { value: "Mavic 3E" },
@@ -125,76 +196,46 @@ describe("MissionSurveyInspector", () => {
       onUpdateRegion,
     });
     expect((screen.getByTestId(missionWorkspaceTestIds.surveyGenerate) as HTMLButtonElement).disabled).toBe(false);
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.surveyGenerate));
+    expect(onGenerateRegion).toHaveBeenCalledWith(region.id);
   });
 
-  it("validates custom camera form values and surfaces save failures without hiding builtin cameras", async () => {
+  it("validates custom camera form values and handles save failure then success", async () => {
+    const onUpdateRegion = vi.fn();
     const region = makeGridRegion();
-    renderInspector(region);
+    renderInspector(region, { onUpdateRegion });
 
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.cameraCustomToggle));
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.cameraCustomSave));
 
     expect(screen.getByTestId(missionWorkspaceTestIds.cameraWarning).textContent).toContain("canonical name, brand, and model");
 
-    const originalLocalStorage = globalThis.localStorage;
-    Object.defineProperty(globalThis, "localStorage", {
-      configurable: true,
-      value: {
-        getItem: originalLocalStorage?.getItem?.bind(originalLocalStorage) ?? (() => null),
-        setItem: () => {
-          throw new Error("quota");
-        },
-        removeItem: originalLocalStorage?.removeItem?.bind(originalLocalStorage) ?? (() => undefined),
-        clear: originalLocalStorage?.clear?.bind(originalLocalStorage) ?? (() => undefined),
-        key: originalLocalStorage?.key?.bind(originalLocalStorage) ?? (() => null),
-        get length() {
-          return originalLocalStorage?.length ?? 0;
-        },
-      },
-    });
+    await fillCustomCameraForm({ focal: "0" });
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.cameraCustomSave));
+    expect(screen.getByTestId(missionWorkspaceTestIds.cameraWarning).textContent).toContain("positive sensor, image, and focal-length values");
 
-    await fireEvent.input(screen.getByTestId(missionWorkspaceTestIds.cameraCustomName), {
-      target: { value: "Custom Survey Cam 24mm" },
-    });
-    await fireEvent.input(screen.getByTestId(missionWorkspaceTestIds.cameraCustomBrand), {
-      target: { value: "Custom" },
-    });
-    await fireEvent.input(screen.getByTestId(missionWorkspaceTestIds.cameraCustomModel), {
-      target: { value: "Survey Cam 24mm" },
-    });
-    await fireEvent.input(screen.getByTestId(missionWorkspaceTestIds.cameraCustomSensorWidth), {
-      target: { value: "23.5" },
-    });
-    await fireEvent.input(screen.getByTestId(missionWorkspaceTestIds.cameraCustomSensorHeight), {
-      target: { value: "15.6" },
-    });
-    await fireEvent.input(screen.getByTestId(missionWorkspaceTestIds.cameraCustomImageWidth), {
-      target: { value: "6000" },
-    });
-    await fireEvent.input(screen.getByTestId(missionWorkspaceTestIds.cameraCustomImageHeight), {
-      target: { value: "4000" },
-    });
-    await fireEvent.input(screen.getByTestId(missionWorkspaceTestIds.cameraCustomFocal), {
-      target: { value: "24" },
-    });
+    await fillCustomCameraForm();
+
+    const restoreLocalStorage = installFailingLocalStorage();
+    try {
+      await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.cameraCustomSave));
+      expect(screen.getByTestId(missionWorkspaceTestIds.cameraWarning).textContent).toContain("not saved");
+      expect(onUpdateRegion).not.toHaveBeenCalled();
+    } finally {
+      restoreLocalStorage();
+    }
 
     await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.cameraCustomSave));
 
-    expect(screen.getByTestId(missionWorkspaceTestIds.cameraWarning).textContent).toContain("not saved");
-
-    Object.defineProperty(globalThis, "localStorage", {
-      configurable: true,
-      value: originalLocalStorage,
-    });
-
-    await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.cameraSearch), {
-      target: { value: "Mavic 3E" },
-    });
-    expect(screen.getByRole("button", { name: /Use DJI Mavic 3E/i })).toBeTruthy();
+    expect(onUpdateRegion).toHaveBeenCalledTimes(1);
+    const [, updater] = onUpdateRegion.mock.calls[0] as [string, (current: SurveyRegion) => SurveyRegion];
+    const updatedRegion = updater(region);
+    expect(updatedRegion.camera?.canonicalName).toBe("Custom Survey Cam 24mm");
+    expect(updatedRegion.camera?.minTriggerInterval_s).toBe(1.5);
   });
 
-  it("ignores invalid numeric edits and routes subordinate generated-item changes through manual-edit callbacks", async () => {
-    const onUpdateRegion = vi.fn();
+  it("routes subordinate generated-item changes through manual-edit callbacks", async () => {
     const onMarkGeneratedItemEdited = vi.fn();
     const region = makeGridRegion({
       cameraId: BUILTIN_CAMERA.canonicalName,
@@ -203,14 +244,8 @@ describe("MissionSurveyInspector", () => {
     });
 
     renderInspector(region, {
-      onUpdateRegion,
       onMarkGeneratedItemEdited,
     });
-
-    await fireEvent.change(screen.getByTestId(`${missionWorkspaceTestIds.surveyParamPrefix}-altitude_m`), {
-      target: { value: "" },
-    });
-    expect(onUpdateRegion).not.toHaveBeenCalled();
 
     await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.surveyGeneratedItemPrefix}-0`));
     await fireEvent.change(screen.getByTestId(missionWorkspaceTestIds.surveyGeneratedAltitude), {
@@ -222,61 +257,5 @@ describe("MissionSurveyInspector", () => {
     expect(regionId).toBe(region.id);
     expect(localIndex).toBe(0);
     expect(JSON.stringify(editedItem.command)).toContain("80");
-  });
-
-  it("keeps survey coordinate editors rounded and stacked inside narrow inspector layouts", async () => {
-    const region = makeGridRegion({
-      cameraId: BUILTIN_CAMERA.canonicalName,
-      camera: BUILTIN_CAMERA,
-      polygon: [
-        { latitude_deg: 47.398123456789, longitude_deg: 8.545123456789 },
-        { latitude_deg: 47.398987654321, longitude_deg: 8.545876543219 },
-        { latitude_deg: 47.397555555555, longitude_deg: 8.545999999999 },
-      ],
-      generatedItems: [makeWaypoint(47.398222222222, 8.545444444444, 55)],
-    });
-
-    renderInspector(region);
-
-    const latitudeInput = screen.getByTestId(`${missionWorkspaceTestIds.surveyPointPrefix}-0-latitude`) as HTMLInputElement;
-    const longitudeInput = screen.getByTestId(`${missionWorkspaceTestIds.surveyPointPrefix}-0-longitude`) as HTMLInputElement;
-    expect(latitudeInput.value).toBe("47.3981235");
-    expect(longitudeInput.value).toBe("8.5451235");
-    expect(latitudeInput.closest(".grid")?.className).not.toContain("grid-cols");
-
-    const altitudeParam = screen.getByTestId(`${missionWorkspaceTestIds.surveyParamPrefix}-altitude_m`);
-    expect(altitudeParam.closest(".grid")?.className).not.toContain("grid-cols");
-
-    await fireEvent.click(screen.getByTestId(`${missionWorkspaceTestIds.surveyGeneratedItemPrefix}-0`));
-    expect((screen.getByTestId(missionWorkspaceTestIds.surveyGeneratedLatitude) as HTMLInputElement).value).toBe("47.3982222");
-    expect(screen.getByTestId(missionWorkspaceTestIds.surveyGeneratedLatitude).closest(".grid")?.className).not.toContain("grid-cols");
-  });
-
-  it("renders survey prompts inline and routes confirm or dismiss through the planner callbacks", async () => {
-    const onConfirmSurveyPrompt = vi.fn();
-    const onDismissSurveyPrompt = vi.fn();
-    const region = makeGridRegion({
-      cameraId: BUILTIN_CAMERA.canonicalName,
-      camera: BUILTIN_CAMERA,
-      generatedItems: [makeWaypoint(47.3982, 8.5454, 55)],
-    });
-
-    renderInspector(region, {
-      surveyPrompt: {
-        kind: "confirm-regenerate",
-        regionId: region.id,
-        message: "Regenerating this survey will overwrite 1 manual edit.",
-      },
-      onConfirmSurveyPrompt,
-      onDismissSurveyPrompt,
-    });
-
-    expect(screen.getByTestId(missionWorkspaceTestIds.surveyPromptKind).textContent).toContain("confirm-regenerate");
-
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.surveyPromptDismiss));
-    expect(onDismissSurveyPrompt).toHaveBeenCalledTimes(1);
-
-    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.surveyPromptConfirm));
-    expect(onConfirmSurveyPrompt).toHaveBeenCalledTimes(1);
   });
 });

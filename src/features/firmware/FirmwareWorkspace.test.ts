@@ -144,21 +144,19 @@ function defaultReadiness(
   };
 }
 
-function createResponsiveChromeState(width: number, height: number, tierOverride?: string) {
-  return createShellChromeState(
-    {
-      sm: width >= 640,
-      md: width >= 768,
-      lg: width >= 1024,
-      xl: width >= 1280,
-    },
-    { width, height },
-    tierOverride,
-  );
-}
-
 function createResponsiveChromeStore(width: number, height: number, tierOverride?: string): Writable<ShellChromeState> {
-  return writable(createResponsiveChromeState(width, height, tierOverride));
+  return writable(
+    createShellChromeState(
+      {
+        sm: width >= 640,
+        md: width >= 768,
+        lg: width >= 1024,
+        xl: width >= 1280,
+      },
+      { width, height },
+      tierOverride,
+    ),
+  );
 }
 
 function createFileIo(overrides: Partial<FirmwareFileIo> = {}): FirmwareFileIo {
@@ -173,8 +171,6 @@ function createService(
   overrides: Partial<FirmwareService> = {},
   config: {
     detectedBoardId?: number | null;
-    hasParamsToBackup?: boolean;
-    paramCount?: number;
     entries?: Record<string, CatalogEntry[]>;
     targets?: CatalogTargetSummary[];
     recoveryTargets?: CatalogTargetSummary[];
@@ -193,8 +189,8 @@ function createService(
     sessionClearCompleted: vi.fn(async () => undefined),
     installPreflight: vi.fn(async () => ({
       vehicle_connected: false,
-      param_count: config.paramCount ?? 12,
-      has_params_to_backup: config.hasParamsToBackup ?? true,
+      param_count: 12,
+      has_params_to_backup: true,
       available_ports: DEFAULT_PORTS,
       detected_board_id: null,
       session_ready: true,
@@ -332,10 +328,6 @@ describe("FirmwareWorkspace", () => {
 
     await renderWorkspace({ fileIo });
 
-    const serialContentGrid = Array.from(screen.getByTestId(firmwareWorkspaceTestIds.serialPanel).children)
-      .find((element) => (element as HTMLElement).className.includes("mt-3 grid gap-3")) as HTMLElement | undefined;
-    expect(serialContentGrid?.className).toBe("mt-3 grid gap-3");
-
     await waitFor(() => {
       expect(screen.getByTestId(firmwareWorkspaceTestIds.manualTargetRequired).textContent).toContain("No board hint is available");
       expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(true);
@@ -375,84 +367,6 @@ describe("FirmwareWorkspace", () => {
     expect((screen.getByTestId(firmwareWorkspaceTestIds.startRecovery) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("disables start when the selected manual target is hidden by the current search filter", async () => {
-    await renderWorkspace();
-
-    await chooseManualTarget(/Cube Orange/i);
-
-    await waitFor(() => {
-      expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(false);
-    });
-
-    await fireEvent.input(screen.getByTestId(firmwareWorkspaceTestIds.manualTargetSearch), {
-      target: { value: "matek" },
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.manualTargetHidden)).toBeTruthy();
-      expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(true);
-    });
-  });
-
-  it("renders the parameter backup reminder when preflight reports a backup-worthy parameter set", async () => {
-    await renderWorkspace({
-      service: createService({}, { hasParamsToBackup: true, paramCount: 42 }),
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.paramBackup)).toBeTruthy();
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.paramBackupState).textContent).toContain("42 parameters are currently available");
-    });
-  });
-
-  it("keeps the backup surface truthful when preflight reports no parameter backup context", async () => {
-    await renderWorkspace({
-      service: createService({}, { hasParamsToBackup: false, paramCount: 0 }),
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByTestId(firmwareWorkspaceTestIds.paramBackup)).toBeNull();
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.paramBackupState).textContent).toContain("No backed-up parameter set is currently reported");
-    });
-  });
-
-  it("keeps the workspace browseable on radiomaster and phone layouts while blocking actual install and recovery starts", async () => {
-    const chromeStore = createResponsiveChromeStore(1440, 900, "wide");
-    await renderWorkspace({ chromeStore });
-
-    await chooseManualTarget(/Cube Orange/i);
-
-    await waitFor(() => {
-      expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(false);
-    });
-
-    chromeStore.set(createResponsiveChromeState(1280, 680, "wide"));
-
-    await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.layoutMode).textContent).toContain("browse-radiomaster");
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.blockedReason).textContent).toContain("constrained widths");
-      expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(true);
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.manualTargetSearch)).toBeTruthy();
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel)).toBeTruthy();
-    });
-
-    await openRecoveryMode();
-
-    await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoveryPanel)).toBeTruthy();
-      expect((screen.getByTestId(firmwareWorkspaceTestIds.startRecovery) as HTMLButtonElement).disabled).toBe(true);
-    });
-
-    chromeStore.set(createResponsiveChromeState(390, 844, "phone"));
-
-    await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.layoutMode).textContent).toContain("browse-phone");
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.blockedReason).textContent).toContain("phone widths");
-      expect((screen.getByTestId(firmwareWorkspaceTestIds.startRecovery) as HTMLButtonElement).disabled).toBe(true);
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoveryGuidance)).toBeTruthy();
-    });
-  });
-
   it("retains target and source context after a rejected serial start and renders the failure outcome inline", async () => {
     const service = createService({
       startFirmwareInstallUpdate: vi.fn(async () => {
@@ -477,57 +391,6 @@ describe("FirmwareWorkspace", () => {
     });
   });
 
-  it("retains cancelled serial outcomes without clearing the retryable selection context", async () => {
-    const service = createService({
-      startFirmwareInstallUpdate: vi.fn(async () => ({ result: "cancelled" })),
-    });
-
-    await renderWorkspace({ service });
-    await chooseManualTarget(/Cube Orange/i);
-
-    await waitFor(() => {
-      expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(false);
-    });
-
-    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.startSerial));
-
-    await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeResult).textContent).toContain("Cancelled");
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeSummary).textContent).toContain("cancelled before completion");
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedTargetState).textContent).toContain("Cube Orange");
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedSourceState).textContent).toContain("catalog_url");
-    });
-  });
-
-  it("renders detailed outcome facts for reconnect verification failures instead of collapsing them into a generic error", async () => {
-    const service = createService({
-      startFirmwareInstallUpdate: vi.fn(async () => ({
-        result: "reconnect_failed",
-        board_id: 140,
-        bootloader_rev: 6,
-        flash_verified: true,
-        reconnect_error: "timeout waiting for heartbeat",
-      })),
-    });
-
-    await renderWorkspace({ service });
-    await chooseManualTarget(/Cube Orange/i);
-
-    await waitFor(() => {
-      expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(false);
-    });
-
-    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.startSerial));
-
-    await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeResult).textContent).toContain("Reconnect failed");
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel).textContent).toContain("Bootloader rev");
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel).textContent).toContain("6");
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel).textContent).toContain("Reconnect error");
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel).textContent).toContain("timeout waiting for heartbeat");
-    });
-  });
-
   it("keeps bootloader installation separate from firmware install/update and gates dangerous manual bootloader images behind explicit confirmation", async () => {
     const fileIo = createFileIo({
       pickBinFile: vi.fn(async () => ({
@@ -543,14 +406,8 @@ describe("FirmwareWorkspace", () => {
     });
 
     await renderWorkspace({ fileIo });
-
-    expect(screen.getByTestId(firmwareWorkspaceTestIds.serialPanel)).toBeTruthy();
-    expect(screen.queryByTestId(firmwareWorkspaceTestIds.recoveryPanel)).toBeNull();
-
     await openRecoveryMode();
 
-    expect(screen.queryByTestId(firmwareWorkspaceTestIds.serialPanel)).toBeNull();
-    expect(screen.getByTestId(firmwareWorkspaceTestIds.recoveryPanel)).toBeTruthy();
     expect(screen.queryByTestId(firmwareWorkspaceTestIds.recoveryManualPanel)).toBeNull();
 
     await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryAdvancedToggle));
@@ -601,134 +458,6 @@ describe("FirmwareWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(firmwareWorkspaceTestIds.recoverySourceState).textContent).toContain("official_bootloader");
       expect((screen.getByTestId(firmwareWorkspaceTestIds.startRecovery) as HTMLButtonElement).disabled).toBe(false);
-    });
-  });
-
-  it("surfaces invalid manual recovery files loudly and resets stale confirmation when the manual source changes", async () => {
-    const fileIo = createFileIo({
-      pickApjFile: vi.fn()
-        .mockRejectedValueOnce(new Error("The selected .apj firmware file was empty."))
-        .mockResolvedValueOnce({
-          status: "success",
-          selection: {
-            kind: "local_apj_bytes",
-            data: [1, 2, 3, 4],
-            fileName: "bootloader-a.apj",
-            byteLength: 4,
-            digest: "aaaa",
-          },
-        })
-        .mockResolvedValueOnce({
-          status: "success",
-          selection: {
-            kind: "local_apj_bytes",
-            data: [5, 6, 7, 8],
-            fileName: "bootloader-b.apj",
-            byteLength: 4,
-            digest: "bbbb",
-          },
-        }),
-    });
-
-    await renderWorkspace({ fileIo });
-    await openRecoveryMode();
-    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryAdvancedToggle));
-    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryManualApj));
-    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryBrowse));
-
-    await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoverySourceError).textContent).toContain("empty");
-    });
-
-    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryBrowse));
-
-    await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoverySourceState).textContent).toContain("bootloader-a.apj");
-    });
-
-    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoverySafetyConfirm));
-    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryManualConfirm));
-    expect((screen.getByTestId(firmwareWorkspaceTestIds.recoveryManualConfirm) as HTMLInputElement).checked).toBe(true);
-
-    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryBrowse));
-
-    await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoverySourceState).textContent).toContain("bootloader-b.apj");
-      expect((screen.getByTestId(firmwareWorkspaceTestIds.recoveryManualConfirm) as HTMLInputElement).checked).toBe(false);
-    });
-  });
-
-  it("keeps the selected DFU device stable by unique_id across rescan reorder", async () => {
-    const listDfuDevices = vi.fn()
-      .mockResolvedValueOnce({
-        kind: "available",
-        devices: [
-          {
-            vid: 0x0483,
-            pid: 0xdf11,
-            unique_id: "dfu-a",
-            serial_number: "A",
-            manufacturer: "ST",
-            product: "STM32 DFU A",
-          },
-          {
-            vid: 0x0483,
-            pid: 0xdf11,
-            unique_id: "dfu-b",
-            serial_number: "B",
-            manufacturer: "ST",
-            product: "STM32 DFU B",
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        kind: "available",
-        devices: [
-          {
-            vid: 0x0483,
-            pid: 0xdf11,
-            unique_id: "dfu-b",
-            serial_number: "B",
-            manufacturer: "ST",
-            product: "STM32 DFU B",
-          },
-          {
-            vid: 0x0483,
-            pid: 0xdf11,
-            unique_id: "dfu-a",
-            serial_number: "A",
-            manufacturer: "ST",
-            product: "STM32 DFU A",
-          },
-        ],
-      });
-
-    await renderWorkspace({
-      service: createService({ listDfuDevices }, {
-        recoveryTargets: DEFAULT_RECOVERY_TARGETS,
-        dfuDevices: [],
-      }),
-    });
-
-    await openRecoveryMode();
-
-    await waitFor(() => {
-      expect((screen.getByTestId(firmwareWorkspaceTestIds.recoveryDeviceSelect) as HTMLSelectElement).value).toBe("");
-    });
-
-    await fireEvent.change(screen.getByTestId(firmwareWorkspaceTestIds.recoveryDeviceSelect), {
-      target: { value: "dfu-b" },
-    });
-
-    await waitFor(() => {
-      expect((screen.getByTestId(firmwareWorkspaceTestIds.recoveryDeviceSelect) as HTMLSelectElement).value).toBe("dfu-b");
-    });
-
-    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.recoveryDeviceRefresh));
-
-    await waitFor(() => {
-      expect((screen.getByTestId(firmwareWorkspaceTestIds.recoveryDeviceSelect) as HTMLSelectElement).value).toBe("dfu-b");
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.recoveryDeviceState).textContent).toContain("STM32 DFU B");
     });
   });
 

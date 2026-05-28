@@ -162,8 +162,6 @@ function rebootTone(): string {
           {model.ports.length} {model.ports.length === 1 ? "port" : "ports"}
         </SetupStatusPill>
       {/if}
-      <span class="sr-only" data-testid={setupWorkspaceTestIds.serialPortsConflictState}>{conflictTone()}</span>
-      <span class="sr-only" data-testid={setupWorkspaceTestIds.serialPortsRebootState}>{rebootTone()}</span>
       {/snippet}
     </SetupCardHeader>
 

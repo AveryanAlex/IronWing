@@ -22,8 +22,6 @@ import type {
 
 export const runtimeSelectors = {
     shell: '[data-testid="app-shell"]',
-    heading: '[data-testid="app-shell-heading"]',
-    runtimeMarker: '[data-testid="app-runtime-marker"]',
     framework: '[data-testid="app-runtime-framework"]',
     bootstrapState: '[data-testid="app-bootstrap-state"]',
     bootedAt: '[data-testid="app-runtime-booted-at"]',
@@ -102,12 +100,6 @@ export const operatorWorkspaceSelectors = {
 
 export const setupWorkspaceSelectors = {
     root: `[data-testid="${setupWorkspaceTestIds.root}"]`,
-    state: `[data-testid="${setupWorkspaceTestIds.state}"]`,
-    scope: `[data-testid="${setupWorkspaceTestIds.scope}"]`,
-    metadata: `[data-testid="${setupWorkspaceTestIds.metadata}"]`,
-    progress: `[data-testid="${setupWorkspaceTestIds.progress}"]`,
-    notice: `[data-testid="${setupWorkspaceTestIds.notice}"]`,
-    selectedSection: `[data-testid="${setupWorkspaceTestIds.selectedSection}"]`,
     checkpoint: `[data-testid="${setupWorkspaceTestIds.checkpoint}"]`,
     checkpointTitle: `[data-testid="${setupWorkspaceTestIds.checkpointTitle}"]`,
     checkpointDetail: `[data-testid="${setupWorkspaceTestIds.checkpointDetail}"]`,
@@ -284,11 +276,6 @@ export const telemetrySettingsSelectors = {
 export const missionWorkspaceSelectors = {
     root: `[data-testid="${missionWorkspaceTestIds.root}"]`,
     header: `[data-testid="${missionWorkspaceTestIds.header}"]`,
-    state: `[data-testid="${missionWorkspaceTestIds.state}"]`,
-    attachment: `[data-testid="${missionWorkspaceTestIds.attachment}"]`,
-    attachmentDetail: `[data-testid="${missionWorkspaceTestIds.attachmentDetail}"]`,
-    scope: `[data-testid="${missionWorkspaceTestIds.scope}"]`,
-    summary: `[data-testid="${missionWorkspaceTestIds.summary}"]`,
     inlineStatus: `[data-testid="${missionWorkspaceTestIds.inlineStatus}"]`,
     inlineStatusMessage: `[data-testid="${missionWorkspaceTestIds.inlineStatusMessage}"]`,
     inlineStatusDetail: `[data-testid="${missionWorkspaceTestIds.inlineStatusDetail}"]`,
@@ -296,12 +283,6 @@ export const missionWorkspaceSelectors = {
     warningRegister: `[data-testid="${missionWorkspaceTestIds.warningRegister}"]`,
     warningFile: `[data-testid="${missionWorkspaceTestIds.warningFile}"]`,
     warningValidation: `[data-testid="${missionWorkspaceTestIds.warningValidation}"]`,
-    countsMission: `[data-testid="${missionWorkspaceTestIds.countsMission}"]`,
-    countsSurvey: `[data-testid="${missionWorkspaceTestIds.countsSurvey}"]`,
-    countsFence: `[data-testid="${missionWorkspaceTestIds.countsFence}"]`,
-    countsRally: `[data-testid="${missionWorkspaceTestIds.countsRally}"]`,
-    countsValidation: `[data-testid="${missionWorkspaceTestIds.countsValidation}"]`,
-    countsWarnings: `[data-testid="${missionWorkspaceTestIds.countsWarnings}"]`,
     ready: `[data-testid="${missionWorkspaceTestIds.ready}"]`,
     modeMission: `[data-testid="${missionWorkspaceTestIds.modeMission}"]`,
     modeFence: `[data-testid="${missionWorkspaceTestIds.modeFence}"]`,
@@ -344,7 +325,6 @@ export const missionWorkspaceSelectors = {
     mapDragState: `[data-testid="${missionWorkspaceTestIds.mapDragState}"]`,
     mapReplayPath: `[data-testid="${missionWorkspaceTestIds.mapReplayPath}"]`,
     mapReplayMarker: `[data-testid="${missionWorkspaceTestIds.mapReplayMarker}"]`,
-    mapDebug: `[data-testid="${missionWorkspaceTestIds.mapDebug}"]`,
     mapDrawEdit: `[data-testid="${missionWorkspaceTestIds.mapDrawEdit}"]`,
     mapDrawFinish: `[data-testid="${missionWorkspaceTestIds.mapDrawFinish}"]`,
     mapDrawCancel: `[data-testid="${missionWorkspaceTestIds.mapDrawCancel}"]`,
@@ -395,14 +375,7 @@ export const missionWorkspaceSelectors = {
 } as const;
 
 export const missionWorkspaceLayoutSelectors = {
-    layoutDiagnostics: `[data-testid="${missionWorkspaceTestIds.layoutDiagnostics}"]`,
-    layoutMode: `[data-testid="${missionWorkspaceTestIds.layoutMode}"]`,
-    layoutTier: `[data-testid="${missionWorkspaceTestIds.layoutTier}"]`,
-    layoutTierMismatch: `[data-testid="${missionWorkspaceTestIds.layoutTierMismatch}"]`,
-    detailColumns: `[data-testid="${missionWorkspaceTestIds.detailColumns}"]`,
-    supportPlacement: `[data-testid="${missionWorkspaceTestIds.supportPlacement}"]`,
     phoneSegmentBar: `[data-testid="${missionWorkspaceTestIds.phoneSegmentBar}"]`,
-    phoneSegmentState: `[data-testid="${missionWorkspaceTestIds.phoneSegmentState}"]`,
     phoneSegmentMap: `[data-testid="${missionWorkspaceTestIds.phoneSegmentMap}"]`,
     phoneSegmentPlan: `[data-testid="${missionWorkspaceTestIds.phoneSegmentPlan}"]`,
     mapPane: `[data-testid="${missionWorkspaceTestIds.mapPane}"]`,
@@ -429,8 +402,6 @@ export const firmwareWorkspaceSelectors = {
     modeRecovery: `[data-testid="${firmwareWorkspaceTestIds.modeRecovery}"]`,
     returnGuidance: `[data-testid="${firmwareWorkspaceTestIds.returnGuidance}"]`,
     layoutMode: `[data-testid="${firmwareWorkspaceTestIds.layoutMode}"]`,
-    layoutTier: `[data-testid="${firmwareWorkspaceTestIds.layoutTier}"]`,
-    layoutTierMismatch: `[data-testid="${firmwareWorkspaceTestIds.layoutTierMismatch}"]`,
     blockedReason: `[data-testid="${firmwareWorkspaceTestIds.blockedReason}"]`,
     blockedCopy: `[data-testid="${firmwareWorkspaceTestIds.blockedCopy}"]`,
     serialPanel: `[data-testid="${firmwareWorkspaceTestIds.serialPanel}"]`,
@@ -448,7 +419,6 @@ export const firmwareWorkspaceSelectors = {
     manualTargetEmpty: `[data-testid="${firmwareWorkspaceTestIds.manualTargetEmpty}"]`,
     manualTargetNoMatches: `[data-testid="${firmwareWorkspaceTestIds.manualTargetNoMatches}"]`,
     manualTargetSelected: `[data-testid="${firmwareWorkspaceTestIds.manualTargetSelected}"]`,
-    manualTargetHidden: `[data-testid="${firmwareWorkspaceTestIds.manualTargetHidden}"]`,
     targetListError: `[data-testid="${firmwareWorkspaceTestIds.targetListError}"]`,
     targetListRetry: `[data-testid="${firmwareWorkspaceTestIds.targetListRetry}"]`,
     catalogEntryState: `[data-testid="${firmwareWorkspaceTestIds.catalogEntryState}"]`,
@@ -1011,6 +981,10 @@ export function missionWorkspaceLocator(page: Page, selector: keyof typeof missi
     return page.locator(missionWorkspaceSelectors[selector]);
 }
 
+export function missionWorkspaceStateLocator(page: Page): Locator {
+    return page.locator(`${missionWorkspaceSelectors.root} .mission-workspace`);
+}
+
 /**
  * Test ids for secondary toolbar actions hosted inside the Mission toolbar's
  * shared `ui/Menu` overflow. Undo and Redo remain inline `IconButton`s in the
@@ -1263,6 +1237,10 @@ export function operatorWorkspaceLocator(page: Page, selector: keyof typeof oper
 
 export function setupWorkspaceLocator(page: Page, selector: keyof typeof setupWorkspaceSelectors): Locator {
     return page.locator(setupWorkspaceSelectors[selector]);
+}
+
+export function setupWorkspaceStateLocator(page: Page): Locator {
+    return page.locator(`${setupWorkspaceSelectors.root} [data-selected-section]`);
 }
 
 export function setupNavLocator(page: Page, sectionId: string): Locator {
@@ -1639,34 +1617,36 @@ export async function mockTerrainNoData(page: Page): Promise<void> {
 }
 
 export async function expectMissionLayoutState(page: Page, expected: MissionLayoutExpectations): Promise<void> {
+    const workspace = missionWorkspaceStateLocator(page);
+
     await expect(
-        page.locator(missionWorkspaceLayoutSelectors.layoutDiagnostics),
-        "Mission layout diagnostics are missing; keep the responsive proof aligned with the shipped Mission workspace diagnostics instead of scraping layout classes.",
-    ).toHaveCount(1);
+        workspace,
+        "Mission workspace state container is missing; keep responsive proof attributes on the visible Mission workspace surface.",
+    ).toBeVisible();
     await expect(
-        page.locator(missionWorkspaceLayoutSelectors.layoutMode),
+        workspace,
         `Mission layout mode drifted; expected ${expected.mode}.`,
-    ).toContainText(expected.mode);
+    ).toHaveAttribute("data-mission-layout-mode", expected.mode);
     await expect(
-        page.locator(missionWorkspaceLayoutSelectors.layoutTier),
+        workspace,
         `Mission layout tier drifted; expected ${expected.tier}.`,
-    ).toContainText(expected.tier);
+    ).toHaveAttribute("data-mission-layout-tier", expected.tier);
     await expect(
-        page.locator(missionWorkspaceLayoutSelectors.detailColumns),
+        workspace,
         `Mission detail panel columns drifted; expected ${expected.detailColumns}.`,
-    ).toContainText(expected.detailColumns);
+    ).toHaveAttribute("data-mission-layout-detail-columns", expected.detailColumns);
     await expect(
-        page.locator(missionWorkspaceLayoutSelectors.supportPlacement),
+        workspace,
         `Mission support panel placement drifted; expected ${expected.supportPlacement}.`,
-    ).toContainText(expected.supportPlacement);
+    ).toHaveAttribute("data-mission-layout-support-placement", expected.supportPlacement);
     await expect(
-        page.locator(missionWorkspaceLayoutSelectors.phoneSegmentState),
+        workspace,
         `Mission phone segment diagnostics drifted; expected ${expected.phoneSegmentState}.`,
-    ).toContainText(expected.phoneSegmentState);
+    ).toHaveAttribute("data-mission-phone-segment", expected.phoneSegmentState);
     await expect(
-        page.locator(missionWorkspaceLayoutSelectors.layoutTierMismatch),
+        workspace,
         "Mission layout tier-sync diagnostics are missing.",
-    ).toContainText((expected.tierMismatch ?? false) ? "mismatch" : "match");
+    ).toHaveAttribute("data-mission-layout-tier-match", (expected.tierMismatch ?? false) ? "mismatch" : "match");
     if (expected.showPhoneSegments) {
         await expect(
             page.locator(missionWorkspaceLayoutSelectors.mapPane),

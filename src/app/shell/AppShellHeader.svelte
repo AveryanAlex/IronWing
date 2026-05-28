@@ -178,7 +178,7 @@ function mobileWorkspaceLabel(tab: ShellTabItem): string {
 
 <header class="app-shell-header">
   {#if tier === "phone"}
-    <h1 class="sr-only" data-testid={runtimeTestIds.heading}>IronWing</h1>
+    <h1 class="sr-only">IronWing</h1>
     <nav aria-label="Primary" class="app-shell-phone-nav">
       {#if showVehiclePanelButton}
         <button
@@ -221,7 +221,7 @@ function mobileWorkspaceLabel(tab: ShellTabItem): string {
     <AdaptiveRail split>
       <div class="app-shell-header__top">
         <div class="app-shell-header__brand">
-          <h1 class="app-shell-header__title" data-testid={runtimeTestIds.heading}>IronWing</h1>
+          <h1 class="app-shell-header__title">IronWing</h1>
           <span
             aria-hidden="true"
             class={`app-shell-header__connection-indicator ${connectionIndicatorClass(connectionTone)}`}
@@ -241,15 +241,12 @@ function mobileWorkspaceLabel(tab: ShellTabItem): string {
   {/if}
 
   <div aria-hidden="true" class="hidden">
-    <span data-testid={runtimeTestIds.runtimeMarker}>IronWing runtime marker</span>
     <span data-testid={runtimeTestIds.framework}>{framework}</span>
     <span data-testid={runtimeTestIds.bootstrapState} data-runtime-phase={bootstrapState}>{bootstrapState}</span>
     <span data-testid={runtimeTestIds.bootedAt}>{bootedAt ?? "Starting up"}</span>
     <span data-testid={runtimeTestIds.entrypoint}>{entrypoint}</span>
     <span data-testid={appShellTestIds.tier}>{tierLabels[tier]}</span>
     <span data-testid={appShellTestIds.drawerState}>{drawerState}</span>
-    <span data-testid={appShellTestIds.sessionPhase}>{lastPhase}</span>
     <span data-testid={appShellTestIds.sessionSource}>{activeSource ?? "none"}</span>
-    <span data-testid={appShellTestIds.sessionEnvelope}>{activeEnvelopeText}</span>
   </div>
 </header>

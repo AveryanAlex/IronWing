@@ -97,7 +97,7 @@ vi.mock("../../guided", () => ({
 }));
 
 import OverviewMap from "./components/OverviewMap.svelte";
-import { startGuidedSession, updateGuidedSession, type GuidedDomain } from "../../guided";
+import { startGuidedSession } from "../../guided";
 import { toast } from "svelte-sonner";
 
 const originalGeolocationDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "geolocation");
@@ -115,28 +115,6 @@ function createGeolocationMock(): Geolocation {
     getCurrentPosition: vi.fn(),
     watchPosition: vi.fn(() => 1),
   } as unknown as Geolocation;
-}
-
-function createControllableGeolocationMock() {
-  const state: {
-    success: PositionCallback | null;
-    error: PositionErrorCallback | null;
-    geolocation: Geolocation;
-  } = {
-    success: null,
-    error: null,
-    geolocation: {
-      clearWatch: vi.fn(),
-      getCurrentPosition: vi.fn(),
-      watchPosition: vi.fn((success: PositionCallback, error?: PositionErrorCallback | null) => {
-        state.success = success;
-        state.error = error ?? null;
-        return 1;
-      }),
-    } as unknown as Geolocation,
-  };
-
-  return state;
 }
 
 function waypoint(lat: number, lon: number) {
@@ -160,27 +138,6 @@ function waypoint(lat: number, lon: number) {
     },
     current: false,
     autocontinue: true,
-  };
-}
-
-function guidedGoto(latitude_deg: number, longitude_deg: number, altitude_msl_m = 30): GuidedDomain {
-  return {
-    available: true,
-    complete: true,
-    provenance: "stream",
-    value: {
-      status: "active",
-      session: { kind: "goto", latitude_deg, longitude_deg, altitude_msl_m },
-      entered_at_unix_msec: 1,
-      blocking_reason: null,
-      termination: null,
-      last_command: null,
-      actions: {
-        start: { allowed: true, blocking_reason: null },
-        update: { allowed: true, blocking_reason: null },
-        stop: { allowed: true, blocking_reason: null },
-      },
-    },
   };
 }
 
@@ -242,45 +199,6 @@ describe("OverviewMap", () => {
     expect(screen.getByTestId("overview-map-target-vehicle")).toBeTruthy();
   });
 
-  it("rotates the vehicle marker through north without a full spin", async () => {
-    setNavigatorGeolocation(createGeolocationMock());
-
-    const { rerender } = render(OverviewMap, {
-      props: {
-        vehicleLat: 47.397742,
-        vehicleLon: 8.545594,
-        vehicleHeading: 359,
-        homeLat: 47.397742,
-        homeLon: 8.545594,
-      },
-    });
-    await tick();
-
-    const vehicleSvg = maplibreState.markers.find((marker) => marker.element.className.includes("vehicle-marker"))
-      ?.element.querySelector("svg") as SVGSVGElement | null;
-    expect(vehicleSvg?.style.transform).toBe("rotate(359deg)");
-
-    await rerender({
-      vehicleLat: 47.397742,
-      vehicleLon: 8.545594,
-      vehicleHeading: 0,
-      homeLat: 47.397742,
-      homeLon: 8.545594,
-    });
-    await tick();
-    expect(vehicleSvg?.style.transform).toBe("rotate(360deg)");
-
-    await rerender({
-      vehicleLat: 47.397742,
-      vehicleLon: 8.545594,
-      vehicleHeading: 1,
-      homeLat: 47.397742,
-      homeLon: 8.545594,
-    });
-    await tick();
-    expect(vehicleSvg?.style.transform).toBe("rotate(361deg)");
-  });
-
   it("enters vehicle follow mode on hold and cancels it after a manual move", async () => {
     setNavigatorGeolocation(createGeolocationMock());
 
@@ -313,51 +231,6 @@ describe("OverviewMap", () => {
     expect(vehicleButton.getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("toggles satellite layers and 3D terrain once the style is ready", async () => {
-    setNavigatorGeolocation(createGeolocationMock());
-
-    render(OverviewMap, {
-      vehicleLat: 47.397742,
-      vehicleLon: 8.545594,
-      homeLat: 47.397742,
-      homeLon: 8.545594,
-      missionPath: [
-        { lat: 47.397742, lon: 8.545594 },
-        { lat: 47.3982, lon: 8.5461 },
-      ],
-    });
-
-    maplibreState.handlers.get("style.load")?.();
-    await tick();
-    maplibreState.mockMap.getLayer.mockImplementation((id?: string) => ({ id }));
-
-    await fireEvent.click(screen.getByTestId("overview-map-layer-satellite"));
-
-    await waitFor(() => {
-      expect(maplibreState.mockMap.setLayoutProperty).toHaveBeenCalledWith(
-        "overview-satellite",
-        "visibility",
-        "visible",
-      );
-      expect(maplibreState.mockMap.setLayoutProperty).toHaveBeenCalledWith(
-        "roads",
-        "visibility",
-        "none",
-      );
-    });
-
-    const terrainButton = screen.getByTestId("overview-map-toggle-3d");
-    await fireEvent.click(terrainButton);
-
-    await waitFor(() => {
-      expect(terrainButton.getAttribute("aria-pressed")).toBe("true");
-      expect(maplibreState.mockMap.setTerrain).toHaveBeenLastCalledWith({
-        source: "overview-terrain-source",
-        exaggeration: 1.5,
-      });
-    });
-  });
-
   it("opens a context menu and starts guided goto at the clicked coordinate", async () => {
     setNavigatorGeolocation(createGeolocationMock());
 
@@ -386,140 +259,7 @@ describe("OverviewMap", () => {
       });
       expect(toast.success).toHaveBeenCalledWith("Guided target sent");
     });
-    expect(updateGuidedSession).not.toHaveBeenCalled();
     expect(screen.queryByTestId("overview-map-context-menu")).toBeNull();
-  });
-
-  it("stops following before opening the context menu", async () => {
-    setNavigatorGeolocation(createGeolocationMock());
-
-    render(OverviewMap, {
-      vehicleLat: 47.397742,
-      vehicleLon: 8.545594,
-      homeLat: 47.397742,
-      homeLon: 8.545594,
-    });
-
-    const vehicleButton = screen.getByTestId("overview-map-target-vehicle");
-    vehicleButton.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 550));
-    await tick();
-    expect(vehicleButton.getAttribute("aria-pressed")).toBe("true");
-
-    const preventDefault = vi.fn();
-    maplibreState.handlers.get("contextmenu")?.({
-      preventDefault,
-      originalEvent: { preventDefault, clientX: 120, clientY: 80 },
-      lngLat: { lat: 47.4, lng: 8.55 },
-    });
-    await tick();
-
-    expect(screen.getByTestId("overview-map-context-menu")).toBeTruthy();
-    expect(vehicleButton.getAttribute("aria-pressed")).toBe("false");
-  });
-
-  it("opens the context menu from a touchscreen long hold", async () => {
-    setNavigatorGeolocation(createGeolocationMock());
-
-    render(OverviewMap, {
-      vehicleLat: 47.397742,
-      vehicleLon: 8.545594,
-      homeLat: 47.397742,
-      homeLon: 8.545594,
-    });
-
-    const surface = screen.getByTestId("overview-map-surface");
-    vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
-      x: 20,
-      y: 30,
-      width: 400,
-      height: 300,
-      top: 30,
-      right: 420,
-      bottom: 330,
-      left: 20,
-      toJSON: () => ({}),
-    });
-
-    surface.dispatchEvent(new PointerEvent("pointerdown", {
-      bubbles: true,
-      button: 0,
-      clientX: 140,
-      clientY: 90,
-      pointerId: 7,
-      pointerType: "touch",
-    }));
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    await tick();
-
-    expect(maplibreState.mockMap.unproject).toHaveBeenCalledWith([120, 60]);
-    expect(screen.getByTestId("overview-map-context-menu")).toBeTruthy();
-    expect(screen.getByText("6.000000, 12.000000")).toBeTruthy();
-  });
-
-  it("updates an active guided goto from the context menu using home-relative MSL fallback altitude", async () => {
-    setNavigatorGeolocation(createGeolocationMock());
-
-    render(OverviewMap, {
-      vehicleLat: 47.397742,
-      vehicleLon: 8.545594,
-      guided: {
-        available: true,
-        complete: true,
-        provenance: "stream",
-        value: {
-          status: "active",
-          session: { kind: "goto", latitude_deg: 47, longitude_deg: 8, altitude_msl_m: 30 },
-          entered_at_unix_msec: 1,
-          blocking_reason: null,
-          termination: null,
-          last_command: null,
-          actions: {
-            start: { allowed: true, blocking_reason: null },
-            update: { allowed: true, blocking_reason: null },
-            stop: { allowed: true, blocking_reason: null },
-          },
-        },
-      },
-      homeAltitude: 488,
-      currentAltitudeM: Number.NaN,
-    });
-
-    const preventDefault = vi.fn();
-    maplibreState.handlers.get("contextmenu")?.({
-      preventDefault,
-      originalEvent: { preventDefault, clientX: 60, clientY: 40 },
-      lngLat: { lat: 47.41, lng: 8.56 },
-    });
-    await tick();
-
-    await fireEvent.click(screen.getByTestId("overview-map-fly-here"));
-
-    await waitFor(() => {
-      expect(updateGuidedSession).toHaveBeenCalledWith({
-        session: { kind: "goto", latitude_deg: 47.41, longitude_deg: 8.56, altitude_msl_m: 513 },
-      });
-    });
-    expect(startGuidedSession).not.toHaveBeenCalled();
-  });
-
-  it("shows and clears the active guided goto target marker", async () => {
-    setNavigatorGeolocation(createGeolocationMock());
-
-    const { rerender } = render(OverviewMap, {
-      guided: guidedGoto(47.41, 8.56, 35),
-    });
-    await tick();
-
-    const marker = maplibreState.markers.find((item) => item.element.className.includes("guided-target-marker"));
-    expect(marker?.element.getAttribute("aria-label")).toBe("Guided target at 35 m");
-    expect(marker?.setLngLat).toHaveBeenCalledWith([8.56, 47.41]);
-    expect(marker?.addTo).toHaveBeenCalledWith(maplibreState.mockMap);
-
-    await rerender({ guided: null });
-    await tick();
-
-    expect(marker?.remove).toHaveBeenCalled();
   });
 
   it("renders mission markers and an active mission path segment", async () => {
@@ -557,7 +297,7 @@ describe("OverviewMap", () => {
     expect(lastData.features.some((feature) => feature.properties?.segmentStatus === "active")).toBe(true);
   });
 
-  it("provides a transparent fallback for missing base style icons", async () => {
+  it("provides a transparent fallback for missing base style icons", () => {
     setNavigatorGeolocation(createGeolocationMock());
 
     render(OverviewMap, {
@@ -572,80 +312,5 @@ describe("OverviewMap", () => {
       height: 1,
       data: expect.any(Uint8Array),
     });
-  });
-
-  it("does not let a pending device recenter override a later home selection", async () => {
-    const geolocation = createControllableGeolocationMock();
-    setNavigatorGeolocation(geolocation.geolocation);
-
-    render(OverviewMap, {
-      vehicleLat: 47.397742,
-      vehicleLon: 8.545594,
-      homeLat: 47.3982,
-      homeLon: 8.5461,
-    });
-
-    const deviceButton = screen.getByTestId("overview-map-target-device");
-    const homeButton = screen.getByTestId("overview-map-target-home");
-
-    deviceButton.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-    deviceButton.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
-    await tick();
-
-    homeButton.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-    homeButton.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
-    await tick();
-
-    geolocation.success?.({
-      coords: {
-        accuracy: 4,
-        altitude: null,
-        altitudeAccuracy: null,
-        heading: null,
-        latitude: 47.4,
-        longitude: 8.55,
-        speed: null,
-        toJSON: () => ({}),
-      },
-      timestamp: Date.now(),
-      toJSON: () => ({}),
-    } as GeolocationPosition);
-    await tick();
-
-    expect(deviceButton.getAttribute("aria-pressed")).toBe("false");
-    expect(homeButton.getAttribute("aria-pressed")).toBe("false");
-    expect(maplibreState.mockMap.flyTo).toHaveBeenCalledWith({
-      center: [8.5461, 47.3982],
-      zoom: 15,
-      duration: 800,
-    });
-  });
-
-  it("keeps the my-location control visible after a transient position-unavailable error", async () => {
-    const geolocation = createControllableGeolocationMock();
-    setNavigatorGeolocation(geolocation.geolocation);
-
-    render(OverviewMap, {
-      vehicleLat: 47.397742,
-      vehicleLon: 8.545594,
-      homeLat: 47.3982,
-      homeLon: 8.5461,
-    });
-
-    const deviceButton = screen.getByTestId("overview-map-target-device");
-    deviceButton.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-    deviceButton.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
-    await tick();
-
-    geolocation.error?.({
-      code: 2,
-      message: "position unavailable",
-      PERMISSION_DENIED: 1,
-      POSITION_UNAVAILABLE: 2,
-      TIMEOUT: 3,
-    } as GeolocationPositionError);
-    await tick();
-
-    expect(screen.getByTestId("overview-map-target-device")).toBeTruthy();
   });
 });

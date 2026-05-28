@@ -140,13 +140,6 @@ $effect(() => {
 </script>
 
 <WorkspaceShell mode="inset" testId={firmwareWorkspaceTestIds.root}>
-  <div
-    aria-hidden="true"
-    class="hidden"
-    data-actions-enabled={layout.actionsEnabled ? "true" : "false"}
-    data-layout-mode={layout.mode}
-  ></div>
-
   <div class="rounded-lg border border-border bg-bg-secondary p-1">
     <div class="grid gap-1 md:grid-cols-2">
       <SelectableCard
@@ -213,8 +206,6 @@ $effect(() => {
       >{effectiveMode === "install" ? "firmware-install-update" : "bootloader-installation"}</span
     >
     <span data-testid={firmwareWorkspaceTestIds.layoutMode}>{layout.mode}</span>
-    <span data-testid={firmwareWorkspaceTestIds.layoutTier}>{layout.tier}</span>
-    <span data-testid={firmwareWorkspaceTestIds.layoutTierMismatch}>{layout.tierMismatch ? "mismatch" : "match"}</span>
   </div>
 
   <div class="grid gap-4">

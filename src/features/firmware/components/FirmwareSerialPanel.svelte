@@ -824,7 +824,7 @@ $effect(() => {
               {/if}
 
               {#if manualSelectionActive && !selectedTargetVisible}
-                <div class="mt-3" data-testid={firmwareWorkspaceTestIds.manualTargetHidden}>
+                <div class="mt-3">
                   <Banner
                     severity="warning"
                     title="The selected manual target is hidden by the current filter. Clear the filter or reselect a visible target before flashing."

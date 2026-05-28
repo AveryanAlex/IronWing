@@ -15,6 +15,7 @@ import {
     expectRuntimeDiagnostics,
     missionWorkspaceLocator,
     missionWorkspaceSelectors,
+    missionWorkspaceStateLocator,
     openMissionWorkspace,
     openVehiclePanelDrawer,
     readMissionHistoryState,
@@ -310,7 +311,7 @@ async function startBlankMission(page: Page, history: string[]) {
 async function addManualWaypoint(page: Page, history: string[]) {
     note(history, "Add one manual waypoint so export proves mixed manual + survey content.");
     await missionWorkspaceLocator(page, "listAdd").click();
-    await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("1");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-mission", "1");
     await missionWorkspaceLocator(page, "inspectorLatitude").fill("47.5301");
     await missionWorkspaceLocator(page, "inspectorLongitude").fill("8.6301");
     await missionWorkspaceLocator(page, "inspectorAltitude").fill("120");
@@ -729,8 +730,8 @@ test.describe("mocked survey authoring workflow", () => {
             await generateSelectedSurvey(page, history, "structure");
 
             note(history, "Confirm the mixed workspace now contains one manual item and three persisted survey cards.");
-            await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("1");
-            await expect(missionWorkspaceLocator(page, "countsSurvey")).toContainText("3");
+            await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-mission", "1");
+            await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-survey", "3");
             await expect(
                 page.locator(surveyCardSelector),
                 historyMessage(history, `The ${preset} workflow did not leave three persisted survey cards in the mixed workspace.`),

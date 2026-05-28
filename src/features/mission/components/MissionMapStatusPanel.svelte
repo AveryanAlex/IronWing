@@ -1,6 +1,5 @@
 <script lang="ts">
 import { Alert } from "../../../components/ui";
-import { missionWorkspaceTestIds } from "../mission-workspace-test-ids";
 
 type LocalMapMessage = {
   tone: "warning" | "info";
@@ -10,13 +9,11 @@ type LocalMapMessage = {
 type Props = {
   localMessage: LocalMapMessage | null;
   diagnostics: string[];
-  debugPayload: unknown;
 };
 
 let {
   localMessage,
   diagnostics,
-  debugPayload,
 }: Props = $props();
 </script>
 
@@ -36,5 +33,3 @@ let {
     </ul>
   </Alert>
 {/if}
-
-<pre class="sr-only" data-testid={missionWorkspaceTestIds.mapDebug}>{JSON.stringify(debugPayload)}</pre>

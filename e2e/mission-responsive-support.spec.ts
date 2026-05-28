@@ -15,6 +15,7 @@ import {
     missionTerrainWarningActionLocator,
     missionToolbarSecondaryLocator,
     missionWorkspaceLocator,
+    missionWorkspaceStateLocator,
     mockTerrainNoData,
     openMissionToolbarMoreMenu,
     openMissionWorkspace,
@@ -191,7 +192,7 @@ async function seedMissionSupportState(page: Page) {
         altitude: "135",
     });
 
-    await expect(missionWorkspaceLocator(page, "countsMission")).toContainText("2 / 0");
+    await expect(missionWorkspaceStateLocator(page)).toHaveAttribute("data-mission-count-mission-summary", "2 / 0");
     await expect(page.locator(missionSupportPanelSelectors.planningStatsMissionState)).toContainText("Finite estimate");
     await expect(page.locator(missionSupportPanelSelectors.planningStatsMissionDistance)).not.toContainText("—");
 

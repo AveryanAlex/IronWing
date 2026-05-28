@@ -60,6 +60,7 @@ import {
   setupServoOutputsRowReverseLocator,
   setupServoOutputsRowReversedLocator,
   setupWorkspaceSelectors,
+  setupWorkspaceStateLocator,
 } from "../fixtures/mock-platform";
 
 type SetupParamType = MockParamStoreState["params"][string]["param_type"];
@@ -1136,7 +1137,7 @@ export async function connectSetupSession(
 
 export async function openConnectedSetupWorkspace(page: Page): Promise<void> {
   await openSetupWorkspace(page);
-  await expect(page.locator(setupWorkspaceSelectors.metadata)).toContainText(/Metadata/i, { timeout: 10_000 });
+  await expect(setupWorkspaceStateLocator(page)).toHaveAttribute("data-setup-metadata", /Metadata/i, { timeout: 10_000 });
 }
 
 export async function emitSetupScopeEnvelope(

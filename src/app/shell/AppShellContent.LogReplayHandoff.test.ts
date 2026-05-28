@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
-import type { Component } from "svelte";
+import { createRawSnippet } from "svelte";
+import type { Snippet } from "svelte";
+import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.hoisted(() => {
@@ -16,6 +18,11 @@ vi.hoisted(() => {
 
 const { queryFlightPathMock } = vi.hoisted(() => ({
   queryFlightPathMock: vi.fn(),
+}));
+
+const routeContexts = vi.hoisted(() => ({
+  logs: null as import("./runtime-context").LogsWorkspaceRouteContext | null,
+  mission: null as import("./runtime-context").MissionWorkspaceRouteContext | null,
 }));
 
 vi.mock("svelte-sonner", () => ({
@@ -58,9 +65,23 @@ vi.mock("../../logs", async (importActual) => ({
   queryFlightPath: queryFlightPathMock,
 }));
 
-import AppShellRouteHost from "../../test/AppShellRouteHost.svelte";
-import LogsWorkspaceHandoffMock from "../../test/mocks/LogsWorkspaceHandoffMock.svelte";
-import MissionWorkspaceReplayOverlayMock from "../../test/mocks/MissionWorkspaceReplayOverlayMock.svelte";
+vi.mock("./runtime-context", async (importActual) => {
+  const actual = await importActual<typeof import("./runtime-context")>();
+
+  return {
+    ...actual,
+    setLogsWorkspaceRouteContext(context: import("./runtime-context").LogsWorkspaceRouteContext) {
+      routeContexts.logs = context;
+      return actual.setLogsWorkspaceRouteContext(context);
+    },
+    setMissionWorkspaceRouteContext(context: import("./runtime-context").MissionWorkspaceRouteContext) {
+      routeContexts.mission = context;
+      return actual.setMissionWorkspaceRouteContext(context);
+    },
+  };
+});
+
+import AppShellContent from "./AppShellContent.svelte";
 import { appShellTestIds } from "./chrome-state";
 import type { AppShellWorkspace } from "./workspace-routes";
 import { createParamsStore } from "../../lib/stores/params";
@@ -156,6 +177,50 @@ function createParamsService(): ParamsService {
   } satisfies ParamsService;
 }
 
+function logReplayHandoffSnippet() {
+  return createRawSnippet(() => ({
+    render: () => `
+      <section data-testid="mock-log-replay-handoff">
+        <button data-testid="mock-logs-path-handoff" type="button">handoff</button>
+        <span data-testid="mock-mission-overlay-phase">none</span>
+        <span data-testid="mock-mission-overlay-path-count">0</span>
+      </section>
+    `,
+    setup(element) {
+      const handoffButton = element.querySelector<HTMLButtonElement>("[data-testid='mock-logs-path-handoff']");
+      const overlayPhase = element.querySelector<HTMLElement>("[data-testid='mock-mission-overlay-phase']");
+      const overlayPathCount = element.querySelector<HTMLElement>("[data-testid='mock-mission-overlay-path-count']");
+
+      if (!handoffButton || !overlayPhase || !overlayPathCount) {
+        throw new Error("Log replay handoff test snippet failed to render expected controls.");
+      }
+
+      const updateOverlay = () => {
+        const overlay = routeContexts.mission ? get(routeContexts.mission.replayMapOverlay) : null;
+        overlayPhase.textContent = overlay?.phase ?? "none";
+        overlayPathCount.textContent = String(overlay?.path.length ?? 0);
+      };
+      const unsubscribeOverlay = routeContexts.mission?.replayMapOverlay.subscribe(updateOverlay) ?? (() => {});
+      const handleClick = () => {
+        void routeContexts.logs?.handleLogsMapHandoff({
+          kind: "path",
+          entryId: "entry-1",
+          startUsec: 100,
+          endUsec: 200,
+        });
+      };
+
+      handoffButton.addEventListener("click", handleClick);
+      updateOverlay();
+
+      return () => {
+        unsubscribeOverlay();
+        handoffButton.removeEventListener("click", handleClick);
+      };
+    },
+  }));
+}
+
 afterEach(() => {
   cleanup();
   resetRuntimeState();
@@ -164,6 +229,8 @@ afterEach(() => {
 describe("AppShellContent log replay handoff", () => {
   beforeEach(() => {
     queryFlightPathMock.mockReset();
+    routeContexts.logs = null;
+    routeContexts.mission = null;
   });
 
   it("queries the flight path, switches to mission, and forwards replay overlay state", async () => {
@@ -178,28 +245,27 @@ describe("AppShellContent log replay handoff", () => {
     await paramsStore.initialize();
     markRuntimeReady("2026-04-03T12:34:56.000Z");
 
-    type RouteProps = {
+    type AppShellContentProps = {
       activeWorkspace: AppShellWorkspace;
       navigateWorkspace: (workspace: AppShellWorkspace) => Promise<void>;
-      route: Component;
+      children: Snippet;
     };
-    let rerenderRoute: ((props: RouteProps) => Promise<void>) | null = null;
-    let routeProps: RouteProps = {
+    let rerenderShell: ((props: AppShellContentProps) => Promise<void>) | null = null;
+    let shellProps: AppShellContentProps = {
       activeWorkspace: "logs",
       navigateWorkspace: vi.fn(async (workspace: AppShellWorkspace) => {
-        routeProps = {
-          ...routeProps,
+        shellProps = {
+          ...shellProps,
           activeWorkspace: workspace,
-          route: workspace === "mission" ? MissionWorkspaceReplayOverlayMock : LogsWorkspaceHandoffMock,
         };
-        await rerenderRoute?.(routeProps);
+        await rerenderShell?.(shellProps);
       }),
-      route: LogsWorkspaceHandoffMock,
+      children: logReplayHandoffSnippet(),
     };
-    const rendered = render(withShellContexts(sessionStore, paramsStore, AppShellRouteHost), {
-      props: routeProps,
+    const rendered = render(withShellContexts(sessionStore, paramsStore, AppShellContent), {
+      props: shellProps,
     });
-    rerenderRoute = (props) => rendered.rerender(props);
+    rerenderShell = (props) => rendered.rerender(props);
 
     await fireEvent.click(screen.getByTestId("mock-logs-path-handoff"));
 

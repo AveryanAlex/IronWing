@@ -402,28 +402,6 @@ let diagnostics = $derived.by(() => {
   return [...new Set(warnings)];
 });
 let mapControlsPassive = $derived(surveySession !== null || fencePlacementMode !== null);
-let debugPayload = $derived({
-  mode: view.mode,
-  state: view.state,
-  selection: view.selection,
-  fenceSelection: view.fenceSelection,
-  counts: view.counts,
-  warnings: diagnostics,
-  dragTargetId: activeMarkerDrag?.markerId ?? activeSurveyHandleDrag?.handleId ?? activeFenceDrag?.kind ?? null,
-  dragUpdateCount: activeMarkerDrag?.updateCount ?? activeSurveyHandleDrag?.updateCount ?? activeFenceDrag?.updateCount ?? 0,
-  drawMode: surveySession?.mode ?? "idle",
-  drawPatternType: surveySession?.patternType ?? null,
-  drawRegionId: surveySession?.regionId ?? null,
-  drawPointCount: activeSurveyPointCount,
-  fencePlacementMode,
-  blockedFenceReason: view.mode === "fence" ? blockedReason : null,
-  readOnlyReason,
-  selectedSurveyRegionId,
-  selectedRallyPointUiId: view.selection.kind === "rally-point" ? view.selection.uiId : null,
-  selectedSurveyGenerationBlocked: selectedSurveyGenerationBlockedReason !== null,
-  selectedSurveyGenerationMessage: selectedSurveyGenerationBlockedReason?.message ?? null,
-  rallyMarkerCount: view.counts.rallyMarkers,
-});
 
 $effect(() => {
   if (view.viewport) {
@@ -1915,7 +1893,6 @@ function stopDeviceLocationWatch() {
   <MissionMapStatusPanel
     {localMessage}
     {diagnostics}
-    {debugPayload}
   />
 
   {#if renderViewport}

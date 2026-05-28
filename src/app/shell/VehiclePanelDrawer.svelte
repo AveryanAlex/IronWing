@@ -12,12 +12,6 @@ let { open = false, onClose = () => {} }: Props = $props();
 </script>
 
 {#if !open}
-  <div
-    aria-hidden="true"
-    class="hidden"
-    data-state="closed"
-    data-testid={appShellTestIds.vehiclePanelBackdrop}
-  ></div>
   <aside
     aria-hidden="true"
     class="hidden"

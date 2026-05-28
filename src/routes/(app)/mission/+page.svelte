@@ -677,6 +677,23 @@ function dismissPrompt() {
 <WorkspaceShell mode="split" testId={missionWorkspaceTestIds.root}>
 <div
   class="mission-workspace"
+  data-mission-attachment={view.attachment.label}
+  data-mission-attachment-detail={view.attachment.detail}
+  data-mission-count-fence={view.fenceRegionCount}
+  data-mission-count-mission={view.missionItemCount}
+  data-mission-count-mission-summary={`${view.missionItemCount} / ${view.surveyRegionCount}`}
+  data-mission-count-rally={view.rallyPointCount}
+  data-mission-count-survey={view.surveyRegionCount}
+  data-mission-count-validation={view.validationIssueCount}
+  data-mission-count-warnings={view.warningCount}
+  data-mission-layout-detail-columns={workspaceLayout.detailColumns}
+  data-mission-layout-mode={workspaceLayout.mode}
+  data-mission-layout-support-placement={workspaceLayout.supportPlacement}
+  data-mission-layout-tier={workspaceLayout.tier}
+  data-mission-layout-tier-match={workspaceLayout.tierMismatch ? "mismatch" : "match"}
+  data-mission-phone-segment={missionSegmentState}
+  data-mission-scope={view.activeEnvelopeText}
+  data-mission-state={view.status}
   data-readiness={view.readiness}
   data-workspace-state={view.status}
 >
@@ -706,20 +723,6 @@ function dismissPrompt() {
     undoCount={view.undoCount}
   />
 
-  <!-- Hidden diagnostics for E2E test anchors -->
-  <div aria-hidden="true" class="hidden">
-    <span data-testid={missionWorkspaceTestIds.state}>{view.status}</span>
-    <span data-testid={missionWorkspaceTestIds.scope}>{view.activeEnvelopeText}</span>
-    <span data-testid={missionWorkspaceTestIds.attachment}>{view.attachment.label}</span>
-    <span data-testid={missionWorkspaceTestIds.attachmentDetail}>{view.attachment.detail}</span>
-    <span data-testid={missionWorkspaceTestIds.countsMission}>Mission + Home + Survey · {view.missionItemCount} / {view.surveyRegionCount}</span>
-    <span data-testid={missionWorkspaceTestIds.countsSurvey}>Survey blocks · {view.surveyRegionCount}</span>
-    <span data-testid={missionWorkspaceTestIds.countsFence}>Fence regions · {view.fenceRegionCount}</span>
-    <span data-testid={missionWorkspaceTestIds.countsRally}>Rally points · {view.rallyPointCount}</span>
-    <span data-testid={missionWorkspaceTestIds.countsValidation}>Validation issues · {view.validationIssueCount}</span>
-    <span data-testid={missionWorkspaceTestIds.countsWarnings}>Sticky warnings · {view.warningCount}</span>
-  </div>
-
   <MissionWorkspaceStatusPanels
     {inlineCopy}
     {planner}
@@ -736,15 +739,6 @@ function dismissPrompt() {
     onSetExportReviewChoice={missionPlannerStore.setExportReviewChoice}
     onSetImportReviewChoice={missionPlannerStore.setImportReviewChoice}
   />
-
-  <div aria-hidden="true" class="hidden" data-testid={missionWorkspaceTestIds.layoutDiagnostics}>
-    <span data-testid={missionWorkspaceTestIds.layoutMode}>{workspaceLayout.mode}</span>
-    <span data-testid={missionWorkspaceTestIds.layoutTier}>{workspaceLayout.tier}</span>
-    <span data-testid={missionWorkspaceTestIds.layoutTierMismatch}>{workspaceLayout.tierMismatch ? "mismatch" : "match"}</span>
-    <span data-testid={missionWorkspaceTestIds.detailColumns}>{workspaceLayout.detailColumns}</span>
-    <span data-testid={missionWorkspaceTestIds.supportPlacement}>{workspaceLayout.supportPlacement}</span>
-    <span data-testid={missionWorkspaceTestIds.phoneSegmentState}>{missionSegmentState}</span>
-  </div>
 
   {#if useHorizontalSplit}
     <MissionWorkspaceDesktopReady actions={workspaceActions} context={workspaceContext} />

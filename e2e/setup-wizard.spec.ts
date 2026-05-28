@@ -5,6 +5,7 @@ import {
   connectionSelectors,
   expect,
   setupWorkspaceSelectors,
+  setupWorkspaceStateLocator,
   test,
 } from "./fixtures/mock-platform";
 import {
@@ -116,7 +117,7 @@ test.describe("setup wizard proof", () => {
     await emitHealthySensorHealth(mockPlatform);
 
     await openConnectedSetupWorkspace(page);
-    await expect(page.locator(setupWorkspaceSelectors.metadata)).toContainText("Metadata ready");
+    await expect(setupWorkspaceStateLocator(page)).toHaveAttribute("data-setup-metadata", /Metadata ready/);
     await openSetupWizard(page);
 
     // Frame: seeded fixture already matches, so apply falls through to advance.
@@ -199,7 +200,7 @@ test.describe("setup wizard proof", () => {
     });
 
     await openConnectedSetupWorkspace(page);
-    await expect(page.locator(setupWorkspaceSelectors.metadata)).toContainText("Metadata ready");
+    await expect(setupWorkspaceStateLocator(page)).toHaveAttribute("data-setup-metadata", /Metadata ready/);
     await openSetupWizard(page);
 
     // Change FRAME_CLASS to Hexa (code 2). FRAME_CLASS is flagged

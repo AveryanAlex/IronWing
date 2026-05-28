@@ -205,7 +205,6 @@ function discardAllQueuedEdits() {
     data-surface-kind="setup-bottom-menu"
     data-testid={appShellTestIds.parameterReviewTray}
   >
-    <span class="sr-only" data-testid={appShellTestIds.parameterReviewState}>{expanded ? "open" : "closed"}</span>
     <Collapsible
       bind:open={expanded}
       class="gap-0"

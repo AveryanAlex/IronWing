@@ -230,7 +230,7 @@ function createHarnessFirmwareFileIo(): FirmwareFileIo {
   });
 }
 
-export function createHarnessFirmwareWorkspaceContext(options: {
+function createHarnessFirmwareWorkspaceContext(options: {
   store?: FirmwareWorkspaceStore;
   service?: FirmwareService;
   fileIo?: FirmwareFileIo;
@@ -297,39 +297,12 @@ export function withParameterWorkspaceContext(store: ParamsStore, component: unk
   };
 }
 
-export function withSetupWorkspaceContext(
-  sessionStore: SessionStore,
-  parameterStore: ParamsStore,
-  component: unknown,
-) {
-  const renderable = asRenderable(component);
-
-  return function SetupWorkspaceHarness(...args: any[]) {
-    const parameterWorkspaceView = createParameterWorkspaceViewStore(parameterStore);
-    const setupWorkspaceStore = createSetupWorkspaceStore(sessionStore, parameterStore);
-    const setupWorkspaceViewStore = createSetupWorkspaceViewStore(setupWorkspaceStore);
-
-    setSessionStoreContext(sessionStore);
-    setParamsStoreContext(parameterStore);
-    setParameterWorkspaceViewStoreContext(parameterWorkspaceView);
-    setSetupWorkspaceStoreContext(setupWorkspaceStore);
-    setSetupWorkspaceViewStoreContext(setupWorkspaceViewStore);
-
-    return renderable(...args);
-  };
-}
-
 export function withShellContexts(
   store: SessionStore,
   parameterStore: ParamsStore,
   component: unknown,
   options: {
-    liveSettingsStore?: LiveSettingsStore;
-    missionPlannerStore?: MissionPlannerStore;
-    missionPlannerViewStore?: MissionPlannerViewStore;
     setupWorkspaceStore?: SetupWorkspaceStore;
-    setupWorkspaceViewStore?: SetupWorkspaceViewStore;
-    firmwareWorkspaceContext?: FirmwareWorkspaceContext;
     chromeStore?: ShellChromeStore;
   } = {},
 ) {
@@ -341,11 +314,11 @@ export function withShellContexts(
     const operatorWorkspaceView = createOperatorWorkspaceViewStore(store);
     const parameterWorkspaceView = createParameterWorkspaceViewStore(parameterStore);
     const setupWorkspaceStore = options.setupWorkspaceStore ?? createSetupWorkspaceStore(store, parameterStore);
-    const setupWorkspaceViewStore = options.setupWorkspaceViewStore ?? createSetupWorkspaceViewStore(setupWorkspaceStore);
-    const liveSettingsStore = options.liveSettingsStore ?? createHarnessLiveSettingsStore(store);
-    const missionPlannerStore = options.missionPlannerStore ?? createHarnessMissionPlannerStore(store);
-    const missionPlannerViewStore = options.missionPlannerViewStore ?? createMissionPlannerViewStore(missionPlannerStore);
-    const firmwareWorkspaceContext = options.firmwareWorkspaceContext ?? createHarnessFirmwareWorkspaceContext();
+    const setupWorkspaceViewStore = createSetupWorkspaceViewStore(setupWorkspaceStore);
+    const liveSettingsStore = createHarnessLiveSettingsStore(store);
+    const missionPlannerStore = createHarnessMissionPlannerStore(store);
+    const missionPlannerViewStore = createMissionPlannerViewStore(missionPlannerStore);
+    const firmwareWorkspaceContext = createHarnessFirmwareWorkspaceContext();
 
     setSessionStoreContext(store);
     setSessionViewStoreContext(sessionView);

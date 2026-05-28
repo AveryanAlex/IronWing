@@ -111,10 +111,7 @@ function stepById(id: string): WizardStepSnapshot | null {
     class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-bg-primary/50 px-2 py-1"
     data-testid={`${setupWorkspaceTestIds.wizardHandoffRowPrefix}-${step.id}`}
   >
-    <span
-      class="text-xs font-semibold text-text-primary"
-      data-testid={`${setupWorkspaceTestIds.wizardStepTitlePrefix}-${step.id}`}
-    >
+    <span class="text-xs font-semibold text-text-primary">
       {step.title}
     </span>
     <Button
@@ -122,7 +119,6 @@ function stepById(id: string): WizardStepSnapshot | null {
       size="sm"
       class="h-6 px-2 text-xs uppercase tracking-widest"
       shape="pill"
-      testId={`${setupWorkspaceTestIds.wizardHandoffJumpPrefix}-${step.id}`}
       onclick={() => handleHandoffJump(step.sectionId)}
     >
       Jump to expert
@@ -135,7 +131,7 @@ function stepById(id: string): WizardStepSnapshot | null {
     <SetupCardHeader title="Wizard progress">
       {#snippet actions()}
         <div class="flex items-center gap-2">
-          <SetupStatusPill tone="muted" testId={setupWorkspaceTestIds.wizardPhase}>{phaseLabel(wizardState)}</SetupStatusPill>
+          <SetupStatusPill tone="muted">{phaseLabel(wizardState)}</SetupStatusPill>
           <Button
             variant="outline"
             size="sm"
@@ -153,22 +149,13 @@ function stepById(id: string): WizardStepSnapshot | null {
   <HelperText
     size="xs"
     tone="muted"
-    testId={setupWorkspaceTestIds.wizardProgress}
   >
     {progressSummary(wizardState)}
   </HelperText>
 
-  <ol
-    class="mt-3 flex flex-wrap gap-2"
-    data-testid={setupWorkspaceTestIds.wizardStepList}
-  >
+  <ol class="mt-3 flex flex-wrap gap-2">
     {#each wizardState.steps as step (step.id)}
-      <li
-        class="rounded-full bg-bg-secondary px-2 py-1 text-xs font-medium text-text-secondary"
-        data-testid={`${setupWorkspaceTestIds.wizardStepItemPrefix}-${step.id}`}
-        data-status={step.status}
-        data-tier={step.tier}
-      >
+      <li class="rounded-full bg-bg-secondary px-2 py-1 text-xs font-medium text-text-secondary">
         {step.title}
       </li>
     {/each}
