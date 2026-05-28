@@ -19,6 +19,7 @@ export default defineConfig({
       "@platform/event": fileURLToPath(new URL("src/platform/tauri/event.ts", import.meta.url)),
       "@platform/http": fileURLToPath(new URL("src/platform/tauri/http.ts", import.meta.url)),
       "@platform/analytics": fileURLToPath(new URL("src/platform/tauri/analytics.ts", import.meta.url)),
+      "$app/paths": fileURLToPath(new URL("src/test/sveltekit-paths.ts", import.meta.url)),
     },
     conditions: ["browser"],
   },

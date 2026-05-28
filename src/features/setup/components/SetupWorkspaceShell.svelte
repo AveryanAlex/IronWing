@@ -113,6 +113,7 @@ setSetupWorkspaceRouteContext({
   viewStore: setupWorkspaceViewStore,
   wizardStore,
   selectSection,
+  handleSectionLinkClick,
 });
 
 let view = $derived(viewStore.current);
@@ -178,9 +179,9 @@ function applySectionSelection(sectionId: SetupSectionId) {
   store.selectSection(sectionId);
 }
 
-function selectSection(sectionId: string) {
+function prepareSectionNavigation(sectionId: string): SetupSectionId | null {
   if (!isSetupSectionId(sectionId)) {
-    return;
+    return null;
   }
 
   if (requestedSectionId && requestedSectionId !== sectionId) {
@@ -188,7 +189,28 @@ function selectSection(sectionId: string) {
   }
 
   applySectionSelection(sectionId);
-  void navigateToSetupSection?.(sectionId);
+  return sectionId;
+}
+
+function selectSection(sectionId: string) {
+  const selectedSectionId = prepareSectionNavigation(sectionId);
+  if (!selectedSectionId) {
+    return;
+  }
+
+  void navigateToSetupSection?.(selectedSectionId);
+}
+
+function isPlainLeftClick(event: MouseEvent) {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
+function handleSectionLinkClick(sectionId: string, event: MouseEvent) {
+  if (!isPlainLeftClick(event)) {
+    return;
+  }
+
+  prepareSectionNavigation(sectionId);
 }
 
 $effect(() => {
@@ -209,9 +231,14 @@ $effect(() => {
   applySectionSelection(requestedSectionId);
 });
 
-function selectSectionFromDrawer(sectionId: string) {
-  selectSection(sectionId);
-  closeSectionDrawer();
+function handleSectionDrawerLinkClick(sectionId: string, event: MouseEvent) {
+  if (!isPlainLeftClick(event)) {
+    return;
+  }
+
+  if (prepareSectionNavigation(sectionId)) {
+    closeSectionDrawer();
+  }
 }
 
 function clearCheckpoint() {
@@ -224,7 +251,7 @@ function clearCheckpoint() {
 {#snippet sectionNav()}
   <div class="flex h-full min-h-0 flex-col overflow-hidden border-r border-border bg-bg-primary px-1.5 py-2">
     <SetupWorkspaceSectionNav
-      onSelect={selectSection}
+      onSectionLinkClick={handleSectionLinkClick}
       sectionGroups={view.sectionGroups}
       selectedSectionId={view.selectedSectionId}
     />
@@ -347,7 +374,7 @@ function clearCheckpoint() {
           </IconButton>
         </div>
         <SetupWorkspaceSectionNav
-          onSelect={selectSectionFromDrawer}
+          onSectionLinkClick={handleSectionDrawerLinkClick}
           sectionGroups={view.sectionGroups}
           selectedSectionId={view.selectedSectionId}
         />

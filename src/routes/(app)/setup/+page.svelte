@@ -1,10 +1,13 @@
 <script lang="ts">
+import { resolve } from "$app/paths";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext } from "../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import { createParameterFileIo } from "../../../lib/params/parameter-file-io";
+import { setupSectionPath, type SetupSectionId } from "../../../lib/setup-sections";
 import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
+import { cn } from "../../../lib/utils";
 import { setupWorkspaceTestIds } from "../../../features/setup/setup-workspace-test-ids";
 import { ActionRow, Button, Card, ExternalLink, Eyebrow, FactTile, HelperText } from "../../../components/ui";
 import SetupCard from "../../../features/setup/shared/SetupCard.svelte";
@@ -19,13 +22,19 @@ const route = getSetupWorkspaceRouteContext();
 const viewStore = fromStore(route.viewStore);
 
 let view = $derived(viewStore.current);
-const onSelect = route.selectSection;
 
 type NoticeTone = "info" | "warning" | "danger" | "success";
 
 const fileIo = createParameterFileIo();
 const paramsStore = getParamsStoreContext();
 const paramsState = fromStore(paramsStore);
+
+const setupActionLinkBaseClass =
+  "inline-flex h-9 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium whitespace-nowrap no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
+const setupActionLinkVariantClasses = {
+  outline: "border-border-light bg-transparent text-text-primary hover:bg-bg-secondary",
+  secondary: "border-border-light bg-bg-secondary text-text-primary shadow-sm hover:bg-bg-tertiary",
+} as const;
 
 let fileActionMessage = $state("Imports stage changed values in the shared review tray.");
 let fileActionBusy = $state<"refresh" | "save" | "load" | null>(null);
@@ -218,6 +227,14 @@ function groupTone(progressText: string): string {
 function sectionIsComingLater(section: SetupWorkspaceStoreState["sections"][number]): boolean {
   return section.kind === "guided" && !section.implemented;
 }
+
+function setupActionLinkClass(variant: keyof typeof setupActionLinkVariantClasses, className?: string) {
+  return cn(setupActionLinkBaseClass, setupActionLinkVariantClasses[variant], className);
+}
+
+function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
+  route.handleSectionLinkClick(sectionId, event);
+}
 </script>
 
 <section class="space-y-4" data-testid={setupWorkspaceTestIds.overviewSection}>
@@ -304,27 +321,30 @@ function sectionIsComingLater(section: SetupWorkspaceStoreState["sections"][numb
   {/if}
 
   <ActionRow align="start">
-    <Button
-      variant="outline"
-      testId={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-frame_orientation`}
-      onclick={() => onSelect("frame_orientation")}
+    <a
+      class={setupActionLinkClass("outline")}
+      data-testid={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-frame_orientation`}
+      href={resolve(setupSectionPath("frame_orientation"))}
+      onclick={(event) => handleSetupLinkClick("frame_orientation", event)}
     >
       Open Frame &amp; orientation
-    </Button>
-    <Button
-      variant="outline"
-      testId={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-flight_modes`}
-      onclick={() => onSelect("flight_modes")}
+    </a>
+    <a
+      class={setupActionLinkClass("outline")}
+      data-testid={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-flight_modes`}
+      href={resolve(setupSectionPath("flight_modes"))}
+      onclick={(event) => handleSetupLinkClick("flight_modes", event)}
     >
       Open Flight modes
-    </Button>
-    <Button
-      variant="outline"
-      testId={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-full_parameters`}
-      onclick={() => onSelect("full_parameters")}
+    </a>
+    <a
+      class={setupActionLinkClass("outline")}
+      data-testid={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-full_parameters`}
+      href={resolve(setupSectionPath("full_parameters"))}
+      onclick={(event) => handleSetupLinkClick("full_parameters", event)}
     >
       Open Full Parameters
-    </Button>
+    </a>
   </ActionRow>
 
     <div class="space-y-4">
@@ -379,13 +399,13 @@ function sectionIsComingLater(section: SetupWorkspaceStoreState["sections"][numb
                 {#if sectionIsComingLater(section)}
                   <Eyebrow class="mt-4" tracking="widest">Coming later</Eyebrow>
                 {:else}
-                  <Button
-                    variant="outline"
-                    class="mt-4"
-                    onclick={() => onSelect(section.id)}
+                  <a
+                    class={setupActionLinkClass("outline", "mt-4")}
+                    href={resolve(setupSectionPath(section.id))}
+                    onclick={(event) => handleSetupLinkClick(section.id, event)}
                   >
                     {`Open ${section.title}`}
-                  </Button>
+                  </a>
                 {/if}
               </SetupCard>
             {/each}
@@ -403,20 +423,22 @@ function sectionIsComingLater(section: SetupWorkspaceStoreState["sections"][numb
           </HelperText>
         </div>
         <ActionRow align="start">
-          <Button
-            variant="secondary"
-            testId={setupWorkspaceTestIds.overviewWizardLaunch}
-            onclick={() => onSelect("beginner_wizard")}
+          <a
+            class={setupActionLinkClass("secondary")}
+            data-testid={setupWorkspaceTestIds.overviewWizardLaunch}
+            href={resolve(setupSectionPath("beginner_wizard"))}
+            onclick={(event) => handleSetupLinkClick("beginner_wizard", event)}
           >
             Start beginner wizard
-          </Button>
-            <Button
-              variant="secondary"
-              testId={setupWorkspaceTestIds.overviewRecoveryAction}
-              onclick={() => onSelect("full_parameters")}
-            >
+          </a>
+          <a
+            class={setupActionLinkClass("secondary")}
+            data-testid={setupWorkspaceTestIds.overviewRecoveryAction}
+            href={resolve(setupSectionPath("full_parameters"))}
+            onclick={(event) => handleSetupLinkClick("full_parameters", event)}
+          >
             Open Full Parameters
-          </Button>
+          </a>
         </ActionRow>
       </div>
     </SetupCard>

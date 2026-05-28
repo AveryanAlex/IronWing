@@ -9,6 +9,7 @@ export type SetupWorkspaceRouteContext = {
   viewStore: SetupWorkspaceViewStore;
   wizardStore: SetupWizardStore;
   selectSection(sectionId: string): void;
+  handleSectionLinkClick(sectionId: string, event: MouseEvent): void;
 };
 
 export const [getSetupWorkspaceRouteContext, setSetupWorkspaceRouteContext] = createContext<SetupWorkspaceRouteContext>();

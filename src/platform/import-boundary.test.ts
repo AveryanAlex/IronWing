@@ -136,6 +136,13 @@ const DIRECT_ANALYTICS_ADAPTER_IMPORT_RULES: ImportRule[] = [
 
 const UI_PRIMITIVE_DIR_PREFIX = "src/components/ui/";
 
+const RAW_ANCHOR_ALLOWLIST = new Set([
+  // SvelteKit internal route navigation intentionally uses native anchors.
+  "src/app/shell/AppShellHeader.svelte",
+  "src/features/setup/components/SetupWorkspaceSectionNav.svelte",
+  "src/routes/(app)/setup/+page.svelte",
+]);
+
 const RAW_BUTTON_ALLOWLIST = new Set([
   "src/app/shell/AppShellHeader.svelte",
   "src/routes/(app)/hud/+page.svelte",
@@ -153,6 +160,7 @@ const RAW_COMPONENT_MARKUP_RULES: ContentScanRule[] = [
   {
     label: "raw external anchors outside shared UI",
     pattern: /<a\b/,
+    allowlist: RAW_ANCHOR_ALLOWLIST,
     guidance:
       "Use the shared ExternalLink component for external links. If a plain anchor is truly required, add a narrowly-scoped allowlist entry with justification.",
   },

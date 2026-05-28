@@ -1598,6 +1598,14 @@ async function renderSetupWorkspace(options: {
     setupWorkspaceStore.selectSection(sectionId);
   }
 
+  function handleRouteSectionLinkClick(sectionId: string, event: MouseEvent) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return;
+    }
+
+    selectRouteSection(sectionId);
+  }
+
   function withSetupRouteContexts(component: unknown) {
     const renderable = component as (...args: any[]) => unknown;
 
@@ -1609,6 +1617,7 @@ async function renderSetupWorkspace(options: {
           viewStore: setupWorkspaceViewStore,
           wizardStore,
           selectSection: selectRouteSection,
+          handleSectionLinkClick: handleRouteSectionLinkClick,
         });
 
         return renderable(...args);
@@ -1758,7 +1767,7 @@ describe("SetupWorkspace", () => {
     });
   });
 
-  it("honors setup section routes and delegates section navigation to the router", async () => {
+  it("honors setup section routes and renders section navigation as links", async () => {
     const navigateToSetupSection = vi.fn();
 
     await renderSetupWorkspace({
@@ -1772,13 +1781,16 @@ describe("SetupWorkspace", () => {
       expect(screen.getByTestId(setupWorkspaceTestIds.gpsSection)).toBeTruthy();
     });
 
-    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-flight_modes`));
+    const flightModesLink = screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-flight_modes`);
+    expect(flightModesLink.getAttribute("href")).toBe("/setup/flight-modes");
+
+    await fireEvent.click(flightModesLink);
 
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("flight_modes");
       expect(screen.getByTestId(setupWorkspaceTestIds.flightModesSection)).toBeTruthy();
     });
-    expect(navigateToSetupSection).toHaveBeenLastCalledWith("flight_modes");
+    expect(navigateToSetupSection).not.toHaveBeenCalled();
   });
 
   it("opens Full Parameters directly into the raw parameter browser", async () => {
@@ -1858,7 +1870,7 @@ describe("SetupWorkspace", () => {
     render(SetupWorkspaceSectionNav, {
       sectionGroups,
       selectedSectionId: "battery_monitor",
-      onSelect: vi.fn(),
+      onSectionLinkClick: vi.fn(),
     });
 
     const activeItem = screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-battery_monitor`);
@@ -1889,7 +1901,7 @@ describe("SetupWorkspace", () => {
     render(SetupWorkspaceSectionNav, {
       sectionGroups,
       selectedSectionId: "overview",
-      onSelect: vi.fn(),
+      onSectionLinkClick: vi.fn(),
     });
 
     const pidTuningItem = screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-pid_tuning`);
@@ -1925,6 +1937,7 @@ describe("SetupWorkspace", () => {
             viewStore: overviewViewStore,
             wizardStore,
             selectSection: vi.fn(),
+            handleSectionLinkClick: vi.fn(),
           });
 
           return (SetupOverviewSection as (...args: any[]) => unknown)(...args);
@@ -1946,7 +1959,7 @@ describe("SetupWorkspace", () => {
     render(SetupWorkspaceSectionNav, {
       sectionGroups,
       selectedSectionId: "overview",
-      onSelect: vi.fn(),
+      onSectionLinkClick: vi.fn(),
     });
 
     expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`).hasAttribute("disabled")).toBe(false);
@@ -2000,7 +2013,7 @@ describe("SetupWorkspace", () => {
     render(SetupWorkspaceSectionNav, {
       sectionGroups,
       selectedSectionId: "overview",
-      onSelect: vi.fn(),
+      onSectionLinkClick: vi.fn(),
     });
 
     const pidTuningItem = screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-pid_tuning`);
@@ -3586,6 +3599,24 @@ describe("SetupWorkspace", () => {
       expect(screen.queryByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeNull();
     });
     expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("gps");
+  });
+
+  it("does not mutate setup selection or close the drawer for modifier-clicked section links", async () => {
+    await renderSetupWorkspace({
+      metadata: createSetupMetadata(),
+      chromeStore: createStaticShellChromeStore("phone"),
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.sectionDrawerToggle));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`), { ctrlKey: true });
+
+    expect(screen.getByTestId(setupWorkspaceTestIds.selectedSection).textContent?.trim()).toBe("overview");
+    expect(screen.getByTestId(setupWorkspaceTestIds.sectionDrawer)).toBeTruthy();
   });
 
   it("closes the drawer when the close button is clicked on phone tier", async () => {

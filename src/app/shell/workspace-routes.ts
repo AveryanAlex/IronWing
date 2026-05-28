@@ -1,30 +1,10 @@
-export type AppShellWorkspace =
-  | "overview"
-  | "telemetry"
-  | "hud"
-  | "mission"
-  | "logs"
-  | "firmware"
-  | "settings"
-  | "setup";
-
-export type AppShellWorkspacePath =
-  | "/"
-  | "/telemetry"
-  | "/hud"
-  | "/mission"
-  | "/logs"
-  | "/firmware"
-  | "/settings"
-  | "/setup";
-
-export type AppShellWorkspaceRoute = {
-  key: AppShellWorkspace;
+type WorkspaceRouteDefinition = {
+  key: string;
   label: string;
-  path: AppShellWorkspacePath;
+  path: string;
 };
 
-export const appShellWorkspaces: ReadonlyArray<AppShellWorkspaceRoute> = [
+export const appShellWorkspaces = [
   { key: "overview", label: "Overview", path: "/" },
   { key: "telemetry", label: "Telemetry", path: "/telemetry" },
   { key: "hud", label: "HUD", path: "/hud" },
@@ -33,7 +13,11 @@ export const appShellWorkspaces: ReadonlyArray<AppShellWorkspaceRoute> = [
   { key: "firmware", label: "Firmware", path: "/firmware" },
   { key: "setup", label: "Setup", path: "/setup" },
   { key: "settings", label: "App settings", path: "/settings" },
-];
+] as const satisfies ReadonlyArray<WorkspaceRouteDefinition>;
+
+export type AppShellWorkspaceRoute = (typeof appShellWorkspaces)[number];
+export type AppShellWorkspace = AppShellWorkspaceRoute["key"];
+export type AppShellWorkspacePath = AppShellWorkspaceRoute["path"];
 
 const WORKSPACE_BY_PATH = new Map<AppShellWorkspacePath, AppShellWorkspace>(
   appShellWorkspaces.map((workspace) => [workspace.path, workspace.key]),

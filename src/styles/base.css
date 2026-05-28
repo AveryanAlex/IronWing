@@ -140,6 +140,7 @@ body {
   font-weight: 650;
   line-height: 1;
   padding: 7px 1px 6px;
+  text-decoration: none;
   transition: color 0.15s ease, background 0.15s ease;
 }
 

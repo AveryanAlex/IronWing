@@ -33,11 +33,11 @@ import {
 
 type Props = {
   activeWorkspace: AppShellWorkspace;
-  navigateToWorkspace: (workspace: AppShellWorkspace) => void | Promise<void>;
+  navigateWorkspace: (workspace: AppShellWorkspace) => void | Promise<void>;
   children: Snippet;
 };
 
-let { activeWorkspace, navigateToWorkspace, children }: Props = $props();
+let { activeWorkspace, navigateWorkspace, children }: Props = $props();
 
 const chrome = createShellChromeStore();
 const liveSettings = createLiveSettingsStore(session);
@@ -75,6 +75,6 @@ onDestroy(() => {
 });
 </script>
 
-<AppShellContent {activeWorkspace} {navigateToWorkspace}>
+<AppShellContent {activeWorkspace} {navigateWorkspace}>
   {@render children()}
 </AppShellContent>

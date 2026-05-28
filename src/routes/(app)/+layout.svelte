@@ -11,11 +11,11 @@ let { children }: { children: Snippet } = $props();
 
 let activeWorkspace = $derived(workspaceForPath(page.url.pathname));
 
-function navigateToWorkspace(workspace: AppShellWorkspace) {
+function navigateWorkspace(workspace: AppShellWorkspace) {
   return goto(resolve(workspacePath(workspace)));
 }
 </script>
 
-<AppShell {activeWorkspace} {navigateToWorkspace}>
+<AppShell {activeWorkspace} {navigateWorkspace}>
   {@render children()}
 </AppShell>

@@ -1,10 +1,16 @@
 <script lang="ts">
+import { resolve } from "$app/paths";
 import { tick } from "svelte";
 import type { Snippet } from "svelte";
+import type { Pathname } from "$app/types";
+
+// SvelteKit's `resolve` overloads are route-specific, so they do not accept
+// the full Pathname union directly even when every value is a static pathname.
 
 type Tab = {
   key: string;
   label: string;
+  path: Pathname;
   badge?: string;
   testId?: string;
   badgeTestId?: string;
@@ -14,12 +20,11 @@ type Tab = {
 type Props = {
   tabs: ReadonlyArray<Tab>;
   active: string;
-  onSelect: (key: string) => void;
   ariaLabel: string;
   testId?: string;
 };
 
-let { tabs, active, onSelect, ariaLabel, testId }: Props = $props();
+let { tabs, active, ariaLabel, testId }: Props = $props();
 
 type Density = "labels" | "compact" | "icons" | "scroll";
 
@@ -82,7 +87,7 @@ let trackClass = $derived([
 
 function tabClass(): string {
   return [
-    "inline-flex min-w-0 flex-[0_1_auto] cursor-pointer items-center justify-center gap-[clamp(3px,0.45cqi,6px)] whitespace-nowrap rounded-md border border-transparent bg-transparent px-[clamp(0.38rem,0.8cqi,0.72rem)] py-[0.4rem] font-semibold text-text-secondary hover:border-border hover:text-text-primary data-[active]:border-border-light data-[active]:bg-bg-primary data-[active]:text-text-primary",
+    "inline-flex min-w-0 flex-[0_1_auto] cursor-pointer items-center justify-center gap-[clamp(3px,0.45cqi,6px)] whitespace-nowrap rounded-md border border-transparent bg-transparent px-[clamp(0.38rem,0.8cqi,0.72rem)] py-[0.4rem] font-semibold text-text-secondary no-underline hover:border-border hover:text-text-primary data-[active]:border-border-light data-[active]:bg-bg-primary data-[active]:text-text-primary",
     density === "compact" ? "gap-[3px] px-[0.34rem]" : "",
     density === "icons" ? "max-w-14 flex-[1_1_42px] px-[0.42rem]" : "",
     density === "scroll" ? "max-w-none flex-[0_0_40px] px-[0.34rem]" : "",
@@ -127,22 +132,21 @@ $effect(() => {
 <div bind:this={containerElement} class="@container min-w-0 w-full overflow-hidden" aria-label={ariaLabel} data-density={density} data-testid={testId} role="group">
   <div bind:this={trackElement} class={trackClass}>
     {#each tabs as tab (tab.key)}
-      <button
+      <a
         aria-label={tab.label}
-        aria-pressed={tab.key === active}
+        aria-current={tab.key === active ? "page" : undefined}
         class={tabClass()}
         data-active={tab.key === active || undefined}
         data-has-icon={tab.icon ? true : undefined}
         data-testid={tab.testId}
-        onclick={() => onSelect(tab.key)}
-        type="button"
+        href={resolve(tab.path as "/")}
       >
         {#if tab.icon}
           <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">{@render tab.icon()}</span>
         {/if}
         <span class={labelClass(Boolean(tab.icon))}>{tab.label}</span>
         {#if tab.badge}<span class="shrink-0 rounded-full bg-bg-tertiary px-1.5 py-0.5 text-xs font-bold text-text-secondary" data-testid={tab.badgeTestId}>{tab.badge}</span>{/if}
-      </button>
+      </a>
     {/each}
   </div>
 </div>

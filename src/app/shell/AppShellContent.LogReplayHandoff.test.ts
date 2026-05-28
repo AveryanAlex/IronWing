@@ -180,13 +180,13 @@ describe("AppShellContent log replay handoff", () => {
 
     type RouteProps = {
       activeWorkspace: AppShellWorkspace;
-      navigateToWorkspace: (workspace: AppShellWorkspace) => Promise<void>;
+      navigateWorkspace: (workspace: AppShellWorkspace) => Promise<void>;
       route: Component;
     };
     let rerenderRoute: ((props: RouteProps) => Promise<void>) | null = null;
     let routeProps: RouteProps = {
       activeWorkspace: "logs",
-      navigateToWorkspace: vi.fn(async (workspace: AppShellWorkspace) => {
+      navigateWorkspace: vi.fn(async (workspace: AppShellWorkspace) => {
         routeProps = {
           ...routeProps,
           activeWorkspace: workspace,

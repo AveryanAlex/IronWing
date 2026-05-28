@@ -542,17 +542,17 @@ async function renderShellAt(
     await parameterStore.initialize();
     markRuntimeReady("2026-04-03T12:34:56.000Z");
 
-    const navigateToWorkspace = vi.fn(async () => undefined);
+    const navigateWorkspace = vi.fn(async () => undefined);
     const navigateToSetupSection = vi.fn(async () => undefined);
     let routeProps = {
         activeWorkspace: options.activeWorkspace ?? "overview",
-        navigateToWorkspace,
+        navigateWorkspace,
         route: options.route ?? OverviewRoutePage,
         setupSectionId: options.setupSectionId,
         navigateToSetupSection,
     } satisfies {
         activeWorkspace: AppShellWorkspace;
-        navigateToWorkspace: (workspace: AppShellWorkspace) => Promise<void>;
+        navigateWorkspace: (workspace: AppShellWorkspace) => Promise<void>;
         route: Component;
         setupSectionId?: SetupSectionId;
         navigateToSetupSection: (sectionId: SetupSectionId) => Promise<void>;
@@ -572,7 +572,6 @@ async function renderShellAt(
         viewport,
         store,
         parameterStore,
-        navigateToWorkspace,
         navigateToSetupSection,
         async rerenderRoute(nextRoute: Partial<Pick<typeof routeProps, "activeWorkspace" | "route" | "setupSectionId">>) {
             routeProps = {
@@ -585,7 +584,6 @@ async function renderShellAt(
         viewport: ReturnType<typeof installViewportController>;
         store: SessionStore;
         parameterStore: ReturnType<typeof createParamsStore>;
-        navigateToWorkspace: typeof navigateToWorkspace;
         navigateToSetupSection: typeof navigateToSetupSection;
         rerenderRoute(nextRoute: Partial<Pick<typeof routeProps, "activeWorkspace" | "route" | "setupSectionId">>): Promise<void>;
     };
@@ -638,23 +636,24 @@ describe("AppShell", () => {
         expect(screen.getByTestId(appShellTestIds.replayReadonlyBanner).textContent).toContain("Replay is read-only");
     });
 
-    it("renders the archived tab shape, keeps placeholder tabs where expected, and mounts the real mission workspace", async () => {
+    it("renders workspace links, keeps placeholder tabs where expected, and mounts the real mission workspace", async () => {
         const shell = await renderShellAt(1440);
 
-        expect(screen.getByRole("button", { name: "Overview" })).toBeTruthy();
-        expect(screen.getByRole("button", { name: "Telemetry" })).toBeTruthy();
-        expect(screen.getByRole("button", { name: "HUD" })).toBeTruthy();
-        expect(screen.getByRole("button", { name: "Mission" })).toBeTruthy();
-        expect(screen.getByRole("button", { name: "Logs" })).toBeTruthy();
-        expect(screen.getByRole("button", { name: "Firmware" })).toBeTruthy();
-        const setupTab = screen.getByRole("button", { name: "Setup" });
-        const appSettingsTab = screen.getByRole("button", { name: "App settings" });
+        expect(screen.getByRole("link", { name: "Overview" }).getAttribute("href")).toBe("/");
+        const telemetryTab = screen.getByRole("link", { name: "Telemetry" });
+        expect(telemetryTab.getAttribute("href")).toBe("/telemetry");
+        expect(screen.getByRole("link", { name: "HUD" }).getAttribute("href")).toBe("/hud");
+        const missionTab = screen.getByRole("link", { name: "Mission" });
+        expect(missionTab.getAttribute("href")).toBe("/mission");
+        expect(screen.getByRole("link", { name: "Logs" }).getAttribute("href")).toBe("/logs");
+        expect(screen.getByRole("link", { name: "Firmware" }).getAttribute("href")).toBe("/firmware");
+        const setupTab = screen.getByRole("link", { name: "Setup" });
+        expect(setupTab.getAttribute("href")).toBe("/setup");
+        const appSettingsTab = screen.getByRole("link", { name: "App settings" });
+        expect(appSettingsTab.getAttribute("href")).toBe("/settings");
         expect(setupTab).toBeTruthy();
         expect(appSettingsTab).toBeTruthy();
         expect(Boolean(setupTab.compareDocumentPosition(appSettingsTab) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
-
-        await fireEvent.click(screen.getByRole("button", { name: "Telemetry" }));
-        expect(shell.navigateToWorkspace).toHaveBeenCalledWith("telemetry");
 
         await shell.rerenderRoute({ activeWorkspace: "telemetry", route: TelemetryRoutePage });
         await waitFor(() => {
@@ -666,9 +665,6 @@ describe("AppShell", () => {
         expect(screen.queryByTestId("app-shell-placeholder-telemetry")).toBeNull();
         // The sidebar telemetry panel is not visible in the main workspace area.
         expect(within(screen.getByTestId(appShellTestIds.mainViewport)).queryByTestId("telemetry-state-value")).toBeNull();
-
-        await fireEvent.click(screen.getByRole("button", { name: "Mission" }));
-        expect(shell.navigateToWorkspace).toHaveBeenCalledWith("mission");
 
         await shell.rerenderRoute({ activeWorkspace: "mission", route: MissionRoutePage });
         await waitFor(() => {
@@ -931,8 +927,10 @@ describe("AppShell", () => {
         expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-rc_receiver`).hasAttribute("disabled")).toBe(false);
         expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-calibration`).hasAttribute("disabled")).toBe(false);
 
-        await fireEvent.click(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`));
-        expect(shell.navigateToSetupSection).toHaveBeenCalledWith("full_parameters");
+        const fullParametersLink = screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-full_parameters`);
+        expect(fullParametersLink.getAttribute("href")).toBe("/setup/full-parameters");
+        await fireEvent.click(fullParametersLink);
+        expect(shell.navigateToSetupSection).not.toHaveBeenCalled();
 
         await shell.rerenderRoute({ route: SetupFullParametersRoutePage, setupSectionId: "full_parameters" });
         await waitFor(() => {
@@ -1177,7 +1175,7 @@ describe("AppShell", () => {
         render(withShellContexts(store, parameterStore, AppShellRouteHost), {
             props: {
                 activeWorkspace: "overview",
-                navigateToWorkspace: vi.fn(async () => undefined),
+                navigateWorkspace: vi.fn(async () => undefined),
                 route: OverviewRoutePage,
             },
         });

@@ -8,7 +8,7 @@ import type { SetupSectionId } from "../lib/setup-sections";
 
 type Props = {
   activeWorkspace: AppShellWorkspace;
-  navigateToWorkspace: (workspace: AppShellWorkspace) => void | Promise<void>;
+  navigateWorkspace: (workspace: AppShellWorkspace) => void | Promise<void>;
   route: Component;
   setupSectionId?: SetupSectionId;
   navigateToSetupSection?: (sectionId: SetupSectionId) => void | Promise<void>;
@@ -16,14 +16,14 @@ type Props = {
 
 let {
   activeWorkspace,
-  navigateToWorkspace,
+  navigateWorkspace,
   route: Route,
   setupSectionId = "overview",
   navigateToSetupSection = () => {},
 }: Props = $props();
 </script>
 
-<AppShellContent {activeWorkspace} {navigateToWorkspace}>
+<AppShellContent {activeWorkspace} {navigateWorkspace}>
   {#if activeWorkspace === "setup"}
     <SetupWorkspaceShell requestedSectionId={setupSectionId} {navigateToSetupSection}>
       <Route />

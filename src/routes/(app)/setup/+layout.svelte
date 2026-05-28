@@ -12,7 +12,7 @@ import SetupWorkspaceShell from "../../../features/setup/components/SetupWorkspa
 import { setupWorkspaceTestIds } from "../../../features/setup/setup-workspace-test-ids";
 import SetupCard from "../../../features/setup/shared/SetupCard.svelte";
 import SetupContentPanel from "../../../features/setup/shared/SetupContentPanel.svelte";
-import { setupSectionForPath, type SetupSectionId } from "../../../lib/setup-sections";
+import { setupSectionForPath, setupSectionPath, type SetupSectionId } from "../../../lib/setup-sections";
 import { paramProgressCounts, paramProgressPhase } from "../../../params";
 
 let { children }: { children: Snippet } = $props();
@@ -46,46 +46,7 @@ let downloadProgressPct = $derived.by(() => {
 });
 
 function navigateToSetupSection(sectionId: SetupSectionId) {
-  switch (sectionId) {
-    case "overview":
-      return goto(resolve("/setup"));
-    case "beginner_wizard":
-      return goto(resolve("/setup/beginner-wizard"));
-    case "frame_orientation":
-      return goto(resolve("/setup/frame-orientation"));
-    case "calibration":
-      return goto(resolve("/setup/calibration"));
-    case "rc_receiver":
-      return goto(resolve("/setup/rc-receiver"));
-    case "gps":
-      return goto(resolve("/setup/gps"));
-    case "battery_monitor":
-      return goto(resolve("/setup/battery-monitor"));
-    case "motors_esc":
-      return goto(resolve("/setup/motors-esc"));
-    case "servo_outputs":
-      return goto(resolve("/setup/servo-outputs"));
-    case "serial_ports":
-      return goto(resolve("/setup/serial-ports"));
-    case "flight_modes":
-      return goto(resolve("/setup/flight-modes"));
-    case "failsafe":
-      return goto(resolve("/setup/failsafe"));
-    case "rtl_return":
-      return goto(resolve("/setup/rtl-return"));
-    case "geofence":
-      return goto(resolve("/setup/geofence"));
-    case "arming":
-      return goto(resolve("/setup/arming"));
-    case "initial_params":
-      return goto(resolve("/setup/initial-params"));
-    case "pid_tuning":
-      return goto(resolve("/setup/pid-tuning"));
-    case "peripherals":
-      return goto(resolve("/setup/peripherals"));
-    case "full_parameters":
-      return goto(resolve("/setup/full-parameters"));
-  }
+  return goto(resolve(setupSectionPath(sectionId)));
 }
 
 async function handleDownloadParameters() {

@@ -36,11 +36,11 @@ import VehiclePanelContent from "./VehiclePanelContent.svelte";
 
 type Props = {
   activeWorkspace: AppShellWorkspace;
-  navigateToWorkspace: (workspace: AppShellWorkspace) => void | Promise<void>;
+  navigateWorkspace: (workspace: AppShellWorkspace) => void | Promise<void>;
   children: Snippet;
 };
 
-let { activeWorkspace, navigateToWorkspace, children }: Props = $props();
+let { activeWorkspace, navigateWorkspace, children }: Props = $props();
 
 const sessionStore = getSessionStoreContext();
 const parameterStore = getParamsStoreContext();
@@ -129,10 +129,6 @@ function dismissReplayMapOverlay() {
   replayMapOverlayStore.set(null);
 }
 
-function handleWorkspaceSelect(workspace: AppShellWorkspace) {
-  void navigateToWorkspace(workspace);
-}
-
 function formatReplayMapOverlayError(error: unknown): string {
   return error instanceof Error && error.message.trim().length > 0
     ? error.message
@@ -159,7 +155,7 @@ async function handleLogsMapHandoff(
   const currentReplayOverlay = get(replayMapOverlayStore);
   const currentOverlay = currentReplayOverlay?.entryId === handoff.entryId ? currentReplayOverlay : null;
 
-  await navigateToWorkspace("mission");
+  await navigateWorkspace("mission");
 
   if (handoff.kind === "path") {
     replayMapOverlayStore.set(createReplayPathOverlay(handoff.entryId, "loading", currentOverlay?.path ?? [], null));
@@ -275,7 +271,6 @@ async function handleLogsMapHandoff(
       framework={$runtimeStore.framework}
       handleVehiclePanelToggle={controller.toggleVehiclePanel}
       lastPhase={$sessionStore.lastPhase}
-      onSelectWorkspace={handleWorkspaceSelect}
       connectionTone={connectionTone}
       showVehiclePanelButton={showVehiclePanelButton}
       tier={$chromeStore.tier}

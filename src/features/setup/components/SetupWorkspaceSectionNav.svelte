@@ -1,7 +1,9 @@
 <script lang="ts">
 import { ChevronDown, ChevronRight } from "lucide-svelte";
+import { resolve } from "$app/paths";
 
 import type { SetupWorkspaceSection, SetupWorkspaceSectionGroup } from "../../../lib/stores/setup-workspace";
+import { setupSectionPath } from "../../../lib/setup-sections";
 import { Button } from "../../../components/ui";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 import SectionStatusIcon from "../shared/SectionStatusIcon.svelte";
@@ -42,11 +44,11 @@ const NAV_SECTION_GROUPS: ReadonlyArray<{
 let {
   sectionGroups,
   selectedSectionId,
-  onSelect,
+  onSectionLinkClick = () => {},
 }: {
   sectionGroups: SetupWorkspaceSectionGroup[];
   selectedSectionId: SetupWorkspaceSection["id"];
-  onSelect: (sectionId: SetupWorkspaceSection["id"]) => void;
+  onSectionLinkClick?: (sectionId: SetupWorkspaceSection["id"], event: MouseEvent) => void;
 } = $props();
 
 let collapsedGroups: Record<string, boolean> = $state({});
@@ -95,17 +97,18 @@ function showStatusIcon(section: SetupWorkspaceSection): boolean {
       {#if !collapsedGroups[group.id]}
         <div class="flex flex-col gap-0.5 px-0.5">
           {#each group.sections as section (section.id)}
-          <Button
+          <a
             aria-current={selectedSectionId === section.id ? "page" : undefined}
             class={[
-              "h-auto w-full justify-start gap-2.5 rounded-md border-none px-2.5 py-2 text-left text-xs",
+              "inline-flex h-auto w-full items-center justify-start gap-2.5 rounded-md border border-none px-2.5 py-2 text-left text-xs font-medium whitespace-nowrap no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
               selectedSectionId === section.id
                 ? "bg-accent/20 text-text-primary hover:bg-accent/20"
                 : "bg-transparent text-text-secondary hover:bg-bg-tertiary/60",
             ].join(" ")}
             data-implemented={section.implemented ? "true" : "false"}
-            testId={`${setupWorkspaceTestIds.navPrefix}-${section.id}`}
-            onclick={() => onSelect(section.id)}
+            data-testid={`${setupWorkspaceTestIds.navPrefix}-${section.id}`}
+            href={resolve(setupSectionPath(section.id))}
+            onclick={(event) => onSectionLinkClick(section.id, event)}
           >
             <SetupSectionIcon sectionId={section.id} />
             <span class="truncate font-medium">{section.title}</span>
@@ -118,7 +121,7 @@ function showStatusIcon(section: SetupWorkspaceSection): boolean {
                 <SectionStatusIcon status={section.status} />
               </span>
             {/if}
-          </Button>
+          </a>
           {/each}
         </div>
       {/if}

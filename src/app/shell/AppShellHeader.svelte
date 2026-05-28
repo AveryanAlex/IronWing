@@ -1,17 +1,18 @@
 <script lang="ts">
+import { resolve } from "$app/paths";
 import { Activity, Cpu, Crosshair, FileText, LayoutDashboard, Route, Settings, Wrench } from "lucide-svelte";
 import type { Snippet } from "svelte";
 
 import { AdaptiveRail, ResponsiveTabs } from "../../components/ui";
 import { runtimeTestIds } from "../../lib/stores/runtime";
 import { appShellTestIds, type ShellTier } from "./chrome-state";
-import type { AppShellWorkspace, AppShellWorkspaceRoute } from "./workspace-routes";
+import type { AppShellWorkspace, AppShellWorkspacePath, AppShellWorkspaceRoute } from "./workspace-routes";
 
 type ConnectionTone = "neutral" | "positive" | "caution" | "critical";
 type ShellTabItem = {
   key: AppShellWorkspace;
   label: string;
-  path: string;
+  path: AppShellWorkspacePath;
   testId?: string;
   icon?: Snippet;
 };
@@ -19,7 +20,6 @@ type ShellTabItem = {
 type Props = {
   workspaces?: ReadonlyArray<AppShellWorkspaceRoute>;
   activeWorkspace?: AppShellWorkspace;
-  onSelectWorkspace?: (workspace: AppShellWorkspace) => void;
   framework?: string;
   bootstrapState?: "booting" | "ready" | "failed";
   bootedAt?: string | null;
@@ -38,7 +38,6 @@ type Props = {
 let {
   workspaces = [],
   activeWorkspace = "overview",
-  onSelectWorkspace = () => {},
   framework = "Svelte 5",
   bootstrapState = "booting",
   bootedAt = null,
@@ -203,20 +202,19 @@ function mobileWorkspaceLabel(tab: ShellTabItem): string {
       {/if}
 
       {#each tabItems as tab (tab.key)}
-        <button
+        <a
           aria-label={tab.label}
-          aria-pressed={tab.key === activeWorkspace}
+          aria-current={tab.key === activeWorkspace ? "page" : undefined}
           class="app-shell-phone-nav__item"
           data-active={tab.key === activeWorkspace || undefined}
           data-testid={tab.testId}
-          onclick={() => onSelectWorkspace(tab.key)}
-          type="button"
+          href={resolve(tab.path)}
         >
           {#if tab.icon}
             <span class="app-shell-phone-nav__icon" aria-hidden="true">{@render tab.icon()}</span>
           {/if}
           <span class="app-shell-phone-nav__label">{mobileWorkspaceLabel(tab)}</span>
-        </button>
+        </a>
       {/each}
     </nav>
   {:else}
@@ -236,7 +234,6 @@ function mobileWorkspaceLabel(tab: ShellTabItem): string {
         <ResponsiveTabs
           active={activeWorkspace}
           ariaLabel="Top-level workspaces"
-          onSelect={(key) => onSelectWorkspace(key as AppShellWorkspace)}
           tabs={tabItems}
         />
       </nav>
