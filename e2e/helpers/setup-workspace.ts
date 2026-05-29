@@ -161,8 +161,12 @@ function inferParamType(name: string, value: number): SetupParamType {
     return "uint32";
   }
 
-  if (/^SERVO\d+_(FUNCTION|MIN|MAX|TRIM)$/.test(name) || /^RC1_(MIN|MAX)$/.test(name)) {
+  if (/^SERVO\d+_(FUNCTION|MIN|MAX|TRIM)$/.test(name) || /^RC\d+_(MIN|MAX|TRIM|DZ)$/.test(name)) {
     return "int16";
+  }
+
+  if (/^(ACRO_|Q_ACRO_|MAN_EXPO_)/.test(name)) {
+    return "real32";
   }
 
   return "uint8";
@@ -671,7 +675,26 @@ function createCommonSetupMetadataParams(modeValues: SetupMetadataOption[]): Set
     numericParam("INS_ACCOFFS_Y", "Accel Y Offset", "Accelerometer Y offset.", { unitText: "m/s²" }),
     numericParam("INS_ACCOFFS_Z", "Accel Z Offset", "Accelerometer Z offset.", { unitText: "m/s²" }),
     numericParam("RC1_MIN", "CH1 Min", "Channel 1 minimum PWM.", { unitText: "µs" }),
+    numericParam("RC1_TRIM", "CH1 Trim", "Channel 1 trim PWM.", { unitText: "µs" }),
     numericParam("RC1_MAX", "CH1 Max", "Channel 1 maximum PWM.", { unitText: "µs" }),
+    numericParam("RC1_DZ", "CH1 Deadzone", "Channel 1 deadzone.", { unitText: "µs" }),
+    enumParam("RC1_REVERSED", "CH1 Reversed", "Reverse channel 1.", reverseValues),
+    numericParam("RC2_MIN", "CH2 Min", "Channel 2 minimum PWM.", { unitText: "µs" }),
+    numericParam("RC2_TRIM", "CH2 Trim", "Channel 2 trim PWM.", { unitText: "µs" }),
+    numericParam("RC2_MAX", "CH2 Max", "Channel 2 maximum PWM.", { unitText: "µs" }),
+    numericParam("RC2_DZ", "CH2 Deadzone", "Channel 2 deadzone.", { unitText: "µs" }),
+    enumParam("RC2_REVERSED", "CH2 Reversed", "Reverse channel 2.", reverseValues),
+    numericParam("RC4_MIN", "CH4 Min", "Channel 4 minimum PWM.", { unitText: "µs" }),
+    numericParam("RC4_TRIM", "CH4 Trim", "Channel 4 trim PWM.", { unitText: "µs" }),
+    numericParam("RC4_MAX", "CH4 Max", "Channel 4 maximum PWM.", { unitText: "µs" }),
+    numericParam("RC4_DZ", "CH4 Deadzone", "Channel 4 deadzone.", { unitText: "µs" }),
+    enumParam("RC4_REVERSED", "CH4 Reversed", "Reverse channel 4.", reverseValues),
+    numericParam("ACRO_RP_RATE", "Acro roll/pitch rate", "Maximum roll and pitch rotation rate in Acro.", { unitText: "deg/s" }),
+    numericParam("ACRO_RP_EXPO", "Acro roll/pitch expo", "Roll and pitch input expo in Acro."),
+    numericParam("ACRO_RP_RATE_TC", "Acro roll/pitch response", "Roll and pitch rate response time constant.", { unitText: "s" }),
+    numericParam("ACRO_Y_RATE", "Acro yaw rate", "Maximum yaw rotation rate in Acro.", { unitText: "deg/s" }),
+    numericParam("ACRO_Y_EXPO", "Acro yaw expo", "Yaw input expo in Acro."),
+    numericParam("ACRO_Y_RATE_TC", "Acro yaw response", "Yaw rate response time constant.", { unitText: "s" }),
     numericParam("MOT_THST_EXPO", "Thrust expo", "Multirotor thrust curve compensation."),
     numericParam("MOT_THST_HOVER", "Hover thrust", "Estimated hover throttle."),
     numericParam("MOT_BAT_VOLT_MAX", "Motor battery max", "Maximum battery voltage used for compensation.", { unitText: "V" }),
@@ -858,7 +881,26 @@ const setupParamStoreEntries: SetupParamSeed[] = [
   { name: "INS_ACCOFFS_Y", value: 0 },
   { name: "INS_ACCOFFS_Z", value: 0 },
   { name: "RC1_MIN", value: 1000 },
+  { name: "RC1_TRIM", value: 1500 },
   { name: "RC1_MAX", value: 2000 },
+  { name: "RC1_DZ", value: 20 },
+  { name: "RC1_REVERSED", value: 0 },
+  { name: "RC2_MIN", value: 1000 },
+  { name: "RC2_TRIM", value: 1500 },
+  { name: "RC2_MAX", value: 2000 },
+  { name: "RC2_DZ", value: 20 },
+  { name: "RC2_REVERSED", value: 0 },
+  { name: "RC4_MIN", value: 1000 },
+  { name: "RC4_TRIM", value: 1500 },
+  { name: "RC4_MAX", value: 2000 },
+  { name: "RC4_DZ", value: 20 },
+  { name: "RC4_REVERSED", value: 0 },
+  { name: "ACRO_RP_RATE", value: 360 },
+  { name: "ACRO_RP_EXPO", value: 0.3 },
+  { name: "ACRO_RP_RATE_TC", value: 0 },
+  { name: "ACRO_Y_RATE", value: 202.5 },
+  { name: "ACRO_Y_EXPO", value: 0 },
+  { name: "ACRO_Y_RATE_TC", value: 0 },
   { name: "MOT_THST_EXPO", value: 0.42 },
   { name: "MOT_THST_HOVER", value: 0.25 },
   { name: "MOT_BAT_VOLT_MAX", value: 16.2 },

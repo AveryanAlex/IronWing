@@ -133,7 +133,7 @@ function buildExpertRow(
   const bitmaskOptions = normalizeBitmaskOptions(meta?.bitmask, item.value);
   const isStaged = Boolean(stagedEdit && stagedEdit.nextValue !== item.value);
   const stagedValue = isStaged ? stagedEdit?.nextValue ?? null : null;
-  const stagedValueText = stagedValue === null ? null : formatParamValue(stagedValue);
+  const stagedValueText = stagedValue === null ? null : formatParamValue(stagedValue, item.increment);
   const stagedValueLabel = stagedValue === null ? null : resolveValueLabel(stagedValue, meta);
   const prefix = resolveGroupPrefix(item.rawName);
   const userLevel = resolveUserLevel(meta);

@@ -202,7 +202,7 @@ function applyStagedItemState(
     };
   }
 
-  const stagedValueText = formatParamValue(stagedEdit.nextValue);
+  const stagedValueText = formatParamValue(stagedEdit.nextValue, item.increment);
   return {
     ...item,
     isStaged: true,
@@ -226,8 +226,8 @@ function mergeStagedEdit(
   if (!currentItem) {
     return {
       ...edit,
-      nextValueText: formatParamValue(edit.nextValue),
-      currentValueText: formatParamValue(edit.currentValue),
+      nextValueText: formatParamValue(edit.nextValue, meta?.increment),
+      currentValueText: formatParamValue(edit.currentValue, meta?.increment),
       currentDisplayText: formatParamDisplayValue(edit.currentValue, meta, edit.units),
       nextDisplayText: formatParamDisplayValue(edit.nextValue, meta, edit.units),
       failureMessage: retainedFailure?.message ?? null,
@@ -246,7 +246,7 @@ function mergeStagedEdit(
     currentValue: currentItem.value,
     currentValueText: currentItem.valueText,
     nextValue: currentItem.stagedValue ?? edit.nextValue,
-    nextValueText: currentItem.stagedValueText ?? formatParamValue(edit.nextValue),
+    nextValueText: currentItem.stagedValueText ?? formatParamValue(edit.nextValue, currentItem.increment),
     currentDisplayText: formatParamDisplayValue(currentItem.value, meta, currentItem.units),
     nextDisplayText: formatParamDisplayValue(currentItem.stagedValue ?? edit.nextValue, meta, currentItem.units),
     units: currentItem.units,

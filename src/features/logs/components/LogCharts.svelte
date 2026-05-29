@@ -3,7 +3,7 @@ import type uPlot from "uplot";
 
 import type { ChartSeries, ChartSeriesRequest, LogLibraryEntry } from "../../../logs";
 import type { LogsChartState, LogsExportState } from "../../../lib/stores/logs-workspace";
-import UPlotChart from "../../mission/components/UPlotChart.svelte";
+import UPlotChart from "../../../components/charts/UPlotChart.svelte";
 import { Banner, Card, EmptyState, Eyebrow, HelperText, MonoValue, Panel, StatusPill } from "../../../components/ui";
 import LogChartExportPanel from "./LogChartExportPanel.svelte";
 import LogChartGroupSelector from "./LogChartGroupSelector.svelte";

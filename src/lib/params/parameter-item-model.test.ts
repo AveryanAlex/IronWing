@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
-import { buildParameterItemModels } from "./parameter-item-model";
+import { buildParameterItemModels, formatParamValue } from "./parameter-item-model";
 
 function createParamStore(): ParamStore {
   return {
@@ -15,6 +15,13 @@ function createParamStore(): ParamStore {
 }
 
 describe("buildParameterItemModels", () => {
+  it("formats binary float artifacts using parameter increments", () => {
+    expect(formatParamValue(0.13500000536441803, 0.005)).toBe("0.135");
+    expect(formatParamValue(0.003599999938160181, 0.001)).toBe("0.004");
+    expect(formatParamValue(0.30000001192092896)).toBe("0.3");
+    expect(formatParamValue(202.5)).toBe("202.5");
+  });
+
   it("projects deterministic shared item models from params plus metadata", () => {
     const metadata = new Map([
       [

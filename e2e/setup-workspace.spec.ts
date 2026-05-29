@@ -206,6 +206,15 @@ test.describe("setup workspace proof", () => {
       .click();
     await expect(parameterReviewRowLocator(page, "MOT_THST_EXPO")).toContainText("MOT_THST_EXPO");
 
+    await setupNavLocator(page, "rc_receiver").click();
+    await expect(page.locator(setupWorkspaceSelectors.rcSection)).toBeVisible();
+    await expect(page.locator(`[data-testid="${setupWorkspaceTestIds.rcRatesCard}"]`)).toContainText("ArduCopter Acro");
+    await expect(page.locator(`[data-testid="${setupWorkspaceTestIds.rcRatesGraphPrefix}-roll-pitch"]`)).toBeVisible();
+    await expect(page.locator(`[data-testid="${setupWorkspaceTestIds.rcRatesMarkerPrefix}-roll-pitch"]`)).toContainText("CH1");
+    await page.locator(`[data-testid="${setupWorkspaceTestIds.rcRatesInputPrefix}-roll-pitch-ACRO_RP_RATE"]`).fill("420");
+    await page.locator(`[data-testid="${setupWorkspaceTestIds.rcRatesStage}"]`).click();
+    await expect(parameterReviewRowLocator(page, "ACRO_RP_RATE")).toContainText("ACRO_RP_RATE");
+
     await setupNavLocator(page, "peripherals").click();
     await expect(page.locator(setupWorkspaceSelectors.peripheralsSection)).toBeVisible();
     await expect(page.locator(setupWorkspaceSelectors.peripheralsDocsLink)).toHaveAttribute("href", /optional-hardware/);

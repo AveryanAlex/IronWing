@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Activity, GitBranch, Radio } from "lucide-svelte";
+import { Activity, GitBranch, Radio, SlidersHorizontal } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext } from "../../../../app/shell/runtime-context";
@@ -14,6 +14,7 @@ import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
 import SetupParameterRow from "../../../../features/setup/shared/SetupParameterRow.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
+import RateCurveEditor from "../../../../features/setup/components/rates/RateCurveEditor.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import { getSetupWorkspaceRouteContext } from "../../../../features/setup/components/setup-workspace-route-context";
 
@@ -295,6 +296,21 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
     {:else}
       <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
     {/if}
+  </SetupSectionCard>
+
+  <SetupSectionCard
+    icon={SlidersHorizontal}
+    title="Rate curves"
+    description="Preview and stage native ArduPilot stick-to-rate parameters for the detected vehicle model."
+    surface="elevated"
+  >
+    <RateCurveEditor
+      {itemIndex}
+      stagedEdits={params.stagedEdits}
+      channels={view.rcReceiver.channels}
+      disabled={view.checkpoint.blocksActions}
+      onStageParameter={(item, value) => paramsStore.stageParameterEdit(item, value)}
+    />
   </SetupSectionCard>
 
   <SetupGuideCard title="Receiver mapping check" description="Use the live channel monitor before changing mapping.">

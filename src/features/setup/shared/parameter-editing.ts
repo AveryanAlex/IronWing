@@ -1,4 +1,4 @@
-import type { ParameterItemModel } from "../../../lib/params/parameter-item-model";
+import { formatParamValue, type ParameterItemModel } from "../../../lib/params/parameter-item-model";
 import type { StagedParameterEdit } from "../../../lib/stores/params";
 
 export type SetupEnumOption = {
@@ -43,7 +43,11 @@ export function resolveSetupDraftValue(
   fallback: number | string | null = "",
 ): string {
   const value = item ? (stagedEdits?.[item.name]?.nextValue ?? item.value) : fallback;
-  return value === null || value === undefined ? "" : String(value);
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  return typeof value === "number" ? formatParamValue(value, item?.increment) : String(value);
 }
 
 export function stageSetupParameterEdit(

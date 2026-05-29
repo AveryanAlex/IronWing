@@ -7,7 +7,7 @@ import {
 } from "../../../lib/mission-terrain-state";
 import type { ProfilePoint, TerrainWarning } from "../../../lib/mission-terrain-profile";
 import { Alert, Badge, Button, Card, EmptyState, Eyebrow, HelperText } from "../../../components/ui";
-import UPlotChart from "./UPlotChart.svelte";
+import UPlotChart from "../../../components/charts/UPlotChart.svelte";
 import { missionWorkspaceTestIds } from "../mission-workspace-test-ids";
 
 type Props = {

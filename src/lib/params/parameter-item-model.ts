@@ -42,6 +42,7 @@ export function buildParameterItemModel(
   metadata: ParamMetadataMap | null,
 ): ParameterItemModel {
   const meta = metadata?.get(param.name);
+  const increment = normalizeIncrement(meta?.increment);
 
   return {
     name: param.name,
@@ -49,27 +50,27 @@ export function buildParameterItemModel(
     label: normalizeLabel(meta?.humanName, param.name),
     description: normalizeOptionalText(meta?.description),
     value: param.value,
-    valueText: formatParamValue(param.value),
+    valueText: formatParamValue(param.value, increment),
     valueLabel: resolveValueLabel(param.value, meta),
     units: normalizeOptionalText(meta?.unitText) ?? normalizeOptionalText(meta?.units),
     rebootRequired: meta?.rebootRequired === true,
     order: param.index,
-    increment: normalizeIncrement(meta?.increment),
+    increment,
     range: normalizeRange(meta?.range),
     readOnly: meta?.readOnly === true,
   };
 }
 
-export function formatParamValue(value: number): string {
+export function formatParamValue(value: number, increment: number | null | undefined = null): string {
   if (!Number.isFinite(value)) {
     return "--";
   }
 
-  if (Number.isInteger(value)) {
-    return String(value);
-  }
+  const normalizedIncrement = normalizeIncrement(increment ?? undefined);
+  const displayValue = normalizedIncrement ? roundToIncrement(value, normalizedIncrement) : cleanFloatArtifact(value);
+  const decimals = normalizedIncrement ? decimalPlacesForIncrement(normalizedIncrement) : 6;
 
-  return value.toFixed(3).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
+  return displayValue.toFixed(decimals).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
 }
 
 export function formatParamDisplayValue(
@@ -82,7 +83,7 @@ export function formatParamDisplayValue(
     return valueLabel;
   }
 
-  const valueText = formatParamValue(value);
+  const valueText = formatParamValue(value, meta?.increment);
   const units = normalizeOptionalText(meta?.unitText) ?? normalizeOptionalText(meta?.units) ?? fallbackUnits;
   return units ? `${valueText} ${units}` : valueText;
 }
@@ -102,6 +103,32 @@ function normalizeOptionalText(value: string | undefined): string | null {
 
 function normalizeIncrement(value: number | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function roundToIncrement(value: number, increment: number): number {
+  const rounded = Math.round(value / increment) * increment;
+  const decimals = Math.max(0, Math.min(10, decimalPlacesForIncrement(increment) + 2));
+  return Number(rounded.toFixed(decimals));
+}
+
+function decimalPlacesForIncrement(increment: number): number {
+  const text = increment.toString().toLowerCase();
+  if (text.includes("e-")) {
+    const [, exponent] = text.split("e-");
+    return Number.parseInt(exponent ?? "0", 10) || 0;
+  }
+
+  const decimal = text.split(".")[1];
+  return decimal ? decimal.length : 0;
+}
+
+function cleanFloatArtifact(value: number): number {
+  if (Number.isInteger(value)) {
+    return value;
+  }
+
+  const rounded = Number(value.toFixed(6));
+  return Math.abs(value - rounded) < 1e-6 ? rounded : value;
 }
 
 function normalizeRange(range: ParamMeta["range"] | undefined): { min: number; max: number } | null {

@@ -32,7 +32,7 @@ $effect(() => {
   }
 
   lastResetKey = resetKey;
-  draft = String(props.row.stagedValue ?? props.row.value);
+  draft = props.row.stagedValueText ?? props.row.valueText;
   validationMessage = null;
 });
 
