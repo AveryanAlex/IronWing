@@ -207,6 +207,8 @@ function mobileWorkspaceLabel(tab: ShellTabItem): string {
           aria-current={tab.key === activeWorkspace ? "page" : undefined}
           class="app-shell-phone-nav__item"
           data-active={tab.key === activeWorkspace || undefined}
+          data-sveltekit-preload-code="hover"
+          data-sveltekit-preload-data="hover"
           data-testid={tab.testId}
           href={resolve(tab.path)}
         >

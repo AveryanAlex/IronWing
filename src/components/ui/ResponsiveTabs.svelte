@@ -138,6 +138,8 @@ $effect(() => {
         class={tabClass()}
         data-active={tab.key === active || undefined}
         data-has-icon={tab.icon ? true : undefined}
+        data-sveltekit-preload-code="hover"
+        data-sveltekit-preload-data="hover"
         data-testid={tab.testId}
         href={resolve(tab.path as "/")}
       >

@@ -110,7 +110,10 @@ describe("SetupWorkspace", () => {
     expect(within(nav).getByTestId(`${setupWorkspaceTestIds.navPrefix}-overview`).getAttribute("aria-current")).toBe(
       "page",
     );
-    expect(within(nav).getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`).getAttribute("href")).toBe("/setup/gps");
+    const gpsLink = within(nav).getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`);
+    expect(gpsLink.getAttribute("href")).toBe("/setup/gps");
+    expect(gpsLink.getAttribute("data-sveltekit-preload-code")).toBe("hover");
+    expect(gpsLink.getAttribute("data-sveltekit-preload-data")).toBe("hover");
   });
 
   it("selects a representative setup section from the shell navigation", async () => {

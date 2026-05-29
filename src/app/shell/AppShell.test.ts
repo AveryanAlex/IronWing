@@ -358,6 +358,9 @@ describe("AppShell", () => {
     expect(screen.getByTestId(appShellTestIds.mainViewport)).toBeTruthy();
     expect(screen.getByTestId("mock-shell-route")).toBeTruthy();
     expect(screen.getByTestId(appShellTestIds.vehiclePanelRail).getAttribute("data-panel-state")).toBe("docked");
+    const telemetryLink = screen.getByRole("link", { name: "Telemetry" });
+    expect(telemetryLink.getAttribute("data-sveltekit-preload-code")).toBe("hover");
+    expect(telemetryLink.getAttribute("data-sveltekit-preload-data")).toBe("hover");
     expect(screen.queryByTestId(appShellTestIds.vehiclePanelButton)).toBeNull();
     expect(screen.getByTestId(appShellTestIds.connectionIndicator)).toBeTruthy();
     expect(analyticsMocks.trackAnalytics).toHaveBeenCalledWith("workspace_viewed", { workspace: "overview" });

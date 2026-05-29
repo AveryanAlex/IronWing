@@ -106,6 +106,8 @@ function showStatusIcon(section: SetupWorkspaceSection): boolean {
                 : "bg-transparent text-text-secondary hover:bg-bg-tertiary/60",
             ].join(" ")}
             data-implemented={section.implemented ? "true" : "false"}
+            data-sveltekit-preload-code="hover"
+            data-sveltekit-preload-data="hover"
             data-testid={`${setupWorkspaceTestIds.navPrefix}-${section.id}`}
             href={resolve(setupSectionPath(section.id))}
             onclick={(event) => onSectionLinkClick(section.id, event)}
