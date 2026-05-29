@@ -1,5 +1,6 @@
 <script lang="ts">
 import { resolve } from "$app/paths";
+import { MessageSquare, Upload } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext } from "../../../app/shell/runtime-context";
@@ -11,10 +12,11 @@ import { cn } from "../../../lib/utils";
 import { setupWorkspaceTestIds } from "../../../features/setup/setup-workspace-test-ids";
 import { ActionRow, Button, Card, ExternalLink, Eyebrow, FactTile, HelperText } from "../../../components/ui";
 import SetupCard from "../../../features/setup/shared/SetupCard.svelte";
-import SetupCardHeader from "../../../features/setup/shared/SetupCardHeader.svelte";
 import SetupContentPanel from "../../../features/setup/shared/SetupContentPanel.svelte";
+import SetupGuideCard from "../../../features/setup/shared/SetupGuideCard.svelte";
 import SetupIntroCard from "../../../features/setup/shared/SetupIntroCard.svelte";
 import SetupNotice from "../../../features/setup/shared/SetupNotice.svelte";
+import SetupSectionCard from "../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupStatusPill from "../../../features/setup/shared/SetupStatusPill.svelte";
 import { getSetupWorkspaceRouteContext } from "../../../features/setup/components/setup-workspace-route-context";
 
@@ -36,7 +38,7 @@ const setupActionLinkVariantClasses = {
   secondary: "border-border-light bg-bg-secondary text-text-primary shadow-sm hover:bg-bg-tertiary",
 } as const;
 
-let fileActionMessage = $state("Imports stage changed values in the shared review tray.");
+let fileActionMessage = $state("Imports stage changed values for operator review.");
 let fileActionBusy = $state<"refresh" | "save" | "load" | null>(null);
 let paramsReady = $derived(paramsState.current.paramStore !== null);
 let refreshDisabled = $derived(fileActionBusy !== null || !paramsState.current.liveSessionConnected);
@@ -121,8 +123,8 @@ function formatActionError(error: unknown) {
 const overviewDocs = [
   {
     id: "hardware",
-    label: "GPS & sensors docs",
-    detail: "Airframe, GPS, and shared hardware references.",
+    label: "Navigation & sensors docs",
+    detail: "Airframe, navigation, and shared hardware references.",
     url: resolveDocsUrl("positioning_gps_compass"),
   },
   {
@@ -159,7 +161,7 @@ let bannerTone = $derived.by<NoticeTone>(() => {
 });
 let bannerTitle = $derived.by(() => {
   if (view.metadataState === "unavailable") {
-    return "Metadata missing — recovery mode is active";
+    return "Some parameter details are unavailable";
   }
 
   if (view.readiness === "bootstrapping") {
@@ -178,7 +180,7 @@ let bannerTitle = $derived.by(() => {
 });
 let bannerBody = $derived.by(() => {
   if (view.metadataState === "unavailable") {
-    return "Guided editors remain reachable, but parameter labels, ranges, and option lists may be incomplete. Use Full Parameters when a guided section cannot show enough detail.";
+    return "Guided editors remain reachable, but labels, ranges, and option lists may be limited. Use Full Parameters when a setting is not shown here.";
   }
 
   if (view.readiness === "bootstrapping") {
@@ -193,7 +195,7 @@ let bannerBody = $derived.by(() => {
     return `${unknownCount} unconfirmed sections remain visible while live setup facts settle.`;
   }
 
-  return "Open a section below to inspect settings and queue changes in the review tray.";
+  return "Open a section below to inspect settings and queue changes for review.";
 });
 let overviewMetrics = $derived([
   {
@@ -276,9 +278,8 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
       {/each}
     </div>
 
-    <SetupCard variant="primary">
-      <SetupCardHeader title="Parameter actions" />
-      <HelperText class="mt-2">Refresh all values from the vehicle, or save/load a parameter file snapshot. File imports stage changes in the review tray.</HelperText>
+    <SetupSectionCard icon={Upload} title="Parameter actions" surface="primary" compact>
+      <HelperText>Refresh all values from the vehicle, or save/load a parameter file snapshot. File imports stage changed values for review.</HelperText>
       <ActionRow align="start" class="mt-4">
         <Button
           variant="secondary"
@@ -303,11 +304,10 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
         </Button>
       </ActionRow>
       <HelperText class="mt-3" size="xs" tone="muted">{fileActionMessage}</HelperText>
-    </SetupCard>
+    </SetupSectionCard>
 
   {#if view.statusNotices.length > 0}
-    <SetupCard testId={setupWorkspaceTestIds.notices}>
-      <SetupCardHeader title="Status text" />
+    <SetupSectionCard icon={MessageSquare} title="Status text" compact testId={setupWorkspaceTestIds.notices}>
       <ul class="mt-3 space-y-2">
         {#each view.statusNotices as notice (notice.id)}
           <li data-testid={`${setupWorkspaceTestIds.statusNoticePrefix}-${notice.id}`}>
@@ -317,7 +317,7 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
           </li>
         {/each}
       </ul>
-    </SetupCard>
+    </SetupSectionCard>
   {/if}
 
   <ActionRow align="start">
@@ -414,12 +414,11 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
       {/each}
     </div>
 
-    <SetupCard variant="primary" class="text-sm leading-6 text-text-secondary" testId={setupWorkspaceTestIds.detailRecovery}>
+    <SetupGuideCard title="Complete parameter catalog" testId={setupWorkspaceTestIds.detailRecovery}>
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="max-w-3xl">
-          <Eyebrow tracking="widest">Recovery path</Eyebrow>
           <HelperText class="mt-2">
-            Full Parameters stays separate from the guided sections. Open Full Parameters to inspect settings not covered above and queue raw changes in the review tray.
+            Full Parameters stays separate from guided setup. Open it to inspect settings not covered above and queue parameter changes for review.
           </HelperText>
         </div>
         <ActionRow align="start">
@@ -441,6 +440,6 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
           </a>
         </ActionRow>
       </div>
-    </SetupCard>
+    </SetupGuideCard>
   </SetupContentPanel>
 </section>

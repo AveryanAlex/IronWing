@@ -18,8 +18,11 @@ import {
   type SafetyDefaultsEntry,
 } from "../../../lib/setup/failsafe-model";
 import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
-import { Alert, Button, Card, Eyebrow, HelperText, MonoValue } from "../../../components/ui";
+import { Card, Eyebrow, HelperText, MonoValue } from "../../../components/ui";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import SetupWizardActions from "../shared/SetupWizardActions.svelte";
+import SetupWizardApplyError from "../shared/SetupWizardApplyError.svelte";
+import SetupWizardHintCard from "../shared/SetupWizardHintCard.svelte";
 
 let {
   view,
@@ -141,9 +144,7 @@ function selectDefaults(familyValue: ReturnType<typeof resolveSafetyVehicleFamil
   </HelperText>
 
   <Card.Root surface="primary" density="compact" testId={setupWorkspaceTestIds.wizardStepFailsafeSummary}>
-    {#if failureMessage}
-      <Alert variant="danger" density="compact" shadow={false} description={`Apply failed. Staged edits remain in the review tray so you can retry. ${failureMessage}`} />
-    {/if}
+    <SetupWizardApplyError message={failureMessage} />
     <Eyebrow tracking="widest">
       Recommended defaults ({family})
     </Eyebrow>
@@ -162,32 +163,22 @@ function selectDefaults(familyValue: ReturnType<typeof resolveSafetyVehicleFamil
     </ul>
   </Card.Root>
 
-  <Card.Root surface="primary" density="compact">
-    <HelperText size="xs">
+  <SetupWizardHintCard>
     Need per-action tuning? Open the Failsafe section from the wizard footer
     for the expert layout.
-    </HelperText>
-  </Card.Root>
+  </SetupWizardHintCard>
 
-  <div class="flex flex-wrap gap-2">
-    <Button
-      shape="pill"
-      tone="accent"
-      variant="soft"
-      testId={setupWorkspaceTestIds.wizardStepFailsafeApply}
-      disabled={view.checkpoint.blocksActions || applyPending || !hasAnyWritable}
-      onclick={handleApply}
-    >
-      {applyPending ? "Applying…" : "Apply recommended defaults"}
-    </Button>
-    <Button
-      variant="secondary"
-      class="rounded-full"
-      testId={setupWorkspaceTestIds.wizardStepFailsafeConfirm}
-      disabled={view.checkpoint.blocksActions || applyPending}
-      onclick={handleMarkReviewed}
-    >
-      Mark as reviewed
-    </Button>
-  </div>
+  <SetupWizardActions
+    primaryLabel="Apply recommended defaults"
+    primaryPendingLabel="Applying…"
+    primaryPending={applyPending}
+    primaryDisabled={view.checkpoint.blocksActions || !hasAnyWritable}
+    primaryTestId={setupWorkspaceTestIds.wizardStepFailsafeApply}
+    onPrimary={handleApply}
+    secondaryLabel="Mark as reviewed"
+    secondaryShape="pill"
+    secondaryDisabled={view.checkpoint.blocksActions || applyPending}
+    secondaryTestId={setupWorkspaceTestIds.wizardStepFailsafeConfirm}
+    onSecondary={handleMarkReviewed}
+  />
 </div>

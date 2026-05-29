@@ -37,7 +37,7 @@ function resolveVehicleSlug(vehicleType: string | null): VehicleSlug | null {
   <SetupIntroCard
     sectionId="full_parameters"
     title="Full Parameters"
-    description="Use this page to inspect, search, and queue raw parameter changes. Open the raw list below to inspect settings or queue changes for review."
+    description="Inspect, search, and edit the complete ArduPilot parameter catalog. Changes remain staged until you review and apply them."
     docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.fullParametersDocsLink }]}
   />
 

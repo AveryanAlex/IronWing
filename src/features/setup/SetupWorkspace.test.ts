@@ -110,36 +110,36 @@ describe("SetupWorkspace", () => {
     expect(within(nav).getByTestId(`${setupWorkspaceTestIds.navPrefix}-overview`).getAttribute("aria-current")).toBe(
       "page",
     );
-    const gpsLink = within(nav).getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`);
-    expect(gpsLink.getAttribute("href")).toBe("/setup/gps");
-    expect(gpsLink.getAttribute("data-sveltekit-preload-code")).toBe("hover");
-    expect(gpsLink.getAttribute("data-sveltekit-preload-data")).toBe("hover");
+    const navigationLink = within(nav).getByTestId(`${setupWorkspaceTestIds.navPrefix}-navigation`);
+    expect(navigationLink.getAttribute("href")).toBe("/setup/navigation");
+    expect(navigationLink.getAttribute("data-sveltekit-preload-code")).toBe("hover");
+    expect(navigationLink.getAttribute("data-sveltekit-preload-data")).toBe("hover");
   });
 
   it("selects a representative setup section from the shell navigation", async () => {
     const { setupWorkspaceStore } = renderSetupWorkspace();
-    const gpsLink = screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`);
-    gpsLink.addEventListener("click", (event) => event.preventDefault());
+    const navigationLink = screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-navigation`);
+    navigationLink.addEventListener("click", (event) => event.preventDefault());
 
-    await fireEvent.click(gpsLink);
+    await fireEvent.click(navigationLink);
 
     await waitFor(() => {
-      expect(screen.getByTestId(setupWorkspaceTestIds.root).querySelector("[data-selected-section]")?.getAttribute("data-selected-section")).toBe("gps");
+      expect(screen.getByTestId(setupWorkspaceTestIds.root).querySelector("[data-selected-section]")?.getAttribute("data-selected-section")).toBe("navigation");
     });
-    expect(get(setupWorkspaceStore).selectedSectionId).toBe("gps");
-    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-gps`).getAttribute("aria-current")).toBe("page");
+    expect(get(setupWorkspaceStore).selectedSectionId).toBe("navigation");
+    expect(screen.getByTestId(`${setupWorkspaceTestIds.navPrefix}-navigation`).getAttribute("aria-current")).toBe("page");
   });
 
   it("tracks a route-selected setup section without an intermediate overview view", async () => {
-    const { setupWorkspaceStore } = renderSetupWorkspace({ requestedSectionId: "gps" });
+    const { setupWorkspaceStore } = renderSetupWorkspace({ requestedSectionId: "navigation" });
 
     await waitFor(() => {
-      expect(get(setupWorkspaceStore).selectedSectionId).toBe("gps");
+      expect(get(setupWorkspaceStore).selectedSectionId).toBe("navigation");
     });
     await waitFor(() => {
       expect(analyticsMocks.trackAnalytics).toHaveBeenCalledWith("setup_section_viewed", {
         connected: 0,
-        section: "gps",
+        section: "navigation",
       });
     });
     expect(analyticsMocks.trackAnalytics).not.toHaveBeenCalledWith(

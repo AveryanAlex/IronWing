@@ -5,7 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath, URL } from "url";
 
 type PlatformDir = "mock" | "remote" | "tauri" | "web";
-type WasmBuildScript = "internal:wasm:web:debug" | "internal:wasm:web:release";
+type WasmBuildScript = "internal:wasm:web:release";
 type IronwingWebWasmState = {
   scriptPromises: Partial<Record<WasmBuildScript, Promise<void>>>;
 };
@@ -79,20 +79,14 @@ function runWebWasmScriptOnce(script: WasmBuildScript): Promise<void> {
 }
 
 function ironwingWebWasmPlugin(enabled: boolean): Plugin {
-  let command: "build" | "serve" = "serve";
-
   return {
     name: "ironwing-web-wasm",
-    configResolved(config) {
-      command = config.command;
-    },
     async buildStart() {
       if (!enabled) {
         return;
       }
 
-      const script = command === "serve" ? "internal:wasm:web:debug" : "internal:wasm:web:release";
-      await runWebWasmScriptOnce(script);
+      await runWebWasmScriptOnce("internal:wasm:web:release");
     },
   };
 }

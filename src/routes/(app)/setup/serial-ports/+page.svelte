@@ -9,14 +9,13 @@ import { buildSerialPortModel, type SerialPortRow } from "../../../../lib/setup/
 import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
-import SetupCard from "../../../../features/setup/shared/SetupCard.svelte";
-import SetupCardHeader from "../../../../features/setup/shared/SetupCardHeader.svelte";
 import SetupHint from "../../../../features/setup/shared/SetupHint.svelte";
-import SetupHintList from "../../../../features/setup/shared/SetupHintList.svelte";
+import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
 import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
 import SetupParamSelect from "../../../../features/setup/shared/SetupParamSelect.svelte";
 import SetupParamTable from "../../../../features/setup/shared/SetupParamTable.svelte";
 import SetupStatusPill from "../../../../features/setup/shared/SetupStatusPill.svelte";
+import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import { Alert } from "../../../../components/ui";
 import {
   getSetupWorkspaceRouteContext,
@@ -154,16 +153,14 @@ function rebootTone(): string {
     </p>
   </SetupNotice>
 
-  <SetupCard testId={setupWorkspaceTestIds.serialPortsSummary}>
-    <SetupCardHeader icon={Cable} title="Serial Port Assignment" compact>
-      {#snippet actions()}
+  <SetupSectionCard icon={Cable} title="Serial Port Assignment" description="Edit each logical SERIAL port in one table. Protocol and baud changes are staged and require a reboot after apply." testId={setupWorkspaceTestIds.serialPortsSummary}>
+    {#snippet status()}
       {#if model.ports.length > 0}
         <SetupStatusPill>
           {model.ports.length} {model.ports.length === 1 ? "port" : "ports"}
         </SetupStatusPill>
       {/if}
-      {/snippet}
-    </SetupCardHeader>
+    {/snippet}
 
     {#if model.ports.length === 0}
       <div
@@ -220,7 +217,7 @@ function rebootTone(): string {
         {/each}
       </SetupParamTable>
     {/if}
-  </SetupCard>
+  </SetupSectionCard>
 
   {#if model.recoveryText}
     <Alert
@@ -251,7 +248,7 @@ function rebootTone(): string {
     </Alert>
   {/each}
 
-  <SetupHintList title="Common Configurations">
+  <SetupGuideCard title="Common Configurations">
       <SetupHint>
         <p>
           <span class="font-medium text-text-primary">GPS</span> — typically on SERIAL3 or SERIAL4.
@@ -275,6 +272,6 @@ function rebootTone(): string {
           <span class="font-mono text-text-primary"> 921600</span> for high-bandwidth links.
         </p>
       </SetupHint>
-  </SetupHintList>
+  </SetupGuideCard>
   {/snippet}
 </SetupSectionShell>

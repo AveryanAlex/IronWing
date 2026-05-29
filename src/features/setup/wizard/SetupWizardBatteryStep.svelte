@@ -7,8 +7,11 @@ import {
   type ParameterItemModel,
 } from "../../../lib/params/parameter-item-model";
 import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
-import { Alert, Button, Card, Eyebrow, Field, HelperText, NativeSelect } from "../../../components/ui";
+import { Card, Eyebrow, Field, HelperText, NativeSelect } from "../../../components/ui";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import SetupWizardActions from "../shared/SetupWizardActions.svelte";
+import SetupWizardApplyError from "../shared/SetupWizardApplyError.svelte";
+import SetupWizardHintCard from "../shared/SetupWizardHintCard.svelte";
 
 type EnumOption = { code: number; label: string };
 
@@ -125,9 +128,7 @@ function resolveDraftNumber(value: string): number | null {
     density="compact"
     testId={setupWorkspaceTestIds.wizardStepBatterySummary}
   >
-    {#if failureMessage}
-      <Alert variant="danger" density="compact" shadow={false} class="mb-2" description={`Apply failed. Staged edits remain in the review tray so you can retry. ${failureMessage}`} />
-    {/if}
+    <SetupWizardApplyError message={failureMessage} class="mb-2" />
     <Eyebrow tracking="widest">Current battery monitor</Eyebrow>
     <p class="mt-2 text-sm font-semibold text-text-primary">{currentMonitorLabel}</p>
     <HelperText class="mt-1" size="xs" tone="muted">BATT_MONITOR</HelperText>
@@ -147,23 +148,17 @@ function resolveDraftNumber(value: string): number | null {
     </Field.Root>
   {/if}
 
-  <Card.Root surface="primary" density="compact">
-    <HelperText size="xs">
+  <SetupWizardHintCard>
     Need to tweak board pins, sensor scaling, or chemistry thresholds? Open
     the Battery Monitor section from the wizard footer for the expert layout.
-    </HelperText>
-  </Card.Root>
+  </SetupWizardHintCard>
 
-  <div class="flex flex-wrap gap-2">
-    <Button
-      shape="pill"
-      tone="accent"
-      variant="soft"
-      testId={setupWorkspaceTestIds.wizardStepBatteryApply}
-      disabled={view.checkpoint.blocksActions || applyPending || !monitorItem}
-      onclick={handleApply}
-    >
-      {applyPending ? "Applying…" : "Apply and continue"}
-    </Button>
-  </div>
+  <SetupWizardActions
+    primaryLabel="Apply and continue"
+    primaryPendingLabel="Applying…"
+    primaryPending={applyPending}
+    primaryDisabled={view.checkpoint.blocksActions || !monitorItem}
+    primaryTestId={setupWorkspaceTestIds.wizardStepBatteryApply}
+    onPrimary={handleApply}
+  />
 </div>

@@ -7,7 +7,6 @@ import {
     calcBattLowVolt,
     calcBattVoltMax,
     calcBattVoltMin,
-    calcGyroFilter,
     calcMotThrustExpo,
 } from "../../data/battery-presets";
 import type { ParamMeta, ParamMetadataMap } from "../../param-metadata";
@@ -252,10 +251,6 @@ function buildFlightWorkflowCard(args: WorkflowBuildArgs): ParameterWorkflowCard
         {
             name: "MOT_THST_EXPO",
             proposedValue: roundToFixed(calcMotThrustExpo(args.flightInputs.propInches)),
-        },
-        {
-            name: "INS_GYRO_FILTER",
-            proposedValue: calcGyroFilter(args.flightInputs.propInches),
         },
         {
             name: "ATC_ACCEL_P_MAX",

@@ -143,16 +143,16 @@ $effect(() => {
 });
 
 $effect(() => {
-  const gpsStatus = view.sectionStatuses.gps;
+  const navigationStatus = view.sectionStatuses.navigation;
   const batteryStatus = view.sectionStatuses.battery_monitor;
-  const gpsConfigured =
-    gpsStatus === "complete" ? true : gpsStatus === "not_started" ? false : null;
+  const navigationConfigured =
+    navigationStatus === "complete" ? true : navigationStatus === "not_started" ? false : null;
   const batteryConfigured =
     batteryStatus === "complete" ? true : batteryStatus === "not_started" ? false : null;
   wizardStore.updateFromWorkspace({
     sectionStatuses: view.sectionStatuses,
     activeEnvelope: view.activeEnvelope,
-    gpsConfigured,
+    navigationConfigured,
     batteryConfigured,
     checkpointPhase: view.checkpoint.phase,
   });

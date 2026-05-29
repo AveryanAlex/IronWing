@@ -108,7 +108,7 @@ describe("prearm-model", () => {
     });
   });
 
-  it("builds arming metadata recovery copy when checklist metadata is missing", () => {
+  it("builds arming guidance copy when checklist labels are missing", () => {
     const metadata: ParamMetadataMap = new Map([
       [
         "ARMING_REQUIRE",
@@ -125,7 +125,7 @@ describe("prearm-model", () => {
       metadata,
     });
 
-    expect(reasons.join(" ")).toContain("ARMING_CHECK metadata is missing or malformed");
+    expect(reasons.join(" ")).toContain("ARMING_CHECK labels are unavailable");
   });
 
   it("derives a ready pre-arm model when the link is live and health is good", () => {

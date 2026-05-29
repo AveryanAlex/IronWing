@@ -109,7 +109,7 @@ function buildCustomTailsitterModel(): MotorDiagramModel {
     motors: CUSTOM_TAILSITTER_MOTORS,
     hasLiftMotorSurface: false,
     hasMotorTestSurface: true,
-    message: "Custom tailsitter preview shown. Use motor testing and manual verification because lift-motor ownership is not authoritative for this layout.",
+    message: "Custom tailsitter preview shown. Use motor testing and manual verification because lift-motor mapping depends on this custom layout.",
   };
 }
 

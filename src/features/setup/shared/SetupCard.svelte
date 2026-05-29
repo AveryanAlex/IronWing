@@ -3,7 +3,7 @@ import type { Snippet } from "svelte";
 import { Card } from "../../../components/ui";
 
 type Variant = "default" | "primary" | "flat";
-type CardSurface = "default" | "elevated" | "muted" | "transparent" | "primary" | "secondary" | "panel" | "input";
+type CardSurface = "default" | "elevated" | "muted" | "muted-soft" | "transparent" | "primary" | "secondary" | "panel" | "panel-soft" | "input";
 type CardTone = "neutral" | "info" | "success" | "warning" | "danger";
 type CardAppearance = "solid" | "dashed";
 type CardLayout = "stack" | "row" | "block";

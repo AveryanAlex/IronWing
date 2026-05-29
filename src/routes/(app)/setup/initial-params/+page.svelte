@@ -1,4 +1,5 @@
 <script lang="ts">
+import { BatteryCharging, Calculator, ListChecks, Ruler } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import {
@@ -13,12 +14,9 @@ import {
   createResolvedInitialParamsInputs,
   type InitialParamsPreviewBatch,
 } from "../../../../lib/setup/initial-params-model";
-import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import {
-  Alert,
   ActionRow,
   Button,
-  Card,
   Checkbox,
   Eyebrow,
   Field,
@@ -26,6 +24,7 @@ import {
   Input,
   NativeSelect,
 } from "../../../../components/ui";
+import { SetupFieldStack, SetupGuideCard, SetupNotice, SetupSectionCard } from "../../../../features/setup/shared";
 import SetupPreviewStagePanel from "../../../../features/setup/shared/SetupPreviewStagePanel.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
@@ -193,106 +192,116 @@ function resolvedInputText(): string {
   sectionId={section.id}
   eyebrow={section.title}
   title="Preview starter settings from your vehicle inputs"
-  description="Enter prop size, battery chemistry, and cell count to preview starter settings for this vehicle family. Review the suggested batches here, then queue any changes through the review tray."
+  description="Enter prop size, battery chemistry, and cell count to preview starter values for this vehicle family. Treat them as starting points, review each batch, then stage selected changes for review."
   testId={setupWorkspaceTestIds.initialParamsSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.initialParamsDocsLink }]}
 >
   {#snippet body()}
-      <Card.Root
-        density="compact"
-        gap="compact"
-        class="grid md:grid-cols-3"
-        surface="elevated"
-        testId={setupWorkspaceTestIds.initialParamsSummary}
-      >
-    <div>
-      <Eyebrow tracking="widest">Vehicle family</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.initialParamsFamilyState}>
-        {model.family.headline}
-      </p>
-      <HelperText class="mt-1">{model.family.detail}</HelperText>
-    </div>
-    <div>
-      <Eyebrow tracking="widest">Preview state</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.initialParamsPreviewState}>
-        {model.previewStateText}
-      </p>
-      <HelperText class="mt-1">{model.previewDetailText}</HelperText>
-    </div>
-    <div>
-      <Eyebrow tracking="widest">Resolved inputs</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary">{resolvedInputText()}</p>
-      <HelperText class="mt-1">
-        {#if model.usingFallbackInputs}
-          Last valid inputs are retained for visibility only until the current calculator fields are fixed.
-        {:else}
-          Starter batches stay scoped to the currently resolved calculator assumptions.
-        {/if}
-      </HelperText>
-    </div>
-  </Card.Root>
+    <SetupSectionCard
+      icon={Calculator}
+      title="Starter value preview"
+      description="Preview recommended initial values before staging anything. Apply changes only after confirming they match the airframe and power system."
+      surface="elevated"
+      testId={setupWorkspaceTestIds.initialParamsSummary}
+    >
+      <div class="grid gap-4 md:grid-cols-3">
+        <div>
+          <Eyebrow tracking="widest">Vehicle family</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.initialParamsFamilyState}>
+            {model.family.headline}
+          </p>
+          <HelperText class="mt-1">{model.family.detail}</HelperText>
+        </div>
+        <div>
+          <Eyebrow tracking="widest">Preview state</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.initialParamsPreviewState}>
+            {model.previewStateText}
+          </p>
+          <HelperText class="mt-1">{model.previewDetailText}</HelperText>
+        </div>
+        <div>
+          <Eyebrow tracking="widest">Resolved inputs</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary">{resolvedInputText()}</p>
+          <HelperText class="mt-1">
+            {#if model.usingFallbackInputs}
+              Last valid inputs are retained for visibility only until the current calculator fields are fixed.
+            {:else}
+              Starter batches stay scoped to the currently resolved calculator assumptions.
+            {/if}
+          </HelperText>
+        </div>
+      </div>
+    </SetupSectionCard>
 
-  <Card.Root as="article" density="compact" surface="elevated">
-    <Eyebrow tracking="widest">Vehicle inputs</Eyebrow>
-    <h4 class="mt-2 text-base font-semibold text-text-primary">Starter assumptions</h4>
-    <HelperText class="mt-2">
-      Update the physical assumptions first. Preview batches stay hidden until inputs are valid, and stale retained previews remain non-stageable.
-    </HelperText>
+  <SetupSectionCard
+    icon={Ruler}
+    title="Starter assumptions"
+    description="Update the physical assumptions first. Preview batches stay hidden until inputs are valid, and retained previews remain non-stageable until the current fields are fixed."
+    surface="elevated"
+    compact
+  >
 
     <div class="mt-4 grid gap-3 md:grid-cols-3">
-      <Field.Root>
-        <Field.Label>Prop size (inches)</Field.Label>
-        <Input
-          data-testid={`${setupWorkspaceTestIds.initialParamsInputPrefix}-prop_inches`}
-          inputmode="decimal"
-          min="1"
-          oninput={(event) => updatePropSize((event.currentTarget as HTMLInputElement).value)}
-          step="0.5"
-          type="number"
-          value={propSizeInput}
-        />
-      </Field.Root>
+      <SetupFieldStack gap="compact">
+        <Field.Root>
+          <Field.Label>Prop size (inches)</Field.Label>
+          <Input
+            data-testid={`${setupWorkspaceTestIds.initialParamsInputPrefix}-prop_inches`}
+            inputmode="decimal"
+            min="1"
+            oninput={(event) => updatePropSize((event.currentTarget as HTMLInputElement).value)}
+            step="0.5"
+            type="number"
+            value={propSizeInput}
+          />
+        </Field.Root>
+      </SetupFieldStack>
 
-      <Field.Root>
-        <Field.Label>Battery cells</Field.Label>
-        <Input
-          data-testid={`${setupWorkspaceTestIds.initialParamsInputPrefix}-cell_count`}
-          inputmode="numeric"
-          min="1"
-          oninput={(event) => updateCellCount((event.currentTarget as HTMLInputElement).value)}
-          step="1"
-          type="number"
-          value={cellCountInput}
-        />
-      </Field.Root>
+      <SetupFieldStack gap="compact">
+        <Field.Root>
+          <Field.Label>Battery cells</Field.Label>
+          <Input
+            data-testid={`${setupWorkspaceTestIds.initialParamsInputPrefix}-cell_count`}
+            inputmode="numeric"
+            min="1"
+            oninput={(event) => updateCellCount((event.currentTarget as HTMLInputElement).value)}
+            step="1"
+            type="number"
+            value={cellCountInput}
+          />
+        </Field.Root>
+      </SetupFieldStack>
 
-      <Field.Root>
-        <Field.Label>Battery chemistry</Field.Label>
-        <NativeSelect
-          onchange={(event) => updateChemistry((event.currentTarget as HTMLSelectElement).value)}
-          options={chemistryOptions}
-          testId={`${setupWorkspaceTestIds.initialParamsInputPrefix}-chemistry`}
-          value={String(chemistryIndex)}
-        />
-      </Field.Root>
+      <SetupFieldStack gap="compact">
+        <Field.Root>
+          <Field.Label>Battery chemistry</Field.Label>
+          <NativeSelect
+            onchange={(event) => updateChemistry((event.currentTarget as HTMLSelectElement).value)}
+            options={chemistryOptions}
+            testId={`${setupWorkspaceTestIds.initialParamsInputPrefix}-chemistry`}
+            value={String(chemistryIndex)}
+          />
+        </Field.Root>
+      </SetupFieldStack>
     </div>
-  </Card.Root>
+  </SetupSectionCard>
 
   {#if model.validationMessage}
-      <Alert variant="warning" density="compact" shadow={false} description={model.validationMessage} testId={`${setupWorkspaceTestIds.initialParamsBannerPrefix}-inputs`} />
+      <SetupNotice tone="warning" testId={`${setupWorkspaceTestIds.initialParamsBannerPrefix}-inputs`}>{model.validationMessage}</SetupNotice>
   {/if}
 
   {#if model.batches.length > 0}
     <div class="grid gap-3 2xl:grid-cols-2">
       {#each model.batches as batch (batch.id)}
-        <Card.Root
-          as="article"
-          density="compact"
+        <SetupSectionCard
+          icon={batch.id.includes("battery") ? BatteryCharging : ListChecks}
+          title={batch.title}
+          description={batch.description}
           surface="elevated"
+          compact
           testId={`${setupWorkspaceTestIds.initialParamsPreviewPrefix}-${batch.id}`}
         >
-          <div class="flex items-center justify-between mb-2">
-            <Eyebrow tracking="widest">Preview batch</Eyebrow>
+          {#snippet actions()}
             {#if batch.stageAllowed}
               <Checkbox
                 checked={selectedBatchIds.includes(batch.id)}
@@ -300,9 +309,7 @@ function resolvedInputText(): string {
                 onCheckedChange={() => toggleBatchSelection(batch.id)}
               />
             {/if}
-          </div>
-          <h4 class="mt-2 text-base font-semibold text-text-primary">{batch.title}</h4>
-          <HelperText class="mt-2">{batch.description}</HelperText>
+          {/snippet}
           <div class="mt-4">
             <SetupPreviewStagePanel
               headerLabel={`Preview · ${batch.title}`}
@@ -310,13 +317,13 @@ function resolvedInputText(): string {
               onStage={() => stageBatch(batch)}
               rows={batch.rows}
               stageDisabled={actionsBlocked || !batch.stageAllowed}
-              stageLabel={batch.stageAllowed ? "Stage in review tray" : "Preview only"}
+              stageLabel={batch.stageAllowed ? "Stage for review" : "Preview only"}
             />
           </div>
           {#if batch.stageBlockedReason}
             <HelperText class="mt-3" size="xs" tone="warning">{batch.stageBlockedReason}</HelperText>
           {/if}
-        </Card.Root>
+        </SetupSectionCard>
       {/each}
     </div>
 
@@ -333,14 +340,19 @@ function resolvedInputText(): string {
   {/if}
 
   {#if model.recoveryReasons.length > 0}
-    <Alert variant="warning" density="compact" shadow={false} testId={setupWorkspaceTestIds.initialParamsRecovery}>
-      <p class="font-semibold text-text-primary">Initial-parameter recovery is active.</p>
+    <SetupNotice tone="warning" testId={setupWorkspaceTestIds.initialParamsRecovery}>
+      <p class="font-semibold text-text-primary">Starter values are unavailable for this firmware.</p>
       <ul class="mt-2 list-disc space-y-1 pl-5">
         {#each model.recoveryReasons as reason (reason)}
           <li>{reason}</li>
         {/each}
       </ul>
-    </Alert>
+    </SetupNotice>
   {/if}
+
+  <SetupGuideCard title="Starter values are starting points">
+    <p>Use these batches to get close to common defaults for the selected vehicle family, prop size, cell count, and chemistry.</p>
+    <p>Apply in batches, inspect staged values, and tune from flight-test results rather than treating starter values as final tuning.</p>
+  </SetupGuideCard>
   {/snippet}
 </SetupSectionShell>

@@ -125,7 +125,7 @@ export function buildArmingRecoveryReasons(input: {
       ? bitmask.filter((entry) => Number.isInteger(entry.bit) && entry.bit >= 0 && typeof entry.label === "string" && entry.label.trim().length > 0)
       : [];
     if (validBits.length === 0) {
-      reasons.push("ARMING_CHECK metadata is missing or malformed, so the pre-arm checklist stays read-only.");
+      reasons.push("ARMING_CHECK labels are unavailable, so the pre-arm checklist stays read-only in this guided view.");
     }
   }
 
@@ -137,7 +137,7 @@ export function buildArmingRecoveryReasons(input: {
       ? values.filter((entry) => Number.isFinite(entry.code) && typeof entry.label === "string" && entry.label.trim().length > 0)
       : [];
     if (validValues.length === 0) {
-      reasons.push("ARMING_REQUIRE metadata is missing or malformed, so the arming-method selector stays read-only.");
+      reasons.push("ARMING_REQUIRE labels are unavailable, so the arming-method selector stays read-only in this guided view.");
     }
   }
 

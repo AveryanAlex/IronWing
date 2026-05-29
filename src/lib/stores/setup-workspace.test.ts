@@ -269,7 +269,7 @@ describe("setup workspace store", () => {
 
     const state = get(store);
     const frameSection = readSection(state, "frame_orientation");
-    const gpsSection = readSection(state, "gps");
+    const navigationSection = readSection(state, "navigation");
     const hardwareGroup = readGroup(state, "hardware");
     const safetyGroup = readGroup(state, "safety");
     const tuningGroup = readGroup(state, "tuning");
@@ -281,7 +281,7 @@ describe("setup workspace store", () => {
       "beginner_wizard",
       "frame_orientation",
       "calibration",
-      "gps",
+      "navigation",
       "battery_monitor",
       "motors_esc",
       "servo_outputs",
@@ -301,7 +301,7 @@ describe("setup workspace store", () => {
     expect(state.sectionStatuses.frame_orientation).toBe("unknown");
     expect(frameSection?.statusText).toBe("Unknown");
     expect(frameSection?.confidenceText).toBe("Unconfirmed");
-    expect(gpsSection?.implemented).toBe(true);
+    expect(navigationSection?.implemented).toBe(true);
     expect(hardwareGroup?.sections).toHaveLength(7);
     expect(hardwareGroup?.implementedCount).toBe(7);
     expect(hardwareGroup?.progressText).toBe("0/6 confirmed");
@@ -636,13 +636,13 @@ describe("setup workspace store", () => {
     const paramsStore = writable(createParamsState());
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
-    store.confirmSection("gps");
+    store.confirmSection("navigation");
     let state = get(store);
-    expect(state.sectionConfirmations.gps).toBe(true);
+    expect(state.sectionConfirmations.navigation).toBe(true);
 
-    store.clearSectionConfirmation("gps");
+    store.clearSectionConfirmation("navigation");
     state = get(store);
-    expect(state.sectionConfirmations.gps).toBe(false);
+    expect(state.sectionConfirmations.navigation).toBe(false);
 
     sessionStore.set(createSessionState({
       sessionDomain: {
@@ -668,14 +668,14 @@ describe("setup workspace store", () => {
       },
     }));
 
-    store.confirmSection("gps");
+    store.confirmSection("navigation");
     state = get(store);
-    expect(state.sectionConfirmations.gps).toBe(true);
+    expect(state.sectionConfirmations.navigation).toBe(true);
 
     sessionStore.set(createSessionState());
-    store.confirmSection("gps");
+    store.confirmSection("navigation");
     state = get(store);
-    expect(state.sectionConfirmations.gps).toBe(true);
+    expect(state.sectionConfirmations.navigation).toBe(true);
 
     sessionStore.set(createSessionState({
       sessionDomain: {
@@ -701,9 +701,9 @@ describe("setup workspace store", () => {
       },
     }));
 
-    store.clearSectionConfirmation("gps");
+    store.clearSectionConfirmation("navigation");
     state = get(store);
-    expect(state.sectionConfirmations.gps).toBe(false);
+    expect(state.sectionConfirmations.navigation).toBe(false);
   });
 
   it("applies replaced guided confirmations for the active scope", () => {
@@ -711,9 +711,9 @@ describe("setup workspace store", () => {
     const paramsStore = writable(createParamsState());
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
-    store.confirmSection("gps");
+    store.confirmSection("navigation");
     let state = get(store);
-    expect(state.sectionConfirmations.gps).toBe(true);
+    expect(state.sectionConfirmations.navigation).toBe(true);
 
     sessionStore.set(createSessionState({
       sessionDomain: {
@@ -742,12 +742,12 @@ describe("setup workspace store", () => {
     store.replaceSectionConfirmations({
       scopeKey: "session-1:live:0:0",
       confirmedSections: {
-        gps: false,
+        navigation: false,
       },
     });
 
     state = get(store);
-    expect(state.sectionConfirmations.gps).toBe(false);
+    expect(state.sectionConfirmations.navigation).toBe(false);
   });
 
   it("clears active-scope guided confirmations without scopeKey", () => {
@@ -755,9 +755,9 @@ describe("setup workspace store", () => {
     const paramsStore = writable(createParamsState());
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
-    store.confirmSection("gps");
+    store.confirmSection("navigation");
     let state = get(store);
-    expect(state.sectionConfirmations.gps).toBe(true);
+    expect(state.sectionConfirmations.navigation).toBe(true);
 
     sessionStore.set(createSessionState({
       sessionDomain: {
@@ -785,12 +785,12 @@ describe("setup workspace store", () => {
 
     store.replaceSectionConfirmations({
       confirmedSections: {
-        gps: false,
+        navigation: false,
       },
     });
 
     state = get(store);
-    expect(state.sectionConfirmations.gps).toBe(false);
+    expect(state.sectionConfirmations.navigation).toBe(false);
   });
 
   it("still replaces confirmations for the active scope when guided sections are available", () => {

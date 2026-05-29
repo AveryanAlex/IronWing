@@ -1,15 +1,17 @@
 <script lang="ts">
+import { Activity, Gauge } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterExpertView, type ParameterExpertRow } from "../../../../lib/params/parameter-expert-view";
 import { deriveVehicleProfile } from "../../../../lib/setup/vehicle-profile";
-import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import ParameterExpertRowComponent from "../../../../features/params/components/ParameterExpertRow.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
-import { Alert, Badge, Card } from "../../../../components/ui";
+import { SetupFieldStack, SetupGuideCard, SetupNotice, SetupSectionCard } from "../../../../features/setup/shared";
+import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
+import { Badge } from "../../../../components/ui";
 import {
   getSetupWorkspaceRouteContext,
   setupRouteSection,
@@ -34,7 +36,6 @@ type CuratedPidView = {
   groups: CuratedPidGroup[];
   banners: Array<{ id: string; text: string; tone: "warning" | "muted" }>;
   recoveryReasons: string[];
-  metadataFallbackCount: number;
 };
 
 const COPTER_GROUP_DEFINITIONS: ReadonlyArray<{
@@ -46,8 +47,7 @@ const COPTER_GROUP_DEFINITIONS: ReadonlyArray<{
   {
     id: "rate",
     title: "Rate controllers",
-    description:
-      "Inner-loop roll, pitch, and yaw response stays grouped instead of dropping into a raw prefix browser.",
+    description: "Inner-loop roll, pitch, and yaw response stays grouped for the rate-controller tuning workflow.",
     names: [
       "ATC_RAT_RLL_P",
       "ATC_RAT_RLL_I",
@@ -75,7 +75,7 @@ const COPTER_GROUP_DEFINITIONS: ReadonlyArray<{
   {
     id: "outer-loop",
     title: "Angle and position hold",
-    description: "Outer-loop angle and position response stays surfaced as a purposeful copter tuning group.",
+    description: "Outer-loop angle and position response stays grouped for the normal copter tuning workflow.",
     names: [
       "ATC_ANG_RLL_P",
       "ATC_ANG_PIT_P",
@@ -89,21 +89,6 @@ const COPTER_GROUP_DEFINITIONS: ReadonlyArray<{
       "PSC_VELXY_I",
       "PSC_VELXY_D",
       "PSC_POSXY_P",
-    ],
-  },
-  {
-    id: "filters",
-    title: "Filters and notch control",
-    description:
-      "Shared gyro, accelerometer, and notch controls remain visible here even when some enum metadata is degraded.",
-    names: [
-      "INS_GYRO_FILTER",
-      "INS_ACCEL_FILTER",
-      "INS_HNTCH_ENABLE",
-      "INS_HNTCH_MODE",
-      "INS_HNTCH_FREQ",
-      "INS_HNTCH_BW",
-      "INS_HNTCH_REF",
     ],
   },
 ];
@@ -140,22 +125,8 @@ const PLANE_GROUP_DEFINITIONS: ReadonlyArray<{
     id: "speed",
     title: "Speed configuration",
     description:
-      "Cruise-speed and airspeed guardrails stay together instead of blending into unrelated raw parameter groups.",
+      "Cruise-speed and airspeed guardrails stay together instead of blending into unrelated full-parameter groups.",
     names: ["ARSPD_FBW_MIN", "ARSPD_FBW_MAX", "TRIM_THROTTLE", "TRIM_ARSPD_CM"],
-  },
-  {
-    id: "filters",
-    title: "Shared filters",
-    description: "Shared sensor filtering remains editable here when the plane snapshot exposes the rows truthfully.",
-    names: [
-      "INS_GYRO_FILTER",
-      "INS_ACCEL_FILTER",
-      "INS_HNTCH_ENABLE",
-      "INS_HNTCH_MODE",
-      "INS_HNTCH_FREQ",
-      "INS_HNTCH_BW",
-      "INS_HNTCH_REF",
-    ],
   },
 ];
 
@@ -204,20 +175,6 @@ const QUADPLANE_GROUP_DEFINITIONS: ReadonlyArray<{
     description:
       "Lift-thrust response and compensation remain tied to Q_M_* instead of falling through to generic multirotor rows.",
     names: ["Q_M_THST_EXPO", "Q_M_THST_HOVER", "Q_M_BAT_VOLT_MAX", "Q_M_BAT_VOLT_MIN"],
-  },
-  {
-    id: "filters",
-    title: "Shared filters",
-    description: "Shared sensor filters remain visible when the VTOL snapshot exposes them truthfully.",
-    names: [
-      "INS_GYRO_FILTER",
-      "INS_ACCEL_FILTER",
-      "INS_HNTCH_ENABLE",
-      "INS_HNTCH_MODE",
-      "INS_HNTCH_FREQ",
-      "INS_HNTCH_BW",
-      "INS_HNTCH_REF",
-    ],
   },
 ];
 
@@ -282,8 +239,7 @@ function withSafetyFallback(row: ParameterExpertRow): ParameterExpertRow {
     ...row,
     label: row.rawName,
     description:
-      row.description ??
-      "Metadata is incomplete for this row, so the purposeful PID surface keeps it visible but read-only.",
+      row.description ?? "This advanced parameter can be reviewed here; edit it from Full Parameters if needed.",
     readOnly: true,
   } satisfies ParameterExpertRow;
 }
@@ -304,45 +260,40 @@ function buildGroups(
 }
 
 function buildCuratedView(): CuratedPidView {
-  const metadataFallbackCount = [...rowIndex.values()].filter((row) => row.readOnly === true).length;
   const banners: CuratedPidView["banners"] = [];
   const recoveryReasons: string[] = [];
 
   if (profile.isPlane && profile.quadPlaneEnabled && profile.planeVtolState !== "vtol-ready") {
     recoveryReasons.push(
-      "QuadPlane hover tuning stays blocked until the current scope exposes the VTOL-specific Q_A_* and Q_M_* parameter families truthfully.",
+      "QuadPlane hover tuning appears after the vehicle exposes the VTOL-specific Q_A_* and Q_M_* parameter families.",
     );
     return {
       familyStateText: "QuadPlane refresh required",
       familyDetailText:
-        "The vehicle reports Plane firmware with VTOL enabled, but the VTOL tuning families are still partial. This section refuses to fall back to fixed-wing tuning cards while the hover truth is incomplete.",
+        "Apply the VTOL enable change, reboot, and refresh parameters before editing QuadPlane hover tuning.",
       groups: [],
       banners: [
         {
           id: "quadplane-refresh",
-          text: "Awaiting truthful Q_A_* and Q_M_* VTOL tuning rows after the QuadPlane refresh.",
+          text: "QuadPlane hover tuning needs Q_A_* and Q_M_* settings from the refreshed vehicle parameter list.",
           tone: "warning",
         },
       ],
       recoveryReasons,
-      metadataFallbackCount,
     };
   }
 
   let familyStateText = "Unsupported vehicle family";
-  let familyDetailText =
-    "This PID section only exposes purposeful copter, fixed-wing, and fully refreshed QuadPlane tuning surfaces.";
+  let familyDetailText = "This PID section exposes copter, fixed-wing, and fully refreshed QuadPlane tuning surfaces.";
   let groups: CuratedPidGroup[] = [];
 
   if (profile.isCopter) {
     familyStateText = "Multirotor rate and hold tuning";
-    familyDetailText =
-      "Copter PID work stays grouped by rate, outer-loop hold, and filters instead of sending you into a raw-parameter-first view.";
+    familyDetailText = "Copter PID settings are grouped by rate controller and outer-loop hold settings.";
     groups = buildGroups(COPTER_GROUP_DEFINITIONS);
   } else if (profile.isPlane && profile.planeVtolState === "vtol-ready") {
     familyStateText = "QuadPlane VTOL tuning";
-    familyDetailText =
-      "VTOL hover and lift-motor tuning stay scoped to the Q_A_* and Q_M_* families, with shared filters separated below.";
+    familyDetailText = "VTOL hover and lift-motor tuning use the Q_A_* and Q_M_* families.";
     groups = buildGroups(QUADPLANE_GROUP_DEFINITIONS);
 
     const missingFamilies = [
@@ -353,36 +304,25 @@ function buildCuratedView(): CuratedPidView {
     if (missingFamilies.length > 0) {
       banners.push({
         id: "quadplane-gap",
-        text: `Missing VTOL families stay explicit here instead of falling back to fixed-wing cards: ${missingFamilies.join(" and ")}.`,
+        text: `QuadPlane hover tuning is waiting for these setting groups: ${missingFamilies.join(" and ")}.`,
         tone: "warning",
       });
       recoveryReasons.push(`Missing VTOL tuning families: ${missingFamilies.join(", ")}.`);
     }
   } else if (profile.isPlane) {
     familyStateText = "Fixed-wing servo and speed tuning";
-    familyDetailText =
-      "Plane tuning stays grouped by servo response, cruise-speed configuration, and shared filters rather than raw prefixes.";
+    familyDetailText = "Plane tuning is grouped by servo response and cruise-speed configuration.";
     groups = buildGroups(PLANE_GROUP_DEFINITIONS);
   } else if (profile.isRover) {
     familyStateText = "Rover PID surface unavailable";
-    familyDetailText = "Rover tuning is intentionally not modeled by this purposeful PID surface yet.";
+    familyDetailText = "Rover tuning is not modeled by this guided PID surface yet.";
     recoveryReasons.push("Rover PID tuning is not yet implemented in the setup workspace.");
   } else {
-    recoveryReasons.push(
-      "The current vehicle family is ambiguous, so PID tuning stays fail-closed instead of guessing which control families should be edited.",
-    );
-  }
-
-  if (metadataFallbackCount > 0) {
-    banners.push({
-      id: "metadata",
-      text: `${metadataFallbackCount} row${metadataFallbackCount === 1 ? "" : "s"} stay visible with raw-name fallback because their metadata is incomplete. Those rows are intentionally read-only here.`,
-      tone: "muted",
-    });
+    recoveryReasons.push("PID tuning is not available because the current vehicle family could not be identified.");
   }
 
   if (groups.length === 0 && recoveryReasons.length === 0) {
-    recoveryReasons.push("No purposeful PID groups are available for the current parameter snapshot.");
+    recoveryReasons.push("No matching PID tuning settings are available for this firmware.");
   }
 
   return {
@@ -391,7 +331,6 @@ function buildCuratedView(): CuratedPidView {
     groups,
     banners,
     recoveryReasons,
-    metadataFallbackCount,
   };
 }
 
@@ -407,61 +346,66 @@ function discardItem(name: string) {
 <SetupSectionShell
   sectionId={section.id}
   eyebrow={section.title}
-  title="Vehicle-aware PID surfaces without a raw-parameter fallback"
-  description="PID tuning stays shaped around the current vehicle family. Copter, fixed-wing, and fully refreshed QuadPlane scopes each get a purposeful expert-row surface, while partial VTOL truth stays explicit and fail-closed."
+  title="Vehicle-aware PID tuning workflow"
+  description="Tune one curated control group at a time. Rows appear only when the current firmware exposes matching settings."
   testId={setupWorkspaceTestIds.pidTuningSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.pidTuningDocsLink }]}
 >
   {#snippet body()}
-      <Card.Root class="grid md:grid-cols-3" density="compact" gap="compact" testId={setupWorkspaceTestIds.pidTuningSummary}>
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Family state</p>
-      <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.pidTuningFamilyState}>
-        {curated.familyStateText}
-      </p>
-      <p class="mt-1 text-sm text-text-secondary">{curated.familyDetailText}</p>
-    </div>
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Visible groups</p>
-      <p class="mt-2 text-sm font-semibold text-text-primary">{curated.groups.length}</p>
-      <p class="mt-1 text-sm text-text-secondary">
-        Purpose-built groups stay mounted only when the current snapshot exposes truthful family-specific rows.
-      </p>
-    </div>
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Metadata fallback</p>
-      <p class="mt-2 text-sm font-semibold text-text-primary">{curated.metadataFallbackCount} locked row{curated.metadataFallbackCount === 1 ? "" : "s"}</p>
-      <p class="mt-1 text-sm text-text-secondary">
-        Incomplete enum or label metadata downgrades affected expert rows to raw-name, read-only visibility here.
-      </p>
-    </div>
-  </Card.Root>
-
-  {#each curated.banners as banner (banner.id)}
-    <Alert
-      variant={banner.tone === "warning" ? "warning" : "info"}
-      testId={`${setupWorkspaceTestIds.pidTuningBannerPrefix}-${banner.id}`}
+    <SetupSectionCard
+      icon={Activity}
+      title="Tuning surface"
+      description="Use these groups as a guided starting point; apply and flight-test changes in small steps."
+      surface="elevated"
+      testId={setupWorkspaceTestIds.pidTuningSummary}
     >
-      {banner.text}
-    </Alert>
-  {/each}
+      <div class="grid gap-4 md:grid-cols-3">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Active workflow</p>
+          <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.pidTuningFamilyState}>
+            {curated.familyStateText}
+          </p>
+          <p class="mt-1 text-sm text-text-secondary">{curated.familyDetailText}</p>
+        </div>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Tuning groups</p>
+          <p class="mt-2 text-sm font-semibold text-text-primary">{curated.groups.length}</p>
+          <p class="mt-1 text-sm text-text-secondary">
+            Rate controller, outer-loop, servo, speed, and lift-motor groups appear when their settings exist for this firmware.
+          </p>
+        </div>
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Safe workflow</p>
+          <p class="mt-2 text-sm font-semibold text-text-primary">Small changes</p>
+          <p class="mt-1 text-sm text-text-secondary">
+            Tune one group at a time, apply the staged values, and verify behavior before moving to the next group.
+          </p>
+        </div>
+      </div>
+    </SetupSectionCard>
+
+  <SetupNoticeList
+    notices={curated.banners.map((banner) => ({ ...banner, tone: banner.tone === "warning" ? "warning" : "info" }))}
+    testIdPrefix={setupWorkspaceTestIds.pidTuningBannerPrefix}
+  />
 
   {#if curated.groups.length > 0}
     <div class="space-y-4">
       {#each curated.groups as group (group.id)}
-        <Card.Root as="section" density="compact" testId={`${setupWorkspaceTestIds.pidTuningGroupPrefix}-${group.id}`}>
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Curated group</p>
-              <h4 class="mt-2 text-lg font-semibold text-text-primary">{group.title}</h4>
-              <p class="mt-2 text-sm text-text-secondary">{group.description}</p>
-            </div>
+        <SetupSectionCard
+          icon={Gauge}
+          title={group.title}
+          description={group.description}
+          surface="elevated"
+          testId={`${setupWorkspaceTestIds.pidTuningGroupPrefix}-${group.id}`}
+        >
+          {#snippet actions()}
             <Badge variant="muted">
               {group.rows.length} row{group.rows.length === 1 ? "" : "s"}
             </Badge>
-          </div>
+          {/snippet}
 
-          <div class="mt-4 space-y-3">
+          <SetupFieldStack gap="compact">
             {#each group.rows as row (row.renderId)}
               <ParameterExpertRowComponent
                 envelopeKey={envelopeKey()}
@@ -471,24 +415,29 @@ function discardItem(name: string) {
                 {row}
               />
             {/each}
-          </div>
-        </Card.Root>
+          </SetupFieldStack>
+        </SetupSectionCard>
       {/each}
     </div>
   {/if}
 
   {#if curated.recoveryReasons.length > 0}
-    <Alert
-      variant="warning"
-      title="PID recovery is active."
+    <SetupNotice
+      tone="warning"
       testId={setupWorkspaceTestIds.pidTuningRecovery}
     >
+      <p class="font-semibold text-text-primary">PID tuning settings are unavailable.</p>
       <ul class="mt-2 list-disc space-y-1 pl-5">
         {#each curated.recoveryReasons as reason (reason)}
           <li>{reason}</li>
         {/each}
       </ul>
-    </Alert>
+    </SetupNotice>
   {/if}
+
+  <SetupGuideCard title="PID tuning guide">
+    <p>Change starter values in small increments and verify each step with controlled test flights.</p>
+    <p>Use flight logs and conservative increments before moving from one tuning group to the next.</p>
+  </SetupGuideCard>
   {/snippet}
 </SetupSectionShell>

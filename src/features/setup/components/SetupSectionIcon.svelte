@@ -11,10 +11,10 @@ import {
   Home,
   LayoutDashboard,
   Lock,
+  Navigation,
   Plane,
   Puzzle,
   Radio,
-  Satellite,
   ShieldAlert,
   SlidersHorizontal,
   SlidersVertical,
@@ -41,8 +41,8 @@ let { sectionId, size = 14 }: Props = $props();
   <Compass {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "rc_receiver"}
   <Radio {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "gps"}
-  <Satellite {size} class="shrink-0" aria-hidden="true" />
+{:else if sectionId === "navigation"}
+  <Navigation {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "battery_monitor"}
   <Battery {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "motors_esc"}

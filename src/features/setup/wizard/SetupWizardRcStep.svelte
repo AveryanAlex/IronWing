@@ -6,8 +6,10 @@ import {
   buildParameterItemIndex,
 } from "../../../lib/params/parameter-item-model";
 import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
-import { Alert, Button, Card, Eyebrow, FactTile, HelperText, MonoValue } from "../../../components/ui";
+import { Alert, Card, Eyebrow, FactTile, HelperText, MonoValue } from "../../../components/ui";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import SetupWizardActions from "../shared/SetupWizardActions.svelte";
+import SetupWizardApplyError from "../shared/SetupWizardApplyError.svelte";
 
 // Mode 2 / AETR preset: roll=ch1, pitch=ch2, throttle=ch3, yaw=ch4.
 const MODE_2_PRESET: Record<string, number> = {
@@ -138,28 +140,19 @@ function handleContinue() {
     />
   {/if}
 
-  {#if failureMessage}
-    <Alert variant="danger" density="compact" shadow={false} description={`Preset apply failed. ${failureMessage}`} />
-  {/if}
+  <SetupWizardApplyError message={failureMessage} prefix="Preset apply failed." />
 
-  <div class="flex flex-wrap gap-2">
-    <Button
-      variant="secondary"
-      testId={setupWorkspaceTestIds.wizardStepRcPreset}
-      disabled={view.checkpoint.blocksActions || applyPending}
-      onclick={handlePreset}
-    >
-      {applyPending ? "Applying…" : "Apply Mode 2 preset"}
-    </Button>
-    <Button
-      shape="pill"
-      tone="accent"
-      variant="soft"
-      testId={setupWorkspaceTestIds.wizardStepRcContinue}
-      disabled={continueDisabled}
-      onclick={handleContinue}
-    >
-      Continue
-    </Button>
-  </div>
+  <SetupWizardActions
+    primaryLabel="Continue"
+    primaryDisabled={continueDisabled}
+    primaryTestId={setupWorkspaceTestIds.wizardStepRcContinue}
+    onPrimary={handleContinue}
+    secondaryLabel="Apply Mode 2 preset"
+    secondaryPendingLabel="Applying…"
+    secondaryPending={applyPending}
+    secondaryDisabled={view.checkpoint.blocksActions}
+    secondaryTestId={setupWorkspaceTestIds.wizardStepRcPreset}
+    secondaryPosition="before"
+    onSecondary={handlePreset}
+  />
 </div>

@@ -172,7 +172,7 @@ describe("failsafe-model", () => {
       stagedEdits: {},
     });
 
-    expect(model.recoveryReasons.join(" ")).toContain("FS_ACTION metadata is missing or malformed");
+    expect(model.recoveryReasons.join(" ")).toContain("FS_ACTION option labels are unavailable");
     expect(model.canConfirm).toBe(false);
   });
 
@@ -277,7 +277,7 @@ describe("failsafe-model", () => {
     expect(model.canConfirm).toBe(true);
   });
 
-  it("keeps geofence fail-closed when the fence-type bitmask metadata is malformed", () => {
+  it("keeps geofence read-only when the fence-type bitmask labels are unavailable", () => {
     const metadata = createMetadata();
     metadata.delete("FENCE_TYPE");
 
@@ -294,7 +294,7 @@ describe("failsafe-model", () => {
       stagedEdits: {},
     });
 
-    expect(model.recoveryReasons.join(" ")).toContain("FENCE_TYPE bitmask metadata is missing or malformed");
+    expect(model.recoveryReasons.join(" ")).toContain("FENCE_TYPE checklist labels are unavailable");
     expect(model.canConfirm).toBe(false);
   });
 

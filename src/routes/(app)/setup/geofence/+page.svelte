@@ -1,4 +1,5 @@
 <script lang="ts">
+import { Map, Ruler, Shield } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import {
@@ -10,18 +11,15 @@ import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import { buildGeofenceModel, type SafetyVehicleFamily } from "../../../../lib/setup/failsafe-model";
 import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
-import SetupBitmaskChecklist from "../../../../features/setup/shared/SetupBitmaskChecklist.svelte";
-import SetupParamEnumControl from "../../../../features/setup/shared/SetupParamEnumControl.svelte";
+import SetupBitmaskTable from "../../../../features/setup/shared/SetupBitmaskTable.svelte";
+import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
+import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
+import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
+import SetupParamEditorRow from "../../../../features/setup/shared/SetupParamEditorRow.svelte";
+import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
-import {
-  Alert,
-  Card,
-  EmptyState,
-  Eyebrow,
-  HelperText,
-  Input,
-  StagedBadge as SetupStagedBadge,
-} from "../../../../components/ui";
+import { resolveSetupDraftNumber, resolveSetupEnumOptions } from "../../../../features/setup/shared/parameter-editing";
+import { Eyebrow, HelperText } from "../../../../components/ui";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import {
   getSetupWorkspaceRouteContext,
@@ -251,13 +249,12 @@ function currentValueText(item: ParameterItemModel | null): string {
   return item?.valueLabel ?? item?.valueText ?? "Unavailable";
 }
 
-function enumOptions(name: string) {
-  const values = params.metadata?.get(name)?.values;
-  if (!Array.isArray(values)) {
-    return [];
-  }
+function visibleFields(fields: FenceFieldConfig[]): FenceFieldConfig[] {
+  return fields.filter((field) => item(field.name));
+}
 
-  return values.filter((entry) => Number.isFinite(entry.code) && entry.label.trim().length > 0);
+function enumOptions(name: string) {
+  return resolveSetupEnumOptions(params.metadata?.get(name)?.values);
 }
 
 function draftValue(name: string, fallback: number | null): string {
@@ -281,13 +278,7 @@ function setDraft(name: string, value: string) {
 }
 
 function resolveDraftNumber(name: string, fallback: number | null): number | null {
-  const raw = draftValue(name, fallback).trim();
-  if (raw.length === 0) {
-    return null;
-  }
-
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : null;
+  return resolveSetupDraftNumber(draftValue(name, fallback));
 }
 
 function canAutostage(
@@ -336,160 +327,123 @@ function toggleFenceType(bit: number) {
 
   paramsStore.stageParameterEdit(fenceTypeItem, currentMask ^ (1 << bit));
 }
+
+function setFenceTypes(checked: boolean) {
+  if (!fenceTypeItem || actionsBlocked || fenceTypeItem.readOnly === true || fenceTypeEntries.length === 0) {
+    return;
+  }
+
+  const nextMask = checked ? fenceTypeEntries.reduce((mask, entry) => mask | (1 << Number(entry.key)), 0) : 0;
+  paramsStore.stageParameterEdit(fenceTypeItem, nextMask);
+}
 </script>
 
 <SetupSectionShell
   sectionId={section.id}
   eyebrow={section.title}
-  title="Boundary enforcement that stays honest about vehicle-family limits"
-  description="Geofence keeps the selected boundary types, breach action, and family-specific range controls explicit. Copter altitude limits, plane ceiling protection, and rover radius-only fences stay separate instead of collapsing into one raw-parameter bucket."
+  title="Geofence enable, type, breach, and boundary settings"
+  description="Review fence enable state, selected boundary types, breach action, and vehicle-specific limits. Copter altitude/radius, plane ceiling, and rover radius controls remain separate."
   testId={setupWorkspaceTestIds.geofenceSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.geofenceDocsLink }]}
 >
   {#snippet body()}
-      <Card.Root
-        density="compact"
-        gap="compact"
-        class="grid md:grid-cols-3"
-        testId={setupWorkspaceTestIds.geofenceSummary}
-      >
-    <div>
-      <Eyebrow tracking="widest">Fence state</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary">{model.fenceEnabled ? "Enabled" : "Disabled"}</p>
-      <HelperText class="mt-1">{model.selectedTypeCount > 0 ? model.selectedTypeLabels.join(", ") : "No fence types selected yet."}</HelperText>
-    </div>
-    <div>
-      <Eyebrow tracking="widest">Vehicle family</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary">{model.family}</p>
-      <HelperText class="mt-1">The visible boundary controls stay limited to what this vehicle family actually supports.</HelperText>
-    </div>
-    <div>
-      <Eyebrow tracking="widest">Stage state</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary">{model.hasPendingChanges ? "Queued fence edits present" : "No queued fence edits"}</p>
-      <HelperText class="mt-1">Fence confirmation stays conservative until the shared review tray is clear and at least one type is configured when enabled.</HelperText>
-    </div>
-  </Card.Root>
-
-  {#if model.recoveryReasons.length > 0}
-      <Alert
-        variant="warning"
-        density="compact"
-        shadow={false}
-      title="Geofence is staying fail-closed while the required rows or fence bitmask metadata are partial."
-      testId={setupWorkspaceTestIds.geofenceRecovery}
+    <SetupSectionCard
+      icon={Shield}
+      title="Fence summary"
+      description="Confirm enforcement state and selected fence types before flight."
+      surface="elevated"
+      testId={setupWorkspaceTestIds.geofenceSummary}
     >
-      <ul class="mt-2 list-disc space-y-1 pl-5">
-        {#each model.recoveryReasons as reason (reason)}
-          <li>{reason}</li>
-        {/each}
-      </ul>
-    </Alert>
-  {/if}
+      <div class="grid gap-3 md:grid-cols-3">
+        <div>
+          <Eyebrow tracking="widest">Fence state</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary">{model.fenceEnabled ? "Enabled" : "Disabled"}</p>
+          <HelperText class="mt-1">{model.selectedTypeCount > 0 ? model.selectedTypeLabels.join(", ") : "No fence types selected yet."}</HelperText>
+        </div>
+        <div>
+          <Eyebrow tracking="widest">Vehicle family</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary">{model.family}</p>
+          <HelperText class="mt-1">Only boundary controls supported by this vehicle family are shown.</HelperText>
+        </div>
+        <div>
+          <Eyebrow tracking="widest">Staged state</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary">{model.hasPendingChanges ? "Fence edits staged" : "No staged fence edits"}</p>
+          <HelperText class="mt-1">When the fence is enabled, select at least one boundary type before confirming the section.</HelperText>
+        </div>
+      </div>
+    </SetupSectionCard>
 
-  {#each model.warningTexts as text, index (text)}
-      <Alert
-        variant="warning"
-        density="compact"
-        shadow={false}
-      testId={`${setupWorkspaceTestIds.geofenceBannerPrefix}-${index}`}
-    >
-      {text}
-    </Alert>
-  {/each}
+  <SetupNoticeList notices={model.warningTexts} tone="warning" testIdPrefix={setupWorkspaceTestIds.geofenceBannerPrefix} />
 
-  <Card.Root as="article" density="compact" testId={setupWorkspaceTestIds.geofenceTypeChecklist}>
-    <div>
-      <Eyebrow tracking="widest">Fence boundary types</Eyebrow>
-      <HelperText class="mt-2">
-        Circle, polygon, and altitude fence selections stay visible here. When the bitmask metadata is malformed, the checklist stays read-only.
-      </HelperText>
-      <Eyebrow class="mt-3" tracking="widest" testId={`${setupWorkspaceTestIds.geofenceCurrentPrefix}-FENCE_TYPE`}>
-        Current · {fenceTypeItem?.valueLabel ?? fenceTypeItem?.valueText ?? "Unavailable"}
-      </Eyebrow>
+  <SetupSectionCard
+    icon={Map}
+    title="Fence boundary types"
+    description="Select the enabled fence shapes and altitude checks supported by this firmware."
+    surface="elevated"
+    testId={setupWorkspaceTestIds.geofenceTypeChecklist}
+  >
       {#if params.stagedEdits.FENCE_TYPE}
         <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.geofenceStagedPrefix}-FENCE_TYPE`}>
           Queued · {params.stagedEdits.FENCE_TYPE.nextValueText}
         </p>
       {/if}
-    </div>
 
     {#if fenceTypeEntries.length > 0}
-      <div class="mt-4">
-        <SetupBitmaskChecklist
-          disabled={actionsBlocked || fenceTypeItem?.readOnly === true}
-          items={fenceTypeEntries}
-          onToggle={(entry) => toggleFenceType(Number(entry.key))}
-          title="Configured fence types"
-        />
-      </div>
+      <SetupBitmaskTable
+        description="Select the fence shapes and altitude checks that should be active when the geofence is enabled."
+        disabled={actionsBlocked || fenceTypeItem?.readOnly === true}
+        embedded
+        items={fenceTypeEntries}
+        onSetAll={setFenceTypes}
+        onToggle={(entry) => toggleFenceType(Number(entry.key))}
+        title="Configured fence types"
+      />
     {:else}
-      <EmptyState class="mt-4" title="Fence metadata unavailable" description="Fence type metadata is incomplete for this scope, so the checklist stays read-only." />
+      <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
     {/if}
-  </Card.Root>
+  </SetupSectionCard>
 
   <div class="space-y-3">
     {#each cards as card (card.id)}
-      <Card.Root as="article" density="compact" testId={`${setupWorkspaceTestIds.geofenceCardPrefix}-${card.id}`}>
-        <div>
-          <Eyebrow tracking="widest">{card.title}</Eyebrow>
-          <h4 class="mt-2 text-base font-semibold text-text-primary">{card.summary}</h4>
-        </div>
-
-        <div class="mt-4 grid gap-3 xl:grid-cols-2">
-          {#each card.fields as field (field.name)}
-            <Card.Root density="compact" surface="muted">
-              <div class="flex items-center gap-2">
-                <label class="text-xs font-semibold uppercase tracking-wide text-text-muted" for={`${card.id}-${field.name}`}>
-                  {field.label}
-                </label>
-                {#if params.stagedEdits[field.name]}
-                  <SetupStagedBadge
-                    name={field.name}
-                    onUnstage={unstage}
-                    testId={`${setupWorkspaceTestIds.geofenceStagedPrefix}-${field.name}`}
-                  />
-                {/if}
-              </div>
-              <HelperText class="mt-2">{field.description}</HelperText>
-              <Eyebrow class="mt-3" tracking="widest" testId={`${setupWorkspaceTestIds.geofenceCurrentPrefix}-${field.name}`}>
-                Current · {currentValueText(item(field.name))}
-              </Eyebrow>
-
-              <div class="mt-4">
-                {#if field.kind === "enum"}
-                  <SetupParamEnumControl
-                    disabled={actionsBlocked || enumOptions(field.name).length === 0 || !item(field.name)}
-                    id={`${card.id}-${field.name}`}
-                    onChange={(value) => stageDraftValue(field, value)}
-                    options={enumOptions(field.name)}
-                    testId={`${setupWorkspaceTestIds.geofenceInputPrefix}-${field.name}`}
-                    value={draftValue(field.name, item(field.name)?.value ?? null)}
-                  />
-                {:else}
-                  <div class="flex items-center gap-2">
-                    <Input
-                      data-testid={`${setupWorkspaceTestIds.geofenceInputPrefix}-${field.name}`}
-                      disabled={actionsBlocked || !item(field.name)}
-                      id={`${card.id}-${field.name}`}
-                      min={field.min}
-                      onchange={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
-                      oninput={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
-                      step={field.step}
-                      type="number"
-                      value={draftValue(field.name, item(field.name)?.value ?? null)}
-                    />
-                    {#if field.unit}
-                      <span class="shrink-0 text-xs text-text-muted">{field.unit}</span>
-                    {/if}
-                  </div>
-                {/if}
-
-              </div>
-            </Card.Root>
-          {/each}
-        </div>
-      </Card.Root>
+      <SetupSectionCard
+        icon={Ruler}
+        title={card.title}
+        description={card.summary}
+        surface="elevated"
+        testId={`${setupWorkspaceTestIds.geofenceCardPrefix}-${card.id}`}
+      >
+        {#if visibleFields(card.fields).length > 0}
+          <SetupFieldStack divided>
+            {#each visibleFields(card.fields) as field (field.name)}
+              <SetupParamEditorRow
+                item={item(field.name)}
+                id={`${card.id}-${field.name}`}
+                label={field.label}
+                description={field.description}
+                mode={field.kind}
+                options={enumOptions(field.name)}
+                value={draftValue(field.name, item(field.name)?.value ?? null)}
+                stagedEdits={params.stagedEdits}
+                stagedTestId={`${setupWorkspaceTestIds.geofenceStagedPrefix}-${field.name}`}
+                onUnstage={unstage}
+                onChange={(value) => stageDraftValue(field, value)}
+                inputTestId={`${setupWorkspaceTestIds.geofenceInputPrefix}-${field.name}`}
+                disabled={actionsBlocked}
+                min={field.min}
+                step={field.step}
+                unit={field.unit ?? null}
+              />
+            {/each}
+          </SetupFieldStack>
+        {:else}
+          <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
+        {/if}
+      </SetupSectionCard>
     {/each}
-      </div>
+
+    <SetupGuideCard title="Geofence review" description="Use the enable, type, breach action, and boundary controls together.">
+      <p>When fence enforcement is enabled, verify at least one boundary type is selected and check the planned radius or altitude limits against the operating area.</p>
+    </SetupGuideCard>
+  </div>
   {/snippet}
 </SetupSectionShell>

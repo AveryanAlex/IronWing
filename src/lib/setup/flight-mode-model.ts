@@ -305,15 +305,15 @@ export function buildFlightModeModel(input: FlightModeModelInput): FlightModeMod
   let availabilityState: FlightModeAvailabilityState = "unavailable";
   let options: FlightModeOption[] = [];
   let availabilityText = "Mode list unavailable";
-  let availabilityDetail = "Available flight modes have not been confirmed for this scope yet, so slot editing stays visible but fail-closed.";
+  let availabilityDetail = "Available flight modes have not been reported yet, so slot editing remains read-only.";
 
   if (input.liveConnected && normalizedCurrentModes.options.length > 0) {
     availabilityState = "live";
     options = normalizedCurrentModes.options;
     availabilityText = normalizedCurrentModes.malformedCount > 0 ? "Live, partial" : "Live";
     availabilityDetail = normalizedCurrentModes.malformedCount > 0
-      ? "Malformed available-mode rows were dropped. Valid mode names stay visible, but unsupported values fall back to raw numbers."
-      : "Available flight modes are live for this scope and can be staged through the shared review tray.";
+      ? "Malformed available-mode rows were dropped. Valid mode names stay visible, and unsupported values are shown by number."
+      : "Available flight modes are live for this scope and can be staged for review.";
   } else if (
     input.sameScope
     && normalizedPreviousModes.options.length > 0

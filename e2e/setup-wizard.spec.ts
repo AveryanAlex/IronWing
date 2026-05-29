@@ -137,11 +137,11 @@ test.describe("setup wizard proof", () => {
     await page
       .getByTestId(setupWorkspaceTestIds.wizardStepArmingContinue)
       .click();
-    await expect(wizardStepBodyLocator(page, "gps")).toBeVisible();
+    await expect(wizardStepBodyLocator(page, "navigation")).toBeVisible();
 
     // Skip every recommended step through the shell's Skip button.
     const recommendedSteps = [
-      "gps",
+      "navigation",
       "battery_monitor",
       "failsafe",
       "flight_modes",

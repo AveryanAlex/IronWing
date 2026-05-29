@@ -132,7 +132,7 @@ describe("serial-port-model", () => {
     ]);
   });
 
-  it("exposes reboot-required pending changes and truthful protocol summaries", () => {
+  it("exposes reboot-required pending changes and protocol summaries", () => {
     const model = buildSerialPortModel({
       paramStore: createParamStore({
         SERIAL1_PROTOCOL: 2,
@@ -149,7 +149,7 @@ describe("serial-port-model", () => {
     expect(model.hasPendingChanges).toBe(true);
     expect(model.summaryText).toContain("2 detected");
     expect(model.summaryText).toContain("GPS on SERIAL3");
-    expect(model.rebootWarningText).toContain("require a reboot");
+    expect(model.rebootWarningText).toContain("require apply and reboot");
     expect(model.ports.find((row) => row.prefix === "SERIAL1")?.hasPendingChange).toBe(true);
   });
 
@@ -174,13 +174,13 @@ describe("serial-port-model", () => {
       stagedEdits: {},
     });
 
-    expect(model.recoveryText).toContain("SERIAL1_BAUD metadata is missing or malformed");
-    expect(model.recoveryText).toContain("Full Parameters recovery");
+    expect(model.recoveryText).toContain("SERIAL1_BAUD option labels are unavailable");
+    expect(model.recoveryText).toContain("Use Full Parameters");
     expect(model.ports[0]?.baudMetadataReady).toBe(false);
-    expect(model.ports[0]?.recoveryText).toContain("SERIAL1_BAUD metadata is missing or malformed");
+    expect(model.ports[0]?.recoveryText).toContain("SERIAL1_BAUD option labels are unavailable");
   });
 
-  it("tracks protocol ownership summaries across sparse port sets", () => {
+  it("tracks protocol summaries across sparse port sets", () => {
     const model = buildSerialPortModel({
       paramStore: createParamStore({
         SERIAL1_PROTOCOL: RC_PROTOCOL,

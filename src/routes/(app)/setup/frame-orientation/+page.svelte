@@ -8,14 +8,15 @@ import { getMotorLayout } from "../../../../data/motor-layouts";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import { deriveVehicleProfile, getVehicleSlug, type VehicleProfile } from "../../../../lib/setup/vehicle-profile";
 import { getVtolLayoutModel, type MotorDiagramModel } from "../../../../lib/setup/vtol-layout-model";
-import type { SetupWorkspaceCheckpointState, SetupWorkspaceSection } from "../../../../lib/stores/setup-workspace";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import MotorDiagram from "../../../../features/setup/shared/MotorDiagram.svelte";
 import SetupCard from "../../../../features/setup/shared/SetupCard.svelte";
-import SetupCardHeader from "../../../../features/setup/shared/SetupCardHeader.svelte";
+import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
 import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
+import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
 import SetupParamSelect from "../../../../features/setup/shared/SetupParamSelect.svelte";
+import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import {
   getSetupWorkspaceRouteContext,
   setupRouteSection,
@@ -146,48 +147,6 @@ let previewOrientationLabel = $derived(
     orientationItem?.valueText ??
     "Orientation unavailable",
 );
-let frameRecoveryReasons = $derived.by(() => {
-  const reasons: string[] = [];
-
-  if (profile.isPlane) {
-    if (profile.frameParamFamily === "quadplane") {
-      if (!frameClassItem || frameClassOptions.length === 0) {
-        reasons.push(
-          "QuadPlane frame class metadata is missing, so the editor cannot prove the available lift-motor families.",
-        );
-      }
-      if (!frameTypeItem || frameTypeOptions.length === 0) {
-        reasons.push(
-          "QuadPlane frame type metadata is missing, so the editor cannot prove the available VTOL layouts.",
-        );
-      }
-    } else if (!qEnableItem || qEnableOptions.length === 0) {
-      reasons.push(
-        "QuadPlane enable metadata is missing, so the section cannot prove VTOL ownership or offer a safe enable path.",
-      );
-    }
-
-    return reasons;
-  }
-
-  if (!frameClassItem || frameClassOptions.length === 0) {
-    reasons.push("Frame class metadata is missing, so the guided editor cannot prove the available layouts.");
-  }
-  if (!frameTypeItem || frameTypeOptions.length === 0) {
-    reasons.push(
-      "Frame type metadata is missing, so the guided editor would have to guess the available frame layouts.",
-    );
-  }
-
-  return reasons;
-});
-let orientationRecoveryReason = $derived.by(() => {
-  if (!orientationItem || orientationOptions.length === 0) {
-    return "Orientation metadata is missing, so the section cannot offer a truthful board-orientation picker.";
-  }
-
-  return null;
-});
 let retainedFailures = $derived(
   VTOL_RECOVERY_NAMES.map((name) => params.retainedFailures[name]).filter(
     (failure): failure is NonNullable<typeof failure> => failure != null,
@@ -261,7 +220,7 @@ function frameStateLabel(profile: VehicleProfile): string {
       case "awaiting-refresh":
         return "Awaiting VTOL refresh";
       case "partial-refresh":
-        return "Partial VTOL refresh";
+        return "VTOL settings incomplete";
       case "vtol-ready":
         switch (profile.subtype) {
           case "tiltrotor":
@@ -294,26 +253,26 @@ function frameStateDetail(profile: VehicleProfile): string {
       case "enable-pending":
         return "Q_ENABLE is staged, but the vehicle has not rebooted and refreshed the VTOL parameter family yet.";
       case "awaiting-refresh":
-        return "VTOL is enabled, but Q_FRAME_CLASS and Q_FRAME_TYPE have not returned yet. Keep motor testing blocked until refresh completes.";
+        return "VTOL is enabled, but Q_FRAME_CLASS and Q_FRAME_TYPE are not available yet. Refresh parameters before motor testing.";
       case "partial-refresh":
-        return "Only part of the Q_FRAME family is present, so the section stays fail-closed instead of guessing the QuadPlane layout.";
+        return "Only part of the Q_FRAME family is present. Refresh parameters before changing the QuadPlane layout.";
       case "vtol-ready":
-        return "QuadPlane Q_FRAME_* parameters own frame truth for this scope, and staged edits still flow through the shared review tray.";
+        return "QuadPlane Q_FRAME_* parameters define the VTOL frame layout.";
       case "plain-plane":
       default:
-        return "Plane firmware is active and VTOL is not enabled yet. Use the QuadPlane enable path before expecting motor-layout truth here.";
+        return "Plane firmware is active and VTOL is not enabled yet. Enable QuadPlane before using VTOL frame settings.";
     }
   }
 
   if (profile.isCopter) {
-    return "FRAME_CLASS and FRAME_TYPE remain the authoritative layout controls for this scope.";
+    return "FRAME_CLASS and FRAME_TYPE define the active multicopter layout.";
   }
 
   if (profile.isRover) {
-    return "This vehicle family does not expose VTOL frame ownership here, so the section keeps only safe summary/recovery guidance.";
+    return "This vehicle family does not use VTOL frame settings here.";
   }
 
-  return "Vehicle type could not be resolved, so the section stays explicit instead of inventing hidden frame ownership.";
+  return "Vehicle type could not be resolved. Connect a vehicle and refresh parameters before changing frame settings.";
 }
 
 function framePanelTitle(profile: VehicleProfile): string {
@@ -362,24 +321,24 @@ function layoutStateLabel(profile: VehicleProfile, layoutModel: MotorDiagramMode
 function layoutStateDetail(profile: VehicleProfile, layoutModel: MotorDiagramModel | null): string {
   if (profile.frameParamFamily === "quadplane") {
     if (!layoutModel) {
-      return "QuadPlane layout preview stays blocked until the refreshed Q_FRAME_* values are present and coherent.";
+      return "QuadPlane layout preview appears after refreshed Q_FRAME_* values are available.";
     }
 
     return (
       layoutModel.message ??
-      `The active VTOL layout currently exposes ${layoutModel.motors.length} mapped motors for downstream testing surfaces.`
+      `The active VTOL layout currently maps ${layoutModel.motors.length} motors for motor testing.`
     );
   }
 
   if (previewStandardLayout) {
-    return `${previewStandardLayout.motors.length} mapped motors in the authoritative FRAME_CLASS / FRAME_TYPE combination.`;
+    return `${previewStandardLayout.motors.length} mapped motors in the selected FRAME_CLASS / FRAME_TYPE combination.`;
   }
 
   if (profile.isPlane) {
-    return "A Plane-only scope cannot claim motor-layout truth until VTOL ownership is enabled and refreshed.";
+    return "A Plane-only scope needs QuadPlane enabled and refreshed before a VTOL motor layout is available.";
   }
 
-  return "The selected frame is not present in the authoritative motor-layout map yet.";
+  return "The selected frame is not present in the motor-layout map yet.";
 }
 
 function buildFrameBanners(input: {
@@ -395,14 +354,14 @@ function buildFrameBanners(input: {
         banners.push({
           id: "plain-plane",
           tone: "info",
-          text: "Plane firmware can expose a QuadPlane setup path here. Enable Q_ENABLE, apply the staged change through the shared review tray, reboot, and refresh parameters before expecting VTOL frame or motor truth.",
+          text: "Plane firmware can expose a QuadPlane setup path here. Enable Q_ENABLE, apply the staged change, reboot, and refresh parameters before configuring VTOL frame settings.",
         });
         break;
       case "enable-pending":
         banners.push({
           id: "enable-pending",
           tone: "warning",
-          text: "QuadPlane enable is staged. Apply the change, reboot the vehicle, and wait for the refreshed Q_* parameter family before testing motors or trusting layout ownership.",
+          text: "QuadPlane enable is staged. Apply the change, reboot the vehicle, and refresh the Q_* parameter family before testing motors.",
         });
         break;
       case "awaiting-refresh":
@@ -416,7 +375,7 @@ function buildFrameBanners(input: {
         banners.push({
           id: "partial-refresh",
           tone: "warning",
-          text: "Only part of the QuadPlane frame family is available right now. Refresh parameters before changing VTOL frame settings so the section does not guess the wrong layout.",
+          text: "Only part of the QuadPlane frame family is available right now. Refresh parameters before changing VTOL frame settings.",
         });
         break;
       default:
@@ -429,7 +388,7 @@ function buildFrameBanners(input: {
       banners.push({
         id: "tiltrotor",
         tone: "info",
-        text: "Tilt-rotor QuadPlane detected. Lift-motor frame truth still comes from Q_FRAME_CLASS and Q_FRAME_TYPE after the VTOL params refresh.",
+        text: "Tilt-rotor QuadPlane detected. Lift-motor frame layout comes from Q_FRAME_CLASS and Q_FRAME_TYPE after the VTOL parameter refresh.",
       });
     }
 
@@ -437,7 +396,7 @@ function buildFrameBanners(input: {
       banners.push({
         id: "tailsitter",
         tone: "info",
-        text: "Tailsitter QuadPlane detected. Keep using the refreshed Q_FRAME_* values for layout truth, and verify motor ownership manually where the preview stays advisory.",
+        text: "Tailsitter QuadPlane detected. Use the refreshed Q_FRAME_* values for layout selection and verify motor mapping manually when the preview is advisory.",
       });
     }
   }
@@ -446,7 +405,7 @@ function buildFrameBanners(input: {
     banners.push({
       id: "unsupported-subtype",
       tone: "danger",
-      text: "Both tilt-rotor and tailsitter flags are enabled. Keep using the shared review tray and a full parameter refresh before trusting any VTOL layout-dependent guidance.",
+      text: "Both tilt-rotor and tailsitter flags are enabled. Refresh the full parameter list before using VTOL layout-dependent guidance.",
     });
   }
 
@@ -465,8 +424,8 @@ function buildFrameBanners(input: {
 <SetupSectionShell
   sectionId={section.id}
   eyebrow={section.title}
-  title="Plane vs QuadPlane truth stays explicit here"
-  description="Frame, VTOL enable, and board orientation stay separate from apply ownership: every parameter-backed change stages into the shared review tray, while stale or partial Q-frame truth fails closed instead of bluffing actuator safety."
+  title="Configure frame, QuadPlane, and board orientation"
+  description="Choose the ArduPilot frame family and layout, enable QuadPlane options where supported, and set the physical board orientation. Parameter-backed changes are staged for review before apply."
   testId={setupWorkspaceTestIds.frameSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.frameDocsLink }]}
 >
@@ -485,7 +444,7 @@ function buildFrameBanners(input: {
       <p class="mt-1 text-sm text-text-secondary">{frameStateDetail(profile)}</p>
     </div>
       <div>
-        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Layout truth</p>
+        <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Layout</p>
         <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.frameLayoutState}>
           {layoutStateLabel(profile, previewVtolLayout)}
         </p>
@@ -502,7 +461,7 @@ function buildFrameBanners(input: {
 
   {#if retainedFailures.length > 0}
     <SetupNotice tone="danger" testId={setupWorkspaceTestIds.frameFailure}>
-      <p class="font-semibold text-text-primary">The shared review tray is still retaining frame or orientation failures.</p>
+      <p class="font-semibold text-text-primary">Some frame or orientation changes could not be applied.</p>
       <ul class="mt-2 list-disc space-y-1 pl-5">
         {#each retainedFailures as failure (failure.name)}
           <li>{failure.name} · {failure.message}</li>
@@ -511,17 +470,11 @@ function buildFrameBanners(input: {
     </SetupNotice>
   {/if}
 
-  {#each frameBanners as banner (banner.id)}
-    <SetupNotice tone={banner.tone} testId={`${setupWorkspaceTestIds.frameBannerPrefix}-${banner.id}`}>
-      <p>{banner.text}</p>
-    </SetupNotice>
-  {/each}
+  <SetupNoticeList notices={frameBanners} testIdPrefix={setupWorkspaceTestIds.frameBannerPrefix} />
 
   <div class="space-y-4">
     {#if showQEnableCard}
-      <SetupCard testId={`${setupWorkspaceTestIds.frameCardPrefix}-Q_ENABLE`}>
-        <SetupCardHeader icon={Box} title="QuadPlane Configuration" />
-
+      <SetupSectionCard icon={Box} title="QuadPlane Configuration" compact testId={`${setupWorkspaceTestIds.frameCardPrefix}-Q_ENABLE`}>
         <SetupParamSelect
           id="setup-frame-q-enable"
           value={qEnableDraft}
@@ -536,14 +489,13 @@ function buildFrameBanners(input: {
           onChange={(value) => stage(qEnableItem, value)}
           onUnstage={unstage}
         />
-      </SetupCard>
+      </SetupSectionCard>
     {/if}
 
     {#if showFrameCards && frameClassItem && frameTypeItem}
-      <SetupCard>
-        <SetupCardHeader icon={Box} title={framePanelTitle(profile)} />
-
-        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <SetupSectionCard icon={Box} title={framePanelTitle(profile)} compact>
+        <SetupFieldStack>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-${frameClassItem.name}`}>
             <SetupParamSelect
               id={`setup-frame-${frameClassItem.name}`}
@@ -551,8 +503,8 @@ function buildFrameBanners(input: {
               options={frameClassOptions}
               label={frameClassItem.label}
               description={frameClassItem.description ?? (profile.frameParamFamily === "quadplane"
-                ? "Choose the authoritative QuadPlane lift-motor frame family after the VTOL params refresh."
-                : "Choose the current frame family reported by ArduPilot metadata.")}
+                ? "Choose the QuadPlane lift-motor frame family after the VTOL parameter refresh."
+                : "Choose the current frame family reported by ArduPilot.")}
               testId={`${setupWorkspaceTestIds.frameInputPrefix}-${frameClassItem.name}`}
               disabled={checkpoint.blocksActions}
               stagedName={params.stagedEdits[frameClassItem.name] ? frameClassItem.name : undefined}
@@ -570,7 +522,7 @@ function buildFrameBanners(input: {
               options={frameTypeOptions}
               label={frameTypeItem.label}
               description={frameTypeItem.description ?? (profile.frameParamFamily === "quadplane"
-                ? "Choose the authoritative QuadPlane layout inside the refreshed VTOL frame family."
+                ? "Choose the QuadPlane layout inside the refreshed VTOL frame family."
                 : "Choose the layout inside the current frame family.")}
               testId={`${setupWorkspaceTestIds.frameInputPrefix}-${frameTypeItem.name}`}
               disabled={checkpoint.blocksActions}
@@ -583,7 +535,7 @@ function buildFrameBanners(input: {
           </div>
         </div>
 
-        <div class="mt-4 flex flex-col items-center gap-2 rounded-md border border-border/50 bg-bg-secondary/40 py-4">
+        <div class="flex flex-col items-center gap-2 rounded-md border border-border/50 bg-bg-secondary/40 py-4">
           <MotorDiagram
             model={profile.frameParamFamily === "quadplane" ? previewVtolLayout : null}
             frameClass={profile.frameParamFamily !== "quadplane" ? previewFrameClass : null}
@@ -592,13 +544,12 @@ function buildFrameBanners(input: {
           />
           <span class="text-[10px] text-text-muted">{motorPreviewLabel}</span>
         </div>
-      </SetupCard>
+        </SetupFieldStack>
+      </SetupSectionCard>
     {/if}
 
     {#if showOrientationCard && orientationItem}
-      <SetupCard testId={`${setupWorkspaceTestIds.frameCardPrefix}-AHRS_ORIENTATION`}>
-        <SetupCardHeader icon={Compass} title="Board Orientation" />
-
+      <SetupSectionCard icon={Compass} title="Board Orientation" compact testId={`${setupWorkspaceTestIds.frameCardPrefix}-AHRS_ORIENTATION`}>
         <SetupParamSelect
           id="setup-frame-ahrs-orientation"
           value={orientationDraft}
@@ -613,22 +564,8 @@ function buildFrameBanners(input: {
           onChange={(value) => stage(orientationItem, value)}
           onUnstage={unstage}
         />
-      </SetupCard>
+      </SetupSectionCard>
     {/if}
   </div>
-
-  {#if frameRecoveryReasons.length > 0 || orientationRecoveryReason}
-    <SetupNotice tone="warning" testId={setupWorkspaceTestIds.frameRecovery}>
-      <p class="font-semibold text-text-primary">This section is staying in recovery mode instead of guessing hidden frame or orientation truth.</p>
-      <ul class="mt-2 list-disc space-y-1 pl-5">
-        {#each frameRecoveryReasons as reason (reason)}
-          <li>{reason}</li>
-        {/each}
-        {#if orientationRecoveryReason}
-          <li>{orientationRecoveryReason}</li>
-        {/if}
-      </ul>
-    </SetupNotice>
-  {/if}
   {/snippet}
 </SetupSectionShell>

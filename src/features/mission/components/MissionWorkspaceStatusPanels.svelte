@@ -85,7 +85,7 @@ function replayOverlayVariant(phase: ReplayMapOverlayState["phase"]): "danger" |
       {#each view.importReview.choices as choice (choice.domain)}
         <Card.Root as="article" density="compact" surface="primary" tone="warning" testId={importReviewChoiceTestId(choice.domain)}>
           <Eyebrow>{choice.label}</Eyebrow>
-          <HelperText class="mt-2" size="xs">Current · {choice.currentSummary}</HelperText>
+          <HelperText class="mt-2" size="xs">Existing · {choice.currentSummary}</HelperText>
           <HelperText class="mt-1" size="xs">Incoming · {choice.incomingSummary}</HelperText>
           <ButtonGroup class="mt-3 flex-wrap">
             <Button

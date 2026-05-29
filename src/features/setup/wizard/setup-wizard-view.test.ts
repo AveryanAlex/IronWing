@@ -27,7 +27,7 @@ function createSnapshot(): WorkspaceSnapshot {
       seek_epoch: 0,
       reset_revision: 0,
     },
-    gpsConfigured: null,
+    navigationConfigured: null,
     batteryConfigured: null,
     checkpointPhase: "idle",
   };

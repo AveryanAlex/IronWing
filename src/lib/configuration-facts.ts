@@ -100,7 +100,7 @@ export function deriveSetupSectionStatuses(input: SetupFactsInput): Map<SetupSec
             case "frame_orientation":
                 statuses.set(id, statusFromConfigured(facts?.frame));
                 break;
-            case "gps":
+            case "navigation":
                 statuses.set(id, statusFromConfigured(facts?.gps));
                 break;
             case "battery_monitor":

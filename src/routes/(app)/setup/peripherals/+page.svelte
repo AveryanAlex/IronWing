@@ -5,11 +5,11 @@ import { fromStore } from "svelte/store";
 import { getParamsStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterExpertView, type ParameterExpertRow } from "../../../../lib/params/parameter-expert-view";
-import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import ParameterExpertRowComponent from "../../../../features/params/components/ParameterExpertRow.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
-import { Alert, Badge, Button, Card, EmptyState, Eyebrow, HelperText } from "../../../../components/ui";
+import { SetupFieldStack, SetupGuideCard, SetupSectionCard } from "../../../../features/setup/shared";
+import { Badge, Button, Card, EmptyState, Eyebrow, HelperText } from "../../../../components/ui";
 import {
   getSetupWorkspaceRouteContext,
   setupRouteSection,
@@ -62,6 +62,8 @@ const EXCLUDED_PREFIXES = [
   "GPS_",
   "GPS1_",
   "GPS2_",
+  "COMPASS_",
+  "BARO_",
   "SERIAL",
   "RC",
   "RCMAP_",
@@ -133,12 +135,6 @@ const KNOWN_GROUPS: ReadonlyArray<PeripheralGroupDef> = [
     enableParams: ["MNT_TYPE", "MNT1_TYPE", "MNT2_TYPE"],
   },
   {
-    id: "compass",
-    label: "Compass",
-    prefixes: ["COMPASS_"],
-    enableParams: ["COMPASS_ENABLE"],
-  },
-  {
     id: "can",
     label: "CAN bus",
     prefixes: ["CAN_", "CAN_D1_", "CAN_D2_", "CAN_P1_", "CAN_P2_"],
@@ -179,7 +175,6 @@ let knownGroups = $derived(
   KNOWN_GROUPS.map((group) => buildKnownGroup(group)).filter((group): group is PeripheralGroupModel => group !== null),
 );
 let extraGroups = $derived(buildExtraGroups());
-let allGroups = $derived([...knownGroups, ...extraGroups]);
 let visibleKnownGroups = $derived(
   showConfiguredOnly ? knownGroups.filter((group) => group.configured === true) : knownGroups,
 );
@@ -187,7 +182,6 @@ let visibleExtraGroups = $derived(
   showConfiguredOnly ? extraGroups.filter((group) => group.configured === true) : extraGroups,
 );
 let visibleGroups = $derived([...visibleKnownGroups, ...visibleExtraGroups]);
-let metadataFallbackCount = $derived(allGroups.reduce((count, group) => count + group.lockedCount, 0));
 
 function envelopeKey() {
   const activeEnvelope = view.activeEnvelope;
@@ -213,7 +207,7 @@ function withSafetyFallback(row: ParameterExpertRow): ParameterExpertRow {
     label: row.rawName,
     description:
       row.description ??
-      "Metadata is incomplete for this peripheral row, so the curated inventory keeps it visible but read-only.",
+      "Documentation details are incomplete for this peripheral row, so it remains visible but read-only.",
     readOnly: true,
   } satisfies ParameterExpertRow;
 }
@@ -399,8 +393,8 @@ function toggleSubgroup(groupId: string, subgroupId: string) {
 <SetupSectionShell
   sectionId={section.id}
   eyebrow={section.title}
-  title="Curated peripheral inventory with configured-only filtering"
-  description="Peripheral setup stays inventory-first here: known hardware families and discovered extras remain grouped, visible, and staged through the shared review tray without dropping into a generic raw-parameter browser."
+  title="Optional hardware and peripheral families"
+  description="Review optional hardware families such as rangefinders, airspeed sensors, optical flow, gimbals, compass, and CAN devices. Stage changes from each family without leaving the setup workflow."
   testId={setupWorkspaceTestIds.peripheralsSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.peripheralsDocsLink }]}
 >
@@ -416,36 +410,43 @@ function toggleSubgroup(groupId: string, subgroupId: string) {
   {/snippet}
 
   {#snippet body()}
-      <Card.Root class="grid md:grid-cols-3" density="compact" gap="compact" testId={setupWorkspaceTestIds.peripheralsSummary}>
-    <div>
-      <Eyebrow tracking="widest">Visible groups</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary">{visibleGroups.length}</p>
-      <HelperText class="mt-1">Known hardware families and discovered extras stay separated by inventory group.</HelperText>
-    </div>
-    <div>
-      <Eyebrow tracking="widest">Filter state</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary">{showConfiguredOnly ? "Configured only" : "All discovered groups"}</p>
-      <HelperText class="mt-1">
-        Groups without truthful enable-state evidence disappear under configured-only mode instead of being guessed as active.
-      </HelperText>
-    </div>
-    <div>
-      <Eyebrow tracking="widest">Metadata fallback</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary">{metadataFallbackCount} locked row{metadataFallbackCount === 1 ? "" : "s"}</p>
-      <HelperText class="mt-1">
-        Raw-name fallback keeps partial-metadata rows visible and read-only rather than inventing friendly labels.
-      </HelperText>
-    </div>
-  </Card.Root>
+    <SetupSectionCard
+      title="Peripheral overview"
+      description="Known optional hardware and additional discovered parameter families stay separated so operators can inspect the right device family first."
+      surface="elevated"
+      testId={setupWorkspaceTestIds.peripheralsSummary}
+    >
+      <div class="grid gap-4 md:grid-cols-3">
+        <div>
+          <Eyebrow tracking="widest">Hardware families</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary">{visibleGroups.length}</p>
+          <HelperText class="mt-1">Known hardware families and discovered extras stay separated by hardware group.</HelperText>
+        </div>
+        <div>
+          <Eyebrow tracking="widest">Filter state</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary">{showConfiguredOnly ? "Configured only" : "All discovered groups"}</p>
+          <HelperText class="mt-1">
+            Configured-only mode shows groups with enabled settings and hides families that are not active.
+          </HelperText>
+        </div>
+        <div>
+          <Eyebrow tracking="widest">Setup workflow</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary">Review by device family</p>
+          <HelperText class="mt-1">
+            Start with the hardware family you installed, then open advanced groups only when a device needs extra settings.
+          </HelperText>
+        </div>
+      </div>
+    </SetupSectionCard>
 
   {#if visibleGroups.length === 0}
-    <EmptyState
-      title={showConfiguredOnly ? "No configured peripheral groups match the current scope." : "No peripheral inventory groups are available for this scope."}
-      description={showConfiguredOnly
-        ? "Disable the filter to inspect all discovered peripheral families."
-        : "This snapshot did not expose enough peripheral rows for a curated inventory."}
-      testId={setupWorkspaceTestIds.peripheralsEmpty}
-    />
+      <EmptyState
+        title={showConfiguredOnly ? "No configured peripheral groups match the current vehicle." : "No peripheral hardware groups are available for this firmware."}
+        description={showConfiguredOnly
+          ? "Disable the filter to inspect all discovered peripheral families."
+          : "No matching peripheral settings are available for this firmware."}
+        testId={setupWorkspaceTestIds.peripheralsEmpty}
+      />
   {:else}
     <div class="space-y-3">
       {#each visibleKnownGroups as group (group.id)}
@@ -467,6 +468,11 @@ function toggleSubgroup(groupId: string, subgroupId: string) {
       {/if}
     </div>
   {/if}
+
+  <SetupGuideCard title="Peripheral setup guide">
+    <p>Enable and configure optional hardware only for devices installed on the vehicle.</p>
+    <p>Use known families first, then inspect additional peripherals when firmware-specific accessories expose their own settings.</p>
+  </SetupGuideCard>
   {/snippet}
 </SetupSectionShell>
 
@@ -528,7 +534,7 @@ function toggleSubgroup(groupId: string, subgroupId: string) {
                 </button>
 
                 {#if isSubgroupExpanded(group.id, subgroup)}
-                  <div class="ml-3 flex flex-col border-l border-border pl-3">
+                  <SetupFieldStack class="ml-3 border-l border-border pl-3" gap="compact">
                     {#each subgroup.rows as row (row.renderId)}
                       <ParameterExpertRowComponent
                         envelopeKey={envelopeKey()}
@@ -538,13 +544,13 @@ function toggleSubgroup(groupId: string, subgroupId: string) {
                         {row}
                       />
                     {/each}
-                  </div>
+                  </SetupFieldStack>
                 {/if}
               </div>
             {/each}
           </div>
         {:else if group.subgroups[0]}
-          <div class="flex flex-col">
+          <SetupFieldStack gap="compact">
             {#each group.subgroups[0].rows as row (row.renderId)}
               <ParameterExpertRowComponent
                 envelopeKey={envelopeKey()}
@@ -554,7 +560,7 @@ function toggleSubgroup(groupId: string, subgroupId: string) {
                 {row}
               />
             {/each}
-          </div>
+          </SetupFieldStack>
         {/if}
       </div>
     {/if}

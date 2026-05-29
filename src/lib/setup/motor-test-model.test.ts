@@ -30,7 +30,7 @@ function createInput(entries: Record<string, number>, stagedEntries: Record<stri
 }
 
 describe("motor-test-model", () => {
-  it("sorts Quad X rows by ArduPilot test order and resolves stable servo ownership", () => {
+  it("sorts Quad X rows by ArduPilot test order and resolves stable servo mapping", () => {
     const rows = buildMotorTestRows(
       getApMotorDiagramModel(1, 1),
       createInput({

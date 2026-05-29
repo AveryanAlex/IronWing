@@ -280,7 +280,7 @@ function buildRecoveryReasons(
     if (!hasParam(input.paramStore, name)) {
       reasons.push(`${name} is absent from the active parameter set.`);
     } else if (!hasEnumMetadata(input.metadata, name)) {
-      reasons.push(`${name} metadata is missing or malformed, so the purpose-built selector stays read-only.`);
+      reasons.push(`${name} option labels are unavailable, so this selector stays read-only in the guided view.`);
     }
   }
 
@@ -288,7 +288,7 @@ function buildRecoveryReasons(
     if (!hasParam(input.paramStore, name)) {
       reasons.push(`${name} is absent from the active parameter set.`);
     } else if (!hasBitmaskMetadata(input.metadata, name)) {
-      reasons.push(`${name} bitmask metadata is missing or malformed, so the purpose-built checklist stays read-only.`);
+      reasons.push(`${name} checklist labels are unavailable, so this checklist stays read-only in the guided view.`);
     }
   }
 
@@ -381,7 +381,7 @@ export function buildRtlReturnModel(input: SafetyModelInput): RtlReturnModel {
     const rtlAlt = stagedOrCurrentValue(input.paramStore, input.stagedEdits, "RTL_ALT");
     const finalAlt = stagedOrCurrentValue(input.paramStore, input.stagedEdits, "RTL_ALT_FINAL");
     summaryText = `Return altitude ${rtlAlt == null ? "--" : `${(rtlAlt / 100).toFixed(1)} m`} · Final altitude ${finalAlt == null ? "--" : `${(finalAlt / 100).toFixed(1)} m`}`;
-    detailText = "Copter RTL keeps climb, return speed, and final descent explicit instead of hiding them in raw parameters.";
+    detailText = "Copter RTL combines climb altitude, return speed, loiter, and final descent settings.";
     if (rtlAlt === 0) {
       warningTexts.push("RTL_ALT is 0, so the vehicle may return at its current altitude instead of climbing above obstacles.");
     }

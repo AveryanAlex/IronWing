@@ -49,7 +49,7 @@ const IMPLEMENTED_SECTION_ID_SET = new Set<SetupSectionId>([
   "beginner_wizard",
   "frame_orientation",
   "calibration",
-  "gps",
+  "navigation",
   "battery_monitor",
   "motors_esc",
   "servo_outputs",
@@ -464,7 +464,7 @@ function describeGuidedSectionStatus(status: SectionStatus, sectionId: SetupSect
       case "complete":
         return "Motor and ESC facts are confirmed for this scope.";
       case "in_progress":
-        return "Motor and ESC setup is in progress. Check output ownership, direction, and reboot-required changes before testing again.";
+        return "Motor and ESC setup is in progress. Check layout, direction, and reboot-required changes before testing again.";
       case "failed":
         return "Motor or ESC setup reported a failed state that still needs attention.";
       case "not_started":
@@ -480,7 +480,7 @@ function describeGuidedSectionStatus(status: SectionStatus, sectionId: SetupSect
       case "complete":
         return "Servo output configuration is confirmed for this scope.";
       case "in_progress":
-        return "Servo output setup is in progress. Keep staged reversal changes in the shared review tray until the scope refreshes.";
+        return "Servo output setup is in progress. Review staged reversal changes before testing again.";
       case "failed":
         return "Servo output setup reported a failed state that still needs attention.";
       case "not_started":
@@ -496,7 +496,7 @@ function describeGuidedSectionStatus(status: SectionStatus, sectionId: SetupSect
       case "complete":
         return "Receiver facts and calibration state are confirmed for this scope.";
       case "in_progress":
-        return "Receiver setup is in progress. Check live bars and the shared review tray before applying more changes.";
+        return "Receiver setup is in progress. Check live bars before applying more mapping changes.";
       case "failed":
         return "Receiver setup reported a failed state that still needs attention.";
       case "not_started":
@@ -545,7 +545,7 @@ function describePlannedSectionStatus(status: SectionStatus, sectionId: SetupSec
     case "complete":
       return `${definition.title} is confirmed for this scope. Direct editing for this section is not available in this workspace yet.`;
     case "in_progress":
-      return `${definition.title} is partially confirmed for this scope. Keep progress conservative until the dedicated editor lands and can prove the next step.`;
+      return `${definition.title} is partially confirmed for this scope. Keep progress conservative until the dedicated editor is available.`;
     case "failed":
       return `${definition.title} reported a failed or blocked state. Review the current vehicle values or recover through Full Parameters before retrying.`;
     case "not_started":
@@ -589,9 +589,9 @@ function buildCatalogSections(input: {
         groupId: group.id,
         groupTitle: group.title,
         status: null,
-        statusText: "Recovery",
+        statusText: "Advanced",
         confidenceText: null,
-        detailText: "Open Full Parameters to review and edit raw parameter values.",
+        detailText: "Open Full Parameters to review and edit advanced vehicle settings.",
         trackable: definition.trackable,
         implemented,
       } satisfies SetupWorkspaceSection;
@@ -631,7 +631,7 @@ function buildSectionGroups(sections: SetupWorkspaceSection[]): SetupWorkspaceSe
       progressText = group.id === "workspace"
         ? "Dashboard"
         : group.id === "recovery"
-          ? "Recovery"
+          ? "Advanced"
           : "Status only";
     }
 
@@ -781,7 +781,7 @@ function deriveRcReceiverState(input: {
     return {
       signalState: "live",
       statusText: `${current.channels.length} live`,
-      detailText: "Live RC input is available. Use presets or manual mapping to queue channel-order changes through the shared review tray.",
+      detailText: "Live RC input is available. Use presets or manual mapping to stage channel-order changes.",
       rssi: currentRssi,
       rssiText: formatRssiText(currentRssi),
       channels: current.channels,
@@ -1146,9 +1146,9 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
         groupId: group.id,
         groupTitle: group.title,
         status: null,
-        statusText: "Recovery",
+        statusText: "Advanced",
         confidenceText: null,
-        detailText: "Open Full Parameters to review and edit raw parameter values.",
+        detailText: "Open Full Parameters to review and edit advanced vehicle settings.",
         trackable: definition.trackable,
         implemented,
       } satisfies SetupWorkspaceSection;
@@ -1225,7 +1225,7 @@ export function createSetupWorkspaceStore(
   let previousScopeKey: string | null = null;
   let previousApplyPhase: ParamsStoreState["applyPhase"] = "idle";
   let currentActiveScopeKey: string | null = null;
-  // The beginner wizard section's truth comes from the wizard store phase, not
+  // The beginner wizard section state comes from the wizard store phase, not
   // from configuration facts. SetupWorkspaceShell.svelte pushes this via
   // `setWizardPhase(...)` whenever the wizard store state changes, and the
   // overlay below keeps the grouped dashboard in sync with live wizard
@@ -1269,7 +1269,7 @@ export function createSetupWorkspaceStore(
       sameScope,
       currentScopeConfirmations,
     );
-    // Overlay the beginner wizard section truth so the grouped dashboard
+    // Overlay the beginner wizard section state so the grouped dashboard
     // reflects the live wizard store phase.
     sectionStatuses.beginner_wizard = wizardSectionStatusFromPhase(currentWizardPhase);
 
@@ -1294,7 +1294,7 @@ export function createSetupWorkspaceStore(
           resumeRevision: pendingCheckpointSeed.resumeRevision,
           reason: `Reboot and reconnect to resume ${resumeLabel}.`,
           title: "Reconnect required",
-          detailText: `Reboot-required setup changes were confirmed through the shared review tray. Dependent actions stay locked until the same setup scope reconnects or you reset this checkpoint.`,
+          detailText: `Reboot-required setup changes were applied. Dependent actions stay locked until the same setup scope reconnects or you reset this checkpoint.`,
           blocksActions: true,
         };
       }

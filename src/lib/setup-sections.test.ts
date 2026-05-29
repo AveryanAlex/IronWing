@@ -16,7 +16,7 @@ describe("setup section routes", () => {
       ["beginner_wizard", "/setup/beginner-wizard"],
       ["frame_orientation", "/setup/frame-orientation"],
       ["calibration", "/setup/calibration"],
-      ["gps", "/setup/gps"],
+      ["navigation", "/setup/navigation"],
       ["battery_monitor", "/setup/battery-monitor"],
       ["motors_esc", "/setup/motors-esc"],
       ["servo_outputs", "/setup/servo-outputs"],

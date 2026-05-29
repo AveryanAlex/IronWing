@@ -9,7 +9,6 @@ import {
     calcBattLowVolt,
     calcBattVoltMax,
     calcBattVoltMin,
-    calcGyroFilter,
     calcMotThrustExpo,
 } from "../../data/battery-presets";
 import type { ParamMetadataMap } from "../../param-metadata";
@@ -35,10 +34,9 @@ function createParamStore(overrides: Partial<ParamStore["params"]> = {}): ParamS
             MOT_BAT_VOLT_MAX: { name: "MOT_BAT_VOLT_MAX", value: 12.6, param_type: "real32", index: 7 },
             MOT_BAT_VOLT_MIN: { name: "MOT_BAT_VOLT_MIN", value: 11.1, param_type: "real32", index: 8 },
             MOT_THST_EXPO: { name: "MOT_THST_EXPO", value: 0.35, param_type: "real32", index: 9 },
-            INS_GYRO_FILTER: { name: "INS_GYRO_FILTER", value: 20, param_type: "uint16", index: 10 },
-            ATC_ACCEL_P_MAX: { name: "ATC_ACCEL_P_MAX", value: 10000, param_type: "uint32", index: 11 },
-            ATC_ACCEL_R_MAX: { name: "ATC_ACCEL_R_MAX", value: 10000, param_type: "uint32", index: 12 },
-            ATC_ACCEL_Y_MAX: { name: "ATC_ACCEL_Y_MAX", value: 8000, param_type: "uint32", index: 13 },
+            ATC_ACCEL_P_MAX: { name: "ATC_ACCEL_P_MAX", value: 10000, param_type: "uint32", index: 10 },
+            ATC_ACCEL_R_MAX: { name: "ATC_ACCEL_R_MAX", value: 10000, param_type: "uint32", index: 11 },
+            ATC_ACCEL_Y_MAX: { name: "ATC_ACCEL_Y_MAX", value: 8000, param_type: "uint32", index: 12 },
             ...overrides,
         },
     };
@@ -138,14 +136,6 @@ function createMetadata(): ParamMetadataMap {
             },
         ],
         [
-            "INS_GYRO_FILTER",
-            {
-                humanName: "Gyro filter",
-                description: "Primary gyro filter.",
-                unitText: "Hz",
-            },
-        ],
-        [
             "ATC_ACCEL_P_MAX",
             {
                 humanName: "Pitch accel max",
@@ -211,9 +201,6 @@ describe("parameter workflows", () => {
 
         expect(flightCard.recommendations.find((row) => row.name === "MOT_THST_EXPO")?.proposedValue).toBe(
             calcMotThrustExpo(9),
-        );
-        expect(flightCard.recommendations.find((row) => row.name === "INS_GYRO_FILTER")?.proposedValue).toBe(
-            calcGyroFilter(9),
         );
         expect(flightCard.recommendations.find((row) => row.name === "ATC_ACCEL_P_MAX")?.proposedValue).toBe(
             calcAccelPRMax(9),

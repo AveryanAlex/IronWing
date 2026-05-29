@@ -26,7 +26,7 @@ describe("WIZARD_STEP_CATALOG", () => {
       "calibration",
       "rc_receiver",
       "arming",
-      "gps",
+      "navigation",
       "battery_monitor",
       "failsafe",
       "flight_modes",
@@ -50,12 +50,12 @@ describe("WIZARD_STEP_CATALOG", () => {
     expect(required).toEqual(["frame_orientation", "calibration", "rc_receiver", "arming"]);
   });
 
-  it("recommended steps include gps, battery_monitor, failsafe, flight_modes, initial_params", () => {
+  it("recommended steps include navigation, battery_monitor, failsafe, flight_modes, initial_params", () => {
     const recommended = WIZARD_STEP_CATALOG.filter((step) => step.tier === "recommended").map(
       (step) => step.id,
     );
     expect(recommended).toEqual([
-      "gps",
+      "navigation",
       "battery_monitor",
       "failsafe",
       "flight_modes",
@@ -65,25 +65,25 @@ describe("WIZARD_STEP_CATALOG", () => {
 });
 
 describe("resolveStepTier", () => {
-  it("upgrades gps to required when gpsConfigured is false", () => {
-    const tier = resolveStepTier(stepById("gps"), {
-      gpsConfigured: false,
+  it("upgrades navigation to required when navigationConfigured is false", () => {
+    const tier = resolveStepTier(stepById("navigation"), {
+      navigationConfigured: false,
       batteryConfigured: true,
     });
     expect(tier).toBe("required");
   });
 
-  it("keeps gps as recommended when gpsConfigured is true", () => {
-    const tier = resolveStepTier(stepById("gps"), {
-      gpsConfigured: true,
+  it("keeps navigation as recommended when navigationConfigured is true", () => {
+    const tier = resolveStepTier(stepById("navigation"), {
+      navigationConfigured: true,
       batteryConfigured: true,
     });
     expect(tier).toBe("recommended");
   });
 
-  it("keeps gps as recommended when gpsConfigured is unknown (null)", () => {
-    const tier = resolveStepTier(stepById("gps"), {
-      gpsConfigured: null,
+  it("keeps navigation as recommended when navigationConfigured is unknown (null)", () => {
+    const tier = resolveStepTier(stepById("navigation"), {
+      navigationConfigured: null,
       batteryConfigured: null,
     });
     expect(tier).toBe("recommended");
@@ -91,7 +91,7 @@ describe("resolveStepTier", () => {
 
   it("upgrades battery_monitor to required when batteryConfigured is false", () => {
     const tier = resolveStepTier(stepById("battery_monitor"), {
-      gpsConfigured: true,
+      navigationConfigured: true,
       batteryConfigured: false,
     });
     expect(tier).toBe("required");
@@ -99,13 +99,13 @@ describe("resolveStepTier", () => {
 
   it("always returns recommended for failsafe regardless of facts", () => {
     expect(
-      resolveStepTier(stepById("failsafe"), { gpsConfigured: false, batteryConfigured: false }),
+      resolveStepTier(stepById("failsafe"), { navigationConfigured: false, batteryConfigured: false }),
     ).toBe("recommended");
     expect(
-      resolveStepTier(stepById("failsafe"), { gpsConfigured: true, batteryConfigured: true }),
+      resolveStepTier(stepById("failsafe"), { navigationConfigured: true, batteryConfigured: true }),
     ).toBe("recommended");
     expect(
-      resolveStepTier(stepById("failsafe"), { gpsConfigured: null, batteryConfigured: null }),
+      resolveStepTier(stepById("failsafe"), { navigationConfigured: null, batteryConfigured: null }),
     ).toBe("recommended");
   });
 });

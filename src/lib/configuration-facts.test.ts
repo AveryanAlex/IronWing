@@ -227,7 +227,7 @@ describe("deriveSetupSectionStatuses", () => {
         });
 
         expect(statuses.get("frame_orientation")).toBe("complete");
-        expect(statuses.get("gps")).toBe("complete");
+        expect(statuses.get("navigation")).toBe("complete");
         expect(statuses.get("battery_monitor")).toBe("complete");
         expect(statuses.get("motors_esc")).toBe("unknown");
         expect(statuses.get("calibration")).toBe("complete");

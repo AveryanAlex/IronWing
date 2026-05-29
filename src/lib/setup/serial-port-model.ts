@@ -137,13 +137,13 @@ function buildRowRecoveryReasons(row: Pick<SerialPortRow, "hasProtocolParam" | "
   if (!row.hasProtocolParam) {
     reasons.push(`${row.prefix}_PROTOCOL is unavailable for this port on the current scope.`);
   } else if (!row.protocolMetadataReady) {
-    reasons.push(`${row.prefix}_PROTOCOL metadata is missing or malformed, so protocol edits stay read-only.`);
+    reasons.push(`${row.prefix}_PROTOCOL option labels are unavailable, so protocol edits stay read-only in this guided view.`);
   }
 
   if (!row.hasBaudParam) {
     reasons.push(`${row.prefix}_BAUD is unavailable for this port on the current scope.`);
   } else if (!row.baudMetadataReady) {
-    reasons.push(`${row.prefix}_BAUD metadata is missing or malformed, so baud edits stay read-only.`);
+    reasons.push(`${row.prefix}_BAUD option labels are unavailable, so baud edits stay read-only in this guided view.`);
   }
 
   return reasons;
@@ -278,7 +278,7 @@ export function buildSerialPortModel(input: SerialPortModelInput): SerialPortMod
     ),
   ];
   const recoveryText = recoveryReasons.length > 0
-    ? `${recoveryReasons.join(" ")} Use Full Parameters recovery if this scope is missing labels or port rows.`
+    ? `${recoveryReasons.join(" ")} Use Full Parameters if this firmware needs a setting that is not shown here.`
     : null;
 
   return {
@@ -290,8 +290,8 @@ export function buildSerialPortModel(input: SerialPortModelInput): SerialPortMod
     configuredPortCount,
     summaryText: buildModelSummary(ports, gpsPorts, rcPorts, conflicts),
     rebootWarningText: hasPendingChanges
-      ? "Queued serial protocol or baud changes stay in the shared review tray and require a reboot before the new port map is truthful."
-      : "Serial protocol and baud changes take effect only after the shared review tray applies them and the vehicle reboots.",
+      ? "Queued serial protocol or baud changes require apply and reboot before the vehicle uses the new port map."
+      : "Serial protocol and baud changes take effect after apply and vehicle reboot.",
     recoveryReasons,
     recoveryText,
   };

@@ -8,7 +8,7 @@ import SetupWizardCalibrationStep from "../../../../features/setup/wizard/SetupW
 import SetupWizardFailsafeStep from "../../../../features/setup/wizard/SetupWizardFailsafeStep.svelte";
 import SetupWizardFlightModesStep from "../../../../features/setup/wizard/SetupWizardFlightModesStep.svelte";
 import SetupWizardFrameStep from "../../../../features/setup/wizard/SetupWizardFrameStep.svelte";
-import SetupWizardGpsStep from "../../../../features/setup/wizard/SetupWizardGpsStep.svelte";
+import SetupWizardNavigationStep from "../../../../features/setup/wizard/SetupWizardNavigationStep.svelte";
 import SetupWizardInitialParamsStep from "../../../../features/setup/wizard/SetupWizardInitialParamsStep.svelte";
 import SetupWizardRcStep from "../../../../features/setup/wizard/SetupWizardRcStep.svelte";
 import SetupWizardShell from "../../../../features/setup/wizard/SetupWizardShell.svelte";
@@ -56,8 +56,8 @@ function handleClose() {
           <SetupWizardRcStep {view} onAdvance={advance} />
         {:else if step.id === "arming"}
           <SetupWizardArmingStep {view} onAdvance={advance} />
-        {:else if step.id === "gps"}
-          <SetupWizardGpsStep {view} onAdvance={advance} />
+        {:else if step.id === "navigation"}
+          <SetupWizardNavigationStep {view} onAdvance={advance} />
         {:else if step.id === "battery_monitor"}
           <SetupWizardBatteryStep {view} onAdvance={advance} />
         {:else if step.id === "failsafe"}

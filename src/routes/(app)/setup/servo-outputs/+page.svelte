@@ -1,4 +1,5 @@
 <script lang="ts">
+import { Activity, Cable, List, Power } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
@@ -17,10 +18,11 @@ import {
   type ServoTestTarget,
 } from "../../../../lib/setup/servo-test-model";
 import { deriveVehicleProfile } from "../../../../lib/setup/vehicle-profile";
-import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import { selectTelemetryView } from "../../../../lib/telemetry-selectors";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
+import { SetupFieldStack, SetupGuideCard, SetupNotice, SetupSectionCard } from "../../../../features/setup/shared";
+import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
 import {
   Alert,
   Badge,
@@ -128,14 +130,14 @@ let testerSummaryLabel = $derived(
 );
 let testerSummaryDetail = $derived.by(() => {
   if (configuredOutputs.length === 0) {
-    return "No configured SERVOx_FUNCTION rows are available for this scope yet.";
+    return "No configured SERVOx_FUNCTION rows are available yet.";
   }
 
   if (functionGroups.length === 0) {
     return "No live-testable non-motor outputs are currently within the SERVO1–16 bridge window.";
   }
 
-  return `${functionGroups.length} function group${functionGroups.length === 1 ? "" : "s"} drive the purpose-built tester, while the raw inventory keeps every configured output visible.`;
+  return `${functionGroups.length} function group${functionGroups.length === 1 ? "" : "s"} drive the grouped tester, while the advanced output list keeps every configured output visible.`;
 });
 let safetyStateLabel = $derived.by(() => {
   if (view.checkpoint.blocksActions) {
@@ -147,7 +149,7 @@ let safetyStateLabel = $derived.by(() => {
   }
 
   if (unlockDisabledReason) {
-    return "Fail-closed";
+    return "Locked";
   }
 
   return testUnlocked ? "Unlocked" : "Locked";
@@ -166,8 +168,8 @@ let safetyStateDetail = $derived.by(() => {
   }
 
   return testUnlocked
-    ? "The section-level unlock is open. Min/max probes and raw PWM sends now use the same shared gate."
-    : "Unlock once at the section level, then use function testers or raw PWM sends without per-click confirmation spam.";
+    ? "The section-level unlock is open. Min/max probes and advanced PWM sends now use the same shared gate."
+    : "Unlock once at the section level, then use function testers or advanced PWM sends without repeated confirmation prompts.";
 });
 let readbackSummary = $derived.by(() => {
   let live = 0;
@@ -207,14 +209,14 @@ let reversalStateDetail = $derived.by(() => {
   }
 
   if (pendingReversalCount > 0) {
-    return "Queued SERVOx_REVERSED edits are sitting in the shared review tray and still require review + apply outside this section.";
+    return "Queued SERVOx_REVERSED edits are staged and still require review + apply outside this section.";
   }
 
   if (retainedReversalFailures.length > 0) {
     return "Retained SERVOx_REVERSED failures stay visible next to the affected rows until you restage or resolve them.";
   }
 
-  return "Reversal fixes queue through the shared review tray only. This section never writes them directly.";
+  return "Reversal fixes are staged for review only. This section does not apply them directly.";
 });
 let banners = $derived.by(() => {
   const next: Banner[] = [];
@@ -223,7 +225,7 @@ let banners = $derived.by(() => {
     next.push({
       id: "queued-output-edits",
       tone: "warning",
-      text: `${pendingOutputEditCount} staged SERVOx FUNCTION/MIN/MAX/TRIM edit${pendingOutputEditCount === 1 ? " is" : "s are"} pending in the shared review tray. This section keeps testing scoped to the currently applied output map until those changes are reviewed and applied.`,
+      text: `${pendingOutputEditCount} staged SERVOx FUNCTION/MIN/MAX/TRIM edit${pendingOutputEditCount === 1 ? " is" : "s are"} pending. This section keeps testing scoped to the currently applied output map until those changes are reviewed and applied.`,
     });
   }
 
@@ -231,7 +233,7 @@ let banners = $derived.by(() => {
     next.push({
       id: "unsupported-outputs",
       tone: "info",
-      text: `${unsupportedOutputs.length} configured output${unsupportedOutputs.length === 1 ? "" : "s"} sit above SERVO1–${SERVO_LIVE_TEST_LIMIT}. They remain visible with explicit unsupported copy instead of disappearing from the section.`,
+      text: `${unsupportedOutputs.length} configured output${unsupportedOutputs.length === 1 ? "" : "s"} sit above SERVO1–${SERVO_LIVE_TEST_LIMIT}. They remain visible with unsupported guidance.`,
     });
   }
 
@@ -239,7 +241,7 @@ let banners = $derived.by(() => {
     next.push({
       id: "motor-outputs",
       tone: "info",
-      text: `${motorOutputs.length} motor-assigned output${motorOutputs.length === 1 ? " remains" : "s remain"} visible for inventory truth here, but live motor actuation belongs in Motors & ESC.`,
+      text: `${motorOutputs.length} motor-assigned output${motorOutputs.length === 1 ? " remains" : "s remain"} visible in the output list, but live motor actuation belongs in Motors & ESC.`,
     });
   }
 
@@ -247,7 +249,7 @@ let banners = $derived.by(() => {
     next.push({
       id: "generic-fallback",
       tone: "info",
-      text: "Some VTOL-specific function labels are missing or partial, so those rows fall back to generic configured-output groups instead of being hidden.",
+      text: "Some outputs do not have VTOL-specific labels, so they appear in the general configured-output group.",
     });
   }
 
@@ -298,11 +300,11 @@ function resolveUnlockDisabledReason(input: {
   }
 
   if (!input.liveConnected) {
-    return "Servo actuation stays locked until the live vehicle link is connected for this scope.";
+    return "Servo actuation stays locked until the live vehicle link is connected.";
   }
 
   if (input.configuredOutputCount === 0) {
-    return "No configured SERVOx_FUNCTION rows are available yet for this scope.";
+    return "No configured SERVOx_FUNCTION rows are available yet.";
   }
 
   if (input.supportedTargetCount === 0) {
@@ -329,7 +331,7 @@ function resolveReadback(output: ServoConfiguredOutput): ReadbackView {
       return {
         state: "live",
         text: `${rounded} µs`,
-        detail: "Live PWM readback from the current telemetry scope.",
+        detail: "Live PWM readback from telemetry.",
         value: rounded,
       };
     }
@@ -338,8 +340,7 @@ function resolveReadback(output: ServoConfiguredOutput): ReadbackView {
       return {
         state: "unavailable",
         text: "Unavailable",
-        detail:
-          "The latest servo telemetry payload was malformed for this row, so the section refuses to guess the current PWM.",
+        detail: "The latest servo telemetry payload was malformed for this row, so current PWM is unavailable.",
         value: null,
       };
     }
@@ -357,7 +358,7 @@ function resolveReadback(output: ServoConfiguredOutput): ReadbackView {
     return {
       state: "stale",
       text: `${staleValue} µs`,
-      detail: "Last scoped-good PWM retained while live telemetry settles for the current scope.",
+      detail: "Last PWM readback retained while live telemetry updates.",
       value: staleValue,
     };
   }
@@ -366,22 +367,10 @@ function resolveReadback(output: ServoConfiguredOutput): ReadbackView {
     state: "unavailable",
     text: "Unavailable",
     detail: liveConnected
-      ? "Waiting for truthful servo readback from the current scope."
+      ? "Waiting for servo readback from the current scope."
       : "Reconnect the live vehicle link to recover servo readback.",
     value: null,
   };
-}
-
-function bannerVariant(tone: Tone): "info" | "warning" | "danger" {
-  switch (tone) {
-    case "warning":
-      return "warning";
-    case "danger":
-      return "danger";
-    case "info":
-    default:
-      return "info";
-  }
 }
 
 function readbackBadgeVariant(readback: ReadbackView): BadgeVariant {
@@ -519,7 +508,7 @@ function reverseStateText(output: ServoConfiguredOutput): string {
     return "Reverse param unavailable";
   }
 
-  return reverseItem.value === 1 ? "Current · reversed" : "Current · normal";
+  return reverseItem.value === 1 ? "reversed" : "normal";
 }
 
 function rawSendButtonLabel(output: ServoConfiguredOutput): string {
@@ -535,7 +524,7 @@ function rawSendButtonLabel(output: ServoConfiguredOutput): string {
     return "Use Motors & ESC";
   }
 
-  return "Send raw PWM";
+  return "Send PWM";
 }
 
 function directionControlsVisible(target: ServoTestTarget): boolean {
@@ -569,49 +558,57 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 <SetupSectionShell
   sectionId={section.id}
   eyebrow={section.title}
-  title="Grouped servo proof up front, raw PWM escape hatch below"
-  description="Function-oriented testers stay grouped by the configured surface, raw per-servo PWM sends stay available as the escape hatch, and every configured output stays visible even when current metadata is partial or above the live actuation bridge window."
+  title="Servo outputs grouped by function with an advanced output list"
+  description="Review SERVOn_FUNCTION mappings first, test supported non-motor outputs by function, and use the advanced output list for per-servo PWM checks when needed."
   testId={setupWorkspaceTestIds.servoOutputsSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.servoOutputsDocsLink }]}
 >
   {#snippet body()}
-      <Card.Root class="grid xl:grid-cols-4" density="compact" gap="compact" testId={setupWorkspaceTestIds.servoOutputsSummary}>
-    <div>
-      <Eyebrow tracking="widest">Function testers</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.servoOutputsTesterState}>
-        {testerSummaryLabel}
-      </p>
-      <HelperText class="mt-1">{testerSummaryDetail}</HelperText>
-    </div>
-    <div>
-      <Eyebrow tracking="widest">Safety unlock</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.servoOutputsSafetyState}>
-        {safetyStateLabel}
-      </p>
-      <HelperText class="mt-1">{safetyStateDetail}</HelperText>
-    </div>
-    <div>
-      <Eyebrow tracking="widest">Readback truth</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.servoOutputsReadbackState}>
-        {readbackSummary.label}
-      </p>
-      <HelperText class="mt-1">{readbackSummary.detail}</HelperText>
-    </div>
-    <div>
-      <Eyebrow tracking="widest">Shared review tray</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.servoOutputsReversalState}>
-        {reversalStateLabel}
-      </p>
-      <HelperText class="mt-1">{reversalStateDetail}</HelperText>
-    </div>
-  </Card.Root>
+    <SetupSectionCard
+      icon={Cable}
+      title="Output map overview"
+      description="SERVOn_FUNCTION mapping controls which outputs are safe to test here; motor functions remain visible but route to Motors & ESC."
+      surface="elevated"
+      testId={setupWorkspaceTestIds.servoOutputsSummary}
+    >
+      <div class="grid gap-4 xl:grid-cols-4">
+        <div>
+          <Eyebrow tracking="widest">Function testers</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.servoOutputsTesterState}>
+            {testerSummaryLabel}
+          </p>
+          <HelperText class="mt-1">{testerSummaryDetail}</HelperText>
+        </div>
+        <div>
+          <Eyebrow tracking="widest">Safety unlock</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.servoOutputsSafetyState}>
+            {safetyStateLabel}
+          </p>
+          <HelperText class="mt-1">{safetyStateDetail}</HelperText>
+        </div>
+        <div>
+          <Eyebrow tracking="widest">Readback state</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.servoOutputsReadbackState}>
+            {readbackSummary.label}
+          </p>
+          <HelperText class="mt-1">{readbackSummary.detail}</HelperText>
+        </div>
+        <div>
+          <Eyebrow tracking="widest">Direction changes</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.servoOutputsReversalState}>
+            {reversalStateLabel}
+          </p>
+          <HelperText class="mt-1">{reversalStateDetail}</HelperText>
+        </div>
+      </div>
+    </SetupSectionCard>
 
   {#if retainedReversalFailures.length > 0}
       <Alert
         variant="danger"
         density="compact"
         shadow={false}
-      title="The shared review tray is still retaining servo reversal failures."
+      title="Some staged servo reversal changes still need attention."
       testId={setupWorkspaceTestIds.servoOutputsFailure}
     >
       <ul class="mt-2 list-disc space-y-1 pl-5">
@@ -622,26 +619,10 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
     </Alert>
   {/if}
 
-  {#each banners as banner (banner.id)}
-      <Alert
-        variant={bannerVariant(banner.tone)}
-        density="compact"
-        shadow={false}
-      testId={`${setupWorkspaceTestIds.servoOutputsBannerPrefix}-${banner.id}`}
-    >
-      {banner.text}
-    </Alert>
-  {/each}
+  <SetupNoticeList notices={banners} testIdPrefix={setupWorkspaceTestIds.servoOutputsBannerPrefix} />
 
-  <Card.Root density="compact">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <Eyebrow tracking="widest">Servo actuation gate</Eyebrow>
-        <HelperText class="mt-2">
-          Configured outputs · {configuredOutputs.length} · Live-testable targets · {supportedTargets.length} · Unsupported outputs · {unsupportedOutputs.length}
-        </HelperText>
-      </div>
-
+  <SetupSectionCard icon={Power} title="Servo actuation gate" surface="elevated" compact>
+    {#snippet actions()}
       <Button
         variant={testUnlocked ? "destructive" : "secondary"}
         testId={setupWorkspaceTestIds.servoOutputsUnlock}
@@ -650,34 +631,38 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
       >
         {testUnlocked ? "Lock servo actuation" : "Unlock servo actuation"}
       </Button>
-    </div>
+    {/snippet}
+
+    <SetupFieldStack gap="compact">
+      <HelperText>
+          Configured outputs · {configuredOutputs.length} · Live-testable targets · {supportedTargets.length} · Unsupported outputs · {unsupportedOutputs.length}
+      </HelperText>
 
     {#if unlockDisabledReason}
-      <HelperText class="mt-3">{unlockDisabledReason}</HelperText>
+      <HelperText>{unlockDisabledReason}</HelperText>
     {:else if !testUnlocked}
-      <HelperText class="mt-3">Unlock once to expose the grouped min/max testers and the raw per-servo PWM escape hatch below.</HelperText>
+      <HelperText>Unlock once to expose the grouped min/max testers and the advanced per-servo PWM list below.</HelperText>
     {:else}
-      <HelperText class="mt-3">Servo actuation is unlocked for this scoped session. Use the grouped tester first, then drop to the raw inventory only when you need a precise PWM escape hatch.</HelperText>
+      <HelperText>Servo actuation is unlocked for this session. Use the grouped tester first, then use the advanced output list when you need a precise PWM command.</HelperText>
     {/if}
-  </Card.Root>
+    </SetupFieldStack>
+  </SetupSectionCard>
 
   {#if configuredOutputs.length === 0}
-    <EmptyState title="No configured outputs" description="No configured SERVOx_FUNCTION rows are available for this scope yet. Download parameters first to inspect output state here." />
+    <EmptyState title="No configured outputs" description="No configured SERVOx_FUNCTION rows are available for this firmware." />
   {:else}
     <div class="space-y-4">
-      <Card.Root density="compact">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <Eyebrow tracking="widest">Function-oriented tester</Eyebrow>
-            <HelperText class="mt-2">Grouped by configured function so expert operators can test a surface family first, then confirm direction and stage shared-tray reversal fixes without dropping straight to raw PWM.</HelperText>
-          </div>
+      <SetupSectionCard icon={Activity} title="Function-oriented tester" surface="elevated" compact>
+        {#snippet actions()}
           <Badge variant="muted" testId={setupWorkspaceTestIds.servoOutputsSelectedTarget}>
             {selectedOutputIndex ? `Selected · SERVO${selectedOutputIndex}` : "Selected · none"}
           </Badge>
-        </div>
+        {/snippet}
+
+        <HelperText>Grouped by SERVOn_FUNCTION so operators can test a surface family first, then confirm direction and stage SERVOx_REVERSED changes without moving directly to per-output PWM commands.</HelperText>
 
         {#if functionGroups.length === 0}
-          <EmptyState class="mt-4" title="No grouped live-test targets" description={`No non-motor SERVO1-${SERVO_LIVE_TEST_LIMIT} targets are currently available for grouped live testing. Use the raw inventory below to inspect every configured output and the explicit unsupported-output copy.`} />
+          <EmptyState class="mt-4" title="No grouped live-test targets" description={`No non-motor SERVO1-${SERVO_LIVE_TEST_LIMIT} targets are currently available for grouped live testing. Use the advanced output list below to inspect every configured output.`} />
         {:else}
           <div class="mt-4 space-y-4">
             {#each functionGroups as group (group.id)}
@@ -784,7 +769,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 
                           {#if directionResult === "reversed"}
                             <div class="mt-4">
-                              <p class="text-sm leading-6 text-text-secondary">Queue the corresponding SERVOx_REVERSED change through the shared review tray only; this section never writes it directly.</p>
+                              <p class="text-sm leading-6 text-text-secondary">Stage the corresponding SERVOx_REVERSED change for review; this section does not apply it directly.</p>
                               <div class="mt-3 flex flex-wrap items-center gap-2">
                                 <Button
                                   variant="secondary"
@@ -793,7 +778,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                                   onclick={() => stageReverse(target)}
                                 >
                                   {target.reverseParamName && params.stagedEdits[target.reverseParamName]
-                                    ? "Queued in review tray"
+                                    ? "Staged for review"
                                     : stageReverseButtonLabel(target)}
                                 </Button>
                                 <HelperText as="span" size="xs">{reverseStateText(target)}</HelperText>
@@ -815,13 +800,15 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
             {/each}
           </div>
         {/if}
-      </Card.Root>
+      </SetupSectionCard>
 
-      <Card.Root density="compact">
-        <div>
-          <Eyebrow tracking="widest">Raw PWM escape hatch</Eyebrow>
-          <HelperText class="mt-2">Every configured output stays visible here. Use the raw send only when the grouped tester is not enough, and keep unsupported or motor-owned rows visible for diagnosis instead of pretending they do not exist.</HelperText>
-        </div>
+      <SetupSectionCard
+        icon={List}
+        title="Advanced output list"
+        description="Every configured output stays visible here. Use direct PWM only when the grouped tester is not enough; unsupported or motor-owned rows remain visible for diagnosis."
+        surface="elevated"
+        compact
+      >
 
         <div class="mt-4 space-y-4">
           {#each rawGroups as group (group.id)}
@@ -859,7 +846,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                         <HelperText class="mt-2" testId={`${setupWorkspaceTestIds.servoOutputsRawAvailabilityPrefix}-${output.index}`}>
                           {output.liveTestReason ?? `Live actuation is available for this row once the section-level unlock is open. Safe window · ${output.minPwm}–${output.maxPwm} µs.`}
                         </HelperText>
-                        <HelperText class="mt-1" size="xs" tone="muted">Raw default · <MonoValue size="xs" tone="muted" value={output.defaultPwm} /> µs · Reverse state · {reverseStateText(output)}</HelperText>
+                        <HelperText class="mt-1" size="xs" tone="muted">Default PWM · <MonoValue size="xs" tone="muted" value={output.defaultPwm} /> µs · Reverse state · {reverseStateText(output)}</HelperText>
                       </div>
 
                       <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -888,7 +875,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                           onclick={() => stageReverse(output)}
                         >
                           {output.reverseParamName && params.stagedEdits[output.reverseParamName]
-                            ? "Queued in review tray"
+                            ? "Staged for review"
                             : stageReverseButtonLabel(output)}
                         </Button>
                       </div>
@@ -915,8 +902,13 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
             </Card.Root>
           {/each}
         </div>
-      </Card.Root>
+      </SetupSectionCard>
     </div>
   {/if}
+
+  <SetupGuideCard title="Servo output workflow">
+    <p>Start with the SERVOn_FUNCTION mapping to identify the surface or peripheral assigned to each output.</p>
+    <p>Use grouped min/max tests for supported non-motor outputs, then use the advanced output list for direct PWM checks and unsupported-output diagnosis.</p>
+  </SetupGuideCard>
   {/snippet}
 </SetupSectionShell>

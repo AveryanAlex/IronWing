@@ -104,8 +104,6 @@ function createInitialParamStore(): ParamStore {
   const entries: Record<string, number> = {
     MOT_THST_EXPO: 0,
     MOT_THST_HOVER: 0,
-    INS_GYRO_FILTER: 0,
-    INS_ACCEL_FILTER: 0,
     BATT_FS_LOW_ACT: 0,
     BATT_FS_CRT_ACT: 0,
   };
@@ -302,7 +300,7 @@ describe("SetupWizardInitialParamsStep", () => {
     const args = applySpy.mock.calls[0]?.[0] as string[] | undefined;
     expect(args).toBeDefined();
     expect(args?.length ?? 0).toBeGreaterThan(0);
-    // At least one of the stageable MOT_* or INS_* rows should have been staged.
+    // At least one stageable motor row should have been staged.
     expect(args).toContain("MOT_THST_EXPO");
 
     const snapshot = get(parameterStore);

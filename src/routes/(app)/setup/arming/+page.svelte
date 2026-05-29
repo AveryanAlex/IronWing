@@ -1,4 +1,5 @@
 <script lang="ts">
+import { CircleAlert, KeyRound, ListChecks, Power, ShieldCheck } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
@@ -6,25 +7,16 @@ import { requestPrearmChecks } from "../../../../calibration";
 import { trackAnalytics } from "../../../../lib/analytics/client";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
-import {
-  ARMING_REQUIRE_OPTIONS,
-  buildArmingRecoveryReasons,
-  derivePrearmModel,
-  type PrearmSnapshot,
-} from "../../../../lib/setup/prearm-model";
+import { ARMING_REQUIRE_OPTIONS, derivePrearmModel, type PrearmSnapshot } from "../../../../lib/setup/prearm-model";
 import { getVehicleSlug } from "../../../../lib/setup/vehicle-profile";
 import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import { armVehicle, disarmVehicle } from "../../../../telemetry";
-import {
-  Alert,
-  ActionRow,
-  Badge,
-  Button,
-  Card,
-  NativeSelect,
-  StagedBadge as SetupStagedBadge,
-} from "../../../../components/ui";
-import SetupBitmaskChecklist from "../../../../features/setup/shared/SetupBitmaskChecklist.svelte";
+import { ActionRow, Badge, Button, NativeSelect, StagedBadge as SetupStagedBadge } from "../../../../components/ui";
+import SetupBitmaskTable from "../../../../features/setup/shared/SetupBitmaskTable.svelte";
+import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
+import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
+import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
+import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import {
@@ -56,12 +48,6 @@ let itemIndex = $derived(buildParameterItemIndex(params.paramStore, params.metad
 let actionsBlocked = $derived(view.checkpoint.blocksActions);
 let vehicleSlug = $derived(getVehicleSlug(session.sessionDomain.value?.vehicle_state?.vehicle_type ?? null));
 let armed = $derived(session.sessionDomain.value?.vehicle_state?.armed === true);
-let armingRecoveryReasons = $derived(
-  buildArmingRecoveryReasons({
-    paramStore: params.paramStore,
-    metadata: params.metadata,
-  }),
-);
 let prearmModel = $derived(
   derivePrearmModel({
     scopeKey: view.activeScopeKey,
@@ -141,10 +127,6 @@ function item(name: string): ParameterItemModel | null {
   return itemIndex.get(name) ?? null;
 }
 
-function currentValueText(item: ParameterItemModel | null): string {
-  return item?.valueLabel ?? item?.valueText ?? "Unavailable";
-}
-
 function draftValue(name: string, fallback: number | null): string {
   if (draftValues[name] !== undefined) {
     return draftValues[name];
@@ -222,6 +204,15 @@ function toggleArmingCheck(bit: number) {
   paramsStore.stageParameterEdit(armingCheckItem, currentMask ^ (1 << bit));
 }
 
+function setArmingChecks(checked: boolean) {
+  if (actionsBlocked || !armingCheckItem || armingCheckItem.readOnly === true || armingCheckEntries.length === 0) {
+    return;
+  }
+
+  const nextMask = checked ? armingCheckEntries.reduce((mask, entry) => mask | (1 << Number(entry.key)), 0) : 0;
+  paramsStore.stageParameterEdit(armingCheckItem, nextMask);
+}
+
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -290,7 +281,7 @@ async function handleDisarm() {
   sectionId={section.id}
   eyebrow={section.title}
   title="Review pre-arm blockers and live arm controls"
-  description="Review live support, sensor health, and status text here before you arm. If a check is blocked, request fresh checks here; parameter edits still queue in the review tray."
+  description="Review live support, sensor health, and status text before arming. Request fresh pre-arm checks when blockers are present; parameter edits are staged for review before they are applied."
   testId={setupWorkspaceTestIds.armingSection}
   docs={[
     { url: prearmDocsUrl, label: "Pre-arm docs", testId: setupWorkspaceTestIds.prearmDocsLink },
@@ -298,186 +289,166 @@ async function handleDisarm() {
   ]}
 >
   {#snippet body()}
-      <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
-    <Card.Root
-      density="compact"
-      surface="elevated"
-      data-arming-state={prearmModel.state}
-      testId={setupWorkspaceTestIds.armingSummary}
-    >
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Pre-arm readiness</p>
-          <p class="mt-2 text-base font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.armingReadiness}>
+    {#snippet requestChecksAction()}
+      <Button
+        variant="outline"
+        testId={setupWorkspaceTestIds.armingRefresh}
+        disabled={actionsBlocked || !prearmModel.canRequestChecks || requestPhase === "running"}
+        onclick={handleRequestChecks}
+      >
+          {requestPhase === "running" ? "Requesting checks…" : "Request pre-arm checks"}
+      </Button>
+    {/snippet}
+
+    <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <SetupSectionCard
+        icon={ShieldCheck}
+        title="Pre-arm readiness"
+        surface="elevated"
+        testId={setupWorkspaceTestIds.armingSummary}
+        actions={requestChecksAction}
+      >
+        <div data-arming-state={prearmModel.state}>
+          <p class="text-base font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.armingReadiness}>
             {prearmModel.statusText}
           </p>
           <p class="mt-2 text-sm leading-6 text-text-secondary">{prearmModel.detailText}</p>
+
+          {#if prearmModel.requestChecksBlockedReason}
+            <p class="mt-3 text-xs leading-5 text-warning">{prearmModel.requestChecksBlockedReason}</p>
+          {/if}
         </div>
-        <Button
-          variant="outline"
-          testId={setupWorkspaceTestIds.armingRefresh}
-          disabled={actionsBlocked || !prearmModel.canRequestChecks || requestPhase === "running"}
-          onclick={handleRequestChecks}
-        >
-          {requestPhase === "running" ? "Requesting checks…" : "Request pre-arm checks"}
-        </Button>
-      </div>
+      </SetupSectionCard>
 
-      {#if prearmModel.requestChecksBlockedReason}
-        <p class="mt-3 text-xs leading-5 text-warning">{prearmModel.requestChecksBlockedReason}</p>
-      {/if}
-    </Card.Root>
+      <SetupSectionCard icon={Power} title="Live control" surface="elevated">
+        <p class={`text-base font-semibold ${armed ? "text-danger" : "text-text-primary"}`}>
+          {armed ? "Armed" : "Disarmed"}
+        </p>
+        <p class="mt-2 text-sm text-text-secondary">
+          {armed
+            ? "The vehicle currently reports ARMED. Disarm immediately if conditions become unsafe."
+            : prearmModel.canAttemptArm
+              ? "Current pre-arm state allows an arm request."
+              : "Arm stays blocked until the vehicle reports a healthy pre-arm state."}
+        </p>
 
-    <Card.Root density="compact" surface="elevated">
-      <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Live control</p>
-      <p class={`mt-2 text-base font-semibold ${armed ? "text-danger" : "text-text-primary"}`}>
-        {armed ? "Armed" : "Disarmed"}
-      </p>
-      <p class="mt-2 text-sm text-text-secondary">
-        {armed
-          ? "The vehicle currently reports ARMED. Disarm immediately if conditions become unsafe."
-          : prearmModel.canAttemptArm
-            ? "Current pre-arm state allows an arm request."
-            : "Arm stays blocked until the current scope reports a healthy pre-arm state."}
-      </p>
-
-      <ActionRow align="start" class="mt-4">
-        {#if armed}
-          <Button
-            variant="destructive"
-            testId={setupWorkspaceTestIds.armingDisarm}
-            disabled={actionsBlocked || !prearmModel.canAttemptDisarm || actionPhase !== "idle"}
-            onclick={handleDisarm}
-          >
-            {actionPhase === "disarming" ? "Disarming…" : "Disarm"}
-          </Button>
-        {:else}
-          <Button
-            tone="success"
-            variant="soft"
-            testId={setupWorkspaceTestIds.armingArm}
-            disabled={actionsBlocked || (!confirmArm && !prearmModel.canAttemptArm) || actionPhase !== "idle"}
-            onclick={handleArm}
-          >
-            {#if actionPhase === "arming"}
-              Arming…
-            {:else if confirmArm}
-              Confirm arm
-            {:else}
-              Arm
-            {/if}
-          </Button>
-          {#if confirmArm}
-            <Button variant="secondary" onclick={() => (confirmArm = false)}>Cancel</Button>
-          {/if}
-        {/if}
-      </ActionRow>
-    </Card.Root>
-  </div>
-
-      {#if commandError}
-        <Alert variant="danger" title={commandError} testId={setupWorkspaceTestIds.armingFailure} />
-      {/if}
-
-      {#if checksDisabled}
-        <Alert
-          variant="danger"
-          title="ARMING_CHECK is disabled, so the vehicle can arm without the normal pre-flight safety validation."
-          testId={`${setupWorkspaceTestIds.armingBannerPrefix}-checks-disabled`}
-        />
-      {:else if checksPartial}
-        <Alert
-          variant="warning"
-          title="ARMING_CHECK is using a partial bitmask. Review the missing checks and request fresh blocker scans before flight."
-          testId={`${setupWorkspaceTestIds.armingBannerPrefix}-checks-partial`}
-        />
-      {/if}
-
-      {#if armingMethodDisabled}
-        <Alert
-          variant="warning"
-          title="ARMING_REQUIRE is disabled, so GCS arming can bypass the physical arming gesture safeguards."
-          testId={`${setupWorkspaceTestIds.armingBannerPrefix}-method-disabled`}
-        />
-      {/if}
-
-      {#if armingRecoveryReasons.length > 0}
-        <Alert variant="warning" testId={setupWorkspaceTestIds.armingRecovery}>
-          <p class="font-semibold text-text-primary">Arming parameter editors are staying fail-closed while metadata is partial.</p>
-          <ul class="mt-2 list-disc space-y-1 pl-5">
-            {#each armingRecoveryReasons as reason (reason)}
-              <li>{reason}</li>
-            {/each}
-          </ul>
-        </Alert>
-      {/if}
-
-      {#if prearmModel.blockers.length > 0}
-        <Card.Root density="compact" surface="elevated" testId={setupWorkspaceTestIds.armingBlockers}>
-          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Current blockers</p>
-          <div class="mt-4 space-y-3">
-            {#each prearmModel.blockers as blocker (blocker.id)}
-              <Card.Root density="compact" surface="muted">
-                <div class="flex items-start justify-between gap-3">
-                  <div>
-                    <p class="text-sm font-semibold text-text-primary">{blocker.category}</p>
-                    <p class="mt-1 text-sm text-text-secondary">{blocker.rawText}</p>
-                    <p class="mt-2 text-xs leading-5 text-text-muted">{blocker.guidance}</p>
-                  </div>
-                  {#if blocker.stale}
-                    <Badge variant="warning">stale</Badge>
-                  {/if}
-                </div>
-              </Card.Root>
-            {/each}
-          </div>
-        </Card.Root>
-      {/if}
-
-      <div class="grid gap-3 xl:grid-cols-2">
-        <Card.Root as="article" density="compact" surface="elevated" testId={setupWorkspaceTestIds.armingCheckChecklist}>
-          <h4 class="text-base font-semibold text-text-primary">{armingCheckItem?.label ?? "Arming checks"}</h4>
-          <p class="mt-2 text-sm text-text-secondary">
-            Review the active pre-arm check mask here. Toggling a bit stages the updated mask in the shared review tray instead of applying it directly.
-          </p>
-          <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.armingCurrentPrefix}-ARMING_CHECK`}>
-            Current · {currentValueText(armingCheckItem)}
-          </p>
-          {#if params.stagedEdits.ARMING_CHECK}
-            <p class="mt-2">
-              <SetupStagedBadge name="ARMING_CHECK" onUnstage={unstage} testId={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_CHECK`} />
-            </p>
-          {/if}
-
-          {#if armingCheckEntries.length > 0}
-            <div class="mt-4">
-              <SetupBitmaskChecklist
-                disabled={actionsBlocked || armingCheckItem?.readOnly === true}
-                items={armingCheckEntries}
-                onToggle={(entry) => toggleArmingCheck(Number(entry.key))}
-                title="Configured pre-arm checks"
-              />
-            </div>
+        <ActionRow align="start" class="mt-4">
+          {#if armed}
+            <Button
+              variant="destructive"
+              testId={setupWorkspaceTestIds.armingDisarm}
+              disabled={actionsBlocked || !prearmModel.canAttemptDisarm || actionPhase !== "idle"}
+              onclick={handleDisarm}
+            >
+              {actionPhase === "disarming" ? "Disarming…" : "Disarm"}
+            </Button>
           {:else}
-            <p class="mt-4 text-sm text-warning">ARMING_CHECK metadata is incomplete for this scope, so the checklist stays read-only.</p>
+            <Button
+              tone="success"
+              variant="soft"
+              testId={setupWorkspaceTestIds.armingArm}
+              disabled={actionsBlocked || (!confirmArm && !prearmModel.canAttemptArm) || actionPhase !== "idle"}
+              onclick={handleArm}
+            >
+              {#if actionPhase === "arming"}
+                Arming…
+              {:else if confirmArm}
+                Confirm arm
+              {:else}
+                Arm
+              {/if}
+            </Button>
+            {#if confirmArm}
+              <Button variant="secondary" onclick={() => (confirmArm = false)}>Cancel</Button>
+            {/if}
           {/if}
-        </Card.Root>
+        </ActionRow>
+      </SetupSectionCard>
+    </div>
 
-        <Card.Root as="article" density="compact" surface="elevated">
-          <h4 class="text-base font-semibold text-text-primary">{armingRequireItem?.label ?? "Arming method"}</h4>
-          <p class="mt-2 text-sm text-text-secondary">
-            Choose how the vehicle can be armed. This selector stays read-only when the current scope is missing the required option list.
-          </p>
-          <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-text-muted" data-testid={`${setupWorkspaceTestIds.armingCurrentPrefix}-ARMING_REQUIRE`}>
-            Current · {currentValueText(armingRequireItem)}
-          </p>
-          {#if params.stagedEdits.ARMING_REQUIRE}
-            <p class="mt-2">
-              <SetupStagedBadge name="ARMING_REQUIRE" onUnstage={unstage} testId={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_REQUIRE`} />
-            </p>
-          {/if}
+    {#if commandError}
+      <SetupNotice tone="danger" testId={setupWorkspaceTestIds.armingFailure}>{commandError}</SetupNotice>
+    {/if}
 
-          <div class="mt-4">
+    {#if checksDisabled}
+      <SetupNotice tone="danger" testId={`${setupWorkspaceTestIds.armingBannerPrefix}-checks-disabled`}>
+        ARMING_CHECK is disabled, so the vehicle can arm without normal pre-flight safety validation.
+      </SetupNotice>
+    {:else if checksPartial}
+      <SetupNotice tone="warning" testId={`${setupWorkspaceTestIds.armingBannerPrefix}-checks-partial`}>
+        ARMING_CHECK is using a partial check set. Review the disabled checks and request fresh pre-arm checks before flight.
+      </SetupNotice>
+    {/if}
+
+    {#if armingMethodDisabled}
+      <SetupNotice tone="warning" testId={`${setupWorkspaceTestIds.armingBannerPrefix}-method-disabled`}>
+        ARMING_REQUIRE is disabled, so GCS arming can bypass the physical arming gesture safeguards.
+      </SetupNotice>
+    {/if}
+
+    {#if prearmModel.blockers.length > 0}
+      <SetupSectionCard icon={CircleAlert} title="Current blockers" surface="elevated" testId={setupWorkspaceTestIds.armingBlockers}>
+        <SetupFieldStack divided>
+          {#each prearmModel.blockers as blocker (blocker.id)}
+            <div class="flex items-start justify-between gap-3 pt-3 first:pt-0">
+              <div>
+                <p class="text-sm font-semibold text-text-primary">{blocker.category}</p>
+                <p class="mt-1 text-sm text-text-secondary">{blocker.rawText}</p>
+                <p class="mt-2 text-xs leading-5 text-text-muted">{blocker.guidance}</p>
+              </div>
+              {#if blocker.stale}
+                <Badge variant="warning">stale</Badge>
+              {/if}
+            </div>
+          {/each}
+        </SetupFieldStack>
+      </SetupSectionCard>
+    {/if}
+
+    <div class="grid gap-3 xl:grid-cols-2">
+      <SetupSectionCard
+        icon={ListChecks}
+        title={armingCheckItem?.label ?? "Arming checks"}
+        description="Use the default all-checks setting when possible. Toggling a check stages the updated ARMING_CHECK value for later apply."
+        surface="elevated"
+        testId={setupWorkspaceTestIds.armingCheckChecklist}
+      >
+        {#if params.stagedEdits.ARMING_CHECK}
+          <p>
+            <SetupStagedBadge name="ARMING_CHECK" onUnstage={unstage} testId={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_CHECK`} />
+          </p>
+        {/if}
+
+        {#if armingCheckEntries.length > 0}
+          <SetupBitmaskTable
+            clearAllLabel="Disable all"
+            description="Most vehicles should keep all pre-arm checks enabled. Disable individual checks only for documented bench procedures."
+            disabled={actionsBlocked || armingCheckItem?.readOnly === true}
+            embedded
+            items={armingCheckEntries}
+            onSetAll={setArmingChecks}
+            onToggle={(entry) => toggleArmingCheck(Number(entry.key))}
+            title="Configured pre-arm checks"
+          />
+        {:else}
+          <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
+        {/if}
+      </SetupSectionCard>
+
+      <SetupSectionCard
+        icon={KeyRound}
+        title={armingRequireItem?.label ?? "Arming method"}
+        description="Choose how the vehicle can be armed. Keep arming safeguards enabled unless the vehicle documentation and operating procedure require a different value."
+        surface="elevated"
+      >
+        {#if params.stagedEdits.ARMING_REQUIRE}
+          <p>
+            <SetupStagedBadge name="ARMING_REQUIRE" onUnstage={unstage} testId={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_REQUIRE`} />
+          </p>
+        {/if}
+
+        {#if armingRequireItem}
+          <div>
             <NativeSelect
               disabled={actionsBlocked || armingRequireOptions.length === 0 || !armingRequireItem}
               onchange={(event) => stageRequire((event.currentTarget as HTMLSelectElement).value)}
@@ -485,9 +456,15 @@ async function handleDisarm() {
               testId={`${setupWorkspaceTestIds.armingInputPrefix}-ARMING_REQUIRE`}
               value={armingRequireDraft}
             />
-
           </div>
-        </Card.Root>
-      </div>
+        {:else}
+          <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
+        {/if}
+      </SetupSectionCard>
+    </div>
+
+    <SetupGuideCard title="Pre-arm safety" description="ArduPilot's default all-checks behavior is the safest baseline for routine operation.">
+      <p>Request checks after correcting blockers and before arming. Keep personnel clear of propellers, wheels, and control surfaces whenever an arm request is possible.</p>
+    </SetupGuideCard>
   {/snippet}
 </SetupSectionShell>

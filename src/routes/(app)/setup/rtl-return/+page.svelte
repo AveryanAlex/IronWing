@@ -1,4 +1,5 @@
 <script lang="ts">
+import { Home, Route } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import {
@@ -10,17 +11,14 @@ import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import { buildRtlReturnModel, type SafetyVehicleFamily } from "../../../../lib/setup/failsafe-model";
 import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
-import {
-  Alert,
-  Card,
-  Eyebrow,
-  Field,
-  HelperText,
-  Input,
-  StagedBadge as SetupStagedBadge,
-} from "../../../../components/ui";
-import SetupParamEnumControl from "../../../../features/setup/shared/SetupParamEnumControl.svelte";
+import { Eyebrow, HelperText } from "../../../../components/ui";
+import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
+import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
+import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
+import SetupParamEditorRow from "../../../../features/setup/shared/SetupParamEditorRow.svelte";
+import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
+import { resolveSetupEnumOptions } from "../../../../features/setup/shared/parameter-editing";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import {
   getSetupWorkspaceRouteContext,
@@ -224,13 +222,12 @@ function item(name: string): ParameterItemModel | null {
   return itemIndex.get(name) ?? null;
 }
 
-function enumOptions(name: string) {
-  const values = params.metadata?.get(name)?.values;
-  if (!Array.isArray(values)) {
-    return [];
-  }
+function visibleFields(fields: RtlFieldConfig[]): RtlFieldConfig[] {
+  return fields.filter((field) => item(field.name));
+}
 
-  return values.filter((entry) => Number.isFinite(entry.code) && entry.label.trim().length > 0);
+function enumOptions(name: string) {
+  return resolveSetupEnumOptions(params.metadata?.get(name)?.values);
 }
 
 function formatDisplayValue(rawValue: number | null, factor: number, decimals: number, sentinel?: number): string {
@@ -358,119 +355,80 @@ function unstage(name: string) {
   sectionId={section.id}
   eyebrow={section.title}
   title="Return-home behavior in operator-facing units"
-  description="RTL / Return keeps altitude, speed, timing, and landing behavior in purpose-built cards for the active vehicle family. The UI speaks in meters, meters per second, and seconds while the shared review tray still carries the raw parameter writes underneath."
+  description="Review RTL home, altitude, speed, timing, and final behavior for the active vehicle family. Values are shown in meters, meters per second, and seconds where applicable."
   testId={setupWorkspaceTestIds.rtlReturnSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.rtlReturnDocsLink }]}
 >
   {#snippet body()}
-      <Card.Root
-        density="compact"
-        gap="compact"
-        class="grid md:grid-cols-3"
-        surface="elevated"
-        testId={setupWorkspaceTestIds.rtlReturnSummary}
-      >
-    <div>
-      <Eyebrow tracking="widest">Return summary</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary">{model.summaryText}</p>
-      <HelperText class="mt-1">{model.detailText}</HelperText>
-    </div>
-    <div>
-      <Eyebrow tracking="widest">Current family</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary">{model.family}</p>
-      <HelperText class="mt-1">Only the parameters that make sense for this vehicle family remain in the purpose-built card.</HelperText>
-    </div>
-    <div>
-      <Eyebrow tracking="widest">Stage state</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary">{model.hasPendingChanges ? "Queued changes present" : "No queued RTL edits"}</p>
-      <HelperText class="mt-1">Return changes remain unconfirmed until the shared review tray is clear and metadata is complete.</HelperText>
-    </div>
-  </Card.Root>
+    <SetupSectionCard
+      icon={Home}
+      title="Return summary"
+      description="Confirm the active return profile before relying on RTL."
+      surface="elevated"
+      testId={setupWorkspaceTestIds.rtlReturnSummary}
+    >
+      <div class="grid gap-3 md:grid-cols-3">
+        <div>
+          <Eyebrow tracking="widest">Home behavior</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary">{model.summaryText}</p>
+          <HelperText class="mt-1">RTL uses the vehicle home position or rally behavior configured by the firmware.</HelperText>
+        </div>
+        <div>
+          <Eyebrow tracking="widest">Current family</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary">{model.family}</p>
+          <HelperText class="mt-1">Only controls supported by this vehicle family are shown.</HelperText>
+        </div>
+        <div>
+          <Eyebrow tracking="widest">Staged state</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary">{model.hasPendingChanges ? "RTL edits staged" : "No staged RTL edits"}</p>
+          <HelperText class="mt-1">Apply staged return changes before using them operationally.</HelperText>
+        </div>
+      </div>
+    </SetupSectionCard>
 
-  {#if model.recoveryReasons.length > 0}
-    <Alert variant="warning" density="compact" shadow={false} testId={setupWorkspaceTestIds.rtlReturnRecovery}>
-      <p class="font-semibold text-text-primary">RTL / Return is staying fail-closed while required rows are partial.</p>
-      <ul class="mt-2 list-disc space-y-1 pl-5">
-        {#each model.recoveryReasons as reason (reason)}
-          <li>{reason}</li>
-        {/each}
-      </ul>
-    </Alert>
-  {/if}
-
-  {#each model.warningTexts as text, index (text)}
-      <Alert
-        variant="warning"
-        density="compact"
-        shadow={false}
-      description={text}
-      testId={`${setupWorkspaceTestIds.rtlReturnBannerPrefix}-${index}`}
-    />
-  {/each}
+  <SetupNoticeList notices={model.warningTexts} tone="warning" testIdPrefix={setupWorkspaceTestIds.rtlReturnBannerPrefix} />
 
   <div class="space-y-3">
     {#each cards as card (card.id)}
-      <Card.Root as="article" density="compact" surface="elevated" testId={`${setupWorkspaceTestIds.rtlReturnCardPrefix}-${card.id}`}>
-        <div>
-          <Eyebrow tracking="widest">{card.title}</Eyebrow>
-          <h4 class="mt-2 text-base font-semibold text-text-primary">{card.summary}</h4>
-        </div>
-
-        <div class="mt-4 grid gap-3 xl:grid-cols-2">
-          {#each card.fields as field (field.name)}
-            <Card.Root density="compact" surface="muted">
-              <Field.Root>
-                <div class="flex items-center gap-2">
-                <Field.Label for={`${card.id}-${field.name}`}>
-                  {field.label}
-                </Field.Label>
-                {#if params.stagedEdits[field.name]}
-                  <SetupStagedBadge
-                    name={field.name}
-                    onUnstage={unstage}
-                    testId={`${setupWorkspaceTestIds.rtlReturnStagedPrefix}-${field.name}`}
-                  />
-                {/if}
-                </div>
-              <Field.Description>{field.description}</Field.Description>
-              <Eyebrow class="mt-3" tracking="widest" testId={`${setupWorkspaceTestIds.rtlReturnCurrentPrefix}-${field.name}`}>
-                Current · {#if field.kind === "enum"}{item(field.name)?.valueLabel ?? item(field.name)?.valueText ?? "Unavailable"}{:else}{currentDisplayText(field.name, field.factor, field.decimals, field.unit, field.sentinel)}{/if}
-              </Eyebrow>
-
-              <div class="mt-4">
-                {#if field.kind === "enum"}
-                  <SetupParamEnumControl
-                    disabled={actionsBlocked || enumOptions(field.name).length === 0 || !item(field.name)}
-                    id={`${card.id}-${field.name}`}
-                    onChange={(value) => stageDraftValue(field, value)}
-                    options={enumOptions(field.name)}
-                    testId={`${setupWorkspaceTestIds.rtlReturnInputPrefix}-${field.name}`}
-                    value={draftValue(field.name, item(field.name)?.value ?? null, 1, 0, field.sentinel)}
-                  />
-                {:else}
-                  <div class="flex items-center gap-2">
-                    <Input
-                      disabled={actionsBlocked || !item(field.name)}
-                      id={`${card.id}-${field.name}`}
-                      min={field.min}
-                      onchange={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
-                      oninput={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
-                      step={field.step}
-                      testId={`${setupWorkspaceTestIds.rtlReturnInputPrefix}-${field.name}`}
-                      type="number"
-                      value={draftValue(field.name, item(field.name)?.value ?? null, field.factor, field.decimals, field.sentinel)}
-                    />
-                    <span class="shrink-0 text-xs text-text-muted">{field.unit}</span>
-                  </div>
-                {/if}
-
-              </div>
-              </Field.Root>
-            </Card.Root>
-          {/each}
-        </div>
-      </Card.Root>
+      <SetupSectionCard
+        icon={Route}
+        title={card.title}
+        description={card.summary}
+        surface="elevated"
+        testId={`${setupWorkspaceTestIds.rtlReturnCardPrefix}-${card.id}`}
+      >
+        {#if visibleFields(card.fields).length > 0}
+          <SetupFieldStack divided>
+            {#each visibleFields(card.fields) as field (field.name)}
+              <SetupParamEditorRow
+                item={item(field.name)}
+                id={`${card.id}-${field.name}`}
+                label={field.label}
+                description={field.description}
+                mode={field.kind ?? "number"}
+                options={enumOptions(field.name)}
+                value={draftValue(field.name, item(field.name)?.value ?? null, field.factor, field.decimals, field.sentinel)}
+                stagedEdits={params.stagedEdits}
+                stagedTestId={`${setupWorkspaceTestIds.rtlReturnStagedPrefix}-${field.name}`}
+                onUnstage={unstage}
+                onChange={(value) => stageDraftValue(field, value)}
+                inputTestId={`${setupWorkspaceTestIds.rtlReturnInputPrefix}-${field.name}`}
+                disabled={actionsBlocked}
+                min={field.min}
+                step={field.step}
+                unit={field.kind === "enum" ? null : field.unit}
+              />
+            {/each}
+          </SetupFieldStack>
+        {:else}
+          <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
+        {/if}
+      </SetupSectionCard>
     {/each}
-      </div>
+
+    <SetupGuideCard title="RTL review" description="Check home, altitude, and final behavior together.">
+      <p>For copters, confirm climb and final altitude. For planes, confirm return altitude and auto-land behavior. For rovers, confirm return speed and arrival radius.</p>
+    </SetupGuideCard>
+  </div>
   {/snippet}
 </SetupSectionShell>

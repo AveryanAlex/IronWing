@@ -33,8 +33,6 @@ function createCopterInitialParamsStore(): ParamStore {
     MOT_THST_HOVER: 0.25,
     MOT_BAT_VOLT_MAX: 16.2,
     MOT_BAT_VOLT_MIN: 13.2,
-    INS_GYRO_FILTER: 20,
-    INS_ACCEL_FILTER: 20,
     ATC_RAT_PIT_FLTD: 15,
     ATC_RAT_PIT_FLTE: 5,
     ATC_RAT_PIT_FLTT: 15,
@@ -83,8 +81,6 @@ function createQuadPlaneInitialParamsStore(entries: Record<string, number> = {})
     Q_A_ACCEL_R_MAX: 8000,
     Q_A_ACCEL_Y_MAX: 8000,
     Q_A_THR_MIX_MAN: 0.2,
-    INS_GYRO_FILTER: 20,
-    INS_ACCEL_FILTER: 20,
     ACRO_YAW_P: 0.8,
     BATT_ARM_VOLT: 13.3,
     BATT_LOW_VOLT: 14.4,
@@ -192,7 +188,7 @@ describe("buildInitialParamsModel", () => {
     expect(model.batches.every((batch) => batch.stageAllowed === false)).toBe(true);
   });
 
-  it("surfaces purposeful unsupported copy for plain fixed-wing scopes", () => {
+  it("surfaces operator-facing unsupported copy for plain fixed-wing scopes", () => {
     const model = buildInitialParamsModel({
       vehicleType: "fixed_wing",
       paramStore: createParamStore({ Q_ENABLE: 0 }),
@@ -207,6 +203,6 @@ describe("buildInitialParamsModel", () => {
 
     expect(model.family.state).toBe("plain-plane");
     expect(model.batches).toEqual([]);
-    expect(model.recoveryReasons[0]).toContain("Fixed-wing");
+    expect(model.recoveryReasons[0]).toContain("fixed-wing tuning");
   });
 });

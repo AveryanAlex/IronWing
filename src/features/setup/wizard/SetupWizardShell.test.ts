@@ -112,7 +112,7 @@ function createSnapshot(overrides: Partial<WorkspaceSnapshot> = {}): WorkspaceSn
       seek_epoch: 0,
       reset_revision: 0,
     },
-    gpsConfigured: true,
+    navigationConfigured: true,
     batteryConfigured: true,
     checkpointPhase: "idle",
     ...overrides,
@@ -239,7 +239,7 @@ describe("SetupWizardShell", () => {
     store.advance();
     store.advance();
 
-    expect(get(store).currentStepId).toBe("gps");
+    expect(get(store).currentStepId).toBe("navigation");
     await waitFor(() => {
       expect(screen.getByTestId(setupWorkspaceTestIds.wizardStepSkip)).toBeTruthy();
     });

@@ -84,7 +84,7 @@ export function resolveMotorOwner(
       servoIndex: null,
       functionParamName: null,
       reverseParamName: null,
-      reason: "Motor numbering is invalid, so output ownership cannot be proven.",
+      reason: "Motor numbering is invalid, so no output can be selected for this motor.",
     };
   }
 
@@ -125,7 +125,7 @@ export function resolveMotorOwner(
       servoIndex: ambiguousServoIndex,
       functionParamName: `SERVO${ambiguousServoIndex}_FUNCTION`,
       reverseParamName: null,
-      reason: "A staged SERVOx_FUNCTION remap is still pending, so the owning output is not safe to prove yet.",
+      reason: "A staged SERVOx_FUNCTION remap is pending. Apply or discard it before testing this motor output.",
     };
   }
 
@@ -135,7 +135,7 @@ export function resolveMotorOwner(
       servoIndex: null,
       functionParamName: null,
       reverseParamName: null,
-      reason: "No stable SERVOx_FUNCTION row proves which output owns this motor right now.",
+      reason: "No current SERVOx_FUNCTION row maps to this motor.",
     };
   }
 
@@ -166,7 +166,7 @@ function resolveLayoutTestStatus(
 ): { bridgeSupported: boolean; testStatus: MotorTestStatus; testReason: string | null } {
   if (layoutModel.status !== "supported") {
     const layoutReason = layoutModel.status === "preview-only"
-      ? "Direction-dependent testing is blocked because this layout is preview-only and ownership remains advisory."
+      ? "Direction-dependent testing is blocked because this layout is preview-only. Verify the airframe manually first."
       : "Direction-dependent testing is blocked because the active layout is unsupported. Verify the airframe manually first.";
 
     return {

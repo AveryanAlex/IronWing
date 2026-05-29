@@ -6,7 +6,7 @@ export type WizardStepId =
   | "calibration"
   | "rc_receiver"
   | "arming"
-  | "gps"
+  | "navigation"
   | "battery_monitor"
   | "failsafe"
   | "flight_modes"
@@ -20,7 +20,7 @@ export type WizardStepDefinition = {
   description: string;
   tier: WizardStepTier;
   sectionId: SetupSectionId;
-  autoUpgradeWhen?: "gps_unconfigured" | "battery_unconfigured";
+  autoUpgradeWhen?: "navigation_unconfigured" | "battery_unconfigured";
 };
 
 /**
@@ -62,12 +62,12 @@ export const WIZARD_STEP_CATALOG: ReadonlyArray<WizardStepDefinition> = [
     sectionId: "arming",
   },
   {
-    id: "gps",
-    title: "GPS",
-    description: "Pick the right GPS receiver type so autonomous modes have a reliable position fix.",
+    id: "navigation",
+    title: "Navigation",
+    description: "Pick the receiver and navigation sensor defaults autonomous modes need for a reliable fix.",
     tier: "recommended",
-    sectionId: "gps",
-    autoUpgradeWhen: "gps_unconfigured",
+    sectionId: "navigation",
+    autoUpgradeWhen: "navigation_unconfigured",
   },
   {
     id: "battery_monitor",
@@ -101,7 +101,7 @@ export const WIZARD_STEP_CATALOG: ReadonlyArray<WizardStepDefinition> = [
 ];
 
 export type WizardFactsView = {
-  gpsConfigured: boolean | null;
+  navigationConfigured: boolean | null;
   batteryConfigured: boolean | null;
 };
 
@@ -115,7 +115,7 @@ export function resolveStepTier(
   step: WizardStepDefinition,
   facts: WizardFactsView,
 ): WizardStepTier {
-  if (step.autoUpgradeWhen === "gps_unconfigured" && facts.gpsConfigured === false) {
+  if (step.autoUpgradeWhen === "navigation_unconfigured" && facts.navigationConfigured === false) {
     return "required";
   }
   if (step.autoUpgradeWhen === "battery_unconfigured" && facts.batteryConfigured === false) {

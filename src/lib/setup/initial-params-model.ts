@@ -17,7 +17,6 @@ import {
   calcMotThrustExpo,
   calcRateFilterD,
   calcYawFilterT,
-  INS_ACCEL_FILTER,
   MOT_THST_HOVER,
 } from "../../data/battery-presets";
 import type { ParamMetadataMap } from "../../param-metadata";
@@ -145,9 +144,8 @@ const MOT_PARAMS = new Set([
 const PREVIEW_BATCHES: RecommendationBatchDefinition[] = [
   {
     id: "control_baseline",
-    title: "Control and filter baseline",
-    description:
-      "Use prop-size formulas to preview the thrust curve, rate filters, and acceleration limits before deeper tuning.",
+    title: "Control baseline",
+    description: "Use prop-size formulas to preview the thrust curve, controller response, and acceleration limits before deeper tuning.",
   },
   {
     id: "battery_compensation",
@@ -293,18 +291,6 @@ function buildRecommendationDefinitions(inputs: ResolvedInitialParamsInputs): Re
       proposedValue: MOT_THST_HOVER,
     },
     {
-      canonical: "INS_GYRO_FILTER",
-      label: "Gyro filter",
-      batchId: "control_baseline",
-      proposedValue: gyroFilter,
-    },
-    {
-      canonical: "INS_ACCEL_FILTER",
-      label: "Accel filter",
-      batchId: "control_baseline",
-      proposedValue: INS_ACCEL_FILTER,
-    },
-    {
       canonical: "ATC_RAT_PIT_FLTD",
       label: "Pitch D filter",
       batchId: "control_baseline",
@@ -442,7 +428,7 @@ function describeFamily(profile: VehicleProfile): InitialParamsFamilyRecommendat
         state: "quadplane",
         headline: "QuadPlane VTOL starter baseline",
         detail:
-          "QuadPlane is fully identified, so hover-related ATC_* and MOT_* starters are remapped to the truthful Q_A_* and Q_M_* families.",
+          "QuadPlane hover starter values are mapped to the VTOL Q_A_* and Q_M_* parameter families.",
         supportsCalculator: true,
       };
     }
@@ -459,9 +445,9 @@ function describeFamily(profile: VehicleProfile): InitialParamsFamilyRecommendat
 
     return {
       state: "plain-plane",
-      headline: "Fixed-wing starter gap",
+        headline: "Fixed-wing starter values not available",
       detail:
-        "This calculator is intentionally scoped to multirotor and QuadPlane hover tuning. Fixed-wing starter values stay outside this purpose-built section.",
+          "Starter calculations are available for multirotor and QuadPlane hover tuning. Use the PID Tuning section and ArduPilot guidance for fixed-wing tuning.",
       supportsCalculator: false,
     };
   }
@@ -469,7 +455,7 @@ function describeFamily(profile: VehicleProfile): InitialParamsFamilyRecommendat
   if (profile.isRover) {
     return {
       state: "rover",
-      headline: "Rover starter gap",
+        headline: "Rover starter values not available",
       detail:
         "Rover startup tuning is intentionally not modeled in this calculator-first section yet. Use the dedicated setup sections or Full Parameters instead.",
       supportsCalculator: false,
@@ -480,7 +466,7 @@ function describeFamily(profile: VehicleProfile): InitialParamsFamilyRecommendat
     state: "unknown",
     headline: "Unsupported vehicle family",
     detail:
-      "The current vehicle family is ambiguous, so the initial-parameter calculator stays fail-closed instead of guessing which parameter families should be touched.",
+        "The current vehicle family is not identified, so this calculator cannot choose the correct starter families.",
     supportsCalculator: false,
   };
 }
@@ -639,7 +625,7 @@ export function buildInitialParamsModel(input: InitialParamsModelInput): Initial
   if (resolvedBatches.length === 0) {
     previewStateText = "No previewable rows";
     previewDetailText = recoveryReasons[0]
-      ?? "The current scope does not expose enough initial-parameter rows to build a truthful starter preview.";
+      ?? "This firmware does not expose enough initial-parameter rows to build a starter preview.";
   } else if (usingFallbackInputs) {
     previewStateText = "Stale preview retained";
   }

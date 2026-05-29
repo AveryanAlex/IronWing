@@ -1,4 +1,5 @@
 <script lang="ts">
+import { Fan, Power } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
@@ -17,10 +18,11 @@ import {
   getVtolLayoutModel,
   type MotorDiagramModel,
 } from "../../../../lib/setup/vtol-layout-model";
-import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import MotorDiagram from "../../../../features/setup/shared/MotorDiagram.svelte";
+import { SetupFieldStack, SetupGuideCard, SetupNotice, SetupSectionCard } from "../../../../features/setup/shared";
+import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
 import { Alert, Badge, Button, Card, Eyebrow, HelperText } from "../../../../components/ui";
 import {
   getSetupWorkspaceRouteContext,
@@ -109,7 +111,7 @@ let layoutStateDetail = $derived.by(() => {
   }
 
   if (lastScopedGoodLayoutSummary && lastScopedGoodLayoutSummary.scopeKey === view.activeScopeKey) {
-    return `Last scoped-good layout · ${lastScopedGoodLayoutSummary.label}. Testing stays blocked until truth returns.`;
+    return `Last valid layout · ${lastScopedGoodLayoutSummary.label}. Testing stays blocked until the layout refreshes.`;
   }
 
   return unresolvedLayoutDetail(appliedProfile);
@@ -124,7 +126,7 @@ let safetyStateLabel = $derived.by(() => {
   }
 
   if (unlockDisabledReason) {
-    return "Fail-closed";
+    return "Locked";
   }
 
   return testUnlocked ? "Unlocked" : "Locked";
@@ -151,18 +153,18 @@ let reversalStateLabel = $derived.by(() => {
     return `${pendingReversalCount} queued`;
   }
 
-  return `${resolvedOwnerCount}/${rows.length} owner-proven`;
+  return `${resolvedOwnerCount}/${rows.length} outputs mapped`;
 });
 let reversalStateDetail = $derived.by(() => {
   if (rows.length === 0) {
-    return "Reversal staging is hidden until the section can prove motor rows and output ownership.";
+    return "Reversal staging appears after motor rows and mapped outputs are available.";
   }
 
   if (pendingReversalCount > 0) {
-    return "Queued SERVOx_REVERSED edits are sitting in the shared review tray and still require review + apply outside this section.";
+    return "Queued SERVOx_REVERSED edits are waiting in staged changes and still require review + apply outside this section.";
   }
 
-  return `${resolvedOwnerCount} rows can stage one-click SERVOx_REVERSED fixes. The rest stay diagnosis-only because ownership or reverse params are not provable.`;
+  return `${resolvedOwnerCount} rows can stage one-click SERVOx_REVERSED fixes. The rest stay diagnosis-only because mapped outputs or reverse settings are unavailable.`;
 });
 let hasQueuedLayoutChange = $derived(
   previewProfile.quadPlaneEnabled !== appliedProfile.quadPlaneEnabled ||
@@ -177,7 +179,7 @@ let banners = $derived.by(() => {
     next.push({
       id: "queued-layout",
       tone: "warning",
-      text: "Frame or VTOL changes are queued in the shared review tray. This section keeps showing the last applied layout and fails closed if the queued edits would change motor truth after the next reboot or refresh.",
+      text: "Frame or VTOL changes are staged. This section keeps showing the last applied layout until those edits are applied and parameters refresh.",
     });
   }
 
@@ -191,13 +193,13 @@ let banners = $derived.by(() => {
     next.push({
       id: "layout-preview",
       tone: "warning",
-      text: `${layoutModel.message ?? "This layout is preview-only."} Direction-dependent testing stays blocked until the layout becomes authoritative.`,
+      text: `${layoutModel.message ?? "This layout is preview-only."} Direction-dependent testing stays blocked until the layout is available from applied parameters.`,
     });
   } else if (layoutModel.status === "unsupported") {
     next.push({
       id: "layout-unsupported",
       tone: "danger",
-      text: `${layoutModel.message ?? "The current layout is unsupported."} Motor rows stay fail-closed and one-click fixes stop at manual guidance.`,
+      text: `${layoutModel.message ?? "The current layout is unsupported."} Motor rows stay locked and one-click fixes stop at manual guidance.`,
     });
   }
 
@@ -209,7 +211,7 @@ let banners = $derived.by(() => {
     next.push({
       id: "last-good-layout",
       tone: "info",
-      text: `Last scoped-good layout: ${lastScopedGoodLayoutSummary.label}. ${lastScopedGoodLayoutSummary.detail} Test buttons stay blocked until live truth returns for this scope.`,
+      text: `Last valid layout: ${lastScopedGoodLayoutSummary.label}. ${lastScopedGoodLayoutSummary.detail} Test buttons stay blocked until the current scope refreshes.`,
     });
   }
 
@@ -217,7 +219,7 @@ let banners = $derived.by(() => {
     next.push({
       id: "bridge-limit",
       tone: "info",
-      text: `${bridgeLimitedCount} row${bridgeLimitedCount === 1 ? " is" : "s are"} visible above the current motor_test bridge window. They remain on-screen with explicit manual-only guidance instead of being silently hidden.`,
+      text: `${bridgeLimitedCount} row${bridgeLimitedCount === 1 ? " is" : "s are"} visible above the current motor_test bridge window. They remain on-screen with manual-only guidance.`,
     });
   }
 
@@ -267,15 +269,15 @@ function resolveUnlockDisabledReason(input: {
   }
 
   if (!input.liveConnected) {
-    return "Testing stays locked until the live vehicle link is connected for this scope.";
+    return "Testing stays locked until the live vehicle link is connected.";
   }
 
   if (!input.layoutModel) {
-    return "Testing stays locked because the active layout is unknown for this scope.";
+    return "Testing stays locked because the active layout is unavailable.";
   }
 
   if (input.layoutModel.status === "preview-only") {
-    return "Testing stays locked because this layout is preview-only and motor ownership is still advisory.";
+    return "Testing stays locked because this layout is preview-only. Verify the airframe manually first.";
   }
 
   if (input.layoutModel.status === "unsupported") {
@@ -324,7 +326,7 @@ function layoutModelDetail(currentLayoutModel: MotorDiagramModel): string {
     return currentLayoutModel.message;
   }
 
-  return `${currentLayoutModel.motors.length} mapped motors are visible in ArduPilot test order for this scope.`;
+  return `${currentLayoutModel.motors.length} mapped motors are shown in ArduPilot test order.`;
 }
 
 function unresolvedLayoutDetail(profile: VehicleProfile): string {
@@ -333,28 +335,16 @@ function unresolvedLayoutDetail(profile: VehicleProfile): string {
       case "enable-pending":
         return "Q_ENABLE is staged but not yet applied. Keep motor testing locked until the vehicle reboots and the Q_FRAME_* family refreshes for the same scope.";
       case "awaiting-refresh":
-        return "QuadPlane is enabled, but Q_FRAME_CLASS and Q_FRAME_TYPE have not refreshed yet. This section refuses to invent motor order, direction, or row ownership while that truth is missing.";
+        return "QuadPlane is enabled, but Q_FRAME_CLASS and Q_FRAME_TYPE have not refreshed yet. Motor order and direction checks are unavailable until they do.";
       case "partial-refresh":
         return "Only part of the Q_FRAME family is present. Finish the refresh before trusting any direction-dependent motor guidance here.";
       case "plain-plane":
       default:
-        return "Plane firmware is still in plain fixed-wing mode for this scope. Enable VTOL in Frame & Orientation first, then refresh parameters before opening motor-direction work here.";
+        return "Plane firmware is still in plain fixed-wing mode. Enable VTOL in Frame & Orientation first, then refresh parameters before opening motor-direction work here.";
     }
   }
 
-  return "The active scope does not currently expose a motor layout the section can trust.";
-}
-
-function bannerVariant(tone: Tone): "info" | "warning" | "danger" {
-  switch (tone) {
-    case "warning":
-      return "warning";
-    case "danger":
-      return "danger";
-    case "info":
-    default:
-      return "info";
-  }
+  return "The active scope does not currently expose a supported motor layout.";
 }
 
 function directionBadge(direction: MotorDirection): { label: string; variant: BadgeVariant } {
@@ -413,10 +403,10 @@ function rowAvailabilityText(row: MotorTestRow): string {
 
 function rowOwnerText(row: MotorTestRow): string {
   if (row.ownerStatus === "resolved" && row.servoIndex !== null) {
-    return `Owner proven · SERVO${row.servoIndex}`;
+    return `Mapped output · SERVO${row.servoIndex}`;
   }
 
-  return row.ownerReason ?? "Owner not proven";
+  return row.ownerReason ?? "Output mapping unavailable";
 }
 
 function directionControlsVisible(row: MotorTestRow): boolean {
@@ -452,7 +442,7 @@ function reversalButtonLabel(row: MotorTestRow): string {
   const item = itemIndex.get(row.reversalParamName) ?? null;
   const nextValue = item?.value === 1 ? 0 : 1;
   const verb = nextValue === 1 ? "Stage reversal" : "Stage normal direction";
-  return `${verb} in review tray`;
+  return `${verb} for review`;
 }
 
 function selectRow(motorNumber: number) {
@@ -543,48 +533,56 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
 <SetupSectionShell
   sectionId={section.id}
   eyebrow={section.title}
-  title="Fail-closed motor direction proof with one shared unlock"
-  description="Motor order, expected direction, and reversal staging only appear when this scope can prove the active layout. Unlock once at the section level, test rows directly, and queue any reversal fix through the shared review tray instead of a local apply path."
+  title="Motor order and direction checks with one shared unlock"
+  description="Remove props before motor/ESC tests. Confirm ArduPilot motor order, expected spin direction, and SERVOx_REVERSED staging from the applied layout, then stage any reversal fix for review."
   testId={setupWorkspaceTestIds.motorsEscSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.motorsEscDocsLink }]}
 >
   {#snippet body()}
-      <Card.Root class="grid md:grid-cols-3" density="compact" gap="compact" testId={setupWorkspaceTestIds.motorsEscSummary}>
-    <div>
-      <Eyebrow tracking="widest">Layout truth</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.motorsEscLayoutState}>
-        {layoutStateLabel}
-      </p>
-      <HelperText class="mt-1">{layoutStateDetail}</HelperText>
+    <SetupSectionCard
+      icon={Fan}
+      title="Motor test readiness"
+      description="Verify motor order and direction against the applied ArduPilot layout before staging any direction changes."
+      surface="elevated"
+      testId={setupWorkspaceTestIds.motorsEscSummary}
+    >
+      <div class="grid gap-4 md:grid-cols-3">
+        <div>
+          <Eyebrow tracking="widest">Motor layout</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.motorsEscLayoutState}>
+            {layoutStateLabel}
+          </p>
+          <HelperText class="mt-1">{layoutStateDetail}</HelperText>
 
-      {#if layoutModel}
-        <div class="mt-4 flex justify-center">
-          <MotorDiagram model={layoutModel} activeMotor={activeMotorNumber ?? selectedMotorNumber} size={160} />
+          {#if layoutModel}
+            <div class="mt-4 flex justify-center">
+              <MotorDiagram model={layoutModel} activeMotor={activeMotorNumber ?? selectedMotorNumber} size={160} />
+            </div>
+          {/if}
         </div>
-      {/if}
-    </div>
-    <div>
-      <Eyebrow tracking="widest">Safety unlock</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.motorsEscSafetyState}>
-        {safetyStateLabel}
-      </p>
-      <HelperText class="mt-1">{safetyStateDetail}</HelperText>
-    </div>
-    <div>
-      <Eyebrow tracking="widest">Reversal staging</Eyebrow>
-      <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.motorsEscReversalState}>
-        {reversalStateLabel}
-      </p>
-      <HelperText class="mt-1">{reversalStateDetail}</HelperText>
-    </div>
-  </Card.Root>
+        <div>
+          <Eyebrow tracking="widest">Safety unlock</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.motorsEscSafetyState}>
+            {safetyStateLabel}
+          </p>
+          <HelperText class="mt-1">{safetyStateDetail}</HelperText>
+        </div>
+        <div>
+          <Eyebrow tracking="widest">Direction changes</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.motorsEscReversalState}>
+            {reversalStateLabel}
+          </p>
+          <HelperText class="mt-1">{reversalStateDetail}</HelperText>
+        </div>
+      </div>
+    </SetupSectionCard>
 
   {#if retainedReversalFailures.length > 0}
       <Alert
         variant="danger"
         density="compact"
         shadow={false}
-      title="The shared review tray is still retaining reversal failures."
+      title="Some staged reversal changes still need attention."
       testId={setupWorkspaceTestIds.motorsEscFailure}
     >
       <ul class="mt-2 list-disc space-y-1 pl-5">
@@ -595,26 +593,10 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
     </Alert>
   {/if}
 
-  {#each banners as banner (banner.id)}
-      <Alert
-        variant={bannerVariant(banner.tone)}
-        density="compact"
-        shadow={false}
-      testId={`${setupWorkspaceTestIds.motorsEscBannerPrefix}-${banner.id}`}
-    >
-      {banner.text}
-    </Alert>
-  {/each}
+  <SetupNoticeList notices={banners} testIdPrefix={setupWorkspaceTestIds.motorsEscBannerPrefix} />
 
-  <Card.Root density="compact">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <Eyebrow tracking="widest">Motor test gate</Eyebrow>
-        <HelperText class="mt-2">
-          Visible rows · {rows.length} · Direct test rows · {testableCount} · Bridge-limited rows · {bridgeLimitedCount}
-        </HelperText>
-      </div>
-
+  <SetupSectionCard icon={Power} title="Motor test gate" surface="elevated" compact>
+    {#snippet actions()}
       <Button
         variant={testUnlocked ? "destructive" : "secondary"}
         testId={setupWorkspaceTestIds.motorsEscUnlock}
@@ -623,21 +605,27 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
       >
         {testUnlocked ? "Lock motor test" : "Unlock motor test"}
       </Button>
-    </div>
+    {/snippet}
+
+    <SetupFieldStack gap="compact">
+      <HelperText>
+          Visible rows · {rows.length} · Direct test rows · {testableCount} · Bridge-limited rows · {bridgeLimitedCount}
+      </HelperText>
 
     {#if unlockDisabledReason}
-      <HelperText class="mt-3">{unlockDisabledReason}</HelperText>
+      <HelperText>{unlockDisabledReason}</HelperText>
     {:else if !testUnlocked}
-      <HelperText class="mt-3">Unlock once to expose direct row actions. This gate stays section-level, so the rows below do not ask for another confirmation before each pulse.</HelperText>
+      <HelperText>Unlock once to expose direct row actions. Keep props removed before sending any motor test pulse.</HelperText>
     {:else}
-      <HelperText class="mt-3">Motor test is unlocked for this scoped session. Use the row actions below, confirm the observed direction, and queue any safe reversal fix into the shared review tray.</HelperText>
+      <HelperText>Motor test is unlocked for this session. Use the row actions below, confirm the observed direction, and stage any reversal fix for review.</HelperText>
     {/if}
-  </Card.Root>
+    </SetupFieldStack>
+  </SetupSectionCard>
 
   {#if rows.length === 0}
-    <Alert variant="info" density="compact" shadow={false}>
-      Motor rows are hidden until the section can prove a real layout. Use Frame & Orientation to recover missing truth before testing.
-    </Alert>
+    <SetupNotice tone="info">
+      No matching motor settings are available for this firmware. Use Frame & Orientation to refresh layout settings before testing.
+    </SetupNotice>
   {:else}
     <div class="space-y-3">
       {#each rows as row (row.motorNumber)}
@@ -736,7 +724,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
                 <Card.Root class="mt-4" surface="primary" density="default">
                   {#if row.ownerStatus === "resolved" && row.reversalParamName && reverseParamItem}
                     <p class="text-sm leading-6 text-text-secondary">
-                      Queue a shared-tray reversal fix for {row.reversalParamName}. The section never writes this directly.
+                      Stage a reversal fix for {row.reversalParamName}. The section does not apply it directly.
                     </p>
                     <Button
                       class="mt-3"
@@ -745,11 +733,11 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
                       disabled={!canStageReversal(row)}
                       onclick={() => stageReversal(row)}
                     >
-                      {reversalQueued ? "Queued in review tray" : reversalButtonLabel(row)}
+                      {reversalQueued ? "Staged for review" : reversalButtonLabel(row)}
                     </Button>
                   {:else}
                     <p class="text-sm leading-6 text-text-secondary" data-testid={`${setupWorkspaceTestIds.motorsEscRowManualPrefix}-${row.motorNumber}`}>
-                      {row.ownerReason ?? "The section cannot prove the owning SERVOx_FUNCTION / SERVOx_REVERSED rows, so reversal stops at manual guidance."}
+                      {row.ownerReason ?? "The owning SERVOx_FUNCTION / SERVOx_REVERSED rows are unavailable, so reversal stops at manual guidance."}
                     </p>
                   {/if}
 
@@ -766,5 +754,10 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
       {/each}
     </div>
   {/if}
+
+  <SetupGuideCard title="Motor/ESC test checklist">
+    <p>Remove all props before sending any motor test command.</p>
+    <p>Run motors in ArduPilot test order, compare the observed spin against the expected CW/CCW direction, then stage SERVOx_REVERSED changes only for outputs that map to the tested motor.</p>
+  </SetupGuideCard>
   {/snippet}
 </SetupSectionShell>

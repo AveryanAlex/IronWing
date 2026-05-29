@@ -6,7 +6,7 @@ export type SetupSectionId =
   | "frame_orientation"
   | "calibration"
   | "rc_receiver"
-  | "gps"
+  | "navigation"
   | "battery_monitor"
   | "motors_esc"
   | "servo_outputs"
@@ -36,7 +36,7 @@ export type SetupSectionPath =
   | "/setup/frame-orientation"
   | "/setup/calibration"
   | "/setup/rc-receiver"
-  | "/setup/gps"
+  | "/setup/navigation"
   | "/setup/battery-monitor"
   | "/setup/motors-esc"
   | "/setup/servo-outputs"
@@ -79,19 +79,19 @@ export const SETUP_SECTION_GROUPS: ReadonlyArray<SetupSectionGroupDefinition> = 
   {
     id: "workspace",
     title: "Workspace",
-    description: "Start from truthful setup status before moving into expert editors.",
+    description: "Start from the setup dashboard before opening detailed editors.",
     order: 0,
   },
   {
     id: "hardware",
     title: "Hardware",
-    description: "Airframe, sensors, power, outputs, and port ownership stay visible together.",
+    description: "Airframe, sensors, power, outputs, and serial connections.",
     order: 1,
   },
   {
     id: "safety",
     title: "Safety & control",
-    description: "Receiver, modes, failsafes, return, fence, and arming truth stay explicit.",
+    description: "Receiver, modes, failsafes, return, fence, and arming settings.",
     order: 2,
   },
   {
@@ -102,8 +102,8 @@ export const SETUP_SECTION_GROUPS: ReadonlyArray<SetupSectionGroupDefinition> = 
   },
   {
     id: "recovery",
-    title: "Recovery",
-    description: "Fallback raw-parameter access when purpose-built cards cannot prove their state.",
+    title: "Advanced",
+    description: "Full parameter access for settings not covered by guided cards.",
     order: 4,
   },
 ];
@@ -112,7 +112,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "overview",
     title: "Overview",
-    description: "Grouped setup dashboard with current-scope progress and recovery guidance.",
+    description: "Grouped setup dashboard with current vehicle progress and next steps.",
     kind: "overview",
     groupId: "workspace",
     trackable: false,
@@ -128,7 +128,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "frame_orientation",
     title: "Frame & Orientation",
-    description: "Vehicle layout, VTOL ownership, and board orientation truth.",
+    description: "Vehicle layout, VTOL settings, and board orientation.",
     kind: "guided",
     groupId: "hardware",
     trackable: true,
@@ -136,15 +136,15 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "calibration",
     title: "Calibration",
-    description: "Sensor lifecycle status with explicit action gating and recovery guidance.",
+    description: "Accelerometer, compass, radio, and sensor calibration actions.",
     kind: "guided",
     groupId: "hardware",
     trackable: true,
   },
   {
-    id: "gps",
-    title: "GPS",
-    description: "Receiver type, GNSS capabilities, and navigation-lock readiness.",
+    id: "navigation",
+    title: "Navigation",
+    description: "Primary GNSS receiver, compass heading, altitude reference, and navigation guidance settings.",
     kind: "guided",
     groupId: "hardware",
     trackable: true,
@@ -152,7 +152,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "battery_monitor",
     title: "Battery Monitor",
-    description: "Battery sensor presets, live power truth, and staged monitor configuration.",
+    description: "Battery monitor presets, live power telemetry, and manual calibration settings.",
     kind: "guided",
     groupId: "hardware",
     trackable: true,
@@ -160,7 +160,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "motors_esc",
     title: "Motors & ESC",
-    description: "VTOL motor ownership, direction proof, and fail-closed test readiness.",
+    description: "Motor layout, direction checks, and guarded test readiness.",
     kind: "guided",
     groupId: "hardware",
     trackable: true,
@@ -168,7 +168,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "servo_outputs",
     title: "Servo Outputs",
-    description: "Function-aware output inspection, reversal staging, and live readback truth.",
+    description: "Function-aware output inspection, reversal staging, and live readback.",
     kind: "guided",
     groupId: "hardware",
     trackable: false,
@@ -176,7 +176,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "serial_ports",
     title: "Serial Ports",
-    description: "Protocol ownership, baud choices, and reboot-required port changes.",
+    description: "Serial protocols, baud rates, and reboot-required port changes.",
     kind: "guided",
     groupId: "hardware",
     trackable: true,
@@ -184,7 +184,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "rc_receiver",
     title: "RC / Receiver",
-    description: "Live channel mapping, preset order, and receiver truth.",
+    description: "Live channel mapping, preset order, and receiver motion checks.",
     kind: "guided",
     groupId: "safety",
     trackable: true,
@@ -192,7 +192,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "flight_modes",
     title: "Flight Modes",
-    description: "Available-mode slots, defaults, and vehicle-aware mode readiness.",
+    description: "Mode switch channel, six mode slots, and vehicle defaults.",
     kind: "guided",
     groupId: "safety",
     trackable: true,
@@ -208,7 +208,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "rtl_return",
     title: "RTL / Return",
-    description: "Return-home altitude, descent, landing, and recovery behavior.",
+    description: "Return-home altitude, descent, landing, and final behavior.",
     kind: "guided",
     groupId: "safety",
     trackable: true,
@@ -216,7 +216,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "geofence",
     title: "Geofence",
-    description: "Fence type, boundary behavior, and constrained recovery options.",
+    description: "Fence type, boundary limits, and breach actions.",
     kind: "guided",
     groupId: "safety",
     trackable: true,
@@ -224,7 +224,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "arming",
     title: "Arming",
-    description: "Pre-arm blocker truth, request-check support, and arm/disarm recovery guidance.",
+    description: "Pre-arm checks, current blockers, and arm/disarm controls.",
     kind: "guided",
     groupId: "safety",
     trackable: true,
@@ -240,7 +240,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "pid_tuning",
     title: "PID Tuning",
-    description: "Vehicle-aware tuning surfaces without dropping straight into raw parameters.",
+    description: "Rate controllers and vehicle-specific tuning groups.",
     kind: "guided",
     groupId: "tuning",
     trackable: false,
@@ -248,7 +248,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "peripherals",
     title: "Peripherals",
-    description: "Curated hardware inventory and configured-only expert accessories view.",
+    description: "Optional hardware families and configured peripheral settings.",
     kind: "guided",
     groupId: "tuning",
     trackable: false,
@@ -256,7 +256,7 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "full_parameters",
     title: "Full Parameters",
-    description: "Shared raw-parameter recovery surface with the shell-owned review tray.",
+    description: "Search and edit the complete parameter catalog for the active vehicle.",
     kind: "recovery",
     groupId: "recovery",
     trackable: false,
@@ -271,7 +271,7 @@ const SETUP_SECTION_PATHS: Record<SetupSectionId, SetupSectionPath> = {
   frame_orientation: "/setup/frame-orientation",
   calibration: "/setup/calibration",
   rc_receiver: "/setup/rc-receiver",
-  gps: "/setup/gps",
+  navigation: "/setup/navigation",
   battery_monitor: "/setup/battery-monitor",
   motors_esc: "/setup/motors-esc",
   servo_outputs: "/setup/servo-outputs",
@@ -356,7 +356,7 @@ export function getSetupSectionDefinition(id: SetupSectionId): SetupSectionDefin
   return SECTION_DEFINITION_MAP.get(id) ?? {
     id,
     title: id,
-    description: "Setup section metadata is unavailable for this section.",
+    description: "Setup section details are unavailable for this section.",
     kind: id === "overview" ? "overview" : id === "full_parameters" ? "recovery" : "guided",
     groupId: id === "full_parameters" ? "recovery" : "hardware",
     trackable: TRACKABLE_SECTIONS.has(id),

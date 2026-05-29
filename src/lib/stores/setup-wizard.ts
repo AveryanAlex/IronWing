@@ -62,7 +62,7 @@ export type WizardScopeEnvelope = {
 export type WorkspaceSnapshot = {
   sectionStatuses: Record<SetupSectionId, SectionStatus>;
   activeEnvelope: WizardScopeEnvelope | null;
-  gpsConfigured: boolean | null;
+  navigationConfigured: boolean | null;
   batteryConfigured: boolean | null;
   checkpointPhase: "idle" | "resume_pending" | "resume_complete" | "scope_changed";
 };
@@ -291,7 +291,7 @@ export function createSetupWizardStore(
   // Last family key observed from updateFromWorkspace — distinct from
   // state.scopeFamilyKey, which only flips on start/restart.
   let lastSeenFamilyKey: string | null = null;
-  let lastFacts: WizardFactsView = { gpsConfigured: null, batteryConfigured: null };
+  let lastFacts: WizardFactsView = { navigationConfigured: null, batteryConfigured: null };
 
   function persist(state: WizardStoreState): void {
     if (!storage) return;
@@ -344,7 +344,7 @@ export function createSetupWizardStore(
   function updateFromWorkspace(snapshot: WorkspaceSnapshot): void {
     const newFamilyKey = scopeFamilyKey(snapshot.activeEnvelope);
     const facts: WizardFactsView = {
-      gpsConfigured: snapshot.gpsConfigured,
+      navigationConfigured: snapshot.navigationConfigured,
       batteryConfigured: snapshot.batteryConfigured,
     };
     lastSeenFamilyKey = newFamilyKey;

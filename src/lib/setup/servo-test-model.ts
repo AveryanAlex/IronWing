@@ -124,7 +124,7 @@ function resolveLiveTestStatus(index: number, isMotorFunction: boolean): {
     return {
       supported: false,
       liveTestStatus: "motor-function",
-      liveTestReason: "Motor-assigned outputs stay visible for inventory truth here, but live motor actuation belongs in Motors & ESC.",
+      liveTestReason: "Motor-assigned outputs are listed here, but live motor actuation belongs in Motors & ESC.",
     };
   }
 
@@ -273,9 +273,9 @@ export function deriveServoOutputGroups(
           ? "Tailsitter control outputs"
           : "VTOL control outputs",
       description: subtype === "tiltrotor"
-        ? "These outputs look like tilt or transition servos. Keep them visible here even when other VTOL metadata is still settling."
+        ? "These outputs look like tilt or transition servos for this VTOL layout."
         : subtype === "tailsitter"
-          ? "These outputs look like tailsitter surfaces or transition servos. Keep them visible even when the current metadata is only partially labeled."
+          ? "These outputs look like tailsitter surfaces or transition servos."
           : "These outputs look VTOL-specific and stay grouped here without hiding the remaining configured outputs.",
       kind: "vtol",
       outputs: vtolOutputs,
@@ -286,7 +286,7 @@ export function deriveServoOutputGroups(
     groups.push({
       id: "motors",
       title: "Auto-assigned lift motors",
-      description: "Motor functions stay visible for inventory truth here, but live actuation belongs in Motors & ESC.",
+      description: "Motor functions are listed here for inspection, but live actuation belongs in Motors & ESC.",
       kind: "motor",
       outputs: motorOutputs,
     });
@@ -297,8 +297,8 @@ export function deriveServoOutputGroups(
       id: "general",
       title: groups.length === 0 ? "Configured outputs" : "Other configured outputs",
       description: groups.length === 0
-        ? "All configured outputs stay visible here so partial or missing metadata never hides them."
-        : "Outputs without trustworthy VTOL labels fall back here so partial metadata never hides them.",
+        ? "All configured outputs are shown in one list."
+        : "Outputs without a VTOL-specific label are grouped here for inspection.",
       kind: "general",
       outputs: generalOutputs,
     });

@@ -1,6 +1,7 @@
 <script lang="ts">
 import { DragDropProvider, type DragDropEventHandlers } from "@dnd-kit/svelte";
 import { createSortable, isSortable } from "@dnd-kit/svelte/sortable";
+import { Compass, GripVertical, Radio, Route } from "lucide-svelte";
 import { tick } from "svelte";
 import { fromStore } from "svelte/store";
 
@@ -24,14 +25,11 @@ import {
   type FlightModeSlotModel,
 } from "../../../../lib/setup/flight-mode-model";
 import { getVehicleSlug } from "../../../../lib/setup/vehicle-profile";
-import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import { selectTelemetryView } from "../../../../lib/telemetry-selectors";
 import type { FlightModeEntry } from "../../../../telemetry";
 import {
-  Alert,
   Badge,
   Button,
-  Card,
   DragHandle,
   ExternalLink,
   Eyebrow,
@@ -41,8 +39,11 @@ import {
 } from "../../../../components/ui";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
-import SetupBitmaskChecklist from "../../../../features/setup/shared/SetupBitmaskChecklist.svelte";
+import SetupBitmaskTable from "../../../../features/setup/shared/SetupBitmaskTable.svelte";
+import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
+import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
 import SetupPreviewStagePanel from "../../../../features/setup/shared/SetupPreviewStagePanel.svelte";
+import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import {
   getSetupWorkspaceRouteContext,
   setupRouteSection,
@@ -358,10 +359,6 @@ function resolveDraftNumber(name: string, fallback: number | null): number | nul
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function currentValueText(item: ParameterItemModel | null): string {
-  return item?.valueLabel ?? item?.valueText ?? "Unavailable";
-}
-
 function canAutostage(name: string, nextValue: number | null, allowWithoutModes = false): boolean {
   const target = item(name);
   if (!target || nextValue === null || target.readOnly === true || actionsBlocked) {
@@ -406,6 +403,20 @@ function toggleBitmask(paramName: "SIMPLE" | "SUPER_SIMPLE", slot: number) {
 
   const currentMask = params.stagedEdits[paramName]?.nextValue ?? target.value;
   paramsStore.stageParameterEdit(target, toggleFlightModeBitmaskValue(currentMask, slot));
+}
+
+function setBitmaskSlots(paramName: "SIMPLE" | "SUPER_SIMPLE", checked: boolean) {
+  if (actionsBlocked) {
+    return;
+  }
+
+  const target = item(paramName);
+  if (!target || target.readOnly === true) {
+    return;
+  }
+
+  const nextMask = checked ? model.slots.reduce((mask, slot) => mask | (1 << (slot.slot - 1)), 0) : 0;
+  paramsStore.stageParameterEdit(target, nextMask);
 }
 
 function stagePreset() {
@@ -602,13 +613,12 @@ function handleFallbackDragEnd() {
   sectionId={section.id}
   eyebrow={section.title}
   title="Flight mode switch, live PWM ranges, and reorderable slots"
-  description="Pick the RC channel that drives ArduPilot's six flight-mode PWM windows, then stage mode assignments with dropdowns or by dragging tiles into a new order. Changes still queue through the shared review tray."
+  description="Pick the RC channel that drives ArduPilot's six flight-mode switch PWM ranges, then stage mode assignments with dropdowns or by dragging tiles into a new order."
   testId={setupWorkspaceTestIds.flightModesSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.flightModesDocsLink }]}
 >
   {#snippet body()}
-    <Card.Root as="article" surface="primary">
-      <Eyebrow tracking="widest">How the switch works</Eyebrow>
+    <SetupGuideCard title="How the switch works">
       <div class="mt-3 grid gap-3 text-sm leading-6 text-text-secondary lg:grid-cols-3">
         <p>
           ArduPilot reads one RC input channel and splits its PWM value into six fixed ranges. Each range selects one
@@ -623,36 +633,17 @@ function handleFallbackDragEnd() {
           Nothing is applied until review is confirmed.
         </p>
       </div>
-    </Card.Root>
+    </SetupGuideCard>
 
-    {#if model.recoveryReasons.length > 0}
-      <Alert
-        variant="warning"
-        density="default"
-        appearance="solid"
-        shadow={false}
-        layout="stacked"
-        title="Flight-mode staging is staying fail-closed while live truth is partial."
-        testId={`${setupWorkspaceTestIds.flightModesBannerPrefix}-recovery`}
-      >
-        <ul class="list-disc space-y-1 pl-5 text-sm leading-6 text-warning">
-          {#each model.recoveryReasons as reason (reason)}
-            <li>{reason}</li>
-          {/each}
-        </ul>
-      </Alert>
+    {#if model.availabilityState === "unavailable"}
+      <SetupNotice tone="warning" testId={`${setupWorkspaceTestIds.flightModesBannerPrefix}-mode-list`}>
+        The vehicle has not reported its available mode list yet, so slot selectors are read-only until live mode data arrives.
+      </SetupNotice>
     {/if}
 
     {#if model.preset}
-      <Card.Root as="article" density="compact" surface="primary" testId={setupWorkspaceTestIds.flightModesPresetPreview}>
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <Eyebrow tracking="widest">Recommended preset</Eyebrow>
-            <h4 class="mt-2 text-base font-semibold text-text-primary">{presetTitle}</h4>
-            <HelperText class="mt-2">
-              Use the vehicle-family default slot order when you want a conservative audited starting point. The preview stays visible even if the live mode list is currently stale.
-            </HelperText>
-          </div>
+      <SetupSectionCard icon={Route} title={presetTitle} description="Use the vehicle-family default slot order as a conservative starting point. The preview stays visible even if the live mode list is currently stale." surface="primary" compact testId={setupWorkspaceTestIds.flightModesPresetPreview}>
+        {#snippet actions()}
           <Button
             variant="secondary"
             disabled={presetRows.length === 0}
@@ -660,7 +651,7 @@ function handleFallbackDragEnd() {
           >
             {presetPreviewOpen ? "Hide preview" : "Preview defaults"}
           </Button>
-        </div>
+        {/snippet}
 
         {#if presetPreviewOpen}
           <div class="mt-4">
@@ -678,28 +669,19 @@ function handleFallbackDragEnd() {
             {/if}
           </div>
         {/if}
-      </Card.Root>
+      </SetupSectionCard>
     {/if}
 
-    <Card.Root as="article" density="compact" surface="primary">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h4 class="text-base font-semibold text-text-primary">Mode switch channel</h4>
-          <HelperText class="mt-2">
-            Select which RC channel feeds the six-slot mode PWM ranges. Live values in parentheses update from telemetry so you can identify the transmitter switch channel.
-          </HelperText>
-        </div>
+    <SetupSectionCard icon={Radio} title="Mode switch channel" description="Select which RC channel feeds the six flight-mode switch PWM ranges. Live values in parentheses update from telemetry so you can identify the transmitter switch channel." surface="primary" compact>
+      {#snippet actions()}
         <div class="text-right">
-          <Eyebrow tracking="widest" testId={`${setupWorkspaceTestIds.flightModesCurrentPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`}>
-            Current · {currentValueText(flightModeChannelItem)} · {formatPwmValue(selectedChannelValue)}
-          </Eyebrow>
           {#if params.stagedEdits[FLIGHT_MODE_CHANNEL_PARAM]}
             <p class="mt-2">
               <SetupStagedBadge name={FLIGHT_MODE_CHANNEL_PARAM} onUnstage={unstage} testId={`${setupWorkspaceTestIds.flightModesStagedPrefix}-${FLIGHT_MODE_CHANNEL_PARAM}`} />
             </p>
           {/if}
         </div>
-      </div>
+      {/snippet}
 
       <div class="mt-4">
         <NativeSelect
@@ -710,17 +692,10 @@ function handleFallbackDragEnd() {
           value={flightModeChannelDraft}
         />
       </div>
-    </Card.Root>
+    </SetupSectionCard>
 
-    <Card.Root as="article" density="compact" surface="primary">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Eyebrow tracking="widest">Flight mode order · PWM ranges</Eyebrow>
-          <h4 class="mt-2 text-base font-semibold text-text-primary">Drag tiles or edit a slot directly</h4>
-          <HelperText class="mt-2">
-            The PWM ranges stay fixed and the range column is row-aligned with each slot. Reordering moves mode values into the target FLTMODEx slots and stages the affected parameters.
-          </HelperText>
-        </div>
+    <SetupSectionCard icon={GripVertical} title="Drag tiles or edit a slot directly" description="The PWM ranges stay fixed and the range column is row-aligned with each slot. Reordering moves mode values into the target FLTMODEx slots and stages the affected parameters." surface="primary" compact>
+      {#snippet actions()}
         {#if !canReorderFlightModes}
           <HelperText class="max-w-xs" size="xs" tone="warning">
             Reordering is enabled when the live mode list is available and all six slot parameters are writable.
@@ -730,7 +705,7 @@ function handleFallbackDragEnd() {
             PWM · <span class="font-mono text-text-primary tabular-nums">{selectedChannelLabel} · {formatPwmValue(selectedChannelValue)}</span>
           </Eyebrow>
         {/if}
-      </div>
+      {/snippet}
 
       <DragDropProvider
         onDragEnd={handleSortableDragEnd}
@@ -794,7 +769,7 @@ function handleFallbackDragEnd() {
 
                     {#if slot.unresolved}
                       <HelperText class="basis-full" size="xs" tone="warning">
-                        The current slot value is not in the live available-mode list, so the section falls back to the raw numeric mode id until the vehicle reports a supported label again.
+                        The current slot value is not in the live available-mode list, so the section shows the numeric mode id until the vehicle reports a supported label again.
                       </HelperText>
                     {/if}
                   </div>
@@ -852,40 +827,50 @@ function handleFallbackDragEnd() {
           </div>
         </div>
       </DragDropProvider>
-    </Card.Root>
+    </SetupSectionCard>
 
     {#if model.simpleModeSupported}
-      <div class="grid gap-3 xl:grid-cols-2">
-        {#if simpleItem && model.simpleModeSlots.length > 0}
-          <div data-testid={setupWorkspaceTestIds.flightModesSimpleChecklist}>
-            <SetupBitmaskChecklist
-              disabled={actionsBlocked || simpleItem.readOnly === true}
-              items={model.simpleModeSlots.map((slot) => ({
-                key: slot.key,
-                label: slot.label,
-                checked: slot.checked,
-              }))}
-              onToggle={(entry) => toggleBitmask("SIMPLE", Number(entry.key))}
-              title="Simple mode slots"
-            />
-          </div>
-        {/if}
+      <SetupSectionCard icon={Compass} title="Simple mode assignment" description="Enable Simple or Super Simple on selected switch positions from the same grouped card." compact>
+        <div class="grid gap-6 xl:grid-cols-2">
+          {#if simpleItem && model.simpleModeSlots.length > 0}
+            <div data-testid={setupWorkspaceTestIds.flightModesSimpleChecklist}>
+              <SetupBitmaskTable
+                description="Choose which flight-mode switch positions use Simple pilot-relative control."
+                disabled={actionsBlocked || simpleItem.readOnly === true}
+                embedded
+                items={model.simpleModeSlots.map((slot) => ({
+                  key: slot.key,
+                  label: slot.label,
+                  description: `Flight mode slot ${slot.key}`,
+                  checked: slot.checked,
+                }))}
+                onSetAll={(checked) => setBitmaskSlots("SIMPLE", checked)}
+                onToggle={(entry) => toggleBitmask("SIMPLE", Number(entry.key))}
+                title="Simple mode slots"
+              />
+            </div>
+          {/if}
 
-        {#if superSimpleItem && model.superSimpleSlots.length > 0}
-          <div data-testid={setupWorkspaceTestIds.flightModesSuperChecklist}>
-            <SetupBitmaskChecklist
-              disabled={actionsBlocked || superSimpleItem.readOnly === true}
-              items={model.superSimpleSlots.map((slot) => ({
-                key: slot.key,
-                label: slot.label,
-                checked: slot.checked,
-              }))}
-              onToggle={(entry) => toggleBitmask("SUPER_SIMPLE", Number(entry.key))}
-              title="Super Simple slots"
-            />
-          </div>
-        {/if}
-      </div>
+          {#if superSimpleItem && model.superSimpleSlots.length > 0}
+            <div data-testid={setupWorkspaceTestIds.flightModesSuperChecklist}>
+              <SetupBitmaskTable
+                description="Choose which flight-mode switch positions use Super Simple control relative to home."
+                disabled={actionsBlocked || superSimpleItem.readOnly === true}
+                embedded
+                items={model.superSimpleSlots.map((slot) => ({
+                  key: slot.key,
+                  label: slot.label,
+                  description: `Flight mode slot ${slot.key}`,
+                  checked: slot.checked,
+                }))}
+                onSetAll={(checked) => setBitmaskSlots("SUPER_SIMPLE", checked)}
+                onToggle={(entry) => toggleBitmask("SUPER_SIMPLE", Number(entry.key))}
+                title="Super Simple slots"
+              />
+            </div>
+          {/if}
+        </div>
+      </SetupSectionCard>
 
       {#if simpleDocsUrl}
         <HelperText size="xs">

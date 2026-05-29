@@ -14,8 +14,11 @@ import {
   type VehicleProfile,
 } from "../../../lib/setup/vehicle-profile";
 import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
-import { Alert, Button, Card, Eyebrow, Field, HelperText, NativeSelect } from "../../../components/ui";
+import { Card, Eyebrow, Field, HelperText, NativeSelect } from "../../../components/ui";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import SetupWizardActions from "../shared/SetupWizardActions.svelte";
+import SetupWizardApplyError from "../shared/SetupWizardApplyError.svelte";
+import SetupWizardHintCard from "../shared/SetupWizardHintCard.svelte";
 
 type EnumOption = { code: number; label: string };
 
@@ -181,13 +184,11 @@ function resolveDraftNumber(value: string): number | null {
 <div class="space-y-4">
   <HelperText>
     Confirm the frame family and board orientation the vehicle is reporting. We stage the edits
-    into the shared review tray and apply them here before moving on.
+    here and apply them before moving on.
   </HelperText>
 
   <Card.Root class="grid md:grid-cols-2" surface="primary" density="compact" gap="compact" testId={setupWorkspaceTestIds.wizardStepFrameSummary}>
-    {#if failureMessage}
-      <Alert variant="danger" class="md:col-span-2" description={`Apply failed. Staged edits remain in the review tray so you can retry. ${failureMessage}`} />
-    {/if}
+    <SetupWizardApplyError message={failureMessage} class="md:col-span-2" />
     <div>
       <Eyebrow tracking="widest">Frame class</Eyebrow>
       <p class="mt-2 text-sm font-semibold text-text-primary">{currentFrameClassLabel}</p>
@@ -233,23 +234,17 @@ function resolveDraftNumber(value: string): number | null {
   </div>
 
   {#if profile.isPlane && qEnableItem}
-    <Card.Root surface="primary" density="compact">
-      <HelperText size="xs">
+    <SetupWizardHintCard>
       Plane firmware: QuadPlane toggles live in the full Frame section. Open it from the wizard footer if you need to adjust Q_ENABLE or Q_FRAME_*.
-      </HelperText>
-    </Card.Root>
+    </SetupWizardHintCard>
   {/if}
 
-  <div class="flex flex-wrap gap-2">
-    <Button
-      shape="pill"
-      tone="accent"
-      variant="soft"
-      testId={setupWorkspaceTestIds.wizardStepFrameApply}
-      disabled={view.checkpoint.blocksActions || applyPending}
-      onclick={handleApply}
-    >
-      {applyPending ? "Applying…" : "Apply and continue"}
-    </Button>
-  </div>
+  <SetupWizardActions
+    primaryLabel="Apply and continue"
+    primaryPendingLabel="Applying…"
+    primaryPending={applyPending}
+    primaryDisabled={view.checkpoint.blocksActions}
+    primaryTestId={setupWorkspaceTestIds.wizardStepFrameApply}
+    onPrimary={handleApply}
+  />
 </div>

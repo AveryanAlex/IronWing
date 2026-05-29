@@ -12,8 +12,11 @@ import {
   createResolvedInitialParamsInputs,
 } from "../../../lib/setup/initial-params-model";
 import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
-import { Alert, Button, Card, Eyebrow, HelperText } from "../../../components/ui";
+import { Card, Eyebrow, HelperText } from "../../../components/ui";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import SetupWizardActions from "../shared/SetupWizardActions.svelte";
+import SetupWizardApplyError from "../shared/SetupWizardApplyError.svelte";
+import SetupWizardHintCard from "../shared/SetupWizardHintCard.svelte";
 
 // Conservative beginner defaults: 9" prop, 4S LiPo. These match the expert
 // section's initial field values so the two surfaces stay coherent.
@@ -138,9 +141,7 @@ function handleMarkReviewed() {
   </HelperText>
 
   <Card.Root surface="primary" density="compact" testId={setupWorkspaceTestIds.wizardStepInitialParamsSummary}>
-    {#if failureMessage}
-      <Alert variant="danger" density="compact" shadow={false} description={`Apply failed. Staged edits remain in the review tray so you can retry. ${failureMessage}`} />
-    {/if}
+    <SetupWizardApplyError message={failureMessage} />
     <Eyebrow tracking="widest">
       {model.family.headline}
     </Eyebrow>
@@ -165,32 +166,22 @@ function handleMarkReviewed() {
     {/if}
   </Card.Root>
 
-  <Card.Root surface="primary" density="compact">
-    <HelperText size="xs">
+  <SetupWizardHintCard>
     Tuning continues after the wizard — this step only primes a beginner
     baseline. Full PID tuning lives in its own setup section.
-    </HelperText>
-  </Card.Root>
+  </SetupWizardHintCard>
 
-  <div class="flex flex-wrap gap-2">
-    <Button
-      shape="pill"
-      tone="accent"
-      variant="soft"
-      testId={setupWorkspaceTestIds.wizardStepInitialParamsApply}
-      disabled={view.checkpoint.blocksActions || applyPending || !hasAnyStageable}
-      onclick={handleApply}
-    >
-      {applyPending ? "Applying…" : "Apply recommended baseline"}
-    </Button>
-    <Button
-      variant="secondary"
-      class="rounded-full"
-      testId={setupWorkspaceTestIds.wizardStepInitialParamsConfirm}
-      disabled={view.checkpoint.blocksActions || applyPending}
-      onclick={handleMarkReviewed}
-    >
-      Mark as reviewed
-    </Button>
-  </div>
+  <SetupWizardActions
+    primaryLabel="Apply recommended baseline"
+    primaryPendingLabel="Applying…"
+    primaryPending={applyPending}
+    primaryDisabled={view.checkpoint.blocksActions || !hasAnyStageable}
+    primaryTestId={setupWorkspaceTestIds.wizardStepInitialParamsApply}
+    onPrimary={handleApply}
+    secondaryLabel="Mark as reviewed"
+    secondaryShape="pill"
+    secondaryDisabled={view.checkpoint.blocksActions || applyPending}
+    secondaryTestId={setupWorkspaceTestIds.wizardStepInitialParamsConfirm}
+    onSecondary={handleMarkReviewed}
+  />
 </div>

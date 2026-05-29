@@ -18,7 +18,7 @@ import type { ParamMetadataMap } from "../../../param-metadata";
 import type { ParamStore } from "../../../params";
 import { withShellContexts } from "../../../test/context-harnesses";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
-import SetupWizardGpsStep from "./SetupWizardGpsStep.svelte";
+import SetupWizardNavigationStep from "./SetupWizardNavigationStep.svelte";
 
 function createSectionStatuses(): Record<SetupSectionId, SectionStatus> {
   const record = {} as Record<SetupSectionId, SectionStatus>;
@@ -73,7 +73,7 @@ function makeView(
     noticeText: null,
     progress: { completed: 0, total: 0, percentage: 0 },
     progressText: "0 of 0 complete",
-    selectedSectionId: "gps",
+    selectedSectionId: "navigation",
     sections: [],
     sectionGroups: [],
     sectionStatuses: createSectionStatuses(),
@@ -115,31 +115,19 @@ function createParamStoreFromEntries(entries: Record<string, number>): ParamStor
   };
 }
 
-function createGpsMetadata(): ParamMetadataMap {
+function createNavigationMetadata(): ParamMetadataMap {
   return new Map([
     [
       "GPS_TYPE",
       {
-        humanName: "GPS primary type",
-        description: "Primary GPS receiver type.",
+        humanName: "GNSS primary type",
+        description: "Primary GNSS receiver type.",
         values: [
           { code: 0, label: "None" },
           { code: 1, label: "Auto" },
           { code: 2, label: "u-blox" },
         ],
         rebootRequired: true,
-      },
-    ],
-    [
-      "GPS_AUTO_SWITCH",
-      {
-        humanName: "GPS auto switch",
-        description: "Automatic GPS switching behavior.",
-        values: [
-          { code: 0, label: "Disabled" },
-          { code: 1, label: "UseBest" },
-        ],
-        rebootRequired: false,
       },
     ],
   ]) as unknown as ParamMetadataMap;
@@ -254,12 +242,11 @@ type RenderOptions = {
   onAdvance?: () => void;
 };
 
-async function renderGpsStep(options: RenderOptions = {}) {
+async function renderNavigationStep(options: RenderOptions = {}) {
   const paramStore = options.paramStore ?? createParamStoreFromEntries({
     GPS_TYPE: 0,
-    GPS_AUTO_SWITCH: 1,
   });
-  const metadata = options.metadata === undefined ? createGpsMetadata() : options.metadata;
+  const metadata = options.metadata === undefined ? createNavigationMetadata() : options.metadata;
   const sessionStore = writable(createSessionState(paramStore));
   const harness = createMockParamsService(metadata, options.paramsService);
   const parameterStore = createParamsStore(sessionStore, harness.service);
@@ -272,7 +259,7 @@ async function renderGpsStep(options: RenderOptions = {}) {
   const applySpy = vi.spyOn(parameterStore, "applyStagedEdits");
 
   render(
-    withShellContexts(sessionReadable, parameterStore, SetupWizardGpsStep),
+    withShellContexts(sessionReadable, parameterStore, SetupWizardNavigationStep),
     {
       view,
       onAdvance,
@@ -292,12 +279,12 @@ afterEach(() => {
   cleanup();
 });
 
-describe("SetupWizardGpsStep", () => {
-  it("renders a summary of the current GPS type", async () => {
-    await renderGpsStep();
+describe("SetupWizardNavigationStep", () => {
+  it("renders a summary of the current GNSS type", async () => {
+    await renderNavigationStep();
 
     const summary = await waitFor(() =>
-      screen.getByTestId(setupWorkspaceTestIds.wizardStepGpsSummary),
+      screen.getByTestId(setupWorkspaceTestIds.wizardStepNavigationSummary),
     );
 
     expect(summary.textContent).toContain("None");
@@ -305,9 +292,9 @@ describe("SetupWizardGpsStep", () => {
   });
 
   it("stages GPS_TYPE=1 and calls applyStagedEdits on Apply click", async () => {
-    const { applySpy, parameterStore } = await renderGpsStep();
+    const { applySpy, parameterStore } = await renderNavigationStep();
 
-    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardStepGpsApply));
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardStepNavigationApply));
 
     await waitFor(() => {
       expect(applySpy).toHaveBeenCalled();
@@ -323,9 +310,9 @@ describe("SetupWizardGpsStep", () => {
 
   it("calls onAdvance after a successful apply", async () => {
     const onAdvance = vi.fn();
-    await renderGpsStep({ onAdvance });
+    await renderNavigationStep({ onAdvance });
 
-    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardStepGpsApply));
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardStepNavigationApply));
 
     await waitFor(() => {
       expect(onAdvance).toHaveBeenCalledTimes(1);
@@ -334,12 +321,12 @@ describe("SetupWizardGpsStep", () => {
 
   it("advances without staging if GPS_TYPE already equals the recommended auto-detect value", async () => {
     const onAdvance = vi.fn();
-    const { applySpy } = await renderGpsStep({
+    const { applySpy } = await renderNavigationStep({
       onAdvance,
-      paramStore: createParamStoreFromEntries({ GPS_TYPE: 1, GPS_AUTO_SWITCH: 1 }),
+      paramStore: createParamStoreFromEntries({ GPS_TYPE: 1 }),
     });
 
-    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardStepGpsApply));
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardStepNavigationApply));
 
     await waitFor(() => {
       expect(onAdvance).toHaveBeenCalledTimes(1);
@@ -356,12 +343,12 @@ describe("SetupWizardGpsStep", () => {
       success: false,
     })));
 
-    await renderGpsStep({
+    await renderNavigationStep({
       onAdvance,
       paramsService: { writeBatch: failingWriteBatch },
     });
 
-    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardStepGpsApply));
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.wizardStepNavigationApply));
 
     await waitFor(() => {
       expect(failingWriteBatch).toHaveBeenCalled();
@@ -369,7 +356,7 @@ describe("SetupWizardGpsStep", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByTestId(setupWorkspaceTestIds.wizardStepGpsSummary).textContent,
+        screen.getByTestId(setupWorkspaceTestIds.wizardStepNavigationSummary).textContent,
       ).toContain("Apply failed");
     });
     expect(onAdvance).not.toHaveBeenCalled();

@@ -19,14 +19,14 @@ describe("workspace route metadata", () => {
   it("resolves paths and falls back to overview for unknown routes", () => {
     expect(workspaceForPath("/mission")).toBe("mission");
     expect(workspaceForPath("/mission/")).toBe("mission");
-    expect(workspaceForPath("/setup/gps")).toBe("setup");
-    expect(workspaceForPath("/setup/gps/")).toBe("setup");
+    expect(workspaceForPath("/setup/navigation")).toBe("setup");
+    expect(workspaceForPath("/setup/navigation/")).toBe("setup");
     expect(workspaceForPath("/unknown")).toBe("overview");
   });
 
   it("resolves SvelteKit route IDs without deployment base path coupling", () => {
     expect(workspaceForRouteId("/(app)/telemetry")).toBe("telemetry");
-    expect(workspaceForRouteId("/(app)/setup/gps")).toBe("setup");
+    expect(workspaceForRouteId("/(app)/setup/navigation")).toBe("setup");
     expect(workspaceForRouteId("/(app)")).toBe("overview");
     expect(workspaceForRouteId(null)).toBe("overview");
   });

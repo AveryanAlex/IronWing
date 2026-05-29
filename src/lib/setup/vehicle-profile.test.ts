@@ -105,7 +105,7 @@ describe("vehicle-profile", () => {
     expect(profile.planeVtolState).toBe("awaiting-refresh");
   });
 
-  it("keeps partial Q-frame availability explicit instead of guessing ownership", () => {
+  it("keeps incomplete Q-frame availability explicit", () => {
     const profile = deriveVehicleProfile(
       "Fixed_Wing",
       createProfileInput({
@@ -119,7 +119,7 @@ describe("vehicle-profile", () => {
     expect(profile.planeVtolState).toBe("partial-refresh");
   });
 
-  it("switches Plane frame ownership to Q_FRAME_* after refresh", () => {
+  it("switches Plane frame settings to Q_FRAME_* after refresh", () => {
     const profile = deriveVehicleProfile(
       "Fixed_Wing",
       createProfileInput({
@@ -221,7 +221,7 @@ describe("vtol-layout-model", () => {
     expect(model?.hasMotorTestSurface).toBe(true);
   });
 
-  it("keeps custom tailsitter layouts preview-only while preserving motor-test truth", () => {
+  it("keeps custom tailsitter layouts preview-only while preserving motor-test state", () => {
     const model = getVtolLayoutModel(
       createResolvedQuadPlaneProfile({
         frameClassValue: 10,

@@ -14,8 +14,11 @@ import {
   type FlightModePreset,
 } from "../../../lib/setup/flight-mode-model";
 import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
-import { Alert, Button, Card, Eyebrow, HelperText, MonoValue } from "../../../components/ui";
+import { Card, Eyebrow, HelperText, MonoValue } from "../../../components/ui";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import SetupWizardActions from "../shared/SetupWizardActions.svelte";
+import SetupWizardApplyError from "../shared/SetupWizardApplyError.svelte";
+import SetupWizardHintCard from "../shared/SetupWizardHintCard.svelte";
 
 let {
   view,
@@ -135,9 +138,7 @@ function handleMarkReviewed() {
   </HelperText>
 
   <Card.Root surface="primary" density="compact" testId={setupWorkspaceTestIds.wizardStepFlightModesSummary}>
-    {#if failureMessage}
-      <Alert variant="danger" density="compact" shadow={false} description={`Apply failed. Staged edits remain in the review tray so you can retry. ${failureMessage}`} />
-    {/if}
+    <SetupWizardApplyError message={failureMessage} />
     <Eyebrow tracking="widest">
       Recommended {preset} preset
     </Eyebrow>
@@ -156,33 +157,23 @@ function handleMarkReviewed() {
     </ul>
   </Card.Root>
 
-  <Card.Root surface="primary" density="compact">
-    <HelperText size="xs">
+  <SetupWizardHintCard>
     Need to wire up a non-standard channel or choose custom modes per slot?
     Open the Flight Modes section from the wizard footer for the expert
     layout.
-    </HelperText>
-  </Card.Root>
+  </SetupWizardHintCard>
 
-  <div class="flex flex-wrap gap-2">
-    <Button
-      shape="pill"
-      tone="accent"
-      variant="soft"
-      testId={setupWorkspaceTestIds.wizardStepFlightModesPreset}
-      disabled={view.checkpoint.blocksActions || applyPending || !hasAnyWritable}
-      onclick={handleApplyPreset}
-    >
-      {applyPending ? "Applying…" : "Apply recommended preset"}
-    </Button>
-    <Button
-      variant="secondary"
-      class="rounded-full"
-      testId={setupWorkspaceTestIds.wizardStepFlightModesConfirm}
-      disabled={view.checkpoint.blocksActions || applyPending}
-      onclick={handleMarkReviewed}
-    >
-      Mark as reviewed
-    </Button>
-  </div>
+  <SetupWizardActions
+    primaryLabel="Apply recommended preset"
+    primaryPendingLabel="Applying…"
+    primaryPending={applyPending}
+    primaryDisabled={view.checkpoint.blocksActions || !hasAnyWritable}
+    primaryTestId={setupWorkspaceTestIds.wizardStepFlightModesPreset}
+    onPrimary={handleApplyPreset}
+    secondaryLabel="Mark as reviewed"
+    secondaryShape="pill"
+    secondaryDisabled={view.checkpoint.blocksActions || applyPending}
+    secondaryTestId={setupWorkspaceTestIds.wizardStepFlightModesConfirm}
+    onSecondary={handleMarkReviewed}
+  />
 </div>

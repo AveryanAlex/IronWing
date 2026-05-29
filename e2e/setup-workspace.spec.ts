@@ -177,12 +177,12 @@ test.describe("setup workspace proof", () => {
     await expect(page.locator(parameterWorkspaceSelectors.reviewSurface)).toBeVisible();
     await expect(parameterReviewRowLocator(page, "FLTMODE1")).toContainText("FLTMODE1");
 
-    await setupNavLocator(page, "gps").click();
-    await expect(page).toHaveURL(/\/setup\/gps$/);
-    await expect(page.locator(setupWorkspaceSelectors.gpsSection)).toBeVisible();
-    await expect(page.locator(setupWorkspaceSelectors.gpsLiveState)).toContainText("Live");
-    await expect(page.locator(setupWorkspaceSelectors.gpsPortState)).toContainText("SERIAL3");
-    await expect(page.locator(setupWorkspaceSelectors.gpsDocsLink)).toHaveAttribute(
+    await setupNavLocator(page, "navigation").click();
+    await expect(page).toHaveURL(/\/setup\/navigation$/);
+    await expect(page.locator(setupWorkspaceSelectors.navigationSection)).toBeVisible();
+    await expect(page.locator(setupWorkspaceSelectors.navigationLiveState)).toContainText("Current");
+    await expect(page.locator(setupWorkspaceSelectors.navigationPortState)).toContainText("SERIAL3");
+    await expect(page.locator(setupWorkspaceSelectors.navigationDocsLink)).toHaveAttribute(
       "href",
       /common-positioning-landing-page/,
     );

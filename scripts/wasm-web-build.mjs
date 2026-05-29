@@ -7,10 +7,9 @@ import {
   shouldKeepWasmGenerated,
 } from "./workflow/wasm-web.mjs";
 
-const isDev = process.argv.includes("--dev");
 const cleanAfter = process.argv.includes("--clean-after") && !shouldKeepWasmGenerated();
 const cleanupOnly = process.argv.includes("--cleanup-only");
-const profileFlag = isDev ? "--dev" : "--release";
+const profileFlag = "--release";
 
 if (cleanupOnly) {
   if (!shouldKeepWasmGenerated()) {

@@ -1,8 +1,10 @@
 <script lang="ts">
 import { requestPrearmChecks } from "../../../calibration";
 import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
-import { Alert, Button, Card, EmptyState, Eyebrow, HelperText } from "../../../components/ui";
+import { Card, EmptyState, Eyebrow, HelperText } from "../../../components/ui";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import SetupWizardActions from "../shared/SetupWizardActions.svelte";
+import SetupWizardApplyError from "../shared/SetupWizardApplyError.svelte";
 
 let {
   view,
@@ -98,28 +100,19 @@ function handleContinue() {
     {/if}
   </Card.Root>
 
-  {#if commandError}
-    <Alert variant="danger" density="compact" shadow={false} description={commandError} />
-  {/if}
+  <SetupWizardApplyError message={commandError} prefix="" />
 
-  <div class="flex flex-wrap gap-2">
-    <Button
-      variant="secondary"
-      testId={setupWorkspaceTestIds.wizardStepArmingRefresh}
-      disabled={view.checkpoint.blocksActions || requestPending}
-      onclick={handleRefresh}
-    >
-      {requestPending ? "Requesting…" : "Refresh prearm checks"}
-    </Button>
-    <Button
-      shape="pill"
-      tone="accent"
-      variant="soft"
-      testId={setupWorkspaceTestIds.wizardStepArmingContinue}
-      disabled={continueDisabled}
-      onclick={handleContinue}
-    >
-      Continue
-    </Button>
-  </div>
+  <SetupWizardActions
+    primaryLabel="Continue"
+    primaryDisabled={continueDisabled}
+    primaryTestId={setupWorkspaceTestIds.wizardStepArmingContinue}
+    onPrimary={handleContinue}
+    secondaryLabel="Refresh prearm checks"
+    secondaryPendingLabel="Requesting…"
+    secondaryPending={requestPending}
+    secondaryDisabled={view.checkpoint.blocksActions}
+    secondaryTestId={setupWorkspaceTestIds.wizardStepArmingRefresh}
+    secondaryPosition="before"
+    onSecondary={handleRefresh}
+  />
 </div>

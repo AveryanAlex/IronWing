@@ -43,7 +43,7 @@ function createSnapshot(
       seek_epoch: 0,
       reset_revision: 0,
     },
-    gpsConfigured: null,
+    navigationConfigured: null,
     batteryConfigured: null,
     checkpointPhase: "idle",
     ...overrides,
@@ -130,11 +130,11 @@ describe("createSetupWizardStore — basic flow", () => {
     store.advance();
 
     let state = get(store);
-    expect(state.currentStepId).toBe("gps");
+    expect(state.currentStepId).toBe("navigation");
     store.skip();
     state = get(store);
-    const gps = state.steps.find((step) => step.id === "gps");
-    expect(gps?.status).toBe("skipped");
+    const navigation = state.steps.find((step) => step.id === "navigation");
+    expect(navigation?.status).toBe("skipped");
     expect(state.currentStepId).toBe("battery_monitor");
   });
 
@@ -184,12 +184,12 @@ describe("createSetupWizardStore — detour inference", () => {
     const store = createSetupWizardStore();
     store.updateFromWorkspace(createSnapshot());
     store.start();
-    store.markStepComplete("gps");
+    store.markStepComplete("navigation");
 
     const state = get(store);
     expect(state.currentStepId).toBe("frame_orientation");
-    const gps = state.steps.find((step) => step.id === "gps");
-    expect(gps?.status).toBe("done_by_detour");
+    const navigation = state.steps.find((step) => step.id === "navigation");
+    expect(navigation?.status).toBe("done_by_detour");
   });
 
   it("pause('detour') records the current step's sectionId as resumeSectionId", () => {
@@ -323,7 +323,7 @@ describe("createSetupWizardStore — scope changes and checkpoints", () => {
 });
 
 describe("createSetupWizardStore — fact-driven tier upgrade", () => {
-  it("upgrades gps tier to required when facts say gpsConfigured is false", () => {
+  it("upgrades navigation tier to required when facts say navigationConfigured is false", () => {
     const store = createSetupWizardStore();
     store.updateFromWorkspace(createSnapshot());
     store.start();
@@ -331,10 +331,10 @@ describe("createSetupWizardStore — fact-driven tier upgrade", () => {
     const beforeState = get(store);
     expect(beforeState.requiredRemaining).toBe(4);
 
-    store.updateFromWorkspace(createSnapshot({ gpsConfigured: false }));
+    store.updateFromWorkspace(createSnapshot({ navigationConfigured: false }));
     const state = get(store);
-    const gps = state.steps.find((step) => step.id === "gps");
-    expect(gps?.tier).toBe("required");
+    const navigation = state.steps.find((step) => step.id === "navigation");
+    expect(navigation?.tier).toBe("required");
     expect(state.requiredRemaining).toBe(5);
   });
 });

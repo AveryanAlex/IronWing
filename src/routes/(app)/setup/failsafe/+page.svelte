@@ -1,4 +1,5 @@
 <script lang="ts">
+import { ClipboardCheck, ShieldAlert } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import {
@@ -10,19 +11,15 @@ import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import { buildFailsafeSectionModel, type SafetyVehicleFamily } from "../../../../lib/setup/failsafe-model";
 import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
+import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
+import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
+import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
+import SetupParamEditorRow from "../../../../features/setup/shared/SetupParamEditorRow.svelte";
 import SetupPreviewStagePanel from "../../../../features/setup/shared/SetupPreviewStagePanel.svelte";
-import SetupParamEnumControl from "../../../../features/setup/shared/SetupParamEnumControl.svelte";
+import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
-import {
-  Alert,
-  Button,
-  Card,
-  ExternalLink,
-  Eyebrow,
-  HelperText,
-  Input,
-  StagedBadge as SetupStagedBadge,
-} from "../../../../components/ui";
+import { resolveSetupDraftNumber, resolveSetupEnumOptions } from "../../../../features/setup/shared/parameter-editing";
+import { Button, Eyebrow, HelperText } from "../../../../components/ui";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import {
   getSetupWorkspaceRouteContext,
@@ -318,16 +315,15 @@ function item(name: string): ParameterItemModel | null {
 }
 
 function resolveEnumOptions(name: string) {
-  const values = params.metadata?.get(name)?.values;
-  if (!Array.isArray(values)) {
-    return [];
-  }
-
-  return values.filter((entry) => Number.isFinite(entry.code) && entry.label.trim().length > 0);
+  return resolveSetupEnumOptions(params.metadata?.get(name)?.values);
 }
 
 function currentValueText(item: ParameterItemModel | null): string {
   return item?.valueLabel ?? item?.valueText ?? "Unavailable";
+}
+
+function visibleFields(fields: FieldConfig[]): FieldConfig[] {
+  return fields.filter((field) => item(field.name));
 }
 
 function draftValue(name: string, fallback: number | null): string {
@@ -351,13 +347,7 @@ function setDraft(name: string, value: string) {
 }
 
 function resolveDraftNumber(name: string, fallback: number | null): number | null {
-  const raw = draftValue(name, fallback).trim();
-  if (raw.length === 0) {
-    return null;
-  }
-
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : null;
+  return resolveSetupDraftNumber(draftValue(name, fallback));
 }
 
 function canAutostage(name: string, nextValue: number | null, requireOptions = false): boolean {
@@ -413,171 +403,120 @@ function stageDefaults() {
 <SetupSectionShell
   sectionId={section.id}
   eyebrow={section.title}
-  title="Vehicle-aware protective defaults and loss-of-link actions"
-  description="Failsafe actions stay split by the active vehicle family so copter, plane, and rover operators can stage protective defaults without dropping straight into raw parameters. Every change still queues through the shared review tray."
+  title="Failsafe actions by link and power source"
+  description="Review radio, battery, and ground-control failsafe groups for the active vehicle family. Changes are staged for review before they are applied."
   testId={setupWorkspaceTestIds.failsafeSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.failsafeDocsLink }]}
 >
   {#snippet body()}
-    <Card.Root
-      density="compact"
-      gap="compact"
-      class="grid md:grid-cols-3"
+    <SetupSectionCard
+      icon={ShieldAlert}
+      title="Failsafe summary"
+      description="Confirm the recommended defaults, loss-of-link response, and battery thresholds for the current vehicle."
       surface="elevated"
       testId={setupWorkspaceTestIds.failsafeSummary}
     >
-      <div>
-        <Eyebrow tracking="widest">Defaults preview</Eyebrow>
-        <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.failsafeDefaultsState}>
-          {defaultsStateText}
-        </p>
-        <HelperText class="mt-1">Recommended loss-of-link actions stay inspectable before you queue them.</HelperText>
+      <div class="grid gap-3 md:grid-cols-3">
+        <div>
+          <Eyebrow tracking="widest">Defaults preview</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.failsafeDefaultsState}>
+            {defaultsStateText}
+          </p>
+          <HelperText class="mt-1">Recommended loss-of-link actions can be inspected before staging.</HelperText>
+        </div>
+        <div>
+          <Eyebrow tracking="widest">Radio / GCS state</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary">
+            {#if model.family === "plane"}
+              {currentValueText(item("THR_FAILSAFE"))} radio · {currentValueText(item("FS_LONG_ACTN"))} GCS
+            {:else if model.family === "rover"}
+              {currentValueText(item("FS_ACTION"))} · timeout {currentValueText(item("FS_TIMEOUT"))}
+            {:else}
+              {currentValueText(item("FS_THR_ENABLE"))} radio · {currentValueText(item("FS_GCS_ENABLE"))} GCS
+            {/if}
+          </p>
+          <HelperText class="mt-1">Match the loss-of-link actions to the vehicle family before flight.</HelperText>
+        </div>
+        <div>
+          <Eyebrow tracking="widest">Battery thresholds</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary">
+            Low {currentValueText(item("BATT_LOW_VOLT"))} · Critical {currentValueText(item("BATT_CRT_VOLT"))}
+          </p>
+          <HelperText class="mt-1">Keep low and critical actions separate so escalation is clear.</HelperText>
+        </div>
       </div>
-      <div>
-        <Eyebrow tracking="widest">Radio / GCS state</Eyebrow>
-        <p class="mt-2 text-sm font-semibold text-text-primary">
-          {#if model.family === "plane"}
-            {currentValueText(item("THR_FAILSAFE"))} radio · {currentValueText(item("FS_LONG_ACTN"))} GCS
-          {:else if model.family === "rover"}
-            {currentValueText(item("FS_ACTION"))} · {currentValueText(item("FS_TIMEOUT"))}
-          {:else}
-            {currentValueText(item("FS_THR_ENABLE"))} radio · {currentValueText(item("FS_GCS_ENABLE"))} GCS
-          {/if}
-        </p>
-        <HelperText class="mt-1">Review the loss-of-link actions for this vehicle family here instead of guessing from generic labels.</HelperText>
-      </div>
-      <div>
-        <Eyebrow tracking="widest">Battery thresholds</Eyebrow>
-        <p class="mt-2 text-sm font-semibold text-text-primary">
-          Low {currentValueText(item("BATT_LOW_VOLT"))} · Critical {currentValueText(item("BATT_CRT_VOLT"))}
-        </p>
-        <HelperText class="mt-1">Low and critical actions remain separate so escalation is visible before flight.</HelperText>
-      </div>
-    </Card.Root>
+    </SetupSectionCard>
 
-  {#if model.recoveryReasons.length > 0}
-    <Alert
-      variant="warning"
-      density="default"
-      appearance="solid"
-      shadow={false}
-      layout="stacked"
-      title="Failsafe editors are staying fail-closed until the required metadata and rows are complete."
-      testId={setupWorkspaceTestIds.failsafeRecovery}
-    >
-      <ul class="list-disc space-y-1 pl-5 text-sm leading-6 text-warning">
-        {#each model.recoveryReasons as reason (reason)}
-          <li>{reason}</li>
-        {/each}
-      </ul>
-    </Alert>
-  {/if}
+  <SetupNoticeList notices={model.warningTexts} tone="warning" testIdPrefix={setupWorkspaceTestIds.failsafeBannerPrefix} />
 
-  {#each model.warningTexts as text, index (text)}
-    <Alert
-      variant="warning"
-      density="default"
-      appearance="solid"
-      shadow={false}
-      description={text}
-      testId={`${setupWorkspaceTestIds.failsafeBannerPrefix}-${index}`}
-    />
-  {/each}
-
-  <Card.Root as="article" density="compact" surface="primary" testId={setupWorkspaceTestIds.failsafePreview}>
-    <div class="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <Eyebrow tracking="widest">Recommended defaults</Eyebrow>
-        <h4 class="mt-2 text-base font-semibold text-text-primary">Preview safe starting actions</h4>
-        <HelperText class="mt-2">
-          Stage the audited defaults for the current vehicle family through the shared review tray. You can still keep intentional deviations visible afterwards.
-        </HelperText>
-      </div>
-      <Button
-        variant="secondary"
-        onclick={() => (defaultsPreviewOpen = !defaultsPreviewOpen)}
-      >
+  {#snippet previewActions()}
+    <Button variant="secondary" onclick={() => (defaultsPreviewOpen = !defaultsPreviewOpen)}>
         {defaultsPreviewOpen ? "Hide preview" : "Preview defaults"}
-      </Button>
-    </div>
+    </Button>
+  {/snippet}
+
+  <SetupSectionCard
+    icon={ClipboardCheck}
+    title="Recommended defaults"
+    description="Preview recommended starting actions for this vehicle family before staging them. Intentional deviations remain visible as staged edits."
+    surface="primary"
+    testId={setupWorkspaceTestIds.failsafePreview}
+    actions={previewActions}
+  >
 
     {#if defaultsPreviewOpen}
-      <div class="mt-4">
-        <SetupPreviewStagePanel
-          headerLabel="Preview · recommended failsafe defaults"
-          onCancel={() => (defaultsPreviewOpen = false)}
-          onStage={stageDefaults}
-          rows={previewRows}
-          stageLabel="Stage recommended defaults"
-        />
-      </div>
+      <SetupPreviewStagePanel
+        headerLabel="Preview · recommended failsafe defaults"
+        onCancel={() => (defaultsPreviewOpen = false)}
+        onStage={stageDefaults}
+        rows={previewRows}
+        stageLabel="Stage recommended defaults"
+      />
     {/if}
-  </Card.Root>
+  </SetupSectionCard>
 
   <div class="space-y-3">
     {#each cards as card (card.id)}
-      <Card.Root as="article" density="compact" surface="elevated" testId={`${setupWorkspaceTestIds.failsafeCardPrefix}-${card.id}`}>
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <Eyebrow tracking="widest">{card.title}</Eyebrow>
-            <h4 class="mt-2 text-base font-semibold text-text-primary">{card.summary}</h4>
-          </div>
-          {#if card.docsUrl}
-            <ExternalLink class="text-xs font-semibold" href={card.docsUrl}>Docs</ExternalLink>
-          {/if}
-        </div>
-
-        <div class="mt-4 grid gap-3 xl:grid-cols-2">
-          {#each card.fields as field (field.name)}
-            <Card.Root density="compact" surface="secondary">
-              <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for={`${card.id}-${field.name}`}>
-                {field.label}
-              </label>
-              <HelperText class="mt-2">{field.description}</HelperText>
-              <Eyebrow class="mt-3" tracking="widest" testId={`${setupWorkspaceTestIds.failsafeCurrentPrefix}-${field.name}`}>
-                Current · {currentValueText(item(field.name))}
-              </Eyebrow>
-              {#if params.stagedEdits[field.name]}
-                <p class="mt-2">
-                  <SetupStagedBadge name={field.name} onUnstage={unstage} testId={`${setupWorkspaceTestIds.failsafeStagedPrefix}-${field.name}`} />
-                </p>
-              {/if}
-
-              <div class="mt-4">
-                {#if field.kind === "enum"}
-                  <SetupParamEnumControl
-                    disabled={actionsBlocked || resolveEnumOptions(field.name).length === 0 || !item(field.name)}
-                    id={`${card.id}-${field.name}`}
-                    onChange={(value) => stage(field.name, value, item(field.name)?.value ?? null, true)}
-                    options={resolveEnumOptions(field.name)}
-                    testId={`${setupWorkspaceTestIds.failsafeInputPrefix}-${field.name}`}
-                    value={draftValue(field.name, item(field.name)?.value ?? null)}
-                  />
-                {:else}
-                  <div class="flex items-center gap-2">
-                    <Input
-                      disabled={actionsBlocked || !item(field.name)}
-                      id={`${card.id}-${field.name}`}
-                      min={field.min}
-                      onchange={(event) => stage(field.name, (event.currentTarget as HTMLInputElement).value, item(field.name)?.value ?? null)}
-                      oninput={(event) => stage(field.name, (event.currentTarget as HTMLInputElement).value, item(field.name)?.value ?? null)}
-                      step={field.step}
-                      testId={`${setupWorkspaceTestIds.failsafeInputPrefix}-${field.name}`}
-                      type="number"
-                      value={draftValue(field.name, item(field.name)?.value ?? null)}
-                    />
-                    {#if field.unit}
-                      <span class="shrink-0 text-xs text-text-muted">{field.unit}</span>
-                    {/if}
-                  </div>
-                {/if}
-
-              </div>
-            </Card.Root>
-          {/each}
-        </div>
-      </Card.Root>
+      <SetupSectionCard
+        icon={ShieldAlert}
+        title={card.title}
+        description={card.summary}
+        docsUrl={card.docsUrl}
+        surface="elevated"
+        testId={`${setupWorkspaceTestIds.failsafeCardPrefix}-${card.id}`}
+      >
+        {#if visibleFields(card.fields).length > 0}
+          <SetupFieldStack divided>
+            {#each visibleFields(card.fields) as field (field.name)}
+              <SetupParamEditorRow
+                item={item(field.name)}
+                id={`${card.id}-${field.name}`}
+                label={field.label}
+                description={field.description}
+                mode={field.kind}
+                options={resolveEnumOptions(field.name)}
+                value={draftValue(field.name, item(field.name)?.value ?? null)}
+                stagedEdits={params.stagedEdits}
+                stagedTestId={`${setupWorkspaceTestIds.failsafeStagedPrefix}-${field.name}`}
+                onUnstage={unstage}
+                onChange={(value) => stage(field.name, value, item(field.name)?.value ?? null, field.kind === "enum")}
+                inputTestId={`${setupWorkspaceTestIds.failsafeInputPrefix}-${field.name}`}
+                disabled={actionsBlocked}
+                min={field.min}
+                step={field.step}
+                unit={field.unit ?? null}
+              />
+            {/each}
+          </SetupFieldStack>
+        {:else}
+          <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
+        {/if}
+      </SetupSectionCard>
     {/each}
-      </div>
+
+    <SetupGuideCard title="Failsafe review" description="Before flight, verify the radio link, battery thresholds, and GCS loss action against the current operating plan.">
+      <p>Use battery low and critical actions as separate escalation points, and keep loss-of-link behavior aligned with the vehicle family.</p>
+    </SetupGuideCard>
+  </div>
   {/snippet}
 </SetupSectionShell>

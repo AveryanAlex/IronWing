@@ -4,8 +4,10 @@ import type {
   SetupWorkspaceCalibrationCard,
   SetupWorkspaceStoreState,
 } from "../../../lib/stores/setup-workspace";
-import { Alert, Button, Card, Eyebrow, HelperText } from "../../../components/ui";
+import { Button, Card, Eyebrow, HelperText } from "../../../components/ui";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import SetupWizardActions from "../shared/SetupWizardActions.svelte";
+import SetupWizardApplyError from "../shared/SetupWizardApplyError.svelte";
 
 let {
   view,
@@ -126,20 +128,12 @@ function handleContinue() {
     {/if}
   </Card.Root>
 
-  {#if commandError}
-    <Alert variant="danger" density="compact" shadow={false} description={commandError} />
-  {/if}
+  <SetupWizardApplyError message={commandError} prefix="" />
 
-  <div class="flex flex-wrap gap-2">
-    <Button
-      shape="pill"
-      tone="accent"
-      variant="soft"
-      testId={setupWorkspaceTestIds.wizardStepCalibContinue}
-      disabled={continueDisabled || view.checkpoint.blocksActions}
-      onclick={handleContinue}
-    >
-      Continue
-    </Button>
-  </div>
+  <SetupWizardActions
+    primaryLabel="Continue"
+    primaryDisabled={continueDisabled || view.checkpoint.blocksActions}
+    primaryTestId={setupWorkspaceTestIds.wizardStepCalibContinue}
+    onPrimary={handleContinue}
+  />
 </div>

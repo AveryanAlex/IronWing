@@ -1,10 +1,15 @@
 <script lang="ts">
+import { Compass, Gauge, MessageSquare, Radio } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 import { calibrateCompassAccept, calibrateCompassCancel, calibrateCompassStart } from "../../../../calibration";
 import { trackAnalytics } from "../../../../lib/analytics/client";
 import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../../../lib/replay-readonly";
 import type { SetupWorkspaceStoreState, SetupWorkspaceCalibrationCard } from "../../../../lib/stores/setup-workspace";
-import { Banner, Button } from "../../../../components/ui";
+import { Button } from "../../../../components/ui";
+import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
+import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
+import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
+import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import { getSetupWorkspaceRouteContext } from "../../../../features/setup/components/setup-workspace-route-context";
@@ -45,83 +50,95 @@ async function runCompassAction(card: SetupWorkspaceCalibrationCard) {
   }
 }
 
-function cardTone(card: SetupWorkspaceCalibrationCard): string {
+function cardTone(card: SetupWorkspaceCalibrationCard): "neutral" | "info" | "success" | "warning" | "danger" {
   switch (card.lifecycle) {
     case "complete":
-      return "border-success/30 bg-success/10";
+      return "success";
     case "running":
-      return "border-accent/30 bg-accent/10";
+      return "info";
     case "failed":
+      return "danger";
     case "unavailable":
-      return "border-warning/40 bg-warning/10";
+      return "warning";
     case "not_started":
     default:
-      return "border-border bg-bg-primary/80";
+      return "neutral";
   }
+}
+
+function calibrationIcon(cardId: SetupWorkspaceCalibrationCard["id"]) {
+  if (cardId === "compass") {
+    return Compass;
+  }
+
+  if (cardId === "radio") {
+    return Radio;
+  }
+
+  return Gauge;
 }
 </script>
 
 <SetupSectionShell
   sectionId="calibration"
   eyebrow="Calibration"
-  title="Broad cards, honest lifecycle truth"
-  description="Accelerometer, gyroscope, compass, and radio remain visible together, but this slice only treats the compass lifecycle as a fully actionable setup path."
+  title="Calibration status and guided actions"
+  description="Review accelerometer, gyroscope, compass, and radio calibration status. Compass actions remain available here when the vehicle supports them."
   testId={setupWorkspaceTestIds.calibrationSection}
 >
   {#snippet body()}
       {#if actionError}
-        <Banner severity="danger" title={actionError} />
+        <SetupNotice tone="danger">{actionError}</SetupNotice>
       {/if}
 
       {#if replayReadonly}
-        <Banner
-          severity="warning"
-          title={REPLAY_READONLY_TITLE}
-          message={REPLAY_READONLY_COPY}
-          testId={setupWorkspaceTestIds.calibrationReplayReadonly}
-        />
+        <SetupNotice tone="warning" testId={setupWorkspaceTestIds.calibrationReplayReadonly}>
+          <strong>{REPLAY_READONLY_TITLE}</strong> {REPLAY_READONLY_COPY}
+        </SetupNotice>
       {/if}
 
       {#if view.statusNotices.length > 0}
-        <div
-          class="rounded-lg border border-border bg-bg-primary/80 p-3"
-          data-testid={setupWorkspaceTestIds.calibrationNotices}
+        <SetupSectionCard
+          icon={MessageSquare}
+          title="Calibration messages"
+          description="Recent calibration status text from the vehicle."
+          surface="elevated"
+          testId={setupWorkspaceTestIds.calibrationNotices}
         >
-          <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Lifecycle status text</p>
-          <ul class="mt-3 space-y-2">
+          <ul class="space-y-2">
             {#each view.statusNotices as notice (notice.id)}
               <li class="rounded-lg border border-border bg-bg-secondary/70 px-3 py-2 text-sm text-text-secondary">
                 {notice.text}
               </li>
             {/each}
           </ul>
-        </div>
+        </SetupSectionCard>
       {/if}
 
       <div class="grid gap-3 xl:grid-cols-2">
         {#each view.calibrationSummary.cards as card (card.id)}
-          <article
-            class={`rounded-lg border p-3 ${cardTone(card)}`}
-            data-testid={`${setupWorkspaceTestIds.calibrationCardPrefix}-${card.id}`}
+          {#snippet lifecycleStatus()}
+            <span class="rounded-full border border-border bg-bg-primary/80 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
+              {card.lifecycle}
+            </span>
+          {/snippet}
+
+          <SetupSectionCard
+            icon={calibrationIcon(card.id)}
+            title={card.title}
+            description={card.detailText}
+            tone={cardTone(card)}
+            surface="elevated"
+            testId={`${setupWorkspaceTestIds.calibrationCardPrefix}-${card.id}`}
+            status={lifecycleStatus}
           >
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p class="text-sm font-semibold text-text-primary">{card.title}</p>
-                <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={`${setupWorkspaceTestIds.calibrationStatusPrefix}-${card.id}`}>
-                  {card.statusText}
-                </p>
-              </div>
-
-              <span class="rounded-full border border-border bg-bg-primary/80 px-2 py-1 text-xs font-semibold uppercase tracking-widest text-text-secondary">
-                {card.lifecycle}
-              </span>
-            </div>
-
-            <p class="mt-3 text-sm leading-6 text-text-secondary">{card.detailText}</p>
+            <p class="text-sm font-semibold text-text-primary" data-testid={`${setupWorkspaceTestIds.calibrationStatusPrefix}-${card.id}`}>
+              {card.statusText}
+            </p>
 
             {#if card.actionLabel}
               <Button
-                class="mt-4 rounded-md border border-border bg-bg-secondary px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+                class="self-start"
                 disabled={replayReadonly || card.actionAvailability !== "available" || pendingCardId === card.id}
                 onclick={() => runCompassAction(card)}
                 testId={`${setupWorkspaceTestIds.calibrationActionPrefix}-${card.id}`}
@@ -130,8 +147,16 @@ function cardTone(card: SetupWorkspaceCalibrationCard): string {
                 {pendingCardId === card.id ? "Working…" : card.actionLabel}
               </Button>
             {/if}
-          </article>
+          </SetupSectionCard>
         {/each}
       </div>
+
+      <SetupGuideCard title="Calibration steps" description="Complete calibrations on a stable bench with the vehicle made safe.">
+        <SetupFieldStack divided>
+          <p class="pt-3 first:pt-0">Disconnect or secure propulsion before starting any calibration that can move surfaces or motors.</p>
+          <p class="pt-3 first:pt-0">For compass calibration, rotate the vehicle through all orientations and accept the result only after the vehicle reports completion.</p>
+          <p class="pt-3 first:pt-0">Re-run pre-arm checks after calibration so sensor health and status text reflect the new offsets.</p>
+        </SetupFieldStack>
+      </SetupGuideCard>
   {/snippet}
 </SetupSectionShell>
