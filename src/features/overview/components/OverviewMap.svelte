@@ -762,18 +762,20 @@ function activateTarget(target: FollowTarget, follow: boolean) {
   />
 
   {#if contextMenu}
-    <MapContextMenu
-      x={contextMenu.x}
-      y={contextMenu.y}
-      lat={contextMenu.lat}
-      lon={contextMenu.lon}
-      actions={contextMenuActions}
-      testId="overview-map-context-menu"
-      coordinatesTestId="overview-map-context-menu-coordinates"
-      onClose={() => {
-        contextMenu = null;
-      }}
-    />
+    {#key contextMenu}
+      <MapContextMenu
+        x={contextMenu.x}
+        y={contextMenu.y}
+        lat={contextMenu.lat}
+        lon={contextMenu.lon}
+        actions={contextMenuActions}
+        testId="overview-map-context-menu"
+        coordinatesTestId="overview-map-context-menu-coordinates"
+        onClose={() => {
+          contextMenu = null;
+        }}
+      />
+    {/key}
   {/if}
 
   <MapSurfaceControls

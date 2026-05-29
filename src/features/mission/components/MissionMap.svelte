@@ -1973,16 +1973,18 @@ function stopDeviceLocationWatch() {
       />
 
       {#if contextMenu}
-        <MapContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          lat={contextMenu.lngLat.lat}
-          lon={contextMenu.lngLat.lng}
-          actions={buildContextMenuActions()}
-          testId="mission-map-context-menu"
-          coordinatesTestId="mission-map-context-menu-coordinates"
-          onClose={() => { contextMenu = null; }}
-        />
+        {#key contextMenu}
+          <MapContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            lat={contextMenu.lngLat.lat}
+            lon={contextMenu.lngLat.lng}
+            actions={buildContextMenuActions()}
+            testId="mission-map-context-menu"
+            coordinatesTestId="mission-map-context-menu-coordinates"
+            onClose={() => { contextMenu = null; }}
+          />
+        {/key}
       {/if}
     </div>
   {/if}

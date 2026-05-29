@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import MapContextMenuCloseHarness from "./MapContextMenuCloseHarness.svelte";
 import MapContextMenu from "./MapContextMenu.svelte";
 
 describe("MapContextMenu", () => {
@@ -64,5 +65,17 @@ describe("MapContextMenu", () => {
 
     expect(screen.getByTestId("empty-map-context-menu")).toBeTruthy();
     expect(screen.getByText("6.000000, 12.000000")).toBeTruthy();
+  });
+
+  it("allows a menu action to synchronously close the parent-owned menu", async () => {
+    render(MapContextMenuCloseHarness);
+
+    expect(screen.getByTestId("test-map-context-menu")).toBeTruthy();
+
+    await fireEvent.click(screen.getByTestId("test-map-context-menu-close-sync"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("test-map-context-menu")).toBeNull();
+    });
   });
 });
