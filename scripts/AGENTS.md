@@ -45,7 +45,7 @@ SvelteKit's Vite CLI is now the web/WASM default: `pnpm exec vite` serves the pu
 
 ## Target Rules
 
-- SvelteKit/Vite defaults to the pure web platform and `dist/web`; `vite.config.ts` triggers `internal:wasm:web:*` for web builds/dev.
+- SvelteKit/Vite defaults to the pure web platform and `dist/web`; `vite.config.ts` triggers `internal:wasm` for web builds/dev.
 - Do not add a second explicit `wasm-pack` call to `dev:web` or `build:web`; keep Rust WASM compilation centralized in Vite + `wasm-web-build.mjs`.
 - Keep `src/platform/web/generated/ironwing_wasm.d.ts` checked in and do not modify it unless intentionally regenerating bindings. Generated JS/WASM runtime files remain transient and ignored.
 - Tauri dev/build entrypoints must pass `tauriFrontendEnv()` so frontend aliases use `src/platform/tauri/*` and output goes to `dist/tauri`.

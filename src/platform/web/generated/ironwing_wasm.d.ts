@@ -97,12 +97,8 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
-    readonly __wbg_wasmbytebridge_free: (a: number, b: number) => void;
-    readonly wasmbytebridge_close: (a: number) => void;
-    readonly wasmbytebridge_isClosed: (a: number) => number;
-    readonly wasmbytebridge_nextOutbound: (a: number) => any;
-    readonly wasmbytebridge_pushInbound: (a: number, b: any) => any;
     readonly __wbg_ironwingwasmruntime_free: (a: number, b: number) => void;
+    readonly __wbg_wasmbytebridge_free: (a: number, b: number) => void;
     readonly availableMessageRates: () => [number, number, number];
     readonly firmwareBootloaderCatalogTargetsFromManifest: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly firmwareCatalogEntriesFromManifest: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
@@ -161,12 +157,16 @@ export interface InitOutput {
     readonly logRawMessagesQuery: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
     readonly logTelemetryAt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: bigint) => [number, number, number];
     readonly logTelemetryTrack: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+    readonly start: () => void;
+    readonly wasmbytebridge_close: (a: number) => void;
+    readonly wasmbytebridge_isClosed: (a: number) => number;
+    readonly wasmbytebridge_nextOutbound: (a: number) => any;
+    readonly wasmbytebridge_pushInbound: (a: number, b: any) => any;
     readonly webSerialFirmwareInstallUpdate: (a: number, b: number, c: any, d: any, e: any, f: any, g: any) => any;
     readonly webTransportDescriptors: (a: number, b: number, c: number) => [number, number, number];
-    readonly start: () => void;
-    readonly wasm_bindgen__convert__closures_____invoke__h157532a21e05ac18: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen__convert__closures_____invoke__h831f6e81e7b0bf6f: (a: number, b: number, c: any, d: any) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__hba32844d06b6d595: (a: number, b: number) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__hd4c8cbd6c98bd34a: (a: number, b: number, c: any) => [number, number];
+    readonly wasm_bindgen__convert__closures_____invoke__h2b1cbf5ec2613011: (a: number, b: number, c: any, d: any) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__h5a562c310a1ac94f: (a: number, b: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

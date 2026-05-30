@@ -39,9 +39,7 @@
     "profile:hud:web": "node scripts/profile-web-hud.mjs",
     "profile:serve": "node scripts/profile-serve.mjs",
     "profile:compare": "node scripts/profile-compare.mjs",
-    "internal:wasm:web:debug": "node scripts/wasm-web-build.mjs --release",
-    "internal:wasm:web:release": "node scripts/wasm-web-build.mjs --release",
-    "internal:wasm:web:cleanup": "node scripts/wasm-web-build.mjs --cleanup-only",
+    "internal:wasm": "node scripts/wasm-web-build.mjs",
     "tool:sitl:ws": "node scripts/sitl-ws.mjs"
   },
   "dependencies": {
