@@ -1,5 +1,15 @@
 <script lang="ts">
-import { Activity, GitBranch, Radio, SlidersHorizontal } from "lucide-svelte";
+import {
+  Activity,
+  Crosshair,
+  Gauge,
+  GitBranch,
+  ListChecks,
+  MoveVertical,
+  Radio,
+  Settings2,
+  SlidersHorizontal,
+} from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext } from "../../../../app/shell/runtime-context";
@@ -14,6 +24,12 @@ import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
 import SetupParameterRow from "../../../../features/setup/shared/SetupParameterRow.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
+import CopterAngleModeTiltEditor from "../../../../features/setup/components/CopterAngleModeTiltEditor.svelte";
+import CopterThrottleClimbResponseEditor from "../../../../features/setup/components/CopterThrottleClimbResponseEditor.svelte";
+import RcCalibrationEditor from "../../../../features/setup/components/RcCalibrationEditor.svelte";
+import RcReceiverSettingsEditor from "../../../../features/setup/components/RcReceiverSettingsEditor.svelte";
+import RcOptionAssignmentEditor from "../../../../features/setup/components/RcOptionAssignmentEditor.svelte";
+import RssiSourceEditor from "../../../../features/setup/components/RssiSourceEditor.svelte";
 import RateCurveEditor from "../../../../features/setup/components/rates/RateCurveEditor.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import { getSetupWorkspaceRouteContext } from "../../../../features/setup/components/setup-workspace-route-context";
@@ -51,6 +67,49 @@ const CHANNEL_OPTIONS = Array.from({ length: 16 }, (_, index) => ({
   label: `Channel ${index + 1}`,
 }));
 
+const COMMON_MAPPING_AXIS_NAMES = ["RCMAP_ROLL", "RCMAP_PITCH", "RCMAP_THROTTLE", "RCMAP_YAW"] as const;
+
+const MAPPING_AXES = [
+  {
+    name: "RCMAP_ROLL",
+    id: "setup-rc-map-roll",
+    label: "Roll",
+    description: "Map roll to the receiver channel that moves with the roll stick.",
+  },
+  {
+    name: "RCMAP_PITCH",
+    id: "setup-rc-map-pitch",
+    label: "Pitch",
+    description: "Map pitch to the receiver channel that moves with the pitch stick.",
+  },
+  {
+    name: "RCMAP_THROTTLE",
+    id: "setup-rc-map-throttle",
+    label: "Throttle",
+    description: "Map throttle to the receiver channel that moves with the throttle stick.",
+  },
+  {
+    name: "RCMAP_YAW",
+    id: "setup-rc-map-yaw",
+    label: "Yaw",
+    description: "Map yaw to the receiver channel that moves with the yaw stick.",
+  },
+  {
+    name: "RCMAP_FORWARD",
+    id: "setup-rc-map-forward",
+    label: "Sub forward",
+    description: "Map Sub forward motion to its receiver channel when supported by this firmware.",
+  },
+  {
+    name: "RCMAP_LATERAL",
+    id: "setup-rc-map-lateral",
+    label: "Sub lateral",
+    description: "Map Sub lateral motion to its receiver channel when supported by this firmware.",
+  },
+] as const;
+
+type CommonMappingAxisName = (typeof COMMON_MAPPING_AXIS_NAMES)[number];
+
 const paramsStore = getParamsStoreContext();
 const paramsState = fromStore(paramsStore);
 
@@ -58,24 +117,34 @@ let params = $derived(paramsState.current);
 let itemIndex = $derived(buildParameterItemIndex(params.paramStore, params.metadata));
 let docsUrl = $derived(resolveDocsUrl("radio_calibration"));
 let retainedFailures = $derived(
-  ["RCMAP_ROLL", "RCMAP_PITCH", "RCMAP_THROTTLE", "RCMAP_YAW"]
-    .map((name) => params.retainedFailures[name])
-    .filter((failure): failure is NonNullable<typeof failure> => failure != null),
+  MAPPING_AXES.map((axis) => params.retainedFailures[axis.name]).filter(
+    (failure): failure is NonNullable<typeof failure> => failure != null,
+  ),
 );
-let rollItem = $derived(itemIndex.get("RCMAP_ROLL") ?? null);
-let pitchItem = $derived(itemIndex.get("RCMAP_PITCH") ?? null);
-let throttleItem = $derived(itemIndex.get("RCMAP_THROTTLE") ?? null);
-let yawItem = $derived(itemIndex.get("RCMAP_YAW") ?? null);
-let rollDraft = $derived(String(params.stagedEdits.RCMAP_ROLL?.nextValue ?? rollItem?.value ?? ""));
-let pitchDraft = $derived(String(params.stagedEdits.RCMAP_PITCH?.nextValue ?? pitchItem?.value ?? ""));
-let throttleDraft = $derived(String(params.stagedEdits.RCMAP_THROTTLE?.nextValue ?? throttleItem?.value ?? ""));
-let yawDraft = $derived(String(params.stagedEdits.RCMAP_YAW?.nextValue ?? yawItem?.value ?? ""));
+let mappingRows = $derived.by(() =>
+  MAPPING_AXES.flatMap((axis) => {
+    const item = itemIndex.get(axis.name) ?? null;
+    if (!item) {
+      return [];
+    }
+
+    return [
+      {
+        ...axis,
+        item,
+        draft: resolveMappingDraft(axis.name, item),
+        stagedName: params.stagedEdits[axis.name] ? axis.name : undefined,
+        disabled: view.checkpoint.blocksActions || item.readOnly,
+      },
+    ];
+  }),
+);
 let currentPreset = $derived.by(() => {
   const currentValues = {
-    RCMAP_ROLL: resolveDraftNumber(rollDraft) ?? rollItem?.value ?? null,
-    RCMAP_PITCH: resolveDraftNumber(pitchDraft) ?? pitchItem?.value ?? null,
-    RCMAP_THROTTLE: resolveDraftNumber(throttleDraft) ?? throttleItem?.value ?? null,
-    RCMAP_YAW: resolveDraftNumber(yawDraft) ?? yawItem?.value ?? null,
+    RCMAP_ROLL: resolveMappingNumber("RCMAP_ROLL"),
+    RCMAP_PITCH: resolveMappingNumber("RCMAP_PITCH"),
+    RCMAP_THROTTLE: resolveMappingNumber("RCMAP_THROTTLE"),
+    RCMAP_YAW: resolveMappingNumber("RCMAP_YAW"),
   };
 
   return (
@@ -95,7 +164,16 @@ let rcChannelItems = $derived(
     stale: channel.stale,
   })),
 );
-let mappingAvailable = $derived(Boolean(rollItem || pitchItem || throttleItem || yawItem));
+let mappingAvailable = $derived(mappingRows.length > 0);
+
+function resolveMappingDraft(name: string, item: ParameterItemModel | null): string {
+  return String(params.stagedEdits[name]?.nextValue ?? item?.value ?? "");
+}
+
+function resolveMappingNumber(name: CommonMappingAxisName): number | null {
+  const item = itemIndex.get(name) ?? null;
+  return resolveDraftNumber(resolveMappingDraft(name, item)) ?? item?.value ?? null;
+}
 
 function resolveDraftNumber(value: string): number | null {
   if (value.trim().length === 0) {
@@ -108,7 +186,7 @@ function resolveDraftNumber(value: string): number | null {
 
 function stage(item: ParameterItemModel | null, draftValue: string) {
   const nextValue = resolveDraftNumber(draftValue);
-  if (!item || nextValue === null || view.checkpoint.blocksActions) {
+  if (!item || item.readOnly || nextValue === null || view.checkpoint.blocksActions) {
     return;
   }
 
@@ -124,7 +202,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
     return;
   }
 
-  for (const [name, nextValue] of Object.entries(preset.values) as Array<[string, number]>) {
+  for (const [name, nextValue] of Object.entries(preset.values) as Array<[CommonMappingAxisName, number]>) {
     const item = itemIndex.get(name) ?? null;
     if (!item || item.readOnly === true || item.value === nextValue) {
       continue;
@@ -138,8 +216,8 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
 <SetupSectionShell
   sectionId="rc_receiver"
   eyebrow="RC receiver"
-  title="Check live channel bars and queue receiver mapping changes"
-  description="Watch live PWM movement, identify roll/pitch/throttle/yaw channels, then stage receiver mapping changes for review before applying them."
+  title="Review live RC input and queue setup changes"
+  description="Watch live PWM movement, stage channel mapping and calibration, then tune available RC stick-response settings before applying them."
   testId={setupWorkspaceTestIds.rcSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.rcDocsLink }]}
 >
@@ -196,6 +274,40 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
     {/if}
   </SetupSectionCard>
 
+  <SetupSectionCard
+    icon={Settings2}
+    title="Receiver protocols, options, and timeouts"
+    description="Review global ArduPilot receiver detection, behavior flags, override timeout, and RC-loss failsafe timeout settings."
+    surface="elevated"
+  >
+    <RcReceiverSettingsEditor
+      {itemIndex}
+      metadata={params.metadata}
+      stagedEdits={params.stagedEdits}
+      disabled={view.checkpoint.blocksActions}
+      onStageParameter={(item, value) => paramsStore.stageParameterEdit(item, value)}
+      onResetParameter={(name) => paramsStore.discardStagedEdit(name)}
+    />
+  </SetupSectionCard>
+
+  <SetupSectionCard
+    icon={Radio}
+    title="RSSI signal source"
+    description="Select the native ArduPilot RSSI source, preview available live signal data, and stage only that source's calibration settings."
+    surface="elevated"
+  >
+    <RssiSourceEditor
+      {itemIndex}
+      metadata={params.metadata}
+      stagedEdits={params.stagedEdits}
+      channels={view.rcReceiver.channels}
+      rssiText={view.rcReceiver.rssiText}
+      disabled={view.checkpoint.blocksActions}
+      onStageParameter={(item, value) => paramsStore.stageParameterEdit(item, value)}
+      onResetParameter={(name) => paramsStore.discardStagedEdit(name)}
+    />
+  </SetupSectionCard>
+
   <SetupSectionCard icon={GitBranch} title="Channel mapping" description="Start with a known transmitter order, then fine-tune individual axes if needed." surface="elevated">
     <div class="flex flex-wrap gap-2">
       {#each PRESETS as preset (preset.id)}
@@ -211,91 +323,97 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
       {/each}
     </div>
 
+    <HelperText class="mt-3">RCMAP channel changes take effect after vehicle reboot.</HelperText>
+
     {#if mappingAvailable}
       <SetupFieldStack class="mt-2" divided>
-        {#if rollItem}
+        {#each mappingRows as mapping (mapping.name)}
           <SetupParameterRow
-            id="setup-rc-map-roll"
-            label="Roll"
-            description="Map roll to the receiver channel that moves with the roll stick."
-            stagedName={params.stagedEdits.RCMAP_ROLL ? "RCMAP_ROLL" : undefined}
-            stagedTestId={`${setupWorkspaceTestIds.rcStagedPrefix}-RCMAP_ROLL`}
+            id={mapping.id}
+            label={mapping.label}
+            description={mapping.description}
+            stagedName={mapping.stagedName}
+            stagedTestId={`${setupWorkspaceTestIds.rcStagedPrefix}-${mapping.name}`}
             onUnstage={unstage}
             controlWidth="narrow"
           >
             <NativeSelect
-              bind:value={rollDraft}
-              disabled={view.checkpoint.blocksActions}
-              onchange={(event) => stage(rollItem, (event.currentTarget as HTMLSelectElement).value)}
+              id={mapping.id}
+              value={mapping.draft}
+              disabled={mapping.disabled}
+              onchange={(event) => stage(mapping.item, (event.currentTarget as HTMLSelectElement).value)}
               options={CHANNEL_OPTIONS}
-              testId={`${setupWorkspaceTestIds.rcInputPrefix}-RCMAP_ROLL`}
+              testId={`${setupWorkspaceTestIds.rcInputPrefix}-${mapping.name}`}
             />
           </SetupParameterRow>
-        {/if}
-
-        {#if pitchItem}
-          <SetupParameterRow
-            id="setup-rc-map-pitch"
-            label="Pitch"
-            description="Map pitch to the receiver channel that moves with the pitch stick."
-            stagedName={params.stagedEdits.RCMAP_PITCH ? "RCMAP_PITCH" : undefined}
-            stagedTestId={`${setupWorkspaceTestIds.rcStagedPrefix}-RCMAP_PITCH`}
-            onUnstage={unstage}
-            controlWidth="narrow"
-          >
-            <NativeSelect
-              bind:value={pitchDraft}
-              disabled={view.checkpoint.blocksActions}
-              onchange={(event) => stage(pitchItem, (event.currentTarget as HTMLSelectElement).value)}
-              options={CHANNEL_OPTIONS}
-              testId={`${setupWorkspaceTestIds.rcInputPrefix}-RCMAP_PITCH`}
-            />
-          </SetupParameterRow>
-        {/if}
-
-        {#if throttleItem}
-          <SetupParameterRow
-            id="setup-rc-map-throttle"
-            label="Throttle"
-            description="Map throttle to the receiver channel that moves with the throttle stick."
-            stagedName={params.stagedEdits.RCMAP_THROTTLE ? "RCMAP_THROTTLE" : undefined}
-            stagedTestId={`${setupWorkspaceTestIds.rcStagedPrefix}-RCMAP_THROTTLE`}
-            onUnstage={unstage}
-            controlWidth="narrow"
-          >
-            <NativeSelect
-              bind:value={throttleDraft}
-              disabled={view.checkpoint.blocksActions}
-              onchange={(event) => stage(throttleItem, (event.currentTarget as HTMLSelectElement).value)}
-              options={CHANNEL_OPTIONS}
-              testId={`${setupWorkspaceTestIds.rcInputPrefix}-RCMAP_THROTTLE`}
-            />
-          </SetupParameterRow>
-        {/if}
-
-        {#if yawItem}
-          <SetupParameterRow
-            id="setup-rc-map-yaw"
-            label="Yaw"
-            description="Map yaw to the receiver channel that moves with the yaw stick."
-            stagedName={params.stagedEdits.RCMAP_YAW ? "RCMAP_YAW" : undefined}
-            stagedTestId={`${setupWorkspaceTestIds.rcStagedPrefix}-RCMAP_YAW`}
-            onUnstage={unstage}
-            controlWidth="narrow"
-          >
-            <NativeSelect
-              bind:value={yawDraft}
-              disabled={view.checkpoint.blocksActions}
-              onchange={(event) => stage(yawItem, (event.currentTarget as HTMLSelectElement).value)}
-              options={CHANNEL_OPTIONS}
-              testId={`${setupWorkspaceTestIds.rcInputPrefix}-RCMAP_YAW`}
-            />
-          </SetupParameterRow>
-        {/if}
+        {/each}
       </SetupFieldStack>
     {:else}
       <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
     {/if}
+  </SetupSectionCard>
+
+  <SetupSectionCard
+    icon={ListChecks}
+    title="Auxiliary channel functions"
+    description="Review firmware-specific RCx_OPTION assignments, confirm switch motion with live PWM, and stage selected-channel changes."
+    surface="elevated"
+  >
+    <RcOptionAssignmentEditor
+      {itemIndex}
+      metadata={params.metadata}
+      stagedEdits={params.stagedEdits}
+      channels={view.rcReceiver.channels}
+      disabled={view.checkpoint.blocksActions}
+      onStageParameter={(item, value) => paramsStore.stageParameterEdit(item, value)}
+      onResetParameter={(name) => paramsStore.discardStagedEdit(name)}
+    />
+  </SetupSectionCard>
+
+  <SetupSectionCard
+    icon={Crosshair}
+    title="Channel calibration and deadzone"
+    description="Preview and stage per-channel ArduPilot receiver endpoint, trim, deadzone, and reversal parameters."
+    surface="elevated"
+  >
+    <RcCalibrationEditor
+      {itemIndex}
+      stagedEdits={params.stagedEdits}
+      channels={view.rcReceiver.channels}
+      disabled={view.checkpoint.blocksActions}
+      onStageParameter={(item, value) => paramsStore.stageParameterEdit(item, value)}
+      onResetParameter={(name) => paramsStore.discardStagedEdit(name)}
+    />
+  </SetupSectionCard>
+
+  <SetupSectionCard
+    icon={MoveVertical}
+    title="AltHold throttle / climb response"
+    description="Preview and stage Copter throttle-command deadband, climb limits, and vertical response feel."
+    surface="elevated"
+  >
+    <CopterThrottleClimbResponseEditor
+      {itemIndex}
+      stagedEdits={params.stagedEdits}
+      channels={view.rcReceiver.channels}
+      disabled={view.checkpoint.blocksActions}
+      onStageParameter={(item, value) => paramsStore.stageParameterEdit(item, value)}
+    />
+  </SetupSectionCard>
+
+  <SetupSectionCard
+    icon={Gauge}
+    title="Angle-mode tilt envelope"
+    description="Preview and stage Copter roll / pitch target-tilt caps separately from rate curves."
+    surface="elevated"
+  >
+    <CopterAngleModeTiltEditor
+      {itemIndex}
+      stagedEdits={params.stagedEdits}
+      channels={view.rcReceiver.channels}
+      disabled={view.checkpoint.blocksActions}
+      onStageParameter={(item, value) => paramsStore.stageParameterEdit(item, value)}
+    />
   </SetupSectionCard>
 
   <SetupSectionCard
@@ -314,7 +432,7 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
   </SetupSectionCard>
 
   <SetupGuideCard title="Receiver mapping check" description="Use the live channel monitor before changing mapping.">
-    <p>Move one stick at a time, confirm the changing PWM channel, then stage the matching roll, pitch, throttle, and yaw channel numbers.</p>
+    <p>Move one stick at a time, confirm the changing PWM channel, then stage the matching common axes and any available Sub axes.</p>
   </SetupGuideCard>
   {/snippet}
 </SetupSectionShell>

@@ -11,7 +11,7 @@ import {
   type RateCurvePoint,
 } from "./rate-curves";
 
-export type RateCurveAdapterId = "copter-acro" | "plane-acro" | "quadplane-qacro" | "rover-turn-rate" | "sub-acro";
+export type RateCurveAdapterId = "copter-acro" | "copter-assisted-yaw" | "plane-acro" | "quadplane-qacro" | "rover-turn-rate" | "sub-acro";
 export type RateCurveAxisId = "roll-pitch" | "roll" | "pitch" | "yaw" | "steering";
 export type RateCurveParameterRole = "rate" | "expo" | "smoothing" | "gain";
 export type RateCurveNoticeTone = "info" | "warning";
@@ -80,6 +80,7 @@ const SAMPLES = 101;
 
 export const rateCurveAdapters: RateCurveAdapter[] = [
   createCopterAcroAdapter(),
+  createCopterAssistedYawAdapter(),
   createPlaneAcroAdapter(),
   createQuadPlaneQacroAdapter(),
   createRoverTurnRateAdapter(),
@@ -248,6 +249,70 @@ function createCopterAcroAdapter(): RateCurveAdapter {
             id: "yaw",
             label: "Yaw",
             description: "Independent yaw body-rate request.",
+            unit: "deg/s",
+            rcInput: { role: "yaw", mode: "norm_input_dz" },
+            currentPoints: sampleRateCurve((stick) => ardupilotRateCurve(stick, yawRate.currentValue, yawExpo.currentValue), SAMPLES),
+            draftPoints: sampleRateCurve((stick) => ardupilotRateCurve(stick, yawRate.draftValue, yawExpo.draftValue), SAMPLES),
+            controls: [yawRate, yawExpo, yawTc].filter((entry): entry is RateCurveParameterControl => entry != null),
+            summary: `Full stick ${formatRateValue(yawRate.draftValue)} with expo ${formatParamValue(yawExpo.draftValue)}.`,
+          },
+        ],
+      };
+    },
+  };
+}
+
+function createCopterAssistedYawAdapter(): RateCurveAdapter {
+  return {
+    id: "copter-assisted-yaw",
+    label: "ArduCopter assisted yaw",
+    shortLabel: "Copter yaw",
+    matches: ({ itemIndex }) => hasAll(itemIndex, ["PILOT_Y_RATE", "PILOT_Y_EXPO"]),
+    buildModel(ctx) {
+      const yawRate = control(ctx, "PILOT_Y_RATE", {
+        label: "Assisted yaw max rate",
+        description: "Maximum yaw rate requested at full stick in stabilized/assisted Copter modes.",
+        role: "rate",
+        fallbackMin: 1,
+        fallbackMax: 360,
+        fallbackStep: 0.1,
+        unit: "deg/s",
+      });
+      const yawExpo = control(ctx, "PILOT_Y_EXPO", {
+        label: "Assisted yaw expo",
+        description: "ArduCopter PILOT_Y_EXPO input shaping for assisted yaw stick commands.",
+        role: "expo",
+        fallbackMin: -0.5,
+        fallbackMax: 1,
+        fallbackStep: 0.01,
+      });
+      const yawTc = optionalControl(ctx, "PILOT_Y_RATE_TC", {
+        label: "Assisted yaw response smoothing",
+        description: "Optional time constant used to shape yaw-rate command changes. It does not change the static curve.",
+        role: "smoothing",
+        fallbackMin: 0,
+        fallbackMax: 1,
+        fallbackStep: 0.01,
+        unit: "s",
+      });
+
+      return {
+        id: "copter-assisted-yaw",
+        label: "ArduCopter assisted yaw",
+        shortLabel: "Copter yaw",
+        description: "Native Copter yaw-rate model used by stabilized/assisted modes such as Stabilize, AltHold, and Loiter. Acro keeps its separate ACRO_Y_* yaw curve.",
+        notices: [
+          {
+            id: "copter-assisted-yaw-scope",
+            tone: "info",
+            text: "This previews PILOT_Y_RATE/PILOT_Y_EXPO for non-Acro yaw assistance. Copter Acro remains controlled by ACRO_Y_RATE/ACRO_Y_EXPO.",
+          },
+        ],
+        axes: [
+          {
+            id: "yaw",
+            label: "Yaw",
+            description: "Assisted-mode yaw rate request after deadzone-normalized stick input.",
             unit: "deg/s",
             rcInput: { role: "yaw", mode: "norm_input_dz" },
             currentPoints: sampleRateCurve((stick) => ardupilotRateCurve(stick, yawRate.currentValue, yawExpo.currentValue), SAMPLES),

@@ -73,6 +73,65 @@ describe("rate curve adapters", () => {
     expect(yawRateControl?.step).toBe(0.1);
   });
 
+  it("detects Copter assisted yaw only with its rate and expo parameters", () => {
+    const models = discoverRateCurveModels({
+      itemIndex: index({
+        PILOT_Y_RATE: 202.5,
+        PILOT_Y_EXPO: 0.3,
+      }),
+      getDraftValue: (_name, nextItem) => nextItem.value,
+    });
+    const missingExpoModels = discoverRateCurveModels({
+      itemIndex: index({ PILOT_Y_RATE: 202.5 }),
+      getDraftValue: (_name, nextItem) => nextItem.value,
+    });
+
+    expect(models.map((model) => model.id)).toEqual(["copter-assisted-yaw"]);
+    expect(missingExpoModels.map((model) => model.id)).not.toContain("copter-assisted-yaw");
+    expect(models[0].axes).toHaveLength(1);
+    expect(models[0].axes[0].rcInput).toEqual({ role: "yaw", mode: "norm_input_dz" });
+    expect(models[0].axes[0].controls.find((control) => control.name === "PILOT_Y_EXPO")?.min).toBe(-0.5);
+    expect(models[0].axes[0].controls.find((control) => control.name === "PILOT_Y_EXPO")?.max).toBe(1);
+    expect(models[0].description).toContain("Stabilize, AltHold, and Loiter");
+    expect(models[0].description).toContain("Acro keeps its separate ACRO_Y_* yaw curve");
+  });
+
+  it("includes optional Copter assisted yaw response smoothing", () => {
+    const withoutTc = discoverRateCurveModels({
+      itemIndex: index({
+        PILOT_Y_RATE: 202.5,
+        PILOT_Y_EXPO: 0.3,
+      }),
+      getDraftValue: (_name, nextItem) => nextItem.value,
+    })[0];
+    const withTc = discoverRateCurveModels({
+      itemIndex: index({
+        PILOT_Y_RATE: 202.5,
+        PILOT_Y_EXPO: 0.3,
+        PILOT_Y_RATE_TC: 0.2,
+      }),
+      getDraftValue: (_name, nextItem) => nextItem.value,
+    })[0];
+
+    expect(withoutTc.axes[0].controls.map((control) => control.name)).toEqual(["PILOT_Y_RATE", "PILOT_Y_EXPO"]);
+    expect(withTc.axes[0].controls.map((control) => control.name)).toEqual(["PILOT_Y_RATE", "PILOT_Y_EXPO", "PILOT_Y_RATE_TC"]);
+    expect(withTc.axes[0].controls[2].role).toBe("smoothing");
+  });
+
+  it("preserves the Copter assisted yaw full-stick rate", () => {
+    const models = discoverRateCurveModels({
+      itemIndex: index({
+        PILOT_Y_RATE: 202.5,
+        PILOT_Y_EXPO: 0.3,
+      }),
+      getDraftValue: (_name, nextItem) => nextItem.value,
+    });
+    const points = models[0].axes[0].draftPoints;
+
+    expect(points[0].rateDegS).toBeCloseTo(-202.5);
+    expect(points[points.length - 1].rateDegS).toBeCloseTo(202.5);
+  });
+
   it("detects Plane and QuadPlane models independently", () => {
     const models = discoverRateCurveModels({
       itemIndex: index({
