@@ -11,11 +11,11 @@ import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import { buildRtlReturnModel, type SafetyVehicleFamily } from "../../../../lib/setup/failsafe-model";
 import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
-import { Eyebrow, HelperText } from "../../../../components/ui";
-import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
+import { Eyebrow, HelperText, Input } from "../../../../components/ui";
 import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
 import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
-import SetupParamEditorRow from "../../../../features/setup/shared/SetupParamEditorRow.svelte";
+import SetupParamEditCard from "../../../../features/setup/shared/SetupParamEditCard.svelte";
+import SetupParamEditGrid from "../../../../features/setup/shared/SetupParamEditGrid.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { resolveSetupEnumOptions } from "../../../../features/setup/shared/parameter-editing";
@@ -312,6 +312,17 @@ function currentFallback(name: string): number | null {
   return item(name)?.value ?? null;
 }
 
+function displayMax(target: ParameterItemModel, factor: number): number | undefined {
+  return target.range?.max === undefined ? undefined : target.range.max / factor;
+}
+
+function numericFieldMetadata(field: RtlFieldConfig, target: ParameterItemModel): string {
+  const max = displayMax(target, field.factor);
+  const range = field.min !== undefined && max !== undefined ? `${field.min}–${max} ${field.unit}` : undefined;
+  const step = field.step === undefined ? undefined : `step ${field.step} ${field.unit}`;
+  return [field.name, range, step].filter((part) => part !== undefined).join(" · ");
+}
+
 function canAutostage(
   field: RtlFieldConfig,
   target: ParameterItemModel | null,
@@ -398,28 +409,65 @@ function unstage(name: string) {
         testId={`${setupWorkspaceTestIds.rtlReturnCardPrefix}-${card.id}`}
       >
         {#if visibleFields(card.fields).length > 0}
-          <SetupFieldStack divided>
+          <SetupParamEditGrid>
             {#each visibleFields(card.fields) as field (field.name)}
-              <SetupParamEditorRow
-                item={item(field.name)}
-                id={`${card.id}-${field.name}`}
-                label={field.label}
-                description={field.description}
-                mode={field.kind ?? "number"}
-                options={enumOptions(field.name)}
-                value={draftValue(field.name, item(field.name)?.value ?? null, field.factor, field.decimals, field.sentinel)}
-                stagedEdits={params.stagedEdits}
-                stagedTestId={`${setupWorkspaceTestIds.rtlReturnStagedPrefix}-${field.name}`}
-                onUnstage={unstage}
-                onChange={(value) => stageDraftValue(field, value)}
-                inputTestId={`${setupWorkspaceTestIds.rtlReturnInputPrefix}-${field.name}`}
-                disabled={actionsBlocked}
-                min={field.min}
-                step={field.step}
-                unit={field.kind === "enum" ? null : field.unit}
-              />
+              {@const fieldItem = item(field.name)}
+              {#if fieldItem}
+                {@const fieldValue = draftValue(field.name, fieldItem.value, field.factor, field.decimals, field.sentinel)}
+                {#if field.kind === "enum"}
+                  {@const options = enumOptions(field.name)}
+                  <SetupParamEditCard
+                    item={fieldItem}
+                    inputId={`${card.id}-${field.name}`}
+                    label={field.label}
+                    description={field.description}
+                    type="enum"
+                    options={options}
+                    value={fieldValue}
+                    stagedName={params.stagedEdits[field.name] ? field.name : undefined}
+                    stagedTestId={`${setupWorkspaceTestIds.rtlReturnStagedPrefix}-${field.name}`}
+                    onUnstage={unstage}
+                    onValueChange={(value) => typeof value === "string" && stageDraftValue(field, value)}
+                    inputTestId={`${setupWorkspaceTestIds.rtlReturnInputPrefix}-${field.name}`}
+                    disabled={actionsBlocked || options.length === 0}
+                  />
+                {:else}
+                  <SetupParamEditCard
+                    item={fieldItem}
+                    inputId={`${card.id}-${field.name}`}
+                    label={field.label}
+                    description={field.description}
+                    min={field.min}
+                    max={displayMax(fieldItem, field.factor)}
+                    step={field.step}
+                    unit={field.unit}
+                    metadata={numericFieldMetadata(field, fieldItem)}
+                    stagedName={params.stagedEdits[field.name] ? field.name : undefined}
+                    stagedTestId={`${setupWorkspaceTestIds.rtlReturnStagedPrefix}-${field.name}`}
+                    onUnstage={unstage}
+                    disabled={actionsBlocked}
+                  >
+                    <div class="flex items-center gap-2">
+                      <Input
+                        id={`${card.id}-${field.name}`}
+                        inputmode="decimal"
+                        min={field.min}
+                        max={displayMax(fieldItem, field.factor)}
+                        step={field.step}
+                        type="number"
+                        value={fieldValue}
+                        disabled={actionsBlocked || fieldItem.readOnly}
+                        testId={`${setupWorkspaceTestIds.rtlReturnInputPrefix}-${field.name}`}
+                        oninput={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
+                        onchange={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
+                      />
+                      <span class="shrink-0 text-xs text-text-muted">{field.unit}</span>
+                    </div>
+                  </SetupParamEditCard>
+                {/if}
+              {/if}
             {/each}
-          </SetupFieldStack>
+          </SetupParamEditGrid>
         {:else}
           <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
         {/if}

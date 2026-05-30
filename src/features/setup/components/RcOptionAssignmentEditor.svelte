@@ -1,7 +1,7 @@
 <script lang="ts">
 import { RotateCcw, Search, SlidersHorizontal } from "lucide-svelte";
 
-import { Badge, Button, EmptyState, HelperText, Input, MonoValue, NativeSelect, NumberInput, SelectableCard, StagedBadge } from "../../../components/ui";
+import { Badge, Button, EmptyState, HelperText, Input, NativeSelect, NumberInput, SelectableCard, StagedBadge } from "../../../components/ui";
 import type { ParamMetadataMap } from "../../../param-metadata";
 import { formatParamValue, type ParameterItemModel } from "../../../lib/params/parameter-item-model";
 import {
@@ -16,6 +16,8 @@ import {
 } from "../../../lib/setup/rc-option-assignment";
 import type { RcChannelSample } from "../../../lib/setup/rc-input-normalization";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import SetupParamEditCard from "../shared/SetupParamEditCard.svelte";
+import SetupParamEditGrid from "../shared/SetupParamEditGrid.svelte";
 
 type Props = {
   itemIndex: ReadonlyMap<string, ParameterItemModel>;
@@ -176,55 +178,56 @@ function numericMetadataText(item: ParameterItemModel): string {
       </div>
     </div>
 
-    <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Auxiliary RC channel assignment summary">
-      {#each assignments as assignment (assignment.name)}
-        <SelectableCard
-          density="compact"
-          selected={assignment.channel === selectedAssignment.channel}
-          ariaLabel={`Select CH${assignment.channel} auxiliary assignment`}
-          class="min-h-11"
-          testId={`${setupWorkspaceTestIds.rcFunctionsChannelPrefix}-${assignment.channel}`}
-          onSelect={() => selectChannel(assignment.channel)}
-        >
-          <span class="flex flex-wrap items-center justify-between gap-2">
-            <span class="text-sm font-semibold text-text-primary">CH{assignment.channel}</span>
-            <span class="flex flex-wrap items-center gap-1">
-              {#if assignment.staged}
-                <StagedBadge name={assignment.name} />
-              {/if}
-              {#if assignment.duplicateChannels.length > 0}
-                <Badge variant="warning" size="xs" case="normal" testId={`${setupWorkspaceTestIds.rcFunctionsDuplicatePrefix}-${assignment.channel}`}>duplicate</Badge>
+    <div aria-label="Auxiliary RC channel assignment summary">
+      <SetupParamEditGrid minWidth="12rem" density="compact">
+        {#each assignments as assignment (assignment.name)}
+          <SelectableCard
+            density="compact"
+            selected={assignment.channel === selectedAssignment.channel}
+            ariaLabel={`Select CH${assignment.channel} auxiliary assignment`}
+            class="min-h-11"
+            testId={`${setupWorkspaceTestIds.rcFunctionsChannelPrefix}-${assignment.channel}`}
+            onSelect={() => selectChannel(assignment.channel)}
+          >
+            <span class="flex flex-wrap items-center justify-between gap-2">
+              <span class="text-sm font-semibold text-text-primary">CH{assignment.channel}</span>
+              <span class="flex flex-wrap items-center gap-1">
+                {#if assignment.staged}
+                  <StagedBadge name={assignment.name} />
+                {/if}
+                {#if assignment.duplicateChannels.length > 0}
+                  <Badge variant="warning" size="xs" case="normal" testId={`${setupWorkspaceTestIds.rcFunctionsDuplicatePrefix}-${assignment.channel}`}>duplicate</Badge>
+                {/if}
+              </span>
+            </span>
+            <span class="mt-1 block truncate text-xs text-text-secondary">{assignmentLabel(assignment)}</span>
+            <span class="mt-1 flex flex-wrap items-center gap-1 text-xs text-text-muted" data-testid={`${setupWorkspaceTestIds.rcFunctionsPwmPrefix}-${assignment.channel}`}>
+              {formatPwm(assignment)}
+              {#if assignment.liveSample?.stale}
+                <Badge variant="muted" size="xs" case="normal">stale</Badge>
               {/if}
             </span>
-          </span>
-          <span class="mt-1 block truncate text-xs text-text-secondary">{assignmentLabel(assignment)}</span>
-          <span class="mt-1 flex flex-wrap items-center gap-1 text-xs text-text-muted" data-testid={`${setupWorkspaceTestIds.rcFunctionsPwmPrefix}-${assignment.channel}`}>
-            {formatPwm(assignment)}
-            {#if assignment.liveSample?.stale}
-              <Badge variant="muted" size="xs" case="normal">stale</Badge>
-            {/if}
-          </span>
-        </SelectableCard>
-      {/each}
+          </SelectableCard>
+        {/each}
+      </SetupParamEditGrid>
     </div>
 
-    <div class="grid gap-3 rounded-lg border border-border bg-bg-primary/70 p-3">
-      <div class="flex min-w-0 flex-wrap items-start justify-between gap-2">
-        <div>
-          <p class="text-sm font-semibold text-text-primary">CH{selectedAssignment.channel} function</p>
-          <p class="mt-1 text-xs text-text-secondary">Stage or reset this selected channel explicitly. Duplicate enabled assignments stay allowed for intentional configurations.</p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          {#if selectedAssignment.item.readOnly}
-            <Badge variant="muted" size="sm" case="normal">Read only</Badge>
-          {/if}
-          {#if selectedAssignment.duplicateChannels.length > 0}
-            <Badge variant="warning" size="sm" case="normal">Also assigned on CH{selectedAssignment.duplicateChannels.filter((channel) => channel !== selectedAssignment.channel).join(", CH")}</Badge>
-          {/if}
-          <MonoValue size="xs" tone="muted">{selectedAssignment.name}</MonoValue>
-        </div>
-      </div>
+    {#snippet assignmentBadges()}
+      {#if selectedAssignment.duplicateChannels.length > 0}
+        <Badge variant="warning" size="sm" case="normal">Also assigned on CH{selectedAssignment.duplicateChannels.filter((channel) => channel !== selectedAssignment.channel).join(", CH")}</Badge>
+      {/if}
+    {/snippet}
 
+    <SetupParamEditCard
+      item={selectedAssignment.item}
+      inputId={selectedOptions.length > 0 ? "rc-option-assignment-picker" : "rc-option-assignment-numeric"}
+      label={`CH${selectedAssignment.channel} function`}
+      description="Stage or reset this selected channel explicitly. Duplicate enabled assignments stay allowed for intentional configurations."
+      type="custom"
+      value={selectedDraftNumber ?? selectedAssignment.value}
+      {disabled}
+      badges={assignmentBadges}
+    >
       {#if selectedOptions.length > 0}
         <div class="grid gap-3 sm:grid-cols-2">
           <div>
@@ -285,6 +288,6 @@ function numericMetadataText(item: ParameterItemModel): string {
           Reset selected
         </Button>
       </div>
-    </div>
+    </SetupParamEditCard>
   </div>
 {/if}

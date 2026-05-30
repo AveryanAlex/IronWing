@@ -1,7 +1,7 @@
 <script lang="ts">
 import { Crosshair, RotateCcw } from "lucide-svelte";
 
-import { Badge, Button, Card, EmptyState, Eyebrow, HelperText, MonoValue, NativeSelect, NumberInput, Switch } from "../../../components/ui";
+import { Badge, Button, Card, EmptyState, Eyebrow, HelperText, NativeSelect } from "../../../components/ui";
 import { formatParamValue, type ParameterItemModel } from "../../../lib/params/parameter-item-model";
 import {
   calculateRcCalibrationRange,
@@ -14,7 +14,10 @@ import {
 } from "../../../lib/setup/rc-calibration-editor";
 import type { RcChannelSample } from "../../../lib/setup/rc-input-normalization";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
+import SetupParamEditCard from "../shared/SetupParamEditCard.svelte";
+import SetupParamEditGrid from "../shared/SetupParamEditGrid.svelte";
 import SetupNotice from "../shared/SetupNotice.svelte";
+import SetupRcCaptureParamEditCard from "../shared/SetupRcCaptureParamEditCard.svelte";
 
 type StagedEdit = { nextValue: number };
 
@@ -127,10 +130,6 @@ function updateControl(control: NumericControl, value: number) {
   };
 }
 
-function handleNumberInput(control: NumericControl, event: Event) {
-  updateControl(control, Number((event.currentTarget as HTMLInputElement).value));
-}
-
 function captureLive(control: NumericControl) {
   if (!freshLiveSample || control.key === "deadZone") {
     return;
@@ -181,57 +180,43 @@ function formatPwm(value: number): string {
   return `${formatParamValue(value, 1)}µs`;
 }
 
-function formatMetadata(control: NumericControl): string {
-  const rangeText = control.item.range ? `${formatParamValue(control.item.range.min, control.step)}–${formatParamValue(control.item.range.max, control.step)}` : "firmware range unavailable";
-  return `${control.item.name} · ${rangeText} · step ${formatParamValue(control.step, control.step)}`;
-}
 </script>
 
 {#snippet parameterControl(control: NumericControl)}
-  <div class="grid min-w-0 gap-3 rounded-lg border border-border bg-bg-primary/70 p-3">
-    <div class="flex min-w-0 flex-wrap items-start justify-between gap-2">
-      <div class="min-w-0">
-        <label class="text-sm font-medium text-text-primary" for={`rc-calibration-${control.item.name}`}>{control.label}</label>
-        <p class="mt-1 text-xs text-text-secondary">{control.description}</p>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        {#if control.item.readOnly}
-          <Badge variant="muted" size="sm" case="normal" shape="pill">Read only</Badge>
-        {/if}
-        <MonoValue size="xs" tone="muted">{control.item.name}</MonoValue>
-      </div>
-    </div>
-
-    <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-      <NumberInput
-        id={`rc-calibration-${control.item.name}`}
-        value={control.draftValue}
-        min={control.item.range?.min}
-        max={control.item.range?.max}
-        step={control.step}
-        unit="µs"
-        invalid={!control.inRange}
-        disabled={disabled || control.item.readOnly}
-        testId={`${setupWorkspaceTestIds.rcCalibrationInputPrefix}-${control.item.name}`}
-        oninput={(event) => handleNumberInput(control, event)}
-        onchange={(event) => handleNumberInput(control, event)}
-      />
-      {#if control.key !== "deadZone"}
-        <Button
-          size="default"
-          tone="neutral"
-          variant="outline"
-          disabled={disabled || control.item.readOnly || !freshLiveSample}
-          onclick={() => captureLive(control)}
-          testId={`${setupWorkspaceTestIds.rcCalibrationCapturePrefix}-${control.item.name}`}
-        >
-          Capture live
-        </Button>
-      {/if}
-    </div>
-
-    <p class="text-xs text-text-muted">{formatMetadata(control)}</p>
-  </div>
+  {#if control.key === "deadZone"}
+    <SetupParamEditCard
+      item={control.item}
+      inputId={`rc-calibration-${control.item.name}`}
+      label={control.label}
+      description={control.description}
+      value={control.draftValue}
+      step={control.step}
+      unit="µs"
+      invalid={!control.inRange}
+      {disabled}
+      stagedName={stagedEdits[control.item.name] ? control.item.name : undefined}
+      inputTestId={`${setupWorkspaceTestIds.rcCalibrationInputPrefix}-${control.item.name}`}
+      onValueChange={(value) => typeof value === "number" && updateControl(control, value)}
+    />
+  {:else}
+    <SetupRcCaptureParamEditCard
+      item={control.item}
+      inputId={`rc-calibration-${control.item.name}`}
+      label={control.label}
+      description={control.description}
+      value={control.draftValue}
+      step={control.step}
+      unit="µs"
+      invalid={!control.inRange}
+      {disabled}
+      stagedName={stagedEdits[control.item.name] ? control.item.name : undefined}
+      captureDisabled={!freshLiveSample}
+      inputTestId={`${setupWorkspaceTestIds.rcCalibrationInputPrefix}-${control.item.name}`}
+      captureTestId={`${setupWorkspaceTestIds.rcCalibrationCapturePrefix}-${control.item.name}`}
+      onValueChange={(value) => updateControl(control, value)}
+      onCaptureLive={() => captureLive(control)}
+    />
+  {/if}
 {/snippet}
 
 {#if !selectedChannel || !calibrationValues}
@@ -322,31 +307,27 @@ function formatMetadata(control: NumericControl): string {
       </HelperText>
     {/if}
 
-    <div class="grid gap-3 md:grid-cols-2">
+    <SetupParamEditGrid>
       {#each numericControls as control (control.item.name)}
         {@render parameterControl(control)}
       {/each}
-    </div>
+    </SetupParamEditGrid>
 
     {#if reversedItem}
-      <div class="rounded-lg border border-border bg-bg-primary/70 p-3">
-        <div class="flex min-w-0 flex-wrap items-start justify-between gap-3">
-          <Switch
-            checked={reversedValue}
-            disabled={disabled || reversedItem.readOnly}
-            label="Reverse normalized input"
-            description="Invert this channel after endpoint, trim, and deadzone normalization."
-            onCheckedChange={updateReversed}
-            testId={`${setupWorkspaceTestIds.rcCalibrationInputPrefix}-${reversedItem.name}`}
-          />
-          <div class="flex flex-wrap items-center gap-2">
-            {#if reversedItem.readOnly}
-              <Badge variant="muted" size="sm" case="normal" shape="pill">Read only</Badge>
-            {/if}
-            <MonoValue size="xs" tone="muted">{reversedItem.name}</MonoValue>
-          </div>
-        </div>
-      </div>
+      <SetupParamEditGrid>
+        <SetupParamEditCard
+          item={reversedItem}
+          inputId={`rc-calibration-${reversedItem.name}`}
+          label="Reverse normalized input"
+          description="Invert this channel after endpoint, trim, and deadzone normalization."
+          type="boolean"
+          value={reversedValue}
+          {disabled}
+          stagedName={stagedEdits[reversedItem.name] ? reversedItem.name : undefined}
+          inputTestId={`${setupWorkspaceTestIds.rcCalibrationInputPrefix}-${reversedItem.name}`}
+          onValueChange={(value) => typeof value === "boolean" && updateReversed(value)}
+        />
+      </SetupParamEditGrid>
     {/if}
 
     <Card.Root surface="default" density="compact" tone="info" appearance="solid">

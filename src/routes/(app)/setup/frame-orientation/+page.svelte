@@ -15,7 +15,8 @@ import SetupCard from "../../../../features/setup/shared/SetupCard.svelte";
 import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
 import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
 import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
-import SetupParamSelect from "../../../../features/setup/shared/SetupParamSelect.svelte";
+import SetupParamEditCard from "../../../../features/setup/shared/SetupParamEditCard.svelte";
+import SetupParamEditGrid from "../../../../features/setup/shared/SetupParamEditGrid.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import {
   getSetupWorkspaceRouteContext,
@@ -473,67 +474,70 @@ function buildFrameBanners(input: {
   <SetupNoticeList notices={frameBanners} testIdPrefix={setupWorkspaceTestIds.frameBannerPrefix} />
 
   <div class="space-y-4">
-    {#if showQEnableCard}
+    {#if showQEnableCard && qEnableItem}
       <SetupSectionCard icon={Box} title="QuadPlane Configuration" compact testId={`${setupWorkspaceTestIds.frameCardPrefix}-Q_ENABLE`}>
-        <SetupParamSelect
-          id="setup-frame-q-enable"
+        <SetupParamEditGrid>
+        <SetupParamEditCard
+          item={qEnableItem}
+          inputId="setup-frame-q-enable"
           value={qEnableDraft}
           options={qEnableOptions}
+          type="enum"
           label="VTOL / QuadPlane"
-          description={qEnableItem?.description ?? "Enable QuadPlane to expose VTOL frame, motor, and tuning parameters on Plane firmware."}
-          testId={`${setupWorkspaceTestIds.frameInputPrefix}-Q_ENABLE`}
+          description={qEnableItem.description ?? "Enable QuadPlane to expose VTOL frame, motor, and tuning parameters on Plane firmware."}
+          inputTestId={`${setupWorkspaceTestIds.frameInputPrefix}-Q_ENABLE`}
           disabled={checkpoint.blocksActions}
           stagedName={params.stagedEdits.Q_ENABLE ? "Q_ENABLE" : undefined}
           stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-Q_ENABLE`}
-          rebootRequired={qEnableItem?.rebootRequired === true}
-          onChange={(value) => stage(qEnableItem, value)}
           onUnstage={unstage}
+          onValueChange={(value) => typeof value === "string" && stage(qEnableItem, value)}
         />
+        </SetupParamEditGrid>
       </SetupSectionCard>
     {/if}
 
     {#if showFrameCards && frameClassItem && frameTypeItem}
       <SetupSectionCard icon={Box} title={framePanelTitle(profile)} compact>
         <SetupFieldStack>
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-${frameClassItem.name}`}>
-            <SetupParamSelect
-              id={`setup-frame-${frameClassItem.name}`}
+        <SetupParamEditGrid>
+            <SetupParamEditCard
+              item={frameClassItem}
+              inputId={`setup-frame-${frameClassItem.name}`}
               value={frameClassDraft}
               options={frameClassOptions}
+              type="enum"
               label={frameClassItem.label}
               description={frameClassItem.description ?? (profile.frameParamFamily === "quadplane"
                 ? "Choose the QuadPlane lift-motor frame family after the VTOL parameter refresh."
                 : "Choose the current frame family reported by ArduPilot.")}
-              testId={`${setupWorkspaceTestIds.frameInputPrefix}-${frameClassItem.name}`}
+              testId={`${setupWorkspaceTestIds.frameCardPrefix}-${frameClassItem.name}`}
+              inputTestId={`${setupWorkspaceTestIds.frameInputPrefix}-${frameClassItem.name}`}
               disabled={checkpoint.blocksActions}
               stagedName={params.stagedEdits[frameClassItem.name] ? frameClassItem.name : undefined}
               stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-${frameClassItem.name}`}
-              rebootRequired={frameClassItem.rebootRequired}
-              onChange={(value) => stage(frameClassItem, value)}
               onUnstage={unstage}
+              onValueChange={(value) => typeof value === "string" && stage(frameClassItem, value)}
             />
-          </div>
 
-          <div data-testid={`${setupWorkspaceTestIds.frameCardPrefix}-${frameTypeItem.name}`}>
-            <SetupParamSelect
-              id={`setup-frame-${frameTypeItem.name}`}
+            <SetupParamEditCard
+              item={frameTypeItem}
+              inputId={`setup-frame-${frameTypeItem.name}`}
               value={frameTypeDraft}
               options={frameTypeOptions}
+              type="enum"
               label={frameTypeItem.label}
               description={frameTypeItem.description ?? (profile.frameParamFamily === "quadplane"
                 ? "Choose the QuadPlane layout inside the refreshed VTOL frame family."
                 : "Choose the layout inside the current frame family.")}
-              testId={`${setupWorkspaceTestIds.frameInputPrefix}-${frameTypeItem.name}`}
+              testId={`${setupWorkspaceTestIds.frameCardPrefix}-${frameTypeItem.name}`}
+              inputTestId={`${setupWorkspaceTestIds.frameInputPrefix}-${frameTypeItem.name}`}
               disabled={checkpoint.blocksActions}
               stagedName={params.stagedEdits[frameTypeItem.name] ? frameTypeItem.name : undefined}
               stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-${frameTypeItem.name}`}
-              rebootRequired={frameTypeItem.rebootRequired}
-              onChange={(value) => stage(frameTypeItem, value)}
               onUnstage={unstage}
+              onValueChange={(value) => typeof value === "string" && stage(frameTypeItem, value)}
             />
-          </div>
-        </div>
+        </SetupParamEditGrid>
 
         <div class="flex flex-col items-center gap-2 rounded-md border border-border/50 bg-bg-secondary/40 py-4">
           <MotorDiagram
@@ -550,20 +554,23 @@ function buildFrameBanners(input: {
 
     {#if showOrientationCard && orientationItem}
       <SetupSectionCard icon={Compass} title="Board Orientation" compact testId={`${setupWorkspaceTestIds.frameCardPrefix}-AHRS_ORIENTATION`}>
-        <SetupParamSelect
-          id="setup-frame-ahrs-orientation"
+        <SetupParamEditGrid>
+        <SetupParamEditCard
+          item={orientationItem}
+          inputId="setup-frame-ahrs-orientation"
           value={orientationDraft}
           options={orientationOptions}
+          type="enum"
           label="Orientation"
           description="Set the physical orientation of the flight controller on your frame. The arrow on the FC should point forward. If mounted differently, select the rotation that matches."
-          testId={`${setupWorkspaceTestIds.frameInputPrefix}-AHRS_ORIENTATION`}
+          inputTestId={`${setupWorkspaceTestIds.frameInputPrefix}-AHRS_ORIENTATION`}
           disabled={checkpoint.blocksActions}
           stagedName={params.stagedEdits.AHRS_ORIENTATION ? "AHRS_ORIENTATION" : undefined}
           stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-AHRS_ORIENTATION`}
-          rebootRequired={orientationItem.rebootRequired}
-          onChange={(value) => stage(orientationItem, value)}
           onUnstage={unstage}
+          onValueChange={(value) => typeof value === "string" && stage(orientationItem, value)}
         />
+        </SetupParamEditGrid>
       </SetupSectionCard>
     {/if}
   </div>

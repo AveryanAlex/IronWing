@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Alert, Badge, Card, Eyebrow } from "../../../components/ui";
+import { Alert, Badge, BalancedGrid, Card, Eyebrow } from "../../../components/ui";
 import PwmVerticalBar, { type PwmBarState } from "./PwmVerticalBar.svelte";
 
 const MIN_COLUMN_WIDTH_PX = 42;
@@ -32,8 +32,6 @@ let {
   testIdPrefix,
 }: Props = $props();
 
-let gridWidth = $state(0);
-
 let normalizedItems = $derived.by<PwmChannelItem[]>(() => {
   if (items) return items.slice(0, maxVisible);
   if (!values?.length) return [];
@@ -43,19 +41,6 @@ let normalizedItems = $derived.by<PwmChannelItem[]>(() => {
     value: typeof value === "number" && Number.isFinite(value) ? value : null,
     state: typeof value === "number" && Number.isFinite(value) ? "live" : "malformed",
   }));
-});
-
-let columnCount = $derived.by(() => {
-  const itemCount = normalizedItems.length;
-  if (itemCount === 0) return 1;
-
-  const maxColumnsByWidth = gridWidth > 0
-    ? Math.max(1, Math.floor((gridWidth + GRID_GAP_PX) / (MIN_COLUMN_WIDTH_PX + GRID_GAP_PX)))
-    : itemCount;
-  const maxColumns = Math.min(itemCount, maxColumnsByWidth);
-  const rowCount = Math.ceil(itemCount / maxColumns);
-
-  return Math.ceil(itemCount / rowCount);
 });
 </script>
 
@@ -72,10 +57,12 @@ let columnCount = $derived.by(() => {
   {#if normalizedItems.length === 0}
     <Alert variant="info" density="compact" description={emptyText} />
   {:else}
-    <div
-      bind:clientWidth={gridWidth}
-      class="grid gap-1.5"
-      style:grid-template-columns={`repeat(${columnCount}, minmax(${MIN_COLUMN_WIDTH_PX}px, 1fr))`}
+    <BalancedGrid
+      minItemWidth={`${MIN_COLUMN_WIDTH_PX}px`}
+      minItemWidthPx={MIN_COLUMN_WIDTH_PX}
+      gapPx={GRID_GAP_PX}
+      itemCount={normalizedItems.length}
+      class="gap-1.5"
     >
       {#each normalizedItems as item (item.index)}
         <PwmVerticalBar
@@ -85,6 +72,6 @@ let columnCount = $derived.by(() => {
           testId={testIdPrefix ? `${testIdPrefix}-${item.index}` : undefined}
         />
       {/each}
-    </div>
+    </BalancedGrid>
   {/if}
 </Card.Root>

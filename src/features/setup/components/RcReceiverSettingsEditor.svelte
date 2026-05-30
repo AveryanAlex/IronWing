@@ -1,7 +1,7 @@
 <script lang="ts">
 import { RotateCcw, Settings2 } from "lucide-svelte";
 
-import { Badge, Button, Card, Checkbox, EmptyState, Eyebrow, HelperText, MonoValue, NumberInput, StagedBadge } from "../../../components/ui";
+import { Badge, Button, Card, Checkbox, EmptyState, Eyebrow, HelperText, NumberInput } from "../../../components/ui";
 import type { ParamMetadataMap } from "../../../param-metadata";
 import { formatParamValue, type ParameterItemModel } from "../../../lib/params/parameter-item-model";
 import {
@@ -20,6 +20,8 @@ import {
 } from "../../../lib/setup/rc-receiver-settings-editor";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 import SetupNotice from "../shared/SetupNotice.svelte";
+import SetupParamEditCard from "../shared/SetupParamEditCard.svelte";
+import SetupParamEditGrid from "../shared/SetupParamEditGrid.svelte";
 
 type Props = {
   itemIndex: ReadonlyMap<string, ParameterItemModel>;
@@ -160,6 +162,7 @@ function rangeWarning(control: ReceiverSettingControl): string {
       {#each control.bitmaskOptions as option (option.bit)}
         <div class="rounded-md border border-border bg-bg-secondary p-3">
           <Checkbox
+            id={option.bit === control.bitmaskOptions[0]?.bit ? `rc-receiver-setting-${control.name}` : undefined}
             checked={isRcReceiverBitEnabled(control.state.draftValue, option.bit)}
             disabled={disabled || control.item.readOnly}
             label={`${option.label} · bit ${option.bit}`}
@@ -178,45 +181,58 @@ function rangeWarning(control: ReceiverSettingControl): string {
 {/snippet}
 
 {#snippet settingControl(control: ReceiverSettingControl)}
-  <div class="grid min-w-0 gap-3 rounded-lg border border-border bg-bg-primary/70 p-3">
-    <div class="flex min-w-0 flex-wrap items-start justify-between gap-2">
-      <div class="min-w-0">
-        {#if control.kind === "number"}
-          <label class="text-sm font-medium text-text-primary" for={`rc-receiver-setting-${control.name}`}>{control.label}</label>
-        {:else}
-          <p class="text-sm font-medium text-text-primary">{control.label}</p>
-        {/if}
-        <p class="mt-1 text-xs leading-5 text-text-secondary">{control.description}</p>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <Badge variant={control.level === "Advanced" ? "warning" : "muted"} size="sm" case="normal" shape="pill">{control.level}</Badge>
-        {#if control.state.staged}
-          <StagedBadge name={control.name} />
-        {/if}
-        {#if control.item.readOnly}
-          <Badge variant="muted" size="sm" case="normal" shape="pill">Read only</Badge>
-        {/if}
-        <MonoValue size="xs" tone="muted">{control.name}</MonoValue>
-      </div>
-    </div>
+  {#snippet badges()}
+    <Badge variant={control.level === "Advanced" ? "warning" : "muted"} size="sm" case="normal" shape="pill">{control.level}</Badge>
+  {/snippet}
 
-    {#if control.kind === "bitmask"}
-      {@render bitmaskControl(control)}
-      <p class="text-xs text-text-muted">Integer mask {formatParamValue(control.state.draftValue, 1)} · checkbox labels {metadata?.get(control.name)?.bitmask?.length ? "from firmware metadata" : "from source fallback"}</p>
-      {#if control.name === "RC_PROTOCOLS"}
-        <HelperText size="xs">All means broad protocol auto-detection. Specific protocol bits narrow detection only when All is cleared.</HelperText>
-      {/if}
-    {:else}
-      {@render numberControl(control)}
-      <p class="text-xs text-text-muted">{control.name} · {formatRange(control)} · step {formatParamValue(control.step, control.step)}{control.unit ? ` ${control.unit}` : ""}</p>
-    {/if}
-
+  {#snippet footer()}
     {#if control.outsideRange}
       <SetupNotice tone="warning" testId={`${setupWorkspaceTestIds.rcReceiverSettingsWarningPrefix}-${control.name}`}>
         {rangeWarning(control)}
       </SetupNotice>
     {/if}
-  </div>
+  {/snippet}
+
+  {#if control.kind === "bitmask"}
+    <SetupParamEditCard
+      item={control.item}
+      inputId={`rc-receiver-setting-${control.name}`}
+      label={control.label}
+      description={control.description}
+      type="custom"
+      value={control.state.draftValue}
+      {disabled}
+      metadata={`Integer mask ${formatParamValue(control.state.draftValue, 1)} · checkbox labels ${metadata?.get(control.name)?.bitmask?.length ? "from firmware metadata" : "from source fallback"}`}
+      stagedName={control.state.staged ? control.name : undefined}
+      {badges}
+      {footer}
+    >
+      {@render bitmaskControl(control)}
+      {#if control.name === "RC_PROTOCOLS"}
+        <HelperText size="xs">All means broad protocol auto-detection. Specific protocol bits narrow detection only when All is cleared.</HelperText>
+      {/if}
+    </SetupParamEditCard>
+  {:else}
+    <SetupParamEditCard
+      item={control.item}
+      inputId={`rc-receiver-setting-${control.name}`}
+      label={control.label}
+      description={control.description}
+      value={control.state.draftValue}
+      min={control.range?.min}
+      max={control.range?.max}
+      step={control.step}
+      unit={control.unit}
+      invalid={control.outsideRange}
+      {disabled}
+      metadata={`${control.name} · ${formatRange(control)} · step ${formatParamValue(control.step, control.step)}${control.unit ? ` ${control.unit}` : ""}`}
+      stagedName={control.state.staged ? control.name : undefined}
+      inputTestId={`${setupWorkspaceTestIds.rcReceiverSettingsInputPrefix}-${control.name}`}
+      {badges}
+      {footer}
+      onValueChange={(value) => typeof value === "number" && updateDraft(control, value)}
+    />
+  {/if}
 {/snippet}
 
 {#if controls.length === 0}
@@ -239,11 +255,11 @@ function rangeWarning(control: ReceiverSettingControl): string {
       <Badge variant="muted" size="sm" case="normal" shape="pill">{controls.length} available</Badge>
     </div>
 
-    <div class="grid gap-3">
+    <SetupParamEditGrid>
       {#each controls as control (control.name)}
         {@render settingControl(control)}
       {/each}
-    </div>
+    </SetupParamEditGrid>
 
     <Card.Root surface="default" density="compact" tone="info" appearance="solid">
       <div class="flex items-start justify-between gap-3 max-sm:flex-col">

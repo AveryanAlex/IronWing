@@ -12,14 +12,14 @@ import { buildParameterItemIndex, type ParameterItemModel } from "../../../../li
 import { buildGeofenceModel, type SafetyVehicleFamily } from "../../../../lib/setup/failsafe-model";
 import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import SetupBitmaskTable from "../../../../features/setup/shared/SetupBitmaskTable.svelte";
-import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
 import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
 import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
-import SetupParamEditorRow from "../../../../features/setup/shared/SetupParamEditorRow.svelte";
+import SetupParamEditCard from "../../../../features/setup/shared/SetupParamEditCard.svelte";
+import SetupParamEditGrid from "../../../../features/setup/shared/SetupParamEditGrid.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { resolveSetupDraftNumber, resolveSetupEnumOptions } from "../../../../features/setup/shared/parameter-editing";
-import { Eyebrow, HelperText } from "../../../../components/ui";
+import { Eyebrow, HelperText, Input } from "../../../../components/ui";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import {
   getSetupWorkspaceRouteContext,
@@ -413,28 +413,64 @@ function setFenceTypes(checked: boolean) {
         testId={`${setupWorkspaceTestIds.geofenceCardPrefix}-${card.id}`}
       >
         {#if visibleFields(card.fields).length > 0}
-          <SetupFieldStack divided>
+          <SetupParamEditGrid>
             {#each visibleFields(card.fields) as field (field.name)}
-              <SetupParamEditorRow
-                item={item(field.name)}
-                id={`${card.id}-${field.name}`}
-                label={field.label}
-                description={field.description}
-                mode={field.kind}
-                options={enumOptions(field.name)}
-                value={draftValue(field.name, item(field.name)?.value ?? null)}
-                stagedEdits={params.stagedEdits}
-                stagedTestId={`${setupWorkspaceTestIds.geofenceStagedPrefix}-${field.name}`}
-                onUnstage={unstage}
-                onChange={(value) => stageDraftValue(field, value)}
-                inputTestId={`${setupWorkspaceTestIds.geofenceInputPrefix}-${field.name}`}
-                disabled={actionsBlocked}
-                min={field.min}
-                step={field.step}
-                unit={field.unit ?? null}
-              />
+              {@const fieldItem = item(field.name)}
+              {#if fieldItem}
+                {@const fieldValue = draftValue(field.name, fieldItem.value)}
+                {#if field.kind === "enum"}
+                  {@const options = enumOptions(field.name)}
+                  <SetupParamEditCard
+                    item={fieldItem}
+                    inputId={`${card.id}-${field.name}`}
+                    label={field.label}
+                    description={field.description}
+                    type="enum"
+                    options={options}
+                    value={fieldValue}
+                    stagedName={params.stagedEdits[field.name] ? field.name : undefined}
+                    stagedTestId={`${setupWorkspaceTestIds.geofenceStagedPrefix}-${field.name}`}
+                    onUnstage={unstage}
+                    onValueChange={(value) => typeof value === "string" && stageDraftValue(field, value)}
+                    inputTestId={`${setupWorkspaceTestIds.geofenceInputPrefix}-${field.name}`}
+                    disabled={actionsBlocked || options.length === 0}
+                  />
+                {:else}
+                  <SetupParamEditCard
+                    item={fieldItem}
+                    inputId={`${card.id}-${field.name}`}
+                    label={field.label}
+                    description={field.description}
+                    min={field.min}
+                    step={field.step}
+                    unit={field.unit ?? null}
+                    stagedName={params.stagedEdits[field.name] ? field.name : undefined}
+                    stagedTestId={`${setupWorkspaceTestIds.geofenceStagedPrefix}-${field.name}`}
+                    onUnstage={unstage}
+                    disabled={actionsBlocked}
+                  >
+                    <div class="flex items-center gap-2">
+                      <Input
+                        id={`${card.id}-${field.name}`}
+                        inputmode="decimal"
+                        min={field.min}
+                        step={field.step}
+                        type="number"
+                        value={fieldValue}
+                        disabled={actionsBlocked || fieldItem.readOnly}
+                        testId={`${setupWorkspaceTestIds.geofenceInputPrefix}-${field.name}`}
+                        oninput={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
+                        onchange={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
+                      />
+                      {#if field.unit}
+                        <span class="shrink-0 text-xs text-text-muted">{field.unit}</span>
+                      {/if}
+                    </div>
+                  </SetupParamEditCard>
+                {/if}
+              {/if}
             {/each}
-          </SetupFieldStack>
+          </SetupParamEditGrid>
         {:else}
           <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
         {/if}

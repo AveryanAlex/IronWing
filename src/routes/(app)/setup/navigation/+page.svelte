@@ -9,11 +9,11 @@ import { buildSerialPortModel } from "../../../../lib/setup/serial-port-model";
 import { selectTelemetryView } from "../../../../lib/telemetry-selectors";
 import type { ParamMeta } from "../../../../param-metadata";
 import SetupBitmaskTable from "../../../../features/setup/shared/SetupBitmaskTable.svelte";
-import SetupParamEditorRow from "../../../../features/setup/shared/SetupParamEditorRow.svelte";
+import SetupParamEditCard from "../../../../features/setup/shared/SetupParamEditCard.svelte";
+import SetupParamEditGrid from "../../../../features/setup/shared/SetupParamEditGrid.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { HelperText } from "../../../../components/ui";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
-import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
 import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupTelemetryCard from "../../../../features/setup/shared/SetupTelemetryCard.svelte";
@@ -386,7 +386,7 @@ function enumOptions(name: string) {
   return resolveSetupEnumOptions(params.metadata?.get(name)?.values);
 }
 
-function stage(item: ParameterItemModel | null, draftValue: string, optionsReady = true) {
+function stage(item: ParameterItemModel | null, draftValue: unknown, optionsReady = true) {
   stageSetupParameterEdit(paramsStore, item, draftValue, { actionsBlocked, optionsReady });
 }
 
@@ -531,22 +531,25 @@ function formatHdop(value: number | null): string {
   {@const fieldItem = resolveFieldItem(field)}
   {@const fieldName = fieldItem?.name ?? field.name}
   {@const options = enumOptions(fieldName)}
-  <SetupParamEditorRow
-    item={fieldItem}
-    id={`setup-navigation-${cardId}-${fieldName}`}
-    label={field.label}
-    description={fieldItem?.description ?? field.description}
-    stagedEdits={params.stagedEdits}
-    stagedTestId={`${setupWorkspaceTestIds.navigationStagedPrefix}-${fieldName}`}
-    onUnstage={unstage}
-    onChange={(value) => stage(fieldItem, value, options.length > 0)}
-    {options}
-    inputTestId={`${setupWorkspaceTestIds.navigationInputPrefix}-${fieldName}`}
-    disabled={actionsBlocked}
-    step={field.step}
-    unit={field.unit ?? fieldItem?.units ?? null}
-  >
-  </SetupParamEditorRow>
+  {#if fieldItem}
+    <SetupParamEditCard
+      item={fieldItem}
+      inputId={`setup-navigation-${cardId}-${fieldName}`}
+      label={field.label}
+      description={fieldItem.description ?? field.description}
+      type={options.length > 0 ? "enum" : "number"}
+      value={params.stagedEdits[fieldName]?.nextValue ?? fieldItem.value}
+      stagedName={params.stagedEdits[fieldName] ? fieldName : undefined}
+      stagedTestId={`${setupWorkspaceTestIds.navigationStagedPrefix}-${fieldName}`}
+      onUnstage={unstage}
+      onValueChange={(value) => typeof value !== "boolean" && stage(fieldItem, value)}
+      {options}
+      inputTestId={`${setupWorkspaceTestIds.navigationInputPrefix}-${fieldName}`}
+      disabled={actionsBlocked}
+      step={field.step === undefined ? undefined : Number(field.step)}
+      unit={field.unit ?? fieldItem.units ?? null}
+    />
+  {/if}
 {/snippet}
 
 <SetupSectionShell
@@ -577,44 +580,44 @@ function formatHdop(value: number | null): string {
   {/if}
 
   <SetupSectionCard icon={Radio} title="GNSS receiver configuration" description="Choose the primary receiver behavior and module auto-configuration from one grouped card.">
-    <SetupFieldStack divided>
+    <SetupParamEditGrid>
       {#if primaryTypeItem}
-        <SetupParamEditorRow
+        <SetupParamEditCard
           item={primaryTypeItem}
-          id={`setup-navigation-${primaryTypeItem.name}`}
+          inputId={`setup-navigation-${primaryTypeItem.name}`}
           label={primaryTypeItem.label}
           description={primaryTypeItem.description ?? "Choose the primary GNSS receiver type used by the flight controller."}
-          mode="enum"
+          type="enum"
+          value={params.stagedEdits[primaryTypeItem.name]?.nextValue ?? primaryTypeItem.value}
           options={primaryTypeOptions}
-          stagedEdits={params.stagedEdits}
+          stagedName={params.stagedEdits[primaryTypeItem.name] ? primaryTypeItem.name : undefined}
           stagedTestId={`${setupWorkspaceTestIds.navigationStagedPrefix}-${primaryTypeItem.name}`}
           onUnstage={unstage}
-          onChange={(value) => stage(primaryTypeItem, value, primaryTypeOptions.length > 0)}
+          onValueChange={(value) => typeof value === "string" && stage(primaryTypeItem, value, primaryTypeOptions.length > 0)}
           inputTestId={`${setupWorkspaceTestIds.navigationInputPrefix}-${primaryTypeItem.name}`}
-          disabled={actionsBlocked}
-          controlWidth="wide"
+          disabled={actionsBlocked || primaryTypeOptions.length === 0}
         />
       {/if}
 
       {#if autoConfigItem}
-        <SetupParamEditorRow
+        <SetupParamEditCard
           item={autoConfigItem}
-          id="setup-navigation-auto-config"
+          inputId="setup-navigation-auto-config"
           label={autoConfigItem.label}
           description={autoConfigItem.description ?? "Review GNSS module auto-configuration for the active receiver."}
-          mode="enum"
+          type="enum"
+          value={params.stagedEdits.GPS_AUTO_CONFIG?.nextValue ?? autoConfigItem.value}
           options={autoConfigOptions}
-          stagedEdits={params.stagedEdits}
+          stagedName={params.stagedEdits.GPS_AUTO_CONFIG ? autoConfigItem.name : undefined}
           stagedTestId={`${setupWorkspaceTestIds.navigationStagedPrefix}-GPS_AUTO_CONFIG`}
           onUnstage={unstage}
-          onChange={(value) => stage(autoConfigItem, value, autoConfigOptions.length > 0)}
+          onValueChange={(value) => typeof value === "string" && stage(autoConfigItem, value, autoConfigOptions.length > 0)}
           inputTestId={`${setupWorkspaceTestIds.navigationInputPrefix}-GPS_AUTO_CONFIG`}
-          disabled={actionsBlocked}
-          controlWidth="wide"
+          disabled={actionsBlocked || autoConfigOptions.length === 0}
         />
       {/if}
 
-    </SetupFieldStack>
+    </SetupParamEditGrid>
   </SetupSectionCard>
 
   <SetupSectionCard
@@ -658,11 +661,11 @@ function formatHdop(value: number | null): string {
       description="Review which compass sensors provide heading data. Calibration actions stay in Calibration; this card focuses on the settings navigation uses after calibration."
       testId={`${setupWorkspaceTestIds.navigationCardPrefix}-compass`}
     >
-      <SetupFieldStack divided>
+      <SetupParamEditGrid>
         {#each visibleCompassFields as field (field.name)}
           {@render navigationFieldRow(field, "compass")}
         {/each}
-      </SetupFieldStack>
+      </SetupParamEditGrid>
     </SetupSectionCard>
   {/if}
 
@@ -673,11 +676,11 @@ function formatHdop(value: number | null): string {
       description="Review the pressure and ground-reference settings that support altitude estimates when the firmware exposes them."
       testId={`${setupWorkspaceTestIds.navigationCardPrefix}-barometer`}
     >
-      <SetupFieldStack divided>
+      <SetupParamEditGrid>
         {#each visibleBarometerFields as field (field.name)}
           {@render navigationFieldRow(field, "barometer")}
         {/each}
-      </SetupFieldStack>
+      </SetupParamEditGrid>
     </SetupSectionCard>
   {/if}
 
@@ -688,11 +691,11 @@ function formatHdop(value: number | null): string {
       description="Review AHRS and EKF source selections for GNSS, barometer, compass, and other navigation inputs."
       testId={`${setupWorkspaceTestIds.navigationCardPrefix}-estimator`}
     >
-      <SetupFieldStack divided>
+      <SetupParamEditGrid>
         {#each visibleEstimatorFields as field (field.name)}
           {@render navigationFieldRow(field, "estimator")}
         {/each}
-      </SetupFieldStack>
+      </SetupParamEditGrid>
     </SetupSectionCard>
   {/if}
 
@@ -703,11 +706,11 @@ function formatHdop(value: number | null): string {
       description="Review speed, acceleration, and arrival-radius settings used by guided and waypoint navigation."
       testId={`${setupWorkspaceTestIds.navigationCardPrefix}-waypoint`}
     >
-      <SetupFieldStack divided>
+      <SetupParamEditGrid>
         {#each visibleWaypointFields as field (field.name)}
           {@render navigationFieldRow(field, "waypoint")}
         {/each}
-      </SetupFieldStack>
+      </SetupParamEditGrid>
     </SetupSectionCard>
   {/if}
   {/snippet}

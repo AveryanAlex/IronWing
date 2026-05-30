@@ -18,7 +18,8 @@ import { Eyebrow, HelperText, Input, NativeSelect } from "../../../../components
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
 import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
-import SetupParamEditorRow from "../../../../features/setup/shared/SetupParamEditorRow.svelte";
+import SetupParamEditCard from "../../../../features/setup/shared/SetupParamEditCard.svelte";
+import SetupParamEditGrid from "../../../../features/setup/shared/SetupParamEditGrid.svelte";
 import SetupPreviewStagePanel from "../../../../features/setup/shared/SetupPreviewStagePanel.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupTelemetryCard from "../../../../features/setup/shared/SetupTelemetryCard.svelte";
@@ -256,7 +257,7 @@ $effect(() => {
   }
 });
 
-function stage(item: ParameterItemModel | null, draftValue: string, requireOptions = false, optionsCount = 0) {
+function stage(item: ParameterItemModel | null, draftValue: unknown, requireOptions = false, optionsCount = 0) {
   stageSetupParameterEdit(paramsStore, item, draftValue, {
     actionsBlocked,
     optionsReady: !requireOptions || optionsCount > 0,
@@ -441,20 +442,20 @@ function round3(value: number): number {
   <SetupSectionCard icon={BatteryCharging} title="Monitor and presets" description="Choose the battery monitor type, then use presets when the flight-controller board, power module, or battery chemistry is known." compact>
     <SetupFieldStack divided>
       {#if monitorItem}
-        <SetupParamEditorRow
+        <SetupParamEditCard
           item={monitorItem}
-          id="setup-battery-monitor"
+          inputId="setup-battery-monitor"
           label={monitorItem.label}
           description={monitorItem.description ?? "Choose the primary battery monitor backend."}
-          mode="enum"
+          type="enum"
+          value={params.stagedEdits.BATT_MONITOR?.nextValue ?? monitorItem.value}
           options={monitorOptions}
-          stagedEdits={params.stagedEdits}
+          stagedName={params.stagedEdits.BATT_MONITOR ? monitorItem.name : undefined}
           stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_MONITOR`}
           onUnstage={unstage}
-          onChange={(value) => stage(monitorItem, value, true, monitorOptions.length)}
+          onValueChange={(value) => typeof value !== "boolean" && stage(monitorItem, value, true, monitorOptions.length)}
           inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_MONITOR`}
-          disabled={actionsBlocked}
-          controlWidth="wide"
+          disabled={actionsBlocked || monitorOptions.length === 0}
         />
       {/if}
 
@@ -544,138 +545,132 @@ function round3(value: number): number {
   </SetupSectionCard>
 
   <SetupSectionCard icon={Gauge} title="Manual sensor calibration" description="Use these fields when presets do not match the installed power module or wiring." compact>
-    <SetupFieldStack divided>
+    <SetupParamEditGrid>
       {#if voltPinItem}
-        <SetupParamEditorRow
+        <SetupParamEditCard
           item={voltPinItem}
-          id="setup-battery-volt-pin"
+          inputId="setup-battery-volt-pin"
           label={voltPinItem.label}
           description="Voltage sense pin used by the board or power module."
-          stagedEdits={params.stagedEdits}
+          value={params.stagedEdits.BATT_VOLT_PIN?.nextValue ?? voltPinItem.value}
+          stagedName={params.stagedEdits.BATT_VOLT_PIN ? voltPinItem.name : undefined}
           stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_VOLT_PIN`}
           onUnstage={unstage}
-          onChange={(value) => stage(voltPinItem, value)}
+          onValueChange={(value) => typeof value === "number" && stage(voltPinItem, value)}
           inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_VOLT_PIN`}
-          inputMode="numeric"
           disabled={actionsBlocked}
-          controlWidth="narrow"
-          step="1"
+          step={1}
         />
       {/if}
 
       {#if currPinItem}
-        <SetupParamEditorRow
+        <SetupParamEditCard
           item={currPinItem}
-          id="setup-battery-curr-pin"
+          inputId="setup-battery-curr-pin"
           label={currPinItem.label}
           description="Current sense pin used by the board or power module."
-          stagedEdits={params.stagedEdits}
+          value={params.stagedEdits.BATT_CURR_PIN?.nextValue ?? currPinItem.value}
+          stagedName={params.stagedEdits.BATT_CURR_PIN ? currPinItem.name : undefined}
           stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_CURR_PIN`}
           onUnstage={unstage}
-          onChange={(value) => stage(currPinItem, value)}
+          onValueChange={(value) => typeof value === "number" && stage(currPinItem, value)}
           inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_CURR_PIN`}
-          inputMode="numeric"
           disabled={actionsBlocked}
-          controlWidth="narrow"
-          step="1"
+          step={1}
         />
       {/if}
 
       {#if voltMultItem}
-        <SetupParamEditorRow
+        <SetupParamEditCard
           item={voltMultItem}
-          id="setup-battery-volt-mult"
+          inputId="setup-battery-volt-mult"
           label={voltMultItem.label}
           description="Voltage multiplier used to convert sensor output to pack voltage."
-          stagedEdits={params.stagedEdits}
+          value={params.stagedEdits.BATT_VOLT_MULT?.nextValue ?? voltMultItem.value}
+          stagedName={params.stagedEdits.BATT_VOLT_MULT ? voltMultItem.name : undefined}
           stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_VOLT_MULT`}
           onUnstage={unstage}
-          onChange={(value) => stage(voltMultItem, value)}
+          onValueChange={(value) => typeof value === "number" && stage(voltMultItem, value)}
           inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_VOLT_MULT`}
-          inputMode="decimal"
           disabled={actionsBlocked}
-          controlWidth="narrow"
-          step="0.01"
+          step={0.01}
         />
       {/if}
 
       {#if ampPerVoltItem}
-        <SetupParamEditorRow
+        <SetupParamEditCard
           item={ampPerVoltItem}
-          id="setup-battery-amp-per-volt"
+          inputId="setup-battery-amp-per-volt"
           label={ampPerVoltItem.label}
           description="Current scaling used to convert sensor output to amps."
-          stagedEdits={params.stagedEdits}
+          value={params.stagedEdits.BATT_AMP_PERVLT?.nextValue ?? ampPerVoltItem.value}
+          stagedName={params.stagedEdits.BATT_AMP_PERVLT ? ampPerVoltItem.name : undefined}
           stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_AMP_PERVLT`}
           onUnstage={unstage}
-          onChange={(value) => stage(ampPerVoltItem, value)}
+          onValueChange={(value) => typeof value === "number" && stage(ampPerVoltItem, value)}
           inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_AMP_PERVLT`}
-          inputMode="decimal"
           disabled={actionsBlocked}
-          controlWidth="narrow"
-          step="0.01"
+          step={0.01}
         />
       {/if}
-    </SetupFieldStack>
+    </SetupParamEditGrid>
   </SetupSectionCard>
 
   <SetupSectionCard icon={BatteryWarning} title="Capacity and voltage warnings" description="Set pack capacity and manual low-voltage thresholds when chemistry presets need adjustment." compact>
-    <SetupFieldStack divided>
+    <SetupParamEditGrid>
       {#if capacityItem}
-        <SetupParamEditorRow
+        <SetupParamEditCard
           item={capacityItem}
-          id="setup-battery-capacity"
+          inputId="setup-battery-capacity"
           label={capacityItem.label}
           description="Usable pack capacity for remaining-charge estimates and battery failsafe behavior."
-          stagedEdits={params.stagedEdits}
+          value={params.stagedEdits.BATT_CAPACITY?.nextValue ?? capacityItem.value}
+          stagedName={params.stagedEdits.BATT_CAPACITY ? capacityItem.name : undefined}
           stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_CAPACITY`}
           onUnstage={unstage}
-          onChange={(value) => stage(capacityItem, value)}
+          onValueChange={(value) => typeof value === "number" && stage(capacityItem, value)}
           inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_CAPACITY`}
-          inputMode="decimal"
           disabled={actionsBlocked}
-          controlWidth="narrow"
-          step="100"
+          step={100}
         />
       {/if}
 
       {#if lowVoltItem}
-        <SetupParamEditorRow
+        <SetupParamEditCard
           item={lowVoltItem}
-          id="setup-battery-low-volt"
+          inputId="setup-battery-low-volt"
           label={lowVoltItem.label}
           description="Manual low-voltage threshold for battery warnings or failsafe behavior."
-          stagedEdits={params.stagedEdits}
+          value={params.stagedEdits.BATT_LOW_VOLT?.nextValue ?? lowVoltItem.value}
+          stagedName={params.stagedEdits.BATT_LOW_VOLT ? lowVoltItem.name : undefined}
           stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_LOW_VOLT`}
           onUnstage={unstage}
-          onChange={(value) => stage(lowVoltItem, value)}
+          onValueChange={(value) => typeof value === "number" && stage(lowVoltItem, value)}
           inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_LOW_VOLT`}
-          inputMode="decimal"
           disabled={actionsBlocked}
-          controlWidth="narrow"
-          step="0.1"
+          step={0.1}
         />
       {/if}
-    </SetupFieldStack>
+    </SetupParamEditGrid>
   </SetupSectionCard>
 
   {#if secondBatteryVisible}
     <SetupSectionCard icon={BatteryCharging} title="Optional secondary monitor" description="Secondary battery monitor settings are shown when this firmware exposes BATT2_* parameters." surface="elevated" compact>
       {#if secondMonitorItem}
-        <SetupParamEditorRow
+        <SetupParamEditCard
           item={secondMonitorItem}
-          id="setup-battery-secondary-monitor"
+          inputId="setup-battery-secondary-monitor"
           label={secondMonitorItem.label}
           description="Choose the secondary battery monitor backend when this firmware exposes BATT2_* parameters."
-          mode="enum"
+          type="enum"
+          value={params.stagedEdits.BATT2_MONITOR?.nextValue ?? secondMonitorItem.value}
           options={secondMonitorOptions}
-          stagedEdits={params.stagedEdits}
+          stagedName={params.stagedEdits.BATT2_MONITOR ? secondMonitorItem.name : undefined}
           stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT2_MONITOR`}
           onUnstage={unstage}
-          onChange={(value) => stage(secondMonitorItem, value, true, secondMonitorOptions.length)}
+          onValueChange={(value) => typeof value !== "boolean" && stage(secondMonitorItem, value, true, secondMonitorOptions.length)}
           inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT2_MONITOR`}
-          disabled={actionsBlocked}
-          controlWidth="wide"
+          disabled={actionsBlocked || secondMonitorOptions.length === 0}
         />
       {:else}
         <HelperText class="mt-3" tone="warning">Battery 2 settings are only partially available for this firmware.</HelperText>

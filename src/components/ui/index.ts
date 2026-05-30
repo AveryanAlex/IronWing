@@ -36,6 +36,7 @@ export { default as WorkspaceHeader } from "./WorkspaceHeader.svelte";
 export { default as WorkspaceBody } from "./WorkspaceBody.svelte";
 export { default as WorkspacePanel } from "./WorkspacePanel.svelte";
 export { default as WorkspaceGrid } from "./WorkspaceGrid.svelte";
+export { default as BalancedGrid } from "./BalancedGrid.svelte";
 export { default as SplitWorkspace } from "./SplitWorkspace.svelte";
 export { default as AdaptiveRail } from "./AdaptiveRail.svelte";
 export { default as Toolbar } from "./Toolbar.svelte";

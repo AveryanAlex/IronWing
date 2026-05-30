@@ -11,11 +11,13 @@ import { ARMING_REQUIRE_OPTIONS, derivePrearmModel, type PrearmSnapshot } from "
 import { getVehicleSlug } from "../../../../lib/setup/vehicle-profile";
 import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import { armVehicle, disarmVehicle } from "../../../../telemetry";
-import { ActionRow, Badge, Button, NativeSelect, StagedBadge as SetupStagedBadge } from "../../../../components/ui";
+import { ActionRow, Badge, Button, StagedBadge as SetupStagedBadge } from "../../../../components/ui";
 import SetupBitmaskTable from "../../../../features/setup/shared/SetupBitmaskTable.svelte";
 import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
 import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
 import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
+import SetupParamEditCard from "../../../../features/setup/shared/SetupParamEditCard.svelte";
+import SetupParamEditGrid from "../../../../features/setup/shared/SetupParamEditGrid.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
@@ -441,22 +443,22 @@ async function handleDisarm() {
         description="Choose how the vehicle can be armed. Keep arming safeguards enabled unless the vehicle documentation and operating procedure require a different value."
         surface="elevated"
       >
-        {#if params.stagedEdits.ARMING_REQUIRE}
-          <p>
-            <SetupStagedBadge name="ARMING_REQUIRE" onUnstage={unstage} testId={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_REQUIRE`} />
-          </p>
-        {/if}
-
         {#if armingRequireItem}
-          <div>
-            <NativeSelect
-              disabled={actionsBlocked || armingRequireOptions.length === 0 || !armingRequireItem}
-              onchange={(event) => stageRequire((event.currentTarget as HTMLSelectElement).value)}
-              options={armingRequireRenderedOptions.map((option) => ({ value: String(option.code), label: option.label }))}
-              testId={`${setupWorkspaceTestIds.armingInputPrefix}-ARMING_REQUIRE`}
+          <SetupParamEditGrid>
+            <SetupParamEditCard
+              item={armingRequireItem}
+              inputId="setup-arming-require"
+              type="enum"
               value={armingRequireDraft}
+              options={armingRequireRenderedOptions}
+              disabled={actionsBlocked || armingRequireOptions.length === 0}
+              stagedName={params.stagedEdits.ARMING_REQUIRE ? "ARMING_REQUIRE" : undefined}
+              stagedTestId={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_REQUIRE`}
+              onUnstage={unstage}
+              inputTestId={`${setupWorkspaceTestIds.armingInputPrefix}-ARMING_REQUIRE`}
+              onValueChange={(value) => typeof value === "string" && stageRequire(value)}
             />
-          </div>
+          </SetupParamEditGrid>
         {:else}
           <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
         {/if}

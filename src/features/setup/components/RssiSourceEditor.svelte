@@ -1,7 +1,7 @@
 <script lang="ts">
 import { RadioTower, RotateCcw } from "lucide-svelte";
 
-import { Badge, Button, Card, EmptyState, Eyebrow, HelperText, MonoValue, NativeSelect, NumberInput, StagedBadge } from "../../../components/ui";
+import { Badge, Button, Card, EmptyState, Eyebrow, HelperText } from "../../../components/ui";
 import type { ParamMetadataMap } from "../../../param-metadata";
 import { formatParamValue, type ParameterItemModel } from "../../../lib/params/parameter-item-model";
 import type { RcChannelSample } from "../../../lib/setup/rc-input-normalization";
@@ -18,6 +18,8 @@ import {
 } from "../../../lib/setup/rssi-source-editor";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 import SetupNotice from "../shared/SetupNotice.svelte";
+import SetupParamEditCard from "../shared/SetupParamEditCard.svelte";
+import SetupParamEditGrid from "../shared/SetupParamEditGrid.svelte";
 
 type Props = {
   itemIndex: ReadonlyMap<string, ParameterItemModel>;
@@ -124,7 +126,7 @@ let settingControls = $derived(requiredSettingNames.map(buildSettingControl).fil
 let missingSettingNames = $derived(requiredSettingNames.filter((name) => !itemIndex.has(name)));
 let changedControls = $derived(settingControls.filter((control) => control.changed));
 let typeChanged = $derived(Boolean(typeItem && sourceValue !== null && !sameParameterValue(sourceValue, typeItem.value, typeItem.increment)));
-let typeOptionItems = $derived(sourceOptions.map((option) => ({ value: String(option.code), label: `${formatParamValue(option.code)} · ${option.label}` })));
+let typeOptionItems = $derived(sourceOptions.map((option) => ({ code: option.code, label: `${formatParamValue(option.code)} · ${option.label}` })));
 let calibrationNames = $derived(rssiCalibrationParameterNames(sourceType));
 let calibrationPreview = $derived.by(() => {
   if (!calibrationNames) {
@@ -152,18 +154,6 @@ function updateDraft(item: ParameterItemModel, value: number) {
   }
 
   draftOverrides = { ...draftOverrides, [item.name]: clampRssiDraftValue(item, value) };
-}
-
-function updateType(event: Event) {
-  if (!typeItem) {
-    return;
-  }
-
-  updateDraft(typeItem, Number((event.currentTarget as HTMLSelectElement).value));
-}
-
-function updateSetting(control: SettingControl, event: Event) {
-  updateDraft(control.item, Number((event.currentTarget as HTMLInputElement).value));
 }
 
 function stageDraft() {
@@ -217,37 +207,20 @@ function sourceDescription(): string {
 </script>
 
 {#snippet settingControl(control: SettingControl)}
-  <div class="grid min-w-0 gap-3 rounded-lg border border-border bg-bg-primary/70 p-3">
-    <div class="flex min-w-0 flex-wrap items-start justify-between gap-2">
-      <div class="min-w-0">
-        <label class="text-sm font-medium text-text-primary" for={`rssi-source-${control.item.name}`}>{control.label}</label>
-        <p class="mt-1 text-xs text-text-secondary">{control.description}</p>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        {#if stagedEdits[control.item.name]}
-          <StagedBadge name={control.item.name} />
-        {/if}
-        {#if control.item.readOnly}
-          <Badge variant="muted" size="sm" case="normal" shape="pill">Read only</Badge>
-        {/if}
-        <MonoValue size="xs" tone="muted">{control.item.name}</MonoValue>
-      </div>
-    </div>
-
-    <NumberInput
-      id={`rssi-source-${control.item.name}`}
-      value={control.draftValue}
-      min={control.item.range?.min}
-      max={control.item.range?.max}
-      step={control.step}
-      unit={control.unit}
-      disabled={disabled || control.item.readOnly}
-      testId={`${setupWorkspaceTestIds.rcRssiSourceInputPrefix}-${control.item.name}`}
-      oninput={(event) => updateSetting(control, event)}
-      onchange={(event) => updateSetting(control, event)}
-    />
-    <p class="text-xs text-text-muted">{formatMetadata(control)}</p>
-  </div>
+  <SetupParamEditCard
+    item={control.item}
+    inputId={`rssi-source-${control.item.name}`}
+    label={control.label}
+    description={control.description}
+    value={control.draftValue}
+    step={control.step}
+    unit={control.unit}
+    {disabled}
+    metadata={formatMetadata(control)}
+    stagedName={stagedEdits[control.item.name] ? control.item.name : undefined}
+    inputTestId={`${setupWorkspaceTestIds.rcRssiSourceInputPrefix}-${control.item.name}`}
+    onValueChange={(value) => typeof value === "number" && updateDraft(control.item, value)}
+  />
 {/snippet}
 
 {#if !typeItem}
@@ -268,28 +241,18 @@ function sourceDescription(): string {
         <HelperText class="mt-2">{sourceDescription()}</HelperText>
       </div>
 
-      <div>
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <label class="text-xs font-semibold uppercase tracking-widest text-text-muted" for="rssi-source-type">Source</label>
-          <div class="flex flex-wrap items-center gap-2">
-            {#if stagedEdits[RSSI_TYPE_PARAM_NAME]}
-              <StagedBadge name={RSSI_TYPE_PARAM_NAME} />
-            {/if}
-            {#if typeItem.readOnly}
-              <Badge variant="muted" size="sm" case="normal" shape="pill">Read only</Badge>
-            {/if}
-          </div>
-        </div>
-        <NativeSelect
-          id="rssi-source-type"
-          class="mt-2"
-          value={sourceValue === null ? "" : String(sourceValue)}
-          options={typeOptionItems}
-          disabled={disabled || typeItem.readOnly}
-          testId={setupWorkspaceTestIds.rcRssiSourceType}
-          onchange={updateType}
-        />
-      </div>
+      <SetupParamEditCard
+        item={typeItem}
+        inputId="rssi-source-type"
+        label="Source"
+        type="enum"
+        value={sourceValue === null ? "" : String(sourceValue)}
+        options={typeOptionItems}
+        {disabled}
+        stagedName={stagedEdits[RSSI_TYPE_PARAM_NAME] ? RSSI_TYPE_PARAM_NAME : undefined}
+        inputTestId={setupWorkspaceTestIds.rcRssiSourceType}
+        onValueChange={(value) => typeof value === "string" && updateDraft(typeItem, Number(value))}
+      />
     </div>
 
     <div class="grid gap-3 sm:grid-cols-2">
@@ -340,11 +303,11 @@ function sourceDescription(): string {
     {/if}
 
     {#if settingControls.length > 0}
-      <div class="grid gap-3 md:grid-cols-2">
+      <SetupParamEditGrid>
         {#each settingControls as control (control.item.name)}
           {@render settingControl(control)}
         {/each}
-      </div>
+      </SetupParamEditGrid>
     {:else if requiredSettingNames.length === 0}
       <HelperText>No source-specific RSSI settings are required for this selection.</HelperText>
     {:else}

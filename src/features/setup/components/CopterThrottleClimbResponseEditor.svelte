@@ -1,7 +1,7 @@
 <script lang="ts">
 import { CircleDot, Gauge, RotateCcw } from "lucide-svelte";
 
-import { Badge, Button, Card, EmptyState, Eyebrow, HelperText, MonoValue, NumberInput, Slider } from "../../../components/ui";
+import { Button, Card, EmptyState, Eyebrow, HelperText, MonoValue, NumberInput, Slider } from "../../../components/ui";
 import { formatParamValue, type ParameterItemModel } from "../../../lib/params/parameter-item-model";
 import {
   copterThrottleToClimbRateMps,
@@ -14,6 +14,8 @@ import {
 } from "../../../lib/setup/copter-throttle-response";
 import { clampNumber, roundToIncrement } from "../../../lib/setup/rate-curves";
 import type { RcChannelSample } from "../../../lib/setup/rc-input-normalization";
+import SetupParamEditCard from "../shared/SetupParamEditCard.svelte";
+import SetupParamEditGrid from "../shared/SetupParamEditGrid.svelte";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
 type StagedEdit = { nextValue: number };
@@ -229,20 +231,19 @@ function formatSpeed(value: number): string {
 </script>
 
 {#snippet parameterControl(control: ThrottleParameterControl)}
-  <div class="grid min-w-0 gap-3 rounded-lg border border-border bg-bg-primary/70 p-3">
-    <div class="flex min-w-0 flex-wrap items-start justify-between gap-2">
-      <div class="min-w-0">
-        <label class="text-sm font-medium text-text-primary" for={`copter-throttle-control-${control.name}`}>{control.label}</label>
-        <p class="mt-1 text-xs text-text-secondary">{control.description}</p>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        {#if control.readOnly}
-          <Badge variant="muted" size="sm" case="normal" shape="pill">Read only</Badge>
-        {/if}
-        <MonoValue size="xs" tone="muted">{control.name}</MonoValue>
-      </div>
-    </div>
-
+  <SetupParamEditCard
+    item={control.item}
+    inputId={`copter-throttle-control-${control.name}`}
+    label={control.label}
+    description={control.description}
+    type="custom"
+    min={control.min}
+    max={control.max}
+    step={control.step}
+    unit={control.unit}
+    metadata={control.name}
+    {disabled}
+  >
     <div class="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,13rem)] sm:items-center">
       <Slider
         value={control.draftValue}
@@ -267,7 +268,7 @@ function formatSpeed(value: number): string {
         onchange={(event) => handleNumberInput(control, event)}
       />
     </div>
-  </div>
+  </SetupParamEditCard>
 {/snippet}
 
 {#if !allControlsAvailable || !currentCurveInput || !draftCurveInput || !currentDeadband || !draftDeadband}
@@ -336,11 +337,11 @@ function formatSpeed(value: number): string {
         {/if}
       </div>
 
-      <div class="grid min-w-0 content-start gap-3">
+      <SetupParamEditGrid>
         {#each availableControls as control (control.name)}
           {@render parameterControl(control)}
         {/each}
-      </div>
+      </SetupParamEditGrid>
     </div>
 
     <div class="grid gap-3 rounded-lg border border-border bg-bg-secondary p-3 sm:grid-cols-3">

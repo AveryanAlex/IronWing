@@ -16,12 +16,12 @@ import { getParamsStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import type { SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
-import { Badge, Button, EmptyState, HelperText, NativeSelect } from "../../../../components/ui";
+import { Badge, Button, EmptyState, HelperText } from "../../../../components/ui";
 import PwmChannelStrip from "../../../../features/telemetry/components/PwmChannelStrip.svelte";
-import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
 import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
 import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
-import SetupParameterRow from "../../../../features/setup/shared/SetupParameterRow.svelte";
+import SetupParamEditCard from "../../../../features/setup/shared/SetupParamEditCard.svelte";
+import SetupParamEditGrid from "../../../../features/setup/shared/SetupParamEditGrid.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import CopterAngleModeTiltEditor from "../../../../features/setup/components/CopterAngleModeTiltEditor.svelte";
@@ -63,7 +63,7 @@ const PRESETS = [
 ] as const;
 
 const CHANNEL_OPTIONS = Array.from({ length: 16 }, (_, index) => ({
-  value: String(index + 1),
+  code: index + 1,
   label: `Channel ${index + 1}`,
 }));
 
@@ -326,28 +326,25 @@ function stagePreset(preset: (typeof PRESETS)[number]) {
     <HelperText class="mt-3">RCMAP channel changes take effect after vehicle reboot.</HelperText>
 
     {#if mappingAvailable}
-      <SetupFieldStack class="mt-2" divided>
+      <SetupParamEditGrid class="mt-3">
         {#each mappingRows as mapping (mapping.name)}
-          <SetupParameterRow
-            id={mapping.id}
+          <SetupParamEditCard
+            item={mapping.item}
+            inputId={mapping.id}
             label={mapping.label}
             description={mapping.description}
+            type="enum"
+            value={mapping.draft}
+            options={CHANNEL_OPTIONS}
+            disabled={mapping.disabled}
             stagedName={mapping.stagedName}
             stagedTestId={`${setupWorkspaceTestIds.rcStagedPrefix}-${mapping.name}`}
             onUnstage={unstage}
-            controlWidth="narrow"
-          >
-            <NativeSelect
-              id={mapping.id}
-              value={mapping.draft}
-              disabled={mapping.disabled}
-              onchange={(event) => stage(mapping.item, (event.currentTarget as HTMLSelectElement).value)}
-              options={CHANNEL_OPTIONS}
-              testId={`${setupWorkspaceTestIds.rcInputPrefix}-${mapping.name}`}
-            />
-          </SetupParameterRow>
+            inputTestId={`${setupWorkspaceTestIds.rcInputPrefix}-${mapping.name}`}
+            onValueChange={(value) => typeof value === "string" && stage(mapping.item, value)}
+          />
         {/each}
-      </SetupFieldStack>
+      </SetupParamEditGrid>
     {:else}
       <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
     {/if}
