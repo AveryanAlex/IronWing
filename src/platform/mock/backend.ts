@@ -488,7 +488,7 @@ async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unk
       return undefined;
     case "bt_scan_ble":
       return [
-        { name: "Demo BLE Radio", address: "AA:BB:CC:DD:EE:FF", device_type: "ble" },
+        { name: "Demo BLE Radio", address: "AA:BB:CC:DD:EE:FF", device_type: "ble", profile: "nordic_uart" },
       ];
     case "bt_get_bonded_devices":
       return [

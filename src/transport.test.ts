@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildConnectRequest,
+  type BluetoothBleTransportDescriptor,
   type DemoTransportDescriptor,
   type WebSerialTransportDescriptor,
   type WebSocketTransportDescriptor,
@@ -30,6 +31,14 @@ const webSerialDescriptor: WebSerialTransportDescriptor = {
   default_baud: 57600,
 };
 
+const bluetoothBleDescriptor: BluetoothBleTransportDescriptor = {
+  kind: "bluetooth_ble",
+  label: "BLE (Nordic UART)",
+  available: true,
+  validation: { address_required: true },
+  profile: "nordic_uart",
+};
+
 describe("validateTransportDescriptor", () => {
   it("accepts demo transport without address-like fields", () => {
     expect(
@@ -45,6 +54,10 @@ describe("validateTransportDescriptor", () => {
 
   it("requires a granted WebSerial port id before connecting", () => {
     expect(validateTransportDescriptor(webSerialDescriptor, { baud: 115200 })).toEqual(["port_id is required"]);
+  });
+
+  it("requires a selected Nordic UART BLE device before connecting", () => {
+    expect(validateTransportDescriptor(bluetoothBleDescriptor, {})).toEqual(["address is required"]);
   });
 });
 
@@ -86,6 +99,20 @@ describe("buildConnectRequest", () => {
         kind: "web_serial",
         baud: 115200,
         port_id: "webserial:1",
+      },
+    });
+  });
+
+  it("passes the Nordic UART profile into native BLE connect requests", () => {
+    expect(
+      buildConnectRequest(bluetoothBleDescriptor, {
+        address: "AA:BB:CC:DD:EE:FF",
+      }),
+    ).toEqual({
+      transport: {
+        kind: "bluetooth_ble",
+        address: "AA:BB:CC:DD:EE:FF",
+        profile: "nordic_uart",
       },
     });
   });

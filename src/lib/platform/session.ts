@@ -34,6 +34,7 @@ import {
   type ConnectRequest,
   type DemoVehiclePreset,
   type DisconnectRequest,
+  type BluetoothProfile,
   type TransportDescriptor,
   type TransportType,
 } from "../../transport";
@@ -104,7 +105,7 @@ export type SessionService = {
   connectSession(request: ConnectRequest): Promise<void>;
   disconnectSession(request?: DisconnectRequest): Promise<void>;
   btRequestPermissions(): Promise<void>;
-  btScanBle(timeoutMs?: number): Promise<BluetoothDevice[]>;
+  btScanBle(timeoutMs?: number, profile?: BluetoothProfile): Promise<BluetoothDevice[]>;
   btGetBondedDevices(): Promise<BluetoothDevice[]>;
   getAvailableModes(): Promise<FlightModeEntry[]>;
   formatError(error: unknown): string;

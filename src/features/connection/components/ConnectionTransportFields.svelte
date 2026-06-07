@@ -44,8 +44,8 @@ const transportHelpCopy: Record<TransportType, { title: string; description: str
     description: "Pick the detected autopilot serial port. Refresh after plugging in hardware. Baud defaults to 57600; change it under Advanced only if your adapter or vehicle uses another rate.",
   },
   bluetooth_ble: {
-    title: "BLE connection",
-    description: "Scan for nearby BLE devices and choose the MAVLink-capable peripheral before connecting.",
+    title: "Nordic UART BLE connection",
+    description: "Scan for nearby Nordic UART Service BLE peripherals and choose the MAVLink-capable device before connecting.",
   },
   bluetooth_spp: {
     title: "Classic Bluetooth connection",
@@ -133,7 +133,7 @@ let webSerialPortOptions = $derived([
   ...webSerialPorts.map((port) => ({ value: port.portName, label: port.label })),
 ]);
 let bluetoothDeviceOptions = $derived([
-  { value: "", label: btDevices.length === 0 ? "No devices available" : "Select a device" },
+  { value: "", label: bluetoothDevices.length === 0 ? "No devices available" : "Select a device" },
   ...bluetoothDevices.map((device) => ({ value: device.address, label: device.name || device.address })),
 ]);
 
@@ -440,7 +440,7 @@ function parseBaud(value: string) {
     <div class={connectionActionRowWithExtraClass} data-connection-action-row>
       <Field.Root class="min-w-0" invalid={Boolean(errors.selectedBtDevice)}>
         <Field.Label variant="eyebrow" for="connection-bluetooth-device">
-          {form.mode === "bluetooth_ble" ? "BLE device" : "Paired device"}
+          {form.mode === "bluetooth_ble" ? "Nordic UART BLE device" : "Paired device"}
         </Field.Label>
         <NativeSelect
           disabled={formLocked}
@@ -456,9 +456,9 @@ function parseBaud(value: string) {
 
       {@render primaryActionButton()}
 
-      <Tooltip label={form.mode === "bluetooth_ble" ? (btScanning ? "Scanning BLE devices" : "Scan BLE devices") : "Refresh paired devices"}>
+      <Tooltip label={form.mode === "bluetooth_ble" ? (btScanning ? "Scanning Nordic UART BLE devices" : "Scan Nordic UART BLE devices") : "Refresh paired devices"}>
         <IconButton
-          ariaLabel={form.mode === "bluetooth_ble" ? (btScanning ? "Scanning BLE devices" : "Scan BLE devices") : "Refresh paired devices"}
+          ariaLabel={form.mode === "bluetooth_ble" ? (btScanning ? "Scanning Nordic UART BLE devices" : "Scan Nordic UART BLE devices") : "Refresh paired devices"}
           testId={form.mode === "bluetooth_ble" ? "connection-ble-scan-btn" : "connection-bt-refresh-btn"}
           disabled={formLocked || (form.mode === "bluetooth_ble" && btScanning)}
           onclick={form.mode === "bluetooth_ble" ? onScanBleDevices : onRefreshBondedDevices}

@@ -2,6 +2,7 @@ import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
 import type { DomainValue } from "./lib/domain-status";
 import type { SessionEvent } from "./session";
+import type { BluetoothProfile } from "./transport";
 import { createLatestScopedValueHandler } from "./lib/scoped-session-events";
 
 export type LinkState = "connecting" | "connected" | "disconnected" | { error: string };
@@ -132,14 +133,15 @@ export type BluetoothDevice = {
   name: string;
   address: string;
   device_type: "ble" | "classic";
+  profile?: BluetoothProfile;
 };
 
 export async function btRequestPermissions(): Promise<void> {
   await invoke("bt_request_permissions");
 }
 
-export async function btScanBle(timeoutMs?: number): Promise<BluetoothDevice[]> {
-  return invoke<BluetoothDevice[]>("bt_scan_ble", { timeoutMs });
+export async function btScanBle(timeoutMs?: number, profile?: BluetoothProfile): Promise<BluetoothDevice[]> {
+  return invoke<BluetoothDevice[]>("bt_scan_ble", { timeoutMs, profile });
 }
 
 export async function btStopScanBle(): Promise<void> {

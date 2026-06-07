@@ -1,4 +1,7 @@
 use serde::{Deserialize, Serialize};
+use tauri_plugin_blec::models::ScanFilter;
+
+use ironwing_core::{bluetooth_profile, transport::BluetoothProfile};
 
 #[cfg(target_os = "android")]
 use tauri::Manager;
@@ -8,6 +11,19 @@ pub(crate) struct BluetoothDevice {
     name: String,
     address: String,
     device_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    profile: Option<BluetoothProfile>,
+}
+
+pub(crate) fn nordic_uart_service_uuid() -> uuid::Uuid {
+    uuid::Uuid::parse_str(bluetooth_profile::NORDIC_UART_SERVICE_UUID)
+        .expect("valid NUS service UUID")
+}
+
+pub(crate) fn scan_filter_for_profile(profile: BluetoothProfile) -> ScanFilter {
+    match profile {
+        BluetoothProfile::NordicUart => ScanFilter::Service(nordic_uart_service_uuid()),
+    }
 }
 
 #[cfg(target_os = "android")]
@@ -27,17 +43,19 @@ pub(crate) async fn bt_request_permissions() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) async fn bt_scan_ble(timeout_ms: Option<u64>) -> Result<Vec<BluetoothDevice>, String> {
-    use tauri_plugin_blec::models::ScanFilter;
-
+pub(crate) async fn bt_scan_ble(
+    timeout_ms: Option<u64>,
+    profile: Option<BluetoothProfile>,
+) -> Result<Vec<BluetoothDevice>, String> {
     let handler =
         tauri_plugin_blec::get_handler().map_err(|e| format!("BLE plugin not initialized: {e}"))?;
 
     let (tx, mut rx) = tokio::sync::mpsc::channel(8);
     let timeout = timeout_ms.unwrap_or(3000);
+    let profile = profile.unwrap_or(BluetoothProfile::NordicUart);
 
     handler
-        .discover(Some(tx), timeout, ScanFilter::None)
+        .discover(Some(tx), timeout, scan_filter_for_profile(profile))
         .await
         .map_err(|e| format!("BLE scan failed: {e}"))?;
 
@@ -56,6 +74,7 @@ pub(crate) async fn bt_scan_ble(timeout_ms: Option<u64>) -> Result<Vec<Bluetooth
                     },
                     address: d.address,
                     device_type: "ble".to_string(),
+                    profile: Some(profile),
                 });
             }
         }
@@ -91,6 +110,7 @@ pub(crate) async fn bt_get_bonded_devices(
             name: d.name,
             address: d.address,
             device_type: "classic".to_string(),
+            profile: None,
         })
         .collect())
 }

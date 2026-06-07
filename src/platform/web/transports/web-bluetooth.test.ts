@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createWebBluetoothTransport,
   isWebBluetoothAvailable,
+  NORDIC_UART_DEFAULT_CHUNK_SIZE,
   NORDIC_UART_RX_CHARACTERISTIC_UUID,
   NORDIC_UART_SERVICE_UUID,
   NORDIC_UART_TX_CHARACTERISTIC_UUID,
@@ -46,9 +47,10 @@ describe("web bluetooth transport", () => {
     vi.stubGlobal("navigator", { bluetooth: { requestDevice } });
 
     const pushInbound = vi.fn(async () => undefined);
+    const outboundPayload = new Uint8Array(NORDIC_UART_DEFAULT_CHUNK_SIZE + 3).map((_, index) => index + 1);
     const nextOutbound = vi
       .fn<() => Promise<Uint8Array | null>>()
-      .mockResolvedValueOnce(new Uint8Array([1, 2, 3]))
+      .mockResolvedValueOnce(outboundPayload)
       .mockResolvedValueOnce(null);
     const close = vi.fn();
 
@@ -70,6 +72,9 @@ describe("web bluetooth transport", () => {
     });
     expect(tx.startNotifications).toHaveBeenCalledOnce();
     expect(pushInbound).toHaveBeenCalledWith(new Uint8Array([9, 8, 7]));
-    expect(rx.written).toEqual([new Uint8Array([1, 2, 3])]);
+    expect(rx.written).toEqual([
+      outboundPayload.slice(0, NORDIC_UART_DEFAULT_CHUNK_SIZE),
+      outboundPayload.slice(NORDIC_UART_DEFAULT_CHUNK_SIZE),
+    ]);
   });
 });

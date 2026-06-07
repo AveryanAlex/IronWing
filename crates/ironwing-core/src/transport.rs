@@ -29,6 +29,7 @@ pub enum TransportDescriptor {
         #[serde(skip_serializing_if = "Option::is_none")]
         discovery_error: Option<&'static str>,
         validation: AddressValidation,
+        profile: BluetoothProfile,
     },
     BluetoothSpp {
         label: &'static str,
@@ -216,12 +217,13 @@ impl TransportDescriptor {
 
     pub fn bluetooth_ble(availability: TransportAvailability) -> Self {
         Self::BluetoothBle {
-            label: "BLE",
+            label: "BLE (Nordic UART)",
             available: availability.available,
             discovery_error: availability.discovery_error,
             validation: AddressValidation {
                 address_required: true,
             },
+            profile: BluetoothProfile::NordicUart,
         }
     }
 
@@ -338,6 +340,7 @@ mod tests {
         assert_eq!(value[3]["kind"], "serial");
         assert_eq!(value[3]["default_baud"], DEFAULT_SERIAL_BAUD);
         assert_eq!(value[4]["kind"], "bluetooth_ble");
+        assert_eq!(value[4]["profile"], "nordic_uart");
         assert!(value[0].get("discovery_error").is_none());
     }
 

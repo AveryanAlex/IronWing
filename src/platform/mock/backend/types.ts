@@ -60,7 +60,14 @@ export type TransportDescriptor =
     default_baud: number;
   }
   | {
-    kind: "bluetooth_ble" | "bluetooth_spp";
+    kind: "bluetooth_ble";
+    label: string;
+    available: boolean;
+    validation: { address_required: boolean };
+    profile: "nordic_uart";
+  }
+  | {
+    kind: "bluetooth_spp";
     label: string;
     available: boolean;
     validation: { address_required: boolean };

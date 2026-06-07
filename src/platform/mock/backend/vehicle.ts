@@ -329,9 +329,10 @@ export function availableTransportDescriptors(): TransportDescriptor[] {
     },
     {
       kind: "bluetooth_ble",
-      label: "BLE",
+      label: "BLE (Nordic UART)",
       available: true,
       validation: { address_required: true },
+      profile: "nordic_uart",
     },
     {
       kind: "bluetooth_spp",
@@ -388,7 +389,7 @@ export type ConnectLinkRequest = {
     | { kind: "udp"; bind_addr: string }
     | { kind: "tcp"; address: string }
     | { kind: "serial"; port: string; baud: number }
-    | { kind: "bluetooth_ble"; address: string }
+    | { kind: "bluetooth_ble"; address: string; profile?: "nordic_uart" }
     | { kind: "bluetooth_spp"; address: string };
   mockVehicleState?: Partial<MockLiveVehicleState> & { modeName?: string };
   mockMissionState?: Partial<MockMissionState>;

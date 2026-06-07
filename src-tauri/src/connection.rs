@@ -13,7 +13,7 @@ use crate::AppState;
 use crate::guided::emit_guided_reset;
 use crate::ipc::DomainProvenance;
 use crate::recording::auto_record_start_request;
-use ironwing_core::{bluetooth_profile, telemetry, vehicle_config};
+use ironwing_core::{bluetooth_profile, telemetry, transport::BluetoothProfile, vehicle_config};
 
 /// Total time budget for the entire connect flow (TCP handshake + MAVLink
 /// heartbeat wait).  The underlying `mavlink::connect_async` call has no
@@ -45,6 +45,7 @@ async fn clear_background_listeners(state: &AppState, app: &tauri::AppHandle) {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ActiveLinkTarget {
     Serial { port: String },
+    BluetoothBle,
     Other,
 }
 
@@ -95,6 +96,8 @@ pub(crate) enum LinkEndpoint {
     },
     BluetoothBle {
         address: String,
+        #[serde(default)]
+        profile: Option<BluetoothProfile>,
     },
     Demo {
         vehicle_preset: DemoVehiclePreset,
@@ -208,6 +211,25 @@ async fn shutdown_demo_vehicle(state: &AppState) {
     }
 }
 
+async fn teardown_transport_target(target: Option<&ActiveLinkTarget>) {
+    if !matches!(target, Some(ActiveLinkTarget::BluetoothBle)) {
+        return;
+    }
+
+    let handler = match tauri_plugin_blec::get_handler() {
+        Ok(handler) => handler,
+        Err(error) => {
+            tracing::debug!("BLE plugin was not initialized during BLE teardown: {error}");
+            return;
+        }
+    };
+
+    match handler.disconnect().await {
+        Ok(()) | Err(tauri_plugin_blec::Error::NoDeviceConnected) => {}
+        Err(error) => tracing::warn!("BLE disconnect failed during teardown: {error}"),
+    }
+}
+
 async fn store_connected_vehicle(
     state: &AppState,
     app: &tauri::AppHandle,
@@ -282,10 +304,12 @@ pub(crate) async fn connect_link(
             runtime.reset_live_state();
             previous
         });
+        let previous_target = state.active_link_target.lock().await.take();
         if let Some(v) = prev {
             let _ = v.disconnect().await;
         }
         shutdown_demo_vehicle(&state).await;
+        teardown_transport_target(previous_target.as_ref()).await;
     }
 
     match request.transport {
@@ -309,10 +333,12 @@ pub(crate) async fn connect_link(
             store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Serial { port })
                 .await?;
         }
-        LinkEndpoint::BluetoothBle { address } => {
+        LinkEndpoint::BluetoothBle { address, profile } => {
+            let profile = profile.unwrap_or(BluetoothProfile::NordicUart);
             let vehicle =
-                connect_with_abort(&state, async move { connect_ble(&address).await }).await?;
-            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await?;
+                connect_with_abort(&state, async move { connect_ble(&address, profile).await })
+                    .await?;
+            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::BluetoothBle).await?;
         }
         LinkEndpoint::Demo { vehicle_preset } => {
             let vehicle =
@@ -335,12 +361,17 @@ pub(crate) async fn connect_link(
 }
 
 /// Connect via BLE NUS (Nordic UART Service) using tauri-plugin-blec.
-async fn connect_ble(address: &str) -> Result<ConnectedVehicle, String> {
+async fn connect_ble(address: &str, profile: BluetoothProfile) -> Result<ConnectedVehicle, String> {
+    match profile {
+        BluetoothProfile::NordicUart => connect_nordic_uart_ble(address).await,
+    }
+}
+
+async fn connect_nordic_uart_ble(address: &str) -> Result<ConnectedVehicle, String> {
     let handler =
         tauri_plugin_blec::get_handler().map_err(|e| format!("BLE plugin not initialized: {e}"))?;
 
-    let _nus_service = uuid::Uuid::parse_str(bluetooth_profile::NORDIC_UART_SERVICE_UUID)
-        .expect("valid NUS service UUID");
+    let nus_service = crate::bluetooth::nordic_uart_service_uuid();
     let nus_rx = uuid::Uuid::parse_str(bluetooth_profile::NORDIC_UART_RX_CHARACTERISTIC_UUID)
         .expect("valid NUS RX UUID");
     let nus_tx = uuid::Uuid::parse_str(bluetooth_profile::NORDIC_UART_TX_CHARACTERISTIC_UUID)
@@ -349,15 +380,36 @@ async fn connect_ble(address: &str) -> Result<ConnectedVehicle, String> {
     // Try connecting (device should be in blec's cache from prior scan).
     // On Android, blec has no auto-discover fallback, so if the cache is
     // stale we scan briefly and retry.
-    if handler
+    if let Err(error) = handler
         .connect(address, tauri_plugin_blec::OnDisconnectHandler::None)
         .await
-        .is_err()
     {
+        tracing::debug!("BLE connect attempt failed before NUS scan fallback: {error}");
+        match handler.disconnect().await {
+            Ok(()) | Err(tauri_plugin_blec::Error::NoDeviceConnected) => {}
+            Err(error) => tracing::debug!("BLE cleanup before scan fallback failed: {error}"),
+        }
+
+        let (scan_tx, mut scan_rx) = tokio::sync::mpsc::channel(8);
         handler
-            .discover(None, 3000, tauri_plugin_blec::models::ScanFilter::None)
+            .discover(
+                Some(scan_tx),
+                3000,
+                tauri_plugin_blec::models::ScanFilter::Service(nus_service),
+            )
             .await
             .map_err(|e| format!("BLE scan failed: {e}"))?;
+
+        let mut found_device = false;
+        while let Some(devices) = scan_rx.recv().await {
+            found_device |= devices.iter().any(|device| device.address == address);
+        }
+        if !found_device {
+            return Err(format!(
+                "BLE device {address} was not found advertising the Nordic UART Service"
+            ));
+        }
+
         handler
             .connect(address, tauri_plugin_blec::OnDisconnectHandler::None)
             .await
@@ -556,12 +608,18 @@ pub(crate) async fn force_disconnect(
     });
     ironwing_core::live_runtime::emit_session_state(&state.live_runtime, DomainProvenance::Stream);
 
-    *state.active_link_target.lock().await = None;
-    if let Some(v) = vehicle {
-        v.disconnect().await.map_err(|e| e.to_string())?;
+    let previous_target = state.active_link_target.lock().await.take();
+    let vehicle_disconnect_result = if let Some(v) = vehicle {
+        v.disconnect().await.map_err(|e| e.to_string())
+    } else {
+        Ok(())
+    };
+    if let Err(error) = &vehicle_disconnect_result {
+        tracing::warn!("vehicle disconnect failed during teardown: {error}");
     }
     shutdown_demo_vehicle(state).await;
-    Ok(())
+    teardown_transport_target(previous_target.as_ref()).await;
+    vehicle_disconnect_result
 }
 
 pub(crate) async fn is_vehicle_connected(state: &AppState) -> bool {
@@ -600,6 +658,26 @@ mod tests {
             request.transport,
             LinkEndpoint::Demo {
                 vehicle_preset: DemoVehiclePreset::Quadplane,
+            }
+        ));
+    }
+
+    #[test]
+    fn typed_connect_request_deserializes_nordic_uart_ble_profile() {
+        let request: ConnectRequest = serde_json::from_value(serde_json::json!({
+            "transport": {
+                "kind": "bluetooth_ble",
+                "address": "AA:BB:CC:DD:EE:FF",
+                "profile": "nordic_uart"
+            }
+        }))
+        .expect("deserialize BLE connect request");
+
+        assert!(matches!(
+            request.transport,
+            LinkEndpoint::BluetoothBle {
+                profile: Some(BluetoothProfile::NordicUart),
+                ..
             }
         ));
     }

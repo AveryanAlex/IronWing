@@ -545,7 +545,10 @@ export function createSessionStore(service: SessionService = createSessionServic
 
     try {
       await service.btRequestPermissions();
-      const btDevices = await service.btScanBle(timeoutMs);
+      const current = get(store);
+      const descriptor = current.transportDescriptors.find((item) => item.kind === current.connectionForm.mode);
+      const profile = descriptor?.kind === "bluetooth_ble" ? descriptor.profile : undefined;
+      const btDevices = await service.btScanBle(timeoutMs, profile);
       store.update((state) => {
         const connectionForm =
           btDevices.length > 0 && !state.connectionForm.selectedBtDevice

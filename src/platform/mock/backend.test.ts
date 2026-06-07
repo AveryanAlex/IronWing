@@ -910,7 +910,7 @@ describe("mock discovery backend parity", () => {
             { kind: "udp", label: "UDP", available: true, validation: { bind_addr_required: true } },
             { kind: "tcp", label: "TCP", available: true, validation: { address_required: true } },
             { kind: "serial", label: "Serial", available: true, validation: { port_required: true, baud_required: true }, default_baud: 57600 },
-            { kind: "bluetooth_ble", label: "BLE", available: true, validation: { address_required: true } },
+            { kind: "bluetooth_ble", label: "BLE (Nordic UART)", available: true, validation: { address_required: true }, profile: "nordic_uart" },
             { kind: "bluetooth_spp", label: "SPP", available: true, validation: { address_required: true } },
         ]);
         await expect(invokeMockCommand("list_serial_port_inventory")).resolves.toEqual({
@@ -923,7 +923,7 @@ describe("mock discovery backend parity", () => {
             { name: "Demo SPP Radio", address: "11:22:33:44:55:66", device_type: "classic" },
         ]);
         await expect(invokeMockCommand("bt_scan_ble", { timeoutMs: 500 })).resolves.toEqual([
-            { name: "Demo BLE Radio", address: "AA:BB:CC:DD:EE:FF", device_type: "ble" },
+            { name: "Demo BLE Radio", address: "AA:BB:CC:DD:EE:FF", device_type: "ble", profile: "nordic_uart" },
         ]);
         await expect(invokeMockCommand("bt_stop_scan_ble")).resolves.toBeUndefined();
     });

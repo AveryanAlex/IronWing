@@ -9,6 +9,7 @@ export type WebBluetoothTransportRequest = {
 export const NORDIC_UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 export const NORDIC_UART_RX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
 export const NORDIC_UART_TX_CHARACTERISTIC_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+export const NORDIC_UART_DEFAULT_CHUNK_SIZE = 20;
 
 type BluetoothRemoteGATTCharacteristicLike = EventTarget & {
   value?: DataView;
@@ -136,14 +137,28 @@ class WebBluetoothTransport implements BrowserMavlinkTransport {
         : next instanceof ArrayBuffer
           ? new Uint8Array(next)
           : new Uint8Array(next as ArrayBufferLike);
-      const payload = Uint8Array.from(payloadSource);
-      if (typeof this.#rx.writeValueWithoutResponse === "function") {
-        await this.#rx.writeValueWithoutResponse(payload);
-      } else if (typeof this.#rx.writeValue === "function") {
-        await this.#rx.writeValue(payload);
-      } else {
-        throw new Error("Nordic UART RX characteristic is not writable");
+      const payload = new Uint8Array(payloadSource.byteLength);
+      payload.set(payloadSource);
+      for (let offset = 0; offset < payload.byteLength; offset += NORDIC_UART_DEFAULT_CHUNK_SIZE) {
+        const chunkView = payload.subarray(offset, offset + NORDIC_UART_DEFAULT_CHUNK_SIZE);
+        const chunk = new ArrayBuffer(chunkView.byteLength);
+        new Uint8Array(chunk).set(chunkView);
+        await this.writeNordicUartChunk(chunk);
       }
+    }
+  }
+
+  private async writeNordicUartChunk(payload: ArrayBuffer): Promise<void> {
+    if (!this.#rx) {
+      return;
+    }
+
+    if (typeof this.#rx.writeValueWithoutResponse === "function") {
+      await this.#rx.writeValueWithoutResponse(payload);
+    } else if (typeof this.#rx.writeValue === "function") {
+      await this.#rx.writeValue(payload);
+    } else {
+      throw new Error("Nordic UART RX characteristic is not writable");
     }
   }
 }
