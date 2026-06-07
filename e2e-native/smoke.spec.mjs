@@ -37,6 +37,10 @@ async function readElementValue(selector) {
   }, selector);
 }
 
+async function readElementAttribute(selector, attribute) {
+  return browser.execute((value, name) => document.querySelector(value)?.getAttribute(name) ?? null, selector, attribute);
+}
+
 async function readStoredJson(key) {
   return browser.execute((storageKey) => {
     const raw = window.localStorage.getItem(storageKey);
@@ -165,6 +169,32 @@ async function readNumericValue(selector) {
 }
 
 async function readMissionCounts(selector) {
+  const attributes = await browser.execute((value) => {
+    const element = document.querySelector(value);
+    return {
+      mission: element?.getAttribute("data-mission-count-mission") ?? null,
+      summary: element?.getAttribute("data-mission-count-mission-summary") ?? null,
+      survey: element?.getAttribute("data-mission-count-survey") ?? null,
+    };
+  }, selector);
+
+  const missionCount = Number.parseInt(attributes.mission ?? "", 10);
+  const surveyCount = Number.parseInt(attributes.survey ?? "", 10);
+  if (Number.isFinite(missionCount) && Number.isFinite(surveyCount)) {
+    return {
+      mission: missionCount,
+      survey: surveyCount,
+    };
+  }
+
+  const summaryMatch = attributes.summary?.match(/(\d+)\s*\/\s*(\d+)/);
+  if (summaryMatch) {
+    return {
+      mission: Number.parseInt(summaryMatch[1], 10),
+      survey: Number.parseInt(summaryMatch[2], 10),
+    };
+  }
+
   const text = await readTextContent(selector);
   const match = text?.match(/·\s*(\d+)\s*\/\s*(\d+)/);
   if (!match) {
@@ -226,17 +256,18 @@ describe("native real-stack workflows", () => {
       telemetryInput: '[data-testid="app-shell-telemetry-settings-telemetry-input"]',
       telemetryApply: '[data-testid="app-shell-telemetry-settings-apply"]',
       telemetryClose: '[data-testid="app-shell-telemetry-settings-close"]',
-      runtimeMarker: '[data-testid="app-runtime-marker"]',
+      runtimeShell: '[data-testid="app-shell"]',
+      runtimeBootstrapState: '[data-testid="app-bootstrap-state"]',
       runtimeFramework: '[data-testid="app-runtime-framework"]',
       runtimeEntrypoint: '[data-testid="app-runtime-entrypoint"]',
       activeWorkspace: '[data-testid="app-shell-active-workspace"]',
       overviewWorkspaceButton: '[data-testid="app-shell-overview-workspace-btn"]',
       operatorWorkspace: '[data-testid="app-shell-operator-workspace"]',
-      missionWorkspaceButton: '//nav[@aria-label="Primary"]//button[normalize-space()="Mission"]',
+      missionWorkspaceButton: '//nav[@aria-label="Primary"]//a[@aria-label="Mission"]',
       missionRoot: '[data-testid="mission-workspace"]',
       missionReady: '[data-testid="mission-workspace-ready"]',
-      missionAttachment: '[data-testid="mission-workspace-attachment"]',
-      missionCountsMission: '[data-testid="mission-count-mission-items"]',
+      missionAttachment: ".mission-workspace",
+      missionCountsMission: ".mission-workspace",
       missionListAdd: '[data-testid="mission-draft-list-add"]',
       missionInspectorSelectionKind: '[data-testid="mission-inspector-selection-kind"]',
       missionInspectorLatitude: '[data-testid="mission-inspector-latitude"]',
@@ -272,12 +303,13 @@ describe("native real-stack workflows", () => {
       timeoutMsg: "Timed out waiting for the native IronWing window title.",
     });
 
-    await waitForCheckpoint("active Svelte runtime marker present", async () => {
-      const runtimeMarker = await readTextContent(selectors.runtimeMarker);
-      return runtimeMarker === "IronWing runtime marker";
+    await waitForCheckpoint("active Svelte runtime shell ready", async () => {
+      const shellPhase = await readElementAttribute(selectors.runtimeShell, "data-runtime-phase");
+      const bootstrapState = await readTextContent(selectors.runtimeBootstrapState);
+      return shellPhase === "ready" && bootstrapState === "ready";
     }, {
       timeout: 30_000,
-      timeoutMsg: "Timed out waiting for the hidden runtime marker that proves the active Svelte shell mounted.",
+      timeoutMsg: "Timed out waiting for the active Svelte shell to report ready bootstrap state.",
     });
 
     await waitForCheckpoint("runtime framework marker proves Svelte", async () => {
@@ -411,7 +443,7 @@ describe("native real-stack workflows", () => {
     });
     await missionReady.waitForDisplayed({ timeout: 30_000 });
     await waitForCheckpoint("mission workspace attached to the live session", async () => {
-      const attachment = await readTextContent(selectors.missionAttachment);
+      const attachment = await readElementAttribute(selectors.missionAttachment, "data-mission-attachment");
       return typeof attachment === "string" && attachment.includes("Live attached");
     }, {
       timeout: 30_000,
