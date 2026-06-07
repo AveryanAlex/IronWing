@@ -1,4 +1,5 @@
 import { setupWorkspaceTestIds } from "../src/features/setup/setup-workspace-test-ids";
+import type { Locator, Page } from "@playwright/test";
 import {
   applyShellViewport,
   expect,
@@ -13,7 +14,6 @@ import {
   createPlainPlaneSetupParamStore,
   createQuadPlaneSetupParamStore,
   createSetupCalibrationDomain,
-  createSetupConfigurationFactsDomain,
   createSetupStatusTextDomain,
   createSetupSupportDomain,
   createSetupTelemetryDomain,
@@ -65,7 +65,51 @@ async function expectLatestInvocation(
   }).toEqual(args);
 }
 
+async function expectNoVisibleHorizontalOverflow(locator: Locator): Promise<void> {
+  await expect.poll(() => locator.evaluateAll((elements) => elements
+    .map((element) => ({
+      testId: element.getAttribute("data-testid"),
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }))
+    .filter(({ clientWidth, scrollWidth }) => scrollWidth > clientWidth + 1))).toEqual([]);
+}
+
+async function expectSetupParamCardsContained(page: Page, testIdPrefix: string): Promise<void> {
+  const cards = page.locator(`[data-testid^="${testIdPrefix}-card-"]`);
+  await expect(cards.first()).toBeVisible();
+  await expectNoVisibleHorizontalOverflow(cards);
+}
+
 test.describe("setup workspace proof", () => {
+  test("keeps metadata-driven parameter cards contained across responsive widths", async ({
+    page,
+    mockPlatform,
+  }) => {
+    await primeSetupMetadata(page);
+    await applyShellViewport(page, "radiomaster");
+    await page.goto("/");
+    await mockPlatform.reset();
+    await mockPlatform.waitForRuntimeSurface();
+    await connectSetupSession(page, mockPlatform, {
+      paramStore: createFullExpertSetupParamStore(),
+    });
+    await openConnectedSetupWorkspace(page);
+
+    for (const { sectionId, testIdPrefix } of [
+      { sectionId: "navigation", testIdPrefix: "setup-workspace-navigation" },
+      { sectionId: "failsafe", testIdPrefix: "setup-workspace-failsafe" },
+      { sectionId: "geofence", testIdPrefix: "setup-workspace-geofence" },
+    ]) {
+      await applyShellViewport(page, "radiomaster");
+      await setupNavLocator(page, sectionId).click();
+      await expectSetupParamCardsContained(page, testIdPrefix);
+
+      await applyShellViewport(page, "phone");
+      await expectSetupParamCardsContained(page, testIdPrefix);
+    }
+  });
+
   test("keeps metadata-degraded recovery truthful and reachable on Radiomaster width", async ({
     page,
     mockPlatform,
@@ -79,7 +123,6 @@ test.describe("setup workspace proof", () => {
       vehicleState: setupMetadataUnavailableVehicleState,
       telemetry: createSetupTelemetryDomain(null),
       support: createSetupSupportDomain(),
-      configurationFacts: createSetupConfigurationFactsDomain(),
       calibration: createSetupCalibrationDomain(),
       statusText: createSetupStatusTextDomain([
         { sequence: 1, text: "Setup metadata unavailable", severity: "warning", timestamp_usec: 100 },
@@ -142,7 +185,6 @@ test.describe("setup workspace proof", () => {
         },
       }),
       support: createSetupSupportDomain(),
-      configurationFacts: createSetupConfigurationFactsDomain(),
       calibration: createSetupCalibrationDomain(),
       statusText: createSetupStatusTextDomain([
         { sequence: 1, text: "Compass not calibrated", severity: "warning", timestamp_usec: 100 },
@@ -152,8 +194,8 @@ test.describe("setup workspace proof", () => {
 
     await openConnectedSetupWorkspace(page);
 
-    await expect(setupOverviewMetricLocator(page, "inventory")).toContainText("18 sections");
-    await expect(setupOverviewMetricLocator(page, "progress")).toContainText(/\/14 confirmed/);
+    await expect(setupOverviewMetricLocator(page, "inventory")).toContainText("16 sections");
+    await expect(setupOverviewMetricLocator(page, "groups")).toContainText("3 groups");
     await expect(setupOverviewDocLinkLocator(page, "hardware")).toHaveAttribute(
       "href",
       /common-positioning-landing-page/,
@@ -223,7 +265,7 @@ test.describe("setup workspace proof", () => {
 
     await applyShellViewport(page, "radiomaster");
     await setupNavLocator(page, "overview").click();
-    await expect(setupOverviewMetricLocator(page, "inventory")).toContainText("18 sections");
+    await expect(setupOverviewMetricLocator(page, "inventory")).toContainText("16 sections");
     await expect(setupOverviewGroupCountLocator(page, "hardware")).toContainText("7 sections");
     await expect(setupOverviewDocLinkLocator(page, "hardware")).toBeVisible();
   });
@@ -252,7 +294,6 @@ test.describe("setup workspace proof", () => {
         servo_outputs: undefined,
       }),
       support: createSetupSupportDomain(),
-      configurationFacts: createSetupConfigurationFactsDomain(),
       calibration: createSetupCalibrationDomain(),
     });
 
@@ -267,7 +308,7 @@ test.describe("setup workspace proof", () => {
 
     await setupNavLocator(page, "overview").click();
     await expect(setupOverviewCardLocator(page, "flight_modes")).toContainText("Flight Modes");
-    await expect(setupOverviewMetricLocator(page, "status")).toContainText("unconfirmed");
+    await expect(setupOverviewMetricLocator(page, "status")).toContainText("0 notices");
   });
 
   test("seeds ArduPlane metadata, stages QuadPlane enable through the shared tray, and resumes on refreshed VTOL truth", async ({
@@ -290,7 +331,6 @@ test.describe("setup workspace proof", () => {
       paramStore: createPlainPlaneSetupParamStore(),
       telemetry: createSetupTelemetryDomain(null),
       support: createSetupSupportDomain(),
-      configurationFacts: createSetupConfigurationFactsDomain(),
       calibration: createSetupCalibrationDomain(),
     });
 
@@ -321,7 +361,7 @@ test.describe("setup workspace proof", () => {
     await expect(page.locator(setupWorkspaceSelectors.checkpoint)).toBeVisible();
     await expect(page.locator(setupWorkspaceSelectors.checkpointTitle)).toContainText("Reconnect required");
     await expect(page.locator(setupWorkspaceSelectors.checkpointDetail)).toContainText(
-      "Reboot-required setup changes were confirmed through the shared review tray",
+      "Reboot-required setup changes were applied",
     );
 
     await setupNavLocator(page, "motors_esc").click();
@@ -335,7 +375,6 @@ test.describe("setup workspace proof", () => {
       paramProgress: "completed",
       telemetry: createSetupTelemetryDomain(null),
       support: createSetupSupportDomain(),
-      configurationFacts: createSetupConfigurationFactsDomain(),
       calibration: createSetupCalibrationDomain(),
       statusText: createSetupStatusTextDomain([
         { sequence: 2, text: "QuadPlane VTOL parameters refreshed", severity: "notice", timestamp_usec: 200 },
@@ -370,7 +409,6 @@ test.describe("setup workspace proof", () => {
       paramStore: createDodecahexaMotorSetupParamStore(),
       telemetry: createSetupTelemetryDomain(null),
       support: createSetupSupportDomain(),
-      configurationFacts: createSetupConfigurationFactsDomain(),
       calibration: createSetupCalibrationDomain(),
     });
 
@@ -437,7 +475,6 @@ test.describe("setup workspace proof", () => {
         },
       }),
       support: createSetupSupportDomain(),
-      configurationFacts: createSetupConfigurationFactsDomain(),
       calibration: createSetupCalibrationDomain(),
     });
 

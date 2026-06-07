@@ -1,7 +1,6 @@
 import type { Page } from "@playwright/test";
 
 import type { CalibrationDomain } from "../../src/calibration";
-import type { ConfigurationFactsDomain } from "../../src/configuration-facts";
 import type {
   MockCommandBehavior,
   MockGuidedStateValue,
@@ -36,9 +35,7 @@ import {
   setupMotorsEscRowReversedLocator,
   setupMotorsEscRowTestLocator,
   setupNavLocator,
-  setupNavGroupProgressLocator,
   setupOverviewCardLocator,
-  setupOverviewGroupProgressLocator,
   setupOverviewDocLinkLocator,
   setupOverviewGroupCountLocator,
   setupOverviewMetricLocator,
@@ -98,7 +95,6 @@ export type SetupMockPlatform = {
   emitParamProgress: (paramProgress: MockParamProgressState) => Promise<void>;
   emitLiveTelemetryDomain: (telemetry: TelemetryDomain) => Promise<void>;
   emitLiveSupportDomain: (support: SupportDomain) => Promise<void>;
-  emitLiveConfigurationFactsDomain: (facts: ConfigurationFactsDomain) => Promise<void>;
   emitLiveCalibrationDomain: (calibration: CalibrationDomain) => Promise<void>;
   emitLiveStatusTextDomain: (statusText: StatusTextDomain) => Promise<void>;
   getInvocations: () => Promise<MockInvocation[]>;
@@ -1120,23 +1116,6 @@ export function createSetupSupportDomain(overrides: Partial<NonNullable<SupportD
   };
 }
 
-export function createSetupConfigurationFactsDomain(
-  overrides: Partial<NonNullable<ConfigurationFactsDomain["value"]>> = {},
-): ConfigurationFactsDomain {
-  return {
-    available: true,
-    complete: true,
-    provenance: "stream",
-    value: {
-      frame: { configured: true },
-      gps: { configured: true },
-      battery_monitor: { configured: true },
-      motors_esc: { configured: true },
-      ...overrides,
-    },
-  };
-}
-
 export function createSetupCalibrationDomain(
   overrides: Partial<NonNullable<CalibrationDomain["value"]>> = {},
 ): CalibrationDomain {
@@ -1195,7 +1174,6 @@ export async function connectSetupSession(
     vehicleState?: MockLiveVehicleState;
     telemetry?: TelemetryDomain;
     support?: SupportDomain;
-    configurationFacts?: ConfigurationFactsDomain;
     calibration?: CalibrationDomain;
     statusText?: StatusTextDomain;
     paramStore?: MockParamStoreState;
@@ -1236,9 +1214,6 @@ export async function connectSetupSession(
   if (options.support) {
     await mockPlatform.emitLiveSupportDomain(options.support);
   }
-  if (options.configurationFacts) {
-    await mockPlatform.emitLiveConfigurationFactsDomain(options.configurationFacts);
-  }
   if (options.calibration) {
     await mockPlatform.emitLiveCalibrationDomain(options.calibration);
   }
@@ -1259,7 +1234,6 @@ export async function emitSetupScopeEnvelope(
     vehicleState: MockLiveVehicleState;
     telemetry?: TelemetryDomain;
     support?: SupportDomain;
-    configurationFacts?: ConfigurationFactsDomain;
     calibration?: CalibrationDomain;
     statusText?: StatusTextDomain;
   },
@@ -1285,9 +1259,6 @@ export async function emitSetupScopeEnvelope(
   if (payloads.support) {
     await mockPlatform.emit("support://state", { envelope, value: payloads.support });
   }
-  if (payloads.configurationFacts) {
-    await mockPlatform.emit("configuration_facts://state", { envelope, value: payloads.configurationFacts });
-  }
   if (payloads.calibration) {
     await mockPlatform.emit("calibration://state", { envelope, value: payloads.calibration });
   }
@@ -1302,7 +1273,6 @@ export async function simulateSetupReconnectSameScope(
     vehicleState?: MockLiveVehicleState;
     telemetry?: TelemetryDomain;
     support?: SupportDomain;
-    configurationFacts?: ConfigurationFactsDomain;
     calibration?: CalibrationDomain;
     statusText?: StatusTextDomain;
     paramStore?: MockParamStoreState;
@@ -1333,7 +1303,6 @@ export async function simulateSetupReconnectSameScope(
     vehicleState,
     telemetry: payloads.telemetry,
     support: payloads.support,
-    configurationFacts: payloads.configurationFacts,
     calibration: payloads.calibration,
     statusText: payloads.statusText,
   });
@@ -1391,9 +1360,7 @@ export {
   setupMotorsEscRowReversedLocator,
   setupMotorsEscRowTestLocator,
   setupNavLocator,
-  setupNavGroupProgressLocator,
   setupOverviewCardLocator,
-  setupOverviewGroupProgressLocator,
   setupOverviewDocLinkLocator,
   setupOverviewGroupCountLocator,
   setupOverviewMetricLocator,

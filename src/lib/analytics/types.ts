@@ -132,11 +132,6 @@ export type AnalyticsEventMap = {
     section: string;
     connected: number;
   };
-  setup_wizard_step: {
-    action: string;
-    step: string;
-    section: string;
-  };
   calibration_started: {
     kind: string;
   };

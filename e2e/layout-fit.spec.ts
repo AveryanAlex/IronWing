@@ -20,7 +20,6 @@ import {
   connectSetupSession,
   createFullExpertSetupParamStore,
   createSetupCalibrationDomain,
-  createSetupConfigurationFactsDomain,
   createSetupStatusTextDomain,
   createSetupSupportDomain,
   createSetupTelemetryDomain,
@@ -238,12 +237,6 @@ async function connectRepresentativeVehicle(page: Page, mockPlatform: MockPlatfo
       can_calibrate_compass: true,
       can_calibrate_radio: true,
       can_request_prearm_checks: true,
-    }),
-    configurationFacts: createSetupConfigurationFactsDomain({
-      frame: { configured: true },
-      gps: { configured: true },
-      battery_monitor: { configured: true },
-      motors_esc: { configured: true },
     }),
     calibration: createSetupCalibrationDomain({
       accel: { lifecycle: "complete", progress: null, report: null },

@@ -6,8 +6,8 @@ import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/s
 import { requestPrearmChecks } from "../../../../calibration";
 import { trackAnalytics } from "../../../../lib/analytics/client";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
-import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
-import { ARMING_REQUIRE_OPTIONS, derivePrearmModel, type PrearmSnapshot } from "../../../../lib/setup/prearm-model";
+import { buildParameterItemIndex } from "../../../../lib/params/parameter-item-model";
+import { derivePrearmModel, type PrearmSnapshot } from "../../../../lib/setup/prearm-model";
 import { getVehicleSlug } from "../../../../lib/setup/vehicle-profile";
 import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import { armVehicle, disarmVehicle } from "../../../../telemetry";
@@ -16,8 +16,7 @@ import SetupBitmaskTable from "../../../../features/setup/shared/SetupBitmaskTab
 import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
 import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
 import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
-import SetupParamEditCard from "../../../../features/setup/shared/SetupParamEditCard.svelte";
-import SetupParamEditGrid from "../../../../features/setup/shared/SetupParamEditGrid.svelte";
+import SetupParamSection from "../../../../features/setup/shared/SetupParamSection.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
@@ -36,8 +35,8 @@ const paramsStore = getParamsStoreContext();
 const sessionStore = getSessionStoreContext();
 const paramsState = fromStore(paramsStore);
 const sessionState = fromStore(sessionStore);
+const armingRequireParams = [{ id: "ARMING_REQUIRE" }] as const;
 
-let draftValues = $state<Record<string, string>>({});
 let prearmSnapshot = $state<PrearmSnapshot | null>(null);
 let requestPhase = $state<"idle" | "running">("idle");
 let actionPhase = $state<"idle" | "arming" | "disarming">("idle");
@@ -65,19 +64,6 @@ let armingDocsUrl = $derived(resolveDocsUrl("arming", vehicleSlug));
 let prearmDocsUrl = $derived(resolveDocsUrl("prearm_safety_checks", vehicleSlug ?? undefined));
 let armingCheckItem = $derived(itemIndex.get("ARMING_CHECK") ?? null);
 let armingRequireItem = $derived(itemIndex.get("ARMING_REQUIRE") ?? null);
-let armingRequireOptions = $derived.by(() => {
-  const values = params.metadata?.get("ARMING_REQUIRE")?.values;
-  if (!Array.isArray(values)) {
-    return [];
-  }
-
-  return values.filter((entry) => Number.isFinite(entry.code) && entry.label.trim().length > 0);
-});
-let armingRequireRenderedOptions = $derived(
-  armingRequireOptions.length > 0
-    ? armingRequireOptions
-    : ARMING_REQUIRE_OPTIONS.map((option) => ({ code: option.value, label: option.label })),
-);
 let armingCheckEntries = $derived.by(() => {
   const bitmask = params.metadata?.get("ARMING_CHECK")?.bitmask;
   const currentMask = params.stagedEdits.ARMING_CHECK?.nextValue ?? armingCheckItem?.value ?? null;
@@ -99,7 +85,6 @@ let armingCheckEntries = $derived.by(() => {
       checked: (currentMask & (1 << entry.bit)) !== 0,
     }));
 });
-let armingRequireDraft = $derived.by(() => draftValue("ARMING_REQUIRE", armingRequireItem?.value ?? null));
 let armingCheckValue = $derived(params.stagedEdits.ARMING_CHECK?.nextValue ?? armingCheckItem?.value ?? null);
 let armingRequireValue = $derived(params.stagedEdits.ARMING_REQUIRE?.nextValue ?? armingRequireItem?.value ?? null);
 let checksDisabled = $derived(armingCheckValue === 0);
@@ -124,74 +109,6 @@ $effect(() => {
     confirmArm = false;
   }
 });
-
-function item(name: string): ParameterItemModel | null {
-  return itemIndex.get(name) ?? null;
-}
-
-function draftValue(name: string, fallback: number | null): string {
-  if (draftValues[name] !== undefined) {
-    return draftValues[name];
-  }
-
-  const stagedValue = params.stagedEdits[name]?.nextValue;
-  if (typeof stagedValue === "number" && Number.isFinite(stagedValue)) {
-    return String(stagedValue);
-  }
-
-  return fallback === null ? "" : String(fallback);
-}
-
-function setDraft(name: string, value: string) {
-  draftValues = {
-    ...draftValues,
-    [name]: value,
-  };
-}
-
-function resolveDraftNumber(name: string, fallback: number | null): number | null {
-  const raw = draftValue(name, fallback).trim();
-  if (raw.length === 0) {
-    return null;
-  }
-
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function canAutostageRequire(): boolean {
-  if (
-    actionsBlocked ||
-    !armingRequireItem ||
-    armingRequireItem.readOnly === true ||
-    armingRequireOptions.length === 0
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function stageRequire(value: string) {
-  setDraft("ARMING_REQUIRE", value);
-  if (!canAutostageRequire() || !armingRequireItem) {
-    return;
-  }
-
-  const nextValue = resolveDraftNumber("ARMING_REQUIRE", armingRequireItem.value);
-  if (nextValue === null) {
-    return;
-  }
-
-  paramsStore.stageParameterEdit(armingRequireItem, nextValue);
-}
-
-function unstage(name: string) {
-  const nextDrafts = { ...draftValues };
-  delete nextDrafts[name];
-  draftValues = nextDrafts;
-  paramsStore.discardStagedEdit(name);
-}
 
 function toggleArmingCheck(bit: number) {
   if (actionsBlocked || !armingCheckItem || armingCheckItem.readOnly === true) {
@@ -417,7 +334,7 @@ async function handleDisarm() {
       >
         {#if params.stagedEdits.ARMING_CHECK}
           <p>
-            <SetupStagedBadge name="ARMING_CHECK" onUnstage={unstage} testId={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_CHECK`} />
+            <SetupStagedBadge name="ARMING_CHECK" onUnstage={paramsStore.discardStagedEdit} testId={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_CHECK`} />
           </p>
         {/if}
 
@@ -437,32 +354,16 @@ async function handleDisarm() {
         {/if}
       </SetupSectionCard>
 
-      <SetupSectionCard
+      <SetupParamSection
+        id="arming-require"
         icon={KeyRound}
         title={armingRequireItem?.label ?? "Arming method"}
         description="Choose how the vehicle can be armed. Keep arming safeguards enabled unless the vehicle documentation and operating procedure require a different value."
+        params={armingRequireParams}
+        disabled={actionsBlocked}
         surface="elevated"
-      >
-        {#if armingRequireItem}
-          <SetupParamEditGrid>
-            <SetupParamEditCard
-              item={armingRequireItem}
-              inputId="setup-arming-require"
-              type="enum"
-              value={armingRequireDraft}
-              options={armingRequireRenderedOptions}
-              disabled={actionsBlocked || armingRequireOptions.length === 0}
-              stagedName={params.stagedEdits.ARMING_REQUIRE ? "ARMING_REQUIRE" : undefined}
-              stagedTestId={`${setupWorkspaceTestIds.armingStagedPrefix}-ARMING_REQUIRE`}
-              onUnstage={unstage}
-              inputTestId={`${setupWorkspaceTestIds.armingInputPrefix}-ARMING_REQUIRE`}
-              onValueChange={(value) => typeof value === "string" && stageRequire(value)}
-            />
-          </SetupParamEditGrid>
-        {:else}
-          <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
-        {/if}
-      </SetupSectionCard>
+        testIdPrefix="setup-workspace-arming"
+      />
     </div>
 
     <SetupGuideCard title="Pre-arm safety" description="ArduPilot's default all-checks behavior is the safest baseline for routine operation.">

@@ -56,6 +56,7 @@ describe("SetupParamEditCard", () => {
     });
 
     expect(screen.getByText("RC1_MIN · 800–2200 · step 1")).toBeTruthy();
+    expect(screen.getByRole("slider")).toBeTruthy();
     expect(screen.queryByText("Lowest PWM observed at full travel.")).toBeNull();
 
     await fireEvent.click(screen.getByText("Minimum endpoint"));
@@ -82,6 +83,35 @@ describe("SetupParamEditCard", () => {
     expect(screen.getByText("Q_ENABLE")).toBeTruthy();
     expect(screen.queryByText(/step 1/)).toBeNull();
     expect(screen.getByRole("switch")).toBeTruthy();
+  });
+
+  it("keeps numeric parameters without a finite range as number inputs only", () => {
+    render(SetupParamEditCard, {
+      props: {
+        item: item("UNKNOWN_RANGE", { range: null, increment: null, value: 2 }),
+      },
+    });
+
+    expect(screen.getByRole("spinbutton")).toBeTruthy();
+    expect(screen.queryByRole("slider")).toBeNull();
+  });
+
+  it("shows short metadata units with the full unit name in a tooltip", async () => {
+    render(SetupParamEditCard, {
+      props: {
+        item: item("BATT_LOW_MAH", {
+          units: "mAh",
+          unitText: "milliampere hour",
+          value: 1000,
+        }),
+      },
+    });
+
+    expect(screen.getByText("mAh")).toBeTruthy();
+    expect(screen.queryByText("milliampere hour")).toBeNull();
+
+    await fireEvent.click(screen.getByText("mAh"));
+    await waitFor(() => expect(screen.getByText("milliampere hour")).toBeTruthy());
   });
 });
 

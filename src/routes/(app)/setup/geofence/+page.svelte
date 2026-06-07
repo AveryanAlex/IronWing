@@ -2,24 +2,18 @@
 import { Map, Ruler, Shield } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
-import {
-  getParamsStoreContext,
-  getSessionStoreContext,
-  getSetupWorkspaceStoreContext,
-} from "../../../../app/shell/runtime-context";
+import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import { buildGeofenceModel, type SafetyVehicleFamily } from "../../../../lib/setup/failsafe-model";
-import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import SetupBitmaskTable from "../../../../features/setup/shared/SetupBitmaskTable.svelte";
 import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
 import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
-import SetupParamEditCard from "../../../../features/setup/shared/SetupParamEditCard.svelte";
-import SetupParamEditGrid from "../../../../features/setup/shared/SetupParamEditGrid.svelte";
+import SetupParamSection from "../../../../features/setup/shared/SetupParamSection.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
-import { resolveSetupDraftNumber, resolveSetupEnumOptions } from "../../../../features/setup/shared/parameter-editing";
-import { Eyebrow, HelperText, Input } from "../../../../components/ui";
+import type { SetupParamRef } from "../../../../features/setup/shared/setup-param-refs";
+import { Eyebrow, HelperText } from "../../../../components/ui";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import {
   getSetupWorkspaceRouteContext,
@@ -34,11 +28,8 @@ let section = $derived(setupRouteSection(view, "geofence"));
 
 const paramsStore = getParamsStoreContext();
 const sessionStore = getSessionStoreContext();
-const setupWorkspaceStore = getSetupWorkspaceStoreContext();
 const paramsState = fromStore(paramsStore);
 const sessionState = fromStore(sessionStore);
-
-let draftValues = $state<Record<string, string>>({});
 
 let params = $derived(paramsState.current);
 let session = $derived(sessionState.current);
@@ -54,7 +45,6 @@ let model = $derived(
   }),
 );
 let docsUrl = $derived(resolveDocsUrl("geofence"));
-let sectionCanConfirm = $derived(!actionsBlocked && model.canConfirm);
 let fenceTypeItem = $derived(itemIndex.get("FENCE_TYPE") ?? null);
 let fenceTypeEntries = $derived.by(() => {
   const bitmask = params.metadata?.get("FENCE_TYPE")?.bitmask;
@@ -82,32 +72,30 @@ let fenceTypeEntries = $derived.by(() => {
     }));
 });
 
-type FenceFieldConfig = {
-  kind: "enum" | "number";
-  name: string;
-  label: string;
-  description: string;
-  unit?: string;
-  min?: number;
-  step?: number;
-};
-
 type FenceCardConfig = {
   id: string;
   title: string;
   summary: string;
-  fields: FenceFieldConfig[];
+  params: readonly SetupParamRef[];
 };
 
-let cards = $derived.by(() => buildCards(model.family));
+const enableParams = [{ id: "FENCE_ENABLE" }, { id: "FENCE_ACTION" }] as const satisfies readonly SetupParamRef[];
+const roverBoundaryParams = [
+  { id: "FENCE_RADIUS" },
+  { id: "FENCE_MARGIN" },
+] as const satisfies readonly SetupParamRef[];
+const planeBoundaryParams = [
+  { id: "FENCE_ALT_MAX" },
+  { id: "FENCE_MARGIN" },
+] as const satisfies readonly SetupParamRef[];
+const copterBoundaryParams = [
+  { id: "FENCE_ALT_MAX" },
+  { id: "FENCE_ALT_MIN" },
+  { id: "FENCE_RADIUS" },
+  { id: "FENCE_MARGIN" },
+] as const satisfies readonly SetupParamRef[];
 
-$effect(() => {
-  if (sectionCanConfirm) {
-    setupWorkspaceStore.confirmSection("geofence");
-  } else {
-    setupWorkspaceStore.clearSectionConfirmation("geofence");
-  }
-});
+let cards = $derived.by(() => buildCards(model.family));
 
 function buildCards(family: SafetyVehicleFamily): FenceCardConfig[] {
   const base: FenceCardConfig[] = [
@@ -115,20 +103,7 @@ function buildCards(family: SafetyVehicleFamily): FenceCardConfig[] {
       id: "enable",
       title: "Fence enable and breach action",
       summary: `${currentValueText(item("FENCE_ENABLE"))} · ${currentValueText(item("FENCE_ACTION"))}`,
-      fields: [
-        {
-          kind: "enum",
-          name: "FENCE_ENABLE",
-          label: "Fence enable",
-          description: "Turns geofence enforcement on or off for the current vehicle.",
-        },
-        {
-          kind: "enum",
-          name: "FENCE_ACTION",
-          label: "Breach action",
-          description: "Action taken when the vehicle breaches the configured fence.",
-        },
-      ],
+      params: enableParams,
     },
   ];
 
@@ -139,26 +114,7 @@ function buildCards(family: SafetyVehicleFamily): FenceCardConfig[] {
         id: "boundary",
         title: "Rover boundary tuning",
         summary: `${currentValueText(item("FENCE_RADIUS"))} radius · ${currentValueText(item("FENCE_MARGIN"))} margin`,
-        fields: [
-          {
-            kind: "number",
-            name: "FENCE_RADIUS",
-            label: "Circle radius",
-            description: "Radius of the circular fence around the home or configured origin.",
-            unit: "m",
-            min: 0,
-            step: 1,
-          },
-          {
-            kind: "number",
-            name: "FENCE_MARGIN",
-            label: "Margin",
-            description: "Buffer distance before the rover declares a breach.",
-            unit: "m",
-            min: 0,
-            step: 1,
-          },
-        ],
+        params: roverBoundaryParams,
       },
     ];
   }
@@ -170,26 +126,7 @@ function buildCards(family: SafetyVehicleFamily): FenceCardConfig[] {
         id: "boundary",
         title: "Plane boundary tuning",
         summary: `${currentValueText(item("FENCE_ALT_MAX"))} max altitude · ${currentValueText(item("FENCE_MARGIN"))} margin`,
-        fields: [
-          {
-            kind: "number",
-            name: "FENCE_ALT_MAX",
-            label: "Max altitude",
-            description: "Upper altitude limit enforced by the fixed-wing fence.",
-            unit: "m",
-            min: 0,
-            step: 1,
-          },
-          {
-            kind: "number",
-            name: "FENCE_MARGIN",
-            label: "Margin",
-            description: "Buffer distance before the plane fence breach action triggers.",
-            unit: "m",
-            min: 0,
-            step: 1,
-          },
-        ],
+        params: planeBoundaryParams,
       },
     ];
   }
@@ -200,43 +137,7 @@ function buildCards(family: SafetyVehicleFamily): FenceCardConfig[] {
       id: "boundary",
       title: "Copter boundary tuning",
       summary: `${currentValueText(item("FENCE_ALT_MAX"))} max · ${currentValueText(item("FENCE_ALT_MIN"))} min · ${currentValueText(item("FENCE_RADIUS"))} radius`,
-      fields: [
-        {
-          kind: "number",
-          name: "FENCE_ALT_MAX",
-          label: "Max altitude",
-          description: "Upper altitude fence before the copter breaches vertically.",
-          unit: "m",
-          min: 0,
-          step: 1,
-        },
-        {
-          kind: "number",
-          name: "FENCE_ALT_MIN",
-          label: "Min altitude",
-          description: "Lower altitude fence for copter missions that require vertical clearance.",
-          unit: "m",
-          step: 1,
-        },
-        {
-          kind: "number",
-          name: "FENCE_RADIUS",
-          label: "Circle radius",
-          description: "Radius of the copter circle fence.",
-          unit: "m",
-          min: 0,
-          step: 1,
-        },
-        {
-          kind: "number",
-          name: "FENCE_MARGIN",
-          label: "Margin",
-          description: "Buffer distance before the breach action triggers.",
-          unit: "m",
-          min: 0,
-          step: 1,
-        },
-      ],
+      params: copterBoundaryParams,
     },
   ];
 }
@@ -247,72 +148,6 @@ function item(name: string): ParameterItemModel | null {
 
 function currentValueText(item: ParameterItemModel | null): string {
   return item?.valueLabel ?? item?.valueText ?? "Unavailable";
-}
-
-function visibleFields(fields: FenceFieldConfig[]): FenceFieldConfig[] {
-  return fields.filter((field) => item(field.name));
-}
-
-function enumOptions(name: string) {
-  return resolveSetupEnumOptions(params.metadata?.get(name)?.values);
-}
-
-function draftValue(name: string, fallback: number | null): string {
-  if (draftValues[name] !== undefined) {
-    return draftValues[name];
-  }
-
-  const stagedValue = params.stagedEdits[name]?.nextValue;
-  if (typeof stagedValue === "number" && Number.isFinite(stagedValue)) {
-    return String(stagedValue);
-  }
-
-  return fallback === null ? "" : String(fallback);
-}
-
-function setDraft(name: string, value: string) {
-  draftValues = {
-    ...draftValues,
-    [name]: value,
-  };
-}
-
-function resolveDraftNumber(name: string, fallback: number | null): number | null {
-  return resolveSetupDraftNumber(draftValue(name, fallback));
-}
-
-function canAutostage(
-  field: FenceFieldConfig,
-  target: ParameterItemModel | null,
-  nextValue: number | null,
-): target is ParameterItemModel {
-  if (!target || target.readOnly === true || actionsBlocked || nextValue === null) {
-    return false;
-  }
-  if (field.kind === "enum" && enumOptions(field.name).length === 0) {
-    return false;
-  }
-
-  return true;
-}
-
-function stageDraftValue(field: FenceFieldConfig, value: string) {
-  setDraft(field.name, value);
-  const target = item(field.name);
-  const nextValue = resolveDraftNumber(field.name, target?.value ?? null);
-
-  if (!canAutostage(field, target, nextValue)) {
-    return;
-  }
-
-  paramsStore.stageParameterEdit(target, nextValue as number);
-}
-
-function unstage(name: string) {
-  const rest = { ...draftValues };
-  delete rest[name];
-  draftValues = rest;
-  paramsStore.discardStagedEdit(name);
 }
 
 function toggleFenceType(bit: number) {
@@ -405,76 +240,16 @@ function setFenceTypes(checked: boolean) {
 
   <div class="space-y-3">
     {#each cards as card (card.id)}
-      <SetupSectionCard
+      <SetupParamSection
+        id={card.id}
         icon={Ruler}
         title={card.title}
         description={card.summary}
+        params={card.params}
+        disabled={actionsBlocked}
         surface="elevated"
-        testId={`${setupWorkspaceTestIds.geofenceCardPrefix}-${card.id}`}
-      >
-        {#if visibleFields(card.fields).length > 0}
-          <SetupParamEditGrid>
-            {#each visibleFields(card.fields) as field (field.name)}
-              {@const fieldItem = item(field.name)}
-              {#if fieldItem}
-                {@const fieldValue = draftValue(field.name, fieldItem.value)}
-                {#if field.kind === "enum"}
-                  {@const options = enumOptions(field.name)}
-                  <SetupParamEditCard
-                    item={fieldItem}
-                    inputId={`${card.id}-${field.name}`}
-                    label={field.label}
-                    description={field.description}
-                    type="enum"
-                    options={options}
-                    value={fieldValue}
-                    stagedName={params.stagedEdits[field.name] ? field.name : undefined}
-                    stagedTestId={`${setupWorkspaceTestIds.geofenceStagedPrefix}-${field.name}`}
-                    onUnstage={unstage}
-                    onValueChange={(value) => typeof value === "string" && stageDraftValue(field, value)}
-                    inputTestId={`${setupWorkspaceTestIds.geofenceInputPrefix}-${field.name}`}
-                    disabled={actionsBlocked || options.length === 0}
-                  />
-                {:else}
-                  <SetupParamEditCard
-                    item={fieldItem}
-                    inputId={`${card.id}-${field.name}`}
-                    label={field.label}
-                    description={field.description}
-                    min={field.min}
-                    step={field.step}
-                    unit={field.unit ?? null}
-                    stagedName={params.stagedEdits[field.name] ? field.name : undefined}
-                    stagedTestId={`${setupWorkspaceTestIds.geofenceStagedPrefix}-${field.name}`}
-                    onUnstage={unstage}
-                    disabled={actionsBlocked}
-                  >
-                    <div class="flex items-center gap-2">
-                      <Input
-                        id={`${card.id}-${field.name}`}
-                        inputmode="decimal"
-                        min={field.min}
-                        step={field.step}
-                        type="number"
-                        value={fieldValue}
-                        disabled={actionsBlocked || fieldItem.readOnly}
-                        testId={`${setupWorkspaceTestIds.geofenceInputPrefix}-${field.name}`}
-                        oninput={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
-                        onchange={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
-                      />
-                      {#if field.unit}
-                        <span class="shrink-0 text-xs text-text-muted">{field.unit}</span>
-                      {/if}
-                    </div>
-                  </SetupParamEditCard>
-                {/if}
-              {/if}
-            {/each}
-          </SetupParamEditGrid>
-        {:else}
-          <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
-        {/if}
-      </SetupSectionCard>
+        testIdPrefix="setup-workspace-geofence"
+      />
     {/each}
 
     <SetupGuideCard title="Geofence review" description="Use the enable, type, breach action, and boundary controls together.">

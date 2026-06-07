@@ -51,7 +51,6 @@ const ACTIVE_RUNTIME_ROOTS = [
   "src/routes/(app)/firmware/+page.svelte",
   "src/routes/(app)/setup/+layout.svelte",
   "src/routes/(app)/setup/+page.svelte",
-  "src/routes/(app)/setup/beginner-wizard/+page.svelte",
   "src/routes/(app)/setup/frame-orientation/+page.svelte",
   "src/routes/(app)/setup/calibration/+page.svelte",
   "src/routes/(app)/setup/rc-receiver/+page.svelte",

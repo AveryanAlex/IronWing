@@ -6,7 +6,6 @@ import type { SetupWorkspaceSection, SetupWorkspaceSectionGroup } from "../../..
 import { setupSectionPath } from "../../../lib/setup-sections";
 import { Button } from "../../../components/ui";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
-import SectionStatusIcon from "../shared/SectionStatusIcon.svelte";
 import SetupSectionIcon from "./SetupSectionIcon.svelte";
 
 const NAV_SECTION_GROUPS: ReadonlyArray<{
@@ -17,7 +16,7 @@ const NAV_SECTION_GROUPS: ReadonlyArray<{
   {
     id: "essential",
     title: "Essential Setup",
-    sectionIds: ["overview", "beginner_wizard", "frame_orientation", "calibration", "rc_receiver", "flight_modes"],
+    sectionIds: ["overview", "frame_orientation", "calibration", "rc_receiver", "flight_modes"],
   },
   {
     id: "hardware",
@@ -65,13 +64,6 @@ let navGroups = $derived.by(() => {
 function toggleGroup(groupId: string) {
   collapsedGroups[groupId] = !collapsedGroups[groupId];
 }
-
-function showStatusIcon(section: SetupWorkspaceSection): boolean {
-  return section.status === "complete"
-    || section.status === "in_progress"
-    || section.status === "failed"
-    || section.status === "unknown";
-}
 </script>
 
 <nav
@@ -114,15 +106,6 @@ function showStatusIcon(section: SetupWorkspaceSection): boolean {
           >
             <SetupSectionIcon sectionId={section.id} />
             <span class="truncate font-medium">{section.title}</span>
-
-            {#if showStatusIcon(section)}
-              <span
-                class="ml-auto inline-flex items-center justify-center"
-                data-testid={`${setupWorkspaceTestIds.sectionStatusPrefix}-${section.id}`}
-              >
-                <SectionStatusIcon status={section.status} />
-              </span>
-            {/if}
           </a>
           {/each}
         </div>

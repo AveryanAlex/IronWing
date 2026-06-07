@@ -98,17 +98,6 @@ function createSessionState(overrides: Partial<SessionStoreState> = {}): Session
         geofence: "not_present",
       },
     },
-    configurationFacts: {
-      available: true,
-      complete: false,
-      provenance: "bootstrap",
-      value: {
-        frame: null,
-        gps: null,
-        battery_monitor: null,
-        motors_esc: null,
-      },
-    },
     calibration: {
       available: true,
       complete: false,
@@ -143,7 +132,6 @@ function createSessionState(overrides: Partial<SessionStoreState> = {}): Session
       followVehicle: true,
     },
     transportDescriptors: [],
-    serialPorts: [],
     availableModes: [],
     btDevices: [],
     btScanning: false,
@@ -262,7 +250,7 @@ function readGroup(state: SetupWorkspaceStoreState, id: SetupWorkspaceSectionGro
 }
 
 describe("setup workspace store", () => {
-  it("exposes the full grouped expert catalog with conservative initial progress", () => {
+  it("exposes the full grouped expert catalog without setup progress tracking", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState());
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
@@ -278,7 +266,6 @@ describe("setup workspace store", () => {
     expect(state.selectedSectionId).toBe("overview");
     expect(state.sections.map((section) => section.id)).toEqual([
       "overview",
-      "beginner_wizard",
       "frame_orientation",
       "calibration",
       "navigation",
@@ -297,20 +284,14 @@ describe("setup workspace store", () => {
       "peripherals",
       "full_parameters",
     ]);
-    expect(state.progressText).toBe("1/14 confirmed");
-    expect(state.sectionStatuses.frame_orientation).toBe("unknown");
-    expect(frameSection?.statusText).toBe("Unknown");
-    expect(frameSection?.confidenceText).toBe("Unconfirmed");
+    expect(frameSection?.detailText).toBe("Open this section to inspect settings and queue changes for review.");
     expect(navigationSection?.implemented).toBe(true);
     expect(hardwareGroup?.sections).toHaveLength(7);
     expect(hardwareGroup?.implementedCount).toBe(7);
-    expect(hardwareGroup?.progressText).toBe("0/6 confirmed");
     expect(safetyGroup?.sections).toHaveLength(6);
     expect(safetyGroup?.implementedCount).toBe(6);
-    expect(safetyGroup?.progressText).toBe("1/6 confirmed");
     expect(tuningGroup?.sections).toHaveLength(3);
     expect(tuningGroup?.implementedCount).toBe(3);
-    expect(tuningGroup?.progressText).toBe("0/1 confirmed");
   });
 
   it("keeps catalog sections routable while the global gate waits for parameter values", () => {
@@ -631,244 +612,6 @@ describe("setup workspace store", () => {
     }
   });
 
-  it("changes guided confirmations whenever an active scope is present", () => {
-    const sessionStore = writable(createSessionState());
-    const paramsStore = writable(createParamsState());
-    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
-
-    store.confirmSection("navigation");
-    let state = get(store);
-    expect(state.sectionConfirmations.navigation).toBe(true);
-
-    store.clearSectionConfirmation("navigation");
-    state = get(store);
-    expect(state.sectionConfirmations.navigation).toBe(false);
-
-    sessionStore.set(createSessionState({
-      sessionDomain: {
-        available: true,
-        complete: true,
-        provenance: "bootstrap",
-        value: {
-          status: "active",
-          connection: { kind: "disconnected" },
-          vehicle_state: {
-            armed: false,
-            custom_mode: 0,
-            mode_name: "Loiter",
-            system_status: "standby",
-            vehicle_type: "quadrotor",
-            autopilot: "ardu_pilot_mega",
-            system_id: 1,
-            component_id: 1,
-            heartbeat_received: true,
-          },
-          home_position: null,
-        },
-      },
-    }));
-
-    store.confirmSection("navigation");
-    state = get(store);
-    expect(state.sectionConfirmations.navigation).toBe(true);
-
-    sessionStore.set(createSessionState());
-    store.confirmSection("navigation");
-    state = get(store);
-    expect(state.sectionConfirmations.navigation).toBe(true);
-
-    sessionStore.set(createSessionState({
-      sessionDomain: {
-        available: true,
-        complete: true,
-        provenance: "bootstrap",
-        value: {
-          status: "active",
-          connection: { kind: "disconnected" },
-          vehicle_state: {
-            armed: false,
-            custom_mode: 0,
-            mode_name: "Loiter",
-            system_status: "standby",
-            vehicle_type: "quadrotor",
-            autopilot: "ardu_pilot_mega",
-            system_id: 1,
-            component_id: 1,
-            heartbeat_received: true,
-          },
-          home_position: null,
-        },
-      },
-    }));
-
-    store.clearSectionConfirmation("navigation");
-    state = get(store);
-    expect(state.sectionConfirmations.navigation).toBe(false);
-  });
-
-  it("applies replaced guided confirmations for the active scope", () => {
-    const sessionStore = writable(createSessionState());
-    const paramsStore = writable(createParamsState());
-    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
-
-    store.confirmSection("navigation");
-    let state = get(store);
-    expect(state.sectionConfirmations.navigation).toBe(true);
-
-    sessionStore.set(createSessionState({
-      sessionDomain: {
-        available: true,
-        complete: true,
-        provenance: "bootstrap",
-        value: {
-          status: "active",
-          connection: { kind: "disconnected" },
-          vehicle_state: {
-            armed: false,
-            custom_mode: 0,
-            mode_name: "Loiter",
-            system_status: "standby",
-            vehicle_type: "quadrotor",
-            autopilot: "ardu_pilot_mega",
-            system_id: 1,
-            component_id: 1,
-            heartbeat_received: true,
-          },
-          home_position: null,
-        },
-      },
-    }));
-
-    store.replaceSectionConfirmations({
-      scopeKey: "session-1:live:0:0",
-      confirmedSections: {
-        navigation: false,
-      },
-    });
-
-    state = get(store);
-    expect(state.sectionConfirmations.navigation).toBe(false);
-  });
-
-  it("clears active-scope guided confirmations without scopeKey", () => {
-    const sessionStore = writable(createSessionState());
-    const paramsStore = writable(createParamsState());
-    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
-
-    store.confirmSection("navigation");
-    let state = get(store);
-    expect(state.sectionConfirmations.navigation).toBe(true);
-
-    sessionStore.set(createSessionState({
-      sessionDomain: {
-        available: true,
-        complete: true,
-        provenance: "bootstrap",
-        value: {
-          status: "active",
-          connection: { kind: "disconnected" },
-          vehicle_state: {
-            armed: false,
-            custom_mode: 0,
-            mode_name: "Loiter",
-            system_status: "standby",
-            vehicle_type: "quadrotor",
-            autopilot: "ardu_pilot_mega",
-            system_id: 1,
-            component_id: 1,
-            heartbeat_received: true,
-          },
-          home_position: null,
-        },
-      },
-    }));
-
-    store.replaceSectionConfirmations({
-      confirmedSections: {
-        navigation: false,
-      },
-    });
-
-    state = get(store);
-    expect(state.sectionConfirmations.navigation).toBe(false);
-  });
-
-  it("still replaces confirmations for the active scope when guided sections are available", () => {
-    const sessionStore = writable(createSessionState());
-    const paramsStore = writable(createParamsState());
-    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
-
-    store.replaceSectionConfirmations({
-      scopeKey: "session-1:live:0:0",
-      confirmedSections: {
-        flight_modes: true,
-      },
-    });
-
-    const state = get(store);
-    expect(state.sectionConfirmations.flight_modes).toBe(true);
-    expect(state.sectionStatuses.flight_modes).toBe("complete");
-  });
-
-  it("keeps frontend confirmations scoped to the active setup scope and drops malformed payloads", () => {
-    const sessionStore = writable(createSessionState());
-    const paramsStore = writable(createParamsState());
-    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
-
-    store.confirmSection("flight_modes");
-
-    let state = get(store);
-    expect(state.sectionStatuses.flight_modes).toBe("complete");
-    expect(state.sectionConfirmations.flight_modes).toBe(true);
-    expect(state.confirmationScopeKey).toBe("session-1:live:0:0");
-
-    sessionStore.set(createSessionState({
-      activeEnvelope: {
-        session_id: "session-1",
-        source_kind: "live",
-        seek_epoch: 0,
-        reset_revision: 1,
-      },
-    }));
-
-    state = get(store);
-    expect(state.sectionStatuses.flight_modes).toBe("not_started");
-    expect(state.sectionConfirmations.flight_modes).toBe(false);
-    expect(state.confirmationScopeKey).toBe("session-1:live:0:1");
-
-    store.replaceSectionConfirmations({
-      scopeKey: "session-1:live:0:1",
-      confirmedSections: {
-        flight_modes: true,
-        unknown_section: true,
-      },
-    });
-
-    state = get(store);
-    expect(state.sectionStatuses.flight_modes).toBe("complete");
-    expect(state.sectionStatuses.geofence).toBe("not_started");
-
-    store.replaceSectionConfirmations({
-      scopeKey: "session-1:live:0:1",
-      confirmedSections: "malformed",
-    });
-
-    state = get(store);
-    expect(state.sectionStatuses.flight_modes).toBe("not_started");
-    expect(state.sectionConfirmations.flight_modes).toBe(false);
-
-    store.replaceSectionConfirmations({
-      scopeKey: "session-stale:live:0:0",
-      confirmedSections: {
-        flight_modes: true,
-      },
-    });
-
-    state = get(store);
-    expect(state.sectionStatuses.flight_modes).toBe("not_started");
-    expect(state.sectionConfirmations.flight_modes).toBe(false);
-  });
-
   it("keeps last good RC samples stale on same-scope gaps and drops malformed values", () => {
     const sessionStore = writable(createSessionState({
       telemetryDomain: createTelemetryDomain({
@@ -1028,76 +771,4 @@ describe("setup workspace store", () => {
     expect(nextScopeState.checkpoint.detailText).toContain("review current values");
   });
 
-  it("exposes the beginner_wizard section in the workspace group with trackable progress", () => {
-    const sessionStore = writable(createSessionState());
-    const paramsStore = writable(createParamsState());
-    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
-
-    const state = get(store);
-    const wizardSection = readSection(state, "beginner_wizard");
-    const workspaceGroup = readGroup(state, "workspace");
-
-    expect(wizardSection).not.toBeNull();
-    expect(wizardSection?.trackable).toBe(true);
-    expect(workspaceGroup?.sections.map((section) => section.id)).toContain("beginner_wizard");
-    expect(state.sectionStatuses.beginner_wizard).toBe("not_started");
-  });
-
-  it("setWizardPhase('active') flips the beginner_wizard status to in_progress", () => {
-    const sessionStore = writable(createSessionState());
-    const paramsStore = writable(createParamsState());
-    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
-
-    store.setWizardPhase("active");
-
-    const state = get(store);
-    expect(state.sectionStatuses.beginner_wizard).toBe("in_progress");
-  });
-
-  it("setWizardPhase('complete') flips the beginner_wizard status to complete", () => {
-    const sessionStore = writable(createSessionState());
-    const paramsStore = writable(createParamsState());
-    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
-
-    store.setWizardPhase("complete");
-
-    const state = get(store);
-    expect(state.sectionStatuses.beginner_wizard).toBe("complete");
-  });
-
-  it("setWizardPhase('idle') flips the beginner_wizard status back to not_started", () => {
-    const sessionStore = writable(createSessionState());
-    const paramsStore = writable(createParamsState());
-    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
-
-    store.setWizardPhase("active");
-    expect(get(store).sectionStatuses.beginner_wizard).toBe("in_progress");
-
-    store.setWizardPhase("idle");
-    expect(get(store).sectionStatuses.beginner_wizard).toBe("not_started");
-  });
-
-  it("setWizardPhase(null) flips the beginner_wizard status back to not_started", () => {
-    const sessionStore = writable(createSessionState());
-    const paramsStore = writable(createParamsState());
-    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
-
-    store.setWizardPhase("active");
-    store.setWizardPhase(null);
-
-    expect(get(store).sectionStatuses.beginner_wizard).toBe("not_started");
-  });
-
-  it("beginner_wizard contributes to overall progress when the wizard completes", () => {
-    const sessionStore = writable(createSessionState());
-    const paramsStore = writable(createParamsState());
-    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
-
-    const baselineProgress = get(store).progress.completed;
-
-    store.setWizardPhase("complete");
-
-    const completedProgress = get(store).progress.completed;
-    expect(completedProgress).toBe(baselineProgress + 1);
-  });
 });

@@ -18,7 +18,6 @@ import {
   ShieldAlert,
   SlidersHorizontal,
   SlidersVertical,
-  Sparkles,
 } from "lucide-svelte";
 
 import type { SetupSectionId } from "../../../lib/setup-sections";
@@ -33,8 +32,6 @@ let { sectionId, size = 14 }: Props = $props();
 
 {#if sectionId === "overview"}
   <LayoutDashboard {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "beginner_wizard"}
-  <Sparkles {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "frame_orientation"}
   <Box {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "calibration"}

@@ -19,6 +19,3 @@ export { default as SetupRcCaptureParamEditCard } from "./SetupRcCaptureParamEdi
 export { default as SetupSectionCard } from "./SetupSectionCard.svelte";
 export { default as SetupStatusPill } from "./SetupStatusPill.svelte";
 export { default as SetupTelemetryCard } from "./SetupTelemetryCard.svelte";
-export { default as SetupWizardActions } from "./SetupWizardActions.svelte";
-export { default as SetupWizardApplyError } from "./SetupWizardApplyError.svelte";
-export { default as SetupWizardHintCard } from "./SetupWizardHintCard.svelte";

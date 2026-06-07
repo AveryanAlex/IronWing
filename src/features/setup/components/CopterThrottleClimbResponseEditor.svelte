@@ -1,7 +1,7 @@
 <script lang="ts">
 import { CircleDot, Gauge, RotateCcw } from "lucide-svelte";
 
-import { Button, Card, EmptyState, Eyebrow, HelperText, MonoValue, NumberInput, Slider } from "../../../components/ui";
+import { Button, Card, EmptyState, Eyebrow, HelperText, MonoValue } from "../../../components/ui";
 import { formatParamValue, type ParameterItemModel } from "../../../lib/params/parameter-item-model";
 import {
   copterThrottleToClimbRateMps,
@@ -197,10 +197,6 @@ function updateControl(control: ThrottleParameterControl, value: number) {
   };
 }
 
-function handleNumberInput(control: ThrottleParameterControl, event: Event) {
-  updateControl(control, Number((event.currentTarget as HTMLInputElement).value));
-}
-
 function stageDraft() {
   if (disabled) {
     return;
@@ -236,39 +232,16 @@ function formatSpeed(value: number): string {
     inputId={`copter-throttle-control-${control.name}`}
     label={control.label}
     description={control.description}
-    type="custom"
+    value={control.draftValue}
     min={control.min}
     max={control.max}
     step={control.step}
     unit={control.unit}
     metadata={control.name}
     {disabled}
-  >
-    <div class="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,13rem)] sm:items-center">
-      <Slider
-        value={control.draftValue}
-        min={control.min}
-        max={control.max}
-        step={control.step}
-        disabled={disabled || control.readOnly}
-        ariaLabel={control.label}
-        testId={`${setupWorkspaceTestIds.rcThrottleInputPrefix}-${control.name}-slider`}
-        onValueChange={(value) => updateControl(control, value)}
-      />
-      <NumberInput
-        id={`copter-throttle-control-${control.name}`}
-        value={control.draftValue}
-        min={control.min}
-        max={control.max}
-        step={control.step}
-        unit={control.unit}
-        disabled={disabled || control.readOnly}
-        testId={`${setupWorkspaceTestIds.rcThrottleInputPrefix}-${control.name}`}
-        oninput={(event) => handleNumberInput(control, event)}
-        onchange={(event) => handleNumberInput(control, event)}
-      />
-    </div>
-  </SetupParamEditCard>
+    inputTestId={`${setupWorkspaceTestIds.rcThrottleInputPrefix}-${control.name}`}
+    onValueChange={(value) => typeof value === "number" && updateControl(control, value)}
+  />
 {/snippet}
 
 {#if !allControlsAvailable || !currentCurveInput || !draftCurveInput || !currentDeadband || !draftDeadband}

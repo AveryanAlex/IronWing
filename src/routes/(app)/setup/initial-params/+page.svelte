@@ -2,11 +2,7 @@
 import { BatteryCharging, Calculator, ListChecks, Ruler } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
-import {
-  getParamsStoreContext,
-  getSessionStoreContext,
-  getSetupWorkspaceStoreContext,
-} from "../../../../app/shell/runtime-context";
+import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { BATTERY_CHEMISTRIES } from "../../../../data/battery-presets";
 import {
@@ -41,7 +37,6 @@ let section = $derived(setupRouteSection(view, "initial_params"));
 
 const paramsStore = getParamsStoreContext();
 const sessionStore = getSessionStoreContext();
-const setupWorkspaceStore = getSetupWorkspaceStoreContext();
 const paramsState = fromStore(paramsStore);
 const sessionState = fromStore(sessionStore);
 
@@ -76,21 +71,12 @@ let model = $derived(
     fallbackInputs: lastValidInputs,
   }),
 );
-let sectionCanConfirm = $derived(model.canConfirm && !actionsBlocked);
 let chemistryLabel = $derived(
   model.resolvedInputs ? (BATTERY_CHEMISTRIES[model.resolvedInputs.chemistryIndex]?.label ?? "Unknown") : "Unknown",
 );
 let chemistryOptions = $derived(
   BATTERY_CHEMISTRIES.map((chemistry, index) => ({ value: String(index), label: chemistry.label })),
 );
-
-$effect(() => {
-  if (sectionCanConfirm) {
-    setupWorkspaceStore.confirmSection("initial_params");
-  } else {
-    setupWorkspaceStore.clearSectionConfirmation("initial_params");
-  }
-});
 
 function parseWholeNumber(value: string): number | null {
   const trimmed = value.trim();

@@ -1,6 +1,6 @@
 <script lang="ts">
 import { Menu, X } from "lucide-svelte";
-import { onDestroy, untrack } from "svelte";
+import { onDestroy } from "svelte";
 import type { Snippet } from "svelte";
 import { fromStore } from "svelte/store";
 
@@ -11,7 +11,6 @@ import {
 } from "../../../app/shell/runtime-context";
 import { trackAnalytics } from "../../../lib/analytics/client";
 import { isSetupSectionId, type SetupSectionId } from "../../../lib/setup-sections";
-import { createSetupWizardStore, type SetupWizardStore } from "../../../lib/stores/setup-wizard";
 import { IconButton, WorkspaceShell } from "../../../components/ui";
 import SetupCheckpointBanner from "./SetupCheckpointBanner.svelte";
 import SetupSectionIcon from "./SetupSectionIcon.svelte";
@@ -23,27 +22,10 @@ import ParameterReviewTray from "../../../app/shell/ParameterReviewTray.svelte";
 type Props = {
   requestedSectionId?: SetupSectionId | null;
   navigateToSetupSection?: (sectionId: SetupSectionId) => void | Promise<void>;
-  wizardStore?: SetupWizardStore;
   children?: Snippet;
 };
 
-// Node 20+ exposes a stub `localStorage` with no methods when `--localstorage-file`
-// is not set, so `typeof` alone is not enough — we also need a real getter/setter
-// signature before handing the object to the wizard store's persistence layer.
-const hasRealLocalStorage =
-  typeof localStorage !== "undefined" &&
-  typeof localStorage.getItem === "function" &&
-  typeof localStorage.setItem === "function" &&
-  typeof localStorage.removeItem === "function";
-
-function createDefaultWizardStore() {
-  return createSetupWizardStore({
-    storage: hasRealLocalStorage ? localStorage : undefined,
-  });
-}
-
-let { requestedSectionId, navigateToSetupSection, wizardStore: providedWizardStore, children }: Props = $props();
-const wizardStore = untrack(() => providedWizardStore ?? createDefaultWizardStore());
+let { requestedSectionId, navigateToSetupSection, children }: Props = $props();
 
 const store = getSetupWorkspaceStoreContext();
 const setupWorkspaceViewStore = getSetupWorkspaceViewStoreContext();
@@ -107,11 +89,8 @@ onDestroy(() => {
   clearSectionDrawerCloseTimer();
 });
 
-const wizardView = fromStore(wizardStore);
-
 setSetupWorkspaceRouteContext({
   viewStore: setupWorkspaceViewStore,
-  wizardStore,
   selectSection,
   handleSectionLinkClick,
 });
@@ -142,50 +121,7 @@ $effect(() => {
   });
 });
 
-$effect(() => {
-  const navigationStatus = view.sectionStatuses.navigation;
-  const batteryStatus = view.sectionStatuses.battery_monitor;
-  const navigationConfigured =
-    navigationStatus === "complete" ? true : navigationStatus === "not_started" ? false : null;
-  const batteryConfigured =
-    batteryStatus === "complete" ? true : batteryStatus === "not_started" ? false : null;
-  wizardStore.updateFromWorkspace({
-    sectionStatuses: view.sectionStatuses,
-    activeEnvelope: view.activeEnvelope,
-    navigationConfigured,
-    batteryConfigured,
-    checkpointPhase: view.checkpoint.phase,
-  });
-});
-
-// Feed the live wizard phase back into the workspace store so the grouped
-// progress dashboard reflects wizard state the same way it reflects any
-// other tracked section.
-$effect(() => {
-  store.setWizardPhase(wizardView.current.phase);
-});
-
-// Auto-start the wizard the first time the operator enters the section.
-// The store's `start()` is a no-op unless the phase is currently idle, so
-// returning to the section mid-run (resume from detour, re-enter from a
-// different section) preserves the existing progress.
-$effect(() => {
-  if (
-    view.selectedSectionId === "beginner_wizard" &&
-    wizardView.current.phase === "idle"
-  ) {
-    wizardStore.start();
-  }
-});
-
 function applySectionSelection(sectionId: SetupSectionId) {
-  if (
-    view.selectedSectionId === "beginner_wizard" &&
-    sectionId !== "beginner_wizard" &&
-    wizardView.current.phase === "active"
-  ) {
-    wizardStore.pause("detour");
-  }
   store.selectSection(sectionId);
 }
 

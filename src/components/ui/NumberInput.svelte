@@ -2,12 +2,14 @@
 import type { ClassValue } from "clsx";
 import type { HTMLInputAttributes } from "svelte/elements";
 import { cn } from "../../lib/utils";
+import Tooltip from "./Tooltip.svelte";
 
 type InputSize = "sm" | "default" | "lg";
 
 type Props = Omit<HTMLInputAttributes, "class" | "size" | "type" | "value"> & {
   value?: number | undefined;
   unit?: string;
+  unitTooltip?: string | null;
   size?: InputSize;
   invalid?: boolean;
   class?: ClassValue;
@@ -25,6 +27,7 @@ const wrapperSizeClasses: Record<InputSize, string> = {
 let {
   value = $bindable(),
   unit,
+  unitTooltip,
   size = "default",
   invalid = false,
   class: className,
@@ -37,7 +40,7 @@ let {
 
 let wrapperClassName = $derived(
   cn(
-    "flex w-full items-center rounded-md border border-border-light bg-bg-input shadow-sm transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/35 data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-50",
+    "flex min-w-0 w-full items-center overflow-hidden rounded-md border border-border-light bg-bg-input shadow-sm transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/35 data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-50",
     wrapperSizeClasses[size],
     invalid && "border-danger/70 focus-within:border-danger focus-within:ring-danger/25",
     wrapperClass,
@@ -51,7 +54,13 @@ let inputClass = $derived(
     className,
   ),
 );
+
+let hasUnitTooltip = $derived(Boolean(unitTooltip && unitTooltip !== unit));
 </script>
+
+{#snippet unitLabel()}
+  <span class="min-w-0 truncate pr-3 text-xs font-medium text-text-muted">{unit}</span>
+{/snippet}
 
 <div class={wrapperClassName} data-ui-number-input data-disabled={rest.disabled ? "true" : undefined}>
   <input
@@ -63,6 +72,12 @@ let inputClass = $derived(
     aria-invalid={invalid ? "true" : ariaInvalid}
   />
   {#if unit}
-    <span class="shrink-0 pr-3 text-xs font-medium text-text-muted" aria-hidden="true">{unit}</span>
+    {#if hasUnitTooltip}
+      <Tooltip description={unitTooltip ?? undefined} clickToToggle triggerClass="min-w-0 overflow-hidden cursor-help">
+        {@render unitLabel()}
+      </Tooltip>
+    {:else}
+      {@render unitLabel()}
+    {/if}
   {/if}
 </div>

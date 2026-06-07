@@ -17,17 +17,15 @@ import { selectTelemetryView } from "../../../../lib/telemetry-selectors";
 import { Eyebrow, HelperText, Input, NativeSelect } from "../../../../components/ui";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
-import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
-import SetupParamEditCard from "../../../../features/setup/shared/SetupParamEditCard.svelte";
-import SetupParamEditGrid from "../../../../features/setup/shared/SetupParamEditGrid.svelte";
+import SetupParamSection from "../../../../features/setup/shared/SetupParamSection.svelte";
 import SetupPreviewStagePanel from "../../../../features/setup/shared/SetupPreviewStagePanel.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupTelemetryCard from "../../../../features/setup/shared/SetupTelemetryCard.svelte";
+import { resolveSetupDraftNumber } from "../../../../features/setup/shared/parameter-editing";
 import {
-  resolveSetupDraftNumber,
-  resolveSetupEnumOptions,
-  stageSetupParameterEdit,
-} from "../../../../features/setup/shared/parameter-editing";
+  discoverIndexedSetupParamNumbers,
+  indexedSetupParamRefs,
+} from "../../../../features/setup/shared/setup-param-refs";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import {
   getSetupWorkspaceRouteContext,
@@ -65,6 +63,7 @@ let selectedBoardPreset = $state<string>("");
 let selectedSensorPreset = $state<string>("");
 let selectedChemistry = $state<string>("");
 let batteryCellCount = $state("4");
+let selectedBattery = $state("1");
 let lastScopedBatteryObservation = $state<BatteryLiveObservation | null>(null);
 
 let params = $derived(paramsState.current);
@@ -74,6 +73,32 @@ let itemIndex = $derived(buildParameterItemIndex(params.paramStore, params.metad
 let docsUrl = $derived(resolveDocsUrl("power_module_config"));
 let actionsBlocked = $derived(view.checkpoint.blocksActions);
 let liveConnected = $derived(session.sessionDomain.value?.connection.kind === "connected");
+let batteryParamNames = $derived.by(() => [
+  ...Object.keys(params.paramStore?.params ?? {}),
+  ...Object.keys(params.stagedEdits),
+]);
+let availableBatteryNumbers = $derived(discoverIndexedSetupParamNumbers(batteryParamNames, "BATT"));
+let selectedBatteryNumber = $derived.by(() => {
+  const requested = Number(selectedBattery);
+  if (Number.isInteger(requested) && availableBatteryNumbers.includes(requested)) {
+    return requested;
+  }
+
+  return availableBatteryNumbers[0] ?? 1;
+});
+let selectedBatteryLabel = $derived(batteryLabel(selectedBatteryNumber));
+let batterySelectorOptions = $derived.by(() => {
+  const indexes = availableBatteryNumbers.length > 0 ? availableBatteryNumbers : [selectedBatteryNumber];
+  return indexes.map((index) => ({
+    value: String(index),
+    label: availableBatteryNumbers.length > 0 ? batteryLabel(index) : "Battery 1 (waiting for parameters)",
+  }));
+});
+let monitorParams = $derived(indexedSetupParamRefs("BATT", selectedBatteryNumber, ["MONITOR"]));
+let calibrationParams = $derived(
+  indexedSetupParamRefs("BATT", selectedBatteryNumber, ["VOLT_PIN", "CURR_PIN", "VOLT_MULT", "AMP_PERVLT"]),
+);
+let warningParams = $derived(indexedSetupParamRefs("BATT", selectedBatteryNumber, ["CAPACITY", "LOW_VOLT"]));
 let validBoardPresets = $derived(
   BOARD_PRESETS.filter(
     (preset) => preset.label.trim().length > 0 && Number.isFinite(preset.voltPin) && Number.isFinite(preset.currPin),
@@ -105,20 +130,16 @@ let chemistryPresetOptions = $derived([
   { value: "", label: "Select chemistry" },
   ...validChemistries.map((chemistry, index) => ({ value: String(index), label: chemistry.label })),
 ]);
-let monitorItem = $derived(itemIndex.get("BATT_MONITOR") ?? null);
-let voltPinItem = $derived(itemIndex.get("BATT_VOLT_PIN") ?? null);
-let currPinItem = $derived(itemIndex.get("BATT_CURR_PIN") ?? null);
-let voltMultItem = $derived(itemIndex.get("BATT_VOLT_MULT") ?? null);
-let ampPerVoltItem = $derived(itemIndex.get("BATT_AMP_PERVLT") ?? null);
-let capacityItem = $derived(itemIndex.get("BATT_CAPACITY") ?? null);
-let armVoltItem = $derived(itemIndex.get("BATT_ARM_VOLT") ?? null);
-let lowVoltItem = $derived(itemIndex.get("BATT_LOW_VOLT") ?? null);
-let crtVoltItem = $derived(itemIndex.get("BATT_CRT_VOLT") ?? null);
-let secondMonitorItem = $derived(itemIndex.get("BATT2_MONITOR") ?? null);
-let monitorOptions = $derived(resolveSetupEnumOptions(params.metadata?.get("BATT_MONITOR")?.values));
-let secondMonitorOptions = $derived(resolveSetupEnumOptions(params.metadata?.get("BATT2_MONITOR")?.values));
+let monitorItem = $derived(itemIndex.get(batteryParamId("MONITOR")) ?? null);
+let voltPinItem = $derived(itemIndex.get(batteryParamId("VOLT_PIN")) ?? null);
+let currPinItem = $derived(itemIndex.get(batteryParamId("CURR_PIN")) ?? null);
+let voltMultItem = $derived(itemIndex.get(batteryParamId("VOLT_MULT")) ?? null);
+let ampPerVoltItem = $derived(itemIndex.get(batteryParamId("AMP_PERVLT")) ?? null);
+let armVoltItem = $derived(itemIndex.get(batteryParamId("ARM_VOLT")) ?? null);
+let lowVoltItem = $derived(itemIndex.get(batteryParamId("LOW_VOLT")) ?? null);
+let crtVoltItem = $derived(itemIndex.get(batteryParamId("CRT_VOLT")) ?? null);
 let monitorValue = $derived(
-  resolveSetupDraftNumber(params.stagedEdits.BATT_MONITOR?.nextValue ?? monitorItem?.value) ??
+  resolveSetupDraftNumber(params.stagedEdits[batteryParamId("MONITOR")]?.nextValue ?? monitorItem?.value) ??
     monitorItem?.value ??
     null,
 );
@@ -161,8 +182,7 @@ let liveSummary = $derived.by(() => {
     observation: null,
   };
 });
-let secondBatteryVisible = $derived(byPrefixExists(params.paramStore, params.stagedEdits, "BATT2_"));
-let chemistryRows = $derived.by(() => {
+let chemistryPreviewEntries = $derived.by(() => {
   const index = Number(selectedChemistry);
   const cells = Math.max(1, Math.round(resolveSetupDraftNumber(batteryCellCount) ?? 4));
   const chemistry = validChemistries[index] ?? null;
@@ -171,34 +191,49 @@ let chemistryRows = $derived.by(() => {
     return [];
   }
 
-  return buildPreviewRows([
-    { item: armVoltItem, name: "BATT_ARM_VOLT", nextValue: round2(calcBattArmVolt(cells, chemistry.cellVoltMin)) },
-    { item: lowVoltItem, name: "BATT_LOW_VOLT", nextValue: round2(calcBattLowVolt(cells, chemistry.cellVoltMin)) },
-    { item: crtVoltItem, name: "BATT_CRT_VOLT", nextValue: round2(calcBattCrtVolt(cells, chemistry.cellVoltMin)) },
-  ]);
+  return [
+    {
+      item: armVoltItem,
+      name: batteryParamId("ARM_VOLT"),
+      nextValue: round2(calcBattArmVolt(cells, chemistry.cellVoltMin)),
+    },
+    {
+      item: lowVoltItem,
+      name: batteryParamId("LOW_VOLT"),
+      nextValue: round2(calcBattLowVolt(cells, chemistry.cellVoltMin)),
+    },
+    {
+      item: crtVoltItem,
+      name: batteryParamId("CRT_VOLT"),
+      nextValue: round2(calcBattCrtVolt(cells, chemistry.cellVoltMin)),
+    },
+  ];
 });
-let boardRows = $derived.by(() => {
+let chemistryRows = $derived(buildPreviewRows(chemistryPreviewEntries));
+let boardPreviewEntries = $derived.by(() => {
   const preset = validBoardPresets[Number(selectedBoardPreset)] ?? null;
   if (!preset) {
     return [];
   }
 
-  return buildPreviewRows([
-    { item: voltPinItem, name: "BATT_VOLT_PIN", nextValue: preset.voltPin },
-    { item: currPinItem, name: "BATT_CURR_PIN", nextValue: preset.currPin },
-  ]);
+  return [
+    { item: voltPinItem, name: batteryParamId("VOLT_PIN"), nextValue: preset.voltPin },
+    { item: currPinItem, name: batteryParamId("CURR_PIN"), nextValue: preset.currPin },
+  ];
 });
-let sensorRows = $derived.by(() => {
+let boardRows = $derived(buildPreviewRows(boardPreviewEntries));
+let sensorPreviewEntries = $derived.by(() => {
   const preset = validSensorPresets[Number(selectedSensorPreset)] ?? null;
   if (!preset) {
     return [];
   }
 
-  return buildPreviewRows([
-    { item: voltMultItem, name: "BATT_VOLT_MULT", nextValue: round3(preset.voltMult) },
-    { item: ampPerVoltItem, name: "BATT_AMP_PERVLT", nextValue: round3(preset.ampPerVolt) },
-  ]);
+  return [
+    { item: voltMultItem, name: batteryParamId("VOLT_MULT"), nextValue: round3(preset.voltMult) },
+    { item: ampPerVoltItem, name: batteryParamId("AMP_PERVLT"), nextValue: round3(preset.ampPerVolt) },
+  ];
 });
+let sensorRows = $derived(buildPreviewRows(sensorPreviewEntries));
 let presetStateText = $derived.by(() => {
   const parts: string[] = [];
   if (activeBoardPresetLabel) {
@@ -214,14 +249,14 @@ let batteryTelemetryMetrics = $derived.by(() => {
 
   return [
     {
-      label: "Monitor",
+      label: "Selected monitor",
       value: batteryEnabled ? "Enabled" : "Disabled",
       detail: presetStateText,
       tone: batteryEnabled ? ("success" as TelemetryTone) : ("neutral" as TelemetryTone),
       testId: setupWorkspaceTestIds.batteryPresetState,
     },
     {
-      label: "Voltage",
+      label: "Live voltage",
       value: observation ? formatVoltage(observation.voltage) : "—",
       mono: true,
       stale: liveSummary.stale,
@@ -257,26 +292,16 @@ $effect(() => {
   }
 });
 
-function stage(item: ParameterItemModel | null, draftValue: unknown, requireOptions = false, optionsCount = 0) {
-  stageSetupParameterEdit(paramsStore, item, draftValue, {
-    actionsBlocked,
-    optionsReady: !requireOptions || optionsCount > 0,
-  });
+function batteryParamId(suffix: string, index = selectedBatteryNumber): string {
+  return `BATT${index === 1 ? "" : index}_${suffix}`;
 }
 
-function unstage(name: string) {
-  paramsStore.discardStagedEdit(name);
+function batteryLabel(index: number): string {
+  return index === 1 ? "Battery 1 (primary)" : `Battery ${index}`;
 }
 
-function byPrefixExists(
-  paramStore: typeof params.paramStore,
-  stagedEdits: typeof params.stagedEdits,
-  prefix: string,
-): boolean {
-  return (
-    Object.keys(paramStore?.params ?? {}).some((name) => name.startsWith(prefix)) ||
-    Object.keys(stagedEdits).some((name) => name.startsWith(prefix))
-  );
+function selectBattery(event: Event) {
+  selectedBattery = (event.currentTarget as HTMLSelectElement).value;
 }
 
 function resolveCurrentNumericValue(
@@ -429,8 +454,8 @@ function round3(value: number): number {
   {#snippet body()}
   <SetupTelemetryCard
     icon={BatteryCharging}
-    title="Current battery"
-    description="Latest voltage, current, remaining charge, and active monitor preset."
+    title="Live battery telemetry"
+    description="Latest vehicle voltage, current, remaining charge, and the selected configuration preset."
     statusText={liveSummary.stateText}
     statusTone={liveSummary.stateTone}
     statusTestId={setupWorkspaceTestIds.batteryLiveState}
@@ -439,30 +464,34 @@ function round3(value: number): number {
     testId={setupWorkspaceTestIds.batterySummary}
   />
 
-  <SetupSectionCard icon={BatteryCharging} title="Monitor and presets" description="Choose the battery monitor type, then use presets when the flight-controller board, power module, or battery chemistry is known." compact>
-    <SetupFieldStack divided>
-      {#if monitorItem}
-        <SetupParamEditCard
-          item={monitorItem}
-          inputId="setup-battery-monitor"
-          label={monitorItem.label}
-          description={monitorItem.description ?? "Choose the primary battery monitor backend."}
-          type="enum"
-          value={params.stagedEdits.BATT_MONITOR?.nextValue ?? monitorItem.value}
-          options={monitorOptions}
-          stagedName={params.stagedEdits.BATT_MONITOR ? monitorItem.name : undefined}
-          stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_MONITOR`}
-          onUnstage={unstage}
-          onValueChange={(value) => typeof value !== "boolean" && stage(monitorItem, value, true, monitorOptions.length)}
-          inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_MONITOR`}
-          disabled={actionsBlocked || monitorOptions.length === 0}
-        />
-      {/if}
+  <SetupSectionCard icon={BatteryCharging} title="Configuration target" description="Choose which discovered battery parameter family to configure. Live telemetry remains vehicle-wide." compact>
+    <NativeSelect
+      value={String(selectedBatteryNumber)}
+      onchange={selectBattery}
+      aria-label="Battery parameter family"
+      disabled={actionsBlocked || availableBatteryNumbers.length <= 1}
+      options={batterySelectorOptions}
+      testId={`${setupWorkspaceTestIds.batteryPresetSelectPrefix}-battery`}
+    />
+  </SetupSectionCard>
 
+  <SetupParamSection
+    id={`battery-${selectedBatteryNumber}-monitor`}
+    icon={BatteryCharging}
+    title={`${selectedBatteryLabel} monitor`}
+    description="Choose the monitor backend exposed by this battery parameter family."
+    params={monitorParams}
+    disabled={actionsBlocked}
+    compact
+    testIdPrefix="setup-workspace-battery"
+  />
+
+  <SetupSectionCard icon={BatteryCharging} title={`${selectedBatteryLabel} presets`} description="Preview known board, power-module, or chemistry values before staging them for the selected battery." compact>
+    <SetupFieldStack divided>
       <div class="grid gap-3 pt-3 first:pt-0 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,28rem)] xl:items-start">
         <div>
           <Eyebrow tracking="widest">Voltage and current sense pins</Eyebrow>
-          <HelperText class="mt-2">Choose a known flight-controller preset to preview BATT_VOLT_PIN and BATT_CURR_PIN before staging.</HelperText>
+          <HelperText class="mt-2">Choose a known flight-controller preset to preview {batteryParamId("VOLT_PIN")} and {batteryParamId("CURR_PIN")} before staging.</HelperText>
         </div>
         <div>
           <NativeSelect bind:value={selectedBoardPreset} disabled={actionsBlocked || validBoardPresets.length === 0} options={boardPresetOptions} testId={`${setupWorkspaceTestIds.batteryPresetSelectPrefix}-board`} />
@@ -472,10 +501,7 @@ function round3(value: number): number {
                 onCancel={() => {
                   selectedBoardPreset = "";
                 }}
-                onStage={() => stagePreview([
-                  { item: voltPinItem, name: "BATT_VOLT_PIN", nextValue: validBoardPresets[Number(selectedBoardPreset)]?.voltPin ?? 0 },
-                  { item: currPinItem, name: "BATT_CURR_PIN", nextValue: validBoardPresets[Number(selectedBoardPreset)]?.currPin ?? 0 },
-                ])}
+                onStage={() => stagePreview(boardPreviewEntries)}
                 rows={boardRows}
               />
             </div>
@@ -486,7 +512,7 @@ function round3(value: number): number {
       <div class="grid gap-3 pt-3 first:pt-0 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,28rem)] xl:items-start">
         <div>
           <Eyebrow tracking="widest">Voltage multiplier and amps-per-volt</Eyebrow>
-          <HelperText class="mt-2">Choose a known power-module scaling preset to preview BATT_VOLT_MULT and BATT_AMP_PERVLT.</HelperText>
+          <HelperText class="mt-2">Choose a known power-module scaling preset to preview {batteryParamId("VOLT_MULT")} and {batteryParamId("AMP_PERVLT")}.</HelperText>
         </div>
         <div>
           <NativeSelect bind:value={selectedSensorPreset} disabled={actionsBlocked || validSensorPresets.length === 0} options={sensorPresetOptions} testId={`${setupWorkspaceTestIds.batteryPresetSelectPrefix}-sensor`} />
@@ -496,10 +522,7 @@ function round3(value: number): number {
                 onCancel={() => {
                   selectedSensorPreset = "";
                 }}
-                onStage={() => stagePreview([
-                  { item: voltMultItem, name: "BATT_VOLT_MULT", nextValue: round3(validSensorPresets[Number(selectedSensorPreset)]?.voltMult ?? 0) },
-                  { item: ampPerVoltItem, name: "BATT_AMP_PERVLT", nextValue: round3(validSensorPresets[Number(selectedSensorPreset)]?.ampPerVolt ?? 0) },
-                ])}
+                onStage={() => stagePreview(sensorPreviewEntries)}
                 rows={sensorRows}
               />
             </div>
@@ -510,7 +533,7 @@ function round3(value: number): number {
       <div class="grid gap-3 pt-3 first:pt-0 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,28rem)] xl:items-start">
         <div>
           <Eyebrow tracking="widest">Voltage-threshold preview</Eyebrow>
-          <HelperText class="mt-2">Choose a chemistry and cell count to preview BATT_ARM_VOLT, BATT_LOW_VOLT, and BATT_CRT_VOLT.</HelperText>
+          <HelperText class="mt-2">Choose a chemistry and cell count to preview {batteryParamId("ARM_VOLT")}, {batteryParamId("LOW_VOLT")}, and {batteryParamId("CRT_VOLT")}.</HelperText>
         </div>
         <div>
           <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
@@ -523,18 +546,7 @@ function round3(value: number): number {
                 onCancel={() => {
                   selectedChemistry = "";
                 }}
-                onStage={() => {
-                  const chemistry = validChemistries[Number(selectedChemistry)] ?? null;
-                  const cells = Math.max(1, Math.round(resolveSetupDraftNumber(batteryCellCount) ?? 4));
-                  if (!chemistry) {
-                    return;
-                  }
-                  stagePreview([
-                    { item: armVoltItem, name: "BATT_ARM_VOLT", nextValue: round2(calcBattArmVolt(cells, chemistry.cellVoltMin)) },
-                    { item: lowVoltItem, name: "BATT_LOW_VOLT", nextValue: round2(calcBattLowVolt(cells, chemistry.cellVoltMin)) },
-                    { item: crtVoltItem, name: "BATT_CRT_VOLT", nextValue: round2(calcBattCrtVolt(cells, chemistry.cellVoltMin)) },
-                  ]);
-                }}
+                onStage={() => stagePreview(chemistryPreviewEntries)}
                 rows={chemistryRows}
               />
             </div>
@@ -544,138 +556,26 @@ function round3(value: number): number {
     </SetupFieldStack>
   </SetupSectionCard>
 
-  <SetupSectionCard icon={Gauge} title="Manual sensor calibration" description="Use these fields when presets do not match the installed power module or wiring." compact>
-    <SetupParamEditGrid>
-      {#if voltPinItem}
-        <SetupParamEditCard
-          item={voltPinItem}
-          inputId="setup-battery-volt-pin"
-          label={voltPinItem.label}
-          description="Voltage sense pin used by the board or power module."
-          value={params.stagedEdits.BATT_VOLT_PIN?.nextValue ?? voltPinItem.value}
-          stagedName={params.stagedEdits.BATT_VOLT_PIN ? voltPinItem.name : undefined}
-          stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_VOLT_PIN`}
-          onUnstage={unstage}
-          onValueChange={(value) => typeof value === "number" && stage(voltPinItem, value)}
-          inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_VOLT_PIN`}
-          disabled={actionsBlocked}
-          step={1}
-        />
-      {/if}
+  <SetupParamSection
+    id={`battery-${selectedBatteryNumber}-calibration`}
+    icon={Gauge}
+    title={`${selectedBatteryLabel} manual sensor calibration`}
+    description="Use these fields when presets do not match the installed power module or wiring."
+    params={calibrationParams}
+    disabled={actionsBlocked}
+    compact
+    testIdPrefix="setup-workspace-battery"
+  />
 
-      {#if currPinItem}
-        <SetupParamEditCard
-          item={currPinItem}
-          inputId="setup-battery-curr-pin"
-          label={currPinItem.label}
-          description="Current sense pin used by the board or power module."
-          value={params.stagedEdits.BATT_CURR_PIN?.nextValue ?? currPinItem.value}
-          stagedName={params.stagedEdits.BATT_CURR_PIN ? currPinItem.name : undefined}
-          stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_CURR_PIN`}
-          onUnstage={unstage}
-          onValueChange={(value) => typeof value === "number" && stage(currPinItem, value)}
-          inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_CURR_PIN`}
-          disabled={actionsBlocked}
-          step={1}
-        />
-      {/if}
-
-      {#if voltMultItem}
-        <SetupParamEditCard
-          item={voltMultItem}
-          inputId="setup-battery-volt-mult"
-          label={voltMultItem.label}
-          description="Voltage multiplier used to convert sensor output to pack voltage."
-          value={params.stagedEdits.BATT_VOLT_MULT?.nextValue ?? voltMultItem.value}
-          stagedName={params.stagedEdits.BATT_VOLT_MULT ? voltMultItem.name : undefined}
-          stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_VOLT_MULT`}
-          onUnstage={unstage}
-          onValueChange={(value) => typeof value === "number" && stage(voltMultItem, value)}
-          inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_VOLT_MULT`}
-          disabled={actionsBlocked}
-          step={0.01}
-        />
-      {/if}
-
-      {#if ampPerVoltItem}
-        <SetupParamEditCard
-          item={ampPerVoltItem}
-          inputId="setup-battery-amp-per-volt"
-          label={ampPerVoltItem.label}
-          description="Current scaling used to convert sensor output to amps."
-          value={params.stagedEdits.BATT_AMP_PERVLT?.nextValue ?? ampPerVoltItem.value}
-          stagedName={params.stagedEdits.BATT_AMP_PERVLT ? ampPerVoltItem.name : undefined}
-          stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_AMP_PERVLT`}
-          onUnstage={unstage}
-          onValueChange={(value) => typeof value === "number" && stage(ampPerVoltItem, value)}
-          inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_AMP_PERVLT`}
-          disabled={actionsBlocked}
-          step={0.01}
-        />
-      {/if}
-    </SetupParamEditGrid>
-  </SetupSectionCard>
-
-  <SetupSectionCard icon={BatteryWarning} title="Capacity and voltage warnings" description="Set pack capacity and manual low-voltage thresholds when chemistry presets need adjustment." compact>
-    <SetupParamEditGrid>
-      {#if capacityItem}
-        <SetupParamEditCard
-          item={capacityItem}
-          inputId="setup-battery-capacity"
-          label={capacityItem.label}
-          description="Usable pack capacity for remaining-charge estimates and battery failsafe behavior."
-          value={params.stagedEdits.BATT_CAPACITY?.nextValue ?? capacityItem.value}
-          stagedName={params.stagedEdits.BATT_CAPACITY ? capacityItem.name : undefined}
-          stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_CAPACITY`}
-          onUnstage={unstage}
-          onValueChange={(value) => typeof value === "number" && stage(capacityItem, value)}
-          inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_CAPACITY`}
-          disabled={actionsBlocked}
-          step={100}
-        />
-      {/if}
-
-      {#if lowVoltItem}
-        <SetupParamEditCard
-          item={lowVoltItem}
-          inputId="setup-battery-low-volt"
-          label={lowVoltItem.label}
-          description="Manual low-voltage threshold for battery warnings or failsafe behavior."
-          value={params.stagedEdits.BATT_LOW_VOLT?.nextValue ?? lowVoltItem.value}
-          stagedName={params.stagedEdits.BATT_LOW_VOLT ? lowVoltItem.name : undefined}
-          stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT_LOW_VOLT`}
-          onUnstage={unstage}
-          onValueChange={(value) => typeof value === "number" && stage(lowVoltItem, value)}
-          inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT_LOW_VOLT`}
-          disabled={actionsBlocked}
-          step={0.1}
-        />
-      {/if}
-    </SetupParamEditGrid>
-  </SetupSectionCard>
-
-  {#if secondBatteryVisible}
-    <SetupSectionCard icon={BatteryCharging} title="Optional secondary monitor" description="Secondary battery monitor settings are shown when this firmware exposes BATT2_* parameters." surface="elevated" compact>
-      {#if secondMonitorItem}
-        <SetupParamEditCard
-          item={secondMonitorItem}
-          inputId="setup-battery-secondary-monitor"
-          label={secondMonitorItem.label}
-          description="Choose the secondary battery monitor backend when this firmware exposes BATT2_* parameters."
-          type="enum"
-          value={params.stagedEdits.BATT2_MONITOR?.nextValue ?? secondMonitorItem.value}
-          options={secondMonitorOptions}
-          stagedName={params.stagedEdits.BATT2_MONITOR ? secondMonitorItem.name : undefined}
-          stagedTestId={`${setupWorkspaceTestIds.batteryStagedPrefix}-BATT2_MONITOR`}
-          onUnstage={unstage}
-          onValueChange={(value) => typeof value !== "boolean" && stage(secondMonitorItem, value, true, secondMonitorOptions.length)}
-          inputTestId={`${setupWorkspaceTestIds.batteryInputPrefix}-BATT2_MONITOR`}
-          disabled={actionsBlocked || secondMonitorOptions.length === 0}
-        />
-      {:else}
-        <HelperText class="mt-3" tone="warning">Battery 2 settings are only partially available for this firmware.</HelperText>
-      {/if}
-    </SetupSectionCard>
-  {/if}
+  <SetupParamSection
+    id={`battery-${selectedBatteryNumber}-warnings`}
+    icon={BatteryWarning}
+    title={`${selectedBatteryLabel} capacity and voltage warnings`}
+    description="Set pack capacity and manual low-voltage thresholds when chemistry presets need adjustment."
+    params={warningParams}
+    disabled={actionsBlocked}
+    compact
+    testIdPrefix="setup-workspace-battery"
+  />
   {/snippet}
 </SetupSectionShell>

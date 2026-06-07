@@ -13,7 +13,6 @@ describe("setup section routes", () => {
   it("maps every setup section to a stable URL", () => {
     expect(SECTION_IDS.map((sectionId) => [sectionId, setupSectionPath(sectionId)])).toEqual([
       ["overview", "/setup"],
-      ["beginner_wizard", "/setup/beginner-wizard"],
       ["frame_orientation", "/setup/frame-orientation"],
       ["calibration", "/setup/calibration"],
       ["navigation", "/setup/navigation"],

@@ -2,7 +2,7 @@
 import { Cable, RotateCw } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
-import { getParamsStoreContext, getSetupWorkspaceStoreContext } from "../../../../app/shell/runtime-context";
+import { getParamsStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import { buildSerialPortModel, type SerialPortRow } from "../../../../lib/setup/serial-port-model";
@@ -29,7 +29,6 @@ let view = $derived(viewStore.current);
 let section = $derived(setupRouteSection(view, "serial_ports"));
 
 const paramsStore = getParamsStoreContext();
-const setupWorkspaceStore = getSetupWorkspaceStoreContext();
 const paramsState = fromStore(paramsStore);
 
 let draftValues = $state<Record<string, string>>({});
@@ -44,22 +43,6 @@ let model = $derived(
 );
 let docsUrl = $derived(resolveDocsUrl("serial_ports"));
 let actionsBlocked = $derived(view.checkpoint.blocksActions);
-let canConfirm = $derived(
-  !actionsBlocked &&
-    model.ports.length > 0 &&
-    model.conflicts.length === 0 &&
-    model.recoveryReasons.length === 0 &&
-    !model.hasPendingChanges,
-);
-
-$effect(() => {
-  if (canConfirm) {
-    setupWorkspaceStore.confirmSection("serial_ports");
-  } else {
-    setupWorkspaceStore.clearSectionConfirmation("serial_ports");
-  }
-});
-
 function item(name: string): ParameterItemModel | null {
   return itemIndex.get(name) ?? null;
 }

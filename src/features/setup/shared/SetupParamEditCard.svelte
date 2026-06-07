@@ -7,6 +7,7 @@ import {
   NumberInput,
   ParameterBooleanSwitch,
   RebootRequiredBadge,
+  Slider,
   StagedBadge,
   Tooltip,
 } from "../../../components/ui";
@@ -32,6 +33,7 @@ type Props = {
   max?: number;
   step?: number;
   unit?: string | null;
+  unitText?: string | null;
   invalid?: boolean;
   disabled?: boolean;
   offLabel?: string;
@@ -62,6 +64,7 @@ let {
   max = item.range?.max,
   step = item.increment ?? 1,
   unit = item.units,
+  unitText,
   invalid = false,
   disabled = false,
   offLabel = "Disabled",
@@ -85,6 +88,17 @@ let resolvedMetadata = $derived(metadata ?? formatMetadata());
 let enumValue = $derived(String(value));
 let numberValue = $derived(typeof value === "number" ? value : Number.isFinite(Number(value)) ? Number(value) : undefined);
 let booleanValue = $derived(typeof value === "boolean" ? value : Number(value) !== 0);
+let resolvedUnitText = $derived(unitText === undefined && unit === item.units ? item.unitText : unitText);
+let hasSlider = $derived(
+  type === "number"
+    && typeof numberValue === "number"
+    && Number.isFinite(numberValue)
+    && typeof min === "number"
+    && Number.isFinite(min)
+    && typeof max === "number"
+    && Number.isFinite(max)
+    && max > min,
+);
 
 function formatMetadata(): string {
   const parts = [item.name];
@@ -133,6 +147,34 @@ function updateNumber(event: Event) {
       testId={inputTestId}
       onToggle={(checked) => onValueChange?.(checked)}
     />
+  {:else if hasSlider}
+    <div class="setup-param-numeric-control grid min-w-0 gap-2">
+      <Slider
+        id={`${inputId}-slider`}
+        value={numberValue}
+        {min}
+        {max}
+        {step}
+        disabled={controlDisabled}
+        ariaLabel={label}
+        testId={inputTestId ? `${inputTestId}-slider` : undefined}
+        onValueChange={(nextValue) => onValueChange?.(nextValue)}
+      />
+      <NumberInput
+        id={inputId}
+        value={numberValue}
+        {min}
+        {max}
+        {step}
+        unit={unit ?? undefined}
+        unitTooltip={resolvedUnitText}
+        {invalid}
+        disabled={controlDisabled}
+        testId={inputTestId}
+        oninput={updateNumber}
+        onchange={updateNumber}
+      />
+    </div>
   {:else}
     <NumberInput
       id={inputId}
@@ -141,6 +183,7 @@ function updateNumber(event: Event) {
       {max}
       {step}
       unit={unit ?? undefined}
+      unitTooltip={resolvedUnitText}
       {invalid}
       disabled={controlDisabled}
       testId={inputTestId}
@@ -150,7 +193,7 @@ function updateNumber(event: Event) {
   {/if}
 {/snippet}
 
-<div class={`grid min-w-0 gap-3 rounded-lg border border-border bg-bg-primary/70 p-3 ${className}`} data-testid={testId}>
+<div class={`setup-param-edit-card grid min-w-0 gap-3 rounded-lg border border-border bg-bg-primary/70 p-3 ${className}`} data-testid={testId}>
   <div class="flex min-w-0 flex-wrap items-start justify-between gap-2">
     {#if description}
       <Tooltip description={description} align="start" clickToToggle triggerClass="min-w-0 max-w-full">
@@ -186,3 +229,20 @@ function updateNumber(event: Event) {
 
   {@render footer?.()}
 </div>
+
+<style>
+  .setup-param-edit-card {
+    container-type: inline-size;
+  }
+
+  .setup-param-numeric-control {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  @container (min-width: 28rem) {
+    .setup-param-numeric-control {
+      grid-template-columns: minmax(0, 1fr) minmax(9rem, 15rem);
+      align-items: center;
+    }
+  }
+</style>

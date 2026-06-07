@@ -2,7 +2,6 @@ import { pathFromSvelteKitRouteId } from "./sveltekit-route-path";
 
 export type SetupSectionId =
   | "overview"
-  | "beginner_wizard"
   | "frame_orientation"
   | "calibration"
   | "rc_receiver"
@@ -21,18 +20,9 @@ export type SetupSectionId =
   | "peripherals"
   | "full_parameters";
 
-export type SectionStatus = "unknown" | "not_started" | "in_progress" | "failed" | "complete";
-
-export type OverallProgress = {
-  completed: number;
-  total: number;
-  percentage: number;
-};
-
 export type SetupSectionKind = "overview" | "guided" | "recovery";
 export type SetupSectionPath =
   | "/setup"
-  | "/setup/beginner-wizard"
   | "/setup/frame-orientation"
   | "/setup/calibration"
   | "/setup/rc-receiver"
@@ -72,7 +62,6 @@ export type SetupSectionDefinition = {
   description: string;
   kind: SetupSectionKind;
   groupId: Exclude<SetupSectionGroupId, "other">;
-  trackable: boolean;
 };
 
 export const SETUP_SECTION_GROUPS: ReadonlyArray<SetupSectionGroupDefinition> = [
@@ -112,18 +101,9 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
   {
     id: "overview",
     title: "Overview",
-    description: "Grouped setup dashboard with current vehicle progress and next steps.",
+    description: "Grouped setup dashboard with current vehicle readiness and next steps.",
     kind: "overview",
     groupId: "workspace",
-    trackable: false,
-  },
-  {
-    id: "beginner_wizard",
-    title: "Beginner Wizard",
-    description: "Guided setup for frame, calibration, RC, arming, plus recommended safety basics.",
-    kind: "guided",
-    groupId: "workspace",
-    trackable: true,
   },
   {
     id: "frame_orientation",
@@ -131,7 +111,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Vehicle layout, VTOL settings, and board orientation.",
     kind: "guided",
     groupId: "hardware",
-    trackable: true,
   },
   {
     id: "calibration",
@@ -139,7 +118,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Accelerometer, compass, radio, and sensor calibration actions.",
     kind: "guided",
     groupId: "hardware",
-    trackable: true,
   },
   {
     id: "navigation",
@@ -147,7 +125,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Primary GNSS receiver, compass heading, altitude reference, and navigation guidance settings.",
     kind: "guided",
     groupId: "hardware",
-    trackable: true,
   },
   {
     id: "battery_monitor",
@@ -155,7 +132,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Battery monitor presets, live power telemetry, and manual calibration settings.",
     kind: "guided",
     groupId: "hardware",
-    trackable: true,
   },
   {
     id: "motors_esc",
@@ -163,7 +139,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Motor layout, direction checks, and guarded test readiness.",
     kind: "guided",
     groupId: "hardware",
-    trackable: true,
   },
   {
     id: "servo_outputs",
@@ -171,7 +146,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Function-aware output inspection, reversal staging, and live readback.",
     kind: "guided",
     groupId: "hardware",
-    trackable: false,
   },
   {
     id: "serial_ports",
@@ -179,7 +153,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Serial protocols, baud rates, and reboot-required port changes.",
     kind: "guided",
     groupId: "hardware",
-    trackable: true,
   },
   {
     id: "rc_receiver",
@@ -187,7 +160,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Live channel mapping, preset order, and receiver motion checks.",
     kind: "guided",
     groupId: "safety",
-    trackable: true,
   },
   {
     id: "flight_modes",
@@ -195,7 +167,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Mode switch channel, six mode slots, and vehicle defaults.",
     kind: "guided",
     groupId: "safety",
-    trackable: true,
   },
   {
     id: "failsafe",
@@ -203,7 +174,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Loss-of-link behavior and protective defaults for the active vehicle family.",
     kind: "guided",
     groupId: "safety",
-    trackable: true,
   },
   {
     id: "rtl_return",
@@ -211,7 +181,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Return-home altitude, descent, landing, and final behavior.",
     kind: "guided",
     groupId: "safety",
-    trackable: true,
   },
   {
     id: "geofence",
@@ -219,7 +188,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Fence type, boundary limits, and breach actions.",
     kind: "guided",
     groupId: "safety",
-    trackable: true,
   },
   {
     id: "arming",
@@ -227,7 +195,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Pre-arm checks, current blockers, and arm/disarm controls.",
     kind: "guided",
     groupId: "safety",
-    trackable: true,
   },
   {
     id: "initial_params",
@@ -235,7 +202,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Calculator-style startup batches and recommended baseline settings.",
     kind: "guided",
     groupId: "tuning",
-    trackable: true,
   },
   {
     id: "pid_tuning",
@@ -243,7 +209,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Rate controllers and vehicle-specific tuning groups.",
     kind: "guided",
     groupId: "tuning",
-    trackable: false,
   },
   {
     id: "peripherals",
@@ -251,7 +216,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Optional hardware families and configured peripheral settings.",
     kind: "guided",
     groupId: "tuning",
-    trackable: false,
   },
   {
     id: "full_parameters",
@@ -259,7 +223,6 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     description: "Search and edit the complete parameter catalog for the active vehicle.",
     kind: "recovery",
     groupId: "recovery",
-    trackable: false,
   },
 ];
 
@@ -267,7 +230,6 @@ export const SECTION_IDS: SetupSectionId[] = SETUP_SECTION_CATALOG.map((section)
 
 const SETUP_SECTION_PATHS: Record<SetupSectionId, SetupSectionPath> = {
   overview: "/setup",
-  beginner_wizard: "/setup/beginner-wizard",
   frame_orientation: "/setup/frame-orientation",
   calibration: "/setup/calibration",
   rc_receiver: "/setup/rc-receiver",
@@ -334,10 +296,6 @@ export function setupSectionForRouteId(routeId: string | null | undefined): Setu
   return pathname ? setupSectionForPath(pathname) : null;
 }
 
-export const TRACKABLE_SECTIONS: ReadonlySet<SetupSectionId> = new Set(
-  SETUP_SECTION_CATALOG.filter((section) => section.trackable).map((section) => section.id),
-);
-
 function normalizeSetupPath(pathname: string): string {
   return pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
 }
@@ -359,7 +317,6 @@ export function getSetupSectionDefinition(id: SetupSectionId): SetupSectionDefin
     description: "Setup section details are unavailable for this section.",
     kind: id === "overview" ? "overview" : id === "full_parameters" ? "recovery" : "guided",
     groupId: id === "full_parameters" ? "recovery" : "hardware",
-    trackable: TRACKABLE_SECTIONS.has(id),
   };
 }
 
@@ -394,18 +351,4 @@ export function groupSetupSections<TSection extends { id: SetupSectionId }>(
   }
 
   return [...grouped.values()].sort((left, right) => left.group.order - right.group.order);
-}
-
-export function computeOverallProgress(
-  statuses: Map<SetupSectionId, SectionStatus>,
-): OverallProgress {
-  let total = 0;
-  let completed = 0;
-  for (const [id, status] of statuses.entries()) {
-    if (!TRACKABLE_SECTIONS.has(id)) continue;
-    total++;
-    if (status === "complete") completed++;
-  }
-  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
-  return { completed, total, percentage };
 }

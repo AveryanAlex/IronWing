@@ -5,11 +5,7 @@ import { Compass, GripVertical, Radio, Route } from "lucide-svelte";
 import { tick } from "svelte";
 import { fromStore } from "svelte/store";
 
-import {
-  getParamsStoreContext,
-  getSessionStoreContext,
-  getSetupWorkspaceStoreContext,
-} from "../../../../app/shell/runtime-context";
+import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import {
@@ -84,7 +80,6 @@ const FLIGHT_MODE_SORTABLE_GROUP = "setup-flight-mode-slots";
 
 const paramsStore = getParamsStoreContext();
 const sessionStore = getSessionStoreContext();
-const setupWorkspaceStore = getSetupWorkspaceStoreContext();
 const paramsState = fromStore(paramsStore);
 const sessionState = fromStore(sessionStore);
 
@@ -149,7 +144,6 @@ let selectedChannelState = $derived.by<"live" | "stale" | "unavailable">(() => {
 });
 let simpleItem = $derived(itemIndex.get("SIMPLE") ?? null);
 let superSimpleItem = $derived(itemIndex.get("SUPER_SIMPLE") ?? null);
-let sectionCanConfirm = $derived(!actionsBlocked && model.canConfirm);
 let slotSelectsDisabled = $derived(actionsBlocked || model.availabilityState !== "live" || model.options.length === 0);
 let canReorderFlightModes = $derived.by(() => {
   if (slotSelectsDisabled) {
@@ -230,14 +224,6 @@ $effect(() => {
       scopeKey: view.activeScopeKey,
       modes: session.availableModes,
     };
-  }
-});
-
-$effect(() => {
-  if (sectionCanConfirm) {
-    setupWorkspaceStore.confirmSection("flight_modes");
-  } else {
-    setupWorkspaceStore.clearSectionConfirmation("flight_modes");
   }
 });
 

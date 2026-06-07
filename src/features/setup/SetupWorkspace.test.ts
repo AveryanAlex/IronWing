@@ -42,7 +42,6 @@ function createSessionService(): SessionService {
     },
     connectSession: vi.fn(async () => undefined),
     disconnectSession: vi.fn(async () => undefined),
-    listSerialPorts: vi.fn(async () => []),
     btRequestPermissions: vi.fn(async () => undefined),
     btScanBle: vi.fn(async () => []),
     btGetBondedDevices: vi.fn(async () => []),

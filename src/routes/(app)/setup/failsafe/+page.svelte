@@ -2,24 +2,18 @@
 import { ClipboardCheck, ShieldAlert } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
-import {
-  getParamsStoreContext,
-  getSessionStoreContext,
-  getSetupWorkspaceStoreContext,
-} from "../../../../app/shell/runtime-context";
+import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import { buildFailsafeSectionModel, type SafetyVehicleFamily } from "../../../../lib/setup/failsafe-model";
-import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
 import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
-import SetupParamEditCard from "../../../../features/setup/shared/SetupParamEditCard.svelte";
-import SetupParamEditGrid from "../../../../features/setup/shared/SetupParamEditGrid.svelte";
+import SetupParamSection from "../../../../features/setup/shared/SetupParamSection.svelte";
 import SetupPreviewStagePanel from "../../../../features/setup/shared/SetupPreviewStagePanel.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
-import { resolveSetupDraftNumber, resolveSetupEnumOptions } from "../../../../features/setup/shared/parameter-editing";
-import { Button, Eyebrow, HelperText, Input } from "../../../../components/ui";
+import type { SetupParamRef } from "../../../../features/setup/shared/setup-param-refs";
+import { Button, Eyebrow, HelperText } from "../../../../components/ui";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import {
   getSetupWorkspaceRouteContext,
@@ -34,12 +28,10 @@ let section = $derived(setupRouteSection(view, "failsafe"));
 
 const paramsStore = getParamsStoreContext();
 const sessionStore = getSessionStoreContext();
-const setupWorkspaceStore = getSetupWorkspaceStoreContext();
 const paramsState = fromStore(paramsStore);
 const sessionState = fromStore(sessionStore);
 
 let defaultsPreviewOpen = $state(false);
-let draftValues = $state<Record<string, string>>({});
 
 let params = $derived(paramsState.current);
 let session = $derived(sessionState.current);
@@ -70,35 +62,16 @@ let previewRows = $derived(
     willChange: entry.willChange,
   })),
 );
-let sectionCanConfirm = $derived(!actionsBlocked && model.canConfirm);
-
-type FieldConfig = {
-  kind: "enum" | "number";
-  name: string;
-  label: string;
-  description: string;
-  unit?: string;
-  min?: number;
-  step?: number;
-};
 
 type CardConfig = {
   id: string;
   title: string;
   docsUrl: string | null;
   summary: string;
-  fields: FieldConfig[];
+  params: readonly SetupParamRef[];
 };
 
 let cards = $derived.by(() => buildCards(model.family));
-
-$effect(() => {
-  if (sectionCanConfirm) {
-    setupWorkspaceStore.confirmSection("failsafe");
-  } else {
-    setupWorkspaceStore.clearSectionConfirmation("failsafe");
-  }
-});
 
 function buildCards(family: SafetyVehicleFamily): CardConfig[] {
   const radioDocs = resolveDocsUrl("failsafe_radio", model.vehicleSlug);
@@ -112,55 +85,13 @@ function buildCards(family: SafetyVehicleFamily): CardConfig[] {
     title: "Battery failsafe",
     docsUrl: batteryDocs,
     summary: `${currentValueText(item("BATT_FS_LOW_ACT"))} low · ${currentValueText(item("BATT_FS_CRT_ACT"))} critical`,
-    fields: [
-      {
-        kind: "enum",
-        name: "BATT_FS_LOW_ACT",
-        label: "Low-battery action",
-        description: "Action taken when the pack first crosses the low threshold.",
-      },
-      {
-        kind: "number",
-        name: "BATT_LOW_VOLT",
-        label: "Low voltage",
-        description: "Low-voltage threshold before the first battery failsafe action.",
-        unit: "V",
-        min: 0,
-        step: 0.1,
-      },
-      {
-        kind: "number",
-        name: "BATT_LOW_MAH",
-        label: "Low mAh remaining",
-        description: "Remaining capacity threshold for the low-battery action.",
-        unit: "mAh",
-        min: 0,
-        step: 50,
-      },
-      {
-        kind: "enum",
-        name: "BATT_FS_CRT_ACT",
-        label: "Critical-battery action",
-        description: "Action taken when the pack reaches the critical threshold.",
-      },
-      {
-        kind: "number",
-        name: "BATT_CRT_VOLT",
-        label: "Critical voltage",
-        description: "Critical-voltage threshold before the final battery action.",
-        unit: "V",
-        min: 0,
-        step: 0.1,
-      },
-      {
-        kind: "number",
-        name: "BATT_CRT_MAH",
-        label: "Critical mAh remaining",
-        description: "Remaining capacity threshold for the critical battery action.",
-        unit: "mAh",
-        min: 0,
-        step: 50,
-      },
+    params: [
+      { id: "BATT_FS_LOW_ACT" },
+      { id: "BATT_LOW_VOLT" },
+      { id: "BATT_LOW_MAH" },
+      { id: "BATT_FS_CRT_ACT" },
+      { id: "BATT_CRT_VOLT" },
+      { id: "BATT_CRT_MAH" },
     ],
   };
 
@@ -171,18 +102,7 @@ function buildCards(family: SafetyVehicleFamily): CardConfig[] {
         title: "Radio failsafe",
         docsUrl: radioDocs,
         summary: currentValueText(item("THR_FAILSAFE")),
-        fields: [
-          { kind: "enum", name: "THR_FAILSAFE", label: "Action", description: "Plane radio-failsafe enable state." },
-          {
-            kind: "number",
-            name: "THR_FS_VALUE",
-            label: "Throttle PWM threshold",
-            description: "PWM threshold that triggers the plane throttle failsafe.",
-            unit: "PWM",
-            min: 910,
-            step: 1,
-          },
-        ],
+        params: [{ id: "THR_FAILSAFE" }, { id: "THR_FS_VALUE" }],
       },
       commonBattery,
       {
@@ -190,20 +110,7 @@ function buildCards(family: SafetyVehicleFamily): CardConfig[] {
         title: "GCS failsafe",
         docsUrl: gcsDocs,
         summary: `${currentValueText(item("FS_LONG_ACTN"))} long · ${currentValueText(item("FS_SHORT_ACTN"))} short`,
-        fields: [
-          {
-            kind: "enum",
-            name: "FS_LONG_ACTN",
-            label: "Long failsafe action",
-            description: "Plane action when the long GCS failsafe triggers.",
-          },
-          {
-            kind: "enum",
-            name: "FS_SHORT_ACTN",
-            label: "Short failsafe action",
-            description: "Plane action when the short GCS failsafe triggers.",
-          },
-        ],
+        params: [{ id: "FS_LONG_ACTN" }, { id: "FS_SHORT_ACTN" }],
       },
     ];
   }
@@ -215,23 +122,7 @@ function buildCards(family: SafetyVehicleFamily): CardConfig[] {
         title: "Radio / GCS failsafe",
         docsUrl: radioDocs,
         summary: `${currentValueText(item("FS_ACTION"))} · timeout ${currentValueText(item("FS_TIMEOUT"))}`,
-        fields: [
-          {
-            kind: "enum",
-            name: "FS_ACTION",
-            label: "Combined action",
-            description: "Rover combined radio/GCS failsafe action.",
-          },
-          {
-            kind: "number",
-            name: "FS_TIMEOUT",
-            label: "Timeout",
-            description: "How long the rover waits before the combined failsafe triggers.",
-            unit: "s",
-            min: 0,
-            step: 1,
-          },
-        ],
+        params: [{ id: "FS_ACTION" }, { id: "FS_TIMEOUT" }],
       },
       commonBattery,
     ];
@@ -243,18 +134,7 @@ function buildCards(family: SafetyVehicleFamily): CardConfig[] {
       title: "Radio failsafe",
       docsUrl: radioDocs,
       summary: currentValueText(item("FS_THR_ENABLE")),
-      fields: [
-        { kind: "enum", name: "FS_THR_ENABLE", label: "Action", description: "Copter action when RC input is lost." },
-        {
-          kind: "number",
-          name: "FS_THR_VALUE",
-          label: "Throttle PWM threshold",
-          description: "PWM threshold that counts as lost throttle signal.",
-          unit: "PWM",
-          min: 910,
-          step: 1,
-        },
-      ],
+      params: [{ id: "FS_THR_ENABLE" }, { id: "FS_THR_VALUE" }],
     },
     commonBattery,
     {
@@ -262,50 +142,21 @@ function buildCards(family: SafetyVehicleFamily): CardConfig[] {
       title: "GCS failsafe",
       docsUrl: gcsDocs,
       summary: currentValueText(item("FS_GCS_ENABLE")),
-      fields: [
-        {
-          kind: "enum",
-          name: "FS_GCS_ENABLE",
-          label: "Action",
-          description: "Copter action when the GCS link is lost.",
-        },
-      ],
+      params: [{ id: "FS_GCS_ENABLE" }],
     },
     {
       id: "ekf",
       title: "EKF failsafe",
       docsUrl: ekfDocs,
       summary: currentValueText(item("FS_EKF_ACTION")),
-      fields: [
-        {
-          kind: "enum",
-          name: "FS_EKF_ACTION",
-          label: "Action",
-          description: "Copter action when EKF health drops below the configured threshold.",
-        },
-        {
-          kind: "number",
-          name: "FS_EKF_THRESH",
-          label: "Variance threshold",
-          description: "Variance threshold that trips the EKF failsafe.",
-          min: 0.1,
-          step: 0.1,
-        },
-      ],
+      params: [{ id: "FS_EKF_ACTION" }, { id: "FS_EKF_THRESH" }],
     },
     {
       id: "crash",
       title: "Crash detection",
       docsUrl: crashDocs,
       summary: currentValueText(item("FS_CRASH_CHECK")),
-      fields: [
-        {
-          kind: "enum",
-          name: "FS_CRASH_CHECK",
-          label: "Crash check",
-          description: "Automatically disarm after a detected crash event.",
-        },
-      ],
+      params: [{ id: "FS_CRASH_CHECK" }],
     },
   ];
 }
@@ -314,72 +165,8 @@ function item(name: string): ParameterItemModel | null {
   return itemIndex.get(name) ?? null;
 }
 
-function resolveEnumOptions(name: string) {
-  return resolveSetupEnumOptions(params.metadata?.get(name)?.values);
-}
-
 function currentValueText(item: ParameterItemModel | null): string {
   return item?.valueLabel ?? item?.valueText ?? "Unavailable";
-}
-
-function visibleFields(fields: FieldConfig[]): FieldConfig[] {
-  return fields.filter((field) => item(field.name));
-}
-
-function draftValue(name: string, fallback: number | null): string {
-  if (draftValues[name] !== undefined) {
-    return draftValues[name];
-  }
-
-  const stagedValue = params.stagedEdits[name]?.nextValue;
-  if (typeof stagedValue === "number" && Number.isFinite(stagedValue)) {
-    return String(stagedValue);
-  }
-
-  return fallback === null ? "" : String(fallback);
-}
-
-function setDraft(name: string, value: string) {
-  draftValues = {
-    ...draftValues,
-    [name]: value,
-  };
-}
-
-function resolveDraftNumber(name: string, fallback: number | null): number | null {
-  return resolveSetupDraftNumber(draftValue(name, fallback));
-}
-
-function canAutostage(name: string, nextValue: number | null, requireOptions = false): boolean {
-  const target = item(name);
-  const options = resolveEnumOptions(name);
-  if (!target || nextValue === null || target.readOnly === true || actionsBlocked) {
-    return false;
-  }
-  if (requireOptions && options.length === 0) {
-    return false;
-  }
-
-  return true;
-}
-
-function stage(name: string, value: string, fallback: number | null, requireOptions = false) {
-  setDraft(name, value);
-  const target = item(name);
-  const nextValue = resolveDraftNumber(name, fallback);
-
-  if (!canAutostage(name, nextValue, requireOptions) || !target || nextValue === null) {
-    return;
-  }
-
-  paramsStore.stageParameterEdit(target, nextValue);
-}
-
-function unstage(name: string) {
-  const nextDrafts = { ...draftValues };
-  delete nextDrafts[name];
-  draftValues = nextDrafts;
-  paramsStore.discardStagedEdit(name);
 }
 
 function stageDefaults() {
@@ -477,77 +264,17 @@ function stageDefaults() {
 
   <div class="space-y-3">
     {#each cards as card (card.id)}
-      <SetupSectionCard
+      <SetupParamSection
+        id={card.id}
         icon={ShieldAlert}
         title={card.title}
         description={card.summary}
         docsUrl={card.docsUrl}
+        params={card.params}
+        disabled={actionsBlocked}
         surface="elevated"
-        testId={`${setupWorkspaceTestIds.failsafeCardPrefix}-${card.id}`}
-      >
-        {#if visibleFields(card.fields).length > 0}
-          <SetupParamEditGrid>
-            {#each visibleFields(card.fields) as field (field.name)}
-              {@const fieldItem = item(field.name)}
-              {#if fieldItem}
-                {@const fieldValue = draftValue(field.name, fieldItem.value)}
-                {#if field.kind === "enum"}
-                  {@const options = resolveEnumOptions(field.name)}
-                  <SetupParamEditCard
-                    item={fieldItem}
-                    inputId={`${card.id}-${field.name}`}
-                    label={field.label}
-                    description={field.description}
-                    type="enum"
-                    options={options}
-                    value={fieldValue}
-                    stagedName={params.stagedEdits[field.name] ? field.name : undefined}
-                    stagedTestId={`${setupWorkspaceTestIds.failsafeStagedPrefix}-${field.name}`}
-                    onUnstage={unstage}
-                    onValueChange={(value) => typeof value === "string" && stage(field.name, value, fieldItem.value, true)}
-                    inputTestId={`${setupWorkspaceTestIds.failsafeInputPrefix}-${field.name}`}
-                    disabled={actionsBlocked || options.length === 0}
-                  />
-                {:else}
-                  <SetupParamEditCard
-                    item={fieldItem}
-                    inputId={`${card.id}-${field.name}`}
-                    label={field.label}
-                    description={field.description}
-                    min={field.min}
-                    step={field.step}
-                    unit={field.unit ?? null}
-                    stagedName={params.stagedEdits[field.name] ? field.name : undefined}
-                    stagedTestId={`${setupWorkspaceTestIds.failsafeStagedPrefix}-${field.name}`}
-                    onUnstage={unstage}
-                    disabled={actionsBlocked}
-                  >
-                    <div class="flex items-center gap-2">
-                      <Input
-                        id={`${card.id}-${field.name}`}
-                        inputmode="decimal"
-                        min={field.min}
-                        step={field.step}
-                        type="number"
-                        value={fieldValue}
-                        disabled={actionsBlocked || fieldItem.readOnly}
-                        testId={`${setupWorkspaceTestIds.failsafeInputPrefix}-${field.name}`}
-                        oninput={(event) => stage(field.name, (event.currentTarget as HTMLInputElement).value, fieldItem.value)}
-                        onchange={(event) => stage(field.name, (event.currentTarget as HTMLInputElement).value, fieldItem.value)}
-                      />
-                      {#if field.unit}
-                        <span class="shrink-0 text-xs text-text-muted">{field.unit}</span>
-                      {/if}
-                    </div>
-                  </SetupParamEditCard>
-                {/if}
-              {/if}
-            {/each}
-          </SetupParamEditGrid>
-        {:else}
-          <p class="text-sm text-text-secondary">No matching settings are available for this firmware.</p>
-        {/if}
-      </SetupSectionCard>
+        testIdPrefix="setup-workspace-failsafe"
+      />
     {/each}
 
     <SetupGuideCard title="Failsafe review" description="Before flight, verify the radio link, battery thresholds, and GCS loss action against the current operating plan.">

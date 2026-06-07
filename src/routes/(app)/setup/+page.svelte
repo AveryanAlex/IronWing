@@ -17,7 +17,6 @@ import SetupGuideCard from "../../../features/setup/shared/SetupGuideCard.svelte
 import SetupIntroCard from "../../../features/setup/shared/SetupIntroCard.svelte";
 import SetupNotice from "../../../features/setup/shared/SetupNotice.svelte";
 import SetupSectionCard from "../../../features/setup/shared/SetupSectionCard.svelte";
-import SetupStatusPill from "../../../features/setup/shared/SetupStatusPill.svelte";
 import { getSetupWorkspaceRouteContext } from "../../../features/setup/components/setup-workspace-route-context";
 
 const route = getSetupWorkspaceRouteContext();
@@ -145,19 +144,13 @@ let guidedGroups = $derived(
   view.sectionGroups.filter((group) => group.sections.some((section) => section.kind === "guided")),
 );
 let guidedSections = $derived(guidedGroups.flatMap((group) => group.sections));
-let unknownCount = $derived(guidedSections.filter((section) => section.status === "unknown").length);
 let implementedCount = $derived(guidedSections.filter((section) => section.implemented).length);
-let inProgressCount = $derived(guidedSections.filter((section) => section.status === "in_progress").length);
 let bannerTone = $derived.by<NoticeTone>(() => {
   if (view.metadataState === "unavailable" || view.readiness === "degraded") {
     return "warning";
   }
 
-  if (unknownCount > 0) {
-    return "info";
-  }
-
-  return "success";
+  return view.readiness === "ready" ? "success" : "info";
 });
 let bannerTitle = $derived.by(() => {
   if (view.metadataState === "unavailable") {
@@ -172,11 +165,7 @@ let bannerTitle = $derived.by(() => {
     return "Overview is live, with degraded setup data";
   }
 
-  if (unknownCount > 0) {
-    return "Review setup progress before opening a section";
-  }
-
-  return "Overview is fully live";
+  return "Setup overview is live";
 });
 let bannerBody = $derived.by(() => {
   if (view.metadataState === "unavailable") {
@@ -184,15 +173,11 @@ let bannerBody = $derived.by(() => {
   }
 
   if (view.readiness === "bootstrapping") {
-    return "Keep the dashboard open while session and parameter domains finish bootstrapping. Unknown sections remain unconfirmed until live facts arrive.";
+    return "Keep the dashboard open while session and parameter domains finish bootstrapping.";
   }
 
   if (view.readiness === "degraded") {
-    return "Some setup details are limited right now. Use this dashboard to see what is ready, then open any section or Full Parameters for deeper inspection.";
-  }
-
-  if (unknownCount > 0) {
-    return `${unknownCount} unconfirmed sections remain visible while live setup facts settle.`;
+    return "Some setup details are limited right now. Open any section or Full Parameters for deeper inspection.";
   }
 
   return "Open a section below to inspect settings and queue changes for review.";
@@ -205,26 +190,18 @@ let overviewMetrics = $derived([
     detail: `${guidedGroups.length} groups · ${implementedCount} ready here`,
   },
   {
-    id: "progress",
-    label: "Setup progress",
-    value: view.progressText,
-    detail: `${implementedCount} ready here · ${unknownCount} unconfirmed`,
+    id: "groups",
+    label: "Setup groups",
+    value: `${guidedGroups.length} groups`,
+    detail: `${implementedCount} sections ready here`,
   },
   {
     id: "status",
-    label: "Needs review",
-    value: `${unknownCount} unconfirmed`,
-    detail: `${inProgressCount} in progress · ${view.statusNotices.length} status notice${view.statusNotices.length === 1 ? "" : "s"}`,
+    label: "Status text",
+    value: `${view.statusNotices.length} notice${view.statusNotices.length === 1 ? "" : "s"}`,
+    detail: view.noticeText ?? "No active setup notice",
   },
 ]);
-
-function groupTone(progressText: string): string {
-  if (/^\d+\/\d+ confirmed$/.test(progressText) && !progressText.startsWith("0/")) {
-    return "border-border bg-bg-primary/80";
-  }
-
-  return "border-border bg-bg-primary/70";
-}
 
 function sectionIsComingLater(section: SetupWorkspaceStoreState["sections"][number]): boolean {
   return section.kind === "guided" && !section.implemented;
@@ -349,7 +326,7 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
 
     <div class="space-y-4">
       {#each guidedGroups as group (group.id)}
-        <SetupCard class={`p-3 ${groupTone(group.progressText)}`} testId={`${setupWorkspaceTestIds.overviewGroupPrefix}-${group.id}`}>
+        <SetupCard class="border-border bg-bg-primary/70 p-3" testId={`${setupWorkspaceTestIds.overviewGroupPrefix}-${group.id}`}>
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <Eyebrow tracking="widest">{group.title}</Eyebrow>
@@ -361,14 +338,6 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
                 {group.sections.length} sections · {group.implementedCount} ready here
               </p>
             </div>
-            <div class="text-right">
-                <SetupStatusPill tone="muted" testId={`${setupWorkspaceTestIds.overviewGroupProgressPrefix}-${group.id}`}>
-                  {group.progressText}
-                </SetupStatusPill>
-              <HelperText class="mt-2" size="xs" tone="muted">
-                {group.unconfirmedCount} unconfirmed
-              </HelperText>
-            </div>
           </div>
 
           <div class="mt-4 grid gap-3 xl:grid-cols-2">
@@ -379,20 +348,7 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
                     <p class="text-sm font-semibold text-text-primary">{section.title}</p>
                     <p class="mt-1 text-xs text-text-secondary">{section.description}</p>
                   </div>
-                  <SetupStatusPill tone="muted">
-                    {section.statusText}
-                  </SetupStatusPill>
                 </div>
-
-                {#if section.confidenceText}
-                  <Eyebrow
-                    class="mt-3"
-                    tracking="widest"
-                    testId={`${setupWorkspaceTestIds.sectionConfidencePrefix}-${section.id}`}
-                  >
-                    {section.confidenceText}
-                  </Eyebrow>
-                {/if}
 
                 <HelperText class="mt-3">{section.detailText}</HelperText>
 
@@ -422,14 +378,6 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
           </HelperText>
         </div>
         <ActionRow align="start">
-          <a
-            class={setupActionLinkClass("secondary")}
-            data-testid={setupWorkspaceTestIds.overviewWizardLaunch}
-            href={resolve(setupSectionPath("beginner_wizard"))}
-            onclick={(event) => handleSetupLinkClick("beginner_wizard", event)}
-          >
-            Start beginner wizard
-          </a>
           <a
             class={setupActionLinkClass("secondary")}
             data-testid={setupWorkspaceTestIds.overviewRecoveryAction}

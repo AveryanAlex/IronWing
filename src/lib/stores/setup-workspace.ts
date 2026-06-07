@@ -4,24 +4,17 @@ import type { CalibrationLifecycle } from "../../calibration";
 import type { SessionEnvelope, SourceKind } from "../../session";
 import type { CompactStatusNotice } from "../../statustext";
 import { selectCompactStatusNotices } from "../../statustext";
-import { deriveSetupSectionStatuses } from "../configuration-facts";
-import { wizardSectionStatusFromPhase } from "../setup/wizard-catalog";
 import { selectTelemetryView } from "../telemetry-selectors";
 import {
-  SECTION_IDS,
   SETUP_SECTION_CATALOG,
-  computeOverallProgress,
   getSetupSectionDefinition,
   getSetupSectionGroupDefinition,
   groupSetupSections,
   isSetupSectionId,
-  type OverallProgress,
-  type SectionStatus,
   type SetupSectionId,
 } from "../setup-sections";
 import type { ParamsMetadataState, ParamsStoreState } from "./params";
 import type { SessionStorePhase, SessionStoreState } from "./session";
-import type { WizardPhase } from "./setup-wizard";
 import { createUiStateStore, type UiStateStore } from "../ui-state/ui-state";
 
 type SetupCheckpointSeed = {
@@ -37,16 +30,8 @@ type RcSignalState = "disconnected" | "waiting" | "live" | "stale" | "degraded";
 
 type CalibrationActionAvailability = "available" | "blocked" | "unsupported";
 
-type ScopedSectionConfirmations = Partial<Record<SetupSectionId, boolean>>;
-
-type SetupWorkspaceConfirmationPayload = {
-  scopeKey?: unknown;
-  confirmedSections?: unknown;
-};
-
 const IMPLEMENTED_SECTION_ID_SET = new Set<SetupSectionId>([
   "overview",
-  "beginner_wizard",
   "frame_orientation",
   "calibration",
   "navigation",
@@ -88,11 +73,7 @@ export type SetupWorkspaceSection = {
   kind: "overview" | "guided" | "recovery";
   groupId: string;
   groupTitle: string;
-  status: SectionStatus | null;
-  statusText: string;
-  confidenceText: string | null;
   detailText: string;
-  trackable: boolean;
   implemented: boolean;
 };
 
@@ -101,9 +82,6 @@ export type SetupWorkspaceSectionGroup = {
   title: string;
   description: string;
   sections: SetupWorkspaceSection[];
-  progress: OverallProgress;
-  progressText: string;
-  unconfirmedCount: number;
   implementedCount: number;
 };
 
@@ -153,14 +131,9 @@ export type SetupWorkspaceStoreState = {
   metadataState: ParamsMetadataState;
   metadataText: string;
   noticeText: string | null;
-  progress: OverallProgress;
-  progressText: string;
   selectedSectionId: SetupSectionId;
   sections: SetupWorkspaceSection[];
   sectionGroups: SetupWorkspaceSectionGroup[];
-  sectionStatuses: Record<SetupSectionId, SectionStatus>;
-  sectionConfirmations: Record<SetupSectionId, boolean>;
-  confirmationScopeKey: string | null;
   checkpoint: SetupWorkspaceCheckpointState;
   statusNotices: CompactStatusNotice[];
   rcReceiver: SetupWorkspaceRcReceiverState;
@@ -243,69 +216,11 @@ function createInitialCalibrationSummary(): SetupWorkspaceCalibrationSummary {
         title: "Radio",
         lifecycle: "unavailable",
         statusText: "Unavailable",
-        detailText: "Radio calibration availability has not been confirmed yet.",
+        detailText: "Radio calibration availability is not available yet.",
         actionAvailability: "unsupported",
       }),
     ],
   };
-}
-
-function createUnknownSectionStatusRecord(): Record<SetupSectionId, SectionStatus> {
-  return Object.fromEntries(SECTION_IDS.map((id) => [id, "unknown"])) as Record<SetupSectionId, SectionStatus>;
-}
-
-function createEmptySectionConfirmationRecord(): Record<SetupSectionId, boolean> {
-  return Object.fromEntries(SECTION_IDS.map((id) => [id, false])) as Record<SetupSectionId, boolean>;
-}
-
-function normalizeScopedSectionConfirmations(input: unknown): ScopedSectionConfirmations {
-  if (Array.isArray(input)) {
-    return Object.fromEntries(
-      input.filter((value): value is SetupSectionId => typeof value === "string" && isSetupSectionId(value)).map((id) => [id, true]),
-    ) as ScopedSectionConfirmations;
-  }
-
-  if (!input || typeof input !== "object") {
-    return {};
-  }
-
-  const confirmations: ScopedSectionConfirmations = {};
-  for (const [key, value] of Object.entries(input)) {
-    if (isSetupSectionId(key) && value === true) {
-      confirmations[key] = true;
-    }
-  }
-
-  return confirmations;
-}
-
-function normalizeSectionConfirmationPayload(input: unknown): {
-  scopeKey: string | null;
-  confirmedSections: ScopedSectionConfirmations;
-} {
-  const payload = (input ?? {}) as SetupWorkspaceConfirmationPayload;
-  const scopeKey = typeof payload.scopeKey === "string" && payload.scopeKey.trim().length > 0
-    ? payload.scopeKey
-    : null;
-
-  return {
-    scopeKey,
-    confirmedSections: normalizeScopedSectionConfirmations(payload.confirmedSections),
-  };
-}
-
-function toSectionConfirmationRecord(input: ScopedSectionConfirmations | null | undefined): Record<SetupSectionId, boolean> {
-  const record = createEmptySectionConfirmationRecord();
-
-  if (!input) {
-    return record;
-  }
-
-  for (const id of SECTION_IDS) {
-    record[id] = input[id] === true;
-  }
-
-  return record;
 }
 
 function scopeKey(envelope: SessionEnvelope | null): string | null {
@@ -438,166 +353,26 @@ function resolveNoticeText(input: {
   return null;
 }
 
-function formatProgressText(progress: OverallProgress): string {
-  return `${progress.completed}/${progress.total} confirmed`;
+function detailTextForSection(sectionId: SetupSectionId, implemented: boolean): string {
+  if (sectionId === "overview") {
+    return "Use the grouped dashboard to review setup areas before opening a section.";
+  }
+
+  if (sectionId === "full_parameters") {
+    return "Open Full Parameters to review and edit advanced vehicle settings.";
+  }
+
+  if (!implemented) {
+    return "Direct editing for this section is not available in this workspace yet.";
+  }
+
+  return "Open this section to inspect settings and queue changes for review.";
 }
 
-function formatSectionStatusText(status: SectionStatus): string {
-  switch (status) {
-    case "complete":
-      return "Complete";
-    case "in_progress":
-      return "In progress";
-    case "failed":
-      return "Failed";
-    case "not_started":
-      return "Not started";
-    case "unknown":
-    default:
-      return "Unknown";
-  }
-}
-
-function describeGuidedSectionStatus(status: SectionStatus, sectionId: SetupSectionId): string {
-  if (sectionId === "motors_esc") {
-    switch (status) {
-      case "complete":
-        return "Motor and ESC facts are confirmed for this scope.";
-      case "in_progress":
-        return "Motor and ESC setup is in progress. Check layout, direction, and reboot-required changes before testing again.";
-      case "failed":
-        return "Motor or ESC setup reported a failed state that still needs attention.";
-      case "not_started":
-        return "Motor and ESC setup has not been confirmed yet.";
-      case "unknown":
-      default:
-        return "Motor and ESC setup details are still loading for this vehicle.";
-    }
-  }
-
-  if (sectionId === "servo_outputs") {
-    switch (status) {
-      case "complete":
-        return "Servo output configuration is confirmed for this scope.";
-      case "in_progress":
-        return "Servo output setup is in progress. Review staged reversal changes before testing again.";
-      case "failed":
-        return "Servo output setup reported a failed state that still needs attention.";
-      case "not_started":
-        return "Servo output setup has not been confirmed yet.";
-      case "unknown":
-      default:
-        return "Servo output details are still loading for this vehicle.";
-    }
-  }
-
-  if (sectionId === "rc_receiver") {
-    switch (status) {
-      case "complete":
-        return "Receiver facts and calibration state are confirmed for this scope.";
-      case "in_progress":
-        return "Receiver setup is in progress. Check live bars before applying more mapping changes.";
-      case "failed":
-        return "Receiver setup reported a failed state that still needs attention.";
-      case "not_started":
-        return "Receiver setup has not been confirmed yet.";
-      case "unknown":
-      default:
-        return "Receiver details are still loading for this vehicle.";
-    }
-  }
-
-  if (sectionId === "calibration") {
-    switch (status) {
-      case "complete":
-        return "Current calibration facts report complete state for the available setup steps.";
-      case "in_progress":
-        return "Calibration is in progress. Keep this status open until the vehicle reports the next scoped update.";
-      case "failed":
-        return "Calibration reported a failed state. Review status text before retrying.";
-      case "not_started":
-        return "Calibration has not started yet for this scope.";
-      case "unknown":
-      default:
-        return "Calibration details are still loading for this vehicle.";
-    }
-  }
-
-  switch (status) {
-    case "complete":
-      return "Live facts confirm this section is complete.";
-    case "in_progress":
-      return "Live facts show this section is partially complete.";
-    case "failed":
-      return "Live facts show a failed step that still needs attention.";
-    case "not_started":
-      return "Live facts do not confirm this section yet.";
-    case "unknown":
-    default:
-      return "Section details are still loading for this vehicle.";
-  }
-}
-
-function describePlannedSectionStatus(status: SectionStatus, sectionId: SetupSectionId): string {
-  const definition = getSetupSectionDefinition(sectionId);
-
-  switch (status) {
-    case "complete":
-      return `${definition.title} is confirmed for this scope. Direct editing for this section is not available in this workspace yet.`;
-    case "in_progress":
-      return `${definition.title} is partially confirmed for this scope. Keep progress conservative until the dedicated editor is available.`;
-    case "failed":
-      return `${definition.title} reported a failed or blocked state. Review the current vehicle values or recover through Full Parameters before retrying.`;
-    case "not_started":
-      return `${definition.title} has not been confirmed yet for this scope.`;
-    case "unknown":
-    default:
-      return `${definition.title} details are still loading for this vehicle.`;
-  }
-}
-
-function buildCatalogSections(input: {
-  sectionStatuses: Record<SetupSectionId, SectionStatus>;
-}): SetupWorkspaceSection[] {
+function buildCatalogSections(): SetupWorkspaceSection[] {
   return SETUP_SECTION_CATALOG.map((definition) => {
     const group = getSetupSectionGroupDefinition(definition.groupId);
     const implemented = IMPLEMENTED_SECTION_ID_SET.has(definition.id);
-
-    if (definition.id === "overview") {
-      return {
-        id: definition.id,
-        title: definition.title,
-        description: definition.description,
-        kind: definition.kind,
-        groupId: group.id,
-        groupTitle: group.title,
-        status: null,
-        statusText: "Dashboard",
-        confidenceText: null,
-        detailText: "Use the grouped dashboard to review setup status before opening a section.",
-        trackable: definition.trackable,
-        implemented,
-      } satisfies SetupWorkspaceSection;
-    }
-
-    if (definition.id === "full_parameters") {
-      return {
-        id: definition.id,
-        title: definition.title,
-        description: definition.description,
-        kind: definition.kind,
-        groupId: group.id,
-        groupTitle: group.title,
-        status: null,
-        statusText: "Advanced",
-        confidenceText: null,
-        detailText: "Open Full Parameters to review and edit advanced vehicle settings.",
-        trackable: definition.trackable,
-        implemented,
-      } satisfies SetupWorkspaceSection;
-    }
-
-    const status = input.sectionStatuses[definition.id];
 
     return {
       id: definition.id,
@@ -606,13 +381,7 @@ function buildCatalogSections(input: {
       kind: definition.kind,
       groupId: group.id,
       groupTitle: group.title,
-      status,
-      statusText: formatSectionStatusText(status),
-      confidenceText: status === "unknown" ? "Unconfirmed" : null,
-      detailText: implemented
-        ? describeGuidedSectionStatus(status, definition.id)
-        : describePlannedSectionStatus(status, definition.id),
-      trackable: definition.trackable,
+      detailText: detailTextForSection(definition.id, implemented),
       implemented,
     } satisfies SetupWorkspaceSection;
   });
@@ -620,69 +389,14 @@ function buildCatalogSections(input: {
 
 function buildSectionGroups(sections: SetupWorkspaceSection[]): SetupWorkspaceSectionGroup[] {
   return groupSetupSections(sections).map(({ group, sections: groupedSections }) => {
-    const progress = computeOverallProgress(new Map(
-      groupedSections
-        .filter((section) => section.status !== null)
-        .map((section) => [section.id, section.status ?? "unknown"]),
-    ));
-
-    let progressText = `${progress.completed}/${progress.total} confirmed`;
-    if (progress.total === 0) {
-      progressText = group.id === "workspace"
-        ? "Dashboard"
-        : group.id === "recovery"
-          ? "Advanced"
-          : "Status only";
-    }
-
     return {
       id: group.id,
       title: group.title,
       description: group.description,
       sections: groupedSections,
-      progress,
-      progressText,
-      unconfirmedCount: groupedSections.filter((section) => section.status === "unknown" || section.status === "not_started").length,
       implementedCount: groupedSections.filter((section) => section.implemented).length,
     } satisfies SetupWorkspaceSectionGroup;
   });
-}
-
-function deriveSectionStatuses(
-  sessionState: SessionStoreState,
-  previousStatuses: Record<SetupSectionId, SectionStatus> | null,
-  sameScope: boolean,
-  currentScopeConfirmations: ScopedSectionConfirmations,
-): Record<SetupSectionId, SectionStatus> {
-  if (!sessionState.activeEnvelope) {
-    return createUnknownSectionStatusRecord();
-  }
-
-  const next = deriveSetupSectionStatuses({
-    vehicle_type: sessionState.sessionDomain.value?.vehicle_state?.vehicle_type ?? null,
-    confirmed_sections: currentScopeConfirmations,
-    support: sessionState.support,
-    sensor_health: sessionState.sensorHealth,
-    configuration_facts: sessionState.configurationFacts,
-    calibration: sessionState.calibration,
-  });
-
-  const resolved = createUnknownSectionStatusRecord();
-  for (const id of SECTION_IDS) {
-    resolved[id] = next.get(id) ?? "unknown";
-  }
-
-  if (!sameScope || previousStatuses === null) {
-    return resolved;
-  }
-
-  for (const id of SECTION_IDS) {
-    if (resolved[id] === "unknown" && previousStatuses[id] !== "unknown") {
-      resolved[id] = previousStatuses[id];
-    }
-  }
-
-  return resolved;
 }
 
 function resolveStatusNotices(
@@ -1115,63 +829,7 @@ function normalizeCheckpointInput(input: SetupWorkspaceCheckpointInput): SetupWo
 }
 
 function createInitialWorkspaceState(): SetupWorkspaceStoreState {
-  const sectionStatuses = createUnknownSectionStatusRecord();
-  const sections = SETUP_SECTION_CATALOG.map((definition) => {
-    const group = getSetupSectionGroupDefinition(definition.groupId);
-    const implemented = IMPLEMENTED_SECTION_ID_SET.has(definition.id);
-
-    if (definition.id === "overview") {
-      return {
-        id: definition.id,
-        title: definition.title,
-        description: definition.description,
-        kind: definition.kind,
-        groupId: group.id,
-        groupTitle: group.title,
-        status: null,
-        statusText: "Dashboard",
-        confidenceText: null,
-        detailText: "Use the grouped dashboard to review setup status before opening a section.",
-        trackable: definition.trackable,
-        implemented,
-      } satisfies SetupWorkspaceSection;
-    }
-
-    if (definition.id === "full_parameters") {
-      return {
-        id: definition.id,
-        title: definition.title,
-        description: definition.description,
-        kind: definition.kind,
-        groupId: group.id,
-        groupTitle: group.title,
-        status: null,
-        statusText: "Advanced",
-        confidenceText: null,
-        detailText: "Open Full Parameters to review and edit advanced vehicle settings.",
-        trackable: definition.trackable,
-        implemented,
-      } satisfies SetupWorkspaceSection;
-    }
-
-    return {
-      id: definition.id,
-      title: definition.title,
-      description: definition.description,
-      kind: definition.kind,
-      groupId: group.id,
-      groupTitle: group.title,
-      status: sectionStatuses[definition.id],
-      statusText: "Unknown",
-      confidenceText: "Unconfirmed",
-      detailText: implemented
-        ? describeGuidedSectionStatus(sectionStatuses[definition.id], definition.id)
-        : describePlannedSectionStatus(sectionStatuses[definition.id], definition.id),
-      trackable: definition.trackable,
-      implemented,
-    } satisfies SetupWorkspaceSection;
-  });
-  const progress = computeOverallProgress(new Map(SECTION_IDS.map((id) => [id, sectionStatuses[id]])));
+  const sections = buildCatalogSections();
 
   return {
     readiness: "bootstrapping",
@@ -1186,14 +844,9 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
     metadataState: "idle",
     metadataText: "Metadata idle",
     noticeText: "Preparing setup workspace.",
-    progress,
-    progressText: formatProgressText(progress),
     selectedSectionId: "overview",
     sections,
     sectionGroups: buildSectionGroups(sections),
-    sectionStatuses,
-    sectionConfirmations: createEmptySectionConfirmationRecord(),
-    confirmationScopeKey: null,
     checkpoint: createIdleCheckpoint(),
     statusNotices: [],
     rcReceiver: createInitialRcReceiverState(),
@@ -1225,29 +878,6 @@ export function createSetupWorkspaceStore(
   let previousScopeKey: string | null = null;
   let previousApplyPhase: ParamsStoreState["applyPhase"] = "idle";
   let currentActiveScopeKey: string | null = null;
-  // The beginner wizard section state comes from the wizard store phase, not
-  // from configuration facts. SetupWorkspaceShell.svelte pushes this via
-  // `setWizardPhase(...)` whenever the wizard store state changes, and the
-  // overlay below keeps the grouped dashboard in sync with live wizard
-  // progress without bypassing the shared recompute path.
-  let currentWizardPhase: WizardPhase | null = null;
-  const sectionConfirmationsByScope = new Map<string, ScopedSectionConfirmations>();
-
-  function canMutateSectionConfirmation(sectionId: SetupSectionId): boolean {
-    if (!currentActiveScopeKey || checkpointState.blocksActions) {
-      return false;
-    }
-
-    return previous?.sections.some((entry) => entry.id === sectionId && entry.kind === "guided") === true;
-  }
-
-  function canMutateActiveScopeConfirmations(): boolean {
-    if (!currentActiveScopeKey || checkpointState.blocksActions) {
-      return false;
-    }
-
-    return previous?.sections.some((section) => section.kind === "guided") === true;
-  }
 
   function recompute() {
     if (!sessionState || !paramsState) {
@@ -1259,19 +889,8 @@ export function createSetupWorkspaceStore(
     const activeRevision = sessionState.activeEnvelope?.reset_revision ?? null;
     const sameScope = activeScopeKey !== null && activeScopeKey === previousScopeKey;
     currentActiveScopeKey = activeScopeKey;
-    const currentScopeConfirmations = activeScopeKey ? sectionConfirmationsByScope.get(activeScopeKey) ?? {} : {};
     const readiness = resolveSetupReadiness(sessionState, paramsState);
     const liveSessionConnected = sessionState.sessionDomain.value?.connection.kind === "connected";
-    const paramStoreReady = hasReadyParamStore(paramsState);
-    const sectionStatuses = deriveSectionStatuses(
-      sessionState,
-      previous?.sectionStatuses ?? null,
-      sameScope,
-      currentScopeConfirmations,
-    );
-    // Overlay the beginner wizard section state so the grouped dashboard
-    // reflects the live wizard store phase.
-    sectionStatuses.beginner_wizard = wizardSectionStatusFromPhase(currentWizardPhase);
 
     const hasRebootRequiredEdits = Object.values(paramsState.stagedEdits).some((edit) => edit.rebootRequired);
     if (paramsState.applyPhase === "applying" && hasRebootRequiredEdits && pendingCheckpointSeed === null) {
@@ -1343,9 +962,7 @@ export function createSetupWorkspaceStore(
       }
     }
 
-    const sections = buildCatalogSections({
-      sectionStatuses,
-    });
+    const sections = buildCatalogSections();
     if (uiState && activeFamily && activeFamily !== previousFamilyForRestore) {
       const storedSectionId = uiState.getSetupSection(activeFamily);
       if (storedSectionId && isSetupSectionId(storedSectionId) && sections.some((section) => section.id === storedSectionId)) {
@@ -1357,7 +974,6 @@ export function createSetupWorkspaceStore(
       selectedSectionId = "overview";
     }
 
-    const progress = computeOverallProgress(new Map(SECTION_IDS.map((id) => [id, sectionStatuses[id]])));
     const statusNotices = resolveStatusNotices(
       selectCompactStatusNotices(sessionState.statusText),
       previous?.statusNotices ?? [],
@@ -1375,7 +991,6 @@ export function createSetupWorkspaceStore(
       checkpoint: checkpointState,
       liveSessionConnected,
     });
-    const sectionConfirmations = toSectionConfirmationRecord(currentScopeConfirmations);
 
     const next: SetupWorkspaceStoreState = {
       readiness,
@@ -1394,14 +1009,9 @@ export function createSetupWorkspaceStore(
         paramsState,
         readiness,
       }),
-      progress,
-      progressText: formatProgressText(progress),
       selectedSectionId,
       sections,
       sectionGroups: buildSectionGroups(sections),
-      sectionStatuses,
-      sectionConfirmations,
-      confirmationScopeKey: activeScopeKey,
       checkpoint: checkpointState,
       statusNotices,
       rcReceiver,
@@ -1440,67 +1050,6 @@ export function createSetupWorkspaceStore(
       }
       recompute();
     },
-    confirmSection(sectionId: string) {
-      if (!isSetupSectionId(sectionId) || !currentActiveScopeKey) {
-        return;
-      }
-
-      const definition = getSetupSectionDefinition(sectionId);
-      if (definition.kind !== "guided" || !canMutateSectionConfirmation(sectionId)) {
-        return;
-      }
-
-      const next = {
-        ...(sectionConfirmationsByScope.get(currentActiveScopeKey) ?? {}),
-        [sectionId]: true,
-      } satisfies ScopedSectionConfirmations;
-      sectionConfirmationsByScope.set(currentActiveScopeKey, next);
-      recompute();
-    },
-    clearSectionConfirmation(sectionId: string) {
-      if (!isSetupSectionId(sectionId) || !currentActiveScopeKey) {
-        return;
-      }
-
-      const definition = getSetupSectionDefinition(sectionId);
-      if (definition.kind !== "guided" || !canMutateSectionConfirmation(sectionId)) {
-        return;
-      }
-
-      const next = {
-        ...(sectionConfirmationsByScope.get(currentActiveScopeKey) ?? {}),
-      } satisfies ScopedSectionConfirmations;
-      delete next[sectionId];
-      sectionConfirmationsByScope.set(currentActiveScopeKey, next);
-      recompute();
-    },
-    replaceSectionConfirmations(input: unknown) {
-      const normalized = normalizeSectionConfirmationPayload(input);
-
-      if (!normalized.scopeKey) {
-        if (currentActiveScopeKey && canMutateActiveScopeConfirmations()) {
-          sectionConfirmationsByScope.set(currentActiveScopeKey, {});
-          recompute();
-        }
-        return;
-      }
-
-      if (normalized.scopeKey === currentActiveScopeKey && !canMutateActiveScopeConfirmations()) {
-        recompute();
-        return;
-      }
-
-      const nextConfirmations = normalized.scopeKey === currentActiveScopeKey
-        ? Object.fromEntries(
-            Object.entries(normalized.confirmedSections).filter(([sectionId, confirmed]) => {
-              return confirmed === true && isSetupSectionId(sectionId) && canMutateSectionConfirmation(sectionId);
-            }),
-          ) as ScopedSectionConfirmations
-        : normalized.confirmedSections;
-
-      sectionConfirmationsByScope.set(normalized.scopeKey, nextConfirmations);
-      recompute();
-    },
     setCheckpointPlaceholder(input: SetupWorkspaceCheckpointInput) {
       checkpointState = normalizeCheckpointInput(input);
       recompute();
@@ -1508,13 +1057,6 @@ export function createSetupWorkspaceStore(
     clearCheckpointPlaceholder() {
       checkpointState = createIdleCheckpoint();
       pendingCheckpointSeed = null;
-      recompute();
-    },
-    setWizardPhase(phase: WizardPhase | null) {
-      if (currentWizardPhase === phase) {
-        return;
-      }
-      currentWizardPhase = phase;
       recompute();
     },
   };

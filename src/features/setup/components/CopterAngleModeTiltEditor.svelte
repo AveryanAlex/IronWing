@@ -1,7 +1,7 @@
 <script lang="ts">
 import { CircleDot, RotateCcw } from "lucide-svelte";
 
-import { Button, Card, EmptyState, Eyebrow, HelperText, MonoValue, NumberInput, Slider } from "../../../components/ui";
+import { Button, Card, EmptyState, Eyebrow, HelperText, MonoValue } from "../../../components/ui";
 import { formatParamValue, type ParameterItemModel } from "../../../lib/params/parameter-item-model";
 import {
   degreesToRadians,
@@ -174,10 +174,6 @@ function updateControl(control: TiltParameterControl, value: number) {
   };
 }
 
-function handleNumberInput(control: TiltParameterControl, event: Event) {
-  updateControl(control, Number((event.currentTarget as HTMLInputElement).value));
-}
-
 function resetDraft() {
   draftOverrides = {};
 }
@@ -216,39 +212,16 @@ function formatControlValue(control: TiltParameterControl, value: number): strin
     inputId={`copter-tilt-control-${control.name}`}
     label={control.label}
     description={control.description}
-    type="custom"
+    value={control.draftValue}
     min={control.min}
     max={control.max}
     step={control.step}
     unit={control.unit}
     metadata={control.name}
     {disabled}
-  >
-    <div class="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(9rem,12rem)] sm:items-center">
-      <Slider
-        value={control.draftValue}
-        min={control.min}
-        max={control.max}
-        step={control.step}
-        disabled={disabled || control.readOnly}
-        ariaLabel={control.label}
-        testId={`${setupWorkspaceTestIds.rcTiltInputPrefix}-${control.name}-slider`}
-        onValueChange={(value) => updateControl(control, value)}
-      />
-      <NumberInput
-        id={`copter-tilt-control-${control.name}`}
-        value={control.draftValue}
-        min={control.min}
-        max={control.max}
-        step={control.step}
-        unit={control.unit}
-        disabled={disabled || control.readOnly}
-        testId={`${setupWorkspaceTestIds.rcTiltInputPrefix}-${control.name}`}
-        oninput={(event) => handleNumberInput(control, event)}
-        onchange={(event) => handleNumberInput(control, event)}
-      />
-    </div>
-  </SetupParamEditCard>
+    inputTestId={`${setupWorkspaceTestIds.rcTiltInputPrefix}-${control.name}`}
+    onValueChange={(value) => typeof value === "number" && updateControl(control, value)}
+  />
 {/snippet}
 
 {#if !atcControl || !currentCaps || !draftCaps}

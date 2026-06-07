@@ -2,23 +2,19 @@
 import { Home, Route } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
-import {
-  getParamsStoreContext,
-  getSessionStoreContext,
-  getSetupWorkspaceStoreContext,
-} from "../../../../app/shell/runtime-context";
+import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import { buildRtlReturnModel, type SafetyVehicleFamily } from "../../../../lib/setup/failsafe-model";
-import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import { Eyebrow, HelperText, Input } from "../../../../components/ui";
 import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
 import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
 import SetupParamEditCard from "../../../../features/setup/shared/SetupParamEditCard.svelte";
 import SetupParamEditGrid from "../../../../features/setup/shared/SetupParamEditGrid.svelte";
+import SetupParamSection from "../../../../features/setup/shared/SetupParamSection.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
-import { resolveSetupEnumOptions } from "../../../../features/setup/shared/parameter-editing";
+import type { SetupParamRef } from "../../../../features/setup/shared/setup-param-refs";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import {
   getSetupWorkspaceRouteContext,
@@ -33,7 +29,6 @@ let section = $derived(setupRouteSection(view, "rtl_return"));
 
 const paramsStore = getParamsStoreContext();
 const sessionStore = getSessionStoreContext();
-const setupWorkspaceStore = getSetupWorkspaceStoreContext();
 const paramsState = fromStore(paramsStore);
 const sessionState = fromStore(sessionStore);
 
@@ -53,7 +48,6 @@ let model = $derived(
   }),
 );
 let docsUrl = $derived(resolveDocsUrl("rtl_mode", model.vehicleSlug));
-let sectionCanConfirm = $derived(!actionsBlocked && model.canConfirm);
 
 type RtlFieldConfig = {
   name: string;
@@ -65,55 +59,53 @@ type RtlFieldConfig = {
   min?: number;
   step?: number;
   sentinel?: number;
-  kind?: "number" | "enum";
 };
 
-type RtlCardConfig = {
+type RtlLegacyCardConfig = {
   id: string;
   title: string;
   summary: string;
   fields: RtlFieldConfig[];
 };
 
-let cards = $derived.by(() => buildCards(model.family));
+type RtlParamSectionConfig = {
+  id: string;
+  title: string;
+  summary: string;
+  params: readonly SetupParamRef[];
+};
 
-$effect(() => {
-  if (sectionCanConfirm) {
-    setupWorkspaceStore.confirmSection("rtl_return");
-  } else {
-    setupWorkspaceStore.clearSectionConfirmation("rtl_return");
-  }
-});
+const copterAltitudeParams = [
+  { id: "RTL_ALT_M" },
+  { id: "RTL_ALT_FINAL_M" },
+  { id: "RTL_CLIMB_MIN_M" },
+] satisfies readonly SetupParamRef[];
 
-function buildCards(family: SafetyVehicleFamily): RtlCardConfig[] {
+const copterSpeedParams = [{ id: "RTL_SPEED_MS" }] satisfies readonly SetupParamRef[];
+
+const planeReturnParams = [
+  { id: "RTL_ALTITUDE" },
+  { id: "RTL_AUTOLAND" },
+  { id: "RTL_CLIMB_MIN" },
+  { id: "RTL_RADIUS" },
+  { id: "Q_RTL_ALT" },
+  { id: "Q_RTL_MODE" },
+  { id: "Q_RTL_ALT_MIN" },
+] satisfies readonly SetupParamRef[];
+
+let paramSections = $derived.by(() => buildParamSections(model.family));
+let legacyCards = $derived.by(() =>
+  buildLegacyCards(model.family).filter((card) => visibleFields(card.fields).length > 0),
+);
+
+function buildParamSections(family: SafetyVehicleFamily): RtlParamSectionConfig[] {
   if (family === "plane") {
     return [
       {
         id: "plane-return",
         title: "Plane return profile",
-        summary: currentDisplayText("ALT_HOLD_RTL", 100, 1, "m", -1),
-        fields: [
-          {
-            name: "ALT_HOLD_RTL",
-            label: "Return altitude",
-            description: "Altitude used during plane RTL. Set to -1 to hold the current altitude.",
-            factor: 100,
-            decimals: 1,
-            unit: "m",
-            min: -1,
-            step: 1,
-            sentinel: -1,
-          },
-          {
-            name: "RTL_AUTOLAND",
-            label: "Auto-land behavior",
-            description: "How the plane should finish the RTL after reaching home.",
-            factor: 1,
-            decimals: 0,
-            unit: "mode",
-            kind: "enum",
-          },
-        ],
+        summary: `${currentDisplayText("RTL_ALTITUDE", 1, 1, "m")} · ${currentDisplayText("RTL_AUTOLAND", 1, 0, "mode")}`,
+        params: planeReturnParams,
       },
     ];
   }
@@ -123,40 +115,81 @@ function buildCards(family: SafetyVehicleFamily): RtlCardConfig[] {
       {
         id: "rover-return",
         title: "Rover return profile",
-        summary: `${currentDisplayText("RTL_SPEED", 100, 1, "m/s")} · ${currentDisplayText("WP_RADIUS", 1, 1, "m")}`,
-        fields: [
-          {
-            name: "RTL_SPEED",
-            label: "Return speed",
-            description: "Ground speed during the rover return-to-home behavior.",
-            factor: 100,
-            decimals: 1,
-            unit: "m/s",
-            min: 0,
-            step: 0.5,
-          },
-          {
-            name: "WP_RADIUS",
-            label: "Approach radius",
-            description: "Distance from home at which the rover considers the return complete.",
-            factor: 1,
-            decimals: 1,
-            unit: "m",
-            min: 0,
-            step: 0.5,
-          },
-        ],
+        summary: `${currentDisplayText("RTL_SPEED", roverSpeedIsDirectUnit() ? 1 : 100, 1, "m/s")} · ${currentDisplayText("WP_RADIUS", 1, 1, "m")}`,
+        params: roverSpeedIsDirectUnit() ? [{ id: "RTL_SPEED" }, { id: "WP_RADIUS" }] : [{ id: "WP_RADIUS" }],
       },
     ];
   }
 
   return [
     {
-      id: "altitude",
+      id: "altitude-current",
       title: "Altitude profile",
-      summary: `${currentDisplayText("RTL_ALT", 100, 1, "m")} · ${currentDisplayText("RTL_ALT_FINAL", 100, 1, "m")}`,
-      fields: [
-        {
+      summary: `${currentDisplayText("RTL_ALT_M", 1, 1, "m")} · ${currentDisplayText("RTL_ALT_FINAL_M", 1, 1, "m")}`,
+      params: copterAltitudeParams,
+    },
+    {
+      id: "speed-current",
+      title: "Return speed",
+      summary: currentDisplayText("RTL_SPEED_MS", 1, 1, "m/s"),
+      params: copterSpeedParams,
+    },
+  ];
+}
+
+function buildLegacyCards(family: SafetyVehicleFamily): RtlLegacyCardConfig[] {
+  if (family === "plane") {
+    return item("RTL_ALTITUDE")
+      ? []
+      : [
+          {
+            id: "plane-altitude-legacy",
+            title: "Plane return altitude",
+            summary: currentDisplayText("ALT_HOLD_RTL", 100, 1, "m", -1),
+            fields: [
+              {
+                name: "ALT_HOLD_RTL",
+                label: "Return altitude",
+                description: "Altitude used during plane RTL. Set to -1 to hold the current altitude.",
+                factor: 100,
+                decimals: 1,
+                unit: "m",
+                min: -1,
+                step: 1,
+                sentinel: -1,
+              },
+            ],
+          },
+        ];
+  }
+
+  if (family === "rover") {
+    return roverSpeedIsDirectUnit()
+      ? []
+      : [
+          {
+            id: "rover-speed-legacy",
+            title: "Rover return speed",
+            summary: currentDisplayText("RTL_SPEED", 100, 1, "m/s"),
+            fields: [
+              {
+                name: "RTL_SPEED",
+                label: "Return speed",
+                description: "Ground speed during the rover return-to-home behavior.",
+                factor: 100,
+                decimals: 1,
+                unit: "m/s",
+                min: 0,
+                step: 0.5,
+              },
+            ],
+          },
+        ];
+  }
+
+  const altitudeFieldCandidates: (RtlFieldConfig | null)[] = [
+    !item("RTL_ALT_M")
+      ? {
           name: "RTL_ALT",
           label: "Return altitude",
           description: "Minimum altitude the copter climbs to before returning. 0 keeps the current altitude.",
@@ -165,8 +198,10 @@ function buildCards(family: SafetyVehicleFamily): RtlCardConfig[] {
           unit: "m",
           min: 0,
           step: 1,
-        },
-        {
+        }
+      : null,
+    !item("RTL_ALT_FINAL_M")
+      ? {
           name: "RTL_ALT_FINAL",
           label: "Final altitude",
           description: "Final hover altitude after reaching home. 0 triggers an automatic landing.",
@@ -175,8 +210,10 @@ function buildCards(family: SafetyVehicleFamily): RtlCardConfig[] {
           unit: "m",
           min: 0,
           step: 1,
-        },
-        {
+        }
+      : null,
+    !item("RTL_CLIMB_MIN_M")
+      ? {
           name: "RTL_CLIMB_MIN",
           label: "Minimum climb",
           description: "Minimum additional climb before the return leg starts.",
@@ -185,15 +222,14 @@ function buildCards(family: SafetyVehicleFamily): RtlCardConfig[] {
           unit: "m",
           min: 0,
           step: 1,
-        },
-      ],
-    },
-    {
-      id: "timing",
-      title: "Speed and loiter timing",
-      summary: `${currentDisplayText("RTL_SPEED", 100, 1, "m/s")} · ${currentDisplayText("RTL_LOIT_TIME", 1000, 1, "s")}`,
-      fields: [
-        {
+        }
+      : null,
+  ];
+  const altitudeFields = altitudeFieldCandidates.filter(isRtlField);
+
+  const timingFieldCandidates: (RtlFieldConfig | null)[] = [
+    !item("RTL_SPEED_MS")
+      ? {
           name: "RTL_SPEED",
           label: "Return speed",
           description: "Horizontal speed during the RTL leg. 0 defers to the default waypoint speed.",
@@ -202,20 +238,54 @@ function buildCards(family: SafetyVehicleFamily): RtlCardConfig[] {
           unit: "m/s",
           min: 0,
           step: 0.5,
-        },
-        {
-          name: "RTL_LOIT_TIME",
-          label: "Loiter time",
-          description: "Hover time above home before the final descent or landing step begins.",
-          factor: 1000,
-          decimals: 1,
-          unit: "s",
-          min: 0,
-          step: 1,
-        },
-      ],
+        }
+      : null,
+    {
+      name: "RTL_LOIT_TIME",
+      label: "Loiter time",
+      description: "Hover time above home before the final descent or landing step begins.",
+      factor: 1000,
+      decimals: 1,
+      unit: "s",
+      min: 0,
+      step: 1,
     },
   ];
+  const timingFields = timingFieldCandidates.filter(isRtlField);
+
+  return [
+    {
+      id: "altitude-legacy",
+      title: "Altitude profile",
+      summary: `${currentDisplayText("RTL_ALT", 100, 1, "m")} · ${currentDisplayText("RTL_ALT_FINAL", 100, 1, "m")}`,
+      fields: altitudeFields,
+    },
+    {
+      id: "timing-legacy",
+      title: "Speed and loiter timing",
+      summary: `${currentDisplayText("RTL_SPEED", 100, 1, "m/s")} · ${currentDisplayText("RTL_LOIT_TIME", 1000, 1, "s")}`,
+      fields: timingFields,
+    },
+  ];
+}
+
+function isRtlField(field: RtlFieldConfig | null): field is RtlFieldConfig {
+  return field !== null;
+}
+
+function roverSpeedIsDirectUnit(): boolean {
+  const speed = item("RTL_SPEED");
+  return speed ? isMetersPerSecondUnit(speed.units) : false;
+}
+
+function isMetersPerSecondUnit(unit: string | null | undefined): boolean {
+  const normalized = unit?.toLowerCase().replace(/\s+/g, "");
+  return (
+    normalized === "m/s" ||
+    normalized === "meter/second" ||
+    normalized === "meters/second" ||
+    normalized === "meterspersecond"
+  );
 }
 
 function item(name: string): ParameterItemModel | null {
@@ -224,10 +294,6 @@ function item(name: string): ParameterItemModel | null {
 
 function visibleFields(fields: RtlFieldConfig[]): RtlFieldConfig[] {
   return fields.filter((field) => item(field.name));
-}
-
-function enumOptions(name: string) {
-  return resolveSetupEnumOptions(params.metadata?.get(name)?.values);
 }
 
 function formatDisplayValue(rawValue: number | null, factor: number, decimals: number, sentinel?: number): string {
@@ -308,10 +374,6 @@ function resolveDraftRawValue(
   return Math.round(parsed * factor);
 }
 
-function currentFallback(name: string): number | null {
-  return item(name)?.value ?? null;
-}
-
 function displayMax(target: ParameterItemModel, factor: number): number | undefined {
   return target.range?.max === undefined ? undefined : target.range.max / factor;
 }
@@ -323,16 +385,8 @@ function numericFieldMetadata(field: RtlFieldConfig, target: ParameterItemModel)
   return [field.name, range, step].filter((part) => part !== undefined).join(" · ");
 }
 
-function canAutostage(
-  field: RtlFieldConfig,
-  target: ParameterItemModel | null,
-  nextValue: number | null,
-): target is ParameterItemModel {
+function canAutostage(target: ParameterItemModel | null, nextValue: number | null): target is ParameterItemModel {
   if (!target || target.readOnly === true || actionsBlocked || nextValue === null || !Number.isFinite(nextValue)) {
-    return false;
-  }
-
-  if (field.kind === "enum" && enumOptions(field.name).length === 0) {
     return false;
   }
 
@@ -342,12 +396,15 @@ function canAutostage(
 function stageDraftValue(field: RtlFieldConfig, value: string) {
   setDraft(field.name, value);
   const target = item(field.name);
-  const nextValue =
-    field.kind === "enum"
-      ? Number(value)
-      : resolveDraftRawValue(field.name, target?.value ?? null, field.factor, field.decimals, field.sentinel);
+  const nextValue = resolveDraftRawValue(
+    field.name,
+    target?.value ?? null,
+    field.factor,
+    field.decimals,
+    field.sentinel,
+  );
 
-  if (!canAutostage(field, target, nextValue)) {
+  if (!canAutostage(target, nextValue)) {
     return;
   }
 
@@ -400,7 +457,20 @@ function unstage(name: string) {
   <SetupNoticeList notices={model.warningTexts} tone="warning" testIdPrefix={setupWorkspaceTestIds.rtlReturnBannerPrefix} />
 
   <div class="space-y-3">
-    {#each cards as card (card.id)}
+    {#each paramSections as paramSection (paramSection.id)}
+      <SetupParamSection
+        id={paramSection.id}
+        icon={Route}
+        title={paramSection.title}
+        description={paramSection.summary}
+        params={paramSection.params}
+        disabled={actionsBlocked}
+        surface="elevated"
+        testIdPrefix="setup-workspace-rtl-return"
+      />
+    {/each}
+
+    {#each legacyCards as card (card.id)}
       <SetupSectionCard
         icon={Route}
         title={card.title}
@@ -414,57 +484,38 @@ function unstage(name: string) {
               {@const fieldItem = item(field.name)}
               {#if fieldItem}
                 {@const fieldValue = draftValue(field.name, fieldItem.value, field.factor, field.decimals, field.sentinel)}
-                {#if field.kind === "enum"}
-                  {@const options = enumOptions(field.name)}
-                  <SetupParamEditCard
-                    item={fieldItem}
-                    inputId={`${card.id}-${field.name}`}
-                    label={field.label}
-                    description={field.description}
-                    type="enum"
-                    options={options}
-                    value={fieldValue}
-                    stagedName={params.stagedEdits[field.name] ? field.name : undefined}
-                    stagedTestId={`${setupWorkspaceTestIds.rtlReturnStagedPrefix}-${field.name}`}
-                    onUnstage={unstage}
-                    onValueChange={(value) => typeof value === "string" && stageDraftValue(field, value)}
-                    inputTestId={`${setupWorkspaceTestIds.rtlReturnInputPrefix}-${field.name}`}
-                    disabled={actionsBlocked || options.length === 0}
-                  />
-                {:else}
-                  <SetupParamEditCard
-                    item={fieldItem}
-                    inputId={`${card.id}-${field.name}`}
-                    label={field.label}
-                    description={field.description}
-                    min={field.min}
-                    max={displayMax(fieldItem, field.factor)}
-                    step={field.step}
-                    unit={field.unit}
-                    metadata={numericFieldMetadata(field, fieldItem)}
-                    stagedName={params.stagedEdits[field.name] ? field.name : undefined}
-                    stagedTestId={`${setupWorkspaceTestIds.rtlReturnStagedPrefix}-${field.name}`}
-                    onUnstage={unstage}
-                    disabled={actionsBlocked}
-                  >
-                    <div class="flex items-center gap-2">
-                      <Input
-                        id={`${card.id}-${field.name}`}
-                        inputmode="decimal"
-                        min={field.min}
-                        max={displayMax(fieldItem, field.factor)}
-                        step={field.step}
-                        type="number"
-                        value={fieldValue}
-                        disabled={actionsBlocked || fieldItem.readOnly}
-                        testId={`${setupWorkspaceTestIds.rtlReturnInputPrefix}-${field.name}`}
-                        oninput={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
-                        onchange={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
-                      />
-                      <span class="shrink-0 text-xs text-text-muted">{field.unit}</span>
-                    </div>
-                  </SetupParamEditCard>
-                {/if}
+                <SetupParamEditCard
+                  item={fieldItem}
+                  inputId={`${card.id}-${field.name}`}
+                  label={field.label}
+                  description={field.description}
+                  min={field.min}
+                  max={displayMax(fieldItem, field.factor)}
+                  step={field.step}
+                  unit={field.unit}
+                  metadata={numericFieldMetadata(field, fieldItem)}
+                  stagedName={params.stagedEdits[field.name] ? field.name : undefined}
+                  stagedTestId={`${setupWorkspaceTestIds.rtlReturnStagedPrefix}-${field.name}`}
+                  onUnstage={unstage}
+                  disabled={actionsBlocked}
+                >
+                  <div class="flex items-center gap-2">
+                    <Input
+                      id={`${card.id}-${field.name}`}
+                      inputmode="decimal"
+                      min={field.min}
+                      max={displayMax(fieldItem, field.factor)}
+                      step={field.step}
+                      type="number"
+                      value={fieldValue}
+                      disabled={actionsBlocked || fieldItem.readOnly}
+                      testId={`${setupWorkspaceTestIds.rtlReturnInputPrefix}-${field.name}`}
+                      oninput={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
+                      onchange={(event) => stageDraftValue(field, (event.currentTarget as HTMLInputElement).value)}
+                    />
+                    <span class="shrink-0 text-xs text-text-muted">{field.unit}</span>
+                  </div>
+                </SetupParamEditCard>
               {/if}
             {/each}
           </SetupParamEditGrid>

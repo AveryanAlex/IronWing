@@ -5,19 +5,18 @@ import { fromStore } from "svelte/store";
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { getMotorLayout } from "../../../../data/motor-layouts";
-import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
+import { buildParameterItemIndex } from "../../../../lib/params/parameter-item-model";
 import { deriveVehicleProfile, getVehicleSlug, type VehicleProfile } from "../../../../lib/setup/vehicle-profile";
 import { getVtolLayoutModel, type MotorDiagramModel } from "../../../../lib/setup/vtol-layout-model";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import MotorDiagram from "../../../../features/setup/shared/MotorDiagram.svelte";
 import SetupCard from "../../../../features/setup/shared/SetupCard.svelte";
-import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
 import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
 import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
-import SetupParamEditCard from "../../../../features/setup/shared/SetupParamEditCard.svelte";
-import SetupParamEditGrid from "../../../../features/setup/shared/SetupParamEditGrid.svelte";
+import SetupParamSection from "../../../../features/setup/shared/SetupParamSection.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
+import type { SetupParamRef } from "../../../../features/setup/shared/setup-param-refs";
 import {
   getSetupWorkspaceRouteContext,
   setupRouteSection,
@@ -34,14 +33,6 @@ type EnumOption = { code: number; label: string };
 type Tone = "info" | "warning" | "danger";
 type FrameBanner = { id: string; tone: Tone; text: string };
 
-type StageableParamName =
-  | "Q_ENABLE"
-  | "FRAME_CLASS"
-  | "FRAME_TYPE"
-  | "Q_FRAME_CLASS"
-  | "Q_FRAME_TYPE"
-  | "AHRS_ORIENTATION";
-
 const VTOL_RECOVERY_NAMES = [
   "Q_ENABLE",
   "Q_FRAME_CLASS",
@@ -50,6 +41,11 @@ const VTOL_RECOVERY_NAMES = [
   "FRAME_TYPE",
   "AHRS_ORIENTATION",
 ] as const;
+
+const qEnableParams = [{ id: "Q_ENABLE" }] satisfies readonly SetupParamRef[];
+const standardFrameParams = [{ id: "FRAME_CLASS" }, { id: "FRAME_TYPE" }] satisfies readonly SetupParamRef[];
+const quadPlaneFrameParams = [{ id: "Q_FRAME_CLASS" }, { id: "Q_FRAME_TYPE" }] satisfies readonly SetupParamRef[];
+const orientationParams = [{ id: "AHRS_ORIENTATION" }] satisfies readonly SetupParamRef[];
 
 const paramsStore = getParamsStoreContext();
 const sessionStore = getSessionStoreContext();
@@ -67,59 +63,16 @@ let profile = $derived(
   }),
 );
 let docsUrl = $derived(resolveDocsUrl("frame_type", getVehicleSlug(vehicleType)));
+let actionsBlocked = $derived(checkpoint.blocksActions);
 
 let qEnableItem = $derived(itemIndex.get("Q_ENABLE") ?? null);
-let rawFrameClassItem = $derived(itemIndex.get("FRAME_CLASS") ?? null);
-let rawFrameTypeItem = $derived(itemIndex.get("FRAME_TYPE") ?? null);
 let orientationItem = $derived(itemIndex.get("AHRS_ORIENTATION") ?? null);
-let frameClassItem = $derived.by(() => {
-  if (profile.frameClassParam === "Q_FRAME_CLASS") {
-    return itemIndex.get("Q_FRAME_CLASS") ?? null;
-  }
-
-  if (profile.frameClassParam === "FRAME_CLASS") {
-    return itemIndex.get("FRAME_CLASS") ?? null;
-  }
-
-  if (!profile.isPlane && rawFrameClassItem && rawFrameTypeItem) {
-    return rawFrameClassItem;
-  }
-
-  return null;
-});
-let frameTypeItem = $derived.by(() => {
-  if (profile.frameTypeParam === "Q_FRAME_TYPE") {
-    return itemIndex.get("Q_FRAME_TYPE") ?? null;
-  }
-
-  if (profile.frameTypeParam === "FRAME_TYPE") {
-    return itemIndex.get("FRAME_TYPE") ?? null;
-  }
-
-  if (!profile.isPlane && rawFrameClassItem && rawFrameTypeItem) {
-    return rawFrameTypeItem;
-  }
-
-  return null;
-});
+let frameParams = $derived(profile.frameParamFamily === "quadplane" ? quadPlaneFrameParams : standardFrameParams);
 let qEnableOptions = $derived(resolveEnumOptions(params.metadata?.get("Q_ENABLE")?.values));
-let frameClassOptions = $derived(
-  resolveEnumOptions(frameClassItem ? params.metadata?.get(frameClassItem.name)?.values : undefined),
-);
-let frameTypeOptions = $derived(
-  resolveEnumOptions(frameTypeItem ? params.metadata?.get(frameTypeItem.name)?.values : undefined),
-);
 let orientationOptions = $derived(resolveEnumOptions(params.metadata?.get("AHRS_ORIENTATION")?.values));
-let qEnableDraft = $derived(String(params.stagedEdits.Q_ENABLE?.nextValue ?? qEnableItem?.value ?? ""));
-let frameClassDraft = $derived(
-  String(frameClassItem ? (params.stagedEdits[frameClassItem.name]?.nextValue ?? frameClassItem.value) : ""),
-);
-let frameTypeDraft = $derived(
-  String(frameTypeItem ? (params.stagedEdits[frameTypeItem.name]?.nextValue ?? frameTypeItem.value) : ""),
-);
-let orientationDraft = $derived(String(params.stagedEdits.AHRS_ORIENTATION?.nextValue ?? orientationItem?.value ?? ""));
-let previewFrameClass = $derived(resolveDraftNumber(frameClassDraft) ?? frameClassItem?.value ?? null);
-let previewFrameType = $derived(resolveDraftNumber(frameTypeDraft) ?? frameTypeItem?.value ?? null);
+let orientationValue = $derived(params.stagedEdits.AHRS_ORIENTATION?.nextValue ?? orientationItem?.value ?? null);
+let previewFrameClass = $derived(profile.frameClassValue);
+let previewFrameType = $derived(profile.frameTypeValue);
 let previewStandardLayout = $derived.by(() => {
   if (profile.frameParamFamily === "quadplane") {
     return null;
@@ -143,7 +96,7 @@ let previewVtolLayout = $derived.by(() => {
   });
 });
 let previewOrientationLabel = $derived(
-  resolveOptionLabel(orientationOptions, resolveDraftNumber(orientationDraft) ?? orientationItem?.value ?? null) ??
+  resolveOptionLabel(orientationOptions, orientationValue) ??
     orientationItem?.valueLabel ??
     orientationItem?.valueText ??
     "Orientation unavailable",
@@ -160,13 +113,6 @@ let frameBanners = $derived.by(() =>
     previewVtolLayout,
   }),
 );
-let showQEnableCard = $derived(
-  profile.isPlane && profile.frameParamFamily !== "quadplane" && qEnableItem && qEnableOptions.length > 0,
-);
-let showFrameCards = $derived(
-  Boolean(frameClassItem && frameTypeItem && frameClassOptions.length > 0 && frameTypeOptions.length > 0),
-);
-let showOrientationCard = $derived(Boolean(orientationItem && orientationOptions.length > 0));
 let motorPreviewLabel = $derived(
   previewVtolLayout?.status === "unsupported"
     ? "Unsupported VTOL layout"
@@ -183,34 +129,12 @@ function resolveEnumOptions(values: { code: number; label: string }[] | undefine
   return values.filter((value) => Number.isFinite(value.code) && value.label.trim().length > 0);
 }
 
-function resolveDraftNumber(value: string): number | null {
-  if (value.trim().length === 0) {
-    return null;
-  }
-
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function resolveOptionLabel(options: EnumOption[], value: number | null): string | null {
   if (value === null) {
     return null;
   }
 
   return options.find((option) => option.code === value)?.label ?? null;
-}
-
-function stage(item: ParameterItemModel | null, draftValue: string) {
-  const nextValue = resolveDraftNumber(draftValue);
-  if (!item || nextValue === null || checkpoint.blocksActions) {
-    return;
-  }
-
-  paramsStore.stageParameterEdit(item, nextValue);
-}
-
-function unstage(name: string) {
-  paramsStore.discardStagedEdit(name);
 }
 
 function frameStateLabel(profile: VehicleProfile): string {
@@ -474,71 +398,34 @@ function buildFrameBanners(input: {
   <SetupNoticeList notices={frameBanners} testIdPrefix={setupWorkspaceTestIds.frameBannerPrefix} />
 
   <div class="space-y-4">
-    {#if showQEnableCard && qEnableItem}
-      <SetupSectionCard icon={Box} title="QuadPlane Configuration" compact testId={`${setupWorkspaceTestIds.frameCardPrefix}-Q_ENABLE`}>
-        <SetupParamEditGrid>
-        <SetupParamEditCard
-          item={qEnableItem}
-          inputId="setup-frame-q-enable"
-          value={qEnableDraft}
-          options={qEnableOptions}
-          type="enum"
-          label="VTOL / QuadPlane"
-          description={qEnableItem.description ?? "Enable QuadPlane to expose VTOL frame, motor, and tuning parameters on Plane firmware."}
-          inputTestId={`${setupWorkspaceTestIds.frameInputPrefix}-Q_ENABLE`}
-          disabled={checkpoint.blocksActions}
-          stagedName={params.stagedEdits.Q_ENABLE ? "Q_ENABLE" : undefined}
-          stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-Q_ENABLE`}
-          onUnstage={unstage}
-          onValueChange={(value) => typeof value === "string" && stage(qEnableItem, value)}
-        />
-        </SetupParamEditGrid>
-      </SetupSectionCard>
+    {#if profile.isPlane && profile.frameParamFamily !== "quadplane"}
+      <SetupParamSection
+        id="Q_ENABLE"
+        icon={Box}
+        title="QuadPlane Configuration"
+        description="Enable QuadPlane to expose VTOL frame, motor, and tuning parameters on Plane firmware."
+        params={qEnableParams}
+        disabled={actionsBlocked}
+        compact
+        testIdPrefix="setup-workspace-frame"
+      />
     {/if}
 
-    {#if showFrameCards && frameClassItem && frameTypeItem}
-      <SetupSectionCard icon={Box} title={framePanelTitle(profile)} compact>
-        <SetupFieldStack>
-        <SetupParamEditGrid>
-            <SetupParamEditCard
-              item={frameClassItem}
-              inputId={`setup-frame-${frameClassItem.name}`}
-              value={frameClassDraft}
-              options={frameClassOptions}
-              type="enum"
-              label={frameClassItem.label}
-              description={frameClassItem.description ?? (profile.frameParamFamily === "quadplane"
-                ? "Choose the QuadPlane lift-motor frame family after the VTOL parameter refresh."
-                : "Choose the current frame family reported by ArduPilot.")}
-              testId={`${setupWorkspaceTestIds.frameCardPrefix}-${frameClassItem.name}`}
-              inputTestId={`${setupWorkspaceTestIds.frameInputPrefix}-${frameClassItem.name}`}
-              disabled={checkpoint.blocksActions}
-              stagedName={params.stagedEdits[frameClassItem.name] ? frameClassItem.name : undefined}
-              stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-${frameClassItem.name}`}
-              onUnstage={unstage}
-              onValueChange={(value) => typeof value === "string" && stage(frameClassItem, value)}
-            />
+    {#if profile.frameParamFamily}
+      <SetupParamSection
+        id="frame-layout"
+        icon={Box}
+        title={framePanelTitle(profile)}
+        description={profile.frameParamFamily === "quadplane"
+          ? "Choose the QuadPlane lift-motor frame family and layout after the VTOL parameter refresh."
+          : "Choose the current frame family and layout reported by ArduPilot."}
+        params={frameParams}
+        disabled={actionsBlocked}
+        compact
+        testIdPrefix="setup-workspace-frame"
+      />
 
-            <SetupParamEditCard
-              item={frameTypeItem}
-              inputId={`setup-frame-${frameTypeItem.name}`}
-              value={frameTypeDraft}
-              options={frameTypeOptions}
-              type="enum"
-              label={frameTypeItem.label}
-              description={frameTypeItem.description ?? (profile.frameParamFamily === "quadplane"
-                ? "Choose the QuadPlane layout inside the refreshed VTOL frame family."
-                : "Choose the layout inside the current frame family.")}
-              testId={`${setupWorkspaceTestIds.frameCardPrefix}-${frameTypeItem.name}`}
-              inputTestId={`${setupWorkspaceTestIds.frameInputPrefix}-${frameTypeItem.name}`}
-              disabled={checkpoint.blocksActions}
-              stagedName={params.stagedEdits[frameTypeItem.name] ? frameTypeItem.name : undefined}
-              stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-${frameTypeItem.name}`}
-              onUnstage={unstage}
-              onValueChange={(value) => typeof value === "string" && stage(frameTypeItem, value)}
-            />
-        </SetupParamEditGrid>
-
+      <SetupSectionCard icon={Box} title="Motor layout preview" compact>
         <div class="flex flex-col items-center gap-2 rounded-md border border-border/50 bg-bg-secondary/40 py-4">
           <MotorDiagram
             model={profile.frameParamFamily === "quadplane" ? previewVtolLayout : null}
@@ -548,31 +435,19 @@ function buildFrameBanners(input: {
           />
           <span class="text-[10px] text-text-muted">{motorPreviewLabel}</span>
         </div>
-        </SetupFieldStack>
       </SetupSectionCard>
     {/if}
 
-    {#if showOrientationCard && orientationItem}
-      <SetupSectionCard icon={Compass} title="Board Orientation" compact testId={`${setupWorkspaceTestIds.frameCardPrefix}-AHRS_ORIENTATION`}>
-        <SetupParamEditGrid>
-        <SetupParamEditCard
-          item={orientationItem}
-          inputId="setup-frame-ahrs-orientation"
-          value={orientationDraft}
-          options={orientationOptions}
-          type="enum"
-          label="Orientation"
-          description="Set the physical orientation of the flight controller on your frame. The arrow on the FC should point forward. If mounted differently, select the rotation that matches."
-          inputTestId={`${setupWorkspaceTestIds.frameInputPrefix}-AHRS_ORIENTATION`}
-          disabled={checkpoint.blocksActions}
-          stagedName={params.stagedEdits.AHRS_ORIENTATION ? "AHRS_ORIENTATION" : undefined}
-          stagedTestId={`${setupWorkspaceTestIds.frameStagedPrefix}-AHRS_ORIENTATION`}
-          onUnstage={unstage}
-          onValueChange={(value) => typeof value === "string" && stage(orientationItem, value)}
-        />
-        </SetupParamEditGrid>
-      </SetupSectionCard>
-    {/if}
+    <SetupParamSection
+      id="AHRS_ORIENTATION"
+      icon={Compass}
+      title="Board Orientation"
+      description="Set the physical orientation of the flight controller on your frame. The arrow on the FC should point forward. If mounted differently, select the rotation that matches."
+      params={orientationParams}
+      disabled={actionsBlocked}
+      compact
+      testIdPrefix="setup-workspace-frame"
+    />
   </div>
   {/snippet}
 </SetupSectionShell>
