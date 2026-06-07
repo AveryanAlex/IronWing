@@ -90,7 +90,7 @@ function toggleGroup(group: ParameterExpertGroup) {
 </script>
 
 <div class="space-y-4" data-testid={parameterWorkspaceTestIds.expertRoot}>
-  <div class="flex flex-wrap items-center gap-3">
+  <div class="flex flex-wrap items-stretch gap-3 sm:items-center">
     <div class="flex flex-wrap items-center gap-2">
       {#each filterOptions as option (option.value)}
         <Button
@@ -110,10 +110,11 @@ function toggleGroup(group: ParameterExpertGroup) {
       {/each}
     </div>
 
-    <label class="ml-auto flex min-w-0 flex-1 items-center gap-2 sm:max-w-sm">
+    <label class="flex min-w-0 basis-full items-center gap-2 sm:ml-auto sm:max-w-sm sm:flex-1">
       <Search aria-hidden="true" class="shrink-0 text-text-muted" size={14} />
       <span class="sr-only">Search raw parameters</span>
       <Input
+        class="min-w-0"
         testId={parameterWorkspaceTestIds.expertSearch}
         disabled={replayReadonly}
         oninput={(event) => onSearchText((event.currentTarget as HTMLInputElement).value)}

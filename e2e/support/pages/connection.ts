@@ -1,5 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+import { noopLayoutAudit, type LayoutAudit } from "../layout";
+
 export type DemoVehiclePreset = "quadcopter" | "airplane" | "quadplane";
 
 const ids = {
@@ -20,7 +22,10 @@ const ids = {
 } as const;
 
 export class ConnectionPage {
-  constructor(private readonly page: Page) {}
+  constructor(
+    private readonly page: Page,
+    private readonly auditLayout: LayoutAudit = noopLayoutAudit,
+  ) {}
 
   async connectDemo(preset: DemoVehiclePreset): Promise<void> {
     await this.ensureVehiclePanelVisible();
@@ -34,6 +39,7 @@ export class ConnectionPage {
     await expect(this.disconnectButton()).toBeVisible({ timeout: 25_000 });
     await this.expectLiveTelemetry();
     await this.closeVehiclePanelDrawerIfOpen();
+    await this.auditLayout(`connection connected ${preset}`);
   }
 
   async disconnectIfConnected(): Promise<void> {
@@ -44,6 +50,7 @@ export class ConnectionPage {
 
     await this.disconnectButton().click();
     await this.expectIdle();
+    await this.auditLayout("connection disconnected");
   }
 
   async expectIdle(): Promise<void> {
@@ -52,6 +59,7 @@ export class ConnectionPage {
     await expect(this.connectButton()).toBeEnabled();
     await expect(this.disconnectButton()).toHaveCount(0);
     await expect(this.page.getByTestId(ids.bootstrap)).toHaveText("ready");
+    await this.auditLayout("connection idle");
   }
 
   async expectDemoTransportHelp(): Promise<void> {
@@ -60,9 +68,11 @@ export class ConnectionPage {
     await this.page.getByTestId(ids.helpButton).click();
     await expect(this.page.getByTestId(ids.helpPopover)).toBeVisible({ timeout: 10_000 });
     await expect(this.page.getByTestId(ids.helpContent)).toContainText(/demo|vehicle|sim/i);
+    await this.auditLayout("connection transport help");
   }
 
   async expectDiagnosticsHydrated(): Promise<void> {
+    await this.ensureVehiclePanelVisible();
     await expect(this.page.getByTestId(ids.bootstrap)).toHaveText("ready", { timeout: 10_000 });
     await expect(this.page.getByTestId(ids.activeSource)).toHaveText(/none|live|stream|playback/i);
   }
@@ -71,8 +81,11 @@ export class ConnectionPage {
     const panelButton = this.page.getByTestId(ids.vehiclePanelButton);
     await expect(panelButton).toBeVisible({ timeout: 10_000 });
     await panelButton.click();
-    await expect(this.page.getByTestId(ids.vehiclePanelDrawer)).toHaveAttribute("data-state", "open", { timeout: 10_000 });
+    await expect(this.page.getByTestId(ids.vehiclePanelDrawer)).toHaveAttribute("data-state", "open", {
+      timeout: 10_000,
+    });
     await expect(this.transportSelect()).toBeVisible({ timeout: 10_000 });
+    await this.auditLayout("connection phone drawer open");
     await this.closeVehiclePanelDrawerIfOpen();
   }
 
@@ -90,8 +103,11 @@ export class ConnectionPage {
     const vehiclePanelButton = this.page.getByTestId(ids.vehiclePanelButton);
     await expect(vehiclePanelButton).toBeVisible({ timeout: 10_000 });
     await vehiclePanelButton.click();
-    await expect(this.page.getByTestId(ids.vehiclePanelDrawer)).toHaveAttribute("data-state", "open", { timeout: 10_000 });
+    await expect(this.page.getByTestId(ids.vehiclePanelDrawer)).toHaveAttribute("data-state", "open", {
+      timeout: 10_000,
+    });
     await expect(this.transportSelect()).toBeVisible({ timeout: 10_000 });
+    await this.auditLayout("vehicle panel drawer open");
   }
 
   private async closeVehiclePanelDrawerIfOpen(): Promise<void> {
@@ -101,7 +117,10 @@ export class ConnectionPage {
     }
 
     await closeButton.click();
-    await expect(this.page.getByTestId(ids.vehiclePanelDrawer)).toHaveAttribute("data-state", "closed", { timeout: 10_000 });
+    await expect(this.page.getByTestId(ids.vehiclePanelDrawer)).toHaveAttribute("data-state", "closed", {
+      timeout: 10_000,
+    });
+    await this.auditLayout("vehicle panel drawer closed");
   }
 
   private async expectDemoTransportAvailable(): Promise<void> {
@@ -109,9 +128,9 @@ export class ConnectionPage {
     await expect
       .poll(
         async () =>
-          this.transportSelect().locator("option").evaluateAll((options) =>
-            options.map((option) => (option as HTMLOptionElement).value),
-          ),
+          this.transportSelect()
+            .locator("option")
+            .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value)),
         { message: "Demo transport should be available from the real web platform", timeout: 15_000 },
       )
       .toContain("demo");

@@ -374,6 +374,7 @@ function handleEnter(event: KeyboardEvent) {
 }
 </script>
 
+<div class="mission-fence-inspector-shell">
 <Card.Root as="section" density="compact" testId={missionWorkspaceTestIds.fenceInspector}>
   <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
@@ -400,7 +401,7 @@ function handleEnter(event: KeyboardEvent) {
         <HelperText class="mt-1">This point stays separate from Home so fence recovery can target a dedicated location without implying Home sync or mission upload parity.</HelperText>
       </Card.Root>
 
-      <div class="grid gap-3 md:grid-cols-2">
+      <div class="mission-fence-coordinate-grid grid gap-3">
         <Card.Root density="compact" surface="muted">
           <Field.Root>
           <Field.Label class="text-xs font-medium text-text-muted">Latitude</Field.Label>
@@ -514,7 +515,7 @@ function handleEnter(event: KeyboardEvent) {
 
           <div class="space-y-3">
             {#each polygonVertices(region) as vertex, index (`vertex-${index}`)}
-              <div class="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+              <div class="mission-fence-vertex-grid grid gap-3">
                 <MonoValue class="font-semibold uppercase" size="xs" tone="muted">V{index + 1}</MonoValue>
                 <Field.Root>
                   <Field.Label class="text-xs font-medium text-text-muted">Latitude</Field.Label>
@@ -562,7 +563,7 @@ function handleEnter(event: KeyboardEvent) {
           </div>
         </Card.Root>
       {:else}
-        <div class="grid gap-3 md:grid-cols-3">
+        <div class="mission-fence-coordinate-grid grid gap-3">
           {#if circleCenter(region)}
             <Card.Root density="compact" surface="muted">
               <Field.Root>
@@ -655,3 +656,25 @@ function handleEnter(event: KeyboardEvent) {
     <HelperText class="mt-3" size="xs" tone="warning" testId={missionWorkspaceTestIds.fenceInspectorValidation}>{visibleValidationMessage}</HelperText>
   {/if}
 </Card.Root>
+</div>
+
+<style>
+  .mission-fence-inspector-shell {
+    container-type: inline-size;
+  }
+
+  .mission-fence-coordinate-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  }
+
+  .mission-fence-vertex-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  @container (min-width: 36rem) {
+    .mission-fence-vertex-grid {
+      grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+      align-items: end;
+    }
+  }
+</style>

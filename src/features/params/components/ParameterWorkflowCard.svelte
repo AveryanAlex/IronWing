@@ -125,13 +125,13 @@ function valueText(valueText: string, valueLabel: string | null, units: string |
   testId={`${parameterWorkspaceTestIds.workflowCardPrefix}-${card.id}`}
 >
   <div class="flex flex-wrap items-start justify-between gap-3">
-    <div>
+    <div class="min-w-0">
       <Eyebrow>{card.eyebrow}</Eyebrow>
       <h3 class="mt-2 text-lg font-semibold text-text-primary">{card.title}</h3>
       <HelperText class="mt-2">{card.description}</HelperText>
     </div>
 
-    <div class="flex flex-wrap items-center gap-2">
+    <div class="min-w-0 flex flex-wrap items-center gap-2">
       <Badge shape="rounded" size="lg" variant={card.status === "ready" ? "success" : "warning"}>
         {card.status === "ready" ? "ready" : "guided disabled"}
       </Badge>

@@ -1,5 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
+import { noopLayoutAudit, type LayoutAudit } from "../layout";
+
 export type WorkspaceKey = "overview" | "telemetry" | "hud" | "mission" | "logs" | "firmware" | "setup" | "settings";
 
 const ids = {
@@ -23,7 +25,10 @@ const workspaceLabels: Record<WorkspaceKey, string> = {
 };
 
 export class ShellPage {
-  constructor(private readonly page: Page) {}
+  constructor(
+    private readonly page: Page,
+    private readonly auditLayout: LayoutAudit = noopLayoutAudit,
+  ) {}
 
   async expectReady(): Promise<void> {
     await expect(this.page).toHaveTitle(/IronWing/);
@@ -43,6 +48,7 @@ export class ShellPage {
   async navigateTo(workspace: WorkspaceKey): Promise<void> {
     await this.page.getByRole("link", { name: workspaceLabels[workspace], exact: true }).click();
     await this.expectActiveWorkspace(workspace);
+    await this.auditLayout(`navigate to ${workspace}`);
   }
 
   async expectActiveWorkspace(workspace: WorkspaceKey): Promise<void> {

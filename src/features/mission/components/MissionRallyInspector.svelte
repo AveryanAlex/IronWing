@@ -136,7 +136,7 @@ function commitAltitude(rawValue: string) {
         />
       {/if}
 
-      <div class="grid gap-3 md:grid-cols-3">
+      <div class="mission-rally-coordinate-grid grid gap-3">
         <Card.Root density="compact" surface="muted">
           <Field.Root>
           <Field.Label class="text-xs font-medium text-text-muted">Latitude</Field.Label>
@@ -203,3 +203,9 @@ function commitAltitude(rawValue: string) {
     <HelperText class="mt-3" size="xs" tone="warning" testId={missionWorkspaceTestIds.rallyInspectorValidation}>{validationMessage}</HelperText>
   {/if}
 </Card.Root>
+
+<style>
+  .mission-rally-coordinate-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  }
+</style>

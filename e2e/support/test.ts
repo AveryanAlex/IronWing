@@ -7,8 +7,10 @@ type Fixtures = {
 };
 
 export const test = base.extend<Fixtures>({
-  app: async ({ page }, use) => {
-    await use(new IronWingApp(page));
+  app: async ({ page }, use, testInfo) => {
+    const expectedTier =
+      typeof testInfo.project.metadata.expectedTier === "string" ? testInfo.project.metadata.expectedTier : undefined;
+    await use(new IronWingApp(page, { expectedTier }));
   },
 });
 

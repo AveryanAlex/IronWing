@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expectLayoutTargetsReachable } from "../layout";
+import { expectLayoutTargetsReachable, noopLayoutAudit, type LayoutAudit } from "../layout";
 import { expectLiveMetric } from "./utils";
 
 const ids = {
@@ -11,13 +11,17 @@ const ids = {
 } as const;
 
 export class TelemetryWorkspacePage {
-  constructor(private readonly page: Page) {}
+  constructor(
+    private readonly page: Page,
+    private readonly auditLayout: LayoutAudit = noopLayoutAudit,
+  ) {}
 
   async expectLiveMetrics(): Promise<void> {
     await expectLiveMetric(this.page, ids.altitude);
     await expectLiveMetric(this.page, ids.speed);
     await expectLiveMetric(this.page, ids.battery);
     await expectLiveMetric(this.page, ids.gps);
+    await this.auditLayout("telemetry live metrics");
   }
 
   async expectPrimarySurfacesReachable(label = "telemetry"): Promise<void> {

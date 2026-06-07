@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 import type { MissionItemDraft } from "../data/mission";
-import { expectLayoutTargetsReachable } from "../layout";
+import { expectLayoutTargetsReachable, noopLayoutAudit, type LayoutAudit } from "../layout";
 import { expectNumberInputClose, fillAndBlur, isVisible } from "./utils";
 
 const ids = {
@@ -37,12 +37,16 @@ const ids = {
 } as const;
 
 export class MissionWorkspacePage {
-  constructor(private readonly page: Page) {}
+  constructor(
+    private readonly page: Page,
+    private readonly auditLayout: LayoutAudit = noopLayoutAudit,
+  ) {}
 
   async expectOpen(): Promise<void> {
     await expect(this.page.getByTestId(ids.root)).toBeVisible({ timeout: 15_000 });
     await expect(this.page.getByTestId(ids.ready)).toBeVisible();
     await expect(this.page.getByTestId(ids.planningStats)).toBeVisible();
+    await this.auditLayout("mission open");
   }
 
   async clearDraft(): Promise<void> {
@@ -56,16 +60,19 @@ export class MissionWorkspacePage {
       await this.page.getByTestId(ids.promptConfirm).click();
     }
     await this.expectDraftEmpty();
+    await this.auditLayout("mission draft cleared");
   }
 
   async expectDraftEmpty(): Promise<void> {
     await expect(this.page.getByTestId(ids.listEmpty)).toBeVisible({ timeout: 10_000 });
     await expect(this.page.getByTestId(ids.inspectorEmpty)).toBeVisible();
+    await this.auditLayout("mission draft empty");
   }
 
   async authorItems(items: MissionItemDraft[]): Promise<void> {
     for (const [index, item] of items.entries()) {
       await this.addItem(index, item);
+      await this.auditLayout(`mission item ${index + 1} authored`);
     }
     await this.expectDraftItemCount(items.length);
   }
@@ -79,16 +86,19 @@ export class MissionWorkspacePage {
     await expect(upload).toBeEnabled({ timeout: 10_000 });
     await upload.click();
     await expect(upload).toContainText(/Uploaded/i, { timeout: 30_000 });
+    await this.auditLayout("mission uploaded");
   }
 
   async readFromVehicle(expectedItems: number): Promise<void> {
     await this.clickToolbarAction(ids.toolbarRead);
     await this.expectDraftItemCount(expectedItems, 30_000);
+    await this.auditLayout("mission read from vehicle");
   }
 
   async expectItems(items: MissionItemDraft[]): Promise<void> {
     for (const [index, item] of items.entries()) {
       await this.expectItem(index, item);
+      await this.auditLayout(`mission item ${index + 1} verified`);
     }
   }
 
@@ -106,12 +116,15 @@ export class MissionWorkspacePage {
     await this.clearDraft();
     await this.page.getByTestId(ids.addWaypoint).click();
     await this.expectDraftItemCount(1);
+    await this.auditLayout("mission waypoint added");
 
     await this.page.getByTestId(ids.toolbarUndo).click();
     await this.expectDraftEmpty();
+    await this.auditLayout("mission undo");
 
     await this.page.getByTestId(ids.toolbarRedo).click();
     await this.expectDraftItemCount(1);
+    await this.auditLayout("mission redo");
     await this.clearDraft();
   }
 
@@ -120,14 +133,17 @@ export class MissionWorkspacePage {
     await this.switchMode("mission");
     await this.page.getByTestId(ids.addSurveyGrid).click();
     await this.expectAtLeastOne(this.surveyBlocks(), "survey block");
+    await this.auditLayout("mission survey grid added");
 
     await this.switchMode("fence");
     await this.page.getByTestId(ids.fenceAddInclusionCircle).click();
     await this.expectAtLeastOne(this.fenceRegions(), "fence region");
+    await this.auditLayout("mission fence region added");
 
     await this.switchMode("rally");
     await this.page.getByTestId(ids.rallyAdd).click();
     await this.expectAtLeastOne(this.rallyPoints(), "rally point");
+    await this.auditLayout("mission rally point added");
   }
 
   private async addItem(index: number, item: MissionItemDraft): Promise<void> {
@@ -145,7 +161,7 @@ export class MissionWorkspacePage {
     await fillAndBlur(this.page.getByTestId(ids.inspectorLongitude), item.longitude.toFixed(7));
 
     const altitude = this.page.getByTestId(ids.inspectorAltitude);
-    if (item.altitude !== undefined && await isVisible(altitude)) {
+    if (item.altitude !== undefined && (await isVisible(altitude))) {
       await fillAndBlur(altitude, String(item.altitude));
     }
 
@@ -208,6 +224,7 @@ export class MissionWorkspacePage {
       await this.page.keyboard.press("Escape");
     }
     await expect(modeRoots[mode]).toBeVisible({ timeout: 10_000 });
+    await this.auditLayout(`mission mode ${mode}`);
   }
 
   private missionItemRows(): Locator {
@@ -227,7 +244,9 @@ export class MissionWorkspacePage {
   }
 
   private async expectAtLeastOne(locator: Locator, label: string): Promise<void> {
-    await expect.poll(() => locator.count(), { message: `${label} should be created`, timeout: 10_000 }).toBeGreaterThan(0);
+    await expect
+      .poll(() => locator.count(), { message: `${label} should be created`, timeout: 10_000 })
+      .toBeGreaterThan(0);
     await expect(locator.first()).toBeVisible();
   }
 }

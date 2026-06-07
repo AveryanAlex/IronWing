@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 import { safeParameterEditCandidates, setupSections, type ParameterEdit, type SetupSection } from "../data/setup";
-import { expectLayoutTargetsReachable } from "../layout";
+import { expectLayoutTargetsReachable, noopLayoutAudit, type LayoutAudit } from "../layout";
 import { fillAndBlur, isVisible } from "./utils";
 
 const ids = {
@@ -22,10 +22,15 @@ const ids = {
   reviewSurface: "app-shell-parameter-review-surface",
   reviewToggle: "app-shell-parameter-review-toggle",
   reviewTray: "app-shell-parameter-review-tray",
+  sectionDrawer: "setup-workspace-section-drawer",
+  sectionDrawerToggle: "setup-workspace-section-drawer-toggle",
 } as const;
 
 export class SetupWorkspacePage {
-  constructor(private readonly page: Page) {}
+  constructor(
+    private readonly page: Page,
+    private readonly auditLayout: LayoutAudit = noopLayoutAudit,
+  ) {}
 
   async ensureParametersDownloaded(): Promise<void> {
     await this.downloadParametersIfNeeded();
@@ -35,6 +40,7 @@ export class SetupWorkspacePage {
   async expectOverview(): Promise<void> {
     await expect(this.page.getByTestId(ids.overviewSection)).toBeVisible({ timeout: 15_000 });
     await expect(this.page.getByTestId(ids.overviewBanner)).toBeVisible();
+    await this.auditLayout("setup overview");
   }
 
   async expectSectionsOpen(sections: readonly SetupSection[] = setupSections): Promise<void> {
@@ -43,7 +49,9 @@ export class SetupWorkspacePage {
     }
   }
 
-  async stageFirstAvailableSafeParameterEdit(candidates: readonly string[] = safeParameterEditCandidates): Promise<ParameterEdit> {
+  async stageFirstAvailableSafeParameterEdit(
+    candidates: readonly string[] = safeParameterEditCandidates,
+  ): Promise<ParameterEdit> {
     await this.openFullParameters();
 
     for (const name of candidates) {
@@ -61,6 +69,7 @@ export class SetupWorkspacePage {
       await input.fill(String(next));
       await input.blur();
       await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-${name}`)).toHaveCount(1, { timeout: 10_000 });
+      await this.auditLayout(`setup staged ${name}`);
       return { name, current, next };
     }
 
@@ -81,8 +90,11 @@ export class SetupWorkspacePage {
 
     const next = Number((current + 1).toFixed(2));
     await fillAndBlur(input, String(next));
-    await expect(this.page.getByTestId("setup-workspace-rtl-return-staged-RTL_ALTITUDE")).toBeVisible({ timeout: 10_000 });
+    await expect(this.page.getByTestId("setup-workspace-rtl-return-staged-RTL_ALTITUDE")).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-${name}`)).toHaveCount(1, { timeout: 10_000 });
+    await this.auditLayout("setup staged RTL_ALTITUDE");
     return { name, current, next };
   }
 
@@ -94,6 +106,7 @@ export class SetupWorkspacePage {
     for (const name of names) {
       await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-${name}`)).toBeVisible();
     }
+    await this.auditLayout("setup parameter review");
   }
 
   async applyStagedParameters(names: string[]): Promise<void> {
@@ -103,6 +116,7 @@ export class SetupWorkspacePage {
       await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-${name}`)).toHaveCount(0, { timeout: 45_000 });
     }
     await expect(this.page.getByTestId(ids.reviewTray)).toHaveCount(0, { timeout: 10_000 });
+    await this.auditLayout("setup parameters applied");
   }
 
   async reloadParametersFromVehicle(): Promise<void> {
@@ -112,6 +126,7 @@ export class SetupWorkspacePage {
     await expect(refresh).toBeEnabled({ timeout: 10_000 });
     await refresh.click();
     await expect(this.page.getByRole("button", { name: "Refresh all" })).toBeVisible({ timeout: 45_000 });
+    await this.auditLayout("setup parameters reloaded");
   }
 
   async expectParameterValue(name: string, expected: number): Promise<void> {
@@ -122,19 +137,34 @@ export class SetupWorkspacePage {
     }
 
     await expect.poll(async () => Number(await input.inputValue()), { timeout: 10_000 }).toBeCloseTo(expected, 2);
+    await this.auditLayout(`setup parameter ${name} value`);
   }
 
   async expectPrimaryActionsReachable(label = "setup"): Promise<void> {
     await expectLayoutTargetsReachable(this.page, label, [
       { label: "overview section", locator: this.page.getByTestId(ids.overviewSection) },
       { label: "setup banner", locator: this.page.getByTestId(ids.overviewBanner) },
-      { label: "refresh parameters", locator: this.page.getByRole("button", { name: "Refresh all" }), requireEnabled: true },
+      {
+        label: "refresh parameters",
+        locator: this.page.getByRole("button", { name: "Refresh all" }),
+        requireEnabled: true,
+      },
     ]);
   }
 
   async openSection(section: SetupSection): Promise<void> {
-    await this.page.getByTestId(`setup-workspace-nav-${section.id}`).click();
-    await expect(this.page.getByTestId(section.testId), `${section.label} should open`).toBeVisible({ timeout: 15_000 });
+    const navLink = this.page.getByTestId(`setup-workspace-nav-${section.id}`);
+    if (!(await isVisible(navLink))) {
+      await this.page.getByTestId(ids.sectionDrawerToggle).click();
+      await expect(this.page.getByTestId(ids.sectionDrawer)).toHaveAttribute("data-open", "true", { timeout: 10_000 });
+      await this.auditLayout("setup section drawer open");
+    }
+
+    await navLink.click();
+    await expect(this.page.getByTestId(section.testId), `${section.label} should open`).toBeVisible({
+      timeout: 15_000,
+    });
+    await this.auditLayout(`setup section ${section.id}`);
   }
 
   private async openSectionById(sectionId: SetupSection["id"]): Promise<void> {
@@ -151,6 +181,7 @@ export class SetupWorkspacePage {
       await this.page.getByTestId(ids.reviewToggle).click();
     }
     await expect(surface).toBeVisible();
+    await this.auditLayout("setup review surface visible");
   }
 
   private async downloadParametersIfNeeded(): Promise<void> {

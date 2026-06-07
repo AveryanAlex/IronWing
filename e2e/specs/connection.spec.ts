@@ -1,4 +1,3 @@
-import { applyDemoViewport, demoViewports } from "../support/layout";
 import { test } from "../support/test";
 
 test("connection panel connects, disconnects, and reconnects demo vehicles", async ({ app }) => {
@@ -25,11 +24,11 @@ test("connection panel connects, disconnects, and reconnects demo vehicles", asy
   });
 });
 
-test("connection drawer remains usable on phone", async ({ app, page }) => {
-  await test.step("Open the app at phone size", async () => {
-    await applyDemoViewport(page, "phone");
+test("connection drawer remains usable on phone", async ({ app }, testInfo) => {
+  test.skip(testInfo.project.name !== "phone", "The vehicle drawer is phone-only shell chrome");
+
+  await test.step("Open the app", async () => {
     await app.open();
-    await app.shell.expectTier(demoViewports.phone.expectedTier);
   });
 
   await test.step("Open and close the vehicle drawer through the shell control", async () => {

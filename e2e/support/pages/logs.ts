@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-import { expectLayoutTargetsReachable } from "../layout";
+import { expectLayoutTargetsReachable, noopLayoutAudit, type LayoutAudit } from "../layout";
 
 const ids = {
   libraryEmpty: "logs-library-empty",
@@ -13,7 +13,10 @@ const ids = {
 } as const;
 
 export class LogsWorkspacePage {
-  constructor(private readonly page: Page) {}
+  constructor(
+    private readonly page: Page,
+    private readonly auditLayout: LayoutAudit = noopLayoutAudit,
+  ) {}
 
   async expectEmptyAndIdle(): Promise<void> {
     await expect(this.page.getByTestId(ids.root)).toBeVisible({ timeout: 15_000 });
@@ -24,6 +27,7 @@ export class LogsWorkspacePage {
     await expect(this.page.getByTestId(ids.replayPanel)).toBeVisible();
     await expect(this.page.getByTestId(ids.playbackLabel)).toContainText(/Replay idle/i);
     await expect(this.page.getByText("Select a log to inspect it.")).toBeVisible();
+    await this.auditLayout("logs empty idle");
   }
 
   async expectPrimarySurfacesReachable(label = "logs"): Promise<void> {

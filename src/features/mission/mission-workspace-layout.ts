@@ -74,7 +74,7 @@ export function resolveMissionWorkspaceLayout(
 ): MissionWorkspaceLayout {
   const state = normalizeMissionWorkspaceChromeState(chrome);
 
-  if (state.tier === "phone") {
+  if (state.tier === "phone" || state.tier === "tablet") {
     return {
       mode: plannerMode === "mission" ? "phone-segmented" : "phone-stack",
       tier: state.tier,

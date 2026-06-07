@@ -1,4 +1,3 @@
-import { applyDemoViewport, constrainedLayoutViewports, demoViewports, expectWorkspaceUsable } from "../support/layout";
 import { test } from "../support/test";
 import { safeParameterEditCandidates, setupSections } from "../support/data/setup";
 
@@ -23,7 +22,9 @@ test("setup workspace opens every section and persists a safe parameter edit", a
 
   let edit: Awaited<ReturnType<typeof app.setup.stageFirstAvailableSafeParameterEdit>>;
   await test.step("Stage one safe numeric parameter edit through Full Parameters", async () => {
-    edit = await app.setup.stageFirstAvailableSafeParameterEdit(safeParameterEditCandidates.filter((candidate) => candidate !== guidedEdit.name));
+    edit = await app.setup.stageFirstAvailableSafeParameterEdit(
+      safeParameterEditCandidates.filter((candidate) => candidate !== guidedEdit.name),
+    );
     await app.setup.expectReviewContains([guidedEdit.name, edit.name]);
   });
 
@@ -37,20 +38,3 @@ test("setup workspace opens every section and persists a safe parameter edit", a
     await app.setup.expectParameterValue(edit.name, edit.next);
   });
 });
-
-for (const viewport of constrainedLayoutViewports) {
-  test(`setup layout keeps primary actions reachable on ${viewport}`, async ({ app, page }) => {
-    await test.step(`Open Setup with downloaded demo parameters at the ${viewport} viewport`, async () => {
-      await applyDemoViewport(page, viewport);
-      await app.openAndConnectDemo("quadplane");
-      await app.navigateTo("setup");
-      await app.shell.expectTier(demoViewports[viewport].expectedTier);
-      await app.setup.ensureParametersDownloaded();
-    });
-
-    await test.step("Verify setup overview controls fit and remain reachable", async () => {
-      await expectWorkspaceUsable(page, `${viewport} setup`);
-      await app.setup.expectPrimaryActionsReachable(`${viewport} setup`);
-    });
-  });
-}

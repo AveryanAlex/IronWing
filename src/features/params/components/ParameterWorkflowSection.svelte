@@ -49,7 +49,7 @@ let {
     <p class="mt-2 text-sm leading-6 text-text-secondary">{section.description}</p>
   </div>
 
-  <div class="mt-4 grid gap-4 xl:grid-cols-2">
+  <div class="parameter-workflow-card-grid mt-4 grid gap-4">
     {#each section.cards as card (card.id)}
       <ParameterWorkflowCard
         {batteryControls}
@@ -62,3 +62,9 @@ let {
     {/each}
   </div>
 </Card.Root>
+
+<style>
+  .parameter-workflow-card-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  }
+</style>

@@ -119,7 +119,7 @@ let {
 
 let cardClass = $derived(
   cn(
-    "border text-text-primary",
+    "min-w-0 max-w-full border text-text-primary",
     layoutClasses[layout],
     surfaceClasses[surface],
     toneClasses[tone],

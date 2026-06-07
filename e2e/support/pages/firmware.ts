@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-import { expectLayoutTargetsReachable } from "../layout";
+import { expectLayoutTargetsReachable, noopLayoutAudit, type LayoutAudit } from "../layout";
 
 const ids = {
   blockedCopy: "firmware-workspace-blocked-copy",
@@ -16,7 +16,10 @@ const ids = {
 } as const;
 
 export class FirmwareWorkspacePage {
-  constructor(private readonly page: Page) {}
+  constructor(
+    private readonly page: Page,
+    private readonly auditLayout: LayoutAudit = noopLayoutAudit,
+  ) {}
 
   async expectInstallSurfaceSane(): Promise<void> {
     await expect(this.page.getByTestId(ids.root)).toBeVisible({ timeout: 15_000 });
@@ -27,6 +30,7 @@ export class FirmwareWorkspacePage {
     await expect(this.page.getByLabel("Serial port")).toBeVisible();
     await expect(this.page.getByRole("heading", { name: "Choose firmware" })).toBeVisible();
     await expect(this.page.getByRole("button", { name: "Start firmware update" })).toBeDisabled();
+    await this.auditLayout("firmware install surface");
   }
 
   async expectCapabilityBannerIfLayoutBlocksActions(): Promise<void> {
@@ -44,12 +48,17 @@ export class FirmwareWorkspacePage {
     await expect(this.page.getByTestId(ids.recoverySafetyConfirm)).toBeVisible();
     await expect(this.page.getByTestId(ids.recoveryBlockedReason)).toBeVisible();
     await expect(this.page.getByTestId(ids.startRecovery)).toBeDisabled();
+    await this.auditLayout("firmware recovery mode");
   }
 
   async expectPrimaryActionsReachable(label = "firmware"): Promise<void> {
     await expectLayoutTargetsReachable(this.page, label, [
       { label: "firmware workspace", locator: this.page.getByTestId(ids.root) },
-      { label: "install mode selector", locator: this.page.getByRole("button", { name: /Install or update flight firmware/i }), requireEnabled: true },
+      {
+        label: "install mode selector",
+        locator: this.page.getByRole("button", { name: /Install or update flight firmware/i }),
+        requireEnabled: true,
+      },
       { label: "serial port selector", locator: this.page.getByLabel("Serial port") },
       { label: "start update action", locator: this.page.getByRole("button", { name: "Start firmware update" }) },
     ]);

@@ -20,5 +20,7 @@ export async function fillAndBlur(locator: Locator, value: string): Promise<void
 }
 
 export async function expectNumberInputClose(locator: Locator, expected: number, precision = 3): Promise<void> {
-  await expect.poll(async () => Number(await locator.inputValue()), { timeout: 10_000 }).toBeCloseTo(expected, precision);
+  await expect
+    .poll(async () => Number(await locator.inputValue()), { timeout: 10_000 })
+    .toBeCloseTo(expected, precision);
 }

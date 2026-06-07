@@ -85,6 +85,26 @@ describe("resolveMissionWorkspaceLayout", () => {
     });
   });
 
+  it("uses the segmented mission shell on tablet to keep editor panels full width", () => {
+    const layout = resolveMissionWorkspaceLayout(
+      {
+        width: 800,
+        height: 480,
+        tier: "tablet",
+      },
+      "mission",
+    );
+
+    expect(layout).toMatchObject({
+      mode: "phone-segmented",
+      tier: "tablet",
+      detailColumns: "stacked",
+      supportPlacement: "below",
+      showPhoneSegments: true,
+      phoneSegmentDefault: "plan",
+    });
+  });
+
   it("fails closed to the desktop-safe fallback when dimensions are malformed", () => {
     const layout = resolveMissionWorkspaceLayout(
       {

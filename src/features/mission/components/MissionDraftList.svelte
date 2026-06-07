@@ -599,6 +599,7 @@ function handleFallbackDragEnd() {
 }
 </script>
 
+<div class="mission-draft-list-shell">
 <Card.Root as="section" density="compact" testId={missionWorkspaceTestIds.draftList}>
   <div class="flex items-center justify-between gap-3 border-b border-border/70 pb-2">
     <div class="flex min-w-0 items-center gap-2">
@@ -643,7 +644,7 @@ function handleFallbackDragEnd() {
               {@const selected = selectedSurface.kind === "mission-item" && selectedMissionUiId === entry.item.uiId}
               {@const coordinates = coordinateSummary(entry.item)}
               <div
-                class={`group relative flex min-h-11 items-stretch rounded-md border text-xs transition-colors ${selected
+                class={`mission-draft-item group relative flex min-h-11 items-stretch overflow-hidden rounded-md border text-xs transition-colors ${selected
                   ? "border-accent bg-accent/12 shadow-[inset_0_0_0_1px_rgba(18,185,255,0.22)]"
                   : missionItem.current
                     ? "border-success/40 bg-success/5 hover:bg-success/10"
@@ -676,7 +677,7 @@ function handleFallbackDragEnd() {
                   />
                 </div>
 
-                <div class="flex min-w-0 flex-1 items-center gap-2 px-2 py-2">
+                <div class="mission-draft-item__body flex min-w-0 flex-1 items-center gap-2 px-2 py-2">
                   <span class={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold tabular-nums ${selected
                     ? "bg-accent/25 text-accent"
                     : missionItem.current
@@ -687,8 +688,8 @@ function handleFallbackDragEnd() {
                   <Badge class="shrink-0" shape="rounded" size="micro" tone={badge.tone} variant="tint">
                     {badge.label}
                   </Badge>
-                  <span class="shrink-0 font-semibold text-text-primary">{commandDisplayName(command)}</span>
-                  <span class="min-w-0 truncate text-text-muted">
+                  <span class="mission-draft-item__command min-w-0 shrink truncate font-semibold text-text-primary">{commandDisplayName(command)}</span>
+                  <span class="mission-draft-item__detail min-w-0 truncate text-text-muted">
                     {#if coordinates}
                       <span class="inline-flex min-w-0 items-center gap-1">
                         <MapPin aria-hidden="true" class="shrink-0" size={11} />
@@ -698,12 +699,12 @@ function handleFallbackDragEnd() {
                       {parameterSummary(command, items.length)}
                     {/if}
                   </span>
-                  <span class="ml-auto shrink-0 tabular-nums text-text-muted">{altitudeSummary(entry.item)}</span>
+                  <span class="mission-draft-item__alt ml-auto shrink-0 tabular-nums text-text-muted">{altitudeSummary(entry.item)}</span>
                   {#if entry.item.readOnly}
                     <Badge class="shrink-0" shape="rounded" size="micro" variant="warning">Raw</Badge>
                   {/if}
                   {#if missionItem.current}
-                    <Navigation aria-label="Current mission item" class="shrink-0 fill-success text-success" size={13} />
+                    <Navigation aria-label="Current mission item" class="mission-draft-item__current shrink-0 fill-success text-success" size={13} />
                   {/if}
                 </div>
 
@@ -818,3 +819,36 @@ function handleFallbackDragEnd() {
     </DragDropProvider>
   {/if}
 </Card.Root>
+</div>
+
+<style>
+  .mission-draft-list-shell {
+    container-type: inline-size;
+  }
+
+  @container (max-width: 16rem) {
+    .mission-draft-item__body {
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: var(--space-1) var(--space-2);
+    }
+
+    .mission-draft-item__command {
+      flex: 1 1 4rem;
+    }
+
+    .mission-draft-item__detail {
+      order: 10;
+      flex: 1 0 100%;
+    }
+
+    .mission-draft-item__alt {
+      margin-left: 0;
+      order: 11;
+    }
+
+    .mission-draft-item__current {
+      order: 12;
+    }
+  }
+</style>

@@ -29,11 +29,11 @@ let {
 }: Props = $props();
 </script>
 
-<section class="rate-axis-card min-w-0 rounded-xl border border-border bg-bg-secondary/70 p-3">
-  <div class="flex min-w-0 items-center justify-between gap-3">
+<section class="rate-axis-card min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-bg-secondary/70 p-3">
+  <div class="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
     <h3 class="shrink-0 text-sm font-semibold text-text-primary">{axis.label}</h3>
     <p
-      class="min-w-0 truncate text-right text-xs font-medium text-text-secondary sm:text-sm"
+      class="min-w-0 max-w-full flex-1 basis-40 text-right text-xs font-medium text-text-secondary sm:text-sm"
       data-testid={markerTestId}
       title={markerSummary}
     >
@@ -41,8 +41,8 @@ let {
     </p>
   </div>
 
-  <div class="rate-axis-body mt-3 grid min-w-0 gap-4">
-    <div class="rate-axis-chart-pane relative min-h-64 min-w-0 overflow-hidden">
+  <div class="rate-axis-body mt-3 grid min-w-0 max-w-full gap-4">
+    <div class="rate-axis-chart-pane relative min-w-0 max-w-full overflow-hidden">
       <div class="absolute inset-0">
         <RateCurvePreviewChart
           plot={{
@@ -60,7 +60,7 @@ let {
       </div>
     </div>
 
-    <div class="rate-axis-settings-pane min-w-0">
+    <div class="rate-axis-settings-pane min-w-0 max-w-full">
       <RateAxisControls
         {axis}
         {disabled}
@@ -79,7 +79,7 @@ let {
   }
 
   .rate-axis-chart-pane {
-    aspect-ratio: 16 / 9;
+    height: clamp(14rem, 56cqw, 16rem);
   }
 
   @container (min-width: 45rem) {
@@ -91,13 +91,14 @@ let {
     .rate-axis-chart-pane {
       flex: 1 1 20rem;
       max-width: 39.0625rem;
-      min-width: 20rem;
-      aspect-ratio: auto;
+      min-width: 0;
+      min-height: 16rem;
+      height: auto;
     }
 
     .rate-axis-settings-pane {
       flex: 1 1 24rem;
-      min-width: 24rem;
+      min-width: 0;
     }
   }
 </style>

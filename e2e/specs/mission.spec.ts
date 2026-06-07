@@ -1,4 +1,3 @@
-import { applyDemoViewport, constrainedLayoutViewports, demoViewports, expectWorkspaceUsable } from "../support/layout";
 import { test } from "../support/test";
 import { mixedDemoMissionPlan } from "../support/data/mission";
 
@@ -48,20 +47,3 @@ test("mission workspace supports undo, redo, survey, fence, and rally planning t
     await app.mission.expectSurveyFenceAndRallyToolsCreateDraftContent();
   });
 });
-
-for (const viewport of constrainedLayoutViewports) {
-  test(`mission layout keeps primary actions reachable on ${viewport}`, async ({ app, page }) => {
-    await test.step(`Open Mission with a connected demo copter at the ${viewport} viewport`, async () => {
-      await applyDemoViewport(page, viewport);
-      await app.openAndConnectDemo("quadcopter");
-      await app.navigateTo("mission");
-      await app.shell.expectTier(demoViewports[viewport].expectedTier);
-      await app.mission.expectOpen();
-    });
-
-    await test.step("Verify the mission toolbar and planning surfaces fit and remain reachable", async () => {
-      await expectWorkspaceUsable(page, `${viewport} mission`);
-      await app.mission.expectPrimaryActionsReachable(`${viewport} mission`);
-    });
-  });
-}

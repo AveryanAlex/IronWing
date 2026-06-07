@@ -1,15 +1,19 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
-import { expectLayoutTargetsReachable } from "../layout";
+import { expectLayoutTargetsReachable, noopLayoutAudit, type LayoutAudit } from "../layout";
 
 export class SettingsWorkspacePage {
-  constructor(private readonly page: Page) {}
+  constructor(
+    private readonly page: Page,
+    private readonly auditLayout: LayoutAudit = noopLayoutAudit,
+  ) {}
 
   async expectOpen(): Promise<void> {
     await expect(this.page.getByRole("heading", { name: "Telemetry & runtime" })).toBeVisible({ timeout: 10_000 });
     await expect(this.page.getByText("Telemetry update rate")).toBeVisible();
     await expect(this.page.getByRole("heading", { name: "Flight display" })).toBeVisible();
     await expect(this.page.getByText("Synthetic Vision System")).toBeVisible();
+    await this.auditLayout("settings open");
   }
 
   async expectPrimaryControlsReachable(label = "settings"): Promise<void> {
@@ -33,6 +37,7 @@ export class SettingsWorkspacePage {
 
     const after = await this.sliderValue(slider);
     await expect(this.page.getByText(`${after} Hz`).first()).toBeVisible();
+    await this.auditLayout("settings telemetry rate changed");
     return { before, after };
   }
 
@@ -45,7 +50,10 @@ export class SettingsWorkspacePage {
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-checked", String(after), { timeout: 10_000 });
     await expect(this.page.getByText(after ? "Enabled" : "Disabled").first()).toBeVisible();
-    await expect.poll(() => this.page.evaluate(() => localStorage.getItem("ironwing.hud.svs_enabled")), { timeout: 10_000 }).toBe(String(after));
+    await expect
+      .poll(() => this.page.evaluate(() => localStorage.getItem("ironwing.hud.svs_enabled")), { timeout: 10_000 })
+      .toBe(String(after));
+    await this.auditLayout("settings synthetic vision toggled");
 
     return { before, after };
   }

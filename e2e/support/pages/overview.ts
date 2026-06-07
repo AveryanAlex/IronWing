@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-import { expectLayoutTargetsReachable } from "../layout";
+import { expectLayoutTargetsReachable, noopLayoutAudit, type LayoutAudit } from "../layout";
 import { expectLiveMetric } from "./utils";
 
 const ids = {
@@ -15,7 +15,10 @@ const ids = {
 } as const;
 
 export class OverviewWorkspacePage {
-  constructor(private readonly page: Page) {}
+  constructor(
+    private readonly page: Page,
+    private readonly auditLayout: LayoutAudit = noopLayoutAudit,
+  ) {}
 
   async expectLive(): Promise<void> {
     await expect(this.page.getByTestId(ids.root)).toBeVisible({ timeout: 15_000 });
@@ -23,6 +26,7 @@ export class OverviewWorkspacePage {
     await expect(this.page.getByTestId(ids.disconnected)).toHaveCount(0);
     await expect(this.page.getByTestId(ids.readiness)).toBeVisible();
     await this.expectLiveSummaryMetrics();
+    await this.auditLayout("overview live");
   }
 
   async expectLiveSummaryMetrics(): Promise<void> {

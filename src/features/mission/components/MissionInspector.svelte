@@ -388,7 +388,7 @@ function updateAltitudeInput(event: Event) {
 </script>
 
 <Card.Root as="section" density="compact" testId={missionWorkspaceTestIds.inspector}>
-  <div class="flex items-center gap-2">
+  <div class="flex flex-wrap items-center gap-2">
     <Settings2 aria-hidden="true" class="shrink-0 text-accent" size={16} />
     <Eyebrow tracking="widest">Inspector</Eyebrow>
 
@@ -596,7 +596,7 @@ function updateAltitudeInput(event: Event) {
               <p class="text-[10px] font-medium text-text-muted">Coordinates</p>
               <span class="text-[10px] text-text-muted">Relative Alt</span>
             </div>
-            <div class="grid gap-2 sm:grid-cols-2">
+            <div class="grid gap-2">
               <Field.Root class="gap-1">
                 <Field.Label class="text-[10px] text-text-muted">Latitude (deg)</Field.Label>
                   <NumberInput

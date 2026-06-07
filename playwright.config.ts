@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { allLayoutViewports, demoViewports } from "./e2e/support/viewports";
+
 const PLAYWRIGHT_HOST = "127.0.0.1";
 const PLAYWRIGHT_PORT = Number(process.env.E2E_PORT) || 4173;
 const PLAYWRIGHT_BASE_URL = `http://${PLAYWRIGHT_HOST}:${PLAYWRIGHT_PORT}`;
@@ -32,10 +34,17 @@ export default defineConfig({
     video: "retain-on-failure",
   },
 
-  projects: [
-    {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+  projects: allLayoutViewports.map((name) => ({
+    name,
+    metadata: {
+      expectedTier: demoViewports[name].expectedTier,
     },
-  ],
+    use: {
+      ...devices["Desktop Chrome"],
+      viewport: {
+        width: demoViewports[name].width,
+        height: demoViewports[name].height,
+      },
+    },
+  })),
 });

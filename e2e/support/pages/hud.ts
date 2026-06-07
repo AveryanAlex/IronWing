@@ -1,9 +1,12 @@
 import { expect, type Page } from "@playwright/test";
 
-import { expectLayoutTargetsReachable } from "../layout";
+import { expectLayoutTargetsReachable, noopLayoutAudit, type LayoutAudit } from "../layout";
 
 export class HudWorkspacePage {
-  constructor(private readonly page: Page) {}
+  constructor(
+    private readonly page: Page,
+    private readonly auditLayout: LayoutAudit = noopLayoutAudit,
+  ) {}
 
   async expectLiveHud(): Promise<void> {
     const hud = this.page.locator(".hud-panel");
@@ -12,6 +15,7 @@ export class HudWorkspacePage {
     await expect(hud.getByText("GPS", { exact: true })).toBeVisible();
     await expect(hud.getByText("SAFE", { exact: true })).toBeVisible();
     await expect(hud.getByText("ALT", { exact: true })).toBeVisible();
+    await this.auditLayout("HUD live instruments");
   }
 
   async expectPrimarySurfacesReachable(label = "HUD"): Promise<void> {
