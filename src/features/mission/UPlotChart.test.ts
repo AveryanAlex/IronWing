@@ -3,7 +3,7 @@
 import { cleanup, render, screen } from "@testing-library/svelte";
 import { afterEach, describe, expect, it } from "vitest";
 
-import UPlotChart from "./components/UPlotChart.svelte";
+import UPlotChart from "../../components/charts/UPlotChart.svelte";
 
 describe("UPlotChart", () => {
   afterEach(() => {

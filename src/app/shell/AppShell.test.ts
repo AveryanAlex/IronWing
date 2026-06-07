@@ -49,6 +49,7 @@ import type {
 } from "../../lib/platform/session";
 import type { OpenSessionSnapshot } from "../../session";
 import { withShellContexts } from "../../test/context-harnesses";
+import { waitForBitsUiBodyScrollCleanup } from "../../test/bits-ui-cleanup";
 import type { TransportDescriptor } from "../../transport";
 
 type AppShellContentProps = {
@@ -337,9 +338,10 @@ describe("AppShell", () => {
     }
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     cleanup();
     resetRuntimeState();
+    await waitForBitsUiBodyScrollCleanup();
   });
 
   it("renders the shell frame, runtime markers, and docked vehicle panel on wide layouts", async () => {

@@ -2,10 +2,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import Menu from "./Menu.svelte";
+import { waitForBitsUiBodyScrollCleanup } from "../../test/bits-ui-cleanup";
 
 describe("Menu", () => {
-  afterEach(() => {
+  afterEach(async () => {
     cleanup();
+    await waitForBitsUiBodyScrollCleanup();
   });
 
   it("opens via trigger and fires item callbacks", async () => {

@@ -19,6 +19,7 @@ vi.mock("svelte-sonner", () => ({
 
 import { toast } from "svelte-sonner";
 import { withLiveSettingsContext } from "../../test/context-harnesses";
+import { waitForBitsUiBodyScrollCleanup } from "../../test/bits-ui-cleanup";
 import TelemetrySettingsDialog from "./TelemetrySettingsDialog.svelte";
 import { appShellTestIds } from "./chrome-state";
 
@@ -171,7 +172,7 @@ describe("TelemetrySettingsDialog", () => {
 
   afterEach(async () => {
     cleanup();
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await waitForBitsUiBodyScrollCleanup();
   });
 
   it("keeps telemetry cadence editable while disconnected and disables message-rate rows", async () => {
