@@ -21,11 +21,23 @@ function analyticsWebFrontendEnv(env = process.env) {
   };
 }
 
+function ardupilotFrontendEnv(env = process.env) {
+  return {
+    ...(env.IRONWING_ARDUPILOT_AUTOTEST_BASE_URL
+      ? { VITE_IRONWING_ARDUPILOT_AUTOTEST_BASE_URL: env.IRONWING_ARDUPILOT_AUTOTEST_BASE_URL }
+      : {}),
+    ...(env.IRONWING_ARDUPILOT_FIRMWARE_BASE_URL
+      ? { VITE_IRONWING_ARDUPILOT_FIRMWARE_BASE_URL: env.IRONWING_ARDUPILOT_FIRMWARE_BASE_URL }
+      : {}),
+  };
+}
+
 export function tauriFrontendEnv(overrides = {}, env = process.env) {
   return {
     IRONWING_PLATFORM: "tauri",
     IRONWING_OUT_DIR: DIST_DIRS.tauri,
     ...analyticsCommonFrontendEnv(env),
+    ...ardupilotFrontendEnv(env),
     ...overrides,
   };
 }
@@ -34,6 +46,7 @@ export function webFrontendEnv(overrides = {}, env = process.env) {
   return {
     IRONWING_PLATFORM: "web",
     ...analyticsWebFrontendEnv(env),
+    ...ardupilotFrontendEnv(env),
     ...overrides,
     ...(env.IRONWING_OUT_DIR ? { IRONWING_OUT_DIR: env.IRONWING_OUT_DIR } : {}),
     ...(env.IRONWING_BASE ? { IRONWING_BASE: env.IRONWING_BASE } : {}),

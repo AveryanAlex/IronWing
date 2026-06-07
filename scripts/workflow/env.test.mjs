@@ -34,3 +34,21 @@ describe("analytics frontend environment", () => {
     });
   });
 });
+
+describe("ArduPilot endpoint frontend environment", () => {
+  it("maps shared endpoint overrides into native and web frontend envs", () => {
+    const env = {
+      IRONWING_ARDUPILOT_AUTOTEST_BASE_URL: "https://proxy.example/autotest",
+      IRONWING_ARDUPILOT_FIRMWARE_BASE_URL: "https://proxy.example/firmware",
+    };
+
+    expect(tauriFrontendEnv({}, env)).toMatchObject({
+      VITE_IRONWING_ARDUPILOT_AUTOTEST_BASE_URL: "https://proxy.example/autotest",
+      VITE_IRONWING_ARDUPILOT_FIRMWARE_BASE_URL: "https://proxy.example/firmware",
+    });
+    expect(webFrontendEnv({}, env)).toMatchObject({
+      VITE_IRONWING_ARDUPILOT_AUTOTEST_BASE_URL: "https://proxy.example/autotest",
+      VITE_IRONWING_ARDUPILOT_FIRMWARE_BASE_URL: "https://proxy.example/firmware",
+    });
+  });
+});

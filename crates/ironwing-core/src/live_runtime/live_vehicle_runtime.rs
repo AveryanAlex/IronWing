@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use mavkit::ardupilot::{MagCalProgress, MagCalReport};
-use mavkit::{HomePosition, ObservationSubscription, ParamStore, SensorHealthSummary, Vehicle};
+use mavkit::{
+    FirmwareInfo, HomePosition, ObservationSubscription, ParamStore, SensorHealthSummary, Vehicle,
+};
 use web_time::Instant;
 
 use crate::event_names;
@@ -14,9 +16,9 @@ use crate::ipc::{
     AckSessionSnapshotResult, CalibrationSources, DomainProvenance, DomainValue,
     OpenSessionSnapshot, ScopedEvent, SessionConnection, SessionEnvelope, SessionSnapshot,
     SourceKind, StatusTextEntry, TelemetrySnapshot, calibration_snapshot_from_sources,
-    configuration_facts_snapshot_from_param_store, push_status_text_entry,
-    sensor_health_snapshot_from_summary, session_connection_from_link_state,
-    status_text_entry_from_value, status_text_snapshot_from_entries, support_snapshot,
+    push_status_text_entry, sensor_health_snapshot_from_summary,
+    session_connection_from_link_state, status_text_entry_from_value,
+    status_text_snapshot_from_entries, support_snapshot,
 };
 use crate::live::{
     LiveSnapshotInput, SessionContext, base_live_snapshot_from_caches,
@@ -142,6 +144,12 @@ where
         }
     }
 
+    pub fn update_firmware_version(&mut self, firmware_version: Option<String>) {
+        if let Some(vehicle_state) = self.session_context.vehicle_state.as_mut() {
+            vehicle_state.firmware_version = firmware_version;
+        }
+    }
+
     pub fn update_home_position(&mut self, home_position: HomePosition) {
         self.session_context.home_position = Some(home_position);
     }
@@ -178,10 +186,6 @@ where
         let param_store = param_state.as_ref().and_then(|item| item.store.clone());
         snapshot.param_store = param_store.clone();
         snapshot.param_progress = None;
-        snapshot.configuration_facts = param_store
-            .as_ref()
-            .map(|store| configuration_facts_snapshot_from_param_store(store, provenance))
-            .unwrap_or_else(|| DomainValue::missing(provenance));
 
         let ardupilot = vehicle.ardupilot();
         let mag_progress_list = ardupilot.mag_cal_progress().latest().unwrap_or_default();
@@ -518,6 +522,14 @@ where
     emit_session_state(handle, DomainProvenance::Stream);
 }
 
+fn emit_firmware_info_update<H>(handle: &H, firmware: FirmwareInfo)
+where
+    H: LiveRuntimeHandle,
+{
+    handle.with_runtime(|runtime| runtime.update_firmware_version(firmware.version));
+    emit_session_state(handle, DomainProvenance::Stream);
+}
+
 fn emit_home_position_update<H>(handle: &H, latitude_deg: f64, longitude_deg: f64, altitude_m: f64)
 where
     H: LiveRuntimeHandle,
@@ -537,11 +549,6 @@ where
     H: LiveRuntimeHandle,
 {
     emit_scoped(handle, event_names::PARAM_STORE, store.clone());
-    emit_scoped(
-        handle,
-        event_names::CONFIGURATION_FACTS_STATE,
-        configuration_facts_snapshot_from_param_store(store, DomainProvenance::Stream),
-    );
 }
 
 fn emit_sensor_health_update<H>(handle: &H, value: &SensorHealthSummary)
@@ -712,6 +719,10 @@ where
             emit_current_mode_update(handle, current_mode.custom_mode, &current_mode.name);
         },
     );
+
+    registrar.spawn_observation(vehicle.info().firmware().subscribe(), |handle, firmware| {
+        emit_firmware_info_update(handle, firmware);
+    });
 
     registrar.spawn_observation(vehicle.telemetry().home().subscribe(), |handle, sample| {
         let geo = sample.value;
@@ -977,5 +988,56 @@ mod tests {
             events[0].1["value"]["value"]["connection"]["kind"],
             "disconnected"
         );
+    }
+
+    #[test]
+    fn firmware_update_records_version_before_session_emit() {
+        let sink = RecordingEventSink::default();
+        let handle = LocalLiveRuntime::new(LiveVehicleRuntime::new(sink.clone()));
+        let live = handle.with_runtime(|runtime| {
+            runtime
+                .session_runtime_mut()
+                .open_session_snapshot(SourceKind::Live)
+        });
+        handle.with_runtime(|runtime| {
+            let _ = runtime.ack_session_snapshot(
+                &live.envelope.session_id,
+                live.envelope.seek_epoch,
+                live.envelope.reset_revision,
+            );
+            runtime.session_context.connection = SessionConnection::Connected;
+            runtime.session_context.vehicle_state = Some(crate::ipc::VehicleState {
+                armed: false,
+                custom_mode: 0,
+                mode_name: "Unknown".to_string(),
+                system_status: mavkit::SystemStatus::Active,
+                vehicle_type: Default::default(),
+                autopilot: Default::default(),
+                firmware_version: None,
+                system_id: 1,
+                component_id: 1,
+                heartbeat_received: true,
+            });
+        });
+
+        emit_firmware_info_update(
+            &handle,
+            FirmwareInfo {
+                version: Some("4.5.7".to_string()),
+                ..Default::default()
+            },
+        );
+
+        let firmware_version = handle.with_runtime(|runtime| {
+            runtime
+                .session_context
+                .vehicle_state
+                .as_ref()
+                .and_then(|state| state.firmware_version.clone())
+        });
+
+        assert_eq!(firmware_version.as_deref(), Some("4.5.7"));
+        assert_eq!(sink.events().len(), 1);
+        assert_eq!(sink.events()[0].0, event_names::SESSION_STATE,);
     }
 }

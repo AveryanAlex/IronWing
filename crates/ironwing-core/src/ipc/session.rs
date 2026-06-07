@@ -5,7 +5,6 @@ use mavkit::{
 };
 
 use crate::ipc::calibration::CalibrationSnapshot;
-use crate::ipc::configuration_facts::ConfigurationFactsSnapshot;
 use crate::ipc::guided::GuidedSnapshot;
 use crate::ipc::sensor_health::SensorHealthSnapshot;
 use crate::ipc::{
@@ -37,6 +36,7 @@ pub struct VehicleState {
     pub system_status: SystemStatus,
     pub vehicle_type: VehicleType,
     pub autopilot: AutopilotType,
+    pub firmware_version: Option<String>,
     pub system_id: u8,
     pub component_id: u8,
     pub heartbeat_received: bool,
@@ -74,7 +74,6 @@ pub struct OpenSessionSnapshot {
     pub param_progress: Option<ParamOperationProgress>,
     pub support: SupportSnapshot,
     pub sensor_health: SensorHealthSnapshot,
-    pub configuration_facts: ConfigurationFactsSnapshot,
     pub calibration: CalibrationSnapshot,
     pub guided: GuidedSnapshot,
     pub status_text: StatusTextSnapshot,

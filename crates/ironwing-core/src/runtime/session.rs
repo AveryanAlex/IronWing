@@ -78,7 +78,6 @@ impl SessionRuntime {
             param_progress: None,
             support: crate::ipc::DomainValue::missing(DomainProvenance::Bootstrap),
             sensor_health: crate::ipc::DomainValue::missing(DomainProvenance::Bootstrap),
-            configuration_facts: crate::ipc::DomainValue::missing(DomainProvenance::Bootstrap),
             calibration: crate::ipc::DomainValue::missing(DomainProvenance::Bootstrap),
             guided: crate::ipc::DomainValue::missing(DomainProvenance::Bootstrap),
             status_text: crate::ipc::DomainValue::missing(DomainProvenance::Bootstrap),

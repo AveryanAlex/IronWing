@@ -21,15 +21,67 @@ const SLUG_MAP: Record<string, string> = {
   hexarotor: "ArduCopter",
   octorotor: "ArduCopter",
   tricopter: "ArduCopter",
-  helicopter: "ArduCopter",
+  helicopter: "Heli",
   coaxial: "ArduCopter",
   fixed_wing: "ArduPlane",
   vtol: "ArduPlane",
   ground_rover: "Rover",
+  submarine: "ArduSub",
+  blimp: "Blimp",
+  antenna_tracker: "AntennaTracker",
 };
 
 export function vehicleTypeToSlug(vehicleType: string): string | null {
   return SLUG_MAP[vehicleType] ?? null;
+}
+
+export function normalizeFirmwareVersion(firmwareVersion: string | null | undefined): string | null {
+  const trimmed = firmwareVersion?.trim();
+  return trimmed && /^\d+\.\d+\.\d+$/.test(trimmed) ? trimmed : null;
+}
+
+function optionalText(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function readMetadataText(el: Element, fields: ReadonlyMap<string, string>, name: string): string | null {
+  return optionalText(el.getAttribute(name)) ?? fields.get(name) ?? null;
+}
+
+function parseRange(value: string | null): { min: number; max: number } | undefined {
+  const [minText, maxText] = value?.split(/\s+/) ?? [];
+  const min = Number(minText);
+  const max = Number(maxText);
+  return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : undefined;
+}
+
+function parseNumber(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseBoolean(value: string | null): boolean | undefined {
+  return value ? value.toLowerCase() === "true" : undefined;
+}
+
+function parseTextOptions(value: string | null): { code: number; label: string }[] | undefined {
+  if (!value) return undefined;
+
+  const options = value.split(",").flatMap((entry) => {
+    const separator = entry.indexOf(":");
+    const codeText = entry.slice(0, separator).trim();
+    const label = entry.slice(separator + 1).trim();
+    const code = Number(codeText);
+    return separator > 0 && codeText && Number.isFinite(code) && label ? [{ code, label }] : [];
+  });
+  return options.length > 0 ? options : undefined;
+}
+
+function parseTextBitmask(value: string | null): { bit: number; label: string }[] | undefined {
+  const bitmask = parseTextOptions(value)?.flatMap(({ code, label }) => Number.isInteger(code) ? [{ bit: code, label }] : []);
+  return bitmask && bitmask.length > 0 ? bitmask : undefined;
 }
 
 export function parseMetadataXml(xml: string): ParamMetadataMap {
@@ -44,64 +96,51 @@ export function parseMetadataXml(xml: string): ParamMetadataMap {
     const name = rawName.includes(":") ? rawName.split(":")[1] : rawName;
     if (!name) continue;
 
-    const userAttr = el.getAttribute("user");
-    const meta: ParamMeta = {
-      humanName: el.getAttribute("humanName") ?? "",
-      description: el.getAttribute("documentation") ?? "",
-    };
-    if (userAttr === "Standard" || userAttr === "Advanced") {
-      meta.userLevel = userAttr;
+    const fields = new Map<string, string>();
+    for (const field of el.querySelectorAll("field")) {
+      const fieldName = field.getAttribute("name");
+      const text = optionalText(field.textContent);
+      if (fieldName && text && !fields.has(fieldName)) fields.set(fieldName, text);
     }
 
-    // Parse <field> children
-    const fields = el.querySelectorAll("field");
-    for (const field of fields) {
-      const fieldName = field.getAttribute("name");
-      const text = field.textContent?.trim() ?? "";
-      switch (fieldName) {
-        case "Range": {
-          const parts = text.split(/\s+/);
-          if (parts.length >= 2) {
-            const min = parseFloat(parts[0]);
-            const max = parseFloat(parts[1]);
-            if (Number.isFinite(min) && Number.isFinite(max)) {
-              meta.range = { min, max };
-            }
-          }
-          break;
-        }
-        case "Increment": {
-          const inc = parseFloat(text);
-          if (Number.isFinite(inc)) meta.increment = inc;
-          break;
-        }
-        case "Units":
-          meta.units = text;
-          break;
-        case "UnitText":
-          meta.unitText = text;
-          break;
-        case "RebootRequired":
-          meta.rebootRequired = text.toLowerCase() === "true";
-          break;
-        case "ReadOnly":
-          meta.readOnly = text.toLowerCase() === "true";
-          break;
-      }
+    const user = readMetadataText(el, fields, "user") ?? readMetadataText(el, fields, "User");
+    const meta: ParamMeta = {
+      humanName: readMetadataText(el, fields, "humanName") ?? "",
+      description: readMetadataText(el, fields, "documentation") ?? "",
+    };
+    if (user === "Standard" || user === "Advanced") {
+      meta.userLevel = user;
     }
+
+    const range = parseRange(readMetadataText(el, fields, "Range"));
+    const increment = parseNumber(readMetadataText(el, fields, "Increment"));
+    const units = readMetadataText(el, fields, "Units");
+    const unitText = readMetadataText(el, fields, "UnitText");
+    const rebootRequired = parseBoolean(readMetadataText(el, fields, "RebootRequired"));
+    const readOnly = parseBoolean(readMetadataText(el, fields, "ReadOnly"));
+    if (range) meta.range = range;
+    if (increment !== undefined) meta.increment = increment;
+    if (units) meta.units = units;
+    if (unitText) meta.unitText = unitText;
+    if (rebootRequired !== undefined) meta.rebootRequired = rebootRequired;
+    if (readOnly !== undefined) meta.readOnly = readOnly;
 
     // Parse <values> -> <value code="N">Label</value>
     const valueEls = el.querySelectorAll("values > value");
     if (valueEls.length > 0) {
       meta.values = [];
       for (const v of valueEls) {
-        const code = parseInt(v.getAttribute("code") ?? "", 10);
+        const codeText = v.getAttribute("code")?.trim() ?? "";
+        const code = Number(codeText);
         const label = v.textContent?.trim() ?? "";
-        if (Number.isFinite(code) && label) {
+        if (codeText && Number.isFinite(code) && label) {
           meta.values.push({ code, label });
         }
       }
       if (meta.values.length === 0) delete meta.values;
+    } else {
+      const values = parseTextOptions(readMetadataText(el, fields, "Values"));
+      if (values) meta.values = values;
     }
 
     // Parse <bitmask> -> <bit code="N">Label</bit>
@@ -109,13 +148,17 @@ export function parseMetadataXml(xml: string): ParamMetadataMap {
     if (bitEls.length > 0) {
       meta.bitmask = [];
       for (const b of bitEls) {
-        const bit = parseInt(b.getAttribute("code") ?? "", 10);
+        const bitText = b.getAttribute("code")?.trim() ?? "";
+        const bit = Number(bitText);
         const label = b.textContent?.trim() ?? "";
-        if (Number.isFinite(bit) && label) {
+        if (bitText && Number.isInteger(bit) && label) {
           meta.bitmask.push({ bit, label });
         }
       }
       if (meta.bitmask.length === 0) delete meta.bitmask;
+    } else {
+      const bitmask = parseTextBitmask(readMetadataText(el, fields, "Bitmask"));
+      if (bitmask) meta.bitmask = bitmask;
     }
 
     // Don't overwrite — first occurrence wins (vehicle params over library params)
@@ -129,10 +172,11 @@ export function parseMetadataXml(xml: string): ParamMetadataMap {
 
 export async function fetchParamMetadata(
   vehicleType: string,
+  firmwareVersion?: string | null,
 ): Promise<ParamMetadataMap | null> {
   const slug = vehicleTypeToSlug(vehicleType);
   if (!slug) return null;
 
-  const xml = await fetchParamMetadataXml(slug);
+  const xml = await fetchParamMetadataXml(slug, normalizeFirmwareVersion(firmwareVersion));
   return xml ? parseMetadataXml(xml) : null;
 }

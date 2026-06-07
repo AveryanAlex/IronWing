@@ -75,6 +75,7 @@ export type ParamsStoreState = {
   activeSource: SourceKind | null;
   liveSessionConnected: boolean;
   vehicleType: string | null;
+  firmwareVersion: string | null;
   paramStore: ParamStore | null;
   paramProgress: ParamProgress | null;
   metadata: ParamMetadataMap | null;
@@ -115,6 +116,7 @@ function createInitialState(): ParamsStoreState {
     activeSource: null,
     liveSessionConnected: false,
     vehicleType: null,
+    firmwareVersion: null,
     paramStore: null,
     paramProgress: null,
     metadata: null,
@@ -151,10 +153,11 @@ export function createParamsStore(
   function applyBootstrapState(
     sessionState: SessionStoreState,
     envelopeChanged: boolean,
-    metadataReload: { vehicleType: string | null; shouldReload: boolean },
+    metadataReload: { vehicleType: string | null; firmwareVersion: string | null; shouldReload: boolean },
   ) {
     const nextEnvelope = sessionState.activeEnvelope;
     const vehicleType = metadataReload.vehicleType;
+    const firmwareVersion = metadataReload.firmwareVersion;
     const nextStore = normalizeParamStore(sessionState.bootstrap.paramStore);
     const nextProgress = normalizeParamProgress(sessionState.bootstrap.paramProgress);
     const liveSessionConnected = nextEnvelope?.source_kind === "live"
@@ -179,6 +182,7 @@ export function createParamsStore(
           activeSource: null,
           liveSessionConnected: false,
           vehicleType,
+          firmwareVersion,
           paramStore: null,
           paramProgress: null,
           metadata: null,
@@ -213,6 +217,7 @@ export function createParamsStore(
         activeSource: nextEnvelope.source_kind,
         liveSessionConnected,
         vehicleType,
+        firmwareVersion,
         paramStore: resolvedStore,
         paramProgress: shouldReplaceProgress ? nextProgress : state.paramProgress,
         metadata: metadataReload.shouldReload ? null : state.metadata,
@@ -234,11 +239,11 @@ export function createParamsStore(
     });
 
     if (metadataReload.shouldReload) {
-      void ensureMetadata(vehicleType, true);
+      void ensureMetadata(vehicleType, firmwareVersion, true);
     }
   }
 
-  async function ensureMetadata(vehicleType: string | null, forceReload = false) {
+  async function ensureMetadata(vehicleType: string | null, firmwareVersion: string | null = null, forceReload = false) {
     const current = get(store);
     if (!vehicleType) {
       metadataRequestId += 1;
@@ -247,6 +252,7 @@ export function createParamsStore(
         metadata: null,
         metadataState: "idle",
         metadataError: null,
+        firmwareVersion: null,
       }));
       return;
     }
@@ -265,7 +271,7 @@ export function createParamsStore(
     }));
 
     try {
-      const metadata = normalizeMetadataMap(await service.fetchMetadata(vehicleType));
+      const metadata = normalizeMetadataMap(await service.fetchMetadata(vehicleType, firmwareVersion));
       if (metadataRequestId !== requestId) {
         return;
       }
@@ -713,14 +719,17 @@ function areEnvelopesEqual(left: SessionEnvelope | null, right: SessionEnvelope 
 }
 
 function resolveMetadataReload(
-  state: Pick<ParamsStoreState, "vehicleType" | "metadataState" | "metadata">,
+  state: Pick<ParamsStoreState, "vehicleType" | "firmwareVersion" | "metadataState" | "metadata">,
   sessionState: Pick<SessionStoreState, "sessionDomain">,
   envelopeChanged: boolean,
-): { vehicleType: string | null; shouldReload: boolean } {
-  const nextVehicleType = normalizeVehicleType(sessionState.sessionDomain.value?.vehicle_state?.vehicle_type ?? null);
+): { vehicleType: string | null; firmwareVersion: string | null; shouldReload: boolean } {
+  const nextVehicleState = sessionState.sessionDomain.value?.vehicle_state;
+  const nextVehicleType = normalizeVehicleType(nextVehicleState?.vehicle_type ?? null);
+  const nextFirmwareVersion = normalizeFirmwareVersion(nextVehicleState?.firmware_version ?? null);
   if (envelopeChanged) {
     return {
       vehicleType: nextVehicleType,
+      firmwareVersion: nextFirmwareVersion,
       shouldReload: true,
     };
   }
@@ -728,17 +737,20 @@ function resolveMetadataReload(
   if (!nextVehicleType) {
     return {
       vehicleType: state.vehicleType,
+      firmwareVersion: state.firmwareVersion,
       shouldReload: false,
     };
   }
 
   const falseIdleState = state.vehicleType === nextVehicleType
+    && state.firmwareVersion === nextFirmwareVersion
     && state.metadataState === "idle"
     && state.metadata === null;
 
   return {
     vehicleType: nextVehicleType,
-    shouldReload: nextVehicleType !== state.vehicleType || falseIdleState,
+    firmwareVersion: nextFirmwareVersion,
+    shouldReload: nextVehicleType !== state.vehicleType || nextFirmwareVersion !== state.firmwareVersion || falseIdleState,
   };
 }
 
@@ -749,6 +761,15 @@ function normalizeVehicleType(value: unknown): string | null {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeFirmwareVersion(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return /^\d+\.\d+\.\d+$/.test(trimmed) ? trimmed : null;
 }
 
 function selectRequestedEdits(

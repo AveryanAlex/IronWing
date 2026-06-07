@@ -8,4 +8,5 @@ pub mod log_playback;
 pub mod runtime;
 pub mod telemetry;
 pub mod transport;
+pub mod vehicle_config;
 pub mod vehicle_snapshot;

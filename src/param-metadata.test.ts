@@ -1,6 +1,24 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
-import { vehicleTypeToSlug, parseMetadataXml } from "./param-metadata";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { fetchParamMetadataXmlMock } = vi.hoisted(() => ({
+  fetchParamMetadataXmlMock: vi.fn(),
+}));
+
+vi.mock("./lib/param-metadata-cache", () => ({
+  fetchParamMetadataXml: fetchParamMetadataXmlMock,
+}));
+
+import {
+  fetchParamMetadata,
+  normalizeFirmwareVersion,
+  parseMetadataXml,
+  vehicleTypeToSlug,
+} from "./param-metadata";
+
+beforeEach(() => {
+  fetchParamMetadataXmlMock.mockReset();
+});
 
 describe("vehicleTypeToSlug", () => {
   it("maps copter variants to ArduCopter", () => {
@@ -8,8 +26,11 @@ describe("vehicleTypeToSlug", () => {
     expect(vehicleTypeToSlug("hexarotor")).toBe("ArduCopter");
     expect(vehicleTypeToSlug("octorotor")).toBe("ArduCopter");
     expect(vehicleTypeToSlug("tricopter")).toBe("ArduCopter");
-    expect(vehicleTypeToSlug("helicopter")).toBe("ArduCopter");
     expect(vehicleTypeToSlug("coaxial")).toBe("ArduCopter");
+  });
+
+  it("uses the dedicated Heli definitions for helicopter firmware", () => {
+    expect(vehicleTypeToSlug("helicopter")).toBe("Heli");
   });
 
   it("maps plane and vtol to ArduPlane", () => {
@@ -21,10 +42,74 @@ describe("vehicleTypeToSlug", () => {
     expect(vehicleTypeToSlug("ground_rover")).toBe("Rover");
   });
 
+  it("maps submarine, blimp, and antenna tracker names", () => {
+    expect(vehicleTypeToSlug("submarine")).toBe("ArduSub");
+    expect(vehicleTypeToSlug("blimp")).toBe("Blimp");
+    expect(vehicleTypeToSlug("antenna_tracker")).toBe("AntennaTracker");
+  });
+
   it("returns null for unknown vehicle types", () => {
-    expect(vehicleTypeToSlug("submarine")).toBeNull();
-    expect(vehicleTypeToSlug("blimp")).toBeNull();
+    expect(vehicleTypeToSlug("boat")).toBeNull();
     expect(vehicleTypeToSlug("")).toBeNull();
+  });
+});
+
+describe("normalizeFirmwareVersion", () => {
+  it("trims a present firmware version", () => {
+    expect(normalizeFirmwareVersion(" 4.5.7 ")).toBe("4.5.7");
+  });
+
+  it("rejects absent and empty firmware versions", () => {
+    expect(normalizeFirmwareVersion(undefined)).toBeNull();
+    expect(normalizeFirmwareVersion(null)).toBeNull();
+    expect(normalizeFirmwareVersion("   ")).toBeNull();
+  });
+
+  it("rejects firmware versions that cannot identify a stable definition", () => {
+    expect(normalizeFirmwareVersion("4.5")).toBeNull();
+    expect(normalizeFirmwareVersion("4.5.7-dev")).toBeNull();
+    expect(normalizeFirmwareVersion("../../4.5.7")).toBeNull();
+  });
+});
+
+describe("fetchParamMetadata", () => {
+  it("passes normalized firmware version through to the XML cache", async () => {
+    fetchParamMetadataXmlMock.mockResolvedValue(`
+      <paramfile>
+        <param name="P1" humanName="Versioned" documentation="definition"></param>
+      </paramfile>`);
+
+    const metadata = await fetchParamMetadata("quadrotor", " 4.5.7 ");
+
+    expect(fetchParamMetadataXmlMock).toHaveBeenCalledWith("ArduCopter", "4.5.7");
+    expect(metadata?.get("P1")?.humanName).toBe("Versioned");
+  });
+
+  it("keeps primary definitions first while exposing fallback-only parameters from merged XML", async () => {
+    fetchParamMetadataXmlMock.mockResolvedValue(`
+      <paramfile>
+        <param name="PRIMARY" humanName="Primary" documentation="primary"></param>
+        <param name="PRIMARY" humanName="Fallback duplicate" documentation="fallback"></param>
+        <param name="FALLBACK_ONLY" humanName="Fallback only" documentation="fallback"></param>
+      </paramfile>`);
+
+    const metadata = await fetchParamMetadata("quadrotor");
+
+    expect(metadata?.get("PRIMARY")?.humanName).toBe("Primary");
+    expect(metadata?.get("FALLBACK_ONLY")?.humanName).toBe("Fallback only");
+  });
+
+  it("rejects blank firmware versions before loading XML", async () => {
+    fetchParamMetadataXmlMock.mockResolvedValue(null);
+
+    await fetchParamMetadata("quadrotor", "   ");
+
+    expect(fetchParamMetadataXmlMock).toHaveBeenCalledWith("ArduCopter", null);
+  });
+
+  it("does not load XML for unknown vehicle types", async () => {
+    await expect(fetchParamMetadata("boat", "4.5.7")).resolves.toBeNull();
+    expect(fetchParamMetadataXmlMock).not.toHaveBeenCalled();
   });
 });
 
@@ -107,6 +192,35 @@ describe("parseMetadataXml", () => {
     expect(meta.readOnly).toBe(true);
   });
 
+  it("prefers scalar attributes before matching field fallbacks", () => {
+    const xml = `
+      <paramfile>
+        <param
+          name="BATT_LOW_MAH"
+          humanName="Low capacity"
+          documentation="Battery warning threshold."
+          Units="mAh"
+          Increment="50"
+          Range="0 50000"
+          ReadOnly="True"
+          RebootRequired="False"
+        >
+          <field name="Units">wrong</field>
+          <field name="Increment">1</field>
+          <field name="Range">0 1</field>
+        </param>
+      </paramfile>`;
+    const meta = parseMetadataXml(xml).get("BATT_LOW_MAH")!;
+
+    expect(meta).toMatchObject({
+      units: "mAh",
+      increment: 50,
+      range: { min: 0, max: 50000 },
+      readOnly: true,
+      rebootRequired: false,
+    });
+  });
+
   it("parses values enum", () => {
     const xml = `
       <paramfile>
@@ -125,6 +239,26 @@ describe("parseMetadataXml", () => {
     ]);
   });
 
+  it("preserves decimal enum values", () => {
+    const xml = `
+      <paramfile>
+        <param name="FS_EKF_THRESH" humanName="EKF threshold" documentation="desc">
+          <values>
+            <value code="0.6">Strict</value>
+            <value code="0.8">Default</value>
+            <value code="1.0">Relaxed</value>
+          </values>
+        </param>
+      </paramfile>`;
+    const meta = parseMetadataXml(xml).get("FS_EKF_THRESH")!;
+
+    expect(meta.values).toEqual([
+      { code: 0.6, label: "Strict" },
+      { code: 0.8, label: "Default" },
+      { code: 1, label: "Relaxed" },
+    ]);
+  });
+
   it("parses bitmask entries", () => {
     const xml = `
       <paramfile>
@@ -140,6 +274,30 @@ describe("parseMetadataXml", () => {
     expect(meta.bitmask).toEqual([
       { bit: 0, label: "All" },
       { bit: 1, label: "Barometer" },
+    ]);
+  });
+
+  it("parses textual Values and Bitmask field fallbacks", () => {
+    const xml = `
+      <paramfile>
+        <param name="FS_THR_ENABLE" humanName="Throttle failsafe" documentation="desc">
+          <field name="Values">0:Disabled,1:Enabled,0.8:Default threshold</field>
+        </param>
+        <param name="FENCE_TYPE" humanName="Fence type" documentation="desc">
+          <field name="Bitmask">0:Max altitude,1:Circle,2:Polygon</field>
+        </param>
+      </paramfile>`;
+    const map = parseMetadataXml(xml);
+
+    expect(map.get("FS_THR_ENABLE")?.values).toEqual([
+      { code: 0, label: "Disabled" },
+      { code: 1, label: "Enabled" },
+      { code: 0.8, label: "Default threshold" },
+    ]);
+    expect(map.get("FENCE_TYPE")?.bitmask).toEqual([
+      { bit: 0, label: "Max altitude" },
+      { bit: 1, label: "Circle" },
+      { bit: 2, label: "Polygon" },
     ]);
   });
 

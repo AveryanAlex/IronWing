@@ -176,6 +176,7 @@ export function normalizedLiveVehicleState(mockVehicleState?: Partial<MockLiveVe
     system_status: mockVehicleState?.system_status ?? "active",
     vehicle_type: mockVehicleState?.vehicle_type ?? "quadrotor",
     autopilot: mockVehicleState?.autopilot ?? "ardu_pilot_mega",
+    firmware_version: mockVehicleState?.firmware_version ?? null,
     system_id: mockVehicleState?.system_id ?? 1,
     component_id: mockVehicleState?.component_id ?? 1,
     heartbeat_received: mockVehicleState?.heartbeat_received ?? true,
@@ -204,7 +205,6 @@ export function clearLiveVehicleState() {
   mockState.liveStatusText = null;
   mockState.liveSupportDomain = null;
   mockState.liveSensorHealthDomain = null;
-  mockState.liveConfigurationFactsDomain = null;
   mockState.liveVehicleArmed = false;
   mockState.liveVehicleModeName = "Stabilize";
 }
@@ -221,7 +221,6 @@ export function connectLink(args: CommandArgs) {
     mockState.liveStatusText = null;
     mockState.liveSupportDomain = null;
     mockState.liveSensorHealthDomain = null;
-    mockState.liveConfigurationFactsDomain = null;
     return;
   }
 
@@ -233,7 +232,6 @@ export function connectLink(args: CommandArgs) {
   mockState.liveStatusText = null;
   mockState.liveSupportDomain = null;
   mockState.liveSensorHealthDomain = null;
-  mockState.liveConfigurationFactsDomain = null;
 }
 
 export function disconnectLink(args: CommandArgs) {

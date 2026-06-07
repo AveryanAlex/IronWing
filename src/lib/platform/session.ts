@@ -21,7 +21,6 @@ import {
   btRequestPermissions,
   btScanBle,
   getAvailableModes,
-  listSerialPorts,
   type BluetoothDevice,
   type FlightModeEntry,
   type LinkState,
@@ -40,10 +39,6 @@ import {
 } from "../../transport";
 import { subscribeGuidedState, type GuidedDomain } from "../../guided";
 import { subscribeCalibrationStateEvent, type CalibrationDomain } from "../../calibration";
-import {
-  subscribeConfigurationFactsEvent,
-  type ConfigurationFactsDomain,
-} from "../../configuration-facts";
 import { subscribeSensorHealthStateEvent, type SensorHealthDomain } from "../../sensor-health";
 import type { StatusTextDomain } from "../../statustext";
 import type { SupportDomain } from "../../support";
@@ -88,7 +83,6 @@ export type SessionServiceEventHandlers = {
   onPlayback: (event: SessionEvent<PlaybackStateSnapshot>) => void;
   onSupport: (event: SessionEvent<SupportDomain>) => void;
   onSensorHealth: (event: SessionEvent<SensorHealthDomain>) => void;
-  onConfigurationFacts: (event: SessionEvent<ConfigurationFactsDomain>) => void;
   onCalibration: (event: SessionEvent<CalibrationDomain>) => void;
   onGuided: (event: SessionEvent<GuidedDomain>) => void;
   onStatusText: (event: SessionEvent<StatusTextDomain>) => void;
@@ -109,7 +103,6 @@ export type SessionService = {
   buildConnectRequest(descriptor: TransportDescriptor, value: ConnectionFormValue): ConnectRequest;
   connectSession(request: ConnectRequest): Promise<void>;
   disconnectSession(request?: DisconnectRequest): Promise<void>;
-  listSerialPorts(): Promise<string[]>;
   btRequestPermissions(): Promise<void>;
   btScanBle(timeoutMs?: number): Promise<BluetoothDevice[]>;
   btGetBondedDevices(): Promise<BluetoothDevice[]>;
@@ -121,6 +114,7 @@ type ConnectionFormValue = {
   bind_addr?: string;
   address?: string;
   port?: string;
+  port_id?: string;
   websocket_url?: string;
   baud?: number | null;
   demo_vehicle_preset?: DemoVehiclePreset;
@@ -139,7 +133,6 @@ export function createSessionService(): SessionService {
     buildConnectRequest,
     connectSession,
     disconnectSession,
-    listSerialPorts,
     btRequestPermissions,
     btScanBle,
     btGetBondedDevices,
@@ -155,7 +148,6 @@ export async function subscribeAll(handlers: SessionServiceEventHandlers): Promi
     subscribePlaybackState(handlers.onPlayback),
     subscribeSupportState(handlers.onSupport),
     subscribeSensorHealthStateEvent(handlers.onSensorHealth),
-    subscribeConfigurationFactsEvent(handlers.onConfigurationFacts),
     subscribeCalibrationStateEvent(handlers.onCalibration),
     subscribeGuidedState(handlers.onGuided),
     subscribeStatusTextState(handlers.onStatusText),
@@ -342,7 +334,6 @@ export type SessionSnapshotState = Pick<
   | "param_progress"
   | "support"
   | "sensor_health"
-  | "configuration_facts"
   | "calibration"
   | "guided"
   | "status_text"

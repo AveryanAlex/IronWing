@@ -45,17 +45,6 @@ type ContractSupportState = {
   can_calibrate_radio: boolean;
 };
 
-type ContractConfigurationFlag = {
-  configured: boolean;
-};
-
-type ContractConfigurationFactsState = {
-  frame: ContractConfigurationFlag | null;
-  gps: ContractConfigurationFlag | null;
-  battery_monitor: ContractConfigurationFlag | null;
-  motors_esc: ContractConfigurationFlag | null;
-};
-
 type ContractSensorHealthState = {
   gyro: string;
   accel: string;
@@ -107,7 +96,6 @@ type ContractOpenSessionSnapshot = {
   param_progress: ParamProgress | null;
   support: DomainValue<ContractSupportState>;
   sensor_health: DomainValue<ContractSensorHealthState>;
-  configuration_facts: DomainValue<ContractConfigurationFactsState>;
   calibration: DomainValue<ContractCalibrationState>;
   guided: GuidedDomain;
   status_text: StatusTextDomain;
@@ -348,6 +336,7 @@ function expectVehicleState(value: unknown, label: string): VehicleState {
     "system_id",
     "component_id",
     "heartbeat_received",
+    "firmware_version",
   ]);
   return {
     armed: expectBoolean(object.armed, `${label}.armed`),
@@ -359,6 +348,7 @@ function expectVehicleState(value: unknown, label: string): VehicleState {
     system_id: expectNumber(object.system_id, `${label}.system_id`),
     component_id: expectNumber(object.component_id, `${label}.component_id`),
     heartbeat_received: expectBoolean(object.heartbeat_received, `${label}.heartbeat_received`),
+    firmware_version: expectNullable(object.firmware_version, `${label}.firmware_version`, expectString),
   };
 }
 
@@ -493,27 +483,6 @@ function expectSupportState(value: unknown, label: string): ContractSupportState
     can_calibrate_accel: expectBoolean(object.can_calibrate_accel, `${label}.can_calibrate_accel`),
     can_calibrate_compass: expectBoolean(object.can_calibrate_compass, `${label}.can_calibrate_compass`),
     can_calibrate_radio: expectBoolean(object.can_calibrate_radio, `${label}.can_calibrate_radio`),
-  };
-}
-
-function expectConfigurationFlag(value: unknown, label: string): ContractConfigurationFlag {
-  const object = expectRecord(value, label);
-  expectExactKeys(object, label, ["configured"]);
-  return { configured: expectBoolean(object.configured, `${label}.configured`) };
-}
-
-function expectConfigurationFactsState(value: unknown, label: string): ContractConfigurationFactsState {
-  const object = expectRecord(value, label);
-  expectExactKeys(object, label, ["frame", "gps", "battery_monitor", "motors_esc"]);
-  expect(object).toHaveProperty("frame");
-  expect(object).toHaveProperty("gps");
-  expect(object).toHaveProperty("battery_monitor");
-  expect(object).toHaveProperty("motors_esc");
-  return {
-    frame: expectNullable(object.frame ?? null, `${label}.frame`, expectConfigurationFlag),
-    gps: expectNullable(object.gps ?? null, `${label}.gps`, expectConfigurationFlag),
-    battery_monitor: expectNullable(object.battery_monitor ?? null, `${label}.battery_monitor`, expectConfigurationFlag),
-    motors_esc: expectNullable(object.motors_esc ?? null, `${label}.motors_esc`, expectConfigurationFlag),
   };
 }
 
@@ -1083,7 +1052,7 @@ function expectParamProgress(value: unknown, label: string): ParamProgress {
 
 function expectOpenSessionSnapshot(value: unknown, label: string): ContractOpenSessionSnapshot {
   const object = expectRecord(value, label);
-  expectExactKeys(object, label, ["envelope", "session", "telemetry", "mission_state", "param_store", "param_progress", "support", "sensor_health", "configuration_facts", "calibration", "guided", "status_text", "playback"]);
+  expectExactKeys(object, label, ["envelope", "session", "telemetry", "mission_state", "param_store", "param_progress", "support", "sensor_health", "calibration", "guided", "status_text", "playback"]);
   const envelope = expectSessionEnvelope(object.envelope, `${label}.envelope`);
   return {
     envelope,
@@ -1094,7 +1063,6 @@ function expectOpenSessionSnapshot(value: unknown, label: string): ContractOpenS
     param_progress: object.param_progress === null ? null : expectParamProgress(object.param_progress, `${label}.param_progress`),
     support: expectDomainValue(object.support, `${label}.support`, expectSupportState),
     sensor_health: expectDomainValue(object.sensor_health, `${label}.sensor_health`, expectSensorHealthState),
-    configuration_facts: expectDomainValue(object.configuration_facts, `${label}.configuration_facts`, expectConfigurationFactsState),
     calibration: expectDomainValue(object.calibration, `${label}.calibration`, expectCalibrationState),
     guided: expectDomainValue(object.guided, `${label}.guided`, expectGuidedState),
     status_text: expectDomainValue(object.status_text, `${label}.status_text`, expectStatusTextState),
@@ -1204,7 +1172,6 @@ describe("contract fixtures", () => {
     ["telemetry.domain.json", (value, label) => expectDomainValue(value, label, expectTelemetryState)],
     ["support.domain.json", (value, label) => expectDomainValue(value, label, expectSupportState)],
     ["sensor_health.domain.json", (value, label) => expectDomainValue(value, label, expectSensorHealthState)],
-    ["configuration_facts.domain.json", (value, label) => expectDomainValue(value, label, expectConfigurationFactsState)],
     ["calibration.domain.json", (value, label) => expectDomainValue(value, label, expectCalibrationState)],
     ["guided.domain.json", (value, label) => expectDomainValue(value, label, expectGuidedState)],
     ["status_text.domain.json", (value, label) => expectDomainValue(value, label, expectStatusTextState) satisfies StatusTextDomain],

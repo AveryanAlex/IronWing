@@ -1,7 +1,6 @@
 import { missingDomainValue, type DomainValue } from "../domain-status";
 import type { SessionConnectionFormState, SessionService } from "../platform/session";
 import type { CalibrationDomain } from "../../calibration";
-import type { ConfigurationFactsDomain } from "../../configuration-facts";
 import type { GuidedDomain } from "../../guided";
 import type { MissionState } from "../../mission";
 import type { ParamProgress, ParamStore } from "../../params";
@@ -20,7 +19,6 @@ export type SessionStorePhase =
   | "connect-requested"
   | "disconnect-requested"
   | "transport-refresh"
-  | "serial-refresh"
   | "bluetooth-scan"
   | "bluetooth-refresh";
 
@@ -43,14 +41,12 @@ export type SessionStoreState = {
   telemetryDomain: DomainValue<TelemetryState>;
   support: SupportDomain;
   sensorHealth: SensorHealthDomain;
-  configurationFacts: ConfigurationFactsDomain;
   calibration: CalibrationDomain;
   guided: GuidedDomain;
   statusText: StatusTextDomain;
   bootstrap: SessionBootstrapState;
   connectionForm: SessionConnectionFormState;
   transportDescriptors: TransportDescriptor[];
-  serialPorts: string[];
   availableModes: FlightModeEntry[];
   btDevices: BluetoothDevice[];
   btScanning: boolean;
@@ -69,7 +65,6 @@ export function createInitialSessionState(service: SessionService): SessionStore
     telemetryDomain: missingDomainValue<TelemetryState>("bootstrap"),
     support: missingDomainValue("bootstrap"),
     sensorHealth: missingDomainValue("bootstrap"),
-    configurationFacts: missingDomainValue("bootstrap"),
     calibration: missingDomainValue("bootstrap"),
     guided: missingDomainValue("bootstrap"),
     statusText: missingDomainValue("bootstrap"),
@@ -81,7 +76,6 @@ export function createInitialSessionState(service: SessionService): SessionStore
     },
     connectionForm: service.loadConnectionForm(),
     transportDescriptors: [],
-    serialPorts: [],
     availableModes: [],
     btDevices: [],
     btScanning: false,

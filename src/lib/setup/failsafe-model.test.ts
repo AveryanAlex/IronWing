@@ -220,6 +220,25 @@ describe("failsafe-model", () => {
     expect(model.canConfirm).toBe(true);
   });
 
+  it("uses current copter RTL names and direct metric values when available", () => {
+    const model = buildRtlReturnModel({
+      vehicleType: "quadrotor",
+      paramStore: createParamStore({
+        RTL_ALT_M: 15,
+        RTL_ALT_FINAL_M: 2,
+        RTL_CLIMB_MIN_M: 3,
+        RTL_SPEED_MS: 5,
+        RTL_LOIT_TIME: 5000,
+      }),
+      metadata: createMetadata(),
+      stagedEdits: {},
+    });
+
+    expect(model.summaryText).toContain("Return altitude 15.0 m · Final altitude 2.0 m");
+    expect(model.recoveryReasons).toEqual([]);
+    expect(model.canConfirm).toBe(true);
+  });
+
   it("missing RTL rows are described as absent from the active parameter set", () => {
     const model = buildRtlReturnModel({
       vehicleType: "quadrotor",
@@ -249,6 +268,36 @@ describe("failsafe-model", () => {
     });
 
     expect(model.recoveryReasons).toEqual([]);
+    expect(model.canConfirm).toBe(true);
+  });
+
+  it("uses current plane return altitude when available", () => {
+    const model = buildRtlReturnModel({
+      vehicleType: "fixed_wing",
+      paramStore: createParamStore({
+        RTL_ALTITUDE: 100,
+        RTL_AUTOLAND: 2,
+      }),
+      metadata: createMetadata(),
+      stagedEdits: {},
+    });
+
+    expect(model.summaryText).toContain("Return altitude 100.0 m");
+    expect(model.recoveryReasons).toEqual([]);
+    expect(model.canConfirm).toBe(true);
+  });
+
+  it("uses direct rover speed when metadata reports meters per second", () => {
+    const metadata = createMetadata();
+    metadata.set("RTL_SPEED", { humanName: "RTL speed", description: "", units: "m/s" });
+    const model = buildRtlReturnModel({
+      vehicleType: "ground_rover",
+      paramStore: createParamStore({ RTL_SPEED: 2.5, WP_RADIUS: 2 }),
+      metadata,
+      stagedEdits: {},
+    });
+
+    expect(model.summaryText).toContain("Return speed 2.5 m/s");
     expect(model.canConfirm).toBe(true);
   });
 

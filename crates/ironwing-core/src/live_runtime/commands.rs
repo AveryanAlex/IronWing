@@ -296,6 +296,14 @@ pub async fn reboot_vehicle(vehicle: &mavkit::Vehicle) -> LiveCommandResult<()> 
         .map_err(LiveCommandError::vehicle)
 }
 
+pub async fn reboot_to_bootloader(vehicle: &mavkit::Vehicle) -> LiveCommandResult<()> {
+    vehicle
+        .ardupilot()
+        .reboot_to_bootloader()
+        .await
+        .map_err(LiveCommandError::vehicle)
+}
+
 pub async fn motor_test(
     vehicle: &mavkit::Vehicle,
     motor_instance: u8,

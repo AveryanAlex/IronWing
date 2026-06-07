@@ -34,19 +34,6 @@ use crate::ipc::StatusTextEntry;
 #[cfg(test)]
 use ironwing_core::live::{LiveSnapshotInput, base_live_snapshot_from_caches};
 
-#[cfg(not(target_os = "android"))]
-#[tauri::command]
-pub(crate) fn list_serial_ports_cmd() -> Result<Vec<String>, String> {
-    let ports = serialport::available_ports().map_err(|e| e.to_string())?;
-    Ok(ports.into_iter().map(|p| p.port_name).collect())
-}
-
-#[cfg(target_os = "android")]
-#[tauri::command]
-pub(crate) fn list_serial_ports_cmd() -> Result<Vec<String>, String> {
-    Err("not supported on android".to_string())
-}
-
 #[tauri::command]
 pub(crate) fn mission_validate(plan: MissionPlan) -> Vec<MissionIssue> {
     live_commands::mission_validate(&plan)
@@ -73,7 +60,6 @@ fn hydrate_playback_snapshot(
     snapshot.param_progress = None;
     snapshot.support = frame.support;
     snapshot.sensor_health = DomainValue::missing(DomainProvenance::Playback);
-    snapshot.configuration_facts = DomainValue::missing(DomainProvenance::Playback);
     snapshot.calibration = DomainValue::missing(DomainProvenance::Playback);
     snapshot.guided = DomainValue::missing(DomainProvenance::Playback);
     snapshot.status_text = frame.status_text;
@@ -947,6 +933,7 @@ mod tests {
             system_status: SystemStatus::Active,
             vehicle_type: Default::default(),
             autopilot: Default::default(),
+            firmware_version: None,
             system_id: 1,
             component_id: 1,
             heartbeat_received: true,

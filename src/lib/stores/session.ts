@@ -9,7 +9,6 @@ import { trackAnalytics } from "../analytics/client";
 import { durationBucket } from "../analytics/properties";
 import { isNewerScopedEnvelope, isSameEnvelope } from "../scoped-session-events";
 import type { CalibrationDomain } from "../../calibration";
-import type { ConfigurationFactsDomain } from "../../configuration-facts";
 import type { GuidedDomain } from "../../guided";
 import type { PlaybackStateSnapshot } from "../../playback";
 import type { SensorHealthDomain } from "../../sensor-health";
@@ -109,7 +108,6 @@ export function createSessionStore(service: SessionService = createSessionServic
       playbackCursorUsec?: number | null;
       support?: SupportDomain;
       sensorHealth?: SensorHealthDomain;
-      configurationFacts?: ConfigurationFactsDomain;
       calibration?: CalibrationDomain;
       guided?: GuidedDomain;
       statusText?: StatusTextDomain;
@@ -215,20 +213,6 @@ export function createSessionStore(service: SessionService = createSessionServic
     store.update((state) =>
       applyScopedDomainEvent(state, event, (_current, value) => ({
         sensorHealth: value,
-      })),
-    );
-  }
-
-  function applyConfigurationFactsEvent(event: { envelope: SessionEnvelope; value: ConfigurationFactsDomain }) {
-    if (stageBootstrapEvent(event, (buffer, value) => {
-      buffer.configurationFacts = value;
-    })) {
-      return;
-    }
-
-    store.update((state) =>
-      applyScopedDomainEvent(state, event, (_current, value) => ({
-        configurationFacts: value,
       })),
     );
   }
@@ -413,7 +397,6 @@ export function createSessionStore(service: SessionService = createSessionServic
           onPlayback: applyPlaybackEvent,
           onSupport: applySupportEvent,
           onSensorHealth: applySensorHealthEvent,
-          onConfigurationFacts: applyConfigurationFactsEvent,
           onCalibration: applyCalibrationEvent,
           onGuided: applyGuidedEvent,
           onStatusText: applyStatusTextEvent,
@@ -552,37 +535,6 @@ export function createSessionStore(service: SessionService = createSessionServic
     }
   }
 
-  async function refreshSerialPorts() {
-    store.update((state) => ({
-      ...state,
-      lastPhase: "serial-refresh",
-      lastError: null,
-    }));
-
-    try {
-      const serialPorts = await service.listSerialPorts();
-      store.update((state) => {
-        const connectionForm =
-          serialPorts.length > 0 && state.connectionForm.serialPort === ""
-            ? { ...state.connectionForm, serialPort: serialPorts[0] ?? "" }
-            : state.connectionForm;
-
-        if (connectionForm !== state.connectionForm) {
-          service.persistConnectionForm(connectionForm);
-        }
-
-        return {
-          ...state,
-          serialPorts,
-          connectionForm,
-          lastPhase: "ready",
-        };
-      });
-    } catch (error) {
-      completeActionError(error);
-    }
-  }
-
   async function scanBleDevices(timeoutMs = 5000) {
     store.update((state) => ({
       ...state,
@@ -667,7 +619,6 @@ export function createSessionStore(service: SessionService = createSessionServic
     cancelConnect,
     disconnect,
     refreshTransportDescriptors,
-    refreshSerialPorts,
     scanBleDevices,
     refreshBondedDevices,
     updateConnectionForm,

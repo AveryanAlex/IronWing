@@ -83,12 +83,6 @@
     "provenance": "playback",
     "value": null
   },
-  "configuration_facts": {
-    "available": false,
-    "complete": false,
-    "provenance": "playback",
-    "value": null
-  },
   "calibration": {
     "available": false,
     "complete": false,

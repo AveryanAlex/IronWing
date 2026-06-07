@@ -8,7 +8,6 @@ pub const SENSOR_HEALTH_STATE: &str = "sensor_health://state";
 pub const CALIBRATION_STATE: &str = "calibration://state";
 pub const COMPASS_CAL_PROGRESS: &str = "compass://cal_progress";
 pub const COMPASS_CAL_REPORT: &str = "compass://cal_report";
-pub const CONFIGURATION_FACTS_STATE: &str = "configuration_facts://state";
 pub const STATUS_TEXT_STATE: &str = "status_text://state";
 pub const SUPPORT_STATE: &str = "support://state";
 pub const GUIDED_STATE: &str = "guided://state";

@@ -75,7 +75,6 @@ function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessi
             },
         },
         sensor_health: missingDomainValue("stream"),
-        configuration_facts: missingDomainValue("stream"),
         calibration: missingDomainValue("stream"),
         guided: missingDomainValue("stream"),
         status_text: {
@@ -100,7 +99,6 @@ function createState(snapshot: OpenSessionSnapshot = createSnapshot()): SessionS
         telemetryDomain: snapshot.telemetry,
         support: snapshot.support,
         sensorHealth: snapshot.sensor_health,
-        configurationFacts: snapshot.configuration_facts,
         calibration: snapshot.calibration,
         guided: snapshot.guided,
         statusText: snapshot.status_text,
@@ -112,7 +110,6 @@ function createState(snapshot: OpenSessionSnapshot = createSnapshot()): SessionS
         },
         connectionForm: { ...defaultConnectionForm },
         transportDescriptors: [],
-        serialPorts: [],
         availableModes: [],
         btDevices: [],
         btScanning: false,

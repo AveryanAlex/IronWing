@@ -80,7 +80,6 @@ pub fn base_live_snapshot_from_caches(input: LiveSnapshotInput<'_>) -> OpenSessi
             DomainValue::missing(input.provenance)
         },
         sensor_health: DomainValue::missing(input.provenance),
-        configuration_facts: DomainValue::missing(input.provenance),
         calibration: DomainValue::missing(input.provenance),
         guided: DomainValue::missing(input.provenance),
         status_text: status_text_snapshot_from_entries(

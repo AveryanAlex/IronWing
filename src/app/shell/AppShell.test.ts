@@ -107,12 +107,6 @@ function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessi
       provenance: "bootstrap",
       value: null,
     },
-    configuration_facts: {
-      available: false,
-      complete: false,
-      provenance: "bootstrap",
-      value: null,
-    },
     calibration: {
       available: false,
       complete: false,
@@ -187,7 +181,6 @@ function createMockService(overrides: Partial<SessionService> = {}): SessionServ
     })),
     connectSession: vi.fn(async () => undefined),
     disconnectSession: vi.fn(async () => undefined),
-    listSerialPorts: vi.fn(async () => []),
     btRequestPermissions: vi.fn(async () => undefined),
     btScanBle: vi.fn(async () => []),
     btGetBondedDevices: vi.fn(async () => []),

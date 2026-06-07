@@ -1,6 +1,6 @@
+use mavkit::Vehicle;
 use mavkit::sim::{DemoProfile, DemoVehicle, DemoVehicleHandle};
 use mavkit::stream::{ChannelBridge, StreamConnection};
-use mavkit::{Vehicle, VehicleConfig};
 use serde::Deserialize;
 use std::future::Future;
 use std::time::Duration;
@@ -13,7 +13,7 @@ use crate::AppState;
 use crate::guided::emit_guided_reset;
 use crate::ipc::DomainProvenance;
 use crate::recording::auto_record_start_request;
-use ironwing_core::{bluetooth_profile, telemetry};
+use ironwing_core::{bluetooth_profile, telemetry, vehicle_config};
 
 /// Total time budget for the entire connect flow (TCP handshake + MAVLink
 /// heartbeat wait).  The underlying `mavlink::connect_async` call has no
@@ -109,10 +109,7 @@ async fn connect_via_address(
     state: &AppState,
     address: String,
 ) -> Result<ConnectedVehicle, String> {
-    let config = VehicleConfig {
-        connect_timeout: CONNECT_TIMEOUT,
-        ..VehicleConfig::default()
-    };
+    let config = vehicle_config::live_vehicle_config(CONNECT_TIMEOUT);
     tracing::info!("connecting to {address} (timeout {CONNECT_TIMEOUT:?})");
     let task = tokio::spawn(async move {
         let result = tokio::time::timeout(
@@ -184,13 +181,12 @@ async fn request_tcp_telemetry_streams(vehicle: Vehicle) {
 }
 
 async fn connect_demo(vehicle_preset: DemoVehiclePreset) -> Result<ConnectedVehicle, String> {
-    let config = VehicleConfig {
-        connect_timeout: CONNECT_TIMEOUT,
-        command_timeout: Duration::from_secs(10),
-        command_completion_timeout: Duration::from_secs(20),
-        transfer_timeout: Duration::from_secs(20),
-        ..VehicleConfig::default()
-    };
+    let config = vehicle_config::adapter_vehicle_config(
+        CONNECT_TIMEOUT,
+        Duration::from_secs(10),
+        Duration::from_secs(20),
+        Duration::from_secs(20),
+    );
 
     let (vehicle, demo_handle) = DemoVehicle::builder()
         .profile(vehicle_preset.profile())
@@ -414,10 +410,7 @@ async fn connect_ble(address: &str) -> Result<ConnectedVehicle, String> {
         dyn mavlink::AsyncMavConnection<mavkit::dialect::MavMessage> + Sync + Send,
     > = Box::new(connection);
 
-    let config = VehicleConfig {
-        connect_timeout: CONNECT_TIMEOUT,
-        ..VehicleConfig::default()
-    };
+    let config = vehicle_config::live_vehicle_config(CONNECT_TIMEOUT);
     let vehicle = Vehicle::from_connection(connection, config)
         .await
         .map_err(|e| format!("Vehicle connection failed: {e}"))?;
@@ -478,10 +471,7 @@ async fn connect_spp(app: &tauri::AppHandle, address: &str) -> Result<ConnectedV
         dyn mavlink::AsyncMavConnection<mavkit::dialect::MavMessage> + Sync + Send,
     > = Box::new(connection);
 
-    let config = VehicleConfig {
-        connect_timeout: CONNECT_TIMEOUT,
-        ..VehicleConfig::default()
-    };
+    let config = vehicle_config::live_vehicle_config(CONNECT_TIMEOUT);
     let vehicle = Vehicle::from_connection(connection, config)
         .await
         .map_err(|e| format!("Vehicle connection failed: {e}"))?;

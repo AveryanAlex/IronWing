@@ -143,17 +143,17 @@ const FAILSAFE_REQUIRED_ROWS: Record<
   },
 };
 
-const RTL_REQUIRED_ROWS: Record<Exclude<SafetyVehicleFamily, "unknown">, { numeric: string[]; enum: string[] }> = {
+const RTL_REQUIRED_ROWS: Record<Exclude<SafetyVehicleFamily, "unknown">, { numeric: string[][]; enum: string[] }> = {
   copter: {
-    numeric: ["RTL_ALT", "RTL_ALT_FINAL", "RTL_CLIMB_MIN", "RTL_SPEED", "RTL_LOIT_TIME"],
+    numeric: [["RTL_ALT_M", "RTL_ALT"], ["RTL_ALT_FINAL_M", "RTL_ALT_FINAL"], ["RTL_CLIMB_MIN_M", "RTL_CLIMB_MIN"], ["RTL_SPEED_MS", "RTL_SPEED"], ["RTL_LOIT_TIME"]],
     enum: [],
   },
   plane: {
-    numeric: ["ALT_HOLD_RTL"],
+    numeric: [["RTL_ALTITUDE", "ALT_HOLD_RTL"]],
     enum: ["RTL_AUTOLAND"],
   },
   rover: {
-    numeric: ["RTL_SPEED", "WP_RADIUS"],
+    numeric: [["RTL_SPEED"], ["WP_RADIUS"]],
     enum: [],
   },
 };
@@ -302,6 +302,48 @@ function hasPendingChangesForRows(
   return rows.some((name) => hasPendingChange(input.paramStore, input.stagedEdits, name));
 }
 
+function firstPresentParamName(paramStore: ParamStore | null, names: readonly string[]): string | null {
+  return names.find((name) => hasParam(paramStore, name)) ?? null;
+}
+
+function buildRtlRecoveryReasons(
+  input: SafetyModelInput,
+  requiredRows: { numeric: string[][]; enum: string[] },
+): string[] {
+  const reasons = requiredRows.numeric.flatMap((names) => firstPresentParamName(input.paramStore, names)
+    ? []
+    : [`${names.join(" or ")} is absent from the active parameter set.`]);
+
+  return [...reasons, ...buildRecoveryReasons(input, { numeric: [], enum: requiredRows.enum })];
+}
+
+function selectedRtlRowNames(input: SafetyModelInput, requiredRows: { numeric: string[][]; enum: string[] }): string[] {
+  return [
+    ...requiredRows.numeric.flatMap((names) => firstPresentParamName(input.paramStore, names) ?? []),
+    ...requiredRows.enum,
+  ];
+}
+
+function rtlValue(
+  input: SafetyModelInput,
+  names: readonly string[],
+): { name: string; value: number | null } {
+  const name = firstPresentParamName(input.paramStore, names) ?? names[0];
+  return { name, value: stagedOrCurrentValue(input.paramStore, input.stagedEdits, name) };
+}
+
+function isMetersPerSecondUnit(unit: string | undefined): boolean {
+  const normalized = unit?.toLowerCase().replace(/\s+/g, "");
+  return normalized === "m/s"
+    || normalized === "meter/second"
+    || normalized === "meters/second"
+    || normalized === "meterspersecond";
+}
+
+function formatRtlValue(value: number | null, factor: number, unit: string): string {
+  return value == null ? "--" : `${(value / factor).toFixed(1)} ${unit}`;
+}
+
 export function buildFailsafeSectionModel(input: SafetyModelInput): FailsafeSectionModel {
   const family = resolveSafetyVehicleFamily(input.vehicleType);
   if (family === "unknown") {
@@ -370,29 +412,30 @@ export function buildRtlReturnModel(input: SafetyModelInput): RtlReturnModel {
   }
 
   const required = RTL_REQUIRED_ROWS[family];
-  const recoveryReasons = buildRecoveryReasons(input, required);
+  const recoveryReasons = buildRtlRecoveryReasons(input, required);
   const warningTexts: string[] = [];
-  const hasPendingChanges = hasPendingChangesForRows(input, [...required.numeric, ...required.enum]);
+  const hasPendingChanges = hasPendingChangesForRows(input, selectedRtlRowNames(input, required));
 
   let summaryText = "";
   let detailText = "";
 
   if (family === "copter") {
-    const rtlAlt = stagedOrCurrentValue(input.paramStore, input.stagedEdits, "RTL_ALT");
-    const finalAlt = stagedOrCurrentValue(input.paramStore, input.stagedEdits, "RTL_ALT_FINAL");
-    summaryText = `Return altitude ${rtlAlt == null ? "--" : `${(rtlAlt / 100).toFixed(1)} m`} · Final altitude ${finalAlt == null ? "--" : `${(finalAlt / 100).toFixed(1)} m`}`;
+    const rtlAlt = rtlValue(input, ["RTL_ALT_M", "RTL_ALT"]);
+    const finalAlt = rtlValue(input, ["RTL_ALT_FINAL_M", "RTL_ALT_FINAL"]);
+    summaryText = `Return altitude ${formatRtlValue(rtlAlt.value, rtlAlt.name === "RTL_ALT_M" ? 1 : 100, "m")} · Final altitude ${formatRtlValue(finalAlt.value, finalAlt.name === "RTL_ALT_FINAL_M" ? 1 : 100, "m")}`;
     detailText = "Copter RTL combines climb altitude, return speed, loiter, and final descent settings.";
-    if (rtlAlt === 0) {
-      warningTexts.push("RTL_ALT is 0, so the vehicle may return at its current altitude instead of climbing above obstacles.");
+    if (rtlAlt.value === 0) {
+      warningTexts.push(`${rtlAlt.name} is 0, so the vehicle may return at its current altitude instead of climbing above obstacles.`);
     }
   } else if (family === "plane") {
-    const holdAlt = stagedOrCurrentValue(input.paramStore, input.stagedEdits, "ALT_HOLD_RTL");
-    summaryText = `Return altitude ${holdAlt === -1 ? "current altitude" : holdAlt == null ? "--" : `${(holdAlt / 100).toFixed(1)} m`}`;
+    const holdAlt = rtlValue(input, ["RTL_ALTITUDE", "ALT_HOLD_RTL"]);
+    summaryText = `Return altitude ${holdAlt.value === -1 ? "current altitude" : formatRtlValue(holdAlt.value, holdAlt.name === "RTL_ALTITUDE" ? 1 : 100, "m")}`;
     detailText = "Plane RTL keeps return altitude and auto-land intent explicit for fixed-wing recovery.";
   } else {
     const speed = stagedOrCurrentValue(input.paramStore, input.stagedEdits, "RTL_SPEED");
     const radius = stagedOrCurrentValue(input.paramStore, input.stagedEdits, "WP_RADIUS");
-    summaryText = `Return speed ${speed == null ? "--" : `${(speed / 100).toFixed(1)} m/s`} · Approach radius ${radius == null ? "--" : `${radius.toFixed(1)} m`}`;
+    const speedFactor = isMetersPerSecondUnit(input.metadata?.get("RTL_SPEED")?.units) ? 1 : 100;
+    summaryText = `Return speed ${formatRtlValue(speed, speedFactor, "m/s")} · Approach radius ${formatRtlValue(radius, 1, "m")}`;
     detailText = "Rover return keeps speed and arrival radius explicit without pretending aircraft-only altitude controls exist.";
   }
 

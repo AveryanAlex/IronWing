@@ -6,7 +6,6 @@ const {
   subscribePlaybackState,
   subscribeSupportState,
   subscribeSensorHealthStateEvent,
-  subscribeConfigurationFactsEvent,
   subscribeCalibrationStateEvent,
   subscribeGuidedState,
   subscribeStatusTextState,
@@ -16,7 +15,6 @@ const {
   subscribePlaybackState: vi.fn(),
   subscribeSupportState: vi.fn(),
   subscribeSensorHealthStateEvent: vi.fn(),
-  subscribeConfigurationFactsEvent: vi.fn(),
   subscribeCalibrationStateEvent: vi.fn(),
   subscribeGuidedState: vi.fn(),
   subscribeStatusTextState: vi.fn(),
@@ -42,7 +40,6 @@ vi.mock("../../telemetry", () => ({
   btRequestPermissions: vi.fn(),
   btScanBle: vi.fn(),
   getAvailableModes: vi.fn(),
-  listSerialPorts: vi.fn(),
 }));
 
 vi.mock("../../transport", () => ({
@@ -58,10 +55,6 @@ vi.mock("../../guided", () => ({
 
 vi.mock("../../calibration", () => ({
   subscribeCalibrationStateEvent,
-}));
-
-vi.mock("../../configuration-facts", () => ({
-  subscribeConfigurationFactsEvent,
 }));
 
 vi.mock("../../sensor-health", () => ({
@@ -85,7 +78,6 @@ describe("platform session subscriptions", () => {
     const playbackUnlisten = vi.fn();
     const supportUnlisten = vi.fn();
     const sensorHealthUnlisten = vi.fn();
-    const configurationFactsUnlisten = vi.fn();
     const calibrationUnlisten = vi.fn();
     const guidedUnlisten = vi.fn();
     const statusTextUnlisten = vi.fn();
@@ -95,7 +87,6 @@ describe("platform session subscriptions", () => {
     subscribePlaybackState.mockResolvedValue(playbackUnlisten);
     subscribeSupportState.mockResolvedValue(supportUnlisten);
     subscribeSensorHealthStateEvent.mockResolvedValue(sensorHealthUnlisten);
-    subscribeConfigurationFactsEvent.mockResolvedValue(configurationFactsUnlisten);
     subscribeCalibrationStateEvent.mockResolvedValue(calibrationUnlisten);
     subscribeGuidedState.mockResolvedValue(guidedUnlisten);
     subscribeStatusTextState.mockResolvedValue(statusTextUnlisten);
@@ -107,7 +98,6 @@ describe("platform session subscriptions", () => {
       onPlayback: vi.fn(),
       onSupport: vi.fn(),
       onSensorHealth: vi.fn(),
-      onConfigurationFacts: vi.fn(),
       onCalibration: vi.fn(),
       onGuided: vi.fn(),
       onStatusText: vi.fn(),
@@ -124,7 +114,6 @@ describe("platform session subscriptions", () => {
     expect(playbackUnlisten).toHaveBeenCalledOnce();
     expect(supportUnlisten).toHaveBeenCalledOnce();
     expect(sensorHealthUnlisten).toHaveBeenCalledOnce();
-    expect(configurationFactsUnlisten).toHaveBeenCalledOnce();
     expect(calibrationUnlisten).toHaveBeenCalledOnce();
     expect(guidedUnlisten).toHaveBeenCalledOnce();
     expect(statusTextUnlisten).toHaveBeenCalledOnce();

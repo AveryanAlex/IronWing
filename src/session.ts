@@ -3,7 +3,6 @@ import { listen, type UnlistenFn } from "@platform/event";
 import type { CalibrationDomain } from "./calibration";
 import type { GuidedDomain } from "./guided";
 import type { DomainValue } from "./lib/domain-status";
-import type { ConfigurationFactsState } from "./configuration-facts";
 import type { HomePosition, MissionState } from "./mission";
 import type { ParamProgress, ParamStore } from "./params";
 import { withPersistedRecordingSettings } from "./recording";
@@ -128,7 +127,6 @@ export type OpenSessionSnapshot = {
   param_progress: ParamProgress | null;
   support: SupportDomain;
   sensor_health: SensorHealthDomain;
-  configuration_facts: DomainValue<ConfigurationFactsState>;
   calibration: CalibrationDomain;
   guided: GuidedDomain;
   status_text: StatusTextDomain;

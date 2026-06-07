@@ -87,6 +87,11 @@ pub fn seeded_vehicle_state(vehicle: &mavkit::Vehicle) -> VehicleState {
         system_status: mavkit::SystemStatus::Active,
         vehicle_type: identity.vehicle_type,
         autopilot: identity.autopilot,
+        firmware_version: vehicle
+            .info()
+            .firmware()
+            .latest()
+            .and_then(|firmware| firmware.version),
         system_id: identity.system_id,
         component_id: identity.component_id,
         heartbeat_received: true,

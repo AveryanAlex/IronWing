@@ -652,6 +652,7 @@ impl LogStore {
             system_status: mavkit::SystemStatus::Active,
             vehicle_type: Default::default(),
             autopilot: Default::default(),
+            firmware_version: None,
             system_id: 0,
             component_id: 0,
             heartbeat_received: false,

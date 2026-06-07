@@ -2,7 +2,7 @@ use std::{fmt::Debug, fs, path::PathBuf};
 
 use ironwing_core::ipc;
 use mavkit::ardupilot::{MagCalProgress, MagCalReport, MagCalStatus};
-use mavkit::{Param, ParamStore, ParamType, SensorHealthState, SensorHealthSummary};
+use mavkit::{SensorHealthState, SensorHealthSummary};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 
@@ -37,9 +37,6 @@ where
 
 #[test]
 fn contract_fixtures_round_trip_through_rust_contract_types() {
-    assert_round_trip::<ipc::configuration_facts::ConfigurationFactsSnapshot>(
-        "configuration_facts.domain.json",
-    );
     assert_round_trip::<ipc::sensor_health::SensorHealthSnapshot>("sensor_health.domain.json");
     assert_round_trip::<ipc::calibration::CalibrationSnapshot>("calibration.domain.json");
     assert_round_trip::<ipc::GuidedSnapshot>("guided.domain.json");
@@ -88,43 +85,6 @@ fn contract_fixtures_unsupported_catalog_schema_version_returns_structured_error
 
 #[test]
 fn constructor_outputs_match_canonical_grouped_domain_fixtures() {
-    let mut params = std::collections::HashMap::new();
-    params.insert(
-        "FRAME_CLASS".to_string(),
-        Param {
-            name: "FRAME_CLASS".to_string(),
-            value: 1.0,
-            param_type: ParamType::Real32,
-            index: 0,
-        },
-    );
-    params.insert(
-        "GPS1_TYPE".to_string(),
-        Param {
-            name: "GPS1_TYPE".to_string(),
-            value: 2.0,
-            param_type: ParamType::Real32,
-            index: 1,
-        },
-    );
-    params.insert(
-        "BATT_MONITOR".to_string(),
-        Param {
-            name: "BATT_MONITOR".to_string(),
-            value: 4.0,
-            param_type: ParamType::Real32,
-            index: 2,
-        },
-    );
-
-    let configuration_facts =
-        ipc::configuration_facts::configuration_facts_snapshot_from_param_store(
-            &ParamStore {
-                params,
-                expected_count: 3,
-            },
-            ipc::DomainProvenance::Bootstrap,
-        );
     let sensor_health = ipc::sensor_health::sensor_health_snapshot_from_summary(
         &SensorHealthSummary {
             gyro: SensorHealthState::Healthy,
@@ -159,10 +119,6 @@ fn constructor_outputs_match_canonical_grouped_domain_fixtures() {
         ipc::DomainProvenance::Stream,
     );
 
-    assert_eq!(
-        serde_json::to_value(configuration_facts).expect("serialize configuration facts"),
-        load_fixture("configuration_facts.domain.json")
-    );
     assert_eq!(
         serde_json::to_value(sensor_health).expect("serialize sensor health"),
         load_fixture("sensor_health.domain.json")

@@ -13,7 +13,6 @@ import type {
   FirmwareInstallReadinessRequest,
   FirmwareInstallReadinessResponse,
   FirmwareInstallResult,
-  InventoryResult,
   PortInfo,
 } from "../../../firmware";
 import type { LogLibraryCatalog, LogProgress } from "../../../logs";
@@ -23,7 +22,6 @@ import type { SensorHealthDomain } from "../../../sensor-health";
 import type { StatusMessage } from "../../../statustext";
 import type { SupportDomain } from "../../../support";
 import type { FlightModeEntry, TelemetryDomain } from "../../../telemetry";
-import type { ConfigurationFactsDomain } from "../../../configuration-facts";
 import type { MockLogSeedPreset } from "./logs";
 
 export type CommandArgs = Record<string, unknown> | undefined;
@@ -79,6 +77,7 @@ export type MockLiveVehicleState = {
   system_id: number;
   component_id: number;
   heartbeat_received: boolean;
+  firmware_version?: string | null;
 };
 
 export type MockMissionState = MissionState;
@@ -88,7 +87,6 @@ export type MockParamProgressState = ParamProgress;
 export type MockTelemetryDomain = TelemetryDomain;
 export type MockSupportDomain = SupportDomain;
 export type MockSensorHealthDomain = SensorHealthDomain;
-export type MockConfigurationFactsDomain = ConfigurationFactsDomain;
 export type MockLiveStatusTextState = { entries: StatusMessage[] };
 
 export type MockGuidedBlockingReason =
@@ -137,7 +135,6 @@ export type MockBackendState = {
   liveStatusText: MockLiveStatusTextState | null;
   liveSupportDomain: MockSupportDomain | null;
   liveSensorHealthDomain: MockSensorHealthDomain | null;
-  liveConfigurationFactsDomain: MockConfigurationFactsDomain | null;
   liveVehicleArmed: boolean;
   liveVehicleModeName: string;
   guidedTermination: null | { reason: "disconnect" | "mode_change" | "source_switch" | "vehicle_missing"; at_unix_msec: number; message: string };
@@ -223,7 +220,6 @@ export type FirmwareModuleTypes = {
   DfuDeviceInfo: DfuDeviceInfo;
   BootloaderInstallationResult: BootloaderInstallationResult;
   DfuScanResult: DfuScanResult;
-  InventoryResult: InventoryResult;
   PortInfo: PortInfo;
   FirmwareInstallResult: FirmwareInstallResult;
   FirmwareInstallPreflightInfo: FirmwareInstallPreflightInfo;

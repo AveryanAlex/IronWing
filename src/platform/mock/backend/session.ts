@@ -124,11 +124,6 @@ export function openSessionSnapshotResult(sourceKind: "live" | "playback") {
             : mockState.liveVehicleAvailable
                 ? cloneSeededLiveDomain(mockState.liveSensorHealthDomain) ?? liveBootstrapNullDomain()
                 : missingDomainValue(),
-        configuration_facts: sourceKind === "playback"
-            ? { available: false, complete: false, provenance: "playback", value: null }
-            : mockState.liveVehicleAvailable
-                ? cloneSeededLiveDomain(mockState.liveConfigurationFactsDomain) ?? liveBootstrapNullDomain()
-                : missingDomainValue(),
         calibration: sourceKind === "playback"
             ? { available: false, complete: false, provenance: "playback", value: null }
             : mockState.liveVehicleAvailable ? liveBootstrapNullDomain() : missingDomainValue(),

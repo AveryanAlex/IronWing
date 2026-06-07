@@ -16,7 +16,7 @@
 | Calibration state | `crates/ironwing-core/src/ipc/calibration.rs` | Compass/accel calibration snapshots |
 | Sensor health | `crates/ironwing-core/src/ipc/sensor_health.rs` | Subsystem health summary |
 | Status text | `crates/ironwing-core/src/ipc/status_text.rs` | MAVLink status text entries and history |
-| Support / config facts | `crates/ironwing-core/src/ipc/support.rs`, `crates/ironwing-core/src/ipc/configuration_facts.rs` | Vehicle support capabilities, param-derived facts |
+| Support | `crates/ironwing-core/src/ipc/support.rs` | Vehicle support capabilities |
 | Playback state | `crates/ironwing-core/src/ipc/playback.rs` | Playback progress snapshot |
 | Tauri adapter re-exports | `src-tauri/src/ipc/mod.rs` | Public API surface for the rest of the Tauri crate |
 

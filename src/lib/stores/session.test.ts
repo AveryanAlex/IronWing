@@ -118,12 +118,6 @@ function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessi
         geofence: "not_present",
       },
     },
-    configuration_facts: {
-      available: true,
-      complete: false,
-      provenance: "bootstrap",
-      value: { frame: null, gps: null, battery_monitor: null, motors_esc: null },
-    },
     calibration: {
       available: true,
       complete: false,
@@ -212,7 +206,6 @@ function createMockService(overrides: Partial<SessionService> = {}) {
     })),
     connectSession: vi.fn(async () => undefined),
     disconnectSession: vi.fn(async () => undefined),
-    listSerialPorts: vi.fn(async () => ["/dev/ttyUSB0"]),
     btRequestPermissions: vi.fn(async () => undefined),
     btScanBle: vi.fn(async () => []),
     btGetBondedDevices: vi.fn(async () => []),
@@ -737,12 +730,8 @@ describe("session store", () => {
     );
   });
 
-  it("auto-selects serial and bluetooth choices only when those fields are empty", async () => {
+  it("auto-selects bluetooth choices only when the field is empty", async () => {
     const { service } = createMockService({
-      listSerialPorts: vi
-        .fn()
-        .mockResolvedValueOnce(["/dev/ttyUSB0", "/dev/ttyUSB1"])
-        .mockResolvedValueOnce(["/dev/ttyUSB0", "/dev/ttyUSB1"]),
       btGetBondedDevices: vi
         .fn()
         .mockResolvedValueOnce([{ name: "FC-A", address: "AA:BB", device_type: "classic" as const }])
@@ -752,20 +741,9 @@ describe("session store", () => {
 
     await store.initialize();
 
-    await store.refreshSerialPorts();
-    let state = get(store);
-    expect(state.connectionForm.serialPort).toBe("/dev/ttyUSB0");
-
-    store.updateConnectionForm({ serialPort: "/dev/ttyUSB1" });
-    vi.mocked(service.persistConnectionForm).mockClear();
-    await store.refreshSerialPorts();
-    state = get(store);
-    expect(state.connectionForm.serialPort).toBe("/dev/ttyUSB1");
-    expect(service.persistConnectionForm).not.toHaveBeenCalled();
-
     store.updateConnectionForm({ selectedBtDevice: "" });
     await store.refreshBondedDevices();
-    state = get(store);
+    let state = get(store);
     expect(state.connectionForm.selectedBtDevice).toBe("AA:BB");
 
     store.updateConnectionForm({ selectedBtDevice: "CC:DD" });

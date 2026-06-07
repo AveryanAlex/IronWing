@@ -10,6 +10,7 @@ export type ParameterItemModel = {
   valueText: string;
   valueLabel: string | null;
   units: string | null;
+  unitText?: string | null;
   rebootRequired: boolean;
   order: number;
   increment: number | null;
@@ -52,7 +53,8 @@ export function buildParameterItemModel(
     value: param.value,
     valueText: formatParamValue(param.value, increment),
     valueLabel: resolveValueLabel(param.value, meta),
-    units: normalizeOptionalText(meta?.unitText) ?? normalizeOptionalText(meta?.units),
+    units: normalizeOptionalText(meta?.units) ?? normalizeOptionalText(meta?.unitText),
+    unitText: normalizeOptionalText(meta?.unitText),
     rebootRequired: meta?.rebootRequired === true,
     order: param.index,
     increment,
@@ -84,7 +86,7 @@ export function formatParamDisplayValue(
   }
 
   const valueText = formatParamValue(value, meta?.increment);
-  const units = normalizeOptionalText(meta?.unitText) ?? normalizeOptionalText(meta?.units) ?? fallbackUnits;
+  const units = normalizeOptionalText(meta?.units) ?? normalizeOptionalText(meta?.unitText) ?? fallbackUnits;
   return units ? `${valueText} ${units}` : valueText;
 }
 

@@ -106,12 +106,6 @@ function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessi
       provenance: "bootstrap",
       value: null,
     },
-    configuration_facts: {
-      available: false,
-      complete: false,
-      provenance: "bootstrap",
-      value: null,
-    },
     calibration: {
       available: false,
       complete: false,
@@ -135,7 +129,7 @@ function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessi
   };
 }
 
-function createSessionDomain(vehicleType: string | null) {
+function createSessionDomain(vehicleType: string | null, firmwareVersion?: string | null) {
   const session = createSnapshot().session;
   return {
     ...session,
@@ -146,6 +140,7 @@ function createSessionDomain(vehicleType: string | null) {
             ? {
                 ...session.value.vehicle_state!,
                 vehicle_type: vehicleType,
+                firmware_version: firmwareVersion,
               }
             : null,
         }
@@ -174,7 +169,10 @@ function createSessionService(
     mode: "udp",
     udpBind: "0.0.0.0:14550",
     tcpAddress: "127.0.0.1:5760",
+    websocketUrl: "ws://127.0.0.1:14560",
     serialPort: "",
+    webSerialPortId: "",
+    webBluetoothDeviceId: "",
     baud: 57600,
     selectedBtDevice: "",
     takeoffAlt: "10",
@@ -198,7 +196,6 @@ function createSessionService(
     buildConnectRequest: vi.fn(() => ({ transport: { kind: "udp" as const, bind_addr: "0.0.0.0:14550" } })),
     connectSession: vi.fn(async () => undefined),
     disconnectSession: vi.fn(async () => undefined),
-    listSerialPorts: vi.fn(async () => []),
     btRequestPermissions: vi.fn(async () => undefined),
     btScanBle: vi.fn(async () => []),
     btGetBondedDevices: vi.fn(async () => []),
@@ -482,7 +479,40 @@ describe("createParamsStore", () => {
     expect(state.vehicleType).toBe("fixed_wing");
     expect(state.metadataState).toBe("ready");
     expect(state.metadata?.get("FS_THR_ENABLE")?.humanName).toBe("Throttle failsafe");
-    expect(paramsHarness.service.fetchMetadata).toHaveBeenCalledWith("fixed_wing");
+    expect(paramsHarness.service.fetchMetadata).toHaveBeenCalledWith("fixed_wing", null);
+  });
+
+  it("reloads versioned metadata when firmware identity arrives on the same session envelope", async () => {
+    const genericMetadata = new Map([
+      ["FS_THR_ENABLE", { humanName: "Generic throttle failsafe", description: "generic metadata" }],
+    ]) as ParamMetadataMap;
+    const versionedMetadata = new Map([
+      ["FS_THR_ENABLE", { humanName: "Versioned throttle failsafe", description: "versioned metadata" }],
+    ]) as ParamMetadataMap;
+    const snapshot = createSnapshot({
+      session: createSessionDomain("fixed_wing"),
+    });
+    const sessionHarness = createSessionService([snapshot]);
+    const paramsHarness = createParamsService(null, {
+      fetchMetadata: vi.fn().mockResolvedValueOnce(genericMetadata).mockResolvedValueOnce(versionedMetadata),
+    });
+    const sessionStore = createSessionStore(sessionHarness.service);
+    const paramStore = createParamsStore(sessionStore, paramsHarness.service);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+    await waitForMetadata(paramStore);
+
+    sessionHarness.emit("onSession", {
+      envelope: snapshot.envelope,
+      value: createSessionDomain("fixed_wing", "4.5.7"),
+    });
+
+    const state = await waitForMetadata(paramStore);
+    expect(state.firmwareVersion).toBe("4.5.7");
+    expect(state.metadata?.get("FS_THR_ENABLE")?.humanName).toBe("Versioned throttle failsafe");
+    expect(paramsHarness.service.fetchMetadata).toHaveBeenNthCalledWith(1, "fixed_wing", null);
+    expect(paramsHarness.service.fetchMetadata).toHaveBeenNthCalledWith(2, "fixed_wing", "4.5.7");
   });
 
   it("invalidates stale same-envelope metadata requests when vehicle type changes again", async () => {
@@ -525,8 +555,8 @@ describe("createParamsStore", () => {
 
     expect(state.vehicleType).toBe("fixed_wing");
     expect(state.metadata?.get("FS_THR_ENABLE")?.humanName).toBe("Newest metadata");
-    expect(paramsHarness.service.fetchMetadata).toHaveBeenNthCalledWith(1, "quadrotor");
-    expect(paramsHarness.service.fetchMetadata).toHaveBeenNthCalledWith(2, "fixed_wing");
+    expect(paramsHarness.service.fetchMetadata).toHaveBeenNthCalledWith(1, "quadrotor", null);
+    expect(paramsHarness.service.fetchMetadata).toHaveBeenNthCalledWith(2, "fixed_wing", null);
 
     const stale = new Map([
       ["ARMING_CHECK", { humanName: "Stale metadata", description: "old" }],

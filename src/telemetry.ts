@@ -114,6 +114,7 @@ export type VehicleState = {
   system_id: number;
   component_id: number;
   heartbeat_received: boolean;
+  firmware_version: string | null;
 };
 
 export type HomePosition = {
@@ -132,10 +133,6 @@ export type BluetoothDevice = {
   address: string;
   device_type: "ble" | "classic";
 };
-
-export async function listSerialPorts(): Promise<string[]> {
-  return invoke<string[]>("list_serial_ports_cmd");
-}
 
 export async function btRequestPermissions(): Promise<void> {
   await invoke("bt_request_permissions");

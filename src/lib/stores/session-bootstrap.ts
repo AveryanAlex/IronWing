@@ -10,7 +10,6 @@ type BootstrapBuffer = {
   playbackCursorUsec?: number | null;
   support?: OpenSessionSnapshot["support"];
   sensorHealth?: OpenSessionSnapshot["sensor_health"];
-  configurationFacts?: OpenSessionSnapshot["configuration_facts"];
   calibration?: OpenSessionSnapshot["calibration"];
   guided?: OpenSessionSnapshot["guided"];
   statusText?: OpenSessionSnapshot["status_text"];
@@ -104,7 +103,6 @@ export function mergeBootstrapSnapshot({
     telemetryDomain: snapshot.telemetry,
     support: snapshot.support,
     sensorHealth: snapshot.sensor_health,
-    configurationFacts: snapshot.configuration_facts,
     calibration: snapshot.calibration,
     guided: snapshot.guided,
     statusText: snapshot.status_text,
@@ -149,12 +147,6 @@ export function mergeBootstrapSnapshot({
       nextState = {
         ...nextState,
         sensorHealth: buffered.sensorHealth,
-      };
-    }
-    if (buffered.configurationFacts) {
-      nextState = {
-        ...nextState,
-        configurationFacts: buffered.configurationFacts,
       };
     }
     if (buffered.calibration) {

@@ -21,7 +21,7 @@ export type ParamsServiceEventHandlers = {
 
 export type ParamsService = {
   subscribeAll(handlers: ParamsServiceEventHandlers): Promise<() => void>;
-  fetchMetadata(vehicleType: string): Promise<ParamMetadataMap | null>;
+  fetchMetadata(vehicleType: string, firmwareVersion?: string | null): Promise<ParamMetadataMap | null>;
   downloadAll(): Promise<void>;
   cancelDownload(): Promise<void>;
   writeBatch(params: [string, number][]): Promise<ParamWriteResult[]>;

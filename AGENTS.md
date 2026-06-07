@@ -119,6 +119,7 @@ Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavk
 
 - Use `pnpm` only; the version is pinned in `package.json`.
 - Do not hand-edit or roll back `src/platform/web/generated/ironwing_wasm.d.ts`. Regenerate it by building the web WASM module, and commit the generated update when Rust-side WASM exports change.
+- Vite dev mode does not automatically rebuild/reload the Rust WASM module after changes under `crates/ironwing-wasm` or shared Rust code it uses. Restart the Vite dev server, or run the relevant web build path, before verifying WASM behavior in the browser.
 - Tailwind is v4 via `@tailwindcss/vite`; do not introduce `tailwind.config.js`.
 - There is no repo-wide ESLint/Biome/Prettier layer; match surrounding style.
 - Clippy warnings are CI failures.
@@ -140,6 +141,6 @@ Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavk
 
 ## Known Quirks
 
-- IPC event names use URI-style strings such as `telemetry://state`, `session://state`, `mission://state`, `param://store`, `param://progress`, `sensor_health://state`, `calibration://state`, `compass://cal_progress`, `compass://cal_report`, `configuration_facts://state`, `status_text://state`, `support://state`, `guided://state`, `playback://state`, `log://progress`, and `firmware://progress`.
+- IPC event names use URI-style strings such as `telemetry://state`, `session://state`, `mission://state`, `param://store`, `param://progress`, `sensor_health://state`, `calibration://state`, `compass://cal_progress`, `compass://cal_report`, `status_text://state`, `support://state`, `guided://state`, `playback://state`, `log://progress`, and `firmware://progress`.
 - `mav.tlog`, `mav.tlog.raw`, and `mav.parm` at repo root are developer SITL artifacts, not committed fixtures.
 - Parameter metadata is fetched at runtime from `autotest.ardupilot.org` via the platform HTTP layer and cached locally.

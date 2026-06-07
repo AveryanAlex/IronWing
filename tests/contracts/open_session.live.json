@@ -137,17 +137,6 @@
       "geofence": "not_present"
     }
   },
-  "configuration_facts": {
-    "available": true,
-    "complete": false,
-    "provenance": "bootstrap",
-    "value": {
-      "frame": { "configured": true },
-      "gps": { "configured": true },
-      "battery_monitor": { "configured": true },
-      "motors_esc": null
-    }
-  },
   "calibration": {
     "available": true,
     "complete": false,
